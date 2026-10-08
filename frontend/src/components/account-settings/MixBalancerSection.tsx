@@ -11,6 +11,13 @@ import { NumberInput } from "@/components/ui/number-input";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Slider } from "@/components/ui/slider";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { RosterShapeEditor } from "@/components/roster-shape/RosterShapeEditor";
 import { ROSTER_SLOT_CODES } from "@/lib/roster/shape";
 import { notify } from "@/lib/notify";
@@ -19,6 +26,7 @@ import {
   mixPreferencesService,
   type MixBalancerPreferences,
   type MixBalancerPreferencesRead,
+  type MixRatingMode,
 } from "@/services/mix-preferences.service";
 import { Spinner } from "@/components/ui/spinner";
 
@@ -234,12 +242,41 @@ export default function MixBalancerSection() {
           </div>
 
           <div className="space-y-1.5">
+            <Label asChild>
+              <span>{t("mixBalancer.mode.label")}</span>
+            </Label>
+            <Select
+              value={draft.ratingMode}
+              onValueChange={(next) =>
+                setDraft((current) => ({ ...current, ratingMode: next as MixRatingMode }))
+              }
+            >
+              <SelectTrigger
+                id="mix-rating-mode"
+                aria-label={t("mixBalancer.mode.label")}
+                className="h-8 w-56 bg-background/50"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="points">{t("mixBalancer.mode.points")}</SelectItem>
+                <SelectItem value="ranker">{t("mixBalancer.mode.ranker")}</SelectItem>
+              </SelectContent>
+            </Select>
+            {draft.ratingMode === "ranker" ? (
+              <p className="text-xs text-[color:var(--aqt-fg-dim)]">{t("mixBalancer.mode.hint")}</p>
+            ) : null}
+          </div>
+
+          <div className="space-y-1.5">
             <Label htmlFor="mix-points-per-win">{t("mixBalancer.points.label")}</Label>
             <NumberInput
               id="mix-points-per-win"
               integer
               min={0}
               max={MAX_POINTS_PER_WIN}
+              // Kept, not cleared: switching back to points restores the number.
+              disabled={draft.ratingMode === "ranker"}
               placeholder={t("mixBalancer.points.placeholder")}
               value={draft.pointsPerWin}
               onValueChange={(next) => setDraft((current) => ({ ...current, pointsPerWin: next }))}

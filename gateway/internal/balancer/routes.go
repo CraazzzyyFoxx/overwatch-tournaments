@@ -55,6 +55,12 @@ var AdminRoutes = []edge.RouteSpec{
 	{Method: "POST", Pattern: "/api/v1/balancer/tournaments/{tournament_id}/registered-teams/export", Queue: "rpc.balancer.teams.export_registered", IDParam: "tournament_id", Body: true, Auth: edge.AuthRequired},
 	{Method: "GET", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/config", Queue: "rpc.balancer.admin.workspace_config_get", IDParam: "workspace_id", Auth: edge.AuthRequired, Timeout: fastReadTimeout},
 	{Method: "PUT", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/config", Queue: "rpc.balancer.admin.workspace_config_upsert", IDParam: "workspace_id", Body: true, Auth: edge.AuthRequired},
+	// The mix ranker's knobs and its hidden-rating rebuild. The upsert and the
+	// rebuild replay the workspace's whole mix history, so they keep the default
+	// timeout rather than the fast-read one.
+	{Method: "GET", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/ranker", Queue: "rpc.balancer.admin.workspace_ranker_get", IDParam: "workspace_id", Auth: edge.AuthRequired, Timeout: fastReadTimeout},
+	{Method: "PUT", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/ranker", Queue: "rpc.balancer.admin.workspace_ranker_upsert", IDParam: "workspace_id", Body: true, Auth: edge.AuthRequired},
+	{Method: "POST", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/ranker/rebuild", Queue: "rpc.balancer.admin.workspace_ranker_rebuild", IDParam: "workspace_id", Auth: edge.AuthRequired},
 }
 
 // RosterRoutes are the workspace roster, its rank layers, and custom games (mixes).
@@ -66,6 +72,10 @@ var RosterRoutes = []edge.RouteSpec{
 	// the caller's own book. A foreign author is never writable, so it is not a
 	// path segment -- reading somebody else's book is a query param on the list.
 	{Method: "PUT", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/players/{member_id}/ranks", Queue: "rpc.balancer.players.set_ranks", IDParam: "member_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
+	// Read-only admin rank overview: every rank value of every workspace member,
+	// one flat row per value. AllQuery because the filter set is wide (repeated
+	// ?layer=/?role=/?author_user_id=) and entirely server-side.
+	{Method: "GET", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/ranks", Queue: "rpc.balancer.ranks.list", Path: []string{"workspace_id"}, AllQuery: true, Auth: edge.AuthRequired, Timeout: fastReadTimeout},
 	{Method: "GET", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/players/authors", Queue: "rpc.balancer.players.authors", Path: []string{"workspace_id"}, Auth: edge.AuthRequired, Timeout: fastReadTimeout},
 	// The five mix reads (list, stats, get, matches, rotation) are public:
 	// AuthNone, like the draft spectating reads. A mix screen is a lobby board
@@ -81,6 +91,7 @@ var RosterRoutes = []edge.RouteSpec{
 	{Method: "GET", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/stats", Queue: "rpc.balancer.custom.stats", Path: []string{"workspace_id"}, AllQuery: true, Auth: edge.AuthNone, Timeout: fastReadTimeout},
 	{Method: "GET", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}", Queue: "rpc.balancer.custom.get", IDParam: "game_id", Path: []string{"workspace_id"}, Auth: edge.AuthNone, Timeout: fastReadTimeout},
 	{Method: "POST", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/roster", Queue: "rpc.balancer.custom.update_roster", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
+	{Method: "PUT", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/name", Queue: "rpc.balancer.custom.rename", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
 	{Method: "PUT", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/players/{workspace_member_id}", Queue: "rpc.balancer.custom.update_player", IDParam: "game_id", Path: []string{"workspace_id", "workspace_member_id"}, Body: true, Auth: edge.AuthRequired},
 	// Whole-lineup participation write: the rotation hint moves several rows at
 	// once, and one request keeps them in one transaction (and one realtime signal).
@@ -90,6 +101,14 @@ var RosterRoutes = []edge.RouteSpec{
 	// The pager itself: which balance option the mix shows every viewer.
 	{Method: "PUT", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/variant", Queue: "rpc.balancer.custom.set_variant_index", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/discord/post", Queue: "rpc.balancer.custom.post_discord", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
+	// Re-render the lobby's newest lineup card after its lineup changed.
+	{Method: "PUT", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/discord/lineup", Queue: "rpc.balancer.custom.update_lineup", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
+	// The mix's voice channels and the voices it may pick from (host-or-co-host).
+	{Method: "PUT", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/voice", Queue: "rpc.balancer.custom.set_voice_channels", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
+	{Method: "GET", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/voice/options", Queue: "rpc.balancer.custom.voice_options", IDParam: "game_id", Path: []string{"workspace_id"}, Auth: edge.AuthRequired},
+	// Moving people: into the team voices, and back to the general one.
+	{Method: "POST", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/voice/move", Queue: "rpc.balancer.custom.voice_move", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
+	{Method: "POST", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/voice/return", Queue: "rpc.balancer.custom.voice_return", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
 	// The player's own seat. One pattern, four verbs: read it, take it, drop it,
 	// re-role it. AuthRequired because the worker authorizes the clicker (the bot
 	// forwards the linked account's identity the same way the site does); the

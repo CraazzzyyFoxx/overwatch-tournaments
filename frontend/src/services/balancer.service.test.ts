@@ -17,10 +17,11 @@ function configPayload() {
       team_max_pain_weight: 0.6,
       time_limit_ms: 600000,
       rank_comfort_tilt: 0.45,
-      mix_role_weights: null,
+      role_settings: { tank: { impact: 1.4 } },
+      max_result_variants: null,
     },
     limits: { population_size: { min: 10, max: 1000 } },
-    presets: { DEFAULT: { population_size: 100, mix_role_weights: null } },
+    presets: { DEFAULT: { population_size: 100, max_result_variants: null } },
     fields: [
       {
         key: "population_size",
@@ -67,6 +68,16 @@ function configPayload() {
         default: {},
         limits: null,
       },
+      {
+        key: "role_settings",
+        label: "Role weights",
+        description: "d",
+        type: "roles",
+        group: "Quality weights",
+        default: { tank: { impact: 1.4 }, damage: { impact: 1 } },
+        limits: null,
+        columns: [{ key: "impact", label: "Impact", description: "d", limits: { min: 0, max: 10 } }],
+      },
     ],
   };
 }
@@ -88,6 +99,7 @@ describe("balancerService.getConfig", () => {
       "team_max_pain_weight",
       "time_limit_ms",
       "some_future_knob",
+      "role_settings",
     ]);
   });
 
@@ -102,8 +114,8 @@ describe("balancerService.getConfig", () => {
   it("treats a null knob as absent so presets keep matching", async () => {
     const config = await balancerService.getConfig();
 
-    expect("mix_role_weights" in config.defaults).toBe(false);
-    expect("mix_role_weights" in config.presets.DEFAULT).toBe(false);
+    expect("max_result_variants" in config.defaults).toBe(false);
+    expect("max_result_variants" in config.presets.DEFAULT).toBe(false);
   });
 
   it("prefers the live default over the one baked into the field row", async () => {

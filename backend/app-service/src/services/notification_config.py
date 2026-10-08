@@ -79,9 +79,10 @@ async def write_config(
             channels = await list_channels(str(guild_id))
         except DiscordError as exc:
             raise HTTPException(status_code=503, detail="discord_unavailable") from exc
-        # ``guild_channels`` already answers with text channels only, ids as
-        # strings -- the same list the picker renders.
-        if body.discord_channel_id not in {str(channel.get("id")) for channel in channels}:
+        # The listing carries voices and categories too; a notification posts a
+        # message, so only a text channel (ids as strings) is a valid target.
+        valid = {str(channel.get("id")) for channel in channels if channel.get("type") == "text"}
+        if body.discord_channel_id not in valid:
             raise HTTPException(status_code=422, detail="discord_channel_not_in_guild")
         channel_id = int(body.discord_channel_id)
 

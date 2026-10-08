@@ -2,28 +2,25 @@
 
 import { useTranslations } from "next-intl";
 
-import { CAPTION_CLASS, teamAccent } from "@/app/balancer/mix/pickup-chrome";
+import { CAPTION_CLASS, lobbyLetter, teamAccent } from "@/app/balancer/mix/pickup-chrome";
 import { cn } from "@/lib/utils";
 import type { CustomGameLobby } from "@/services/custom-game.service";
 import type { MapRead } from "@/types/map.types";
 
-/** A: 0, B: 1 -- the same letters the team-name offset and the Discord embed use. */
-const LOBBY_LETTERS = ["A", "B"] as const;
-
 type PickupLobbyTabsProps = {
   /** The mix's lobbies, ordered by `lobby_index`. One of them renders nothing. */
   lobbies: CustomGameLobby[];
-  activeLobby: 0 | 1;
+  activeLobby: number;
   /** The OW catalogue, so a tab can name the map its lobby is about to play. */
   maps: MapRead[];
-  onSelect: (lobbyIndex: 0 | 1) => void;
+  onSelect: (lobbyIndex: number) => void;
 };
 
 /**
- * The only way a host reaches lobby B. Tabs rather than two matchups side by
- * side because the matchup column is capped at 1180px next to a 568px lineup
+ * The only way a host reaches any lobby past A. Tabs rather than matchups side
+ * by side because the matchup column is capped at 1180px next to a 568px lineup
  * (see `[gameId]/page.tsx`) -- two do not fit, and half a matchup is worse than
- * one whole one.
+ * one whole one. Six tabs wrap onto a second line rather than shrink to nothing.
  *
  * Each tab carries what a host decides on without opening it: which game that
  * lobby is on, whether the lineup currently on its screen has been recorded,
@@ -46,7 +43,7 @@ export function PickupLobbyTabs({
     <div
       role="tablist"
       aria-label={t("tabsLabel")}
-      className="flex gap-1.5 rounded-xl border border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-1)] p-1"
+      className="flex flex-wrap gap-1.5 rounded-xl border border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-1)] p-1"
     >
       {lobbies.map((lobby) => {
         const selected = lobby.lobby_index === activeLobby;
@@ -61,7 +58,7 @@ export function PickupLobbyTabs({
               if (!selected) onSelect(lobby.lobby_index);
             }}
             className={cn(
-              "flex min-w-0 flex-1 flex-col items-start gap-0.5 rounded-lg border px-3 py-2 text-left transition-colors",
+              "flex min-w-[8.5rem] flex-1 flex-col items-start gap-0.5 rounded-lg border px-3 py-2 text-left transition-colors",
               selected
                 ? "border-[color:var(--aqt-border-3)] bg-[color:var(--aqt-overlay-3)]"
                 : "border-transparent hover:bg-[color:var(--aqt-overlay-2)]"
@@ -75,7 +72,7 @@ export function PickupLobbyTabs({
                   selected ? "text-[color:var(--aqt-fg)]" : "text-[color:var(--aqt-fg-muted)]"
                 )}
               >
-                {t("tab", { letter: LOBBY_LETTERS[lobby.lobby_index] })}
+                {t("tab", { letter: lobbyLetter(lobby.lobby_index) })}
               </span>
             </span>
             <span className={cn(CAPTION_CLASS, "truncate")}>

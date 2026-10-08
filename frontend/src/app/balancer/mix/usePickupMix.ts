@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTranslations } from "next-intl";
 
 import { useInvalidation } from "@/hooks/useInvalidation";
 import { notify } from "@/lib/notify";
@@ -13,6 +14,7 @@ import {
   type CustomGamePlayerPatch,
   type MixSelfSignup,
   type MixSelfState,
+  type MixVoicePatch,
 } from "@/services/custom-game.service";
 
 import {
@@ -20,6 +22,8 @@ import {
   participationEntries,
   type PickupRecordOutcomeInput,
 } from "@/app/balancer/mix/pickup-lineup";
+import { voiceRefusal } from "@/app/balancer/mix/pickup-voice";
+import { liveLineupPostOf } from "@/app/balancer/mix/PickupMixHeader";
 import {
   workspacePlayerKeys,
   workspacePlayerService,
@@ -45,14 +49,14 @@ export type PickupTeamNameInput = {
 };
 
 export type PickupSwapSeatsInput = {
-  lobbyIndex: 0 | 1;
+  lobbyIndex: number;
   variantIndex: number;
   firstUuid: string;
   secondUuid: string;
 };
 
-/** Which lobby a balance run covers: one of them, or the whole pool split across both. */
-export type PickupBalanceInput = { scope: "lobby"; lobbyIndex: 0 | 1 } | { scope: "all" };
+/** Which lobby a balance run covers: one of them, or the whole pool split across all of them. */
+export type PickupBalanceInput = { scope: "lobby"; lobbyIndex: number } | { scope: "all" };
 
 /** The two fields a player owns on their own row. `roles: null` is `all_ranked`. */
 export type PickupMySeatInput = { roles: RoleCode[] | null; is_flex: boolean };
@@ -79,9 +83,10 @@ export type PickupCreateGameInput = {
 export function usePickupMix(
   workspaceId: number,
   pickedGameId: number | null,
-  options: { seatEnabled?: boolean } = {},
+  options: { seatEnabled?: boolean; voiceEnabled?: boolean } = {},
 ) {
   const queryClient = useQueryClient();
+  const tVoiceError = useTranslations("mixes.voice.errors");
 
   const gamesQuery = useQuery({
     queryKey: customGameKeys.list(workspaceId),
@@ -109,10 +114,10 @@ export function usePickupMix(
 
   // The lobby on screen. Page state, not server state: two co-hosts may well be
   // watching different lobbies of the same mix.
-  const [activeLobby, setActiveLobby] = useState<0 | 1>(0);
+  const [activeLobby, setActiveLobby] = useState(0);
   const lobbyCount = gameQuery.data?.lobby_count ?? 1;
-  // Dropping to one lobby while B is open would leave the page pointing at a
-  // lobby the mix no longer has. Reset during render, React's own pattern for
+  // Dropping lobbies while a later one is open would leave the page pointing at
+  // a lobby the mix no longer has. Reset during render, React's own pattern for
   // state derived from a prop that must follow it.
   if (activeLobby >= lobbyCount) {
     setActiveLobby(0);
@@ -141,6 +146,19 @@ export function usePickupMix(
     queryKey: customGameKeys.me(workspaceId, selectedGameId ?? 0),
     queryFn: () => customGameService.getMySeat(workspaceId, selectedGameId as number),
     enabled: selectedGameId != null && options.seatEnabled === true,
+  });
+
+  /**
+   * The voices this mix may pick, listed from Discord through the workspace's
+   * category. A writer's read only -- the endpoint 403s anyone else, and a
+   * viewer has nothing to pick. Cached for a minute: a Discord channel list
+   * does not move between two clicks of the same panel.
+   */
+  const voiceOptionsQuery = useQuery({
+    queryKey: customGameKeys.voiceOptions(workspaceId, selectedGameId ?? 0),
+    queryFn: () => customGameService.voiceOptions(workspaceId, selectedGameId as number),
+    enabled: selectedGameId != null && options.voiceEnabled === true,
+    staleTime: 60_000,
   });
 
   // Another host editing this workspace's mixes (roster, ranks, bench, role
@@ -235,6 +253,12 @@ export function usePickupMix(
     onError: (error) => notify.apiError(error),
   });
 
+  const renameMix = useMutation({
+    mutationFn: (name: string) => customGameService.rename(workspaceId, selectedGameId as number, name),
+    onSuccess: applyGame,
+    onError: (error) => notify.apiError(error),
+  });
+
   /**
    * Hands the matchup to the bot for the mix's Discord channel, as the PNG the
    * caller rasterised from the matchup card. Nothing about the mix changes, so
@@ -246,7 +270,7 @@ export function usePickupMix(
       variantIndex,
       image,
     }: {
-      lobbyIndex: 0 | 1;
+      lobbyIndex: number;
       variantIndex: number;
       image: Blob | null;
     }) =>
@@ -305,12 +329,31 @@ export function usePickupMix(
     onError: (error) => notify.apiError(error),
   });
 
+  /**
+   * Re-sends a lobby's live lineup card with what the lineup says now. `image`
+   * is the recaptured matchup; `null` leaves the bot its text card.
+   */
+  const refreshLineup = useMutation({
+    mutationFn: ({ lobbyIndex, image }: { lobbyIndex: number; image: Blob | null }) =>
+      customGameService.refreshLineup(workspaceId, selectedGameId as number, lobbyIndex, image),
+    onError: (error) => notify.apiError(error),
+  });
+
   const balance = useMutation({
     mutationFn: (input: PickupBalanceInput) =>
       customGameService.balance(workspaceId, selectedGameId as number, input),
-    onSuccess: (game) => {
+    onSuccess: (game, input) => {
       applyGame(game);
       notify.success("Teams balanced");
+      // A shuffle re-seats every lobby, including the ones nobody is looking
+      // at: only the shown lobby has a canvas to capture, so the others get
+      // the bot's text card. The shown one is the panel's own refresh.
+      if (input.scope !== "all") return;
+      for (const lobby of game.lobbies) {
+        if (lobby.lobby_index !== activeLobby && liveLineupPostOf(game, lobby.lobby_index)) {
+          refreshLineup.mutate({ lobbyIndex: lobby.lobby_index, image: null });
+        }
+      }
     },
     onError: (error) => notify.apiError(error),
   });
@@ -348,7 +391,7 @@ export function usePickupMix(
 
   /** The map this lobby's next match is on -- rolled or picked; `null` clears it. */
   const setNextMap = useMutation({
-    mutationFn: ({ lobbyIndex, mapId }: { lobbyIndex: 0 | 1; mapId: number | null }) =>
+    mutationFn: ({ lobbyIndex, mapId }: { lobbyIndex: number; mapId: number | null }) =>
       customGameService.setNextMap(workspaceId, selectedGameId as number, lobbyIndex, mapId),
     onSuccess: applyGame,
     onError: (error) => notify.apiError(error),
@@ -365,14 +408,14 @@ export function usePickupMix(
    * trip behind the arrow keys.
    */
   const setVariantIndex = useMutation({
-    mutationFn: ({ lobbyIndex, variantIndex }: { lobbyIndex: 0 | 1; variantIndex: number }) =>
+    mutationFn: ({ lobbyIndex, variantIndex }: { lobbyIndex: number; variantIndex: number }) =>
       customGameService.setVariantIndex(
         workspaceId,
         selectedGameId as number,
         lobbyIndex,
         variantIndex,
       ),
-    onMutate: ({ lobbyIndex, variantIndex }: { lobbyIndex: 0 | 1; variantIndex: number }) => {
+    onMutate: ({ lobbyIndex, variantIndex }: { lobbyIndex: number; variantIndex: number }) => {
       const key = customGameKeys.one(workspaceId, selectedGameId ?? 0);
       const previous = queryClient.getQueryData<CustomGame>(key);
       if (previous != null) {
@@ -395,15 +438,16 @@ export function usePickupMix(
   });
 
   /**
-   * How many lobbies this mix runs. Going back to one drops lobby B's balance
-   * and every pin server-side, so the whole game is re-seeded from the response.
+   * How many lobbies this mix runs. Dropping lobbies throws their balances away
+   * and clears the pins onto them server-side, so the whole game is re-seeded
+   * from the response.
    */
   const setLobbyCount = useMutation({
-    mutationFn: (count: 1 | 2) =>
+    mutationFn: (count: number) =>
       customGameService.setLobbyCount(workspaceId, selectedGameId as number, count),
     onSuccess: (game) => {
       applyGame(game);
-      notify.success(game.lobby_count === 2 ? "Second lobby opened" : "Back to one lobby");
+      notify.success(`Now running ${game.lobby_count} ${game.lobby_count === 1 ? "lobby" : "lobbies"}`);
     },
     onError: (error) => notify.apiError(error),
   });
@@ -527,6 +571,42 @@ export function usePickupMix(
     onError: (error) => notify.apiError(error),
   });
 
+  /**
+   * The four refusals a move or a return answers with are setup problems with a
+   * sentence of their own (`mixes.voice.errors.*`); everything else is an
+   * ordinary failure and reads as one.
+   */
+  const notifyVoiceError = (error: unknown) => {
+    const refusal = voiceRefusal(error);
+    if (refusal) {
+      notify.error(tVoiceError(refusal));
+      return;
+    }
+    notify.apiError(error);
+  };
+
+  /** The mix's whole voice setup at once -- the endpoint replaces it, not patches it. */
+  const setVoiceChannels = useMutation({
+    mutationFn: (patch: MixVoicePatch) =>
+      customGameService.setVoiceChannels(workspaceId, selectedGameId as number, patch),
+    onSuccess: applyGame,
+    onError: (error) => notify.apiError(error),
+  });
+
+  /** Players into their team voices: one lobby, or every lobby for `null`. */
+  const voiceMove = useMutation({
+    mutationFn: (lobbyIndex: number | null) =>
+      customGameService.voiceMove(workspaceId, selectedGameId as number, lobbyIndex),
+    onError: notifyVoiceError,
+  });
+
+  /** And back into the general voice. The report is read off `.data` by the panel. */
+  const voiceReturn = useMutation({
+    mutationFn: (lobbyIndex: number | null) =>
+      customGameService.voiceReturn(workspaceId, selectedGameId as number, lobbyIndex),
+    onError: notifyVoiceError,
+  });
+
   return {
     selectedGameId,
     activeLobby,
@@ -536,6 +616,7 @@ export function usePickupMix(
     matchesQuery,
     rotationQuery,
     mySeatQuery,
+    voiceOptionsQuery,
     createGame,
     setRoster,
     patchPlayer,
@@ -550,7 +631,9 @@ export function usePickupMix(
     hardDeleteMix,
     setAuthorRanks,
     setTeamNames,
+    renameMix,
     postToDiscord,
+    refreshLineup,
     transferHost,
     addCoHost,
     removeCoHost,
@@ -561,5 +644,8 @@ export function usePickupMix(
     setSelfService,
     postSignup,
     deleteDiscordPost,
+    setVoiceChannels,
+    voiceMove,
+    voiceReturn,
   };
 }

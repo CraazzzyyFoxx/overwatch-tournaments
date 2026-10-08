@@ -13,7 +13,7 @@ import type {
 export type PickupRecordOutcomeInput = {
   outcome: CustomGameOutcome;
   variantIndex: number;
-  lobbyIndex: 0 | 1;
+  lobbyIndex: number;
 };
 
 /**
@@ -149,8 +149,9 @@ export function summarizeLineup(rows: CustomGamePlayer[]): LineupSummary {
 /**
  * A 5v5 mix needs one tank and two of each damage/support per team, so ONE
  * lobby needs twice that before a balance can seat everyone. Exported because a
- * two-lobby mix asks for the same shape twice: the lineup's supply strip
- * multiplies by `lobby_count` rather than keeping a second table of its own.
+ * mix running several lobbies asks for the same shape once per lobby: the
+ * lineup's supply strip multiplies by `lobby_count` rather than keeping a
+ * second table of its own.
  */
 export const ROLE_DEMAND: Record<RoleCode, number> = { tank: 2, damage: 4, support: 4 };
 
@@ -257,6 +258,12 @@ export type PickupSeat = {
   name: string;
   role: RoleCode;
   rating: number | null;
+  /**
+   * The host's own open rating for that bucket, when the mix balanced in
+   * ranker mode -- `rating` above is then the effective one the solver used.
+   * `null` in points mode, where the two cannot differ.
+   */
+  openRating: number | null;
   /** The solver put them off their first choice. */
   offRole: boolean;
   isFlex: boolean;
@@ -322,8 +329,8 @@ function asNumber(value: unknown): number | null {
  * A host's team-name overrides re-keyed by the position `parseVariants` assigns
  * names by -- which is a position INSIDE one lobby. Team names are stored
  * relationally (`custom.set_team_names`) at their global index
- * (`lobby_index * 2 + team`, A: 0-1, B: 2-3), so lobby B's overrides shift down
- * by two here and lobby A's drop out of B's map entirely.
+ * (`lobby_index * 2 + team`, so A: 0-1, B: 2-3, C: 4-5 …), so each lobby's
+ * overrides shift down by its own offset and every other lobby's drop out.
  */
 export function teamNamesByIndex(
   settings: CustomGameSettings | undefined,
@@ -334,7 +341,7 @@ export function teamNamesByIndex(
   for (const [key, value] of Object.entries(settings?.team_names ?? {})) {
     const index = Number(key) - offset;
     // Two teams per lobby, the same bound `discord_lineup` reads names with:
-    // without it lobby A would pick up the overrides stored for lobby B.
+    // without it a lobby would pick up the overrides stored for another.
     if (Number.isInteger(index) && index >= 0 && index < 2 && value.trim()) {
       out[index] = value;
     }
@@ -366,6 +373,8 @@ function parseSeats(roster: Record<string, unknown>, players: Record<string, unk
         role,
         // The server's `seat_rating`: the rating for the bucket they sit in, 0 without one.
         rating: asNumber(asRecord(player.ratings)?.[name]) ?? 0,
+        // Only written by the server when the host balanced in ranker mode.
+        openRating: asNumber(asRecord(player.open_ratings)?.[name]),
         // A flex player is never off-role: any seat is their first choice.
         offRole: !isFlex && preferences.length > 0 && preferences[0] !== name,
         isFlex,

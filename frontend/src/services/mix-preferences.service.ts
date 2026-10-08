@@ -20,8 +20,9 @@ export type MixBalancerPreferences = {
    * evenly as possible, `1` maximises players seated on a preferred role.
    */
   mix_comfort_tilt: number | null;
-  /** Per-line importance for the role-line balance term, keyed by roster slot code. */
-  mix_role_weights: Record<string, number> | null;
+  /** Per-role mix knobs keyed by roster slot code; `mix_weight` is this term's
+   * per-line importance in the role-line balance. */
+  role_settings: Record<string, { mix_weight: number }> | null;
   /** How many balance options one run hands back for the pager to walk. */
   max_result_variants: number | null;
   /**
@@ -31,7 +32,16 @@ export type MixBalancerPreferences = {
   role_mask: RosterSlotMap | null;
   /** Rank points a recorded win moves, in the host's own book; `null`/`0` = off. */
   points_per_win: number | null;
+  /**
+   * How a recorded result moves the host's rank book. `"points"` is the flat
+   * `points_per_win` above; `"ranker"` ignores it and moves ranks by the
+   * ranker formula, balancing on the effective rating instead of the open one.
+   */
+  rating_mode: MixRatingMode;
 };
+
+/** The two ways a host's rank book reacts to a recorded match. */
+export type MixRatingMode = "points" | "ranker";
 
 /**
  * What a read adds on top: the stored shape already resolved, so the editor can

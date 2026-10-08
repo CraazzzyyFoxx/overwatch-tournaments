@@ -1,5 +1,6 @@
 "use client";
 
+import { Fragment } from "react";
 import { Save, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -14,10 +15,13 @@ import {
 } from "@/components/ui/sheet";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
+import { normalizePlayerRole } from "@/lib/roster/player-role";
+import { ROSTER_SLOT_CODES, isRosterSlotCode } from "@/lib/roster/shape";
 import type {
   BalancerConfig,
   BalancerConfigField,
   BalancerConfigValue,
+  BalancerRoleSettings,
 } from "@/types/balancer.types";
 
 const GROUP_ORDER: BalancerConfigField["group"][] = [
@@ -38,6 +42,10 @@ type BalancerConfigDrawerProps = {
   onChange: (key: string, value: BalancerConfigValue) => void;
   onSave: () => void;
   onReset: () => void;
+  /** Slot codes of the tournament's roster shape: the roles a `roles` table
+   *  offers a row for. `null` until the shape is known -- then every role the
+   *  backend declares gets a row, which is also what a shapeless run uses. */
+  roleCodes?: string[] | null;
 };
 
 function formatValue(value: unknown): string {
@@ -52,23 +60,134 @@ function formatValue(value: unknown): string {
   return String(value);
 }
 
-function ConfigFieldControl({
+/** Role rows in the roster vocabulary's order, anything newer appended as it
+ * came. The roster shape decides WHICH roles get a row; without one, every
+ * role the backend declares in its `role_settings` default does. A role left
+ * out still keeps whatever this tournament stored for it -- the table only
+ * stops showing it, it never rewrites it. */
+function roleRowOrder(defaults: BalancerRoleSettings, roleCodes?: string[] | null): string[] {
+  const codes = Object.keys(defaults).filter(
+    (code) => roleCodes == null || roleCodes.includes(code)
+  );
+  return [
+    ...ROSTER_SLOT_CODES.filter((code) => codes.includes(code)),
+    ...codes.filter((code) => !isRosterSlotCode(code)),
+  ];
+}
+
+/** Only the cells moved off their default travel. The server merges a stored
+ * row field by field over its own defaults, so sending back a full copy would
+ * pin today's numbers to this tournament forever. */
+function minimalRoleOverrides(
+  value: BalancerRoleSettings,
+  defaults: BalancerRoleSettings
+): BalancerRoleSettings | undefined {
+  const overrides: BalancerRoleSettings = {};
+
+  for (const [role, row] of Object.entries(value)) {
+    const changed = Object.fromEntries(
+      Object.entries(row ?? {}).filter(
+        ([column, cell]) => typeof cell === "number" && cell !== defaults[role]?.[column]
+      )
+    );
+    if (Object.keys(changed).length > 0) {
+      overrides[role] = changed;
+    }
+  }
+
+  return Object.keys(overrides).length > 0 ? overrides : undefined;
+}
+
+/** One row per role, one numeric input per declared column. An empty cell is
+ * not an empty value: it falls back to the role's default, which is also what
+ * clearing one means. */
+function ConfigRolesTable({
   field,
   value,
+  roleCodes,
   onChange,
 }: Readonly<{
   field: BalancerConfigField;
   value: BalancerConfigValue;
+  roleCodes?: string[] | null;
+  onChange: (value: BalancerConfigValue) => void;
+}>) {
+  const defaults = (field.default ?? {}) as BalancerRoleSettings;
+  const overrides = (value ?? {}) as BalancerRoleSettings;
+  const columns = field.columns ?? [];
+  const roles = roleRowOrder(defaults, roleCodes);
+
+  const setCell = (role: string, column: string, next: number | null) => {
+    const merged = {
+      ...overrides,
+      [role]: { ...overrides[role], [column]: next ?? defaults[role]?.[column] },
+    };
+    onChange(minimalRoleOverrides(merged, defaults));
+  };
+
+  return (
+    <div
+      className="grid gap-2"
+      style={{ gridTemplateColumns: `minmax(0,1fr) repeat(${columns.length}, 96px)` }}
+    >
+      <div />
+      {columns.map((column) => (
+        <div
+          key={column.key}
+          title={column.description}
+          className="text-center text-label uppercase tracking-label text-[color:var(--aqt-fg-dim)]"
+        >
+          {column.label}
+        </div>
+      ))}
+      {roles.map((role) => (
+        <Fragment key={role}>
+          <div className="self-center text-sm text-[color:var(--aqt-fg)]">
+            {isRosterSlotCode(role) ? normalizePlayerRole(role) : role}
+          </div>
+          {columns.map((column) => (
+            <NumberInput
+              key={column.key}
+              id={`config-${field.key}-${role}-${column.key}`}
+              aria-label={`${role} ${column.label}`}
+              value={overrides[role]?.[column.key] ?? defaults[role]?.[column.key] ?? null}
+              onValueChange={(next) => setCell(role, column.key, next)}
+              min={column.limits?.min}
+              max={column.limits?.max}
+              className="h-9 rounded-lg px-2 text-center tabular-nums"
+            />
+          ))}
+        </Fragment>
+      ))}
+    </div>
+  );
+}
+
+function ConfigFieldControl({
+  field,
+  value,
+  roleCodes,
+  onChange,
+}: Readonly<{
+  field: BalancerConfigField;
+  value: BalancerConfigValue;
+  roleCodes?: string[] | null;
   onChange: (value: BalancerConfigValue) => void;
 }>) {
   if (field.type === "boolean") {
     return <Switch checked={Boolean(value)} onCheckedChange={onChange} />;
   }
 
+  if (field.type === "roles") {
+    return (
+      <ConfigRolesTable field={field} value={value} roleCodes={roleCodes} onChange={onChange} />
+    );
+  }
+
   // No `select`/`role_mask` branches: the backend emits only
-  // boolean/integer/float/slider rows. `algorithm` died with the pure-Python
-  // solver, and the per-team slot counts come from the tournament roster shape
-  // rather than from this drawer.
+  // boolean/integer/float/slider/roles rows. `algorithm` died with the
+  // pure-Python solver, and the per-team slot counts come from the tournament
+  // roster shape rather than from this drawer.
   if (field.type === "slider") {
     const numeric =
       typeof value === "number" ? value : Number(value ?? field.default ?? 0);
@@ -123,6 +242,7 @@ export function BalancerConfigDrawer({
   onChange,
   onSave,
   onReset,
+  roleCodes,
 }: Readonly<BalancerConfigDrawerProps>) {
   const fieldsByGroup = GROUP_ORDER.map((group) => ({
     group,
@@ -154,16 +274,31 @@ export function BalancerConfigDrawer({
                         key={field.key}
                         className="rounded-lg border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] p-3"
                       >
-                        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_220px]">
+                        <div
+                          className={
+                            // The table is as wide as it has columns; a knob
+                            // with one input keeps the narrow control column.
+                            field.type === "roles"
+                              ? "grid gap-3"
+                              : "grid gap-3 md:grid-cols-[minmax(0,1fr)_220px]"
+                          }
+                        >
                           <div>
-                            <Label htmlFor={`config-${field.key}`} className="text-sm text-[color:var(--aqt-fg)]">
+                            <Label
+                              htmlFor={field.type === "roles" ? undefined : `config-${field.key}`}
+                              className="text-sm text-[color:var(--aqt-fg)]"
+                            >
                               {field.label}
                             </Label>
                             <p className="mt-1 text-xs leading-5 text-[color:var(--aqt-fg-dim)]">
                               {field.description}
                             </p>
                             <div className="mt-2 flex flex-wrap gap-2 text-label text-[color:var(--aqt-fg-dim)]">
-                              <span>Default: {formatValue(field.default)}</span>
+                              {/* A roles table shows its own defaults in the
+                                  cells; dumping the whole dict here is noise. */}
+                              {field.type === "roles" ? null : (
+                                <span>Default: {formatValue(field.default)}</span>
+                              )}
                               {field.limits ? (
                                 <span>
                                   Limit: {field.limits.min} - {field.limits.max}
@@ -175,6 +310,7 @@ export function BalancerConfigDrawer({
                             <ConfigFieldControl
                               field={field}
                               value={value}
+                              roleCodes={roleCodes}
                               onChange={(nextValue) => onChange(field.key, nextValue)}
                             />
                           </div>

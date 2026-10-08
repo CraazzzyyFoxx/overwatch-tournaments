@@ -12,26 +12,18 @@ interface UserAchievementPageProps {
 }
 
 const parseAchievementFilter = (selectedTournamentId?: string) => {
-  if (!selectedTournamentId || selectedTournamentId === "all") {
-    return { tournamentId: undefined, withoutTournament: undefined, selectValue: "all" };
-  }
-
   if (selectedTournamentId === "none") {
-    return { tournamentId: undefined, withoutTournament: true, selectValue: "none" };
+    return { tournamentId: undefined, withoutTournament: true };
   }
 
-  if (selectedTournamentId.startsWith("t-")) {
+  if (selectedTournamentId?.startsWith("t-")) {
     const parsedTournamentId = Number(selectedTournamentId.slice(2));
     if (Number.isFinite(parsedTournamentId) && parsedTournamentId > 0) {
-      return {
-        tournamentId: parsedTournamentId,
-        withoutTournament: undefined,
-        selectValue: `t-${parsedTournamentId}`
-      };
+      return { tournamentId: parsedTournamentId, withoutTournament: undefined };
     }
   }
 
-  return { tournamentId: undefined, withoutTournament: undefined, selectValue: "all" };
+  return { tournamentId: undefined, withoutTournament: undefined };
 };
 
 const UserAchievementPage = async ({
@@ -39,7 +31,7 @@ const UserAchievementPage = async ({
   selectedTournamentId,
   scope
 }: UserAchievementPageProps) => {
-  const { tournamentId, withoutTournament, selectValue } = parseAchievementFilter(selectedTournamentId);
+  const { tournamentId, withoutTournament } = parseAchievementFilter(selectedTournamentId);
   const t = await getTranslations();
 
   let achievements: AchievementRarity[];
@@ -51,7 +43,7 @@ const UserAchievementPage = async ({
           tournamentId,
           withoutTournament,
           // Locked achievements only make sense for the global (all-tournaments) view.
-          includeLocked: selectValue === "all",
+          includeLocked: tournamentId === undefined && !withoutTournament,
           scope
         })
         .catch(() => [] as AchievementRarity[]),
@@ -70,7 +62,7 @@ const UserAchievementPage = async ({
       <AchievementsView
         achievements={achievements}
         tournaments={profile.tournaments}
-        selectedTournamentValue={selectValue}
+        selectedTournament={withoutTournament ? "none" : tournamentId}
       />
     </div>
   );

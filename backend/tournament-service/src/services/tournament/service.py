@@ -256,19 +256,17 @@ class TournamentService:
 
     async def get_tournaments_overall(
         self, session: AsyncSession, workspace_id: int | None = None
-    ) -> tuple[int, int, int, int]:
+    ) -> schemas.OverallStatistics:
         """
-        Retrieves overall statistics for tournaments, including counts of tournaments, teams, players, and champions.
+        Retrieves overall statistics: how many tournaments, teams, players and champions
+        there are, plus how much was actually played (encounters, maps, days, hours).
 
         Args:
             session: An SQLAlchemy `AsyncSession` for database interaction.
+            workspace_id: Restrict every count to one workspace, or None for the platform.
 
         Returns:
-            A tuple containing:
-            1. The total number of tournaments.
-            2. The total number of teams.
-            3. The total number of players.
-            4. The total number of champions.
+            An `OverallStatistics` schema instance.
         """
         # Hidden tournaments (issue #115) never contribute to public overall stats.
         ws_filters = [models.Tournament.is_hidden.is_(False)]
@@ -316,15 +314,71 @@ class TournamentService:
                 )
             )
         )
+
+        tournament_scope = [models.Tournament.is_league.is_(False), *ws_filters]
+
+        # Played volume. ``encounters`` counts only decided ones -- the same
+        # COMPLETED status every public encounter feed treats as finished.
+        encounters_count_query = (
+            sa.select(sa.func.count(models.Encounter.id))
+            .join(models.Tournament, models.Tournament.id == models.Encounter.tournament_id)
+            .where(models.Encounter.status == enums.EncounterStatus.COMPLETED, *tournament_scope)
+        )
+
+        # Maps and played time come off the same join, so they come off the same
+        # statement. ``time`` is NULL on the legacy logless rows: coalesce, so a
+        # single one of them cannot NULL the whole sum.
+        maps_and_time_query = (
+            sa.select(
+                sa.func.count(models.Match.id),
+                sa.func.coalesce(sa.func.sum(models.Match.time), 0.0),
+            )
+            .select_from(models.Match)
+            .join(models.Encounter, models.Encounter.id == models.Match.encounter_id)
+            .join(models.Tournament, models.Tournament.id == models.Encounter.tournament_id)
+            .where(*tournament_scope)
+        )
+
+        # Calendar days the tournaments COVER, not the sum of their lengths: two
+        # tournaments running the same weekend are three days, not six. Expanding
+        # each [start, end] range to its dates and counting the distinct union is
+        # what makes the overlap collapse.
+        tournament_days = (
+            sa.select(
+                sa.cast(
+                    sa.func.generate_series(
+                        sa.cast(models.Tournament.start_date, sa.Date),
+                        sa.cast(models.Tournament.end_date, sa.Date),
+                        sa.text("interval '1 day'"),
+                    ),
+                    sa.Date,
+                ).label("day")
+            )
+            .where(
+                models.Tournament.start_date.isnot(None),
+                models.Tournament.end_date.isnot(None),
+                *tournament_scope,
+            )
+            .subquery()
+        )
+        days_count_query = sa.select(sa.func.count(sa.distinct(tournament_days.c.day)))
+
         tournaments_count_result = await session.execute(tournaments_count_query)
         teams_count_result = await session.execute(teams_count_query)
         players_count_result = await session.execute(players_count_query)
         champions_count_result = await session.execute(champions_count_query)
-        return (
-            tournaments_count_result.scalar_one(),
-            teams_count_result.scalar_one(),
-            players_count_result.scalar_one(),
-            champions_count_result.scalar_one(),
+        encounters_count_result = await session.execute(encounters_count_query)
+        maps_count, total_seconds = (await session.execute(maps_and_time_query)).one()
+        days_count_result = await session.execute(days_count_query)
+        return schemas.OverallStatistics(
+            tournaments=tournaments_count_result.scalar_one(),
+            teams=teams_count_result.scalar_one(),
+            players=players_count_result.scalar_one(),
+            champions=champions_count_result.scalar_one(),
+            encounters=encounters_count_result.scalar_one(),
+            maps=maps_count,
+            days=days_count_result.scalar_one(),
+            hours=int((total_seconds or 0) // 3600),
         )
 
     async def get_bulk_tournament(

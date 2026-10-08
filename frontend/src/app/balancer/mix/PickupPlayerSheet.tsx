@@ -7,7 +7,7 @@ import { Pin, Save, UserMinus } from "lucide-react";
 import { BattleTagCopyButton } from "@/app/balancer/components/BattleTagCopyControls";
 import { PickupRoleOrderEditor } from "@/app/balancer/mix/PickupRoleOrderEditor";
 import { splitBattleTag } from "@/components/balancer/balancer-page-helpers";
-import { CAPTION_CLASS, EYEBROW_CLASS } from "@/app/balancer/mix/pickup-chrome";
+import { CAPTION_CLASS, EYEBROW_CLASS, lobbyLetter } from "@/app/balancer/mix/pickup-chrome";
 import RankHistory from "@/components/RankHistory";
 import { Button } from "@/components/ui/button";
 import { IconTooltip } from "@/components/ui/icon-tooltip";
@@ -51,8 +51,8 @@ type PickupPlayerSheetProps = {
   onRemove: () => void;
   /** This player's all-time mix record, or `null` where the page does not read one. */
   mixStats?: MixMemberStats | null;
-  /** How many lobbies the mix runs. The pin only exists, and is only sent, at 2. */
-  lobbyCount?: 1 | 2;
+  /** How many lobbies the mix runs. The pin only exists, and is only sent, past 1. */
+  lobbyCount?: number;
 };
 
 /** Everything the sheet edits before Save, kept apart from the server row. */
@@ -66,7 +66,7 @@ type RoleDraft = {
    * `order`'s position stops mattering as a priority hint. */
   isFlex: boolean;
   /** Which lobby the host tied this player to, or `null` for "wherever the balance puts them". */
-  lobbyPin: 0 | 1 | null;
+  lobbyPin: number | null;
 };
 
 function buildDraft(row: CustomGamePlayer | null): RoleDraft {
@@ -78,21 +78,6 @@ function buildDraft(row: CustomGamePlayer | null): RoleDraft {
     lobbyPin: row?.lobby_pin ?? null,
   };
 }
-
-/**
- * The lobby pin, in the order the tabs read: no tie, then A, then B. Each
- * option owns a key rather than an interpolated letter, so a locale can word
- * "Auto" and "Lobby A" independently of the tab label.
- */
-const LOBBY_PIN_OPTIONS: readonly {
-  value: 0 | 1 | null;
-  /** Literal, not `string`: `useTranslations` only takes keys it can see in the bundle. */
-  labelKey: "pinAuto" | "pinA" | "pinB";
-}[] = [
-  { value: null, labelKey: "pinAuto" },
-  { value: 0, labelKey: "pinA" },
-  { value: 1, labelKey: "pinB" },
-];
 
 /** The three-way status picker, in the same order the lineup columns read left to right. */
 const STATUS_OPTIONS: readonly {
@@ -197,7 +182,7 @@ export function PickupPlayerSheet({
         roles: draft.order,
         is_flex: draft.isFlex,
         // A one-lobby mix 422s this field, and there is no control to set it.
-        ...(lobbyCount === 2 ? { lobby_pin: draft.lobbyPin } : {}),
+        ...(lobbyCount > 1 ? { lobby_pin: draft.lobbyPin } : {}),
       },
       Object.keys(draft.rankEdits).length > 0 ? { ranks, clear } : null,
     );
@@ -285,7 +270,7 @@ export function PickupPlayerSheet({
               </div>
             </section>
 
-            {lobbyCount === 2 ? (
+            {lobbyCount > 1 ? (
               <section className="space-y-2.5 border-b border-[color:var(--aqt-border)] px-5 py-4">
                 <h3 className="text-caption font-medium text-[color:var(--aqt-fg)]">
                   {t("pinHeading")}
@@ -293,34 +278,38 @@ export function PickupPlayerSheet({
                 <div
                   role="radiogroup"
                   aria-label={t("pinGroup", { name: label })}
-                  className="grid grid-cols-3 gap-1.5"
+                  className="grid grid-cols-4 gap-1.5"
                 >
-                  {LOBBY_PIN_OPTIONS.map((option) => {
-                    const selected = draft.lobbyPin === option.value;
-                    const optionLabel = t(option.labelKey);
-                    return (
-                      <button
-                        key={option.labelKey}
-                        type="button"
-                        role="radio"
-                        aria-checked={selected}
-                        aria-label={t("pinOption", { option: optionLabel, name: label })}
-                        disabled={disabled}
-                        onClick={() =>
-                          setDraft((current) => ({ ...current, lobbyPin: option.value }))
-                        }
-                        className={cn(
-                          "rounded-lg border px-2 py-2 text-center text-caption font-semibold transition-colors",
-                          selected
-                            ? "border-[color:var(--aqt-teal)] bg-[color:color-mix(in_srgb,var(--aqt-teal)_10%,transparent)] text-[color:var(--aqt-teal)]"
-                            : "border-[color:var(--aqt-border-2)] text-[color:var(--aqt-fg-muted)] hover:border-[color:var(--aqt-border-3)]",
-                          "disabled:cursor-default disabled:opacity-60",
-                        )}
-                      >
-                        {optionLabel}
-                      </button>
-                    );
-                  })}
+                  {/* No tie, then one option per lobby the mix actually runs.
+                      "Auto" is a word of its own rather than an interpolated
+                      letter, so a locale phrases it apart from the tab label. */}
+                  {[null, ...Array.from({ length: lobbyCount }, (_, index) => index)].map(
+                    (value) => {
+                      const selected = draft.lobbyPin === value;
+                      const optionLabel =
+                        value == null ? t("pinAuto") : t("tab", { letter: lobbyLetter(value) });
+                      return (
+                        <button
+                          key={value ?? "auto"}
+                          type="button"
+                          role="radio"
+                          aria-checked={selected}
+                          aria-label={t("pinOption", { option: optionLabel, name: label })}
+                          disabled={disabled}
+                          onClick={() => setDraft((current) => ({ ...current, lobbyPin: value }))}
+                          className={cn(
+                            "rounded-lg border px-2 py-2 text-center text-caption font-semibold transition-colors",
+                            selected
+                              ? "border-[color:var(--aqt-teal)] bg-[color:color-mix(in_srgb,var(--aqt-teal)_10%,transparent)] text-[color:var(--aqt-teal)]"
+                              : "border-[color:var(--aqt-border-2)] text-[color:var(--aqt-fg-muted)] hover:border-[color:var(--aqt-border-3)]",
+                            "disabled:cursor-default disabled:opacity-60",
+                          )}
+                        >
+                          {optionLabel}
+                        </button>
+                      );
+                    },
+                  )}
                 </div>
                 <p className="text-label text-[color:var(--aqt-fg-dim)]">{t("pinHint")}</p>
               </section>

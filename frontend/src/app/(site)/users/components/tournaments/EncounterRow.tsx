@@ -7,7 +7,7 @@ import { EncounterWithUserStats } from "@/types/user.types";
 import type { Hero } from "@/types/hero.types";
 import { HeroStrip } from "@/components/hero/HeroImage";
 import { type ScoreKind } from "@/components/match/cells";
-import MvpMatchPill from "@/components/match/MvpMatchPill";
+import MvpOrdinal from "@/app/(site)/users/components/shared/MvpOrdinal";
 import MatchLogIndicator from "@/components/match/MatchLogIndicator";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
@@ -65,8 +65,7 @@ const EncounterRow = ({
   return (
     <HoverPrefetchLink
       href={`/encounters/${enc.id}`}
-      className="grid grid-cols-[1fr_auto_auto] items-center gap-3 border-b border-[color:var(--aqt-border)] px-4 py-2.5 text-ui transition-colors last:border-b-0 hover:bg-[hsl(0_0%_100%/0.025)] md:grid-cols-[1fr_auto_auto_auto_auto_auto_auto]"
-      style={{ boxShadow: `inset 3px 0 0 0 ${scoreAccent[scoreKind]}` }}
+      className="-mx-2 grid grid-cols-[1fr_auto_auto] items-center gap-3 rounded-lg border-b border-[color:var(--aqt-border)] px-2 py-2.5 text-ui transition-colors last:border-b-0 hover:bg-[hsl(0_0%_100%/0.025)] md:grid-cols-[1fr_auto_auto_auto_auto_auto_auto]"
     >
       {/* Stage + opponent */}
       <div className="flex min-w-0 flex-col gap-0.5">
@@ -83,7 +82,7 @@ const EncounterRow = ({
       <div className="hidden items-center gap-1 md:flex">
         <TooltipProvider delayDuration={150}>
           {(enc.matches ?? []).map((m) => (
-            <MvpMatchPill key={m.id} match={m} />
+            <MvpOrdinal key={m.id} match={m} />
           ))}
         </TooltipProvider>
       </div>

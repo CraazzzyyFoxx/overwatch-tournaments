@@ -26,7 +26,13 @@ from src.interactions import copy  # noqa: E402
 from src.interactions import dispatcher as dispatcher_module  # noqa: E402
 from src.interactions.actions import ACTIONS, parse_custom_id, parse_setup_target, setup_target  # noqa: E402
 from src.interactions.cards import card_view, settle  # noqa: E402
-from src.interactions.dispatcher import IDENTITY_SUBJECT, MIX_CURRENT_SUBJECT, ActionDispatcher, Outcome  # noqa: E402
+from src.interactions.dispatcher import (  # noqa: E402
+    IDENTITY_SUBJECT,
+    MIX_CURRENT_SUBJECT,
+    MIX_HOSTED_SUBJECT,
+    ActionDispatcher,
+    Outcome,
+)
 
 SITE = "https://owt.example"
 IDENTITY = {"sub": 77, "username": "kira", "credential_type": "discord", "workspaces": []}
@@ -38,9 +44,12 @@ class _Rpc:
     def __init__(self, replies: dict[str, Any]) -> None:
         self.replies = replies
         self.calls: list[tuple[str, dict[str, Any]]] = []
+        #: One per call, in order: an action that may legitimately take seconds asks for longer.
+        self.timeouts: list[float] = []
 
     async def __call__(self, broker: Any, payload: dict[str, Any], queue: str, *, timeout: float) -> Any:
         self.calls.append((queue, payload))
+        self.timeouts.append(timeout)
         reply = self.replies[queue]
         if isinstance(reply, Exception):
             raise reply
@@ -490,9 +499,9 @@ class MixSelfSignupTests(IsolatedAsyncioTestCase):
         no_seat_head, _details = copy.mix_text("ru", _mix_state(seat=None))
         self.assertIn("Вы не записаны на этот микс.", no_seat_head)
 
-    async def test_the_card_names_the_lobby_only_when_the_mix_runs_two(self) -> None:
-        """With two lobbies "you are signed up" is not enough: a player has to
-        know which of the two games is theirs, or whether they have a seat yet."""
+    async def test_the_card_names_the_lobby_only_when_the_mix_runs_several(self) -> None:
+        """With more than one lobby "you are signed up" is not enough: a player
+        has to know which of the games is theirs, or whether they have a seat yet."""
         dispatcher = _dispatcher()
 
         one_lobby = _reply_text(dispatcher.reply(Outcome("ok", _mix_state()), "mix.roles", "ru"))
@@ -501,6 +510,10 @@ class MixSelfSignupTests(IsolatedAsyncioTestCase):
         seated = _mix_state(lobby_count=2)
         seated["seat"]["current_lobby"] = 1
         self.assertIn("Лобби B", _reply_text(dispatcher.reply(Outcome("ok", seated), "mix.roles", "ru")))
+
+        third = _mix_state(lobby_count=4)
+        third["seat"]["current_lobby"] = 2
+        self.assertIn("Лобби C", _reply_text(dispatcher.reply(Outcome("ok", third), "mix.roles", "ru")))
 
         waiting = _mix_state(lobby_count=2)
         waiting["seat"]["current_lobby"] = None
@@ -585,3 +598,98 @@ class CurrentMixCommandTests(IsolatedAsyncioTestCase):
 
         self.assertEqual(rpc.calls, [])
         self.assertIn("Сейчас нет открытого микса", _reply_text(command.followup.send.await_args.kwargs["view"]))
+
+
+def _report(**overrides: Any) -> dict[str, Any]:
+    """What a voice move answers with: the count, then a row per person."""
+    report: dict[str, Any] = {
+        "moved": 1,
+        "results": [
+            {"workspace_member_id": 1, "name": "Ana", "status": "moved", "channel_id": "900"},
+            {"workspace_member_id": 2, "name": "Bob", "status": "not_in_voice", "channel_id": None},
+        ],
+    }
+    report.update(overrides)
+    return report
+
+
+class VoiceControlsTests(IsolatedAsyncioTestCase):
+    """The lineup card's voice buttons and ``/mix move|return``: one call, one report."""
+
+    def test_a_voice_button_names_one_mix_and_one_lobby_or_all_of_them(self) -> None:
+        self.assertEqual(parse_custom_id("owt:voice.move:42-0"), ("voice.move", "42-0"))
+        self.assertEqual(parse_custom_id("owt:voice.return:42-all"), ("voice.return", "42-all"))
+        for refused in ("owt:voice.move:42-6", "owt:voice.move:42", "owt:voice.move:all-0"):
+            self.assertIsNone(parse_custom_id(refused), refused)
+
+    async def test_moving_every_lobby_is_one_call_with_room_for_discords_rate_limit(self) -> None:
+        rpc = _Rpc({IDENTITY_SUBJECT: rpc_ok(IDENTITY), "rpc.balancer.custom.voice_move": rpc_ok(_report())})
+
+        with patch.object(dispatcher_module, "request_rpc", rpc):
+            outcome = await _dispatcher().perform(4242, "voice.move", "42-all")
+
+        self.assertEqual(outcome.status, "ok")
+        self.assertEqual(
+            rpc.calls[-1],
+            (
+                "rpc.balancer.custom.voice_move",
+                {"identity": IDENTITY, "custom_game_id": 42, "payload": {"lobby_index": None}},
+            ),
+        )
+        self.assertEqual(rpc.timeouts[-1], 40.0)
+
+    async def test_the_slash_command_moves_one_lobby_and_answers_the_host_alone(self) -> None:
+        rpc = _Rpc({IDENTITY_SUBJECT: rpc_ok(IDENTITY), "rpc.balancer.custom.voice_return": rpc_ok(_report())})
+        command = _interaction(guild_id=555)
+
+        with patch.object(dispatcher_module, "request_rpc", rpc):
+            await _dispatcher().run_voice(command, "voice.return", 42, "1")
+
+        command.response.defer.assert_awaited_once_with(ephemeral=True, thinking=True)
+        subject, body = rpc.calls[-1]
+        self.assertEqual(subject, "rpc.balancer.custom.voice_return")
+        self.assertEqual(body, {"identity": IDENTITY, "custom_game_id": 42, "payload": {"lobby_index": 1}})
+        self.assertTrue(command.followup.send.await_args.kwargs["ephemeral"])
+
+    def test_the_report_counts_who_moved_and_names_everyone_who_did_not(self) -> None:
+        text = _reply_text(_dispatcher().reply(Outcome("ok", data=_report()), "voice.move", "ru"))
+
+        self.assertIn("Перенесено: 1", text)
+        self.assertIn("**Не в войсе:** Bob", text)
+
+    async def test_a_mix_without_a_general_voice_is_told_what_to_fix(self) -> None:
+        # The balancer raises ``HTTPException(409, detail="general_voice_not_configured")``:
+        # a bare string detail, which the envelope carries as the human message
+        # while ``code`` is only the status. The sentence must survive that.
+        refusal = rpc_error("conflict", "general_voice_not_configured")
+        rpc = _Rpc({IDENTITY_SUBJECT: rpc_ok(IDENTITY), "rpc.balancer.custom.voice_return": refusal})
+        dispatcher = _dispatcher()
+
+        with patch.object(dispatcher_module, "request_rpc", rpc):
+            outcome = await dispatcher.perform(4242, "voice.return", "42-all")
+
+        self.assertEqual((outcome.status, outcome.code), ("failed", "conflict"))
+        self.assertIn("У микса не выбран общий войс.", _reply_text(dispatcher.reply(outcome, "voice.return", "ru")))
+
+    async def test_autocomplete_offers_the_open_mixes_matching_what_was_typed(self) -> None:
+        hosted = [
+            {"id": 12, "name": "Пятничный микс", "lobby_count": 2},
+            {"id": 11, "name": "Training", "lobby_count": 1},
+        ]
+        rpc = _Rpc({IDENTITY_SUBJECT: rpc_ok(IDENTITY), MIX_HOSTED_SUBJECT: rpc_ok(hosted)})
+        workspaces = MagicMock(list_ids_by_discord_guild=AsyncMock(return_value=[7]))
+
+        with patch.object(dispatcher_module, "request_rpc", rpc):
+            choices = await _dispatcher(workspaces=workspaces).hosted_mixes(_interaction(guild_id=555), "TRAIN")
+
+        self.assertEqual([(choice.name, choice.value) for choice in choices], [("Training", 11)])
+        self.assertEqual(rpc.calls[-1][1], {"identity": IDENTITY, "workspace_id": 7})
+
+    async def test_autocomplete_offers_nothing_when_the_platform_refuses(self) -> None:
+        rpc = _Rpc({IDENTITY_SUBJECT: rpc_ok(IDENTITY), MIX_HOSTED_SUBJECT: rpc_error("internal", "boom")})
+        workspaces = MagicMock(list_ids_by_discord_guild=AsyncMock(return_value=[7]))
+
+        with patch.object(dispatcher_module, "request_rpc", rpc):
+            choices = await _dispatcher(workspaces=workspaces).hosted_mixes(_interaction(guild_id=555), "")
+
+        self.assertEqual(choices, [])

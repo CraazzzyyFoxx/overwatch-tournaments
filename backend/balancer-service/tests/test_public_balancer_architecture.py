@@ -33,7 +33,9 @@ class MooBackendContractTests(TestCase):
         config = AlgorithmConfig()
         config.intra_team_std_weight = 1.25
         config.internal_role_spread_weight = 0.75
-        config.tank_impact_weight = 1.7
+        config.role_settings = config.role_settings | {
+            "tank": config.role_settings["tank"].model_copy(update={"impact": 1.7})
+        }
         config.mutation_rate_min = 0.2
         config.island_count = 6
         config.crossover_rate = 0.9
@@ -61,7 +63,10 @@ class MooBackendContractTests(TestCase):
         config_payload = payload["config"]
         self.assertEqual(config_payload["intra_team_std_weight"], 1.25)
         self.assertEqual(config_payload["internal_role_spread_weight"], 0.75)
-        self.assertEqual(config_payload["tank_impact_weight"], 1.7)
+        self.assertEqual(
+            {"name": "tank", "slots": 1, "flex": False, "impact": 1.7, "line_gap_weight": 0.8, "line_std_weight": 1.5},
+            payload["roles"][0],
+        )
         self.assertEqual(config_payload["mutation_rate_min"], 0.2)
         self.assertEqual(config_payload["island_count"], 6)
         self.assertEqual(config_payload["crossover_rate"], 0.9)
@@ -93,26 +98,8 @@ class MooBackendRuntimeTests(TestCase):
 
     def test_requires_native_module_even_when_legacy_python_backend_is_requested(self) -> None:
         with patch.dict(os.environ, {"BALANCER_MOO_BACKEND": "python"}, clear=False):
-            with patch("src.domain.balancer.moo_backend.platform.system", return_value="Linux"):
-                with patch("src.domain.balancer.moo_backend._load_native_module", return_value=None):
-                    with self.assertRaisesRegex(RuntimeError, "tournament_balancer"):
-                        run_moo_optimizer(
-                            [self.player],
-                            1,
-                            self.config,
-                            None,
-                            role_assignment=self.role_assignment,
-                            seed=123,
-                        )
-
-    def test_propagates_rust_backend_failures_without_python_fallback(self) -> None:
-        broken_native = SimpleNamespace(
-            run_moo_optimizer=lambda _: (_ for _ in ()).throw(ValueError("native exploded"))
-        )
-
-        with patch("src.domain.balancer.moo_backend.platform.system", return_value="Linux"):
-            with patch("src.domain.balancer.moo_backend._load_native_module", return_value=broken_native):
-                with self.assertRaisesRegex(ValueError, "native exploded"):
+            with patch("src.domain.balancer.native.importlib.import_module", side_effect=ImportError("absent")):
+                with self.assertRaisesRegex(RuntimeError, "balancer_native"):
                     run_moo_optimizer(
                         [self.player],
                         1,
@@ -121,6 +108,22 @@ class MooBackendRuntimeTests(TestCase):
                         role_assignment=self.role_assignment,
                         seed=123,
                     )
+
+    def test_propagates_rust_backend_failures_without_python_fallback(self) -> None:
+        broken_native = SimpleNamespace(
+            run_moo_optimizer=lambda _: (_ for _ in ()).throw(ValueError("native exploded"))
+        )
+
+        with patch("src.domain.balancer.native.load_native_module", return_value=broken_native):
+            with self.assertRaisesRegex(ValueError, "native exploded"):
+                run_moo_optimizer(
+                    [self.player],
+                    1,
+                    self.config,
+                    None,
+                    role_assignment=self.role_assignment,
+                    seed=123,
+                )
 
     def test_forwards_progress_callback_to_native_backend_when_present(self) -> None:
         observed_events: list[dict[str, object]] = []
@@ -156,16 +159,15 @@ class MooBackendRuntimeTests(TestCase):
 
         native_module = SimpleNamespace(run_moo_optimizer=fake_run_moo_optimizer)
 
-        with patch("src.domain.balancer.moo_backend.platform.system", return_value="Linux"):
-            with patch("src.domain.balancer.moo_backend._load_native_module", return_value=native_module):
-                result = run_moo_optimizer(
-                    [self.player],
-                    1,
-                    self.config,
-                    progress_callback,
-                    role_assignment=self.role_assignment,
-                    seed=123,
-                )
+        with patch("src.domain.balancer.native.load_native_module", return_value=native_module):
+            result = run_moo_optimizer(
+                [self.player],
+                1,
+                self.config,
+                progress_callback,
+                role_assignment=self.role_assignment,
+                seed=123,
+            )
 
         self.assertEqual(len(result), 1)
         self.assertEqual(
@@ -524,7 +526,7 @@ class MooDeterminismTests(TestCase):
         def fake_run_moo_optimizer(request_payload: str) -> str:
             payload = json.loads(request_payload)
             observed_seeds.append(payload["seed"])
-            role_names = sorted(payload["mask"].keys())
+            role_names = [role["name"] for role in payload["roles"]]
             players = sorted(payload["players"], key=lambda entry: entry["uuid"])
             teams = []
             for index, player in enumerate(players, start=1):
@@ -539,12 +541,10 @@ class MooDeterminismTests(TestCase):
 
         native_module = SimpleNamespace(run_moo_optimizer=fake_run_moo_optimizer)
 
-        with patch("src.domain.balancer.moo_backend.platform.system", return_value="Linux"):
-            with patch("src.domain.balancer.moo_backend._load_native_module", return_value=native_module):
-                runs = [
-                    balance_teams_tournament(input_data, config_overrides, None, role_mask)[0]["teams"]
-                    for _ in range(3)
-                ]
+        with patch("src.domain.balancer.native.load_native_module", return_value=native_module):
+            runs = [
+                balance_teams_tournament(input_data, config_overrides, None, role_mask)[0]["teams"] for _ in range(3)
+            ]
 
         self.assertEqual(runs[0], runs[1])
         self.assertEqual(runs[1], runs[2])
@@ -589,7 +589,7 @@ class MooDeterminismTests(TestCase):
         def fake_run_moo_optimizer(request_payload: str) -> str:
             payload = json.loads(request_payload)
             observed_player_orders.append([player["uuid"] for player in payload["players"]])
-            role_name = sorted(payload["mask"].keys())[0]
+            role_name = payload["roles"][0]["name"]
             teams = [
                 {
                     "id": index,
@@ -601,14 +601,13 @@ class MooDeterminismTests(TestCase):
 
         native_module = SimpleNamespace(run_moo_optimizer=fake_run_moo_optimizer)
 
-        with patch("src.domain.balancer.moo_backend.platform.system", return_value="Linux"):
-            with patch("src.domain.balancer.moo_backend._load_native_module", return_value=native_module):
-                ordered_run = balance_teams_tournament(
-                    make_input([1, 2, 3, 4, 5, 6]), config_overrides, None, role_mask
-                )[0]["teams"]
-                reversed_run = balance_teams_tournament(
-                    make_input([6, 5, 4, 3, 2, 1]), config_overrides, None, role_mask
-                )[0]["teams"]
+        with patch("src.domain.balancer.native.load_native_module", return_value=native_module):
+            ordered_run = balance_teams_tournament(make_input([1, 2, 3, 4, 5, 6]), config_overrides, None, role_mask)[
+                0
+            ]["teams"]
+            reversed_run = balance_teams_tournament(make_input([6, 5, 4, 3, 2, 1]), config_overrides, None, role_mask)[
+                0
+            ]["teams"]
 
         self.assertEqual(ordered_run, reversed_run)
         self.assertEqual(observed_player_orders[0], observed_player_orders[1])
@@ -654,7 +653,7 @@ class MooDeterminismTests(TestCase):
         def fake_run_moo_optimizer(request_payload: str) -> str:
             payload = json.loads(request_payload)
             players = sorted(payload["players"], key=lambda entry: entry["uuid"])
-            team_size = sum(payload["mask"].values())
+            team_size = sum(role["slots"] for role in payload["roles"])
             # The native backend must only ever see a player count that
             # divides evenly into full teams -- the leftover was trimmed
             # before this request was built.
@@ -674,9 +673,8 @@ class MooDeterminismTests(TestCase):
 
         native_module = SimpleNamespace(run_moo_optimizer=fake_run_moo_optimizer)
 
-        with patch("src.domain.balancer.moo_backend.platform.system", return_value="Linux"):
-            with patch("src.domain.balancer.moo_backend._load_native_module", return_value=native_module):
-                result = balance_teams_tournament(input_data, config_overrides, None, role_mask)[0]
+        with patch("src.domain.balancer.native.load_native_module", return_value=native_module):
+            result = balance_teams_tournament(input_data, config_overrides, None, role_mask)[0]
 
         self.assertEqual(len(result["teams"]), 2)
         self.assertEqual(sum(len(team["roster"].get("tank", [])) for team in result["teams"]), 4)

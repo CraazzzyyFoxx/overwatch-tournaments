@@ -4,9 +4,12 @@ One rule applies almost everywhere: changes do not save themselves. An **Unsaved
 
 ## General
 
-The workspace's name, description, timezone and icon.
+The workspace's name, the texts and links of its community page, its timezone and icon.
 
-- **Name** and **Description** — what the community is called and what it says about itself.
+- **Name** and **Description** — what the community is called and what it says about itself. The description is the lead line under the name on the community page and in the directory.
+- **Tagline** — a short line (up to 120 characters) shown next to "since \<year>" above the name on the community page.
+- **About** — a longer text in Markdown (up to 4000 characters) for the community page's **About the community** section, next to the list of who runs it: the owner, administrators and referees who have a player profile.
+- **Discord**, **Twitch**, **Boosty** — your community's links. They appear as buttons on the community page and in the footer of your own address. Only `https://` links to discord.gg / discord.com, twitch.tv and boosty.to are accepted.
 - **Timezone** — the workspace's zone. Tournament schedules are entered and shown in it, so changing it mid-season is a bad idea.
 - **Icon** — the community picture: PNG, JPEG, WebP or GIF up to 2 MB. It is saved as soon as you pick the file; there is no separate button for it.
 - **Owner** — the account accountable for this workspace.
@@ -60,28 +63,36 @@ Until verification passes, the workspace does not serve on that domain — the o
 
 ## Discord
 
-The single Discord server the community runs in: where the bot assigns subscriber roles, and where match-log channels live.
+The single Discord server the community runs in, plus everything the bot does there: subscriber roles, match logs, tournament announcements and mixes. Every change on this page saves as soon as you make it.
 
-1. **Your servers** lists the servers you administer — ones you own, or ones where you can manage the server. If the list is empty, link or reconnect Discord in your account settings and come back.
-2. Press **Link this server** on the right one. The linked server then shows up under **Linked server**.
-3. Press **Add bot to server** and add the bot. Without it, match logs are not read and mix announcements are not posted — the page warns you about that.
-4. Once a server is linked, a picker appears for the channel where mixes are announced.
+### Server
 
-The platform only reads Discord roles — for example, to see whether someone holds a subscriber role. It never hands out or takes away roles on your server.
+1. Until a server is linked, the page lists the servers you administer: ones you own, or ones where you can manage the server. If the list is empty, link or reconnect Discord in your account settings and come back.
+2. Press **Link this server** on the right one. The page then shows the linked server with its status: **Ownership verified** and whether the bot is in it.
+3. If the bot is missing, press **Add bot to server** in the warning. Without the bot, match logs are not read, announcements are not posted and mix players are not moved.
+4. **Change server** opens the list again to switch to another server. The **⋯** menu holds **Re-invite bot** and **Unlink server**.
+
+The platform only reads Discord roles, for example to see whether someone holds a subscriber role. It never hands out or takes away roles on your server.
 
 <Callout type="warning">
-**Unlink server** disconnects the server immediately: subscriber roles and match-log channels have nowhere to go. You can link a server again later.
+**Unlink server** disconnects the server immediately: subscriber roles, match logs, announcements and mixes have nowhere to go. You can link a server again later.
 </Callout>
 
-## Notifications
+### Tournament announcements
 
-Where the bot announces things, and which things. The page only works once a Discord server is linked.
+Appears once a server is linked.
 
-- **Announcement channel** — the channel for announcements. With no channel the bot posts nothing; personal notifications and the in-app inbox are unaffected.
-- **What gets posted** — a checkbox per event: **Registration opened**, **Check-in opened**, **Match scheduled**. A scheduled match is one post per match, so a whole round scheduled at once is a whole round of posts; it is off by default.
-- **Language** — the language of channel posts: **Russian** or **English**. Times render in each reader's own timezone whatever the language.
+- **Channel**: the channel for announcements. With no channel the bot posts nothing; personal notifications and the in-app inbox are unaffected.
+- **Events**: a checkbox per event: **Registration opened**, **Check-in opened**, **Match scheduled**. A scheduled match is one post per match, so a whole round scheduled at once is a whole round of posts; it is off by default.
+- **Language**: the language of channel posts, **Russian** or **English**. Times render in each reader's own timezone whatever the language.
 
 Hidden tournaments never reach the channel, whatever is ticked.
+
+### Mixes
+
+- **Announcement channel**: where every mix posts its matchup. A workspace admin can point a single mix elsewhere from its own settings.
+- **Voice category**: the category mixes move players through. The bot needs View Channel, Connect and Move Members on it.
+- **General voices**: the voices of that category players wait in; press a voice to toggle it. Every other voice in the category is a team voice. A voice the bot lacks permissions on is marked, with the missing permissions listed below.
 
 ## Divisions
 

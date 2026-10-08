@@ -14,6 +14,7 @@ from shared.services.discord_client import DiscordClient
 from shared.services.subscriptions.providers.discord_role import (
     DiscordForbidden,
     DiscordNotConfigured,
+    DiscordUnavailable,
     MemberNotFound,
 )
 
@@ -93,8 +94,8 @@ class TestGuildReads(IsolatedAsyncioTestCase):
                 [
                     {"id": 10, "type": 4, "name": "Cat", "position": 0},
                     {"id": 11, "type": 0, "name": "b", "position": 2, "parent_id": 10},
-                    {"id": 12, "type": 0, "name": "a", "position": 1, "parent_id": None},
-                    {"id": 13, "type": 2, "name": "voice", "position": 0},
+                    {"id": 13, "type": 2, "name": "voice", "position": 1, "parent_id": 10},
+                    {"id": 14, "type": 15, "name": "forum", "position": 3},
                 ],
             ]
         )
@@ -106,9 +107,36 @@ class TestGuildReads(IsolatedAsyncioTestCase):
             {"id": "2", "name": "high", "color": "#0000ff", "position": 5, "managed": True},
             {"id": "1", "name": "low", "color": None, "position": 0, "managed": False},
         ]
+        # The REST fallback knows the channels but not the bot's member, so no
+        # permission verdict is "all granted"; forums are not pickable at all.
         assert channels == [
-            {"id": "12", "name": "a", "category_name": None, "position": 1},
-            {"id": "11", "name": "b", "category_name": "Cat", "position": 2},
+            {
+                "id": "10",
+                "name": "Cat",
+                "type": "category",
+                "category_id": None,
+                "category_name": None,
+                "position": 0,
+                "missing_permissions": None,
+            },
+            {
+                "id": "13",
+                "name": "voice",
+                "type": "voice",
+                "category_id": "10",
+                "category_name": "Cat",
+                "position": 1,
+                "missing_permissions": None,
+            },
+            {
+                "id": "11",
+                "name": "b",
+                "type": "text",
+                "category_id": "10",
+                "category_name": "Cat",
+                "position": 2,
+                "missing_permissions": None,
+            },
         ]
 
     async def test_guild_info_survives_an_unreadable_owner(self):
@@ -142,3 +170,33 @@ class TestGuildReads(IsolatedAsyncioTestCase):
         with patch("shared.services.discord_client.httpx.AsyncClient", return_value=http):
             with self.assertRaises(DiscordForbidden):
                 await client.guild_roles("g")
+
+
+class TestVoiceMove(IsolatedAsyncioTestCase):
+    async def test_the_bot_answers_per_person_for_the_documented_body(self):
+        broker = _broker(_reply(rpc_ok({"results": [{"discord_user_id": "7", "status": "moved"}]})))
+        client = DiscordClient(broker=broker)
+
+        results = await client.voice_move(
+            "5",
+            category_id="10",
+            moves=[{"discord_user_id": "7", "channel_id": "2"}],
+            drain={"channel_ids": ["2"], "to_channel_id": "1"},
+        )
+
+        assert results == [{"discord_user_id": "7", "status": "moved"}]
+        assert broker.request.await_args.args[0] == {
+            "guild_id": "5",
+            "category_id": "10",
+            "moves": [{"discord_user_id": "7", "channel_id": "2"}],
+            "drain": {"channel_ids": ["2"], "to_channel_id": "1"},
+        }
+
+    async def test_a_dead_broker_is_unavailable_not_an_empty_move(self):
+        broker = _broker(TimeoutError("no answer"))
+        with self.assertRaises(DiscordUnavailable):
+            await DiscordClient(broker=broker).voice_move("5", category_id="10", moves=[], drain=None)
+
+    async def test_without_a_broker_there_is_no_rest_fallback(self):
+        with self.assertRaises(DiscordUnavailable):
+            await DiscordClient(bot_token="t").voice_move("5", category_id="10", moves=[], drain=None)

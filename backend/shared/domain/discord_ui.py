@@ -60,6 +60,11 @@ EMOJI: dict[str, str] = {
     "starter": "⭐",
     "lobby_a": "🅰️",
     "lobby_b": "🅱️",
+    # No letter emoji exists past B, so C..F fall back to regional indicators.
+    "lobby_c": "🇨",
+    "lobby_d": "🇩",
+    "lobby_e": "🇪",
+    "lobby_f": "🇫",
     # a mix
     "live": "🟢",
     "host": "👑",

@@ -2,8 +2,7 @@ import React from "react";
 import { cookies, headers } from "next/headers";
 import Header from "@/components/Header";
 import { Footer } from "@/components/Footer";
-import AnnouncementBanner from "@/components/notifications/AnnouncementBanner";
-import { Separator } from "@/components/ui/separator";
+import { FloatStack } from "@/components/notifications/FloatStack";
 import notificationService from "@/services/notification.service";
 import workspaceService from "@/services/workspace.service";
 import {
@@ -75,33 +74,31 @@ export default async function SiteLayout({
     ? ({ ...seed, backgroundColor: "var(--aqt-bg)" } as React.CSSProperties)
     : undefined;
 
-  // On a tenant host the workspace switcher is replaced by the workspace's own
-  // logo (icon + name) linking home; on the apex the switcher is shown.
-  const tenantWorkspace =
-    tenantMode && workspace
-      ? { name: workspace.name, iconUrl: workspace.icon_url }
-      : undefined;
-
   return (
     <ZoneIntlProvider zone="web">
       <div className="site-theme min-h-screen w-full" style={style}>
         <WorkspaceHostLock workspaceId={tenantMode && workspace ? workspace.id : null} />
         <WorkspaceThemeSync />
-        <div className="w-full max-w-screen-3xl pt-6 mx-auto px-4 md:px-6 xl:px-10 h-full">
-          <Header tenantMode={tenantMode} tenantWorkspace={tenantWorkspace} />
-          <AnnouncementBanner
-            initial={withoutDismissedAnnouncements(
+        <div className="mx-auto h-full w-full max-w-screen-3xl px-4 md:px-6 xl:px-10">
+          <Header
+            tenantMode={tenantMode}
+            tenantWorkspace={
+              tenantMode && workspace
+                ? { id: workspace.id, name: workspace.name, icon_url: workspace.icon_url }
+                : undefined
+            }
+          />
+          <FloatStack
+            initialAnnouncements={withoutDismissedAnnouncements(
               announcements,
               cookieStore.get(DISMISSED_ANNOUNCEMENTS_COOKIE)?.value
             )}
+            tenantWorkspaceId={tenantMode && workspace ? workspace.id : null}
           />
-          <div className="flex w-full flex-col min-h-[95%]">
-            <main id="main-content" tabIndex={-1} className="flex flex-1 flex-col gap-4 pt-4 md:gap-8 md:pt-8">
-              {children}
-            </main>
-          </div>
-          <Separator className="mt-8" />
-          <Footer />
+          <main id="main-content" tabIndex={-1} className="flex flex-col gap-4 pt-5 md:gap-8">
+            {children}
+          </main>
+          <Footer tenant={tenantMode ? workspace : null} />
         </div>
       </div>
     </ZoneIntlProvider>

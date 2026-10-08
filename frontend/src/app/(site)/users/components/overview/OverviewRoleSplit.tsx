@@ -1,5 +1,4 @@
 import { getTranslations } from "next-intl/server";
-import { Layers } from "lucide-react";
 import { UserProfile, UserRole, UserMapRead } from "@/types/user.types";
 import { HeroWithUserStats } from "@/types/hero.types";
 import { LogStatsName } from "@/types/stats.types";
@@ -40,18 +39,6 @@ const ROLE_COLOR: Record<PlayerRoleTint, string> = {
   damage: "var(--aqt-damage)",
   support: "var(--aqt-support)",
   flex: "var(--aqt-flex)"
-};
-
-// Row wash + edge per role. The three original hues stay verbatim; flex reads
-// its hue from the token so it tracks `--aqt-flex`.
-const ROLE_ROW: Record<PlayerRoleTint, { background: string; borderColor: string }> = {
-  tank: { background: "hsl(210 78% 60% / 0.06)", borderColor: "hsl(210 78% 60% / 0.2)" },
-  damage: { background: "hsl(340 78% 60% / 0.06)", borderColor: "hsl(340 78% 60% / 0.25)" },
-  support: { background: "hsl(142 60% 52% / 0.05)", borderColor: "hsl(142 60% 52% / 0.2)" },
-  flex: {
-    background: "color-mix(in srgb, var(--aqt-flex) 6%, transparent)",
-    borderColor: "color-mix(in srgb, var(--aqt-flex) 20%, transparent)"
-  }
 };
 
 // Flex is a real roster role, so it gets its own bucket — without one its maps
@@ -147,7 +134,6 @@ const OverviewRoleSplit = async ({ profile, heroes = [], maps = [] }: Props) => 
   return (
     <CardSurface
       title={t("users.overview.roleSplit.title")}
-      icon={<Layers size={15} />}
       subtitle={t("users.overview.roleSplit.subtitle", {
         maps: totalMaps,
         tournaments: profile.tournaments_count
@@ -157,7 +143,7 @@ const OverviewRoleSplit = async ({ profile, heroes = [], maps = [] }: Props) => 
         {/* Role-spectrum distribution bar (design-book §3f) — one thin
             full-width bar segmented by each role's share of maps played. */}
         <div className="flex flex-col gap-2">
-          <div className="flex h-2.5 w-full overflow-hidden rounded-full border border-[color:var(--aqt-border)]" aria-hidden>
+          <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-[color:var(--aqt-card-2)]" aria-hidden>
             {buckets.map((b) =>
               b.share > 0 ? (
                 <div
@@ -179,28 +165,23 @@ const OverviewRoleSplit = async ({ profile, heroes = [], maps = [] }: Props) => 
             ))}
           </div>
         </div>
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col divide-y divide-[color:var(--aqt-border)]">
           {buckets.map((b) => (
-            <div
-              key={b.key}
-              className="grid grid-cols-[44px_1fr_auto] items-center gap-3 rounded-[10px] border px-3 py-2.5"
-              style={ROLE_ROW[b.key]}
-            >
+            <div key={b.key} className="grid grid-cols-[44px_1fr_auto] items-center gap-3 py-3 first:pt-0 last:pb-0">
               <DivisionIcon
                 division={b.role.division}
                 tournamentGrid={b.role.division_grid_version}
                 width={44}
                 height={44}
               />
-              <div>
-                <div
-                  className="aqt-display flex items-center gap-1.5 text-base font-bold uppercase leading-none tracking-[0.04em]"
-                  style={{ color: ROLE_COLOR[b.key] }}
-                >
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5 font-onest text-base font-bold leading-none text-[color:var(--aqt-fg)]">
                   <PlayerRoleIcon role={ROLE_ICON[b.key]} size={14} color={ROLE_COLOR[b.key]} decorative />
                   {t(ROLE_LABEL_KEY[b.key] as Parameters<typeof t>[0])}
                   {primary && b.key === primary.key ? (
-                    <span className="ml-1 text-label font-semibold tracking-label text-[color:var(--aqt-fg-muted)]"> · {t("users.overview.roleSplit.main")}</span>
+                    <span className="ml-1 text-label font-semibold text-[color:var(--aqt-fg-muted)]">
+                      · {t("users.overview.roleSplit.main")}
+                    </span>
                   ) : null}
                 </div>
                 <div className="aqt-tnum mt-1 text-label text-[color:var(--aqt-fg-muted)]">
@@ -209,14 +190,8 @@ const OverviewRoleSplit = async ({ profile, heroes = [], maps = [] }: Props) => 
               </div>
               <div className="text-right">
                 <div
-                  className="aqt-display aqt-tnum text-title font-bold leading-none"
-                  style={{
-                    color: b.winrate > 0.55
-                      ? "var(--aqt-emerald)"
-                      : b.winrate < 0.5
-                        ? "var(--aqt-rose)"
-                        : "var(--aqt-fg)"
-                  }}
+                  className="aqt-tnum font-onest text-title font-bold leading-none"
+                  style={{ color: winrateColor(b.winrate * 100) }}
                 >
                   {formatPercent(b.winrate)}
                 </div>

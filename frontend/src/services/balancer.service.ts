@@ -16,7 +16,8 @@ const SUPPORTED_CONFIG_FIELD_TYPES: Record<string, true> = {
   boolean: true,
   float: true,
   integer: true,
-  slider: true
+  slider: true,
+  roles: true
 };
 
 type RawBalancerConfigField = Omit<BalancerConfigField, "type"> & {

@@ -6,18 +6,19 @@ import { useTranslations } from "next-intl";
 import SearchableImageSelect, {
   type SearchableImageOption,
 } from "@/components/ui/searchable-image-select";
+import { TournamentCombobox } from "@/app/(site)/users/components/shared/TournamentCombobox";
 
 interface HeroLeaderboardFiltersCardProps {
   heroId: number | undefined;
   tournamentId: number | undefined;
   heroOptions: SearchableImageOption[];
-  tournamentOptions: SearchableImageOption[];
+  tournaments: readonly { id: number; name: string }[];
   isLoadingHeroes: boolean;
   isErrorHeroes: boolean;
   isLoadingTournaments: boolean;
   isErrorTournaments: boolean;
   onHeroChange: (value: string | undefined) => void;
-  onTournamentChange: (value: string | undefined) => void;
+  onTournamentChange: (id: number | undefined) => void;
   onResetColumns: () => void;
   resetDisabled: boolean;
 }
@@ -30,7 +31,7 @@ const HeroLeaderboardFiltersCard = ({
   heroId,
   tournamentId,
   heroOptions,
-  tournamentOptions,
+  tournaments,
   isLoadingHeroes,
   isErrorHeroes,
   isLoadingTournaments,
@@ -60,12 +61,10 @@ const HeroLeaderboardFiltersCard = ({
 
       <div className="flex min-w-0 flex-col gap-2">
         <span className={LABEL}>{t("users.heroesCompare.filters.tournamentScope")}</span>
-        <SearchableImageSelect
-          value={tournamentId !== undefined ? String(tournamentId) : undefined}
-          onValueChange={(v) => onTournamentChange(v || undefined)}
-          options={tournamentOptions}
-          placeholder={t("users.heroesCompare.allTournaments")}
-          searchPlaceholder={t("users.heroesCompare.filters.searchTournaments")}
+        <TournamentCombobox
+          tournaments={tournaments}
+          value={tournamentId}
+          onValueChange={onTournamentChange}
           isLoading={isLoadingTournaments}
           disabled={isLoadingTournaments || isErrorTournaments}
           triggerClassName={TRIGGER}

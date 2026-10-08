@@ -19,9 +19,7 @@ export function EncountersHero({ overview }: Readonly<{ overview: EncounterOverv
   return (
     <PageHero
       eyebrow={<HeroCoord>{t("encounters.hero.eyebrow")}</HeroCoord>}
-      title={t.rich("encounters.hero.title", {
-        em: (chunks) => <em>{chunks}</em>
-      })}
+      title={t("encounters.hero.title")}
       lede={t("encounters.hero.lede")}
       aside={
         <div className={styles.heroStats}>

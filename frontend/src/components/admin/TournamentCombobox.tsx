@@ -35,6 +35,16 @@ export function TournamentCombobox({
     [tournaments, value],
   );
 
+  // Oldest first; JSON delivers `start_date` as a string despite the `Date` type.
+  const sorted = useMemo(
+    () =>
+      [...tournaments].sort(
+        (a, b) =>
+          new Date(a.start_date).getTime() - new Date(b.start_date).getTime() || a.id - b.id,
+      ),
+    [tournaments],
+  );
+
   const selectedLabel = selected ? selected.name : placeholder;
 
   const handleSelect = useCallback(
@@ -68,7 +78,7 @@ export function TournamentCombobox({
       }
     >
       <CommandGroup>
-        {tournaments.map((tournament) => (
+        {sorted.map((tournament) => (
           <CommandItem
             key={tournament.id}
             value={`${tournament.name} ${tournament.id}`}

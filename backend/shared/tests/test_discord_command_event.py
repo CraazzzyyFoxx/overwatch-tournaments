@@ -74,6 +74,12 @@ class DiscordCommandEventTests(TestCase):
                 action="send_dm", discord_user_id=42, message_ref=3, card=SHOWN, image_b64="iVBORw0KGgo="
             )
 
+    def test_an_edit_may_carry_the_picture_its_row_now_shows(self) -> None:
+        """An edit carries no card of its own: the row's card names the file, and
+        the bot checks that name against it when it applies the edit."""
+        event = DiscordCommandEvent(action="edit_message", message_ref=1, image_b64="aGk=")
+        self.assertEqual((event.image_b64, event.image_filename), ("aGk=", "lineup.png"))
+
     def test_nobody_is_pinged_unless_the_publisher_asks(self) -> None:
         event = DiscordCommandEvent(action="post_message", channel_id=1, card=CARD, message_ref=3)
         self.assertFalse(event.allow_mentions)

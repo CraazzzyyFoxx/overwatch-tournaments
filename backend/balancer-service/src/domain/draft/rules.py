@@ -28,7 +28,6 @@ from shared.domain.roster import PlayerRoster
 from shared.domain.roster_shape import FLEX_SLOT_CODE, RosterShape
 from shared.models.balancer.draft import DraftPick, DraftPlayer, DraftSession, DraftTeam
 from src.domain.draft.entities import (
-    DEFAULT_ROLE_IMPACT,
     DraftFeasibilityReport,
     DraftFeasibilityState,
     DraftResult,
@@ -369,7 +368,11 @@ def role_openings(shape: RosterShape, counts: Mapping[str, int]) -> dict[HeroCla
 FILLED_ROLE_DISCOUNT: Final = 0.5
 
 
-def team_fit_config(shape: RosterShape, counts: Mapping[str, int]) -> FitConfig:
+def team_fit_config(
+    shape: RosterShape,
+    counts: Mapping[str, int],
+    role_impact: Mapping[HeroClass, float],
+) -> FitConfig:
     """Fit weights for ONE team: a role's impact shrinks as the team fills it.
 
     A support captain on a 1-2-2 roster still has a support seat open, but the
@@ -378,12 +381,16 @@ def team_fit_config(shape: RosterShape, counts: Mapping[str, int]) -> FitConfig:
     own slots plus the flex slots, the same capacity ``role_openings`` counts.
     THE config behind autopick, /suggestions and /fit, so the three agree on
     what a team needs.
+
+    ``role_impact`` is the tournament's effective base impact per role (the
+    balancer config's ``role_settings``), read by the caller -- the draft and the
+    solver weigh a role the same or a captain's "best fit" is not the balancer's.
     """
     openings = role_openings(shape, counts)
     targets = shape.slots
     flex = targets.get(FLEX_SLOT_CODE, 0)
     impact: dict[HeroClass, float] = {}
-    for role, weight in DEFAULT_ROLE_IMPACT.items():
+    for role, weight in role_impact.items():
         seats = targets.get(role.slot_code, 0) + flex
         filled = 1.0 - openings[role] / seats if seats else 1.0
         impact[role] = weight * (1.0 - FILLED_ROLE_DISCOUNT * filled)

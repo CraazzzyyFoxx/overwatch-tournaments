@@ -68,6 +68,14 @@ class EditTests(IsolatedAsyncioTestCase):
                 self.assertIsNone(await discord_messages.edit_command(object(), _row(gone), CARD), gone)
             set_card.assert_not_awaited()
 
+    async def test_an_edit_may_carry_the_new_picture_its_card_shows(self) -> None:
+        """A re-rendered lineup picture travels with the edit that starts showing it."""
+        shown = DiscordCard(text="### Lineup", image_url="attachment://lineup.png")
+        with patch.object(discord_messages.repository, "set_card", AsyncMock()):
+            command = await discord_messages.edit_command(object(), _row("posted"), shown, image_b64="aGk=")
+
+        self.assertEqual((command.image_b64, command.image_filename), ("aGk=", "lineup.png"))
+
     def test_an_edit_command_may_not_carry_a_card(self) -> None:
         """Two sources for one card is one too many: the row is the only one."""
         with self.assertRaises(ValidationError):

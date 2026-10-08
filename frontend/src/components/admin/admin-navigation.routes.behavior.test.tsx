@@ -139,6 +139,7 @@ const ROUTES = {
   data: [
     "/admin/people",
     "/admin/people/42",
+    "/admin/ranks",
     "/admin/teams",
     "/admin/teams/9",
     "/admin/matches",

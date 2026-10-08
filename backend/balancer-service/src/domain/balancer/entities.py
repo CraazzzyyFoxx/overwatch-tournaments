@@ -41,7 +41,7 @@ class Player:
         self.ratings = ratings
         # Real roles only, the player's own order. ``flex`` is a SLOT, never a
         # preference: the discomfort rule below and the Rust core
-        # (``tournament_balancer::context``) both price it explicitly, so nothing
+        # (``PlayerSpec::role_discomfort`` in ``balancer_native``) both price it explicitly, so nothing
         # has to smuggle it into this list to make it free.
         self.preferences = [role for role in preferences if role != FLEX_SLOT_CODE]
         # The player's main role -- what off-role counting, feasibility supply

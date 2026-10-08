@@ -1,23 +1,18 @@
-"""Интеграционные тесты нативного tournament_balancer: освобождение GIL и валидация входа.
+"""Интеграционные тесты нативного balancer_native (MOO): освобождение GIL и валидация входа.
 
-Выполняются только там, где собран нативный модуль (Linux/Docker);
-на остальных платформах скипаются целиком.
+Выполняются только там, где собран нативный модуль (`maturin develop`);
+иначе скипаются целиком.
 """
 
 from __future__ import annotations
 
 import asyncio
 import json
-import platform
 from typing import Any
 
 import pytest
 
-tournament_balancer = pytest.importorskip(
-    "tournament_balancer", reason="native tournament_balancer module is not installed"
-)
-
-pytestmark = pytest.mark.skipif(platform.system() != "Linux", reason="Rust MOO backend is Linux-only")
+balancer_native = pytest.importorskip("balancer_native", reason="native balancer_native module is not installed")
 
 
 def _native_config(generation_count: int = 60, population_size: int = 40) -> dict[str, Any]:
@@ -36,6 +31,18 @@ def _native_config(generation_count: int = 60, population_size: int = 40) -> dic
         "sub_role_collision_weight": 1.5,
         "use_captains": False,
     }
+
+
+def _roles() -> list[dict[str, Any]]:
+    """Slots plus the per-role weights Python owns — the crate has no role defaults."""
+    return [
+        {"name": name, "slots": slots, "flex": False, "impact": impact, "line_gap_weight": gap, "line_std_weight": std}
+        for name, slots, impact, gap, std in (
+            ("Tank", 1, 1.4, 0.8, 1.5),
+            ("Damage", 2, 1.0, 0.0, 0.0),
+            ("Support", 2, 1.1, 0.0, 0.0),
+        )
+    ]
 
 
 def _players(num_teams: int) -> list[dict[str, Any]]:
@@ -68,7 +75,7 @@ def _payload(num_teams: int, *, generation_count: int = 60, drop_players: int = 
             "players": players,
             "num_teams": num_teams,
             "seed": 7,
-            "mask": {"Tank": 1, "Damage": 2, "Support": 2},
+            "roles": _roles(),
             "config": _native_config(generation_count=generation_count),
         }
     )
@@ -91,7 +98,7 @@ def test_event_loop_stays_responsive_during_native_run() -> None:
         ticker_task = asyncio.create_task(ticker())
         # Достаточно длинный прогон, чтобы event loop успел сделать десятки тиков
         payload = _payload(8, generation_count=400)
-        response = await asyncio.to_thread(tournament_balancer.run_moo_optimizer, payload)
+        response = await asyncio.to_thread(balancer_native.run_moo_optimizer, payload)
         done.set()
         await ticker_task
         assert json.loads(response)["variants"], "optimizer must return variants"
@@ -105,11 +112,11 @@ def test_native_rejects_player_slot_mismatch() -> None:
     """Избыток/недобор игроков должен падать сразу с понятной ошибкой,
     а не молча терять игроков."""
     with pytest.raises(ValueError, match="slots"):
-        tournament_balancer.run_moo_optimizer(_payload(2, drop_players=1))
+        balancer_native.run_moo_optimizer(_payload(2, drop_players=1))
 
 
 def test_native_run_is_deterministic() -> None:
     payload = _payload(4)
-    first = tournament_balancer.run_moo_optimizer(payload)
-    second = tournament_balancer.run_moo_optimizer(payload)
+    first = balancer_native.run_moo_optimizer(payload)
+    second = balancer_native.run_moo_optimizer(payload)
     assert first == second

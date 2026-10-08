@@ -17,10 +17,11 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from shared.core.enums import DraftAutopickStrategy, DraftPlayerStatus, DraftStatus
+from shared.core.enums import HERO_TYPE_CLASSES, DraftAutopickStrategy, DraftPlayerStatus, DraftStatus, HeroClass
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.domain.roster_shape import RosterShape
 from shared.models.balancer.draft import DraftPick, DraftSession
+from shared.repository.balance import BalancerTournamentConfigRepository
 from shared.repository.draft import DraftPickRepository, DraftPlayerRepository, DraftTeamRepository
 from shared.services.roster_shape_access import get_effective_roster_shape
 from src.domain.draft import fit as sug
@@ -39,6 +40,8 @@ from src.domain.draft.feasibility import (
     build_feasibility_state,
     evaluate_pick_options,
 )
+from src.services.balancer.config.defaults import AlgorithmConfig, apply_config_overrides
+from src.services.balancer.config.public_contract import normalize_config_payload
 from src.services.draft import loaders
 from src.services.draft import realtime as draft_rt
 from src.services.draft.rosters import DraftRosterService, draft_rosters
@@ -89,11 +92,13 @@ class DraftFeasibilityService:
         teams_repo: DraftTeamRepository = DraftTeamRepository(),
         players_repo: DraftPlayerRepository = DraftPlayerRepository(),
         picks_repo: DraftPickRepository = DraftPickRepository(),
+        tournament_configs: BalancerTournamentConfigRepository = BalancerTournamentConfigRepository(),
         rosters: DraftRosterService = draft_rosters,
     ) -> None:
         self.teams_repo = teams_repo
         self.players_repo = players_repo
         self.picks_repo = picks_repo
+        self.tournament_configs = tournament_configs
         self.rosters = rosters
 
     async def load_snapshot(self, session: AsyncSession, draft_session: DraftSession) -> DraftSnapshot:
@@ -124,6 +129,24 @@ class DraftFeasibilityService:
             tournament_id=draft_session.tournament_id,
             workspace_id=draft_session.workspace_id,
         )
+
+    async def resolve_role_impact(
+        self,
+        session: AsyncSession,
+        draft_session: DraftSession,
+    ) -> dict[HeroClass, float]:
+        """Base per-role impact for this draft: defaults <- the tournament's stored config.
+
+        Read live on every call rather than captured at session start, so the
+        operator moving a role's weight in the balancer drawer moves what the
+        draft's autopick, /suggestions and /fit consider a good fit too.
+        """
+        stored = await self.tournament_configs.get_by_tournament(session, draft_session.tournament_id)
+        config = apply_config_overrides(
+            AlgorithmConfig(),
+            normalize_config_payload(stored.config_json if stored is not None else None),
+        )
+        return {role: config.role_settings[role.slot_code].impact for role in HERO_TYPE_CLASSES}
 
     async def state_from_snapshot(
         self,
@@ -270,7 +293,7 @@ class DraftFeasibilityService:
         ranked = sug.rank_suggestions(
             fit_players,
             capacity,
-            rules.team_fit_config(shape, counts),
+            rules.team_fit_config(shape, counts, await self.resolve_role_impact(session, draft_session)),
             strategy=DraftAutopickStrategy(draft_session.autopick_strategy),
             limit=5,
             allowed_options=safe_options,
@@ -305,7 +328,7 @@ class DraftFeasibilityService:
         results = sug.candidates(
             players,
             capacity,
-            rules.team_fit_config(shape, counts),
+            rules.team_fit_config(shape, counts, await self.resolve_role_impact(session, draft_session)),
             DraftAutopickStrategy(draft_session.autopick_strategy),
         )
         by_id = {player.player_id: player for player in players}

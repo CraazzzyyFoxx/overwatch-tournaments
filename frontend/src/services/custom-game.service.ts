@@ -2,6 +2,7 @@ import { apiFetch } from "@/lib/api/fetch";
 import { blobToBase64 } from "@/lib/image-capture";
 import type { RoleCode } from "@/lib/roster/roles";
 import type { RosterShape } from "@/lib/roster/shape";
+import type { DiscordVoicePermission } from "@/types/discord.types";
 
 /** Where an effective rank came from, strongest first. */
 export type RankSource = "author" | "workspace" | "ow";
@@ -51,9 +52,9 @@ export type CustomGamePlayer = {
    * the selected variant of each lobby; `null` means waiting for a seat.
    * Detail reads only.
    */
-  current_lobby?: 0 | 1 | null;
+  current_lobby?: number | null;
   /** The host's own tie to a lobby, independent of where the balance seated them. */
-  lobby_pin?: 0 | 1 | null;
+  lobby_pin?: number | null;
   /** `null` only when `role_selection_mode === "all_ranked"`. */
   roles: string[] | null;
   ranks: Record<string, number>;
@@ -109,12 +110,12 @@ export type CustomGameSettings = {
 /**
  * One lobby of a mix — the four columns that used to sit on the mix itself
  * (`custom_game_lobby`). A mix always has exactly `lobby_count` of them, so
- * lobby 0 is an ordinary row rather than a special case, and a second lobby
- * carries its own document, its own pager position and its own next map.
+ * lobby 0 is an ordinary row rather than a special case, and every further
+ * lobby carries its own document, its own pager position and its own next map.
  */
 export type CustomGameLobby = {
-  /** 0 = A, 1 = B. Also the offset of this lobby's team names: `lobby_index * 2 + team`. */
-  lobby_index: 0 | 1;
+  /** 0-based: 0 = A … 5 = F. Also the offset of this lobby's team names: `lobby_index * 2 + team`. */
+  lobby_index: number;
   /**
    * The solver's own document for this lobby's last balance, or `null` before
    * one. Detail reads only -- `list` rows leave it out (it runs to megabytes).
@@ -126,6 +127,13 @@ export type CustomGameLobby = {
   next_map_id: number | null;
   /** When this lobby was last balanced, or `null` while it never was. */
   balanced_at: string | null;
+  /**
+   * The voices this lobby's two teams are moved into (`^\d{1,20}$` snowflakes,
+   * `null` while unpicked). Both list and detail reads carry them: the list is
+   * how the page tells which voices the workspace's other mixes already took.
+   */
+  team1_voice_channel_id: string | null;
+  team2_voice_channel_id: string | null;
   /**
    * `false` when this lobby has been balanced and no match of its own has been
    * recorded since -- the lineup on screen is still unplayed, so anything that
@@ -166,8 +174,8 @@ export type CustomGame = {
   status: CustomGameStatus;
   settings: CustomGameSettings;
   created_at: string | null;
-  /** How many lobbies this mix runs at once. `2` is the ceiling (CHECK server-side). */
-  lobby_count: 1 | 2;
+  /** How many lobbies this mix runs at once; 6 is the ceiling (CHECK server-side). */
+  lobby_count: number;
   /**
    * This mix's lobbies, ordered by `lobby_index` -- exactly `lobby_count` of
    * them. The balance document, the pager position and the next map all live
@@ -188,6 +196,11 @@ export type CustomGame = {
   /** Whether a player on the roster may reorder their own roles and flex. */
   self_role_edit: boolean;
   /**
+   * The voice everyone waits in and is returned to, picked from the
+   * workspace's general voices (`mix_general_voice_channel_ids`).
+   */
+  general_voice_channel_id: string | null;
+  /**
    * Every Discord message the platform posted for this mix (signup card,
    * lineup cards), oldest first, minus the ones already deleted. Optional
    * only so fixtures predating the posts can omit it -- the server always
@@ -195,6 +208,60 @@ export type CustomGame = {
    */
   discord_posts?: CustomGameDiscordPost[];
   players?: CustomGamePlayer[];
+};
+
+/** One voice channel of the workspace's mix category, with the bot's gaps on it. */
+export type MixVoiceChannel = {
+  id: string;
+  name: string;
+  /** `null` when Discord was not asked about it; an empty list means nothing is missing. */
+  missing_permissions: DiscordVoicePermission[] | null;
+};
+
+/**
+ * The voices a mix may pick, read from the workspace's category. `error` is
+ * Discord's own refusal: the category stays configured, it just could not be
+ * listed right now.
+ */
+export type MixVoiceOptions = {
+  category_id: string | null;
+  category_missing_permissions: DiscordVoicePermission[] | null;
+  /** Voices the workspace calls general -- where players wait and are returned to. */
+  general: MixVoiceChannel[];
+  /** Every other voice of the category: what a lobby's two teams are moved into. */
+  team: MixVoiceChannel[];
+  error: string | null;
+};
+
+/** What became of one player in a move or a return. */
+export type MixVoiceStatus =
+  | "moved"
+  | "not_in_voice"
+  | "no_discord_link"
+  | "missing_permission"
+  | "channel_outside_category"
+  | "not_configured"
+  | "failed";
+
+/** One move or return, player by player. `moved` counts the `moved` rows. */
+export type MixVoiceReport = {
+  moved: number;
+  results: {
+    workspace_member_id: number | null;
+    name: string;
+    status: MixVoiceStatus;
+    channel_id: string | null;
+  }[];
+};
+
+/** The mix's whole voice setup: the endpoint replaces it rather than patching a field. */
+export type MixVoicePatch = {
+  general_voice_channel_id: string | null;
+  lobbies: {
+    lobby_index: number;
+    team1_voice_channel_id: string | null;
+    team2_voice_channel_id: string | null;
+  }[];
 };
 
 /**
@@ -215,8 +282,8 @@ export type CustomGameMatch = {
   map_image_path: string | null;
   recorded_by: number | null;
   recorded_at: string | null;
-  /** Which lobby of the mix played it (0 = A, 1 = B). A one-lobby mix records only 0. */
-  lobby_index: 0 | 1;
+  /** Which lobby of the mix played it (0-based, 0 = A). A one-lobby mix records only 0. */
+  lobby_index: number;
   /**
    * The rank points this match moved each player by when it was recorded --
    * `null` for a draw, or when the mix had no rank adjustment configured. An
@@ -234,7 +301,7 @@ export type CustomGamePlayerPatch = {
    * Which lobby this player is tied to, or `null` for "wherever the balance
    * puts them". Host-only, and 422 on a mix that runs one lobby.
    */
-  lobby_pin?: 0 | 1 | null;
+  lobby_pin?: number | null;
 };
 
 /**
@@ -270,7 +337,7 @@ export type MixSelfSeat = {
   /** Effective rank per role; `null` where no layer answers for it. */
   ranks: Record<string, number | null>;
   /** Which lobby a balance seated them in; `null` means waiting for a seat. */
-  current_lobby: 0 | 1 | null;
+  current_lobby: number | null;
 };
 
 /** What the caller may do, and the first reason they may not. */
@@ -374,7 +441,7 @@ export const customGameKeys = {
   matches: (workspaceId: number, gameId: number) => ["custom-games", workspaceId, gameId, "matches"] as const,
   /**
    * Every lobby's rotation queue for one mix — the prefix the per-lobby keys
-   * hang off, so a write that moves the queue drops both lobbies in one call.
+   * hang off, so a write that moves the queue drops every lobby in one call.
    */
   rotationAll: (workspaceId: number, gameId: number) =>
     [...customGameKeys.one(workspaceId, gameId), "rotation"] as const,
@@ -388,6 +455,12 @@ export const customGameKeys = {
    * read with no subscription of its own.
    */
   me: (workspaceId: number, gameId: number) => ["custom-games", workspaceId, gameId, "me"] as const,
+  /**
+   * The voices one mix may pick. Under `all` like `me`: a workspace that
+   * re-picks its voice category drops every mix key anyway.
+   */
+  voiceOptions: (workspaceId: number, gameId: number) =>
+    ["custom-games", workspaceId, gameId, "voice-options"] as const,
   stats: (workspaceId: number, since: string | null) =>
     ["custom-games", workspaceId, "stats", since ?? "all"] as const,
 };
@@ -453,16 +526,17 @@ export const customGameService = {
   },
 
   /**
-   * Re-runs the solver. `scope: "lobby"` balances that lobby alone, leaving the
-   * other one's document, map and pager untouched, and its candidates exclude
-   * whoever is seated in the other lobby or pinned to it. `scope: "all"` splits
-   * the whole pool into two even lobbies and solves each -- two-lobby mixes only
-   * (422 `single_lobby` otherwise).
+   * Re-runs the solver. `scope: "lobby"` balances that lobby alone, leaving
+   * every other document, map and pager untouched, and its candidates exclude
+   * whoever another lobby has seated or holds a pin on. `scope: "all"` splits
+   * the whole pool into equally strong lobbies and solves each -- mixes running
+   * more than one lobby only (422 `single_lobby` otherwise), and 422
+   * `not_enough_players` when the pool cannot fill them all.
    */
   balance(
     workspaceId: number,
     gameId: number,
-    request: { scope: "lobby"; lobbyIndex: 0 | 1 } | { scope: "all" },
+    request: { scope: "lobby"; lobbyIndex: number } | { scope: "all" },
   ): Promise<CustomGame> {
     return apiFetch(`/api/v1/balancer/workspaces/${workspaceId}/custom-games/${gameId}/balance`, {
       method: "POST",
@@ -482,7 +556,7 @@ export const customGameService = {
   recordOutcome(
     workspaceId: number,
     gameId: number,
-    lobbyIndex: 0 | 1,
+    lobbyIndex: number,
     outcome: CustomGameOutcome,
     variantIndex: number,
   ): Promise<CustomGame> {
@@ -520,7 +594,7 @@ export const customGameService = {
   rotation(
     workspaceId: number,
     gameId: number,
-    lobbyIndex: 0 | 1,
+    lobbyIndex: number,
   ): Promise<RotationRecommendation[]> {
     return apiFetch(`/api/v1/balancer/workspaces/${workspaceId}/custom-games/${gameId}/rotation`, {
       query: { lobby_index: lobbyIndex },
@@ -576,7 +650,7 @@ export const customGameService = {
   setNextMap(
     workspaceId: number,
     gameId: number,
-    lobbyIndex: 0 | 1,
+    lobbyIndex: number,
     mapId: number | null,
   ): Promise<CustomGame> {
     return apiFetch(`/api/v1/balancer/workspaces/${workspaceId}/custom-games/${gameId}/next-map`, {
@@ -589,12 +663,12 @@ export const customGameService = {
    * Pages one lobby to one of the options its last balance produced. Not a local
    * view toggle: the index is stored on the lobby, so co-hosts and viewers move
    * with the host. 404s an index past the stored options; 409 `seat_conflict`
-   * when the option would seat somebody the other lobby has already seated.
+   * when the option would seat somebody another lobby has already seated.
    */
   setVariantIndex(
     workspaceId: number,
     gameId: number,
-    lobbyIndex: 0 | 1,
+    lobbyIndex: number,
     variantIndex: number,
   ): Promise<CustomGame> {
     return apiFetch(`/api/v1/balancer/workspaces/${workspaceId}/custom-games/${gameId}/variant`, {
@@ -645,7 +719,7 @@ export const customGameService = {
   swapSeats(
     workspaceId: number,
     gameId: number,
-    lobbyIndex: 0 | 1,
+    lobbyIndex: number,
     variantIndex: number,
     firstUuid: string,
     secondUuid: string,
@@ -674,7 +748,7 @@ export const customGameService = {
   async postToDiscord(
     workspaceId: number,
     gameId: number,
-    lobbyIndex: 0 | 1,
+    lobbyIndex: number,
     variantIndex: number,
     image: Blob | null = null,
   ): Promise<{ status: "queued"; channel_id: string }> {
@@ -693,14 +767,22 @@ export const customGameService = {
   },
 
   /**
-   * How many lobbies this mix runs. 1 -> 2 opens an empty lobby B; 2 -> 1 drops
-   * lobby B's row (its balance is lost, its recorded matches stay in the
-   * history) and clears every player's `lobby_pin`.
+   * How many lobbies this mix runs (1..6). Raising it opens empty lobbies for
+   * the new indexes; lowering it drops the rows past the new count (their
+   * balances are lost, their recorded matches stay in the history) and clears
+   * every `lobby_pin` onto them.
    */
-  setLobbyCount(workspaceId: number, gameId: number, lobbyCount: 1 | 2): Promise<CustomGame> {
+  setLobbyCount(workspaceId: number, gameId: number, lobbyCount: number): Promise<CustomGame> {
     return apiFetch(`/api/v1/balancer/workspaces/${workspaceId}/custom-games/${gameId}/lobbies`, {
       method: "PUT",
       body: { lobby_count: lobbyCount },
+    }).then((r) => r.json());
+  },
+
+  rename(workspaceId: number, gameId: number, name: string): Promise<CustomGame> {
+    return apiFetch(`/api/v1/balancer/workspaces/${workspaceId}/custom-games/${gameId}/name`, {
+      method: "PUT",
+      body: { name },
     }).then((r) => r.json());
   },
 
@@ -783,5 +865,60 @@ export const customGameService = {
       `/api/v1/balancer/workspaces/${workspaceId}/custom-games/${gameId}/discord/posts/${postId}`,
       { method: "DELETE" },
     ).then((r) => r.json());
+  },
+
+  /** The voices this mix may pick, straight from the workspace's category. */
+  voiceOptions(workspaceId: number, gameId: number): Promise<MixVoiceOptions> {
+    return apiFetch(
+      `/api/v1/balancer/workspaces/${workspaceId}/custom-games/${gameId}/voice/options`,
+    ).then((r) => r.json());
+  },
+
+  /** Replaces the mix's whole voice setup -- general voice and every lobby's two. */
+  setVoiceChannels(workspaceId: number, gameId: number, patch: MixVoicePatch): Promise<CustomGame> {
+    return apiFetch(`/api/v1/balancer/workspaces/${workspaceId}/custom-games/${gameId}/voice`, {
+      method: "PUT",
+      body: patch,
+    }).then((r) => r.json());
+  },
+
+  /**
+   * Moves one lobby's seated players into their team voices, or every lobby's
+   * when `lobbyIndex` is `null`. The report says what became of each of them.
+   */
+  voiceMove(workspaceId: number, gameId: number, lobbyIndex: number | null): Promise<MixVoiceReport> {
+    return apiFetch(`/api/v1/balancer/workspaces/${workspaceId}/custom-games/${gameId}/voice/move`, {
+      method: "POST",
+      body: { lobby_index: lobbyIndex },
+    }).then((r) => r.json());
+  },
+
+  /** The other direction: everyone in the team voices goes back to the general one. */
+  voiceReturn(workspaceId: number, gameId: number, lobbyIndex: number | null): Promise<MixVoiceReport> {
+    return apiFetch(`/api/v1/balancer/workspaces/${workspaceId}/custom-games/${gameId}/voice/return`, {
+      method: "POST",
+      body: { lobby_index: lobbyIndex },
+    }).then((r) => r.json());
+  },
+
+  /**
+   * Rewrites this lobby's posted lineup card in place, with the matchup
+   * rasterised in the browser exactly like `postToDiscord`; `null` falls back
+   * to the server's text embed.
+   */
+  async refreshLineup(
+    workspaceId: number,
+    gameId: number,
+    lobbyIndex: number,
+    image: Blob | null = null,
+  ): Promise<{ status: "queued" | "nothing_to_update" }> {
+    const response = await apiFetch(
+      `/api/v1/balancer/workspaces/${workspaceId}/custom-games/${gameId}/discord/lineup`,
+      {
+        method: "PUT",
+        body: { lobby_index: lobbyIndex, image_b64: image ? await blobToBase64(image) : null },
+      },
+    );
+    return response.json();
   },
 };

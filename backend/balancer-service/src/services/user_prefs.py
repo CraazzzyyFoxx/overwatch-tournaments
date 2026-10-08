@@ -39,10 +39,11 @@ class UserMixPrefsService:
         *,
         user_id: int,
         mix_comfort_tilt: float | None,
-        mix_role_weights: Mapping[str, float] | None,
+        role_settings: Mapping[str, Mapping[str, float]] | None,
         max_result_variants: int | None,
         role_mask: Mapping[str, int] | None,
         points_per_win: int | None,
+        rating_mode: str,
     ) -> UserBalancerConfig:
         """Replace the account's settings, splitting them the way the row stores them.
 
@@ -54,15 +55,18 @@ class UserMixPrefsService:
         validation a saved tournament config does, so no key the solver does not
         recognise can ever be persisted into its input.
 
-        The roster shape and the points knob are columns beside it, never keys
-        inside it: neither is a solver override (see ``UserBalancerConfig``).
+        The roster shape, the points knob and the rating mode are columns
+        beside it, never keys inside it: none is a solver override (see
+        ``UserBalancerConfig``).
         The mask is normalized here rather than at the wire so the column can
         never hold a zero count, and ``0`` points stores as NULL -- "off" has one
         spelling in the column, whichever of the two the client sent.
         """
         raw: dict[str, Any] = {
             "mix_comfort_tilt": mix_comfort_tilt,
-            "mix_role_weights": dict(mix_role_weights) if mix_role_weights else None,
+            "role_settings": {code: dict(settings) for code, settings in role_settings.items()}
+            if role_settings
+            else None,
             "max_result_variants": max_result_variants,
         }
         payload = normalize_config_payload({key: value for key, value in raw.items() if value is not None})
@@ -77,6 +81,7 @@ class UserMixPrefsService:
             "config_json": payload,
             "role_slots_json": slots or None,
             "points_per_win": points_per_win or None,
+            "rating_mode": rating_mode,
         }
         config = await self.get(session, user_id)
         if config is None:

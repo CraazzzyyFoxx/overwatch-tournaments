@@ -40,7 +40,8 @@ export function DiscordChannelSelect({
   const [open, setOpen] = React.useState(false);
   const [search, setSearch] = React.useState("");
 
-  const channels: DiscordChannel[] = data?.channels ?? [];
+  // Every picker that uses this posts messages: voices and categories are not targets.
+  const channels: DiscordChannel[] = (data?.channels ?? []).filter((channel) => channel.type === "text");
   const hasChannels = channels.length > 0;
   const selected = channels.find((channel) => channel.id === value);
 

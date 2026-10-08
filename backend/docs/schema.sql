@@ -1,6 +1,6 @@
 -- Anak Tournaments — PostgreSQL DDL compiled from SQLAlchemy metadata.
 -- Open in any SQL editor (DataGrip, DBeaver, VS Code).
--- Tables: 150
+-- Tables: 151
 -- Source of truth is backend/shared/models. Regenerate: python scripts/export_db_schema.py
 
 CREATE SCHEMA IF NOT EXISTS achievements;
@@ -651,10 +651,11 @@ CREATE TABLE balancer.custom_game (
 	lobby_count INTEGER DEFAULT '1' NOT NULL, 
 	self_signup VARCHAR(16) DEFAULT 'closed' NOT NULL, 
 	self_role_edit BOOLEAN DEFAULT 'false' NOT NULL, 
+	general_voice_channel_id BIGINT, 
 	PRIMARY KEY (id), 
 	CONSTRAINT ck_custom_game_status CHECK (status IN ('draft', 'balanced', 'completed', 'cancelled')), 
 	CONSTRAINT ck_custom_game_self_signup CHECK (self_signup IN ('closed', 'pool', 'benched')), 
-	CONSTRAINT ck_custom_game_lobby_count CHECK (lobby_count BETWEEN 1 AND 2), 
+	CONSTRAINT ck_custom_game_lobby_count CHECK (lobby_count BETWEEN 1 AND 6), 
 	FOREIGN KEY(workspace_id) REFERENCES workspace (id) ON DELETE CASCADE, 
 	FOREIGN KEY(host_user_id) REFERENCES auth."user" (id) ON DELETE SET NULL
 );
@@ -679,8 +680,10 @@ CREATE TABLE balancer.custom_game_lobby (
 	balance_result_version INTEGER DEFAULT '1' NOT NULL, 
 	next_map_id BIGINT, 
 	balanced_at TIMESTAMP WITH TIME ZONE, 
+	team1_voice_channel_id BIGINT, 
+	team2_voice_channel_id BIGINT, 
 	PRIMARY KEY (custom_game_id, lobby_index), 
-	CONSTRAINT ck_custom_game_lobby_index CHECK (lobby_index BETWEEN 0 AND 1), 
+	CONSTRAINT ck_custom_game_lobby_index CHECK (lobby_index BETWEEN 0 AND 5), 
 	FOREIGN KEY(custom_game_id) REFERENCES balancer.custom_game (id) ON DELETE CASCADE, 
 	FOREIGN KEY(next_map_id) REFERENCES overwatch.map (id) ON DELETE SET NULL
 );
@@ -700,7 +703,7 @@ CREATE TABLE balancer.custom_game_player (
 	CONSTRAINT uq_custom_game_player_member UNIQUE (custom_game_id, workspace_member_id), 
 	CONSTRAINT ck_custom_game_player_participation CHECK (participation IN ('must_play', 'pool', 'benched')), 
 	CONSTRAINT ck_custom_game_player_role_selection_mode CHECK (role_selection_mode IN ('all_ranked', 'explicit')), 
-	CONSTRAINT ck_custom_game_player_lobby_pin CHECK (lobby_pin BETWEEN 0 AND 1), 
+	CONSTRAINT ck_custom_game_player_lobby_pin CHECK (lobby_pin BETWEEN 0 AND 5), 
 	FOREIGN KEY(custom_game_id) REFERENCES balancer.custom_game (id) ON DELETE CASCADE, 
 	FOREIGN KEY(workspace_member_id) REFERENCES workspace_member (id) ON DELETE CASCADE
 );
@@ -875,6 +878,23 @@ CREATE INDEX ix_balancer_draft_team_captain_workspace_member_id ON balancer.draf
 CREATE INDEX ix_balancer_draft_team_exported_team_id ON balancer.draft_team (exported_team_id);
 
 CREATE INDEX ix_balancer_draft_team_session_id ON balancer.draft_team (session_id);
+
+CREATE TABLE balancer.member_hidden_rating (
+	id BIGSERIAL NOT NULL, 
+	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
+	updated_at TIMESTAMP WITH TIME ZONE, 
+	workspace_id BIGINT NOT NULL, 
+	workspace_member_id BIGINT NOT NULL, 
+	role VARCHAR(16) NOT NULL, 
+	mu FLOAT NOT NULL, 
+	sigma FLOAT NOT NULL, 
+	PRIMARY KEY (id), 
+	CONSTRAINT uq_member_hidden_rating_member_role UNIQUE (workspace_member_id, role), 
+	FOREIGN KEY(workspace_id) REFERENCES workspace (id) ON DELETE CASCADE, 
+	FOREIGN KEY(workspace_member_id) REFERENCES workspace_member (id) ON DELETE CASCADE
+);
+
+CREATE INDEX ix_balancer_member_hidden_rating_workspace_id ON balancer.member_hidden_rating (workspace_id);
 
 CREATE TABLE balancer.member_rank (
 	id BIGSERIAL NOT NULL, 
@@ -1301,8 +1321,10 @@ CREATE TABLE balancer.user_config (
 	config_json JSONB DEFAULT '{}' NOT NULL, 
 	role_slots_json JSONB, 
 	points_per_win INTEGER, 
+	rating_mode VARCHAR(16) DEFAULT 'points' NOT NULL, 
 	PRIMARY KEY (id), 
 	CONSTRAINT uq_balancer_user_config_user UNIQUE (user_id), 
+	CONSTRAINT ck_balancer_user_config_rating_mode CHECK (rating_mode IN ('points', 'ranker')), 
 	FOREIGN KEY(user_id) REFERENCES auth."user" (id) ON DELETE CASCADE
 );
 
@@ -1315,6 +1337,7 @@ CREATE TABLE balancer.workspace_config (
 	workspace_id BIGINT NOT NULL, 
 	config_json JSON DEFAULT '{}' NOT NULL, 
 	updated_by BIGINT, 
+	ranker_json JSONB, 
 	PRIMARY KEY (id), 
 	CONSTRAINT uq_balancer_workspace_config_workspace UNIQUE (workspace_id), 
 	FOREIGN KEY(workspace_id) REFERENCES workspace (id) ON DELETE CASCADE, 
@@ -1333,7 +1356,7 @@ CREATE TABLE casual.match (
 	recorded_by BIGINT, 
 	points_per_win_applied INTEGER, 
 	PRIMARY KEY (id), 
-	CONSTRAINT ck_casual_match_lobby_index CHECK (lobby_index BETWEEN 0 AND 1), 
+	CONSTRAINT ck_casual_match_lobby_index CHECK (lobby_index BETWEEN 0 AND 5), 
 	FOREIGN KEY(custom_game_id) REFERENCES balancer.custom_game (id) ON DELETE CASCADE, 
 	FOREIGN KEY(map_id) REFERENCES overwatch.map (id) ON DELETE SET NULL, 
 	FOREIGN KEY(recorded_by) REFERENCES auth."user" (id) ON DELETE SET NULL
@@ -1360,6 +1383,7 @@ CREATE TABLE casual.player (
 	display_name_snapshot VARCHAR(255) NOT NULL, 
 	role heroclass, 
 	rank INTEGER NOT NULL, 
+	rank_delta_applied INTEGER, 
 	PRIMARY KEY (id), 
 	FOREIGN KEY(team_id) REFERENCES casual.team (id) ON DELETE CASCADE, 
 	FOREIGN KEY(workspace_member_id) REFERENCES workspace_member (id) ON DELETE SET NULL

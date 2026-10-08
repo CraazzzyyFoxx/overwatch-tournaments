@@ -7,7 +7,6 @@ import { BrandingSection } from "./BrandingSection";
 import { DiscordSection } from "./DiscordSection";
 import { DomainSection } from "./DomainSection";
 import { GeneralSection } from "./GeneralSection";
-import { NotificationsSection } from "./NotificationsSection";
 import { VisibilitySection } from "./VisibilitySection";
 import type { WorkspaceRecordSectionKey } from "./sections";
 
@@ -24,8 +23,7 @@ const SECTION_COMPONENTS: Record<
   branding: BrandingSection,
   visibility: VisibilitySection,
   domain: DomainSection,
-  discord: DiscordSection,
-  notifications: NotificationsSection
+  discord: DiscordSection
 };
 
 /** `/admin/settings/*` — the workspace the admin is currently working in. */

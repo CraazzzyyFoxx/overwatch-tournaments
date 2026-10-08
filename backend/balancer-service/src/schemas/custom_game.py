@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import base64
 import binascii
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StrictBool, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StringConstraints, field_validator, model_validator
 
 from shared.core.enums import MixParticipation, MixSelfSignup
+from shared.domain.mix_lobby import MAX_LOBBIES
 from shared.domain.player_sub_roles import REGISTRATION_ROLE_CODES
 
 __all__ = (
@@ -16,7 +17,9 @@ __all__ = (
     "CustomGameCoHostPatch",
     "CustomGameCreate",
     "CustomGameHostTransfer",
+    "CustomGameLineupRefresh",
     "CustomGameLobbyCountPatch",
+    "CustomGameLobbyVoice",
     "CustomGameNextMapPatch",
     "CustomGameOutcome",
     "CustomGamePlayerPatch",
@@ -25,12 +28,15 @@ __all__ = (
     "CustomGamePostDiscord",
     "CustomGamePostSignup",
     "CustomGameRecordOutcome",
+    "CustomGameRename",
     "CustomGameRosterUpdate",
     "CustomGameSeatSwap",
     "CustomGameSelfServicePatch",
     "CustomGameSelfUpdate",
     "CustomGameTeamNamesPatch",
     "CustomGameVariantIndexPatch",
+    "CustomGameVoicePatch",
+    "CustomGameVoiceRun",
 )
 
 
@@ -38,20 +44,20 @@ class _Request(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+#: Trimmed before the length check, so a blank name is refused rather than stored.
+_MixName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)]
+
+
 class CustomGameCreate(_Request):
-    name: str = Field(min_length=1, max_length=255)
+    name: _MixName
     member_ids: list[int] = Field(default_factory=list, max_length=100)
     #: Start from a previous mix of this workspace: its pool, role setup, role
     #: shape, points knob, team names and co-hosts, but none of its played state.
     clone_from_game_id: int | None = None
 
-    @field_validator("name")
-    @classmethod
-    def _trim_name(cls, value: str) -> str:
-        trimmed = value.strip()
-        if not trimmed:
-            raise ValueError("name is required")
-        return trimmed
+
+class CustomGameRename(_Request):
+    name: _MixName
 
 
 class CustomGameRosterUpdate(_Request):
@@ -64,7 +70,7 @@ class CustomGamePlayerPatch(_Request):
     is_flex: StrictBool | None = None
     # ``None`` is "auto": the balance places them wherever they fit. A patch that
     # does not mention the field leaves the pin exactly as it was.
-    lobby_pin: int | None = Field(None, ge=0, le=1)
+    lobby_pin: int | None = Field(None, ge=0, le=MAX_LOBBIES - 1)
 
     @field_validator("roles")
     @classmethod
@@ -107,7 +113,7 @@ class _LobbyScoped(_Request):
     """Every per-match write names its lobby; ``0`` is the only one a
     single-lobby mix has, which is why it is the default."""
 
-    lobby_index: int = Field(0, ge=0, le=1)
+    lobby_index: int = Field(0, ge=0, le=MAX_LOBBIES - 1)
 
 
 class CustomGameNextMapPatch(_LobbyScoped):
@@ -125,7 +131,7 @@ class CustomGameVariantIndexPatch(_LobbyScoped):
 class CustomGameBalanceRequest(_LobbyScoped):
     """What to balance. An empty body is the first lobby, as before there was a second.
 
-    ``scope="all"`` reshuffles both lobbies at once and needs ``lobby_count = 2``.
+    ``scope="all"`` reshuffles every lobby at once and needs ``lobby_count >= 2``.
     """
 
     scope: Literal["lobby", "all"] = "lobby"
@@ -138,17 +144,9 @@ _MAX_IMAGE_B64_LENGTH = 8 * 1024 * 1024
 _PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 
 
-class CustomGamePostDiscord(_LobbyScoped):
-    """Which balance option's lineup to post, and the PNG of it to attach.
+class _LineupImage(_LobbyScoped):
+    """A lineup capture: the matchup card rasterised in the host's browser (see CustomGamePostDiscord)."""
 
-    The image is the matchup card the host is looking at, rasterised in their
-    browser (see ``frontend/src/hooks/useNodeCapture.ts``) -- the bot has no
-    renderer, and a screenshot of the real card is the one thing guaranteed to
-    match what the mix page shows. Omitted when the capture fails, and the
-    text embed is then posted instead.
-    """
-
-    variant_index: int = Field(ge=0)
     image_b64: str | None = Field(default=None, max_length=_MAX_IMAGE_B64_LENGTH)
 
     @field_validator("image_b64")
@@ -168,6 +166,23 @@ class CustomGamePostDiscord(_LobbyScoped):
         if not raw.startswith(_PNG_MAGIC):
             raise ValueError("image_b64 must be a PNG")
         return value
+
+
+class CustomGamePostDiscord(_LineupImage):
+    """Which balance option's lineup to post, and the PNG of it to attach.
+
+    The image is the matchup card the host is looking at, rasterised in their
+    browser (see ``frontend/src/hooks/useNodeCapture.ts``) -- the bot has no
+    renderer, and a screenshot of the real card is the one thing guaranteed to
+    match what the mix page shows. Omitted when the capture fails, and the
+    text embed is then posted instead.
+    """
+
+    variant_index: int = Field(ge=0)
+
+
+class CustomGameLineupRefresh(_LineupImage):
+    """The lobby's newest lineup card, re-rendered from the lineup on screen now."""
 
 
 class CustomGameHostTransfer(_Request):
@@ -239,4 +254,45 @@ class CustomGamePostSignup(_Request):
 class CustomGameLobbyCountPatch(_Request):
     """How many lobbies the mix runs at once."""
 
-    lobby_count: Literal[1, 2]
+    lobby_count: int = Field(ge=1, le=MAX_LOBBIES)
+
+
+#: A Discord id on the wire: digits in a string, because JSON has one number
+#: type and a snowflake does not survive a float64 round-trip.
+_Snowflake = Annotated[str, StringConstraints(strip_whitespace=True, pattern=r"^\d{1,20}$")]
+
+
+class CustomGameLobbyVoice(_LobbyScoped):
+    team1_voice_channel_id: _Snowflake | None = None
+    team2_voice_channel_id: _Snowflake | None = None
+
+    @model_validator(mode="after")
+    def _two_rooms(self) -> CustomGameLobbyVoice:
+        if self.team1_voice_channel_id is not None and self.team1_voice_channel_id == self.team2_voice_channel_id:
+            raise ValueError("the two teams need two different voices")
+        return self
+
+
+class CustomGameVoicePatch(_Request):
+    """The mix's voices: its general voice and the team voices of every listed lobby.
+
+    ``general_voice_channel_id`` is always replaced; a lobby left out of
+    ``lobbies`` keeps its voices. Nothing is checked against Discord here --
+    a voice outside the category is refused when people are moved.
+    """
+
+    general_voice_channel_id: _Snowflake | None = None
+    lobbies: list[CustomGameLobbyVoice] = Field(default_factory=list, max_length=MAX_LOBBIES)
+
+    @model_validator(mode="after")
+    def _unique_lobbies(self) -> CustomGameVoicePatch:
+        indexes = [lobby.lobby_index for lobby in self.lobbies]
+        if len(indexes) != len(set(indexes)):
+            raise ValueError("lobby_index values must be unique")
+        return self
+
+
+class CustomGameVoiceRun(_Request):
+    """Which lobby to move; ``null`` is every lobby of the mix."""
+
+    lobby_index: int | None = Field(None, ge=0, le=MAX_LOBBIES - 1)

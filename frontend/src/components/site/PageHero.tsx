@@ -1,25 +1,17 @@
 import React from "react";
 
 import { cn } from "@/lib/utils";
-import type { PlayerRoleTint } from "@/lib/roster/player-role";
 
 /**
  * Editorial-Tactical page hero (design-book / OWT artifact).
  *
- * The single restrained hero used across every `(site)` page. Replaces the
- * previous per-page multicolored banners (teal + rose/amber/blue glows + hex
- * lattice) with one calm treatment: a 2px teal top hairline, a faint masked
- * square grid, ONE low-opacity teal glow, and a mixed-case Onest title whose
- * accent word (wrapped in `<em>`) is painted with the role-spectrum gradient.
+ * The single restrained hero used across every `(site)` page: a plain frame,
+ * a 2px teal top hairline, ONE soft glow in the page's colour, and a
+ * mixed-case Onest title. No grid, no gradient text.
  *
  * Server-safe: presentational only, no hooks — usable from RSC and client
  * components alike. Colours come from the global `--aqt-*` tokens.
  */
-
-/** Role hue for the profile wash — maps to the `--aqt-{role}` role tokens.
- *  This is a PLAYER-role tint (Tank/Damage/Support/Flex), not a hero class; the
- *  name is historical, so it stays an alias over the one tint vocabulary. */
-type HeroRoleTint = PlayerRoleTint;
 
 /**
  * The cover wash's blur radius, and how far its image is bled past the frame.
@@ -37,13 +29,16 @@ interface HeroFrameProps {
   /**
    * Accent treatment. `"default"` (used by every list/dashboard hero) keeps the
    * calm teal top hairline. `"profile"` is the player-page signature from the
-   * design-book: the role-spectrum hairline moves to the BASE and a role-tinted
-   * wash bleeds from the top-left — the one place the multi-hue spectrum reads
-   * as identity rather than decoration.
+   * design-book: the role-spectrum hairline at the BASE — the one place the
+   * multi-hue spectrum reads as identity rather than decoration.
    */
   variant?: "default" | "profile";
-  /** Role hue for the `"profile"` wash. Omit to skip the tint. */
-  roleTint?: HeroRoleTint;
+  /**
+   * Colour of the soft corner glow (any CSS colour). Defaults to teal; the
+   * player profile passes its main-role hue. Ignored when `coverUrl` is set —
+   * the cover already gives the header its colour.
+   */
+  tint?: string;
   /**
    * Optional banner image behind the hero (a tournament cover) — rendered
    * BLURRED and full-bleed, as the tournament's colour field, not as a picture.
@@ -98,9 +93,9 @@ export function HeroFrame({
   children,
   className,
   variant = "default",
-  roleTint,
   coverUrl,
   coverFade,
+  tint = "var(--aqt-teal)",
 }: Readonly<HeroFrameProps>) {
   const isProfile = variant === "profile";
   const fadeRight = Boolean(coverUrl) && coverFade === "right";
@@ -181,36 +176,13 @@ export function HeroFrame({
             filter: `blur(${COVER_BLUR_PX}px) saturate(2.2)`,
           }}
         />
-      ) : null}
-      {/* faint square grid, radially masked so it fades out */}
-      <span
-        aria-hidden
-        className="pointer-events-none absolute inset-0 opacity-45"
-        style={{
-          backgroundImage:
-            "linear-gradient(var(--aqt-border) 1px, transparent 1px), linear-gradient(90deg, var(--aqt-border) 1px, transparent 1px)",
-          backgroundSize: "48px 48px",
-          WebkitMaskImage:
-            "radial-gradient(120% 120% at 20% 0%, #000 35%, transparent 80%)",
-          maskImage: "radial-gradient(120% 120% at 20% 0%, #000 35%, transparent 80%)",
-        }}
-      />
-      {/* single restrained teal glow */}
-      <span
-        aria-hidden
-        className="pointer-events-none absolute -left-[8%] -top-[30%] h-[150%] w-3/5"
-        style={{ background: "var(--aqt-hero-glow)" }}
-      />
-      {/* profile-only role-tinted wash from the top-left corner */}
-      {isProfile && roleTint ? (
+      ) : (
         <span
           aria-hidden
-          className="pointer-events-none absolute inset-0"
-          style={{
-            background: `radial-gradient(70% 120% at 12% -20%, color-mix(in srgb, var(--aqt-${roleTint}) 16%, transparent), transparent 55%)`,
-          }}
+          className="aqt-hero-tint pointer-events-none absolute inset-0"
+          style={{ "--aqt-hero-tint": tint } as React.CSSProperties}
         />
-      ) : null}
+      )}
       <div className="relative z-[1]">{children}</div>
     </section>
   );
@@ -219,7 +191,7 @@ export function HeroFrame({
 interface PageHeroProps {
   /** Mono coordinate line(s) above the title (use `HeroCoord`). */
   eyebrow?: React.ReactNode;
-  /** Big mixed-case title. Wrap the accent word in `<em>` for the spectrum. */
+  /** Big mixed-case title. */
   title: React.ReactNode;
   /** Optional supporting sentence under the title. */
   lede?: React.ReactNode;
@@ -301,7 +273,7 @@ export function PageHero({
           ) : null}
           <h1
             className={cn(
-              "aqt-hero-title font-onest font-semibold text-[color:var(--aqt-fg)]",
+              "font-onest font-semibold text-[color:var(--aqt-fg)]",
               compact ? "mt-2 text-headline" : "mt-4 text-display",
               titleClassName
             )}

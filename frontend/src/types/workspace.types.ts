@@ -223,6 +223,14 @@ export interface Workspace {
   slug: string;
   name: string;
   description: string | null;
+  /** One-line motto under the community name on its page. */
+  tagline: string | null;
+  /** Organizer-written "About the community", Markdown. */
+  about: string | null;
+  /** Public community links shown as chips on the community page and in its footer. */
+  discord_url: string | null;
+  twitch_url: string | null;
+  boosty_url: string | null;
   icon_url: string | null;
   is_active: boolean;
   /** Excludes this workspace from the anonymous/non-member `/api/v1/workspaces`
@@ -304,6 +312,20 @@ export interface WorkspaceBranding {
 }
 
 export type WorkspaceSystemRole = "owner" | "admin" | "referee" | "host" | "player";
+
+/** The roles the public "Кто ведёт" list shows, highest first. */
+export type WorkspaceStaffRole = "owner" | "admin" | "referee";
+
+/**
+ * One person on the public staff list (`GET /api/v1/workspaces/{id}/staff`):
+ * members holding owner/admin/referee who have a player profile, one row per
+ * person at their highest role. `name` is the player name (BattleTag) the
+ * profile URL is built from (`getPlayerSlug`).
+ */
+export interface WorkspaceStaffMember {
+  role: WorkspaceStaffRole;
+  name: string;
+}
 
 export interface WorkspaceMember {
   id: number;

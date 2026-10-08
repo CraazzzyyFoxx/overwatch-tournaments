@@ -1,10 +1,9 @@
 import { HeroFrame } from "@/components/site/PageHero";
 
 /**
- * Loading placeholder for the player hero, in the Editorial-Tactical aesthetic
- * (design-book §9): the same `HeroFrame` profile shell (masked grid + spectrum
- * base hairline) with a token-coloured hairline scaffold, so the skeleton reads
- * as the system rather than a generic shadcn card. No coloured blur auras.
+ * Loading placeholder for the player hero: the same `HeroFrame` profile shell
+ * (spectrum base hairline) and the same grid as `UserHeader`, so nothing jumps
+ * when the real header streams in.
  */
 const Bar = ({ className }: { className?: string }) => (
   <span className={`block animate-pulse rounded bg-[color:var(--aqt-card-2)] ${className ?? ""}`} />
@@ -13,34 +12,32 @@ const Bar = ({ className }: { className?: string }) => (
 const UserHeaderSkeleton = () => {
   return (
     <HeroFrame className="aqt-player" variant="profile">
-      <div className="flex items-center justify-between gap-3 px-9 pt-5">
-        <Bar className="h-3 w-40" />
-        <div className="flex gap-2">
-          <Bar className="h-7 w-20 rounded-lg" />
-          <Bar className="h-7 w-24 rounded-lg" />
-        </div>
-      </div>
-
-      <div className="grid items-center gap-8 p-7 pt-6 md:grid-cols-[auto_1fr_auto] md:px-9 md:py-7">
-        <Bar className="h-[110px] w-[110px] rounded-[18px]" />
+      <div className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-4 gap-y-6 px-5 py-5 md:gap-x-6 md:px-8 md:py-7 lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-center lg:gap-x-10">
+        <Bar className="size-[72px] rounded-[14px] md:size-[104px] md:rounded-[18px]" />
 
         <div className="flex min-w-0 flex-col gap-3">
           <Bar className="h-9 w-64 max-w-full rounded-md" />
-          <Bar className="h-3.5 w-52 max-w-full" />
+          <Bar className="h-3.5 w-32 max-w-full" />
           <div className="mt-1 flex gap-1.5">
             <Bar className="h-6 w-24 rounded-md" />
             <Bar className="h-6 w-24 rounded-md" />
           </div>
         </div>
 
-        <div className="grid w-full items-end gap-4 md:w-auto md:min-w-[460px] md:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="flex flex-col gap-2">
-              <Bar className="h-2.5 w-16" />
-              <Bar className="h-7 w-20 rounded-md" />
-            </div>
-          ))}
-          <div className="col-span-full mt-2 flex flex-wrap items-center gap-3 border-t border-[color:var(--aqt-border)] pt-3">
+        <div className="col-span-full flex min-w-0 flex-col gap-5 lg:col-span-1 lg:items-end">
+          <div className="flex gap-2">
+            <Bar className="h-8 w-20 rounded-lg" />
+            <Bar className="h-8 w-24 rounded-lg" />
+          </div>
+          <div className="grid w-full grid-cols-2 gap-x-6 gap-y-5 sm:grid-cols-4 lg:w-auto lg:gap-x-9">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="flex flex-col gap-2">
+                <Bar className="h-2.5 w-16" />
+                <Bar className="h-7 w-20 rounded-md" />
+              </div>
+            ))}
+          </div>
+          <div className="flex w-full flex-wrap items-center gap-3 border-t border-[color:var(--aqt-border)] pt-3">
             <Bar className="h-2.5 w-24" />
             <div className="flex gap-1.5">
               {Array.from({ length: 6 }).map((_, i) => (

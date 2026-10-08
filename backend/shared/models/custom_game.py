@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Any
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     CheckConstraint,
     DateTime,
@@ -16,6 +17,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from shared.core import db
+from shared.domain.mix_lobby import MAX_LOBBIES
 
 __all__ = (
     "CustomGame",
@@ -36,7 +38,7 @@ class CustomGame(db.TimeStampIntegerMixin):
     all live in one row of ``balancer.user_config``, so the same person's mixes
     all run the same way -- and the Discord target is the workspace's
     (``balancer.workspace_config.config_json.mix_discord_channel_id``), not this
-    lobby's.
+    lobby's; only the voices a mix moves people into are its own.
     """
 
     __tablename__ = "custom_game"
@@ -49,7 +51,7 @@ class CustomGame(db.TimeStampIntegerMixin):
             "self_signup IN ('closed', 'pool', 'benched')",
             name="ck_custom_game_self_signup",
         ),
-        CheckConstraint("lobby_count BETWEEN 1 AND 2", name="ck_custom_game_lobby_count"),
+        CheckConstraint(f"lobby_count BETWEEN 1 AND {MAX_LOBBIES}", name="ck_custom_game_lobby_count"),
         # (no per-mix points_per_win check: the knob is the host's, see above)
         {"schema": "balancer"},
     )
@@ -60,10 +62,10 @@ class CustomGame(db.TimeStampIntegerMixin):
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="draft", server_default="draft")
-    # How many lobbies this mix runs at once. There are exactly this many
-    # ``custom_game_lobby`` rows: everything about one played match -- the
-    # matchup, the pager, the rolled map -- is a fact about a lobby, not about
-    # the mix, so two lobbies never fight over one column.
+    # How many lobbies this mix runs at once (1..``MAX_LOBBIES``). There are
+    # exactly this many ``custom_game_lobby`` rows: everything about one played
+    # match -- the matchup, the pager, the rolled map -- is a fact about a
+    # lobby, not about the mix, so two lobbies never fight over one column.
     lobby_count: Mapped[int] = mapped_column(Integer(), nullable=False, default=1, server_default="1")
     # Whether players may seat THEMSELVES here, and where that lands them:
     # closed | pool | benched. Every existing mix ships closed, so the feature
@@ -73,6 +75,9 @@ class CustomGame(db.TimeStampIntegerMixin):
     # Whether a seated player may re-order their OWN roles and flip flex. The
     # host's book of ranks stays the host's either way.
     self_role_edit: Mapped[bool] = mapped_column(Boolean(), nullable=False, default=False, server_default="false")
+    # The mix's general voice: where "return" sends everyone. One of the
+    # workspace's general voices (``workspace_config.mix_general_voice_channel_ids``).
+    general_voice_channel_id: Mapped[int | None] = mapped_column(BigInteger(), nullable=True)
 
 
 class CustomGameCoHost(db.Base):
@@ -98,8 +103,8 @@ class CustomGameLobby(db.Base):
     """One of a mix's lobbies: its own matchup, pager, map and clock.
 
     A mix with one lobby is simply row ``lobby_index = 0``, so there is one code
-    path for one and for two. Membership is NOT stored: who is in a lobby right
-    now is derived from the seats of its selected variant, which keeps the
+    path for one lobby and for six. Membership is NOT stored: who is in a lobby
+    right now is derived from the seats of its selected variant, which keeps the
     matchup the single source of truth instead of a column to re-sync after
     every balance and every swap.
 
@@ -110,7 +115,7 @@ class CustomGameLobby(db.Base):
 
     __tablename__ = "custom_game_lobby"
     __table_args__ = (
-        CheckConstraint("lobby_index BETWEEN 0 AND 1", name="ck_custom_game_lobby_index"),
+        CheckConstraint(f"lobby_index BETWEEN 0 AND {MAX_LOBBIES - 1}", name="ck_custom_game_lobby_index"),
         {"schema": "balancer"},
     )
 
@@ -127,6 +132,10 @@ class CustomGameLobby(db.Base):
     # loading in, consumed and cleared by ``record_outcome``.
     next_map_id: Mapped[int | None] = mapped_column(ForeignKey("overwatch.map.id", ondelete="SET NULL"), nullable=True)
     balanced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # The two team voices this lobby's teams are moved into (team 1, team 2):
+    # voices of the workspace's voice category that are not general voices.
+    team1_voice_channel_id: Mapped[int | None] = mapped_column(BigInteger(), nullable=True)
+    team2_voice_channel_id: Mapped[int | None] = mapped_column(BigInteger(), nullable=True)
 
 
 class CustomGamePlayer(db.TimeStampIntegerMixin):
@@ -143,7 +152,7 @@ class CustomGamePlayer(db.TimeStampIntegerMixin):
             "role_selection_mode IN ('all_ranked', 'explicit')",
             name="ck_custom_game_player_role_selection_mode",
         ),
-        CheckConstraint("lobby_pin BETWEEN 0 AND 1", name="ck_custom_game_player_lobby_pin"),
+        CheckConstraint(f"lobby_pin BETWEEN 0 AND {MAX_LOBBIES - 1}", name="ck_custom_game_player_lobby_pin"),
         {"schema": "balancer"},
     )
 

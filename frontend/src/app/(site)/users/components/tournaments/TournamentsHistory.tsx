@@ -11,7 +11,6 @@ import {
   groupTournamentsByLeague,
   isLeagueGroup
 } from "@/app/(site)/users/components/tournaments/tournaments-history.helpers";
-import TournamentsKpiStrip from "@/app/(site)/users/components/tournaments/TournamentsKpiStrip";
 import TournamentsPlacementTimeline from "@/app/(site)/users/components/tournaments/TournamentsPlacementTimeline";
 import TournamentList from "@/app/(site)/users/components/tournaments/TournamentList";
 import TournamentDossier from "@/app/(site)/users/components/tournaments/TournamentDossier";
@@ -132,8 +131,12 @@ const TournamentsHistory = ({ tournaments, selfUserId, profile = null }: Props) 
 
   return (
     <>
-      <TournamentsKpiStrip profile={profile} tournaments={tournaments} />
-      <TournamentsPlacementTimeline tournaments={tournaments} selectedIds={selectedIds} onSelect={selectEvent} />
+      <TournamentsPlacementTimeline
+        tournaments={tournaments}
+        profile={profile}
+        selectedIds={selectedIds}
+        onSelect={selectEvent}
+      />
       <div className="grid grid-cols-1 gap-3.5 min-[1081px]:grid-cols-[minmax(0,1fr)_404px]">
         <div ref={dossierRef} className="order-2 min-w-0 scroll-mt-4 min-[1081px]:order-1">
           <TournamentDossier

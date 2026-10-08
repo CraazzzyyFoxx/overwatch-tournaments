@@ -88,7 +88,7 @@ function tick() {
 async function mount(
   value: CustomGamePlayer | null = row(),
   mixStats: MixMemberStats | null = null,
-  lobbyCount: 1 | 2 = 1,
+  lobbyCount = 1,
 ) {
   const container = document.createElement("div");
   document.body.appendChild(container);
@@ -382,20 +382,31 @@ describe("PickupPlayerSheet mix record", () => {
   });
 });
 
-// The lobby pin. `next-intl` is mocked to echo the key, so every label below is
-// the message key rather than the rendered sentence.
+// The lobby pin. `next-intl` is mocked to echo the key, so the options are read
+// by position -- Auto first, then one per lobby the mix runs -- rather than by
+// a label every option would share once the letter is interpolated away.
 describe("PickupPlayerSheet lobby pin", () => {
+  const pinOptions = (scope: ParentNode) => [
+    ...scope.querySelectorAll('[role="radiogroup"][aria-label="pinGroup"] [role="radio"]'),
+  ];
+
   it("offers no lobby pin while the mix runs one lobby", async () => {
     const scope = await mount(row());
 
     expect(scope.querySelector('[role="radiogroup"][aria-label="pinGroup"]')).toBeNull();
   });
 
+  it("offers Auto plus one option per lobby the mix actually runs", async () => {
+    // Six lobbies is the ceiling, so seven options is the widest this ever gets.
+    expect(pinOptions(await mount(row(), null, 6))).toHaveLength(7);
+  });
+
   it("pins the player to a lobby, and writes it with the rest of the patch", async () => {
-    const scope = await mount(row(), null, 2);
+    const scope = await mount(row(), null, 4);
 
     await act(async () => {
-      findButton(scope, "pinB").dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      // Auto, A, B, C, D -- so the fourth option is lobby C.
+      pinOptions(scope)[3].dispatchEvent(new MouseEvent("click", { bubbles: true }));
       await tick();
     });
     // Staged, like everything else in this sheet.
@@ -406,7 +417,7 @@ describe("PickupPlayerSheet lobby pin", () => {
       await tick();
     });
 
-    expect(onSave.mock.calls[0][0]).toMatchObject({ lobby_pin: 1 });
+    expect(onSave.mock.calls[0][0]).toMatchObject({ lobby_pin: 2 });
   });
 
   it("sends no lobby pin at all from a one-lobby mix -- the server 422s it", async () => {
@@ -421,9 +432,9 @@ describe("PickupPlayerSheet lobby pin", () => {
   });
 
   it("shows the pin the server already stored", async () => {
-    const scope = await mount(row({ lobby_pin: 0 }), null, 2);
+    const scope = await mount(row({ lobby_pin: 3 }), null, 4);
 
-    expect(findButton(scope, "pinA").getAttribute("aria-checked")).toBe("true");
-    expect(findButton(scope, "pinB").getAttribute("aria-checked")).toBe("false");
+    expect(pinOptions(scope)[4].getAttribute("aria-checked")).toBe("true");
+    expect(pinOptions(scope)[1].getAttribute("aria-checked")).toBe("false");
   });
 });

@@ -208,9 +208,9 @@ Shared prep (`backend/balancer-service/src/domain/balancer/runtime.py`):
 - Overflow: `must_play` always kept (error if they exceed slots); optional players trimmed by `rotation_priority`.
 - Captains pinned; roles assigned by backtracking that never evicts a captain.
 
-**Tournament balancer** (Rust NSGA-II, N teams): MMR gap (tax-bracket rates 1/3/8/18/40), tank gap (1/3/8/20), intra-std, discomfort, sub-role collisions (weight 24/pair), low-rank pairs (250/pair), role-line, pain. Hard `time_limit_ms` (default 600s). Discomfort: 0 flex, `pref×100`, 1000 playable-unpreferred, 5000 unplayable.
+**Tournament balancer** (Rust NSGA-II, N teams): MMR gap (tax-bracket rates 1/3/8/18/40), per-role line gap (1/3/8/20) and line std weighted by `role_settings` (default: tank only), role `impact` in the effective team total, intra-std, discomfort, sub-role collisions (weight 24/pair), low-rank pairs (250/pair), role-line, pain. Hard `time_limit_ms` (default 600s). Discomfort: 0 flex, `pref×100`, 1000 playable-unpreferred, 5000 unplayable. Per-role weights are declared once in `AlgorithmConfig.role_settings`; the engine receives them per role and knows no role names.
 
-**Mix balancer** (C++ brute force, exactly 2 teams, Linux): comfort/fairness tilt; retry without `balance_limit` if empty; dedupe mirrored seatings.
+**Mix balancer** (Rust exhaustive search, exactly 2 teams): comfort/fairness tilt, per-role `mix_weight` from the host's preferences; optional `balance_limit` (unset by the service); each unordered seating enumerated once.
 
 Captains: top N by `(-max_rating, uuid)`.
 
@@ -235,28 +235,37 @@ Strategies: `best_fit` (default), `best_available`, `role_need`. Fit is delibera
 
 `MixStatus`: draft / balanced / completed / cancelled. Participation: `must_play` / `pool` / `benched`.
 
-**Lobbies.** A mix runs `lobby_count` lobbies (1 or 2, CHECK). Every per-match fact lives on
-`balancer.custom_game_lobby` keyed `(custom_game_id, lobby_index)`: `balance_result_json`,
+**Lobbies.** A mix runs `lobby_count` lobbies (1..6, CHECK). Every per-match fact lives on
+`balancer.custom_game_lobby` keyed `(custom_game_id, lobby_index)` (0..5): `balance_result_json`,
 `balance_result_version`, `selected_variant_index`, `next_map_id`, `balanced_at`. The mix itself
 carries none of them. Team names stay in `CustomGameTeamName` at the global index
-`lobby_index * 2 + team` (A: 0-1, B: 2-3).
+`lobby_index * 2 + team` (A: 0-1, B: 2-3, …, F: 10-11).
 
 Lobby membership is **not stored**: a player's `current_lobby` is derived from the selected variant
 of each lobby, `null` = waiting. Only the host's tie is stored — `custom_game_player.lobby_pin`
-(422 while `lobby_count = 1`). `set_lobby_count(1)` drops lobby B's row and every pin; its recorded
-matches stay.
+(422 unless `lobby_pin < lobby_count`). `set_lobby_count(n)` opens the lobbies missing below `n`
+and, going down, drops every lobby row with `lobby_index >= n` together with the pins that named
+them; pins to surviving lobbies and recorded matches stay.
 
 `balance` takes `{scope: "lobby", lobby_index} | {scope: "all"}`. Scope `lobby` excludes players
-seated in the other lobby and players pinned to it, then runs the unchanged `run_mix_balance` path.
-Scope `all` needs `lobby_count = 2` (422 `single_lobby`), splits the pool with
-`domain/mix_lobby_split.py` (422 `not_enough_for_two_lobbies` / `too_many_pinned` /
-`too_many_must_play` — more `must_play` than both lobbies have seats — / `roles_infeasible`) and
-solves each lobby. `set_variant_index` refuses a variant that would seat somebody the other lobby
+seated in another lobby and players pinned to one, then runs the unchanged `run_mix_balance` path.
+Scope `all` needs `lobby_count >= 2` (422 `single_lobby`), splits the pool into `lobby_count`
+equally strong parts with `domain/mix_lobby_split.py` (422 `not_enough_players` / `too_many_pinned`
+/ `too_many_must_play` — more `must_play` than all lobbies have seats — / `roles_infeasible`) and
+solves each lobby. `set_variant_index` refuses a variant that would seat somebody another lobby
 already seated: 409 `seat_conflict`.
 
 `record_outcome` stamps `casual.match.lobby_index` and writes one `casual.match_busy_player` row per
-member seated in the other lobby's selected variant. `undo_match` rolls back the newest match **of
+member seated in another lobby's selected variant. `undo_match` rolls back the newest match **of
 that match's lobby** (`newest_id_for_lobby`), not of the mix.
+
+Rank movement on `record_outcome` follows the **host's** `user_config.rating_mode`: `points` moves
+both teams by `points_per_win` (decided matches only, frozen in `points_per_win_applied`); `ranker`
+moves each seat by the mix ranker (draws included, never against the result, frozen per seat in
+`casual.player.rank_delta_applied`) and the host's mixes balance on the effective rating. Either way
+the workspace's hidden ratings (`member_hidden_rating`) advance. `undo_match` gives back what was
+frozen, then rebuilds the hidden ratings from the remaining history. The hidden book is derived data:
+saving a new `rating_min`/`rating_max`/`rating_avg`/`sigma_init` or the admin's rebuild replays it.
 
 Rotation (`mix_rotation.py`): longest sit-out streak → shortest played streak → fewest games → input
 order. `must_play` always seated. No history, or the whole pool fits → all `NEUTRAL` (do not invent
@@ -463,7 +472,7 @@ Duplicates only what the UI needs instantly; comments cite the server symbol:
 | Finalize + no-draw | `backend/shared/services/encounter/finalize.py` |
 | Pick-ban engine | `backend/shared/services/pick_ban_engine.py`, `tournament-service/src/services/encounter/pick_ban_*` |
 | Draft rules / clock | `balancer-service/src/domain/draft/`, `…/services/draft/clock.py` |
-| Balancer objectives | `balancer-service/native/tournament_balancer/src/objectives.rs` |
+| Balancer objectives | `balancer-service/native/balancer_native/src/moo/objectives.rs`, mix: `…/src/mix.rs` |
 | Mix rotation | `balancer-service/src/domain/mix_rotation.py` |
 | RBAC | `backend/shared/rbac/catalog.py`, `backend/shared/models/identity/auth_user.py` |
 | Visibility | `backend/shared/services/tournament/visibility.py` |

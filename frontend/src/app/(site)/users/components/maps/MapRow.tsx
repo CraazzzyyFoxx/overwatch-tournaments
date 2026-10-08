@@ -1,16 +1,15 @@
 "use client";
 
-import { cn } from "@/lib/utils";
-
 import Image from "next/image";
 import { UserMapRead } from "@/types/user.types";
 import HeroImage from "@/components/hero/HeroImage";
 import HeroUserStatsPopover from "@/components/hero/HeroUserStatsPopover";
 import { AvatarStack } from "@/components/ui/avatar";
+import { winrateColor } from "@/app/(site)/users/components/heroes/utils";
 
 const MapRow = ({ row }: { row: UserMapRead }) => {
   const wr = row.win_rate * 100;
-  const wrCls = wr >= 60 ? "good" : wr <= 40 ? "bad" : "";
+  const wrColor = winrateColor(wr);
   const heroStats = row.hero_stats ?? [];
   return (
     <div key={row.map.id} className="aqt-map-row" style={{ gridTemplateColumns: "64px 1fr 1fr minmax(0,1.2fr) 60px 50px" }}>
@@ -29,9 +28,11 @@ const MapRow = ({ row }: { row: UserMapRead }) => {
       </div>
       <div className="aqt-wr-bar">
         <div className="aqt-track">
-          <div className="aqt-fill" style={{ width: `${wr}%` }} />
+          <div className="aqt-fill" style={{ width: `${wr}%`, background: wrColor }} />
         </div>
-        <span className={cn("aqt-num tabular-nums", wrCls)}>{wr.toFixed(0)}%</span>
+        <span className="aqt-num tabular-nums" style={{ color: wrColor }}>
+          {wr.toFixed(0)}%
+        </span>
       </div>
       {heroStats.length > 0 ? (
         <AvatarStack max={8} size={26}>

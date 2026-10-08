@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 //
-// The Discord guild picker. What is pinned here:
+// The Discord settings page. What is pinned here:
 //  1. only servers this account can MANAGE are offered — the rest would be a
 //     guaranteed 403 dressed up as a choice — and picking one posts that
 //     guild id, never a typed snowflake (the field is gone from the PATCH);
@@ -10,13 +10,17 @@
 //     Discord account is not linked, and the fix is one screen away;
 //  4. a linked server can be unlinked, but only after a confirmation — it
 //     takes Boosty roles and match-log channels offline;
-//  5. the bound card shows who owns the Discord server, with their avatar.
+//  5. the bound card shows who owns the Discord server, with their avatar;
+//  6. tournament announcements save on every change, always as the three
+//     fields the RPC takes, the channel a STRING id; a refusal says which one.
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApiError } from "@/lib/api/error";
+import type { DiscordChannelsResponse } from "@/types/discord.types";
+import type { NotificationWorkspaceConfig } from "@/types/notification.types";
 import type { ManageableDiscordGuild, Workspace } from "@/types/workspace.types";
 import { DiscordSection } from "./DiscordSection";
 
@@ -30,8 +34,11 @@ const myDiscordGuilds = vi.fn();
 const verifyDiscordGuild = vi.fn();
 const clearDiscordGuild = vi.fn();
 const getDiscordGuildInfo = vi.fn();
+const getDiscordChannels = vi.fn();
 const getWorkspaceBalancerConfig = vi.fn();
 const upsertWorkspaceBalancerConfig = vi.fn();
+const workspaceConfig = vi.fn();
+const updateWorkspaceConfig = vi.fn();
 
 vi.mock("@/services/workspace.service", () => ({
   default: {
@@ -40,7 +47,15 @@ vi.mock("@/services/workspace.service", () => ({
     myDiscordGuilds: (...args: unknown[]) => myDiscordGuilds(...args),
     verifyDiscordGuild: (...args: unknown[]) => verifyDiscordGuild(...args),
     clearDiscordGuild: (...args: unknown[]) => clearDiscordGuild(...args),
-    getDiscordGuildInfo: (...args: unknown[]) => getDiscordGuildInfo(...args)
+    getDiscordGuildInfo: (...args: unknown[]) => getDiscordGuildInfo(...args),
+    getDiscordChannels: (...args: unknown[]) => getDiscordChannels(...args)
+  }
+}));
+
+vi.mock("@/services/notification.service", () => ({
+  default: {
+    workspaceConfig: (...args: unknown[]) => workspaceConfig(...args),
+    updateWorkspaceConfig: (...args: unknown[]) => updateWorkspaceConfig(...args)
   }
 }));
 
@@ -82,15 +97,77 @@ vi.mock("@/services/balancer-admin.service", () => ({
   }
 }));
 
-// The real picker is a popover over a Discord channel fetch; the mix card only
-// needs a control that emits a channel id.
+// The real picker is a popover over a Discord channel fetch; the page only
+// needs a control that emits a channel id, told apart by its accessible name.
 vi.mock("@/components/discord/DiscordChannelSelect", () => ({
-  DiscordChannelSelect: ({ onChange }: { onChange: (id: string) => void }) => (
-    <button type="button" onClick={() => onChange("555555555555555555")}>
+  DiscordChannelSelect: ({
+    onChange,
+    ariaLabel
+  }: {
+    onChange: (id: string) => void;
+    ariaLabel: string;
+  }) => (
+    <button type="button" aria-label={ariaLabel} onClick={() => onChange("555555555555555555")}>
       Pick channel
     </button>
   )
 }));
+
+// Radix's Select and Checkbox reach for pointer-capture APIs happy-dom does
+// not implement; without these the listbox never opens.
+for (const [name, value] of Object.entries({
+  hasPointerCapture: () => false,
+  setPointerCapture: () => undefined,
+  releasePointerCapture: () => undefined,
+  scrollIntoView: () => undefined
+})) {
+  if (!(name in Element.prototype)) {
+    Object.defineProperty(Element.prototype, name, { value, writable: true });
+  }
+}
+
+// One category with two voices in it, and a third voice that belongs elsewhere.
+const CHANNELS: DiscordChannelsResponse = {
+  guild_id: "222222222222222222",
+  channels: [
+    {
+      id: "10",
+      name: "Mixes",
+      type: "category",
+      category_id: null,
+      category_name: null,
+      position: 0,
+      missing_permissions: []
+    },
+    {
+      id: "1",
+      name: "Lobby",
+      type: "voice",
+      category_id: "10",
+      category_name: "Mixes",
+      position: 1,
+      missing_permissions: []
+    },
+    {
+      id: "2",
+      name: "Team A",
+      type: "voice",
+      category_id: "10",
+      category_name: "Mixes",
+      position: 2,
+      missing_permissions: ["move_members"]
+    },
+    {
+      id: "3",
+      name: "Elsewhere",
+      type: "voice",
+      category_id: "20",
+      category_name: "Other",
+      position: 3,
+      missing_permissions: []
+    }
+  ]
+};
 
 
 const WORKSPACE: Workspace = {
@@ -180,9 +257,11 @@ async function render() {
   await settle();
 }
 
-async function click(node: Element | undefined) {
+async function click(node: Element | null | undefined) {
   expect(node).toBeTruthy();
+  // Radix menus open on pointerdown, buttons act on click: send both.
   await act(async () => {
+    node?.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
     node?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
   });
   await settle();
@@ -191,6 +270,64 @@ async function click(node: Element | undefined) {
 function buttonIn(scope: ParentNode, label: string) {
   return [...scope.querySelectorAll("button")].find((node) => node.textContent?.trim() === label);
 }
+
+/** Radix Select: the trigger opens on pointerdown and portals its listbox. */
+async function pickCategory(label: string) {
+  const trigger = container.querySelector<HTMLElement>(
+    'button[role="combobox"][aria-label="Mix voice category"]'
+  );
+  if (!trigger) throw new Error("no voice category select rendered");
+  await act(async () => {
+    trigger.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+    trigger.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  });
+  await settle();
+  const option = [...document.body.querySelectorAll<HTMLElement>('[role="option"]')].find(
+    (node) => (node.textContent ?? "").trim() === label
+  );
+  if (!option) throw new Error(`no category option matching ${label}`);
+  await act(async () => {
+    option.dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));
+    option.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  });
+  await settle();
+}
+
+/** A voice's toggle in the general-voices group. */
+function voiceToggle(name: string) {
+  const group = container.querySelector('[role="group"][aria-label="General voices"]');
+  return group ? buttonIn(group, name) : undefined;
+}
+
+function channelPicker(ariaLabel: string) {
+  return container.querySelector(`button[aria-label="${ariaLabel}"]`);
+}
+
+function menuItem(text: string) {
+  return [...document.querySelectorAll('[role="menuitem"]')].find(
+    (node) => node.textContent?.trim() === text
+  );
+}
+
+const NOTIFICATION_CONFIG: NotificationWorkspaceConfig = {
+  workspace_id: 7,
+  discord_guild_id: "222222222222222222",
+  discord_channel_id: null,
+  locale: "ru",
+  broadcast_kinds: ["registration.opened", "check_in.opened"],
+  broadcastable_kinds: ["registration.opened", "check_in.opened", "encounter.scheduled"]
+};
+
+const CONFIG_WITH_CATEGORY = {
+  id: 3,
+  workspace_id: 7,
+  rank_delta_threshold: 500,
+  rank_delta_hide_from_pool: true,
+  mix_discord_channel_id: null,
+  mix_voice_category_id: "10",
+  mix_general_voice_channel_ids: [],
+  updated_by: null
+};
 
 beforeEach(() => {
   fetchWorkspaces.mockReset();
@@ -214,9 +351,16 @@ beforeEach(() => {
     rank_delta_threshold: 500,
     rank_delta_hide_from_pool: true,
     mix_discord_channel_id: null,
+    mix_voice_category_id: null,
+    mix_general_voice_channel_ids: [],
     updated_by: null
   });
+  getDiscordChannels.mockReset().mockResolvedValue(CHANNELS);
   upsertWorkspaceBalancerConfig.mockReset().mockResolvedValue({});
+  workspaceConfig.mockReset().mockResolvedValue(NOTIFICATION_CONFIG);
+  updateWorkspaceConfig.mockReset().mockImplementation((_id: number, body: unknown) =>
+    Promise.resolve({ ...NOTIFICATION_CONFIG, ...(body as object) })
+  );
 });
 
 afterEach(async () => {
@@ -241,6 +385,25 @@ describe("Workspace settings › Discord", () => {
     await click(buttonIn(row!, "Link this server"));
 
     expect(verifyDiscordGuild).toHaveBeenCalledWith(7, "222222222222222222");
+    // Nothing about channels is read before there is a guild to read them from.
+    expect(workspaceConfig).not.toHaveBeenCalled();
+    expect(channelPicker("Announcement Discord channel")).toBeNull();
+  });
+
+  it("switches a linked workspace to another server from the Change server dialog", async () => {
+    getById.mockResolvedValue(BOUND);
+    await render();
+
+    // The server list stays out of the page once a server is linked.
+    expect(buttonIn(container, "Link this instead")).toBeUndefined();
+
+    await click(buttonIn(container, "Change server"));
+    const dialog = document.querySelector('[role="dialog"]');
+    expect(dialog?.textContent).toContain("Owned Server");
+
+    await click(buttonIn(dialog!, "Link this instead"));
+
+    expect(verifyDiscordGuild).toHaveBeenCalledWith(7, "111111111111111111");
   });
 
   it("says a claimed server is claimed, not that the account lost access", async () => {
@@ -310,9 +473,10 @@ describe("Workspace settings › Discord", () => {
     await render();
 
     expect(container.textContent).toContain("Owner · Ada");
-    expect(buttonIn(container, "Unlink server")).toBeTruthy();
+    expect(container.textContent).toContain("Bot in server");
 
-    await click(buttonIn(container, "Unlink server"));
+    await click(container.querySelector('button[aria-label="More server actions"]'));
+    await click(menuItem("Unlink server"));
 
     const dialog = document.querySelector('[role="alertdialog"]');
     expect(dialog?.textContent).toContain("Unlink Discord server");
@@ -372,20 +536,124 @@ describe("Workspace settings › Discord", () => {
     await render();
 
     expect(container.textContent).not.toContain("The bot is not in this server");
+    expect(container.textContent).toContain("Bot status unknown");
   });
 
-  // 7. the mix announcement channel is a workspace setting, editable here --
-  //    and saving it must not wipe the rank-delta knobs sharing the blob.
-  it("saves the mix channel without dropping the rank-delta config", async () => {
+  // 7. the mix announcement channel and the mix voice setup are workspace
+  //    settings editable here -- and each save rewrites the whole blob, so
+  //    neither may drop what the other owns.
+  it("saves the mix channel without dropping the rank-delta config or the voice setup", async () => {
     getById.mockResolvedValue(BOUND);
+    getWorkspaceBalancerConfig.mockResolvedValue({
+      id: 3,
+      workspace_id: 7,
+      rank_delta_threshold: 500,
+      rank_delta_hide_from_pool: true,
+      mix_discord_channel_id: null,
+      mix_voice_category_id: "10",
+      mix_general_voice_channel_ids: ["1"],
+      updated_by: null
+    });
     await render();
 
-    await click(buttonIn(container, "Pick channel"));
+    await click(channelPicker("Mix Discord channel"));
 
     expect(upsertWorkspaceBalancerConfig).toHaveBeenCalledWith(7, {
       rank_delta_threshold: 500,
       rank_delta_hide_from_pool: true,
-      mix_discord_channel_id: "555555555555555555"
+      mix_discord_channel_id: "555555555555555555",
+      mix_voice_category_id: "10",
+      mix_general_voice_channel_ids: ["1"]
     });
+  });
+
+  // 8. the voice category is where mixes move players; its voices split into
+  //    the general ones players wait in and the rest, which are team voices.
+  it("saves the picked voice category with no general voices yet", async () => {
+    getById.mockResolvedValue(BOUND);
+    await render();
+
+    await pickCategory("Mixes");
+
+    expect(upsertWorkspaceBalancerConfig).toHaveBeenCalledWith(7, {
+      rank_delta_threshold: 500,
+      rank_delta_hide_from_pool: true,
+      mix_discord_channel_id: null,
+      mix_voice_category_id: "10",
+      mix_general_voice_channel_ids: []
+    });
+  });
+
+  it("offers only the voices of the chosen category, and marks the ones the bot cannot move through", async () => {
+    getById.mockResolvedValue(BOUND);
+    getWorkspaceBalancerConfig.mockResolvedValue(CONFIG_WITH_CATEGORY);
+    await render();
+
+    expect(voiceToggle("Lobby")).toBeTruthy();
+    expect(voiceToggle("Team A")).toBeTruthy();
+    // A voice outside the category is not a mix voice: moving into it would
+    // leave the category the rest of the mix lives in.
+    expect(voiceToggle("Elsewhere")).toBeUndefined();
+    expect(container.textContent).toContain("Missing on Team A: Move Members");
+    expect(container.textContent).not.toContain("Lobby: ");
+  });
+
+  it("toggles a voice into the general list", async () => {
+    getById.mockResolvedValue(BOUND);
+    getWorkspaceBalancerConfig.mockResolvedValue(CONFIG_WITH_CATEGORY);
+    await render();
+
+    expect(voiceToggle("Lobby")?.getAttribute("aria-pressed")).toBe("false");
+    await click(voiceToggle("Lobby"));
+
+    expect(upsertWorkspaceBalancerConfig).toHaveBeenCalledWith(7, {
+      rank_delta_threshold: 500,
+      rank_delta_hide_from_pool: true,
+      mix_discord_channel_id: null,
+      mix_voice_category_id: "10",
+      mix_general_voice_channel_ids: ["1"]
+    });
+  });
+
+  it("offers the server's own catalogue of announced kinds, ticked as stored", async () => {
+    getById.mockResolvedValue(BOUND);
+    await render();
+
+    const boxes = [...container.querySelectorAll('#announcements [role="checkbox"]')];
+    expect(boxes.map((box) => box.getAttribute("aria-checked"))).toEqual(["true", "true", "false"]);
+  });
+
+  it("saves each announcement change as the full body, the channel id a string", async () => {
+    getById.mockResolvedValue(BOUND);
+    await render();
+
+    await click(channelPicker("Announcement Discord channel"));
+    expect(updateWorkspaceConfig).toHaveBeenLastCalledWith(7, {
+      discord_channel_id: "555555555555555555",
+      locale: "ru",
+      broadcast_kinds: ["registration.opened", "check_in.opened"]
+    });
+
+    // The next change carries the channel the previous one saved.
+    await click(container.querySelector("#broadcast-encounter\\.scheduled"));
+    expect(updateWorkspaceConfig).toHaveBeenLastCalledWith(7, {
+      discord_channel_id: "555555555555555555",
+      locale: "ru",
+      broadcast_kinds: ["registration.opened", "check_in.opened", "encounter.scheduled"]
+    });
+  });
+
+  it("names an announcement refusal instead of one flat failure", async () => {
+    getById.mockResolvedValue(BOUND);
+    updateWorkspaceConfig.mockRejectedValue(
+      new ApiError(503, [{ msg: "Could not reach Discord", code: "error" }])
+    );
+    await render();
+
+    await click(channelPicker("Announcement Discord channel"));
+
+    const alert = container.querySelector('[role="alert"]');
+    expect(alert?.textContent).toContain("could not be reached");
+    expect(alert?.textContent).not.toContain("no longer has a linked Discord server");
   });
 });

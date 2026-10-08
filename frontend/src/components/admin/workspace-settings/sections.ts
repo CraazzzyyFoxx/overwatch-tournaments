@@ -15,7 +15,6 @@ export const WORKSPACE_SETTINGS_SECTIONS = [
   "visibility",
   "domain",
   "discord",
-  "notifications",
   "divisions",
   "statuses",
   "sub-roles",
@@ -32,7 +31,6 @@ export const WORKSPACE_SETTINGS_SECTION_LABELS: Record<WorkspaceSettingsSectionK
   visibility: "Visibility",
   domain: "Domain",
   discord: "Discord",
-  notifications: "Notifications",
   divisions: "Divisions",
   statuses: "Player statuses",
   "sub-roles": "Sub-roles",
@@ -51,8 +49,8 @@ export const WORKSPACE_SETTINGS_SECTION_DESCRIPTIONS: Record<
   branding: "The palette the public site paints this workspace in.",
   visibility: "Who can find this workspace, and who counts as a newcomer in it.",
   domain: "The subdomain, the custom domain and the text search engines show.",
-  discord: "The Discord server this workspace runs in.",
-  notifications: "Where tournament events are announced, and which of them.",
+  discord:
+    "The Discord server this workspace runs in: subscriber roles, match logs, tournament announcements and mixes.",
   divisions: "Rank bands players are sorted into, and the version tournaments read.",
   statuses: "Player statuses the balancer takes into account.",
   "sub-roles": "Hero sub-roles used by rosters and reports.",
@@ -65,17 +63,17 @@ export const WORKSPACE_SETTINGS_SECTION_DESCRIPTIONS: Record<
  * The sections that exist under both shells: `/admin/settings/*` for the
  * workspace an admin is currently in, and `/admin/workspaces/[id]/*` for a
  * superuser looking at someone else's. Most are a form over the workspace
- * record itself; Notifications is not, but it is scoped by the same id and a
- * superuser has the same reason to reach it. The rest are workspace-scoped
- * screens of their own and only ever mount under `/admin/settings`.
+ * record itself; Discord also carries the announcement and mix settings, which
+ * are scoped by the same id and a superuser has the same reason to reach. The
+ * rest are workspace-scoped screens of their own and only ever mount under
+ * `/admin/settings`.
  */
 export const WORKSPACE_RECORD_SECTIONS = [
   "general",
   "branding",
   "visibility",
   "domain",
-  "discord",
-  "notifications"
+  "discord"
 ] as const satisfies readonly WorkspaceSettingsSectionKey[];
 
 export type WorkspaceRecordSectionKey = (typeof WORKSPACE_RECORD_SECTIONS)[number];
@@ -83,7 +81,7 @@ export type WorkspaceRecordSectionKey = (typeof WORKSPACE_RECORD_SECTIONS)[numbe
 const GROUPS: ReadonlyArray<{ label: string; sections: readonly WorkspaceSettingsSectionKey[] }> = [
   {
     label: "Workspace",
-    sections: ["general", "branding", "visibility", "domain", "discord", "notifications"]
+    sections: ["general", "branding", "visibility", "domain", "discord"]
   },
   { label: "Competitive", sections: ["divisions", "statuses", "sub-roles", "registration-forms"] },
   { label: "Entitlements", sections: ["subscriptions", "quota"] }

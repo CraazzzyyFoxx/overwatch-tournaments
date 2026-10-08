@@ -265,6 +265,24 @@ def register(broker: Any, logger: Any) -> None:
 
         return await c.envelope(logger, "workspaces.get", op, session_factory=_SF)
 
+    @broker.subscriber("rpc.app.workspaces.staff")
+    async def _staff(data: dict, msg: RabbitMessage) -> dict:
+        """Who runs this workspace: ``[{role, name}]``, public.
+
+        Same visibility as ``get`` above (404 only when the workspace does not
+        exist): hidden workspaces stay reachable by id, they are merely absent
+        from the directory.
+        """
+
+        async def op(session: Any) -> Any:
+            workspace_id = _path_int(data, "workspace_id")
+            if not await workspace_service.get_by_id(session, workspace_id):
+                raise HTTPException(status_code=404, detail="Workspace not found")
+            staff = await workspace_service.get_staff(session, workspace_id)
+            return [schemas.WorkspaceStaffMember.model_validate({"role": role, "name": name}) for role, name in staff]
+
+        return await c.envelope(logger, "workspaces.staff", op, session_factory=_SF)
+
     @broker.subscriber("rpc.app.workspaces.by_host")
     async def by_host(data: dict, msg: RabbitMessage) -> dict:
         """Resolve a request host to its workspace: ``{workspace_id, slug}``.

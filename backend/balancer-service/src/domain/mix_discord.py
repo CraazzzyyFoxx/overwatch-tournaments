@@ -29,6 +29,7 @@ from typing import Any
 
 from shared.division_grid import DEFAULT_GRID
 from shared.domain.discord_ui import BLUE, ROLE_EMOJI, SHORTCODE, TEAL, division_emoji, emoji
+from shared.domain.mix_lobby import LOBBY_LETTERS
 from shared.schemas.events import DiscordActionButton, DiscordCard, DiscordLinkButton
 from src.domain.balancer.result_serializer import seat_rating
 from src.services.balancer.role_naming import role_slot_code
@@ -173,8 +174,9 @@ def signup_card(
         headline = f"## {emoji('live')} Запись на микс «{name}»"
 
     facts = [f"{emoji('host')} {_escape(host_name) if host_name else '—'}"]
-    if lobby_count == 2:
-        facts.append(f"{emoji('lobby_a')}{emoji('lobby_b')} 2 лобби")
+    if lobby_count > 1:
+        marks = "".join(emoji(f"lobby_{LOBBY_LETTERS[index].lower()}") for index in range(lobby_count))
+        facts.append(f"{marks} {lobby_count} лобби")
     if terminal is None and self_signup == "pool":
         facts.append(f"{emoji('pool')} сразу в пул")
     elif terminal is None and self_signup == "benched":
@@ -257,6 +259,7 @@ def lineup_card(
     lobby_label: str | None = None,
     image_filename: str | None = None,
     mentions: Sequence[str] = (),
+    voice_target: str | None = None,
 ) -> DiscordCard:
     """The matchup one lobby is about to play.
 
@@ -277,6 +280,9 @@ def lineup_card(
 
     ``mentions`` are the Discord ids of seated players whose account is linked;
     they ping, which is the point of posting a lineup at all.
+
+    ``voice_target`` is the mix and lobby the voice buttons act on; only the
+    lobby's newest card carries them.
     """
     title = " · ".join(
         part
@@ -308,4 +314,10 @@ def lineup_card(
         details="\n\n".join(blocks) or None,
         image_url=None if image_filename is None else f"attachment://{image_filename}",
         rows=[[_board_button(board_url)]],
+        answers=[]
+        if voice_target is None
+        else [
+            DiscordActionButton(label="Развести по войсам", action="voice.move", target=voice_target, style="primary"),
+            DiscordActionButton(label="Вернуть в общий", action="voice.return", target=voice_target),
+        ],
     )

@@ -1,5 +1,5 @@
 import { getTranslations } from "next-intl/server";
-import { ArrowRight, Award } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import Image from "next/image";
 import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { AchievementRarity } from "@/types/achievement.types";
@@ -43,33 +43,24 @@ const OverviewAchievementsPreview = async ({ achievements, userSlug, limit = DEF
   return (
     <CardSurface
       title={t("users.overview.achievementsPreview.title")}
-      icon={<Award size={15} />}
       action={
-        <HoverPrefetchLink href={`/users/${userSlug}?tab=achievements`} className="aqt-seeall">
+        <HoverPrefetchLink href={`/users/${userSlug}?tab=achievements`} className="aqt-pf-link">
           {t("common.all")} {unlocked.length}
           <ArrowRight aria-hidden className="size-3" />
         </HoverPrefetchLink>
       }
     >
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col divide-y divide-[color:var(--aqt-border)]">
         {top.map((ach) => {
           const rarity = classifyRarity(ach.rarity * 100);
           const rarityLabel = t(TIER_LABEL_KEY[rarity] as Parameters<typeof t>[0]);
           const imgSrc = ach.image_url ?? `/achievements/${ach.slug}.webp`;
           return (
-            <div
-              key={ach.id}
-              className={`${rarityVarClass(rarity)} flex items-center gap-3 rounded-[10px] border px-3 py-2.5`}
-              style={{
-                borderColor: "hsl(var(--rar) / 0.3)",
-                background: "hsl(var(--rar) / 0.06)"
-              }}
-            >
-              <div
-                className="relative h-10 w-10 shrink-0 overflow-hidden rounded-[9px] border"
-                style={{ borderColor: "hsl(var(--rar) / 0.4)", background: "hsl(var(--rar) / 0.16)" }}
-              >
-                <Image src={imgSrc} alt={ach.name} fill sizes="40px" className="object-cover" />
+            <div key={ach.id} className={`${rarityVarClass(rarity)} flex items-center gap-3 py-2.5 first:pt-0 last:pb-0`}>
+              {/* Decorative: the name sits right next to it. A missing file then
+                  renders an empty neutral tile instead of spilling alt text. */}
+              <div className="relative size-10 shrink-0 overflow-hidden rounded-[9px] bg-[color:var(--aqt-card-2)]">
+                <Image src={imgSrc} alt="" fill sizes="40px" className="object-cover" />
               </div>
               <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                 <div className="truncate text-caption font-semibold text-[color:var(--aqt-fg)]" title={ach.name}>
@@ -80,7 +71,7 @@ const OverviewAchievementsPreview = async ({ achievements, userSlug, limit = DEF
                     className="aqt-tnum text-label font-bold uppercase tracking-label"
                     style={{ color: "hsl(var(--rar))" }}
                   >
-                    <span aria-hidden>◆</span> {rarityLabel}
+                    {rarityLabel}
                   </span>
                   <span className="aqt-tnum text-label text-[color:var(--aqt-fg-dim)]">
                     {(ach.rarity * 100).toFixed(2)}%

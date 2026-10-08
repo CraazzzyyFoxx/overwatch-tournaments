@@ -18,13 +18,13 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 
-from shared.core.enums import HeroClass
+from shared.core.enums import HERO_TYPE_CLASSES, HeroClass
 from shared.domain.roster import PlayerRoster
 from shared.models.balancer.draft import DraftPick, DraftPlayer, DraftTeam
+from src.services.balancer.config.defaults import DEFAULT_ROLE_SETTINGS
 
 __all__ = (
     "AutopickChoice",
-    "DEFAULT_ROLE_IMPACT",
     "DraftAssignment",
     "DraftFeasibilityReport",
     "DraftFeasibilityState",
@@ -207,13 +207,16 @@ class RoleEditResult:
 
 # --- autopick fit scoring (domain/draft/fit.py) ------------------------------
 
-# Role-impact weights — mirror native/tournament_balancer/src/lib.rs (tank 1.4 / damage 1.0 / support 1.1).
-# Base values only: ``rules.team_fit_config`` scales them down by how much of each role a team already filled.
-DEFAULT_ROLE_IMPACT: dict[HeroClass, float] = {
-    HeroClass.tank: 1.4,
-    HeroClass.damage: 1.0,
-    HeroClass.support: 1.1,
-}
+
+def _default_role_impact() -> dict[HeroClass, float]:
+    """The balancer's own per-role impact, before a team's filled seats discount it.
+
+    Base values only, and only the fallback: the draft reads the tournament's
+    effective config live (``DraftFeasibilityService.resolve_role_impact``) and
+    ``rules.team_fit_config`` scales whatever it gets by how much of each role a
+    team already filled.
+    """
+    return {role: DEFAULT_ROLE_SETTINGS[role.slot_code].impact for role in HERO_TYPE_CLASSES}
 
 
 @dataclass(frozen=True)
@@ -250,7 +253,7 @@ class TeamFitScore:
 
 @dataclass(frozen=True)
 class FitConfig:
-    role_impact: Mapping[HeroClass, float] = field(default_factory=lambda: dict(DEFAULT_ROLE_IMPACT))
+    role_impact: Mapping[HeroClass, float] = field(default_factory=_default_role_impact)
     discomfort_weight: float = 1.0
     # Large enough that role-need dominates raw fit when filling scarce roles.
     role_need_bonus: float = 1_000_000.0

@@ -113,8 +113,3 @@ export function socialProfileUrl(account: SocialAccount): string | null {
   return derived ?? account.url ?? null;
 }
 
-/** Whether the player has any OAuth-verified social account. */
-export function hasVerifiedSocial(accounts: readonly SocialAccount[]): boolean {
-  return accounts.some((account) => account.is_verified);
-}
-

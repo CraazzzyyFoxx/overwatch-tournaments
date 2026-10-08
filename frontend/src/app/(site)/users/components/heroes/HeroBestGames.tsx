@@ -4,7 +4,7 @@ import Image from "next/image";
 import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { useTranslations } from "next-intl";
 import { useFormatter } from "@/lib/datetime/client";
-import { Crown, Trophy } from "lucide-react";
+import { Crown } from "lucide-react";
 import { LogStatsName } from "@/types/stats.types";
 import type { HeroBestStat, HeroWithUserStats } from "@/types/hero.types";
 import { getHumanizedStats } from "@/lib/stats";
@@ -53,15 +53,18 @@ const HeroBestGames = ({ hero }: { hero: HeroWithUserStats }) => {
   if (records.length === 0) return null;
 
   return (
-    <CardSurface title={t("users.heroes.careerBest")} icon={<Trophy aria-hidden size={15} />} subtitle={t("users.heroes.bestGamesSubtitle", { hero: hero.hero.name })}>
+    <CardSurface
+      title={t("users.heroes.careerBest")}
+      subtitle={t("users.heroes.bestGamesSubtitle", { hero: hero.hero.name })}
+    >
       <TooltipProvider delayDuration={120}>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-x-6 gap-y-5 sm:grid-cols-2 lg:grid-cols-3">
           {records.map(({ name, best, isGlobalRecord }) => (
             <Tooltip key={name}>
               <TooltipTrigger asChild>
                 <HoverPrefetchLink
                   href={`/encounters/${best.encounter_id}`}
-                  className="flex flex-col gap-1 rounded-lg border border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.018)] px-3 py-2.5 transition-colors hover:border-[color:var(--aqt-border-2)] hover:bg-[hsl(0_0%_100%/0.04)]"
+                  className="-m-2 flex flex-col gap-1 rounded-lg p-2 transition-colors hover:bg-[hsl(0_0%_100%/0.03)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--aqt-teal)]"
                 >
                   <span className="flex items-center gap-1.5 text-label font-bold uppercase tracking-label text-[color:var(--aqt-fg-faint)]">
                     {getHumanizedStats(name)}

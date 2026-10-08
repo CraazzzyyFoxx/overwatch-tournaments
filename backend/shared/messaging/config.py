@@ -96,6 +96,21 @@ DISCORD_GUILD_INFO_DLQ = RabbitQueue(
     durable=True,
 )
 
+DISCORD_VOICE_MOVE_QUEUE = RabbitQueue(
+    "discord_voice_move",
+    durable=True,
+    arguments={
+        "x-dead-letter-exchange": "dlx",
+        "x-dead-letter-routing-key": "discord_voice_move.dlq",
+        "x-message-ttl": 60000,  # 1 minute
+    },
+)
+
+DISCORD_VOICE_MOVE_DLQ = RabbitQueue(
+    "discord_voice_move.dlq",
+    durable=True,
+)
+
 # ============================================================================
 # Process Match Log Queue
 # ============================================================================

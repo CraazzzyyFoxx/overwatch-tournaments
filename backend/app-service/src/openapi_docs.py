@@ -218,6 +218,15 @@ DOCS: dict[str, dict] = {
         "summary": "Get workspace",
         "description": "Permission: public; no authentication required. Returns a single workspace by id, 404 if not found.",
     },
+    "rpc.app.workspaces.staff": {
+        "summary": "List workspace staff",
+        "description": (
+            "Permission: public; no authentication required. The organizers credited on the workspace's public page:"
+            " one row per person at their highest of the `owner`/`admin`/`referee` system roles, ordered owner →"
+            " admin → referee then by name. `name` is the person's linked player name (BattleTag); an account with no"
+            " linked player is omitted. 404 if the workspace does not exist."
+        ),
+    },
     "rpc.app.workspaces.create": {
         "summary": "Create workspace",
         "description": "Permission: authenticated (active) user holding the allow-by-default global `workspace.self_create` capability. Creates a workspace, provisions system roles, stamps and adds the creator as owner, and busts the RBAC cache. Deny that capability for an account (negative RBAC, global scope) to revoke self-service creation from it (403). Then capped per account by `workspace_creation.max_owned_per_user`, counted over `Workspace.owner_id` (403 `workspace_create_limit_reached`); platform slugs are unclaimable (400 `slug_reserved`), 400 on a duplicate slug, and the new workspace is born `unverified`.",

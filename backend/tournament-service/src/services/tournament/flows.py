@@ -634,23 +634,17 @@ class TournamentFlowsService:
         self, session: AsyncSession, workspace_id: int | None = None
     ) -> schemas.OverallStatistics:
         """
-        Retrieves overall statistics for tournaments, including counts of tournaments, teams, players, and champions.
+        Retrieves overall statistics for tournaments: how many tournaments, teams,
+        players and champions there are, plus how much was played.
 
         Args:
             session: An SQLAlchemy `AsyncSession` for database interaction.
+            workspace_id: Restrict every count to one workspace, or None for the platform.
 
         Returns:
             An `OverallStatistics` schema instance.
         """
-        tournaments, teams, players, champions = await self.tournaments.get_tournaments_overall(
-            session, workspace_id=workspace_id
-        )
-        return schemas.OverallStatistics(
-            tournaments=tournaments,
-            teams=teams,
-            players=players,
-            champions=champions,
-        )
+        return await self.tournaments.get_tournaments_overall(session, workspace_id=workspace_id)
 
 
 flows_service = TournamentFlowsService()

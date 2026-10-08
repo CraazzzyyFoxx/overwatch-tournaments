@@ -62,6 +62,33 @@ DOCS: dict[str, dict] = {
             "workspace-wide Discord channel for mix matchups."
         ),
     },
+    "rpc.balancer.admin.workspace_ranker_get": {
+        "summary": "Get workspace mix ranker settings",
+        "description": (
+            "Permission: admin-panel access plus workspace `workspace.read`. "
+            "Returns the mix ranker's knobs in force for this workspace (the defaults when never saved) "
+            "and how many hidden ratings its members hold. The ranker implements mixtura-ranker by "
+            "Dmitriy (@dmelackov), https://github.com/mixtura-dev/mixtura-ranker."
+        ),
+    },
+    "rpc.balancer.admin.workspace_ranker_upsert": {
+        "summary": "Set workspace mix ranker settings",
+        "description": (
+            "Permission: admin-panel access plus workspace `team.update`. "
+            "Replaces all seven knobs at once. Changing rating_min, rating_max, rating_avg or sigma_init "
+            "reinterprets every stored hidden rating, so the call rebuilds them from the workspace's "
+            "recorded mix matches before answering. 422 unless rating_min < rating_avg < rating_max."
+        ),
+    },
+    "rpc.balancer.admin.workspace_ranker_rebuild": {
+        "summary": "Rebuild hidden mix ratings from history",
+        "description": (
+            "Permission: admin-panel access plus workspace `team.update`. "
+            "Replays every recorded mix match of the workspace in order and replaces all hidden ratings "
+            "with the result; open ranks are not touched. Returns how many matches were replayed and "
+            "how many hidden ratings came out."
+        ),
+    },
     "rpc.balancer.admin.teams_import": {
         "summary": "Import teams file",
         "description": "Permission: admin-panel access plus workspace `team.create`. Bulk-imports tournament teams from a multipart JSON upload (atravkovs or internal format, auto-detected) and emits a teams-changed realtime event.",
@@ -353,11 +380,11 @@ DOCS: dict[str, dict] = {
         "description": (
             "Permission: workspace membership plus being the mix's host or co-host (or a superuser). "
             'With `scope="lobby"` (the default) balances the non-benched lineup of ONE lobby '
-            "(`lobby_index`, default 0) -- everyone the other lobby is already playing or holds a pin "
-            'on is left out. With `scope="all"` it splits the whole pool into two equally strong '
-            "lobbies and balances both. Ranks come from the host's own book above the workspace canon. "
-            "422 when the lineup is empty, a seated player has no ranked role, the mix has one lobby "
-            "(`single_lobby`) or the pool cannot be split (`not_enough_for_two_lobbies`, "
+            "(`lobby_index`, default 0) -- everyone another lobby is already playing or holds a pin "
+            'on is left out. With `scope="all"` it splits the whole pool into `lobby_count` equally '
+            "strong lobbies and balances them all. Ranks come from the host's own book above the "
+            "workspace canon. 422 when the lineup is empty, a seated player has no ranked role, the "
+            "mix has one lobby (`single_lobby`) or the pool cannot be split (`not_enough_players`, "
             "`too_many_must_play`, `too_many_pinned`, `roles_infeasible`)."
         ),
     },
@@ -383,7 +410,7 @@ DOCS: dict[str, dict] = {
             "Pages one lobby to one of the balance options its last run produced, for every viewer at "
             "once -- the option on screen is a fact about the lobby, not about one browser. "
             "404 when the index points past the stored options, and 409 seat_conflict when the option "
-            "would seat somebody the mix's other lobby has already put on the floor. Re-balancing "
+            "would seat somebody another of the mix's lobbies has already put on the floor. Re-balancing "
             "resets it to the first option."
         ),
     },
@@ -393,7 +420,7 @@ DOCS: dict[str, dict] = {
             "Permission: workspace membership plus being the mix's host or co-host (or a superuser). "
             "Queues an embed of one balance option's teams, the next map and the points at stake "
             "to the workspace-wide mix channel and returns immediately -- delivery is the bot's, "
-            "and nothing about the mix changes. A two-lobby mix names the lobby in the embed title and "
+            "and nothing about the mix changes. A multi-lobby mix names the lobby in the embed title and "
             "numbers the match within that lobby. 409 when the workspace has "
             "no mix channel configured and 404 when the balance option is missing."
         ),
@@ -417,6 +444,16 @@ DOCS: dict[str, dict] = {
             "`discord_posts`, and returns the refreshed mix. 404 when the id belongs to another "
             "mix's message. Clicking twice is harmless; closing or cancelling a mix deletes nothing, "
             "its posts stay as history."
+        ),
+    },
+    "rpc.balancer.custom.voice_options": {
+        "summary": "List custom game voice channels",
+        "description": (
+            "Permission: workspace membership plus being the mix's host or co-host (or a superuser). "
+            "Returns the voice channels of the workspace's mix voice category, split into `general` "
+            "and `team` voices, each with the bot's `missing_permissions`. `error` is set instead of "
+            "failing when Discord is unreachable or the category is gone (`category_not_found`); with "
+            "no category configured both lists are empty."
         ),
     },
     "rpc.balancer.custom.transfer_host": {
@@ -455,9 +492,11 @@ DOCS: dict[str, dict] = {
         "description": (
             "Permission: workspace membership plus being the mix's host or co-host (or a superuser). "
             "Freezes one played match of a balance option into the mix's history, moving both teams' "
-            "ranks in the host's book by points_per_win when a winner is given and redeeming every "
+            "ranks in the host's book -- by points_per_win when a winner is given, or seat by seat by the "
+            "mix ranker when the host's rating_mode is 'ranker' -- advancing the workspace's hidden "
+            "ratings, and redeeming every "
             "seat's must_play pin back to the pool. The match is stamped with the lobby that played it "
-            "and with whoever was playing the other lobby at that moment, whom rotation then counts as "
+            "and with whoever was playing another lobby at that moment, whom rotation then counts as "
             "neither played nor sat out. Repeatable until the mix is closed."
         ),
     },
@@ -470,7 +509,8 @@ DOCS: dict[str, dict] = {
         "description": (
             "Permission: workspace membership plus being the mix's host or co-host (or a superuser). "
             "Deletes the lobby's most recent match and gives back exactly the rank points it applied, "
-            "read from the match itself rather than the mix's current points_per_win. "
+            "read from the match and its seats rather than the host's current settings, then rebuilds "
+            "the workspace's hidden ratings from the remaining history. "
             "404 when the match belongs to another mix and 409 when a newer match of the SAME lobby "
             "exists, since the rank book compounds. must_play pins the recording redeemed are not "
             "restored."
@@ -481,8 +521,8 @@ DOCS: dict[str, dict] = {
         "description": (
             "Permission: public; no authentication required. Recommends who is owed the next seat and "
             "who should sit out, computed from this mix's own match history, read-only. The optional "
-            "lobby_index query parameter ranks the candidates of one lobby -- whoever is seated in the "
-            "other lobby or pinned to it is left out -- and splits at that lobby's seat count."
+            "lobby_index query parameter ranks the candidates of one lobby -- whoever is seated in "
+            "another lobby or pinned to one is left out -- and splits at that lobby's seat count."
         ),
     },
     "rpc.balancer.custom.stats": {
@@ -507,10 +547,18 @@ DOCS: dict[str, dict] = {
         "summary": "Set custom game lobby count",
         "description": (
             "Permission: workspace membership plus being the mix's host or co-host (or a superuser). "
-            "Runs the mix as one lobby or two. Going to two opens an empty second lobby, leaving the "
-            "first untouched; going back to one deletes the second lobby together with its stored "
-            "matchup and clears every player's lobby pin. Matches already recorded for the second "
-            "lobby stay in the history and in the statistics."
+            "Runs the mix as 1..6 lobbies. Growing opens the new lobbies empty, leaving the running "
+            "ones untouched; shrinking deletes every lobby past the new count together with its "
+            "stored matchup and clears the pins that named them. Matches already recorded for a "
+            "deleted lobby stay in the history and in the statistics."
+        ),
+    },
+    "rpc.balancer.custom.rename": {
+        "summary": "Rename custom game",
+        "description": (
+            "Permission: workspace membership plus being the mix's host or co-host (or a superuser). "
+            "Replaces the mix's name (trimmed, 1-255 characters) and re-renders its live Discord "
+            "signup card. Refused once the mix is closed."
         ),
     },
     "rpc.balancer.custom.hard_delete": {
@@ -556,6 +604,20 @@ DOCS: dict[str, dict] = {
         "summary": "List rank authors",
         "description": "Permission: workspace membership (any role); no resource grant is checked. Returns everyone who has personally rank-corrected a member in this workspace, busiest first, with their display name and correction count.",
     },
+    "rpc.balancer.ranks.list": {
+        "summary": "List all rank values in the workspace",
+        "description": (
+            "Permission: workspace member holding `team.update` -- the same grant writing the canon "
+            "needs, because this read puts every author's private book on one screen. Read-only. "
+            "One flat row per rank value across nine layers (canon, author, ow, hidden, "
+            "effective_tournament, effective_mix, registration, tournament, casual); the six current "
+            "layers are the default. The two effective layers are computed in SQL and agree with the "
+            "resolver the balancer runs on: effective_tournament is canon over OW on the workspace "
+            "grid, effective_mix is the author's book over the canon over OW on the global grid. "
+            "`division` is resolved on the workspace's effective grid for every row. Filtering, "
+            "sorting, the exact total and the page all run in the database."
+        ),
+    },
     "rpc.balancer.teams.export_registered": {
         "summary": "Export registered teams",
         "description": (
@@ -573,9 +635,9 @@ DOCS: dict[str, dict] = {
             "preferences only. "
             "Returns the signed-in account's own mix settings -- the rank-balance/role-comfort tilt, "
             "the per-role weights, how many balance options to keep, the roster shape its mixes "
-            "field and how far a decided match moves its rank book -- plus roster_shape, the "
-            "read-only resolution of that shape. A null value means the setting was never saved and "
-            "the default applies."
+            "field, how far a decided match moves its rank book and whether the mix ranker moves it "
+            "instead (rating_mode) -- plus roster_shape, the read-only resolution of that shape. A null "
+            "value means the setting was never saved and the default applies."
         ),
     },
     "rpc.balancer.prefs.upsert": {
@@ -583,7 +645,7 @@ DOCS: dict[str, dict] = {
         "description": (
             "Permission: self-service -- any authenticated (active) account writes its own "
             "preferences only. "
-            "Replaces all five of the caller's mix settings at once and returns the stored result "
+            "Replaces all six of the caller's mix settings at once and returns the stored result "
             "with the re-resolved roster_shape; a null clears one back to the default, and 0 points "
             "per win stores as unset. They apply to every mix this account hosts -- a mix runs on "
             "its host's preferences whoever presses the button. 422 on an impossible roster shape."

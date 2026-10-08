@@ -34,6 +34,9 @@ export const adminQueryKeys = {
   rankCurrent: (userId: KeyPart) => ["admin", "rank", "current", userId] as const,
   rankFetchLog: (workspaceId: KeyPart, status: KeyPart, source: KeyPart) =>
     ["admin", "rank", "fetch-log", workspaceId, status, source] as const,
+  /** The flat rank-overview table; `params` is the whole filter/sort/page set. */
+  rankOverview: (workspaceId: KeyPart, params: unknown) =>
+    ["admin", "rank", "overview", workspaceId, params] as const,
   rankStats: (workspaceId: KeyPart) => ["admin", "rank", "stats", workspaceId] as const,
   rankStatsAll: () => ["admin", "rank", "stats"] as const,
   rankUserSearch: (query: KeyPart) => ["admin", "rank", "user-search", query] as const,

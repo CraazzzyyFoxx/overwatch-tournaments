@@ -828,6 +828,9 @@
      in-page rails offset by --aqt-sticky-top so nothing slides under it. */
   --aqt-header-h: 56px;
   --aqt-sticky-top: 88px;
+  /* Vertical rhythm between the open-layout sections of a page (home,
+     community page, organizer page) and before the footer. */
+  --section-gap: clamp(40px, 6vw, 72px);
   --aqt-radius: 14px;
   --aqt-radius-sm: 8px;
   /* These alias next/font variables, so they only resolve if --font-* is
@@ -840,9 +843,10 @@
      tabular-nums via .aqt-tnum. It used to be JetBrains Mono; real code and
      identifiers use Tailwind's `font-mono` (system monospace) instead. */
   --aqt-data: var(--font-inter), Inter, system-ui, sans-serif;
-  /* Editorial Tactical hero (design-book): role-spectrum accent + ONE
-     restrained teal glow. The spectrum is the single sanctioned multi-hue
-     accent — everywhere else, one teal leads. */
+  /* The role spectrum is the single sanctioned multi-hue accent (the profile
+     header's base hairline, role-distribution bars) — everywhere else, one
+     teal leads. --aqt-hero-glow is the coverless tournament card's glow; the
+     page hero draws its own, tinted per page (HeroFrame `tint`). */
   --aqt-spectrum: linear-gradient(90deg, var(--aqt-tank), var(--aqt-damage), var(--aqt-support));
   --aqt-hero-glow: radial-gradient(
     ellipse at 30% 45%,
@@ -851,14 +855,29 @@
   );
 }
 
-/* Page-hero title accent — role-spectrum gradient text. Callers wrap the
-   emphasized word in <em>; kept as one rule so heroes stay declarative. */
-.aqt-hero-title em {
-  font-style: normal;
-  background: var(--aqt-spectrum);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+/* Page-hero glow (HeroFrame): one soft bloom of the page's colour
+   (`--aqt-hero-tint`, teal by default, main-role hue on a profile) rising from
+   the bottom-left corner. The anchor and strength are set by contrast, not
+   taste: `--aqt-fg-faint` labels sit at 5.1:1 on bare `--aqt-bg`, and every
+   hero puts them top-left (eyebrows) or, once the columns stack below `lg`,
+   along the bottom (stat labels). Bottom-left at 26% clears AA on every
+   desktop hero; stacked layouts drop to 10%. */
+.aqt-hero-tint {
+  background: radial-gradient(
+    50% 140% at 0% 100%,
+    color-mix(in srgb, var(--aqt-hero-tint) 10%, transparent),
+    transparent 70%
+  );
+}
+
+@media (min-width: 1024px) {
+  .aqt-hero-tint {
+    background: radial-gradient(
+      50% 140% at 0% 100%,
+      color-mix(in srgb, var(--aqt-hero-tint) 26%, transparent),
+      transparent 70%
+    );
+  }
 }
 
 @keyframes aqtPulse {

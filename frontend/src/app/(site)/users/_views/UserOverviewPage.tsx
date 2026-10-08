@@ -4,9 +4,7 @@ import { AchievementRarity } from "@/types/achievement.types";
 import userService from "@/services/user.service";
 import { Skeleton } from "@/components/ui/skeleton";
 import OverviewLastTournamentCard from "@/app/(site)/users/components/overview/OverviewLastTournamentCard";
-import OverviewPlacementSpark from "@/app/(site)/users/components/overview/OverviewPlacementSpark";
 import OverviewRoleSplit from "@/app/(site)/users/components/overview/OverviewRoleSplit";
-import OverviewMostPlayedHeroes from "@/app/(site)/users/components/overview/OverviewMostPlayedHeroes";
 import OverviewRecentEncounters from "@/app/(site)/users/components/overview/OverviewRecentEncounters";
 import OverviewCareerList from "@/app/(site)/users/components/overview/OverviewCareerList";
 import OverviewTeammatesSynergy from "@/app/(site)/users/components/overview/OverviewTeammatesSynergy";
@@ -41,14 +39,12 @@ export const UserOverviewPageSkeleton = () => {
     <div className="aqt-player grid grid-cols-1 gap-3.5 xl:grid-cols-[1fr_380px]">
       <div className="flex min-w-0 flex-col gap-3.5">
         <Skeleton className="h-64 w-full rounded-xl" />
-        <Skeleton className="h-80 w-full rounded-xl" />
-        <Skeleton className="h-64 w-full rounded-xl" />
+        <Skeleton className="h-[26rem] w-full rounded-xl" />
         <Skeleton className="h-96 w-full rounded-xl" />
         <Skeleton className="h-80 w-full rounded-xl" />
       </div>
       <div className="flex min-w-0 flex-col gap-3.5">
         <Skeleton className="h-96 w-full rounded-xl" />
-        <Skeleton className="h-72 w-full rounded-xl" />
         <Skeleton className="h-64 w-full rounded-xl" />
         <Skeleton className="h-80 w-full rounded-xl" />
       </div>
@@ -93,10 +89,6 @@ const CareerListSection = async ({
   profile: UserProfile;
   scope: StatsScope;
 }) => <OverviewCareerList profile={profile} tournaments={await getTournaments(user.id, scope)} />;
-
-const PlacementSparkSection = async ({ user, scope }: { user: User; scope: StatsScope }) => (
-  <OverviewPlacementSpark tournaments={await getTournaments(user.id, scope)} />
-);
 
 const TopHeroesSection = async ({
   user,
@@ -212,11 +204,8 @@ const UserOverviewPage = ({ profile, tournamentId, user, scope }: OverviewPagePr
         <Suspense fallback={<Skeleton className="h-64 w-full rounded-xl" />}>
           <LastTournamentSection user={user} profile={profile} tournamentId={tournamentId} />
         </Suspense>
-        <Suspense fallback={<Skeleton className="h-80 w-full rounded-xl" />}>
+        <Suspense fallback={<Skeleton className="h-[26rem] w-full rounded-xl" />}>
           <CareerListSection user={user} profile={profile} scope={scope} />
-        </Suspense>
-        <Suspense fallback={<Skeleton className="h-64 w-full rounded-xl" />}>
-          <PlacementSparkSection user={user} scope={scope} />
         </Suspense>
         <Suspense fallback={<Skeleton className="h-96 w-full rounded-xl" />}>
           <TopHeroesSection user={user} userSlug={userSlug} scope={scope} />
@@ -229,13 +218,6 @@ const UserOverviewPage = ({ profile, tournamentId, user, scope }: OverviewPagePr
       <aside className="z-30 flex min-w-0 flex-col gap-3.5 xl:sticky xl:top-[var(--aqt-sticky-top)]">
         <Suspense fallback={<Skeleton className="h-96 w-full rounded-xl" />}>
           <RoleSplitSection user={user} profile={profile} scope={scope} />
-        </Suspense>
-        <Suspense fallback={<Skeleton className="h-72 w-full rounded-xl" />}>
-          <OverviewMostPlayedHeroes
-            heroes={profile.hero_statistics}
-            userSlug={userSlug}
-            totalCount={profile.hero_statistics.length}
-          />
         </Suspense>
         <Suspense fallback={<Skeleton className="h-64 w-full rounded-xl" />}>
           <AchievementsSection user={user} userSlug={userSlug} scope={scope} />

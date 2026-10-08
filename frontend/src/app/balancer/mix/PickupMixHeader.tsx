@@ -17,8 +17,9 @@ import {
 } from "lucide-react";
 
 import { PANEL_CLASS } from "@/components/balancer/balancer-page-helpers";
-import { EYEBROW_CLASS } from "@/app/balancer/mix/pickup-chrome";
+import { EYEBROW_CLASS, MAX_LOBBIES, lobbyLetter } from "@/app/balancer/mix/pickup-chrome";
 import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
+import { InlineEditText } from "@/components/kit/InlineEditText";
 import { Button } from "@/components/ui/button";
 import { IconTooltip } from "@/components/ui/icon-tooltip";
 import {
@@ -26,12 +27,11 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Slider } from "@/components/ui/slider";
 import { segmentedFrame, toggleVariants } from "@/components/ui/toggle";
 import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
@@ -57,6 +57,18 @@ export function signupPostOf(game: CustomGame): CustomGameDiscordPost | null {
   return (game.discord_posts ?? []).findLast((row) => row.kind === "mix.signup") ?? null;
 }
 
+/** The lobby's newest lineup card still standing in Discord: the one the voice buttons and refresh act on. */
+export function liveLineupPostOf(game: CustomGame, lobbyIndex: number): CustomGameDiscordPost | null {
+  return (
+    (game.discord_posts ?? []).findLast(
+      (row) =>
+        row.kind === "mix.lineup" &&
+        row.slot.startsWith(`lineup:${lobbyIndex}:`) &&
+        (row.status === "posted" || row.status === "pending")
+    ) ?? null
+  );
+}
+
 /**
  * The mode a signup post goes out in. Posting the card IS opening signup
  * (`signup_post` writes the mode server-side), so a closed mix opens into the
@@ -77,6 +89,8 @@ type PickupMixHeaderProps = {
   game: CustomGame | undefined;
   gameLoading: boolean;
   onOpenPool: () => void;
+  /** Omitted -- the name is read-only. Resolve/reject so the editor knows whether to close. */
+  onRename?: (name: string) => Promise<unknown>;
   onOpenAccess: () => void;
   /** Workspace admin (or superuser) -- gates the irreversible hard delete,
    * a stronger grant than the host-or-co-host `canWrite` above. */
@@ -94,7 +108,7 @@ type PickupMixHeaderProps = {
   deletingDiscordPost?: boolean;
   settingLobbyCount?: boolean;
   /** Omitted -- the lobby-count choice is not offered. */
-  onLobbyCountChange?: (lobbyCount: 1 | 2) => void;
+  onLobbyCountChange?: (lobbyCount: number) => void;
 };
 
 /**
@@ -102,9 +116,10 @@ type PickupMixHeaderProps = {
  * and what a host does with it, by how often they do it.
  *
  * Visible: who may sign up, what Discord shows, and Add players -- the one
- * solid action. Behind `⋯`: what is set once per mix (lobby count, co-hosts)
- * and the irreversible delete. The shared two-lobby reshuffle is a lineup
- * action, so it sits with Balance teams under the matchup, not up here.
+ * solid action. Behind `⋯`: what is set once per mix (how many lobbies, up to
+ * `MAX_LOBBIES`, and co-hosts) and the irreversible delete. The shared
+ * reshuffle across every lobby is a lineup action, so it sits with Balance
+ * teams under the matchup, not up here.
  *
  * Which mix this is comes from the route, not from state this header owns --
  * switching to another one, or starting a new one, happens on the list at
@@ -119,6 +134,7 @@ export function PickupMixHeader({
   canDelete = false,
   deleting = false,
   onDeleteMix,
+  onRename,
   onSetSelfService,
   savingSelfService = false,
   onPostSignup,
@@ -133,6 +149,23 @@ export function PickupMixHeader({
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [dropLobbyOpen, setDropLobbyOpen] = useState(false);
   const lobbyCount = game?.lobby_count ?? 1;
+  // What the slider shows while it is being dragged. The request only goes out
+  // on release, so this follows the thumb and the mix's own count follows the
+  // server. Reset during render when the mix's count changes under it (a
+  // co-host's write landing, or this host's own confirm), React's own pattern.
+  const [draftLobbyCount, setDraftLobbyCount] = useState(lobbyCount);
+  const [syncedLobbyCount, setSyncedLobbyCount] = useState(lobbyCount);
+  if (syncedLobbyCount !== lobbyCount) {
+    setSyncedLobbyCount(lobbyCount);
+    setDraftLobbyCount(lobbyCount);
+  }
+  // Dropping a lobby throws its balance away and clears the pins onto it, so it
+  // is the direction that asks; opening one costs nothing. The names come from
+  // the tab label, so the dialog calls them what the tabs do ("Lobby C").
+  const droppedLobbies = Array.from(
+    { length: Math.max(0, lobbyCount - draftLobbyCount) },
+    (_, i) => tl("tab", { letter: lobbyLetter(draftLobbyCount + i) })
+  ).join(", ");
   const offerDelete = canDelete && onDeleteMix != null;
 
   return (
@@ -148,9 +181,20 @@ export function PickupMixHeader({
       <span aria-hidden="true" className="h-5 w-px shrink-0 bg-[color:var(--aqt-border)]" />
 
       <div className="flex min-w-[12rem] flex-1 items-center gap-2.5">
-        <h1 className="min-w-0 truncate font-display text-xl font-bold tracking-[-0.01em] text-[color:var(--aqt-fg)]">
-          {game?.name ?? (gameLoading ? "\u2026" : "No mix yet")}
-        </h1>
+        {canWrite && game != null && onRename ? (
+          <InlineEditText
+            value={game.name}
+            label="mix name"
+            onSave={onRename}
+            className="min-w-0"
+            textClassName="font-display text-xl font-bold tracking-[-0.01em] text-[color:var(--aqt-fg)]"
+            inputClassName="h-8 max-w-sm"
+          />
+        ) : (
+          <h1 className="min-w-0 truncate font-display text-xl font-bold tracking-[-0.01em] text-[color:var(--aqt-fg)]">
+            {game?.name ?? (gameLoading ? "\u2026" : "No mix yet")}
+          </h1>
+        )}
         {game ? (
           <span className="shrink-0 text-caption font-semibold text-[color:var(--aqt-fg-dim)]">
             {`#${game.id}`}
@@ -213,26 +257,33 @@ export function PickupMixHeader({
                   <DropdownMenuLabel className={EYEBROW_CLASS}>
                     {tl("countLabel")}
                   </DropdownMenuLabel>
-                  <DropdownMenuRadioGroup
-                    value={String(lobbyCount)}
-                    onValueChange={(value) => {
-                      if (Number(value) === lobbyCount) return;
-                      // Dropping B throws its balance away and clears every pin, so
-                      // it is the direction that asks; opening one costs nothing.
-                      if (value === "1") setDropLobbyOpen(true);
-                      else onLobbyCountChange(2);
-                    }}
+                  {/* The slider lives inside a menu that owns the arrow keys
+                      and closes on a click: both stay with the control. */}
+                  <div
+                    className="flex items-center gap-3 px-2 pb-2 pt-1"
+                    onKeyDown={(event) => event.stopPropagation()}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onPointerMove={(event) => event.stopPropagation()}
                   >
-                    {([1, 2] as const).map((count) => (
-                      <DropdownMenuRadioItem
-                        key={count}
-                        value={String(count)}
-                        disabled={settingLobbyCount}
-                      >
-                        {tl("count", { count })}
-                      </DropdownMenuRadioItem>
-                    ))}
-                  </DropdownMenuRadioGroup>
+                    <Slider
+                      aria-label={tl("countLabel")}
+                      min={1}
+                      max={MAX_LOBBIES}
+                      step={1}
+                      value={[draftLobbyCount]}
+                      disabled={settingLobbyCount}
+                      onValueChange={([next]) => setDraftLobbyCount(next)}
+                      onValueCommit={([next]) => {
+                        setDraftLobbyCount(next);
+                        if (next === lobbyCount) return;
+                        if (next < lobbyCount) setDropLobbyOpen(true);
+                        else onLobbyCountChange(next);
+                      }}
+                    />
+                    <span className="w-4 shrink-0 text-right text-caption font-semibold tabular-nums text-[color:var(--aqt-fg)]">
+                      {draftLobbyCount}
+                    </span>
+                  </div>
                   <DropdownMenuSeparator />
                 </>
               ) : null}
@@ -263,17 +314,21 @@ export function PickupMixHeader({
       {canWrite && onLobbyCountChange ? (
         <ConfirmDialog
           open={dropLobbyOpen}
-          onOpenChange={setDropLobbyOpen}
+          onOpenChange={(open) => {
+            setDropLobbyOpen(open);
+            // Cancelled: the slider goes back to the count the mix still runs.
+            if (!open) setDraftLobbyCount(lobbyCount);
+          }}
           intent={{
-            title: tl("dropTitle"),
-            description: tl("dropDescription"),
-            confirmLabel: tl("dropConfirm"),
+            title: tl("dropTitle", { letters: droppedLobbies }),
+            description: tl("dropDescription", { letters: droppedLobbies }),
+            confirmLabel: tl("dropConfirm", { letters: droppedLobbies }),
             tone: "danger"
           }}
           pending={settingLobbyCount}
           onConfirm={() => {
             setDropLobbyOpen(false);
-            onLobbyCountChange(1);
+            onLobbyCountChange(draftLobbyCount);
           }}
         />
       ) : null}
@@ -476,14 +531,14 @@ function DiscordMenu({
       : null;
 
   // What a post is, from its slot: the signup card, or one lineup card -- the
-  // lobby letter only when the mix runs two lobbies, since with one it says
-  // nothing. The slot is `lineup:<lobby_index>:<game number>`.
+  // lobby letter only when the mix runs more than one lobby, since with one it
+  // says nothing. The slot is `lineup:<lobby_index>:<game number>`.
   const labelOf = (post: CustomGameDiscordPost) => {
     if (post.slot === "signup") return t("posts.signup");
     const [prefix, lobby, match] = post.slot.split(":");
     if (prefix !== "lineup") return post.slot;
-    return game.lobby_count === 2
-      ? t("posts.lineupLobby", { lobby: String.fromCharCode(65 + Number(lobby)), match })
+    return game.lobby_count > 1
+      ? t("posts.lineupLobby", { lobby: lobbyLetter(Number(lobby)), match })
       : t("posts.lineup", { match });
   };
 

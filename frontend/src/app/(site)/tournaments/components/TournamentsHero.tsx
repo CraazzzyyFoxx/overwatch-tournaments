@@ -43,7 +43,7 @@ const TournamentsHero = ({
           ) : null}
         </>
       }
-      title={t.rich("tournamentsList.hero.title", { em: (chunks) => <em>{chunks}</em> })}
+      title={t("tournamentsList.hero.title")}
       lede={t("tournamentsList.hero.lede")}
       aside={
         <div className="grid grid-cols-3 gap-6">

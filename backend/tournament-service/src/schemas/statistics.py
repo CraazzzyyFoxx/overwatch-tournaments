@@ -38,6 +38,13 @@ class OverallStatistics(BaseModel):
     teams: int
     players: int
     champions: int
+    # Played volume. ``encounters`` counts finished (COMPLETED) ones only;
+    # ``days`` is the distinct calendar days the tournaments cover, so a shared
+    # weekend counts once; ``hours`` is whole hours of logged map time.
+    encounters: int
+    maps: int
+    days: int
+    hours: int
 
 
 class DashboardActiveTournamentStats(BaseModel):

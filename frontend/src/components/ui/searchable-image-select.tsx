@@ -35,11 +35,15 @@ interface SearchableImageSelectProps {
   placeholder: string;
   /** Placeholder for the search input inside the popover. */
   searchPlaceholder?: string;
+  /** `false` drops the clear row, for pickers that always hold a selection. */
+  clearable?: boolean;
+  /** Trigger's accessible name; defaults to `placeholder`. */
+  ariaLabel?: string;
   /** Whether the selector is in a loading state. */
   isLoading?: boolean;
   /** Whether the selector is disabled (loading or error). */
   disabled?: boolean;
-  /** Override the trigger's appearance (border/background). Layout is fixed. */
+  /** Replaces the trigger's default appearance (border/background); merged over its layout. */
   triggerClassName?: string;
 }
 
@@ -49,6 +53,8 @@ const SearchableImageSelect = ({
   options,
   placeholder,
   searchPlaceholder,
+  clearable = true,
+  ariaLabel,
   isLoading = false,
   disabled = false,
   triggerClassName,
@@ -72,7 +78,7 @@ const SearchableImageSelect = ({
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          aria-label={placeholder}
+          aria-label={ariaLabel ?? placeholder}
           disabled={disabled}
           className={cn(
             "h-8 w-full justify-between font-normal",
@@ -101,25 +107,27 @@ const SearchableImageSelect = ({
       </PopoverTrigger>
       <PopoverContent
         align="start"
-        className="liquid-glass-panel p-0"
-        style={{ width: "var(--radix-popover-trigger-width)" }}
+        // Trigger-width, but a compact trigger must not produce a list too
+        // narrow to read; the inner min() keeps it inside the viewport.
+        className="liquid-glass-panel w-[var(--radix-popover-trigger-width)] min-w-[min(16rem,var(--radix-popover-content-available-width))] p-0"
       >
         <Command className="liquid-glass-surface">
           <CommandInput placeholder={resolvedSearchPlaceholder} />
           <CommandList>
             <CommandEmpty>{t("common.noResults")}</CommandEmpty>
             <CommandGroup>
-              {/* Clear / "All" option */}
-              <CommandItem
-                value={`__clear__ ${placeholder}`}
-                onSelect={() => handleSelect(undefined)}
-              >
-                <span>{placeholder}</span>
-                <Check
-                  aria-hidden
-                  className={`ml-auto h-4 w-4 ${value === undefined ? "opacity-100" : "opacity-0"}`}
-                />
-              </CommandItem>
+              {clearable ? (
+                <CommandItem
+                  value={`__clear__ ${placeholder}`}
+                  onSelect={() => handleSelect(undefined)}
+                >
+                  <span>{placeholder}</span>
+                  <Check
+                    aria-hidden
+                    className={`ml-auto h-4 w-4 ${value === undefined ? "opacity-100" : "opacity-0"}`}
+                  />
+                </CommandItem>
+              ) : null}
               {options.map((option) => (
                 <CommandItem
                   key={option.value}

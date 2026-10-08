@@ -1,5 +1,13 @@
 import type { CustomGameStatus } from "@/services/custom-game.service";
 
+/** How many lobbies one mix may run at once -- the server's own CHECK ceiling. */
+export const MAX_LOBBIES = 6;
+
+/** A lobby's glyph from its 0-based index: A..F, identical in every locale. */
+export function lobbyLetter(lobbyIndex: number) {
+  return String.fromCharCode(65 + lobbyIndex);
+}
+
 /**
  * The recurring chrome of the mix surface, named once.
  *

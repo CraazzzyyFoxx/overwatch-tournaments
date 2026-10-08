@@ -41,7 +41,7 @@ type PickupLobbyPanelProps = {
   hasMix: boolean;
   rows: CustomGamePlayer[];
   /** How many lobbies this mix runs: role demand scales with it, and rows gain a lobby badge. */
-  lobbyCount?: 1 | 2;
+  lobbyCount?: number;
   /**
    * Rotation-fairness verdict per roster member, from `usePickupMix`'s
    * `rotationQuery`. Optional, and defaulted to empty, so an older caller (or

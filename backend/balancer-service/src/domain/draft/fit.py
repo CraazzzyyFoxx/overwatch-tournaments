@@ -1,10 +1,11 @@
 """Per-player FIT scoring for draft autopick and suggestions.
 
 A lightweight, pure-Python replica of the balancer's per-player discomfort
-heuristic (``domain/balancer/entities.py``) and role-impact weights
-(Rust ``tournament_balancer`` ``lib.rs``). It scores a *single* candidate against a team's
-open role capacity — it is NOT the full multi-objective genetic solver — so
-autopick and ``/suggestions`` stay synchronous and deterministic.
+heuristic (``domain/balancer/entities.py``) and per-role impact weights
+(``AlgorithmConfig.role_settings``, resolved per tournament by
+``DraftFeasibilityService.resolve_role_impact``). It scores a *single* candidate
+against a team's open role capacity — it is NOT the full multi-objective genetic
+solver — so autopick and ``/suggestions`` stay synchronous and deterministic.
 """
 
 from __future__ import annotations

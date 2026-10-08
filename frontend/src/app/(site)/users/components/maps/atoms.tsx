@@ -2,7 +2,6 @@
 
 import { cn } from "@/lib/utils";
 
-import { CardSurface } from "@/app/(site)/users/components/shared/atoms";
 import {
   Select,
   SelectContent,
@@ -42,17 +41,4 @@ export const AqtSelect = ({
       ))}
     </SelectContent>
   </Select>
-);
-
-export const KPI = ({ label, value, unit, color, sub }: { label: string; value: string; unit?: string; color?: string; sub?: string }) => (
-  <CardSurface>
-    <div className="flex flex-col gap-1">
-      <div className="text-label font-bold uppercase tracking-label text-[color:var(--aqt-fg-faint)]">{label}</div>
-      <div className="aqt-display text-[38px] font-bold leading-[1.1] tabular-nums" style={{ color: color ?? "var(--aqt-fg)" }}>
-        {value}
-        {unit ? <span className="text-title text-[color:var(--aqt-fg-faint)]">{unit}</span> : null}
-      </div>
-      {sub ? <div className="aqt-tnum text-label text-[color:var(--aqt-fg-dim)]">{sub}</div> : null}
-    </div>
-  </CardSurface>
 );

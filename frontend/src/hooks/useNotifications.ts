@@ -7,7 +7,7 @@ import { notificationQueryKeys } from "@/lib/notifications/query-keys";
 import notificationService from "@/services/notification.service";
 import type { NotificationItem } from "@/types/notification.types";
 
-interface UseNotificationsResult {
+export interface UseNotificationsResult {
   items: NotificationItem[];
   unreadCount: number | null;
   isLoading: boolean;

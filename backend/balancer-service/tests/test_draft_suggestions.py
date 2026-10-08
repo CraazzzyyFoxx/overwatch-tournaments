@@ -15,6 +15,7 @@ from shared.core.enums import DraftAutopickStrategy, HeroClass  # noqa: E402
 from shared.domain.roster_shape import parse_roster_slots  # noqa: E402
 from src.domain.draft import fit as sug  # noqa: E402
 from src.domain.draft import rules  # noqa: E402
+from src.services.balancer.config.defaults import DEFAULT_ROLE_SETTINGS  # noqa: E402
 
 T, D, SUP = HeroClass.tank, HeroClass.damage, HeroClass.support
 
@@ -57,11 +58,9 @@ def test_discomfort_unplayable_is_5000() -> None:
 # ---- role impact weights ----
 
 
-def test_role_impact_defaults() -> None:
+def test_role_impact_defaults_come_from_the_balancer_config() -> None:
     cfg = sug.FitConfig()
-    assert cfg.role_impact[T] == 1.4
-    assert cfg.role_impact[D] == 1.0
-    assert cfg.role_impact[SUP] == 1.1
+    assert cfg.role_impact == {role: DEFAULT_ROLE_SETTINGS[role.slot_code].impact for role in (T, D, SUP)}
 
 
 # ---- BEST_FIT ----
@@ -104,14 +103,15 @@ def test_best_fit_prefers_the_role_a_support_captain_team_still_lacks() -> None:
     supp = fp(1, 3600, {SUP}, prefs=(SUP,))  # 3600*1.1*0.75 = 2970 (support half-filled)
     dps = fp(2, 3200, {D}, prefs=(D,))  # 3200*1.0*1.0 = 3200
     counts = {"tank": 0, "damage": 0, "support": 1}  # only the support captain seated
-    captain_support = rules.team_fit_config(shape, counts)
+    base_impact = sug.FitConfig().role_impact
+    captain_support = rules.team_fit_config(shape, counts, base_impact)
     capacity = rules.role_openings(shape, counts)
 
     res = sug.best_fit([supp, dps], capacity, DraftAutopickStrategy.BEST_FIT, captain_support)
     assert res is not None
     assert (res.player_id, res.role) == (2, D)
     # An empty team has no filled role to discount: the higher support still wins.
-    empty = rules.team_fit_config(shape, {"tank": 0, "damage": 0, "support": 0})
+    empty = rules.team_fit_config(shape, {"tank": 0, "damage": 0, "support": 0}, base_impact)
     assert sug.best_fit([supp, dps], capacity, DraftAutopickStrategy.BEST_FIT, empty).player_id == 1
 
 

@@ -159,21 +159,26 @@ without an identity): it reads `GET /api/v1/notifications` and refetches when th
 `user:{id}:notifications` realtime topic signals, so the badge is the server's unread count and
 never a client-side tally. A load failure renders its own retry state inside the panel (never the
 empty-inbox copy), and a row can be marked read on its own — following a row's link never marks it
-read, because a read mark is also how the announcement banner is dismissed. A system row carries
+read, because a read mark is also how an announcement is dismissed. A system row carries
 `kind` plus a payload snapshot and no text — the wording comes from `notifications.kinds.*` in
 `src/i18n/messages/*.json`, so a copy fix reaches rows written months ago; row destinations come
-from `src/lib/notifications/href.ts`, never from payload URLs.
+from `src/lib/notifications/href.ts`, never from payload URLs. The two kinds one click resolves —
+`check_in.opened` and `team_invite.received` (`ACTIONABLE_RANK` in `notification-kinds.ts`) —
+carry their action buttons on the row.
 
 A row can also be deleted from the inbox (`POST /api/v1/notifications/delete`), one at a time or as
 "clear read" for everything already marked. That deletion is per viewer — the server writes
 `notification_read.deleted_at` and keeps the row — so throwing away a platform-wide announcement
 never takes it out of anybody else's inbox. Deleting counts as reading, so the badge drops with it.
 
-Under the header, centred in the content column, on every page and for anonymous visitors too,
-`AnnouncementBanner.tsx` shows the newest active announcement from `GET /api/v1/announcements/active`
-(read server-side in both
-layouts, so it is in the first paint). Closing it writes a read mark for a signed-in viewer and a
-`localStorage` id for everyone else. Operators publish them at `/admin/announcements`.
+Under the header, on every page and for anonymous visitors too, the floating stack
+(`src/components/notifications/FloatStack.tsx`) shows the newest active announcement from
+`GET /api/v1/announcements/active` (read server-side in the layouts, so it is in the first paint)
+and, for a signed-in viewer, the one pending action — an open check-in before a team invite, scoped
+to the community on a community page or host. Below 640px they are cards at the bottom of the
+screen, above that slim bars sticky under the header. Closing the announcement writes a read mark
+for a signed-in viewer and a dismissed id for everyone else; hiding the action card lasts for the
+visit, the item stays in the bell. Operators publish announcements at `/admin/announcements`.
 
 `/admin/notifications` is the other side of the same table: the system notifications *this*
 workspace produced (`notification.source_workspace_id`), filtered by kind through the URL, with a
@@ -187,7 +192,9 @@ the screen.
 The site name and main icon/logo are configurable via environment variables.
 
 - Copy `frontend/.env.example` to `frontend/.env` (or `frontend/.env.local`)
-- Set `NEXT_PUBLIC_SITE_NAME` (e.g. "Overwatch Tournaments")
+- Set `NEXT_PUBLIC_SITE_NAME` (e.g. "Overwatch Tournaments") — the deployment's name in page
+  metadata and the sign-in dialog. The header and footer wordmark is the fixed `BRAND_NAME` ("OWT")
+  in `src/config/site.ts`.
 - Set `NEXT_PUBLIC_SITE_ICON` (e.g. "/logo.webp")
 - (Optional) Set `NEXT_PUBLIC_SITE_FAVICON` (e.g. "/favicon.ico")
 - For a host-run dev server, set `NEXT_INTERNAL_API_URL` to the gateway

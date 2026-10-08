@@ -5,7 +5,8 @@ pool's rank-delta knobs (a balancer-tool setting, ``team.update``) and the
 Discord channel every mix announces in (the workspace's own server,
 ``workspace.update``). The write used to demand ``workspace.update`` for the
 whole payload, so an organizer saving a threshold was rejected over a channel
-they were not touching.
+they were not touching. The mix voice setup (category + general voices) joined
+that blob later and shares the channel's ``workspace.update`` gate.
 """
 
 from __future__ import annotations
@@ -92,7 +93,16 @@ ADMIN = _identity(("team", "update"), ("workspace", "update"))
 BYSTANDER = _identity(("team", "read"), ("tournament", "update"))
 
 
-def _stored(channel: str | None) -> SimpleNamespace:
+# The stored voice setup every request below echoes back unchanged.
+_CATEGORY = "10"
+_GENERALS = ["1", "2"]
+
+
+def _stored(
+    channel: str | None,
+    category: str | None = _CATEGORY,
+    generals: list[str] | None = None,
+) -> SimpleNamespace:
     return SimpleNamespace(
         id=1,
         workspace_id=WORKSPACE_ID,
@@ -100,12 +110,20 @@ def _stored(channel: str | None) -> SimpleNamespace:
             "rank_delta_threshold": 500,
             "rank_delta_hide_from_pool": True,
             "mix_discord_channel_id": channel,
+            "mix_voice_category_id": category,
+            "mix_general_voice_channel_ids": list(_GENERALS if generals is None else generals),
         },
         updated_by=None,
     )
 
 
-def _request(identity: dict, channel: str | None, threshold: int | None = 700) -> dict:
+def _request(
+    identity: dict,
+    channel: str | None,
+    threshold: int | None = 700,
+    category: str | None = _CATEGORY,
+    generals: list[str] | None = None,
+) -> dict:
     return {
         "id": WORKSPACE_ID,
         "identity": identity,
@@ -113,6 +131,8 @@ def _request(identity: dict, channel: str | None, threshold: int | None = 700) -
             "rank_delta_threshold": threshold,
             "rank_delta_hide_from_pool": True,
             "mix_discord_channel_id": channel,
+            "mix_voice_category_id": category,
+            "mix_general_voice_channel_ids": list(_GENERALS if generals is None else generals),
         },
     }
 
@@ -168,3 +188,57 @@ class WorkspaceConfigUpsertGateTests(IsolatedAsyncioTestCase):
         assert response["ok"] is False
         assert response["error"]["code"] == "forbidden"
         self.upsert.assert_not_awaited()
+
+    # --- the mix voice setup rides the same blob and the same admin gate ----
+    async def test_organizer_saves_with_the_voice_setup_unchanged(self) -> None:
+        response = await self._call(_request(ORGANIZER, "555"), stored_channel="555")
+
+        assert response["ok"] is True, response
+        assert self.upsert.await_args.kwargs["mix_voice_category_id"] == "10"
+        assert self.upsert.await_args.kwargs["mix_general_voice_channel_ids"] == ["1", "2"]
+        # And the read echoes the stored setup back, so the UI can post it again.
+        assert response["data"]["mix_voice_category_id"] == "10"
+        assert response["data"]["mix_general_voice_channel_ids"] == ["1", "2"]
+
+    async def test_organizer_may_not_move_the_voice_category(self) -> None:
+        response = await self._call(_request(ORGANIZER, "555", category="20", generals=[]), stored_channel="555")
+
+        assert response["ok"] is False
+        assert response["error"]["code"] == "forbidden"
+        self.upsert.assert_not_awaited()
+
+    async def test_organizer_may_not_change_the_general_voices(self) -> None:
+        response = await self._call(_request(ORGANIZER, "555", generals=["1"]), stored_channel="555")
+
+        assert response["ok"] is False
+        assert response["error"]["code"] == "forbidden"
+        self.upsert.assert_not_awaited()
+
+    async def test_admin_sets_the_voice_category_and_its_general_voices(self) -> None:
+        response = await self._call(_request(ADMIN, "555", category="20", generals=["7", "8"]), stored_channel="555")
+
+        assert response["ok"] is True, response
+        assert self.upsert.await_args.kwargs["mix_voice_category_id"] == "20"
+        assert self.upsert.await_args.kwargs["mix_general_voice_channel_ids"] == ["7", "8"]
+
+    async def test_general_voices_without_a_category_are_rejected(self) -> None:
+        # A general voice is "one of this category's voices"; with no category
+        # there is nothing to tell a general voice from a team voice.
+        response = await self._call(_request(ADMIN, "555", category=None, generals=["7"]), stored_channel="555")
+
+        assert response["ok"] is False
+        assert response["error"]["code"] == "unprocessable"
+        self.upsert.assert_not_awaited()
+
+    async def test_a_general_voice_must_be_a_snowflake(self) -> None:
+        response = await self._call(_request(ADMIN, "555", generals=["12x"]), stored_channel="555")
+
+        assert response["ok"] is False
+        assert response["error"]["code"] == "unprocessable"
+        self.upsert.assert_not_awaited()
+
+    async def test_duplicate_general_voices_collapse_in_order(self) -> None:
+        response = await self._call(_request(ADMIN, "555", generals=["2", "1", "2"]), stored_channel="555")
+
+        assert response["ok"] is True, response
+        assert self.upsert.await_args.kwargs["mix_general_voice_channel_ids"] == ["2", "1"]

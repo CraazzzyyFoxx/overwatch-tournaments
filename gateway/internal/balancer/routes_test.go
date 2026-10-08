@@ -145,6 +145,7 @@ func TestRosterRoutes(t *testing.T) {
 		"GET /api/v1/balancer/workspaces/{workspace_id}/players/summary":           "rpc.balancer.players.summary",
 		"POST /api/v1/balancer/workspaces/{workspace_id}/players":                  "rpc.balancer.players.upsert",
 		"PUT /api/v1/balancer/workspaces/{workspace_id}/players/{member_id}/ranks": "rpc.balancer.players.set_ranks",
+		"GET /api/v1/balancer/workspaces/{workspace_id}/ranks":                     "rpc.balancer.ranks.list",
 	}
 	for _, route := range RosterRoutes {
 		key := route.Method + " " + route.Pattern
@@ -159,6 +160,34 @@ func TestRosterRoutes(t *testing.T) {
 	}
 	if len(want) != 0 {
 		t.Fatalf("missing roster routes: %#v", want)
+	}
+}
+
+// TestWorkspaceRankerRoutes pins the mix ranker's admin endpoints: the workspace
+// id must reach the worker as data["id"] (IDParam) because that is what its
+// RBAC gate reads, and only the upsert carries a body.
+func TestWorkspaceRankerRoutes(t *testing.T) {
+	want := map[string]struct {
+		queue string
+		body  bool
+	}{
+		"GET /api/v1/balancer/workspaces/{workspace_id}/ranker":          {"rpc.balancer.admin.workspace_ranker_get", false},
+		"PUT /api/v1/balancer/workspaces/{workspace_id}/ranker":          {"rpc.balancer.admin.workspace_ranker_upsert", true},
+		"POST /api/v1/balancer/workspaces/{workspace_id}/ranker/rebuild": {"rpc.balancer.admin.workspace_ranker_rebuild", false},
+	}
+	for _, route := range AdminRoutes {
+		key := route.Method + " " + route.Pattern
+		w, ok := want[key]
+		if !ok {
+			continue
+		}
+		if route.Queue != w.queue || route.Body != w.body || route.IDParam != "workspace_id" || route.Auth != edge.AuthRequired {
+			t.Fatalf("unexpected %s: %#v", key, route)
+		}
+		delete(want, key)
+	}
+	if len(want) != 0 {
+		t.Fatalf("missing ranker routes: %#v", want)
 	}
 }
 

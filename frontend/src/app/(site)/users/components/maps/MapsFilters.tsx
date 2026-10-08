@@ -3,9 +3,7 @@
 import { useTranslations } from "next-intl";
 import { ArrowDown, ArrowUp } from "lucide-react";
 
-import SearchableImageSelect, {
-  type SearchableImageOption
-} from "@/components/ui/searchable-image-select";
+import { TournamentCombobox } from "@/app/(site)/users/components/shared/TournamentCombobox";
 import { SearchField } from "@/components/ui/search-field";
 import { AqtSelect } from "@/app/(site)/users/components/maps/atoms";
 
@@ -19,7 +17,7 @@ const SORT_KEYS: SortKey[] = ["winrate", "count", "name"];
 interface MapsFiltersProps {
   tournamentId: number | undefined;
   onTournamentIdChange: (id: number | undefined) => void;
-  tournamentOptions: SearchableImageOption[];
+  tournaments: readonly { id: number; name: string }[];
   tournamentsLoading: boolean;
   tournamentsError: boolean;
   minCount: number;
@@ -37,7 +35,7 @@ interface MapsFiltersProps {
 const MapsFilters = ({
   tournamentId,
   onTournamentIdChange,
-  tournamentOptions,
+  tournaments,
   tournamentsLoading,
   tournamentsError,
   minCount,
@@ -60,12 +58,10 @@ const MapsFilters = ({
   return (
     <div className="aqt-filters rounded-xl border border-[color:var(--aqt-border)] bg-[color:var(--aqt-card)] p-2.5">
       <div className="w-48">
-        <SearchableImageSelect
-          value={tournamentId ? String(tournamentId) : undefined}
-          onValueChange={(val) => onTournamentIdChange(val ? Number(val) : undefined)}
-          options={tournamentOptions}
-          placeholder={t("users.maps.allTournaments")}
-          searchPlaceholder={t("users.maps.searchTournament")}
+        <TournamentCombobox
+          tournaments={tournaments}
+          value={tournamentId}
+          onValueChange={onTournamentIdChange}
           isLoading={tournamentsLoading}
           disabled={tournamentsLoading || tournamentsError}
         />

@@ -346,6 +346,22 @@ describe("parseVariants", () => {
     expect(karin.subRole).toBeNull();
   });
 
+  it("carries the host's open rating for the seated bucket, and nothing in points mode", () => {
+    const [variant] = parseVariants({
+      players: {
+        "7": { name: "karin", ratings: { Tank: 2650 }, open_ratings: { Tank: 2400, Damage: 3100 } },
+        "8": { name: "Tolgrn", ratings: { Damage: 3000 } },
+      },
+      variants: [{ teams: [{ roster: { Tank: ["7"], Damage: ["8"] } }] }],
+    });
+    const [karin, tolgrn] = variant.teams[0].seats;
+    expect(karin.rating).toBe(2650);
+    // The bucket they sit in, not the best open rating they have.
+    expect(karin.openRating).toBe(2400);
+    // No `open_ratings` at all: points mode, nothing extra to show.
+    expect(tolgrn.openRating).toBeNull();
+  });
+
   it("marks a seat off-role only when it is not the player's first choice", () => {
     const [first] = parseVariants(payload);
     const seats = first.teams[0].seats;

@@ -3,26 +3,14 @@
 import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { ResTag, ScoreCell, StagePill } from "@/components/match/cells";
-import MvpMatchPill from "@/components/match/MvpMatchPill";
-import { resolveMvpPlacement } from "@/components/match/cells";
+import { ResTag, ScoreCell, resolveMvpPlacement } from "@/components/match/cells";
 import MatchLogIndicator from "@/components/match/MatchLogIndicator";
 import { HeroStrip } from "@/components/hero/HeroImage";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import MvpOrdinal from "@/app/(site)/users/components/shared/MvpOrdinal";
 import { EncounterWithUserStats } from "@/types/user.types";
 import type { Hero } from "@/types/hero.types";
 import { tournamentHref } from "@/lib/tournament/url";
-
-const stageKindFor = (name: string | undefined): "group" | "playoffs" | "finals" | "default" => {
-  if (!name) return "default";
-  const lower = name.toLowerCase();
-  if (lower.includes("final")) return "finals";
-  if (lower.includes("playoff") || lower.includes("bracket")) return "playoffs";
-  if (lower.includes("group") || lower.match(/^[a-h]$/i)) return "group";
-  return "default";
-};
-
-const stageLabel = (name: string | undefined): string => name?.trim() || "—";
 
 interface MatchRowProps {
   enc: EncounterWithUserStats;
@@ -35,11 +23,10 @@ const MatchRow = ({ enc, selfUserId }: MatchRowProps) => {
   const isUserHome = (enc.home_team?.players ?? []).some((p) => p.user_id === selfUserId);
   const userScore = isUserHome ? enc.score.home : enc.score.away;
   const oppScore = isUserHome ? enc.score.away : enc.score.home;
-  const kind = stageKindFor(enc.stage_item?.name ?? enc.stage?.name);
   const scoreKind = userScore > oppScore ? "win" : userScore < oppScore ? "loss" : "draw";
   const resKind = userScore > oppScore ? "w" : userScore < oppScore ? "l" : "d";
   const opponentName = isUserHome ? enc.away_team?.name : enc.home_team?.name;
-  const userTeamName = isUserHome ? enc.home_team?.name : enc.away_team?.name;
+  const tournamentName = enc.tournament?.name ?? `#${enc.tournament_id}`;
   const heroSet = new Set<string>();
   const heroList: Pick<Hero, "name" | "image_path" | "role">[] = [];
   (enc.matches ?? []).forEach((match) => {
@@ -64,18 +51,14 @@ const MatchRow = ({ enc, selfUserId }: MatchRowProps) => {
         <HoverPrefetchLink
           href={tournamentHref(enc.tournament_id)}
           onClick={(e) => e.stopPropagation()}
-          className="aqt-tnum inline-flex items-center gap-1.5 rounded-[5px] border px-2 py-0.5 text-label font-bold"
-          style={{
-            background: "color-mix(in srgb, var(--aqt-teal) 8%, transparent)",
-            borderColor: "color-mix(in srgb, var(--aqt-teal) 25%, transparent)",
-            color: "var(--aqt-teal)"
-          }}
+          title={tournamentName}
+          className="block max-w-[200px] truncate text-[color:var(--aqt-fg-muted)] hover:text-[color:var(--aqt-teal)]"
         >
-          {enc.tournament?.name ?? `#${enc.tournament_id}`}
+          {tournamentName}
         </HoverPrefetchLink>
       </td>
-      <td className="px-3.5 py-3">
-        <StagePill kind={kind}>{stageLabel(enc.stage_item?.name ?? enc.stage?.name)}</StagePill>
+      <td className="px-3.5 py-3 text-[color:var(--aqt-fg-dim)]">
+        {(enc.stage_item?.name ?? enc.stage?.name)?.trim() || "—"}
       </td>
       <td className="px-3.5 py-3">
         <span className="inline-flex items-center gap-2">
@@ -85,7 +68,7 @@ const MatchRow = ({ enc, selfUserId }: MatchRowProps) => {
             onClick={(e) => e.stopPropagation()}
             className="hover:text-[color:var(--aqt-teal)]"
           >
-            {userTeamName} {t("common.vs")} {opponentName}
+            {t("common.vs")} {opponentName}
           </HoverPrefetchLink>
         </span>
       </td>
@@ -98,9 +81,9 @@ const MatchRow = ({ enc, selfUserId }: MatchRowProps) => {
       <td className="px-3.5 py-3">
         {mvpMatches.length > 0 ? (
           <TooltipProvider delayDuration={150}>
-            <span className="inline-flex items-center gap-1">
+            <span className="inline-flex items-center gap-2">
               {mvpMatches.map((m) => (
-                <MvpMatchPill key={m.id} match={m} />
+                <MvpOrdinal key={m.id} match={m} />
               ))}
             </span>
           </TooltipProvider>

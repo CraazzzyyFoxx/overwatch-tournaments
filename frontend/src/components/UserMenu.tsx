@@ -2,21 +2,18 @@
 
 import { useId, useState, type ComponentPropsWithoutRef, type ReactNode } from "react";
 import Link from "next/link";
-import { Bell, ChevronRight, LogOut, Settings } from "lucide-react";
+import { Bell, ChevronRight, LayoutDashboard, LogOut, Settings, User } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import LanguageSwitcher, { LanguageMenuRadioGroup } from "@/components/LanguageSwitcher";
-import NotificationList from "@/components/notifications/NotificationList";
+import { useCanAccessAdminEntry } from "@/components/site/useCanAccessAdminEntry";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
 import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator
 } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { useNotifications } from "@/hooks/useNotifications";
 import { getAuthProfileHref } from "@/lib/auth/profile-links";
 import { logout } from "@/lib/auth/logout";
 import { cn, initials } from "@/lib/utils";
@@ -125,27 +122,27 @@ export function AccountMenuContent({
   );
 }
 
-const IDENTITY_CLASS =
-  "flex min-w-0 flex-1 items-center gap-3 rounded-md px-2 py-1.5 text-left text-sm outline-none transition-colors hover:bg-accent/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring";
-const STRIP_BUTTON_CLASS =
-  "size-8 shrink-0 text-muted-foreground hover:bg-accent/60 hover:text-foreground";
+const MENU_ITEM_CLASS =
+  "flex min-h-10 w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-body " +
+  "text-[color:var(--aqt-fg)] outline-none transition-colors hover:bg-[color:var(--aqt-overlay-3)] " +
+  "focus-visible:bg-[color:var(--aqt-overlay-3)] focus-visible:shadow-[inset_0_0_0_2px_var(--aqt-teal)]";
 
 /**
- * The signed-in header control: one black panel with the account strip on
- * top, the notification inbox below and the language switch at the foot.
- * A Popover, not a DropdownMenu: `role="menu"` cannot hold the inbox rows (a
- * link and two buttons each, tooltips, a scroll region). Radix owns dismissal
- * and focus restoration.
+ * The signed-in header control: a round avatar button opening the account
+ * menu — identity, profile, the admin entry for those who have one, settings,
+ * language and sign-out. The notification inbox is the bell's, not this menu's.
+ *
+ * A Popover, not a DropdownMenu: `role="menu"` cannot hold the segmented
+ * language control (a plain button inside a menu is unreachable). Radix owns
+ * dismissal and focus restoration.
  */
 const UserMenu = ({ user }: Readonly<{ user: AuthProfile }>) => {
   const t = useTranslations();
   const [open, setOpen] = useState(false);
   const nameId = useId();
-  const headingId = useId();
-  const notifications = useNotifications(user.id);
-  const { unreadCount } = notifications;
   const openSettings = useAccountSettingsModalStore((s) => s.open);
   const signOut = useSignOut();
+  const canAccessAdmin = useCanAccessAdminEntry();
   const profileHref = getAuthProfileHref(user);
 
   return (
@@ -156,25 +153,15 @@ const UserMenu = ({ user }: Readonly<{ user: AuthProfile }>) => {
       <PopoverTrigger asChild>
         <button
           type="button"
-          aria-label={
-            unreadCount == null
-              ? t("common.openMenu")
-              : t("common.openMenuUnread", { count: unreadCount })
-          }
-          className="relative flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-full outline-none transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          aria-label={t("common.openMenu")}
+          className="relative flex size-9 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-full border-2 border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-card-2)] text-xs font-bold text-[color:var(--aqt-fg-muted)] outline-none transition-colors hover:border-[color:var(--aqt-border-3)] focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:border-[color:var(--aqt-border-3)]"
         >
-          <Avatar className="size-8">
+          <Avatar className="size-full rounded-full">
             <AvatarImage src={user.avatarUrl ?? undefined} alt="" />
-            <AvatarFallback className="text-xs font-medium">{initials(user.username)}</AvatarFallback>
+            <AvatarFallback className="bg-transparent text-xs font-bold">
+              {initials(user.username)}
+            </AvatarFallback>
           </Avatar>
-          {unreadCount != null && unreadCount > 0 && (
-            <span
-              aria-hidden
-              className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-label font-bold tabular-nums leading-none text-destructive-foreground ring-2 ring-background"
-            >
-              {unreadCount > 99 ? "99+" : unreadCount}
-            </span>
-          )}
         </button>
       </PopoverTrigger>
       <PopoverContent
@@ -182,72 +169,86 @@ const UserMenu = ({ user }: Readonly<{ user: AuthProfile }>) => {
         sideOffset={8}
         collisionPadding={12}
         aria-labelledby={nameId}
-        animate={false}
-        // Land on the panel, not its first action: focusing that button would
-        // pop its tooltip on every open. Tab still reaches it first.
-        onOpenAutoFocus={(event) => {
-          event.preventDefault();
-          (event.currentTarget as HTMLElement).focus();
-        }}
-        // The strip and the language row are fixed; the inbox is the part that
-        // gives up height when the viewport is short.
-        className="flex max-h-[var(--radix-popover-content-available-height)] w-[380px] max-w-[calc(100vw-1.5rem)] flex-col bg-black p-0 motion-safe:data-[state=open]:animate-in motion-safe:data-[state=closed]:animate-out motion-safe:data-[state=open]:fade-in-0 motion-safe:data-[state=closed]:fade-out-0 motion-safe:duration-150 motion-safe:ease-out"
+        className="w-[340px] max-w-[calc(100vw-24px)] rounded-xl border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-card-2)] p-1.5 shadow-[0_18px_50px_rgb(0_0_0/0.5)]"
       >
-        <div className="flex shrink-0 items-center gap-0.5 border-b p-2">
-          <PopoverClose asChild>
-            {profileHref ? (
-              <Link href={profileHref} className={IDENTITY_CLASS}>
-                <AccountIdentity user={user} nameId={nameId} />
-                <span className="sr-only">{t("common.profile")}</span>
-              </Link>
-            ) : (
-              // No linked player means no public profile: the card opens the
-              // settings where one gets linked, instead of navigating away.
-              <button type="button" className={IDENTITY_CLASS} onClick={() => openSettings("profile")}>
-                <AccountIdentity user={user} nameId={nameId} />
-              </button>
-            )}
-          </PopoverClose>
-          <TooltipProvider delayDuration={200}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <PopoverClose asChild>
-                  <Button
-                    static={false}
-                    variant="ghost"
-                    size="icon"
-                    className={STRIP_BUTTON_CLASS}
-                    onClick={() => openSettings("profile")}
-                  >
-                    <Settings aria-hidden />
-                    <span className="sr-only">{t("common.accountSettings")}</span>
-                  </Button>
-                </PopoverClose>
-              </TooltipTrigger>
-              <TooltipContent>{t("common.accountSettings")}</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  static={false}
-                  variant="ghost"
-                  size="icon"
-                  className={STRIP_BUTTON_CLASS}
-                  onClick={signOut}
+        <div className="flex items-center gap-3 px-2.5 pb-3 pt-2">
+          <Avatar aria-hidden className="size-9 rounded-full border-2 border-[color:var(--aqt-border-2)]">
+            <AvatarImage src={user.avatarUrl ?? undefined} alt="" />
+            <AvatarFallback className="bg-[color:var(--aqt-card-2)] text-xs font-bold text-[color:var(--aqt-fg-muted)]">
+              {initials(user.username)}
+            </AvatarFallback>
+          </Avatar>
+          <span className="min-w-0">
+            <span id={nameId} className="block truncate font-semibold" title={user.username}>
+              {user.username}
+            </span>
+            <span className="block truncate text-caption text-[color:var(--aqt-fg-dim)]">
+              {profileHref ? (
+                <>
+                  {t("nav.account.playerLabel")}{" "}
+                  <PopoverClose asChild>
+                    <Link href={profileHref} className="text-[color:var(--aqt-teal)]">
+                      {user.primaryLinkedPlayer?.playerName}
+                    </Link>
+                  </PopoverClose>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  className="text-[color:var(--aqt-teal)] outline-none focus-visible:underline"
+                  onClick={() => {
+                    setOpen(false);
+                    openSettings("profile");
+                  }}
                 >
-                  <LogOut aria-hidden />
-                  <span className="sr-only">{t("common.logout")}</span>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>{t("common.logout")}</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+                  {t("common.linkPlayer")}
+                </button>
+              )}
+            </span>
+          </span>
         </div>
-        <NotificationList headingId={headingId} {...notifications} />
-        <div className="flex shrink-0 items-center justify-between gap-3 border-t px-4 py-2">
-          <span className="text-xs text-muted-foreground">{t("common.language")}</span>
+        <div className="my-1.5 h-px bg-[color:var(--aqt-border)]" />
+        {profileHref ? (
+          <PopoverClose asChild>
+            <Link href={profileHref} className={MENU_ITEM_CLASS}>
+              <User className="size-4 shrink-0" aria-hidden />
+              <span className="min-w-0 flex-1 truncate">{t("nav.account.myProfile")}</span>
+            </Link>
+          </PopoverClose>
+        ) : null}
+        {canAccessAdmin ? (
+          <PopoverClose asChild>
+            <Link href="/admin" className={MENU_ITEM_CLASS}>
+              <LayoutDashboard className="size-4 shrink-0" aria-hidden />
+              <span className="min-w-0 flex-1 truncate">{t("nav.items.admin.title")}</span>
+            </Link>
+          </PopoverClose>
+        ) : null}
+        <button
+          type="button"
+          className={MENU_ITEM_CLASS}
+          onClick={() => {
+            setOpen(false);
+            openSettings("profile");
+          }}
+        >
+          <Settings className="size-4 shrink-0" aria-hidden />
+          <span className="min-w-0 flex-1 truncate">{t("common.accountSettings")}</span>
+        </button>
+        <div className="my-1.5 h-px bg-[color:var(--aqt-border)]" />
+        <div className="flex items-center justify-between gap-3 px-2.5 py-1.5">
+          <span className="text-[color:var(--aqt-fg-dim)]">{t("common.language")}</span>
           <LanguageSwitcher />
         </div>
+        <div className="my-1.5 h-px bg-[color:var(--aqt-border)]" />
+        <button
+          type="button"
+          className={cn(MENU_ITEM_CLASS, "text-[color:var(--aqt-fg-muted)]")}
+          onClick={signOut}
+        >
+          <LogOut className="size-4 shrink-0" aria-hidden />
+          <span className="min-w-0 flex-1 truncate">{t("common.logout")}</span>
+        </button>
       </PopoverContent>
     </Popover>
   );

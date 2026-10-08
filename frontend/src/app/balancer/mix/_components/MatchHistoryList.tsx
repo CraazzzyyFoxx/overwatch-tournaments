@@ -8,7 +8,7 @@ import { useTranslations } from "next-intl";
 
 import { History, Undo2 } from "lucide-react";
 
-import { EYEBROW_CLASS, teamAccent } from "@/app/balancer/mix/pickup-chrome";
+import { EYEBROW_CLASS, lobbyLetter, teamAccent } from "@/app/balancer/mix/pickup-chrome";
 import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import { formatRelative } from "@/components/kit/format-time";
 import { Button } from "@/components/ui/button";
@@ -19,7 +19,7 @@ import { useFormatter } from "@/lib/datetime/client";
 import { cn } from "@/lib/utils";
 import type { CustomGameMatch } from "@/services/custom-game.service";
 
-/** Every match this mix has recorded, both lobbies, newest first — the permanent record `Record result` writes into. */
+/** Every match this mix has recorded, every lobby, newest first — the permanent record `Record result` writes into. */
 export function MatchHistoryList({
   matches,
   lobbyCount,
@@ -43,9 +43,9 @@ export function MatchHistoryList({
       newestPerLobby.add(match.id);
     }
   }
-  // A mix that switched back to one lobby keeps lobby B's matches in the log,
-  // so the chip follows the history as well as the current count.
-  const showLobby = lobbyCount > 1 || seenLobbies.has(1);
+  // A mix that dropped a lobby keeps that lobby's matches in the log, so the
+  // chip follows the history as well as the current count.
+  const showLobby = lobbyCount > 1 || [...seenLobbies].some((index) => index > 0);
 
   return (
     <div className="flex flex-col gap-2 border-t border-[color:var(--aqt-border)] pt-3">
@@ -87,7 +87,7 @@ function MatchHistoryRow({
   onUndoMatch
 }: Readonly<{
   match: CustomGameMatch;
-  /** Two lobbies now, or lobby B somewhere in the log: say which one played it. */
+  /** More than one lobby now, or one past the first somewhere in the log: say which one played it. */
   showLobby: boolean;
   canUndo: boolean;
   undoing: boolean;
@@ -98,14 +98,13 @@ function MatchHistoryRow({
   const homeAccent = teamAccent(0);
   const awayAccent = teamAccent(1);
   const lobbyAccent = teamAccent(match.lobby_index);
-  // A: 0, B: 1 -- glyphs, identical in every locale, like a team number.
-  const lobbyLetter = match.lobby_index === 0 ? "A" : "B";
+  const letter = lobbyLetter(match.lobby_index);
   const [undoOpen, setUndoOpen] = useState(false);
 
   return (
     <li className="flex items-center gap-3 rounded-lg border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-1)] px-2.5 py-2">
       {showLobby ? (
-        <IconTooltip label={t("tab", { letter: lobbyLetter })} className="shrink-0">
+        <IconTooltip label={t("tab", { letter })} className="shrink-0">
           <span
             data-testid="match-lobby"
             aria-hidden="true"
@@ -115,7 +114,7 @@ function MatchHistoryRow({
               "text-[color:var(--aqt-bg)]"
             )}
           >
-            {lobbyLetter}
+            {letter}
           </span>
         </IconTooltip>
       ) : null}

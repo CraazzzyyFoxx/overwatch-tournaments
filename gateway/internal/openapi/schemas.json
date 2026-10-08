@@ -3781,6 +3781,14 @@
       },
       "summary": "Set workspace custom domain"
     },
+    "rpc.app.workspaces.staff": {
+      "description": "Permission: public; no authentication required. The organizers credited on the workspace's public page: one row per person at their highest of the `owner`/`admin`/`referee` system roles, ordered owner \u2192 admin \u2192 referee then by name. `name` is the person's linked player name (BattleTag); an account with no linked player is omitted. 404 if the workspace does not exist.",
+      "response": {
+        "array": true,
+        "ref": "app.WorkspaceStaffMember"
+      },
+      "summary": "List workspace staff"
+    },
     "rpc.app.workspaces.verification_set": {
       "description": "Permission: superuser only (a workspace owner may not self-certify). Moves a workspace between the `unverified`/`verified`/`trusted` trust tiers \u2014 the only way a self-service workspace is unblocked for GPU compute, inline achievement recompute and the public directory; audited on every call including a no-op set, 404 if workspace missing, 422 on an unknown status.",
       "request": {
@@ -3877,6 +3885,34 @@
       },
       "summary": "Upsert workspace balancer config"
     },
+    "rpc.balancer.admin.workspace_ranker_get": {
+      "description": "Permission: admin-panel access plus workspace `workspace.read`. Returns the mix ranker's knobs in force for this workspace (the defaults when never saved) and how many hidden ratings its members hold. The ranker implements mixtura-ranker by Dmitriy (@dmelackov), https://github.com/mixtura-dev/mixtura-ranker.",
+      "response": {
+        "array": false,
+        "ref": "balancer.WorkspaceRankerRead"
+      },
+      "summary": "Get workspace mix ranker settings"
+    },
+    "rpc.balancer.admin.workspace_ranker_rebuild": {
+      "description": "Permission: admin-panel access plus workspace `team.update`. Replays every recorded mix match of the workspace in order and replaces all hidden ratings with the result; open ranks are not touched. Returns how many matches were replayed and how many hidden ratings came out.",
+      "response": {
+        "array": false,
+        "ref": "balancer.WorkspaceRankerRebuildRead"
+      },
+      "summary": "Rebuild hidden mix ratings from history"
+    },
+    "rpc.balancer.admin.workspace_ranker_upsert": {
+      "description": "Permission: admin-panel access plus workspace `team.update`. Replaces all seven knobs at once. Changing rating_min, rating_max, rating_avg or sigma_init reinterprets every stored hidden rating, so the call rebuilds them from the workspace's recorded mix matches before answering. 422 unless rating_min < rating_avg < rating_max.",
+      "request": {
+        "array": false,
+        "ref": "balancer.WorkspaceRankerUpsert"
+      },
+      "response": {
+        "array": false,
+        "ref": "balancer.WorkspaceRankerRead"
+      },
+      "summary": "Set workspace mix ranker settings"
+    },
     "rpc.balancer.balance": {
       "description": "Permission: workspace `team.create` on the given workspace_id; an API-key caller must also be scoped to that workspace and hold the `team.create` scope. Solves the posted pool and returns the ranked variants in the same response -- no job id, no polling, no realtime events. Everything the solver needs is in the body (`player_data`, optional per-team `role_mask`, optional `config_overrides`); nothing is read from the workspace. The solver budget is clamped to 60s, so a pool too large to settle in time answers 504 and belongs on the asynchronous job API instead. Rate limits, the per-key config policy and the concurrency slot are the job path's.",
       "request": {
@@ -3906,7 +3942,7 @@
       "summary": "Add custom game co-host"
     },
     "rpc.balancer.custom.balance": {
-      "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). With `scope=\"lobby\"` (the default) balances the non-benched lineup of ONE lobby (`lobby_index`, default 0) -- everyone the other lobby is already playing or holds a pin on is left out. With `scope=\"all\"` it splits the whole pool into two equally strong lobbies and balances both. Ranks come from the host's own book above the workspace canon. 422 when the lineup is empty, a seated player has no ranked role, the mix has one lobby (`single_lobby`) or the pool cannot be split (`not_enough_for_two_lobbies`, `too_many_must_play`, `too_many_pinned`, `roles_infeasible`).",
+      "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). With `scope=\"lobby\"` (the default) balances the non-benched lineup of ONE lobby (`lobby_index`, default 0) -- everyone another lobby is already playing or holds a pin on is left out. With `scope=\"all\"` it splits the whole pool into `lobby_count` equally strong lobbies and balances them all. Ranks come from the host's own book above the workspace canon. 422 when the lineup is empty, a seated player has no ranked role, the mix has one lobby (`single_lobby`) or the pool cannot be split (`not_enough_players`, `too_many_must_play`, `too_many_pinned`, `roles_infeasible`).",
       "request": {
         "array": false,
         "ref": "balancer.CustomGameBalanceRequest"
@@ -3946,7 +3982,7 @@
       "summary": "List custom game matches"
     },
     "rpc.balancer.custom.post_discord": {
-      "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Queues an embed of one balance option's teams, the next map and the points at stake to the workspace-wide mix channel and returns immediately -- delivery is the bot's, and nothing about the mix changes. A two-lobby mix names the lobby in the embed title and numbers the match within that lobby. 409 when the workspace has no mix channel configured and 404 when the balance option is missing.",
+      "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Queues an embed of one balance option's teams, the next map and the points at stake to the workspace-wide mix channel and returns immediately -- delivery is the bot's, and nothing about the mix changes. A multi-lobby mix names the lobby in the embed title and numbers the match within that lobby. 409 when the workspace has no mix channel configured and 404 when the balance option is missing.",
       "request": {
         "array": false,
         "ref": "balancer.CustomGamePostDiscord"
@@ -3962,7 +3998,7 @@
       "summary": "Open custom game signup in Discord"
     },
     "rpc.balancer.custom.record_outcome": {
-      "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Freezes one played match of a balance option into the mix's history, moving both teams' ranks in the host's book by points_per_win when a winner is given and redeeming every seat's must_play pin back to the pool. The match is stamped with the lobby that played it and with whoever was playing the other lobby at that moment, whom rotation then counts as neither played nor sat out. Repeatable until the mix is closed.",
+      "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Freezes one played match of a balance option into the mix's history, moving both teams' ranks in the host's book -- by points_per_win when a winner is given, or seat by seat by the mix ranker when the host's rating_mode is 'ranker' -- advancing the workspace's hidden ratings, and redeeming every seat's must_play pin back to the pool. The match is stamped with the lobby that played it and with whoever was playing another lobby at that moment, whom rotation then counts as neither played nor sat out. Repeatable until the mix is closed.",
       "request": {
         "array": false,
         "ref": "balancer.CustomGameRecordOutcome"
@@ -3973,8 +4009,16 @@
       "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Revokes a co-host grant, including a co-host removing themselves, and returns the refreshed mix. An account that has since left the workspace stays revocable.",
       "summary": "Remove custom game co-host"
     },
+    "rpc.balancer.custom.rename": {
+      "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Replaces the mix's name (trimmed, 1-255 characters) and re-renders its live Discord signup card. Refused once the mix is closed.",
+      "request": {
+        "array": false,
+        "ref": "balancer.CustomGameRename"
+      },
+      "summary": "Rename custom game"
+    },
     "rpc.balancer.custom.rotation": {
-      "description": "Permission: public; no authentication required. Recommends who is owed the next seat and who should sit out, computed from this mix's own match history, read-only. The optional lobby_index query parameter ranks the candidates of one lobby -- whoever is seated in the other lobby or pinned to it is left out -- and splits at that lobby's seat count.",
+      "description": "Permission: public; no authentication required. Recommends who is owed the next seat and who should sit out, computed from this mix's own match history, read-only. The optional lobby_index query parameter ranks the candidates of one lobby -- whoever is seated in another lobby or pinned to one is left out -- and splits at that lobby's seat count.",
       "query_params": [
         {
           "name": "lobby_index",
@@ -4012,7 +4056,7 @@
       "summary": "Update my mix seat"
     },
     "rpc.balancer.custom.set_lobby_count": {
-      "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Runs the mix as one lobby or two. Going to two opens an empty second lobby, leaving the first untouched; going back to one deletes the second lobby together with its stored matchup and clears every player's lobby pin. Matches already recorded for the second lobby stay in the history and in the statistics.",
+      "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Runs the mix as 1..6 lobbies. Growing opens the new lobbies empty, leaving the running ones untouched; shrinking deletes every lobby past the new count together with its stored matchup and clears the pins that named them. Matches already recorded for a deleted lobby stay in the history and in the statistics.",
       "request": {
         "array": false,
         "ref": "balancer.CustomGameLobbyCountPatch"
@@ -4052,12 +4096,18 @@
       "summary": "Set custom game team names"
     },
     "rpc.balancer.custom.set_variant_index": {
-      "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Pages one lobby to one of the balance options its last run produced, for every viewer at once -- the option on screen is a fact about the lobby, not about one browser. 404 when the index points past the stored options, and 409 seat_conflict when the option would seat somebody the mix's other lobby has already put on the floor. Re-balancing resets it to the first option.",
+      "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Pages one lobby to one of the balance options its last run produced, for every viewer at once -- the option on screen is a fact about the lobby, not about one browser. 404 when the index points past the stored options, and 409 seat_conflict when the option would seat somebody another of the mix's lobbies has already put on the floor. Re-balancing resets it to the first option.",
       "request": {
         "array": false,
         "ref": "balancer.CustomGameVariantIndexPatch"
       },
       "summary": "Set custom game shown balance option"
+    },
+    "rpc.balancer.custom.set_voice_channels": {
+      "request": {
+        "array": false,
+        "ref": "balancer.CustomGameVoicePatch"
+      }
     },
     "rpc.balancer.custom.stats": {
       "description": "Permission: public; no authentication required. Per-member wins/losses/draws, win rate, current streak and the per-role split across every mix this workspace has run, best record first. The optional since query parameter (ISO 8601) narrows it to matches recorded on or after that moment; without it the whole history counts. Read-only.",
@@ -4080,8 +4130,14 @@
       "summary": "Transfer custom game host"
     },
     "rpc.balancer.custom.undo_match": {
-      "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Deletes the lobby's most recent match and gives back exactly the rank points it applied, read from the match itself rather than the mix's current points_per_win. 404 when the match belongs to another mix and 409 when a newer match of the SAME lobby exists, since the rank book compounds. must_play pins the recording redeemed are not restored.",
+      "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Deletes the lobby's most recent match and gives back exactly the rank points it applied, read from the match and its seats rather than the host's current settings, then rebuilds the workspace's hidden ratings from the remaining history. 404 when the match belongs to another mix and 409 when a newer match of the SAME lobby exists, since the rank book compounds. must_play pins the recording redeemed are not restored.",
       "summary": "Undo custom game match"
+    },
+    "rpc.balancer.custom.update_lineup": {
+      "request": {
+        "array": false,
+        "ref": "balancer.CustomGameLineupRefresh"
+      }
     },
     "rpc.balancer.custom.update_player": {
       "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Patches one seat's participation state, role order or flex flag and returns the refreshed mix; 404 when the member is not on this mix's roster.",
@@ -4098,6 +4154,22 @@
         "ref": "balancer.CustomGameRosterUpdate"
       },
       "summary": "Replace custom game roster"
+    },
+    "rpc.balancer.custom.voice_move": {
+      "request": {
+        "array": false,
+        "ref": "balancer.CustomGameVoiceRun"
+      }
+    },
+    "rpc.balancer.custom.voice_options": {
+      "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Returns the voice channels of the workspace's mix voice category, split into `general` and `team` voices, each with the bot's `missing_permissions`. `error` is set instead of failing when Discord is unreachable or the category is gone (`category_not_found`); with no category configured both lists are empty.",
+      "summary": "List custom game voice channels"
+    },
+    "rpc.balancer.custom.voice_return": {
+      "request": {
+        "array": false,
+        "ref": "balancer.CustomGameVoiceRun"
+      }
     },
     "rpc.balancer.draft.cancel": {
       "description": "Permission: workspace `team.create`. Cancels the draft and publishes a draft-cancelled realtime event.",
@@ -4536,7 +4608,7 @@
       "summary": "Upsert workspace player"
     },
     "rpc.balancer.prefs.get": {
-      "description": "Permission: self-service -- any authenticated (active) account reads its own preferences only. Returns the signed-in account's own mix settings -- the rank-balance/role-comfort tilt, the per-role weights, how many balance options to keep, the roster shape its mixes field and how far a decided match moves its rank book -- plus roster_shape, the read-only resolution of that shape. A null value means the setting was never saved and the default applies.",
+      "description": "Permission: self-service -- any authenticated (active) account reads its own preferences only. Returns the signed-in account's own mix settings -- the rank-balance/role-comfort tilt, the per-role weights, how many balance options to keep, the roster shape its mixes field, how far a decided match moves its rank book and whether the mix ranker moves it instead (rating_mode) -- plus roster_shape, the read-only resolution of that shape. A null value means the setting was never saved and the default applies.",
       "response": {
         "array": false,
         "ref": "balancer.UserMixPreferencesRead"
@@ -4544,7 +4616,7 @@
       "summary": "Get my pickup mix preferences"
     },
     "rpc.balancer.prefs.upsert": {
-      "description": "Permission: self-service -- any authenticated (active) account writes its own preferences only. Replaces all five of the caller's mix settings at once and returns the stored result with the re-resolved roster_shape; a null clears one back to the default, and 0 points per win stores as unset. They apply to every mix this account hosts -- a mix runs on its host's preferences whoever presses the button. 422 on an impossible roster shape.",
+      "description": "Permission: self-service -- any authenticated (active) account writes its own preferences only. Replaces all six of the caller's mix settings at once and returns the stored result with the re-resolved roster_shape; a null clears one back to the default, and 0 points per win stores as unset. They apply to every mix this account hosts -- a mix runs on its host's preferences whoever presses the button. 422 on an impossible roster shape.",
       "request": {
         "array": false,
         "ref": "balancer.UserMixPreferencesUpsert"
@@ -4554,6 +4626,137 @@
         "ref": "balancer.UserMixPreferencesRead"
       },
       "summary": "Set my pickup mix preferences"
+    },
+    "rpc.balancer.ranks.list": {
+      "description": "Permission: workspace member holding `team.update` -- the same grant writing the canon needs, because this read puts every author's private book on one screen. Read-only. One flat row per rank value across nine layers (canon, author, ow, hidden, effective_tournament, effective_mix, registration, tournament, casual); the six current layers are the default. The two effective layers are computed in SQL and agree with the resolver the balancer runs on: effective_tournament is canon over OW on the workspace grid, effective_mix is the author's book over the canon over OW on the global grid. `division` is resolved on the workspace's effective grid for every row. Filtering, sorting, the exact total and the page all run in the database.",
+      "query_params": [
+        {
+          "name": "page",
+          "required": false,
+          "schema": {
+            "description": "1-based page, default 1.",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "per_page",
+          "required": false,
+          "schema": {
+            "description": "Page size, clamped to 1..200, default 50.",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "player_id",
+          "required": false,
+          "schema": {
+            "description": "Only this players.user id.",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "q",
+          "required": false,
+          "schema": {
+            "description": "Needle matched against battle_tag, display_name and name.",
+            "type": "string"
+          }
+        },
+        {
+          "name": "layer",
+          "required": false,
+          "schema": {
+            "description": "Repeatable. One of ['canon', 'author', 'ow', 'hidden', 'effective_tournament', 'effective_mix', 'registration', 'tournament', 'casual']; defaults to the current layers ['canon', 'author', 'ow', 'hidden', 'effective_tournament', 'effective_mix'].",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        {
+          "name": "author_user_id",
+          "required": false,
+          "schema": {
+            "description": "Repeatable. Only these authors/hosts.",
+            "items": {
+              "type": "integer"
+            },
+            "type": "array"
+          }
+        },
+        {
+          "name": "role",
+          "required": false,
+          "schema": {
+            "description": "Repeatable. tank/damage/support.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        {
+          "name": "rank_min",
+          "required": false,
+          "schema": {
+            "description": "Lowest rank_value kept.",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "rank_max",
+          "required": false,
+          "schema": {
+            "description": "Highest rank_value kept.",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "differs_from_canon",
+          "required": false,
+          "schema": {
+            "description": "Keep only author rows whose canon_diff IS DISTINCT FROM 0.",
+            "type": "boolean"
+          }
+        },
+        {
+          "name": "date_from",
+          "required": false,
+          "schema": {
+            "description": "ISO-8601 lower bound on `at`.",
+            "type": "string"
+          }
+        },
+        {
+          "name": "date_to",
+          "required": false,
+          "schema": {
+            "description": "ISO-8601 upper bound on `at`.",
+            "type": "string"
+          }
+        },
+        {
+          "name": "sort",
+          "required": false,
+          "schema": {
+            "description": "One of ['at', 'rank_value', 'display_name', 'layer', 'role', 'canon_diff', 'delta']; default display_name.",
+            "type": "string"
+          }
+        },
+        {
+          "name": "order",
+          "required": false,
+          "schema": {
+            "description": "asc|desc, default asc.",
+            "type": "string"
+          }
+        }
+      ],
+      "response": {
+        "array": false,
+        "ref": "balancer.Paginated_RankOverviewRow_"
+      },
+      "summary": "List all rank values in the workspace"
     },
     "rpc.balancer.teams.export_registered": {
       "description": "Permission: admin-panel access plus workspace `team.create`. Materializes the tournament's complete registered teams into balancer teams, optionally narrowed to given team ids, and returns removed/imported/created counts plus every team skipped and why, and emits a teams-changed realtime event when anything was imported.",
@@ -10095,7 +10298,7 @@
       "summary": "Get tournament history stats"
     },
     "rpc.tournament.statistics_overall": {
-      "description": "Permission: public; no authentication required. Returns aggregate tournament statistics across the workspace.",
+      "description": "Permission: public; no authentication required. Returns aggregate tournament statistics across the workspace: counts of tournaments, teams, players and champions, plus played volume \u2014 finished encounters, maps, distinct calendar days covered (overlapping tournaments counted once) and whole hours of logged map time.",
       "query_params": [
         {
           "name": "workspace_id",
@@ -21234,6 +21437,30 @@
     },
     "app.WorkspaceRead": {
       "properties": {
+        "about": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "About"
+        },
+        "boosty_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Boosty Url"
+        },
         "brand_accent": {
           "anyOf": [
             {
@@ -21469,6 +21696,18 @@
           "default": null,
           "title": "Discord Guild Verified At"
         },
+        "discord_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Discord Url"
+        },
         "icon_url": {
           "anyOf": [
             {
@@ -21546,10 +21785,34 @@
           "default": null,
           "title": "Subdomain"
         },
+        "tagline": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tagline"
+        },
         "timezone": {
           "default": "Europe/Moscow",
           "title": "Timezone",
           "type": "string"
+        },
+        "twitch_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Twitch Url"
         },
         "verification_status": {
           "default": "unverified",
@@ -21569,8 +21832,58 @@
       "title": "WorkspaceRead",
       "type": "object"
     },
+    "app.WorkspaceStaffMember": {
+      "description": "One publicly credited organizer of a workspace.\n\nA NAME and a role, nothing else: unlike ``WorkspaceOwnerRead`` above this\nmodel IS served anonymously, so it carries no account identifier, no email\nand no auth-user id \u2014 only the player name the site already shows on every\nroster and profile page.",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "role": {
+          "enum": [
+            "owner",
+            "admin",
+            "referee"
+          ],
+          "title": "Role",
+          "type": "string"
+        }
+      },
+      "required": [
+        "role",
+        "name"
+      ],
+      "title": "WorkspaceStaffMember",
+      "type": "object"
+    },
     "app.WorkspaceUpdate": {
       "properties": {
+        "about": {
+          "anyOf": [
+            {
+              "maxLength": 4000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "About"
+        },
+        "boosty_url": {
+          "anyOf": [
+            {
+              "maxLength": 512,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Boosty Url"
+        },
         "brand_accent": {
           "anyOf": [
             {
@@ -21752,6 +22065,19 @@
           "default": null,
           "title": "Description"
         },
+        "discord_url": {
+          "anyOf": [
+            {
+              "maxLength": 512,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Discord Url"
+        },
         "icon_url": {
           "anyOf": [
             {
@@ -21852,6 +22178,19 @@
           "default": null,
           "title": "Subdomain"
         },
+        "tagline": {
+          "anyOf": [
+            {
+              "maxLength": 120,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tagline"
+        },
         "timezone": {
           "anyOf": [
             {
@@ -21863,6 +22202,19 @@
           ],
           "default": null,
           "title": "Timezone"
+        },
+        "twitch_url": {
+          "anyOf": [
+            {
+              "maxLength": 512,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Twitch Url"
         }
       },
       "title": "WorkspaceUpdate",
@@ -22563,21 +22915,6 @@
           "description": "Probability of crossover when producing offspring in the Rust MOO search.",
           "title": "Crossover Rate"
         },
-        "damage_impact_weight": {
-          "anyOf": [
-            {
-              "maximum": 10000.0,
-              "minimum": 0.0,
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Importance multiplier for Damage role contribution when comparing effective team totals.",
-          "title": "Damage Impact Weight"
-        },
         "effective_total_std_weight": {
           "anyOf": [
             {
@@ -22758,24 +23095,6 @@
           "description": "Mix trade-off between rank balance and role comfort. 0 weighs only how evenly the two teams' ranks split, 1 only how many players got a preferred role; 0.5 reproduces the engine's own defaults.",
           "title": "Mix Comfort Tilt"
         },
-        "mix_role_weights": {
-          "anyOf": [
-            {
-              "additionalProperties": {
-                "maximum": 100.0,
-                "minimum": 0.0,
-                "type": "number"
-              },
-              "type": "object"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Mix per-role importance for the role-line balance term, keyed by roster slot code. A role left out weighs 1.0, as does every role when this is unset.",
-          "title": "Mix Role Weights"
-        },
         "mutation_rate": {
           "anyOf": [
             {
@@ -22911,6 +23230,30 @@
           "description": "Penalty weight for uneven rating strength between the same role across teams.",
           "title": "Role Line Balance Weight"
         },
+        "role_settings": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "$ref": "#/components/schemas/balancer.RoleSettingsOverride"
+              },
+              "propertyNames": {
+                "enum": [
+                  "tank",
+                  "damage",
+                  "support",
+                  "flex"
+                ]
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Per-role weights keyed by roster slot code: how much a role counts towards a team's effective total, and how hard uneven lines of it are penalized.",
+          "title": "Role Settings"
+        },
         "stagnation_kick_patience": {
           "anyOf": [
             {
@@ -22940,66 +23283,6 @@
           "default": null,
           "description": "Penalty weight per pair of players in the same team sharing the same role subclass, normalized per team count. Use 0 to disable.",
           "title": "Sub Role Collision Weight"
-        },
-        "support_impact_weight": {
-          "anyOf": [
-            {
-              "maximum": 10000.0,
-              "minimum": 0.0,
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Importance multiplier for Support role contribution when comparing effective team totals.",
-          "title": "Support Impact Weight"
-        },
-        "tank_gap_weight": {
-          "anyOf": [
-            {
-              "maximum": 10000.0,
-              "minimum": 0.0,
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Penalty multiplier for the largest gap between adjacent (sorted by strength) Tank lines.",
-          "title": "Tank Gap Weight"
-        },
-        "tank_impact_weight": {
-          "anyOf": [
-            {
-              "maximum": 10000.0,
-              "minimum": 0.0,
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Importance multiplier for Tank role contribution when comparing effective team totals.",
-          "title": "Tank Impact Weight"
-        },
-        "tank_std_weight": {
-          "anyOf": [
-            {
-              "maximum": 10000.0,
-              "minimum": 0.0,
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Penalty multiplier for Tank-line standard deviation across teams.",
-          "title": "Tank Std Weight"
         },
         "team_max_pain_weight": {
           "anyOf": [
@@ -23104,11 +23387,11 @@
     },
     "balancer.CustomGameBalanceRequest": {
       "additionalProperties": false,
-      "description": "What to balance. An empty body is the first lobby, as before there was a second.\n\n``scope=\"all\"`` reshuffles both lobbies at once and needs ``lobby_count = 2``.",
+      "description": "What to balance. An empty body is the first lobby, as before there was a second.\n\n``scope=\"all\"`` reshuffles every lobby at once and needs ``lobby_count >= 2``.",
       "properties": {
         "lobby_index": {
           "default": 0,
-          "maximum": 1,
+          "maximum": 5,
           "minimum": 0,
           "title": "Lobby Index",
           "type": "integer"
@@ -23190,15 +23473,41 @@
       "title": "CustomGameHostTransfer",
       "type": "object"
     },
+    "balancer.CustomGameLineupRefresh": {
+      "additionalProperties": false,
+      "description": "The lobby's newest lineup card, re-rendered from the lineup on screen now.",
+      "properties": {
+        "image_b64": {
+          "anyOf": [
+            {
+              "maxLength": 8388608,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Image B64"
+        },
+        "lobby_index": {
+          "default": 0,
+          "maximum": 5,
+          "minimum": 0,
+          "title": "Lobby Index",
+          "type": "integer"
+        }
+      },
+      "title": "CustomGameLineupRefresh",
+      "type": "object"
+    },
     "balancer.CustomGameLobbyCountPatch": {
       "additionalProperties": false,
       "description": "How many lobbies the mix runs at once.",
       "properties": {
         "lobby_count": {
-          "enum": [
-            1,
-            2
-          ],
+          "maximum": 6,
+          "minimum": 1,
           "title": "Lobby Count",
           "type": "integer"
         }
@@ -23209,13 +23518,53 @@
       "title": "CustomGameLobbyCountPatch",
       "type": "object"
     },
+    "balancer.CustomGameLobbyVoice": {
+      "additionalProperties": false,
+      "properties": {
+        "lobby_index": {
+          "default": 0,
+          "maximum": 5,
+          "minimum": 0,
+          "title": "Lobby Index",
+          "type": "integer"
+        },
+        "team1_voice_channel_id": {
+          "anyOf": [
+            {
+              "pattern": "^\\d{1,20}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Team1 Voice Channel Id"
+        },
+        "team2_voice_channel_id": {
+          "anyOf": [
+            {
+              "pattern": "^\\d{1,20}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Team2 Voice Channel Id"
+        }
+      },
+      "title": "CustomGameLobbyVoice",
+      "type": "object"
+    },
     "balancer.CustomGameNextMapPatch": {
       "additionalProperties": false,
       "description": "``null`` clears the pick; the next match then records with no map.",
       "properties": {
         "lobby_index": {
           "default": 0,
-          "maximum": 1,
+          "maximum": 5,
           "minimum": 0,
           "title": "Lobby Index",
           "type": "integer"
@@ -23299,7 +23648,7 @@
         "lobby_pin": {
           "anyOf": [
             {
-              "maximum": 1,
+              "maximum": 5,
               "minimum": 0,
               "type": "integer"
             },
@@ -23378,7 +23727,7 @@
         },
         "lobby_index": {
           "default": 0,
-          "maximum": 1,
+          "maximum": 5,
           "minimum": 0,
           "title": "Lobby Index",
           "type": "integer"
@@ -23419,7 +23768,7 @@
       "properties": {
         "lobby_index": {
           "default": 0,
-          "maximum": 1,
+          "maximum": 5,
           "minimum": 0,
           "title": "Lobby Index",
           "type": "integer"
@@ -23452,6 +23801,22 @@
       "title": "CustomGameRecordOutcome",
       "type": "object"
     },
+    "balancer.CustomGameRename": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "maxLength": 255,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "CustomGameRename",
+      "type": "object"
+    },
     "balancer.CustomGameRosterUpdate": {
       "additionalProperties": false,
       "properties": {
@@ -23480,7 +23845,7 @@
         },
         "lobby_index": {
           "default": 0,
-          "maximum": 1,
+          "maximum": 5,
           "minimum": 0,
           "title": "Lobby Index",
           "type": "integer"
@@ -23593,7 +23958,7 @@
       "properties": {
         "lobby_index": {
           "default": 0,
-          "maximum": 1,
+          "maximum": 5,
           "minimum": 0,
           "title": "Lobby Index",
           "type": "integer"
@@ -23608,6 +23973,57 @@
         "variant_index"
       ],
       "title": "CustomGameVariantIndexPatch",
+      "type": "object"
+    },
+    "balancer.CustomGameVoicePatch": {
+      "additionalProperties": false,
+      "description": "The mix's voices: its general voice and the team voices of every listed lobby.\n\n``general_voice_channel_id`` is always replaced; a lobby left out of\n``lobbies`` keeps its voices. Nothing is checked against Discord here --\na voice outside the category is refused when people are moved.",
+      "properties": {
+        "general_voice_channel_id": {
+          "anyOf": [
+            {
+              "pattern": "^\\d{1,20}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "General Voice Channel Id"
+        },
+        "lobbies": {
+          "items": {
+            "$ref": "#/components/schemas/balancer.CustomGameLobbyVoice"
+          },
+          "maxItems": 6,
+          "title": "Lobbies",
+          "type": "array"
+        }
+      },
+      "title": "CustomGameVoicePatch",
+      "type": "object"
+    },
+    "balancer.CustomGameVoiceRun": {
+      "additionalProperties": false,
+      "description": "Which lobby to move; ``null`` is every lobby of the mix.",
+      "properties": {
+        "lobby_index": {
+          "anyOf": [
+            {
+              "maximum": 5,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Lobby Index"
+        }
+      },
+      "title": "CustomGameVoiceRun",
       "type": "object"
     },
     "balancer.DraftAutopickPreview": {
@@ -25559,6 +25975,24 @@
       "title": "MixParticipation",
       "type": "string"
     },
+    "balancer.MixRoleSettings": {
+      "additionalProperties": false,
+      "description": "The mix engine's share of a role's settings -- the only one a host may set.\n\nThe tournament drawer owns the rest (``impact``, the line weights), and\n``extra=\"forbid\"`` is what keeps a host from storing a GA knob through their\nown preferences.",
+      "properties": {
+        "mix_weight": {
+          "description": "Multiplier for this role's gap in role fairness.",
+          "maximum": 100.0,
+          "minimum": 0.0,
+          "title": "Mix Weight",
+          "type": "number"
+        }
+      },
+      "required": [
+        "mix_weight"
+      ],
+      "title": "MixRoleSettings",
+      "type": "object"
+    },
     "balancer.MixSelfSignup": {
       "description": "Who may put themselves on a mix roster, and where they land.\n\nOne column, three states: ``closed`` is no self-signup at all, ``pool``\nseats a self-signed player straight into the pool, ``benched`` parks them\nfor the host to promote. A bool plus a destination enum would admit a\nfourth, meaningless pair (\"closed, but onto the bench\").",
       "enum": [
@@ -25568,6 +26002,37 @@
       ],
       "title": "MixSelfSignup",
       "type": "string"
+    },
+    "balancer.Paginated_RankOverviewRow_": {
+      "properties": {
+        "page": {
+          "title": "Page",
+          "type": "integer"
+        },
+        "per_page": {
+          "title": "Per Page",
+          "type": "integer"
+        },
+        "results": {
+          "items": {
+            "$ref": "#/components/schemas/balancer.RankOverviewRow"
+          },
+          "title": "Results",
+          "type": "array"
+        },
+        "total": {
+          "title": "Total",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "page",
+        "per_page",
+        "total",
+        "results"
+      ],
+      "title": "Paginated[RankOverviewRow]",
+      "type": "object"
     },
     "balancer.PlayerData": {
       "properties": {
@@ -25642,6 +26107,293 @@
       "title": "PlayerData",
       "type": "object"
     },
+    "balancer.RankContext": {
+      "description": "What the row belongs to, when it belongs to something.\n\n``tournament`` for registration/roster rows, ``mix`` for a recorded casual\nmatch, ``battle_tag`` for an Overwatch snapshot -- whose ``team`` carries the\nsnapshot's platform, the only thing a battle tag is further split by.",
+      "properties": {
+        "id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Tournament or custom-game id; null for a battle tag.",
+          "title": "Id"
+        },
+        "kind": {
+          "enum": [
+            "tournament",
+            "mix",
+            "battle_tag"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "lobby_index": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Which lobby of the mix played the match.",
+          "title": "Lobby Index"
+        },
+        "team": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Roster team name, or the platform on an ow row.",
+          "title": "Team"
+        }
+      },
+      "required": [
+        "kind",
+        "label"
+      ],
+      "title": "RankContext",
+      "type": "object"
+    },
+    "balancer.RankOverviewRow": {
+      "properties": {
+        "at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Null on the computed effective layers.",
+          "title": "At"
+        },
+        "author_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Author Name"
+        },
+        "author_user_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "auth.user id of the book's author, the mix's host, or null.",
+          "title": "Author User Id"
+        },
+        "battle_tag": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Battle Tag"
+        },
+        "canon_diff": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "author only: rank_value minus the canon, null if none.",
+          "title": "Canon Diff"
+        },
+        "context": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/balancer.RankContext"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "delta": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "casual only: how far the match moved this seat.",
+          "title": "Delta"
+        },
+        "display_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Display Name"
+        },
+        "division": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Resolved on the workspace's effective grid.",
+          "title": "Division"
+        },
+        "layer": {
+          "enum": [
+            "canon",
+            "author",
+            "ow",
+            "hidden",
+            "effective_tournament",
+            "effective_mix",
+            "registration",
+            "tournament",
+            "casual"
+          ],
+          "title": "Layer",
+          "type": "string"
+        },
+        "member_id": {
+          "description": "workspace_member id.",
+          "title": "Member Id",
+          "type": "integer"
+        },
+        "ow_division": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "ow only: the native OverFast division, e.g. 'gold'.",
+          "title": "Ow Division"
+        },
+        "ow_tier": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "ow only: the native tier inside that division.",
+          "title": "Ow Tier"
+        },
+        "player_id": {
+          "description": "players.user id -- the identity /admin/people/[id] is keyed by.",
+          "title": "Player Id",
+          "type": "integer"
+        },
+        "rank_value": {
+          "title": "Rank Value",
+          "type": "integer"
+        },
+        "role": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "tank/damage/support; casual rows may hold any HeroClass.",
+          "title": "Role"
+        },
+        "sigma": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "hidden only.",
+          "title": "Sigma"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "enum": [
+                "author",
+                "workspace",
+                "ow"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "effective_* only: which layer won.",
+          "title": "Source"
+        }
+      },
+      "required": [
+        "layer",
+        "player_id",
+        "member_id",
+        "rank_value"
+      ],
+      "title": "RankOverviewRow",
+      "type": "object"
+    },
     "balancer.RanksExportResponse": {
       "description": "Result of a rank-only re-export (balance or draft): nothing was created or removed.",
       "properties": {
@@ -25687,6 +26439,74 @@
         "demand"
       ],
       "title": "RoleFeasibility",
+      "type": "object"
+    },
+    "balancer.RoleSettingsOverride": {
+      "additionalProperties": false,
+      "description": "Per-role weights to override; an omitted field keeps its configured value.",
+      "properties": {
+        "impact": {
+          "anyOf": [
+            {
+              "maximum": 10000.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Importance multiplier for this role's contribution when comparing effective team totals.",
+          "title": "Impact"
+        },
+        "line_gap_weight": {
+          "anyOf": [
+            {
+              "maximum": 10000.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Penalty multiplier for the largest gap between adjacent (sorted by strength) lines of this role.",
+          "title": "Line Gap Weight"
+        },
+        "line_std_weight": {
+          "anyOf": [
+            {
+              "maximum": 10000.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Penalty multiplier for this role's line-strength standard deviation across teams.",
+          "title": "Line Std Weight"
+        },
+        "mix_weight": {
+          "anyOf": [
+            {
+              "maximum": 100.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Mix-engine multiplier for this role's gap in the role-fairness term.",
+          "title": "Mix Weight"
+        }
+      },
+      "title": "RoleSettingsOverride",
       "type": "object"
     },
     "balancer.RosterShapeRead": {
@@ -26048,7 +26868,7 @@
       "type": "object"
     },
     "balancer.UserMixPreferencesRead": {
-      "description": "What is stored, plus the shape it resolves to.\n\nAll five stored fields are null for an account that never saved any;\n``roster_shape`` is always present, since a mix always has *some* shape.",
+      "description": "What is stored, plus the shape it resolves to.\n\nAll six stored fields are null (``rating_mode``: ``points``) for an\naccount that never saved any; ``roster_shape`` is always present, since a\nmix always has *some* shape.",
       "properties": {
         "max_result_variants": {
           "anyOf": [
@@ -26080,32 +26900,6 @@
           "description": "Trade-off between rank balance (0) and role comfort (1); null leaves the mix engine's own 0.5 weighting in place.",
           "title": "Mix Comfort Tilt"
         },
-        "mix_role_weights": {
-          "anyOf": [
-            {
-              "additionalProperties": {
-                "maximum": 100.0,
-                "minimum": 0.0,
-                "type": "number"
-              },
-              "propertyNames": {
-                "enum": [
-                  "tank",
-                  "damage",
-                  "support",
-                  "flex"
-                ]
-              },
-              "type": "object"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Per-role importance for role-line balance, keyed by roster slot code. An omitted role weighs 1.0; null means no per-role opinion at all.",
-          "title": "Mix Role Weights"
-        },
         "points_per_win": {
           "anyOf": [
             {
@@ -26120,6 +26914,16 @@
           "default": null,
           "description": "How far a decided match moves both teams' ranks in this account's own rank book. 0 and null both mean recording a match adjusts nothing.",
           "title": "Points Per Win"
+        },
+        "rating_mode": {
+          "default": "points",
+          "description": "How recording a match moves this account's rank book: 'points' by points_per_win, 'ranker' by the mix ranker (each seat by its own amount; mixes then balance on the effective rating). The workspace's hidden ratings advance in both.",
+          "enum": [
+            "points",
+            "ranker"
+          ],
+          "title": "Rating Mode",
+          "type": "string"
         },
         "role_mask": {
           "anyOf": [
@@ -26136,6 +26940,30 @@
           "default": null,
           "description": "How many seats of each role a team gets in this account's mixes, keyed by roster slot code; null inherits the workspace default and then the built-in Overwatch 5v5 shape.",
           "title": "Role Mask"
+        },
+        "role_settings": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "$ref": "#/components/schemas/balancer.MixRoleSettings"
+              },
+              "propertyNames": {
+                "enum": [
+                  "tank",
+                  "damage",
+                  "support",
+                  "flex"
+                ]
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Per-role mix weights, keyed by roster slot code: how much this role's gap counts towards role fairness. An omitted role weighs 1.0; null means no per-role opinion at all.",
+          "title": "Role Settings"
         },
         "roster_shape": {
           "$ref": "#/components/schemas/balancer.RosterShapeRead",
@@ -26150,7 +26978,7 @@
     },
     "balancer.UserMixPreferencesUpsert": {
       "additionalProperties": false,
-      "description": "A full replacement: all five keys required, each nullable to unset one.",
+      "description": "A full replacement: all six keys required, the five knobs nullable to unset one.",
       "properties": {
         "max_result_variants": {
           "anyOf": [
@@ -26180,31 +27008,6 @@
           "description": "Trade-off between rank balance (0) and role comfort (1); null leaves the mix engine's own 0.5 weighting in place.",
           "title": "Mix Comfort Tilt"
         },
-        "mix_role_weights": {
-          "anyOf": [
-            {
-              "additionalProperties": {
-                "maximum": 100.0,
-                "minimum": 0.0,
-                "type": "number"
-              },
-              "propertyNames": {
-                "enum": [
-                  "tank",
-                  "damage",
-                  "support",
-                  "flex"
-                ]
-              },
-              "type": "object"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Per-role importance for role-line balance, keyed by roster slot code. An omitted role weighs 1.0; null means no per-role opinion at all.",
-          "title": "Mix Role Weights"
-        },
         "points_per_win": {
           "anyOf": [
             {
@@ -26218,6 +27021,15 @@
           ],
           "description": "How far a decided match moves both teams' ranks in this account's own rank book. 0 and null both mean recording a match adjusts nothing.",
           "title": "Points Per Win"
+        },
+        "rating_mode": {
+          "description": "How recording a match moves this account's rank book: 'points' by points_per_win, 'ranker' by the mix ranker (each seat by its own amount; mixes then balance on the effective rating). The workspace's hidden ratings advance in both.",
+          "enum": [
+            "points",
+            "ranker"
+          ],
+          "title": "Rating Mode",
+          "type": "string"
         },
         "role_mask": {
           "anyOf": [
@@ -26233,14 +27045,38 @@
           ],
           "description": "How many seats of each role a team gets in this account's mixes, keyed by roster slot code; null inherits the workspace default and then the built-in Overwatch 5v5 shape.",
           "title": "Role Mask"
+        },
+        "role_settings": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "$ref": "#/components/schemas/balancer.MixRoleSettings"
+              },
+              "propertyNames": {
+                "enum": [
+                  "tank",
+                  "damage",
+                  "support",
+                  "flex"
+                ]
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Per-role mix weights, keyed by roster slot code: how much this role's gap counts towards role fairness. An omitted role weighs 1.0; null means no per-role opinion at all.",
+          "title": "Role Settings"
         }
       },
       "required": [
         "mix_comfort_tilt",
-        "mix_role_weights",
+        "role_settings",
         "max_result_variants",
         "role_mask",
-        "points_per_win"
+        "points_per_win",
+        "rating_mode"
       ],
       "title": "UserMixPreferencesUpsert",
       "type": "object"
@@ -26262,6 +27098,25 @@
           ],
           "default": null,
           "title": "Mix Discord Channel Id"
+        },
+        "mix_general_voice_channel_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Mix General Voice Channel Ids",
+          "type": "array"
+        },
+        "mix_voice_category_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mix Voice Category Id"
         },
         "rank_delta_hide_from_pool": {
           "title": "Rank Delta Hide From Pool",
@@ -26319,6 +27174,28 @@
           "description": "Workspace-wide Discord channel every mix posts its matchup to. A mix may name its own channel instead, but only a workspace admin can.",
           "title": "Mix Discord Channel Id"
         },
+        "mix_general_voice_channel_ids": {
+          "description": "Voices of that category players wait in and are returned to; every other voice is a team voice.",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 25,
+          "title": "Mix General Voice Channel Ids",
+          "type": "array"
+        },
+        "mix_voice_category_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Discord category whose voice channels mixes move players between.",
+          "title": "Mix Voice Category Id"
+        },
         "rank_delta_hide_from_pool": {
           "default": false,
           "title": "Rank Delta Hide From Pool",
@@ -26341,6 +27218,160 @@
         }
       },
       "title": "WorkspaceBalancerConfigUpsert",
+      "type": "object"
+    },
+    "balancer.WorkspaceRankerRead": {
+      "description": "The knobs in force (defaults when never saved) and how many hidden ratings exist.",
+      "properties": {
+        "gate_steepness": {
+          "description": "How sharply the correction switches from 'ignore' to 'apply' (the specification's d).",
+          "title": "Gate Steepness",
+          "type": "number"
+        },
+        "gravity": {
+          "description": "How strongly an uncertain hidden rating is pulled towards the average (the specification's g).",
+          "title": "Gravity",
+          "type": "number"
+        },
+        "hidden_ratings": {
+          "description": "Hidden ratings stored for this workspace's members, one per role.",
+          "title": "Hidden Ratings",
+          "type": "integer"
+        },
+        "rating_avg": {
+          "description": "The open rating an average player holds; the hidden scale is centred on it.",
+          "title": "Rating Avg",
+          "type": "number"
+        },
+        "rating_max": {
+          "description": "Highest open rating the ranker maps onto.",
+          "title": "Rating Max",
+          "type": "number"
+        },
+        "rating_min": {
+          "description": "Lowest open rating the ranker maps onto.",
+          "title": "Rating Min",
+          "type": "number"
+        },
+        "sigma_init": {
+          "description": "A newcomer's hidden uncertainty; also sets the hidden scale.",
+          "title": "Sigma Init",
+          "type": "number"
+        },
+        "variant": {
+          "description": "'corrected' follows the hidden rating by its own uncertainty; 'reference' scales by the whole open range, as the original specification does.",
+          "enum": [
+            "reference",
+            "corrected"
+          ],
+          "title": "Variant",
+          "type": "string"
+        },
+        "workspace_id": {
+          "title": "Workspace Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "workspace_id",
+        "rating_min",
+        "rating_max",
+        "rating_avg",
+        "gravity",
+        "gate_steepness",
+        "sigma_init",
+        "variant",
+        "hidden_ratings"
+      ],
+      "title": "WorkspaceRankerRead",
+      "type": "object"
+    },
+    "balancer.WorkspaceRankerRebuildRead": {
+      "properties": {
+        "hidden_ratings": {
+          "description": "Hidden ratings the replay produced.",
+          "title": "Hidden Ratings",
+          "type": "integer"
+        },
+        "matches": {
+          "description": "Recorded mix matches replayed.",
+          "title": "Matches",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "matches",
+        "hidden_ratings"
+      ],
+      "title": "WorkspaceRankerRebuildRead",
+      "type": "object"
+    },
+    "balancer.WorkspaceRankerUpsert": {
+      "additionalProperties": false,
+      "description": "A full replacement of the workspace's mix ranker knobs.\n\nChanging ``rating_min``, ``rating_max``, ``rating_avg`` or ``sigma_init``\nreinterprets every stored hidden rating, so the save rebuilds them from the\nworkspace's match history before it answers.",
+      "properties": {
+        "gate_steepness": {
+          "description": "How sharply the correction switches from 'ignore' to 'apply' (the specification's d).",
+          "exclusiveMinimum": 0,
+          "maximum": 50,
+          "title": "Gate Steepness",
+          "type": "number"
+        },
+        "gravity": {
+          "description": "How strongly an uncertain hidden rating is pulled towards the average (the specification's g).",
+          "maximum": 10,
+          "minimum": 0,
+          "title": "Gravity",
+          "type": "number"
+        },
+        "rating_avg": {
+          "description": "The open rating an average player holds; the hidden scale is centred on it.",
+          "maximum": 100000,
+          "minimum": 0,
+          "title": "Rating Avg",
+          "type": "number"
+        },
+        "rating_max": {
+          "description": "Highest open rating the ranker maps onto.",
+          "maximum": 100000,
+          "minimum": 0,
+          "title": "Rating Max",
+          "type": "number"
+        },
+        "rating_min": {
+          "description": "Lowest open rating the ranker maps onto.",
+          "maximum": 100000,
+          "minimum": 0,
+          "title": "Rating Min",
+          "type": "number"
+        },
+        "sigma_init": {
+          "description": "A newcomer's hidden uncertainty; also sets the hidden scale.",
+          "exclusiveMinimum": 0,
+          "maximum": 1000,
+          "title": "Sigma Init",
+          "type": "number"
+        },
+        "variant": {
+          "description": "'corrected' follows the hidden rating by its own uncertainty; 'reference' scales by the whole open range, as the original specification does.",
+          "enum": [
+            "reference",
+            "corrected"
+          ],
+          "title": "Variant",
+          "type": "string"
+        }
+      },
+      "required": [
+        "rating_min",
+        "rating_max",
+        "rating_avg",
+        "gravity",
+        "gate_steepness",
+        "sigma_init",
+        "variant"
+      ],
+      "title": "WorkspaceRankerUpsert",
       "type": "object"
     },
     "identity.AdminSessionRead": {
@@ -42153,6 +43184,22 @@
           "title": "Champions",
           "type": "integer"
         },
+        "days": {
+          "title": "Days",
+          "type": "integer"
+        },
+        "encounters": {
+          "title": "Encounters",
+          "type": "integer"
+        },
+        "hours": {
+          "title": "Hours",
+          "type": "integer"
+        },
+        "maps": {
+          "title": "Maps",
+          "type": "integer"
+        },
         "players": {
           "title": "Players",
           "type": "integer"
@@ -42170,7 +43217,11 @@
         "tournaments",
         "teams",
         "players",
-        "champions"
+        "champions",
+        "encounters",
+        "maps",
+        "days",
+        "hours"
       ],
       "title": "OverallStatistics",
       "type": "object"

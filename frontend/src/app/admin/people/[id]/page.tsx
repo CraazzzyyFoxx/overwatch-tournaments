@@ -15,6 +15,7 @@ import { PersonParticipationsTab } from "@/components/admin/people/PersonPartici
 import { PersonGlance } from "@/components/admin/people/PersonGlance";
 import { RankPlayerPanel } from "@/components/admin/people/PersonRankPanel";
 import { SubscriptionPlayerPanel } from "@/components/admin/people/PersonSubscriptionPanel";
+import { RankOverviewTable } from "@/components/admin/ranks/RankOverviewTable";
 import { EYEBROW_CLASS } from "@/components/kit/tone";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -76,6 +77,7 @@ export default function PersonHubPage() {
   const canRead = canAccessPermission("user.read", workspaceId);
   const canUpdate = hasPermission("user.update");
   const canReadAuth = hasPermission("auth_user.read");
+  const canReadRanks = canAccessPermission("team.update", workspaceId);
   const canMerge = isSuperuser;
   const canManageIdentity = isSuperuser;
 
@@ -194,9 +196,19 @@ export default function PersonHubPage() {
       {tab === "achievements" ? <PersonAchievementsTab personId={personId} /> : null}
 
       {tab === "ranks" ? (
-        <Section title="Rank collection">
-          <RankPlayerPanel userId={personId} />
-        </Section>
+        <div className="space-y-4">
+          {/* The workspace's own numbers for this person — every layer, flat.
+              `team.update` is the roster owner's grant, the same one the
+              endpoint checks; without it the tab is just the OverFast block. */}
+          {canReadRanks ? (
+            <Section title="Workspace ranks">
+              <RankOverviewTable playerId={personId} />
+            </Section>
+          ) : null}
+          <Section title="Rank collection">
+            <RankPlayerPanel userId={personId} />
+          </Section>
+        </div>
       ) : null}
 
       {tab === "subscriptions" ? (

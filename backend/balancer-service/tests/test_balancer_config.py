@@ -21,11 +21,13 @@ os.environ["DEBUG"] = "false"
 
 from src.schemas.team import InternalBalancerTeamsPayload  # noqa: E402
 from src.services.admin.balancer import balancer_admin_service  # noqa: E402
+from src.services.balancer.config.defaults import AlgorithmConfig, apply_config_overrides  # noqa: E402
 from src.services.balancer.config.provider import (  # noqa: E402
     EDITABLE_CONFIG_FIELD_KEYS,
     get_balancer_config_payload,
     normalize_tournament_config_payload,
 )
+from src.services.balancer.config.public_contract import normalize_config_payload  # noqa: E402
 
 
 def test_config_payload_exposes_complete_editable_field_metadata() -> None:
@@ -43,7 +45,16 @@ def test_config_payload_exposes_complete_editable_field_metadata() -> None:
     assert fields_by_key["max_result_variants"]["limits"] == {"min": 1, "max": 100}
     assert fields_by_key["sub_role_collision_weight"]["limits"] == {"min": 0.0, "max": 10000.0}
     assert fields_by_key["internal_role_spread_weight"]["limits"] == {"min": 0.0, "max": 10000.0}
-    assert fields_by_key["tank_impact_weight"]["limits"] == {"min": 0.0, "max": 10000.0}
+    assert fields_by_key["role_settings"]["limits"] is None
+    assert fields_by_key["role_settings"]["type"] == "roles"
+    assert [column["key"] for column in fields_by_key["role_settings"]["columns"]] == [
+        "impact",
+        "line_gap_weight",
+        "line_std_weight",
+    ]
+    # The mix engine's per-role weight is not the operator's to set, exactly like
+    # the other ``mix_*`` knobs.
+    assert all("mix_weight" not in role for role in payload["defaults"]["role_settings"].values())
     assert fields_by_key["mutation_rate_min"]["limits"] == {"min": 0.0, "max": 1.0}
     assert fields_by_key["island_count"]["limits"] == {"min": 1, "max": 64}
     assert "role_mask" not in field_keys
@@ -118,6 +129,34 @@ def test_normalize_tournament_config_payload_rejects_legacy_keys_and_algorithms(
 
     with pytest.raises(ValidationError):
         normalize_tournament_config_payload({"algorithm": "genetic_moo"})
+
+
+def test_normalize_tournament_config_payload_keeps_role_settings_partial_without_mix_weight() -> None:
+    normalized = normalize_tournament_config_payload(
+        {"role_settings": {"tank": {"impact": 2.0, "mix_weight": 3.0}, "support": {"line_std_weight": 0.5}}}
+    )
+
+    assert normalized == {"role_settings": {"tank": {"impact": 2.0}, "support": {"line_std_weight": 0.5}}}
+
+
+def test_normalize_tournament_config_payload_rejects_an_unknown_role_code() -> None:
+    """A slot code the roster vocabulary does not know would weigh nothing, silently."""
+    with pytest.raises(ValidationError):
+        normalize_tournament_config_payload({"role_settings": {"jungle": {"impact": 2.0}}})
+
+
+def test_role_settings_overrides_merge_field_by_field() -> None:
+    """An override names one weight of one role; everything else stays put.
+
+    A whole-dict replacement would silently zero the tank line weights every
+    time an operator nudged tank impact.
+    """
+    overrides = normalize_config_payload({"role_settings": {"tank": {"impact": 2.0}}})
+    config = apply_config_overrides(AlgorithmConfig(), overrides)
+
+    assert config.role_settings["tank"].impact == 2.0
+    assert (config.role_settings["tank"].line_gap_weight, config.role_settings["tank"].line_std_weight) == (0.8, 1.5)
+    assert config.role_settings["support"] == AlgorithmConfig().role_settings["support"]
 
 
 def test_internal_balance_payload_rejects_legacy_result_shape() -> None:

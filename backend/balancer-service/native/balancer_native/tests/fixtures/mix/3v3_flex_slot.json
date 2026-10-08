@@ -1,0 +1,342 @@
+{
+ "request": {
+  "players": [
+   {
+    "uuid": "p00-11165",
+    "name": "p0",
+    "ratings": {
+     "flex": 2337,
+     "Damage": 1760
+    },
+    "preferences": [
+     "Flex",
+     "flex"
+    ],
+    "subclasses": {},
+    "is_captain": false,
+    "is_flex": true,
+    "seed_role": null
+   },
+   {
+    "uuid": "p01-84130",
+    "name": "p1",
+    "ratings": {
+     "Damage": 2874
+    },
+    "preferences": [
+     "Damage"
+    ],
+    "subclasses": {},
+    "is_captain": false,
+    "is_flex": false,
+    "seed_role": null
+   },
+   {
+    "uuid": "p02-64878",
+    "name": "p2",
+    "ratings": {
+     "flex": 2796
+    },
+    "preferences": [
+     "flex"
+    ],
+    "subclasses": {},
+    "is_captain": false,
+    "is_flex": false,
+    "seed_role": null
+   },
+   {
+    "uuid": "p03-99486",
+    "name": "p3",
+    "ratings": {
+     "flex": 1166
+    },
+    "preferences": [
+     "flex"
+    ],
+    "subclasses": {},
+    "is_captain": false,
+    "is_flex": false,
+    "seed_role": null
+   },
+   {
+    "uuid": "p04-49686",
+    "name": "p4",
+    "ratings": {
+     "flex": 2930,
+     "Damage": 1037
+    },
+    "preferences": [
+     "flex"
+    ],
+    "subclasses": {},
+    "is_captain": false,
+    "is_flex": false,
+    "seed_role": null
+   },
+   {
+    "uuid": "p05-8269",
+    "name": "p5",
+    "ratings": {
+     "flex": 1197,
+     "Damage": 2186
+    },
+    "preferences": [
+     "flex"
+    ],
+    "subclasses": {},
+    "is_captain": false,
+    "is_flex": false,
+    "seed_role": null
+   }
+  ],
+  "num_teams": 2,
+  "seed": 0,
+  "roles": [
+   {
+    "name": "Damage",
+    "slots": 2,
+    "weight": 1
+   },
+   {
+    "name": "flex",
+    "slots": 1,
+    "flex": true,
+    "weight": 1
+   }
+  ],
+  "config": {
+   "max_result_variants": 10,
+   "fairness_weight": 1,
+   "role_fairness_weight": 1,
+   "role_priority_weight": 1
+  }
+ },
+ "expected": {
+  "error": null,
+  "results": [
+   {
+    "total": 1762.611083984375,
+    "fairness": 219,
+    "uniformity": 19.111083984375,
+    "role_fairness": 1520.5,
+    "role_points": 4,
+    "teams": [
+     [
+      [
+       "p00-11165",
+       "Damage"
+      ],
+      [
+       "p01-84130",
+       "Damage"
+      ],
+      [
+       "p03-99486",
+       "flex"
+      ]
+     ],
+     [
+      [
+       "p02-64878",
+       "flex"
+      ],
+      [
+       "p04-49686",
+       "Damage"
+      ],
+      [
+       "p05-8269",
+       "Damage"
+      ]
+     ]
+    ]
+   },
+   {
+    "total": 2598.388916015625,
+    "fairness": 633,
+    "uniformity": 14.888916015625,
+    "role_fairness": 1946.5,
+    "role_points": 4,
+    "teams": [
+     [
+      [
+       "p00-11165",
+       "Damage"
+      ],
+      [
+       "p02-64878",
+       "flex"
+      ],
+      [
+       "p04-49686",
+       "Damage"
+      ]
+     ],
+     [
+      [
+       "p01-84130",
+       "Damage"
+      ],
+      [
+       "p03-99486",
+       "flex"
+      ],
+      [
+       "p05-8269",
+       "Damage"
+      ]
+     ]
+    ]
+   },
+   {
+    "total": 2909.2777099609375,
+    "fairness": 1595,
+    "uniformity": 477.7777099609375,
+    "role_fairness": 832.5,
+    "role_points": 4,
+    "teams": [
+     [
+      [
+       "p00-11165",
+       "Damage"
+      ],
+      [
+       "p03-99486",
+       "flex"
+      ],
+      [
+       "p05-8269",
+       "Damage"
+      ]
+     ],
+     [
+      [
+       "p01-84130",
+       "Damage"
+      ],
+      [
+       "p02-64878",
+       "flex"
+      ],
+      [
+       "p04-49686",
+       "Damage"
+      ]
+     ]
+    ]
+   },
+   {
+    "total": 2964.388946533203,
+    "fairness": 1665,
+    "uniformity": 462.8889465332031,
+    "role_fairness": 832.5,
+    "role_points": 4,
+    "teams": [
+     [
+      [
+       "p00-11165",
+       "Damage"
+      ],
+      [
+       "p02-64878",
+       "flex"
+      ],
+      [
+       "p05-8269",
+       "Damage"
+      ]
+     ],
+     [
+      [
+       "p01-84130",
+       "Damage"
+      ],
+      [
+       "p03-99486",
+       "flex"
+      ],
+      [
+       "p04-49686",
+       "Damage"
+      ]
+     ]
+    ]
+   },
+   {
+    "total": 4569.722229003906,
+    "fairness": 3041,
+    "uniformity": 4.22222900390625,
+    "role_fairness": 1520.5,
+    "role_points": 4,
+    "teams": [
+     [
+      [
+       "p00-11165",
+       "Damage"
+      ],
+      [
+       "p01-84130",
+       "Damage"
+      ],
+      [
+       "p02-64878",
+       "flex"
+      ]
+     ],
+     [
+      [
+       "p03-99486",
+       "flex"
+      ],
+      [
+       "p04-49686",
+       "Damage"
+      ],
+      [
+       "p05-8269",
+       "Damage"
+      ]
+     ]
+    ]
+   },
+   {
+    "total": 5843.500061035156,
+    "fairness": 3893,
+    "uniformity": 0.00006103515625,
+    "role_fairness": 1946.5,
+    "role_points": 4,
+    "teams": [
+     [
+      [
+       "p00-11165",
+       "Damage"
+      ],
+      [
+       "p03-99486",
+       "flex"
+      ],
+      [
+       "p04-49686",
+       "Damage"
+      ]
+     ],
+     [
+      [
+       "p01-84130",
+       "Damage"
+      ],
+      [
+       "p02-64878",
+       "flex"
+      ],
+      [
+       "p05-8269",
+       "Damage"
+      ]
+     ]
+    ]
+   }
+  ]
+ }
+}

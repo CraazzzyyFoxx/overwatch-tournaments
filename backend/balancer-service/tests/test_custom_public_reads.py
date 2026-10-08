@@ -118,10 +118,17 @@ class CustomMixPublicReadTests(IsolatedAsyncioTestCase):
             lobby_count=1,
             self_signup="pool",
             self_role_edit=True,
+            general_voice_channel_id=None,
             created_at=datetime(2026, 1, 1, tzinfo=UTC),
         )
         lobby = SimpleNamespace(
-            custom_game_id=3, lobby_index=0, selected_variant_index=2, next_map_id=None, balanced_at=None
+            custom_game_id=3,
+            lobby_index=0,
+            selected_variant_index=2,
+            next_map_id=None,
+            balanced_at=None,
+            team1_voice_channel_id=None,
+            team2_voice_channel_id=None,
         )
         service = MagicMock()
         service.list = AsyncMock(return_value=[row])
@@ -146,7 +153,16 @@ class CustomMixPublicReadTests(IsolatedAsyncioTestCase):
         self.assertIs(True, item["self_role_edit"])
         self.assertEqual(1, item["lobby_count"])
         self.assertEqual(
-            [{"lobby_index": 0, "selected_variant_index": 2, "next_map_id": None, "balanced_at": None}],
+            [
+                {
+                    "lobby_index": 0,
+                    "selected_variant_index": 2,
+                    "next_map_id": None,
+                    "balanced_at": None,
+                    "team1_voice_channel_id": None,
+                    "team2_voice_channel_id": None,
+                }
+            ],
             item["lobbies"],
         )
 
@@ -168,6 +184,7 @@ class CustomMixPublicReadTests(IsolatedAsyncioTestCase):
             lobby_count=2,
             self_signup="closed",
             self_role_edit=False,
+            general_voice_channel_id=None,
             created_at=datetime(2026, 1, 1, tzinfo=UTC),
         )
         document = lobby_document([{"teams": [{"roster": {"tank": [seat("7")]}}, {"roster": {"tank": [seat("8")]}}]}])
@@ -179,6 +196,8 @@ class CustomMixPublicReadTests(IsolatedAsyncioTestCase):
                 selected_variant_index=0,
                 next_map_id=None,
                 balanced_at=balanced_at,
+                team1_voice_channel_id=None,
+                team2_voice_channel_id=None,
                 balance_result_json=document,
             ),
             SimpleNamespace(
@@ -187,6 +206,8 @@ class CustomMixPublicReadTests(IsolatedAsyncioTestCase):
                 selected_variant_index=0,
                 next_map_id=None,
                 balanced_at=balanced_at,
+                team1_voice_channel_id=None,
+                team2_voice_channel_id=None,
                 balance_result_json=None,
             ),
         ]
@@ -290,6 +311,7 @@ class DiscordPostsPayloadTests(IsolatedAsyncioTestCase):
             lobby_count=1,
             self_signup="pool",
             self_role_edit=False,
+            general_voice_channel_id=None,
             created_at=datetime(2026, 1, 1, tzinfo=UTC),
         )
         service = MagicMock()

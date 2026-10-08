@@ -27,7 +27,7 @@ const UserProfileEmpty = async ({ name }: { name: string }) => {
   const displayName = name.split("#")[0];
 
   return (
-    <HeroFrame variant="profile" roleTint="support">
+    <HeroFrame variant="profile">
       <div
         // Polite: an empty career is not a failure the visitor needs announced
         // assertively — it is simply the state of this profile.
@@ -36,13 +36,8 @@ const UserProfileEmpty = async ({ name }: { name: string }) => {
       >
         <span
           aria-hidden
-          className="relative flex size-16 items-center justify-center rounded-2xl border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-2)]"
-          style={{ boxShadow: "0 0 64px -20px color-mix(in srgb, var(--aqt-teal) 75%, transparent)" }}
+          className="flex size-16 items-center justify-center rounded-2xl border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-2)]"
         >
-          <span
-            className="absolute inset-x-3 -bottom-px h-px opacity-90"
-            style={{ background: "var(--aqt-spectrum)" }}
-          />
           <CalendarSearch className="size-7 text-[color:var(--aqt-teal)]" />
         </span>
 
@@ -50,8 +45,8 @@ const UserProfileEmpty = async ({ name }: { name: string }) => {
           <p className="aqt-tnum text-label font-semibold tracking-label uppercase text-[color:var(--aqt-fg-faint)]">
             {t("users.profile.empty.eyebrow")}
           </p>
-          <h2 className="aqt-hero-title aqt-display text-2xl font-semibold tracking-tight text-[color:var(--aqt-fg)] md:text-headline">
-            {t.rich("users.profile.empty.title", { em: (chunks) => <em>{chunks}</em> })}
+          <h2 className="aqt-display text-2xl font-semibold tracking-tight text-[color:var(--aqt-fg)] md:text-headline">
+            {t("users.profile.empty.title")}
           </h2>
           <p className="mx-auto max-w-prose text-caption leading-relaxed text-[color:var(--aqt-fg-muted)] md:text-sm">
             {t("users.profile.empty.description", { name: displayName })}

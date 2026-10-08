@@ -31,6 +31,11 @@ const field = <T,>(
 export const FIELD_DEFS = {
   name: field("general", (ws) => ws.name),
   description: field("general", (ws) => ws.description ?? ""),
+  tagline: field("general", (ws) => ws.tagline ?? ""),
+  about: field("general", (ws) => ws.about ?? ""),
+  discord_url: field("general", (ws) => ws.discord_url ?? ""),
+  twitch_url: field("general", (ws) => ws.twitch_url ?? ""),
+  boosty_url: field("general", (ws) => ws.boosty_url ?? ""),
   timezone: field("general", (ws) => ws.timezone ?? DEFAULT_WORKSPACE_TIMEZONE),
 
   branding_enabled: field("branding", (ws) => ws.branding_enabled),

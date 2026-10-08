@@ -12,7 +12,7 @@ schema name — `ranks/` writes to `overwatch_rank`, `ingestion/` to `log_proces
 > `--check` and fails on drift, so the diagrams cannot fall behind the models again.
 
 <!-- ERD:auto _alembic_head -->
-Alembic head: **`plrole01`** (102 revisions in `backend/migrations/versions/`).
+Alembic head: **`wsprof01`** (107 revisions in `backend/migrations/versions/`).
 <!-- /ERD:auto -->
 
 **Reading the diagrams**
@@ -416,6 +416,11 @@ erDiagram
         varchar name
         varchar description "nullable"
         varchar icon_url "nullable"
+        varchar(120) tagline "nullable"
+        text about "nullable"
+        varchar(512) discord_url "nullable"
+        varchar(512) twitch_url "nullable"
+        varchar(512) boosty_url "nullable"
         boolean is_active
         boolean is_hidden
         varchar(64) timezone
@@ -487,6 +492,16 @@ per-context rank stores, so the resolver reads both layers in a single query.
 <!-- ERD:auto member_rank -->
 ```mermaid
 erDiagram
+    BALANCER_MEMBER_HIDDEN_RATING {
+        bigint id PK
+        timestamptz created_at
+        timestamptz updated_at "nullable"
+        bigint workspace_id FK
+        bigint workspace_member_id FK
+        varchar(16) role
+        float mu
+        float sigma
+    }
     BALANCER_MEMBER_RANK {
         bigint id PK
         timestamptz created_at
@@ -499,9 +514,15 @@ erDiagram
     }
 
     AUTH_USER |o--o{ BALANCER_MEMBER_RANK : "author_user_id"
+    PUBLIC_WORKSPACE ||--o{ BALANCER_MEMBER_HIDDEN_RATING : "workspace_id"
     PUBLIC_WORKSPACE ||--o{ BALANCER_MEMBER_RANK : "workspace_id"
+    PUBLIC_WORKSPACE_MEMBER ||--o{ BALANCER_MEMBER_HIDDEN_RATING : "workspace_member_id"
     PUBLIC_WORKSPACE_MEMBER ||--o{ BALANCER_MEMBER_RANK : "workspace_member_id"
 ```
+
+Composite unique keys:
+
+- `BALANCER_MEMBER_HIDDEN_RATING` unique on (`workspace_member_id`, `role`)
 <!-- /ERD:auto -->
 
 ## catalog — `overwatch`
@@ -1922,6 +1943,7 @@ erDiagram
         jsonb config_json
         jsonb role_slots_json "nullable"
         int points_per_win "nullable"
+        varchar(16) rating_mode
     }
     BALANCER_WORKSPACE_CONFIG {
         bigint id PK
@@ -1930,6 +1952,7 @@ erDiagram
         bigint workspace_id FK,UK
         json config_json
         bigint updated_by FK "nullable"
+        jsonb ranker_json "nullable"
     }
 
     AUTH_USER |o--o{ BALANCER_BALANCE : "saved_by"
@@ -2001,6 +2024,7 @@ erDiagram
         int lobby_count
         varchar(16) self_signup
         boolean self_role_edit
+        bigint general_voice_channel_id "nullable"
     }
     BALANCER_CUSTOM_GAME_CO_HOST {
         bigint custom_game_id PK,FK
@@ -2014,6 +2038,8 @@ erDiagram
         int balance_result_version
         bigint next_map_id FK "nullable"
         timestamptz balanced_at "nullable"
+        bigint team1_voice_channel_id "nullable"
+        bigint team2_voice_channel_id "nullable"
     }
     BALANCER_CUSTOM_GAME_PLAYER {
         bigint id PK
@@ -2091,6 +2117,7 @@ erDiagram
         varchar(255) display_name_snapshot
         heroclass role "nullable"
         int rank
+        int rank_delta_applied "nullable"
     }
     CASUAL_TEAM {
         bigint id PK

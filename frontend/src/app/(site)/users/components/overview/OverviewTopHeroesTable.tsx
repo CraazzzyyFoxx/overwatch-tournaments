@@ -1,6 +1,6 @@
 import { getTranslations } from "next-intl/server";
 import { getFormatter } from "@/lib/datetime/server";
-import { ArrowRight, Swords, TrendingDown, TrendingUp } from "lucide-react";
+import { ArrowRight, TrendingDown, TrendingUp } from "lucide-react";
 import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { HeroWithUserStats } from "@/types/hero.types";
 import { UserMapRead } from "@/types/user.types";
@@ -57,6 +57,8 @@ interface Row {
   games: number;
   /** Total seconds on the hero — this is what the table is ordered by. */
   playtime: number;
+  /** Share of the player's total playtime across all heroes (0..1). */
+  share: number | null;
   winPct: number | null;
   kda: number | null;
   dmg10: number | null;
@@ -89,8 +91,10 @@ const OverviewTopHeroesTable = async ({ heroes, maps, userSlug, limit = DEFAULT_
     }
   }
 
-  const rows: Row[] = heroes
-    .map((h) => ({ h, playtime: getOverall(h, LogStatsName.HeroTimePlayed) }))
+  const withPlaytime = heroes.map((h) => ({ h, playtime: getOverall(h, LogStatsName.HeroTimePlayed) }));
+  const totalPlaytime = withPlaytime.reduce((sum, x) => sum + x.playtime, 0);
+
+  const rows: Row[] = withPlaytime
     .sort((a, b) => b.playtime - a.playtime)
     .slice(0, limit)
     .map(({ h, playtime }) => {
@@ -106,6 +110,7 @@ const OverviewTopHeroesTable = async ({ heroes, maps, userSlug, limit = DEFAULT_
         roleKey: normalizeRole(h.hero.type ?? h.hero.role),
         games,
         playtime,
+        share: totalPlaytime > 0 ? playtime / totalPlaytime : null,
         winPct: lowSample || winFrac == null ? null : winFrac * 100,
         kda: statAvg10(h.stats, LogStatsName.KDA),
         dmg10: statAvg10(h.stats, LogStatsName.HeroDamageDealt),
@@ -122,6 +127,7 @@ const OverviewTopHeroesTable = async ({ heroes, maps, userSlug, limit = DEFAULT_
   const columns = {
     games: hasGamesData,
     playtime: rows.some((r) => r.playtime > 0),
+    share: totalPlaytime > 0,
     winrate: rows.some((r) => r.winPct != null),
     kda: rows.some((r) => r.kda != null),
     dmg10: rows.some((r) => r.dmg10 != null),
@@ -133,10 +139,9 @@ const OverviewTopHeroesTable = async ({ heroes, maps, userSlug, limit = DEFAULT_
   return (
     <CardSurface
       title={t("users.overview.topHeroes.title")}
-      icon={<Swords size={15} />}
       subtitle={t("users.overview.topHeroes.playedByTime", { count: heroes.length })}
       action={
-        <HoverPrefetchLink href={`/users/${userSlug}?tab=heroes`} className="aqt-seeall">
+        <HoverPrefetchLink href={`/users/${userSlug}?tab=heroes`} className="aqt-pf-link">
           {t("common.all")} {heroes.length}
           <ArrowRight aria-hidden className="size-3" />
         </HoverPrefetchLink>
@@ -150,6 +155,11 @@ const OverviewTopHeroesTable = async ({ heroes, maps, userSlug, limit = DEFAULT_
               <th className={`${textHeader} text-center`}>{t("users.overview.topHeroes.col.role")}</th>
               {columns.games ? <th className={numHeader}>{t("users.overview.topHeroes.col.games")}</th> : null}
               {columns.playtime ? <th className={numHeader}>{t("users.overview.topHeroes.col.time")}</th> : null}
+              {columns.share ? (
+                <th className={numHeader} title={t("users.overview.topHeroes.col.shareTitle")}>
+                  {t("users.overview.topHeroes.col.share")}
+                </th>
+              ) : null}
               {columns.winrate ? <th className={numHeader}>{t("users.overview.topHeroes.col.winrate")}</th> : null}
               {columns.kda ? <th className={numHeader}>{t("users.overview.topHeroes.col.kda")}</th> : null}
               {columns.dmg10 ? <th className={numHeader}>{t("users.overview.topHeroes.col.dmg10")}</th> : null}
@@ -201,6 +211,9 @@ const OverviewTopHeroesTable = async ({ heroes, maps, userSlug, limit = DEFAULT_
                   {columns.games ? <td className={numCell}>{r.games}</td> : null}
                   {columns.playtime ? (
                     <td className={numCell}>{r.playtime > 0 ? formatSeconds(r.playtime) : EMPTY}</td>
+                  ) : null}
+                  {columns.share ? (
+                    <td className={numCell}>{r.share == null ? EMPTY : `${(r.share * 100).toFixed(0)}%`}</td>
                   ) : null}
                   {columns.winrate ? (
                     <td className={numCell}>

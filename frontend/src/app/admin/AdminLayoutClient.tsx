@@ -6,7 +6,7 @@ import { skipToken, useQuery } from "@tanstack/react-query";
 
 import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { AdminSidebar } from "@/components/admin/AdminSidebar";
-import AnnouncementBanner from "@/components/notifications/AnnouncementBanner";
+import { FloatStack } from "@/components/notifications/FloatStack";
 import { AuditTrailProvider } from "@/components/kit/AuditTrailSheet";
 import { adminRouteAccessOptions } from "@/components/admin/admin-navigation";
 import {
@@ -185,7 +185,7 @@ export function AdminLayoutClient({
           </header>
           {/* Overlay chrome, not a row: it floats over the content below rather
               than displacing every admin screen by its own height. */}
-          <AnnouncementBanner initial={announcements} />
+          <FloatStack initialAnnouncements={announcements} tenantWorkspaceId={null} />
 
           {/* Full-bleed on purpose: a centered 1720px cap left ~300px of dead
               gutter each side on a 2560 display. Wide tables scroll inside

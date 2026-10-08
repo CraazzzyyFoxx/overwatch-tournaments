@@ -27,10 +27,15 @@ var PublicCacheableReads = map[string]respcache.Rule{
 	// Home page: communities section + champions / top-winrate cards, plus the
 	// /statistics won-maps table. The statistics routes are AuthNone, so
 	// RegisterCached also serves signed-in viewers from these entries.
-	"/api/v1/workspaces":          {Extract: respcache.TTLOnly()},
-	"/api/v1/statistics/champion": {Extract: respcache.TTLOnly()},
-	"/api/v1/statistics/winrate":  {Extract: respcache.TTLOnly()},
-	"/api/v1/statistics/won-maps": {Extract: respcache.TTLOnly()},
+	"/api/v1/workspaces": {Extract: respcache.TTLOnly()},
+	// The workspace page's staff block. TTLOnly like the directory above: the
+	// resource manifest publishes nothing for workspace membership or RBAC
+	// (see respcache/resources.go), so there is no invalidation signal to key
+	// on and a role change surfaces within the TTL.
+	"/api/v1/workspaces/{workspace_id}/staff": {Extract: respcache.TTLOnly()},
+	"/api/v1/statistics/champion":             {Extract: respcache.TTLOnly()},
+	"/api/v1/statistics/winrate":              {Extract: respcache.TTLOnly()},
+	"/api/v1/statistics/won-maps":             {Extract: respcache.TTLOnly()},
 	// /users/[slug] page: slug resolution + every profile tab. NO AuthedRead:
 	// several reads are AuthOptional (heroes, maps, tournaments) — the viewer
 	// reaches the handler, so viewer-agnostic bodies are not guaranteed.

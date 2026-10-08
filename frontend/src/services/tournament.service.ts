@@ -124,7 +124,10 @@ export default class tournamentService {
         per_page: -1,
         sort: "id",
         order: "desc",
-        entities: ["registrations_count"]
+        // The home "now on the platform" block reads all three off one list:
+        // a running tournament shows teams + participants, an open one its
+        // registrations.
+        entities: ["registrations_count", "participants_count", "teams_count"]
       }
     })
       .then((response) => response.json())

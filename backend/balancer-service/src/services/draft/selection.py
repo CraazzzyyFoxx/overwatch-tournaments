@@ -416,7 +416,7 @@ class DraftSelectionService:
             fit_players(available, snapshot.rosters),
             capacity,
             DraftAutopickStrategy(draft_session.autopick_strategy),
-            rules.team_fit_config(shape, counts),
+            rules.team_fit_config(shape, counts, await self.feasibility.resolve_role_impact(session, draft_session)),
             allowed_options={(player_id, role) for player_id, roles in safe_by_player.items() for role in roles},
         )
         if choice is None:

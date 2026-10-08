@@ -94,9 +94,7 @@ export function SeatRow({
           <AlertCircle className="size-3.5" aria-hidden="true" />
         </IconTooltip>
       ) : null}
-      <span className="shrink-0 text-lg font-bold tabular-nums text-[color:var(--aqt-fg)]">
-        {seat.rating == null ? "\u2014" : Math.round(seat.rating)}
-      </span>
+      <SeatRating seat={seat} />
     </li>
   );
 }
@@ -117,9 +115,32 @@ export function SeatDragPreview({ seat }: Readonly<{ seat: PickupSeat }>) {
       <span className="min-w-0 flex-1 truncate text-base font-semibold text-[color:var(--aqt-fg)]">
         {seat.name}
       </span>
-      <span className="shrink-0 text-lg font-bold tabular-nums text-[color:var(--aqt-fg)]">
-        {seat.rating == null ? "\u2014" : Math.round(seat.rating)}
-      </span>
+      <SeatRating seat={seat} />
     </div>
+  );
+}
+
+/**
+ * The number the solver balanced on. In ranker mode that is the effective
+ * rating, so the host's own open rating rides along in small type -- but only
+ * when the correction actually moved it, otherwise it is noise.
+ */
+function SeatRating({ seat }: Readonly<{ seat: PickupSeat }>) {
+  const effective = seat.rating == null ? null : Math.round(seat.rating);
+  const open = seat.openRating == null ? null : Math.round(seat.openRating);
+  return (
+    <span className="flex shrink-0 items-baseline gap-1.5">
+      {open != null && effective != null && open !== effective ? (
+        <span
+          className="text-xs tabular-nums text-[color:var(--aqt-fg-dim)]"
+          title={`Open rating ${open}; the ranker balanced on ${effective}`}
+        >
+          open {open}
+        </span>
+      ) : null}
+      <span className="text-lg font-bold tabular-nums text-[color:var(--aqt-fg)]">
+        {effective == null ? "\u2014" : effective}
+      </span>
+    </span>
   );
 }

@@ -8,6 +8,7 @@ balance_get) and bare-dict / 204 handlers are omitted.
 
 from __future__ import annotations
 
+from shared.core.pagination import Paginated
 from shared.rpc.openapi import Op, QueryParam
 from shared.services.chat import (
     HISTORY_DEFAULT,
@@ -22,6 +23,7 @@ from shared.services.chat import (
 )
 from src import schemas
 from src.schemas import custom_game
+from src.schemas.ranks import CURRENT_LAYERS, LAYERS, SORTS
 
 OPERATIONS: dict[str, Op] = {
     # ── config (public) ────────────────────────────────────────────────────
@@ -37,6 +39,11 @@ OPERATIONS: dict[str, Op] = {
     "rpc.balancer.admin.workspace_config_upsert": Op(
         request=schemas.WorkspaceBalancerConfigUpsert, response=schemas.WorkspaceBalancerConfigRead
     ),
+    "rpc.balancer.admin.workspace_ranker_get": Op(response=schemas.WorkspaceRankerRead),
+    "rpc.balancer.admin.workspace_ranker_upsert": Op(
+        request=schemas.WorkspaceRankerUpsert, response=schemas.WorkspaceRankerRead
+    ),
+    "rpc.balancer.admin.workspace_ranker_rebuild": Op(response=schemas.WorkspaceRankerRebuildRead),
     # ── jobs (public, Redis-backed) ────────────────────────────────────────
     "rpc.balancer.jobs.status": Op(response=schemas.JobStatusResponse),
     "rpc.balancer.jobs.result": Op(response=schemas.BalanceJobResult),
@@ -119,10 +126,15 @@ OPERATIONS: dict[str, Op] = {
     "rpc.balancer.custom.set_participation": Op(request=custom_game.CustomGamePlayersParticipationPatch),
     "rpc.balancer.custom.balance": Op(request=custom_game.CustomGameBalanceRequest),
     "rpc.balancer.custom.set_lobby_count": Op(request=custom_game.CustomGameLobbyCountPatch),
+    "rpc.balancer.custom.rename": Op(request=custom_game.CustomGameRename),
     "rpc.balancer.custom.set_team_names": Op(request=custom_game.CustomGameTeamNamesPatch),
     "rpc.balancer.custom.set_next_map": Op(request=custom_game.CustomGameNextMapPatch),
     "rpc.balancer.custom.set_variant_index": Op(request=custom_game.CustomGameVariantIndexPatch),
     "rpc.balancer.custom.post_discord": Op(request=custom_game.CustomGamePostDiscord),
+    "rpc.balancer.custom.update_lineup": Op(request=custom_game.CustomGameLineupRefresh),
+    "rpc.balancer.custom.set_voice_channels": Op(request=custom_game.CustomGameVoicePatch),
+    "rpc.balancer.custom.voice_move": Op(request=custom_game.CustomGameVoiceRun),
+    "rpc.balancer.custom.voice_return": Op(request=custom_game.CustomGameVoiceRun),
     "rpc.balancer.custom.post_signup": Op(request=custom_game.CustomGamePostSignup),
     "rpc.balancer.custom.transfer_host": Op(request=custom_game.CustomGameHostTransfer),
     "rpc.balancer.custom.add_co_host": Op(request=custom_game.CustomGameCoHostPatch),
@@ -165,6 +177,34 @@ OPERATIONS: dict[str, Op] = {
                 description="Whose rank book author_total counts; defaults to the caller.",
             ),
         )
+    ),
+    # ── the flat rank overview (read-only, team.update) ────────────────────
+    "rpc.balancer.ranks.list": Op(
+        response=Paginated[schemas.RankOverviewRow],
+        query_params=(
+            QueryParam("page", "integer", description="1-based page, default 1."),
+            QueryParam("per_page", "integer", description="Page size, clamped to 1..200, default 50."),
+            QueryParam("player_id", "integer", description="Only this players.user id."),
+            QueryParam("q", description="Needle matched against battle_tag, display_name and name."),
+            QueryParam(
+                "layer",
+                array=True,
+                description=f"Repeatable. One of {list(LAYERS)}; defaults to the current layers {list(CURRENT_LAYERS)}.",
+            ),
+            QueryParam("author_user_id", "integer", array=True, description="Repeatable. Only these authors/hosts."),
+            QueryParam("role", array=True, description="Repeatable. tank/damage/support."),
+            QueryParam("rank_min", "integer", description="Lowest rank_value kept."),
+            QueryParam("rank_max", "integer", description="Highest rank_value kept."),
+            QueryParam(
+                "differs_from_canon",
+                "boolean",
+                description="Keep only author rows whose canon_diff IS DISTINCT FROM 0.",
+            ),
+            QueryParam("date_from", description="ISO-8601 lower bound on `at`."),
+            QueryParam("date_to", description="ISO-8601 upper bound on `at`."),
+            QueryParam("sort", description=f"One of {list(SORTS)}; default display_name."),
+            QueryParam("order", description="asc|desc, default asc."),
+        ),
     ),
     # ── the caller's own mix solver knobs ──────────────────────────────────
     "rpc.balancer.prefs.get": Op(response=schemas.UserMixPreferencesRead),

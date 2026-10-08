@@ -76,6 +76,11 @@ export interface BalanceResponse {
  * back out before the request. */
 export type BalancerConfig = Record<string, BalancerConfigValue>;
 
+/** Per-role knob values of a `roles` field: role code -> column key -> number.
+ * Always a PARTIAL override -- the server merges it field by field over its own
+ * `role_settings` defaults, so a stored row never freezes today's numbers. */
+export type BalancerRoleSettings = Record<string, Record<string, number>>;
+
 /** A knob value on the wire, or the raw string a number input holds mid-edit;
  * `sanitizeBalancerConfig` coerces that back to a number. */
 export type BalancerConfigValue =
@@ -83,11 +88,20 @@ export type BalancerConfigValue =
   | boolean
   | string
   | Record<string, number>
+  | BalancerRoleSettings
   | null
   | undefined;
 
 /** Widget the drawer renders for a knob; mirrors the backend's `ConfigControl`. */
-type BalancerConfigFieldType = "boolean" | "float" | "integer" | "slider";
+type BalancerConfigFieldType = "boolean" | "float" | "integer" | "slider" | "roles";
+
+/** One numeric column of a `roles` table; its limits are the cell's limits. */
+export interface BalancerConfigColumn {
+  key: string;
+  label: string;
+  description: string;
+  limits?: { min: number; max: number } | null;
+}
 
 export interface BalancerConfigField {
   key: string;
@@ -97,6 +111,8 @@ export interface BalancerConfigField {
   group: "Algorithm" | "Quality weights" | "Strategy" | "Solver output";
   default: BalancerConfigValue;
   limits?: { min: number; max: number } | null;
+  /** Only on a `roles` field: the columns each role row gets an input for. */
+  columns?: BalancerConfigColumn[] | null;
 }
 
 export interface BalanceJobResult {

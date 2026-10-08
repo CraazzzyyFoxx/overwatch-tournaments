@@ -37,6 +37,13 @@ import { useWorkspaceSettingsForm } from "./useWorkspaceSettingsForm";
 const ACCEPTED_IMAGE_TYPES = "image/webp,image/png,image/jpeg,image/gif";
 const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2 MB
 
+/** The three community links, rendered identically — label, type, example. */
+const LINK_FIELDS = [
+  { key: "discord_url", label: "Discord", placeholder: "https://discord.gg/…" },
+  { key: "twitch_url", label: "Twitch", placeholder: "https://twitch.tv/…" },
+  { key: "boosty_url", label: "Boosty", placeholder: "https://boosty.to/…" }
+] as const;
+
 /**
  * Name, description, timezone and icon of a workspace.
  *
@@ -119,6 +126,20 @@ export function GeneralSection({ workspaceId }: Readonly<{ workspaceId: number |
               </div>
 
               <div>
+                <Label htmlFor="workspace-tagline">Tagline</Label>
+                <Input
+                  id="workspace-tagline"
+                  className="mt-1.5"
+                  maxLength={120}
+                  value={values.tagline}
+                  onChange={(event) => patch({ tagline: event.target.value })}
+                />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  One line under the community name on its public page.
+                </p>
+              </div>
+
+              <div>
                 <Label htmlFor="workspace-description">Description</Label>
                 <Textarea
                   id="workspace-description"
@@ -127,6 +148,35 @@ export function GeneralSection({ workspaceId }: Readonly<{ workspaceId: number |
                   onChange={(event) => patch({ description: event.target.value })}
                 />
               </div>
+
+              <div>
+                <Label htmlFor="workspace-about">About</Label>
+                <Textarea
+                  id="workspace-about"
+                  className="mt-1.5 min-h-40 font-mono"
+                  maxLength={4000}
+                  value={values.about}
+                  onChange={(event) => patch({ about: event.target.value })}
+                />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Markdown. Rendered as the “About” block of the public page.
+                </p>
+              </div>
+
+              {LINK_FIELDS.map(({ key, label, placeholder }) => (
+                <div key={key}>
+                  <Label htmlFor={`workspace-${key}`}>{label}</Label>
+                  <Input
+                    id={`workspace-${key}`}
+                    className="mt-1.5"
+                    type="url"
+                    inputMode="url"
+                    placeholder={placeholder}
+                    value={values[key]}
+                    onChange={(event) => patch({ [key]: event.target.value })}
+                  />
+                </div>
+              ))}
 
               <div>
                 <Label htmlFor="workspace-timezone">Timezone</Label>

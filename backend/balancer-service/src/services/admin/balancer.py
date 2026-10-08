@@ -160,6 +160,8 @@ class BalancerAdminService:
         rank_delta_threshold: int | None,
         rank_delta_hide_from_pool: bool,
         mix_discord_channel_id: str | None,
+        mix_voice_category_id: str | None,
+        mix_general_voice_channel_ids: list[str],
         updated_by: int | None,
     ) -> WorkspaceBalancerConfig:
         config = await self.get_workspace_balancer_config(session, workspace_id)
@@ -169,6 +171,8 @@ class BalancerAdminService:
             # Digits as a string, the shape the wire uses: JSON has one number
             # type and a snowflake does not survive a float64 round-trip.
             "mix_discord_channel_id": mix_discord_channel_id,
+            "mix_voice_category_id": mix_voice_category_id,
+            "mix_general_voice_channel_ids": list(mix_general_voice_channel_ids),
         }
         if config is None:
             config = await self.workspace_configs.create(

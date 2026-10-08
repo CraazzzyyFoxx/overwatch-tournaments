@@ -4,19 +4,14 @@ version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.14"
-# ``mix-balancer`` is the mix_balancer engine's C++ core (originally
-# mixtura-dev/mixtura-balancer), vendored under ``native/mix_balancer`` (see
-# that directory's README for provenance/pinned commit) -- mirrors how
-# ``native/tournament_balancer`` is a vendored Rust crate, not a published
-# package. Linux-only: ``uv sync`` builds it via scikit-build-core, which
-# needs ``cmake``/a C++ compiler (see ``backend/Dockerfile``'s balancer apt
-# block). See ``domain/balancer/backends/mix_balancer.py`` for the connector.
+# The native engines (``native/balancer_native``, a Rust crate, not a published
+# package) are not a dependency here: the image builds them with maturin into a
+# wheel of their own (see ``backend/Dockerfile``), locally ``maturin develop``.
 dependencies = [
      "apscheduler>=3.10.4",
      "aiobotocore>=2.17.0",
      "alembic>=1.14.0",
      "asyncpg>=0.30.0",
-     "mix-balancer; platform_system == 'Linux'",
      "bcrypt>=4.2.1",
      "cachetools>=6.2.3",
      "cashews>=7.4.0",
@@ -24,7 +19,7 @@ dependencies = [
      "faststream[rabbit,cli]>=0.6.7",
      "httpx>=0.28.1",
      "loguru>=0.7.3",
-     "maturin>=1.8.2; platform_system == 'Linux'",
+     "maturin>=1.8.2",
      "openpyxl>=3.1.5",
      "openskill>=6.1.3",
      "orjson>=3.10.14",
@@ -49,9 +44,6 @@ dependencies = [
      "uvloop; platform_system == 'Linux'",
      "shared",
 ]
-
-[tool.uv.sources]
-mix-balancer = { path = "native/mix_balancer" }
 
 [tool.ty.environment]
 python = "../.venv"

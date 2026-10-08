@@ -1,0 +1,195 @@
+{
+ "request": {
+  "players": [
+   {
+    "uuid": "p00-843",
+    "name": "p0",
+    "ratings": {
+     "Support": 1894,
+     "Damage": 1367,
+     "Tank": 2500
+    },
+    "preferences": [
+     "Damage",
+     "Support"
+    ],
+    "subclasses": {},
+    "is_captain": false,
+    "is_flex": false,
+    "seed_role": null
+   },
+   {
+    "uuid": "p01-80825",
+    "name": "p1",
+    "ratings": {
+     "Support": 3276,
+     "Damage": 1131
+    },
+    "preferences": [
+     "Support",
+     "Damage"
+    ],
+    "subclasses": {},
+    "is_captain": false,
+    "is_flex": false,
+    "seed_role": null
+   },
+   {
+    "uuid": "p02-66357",
+    "name": "p2",
+    "ratings": {
+     "Damage": 2530,
+     "Support": 1443
+    },
+    "preferences": [
+     "Damage",
+     "Flex",
+     "Support",
+     "Tank"
+    ],
+    "subclasses": {},
+    "is_captain": false,
+    "is_flex": false,
+    "seed_role": null
+   },
+   {
+    "uuid": "p03-34961",
+    "name": "p3",
+    "ratings": {
+     "Damage": 1639,
+     "Support": 1718
+    },
+    "preferences": [
+     "Tank",
+     "Damage",
+     "Support"
+    ],
+    "subclasses": {},
+    "is_captain": false,
+    "is_flex": false,
+    "seed_role": null
+   },
+   {
+    "uuid": "p04-5661",
+    "name": "p4",
+    "ratings": {
+     "Damage": 1951
+    },
+    "preferences": [
+     "Damage"
+    ],
+    "subclasses": {},
+    "is_captain": false,
+    "is_flex": false,
+    "seed_role": null
+   },
+   {
+    "uuid": "p05-7181",
+    "name": "p5",
+    "ratings": {
+     "Support": 821
+    },
+    "preferences": [
+     "Support"
+    ],
+    "subclasses": {},
+    "is_captain": false,
+    "is_flex": false,
+    "seed_role": null
+   },
+   {
+    "uuid": "p06-14686",
+    "name": "p6",
+    "ratings": {
+     "Damage": 896
+    },
+    "preferences": [
+     "Damage",
+     "Tank"
+    ],
+    "subclasses": {},
+    "is_captain": false,
+    "is_flex": false,
+    "seed_role": null
+   },
+   {
+    "uuid": "p07-2289",
+    "name": "p7",
+    "ratings": {
+     "Support": 2152,
+     "Damage": 833
+    },
+    "preferences": [
+     "Support",
+     "Damage",
+     "Tank"
+    ],
+    "subclasses": {},
+    "is_captain": false,
+    "is_flex": false,
+    "seed_role": null
+   },
+   {
+    "uuid": "p08-19052",
+    "name": "p8",
+    "ratings": {
+     "Damage": 1081,
+     "Support": 2430
+    },
+    "preferences": [
+     "Damage",
+     "Support",
+     "Tank"
+    ],
+    "subclasses": {},
+    "is_captain": false,
+    "is_flex": false,
+    "seed_role": null
+   },
+   {
+    "uuid": "p09-97668",
+    "name": "p9",
+    "ratings": {
+     "Support": 968
+    },
+    "preferences": [
+     "Flex",
+     "Support"
+    ],
+    "subclasses": {},
+    "is_captain": false,
+    "is_flex": false,
+    "seed_role": null
+   }
+  ],
+  "num_teams": 2,
+  "seed": 0,
+  "roles": [
+   {
+    "name": "Tank",
+    "slots": 1,
+    "weight": 1
+   },
+   {
+    "name": "Damage",
+    "slots": 2,
+    "weight": 1
+   },
+   {
+    "name": "Support",
+    "slots": 2,
+    "weight": 1
+   }
+  ],
+  "config": {
+   "max_result_variants": 5,
+   "fairness_weight": 1,
+   "role_fairness_weight": 1,
+   "role_priority_weight": 1
+  }
+ },
+ "expected": {
+  "error": "Not enough players for each role",
+  "results": []
+ }
+}

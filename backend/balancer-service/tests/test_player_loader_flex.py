@@ -14,7 +14,7 @@ product agree on what a flex player is worth.
 Without the synthesis every player is dropped (no role line resolves into a
 flex-only mask, ``ratings`` stays empty, ``parse_player_node`` returns
 ``None``) and the Rust solver rejects the request with "player count must equal
-total roster slots" — see ``native/tournament_balancer/src/context.rs`` line 41.
+total roster slots" — see ``RoleLayout::from_request`` in ``native/balancer_native/src/common.rs``.
 """
 
 from __future__ import annotations
@@ -247,7 +247,18 @@ def test_native_request_carries_the_flex_mask_and_flex_ratings() -> None:
         )
     )
 
-    assert request["mask"] == FLEX_ONLY_MASK
+    # The flex slot is flagged on the wire: the crate recognises no role names,
+    # so "this seat carries no role" has to travel with the role.
+    assert request["roles"] == [
+        {
+            "name": FLEX_SLOT_CODE,
+            "slots": 6,
+            "flex": True,
+            "impact": 1.0,
+            "line_gap_weight": 0.0,
+            "line_std_weight": 0.0,
+        }
+    ]
     assert len(request["players"]) == 6
     for entry in request["players"]:
         # The Rust core prices a playable flex slot itself (context.rs); the

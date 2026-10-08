@@ -4,7 +4,7 @@
 > Interactive version: [`/docs/design-book.html`](../frontend/public/docs/design-book.html).
 > Tokens are reconciled against `frontend/src/app/globals.css` (the real `--aqt-*`). Every rule below carries one of two tiers: **Verified** — measured against `globals.css`, safe to build on; **Specified** — stated by this book and not implemented upstream, whether a target rule or a token/component API the code expresses only as CSS-class shape and inline literals.
 
-The direction is **Editorial Tactical**: an airy editorial layout (hairline rules, open blocks instead of boxes, large mixed-case headings) plus a tactical/broadcast voice (a barely visible coordinate grid, mono labels, a large grotesque on numbers). Dark-only.
+The direction is **Editorial Tactical**: an airy editorial layout (hairline rules, open blocks instead of boxes, large mixed-case headings) plus a tactical/broadcast voice (uppercase data labels, a large grotesque on numbers). Dark-only. The page hero (`HeroFrame`, shared by every page) is a plain frame with one accent hairline and ONE soft corner glow in the page's colour: teal by default, the main-role hue on a player profile, the cover's colour on a tournament with a cover. No background grid, no gradient text (the coverless tournament card is the last place the grid survives).
 
 Three theses:
 
@@ -155,3 +155,13 @@ The stack collapses into `+N`; the overlap is −9px; player avatars (as opposed
 - The profile Overview is two flex columns (`main flex:1` + `sidebar 380px`), and the cards pack tightly without grid gaps; on mobile the columns need `align-items:stretch`.
 - Numeric table columns: `th.num { text-align:right }` must beat `table.tbl th` on specificity.
 - Wide content (tables, brackets) scrolls horizontally inside its own container (`.tblw`); the page body never scrolls sideways.
+
+## 8. Player profile surfaces (Verified)
+
+The profile (`/users/[slug]`, all tabs) is the first surface on these rules; other pages still use the older uppercase `.aqt-card-title`.
+
+- **One level of framing.** A section is one `CardSurface` (`users/components/shared/atoms.tsx`). Nothing bordered or tinted inside it: no tiles-in-cards, no callout boxes, no coloured left borders, no tinted row fills — whitespace and hairline dividers only.
+- **Section titles** are mixed-case Onest `heading` (`.aqt-pf-title`), no decorative icon, never uppercase user content. "View all" links are `.aqt-pf-link` (mixed-case teal text).
+- **KPIs** are open `ProfileStat` blocks (uppercase data label, Onest figure, dim sub line) in a plain grid; a value is coloured only for quality (`winrateColor`, result tokens).
+- **No encoding captions** ("Bar = …", "lower = better"): if the encoding needs one, fix the encoding; the remaining hint lives in `title`.
+- **Header**: name + tag, neutral social chips with brand-coloured icons and a teal check on verified accounts, stats that do not repeat each other (tournaments, winrate with a labelled last-tournament delta, maps won of total, avg place), form strip. No role meta line — the division badge on the avatar carries the role. Decoration: the shared glow tinted with the main-role hue, and the role-spectrum hairline at the base.

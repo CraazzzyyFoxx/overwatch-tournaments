@@ -16,7 +16,7 @@ from src.domain.balancer.progress import ProgressCallback, emit_progress
 from src.domain.balancer.rating_normalizer import RatingNormalizer
 from src.domain.balancer.result_serializer import _build_response_payload
 from src.domain.balancer.role_assignment_service import find_feasible_role_assignment
-from src.services.balancer.config.defaults import AlgorithmConfig
+from src.services.balancer.config.defaults import AlgorithmConfig, apply_config_overrides
 from src.services.balancer.config.public_contract import normalize_config_payload
 
 
@@ -85,8 +85,7 @@ def _prepare_balance_context(
     overrides = normalize_config_payload(config_overrides) if config_overrides else {}
     if overrides:
         logger.info(f"Applying configuration overrides: {overrides}")
-        for key, value in overrides.items():
-            setattr(config, key, value)
+        apply_config_overrides(config, overrides)
     has_applied_overrides = bool(overrides)
 
     if role_mask:

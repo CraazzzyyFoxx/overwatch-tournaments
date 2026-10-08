@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import type { AchievementRarity, AchievementMatchLink } from "@/types/achievement.types";
 import { cn } from "@/lib/utils";
-import { classifyRarity, localizedText, type Rarity } from "./rarity";
+import { classifyRarity, localizedText, rarityVarClass, type Rarity } from "./rarity";
 
 const MatchRow = ({ match }: { match: AchievementMatchLink }) => {
   const format = useFormatter();
@@ -29,7 +29,7 @@ const MatchRow = ({ match }: { match: AchievementMatchLink }) => {
   return (
     <HoverPrefetchLink
       href={`/encounters/${match.encounter_id}`}
-      className="flex items-center justify-between gap-2 rounded-lg border border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.02)] px-3 py-2 text-caption transition-colors hover:border-[color:var(--aqt-border-2)] hover:bg-[hsl(0_0%_100%/0.04)]"
+      className="flex items-center justify-between gap-2 border-b border-[color:var(--aqt-border)] py-2 text-caption transition-colors last:border-b-0 hover:text-[color:var(--aqt-teal)]"
     >
       <span className="truncate">
         {home} <span className="aqt-tnum opacity-80">{match.score.home}–{match.score.away}</span> {away}
@@ -68,17 +68,17 @@ export const AchievementDetailDialog = ({ achievement, onClose }: Props) => {
             <>
               <DialogHeader className="border-b border-[color:var(--aqt-border)] px-5 py-4 text-left">
                 <div className="flex items-start gap-3">
-                  <div className={cn("aqt-ic-circle relative", rarity)} style={{ width: 52, height: 52 }}>
+                  <div className="relative h-[52px] w-[52px] shrink-0 overflow-hidden rounded-xl bg-[color:var(--aqt-card-2)]">
                     {imgSrc ? (
-                      <Image src={imgSrc} alt={ach.name} fill sizes="52px" className="object-cover" />
+                      <Image src={imgSrc} alt="" fill sizes="52px" className="object-cover" />
                     ) : null}
                   </div>
                   <div className="flex min-w-0 flex-col gap-1">
                     <DialogTitle className="text-base text-[color:var(--aqt-fg)]">{ach.name}</DialogTitle>
                     <div className="flex items-center gap-2 text-label text-[color:var(--aqt-fg-muted)]">
                       {rarity ? (
-                        <span className="capitalize">
-                          <span aria-hidden>◆</span> {rarity}
+                        <span className={cn(rarityVarClass(rarity), "aqt-rar-fg")}>
+                          {tr(`achievements.rarityName.${rarity}`)}
                         </span>
                       ) : null}
                       <span className="aqt-tnum">{(ach.rarity * 100).toFixed(2)}%</span>
@@ -98,7 +98,7 @@ export const AchievementDetailDialog = ({ achievement, onClose }: Props) => {
                 </DialogDescription>
 
                 {locked ? (
-                  <div className="rounded-lg border border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.02)] px-3 py-3 text-center text-caption text-[color:var(--aqt-fg-muted)]">
+                  <div className="text-center text-caption text-[color:var(--aqt-fg-muted)]">
                     {tr("users.achievements.detail.locked")}
                   </div>
                 ) : (
@@ -123,7 +123,7 @@ export const AchievementDetailDialog = ({ achievement, onClose }: Props) => {
                         <h3 className="text-label font-bold uppercase tracking-label text-[color:var(--aqt-fg-faint)]">
                           {tr("common.matches")}
                         </h3>
-                        <div className="flex flex-col gap-1">
+                        <div className="flex flex-col">
                           {ach.matches.map((m) => (
                             <MatchRow key={m.id} match={m} />
                           ))}

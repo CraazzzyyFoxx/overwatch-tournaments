@@ -165,11 +165,7 @@ const EncounterPage = async (props: { params: Promise<{ id: number }> }) => {
             </HeroCoord>
           </>
         }
-        title={t.rich("encounters.detail.heroTitle", {
-          home: homeName,
-          away: awayName,
-          em: (chunks) => <em>{chunks}</em>
-        })}
+        title={t("encounters.detail.heroTitle", { home: homeName, away: awayName })}
         meta={
           <>
             <Pill

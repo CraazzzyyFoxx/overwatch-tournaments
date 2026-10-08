@@ -16,7 +16,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { CustomGame, CustomGameDiscordPost } from "@/services/custom-game.service";
 
-import { PickupMixHeader } from "./PickupMixHeader";
+import { PickupMixHeader, liveLineupPostOf } from "./PickupMixHeader";
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean;
@@ -37,6 +37,7 @@ const onPostSignup = vi.fn();
 const onLobbyCountChange = vi.fn();
 const onDeleteDiscordPost = vi.fn();
 const onDeleteMix = vi.fn();
+const onRename = vi.fn();
 
 function game(overrides: Partial<CustomGame> = {}): CustomGame {
   return {
@@ -69,7 +70,7 @@ function game(overrides: Partial<CustomGame> = {}): CustomGame {
   } as CustomGame;
 }
 
-function lobbyRow(lobbyIndex: 0 | 1, overrides: Record<string, unknown> = {}) {
+function lobbyRow(lobbyIndex: number, overrides: Record<string, unknown> = {}) {
   return {
     lobby_index: lobbyIndex,
     balance_result: null,
@@ -108,6 +109,7 @@ async function mount(
         onOpenAccess={onOpenAccess}
         canDelete={props.canDelete ?? false}
         onDeleteMix={onDeleteMix}
+        onRename={onRename}
         onSetSelfService={onSetSelfService}
         onPostSignup={onPostSignup}
         settingLobbyCount={false}
@@ -150,6 +152,7 @@ beforeEach(() => {
   onLobbyCountChange.mockReset();
   onDeleteDiscordPost.mockReset();
   onDeleteMix.mockReset();
+  onRename.mockReset();
 });
 
 // The `⋯` menu: what a host sets once per mix, and the irreversible delete.
@@ -169,6 +172,22 @@ function menuItem(text: string) {
 async function chooseMore(scope: ParentNode, item: string) {
   await click(moreTrigger(scope));
   await click(menuItem(item));
+}
+
+// The lobby-count slider lives inside that same portalled menu. Radix commits a
+// keyboard step straight away, which is exactly the "on release" the pointer
+// drag produces, so arrow keys are how a test drives a commit.
+function lobbySlider() {
+  return document.querySelector('[role="slider"]');
+}
+
+async function stepLobbySlider(key: "ArrowLeft" | "ArrowRight") {
+  const thumb = lobbySlider();
+  if (!thumb) throw new Error("Expected the lobby slider");
+  await act(async () => {
+    thumb.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
+    await tick();
+  });
 }
 
 describe("PickupMixHeader", () => {
@@ -198,6 +217,26 @@ describe("PickupMixHeader", () => {
     expect(scope.textContent).toContain("Thursday scrim");
   });
 
+  it("lets a host rename the mix, trimmed, and a viewer not at all", async () => {
+    expect((await mount(game(), { canWrite: false })).querySelector('[aria-label="Edit mix name"]')).toBeNull();
+
+    onRename.mockResolvedValue(undefined);
+    const scope = await mount(game());
+    await click(scope.querySelector('[aria-label="Edit mix name"]'));
+    const input = scope.querySelector<HTMLInputElement>('input[aria-label="mix name"]');
+    if (!input) throw new Error("Expected the name input");
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, "  Friday scrim ");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => {
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+      await tick();
+    });
+
+    expect(onRename).toHaveBeenCalledWith("Friday scrim");
+  });
+
   it("disables Add players until a mix has loaded", async () => {
     const scope = await mount(undefined);
 
@@ -218,31 +257,45 @@ describe("PickupMixHeader", () => {
     expect(onOpenAccess).toHaveBeenCalledTimes(1);
   });
 
-  it("opens a second lobby from the more menu", async () => {
-    await chooseMore(await mount(game()), "count(2)");
+  it("opens another lobby straight from the slider, with nothing to confirm", async () => {
+    const scope = await mount(game());
+    await click(moreTrigger(scope));
+
+    await stepLobbySlider("ArrowRight");
 
     expect(onLobbyCountChange).toHaveBeenCalledWith(2);
+    expect(document.querySelector('[role="alertdialog"]')).toBeNull();
   });
 
-  it("does not re-send the lobby count the mix already runs", async () => {
-    await chooseMore(await mount(game()), "count(1)");
-
-    expect(onLobbyCountChange).not.toHaveBeenCalled();
-  });
-
-  it("asks before dropping a lobby, because its balance goes with it", async () => {
-    await chooseMore(
-      await mount(game({ lobby_count: 2, lobbies: [lobbyRow(0), lobbyRow(1)] })),
-      "count(1)"
+  it("asks before dropping lobbies, naming the ones that go with their matchups", async () => {
+    const scope = await mount(
+      game({ lobby_count: 4, lobbies: [0, 1, 2, 3].map((index) => lobbyRow(index)) })
     );
+    await click(moreTrigger(scope));
+
+    await stepLobbySlider("ArrowLeft");
+    await stepLobbySlider("ArrowLeft");
 
     expect(onLobbyCountChange).not.toHaveBeenCalled();
     expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain(
-      "dropDescription"
+      "dropDescription(tab(C), tab(D))"
     );
 
-    await click(byName(document, "dropConfirm"));
-    expect(onLobbyCountChange).toHaveBeenCalledWith(1);
+    await click(byName(document, "dropConfirm(tab(C), tab(D))"));
+    expect(onLobbyCountChange).toHaveBeenCalledWith(2);
+  });
+
+  it("drops nothing when the confirm is cancelled, and snaps the slider back", async () => {
+    const scope = await mount(
+      game({ lobby_count: 4, lobbies: [0, 1, 2, 3].map((index) => lobbyRow(index)) })
+    );
+    await click(moreTrigger(scope));
+    await stepLobbySlider("ArrowLeft");
+
+    await click(byName(document, "cancel"));
+
+    expect(onLobbyCountChange).not.toHaveBeenCalled();
+    expect(lobbySlider()?.getAttribute("aria-valuenow")).toBe("4");
   });
 
   it("offers delete only to an admin, and only after confirming", async () => {
@@ -537,5 +590,35 @@ describe("PickupMixHeader Discord posts list", () => {
     expect(
       document.querySelector('[aria-label="posts.delete(posts.signup)"]')?.hasAttribute("disabled")
     ).toBe(true);
+  });
+});
+
+// Which card a refresh (and the voice buttons) act on: the lobby's own newest
+// one that Discord still holds.
+describe("liveLineupPostOf", () => {
+  it("takes the lobby's newest standing card, not an older one or another lobby's", () => {
+    const current = game({
+      discord_posts: [
+        post({ id: 1, slot: "lineup:0:1", kind: "mix.lineup" }),
+        post({ id: 2, slot: "lineup:1:1", kind: "mix.lineup" }),
+        post({ id: 3, slot: "lineup:0:2", kind: "mix.lineup", status: "pending" }),
+        post({ id: 4, slot: "signup" })
+      ]
+    });
+
+    expect(liveLineupPostOf(current, 0)?.id).toBe(3);
+    expect(liveLineupPostOf(current, 1)?.id).toBe(2);
+  });
+
+  it("finds nothing once the lobby's card is gone, or never went up", () => {
+    for (const status of ["failed", "deleting", "lost"] as const) {
+      const current = game({
+        discord_posts: [post({ id: 7, slot: "lineup:0:1", kind: "mix.lineup", status })]
+      });
+
+      expect(liveLineupPostOf(current, 0)).toBeNull();
+    }
+    expect(liveLineupPostOf(game({ discord_posts: [] }), 0)).toBeNull();
+    expect(liveLineupPostOf(game(), 0)).toBeNull();
   });
 });

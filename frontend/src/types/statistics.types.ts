@@ -25,6 +25,14 @@ export interface TournamentOverall {
   teams: number;
   players: number;
   champions: number;
+  /** Encounters (series) with a result. */
+  encounters: number;
+  /** Maps played (`matches.match` rows). */
+  maps: number;
+  /** Distinct calendar days covered by the tournaments' start..end dates. */
+  days: number;
+  /** Total played map time, whole hours. */
+  hours: number;
 }
 
 export interface UserTournamentStat {

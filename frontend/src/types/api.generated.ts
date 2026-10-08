@@ -4013,7 +4013,7 @@ export interface paths {
         };
         /**
          * Users overview
-         * @description Permission: public; no authentication required. Returns a paginated, workspace-normalized player overview table built from the workspace grid.
+         * @description Permission: public; no authentication required. Returns a paginated, workspace-normalized player overview table built from the workspace grid. `workspace_id=all` reads across every workspace instead: divisions are then resolved on each row's own tournament grid and every referenced grid is returned in `division_grids`. A missing `workspace_id` is a 400.
          *
          *     RPC subject: `rpc.app.users.overview`
          */
@@ -4035,7 +4035,7 @@ export interface paths {
         };
         /**
          * Users overview catalog
-         * @description Permission: public; no authentication required. Returns the filter-catalog (facets) for the players-overview table from the workspace grid.
+         * @description Permission: public; no authentication required. Returns the filter-catalog (facets) for the players-overview table from the workspace grid, or across every workspace with `workspace_id=all` (see `division_grids`).
          *
          *     RPC subject: `rpc.app.users.overview_catalog`
          */
@@ -4057,7 +4057,7 @@ export interface paths {
         };
         /**
          * Users overview stats
-         * @description Permission: public; no authentication required. Returns aggregate statistics for the players-overview table computed against the workspace grid.
+         * @description Permission: public; no authentication required. Returns aggregate statistics for the players-overview table computed against the workspace grid, or across every workspace (each row on its own tournament grid) with `workspace_id=all`.
          *
          *     RPC subject: `rpc.app.users.overview_stats`
          */
@@ -4663,7 +4663,7 @@ export interface paths {
         };
         /**
          * Read one account's notification state
-         * @description Permission: global `auth_user.read`. Everything the account inspector shows about the account named by the path id: the effective Discord-DM group switches and per-workspace staff switches with defaults filled in, whether a Discord account is connected at all, the unread count that account's own bell shows (same audience rules as their inbox, not a platform-wide total) and the ten most recent Discord DMs actually sent to them, newest first. Skips are never recorded, so an empty `recent_deliveries` means nothing was sent — it is not a gap in the ledger. Unlike the self-service preferences read this acts on another account, which the global grant is what authorizes. 404 when the account does not exist.
+         * @description Permission: global `auth_user.read`. Everything the account inspector shows about the account named by the path id: the effective Discord-DM group switches and per-workspace staff switches with defaults filled in, whether a Discord account is connected at all, the unread count that account's own bell shows (same audience rules as their inbox, not a platform-wide total) and the ten most recent Discord DMs handed to the bot for them, newest first, each with how far it got (`pending`, `posted`, `failed`, or `lost` when the broker dropped it). Skips are never recorded, so an empty `recent_deliveries` means nothing was sent — it is not a gap in the record. Unlike the self-service preferences read this acts on another account, which the global grant is what authorizes. 404 when the account does not exist.
          *
          *     RPC subject: `rpc.app.admin_user_notifications_get`
          */
@@ -9711,14 +9711,14 @@ export interface paths {
         };
         /**
          * Get my pickup mix preferences
-         * @description Permission: self-service -- any authenticated (active) account reads its own preferences only. Returns the signed-in account's own mix settings -- the rank-balance/role-comfort tilt, the per-role weights, how many balance options to keep, the roster shape its mixes field and how far a decided match moves its rank book -- plus roster_shape, the read-only resolution of that shape. A null value means the setting was never saved and the default applies.
+         * @description Permission: self-service -- any authenticated (active) account reads its own preferences only. Returns the signed-in account's own mix settings -- the rank-balance/role-comfort tilt, the per-role weights, how many balance options to keep, the roster shape its mixes field, how far a decided match moves its rank book and whether the mix ranker moves it instead (rating_mode) -- plus roster_shape, the read-only resolution of that shape. A null value means the setting was never saved and the default applies.
          *
          *     RPC subject: `rpc.balancer.prefs.get`
          */
         get: operations["get__api_v1_balancer_me_mix_preferences"];
         /**
          * Set my pickup mix preferences
-         * @description Permission: self-service -- any authenticated (active) account writes its own preferences only. Replaces all five of the caller's mix settings at once and returns the stored result with the re-resolved roster_shape; a null clears one back to the default, and 0 points per win stores as unset. They apply to every mix this account hosts -- a mix runs on its host's preferences whoever presses the button. 422 on an impossible roster shape.
+         * @description Permission: self-service -- any authenticated (active) account writes its own preferences only. Replaces all six of the caller's mix settings at once and returns the stored result with the re-resolved roster_shape; a null clears one back to the default, and 0 points per win stores as unset. They apply to every mix this account hosts -- a mix runs on its host's preferences whoever presses the button. 422 on an impossible roster shape.
          *
          *     RPC subject: `rpc.balancer.prefs.upsert`
          */
@@ -9922,7 +9922,7 @@ export interface paths {
         post?: never;
         /**
          * Delete custom game
-         * @description Permission: workspace membership plus the workspace `admin` or `owner` role (superuser counts). Permanently erases the mix together with its roster and every match it recorded, and returns the deleted id. Irreversible, and unlike close it is not open to the mix's own host and co-hosts.
+         * @description Permission: workspace membership plus the workspace `admin` or `owner` role (superuser counts). Permanently erases the mix together with its roster, every match it recorded and every Discord message it posted, and returns the deleted id. Irreversible, and unlike close it is not open to the mix's own host and co-hosts.
          *
          *     RPC subject: `rpc.balancer.custom.hard_delete`
          */
@@ -9943,7 +9943,7 @@ export interface paths {
         put?: never;
         /**
          * Balance custom game
-         * @description Permission: workspace membership plus being the mix's host or co-host (or a superuser). With `scope="lobby"` (the default) balances the non-benched lineup of ONE lobby (`lobby_index`, default 0) -- everyone the other lobby is already playing or holds a pin on is left out. With `scope="all"` it splits the whole pool into two equally strong lobbies and balances both. Ranks come from the host's own book above the workspace canon. 422 when the lineup is empty, a seated player has no ranked role, the mix has one lobby (`single_lobby`) or the pool cannot be split (`not_enough_for_two_lobbies`, `too_many_must_play`, `too_many_pinned`, `roles_infeasible`).
+         * @description Permission: workspace membership plus being the mix's host or co-host (or a superuser). With `scope="lobby"` (the default) balances the non-benched lineup of ONE lobby (`lobby_index`, default 0) -- everyone another lobby is already playing or holds a pin on is left out. With `scope="all"` it splits the whole pool into `lobby_count` equally strong lobbies and balances them all. Ranks come from the host's own book above the workspace canon. 422 when the lineup is empty, a seated player has no ranked role, the mix has one lobby (`single_lobby`) or the pool cannot be split (`not_enough_players`, `too_many_must_play`, `too_many_pinned`, `roles_infeasible`).
          *
          *     RPC subject: `rpc.balancer.custom.balance`
          */
@@ -10020,6 +10020,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/discord/lineup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Update lineup
+         * @description RPC subject: `rpc.balancer.custom.update_lineup`
+         */
+        put: operations["put__api_v1_balancer_workspaces__workspace_id__custom_games__game_id__discord_lineup"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/discord/post": {
         parameters: {
             query?: never;
@@ -10031,12 +10051,34 @@ export interface paths {
         put?: never;
         /**
          * Post custom game lineup to Discord
-         * @description Permission: workspace membership plus being the mix's host or co-host (or a superuser). Queues an embed of one balance option's teams, the next map and the points at stake to the workspace-wide mix channel and returns immediately -- delivery is the bot's, and nothing about the mix changes. A two-lobby mix names the lobby in the embed title and numbers the match within that lobby. 409 when the workspace has no mix channel configured and 404 when the balance option is missing.
+         * @description Permission: workspace membership plus being the mix's host or co-host (or a superuser). Queues an embed of one balance option's teams, the next map and the points at stake to the workspace-wide mix channel and returns immediately -- delivery is the bot's, and nothing about the mix changes. A multi-lobby mix names the lobby in the embed title and numbers the match within that lobby. 409 when the workspace has no mix channel configured and 404 when the balance option is missing.
          *
          *     RPC subject: `rpc.balancer.custom.post_discord`
          */
         post: operations["post__api_v1_balancer_workspaces__workspace_id__custom_games__game_id__discord_post"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/discord/posts/{post_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete one custom game Discord post
+         * @description Permission: workspace membership plus being the mix's host or co-host (or a superuser). Asks the bot to delete one message this mix posted, named by its id from the mix's `discord_posts`, and returns the refreshed mix. 404 when the id belongs to another mix's message. Clicking twice is harmless; closing or cancelling a mix deletes nothing, its posts stay as history.
+         *
+         *     RPC subject: `rpc.balancer.custom.delete_discord_post`
+         */
+        delete: operations["delete__api_v1_balancer_workspaces__workspace_id__custom_games__game_id__discord_posts__post_id_"];
         options?: never;
         head?: never;
         patch?: never;
@@ -10053,7 +10095,7 @@ export interface paths {
         put?: never;
         /**
          * Open custom game signup in Discord
-         * @description Permission: workspace membership plus being the mix's host or co-host (or a superuser). Opens self-signup in the given mode (into the pool or onto the bench) and queues a card with Join / My roles / Leave buttons to the workspace-wide mix channel. The card is static: every click re-reads the mix, so it refuses correctly once signup closes or the mix ends. 409 when the workspace has no mix channel configured.
+         * @description Permission: workspace membership plus being the mix's host or co-host (or a superuser). Opens self-signup in the given mode (into the pool or onto the bench) and queues a card with Join / My roles / Leave buttons to the workspace-wide mix channel. The card is static: every click re-reads the mix, so it refuses correctly once signup closes or the mix ends. A mix has one signup card: posting again deletes the previous one from the channel first. 409 when the workspace has no mix channel configured.
          *
          *     RPC subject: `rpc.balancer.custom.post_signup`
          */
@@ -10096,7 +10138,7 @@ export interface paths {
         get?: never;
         /**
          * Set custom game lobby count
-         * @description Permission: workspace membership plus being the mix's host or co-host (or a superuser). Runs the mix as one lobby or two. Going to two opens an empty second lobby, leaving the first untouched; going back to one deletes the second lobby together with its stored matchup and clears every player's lobby pin. Matches already recorded for the second lobby stay in the history and in the statistics.
+         * @description Permission: workspace membership plus being the mix's host or co-host (or a superuser). Runs the mix as 1..6 lobbies. Growing opens the new lobbies empty, leaving the running ones untouched; shrinking deletes every lobby past the new count together with its stored matchup and clears the pins that named them. Matches already recorded for a deleted lobby stay in the history and in the statistics.
          *
          *     RPC subject: `rpc.balancer.custom.set_lobby_count`
          */
@@ -10142,7 +10184,7 @@ export interface paths {
         post?: never;
         /**
          * Undo custom game match
-         * @description Permission: workspace membership plus being the mix's host or co-host (or a superuser). Deletes the lobby's most recent match and gives back exactly the rank points it applied, read from the match itself rather than the mix's current points_per_win. 404 when the match belongs to another mix and 409 when a newer match of the SAME lobby exists, since the rank book compounds. must_play pins the recording redeemed are not restored.
+         * @description Permission: workspace membership plus being the mix's host or co-host (or a superuser). Deletes the lobby's most recent match and gives back exactly the rank points it applied, read from the match and its seats rather than the host's current settings, then rebuilds the workspace's hidden ratings from the remaining history. 404 when the match belongs to another mix and 409 when a newer match of the SAME lobby exists, since the rank book compounds. must_play pins the recording redeemed are not restored.
          *
          *     RPC subject: `rpc.balancer.custom.undo_match`
          */
@@ -10192,6 +10234,28 @@ export interface paths {
         patch: operations["patch__api_v1_balancer_workspaces__workspace_id__custom_games__game_id__me"];
         trace?: never;
     };
+    "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/name": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Rename custom game
+         * @description Permission: workspace membership plus being the mix's host or co-host (or a superuser). Replaces the mix's name (trimmed, 1-255 characters) and re-renders its live Discord signup card. Refused once the mix is closed.
+         *
+         *     RPC subject: `rpc.balancer.custom.rename`
+         */
+        put: operations["put__api_v1_balancer_workspaces__workspace_id__custom_games__game_id__name"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/next-map": {
         parameters: {
             query?: never;
@@ -10225,7 +10289,7 @@ export interface paths {
         put?: never;
         /**
          * Record custom game match
-         * @description Permission: workspace membership plus being the mix's host or co-host (or a superuser). Freezes one played match of a balance option into the mix's history, moving both teams' ranks in the host's book by points_per_win when a winner is given and redeeming every seat's must_play pin back to the pool. The match is stamped with the lobby that played it and with whoever was playing the other lobby at that moment, whom rotation then counts as neither played nor sat out. Repeatable until the mix is closed.
+         * @description Permission: workspace membership plus being the mix's host or co-host (or a superuser). Freezes one played match of a balance option into the mix's history, moving both teams' ranks in the host's book -- by points_per_win when a winner is given, or seat by seat by the mix ranker when the host's rating_mode is 'ranker' -- advancing the workspace's hidden ratings, and redeeming every seat's must_play pin back to the pool. The match is stamped with the lobby that played it and with whoever was playing another lobby at that moment, whom rotation then counts as neither played nor sat out. Repeatable until the mix is closed.
          *
          *     RPC subject: `rpc.balancer.custom.record_outcome`
          */
@@ -10311,7 +10375,7 @@ export interface paths {
         };
         /**
          * Get custom game rotation hints
-         * @description Permission: public; no authentication required. Recommends who is owed the next seat and who should sit out, computed from this mix's own match history, read-only. The optional lobby_index query parameter ranks the candidates of one lobby -- whoever is seated in the other lobby or pinned to it is left out -- and splits at that lobby's seat count.
+         * @description Permission: public; no authentication required. Recommends who is owed the next seat and who should sit out, computed from this mix's own match history, read-only. The optional lobby_index query parameter ranks the candidates of one lobby -- whoever is seated in another lobby or pinned to one is left out -- and splits at that lobby's seat count.
          *
          *     RPC subject: `rpc.balancer.custom.rotation`
          */
@@ -10400,12 +10464,92 @@ export interface paths {
         get?: never;
         /**
          * Set custom game shown balance option
-         * @description Permission: workspace membership plus being the mix's host or co-host (or a superuser). Pages one lobby to one of the balance options its last run produced, for every viewer at once -- the option on screen is a fact about the lobby, not about one browser. 404 when the index points past the stored options, and 409 seat_conflict when the option would seat somebody the mix's other lobby has already put on the floor. Re-balancing resets it to the first option.
+         * @description Permission: workspace membership plus being the mix's host or co-host (or a superuser). Pages one lobby to one of the balance options its last run produced, for every viewer at once -- the option on screen is a fact about the lobby, not about one browser. 404 when the index points past the stored options, and 409 seat_conflict when the option would seat somebody another of the mix's lobbies has already put on the floor. Re-balancing resets it to the first option.
          *
          *     RPC subject: `rpc.balancer.custom.set_variant_index`
          */
         put: operations["put__api_v1_balancer_workspaces__workspace_id__custom_games__game_id__variant"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/voice": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set voice channels
+         * @description RPC subject: `rpc.balancer.custom.set_voice_channels`
+         */
+        put: operations["put__api_v1_balancer_workspaces__workspace_id__custom_games__game_id__voice"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/voice/move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Voice move
+         * @description RPC subject: `rpc.balancer.custom.voice_move`
+         */
+        post: operations["post__api_v1_balancer_workspaces__workspace_id__custom_games__game_id__voice_move"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/voice/options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Voice options
+         * @description RPC subject: `rpc.balancer.custom.voice_options`
+         */
+        get: operations["get__api_v1_balancer_workspaces__workspace_id__custom_games__game_id__voice_options"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/voice/return": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Voice return
+         * @description RPC subject: `rpc.balancer.custom.voice_return`
+         */
+        post: operations["post__api_v1_balancer_workspaces__workspace_id__custom_games__game_id__voice_return"];
         delete?: never;
         options?: never;
         head?: never;
@@ -10499,6 +10643,78 @@ export interface paths {
          *     RPC subject: `rpc.balancer.players.set_ranks`
          */
         put: operations["put__api_v1_balancer_workspaces__workspace_id__players__member_id__ranks"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/balancer/workspaces/{workspace_id}/ranker": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get workspace mix ranker settings
+         * @description Permission: admin-panel access plus workspace `workspace.read`. Returns the mix ranker's knobs in force for this workspace (the defaults when never saved) and how many hidden ratings its members hold. The ranker implements mixtura-ranker by Dmitriy (@dmelackov), https://github.com/mixtura-dev/mixtura-ranker.
+         *
+         *     RPC subject: `rpc.balancer.admin.workspace_ranker_get`
+         */
+        get: operations["get__api_v1_balancer_workspaces__workspace_id__ranker"];
+        /**
+         * Set workspace mix ranker settings
+         * @description Permission: admin-panel access plus workspace `team.update`. Replaces all seven knobs at once. Changing rating_min, rating_max, rating_avg or sigma_init reinterprets every stored hidden rating, so the call rebuilds them from the workspace's recorded mix matches before answering. 422 unless rating_min < rating_avg < rating_max.
+         *
+         *     RPC subject: `rpc.balancer.admin.workspace_ranker_upsert`
+         */
+        put: operations["put__api_v1_balancer_workspaces__workspace_id__ranker"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/balancer/workspaces/{workspace_id}/ranker/rebuild": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rebuild hidden mix ratings from history
+         * @description Permission: admin-panel access plus workspace `team.update`. Replays every recorded mix match of the workspace in order and replaces all hidden ratings with the result; open ranks are not touched. Returns how many matches were replayed and how many hidden ratings came out.
+         *
+         *     RPC subject: `rpc.balancer.admin.workspace_ranker_rebuild`
+         */
+        post: operations["post__api_v1_balancer_workspaces__workspace_id__ranker_rebuild"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/balancer/workspaces/{workspace_id}/ranks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List all rank values in the workspace
+         * @description Permission: workspace member holding `team.update` -- the same grant writing the canon needs, because this read puts every author's private book on one screen. Read-only. One flat row per rank value across nine layers (canon, author, ow, hidden, effective_tournament, effective_mix, registration, tournament, casual); the six current layers are the default. The two effective layers are computed in SQL and agree with the resolver the balancer runs on: effective_tournament is canon over OW on the workspace grid, effective_mix is the author's book over the canon over OW on the global grid. `division` is resolved on the workspace's effective grid for every row. Filtering, sorting, the exact total and the page all run in the database.
+         *
+         *     RPC subject: `rpc.balancer.ranks.list`
+         */
+        get: operations["get__api_v1_balancer_workspaces__workspace_id__ranks"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -12838,17 +13054,6 @@ export interface components {
             /** Total */
             total: number;
         };
-        /** Paginated[UserOverviewRow] */
-        "app.Paginated_UserOverviewRow_": {
-            /** Page */
-            page: number;
-            /** Per Page */
-            per_page: number;
-            /** Results */
-            results: components["schemas"]["app.UserOverviewRow"][];
-            /** Total */
-            total: number;
-        };
         /** PlayerStatistics */
         "app.PlayerStatistics": {
             /** Id */
@@ -13002,6 +13207,8 @@ export interface components {
         "app.UserCatalogResponse": {
             /** Available Letters */
             available_letters: string[];
+            /** Division Grids */
+            division_grids?: components["schemas"]["app.DivisionGridVersionRead"][];
             /** Letters */
             letters: components["schemas"]["app.UserCatalogLetter"][];
             /** Total */
@@ -13389,10 +13596,31 @@ export interface components {
             avg_10: number;
             name: components["schemas"]["app.LogStatsName"];
         };
+        /**
+         * UserOverviewResponse
+         * @description Overview page plus every division grid its rows' divisions refer to.
+         */
+        "app.UserOverviewResponse": {
+            /** Division Grids */
+            division_grids?: components["schemas"]["app.DivisionGridVersionRead"][];
+            /** Page */
+            page: number;
+            /** Per Page */
+            per_page: number;
+            /** Results */
+            results: components["schemas"]["app.UserOverviewRow"][];
+            /** Total */
+            total: number;
+        };
         /** UserOverviewRoleDivision */
         "app.UserOverviewRoleDivision": {
             /** Division */
             division: number;
+            /**
+             * Division Grid Version Id
+             * @default null
+             */
+            division_grid_version_id: number | null;
             role: components["schemas"]["app.HeroClass"];
         };
         /** UserOverviewRow */
@@ -14009,12 +14237,6 @@ export interface components {
              */
             crossover_rate: number | null;
             /**
-             * Damage Impact Weight
-             * @description Importance multiplier for Damage role contribution when comparing effective team totals.
-             * @default null
-             */
-            damage_impact_weight: number | null;
-            /**
              * Effective Total Std Weight
              * @description Penalty multiplier for weighted effective team-total standard deviation.
              * @default null
@@ -14087,14 +14309,6 @@ export interface components {
              */
             mix_comfort_tilt: number | null;
             /**
-             * Mix Role Weights
-             * @description Mix per-role importance for the role-line balance term, keyed by roster slot code. A role left out weighs 1.0, as does every role when this is unset.
-             * @default null
-             */
-            mix_role_weights: {
-                [key: string]: number;
-            } | null;
-            /**
              * Mutation Rate
              * @description Probability that a solution is changed while producing the next generation.
              * @default null
@@ -14149,6 +14363,14 @@ export interface components {
              */
             role_line_balance_weight: number | null;
             /**
+             * Role Settings
+             * @description Per-role weights keyed by roster slot code: how much a role counts towards a team's effective total, and how hard uneven lines of it are penalized.
+             * @default null
+             */
+            role_settings: {
+                [key: string]: components["schemas"]["balancer.RoleSettingsOverride"];
+            } | null;
+            /**
              * Stagnation Kick Patience
              * @description Generations without archive improvement before stronger mutation and crossover are applied.
              * @default null
@@ -14160,30 +14382,6 @@ export interface components {
              * @default null
              */
             sub_role_collision_weight: number | null;
-            /**
-             * Support Impact Weight
-             * @description Importance multiplier for Support role contribution when comparing effective team totals.
-             * @default null
-             */
-            support_impact_weight: number | null;
-            /**
-             * Tank Gap Weight
-             * @description Penalty multiplier for the largest gap between adjacent (sorted by strength) Tank lines.
-             * @default null
-             */
-            tank_gap_weight: number | null;
-            /**
-             * Tank Impact Weight
-             * @description Importance multiplier for Tank role contribution when comparing effective team totals.
-             * @default null
-             */
-            tank_impact_weight: number | null;
-            /**
-             * Tank Std Weight
-             * @description Penalty multiplier for Tank-line standard deviation across teams.
-             * @default null
-             */
-            tank_std_weight: number | null;
             /**
              * Team Max Pain Weight
              * @description Penalty weight for the per-team maximum role discomfort averaged over all teams. Makes 'one suffering player in every team' visible, unlike the single global maximum.
@@ -15072,6 +15270,36 @@ export interface components {
             role: string;
             /** Supply */
             supply: number;
+        };
+        /**
+         * RoleSettingsOverride
+         * @description Per-role weights to override; an omitted field keeps its configured value.
+         */
+        "balancer.RoleSettingsOverride": {
+            /**
+             * Impact
+             * @description Importance multiplier for this role's contribution when comparing effective team totals.
+             * @default null
+             */
+            impact: number | null;
+            /**
+             * Line Gap Weight
+             * @description Penalty multiplier for the largest gap between adjacent (sorted by strength) lines of this role.
+             * @default null
+             */
+            line_gap_weight: number | null;
+            /**
+             * Line Std Weight
+             * @description Penalty multiplier for this role's line-strength standard deviation across teams.
+             * @default null
+             */
+            line_std_weight: number | null;
+            /**
+             * Mix Weight
+             * @description Mix-engine multiplier for this role's gap in the role-fairness term.
+             * @default null
+             */
+            mix_weight: number | null;
         };
         /**
          * RosterShapeRead
@@ -19093,7 +19321,7 @@ export interface components {
          *     A superset of ``NotificationPreferencesRead`` rather than a sibling of it:
          *     the operator's question is "why has this person not heard from us", and the
          *     switches alone cannot answer it -- an unlinked Discord, a badge nobody
-         *     clears and an empty delivery ledger are three different diagnoses.
+         *     clears and nothing ever sent are three different diagnoses.
          */
         "app.AdminUserNotificationsRead": {
             discord_dm: components["schemas"]["app.NotificationDmGroups"];
@@ -19677,12 +19905,14 @@ export interface components {
         };
         /**
          * NotificationDeliveryItem
-         * @description One row of the delivery ledger -- a message actually handed to Discord.
+         * @description One Discord DM the platform handed to the bot for this account.
          *
          *     Skips are not recorded upstream (preference off, nothing linked), so an
          *     empty list here means "we sent nothing", never "we sent something and did
          *     not write it down" -- which is the whole question the account inspector is
-         *     opened to answer.
+         *     opened to answer. ``status`` says how far it got: ``posted`` reached
+         *     Discord, ``failed`` was refused (the user blocked DMs), ``pending`` is on
+         *     its way and ``lost`` never will be -- the broker dropped the command.
          */
         "app.NotificationDeliveryItem": {
             /** Channel */
@@ -19701,6 +19931,8 @@ export interface components {
              * @default null
              */
             notification_id: number | null;
+            /** Status */
+            status: string;
             /**
              * Workspace Id
              * @default null
@@ -20187,7 +20419,7 @@ export interface components {
          * CustomGameBalanceRequest
          * @description What to balance. An empty body is the first lobby, as before there was a second.
          *
-         *     ``scope="all"`` reshuffles both lobbies at once and needs ``lobby_count = 2``.
+         *     ``scope="all"`` reshuffles every lobby at once and needs ``lobby_count >= 2``.
          */
         "balancer.CustomGameBalanceRequest": {
             /**
@@ -20225,15 +20457,46 @@ export interface components {
             new_host_user_id: number;
         };
         /**
+         * CustomGameLineupRefresh
+         * @description The lobby's newest lineup card, re-rendered from the lineup on screen now.
+         */
+        "balancer.CustomGameLineupRefresh": {
+            /**
+             * Image B64
+             * @default null
+             */
+            image_b64: string | null;
+            /**
+             * Lobby Index
+             * @default 0
+             */
+            lobby_index: number;
+        };
+        /**
          * CustomGameLobbyCountPatch
          * @description How many lobbies the mix runs at once.
          */
         "balancer.CustomGameLobbyCountPatch": {
+            /** Lobby Count */
+            lobby_count: number;
+        };
+        /** CustomGameLobbyVoice */
+        "balancer.CustomGameLobbyVoice": {
             /**
-             * Lobby Count
-             * @enum {integer}
+             * Lobby Index
+             * @default 0
              */
-            lobby_count: BalancerCustomGameLobbyCountPatchLobby_count;
+            lobby_index: number;
+            /**
+             * Team1 Voice Channel Id
+             * @default null
+             */
+            team1_voice_channel_id: string | null;
+            /**
+             * Team2 Voice Channel Id
+             * @default null
+             */
+            team2_voice_channel_id: string | null;
         };
         /**
          * CustomGameNextMapPatch
@@ -20336,6 +20599,11 @@ export interface components {
             /** Variant Index */
             variant_index: number;
         };
+        /** CustomGameRename */
+        "balancer.CustomGameRename": {
+            /** Name */
+            name: string;
+        };
         /** CustomGameRosterUpdate */
         "balancer.CustomGameRosterUpdate": {
             /** Member Ids */
@@ -20409,10 +20677,53 @@ export interface components {
             variant_index: number;
         };
         /**
+         * CustomGameVoicePatch
+         * @description The mix's voices: its general voice and the team voices of every listed lobby.
+         *
+         *     ``general_voice_channel_id`` is always replaced; a lobby left out of
+         *     ``lobbies`` keeps its voices. Nothing is checked against Discord here --
+         *     a voice outside the category is refused when people are moved.
+         */
+        "balancer.CustomGameVoicePatch": {
+            /**
+             * General Voice Channel Id
+             * @default null
+             */
+            general_voice_channel_id: string | null;
+            /** Lobbies */
+            lobbies?: components["schemas"]["balancer.CustomGameLobbyVoice"][];
+        };
+        /**
+         * CustomGameVoiceRun
+         * @description Which lobby to move; ``null`` is every lobby of the mix.
+         */
+        "balancer.CustomGameVoiceRun": {
+            /**
+             * Lobby Index
+             * @default null
+             */
+            lobby_index: number | null;
+        };
+        /**
          * MixParticipation
          * @enum {string}
          */
         "balancer.MixParticipation": BalancerMixParticipation;
+        /**
+         * MixRoleSettings
+         * @description The mix engine's share of a role's settings -- the only one a host may set.
+         *
+         *     The tournament drawer owns the rest (``impact``, the line weights), and
+         *     ``extra="forbid"`` is what keeps a host from storing a GA knob through their
+         *     own preferences.
+         */
+        "balancer.MixRoleSettings": {
+            /**
+             * Mix Weight
+             * @description Multiplier for this role's gap in role fairness.
+             */
+            mix_weight: number;
+        };
         /**
          * MixSelfSignup
          * @description Who may put themselves on a mix roster, and where they land.
@@ -20424,12 +20735,156 @@ export interface components {
          * @enum {string}
          */
         "balancer.MixSelfSignup": BalancerMixSelfSignup;
+        /** Paginated[RankOverviewRow] */
+        "balancer.Paginated_RankOverviewRow_": {
+            /** Page */
+            page: number;
+            /** Per Page */
+            per_page: number;
+            /** Results */
+            results: components["schemas"]["balancer.RankOverviewRow"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * RankContext
+         * @description What the row belongs to, when it belongs to something.
+         *
+         *     ``tournament`` for registration/roster rows, ``mix`` for a recorded casual
+         *     match, ``battle_tag`` for an Overwatch snapshot -- whose ``team`` carries the
+         *     snapshot's platform, the only thing a battle tag is further split by.
+         */
+        "balancer.RankContext": {
+            /**
+             * Id
+             * @description Tournament or custom-game id; null for a battle tag.
+             * @default null
+             */
+            id: number | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: BalancerRankContextKind;
+            /** Label */
+            label: string;
+            /**
+             * Lobby Index
+             * @description Which lobby of the mix played the match.
+             * @default null
+             */
+            lobby_index: number | null;
+            /**
+             * Team
+             * @description Roster team name, or the platform on an ow row.
+             * @default null
+             */
+            team: string | null;
+        };
+        /** RankOverviewRow */
+        "balancer.RankOverviewRow": {
+            /**
+             * At
+             * @description Null on the computed effective layers.
+             * @default null
+             */
+            at: string | null;
+            /**
+             * Author Name
+             * @default null
+             */
+            author_name: string | null;
+            /**
+             * Author User Id
+             * @description auth.user id of the book's author, the mix's host, or null.
+             * @default null
+             */
+            author_user_id: number | null;
+            /**
+             * Battle Tag
+             * @default null
+             */
+            battle_tag: string | null;
+            /**
+             * Canon Diff
+             * @description author only: rank_value minus the canon, null if none.
+             * @default null
+             */
+            canon_diff: number | null;
+            /** @default null */
+            context: components["schemas"]["balancer.RankContext"] | null;
+            /**
+             * Delta
+             * @description casual only: how far the match moved this seat.
+             * @default null
+             */
+            delta: number | null;
+            /**
+             * Display Name
+             * @default null
+             */
+            display_name: string | null;
+            /**
+             * Division
+             * @description Resolved on the workspace's effective grid.
+             * @default null
+             */
+            division: number | null;
+            /**
+             * Layer
+             * @enum {string}
+             */
+            layer: BalancerRankOverviewRowLayer;
+            /**
+             * Member Id
+             * @description workspace_member id.
+             */
+            member_id: number;
+            /**
+             * Ow Division
+             * @description ow only: the native OverFast division, e.g. 'gold'.
+             * @default null
+             */
+            ow_division: string | null;
+            /**
+             * Ow Tier
+             * @description ow only: the native tier inside that division.
+             * @default null
+             */
+            ow_tier: number | null;
+            /**
+             * Player Id
+             * @description players.user id -- the identity /admin/people/[id] is keyed by.
+             */
+            player_id: number;
+            /** Rank Value */
+            rank_value: number;
+            /**
+             * Role
+             * @description tank/damage/support; casual rows may hold any HeroClass.
+             * @default null
+             */
+            role: string | null;
+            /**
+             * Sigma
+             * @description hidden only.
+             * @default null
+             */
+            sigma: number | null;
+            /**
+             * Source
+             * @description effective_* only: which layer won.
+             * @default null
+             */
+            source: BalancerRankOverviewRowSourceAnyOf0 | null;
+        };
         /**
          * UserMixPreferencesRead
          * @description What is stored, plus the shape it resolves to.
          *
-         *     All five stored fields are null for an account that never saved any;
-         *     ``roster_shape`` is always present, since a mix always has *some* shape.
+         *     All six stored fields are null (``rating_mode``: ``points``) for an
+         *     account that never saved any; ``roster_shape`` is always present, since a
+         *     mix always has *some* shape.
          */
         "balancer.UserMixPreferencesRead": {
             /**
@@ -20445,19 +20900,18 @@ export interface components {
              */
             mix_comfort_tilt: number | null;
             /**
-             * Mix Role Weights
-             * @description Per-role importance for role-line balance, keyed by roster slot code. An omitted role weighs 1.0; null means no per-role opinion at all.
-             * @default null
-             */
-            mix_role_weights: {
-                [key: string]: number;
-            } | null;
-            /**
              * Points Per Win
              * @description How far a decided match moves both teams' ranks in this account's own rank book. 0 and null both mean recording a match adjusts nothing.
              * @default null
              */
             points_per_win: number | null;
+            /**
+             * Rating Mode
+             * @description How recording a match moves this account's rank book: 'points' by points_per_win, 'ranker' by the mix ranker (each seat by its own amount; mixes then balance on the effective rating). The workspace's hidden ratings advance in both.
+             * @default points
+             * @enum {string}
+             */
+            rating_mode: BalancerUserMixPreferencesReadRating_mode;
             /**
              * Role Mask
              * @description How many seats of each role a team gets in this account's mixes, keyed by roster slot code; null inherits the workspace default and then the built-in Overwatch 5v5 shape.
@@ -20466,12 +20920,20 @@ export interface components {
             role_mask: {
                 [key: string]: number;
             } | null;
+            /**
+             * Role Settings
+             * @description Per-role mix weights, keyed by roster slot code: how much this role's gap counts towards role fairness. An omitted role weighs 1.0; null means no per-role opinion at all.
+             * @default null
+             */
+            role_settings: {
+                [key: string]: components["schemas"]["balancer.MixRoleSettings"];
+            } | null;
             /** @description Read-only: role_mask resolved through the fallback chain, so the client never recomputes it. source is 'user' when this account stored a mask and 'default' when it did not. */
             roster_shape: components["schemas"]["balancer.RosterShapeRead"];
         };
         /**
          * UserMixPreferencesUpsert
-         * @description A full replacement: all five keys required, each nullable to unset one.
+         * @description A full replacement: all six keys required, the five knobs nullable to unset one.
          */
         "balancer.UserMixPreferencesUpsert": {
             /**
@@ -20485,23 +20947,29 @@ export interface components {
              */
             mix_comfort_tilt: number | null;
             /**
-             * Mix Role Weights
-             * @description Per-role importance for role-line balance, keyed by roster slot code. An omitted role weighs 1.0; null means no per-role opinion at all.
-             */
-            mix_role_weights: {
-                [key: string]: number;
-            } | null;
-            /**
              * Points Per Win
              * @description How far a decided match moves both teams' ranks in this account's own rank book. 0 and null both mean recording a match adjusts nothing.
              */
             points_per_win: number | null;
+            /**
+             * Rating Mode
+             * @description How recording a match moves this account's rank book: 'points' by points_per_win, 'ranker' by the mix ranker (each seat by its own amount; mixes then balance on the effective rating). The workspace's hidden ratings advance in both.
+             * @enum {string}
+             */
+            rating_mode: BalancerUserMixPreferencesUpsertRating_mode;
             /**
              * Role Mask
              * @description How many seats of each role a team gets in this account's mixes, keyed by roster slot code; null inherits the workspace default and then the built-in Overwatch 5v5 shape.
              */
             role_mask: {
                 [key: string]: number;
+            } | null;
+            /**
+             * Role Settings
+             * @description Per-role mix weights, keyed by roster slot code: how much this role's gap counts towards role fairness. An omitted role weighs 1.0; null means no per-role opinion at all.
+             */
+            role_settings: {
+                [key: string]: components["schemas"]["balancer.MixRoleSettings"];
             } | null;
         };
         /** WorkspaceBalancerConfigRead */
@@ -20513,6 +20981,13 @@ export interface components {
              * @default null
              */
             mix_discord_channel_id: string | null;
+            /** Mix General Voice Channel Ids */
+            mix_general_voice_channel_ids?: string[];
+            /**
+             * Mix Voice Category Id
+             * @default null
+             */
+            mix_voice_category_id: string | null;
             /** Rank Delta Hide From Pool */
             rank_delta_hide_from_pool: boolean;
             /** Rank Delta Threshold */
@@ -20534,6 +21009,17 @@ export interface components {
              */
             mix_discord_channel_id: string | null;
             /**
+             * Mix General Voice Channel Ids
+             * @description Voices of that category players wait in and are returned to; every other voice is a team voice.
+             */
+            mix_general_voice_channel_ids?: string[];
+            /**
+             * Mix Voice Category Id
+             * @description Discord category whose voice channels mixes move players between.
+             * @default null
+             */
+            mix_voice_category_id: string | null;
+            /**
              * Rank Delta Hide From Pool
              * @default false
              */
@@ -20544,6 +21030,114 @@ export interface components {
              * @default null
              */
             rank_delta_threshold: number | null;
+        };
+        /**
+         * WorkspaceRankerRead
+         * @description The knobs in force (defaults when never saved) and how many hidden ratings exist.
+         */
+        "balancer.WorkspaceRankerRead": {
+            /**
+             * Gate Steepness
+             * @description How sharply the correction switches from 'ignore' to 'apply' (the specification's d).
+             */
+            gate_steepness: number;
+            /**
+             * Gravity
+             * @description How strongly an uncertain hidden rating is pulled towards the average (the specification's g).
+             */
+            gravity: number;
+            /**
+             * Hidden Ratings
+             * @description Hidden ratings stored for this workspace's members, one per role.
+             */
+            hidden_ratings: number;
+            /**
+             * Rating Avg
+             * @description The open rating an average player holds; the hidden scale is centred on it.
+             */
+            rating_avg: number;
+            /**
+             * Rating Max
+             * @description Highest open rating the ranker maps onto.
+             */
+            rating_max: number;
+            /**
+             * Rating Min
+             * @description Lowest open rating the ranker maps onto.
+             */
+            rating_min: number;
+            /**
+             * Sigma Init
+             * @description A newcomer's hidden uncertainty; also sets the hidden scale.
+             */
+            sigma_init: number;
+            /**
+             * Variant
+             * @description 'corrected' follows the hidden rating by its own uncertainty; 'reference' scales by the whole open range, as the original specification does.
+             * @enum {string}
+             */
+            variant: BalancerWorkspaceRankerReadVariant;
+            /** Workspace Id */
+            workspace_id: number;
+        };
+        /** WorkspaceRankerRebuildRead */
+        "balancer.WorkspaceRankerRebuildRead": {
+            /**
+             * Hidden Ratings
+             * @description Hidden ratings the replay produced.
+             */
+            hidden_ratings: number;
+            /**
+             * Matches
+             * @description Recorded mix matches replayed.
+             */
+            matches: number;
+        };
+        /**
+         * WorkspaceRankerUpsert
+         * @description A full replacement of the workspace's mix ranker knobs.
+         *
+         *     Changing ``rating_min``, ``rating_max``, ``rating_avg`` or ``sigma_init``
+         *     reinterprets every stored hidden rating, so the save rebuilds them from the
+         *     workspace's match history before it answers.
+         */
+        "balancer.WorkspaceRankerUpsert": {
+            /**
+             * Gate Steepness
+             * @description How sharply the correction switches from 'ignore' to 'apply' (the specification's d).
+             */
+            gate_steepness: number;
+            /**
+             * Gravity
+             * @description How strongly an uncertain hidden rating is pulled towards the average (the specification's g).
+             */
+            gravity: number;
+            /**
+             * Rating Avg
+             * @description The open rating an average player holds; the hidden scale is centred on it.
+             */
+            rating_avg: number;
+            /**
+             * Rating Max
+             * @description Highest open rating the ranker maps onto.
+             */
+            rating_max: number;
+            /**
+             * Rating Min
+             * @description Lowest open rating the ranker maps onto.
+             */
+            rating_min: number;
+            /**
+             * Sigma Init
+             * @description A newcomer's hidden uncertainty; also sets the hidden scale.
+             */
+            sigma_init: number;
+            /**
+             * Variant
+             * @description 'corrected' follows the hidden rating by its own uncertainty; 'reference' scales by the whole open range, as the original specification does.
+             * @enum {string}
+             */
+            variant: BalancerWorkspaceRankerUpsertVariant;
         };
         /**
          * AdminSessionRead
@@ -26981,6 +27575,7 @@ export interface operations {
         parameters: {
             query?: {
                 entities?: string;
+                workspace_id?: string;
             };
             header?: never;
             path: {
@@ -41297,7 +41892,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["app.Paginated_UserOverviewRow_"];
+                    "application/json": components["schemas"]["app.UserOverviewResponse"];
                 };
             };
             /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
@@ -66326,6 +66921,89 @@ export interface operations {
             };
         };
     };
+    put__api_v1_balancer_workspaces__workspace_id__custom_games__game_id__discord_lineup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                game_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["balancer.CustomGameLineupRefresh"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not authorized (`forbidden`). Authenticated, but the credential lacks the permission, workspace, or scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     post__api_v1_balancer_workspaces__workspace_id__custom_games__game_id__discord_post: {
         parameters: {
             query?: never;
@@ -66341,6 +67019,86 @@ export interface operations {
                 "application/json": components["schemas"]["balancer.CustomGamePostDiscord"];
             };
         };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not authorized (`forbidden`). Authenticated, but the credential lacks the permission, workspace, or scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    delete__api_v1_balancer_workspaces__workspace_id__custom_games__game_id__discord_posts__post_id_: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                game_id: string;
+                post_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Success */
             200: {
@@ -67049,6 +67807,89 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["balancer.CustomGameSelfUpdate"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not authorized (`forbidden`). Authenticated, but the credential lacks the permission, workspace, or scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    put__api_v1_balancer_workspaces__workspace_id__custom_games__game_id__name: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                game_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["balancer.CustomGameRename"];
             };
         };
         responses: {
@@ -67930,6 +68771,334 @@ export interface operations {
             };
         };
     };
+    put__api_v1_balancer_workspaces__workspace_id__custom_games__game_id__voice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                game_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["balancer.CustomGameVoicePatch"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not authorized (`forbidden`). Authenticated, but the credential lacks the permission, workspace, or scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post__api_v1_balancer_workspaces__workspace_id__custom_games__game_id__voice_move: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                game_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["balancer.CustomGameVoiceRun"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not authorized (`forbidden`). Authenticated, but the credential lacks the permission, workspace, or scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get__api_v1_balancer_workspaces__workspace_id__custom_games__game_id__voice_options: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                game_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not authorized (`forbidden`). Authenticated, but the credential lacks the permission, workspace, or scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post__api_v1_balancer_workspaces__workspace_id__custom_games__game_id__voice_return: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                game_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["balancer.CustomGameVoiceRun"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not authorized (`forbidden`). Authenticated, but the credential lacks the permission, workspace, or scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     get__api_v1_balancer_workspaces__workspace_id__players: {
         parameters: {
             query?: {
@@ -68277,6 +69446,337 @@ export interface operations {
                 };
                 content: {
                     "application/json": Record<string, never>;
+                };
+            };
+            /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not authorized (`forbidden`). Authenticated, but the credential lacks the permission, workspace, or scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get__api_v1_balancer_workspaces__workspace_id__ranker: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["balancer.WorkspaceRankerRead"];
+                };
+            };
+            /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not authorized (`forbidden`). Authenticated, but the credential lacks the permission, workspace, or scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    put__api_v1_balancer_workspaces__workspace_id__ranker: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["balancer.WorkspaceRankerUpsert"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["balancer.WorkspaceRankerRead"];
+                };
+            };
+            /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not authorized (`forbidden`). Authenticated, but the credential lacks the permission, workspace, or scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post__api_v1_balancer_workspaces__workspace_id__ranker_rebuild: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["balancer.WorkspaceRankerRebuildRead"];
+                };
+            };
+            /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not authorized (`forbidden`). Authenticated, but the credential lacks the permission, workspace, or scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get__api_v1_balancer_workspaces__workspace_id__ranks: {
+        parameters: {
+            query?: {
+                page?: number;
+                per_page?: number;
+                player_id?: number;
+                q?: string;
+                layer?: string[];
+                author_user_id?: number[];
+                role?: string[];
+                rank_min?: number;
+                rank_max?: number;
+                differs_from_canon?: boolean;
+                date_from?: string;
+                date_to?: string;
+                sort?: string;
+                order?: string;
+            };
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["balancer.Paginated_RankOverviewRow_"];
                 };
             };
             /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
@@ -72580,10 +74080,6 @@ export enum BalancerCustomGameBalanceRequestScope {
     lobby = "lobby",
     all = "all"
 }
-export enum BalancerCustomGameLobbyCountPatchLobby_count {
-    Value1 = 1,
-    Value2 = 2
-}
 export enum BalancerCustomGameOutcomeWinnerAnyOf0 {
     Value1 = 1,
     Value2 = 2
@@ -72601,6 +74097,43 @@ export enum BalancerMixSelfSignup {
     closed = "closed",
     pool = "pool",
     benched = "benched"
+}
+export enum BalancerRankContextKind {
+    tournament = "tournament",
+    mix = "mix",
+    battle_tag = "battle_tag"
+}
+export enum BalancerRankOverviewRowLayer {
+    canon = "canon",
+    author = "author",
+    ow = "ow",
+    hidden = "hidden",
+    effective_tournament = "effective_tournament",
+    effective_mix = "effective_mix",
+    registration = "registration",
+    tournament = "tournament",
+    casual = "casual"
+}
+export enum BalancerRankOverviewRowSourceAnyOf0 {
+    author = "author",
+    workspace = "workspace",
+    ow = "ow"
+}
+export enum BalancerUserMixPreferencesReadRating_mode {
+    points = "points",
+    ranker = "ranker"
+}
+export enum BalancerUserMixPreferencesUpsertRating_mode {
+    points = "points",
+    ranker = "ranker"
+}
+export enum BalancerWorkspaceRankerReadVariant {
+    reference = "reference",
+    corrected = "corrected"
+}
+export enum BalancerWorkspaceRankerUpsertVariant {
+    reference = "reference",
+    corrected = "corrected"
 }
 export enum ParserSortOrder {
     asc = "asc",

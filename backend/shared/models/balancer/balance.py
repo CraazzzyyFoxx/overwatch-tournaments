@@ -2,7 +2,19 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -51,6 +63,11 @@ class WorkspaceBalancerConfig(db.TimeStampIntegerMixin):
     workspace_id: Mapped[int] = mapped_column(ForeignKey("workspace.id", ondelete="CASCADE"), index=True)
     config_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, server_default="{}", default=dict)
     updated_by: Mapped[int | None] = mapped_column(ForeignKey("auth.user.id", ondelete="SET NULL"), nullable=True)
+    # The mix ranker's knobs (``RankerSettings`` field names); NULL means the
+    # defaults. A column of its own rather than keys in ``config_json``: that
+    # blob is replaced whole by the pool/channel upsert, which knows nothing of
+    # these and would wipe them on every save.
+    ranker_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
 
 
 class UserBalancerConfig(db.TimeStampIntegerMixin):
@@ -60,7 +77,7 @@ class UserBalancerConfig(db.TimeStampIntegerMixin):
     the same preferences every pickup session -- they describe how this person
     runs their mixes, not what happened in one lobby, so they belong to the
     account. ``config_json`` is exactly the solver-override blob the mix engine
-    reads (``mix_comfort_tilt``, ``mix_role_weights``, ``max_result_variants``),
+    reads (``mix_comfort_tilt``, ``role_settings.<role>.mix_weight``, ``max_result_variants``),
     so it reaches the solver untouched; a knob the user never set is an absent
     key, never an explicit null, and an untouched account stores ``{}``.
     """
@@ -68,6 +85,7 @@ class UserBalancerConfig(db.TimeStampIntegerMixin):
     __tablename__ = "user_config"
     __table_args__ = (
         UniqueConstraint("user_id", name="uq_balancer_user_config_user"),
+        CheckConstraint("rating_mode IN ('points', 'ranker')", name="ck_balancer_user_config_rating_mode"),
         {"schema": "balancer"},
     )
 
@@ -90,6 +108,10 @@ class UserBalancerConfig(db.TimeStampIntegerMixin):
     # NULL (the wire's ``0`` or ``null``) means recording a match touches no
     # ranks at all.
     points_per_win: Mapped[int | None] = mapped_column(Integer(), nullable=True)
+    # ``MixRatingMode``: which of the two moves the book when a match is
+    # recorded. ``ranker`` ignores ``points_per_win`` (kept, so switching back
+    # restores it) and balances this host's mixes on the effective rating.
+    rating_mode: Mapped[str] = mapped_column(String(16), nullable=False, default="points", server_default="points")
 
 
 class BalancerBalance(db.TimeStampIntegerMixin):

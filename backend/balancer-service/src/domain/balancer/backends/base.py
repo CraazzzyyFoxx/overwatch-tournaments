@@ -53,7 +53,7 @@ class BalanceMetrics:
 
         Exact rather than approximate: each of those terms is homogeneous of
         degree 1 in rating (an absolute difference, or a power mean of them --
-        see ``native/mix_balancer/mix_balancer.cpp``), so scaling the inputs
+        see ``native/balancer_native/src/mix.rs``), so scaling the inputs
         scales the output by the same factor.
         """
         updates = {
@@ -80,7 +80,7 @@ class OptimizerBackend(typing.Protocol):
 
     Two backends implement it today: ``TournamentBalancerBackend`` (the
     in-house Rust NSGA-II optimizer, N-team capable -- the default) and
-    ``MixBalancerBackend`` (a vendored brute-force engine pinned to exactly
+    ``MixBalancerBackend`` (an exhaustive Rust engine pinned to exactly
     two teams, used only by the mix/custom-game flow). See
     ``domain/balancer/backends/__init__.py`` for the registry.
 

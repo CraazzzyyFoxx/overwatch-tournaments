@@ -32,6 +32,7 @@ from shared.messaging.config import (
     DISCORD_GUILD_INFO_QUEUE,
     DISCORD_GUILD_ROLES_QUEUE,
     DISCORD_MEMBER_ROLES_QUEUE,
+    DISCORD_VOICE_MOVE_QUEUE,
     MATCH_LOG_RESULT_EXCHANGE,
 )
 from shared.observability import make_rabbit_broker, observe_message_processing
@@ -46,6 +47,7 @@ from src.result_waiter import ResultWaiter
 from src.services.attachment_processor import AttachmentProcessor
 from src.services.channel_registry import ChannelRegistry
 from src.services.directory import DirectoryOutcome, DiscordDirectoryService
+from src.services.voice import VoiceMover
 
 _DIRECTORY_CODES = {
     "guild_not_found": "not_found",
@@ -116,6 +118,7 @@ class DiscordRabbitGateway:
         processor: AttachmentProcessor,
         registry: ChannelRegistry,
         directory: DiscordDirectoryService,
+        voice: VoiceMover,
         result_waiter: ResultWaiter,
         bot: discord.Client,
         session_maker: async_sessionmaker[AsyncSession],
@@ -125,6 +128,7 @@ class DiscordRabbitGateway:
         self._processor = processor
         self._registry = registry
         self._directory = directory
+        self._voice = voice
         self._result_waiter = result_waiter
         self._bot = bot
         self._session_maker = session_maker
@@ -137,6 +141,8 @@ class DiscordRabbitGateway:
         # permanently.
         self._pending_edits: set[int] = set()
         self._edit_tasks: dict[int, asyncio.Task[None]] = {}
+        #: The newest PNG an owed edit carries, waiting for its flush.
+        self._pending_images: dict[int, discord.File] = {}
 
     async def start(self) -> None:
         if not self._settings.broker_url:
@@ -158,6 +164,7 @@ class DiscordRabbitGateway:
     async def close(self) -> None:
         for task in list(self._edit_tasks.values()):
             task.cancel()
+        self._pending_images.clear()
         if self._broker is None:
             return
         try:
@@ -267,8 +274,12 @@ class DiscordRabbitGateway:
         """Discord refused this message for good; whoever asked for it reads why."""
         await self._settle(session, row, self._messages.mark_failed(session, row.id, error=reason))
 
-    def _schedule_edit(self, ref: int) -> None:
+    def _schedule_edit(self, ref: int, image: discord.File | None = None) -> None:
         """Note that this message owes an edit; the flush shows the card its row holds by then."""
+        if image is not None:
+            # The newest PNG wins, like the card: it is the one the row's card
+            # at flush time was rendered beside.
+            self._pending_images[ref] = image
         self._pending_edits.add(ref)
         if ref not in self._edit_tasks:
             self._edit_tasks[ref] = asyncio.create_task(self._flush_edit(ref))
@@ -292,6 +303,9 @@ class DiscordRabbitGateway:
                     if row is not None and row.status == "pending":
                         continue
                     self._pending_edits.discard(ref)
+                    # Past this point the edit is either written or dropped,
+                    # and its PNG goes with it: the next render brings its own.
+                    image = self._pending_images.pop(ref, None)
                     if row is None:
                         logger.error(f"❌ discord_message {ref} is gone; dropping its edit")
                         return
@@ -306,9 +320,10 @@ class DiscordRabbitGateway:
                     except ValidationError as exc:
                         logger.error(f"❌ discord_message {ref} holds an unusable card; dropping its edit: {exc}")
                         return
-                    await self._apply_edit(session, row, card)
+                    await self._apply_edit(session, row, card, image)
                     return
             self._pending_edits.discard(ref)
+            self._pending_images.pop(ref, None)
             logger.warning(f"⚠️ discord_message {ref} is still not posted; dropping its edit")
         finally:
             self._edit_tasks.pop(ref, None)
@@ -318,14 +333,27 @@ class DiscordRabbitGateway:
                 # stay a seat behind until the next one.
                 self._schedule_edit(ref)
 
-    async def _apply_edit(self, session: AsyncSession, row: models.DiscordMessage, card: DiscordCard) -> None:
+    async def _apply_edit(
+        self,
+        session: AsyncSession,
+        row: models.DiscordMessage,
+        card: DiscordCard,
+        image: discord.File | None = None,
+    ) -> None:
         """Replace the card of a posted message; a message that is gone closes its row."""
+        extra: dict[str, Any] = {}
+        if image is not None and card.attachment_name == image.filename:
+            extra["attachments"] = [image]
+        elif card.attachment_name is None:
+            # A card that became text drops the picture it used to show.
+            extra["attachments"] = []
         try:
             # No fetch: the ids are enough to edit, and the card comes from the
             # row anyway.
             await self._partial_message(row).edit(
                 view=card_view(card),
                 allowed_mentions=discord.AllowedMentions.none(),
+                **extra,
             )
         except discord.NotFound:
             logger.warning(f"⚠️ Message {row.message_id} is gone; closing discord_message {row.id}")
@@ -473,7 +501,12 @@ class DiscordRabbitGateway:
                         # Acked on scheduling, not on delivery: the edit is
                         # deliberately deferred, and a redelivery would only
                         # ask for an edit the pending one already covers.
-                        self._schedule_edit(event.message_ref)
+                        try:
+                            image = _attachment(event)
+                        except ValueError as exc:
+                            logger.error(f"❌ edit_message {event.message_ref} carried a broken PNG: {exc}")
+                            image = None
+                        self._schedule_edit(event.message_ref, image)
                         await msg.ack()
                         return
 
@@ -483,6 +516,7 @@ class DiscordRabbitGateway:
                         # this message would otherwise be written to a message
                         # that is about to stop existing.
                         self._pending_edits.discard(event.message_ref)
+                        self._pending_images.pop(event.message_ref, None)
                         async with self._session_maker() as session:
                             row = await self._messages.get(session, event.message_ref)
                             if row is None:
@@ -621,6 +655,24 @@ class DiscordRabbitGateway:
             ) as observation:
                 guild_id = str(body.get("guild_id") or "").strip()
                 outcome = await self._directory.get_guild_info(guild_id)
+                observation.set_status(outcome.status)
+                return _directory_reply(outcome)
+
+        @broker.subscriber(DISCORD_VOICE_MOVE_QUEUE)
+        async def handle_voice_move(body: dict[str, Any], msg: RabbitMessage) -> dict[str, Any]:
+            await self._bot.wait_until_ready()
+            async with observe_message_processing(
+                queue=DISCORD_VOICE_MOVE_QUEUE,
+                handler="handle_voice_move",
+                message=msg,
+                logger=logger,
+            ) as observation:
+                outcome = await self._voice.move(
+                    str(body.get("guild_id") or "").strip(),
+                    category_id=str(body.get("category_id") or "").strip(),
+                    moves=list(body.get("moves") or []),
+                    drain=body.get("drain") or None,
+                )
                 observation.set_status(outcome.status)
                 return _directory_reply(outcome)
 

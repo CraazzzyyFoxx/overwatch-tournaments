@@ -29,4 +29,6 @@ export const balancerQueryKeys = {
   tournamentSummary: (tournamentId: KeyPart) =>
     ["balancer", "tournament", tournamentId, "summary"] as const,
   workspaceConfig: (workspaceId: KeyPart) => ["workspace-balancer-config", workspaceId] as const,
+  /** The workspace's ranker settings, saved and rebuilt apart from the config above. */
+  workspaceRanker: (workspaceId: KeyPart) => ["workspace-balancer-ranker", workspaceId] as const,
 };
