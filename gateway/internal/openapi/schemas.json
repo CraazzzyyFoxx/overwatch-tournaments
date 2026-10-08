@@ -4125,6 +4125,12 @@
       "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Deletes the lobby's most recent match and gives back exactly the rank points it applied, read from the match and its seats rather than the host's current settings, then rebuilds the workspace's hidden ratings from the remaining history. 404 when the match belongs to another mix and 409 when a newer match of the SAME lobby exists, since the rank book compounds. must_play pins the recording redeemed are not restored.",
       "summary": "Undo custom game match"
     },
+    "rpc.balancer.custom.update_lineup": {
+      "request": {
+        "array": false,
+        "ref": "balancer.CustomGameLineupRefresh"
+      }
+    },
     "rpc.balancer.custom.update_player": {
       "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Patches one seat's participation state, role order or flex flag and returns the refreshed mix; 404 when the member is not on this mix's roster.",
       "request": {
@@ -23304,6 +23310,34 @@
         "new_host_user_id"
       ],
       "title": "CustomGameHostTransfer",
+      "type": "object"
+    },
+    "balancer.CustomGameLineupRefresh": {
+      "additionalProperties": false,
+      "description": "The lobby's newest lineup card, re-rendered from the lineup on screen now.",
+      "properties": {
+        "image_b64": {
+          "anyOf": [
+            {
+              "maxLength": 8388608,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Image B64"
+        },
+        "lobby_index": {
+          "default": 0,
+          "maximum": 5,
+          "minimum": 0,
+          "title": "Lobby Index",
+          "type": "integer"
+        }
+      },
+      "title": "CustomGameLineupRefresh",
       "type": "object"
     },
     "balancer.CustomGameLobbyCountPatch": {

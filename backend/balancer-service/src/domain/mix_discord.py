@@ -259,6 +259,7 @@ def lineup_card(
     lobby_label: str | None = None,
     image_filename: str | None = None,
     mentions: Sequence[str] = (),
+    voice_target: str | None = None,
 ) -> DiscordCard:
     """The matchup one lobby is about to play.
 
@@ -279,6 +280,9 @@ def lineup_card(
 
     ``mentions`` are the Discord ids of seated players whose account is linked;
     they ping, which is the point of posting a lineup at all.
+
+    ``voice_target`` is the mix and lobby the voice buttons act on; only the
+    lobby's newest card carries them.
     """
     title = " · ".join(
         part
@@ -310,4 +314,10 @@ def lineup_card(
         details="\n\n".join(blocks) or None,
         image_url=None if image_filename is None else f"attachment://{image_filename}",
         rows=[[_board_button(board_url)]],
+        answers=[]
+        if voice_target is None
+        else [
+            DiscordActionButton(label="Развести по войсам", action="voice.move", target=voice_target, style="primary"),
+            DiscordActionButton(label="Вернуть в общий", action="voice.return", target=voice_target),
+        ],
     )

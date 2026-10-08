@@ -10020,6 +10020,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/discord/lineup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Update lineup
+         * @description RPC subject: `rpc.balancer.custom.update_lineup`
+         */
+        put: operations["put__api_v1_balancer_workspaces__workspace_id__custom_games__game_id__discord_lineup"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/discord/post": {
         parameters: {
             query?: never;
@@ -20435,6 +20455,22 @@ export interface components {
         "balancer.CustomGameHostTransfer": {
             /** New Host User Id */
             new_host_user_id: number;
+        };
+        /**
+         * CustomGameLineupRefresh
+         * @description The lobby's newest lineup card, re-rendered from the lineup on screen now.
+         */
+        "balancer.CustomGameLineupRefresh": {
+            /**
+             * Image B64
+             * @default null
+             */
+            image_b64: string | null;
+            /**
+             * Lobby Index
+             * @default 0
+             */
+            lobby_index: number;
         };
         /**
          * CustomGameLobbyCountPatch
@@ -66817,6 +66853,89 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not authorized (`forbidden`). Authenticated, but the credential lacks the permission, workspace, or scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    put__api_v1_balancer_workspaces__workspace_id__custom_games__game_id__discord_lineup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                game_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["balancer.CustomGameLineupRefresh"];
+            };
+        };
         responses: {
             /** @description Success */
             200: {

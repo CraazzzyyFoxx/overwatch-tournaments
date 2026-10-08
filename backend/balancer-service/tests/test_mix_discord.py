@@ -277,3 +277,15 @@ def test_the_card_pings_the_seated_players_it_was_given_ids_for() -> None:
     assert "-# :owt_players: <@111> <@222>" in (_lineup(document, mentions=["111", "222"]).details or "")
     # With a picture the mentions are all the card says.
     assert _lineup(document, image_filename="lineup.png", mentions=["111"]).details == "-# :owt_players: <@111>"
+
+
+def test_only_a_card_given_a_voice_target_offers_to_move_the_lobby() -> None:
+    """The two voice buttons are the newest card's; an older one carries none."""
+    card = _lineup(voice_target="42-0")
+
+    assert [(button.action, button.target) for button in card.answers] == [
+        ("voice.move", "42-0"),
+        ("voice.return", "42-0"),
+    ]
+    assert [button.style for button in card.answers] == ["primary", "secondary"]
+    assert _lineup().answers == []

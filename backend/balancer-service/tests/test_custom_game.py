@@ -168,6 +168,23 @@ def _channel(channel_id: str, name: str, kind: str, **overrides) -> dict[str, ob
     }
 
 
+def _voice_card_json(target: str) -> dict[str, object]:
+    """``card_json`` of a posted lineup card that still carries its voice buttons."""
+    return {
+        "text": "## Scrim · Игра 1",
+        "answers": [
+            {
+                "type": "action",
+                "label": "Развести по войсам",
+                "action": "voice.move",
+                "target": target,
+                "style": "primary",
+            },
+            {"type": "action", "label": "Вернуть в общий", "action": "voice.return", "target": target},
+        ],
+    }
+
+
 def _discord(*channels: dict[str, object]) -> SimpleNamespace:
     return SimpleNamespace(guild_channels=AsyncMock(return_value=list(channels)))
 
@@ -2783,6 +2800,121 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         self.assertEqual((command.image_b64, command.image_filename), ("iVBORw0KGgo=", "lineup.png"))
         # Nobody linked a Discord, so there is no mention line either.
         self.assertIsNone(command.card.details)
+
+    async def test_discord_lineup_takes_the_voice_buttons_off_the_lobbys_older_cards(self) -> None:
+        """Only the newest card of a lobby moves people. The card next door is
+        another lobby's and keeps its own buttons."""
+        result = {"variants": [{"teams": [{"roster": {"Tank": [{"uuid": "1", "name": "Ana"}]}}]}]}
+        self.games.get.return_value = _game(lobby_count=2)
+        self.lobby_rows[0] = _lobby(0, balance_result_json=lobby_document(result["variants"]))
+        self.lobby_rows[1] = _lobby(1, balance_result_json=lobby_document(result["variants"]))
+        older = self.messages.add(
+            subject="mix:11", slot="lineup:0:1", kind="mix.lineup", status="posted", card_json=_voice_card_json("11-0")
+        )
+        neighbour = self.messages.add(
+            subject="mix:11", slot="lineup:1:1", kind="mix.lineup", status="posted", card_json=_voice_card_json("11-1")
+        )
+        self.session.scalar = AsyncMock(return_value={"mix_discord_channel_id": "555"})
+        self._discord_links({})
+
+        _channel_id, [edit, post] = await self.service.discord_lineup(
+            self.session,
+            workspace_id=1,
+            custom_game_id=11,
+            lobby_index=0,
+            variant_index=0,
+            actor_user_id=9,
+            board_url_base="https://owt.example",
+        )
+
+        self.assertEqual((edit.action, edit.message_ref), ("edit_message", older.id))
+        self.assertEqual(older.card_json["answers"], [])
+        self.assertIn("Игра 1", older.card_json["text"])
+        self.assertEqual(len(neighbour.card_json["answers"]), 2)
+        self.assertEqual(
+            [(button.action, button.target) for button in post.card.answers],
+            [("voice.move", "11-0"), ("voice.return", "11-0")],
+        )
+
+    async def test_refresh_lineup_re_renders_the_lobbys_newest_card_with_the_new_capture(self) -> None:
+        """The lineup changed under a card already posted: the newest one is
+        redrawn from the lineup as it stands, keeping the match it announces."""
+        result = {
+            "variants": [{"teams": [{"roster": {"Tank": [{"uuid": "1", "name": "Ana", "assigned_rating": 3000}]}}]}]
+        }
+        self.games.get.return_value = _game()
+        self.lobby_rows[0] = _lobby(0, balance_result_json=lobby_document(result["variants"]))
+        older = self.messages.add(
+            subject="mix:11", slot="lineup:0:1", kind="mix.lineup", status="posted", card_json=_voice_card_json("11-0")
+        )
+        newest = self.messages.add(
+            subject="mix:11", slot="lineup:0:2", kind="mix.lineup", status="posted", card_json=_voice_card_json("11-0")
+        )
+        self._discord_links({})
+
+        [command] = await self.service.refresh_lineup(
+            self.session,
+            workspace_id=1,
+            custom_game_id=11,
+            lobby_index=0,
+            image_b64="iVBORw0KGgo=",
+            actor_user_id=9,
+            board_url_base="https://owt.example",
+        )
+
+        self.assertEqual((command.action, command.message_ref), ("edit_message", newest.id))
+        self.assertEqual((command.image_b64, command.image_filename), ("iVBORw0KGgo=", "lineup.png"))
+        self.assertIn("Игра 2", newest.card_json["text"])
+        self.assertEqual(newest.card_json["image_url"], "attachment://lineup.png")
+        self.assertEqual([button["action"] for button in newest.card_json["answers"]], ["voice.move", "voice.return"])
+        # Only the newest card is touched.
+        self.assertEqual(len(older.card_json["answers"]), 2)
+
+    async def test_refresh_lineup_without_a_capture_falls_back_to_the_seat_lists(self) -> None:
+        result = {
+            "variants": [{"teams": [{"roster": {"Tank": [{"uuid": "1", "name": "Ana", "assigned_rating": 3000}]}}]}]
+        }
+        self.games.get.return_value = _game()
+        self.lobby_rows[0] = _lobby(0, balance_result_json=lobby_document(result["variants"]))
+        row = self.messages.add(
+            subject="mix:11", slot="lineup:0:1", kind="mix.lineup", status="posted", card_json=_voice_card_json("11-0")
+        )
+        self._discord_links({})
+
+        [command] = await self.service.refresh_lineup(
+            self.session,
+            workspace_id=1,
+            custom_game_id=11,
+            lobby_index=0,
+            image_b64=None,
+            actor_user_id=9,
+            board_url_base="https://owt.example",
+        )
+
+        self.assertIsNone(command.image_b64)
+        self.assertIsNone(row.card_json["image_url"])
+        self.assertIn(":owt_tank: Ana · 3000", row.card_json["details"])
+
+    async def test_refresh_lineup_has_nothing_to_do_without_a_live_card_or_an_option(self) -> None:
+        """No card standing, or a lineup whose selected option is gone: the mix
+        page refreshes after every lineup change, and most of them have neither."""
+        self.games.get.return_value = _game()
+        self.lobby_rows[0] = _lobby(0, balance_result_json=lobby_document([{"teams": []}]))
+        self.messages.add(subject="mix:11", slot="lineup:0:1", kind="mix.lineup", status="deleted")
+
+        kwargs: dict[str, object] = {
+            "workspace_id": 1,
+            "custom_game_id": 11,
+            "lobby_index": 0,
+            "image_b64": None,
+            "actor_user_id": 9,
+            "board_url_base": "https://owt.example",
+        }
+        self.assertEqual([], await self.service.refresh_lineup(self.session, **kwargs))
+
+        self.messages.add(subject="mix:11", slot="lineup:0:1", kind="mix.lineup", status="posted")
+        self.lobby_rows[0] = _lobby(0, selected_variant_index=4, balance_result_json=lobby_document([{"teams": []}]))
+        self.assertEqual([], await self.service.refresh_lineup(self.session, **kwargs))
 
     async def test_set_voice_channels_writes_the_mixs_general_voice_and_both_team_voices(self) -> None:
         """One write for the whole mix: the general voice everyone returns to,

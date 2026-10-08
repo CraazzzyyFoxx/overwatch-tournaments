@@ -1017,6 +1017,29 @@ def register(broker: Any, logger: Any) -> None:
 
         return await c.envelope(logger, "custom.post_discord", op, session_factory=_SF)
 
+    @broker.subscriber("rpc.balancer.custom.update_lineup")
+    async def _update_lineup(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = c.active_actor(data)
+            workspace_id = _int(data, "workspace_id")
+            _require_mix(data, user, workspace_id, "update")
+            body = _body(schemas.CustomGameLineupRefresh, data)
+            commands = await custom_game_service.refresh_lineup(
+                session,
+                workspace_id=workspace_id,
+                custom_game_id=_game_id(data),
+                lobby_index=body.lobby_index,
+                image_b64=body.image_b64,
+                actor_user_id=user.id,
+                actor_is_superuser=user.is_superuser,
+                board_url_base=config.public_site_url,
+            )
+            await discord_messages.enqueue(session, commands)
+            await session.commit()
+            return {"status": "queued" if commands else "nothing_to_update"}
+
+        return await c.envelope(logger, "custom.update_lineup", op, session_factory=_SF)
+
     @broker.subscriber("rpc.balancer.custom.set_voice_channels")
     async def _set_voice_channels(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:

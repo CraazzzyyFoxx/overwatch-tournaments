@@ -17,6 +17,7 @@ __all__ = (
     "CustomGameCoHostPatch",
     "CustomGameCreate",
     "CustomGameHostTransfer",
+    "CustomGameLineupRefresh",
     "CustomGameLobbyCountPatch",
     "CustomGameLobbyVoice",
     "CustomGameNextMapPatch",
@@ -143,17 +144,9 @@ _MAX_IMAGE_B64_LENGTH = 8 * 1024 * 1024
 _PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 
 
-class CustomGamePostDiscord(_LobbyScoped):
-    """Which balance option's lineup to post, and the PNG of it to attach.
+class _LineupImage(_LobbyScoped):
+    """A lineup capture: the matchup card rasterised in the host's browser (see CustomGamePostDiscord)."""
 
-    The image is the matchup card the host is looking at, rasterised in their
-    browser (see ``frontend/src/hooks/useNodeCapture.ts``) -- the bot has no
-    renderer, and a screenshot of the real card is the one thing guaranteed to
-    match what the mix page shows. Omitted when the capture fails, and the
-    text embed is then posted instead.
-    """
-
-    variant_index: int = Field(ge=0)
     image_b64: str | None = Field(default=None, max_length=_MAX_IMAGE_B64_LENGTH)
 
     @field_validator("image_b64")
@@ -173,6 +166,23 @@ class CustomGamePostDiscord(_LobbyScoped):
         if not raw.startswith(_PNG_MAGIC):
             raise ValueError("image_b64 must be a PNG")
         return value
+
+
+class CustomGamePostDiscord(_LineupImage):
+    """Which balance option's lineup to post, and the PNG of it to attach.
+
+    The image is the matchup card the host is looking at, rasterised in their
+    browser (see ``frontend/src/hooks/useNodeCapture.ts``) -- the bot has no
+    renderer, and a screenshot of the real card is the one thing guaranteed to
+    match what the mix page shows. Omitted when the capture fails, and the
+    text embed is then posted instead.
+    """
+
+    variant_index: int = Field(ge=0)
+
+
+class CustomGameLineupRefresh(_LineupImage):
+    """The lobby's newest lineup card, re-rendered from the lineup on screen now."""
 
 
 class CustomGameHostTransfer(_Request):
