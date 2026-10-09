@@ -64,7 +64,7 @@ export const ADMISSION_TONE: Record<string, Tone> = {
 };
 
 export function memberName(member: RegistrationTeamMember): string {
-  return member.display_name ?? member.battle_tag ?? `#${member.registration_id}`;
+  return member.display_name ?? member.primary_handle ?? `#${member.registration_id}`;
 }
 
 /** The one member every organizer view identifies a team by. */

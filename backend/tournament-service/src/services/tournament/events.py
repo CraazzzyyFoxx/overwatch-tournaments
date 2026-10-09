@@ -8,6 +8,7 @@ from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
+from shared.core.social import SocialProvider
 from shared.messaging.config import TOURNAMENT_EVENTS_EXCHANGE
 from shared.messaging.outbox import enqueue_outbox_event
 from shared.schemas.events import (
@@ -230,7 +231,7 @@ async def enqueue_registration_approved(
             workspace_id=workspace_id,
             registration_id=registration.id,
             user_id=player_id,
-            battle_tag=registration.battle_tag,
+            battle_tag=registration.primary_handle(SocialProvider.BATTLENET),
             source_service="tournament-service",
         ),
         exchange=TOURNAMENT_EVENTS_EXCHANGE,
@@ -262,7 +263,7 @@ async def enqueue_registration_rejected(
             workspace_id=workspace_id,
             registration_id=registration.id,
             user_id=player_id,
-            battle_tag=registration.battle_tag,
+            battle_tag=registration.primary_handle(SocialProvider.BATTLENET),
             source_service="tournament-service",
         ),
         exchange=TOURNAMENT_EVENTS_EXCHANGE,
@@ -293,7 +294,7 @@ async def enqueue_registration_rank_check(
             workspace_id=await get_registration_workspace_id(session, registration.tournament_id),
             registration_id=registration.id,
             user_id=await get_registration_player_id(session, registration),
-            battle_tag=registration.battle_tag,
+            battle_tag=registration.primary_handle(SocialProvider.BATTLENET),
             source_service="tournament-service",
         ),
         exchange=TOURNAMENT_EVENTS_EXCHANGE,

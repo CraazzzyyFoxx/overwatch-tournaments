@@ -299,7 +299,6 @@ OPERATIONS: dict[str, Op] = {
         request=schemas.BalancerRegistrationRankAutofillRequest,
         response=schemas.BalancerRegistrationRankAutofillResponse,
     ),
-    "rpc.tournament.reg_export_users": Op(response=schemas.RegistrationUserExportResponse),
     "rpc.tournament.reg_check_in": Op(request=schemas.CheckInRequest, response=schemas.BalancerRegistrationRead),
     "rpc.tournament.reg_user_rank_history": Op(response=schemas.BalancerRegistrationRankHistoryResponse),
     # ── registration status catalog ────────────────────────────────────────

@@ -174,7 +174,11 @@ describe("sanitizeSchema", () => {
         "one",
         [
           field("mine", { params: { require_verified: true } }),
-          field("battle_tag", { kind: "builtin", label: null, params: { require_verified: true } })
+          field("identity_battlenet", {
+            kind: "builtin",
+            label: null,
+            params: { require_verified: true }
+          })
         ]
       ])
     );
@@ -205,9 +209,9 @@ describe("blockedFieldKeys", () => {
     // cannot produce one — but the server refuses the whole document for it.
     const smuggled = schemaOf([
       "one",
-      [field("battle_tag"), field("identity_card"), field("fine")]
+      [field("identity_battlenet"), field("identity_card"), field("fine")]
     ]);
-    expect([...blockedFieldKeys(smuggled)]).toEqual(["battle_tag", "identity_card"]);
+    expect([...blockedFieldKeys(smuggled)]).toEqual(["identity_battlenet", "identity_card"]);
   });
 
   it("blocks an unlabelled custom field, bad options and a broken pattern", () => {
@@ -237,7 +241,10 @@ describe("blockedFieldKeys", () => {
   it("does not demand a label of a builtin", () => {
     const builtins = schemaOf([
       "one",
-      [field("battle_tag", { kind: "builtin", label: null }), field("roles", { kind: "builtin", label: null })]
+      [
+        field("identity_battlenet", { kind: "builtin", label: null }),
+        field("roles", { kind: "builtin", label: null })
+      ]
     ]);
     expect([...blockedFieldKeys(builtins)]).toEqual([]);
   });

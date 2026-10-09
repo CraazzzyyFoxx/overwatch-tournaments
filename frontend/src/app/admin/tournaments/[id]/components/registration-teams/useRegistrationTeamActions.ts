@@ -83,7 +83,7 @@ export interface RegistrationTeamActions {
   }) => void;
   attachMember: (input: {
     teamId: number;
-    battle_tag: string;
+    handle: string;
     slot_code: string;
     is_substitute: boolean;
   }) => void;
@@ -277,16 +277,16 @@ export function useRegistrationTeamActions({
   });
 
   /** The same act for someone this tournament has never seen: the organizer
-   *  types the BattleTag instead of picking a registrant. */
+   *  types the handle instead of picking a registrant. */
   const attachAdminMutation = useMutation({
     mutationFn: (input: {
       teamId: number;
-      battle_tag: string;
+      handle: string;
       slot_code: string;
       is_substitute: boolean;
     }) =>
       registrationTeamService.attachMemberAdmin(tournamentId, input.teamId, {
-        battle_tag: input.battle_tag,
+        handle: input.handle,
         slot_code: input.slot_code,
         is_substitute: input.is_substitute
       }),

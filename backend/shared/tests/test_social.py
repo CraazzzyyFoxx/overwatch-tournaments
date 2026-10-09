@@ -3,12 +3,15 @@
 import pytest
 
 from shared.core.social import (
+    GAME_PROVIDERS,
     OAUTH_PROVIDERS,
     PROVIDERS,
     SOCIAL_PROVIDERS,
+    VERIFIABLE_PROVIDERS,
     InvalidHandlePattern,
     SocialProvider,
     compile_handle_pattern,
+    display_social_handle,
     handle_pattern_for,
     is_oauth_provider,
     matches_handle_pattern,
@@ -51,6 +54,29 @@ def test_oauth_capability_drives_every_oauth_derived_set() -> None:
     # A login mechanism that proves no player handle maps to no social identity.
     assert social_provider_for_oauth(SocialProvider.BOOSTY) is None
     assert social_provider_for_oauth("saml") is None
+
+
+def test_verifiable_providers_are_the_ones_whose_ownership_can_be_proven() -> None:
+    """``require_verified`` is honoured for these and ignored everywhere else."""
+    assert VERIFIABLE_PROVIDERS == {
+        SocialProvider.BATTLENET,
+        SocialProvider.DISCORD,
+        SocialProvider.TWITCH,
+    }
+    assert VERIFIABLE_PROVIDERS == {spec.id for spec in PROVIDERS.values() if spec.can_be_verified}
+
+
+def test_game_providers_are_ordered_and_battlenet_is_the_only_one_so_far() -> None:
+    """The order IS the precedence a registration's player is resolved in."""
+    assert GAME_PROVIDERS == (SocialProvider.BATTLENET,)
+    orders = [PROVIDERS[p].order for p in GAME_PROVIDERS]
+    assert orders == sorted(orders)
+
+
+def test_display_handle_keeps_casing_but_canonicalizes_battletag_spacing() -> None:
+    assert display_social_handle(SocialProvider.BATTLENET, "  Player # 1234 ") == "Player#1234"
+    assert display_social_handle(SocialProvider.DISCORD, "  CoolGuy ") == "CoolGuy"
+    assert display_social_handle(SocialProvider.DISCORD, None) == ""
 
 
 def test_normalize_battlenet_strips_spaces_and_casefolds() -> None:

@@ -20,7 +20,7 @@ export type RegistrationTeamInviteState = "pending" | "accepted" | "declined" | 
 export interface RegistrationTeamMember {
   registration_id: number;
   display_name: string | null;
-  battle_tag: string | null;
+  primary_handle: string | null;
   slot_code: string | null;
   is_substitute: boolean;
   is_captain: boolean;
@@ -40,7 +40,7 @@ export interface RegistrationTeamInvite {
    * client could use: a captain managing two pending offers needs a name, or
    * neither chip can be revoked on purpose.
    */
-  target_battle_tag: string | null;
+  target_handle: string | null;
   /** True when the invite is a shareable link. The token itself is never served
    *  again — it is returned exactly once, by the create call. */
   is_link: boolean;
@@ -172,7 +172,7 @@ export interface RegistrationTeamInvitePreview {
  */
 export interface RegistrationFreeAgent {
   registration_id: number;
-  battle_tag: string;
+  primary_handle: string;
   /** Role codes, primary first: the captain is filling one specific slot. */
   roles: string[];
 }
@@ -215,7 +215,7 @@ export interface RegistrationTeamInviteHistoryEntry {
   is_substitute: boolean;
   /** Includes `expired`, which is derived from a pending row past its clock. */
   state: string;
-  target_battle_tag: string | null;
+  target_handle: string | null;
   is_link: boolean;
   invited_at: string | null;
   expires_at: string | null;

@@ -31,14 +31,14 @@ def test_duplicate_field_keys_are_rejected():
 
 def test_custom_key_may_not_shadow_a_builtin_or_identity_prefix():
     with pytest.raises(ValidationError, match="reserved"):
-        _schema(FormField(key="battle_tag", kind="text", label="x"))
+        _schema(FormField(key="public_notes", kind="text", label="x"))
     with pytest.raises(ValidationError, match="reserved"):
         _schema(FormField(key="identity_telegram", kind="text", label="x"))
 
 
 def test_builtin_visibility_is_fixed_by_the_catalog():
     with pytest.raises(ValidationError, match="visibility"):
-        _schema(FormField(key="battle_tag", kind="builtin", visibility="organizers"))
+        _schema(FormField(key="identity_battlenet", kind="builtin", visibility="organizers"))
     with pytest.raises(ValidationError, match="visibility"):
         _schema(FormField(key="organizer_notes", kind="builtin", visibility="public"))
 
@@ -67,25 +67,27 @@ def test_roles_params_validate_against_the_catalog_model():
 
 def test_public_keys_and_canonical_json_are_order_independent_for_dedupe():
     a = _schema(
-        FormField(key="battle_tag", kind="builtin"),
+        FormField(key="identity_battlenet", kind="builtin"),
         FormField(key="phone", kind="text", label="P", visibility="organizers"),
     )
     b = FormSchema.model_validate(a.model_dump())
-    assert a.public_keys() == frozenset({"battle_tag"})
+    assert a.public_keys() == frozenset({"identity_battlenet"})
     assert a.canonical_json() == b.canonical_json()
 
 
 def test_default_schema_matches_todays_default_form():
     keys = [f.key for f in default_schema().fields()]
-    assert keys == ["battle_tag", "smurf_tags", "identity_discord", "identity_twitch", "roles", "public_notes"]
+    assert keys == ["identity_battlenet", "identity_discord", "identity_twitch", "roles", "public_notes"]
     assert [s.key for s in default_schema().sections] == ["accounts", "roles", "details"]
 
 
-def test_identity_keys_round_trip_for_every_non_battlenet_provider():
-    assert "battlenet" not in IDENTITY_PROVIDERS
+def test_identity_keys_round_trip_for_every_provider():
+    """Battle.net is an identity like any other; only its visibility is fixed."""
+    assert "battlenet" in IDENTITY_PROVIDERS
     for provider in IDENTITY_PROVIDERS:
         assert identity_provider(identity_key(provider)) == provider
-        assert builtin_spec(identity_key(provider)).fixed_visibility is None
+    assert builtin_spec("identity_battlenet").fixed_visibility == "public"
+    assert builtin_spec("identity_discord").fixed_visibility is None
     assert identity_provider("identity_nope") is None and builtin_spec("identity_nope") is None
 
 
@@ -116,7 +118,7 @@ def test_builtin_key_must_exist_and_builtins_take_no_options_or_params():
     with pytest.raises(ValidationError, match="unknown builtin"):
         _schema(FormField(key="nope", kind="builtin"))
     with pytest.raises(ValidationError, match="options"):
-        _schema(FormField(key="battle_tag", kind="builtin", options=["a"]))
+        _schema(FormField(key="identity_battlenet", kind="builtin", options=["a"]))
     with pytest.raises(ValidationError, match="takes no params"):
         _schema(FormField(key="public_notes", kind="builtin", params={"x": 1}))
 
@@ -233,15 +235,56 @@ def test_a_required_rank_block_wants_a_rank_on_every_declared_role_and_only_thos
 
 def test_a_battle_tag_is_matched_in_its_canonical_form():
     """The grammar has no room for the spacing humans type around the ``#``, so
-    the pattern runs on the provider's canonical form -- the same one the column
-    and the verified-identity lookup use."""
-    schema = _s(FormField(key="battle_tag", kind="builtin"), FormField(key="smurf_tags", kind="builtin"))
+    the pattern runs on the provider's canonical form -- the same one the stored
+    identity row and the verified-identity lookup use."""
+    schema = _s(FormField(key="identity_battlenet", kind="builtin"))
 
-    result = normalize_answers(schema, {"battle_tag": "Player # 1234", "smurf_tags": ["Alt # 1111"]})
+    result = normalize_answers(schema, {"identity_battlenet": ["Player # 1234", "Alt # 1111"]})
 
     assert result.errors == []
-    # Stored as typed; only the pattern check is canonicalised.
-    assert result.values == {"battle_tag": "Player # 1234", "smurf_tags": ["Alt # 1111"]}
+    # Stored in display form: spacing around ``#`` goes, casing stays.
+    assert result.values == {"identity_battlenet": ["Player#1234", "Alt#1111"]}
+
+
+def test_identity_answers_dedupe_by_the_providers_matching_rule():
+    """``Player#1234`` and ``player # 1234`` are one account, not two smurfs."""
+    schema = _s(FormField(key="identity_battlenet", kind="builtin"))
+
+    result = normalize_answers(schema, {"identity_battlenet": ["Player#1234", "player # 1234", "", "Alt#1111"]})
+
+    assert result.errors == []
+    assert result.values == {"identity_battlenet": ["Player#1234", "Alt#1111"]}
+
+
+def test_more_handles_than_the_field_allows_is_too_many():
+    """Battle.net defaults to 5; every other identity to one."""
+    schema = _s(
+        FormField(key="identity_battlenet", kind="builtin"),
+        FormField(key="identity_discord", kind="builtin"),
+    )
+
+    result = normalize_answers(
+        schema,
+        {
+            "identity_battlenet": [f"Player#{1000 + i}" for i in range(6)],
+            "identity_discord": ["one", "two"],
+        },
+    )
+
+    assert _codes(result) == {("identity_battlenet", "too_many"), ("identity_discord", "too_many")}
+    assert {e.field: e.params.get("max") for e in result.errors} == {
+        "identity_battlenet": 5,
+        "identity_discord": 1,
+    }
+
+
+def test_an_identity_answer_must_be_a_list_of_strings():
+    schema = _s(FormField(key="identity_battlenet", kind="builtin"))
+
+    assert _codes(normalize_answers(schema, {"identity_battlenet": "Player#1234"})) == {
+        ("identity_battlenet", "invalid_type")
+    }
+    assert _codes(normalize_answers(schema, {"identity_battlenet": [123]})) == {("identity_battlenet", "invalid_type")}
 
 
 def test_required_checkbox_must_be_true_and_required_reports_every_missing_field():
@@ -264,7 +307,7 @@ def test_hidden_field_is_dropped_and_never_required():
             visible_when={"field": "stream_pov", "op": "truthy"},
         ),
     )
-    r = normalize_answers(schema, {"stream_pov": False, "identity_twitch": "abcd"})
+    r = normalize_answers(schema, {"stream_pov": False, "identity_twitch": ["abcd"]})
     assert r.errors == [] and "identity_twitch" not in r.values
     r2 = normalize_answers(schema, {"stream_pov": True})
     assert _codes(r2) == {("identity_twitch", "required")}
@@ -274,15 +317,22 @@ def test_default_patterns_apply_server_side_and_explicit_regex_wins():
     schema = _s(
         FormField(key="identity_discord", kind="builtin"),
         FormField(key="site", kind="url", label="S"),
-        FormField(key="battle_tag", kind="builtin", validation={"regex": "^X#[0-9]{4}$", "error_message": "X only"}),
+        FormField(
+            key="identity_battlenet",
+            kind="builtin",
+            validation={"regex": "^x#[0-9]{4}$", "error_message": "X only"},
+        ),
     )
-    r = normalize_answers(schema, {"identity_discord": "Bad Name!", "site": "ftp://x", "battle_tag": "Y#1234"})
+    r = normalize_answers(
+        schema,
+        {"identity_discord": ["Bad Name!"], "site": "ftp://x", "identity_battlenet": ["Y#1234"]},
+    )
     assert _codes(r) == {
         ("identity_discord", "invalid_format"),
         ("site", "invalid_format"),
-        ("battle_tag", "invalid_format"),
+        ("identity_battlenet", "invalid_format"),
     }
-    assert next(e for e in r.errors if e.field == "battle_tag").msg == "X only"
+    assert next(e for e in r.errors if e.field == "identity_battlenet").msg == "X only"
 
 
 def test_unknown_key_and_partial_semantics():
@@ -310,10 +360,10 @@ def test_editable_is_closed_by_default_and_reports_an_allowlist():
     """The deploy must not widen what a registrant may rewrite: a schema nobody
     re-opened in the builder keeps every question frozen."""
     schema = _schema(
-        FormField(key="battle_tag", kind="builtin"),
+        FormField(key="identity_battlenet", kind="builtin"),
         FormField(key="public_notes", kind="builtin", editable=True),
     )
-    assert schema.field("battle_tag").editable is False
+    assert schema.field("identity_battlenet").editable is False
     assert schema.editable_keys() == frozenset({"public_notes"})
 
 
@@ -321,13 +371,13 @@ def test_a_stored_document_without_the_flag_canonicalizes_to_the_default():
     """``apply_schema`` dedupes versions on ``canonical_json`` after re-validating
     the STORED side, so shipping the flag must not append a cosmetic version to
     every existing form."""
-    stored = _schema(FormField(key="battle_tag", kind="builtin")).model_dump(mode="json")
+    stored = _schema(FormField(key="identity_battlenet", kind="builtin")).model_dump(mode="json")
     for section in stored["sections"]:
         for field in section["fields"]:
             del field["editable"]
 
     assert FormSchema.model_validate(stored).canonical_json() == (
-        _schema(FormField(key="battle_tag", kind="builtin")).canonical_json()
+        _schema(FormField(key="identity_battlenet", kind="builtin")).canonical_json()
     )
 
 

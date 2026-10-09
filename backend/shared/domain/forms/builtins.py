@@ -1,7 +1,7 @@
 """The one catalog of builtin registration fields.
 
 A builtin field is one whose answer has dedicated storage (a ``registration``
-column, a ``registration_role`` row, a ``registration_identity`` row). The
+column, a ``registration_role`` row, ``registration_identity`` rows). The
 schema only decides whether it is present, where, and under which rules; this
 module says which keys exist, which params each accepts, and whose visibility
 is not the organizer's to choose.
@@ -15,14 +15,13 @@ from typing import Literal, NamedTuple
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from shared.core.social import SocialProvider
+from shared.core.social import PROVIDERS, SocialProvider
 
 __all__ = (
     "BUILTIN_KEYS",
     "DEFAULT_PATTERNS",
     "IDENTITY_KEY_PREFIX",
     "IDENTITY_PROVIDERS",
-    "BattleTagParams",
     "BuiltinSpec",
     "IdentityParams",
     "RolesParams",
@@ -30,15 +29,18 @@ __all__ = (
     "builtin_spec",
     "default_pattern",
     "identity_key",
+    "identity_max_count",
     "identity_provider",
     "is_builtin_key",
 )
 
 IDENTITY_KEY_PREFIX = "identity_"
 
-#: Providers a registration may ask for. ``battlenet`` is deliberately absent:
-#: the BattleTag is its own builtin with its own column and grammar.
+#: Providers a registration may ask for, one ``identity_<provider>`` builtin
+#: each. Battle.net is one of them: its answer is a list like every other
+#: identity's, primary first, smurfs after.
 IDENTITY_PROVIDERS: tuple[str, ...] = (
+    SocialProvider.BATTLENET,
     SocialProvider.DISCORD,
     SocialProvider.TWITCH,
     SocialProvider.BOOSTY,
@@ -46,17 +48,20 @@ IDENTITY_PROVIDERS: tuple[str, ...] = (
     SocialProvider.YOUTUBE,
 )
 
+#: Upper bound an organizer may set on handles per identity field.
+MAX_IDENTITY_COUNT = 10
+
 
 class _Strict(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class BattleTagParams(_Strict):
-    require_verified: bool = False
-
-
 class IdentityParams(_Strict):
+    #: Only meaningful for providers that ``can_be_verified``; ignored otherwise.
     require_verified: bool = False
+    #: How many handles the answer may carry (primary + extras). ``None`` means
+    #: the provider's ``default_max_count``.
+    max_count: int | None = Field(default=None, ge=1, le=MAX_IDENTITY_COUNT)
 
 
 class TopHeroesParams(_Strict):
@@ -84,8 +89,6 @@ class BuiltinSpec(NamedTuple):
 
 
 _STATIC: dict[str, BuiltinSpec] = {
-    "battle_tag": BuiltinSpec("battle_tag", "public", BattleTagParams),
-    "smurf_tags": BuiltinSpec("smurf_tags", None, None),
     "roles": BuiltinSpec("roles", "public", RolesParams),
     "stream_pov": BuiltinSpec("stream_pov", "public", None),
     #: "Call me in if a replacement is needed." Public on purpose: a reserve
@@ -116,7 +119,21 @@ def is_builtin_key(key: str) -> bool:
 def builtin_spec(key: str) -> BuiltinSpec | None:
     if key in _STATIC:
         return _STATIC[key]
-    return BuiltinSpec(key, None, IdentityParams) if identity_provider(key) else None
+    provider = identity_provider(key)
+    if provider is None:
+        return None
+    # The game handle is the roster's public face, as the BattleTag column was.
+    visibility = "public" if provider == SocialProvider.BATTLENET else None
+    return BuiltinSpec(key, visibility, IdentityParams)
+
+
+def identity_max_count(provider: str, params: dict | None) -> int:
+    """How many handles an ``identity_<provider>`` answer may carry."""
+    explicit = IdentityParams.model_validate(params or {}).max_count
+    if explicit is not None:
+        return explicit
+    spec = PROVIDERS.get(provider)
+    return spec.default_max_count if spec is not None else 1
 
 
 #: Server-side defaults, applied when a field carries no explicit
@@ -124,8 +141,7 @@ def builtin_spec(key: str) -> BuiltinSpec | None:
 #: browser, so a non-browser writer (sheet sync, admin API) could store a
 #: malformed handle; the server is now the one place that decides.
 DEFAULT_PATTERNS: dict[str, str] = {
-    "battle_tag": r"([^#]{2,12}#[0-9]{4,})",
-    "smurf_tags": r"([^#]{2,12}#[0-9]{4,})",
+    identity_key(SocialProvider.BATTLENET): r"([^#]{2,12}#[0-9]{4,})",
     identity_key(SocialProvider.DISCORD): r"^[a-z0-9_.]{2,32}$",
     identity_key(SocialProvider.TWITCH): r"^[a-zA-Z0-9_]{4,25}$",
     identity_key(SocialProvider.BOOSTY): r"^[^#]{2,50}$",

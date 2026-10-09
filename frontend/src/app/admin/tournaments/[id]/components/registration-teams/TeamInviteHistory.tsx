@@ -123,8 +123,8 @@ export function TeamInviteHistory({
                           `RosterSlotGlyph` still announces the role name. */}
                       <RosterSlotGlyph code={entry.slot_code} size={14} />
                       <span className="text-muted-foreground">
-                        {entry.target_battle_tag
-                          ? t("invite.targetLabel", { name: entry.target_battle_tag })
+                        {entry.target_handle
+                          ? t("invite.targetLabel", { name: entry.target_handle })
                           : t("invite.linkLabel")}
                       </span>
                       {entry.is_substitute && (

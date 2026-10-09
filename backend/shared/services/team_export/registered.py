@@ -204,7 +204,7 @@ async def build_registered_export(
                     rank=roster.rank_on(role) or 0,
                     slot_code=registration.team_slot_code,
                     sub_role=_sub_role_for(roster, role),
-                    battle_tag=registration.battle_tag,
+                    battle_tag=roster.battle_tag,
                     workspace_member_id=registration.workspace_member_id,
                     is_substitute=bool(registration.is_substitute),
                 )

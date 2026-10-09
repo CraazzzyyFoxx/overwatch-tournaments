@@ -35,18 +35,18 @@ Content-Type: application/json
 {
   "form_version_id": 7,
   "answers": {
-    "battle_tag": "Player#2100",
+    "identity_battlenet": ["Player#2100", "Smurf#2101"],
     "roles": [
       { "role": "damage", "is_primary": true, "subrole": "hitscan" },
       { "role": "support", "is_primary": false }
     ],
-    "identity_discord": "player",
+    "identity_discord": ["player"],
     "stream_pov": true
   }
 }
 ```
 
-The builtin question keys are fixed: `battle_tag`, `smurf_tags`, `roles`, `stream_pov`, `reserve`, `public_notes`, `organizer_notes`, and `identity_<provider>` for `discord`, `twitch`, `boosty`, `vk`, `youtube`. The BattleTag is its own builtin with its own grammar and is deliberately absent from `identity_*`. Order inside `roles` is the role priority; unknown and duplicate codes are dropped.
+The builtin question keys are fixed: `roles`, `stream_pov`, `reserve`, `public_notes`, `organizer_notes`, and `identity_<provider>` for `battlenet`, `discord`, `twitch`, `boosty`, `vk`, `youtube`. Every `identity_<provider>` answer is a LIST of handles, the primary one first — a Battle.net question therefore carries the main BattleTag and the smurfs in one answer, up to the question's `max_count` (five by default, one for every other provider). Order inside `roles` is the role priority; unknown and duplicate codes are dropped.
 
 The `roles` question's flex mode is `optional` (the registrant names the roles they play), `all_roles` (every role is playable, the registrant still names a priority) or `forced` (every role is playable and primary). A form whose schema cannot be read behaves as `optional`.
 

@@ -18,6 +18,7 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
+import { identityProvider } from "@/lib/forms/builtin-keys";
 import { fieldErrorsFrom } from "@/lib/forms/form-errors";
 import { visibleFields } from "@/lib/forms/visible-when";
 import { notify } from "@/lib/notify";
@@ -41,7 +42,6 @@ import { Spinner } from "@/components/ui/spinner";
 import FieldLabel from "./FieldLabel";
 import TextField, { fieldControlClass } from "./FormField";
 import SubscriptionRuleNotice from "./SubscriptionRuleNotice";
-import { accountProviderFor } from "./fields/IdentityField";
 import { defaultRoleAnswer, rolesParams } from "./fields/RolesField";
 import { registrationRenderers } from "./registrationRenderers";
 import { fromRoleSelections, toRoleSelections } from "./types";
@@ -166,9 +166,10 @@ function roleInputsFrom(roles: readonly StoredRole[]): RoleInput[] {
  *
  * ONE loop over the schema does the whole prefill, keyed on what each field IS
  * rather than on its name: an identity-shaped builtin takes the registrant's
- * handle for its provider, and `roles` takes the flex mode's starting matrix.
- * The four hand-copied per-provider branches this replaces had to be edited in
- * lockstep, and adding VK meant remembering all of them.
+ * handle for its provider — as a one-element LIST, the shape every identity
+ * answer has — and `roles` takes the flex mode's starting matrix. The four
+ * hand-copied per-provider branches this replaces had to be edited in lockstep,
+ * and adding VK meant remembering all of them.
  */
 function initialAnswers(
   schema: FormSchema,
@@ -187,19 +188,13 @@ function initialAnswers(
         : defaultRoleAnswer(rolesParams(field), lockedRole);
       continue;
     }
-    // `battle_tag` is a column, not a JSON answer, so an edit reads it off the
-    // top level rather than out of `answers`.
-    if (field.key === "battle_tag" && initial) {
-      answers.battle_tag = initial.battle_tag ?? "";
-      continue;
-    }
     if (answers[field.key] !== undefined) continue;
 
-    const provider = accountProviderFor(field.key);
+    const provider = identityProvider(field.key);
     const handle = provider
       ? accounts.find((account) => account.provider === provider)?.username
       : undefined;
-    if (handle) answers[field.key] = handle;
+    if (handle) answers[field.key] = [handle];
   }
   return answers;
 }
@@ -421,10 +416,12 @@ export default function RegistrationSchemaForm({
       setAnswers((prev) => {
         const next = { ...prev };
         for (const field of allFields(schema)) {
-          const provider = accountProviderFor(field.key);
+          const provider = identityProvider(field.key);
           if (!provider) continue;
           const handle = page.results.find((c) => c.provider === provider)?.username;
-          if (handle && !String(next[field.key] ?? "").trim()) next[field.key] = handle;
+          // An identity answer is a list; only an EMPTY one is prefilled.
+          if (handle && !(Array.isArray(next[field.key]) && (next[field.key] as unknown[]).length))
+            next[field.key] = [handle];
         }
         return next;
       });

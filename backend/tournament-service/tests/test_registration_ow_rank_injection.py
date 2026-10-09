@@ -17,6 +17,7 @@ models = importlib.import_module("src.models")
 serializers = importlib.import_module("src.services.registration.serializers")
 player_sub_roles = importlib.import_module("shared.domain.player_sub_roles")
 from shared.core.enums import HeroClass  # noqa: E402
+from shared.core.social import SocialProvider, normalize_social_handle  # noqa: E402
 from shared.domain.roster import PlayerRoster, RosterRole  # noqa: E402
 
 
@@ -81,7 +82,14 @@ def test_single_role_registration_is_not_flex() -> None:
         id=1,
         tournament_id=7,
         display_name="Player",
-        battle_tag="Player#1234",
+        identities=[
+            models.BalancerRegistrationIdentity(
+                provider=SocialProvider.BATTLENET,
+                position=0,
+                handle="Player#1234",
+                handle_normalized=normalize_social_handle(SocialProvider.BATTLENET, "Player#1234"),
+            )
+        ],
         status="pending",
         balancer_status="pending",
         # Server-side defaults are not applied to a transient instance.

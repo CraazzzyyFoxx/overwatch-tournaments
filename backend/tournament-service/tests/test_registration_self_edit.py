@@ -27,6 +27,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from shared.core.enums import TournamentStatus  # noqa: E402
 from shared.core.errors import BaseAPIException as HTTPException  # noqa: E402
+from shared.core.social import normalize_social_handle  # noqa: E402
 from shared.domain.forms import FormField, FormSchema, FormSection  # noqa: E402
 from shared.services.roster import roster_engine  # noqa: E402
 from src import models  # noqa: E402
@@ -39,8 +40,13 @@ NOW = datetime.now(UTC)
 
 
 def _schema(*, editable_keys: frozenset[str] = frozenset()) -> FormSchema:
-    """The three floored keys plus two ordinary ones, each opened or not."""
-    keys = (("battle_tag", "builtin"), ("roles", "builtin"), ("reserve", "builtin"), ("public_notes", "builtin"))
+    """The two floored keys plus two ordinary ones, each opened or not."""
+    keys = (
+        ("identity_battlenet", "builtin"),
+        ("roles", "builtin"),
+        ("reserve", "builtin"),
+        ("public_notes", "builtin"),
+    )
     return FormSchema(
         sections=[
             FormSection(
@@ -75,6 +81,15 @@ def _tournament(*, ends_in: timedelta | None = timedelta(days=1)) -> models.Tour
     return tournament
 
 
+def _identity(handle: str, *, provider: str = "battlenet", position: int = 0) -> models.BalancerRegistrationIdentity:
+    return models.BalancerRegistrationIdentity(
+        provider=provider,
+        position=position,
+        handle=handle,
+        handle_normalized=normalize_social_handle(provider, handle),
+    )
+
+
 def _registration(**kwargs: Any) -> models.BalancerRegistration:
     defaults: dict[str, Any] = {
         "id": 1,
@@ -82,7 +97,7 @@ def _registration(**kwargs: Any) -> models.BalancerRegistration:
         "status": "approved",
         "balancer_status": "not_in_balancer",
         "submitted_at": NOW - timedelta(days=2),
-        "battle_tag": "Player#1234",
+        "identities": [_identity("Player#1234")],
         "public_notes": "hi",
     }
     return models.BalancerRegistration(**{**defaults, **kwargs})
@@ -94,7 +109,7 @@ class PolicyTests(TestCase):
 
         assert policy.can_edit is True
         assert "public_notes" in policy.writable_keys
-        assert "battle_tag" not in policy.writable_keys
+        assert "identity_battlenet" not in policy.writable_keys
 
     def test_a_question_this_row_never_answered_is_writable_anyway(self) -> None:
         """Otherwise a new question leaves everyone stuck on a stale version they
@@ -143,13 +158,16 @@ class PolicyTests(TestCase):
             )
             assert (policy.can_edit, policy.reason) == (False, "status_locked"), status
 
-    def test_the_battle_tag_re_locks_once_the_row_was_reviewed(self) -> None:
-        """It is the row's identity anchor: the unique index, the member link and
-        every inherited rank layer are read through it."""
-        opened = _schema(editable_keys=frozenset({"battle_tag", "public_notes"}))
+    def test_the_game_identity_re_locks_once_the_row_was_reviewed(self) -> None:
+        """It is the row's identity anchor: the per-tournament uniqueness check,
+        the member link and every inherited rank layer are read through it."""
+        opened = _schema(editable_keys=frozenset({"identity_battlenet", "public_notes"}))
 
-        assert "battle_tag" in self_edit_policy(_registration(), _tournament(), opened).writable_keys
-        assert "battle_tag" not in self_edit_policy(_registration(reviewed_at=NOW), _tournament(), opened).writable_keys
+        assert "identity_battlenet" in self_edit_policy(_registration(), _tournament(), opened).writable_keys
+        assert (
+            "identity_battlenet"
+            not in self_edit_policy(_registration(reviewed_at=NOW), _tournament(), opened).writable_keys
+        )
 
     def test_roles_re_lock_once_the_balancer_has_them(self) -> None:
         opened = _schema(editable_keys=frozenset({"roles"}))
@@ -240,11 +258,13 @@ class WritePathTests(IsolatedAsyncioTestCase):
         just touched, not as one opaque toast."""
         with self.assertRaises(HTTPException) as caught:
             await self._update(
-                _registration(), {"battle_tag": "Other#1"}, _schema(editable_keys=frozenset({"public_notes"}))
+                _registration(),
+                {"identity_battlenet": ["Other#1111"]},
+                _schema(editable_keys=frozenset({"public_notes"})),
             )
 
         assert caught.exception.status_code == 409
-        assert [(item["field"], item["code"]) for item in caught.exception.detail] == [("battle_tag", "locked")]
+        assert [(item["field"], item["code"]) for item in caught.exception.detail] == [("identity_battlenet", "locked")]
 
     async def test_a_late_sign_up_answers_nothing_on_the_registrants_behalf(self) -> None:
         """The schedule marks the entry late; it does not tick a question for
@@ -253,6 +273,7 @@ class WritePathTests(IsolatedAsyncioTestCase):
         session = _RecordingSession()
         with (
             mock.patch.object(reg_service.registration_service, "ensure_player_identity", _noop),
+            mock.patch.object(reg_service.registration_service, "ensure_unique_primary_game_handles", _noop),
             mock.patch.object(reg_service, "assign_workspace_system_role", _noop),
             mock.patch.object(reg_service, "enqueue_registration_approved", _noop),
             mock.patch.object(roster_engine, "for_tournament", _no_rosters),
@@ -262,7 +283,7 @@ class WritePathTests(IsolatedAsyncioTestCase):
                 tournament_id=7,
                 workspace_id=1,
                 auth_user_id=None,
-                values={"battle_tag": "Player#1234", "reserve": False},
+                values={"identity_battlenet": ["Player#1234"], "reserve": False},
                 schema=_schema(),
                 form_version_id=3,
             )
@@ -273,6 +294,7 @@ class WritePathTests(IsolatedAsyncioTestCase):
         session = _RecordingSession()
         with (
             mock.patch.object(reg_service.registration_service, "ensure_player_identity", _noop),
+            mock.patch.object(reg_service.registration_service, "ensure_unique_primary_game_handles", _noop),
             mock.patch.object(reg_service, "assign_workspace_system_role", _noop),
             mock.patch.object(reg_service, "enqueue_registration_approved", _noop),
             mock.patch.object(roster_engine, "for_tournament", _no_rosters),
@@ -282,7 +304,7 @@ class WritePathTests(IsolatedAsyncioTestCase):
                 tournament_id=7,
                 workspace_id=1,
                 auth_user_id=None,
-                values={"battle_tag": "Player#1234", "reserve": True},
+                values={"identity_battlenet": ["Player#1234"], "reserve": True},
                 schema=_schema(),
                 form_version_id=3,
             )

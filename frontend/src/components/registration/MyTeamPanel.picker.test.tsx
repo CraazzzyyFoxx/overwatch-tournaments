@@ -62,7 +62,7 @@ const TEAM: RegistrationTeam = {
     {
       registration_id: 100,
       display_name: "Nyx",
-      battle_tag: "Nyx#2100",
+      primary_handle: "Nyx#2100",
       slot_code: "tank",
       is_substitute: false,
       is_captain: true,
@@ -77,8 +77,8 @@ const TEAM: RegistrationTeam = {
 } as unknown as RegistrationTeam;
 
 const AGENTS = [
-  { registration_id: 900, battle_tag: "Ana#1111", roles: ["support"] },
-  { registration_id: 901, battle_tag: "Zen#2222", roles: ["damage", "tank"] }
+  { registration_id: 900, primary_handle: "Ana#1111", roles: ["support"] },
+  { registration_id: 901, primary_handle: "Zen#2222", roles: ["damage", "tank"] }
 ];
 
 async function openDialog(): Promise<HTMLElement> {

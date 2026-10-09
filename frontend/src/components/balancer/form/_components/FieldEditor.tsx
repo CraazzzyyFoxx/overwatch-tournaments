@@ -15,7 +15,13 @@ import {
   SelectValue
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { builtinFixedVisibility, builtinParamsKind } from "@/lib/forms/builtin-keys";
+import {
+  MAX_IDENTITY_COUNT,
+  builtinFixedVisibility,
+  builtinParamsKind,
+  identityProvider
+} from "@/lib/forms/builtin-keys";
+import { getSocialProviderConfig } from "@/lib/social/providers";
 import { cn } from "@/lib/utils";
 import type { Condition, FormField, Visibility } from "@/types/forms.types";
 
@@ -41,14 +47,14 @@ const CONDITION_OPS = ["truthy", "eq", "neq", "in"] as const;
  * hint that has to name that floor.
  *
  * The control stays enabled for them: the floor is a lower bound, so an
- * organizer may legitimately freeze `battle_tag` or `roles` EARLIER than the
+ * organizer may legitimately freeze the BattleTag or `roles` EARLIER than the
  * server would. Stating the floor beats silently overriding the switch.
  *
  * Valued with message-key LITERALS, not `string`: the translator is typed
  * against the message tree, so a widened key would not resolve.
  */
 const EDITABLE_HINT_KEY: Record<string, "editableHintBattleTag" | "editableHintRoles"> = {
-  battle_tag: "editableHintBattleTag",
+  identity_battlenet: "editableHintBattleTag",
   roles: "editableHintRoles"
 };
 
@@ -227,6 +233,11 @@ export function FieldEditor({
   const isBuiltin = field.kind === "builtin";
   const fixedVisibility = isBuiltin ? builtinFixedVisibility(field.key) : null;
   const paramsKind = isBuiltin ? builtinParamsKind(field.key) : null;
+  // Identity params are per-provider: only a provider whose ownership CAN be
+  // proven gets the verified toggle, and the handle ceiling defaults to the
+  // provider's own (five BattleTags, one of everything else).
+  const identity = paramsKind === "identity" ? identityProvider(field.key) : null;
+  const identityConfig = identity ? getSocialProviderConfig(identity) : null;
   const issues = fieldIssues(field);
   const condition = field.visible_when ?? null;
   const target = condition
@@ -341,7 +352,7 @@ export function FieldEditor({
           onCheckedChange={(required) => onChange({ ...field, required })}
         />
 
-        {paramsKind === "battle_tag" || paramsKind === "identity" ? (
+        {identityConfig?.canBeVerified === true ? (
           <SwitchRow
             id={`${ids}-verified`}
             label={t("requireVerified")}
@@ -351,6 +362,37 @@ export function FieldEditor({
               onChange({ ...field, params: { ...field.params, require_verified } })
             }
           />
+        ) : null}
+
+        {identity ? (
+          <div className="grid gap-1.5">
+            <Label htmlFor={`${ids}-max-count`} className="text-xs">
+              {t("maxCount")}
+            </Label>
+            <Input
+              id={`${ids}-max-count`}
+              type="number"
+              min={1}
+              max={MAX_IDENTITY_COUNT}
+              className="sm:w-32"
+              // Empty means "the provider's default", which is what the
+              // placeholder shows — not a zero the server would refuse.
+              placeholder={String(identityConfig?.defaultMaxCount ?? 1)}
+              value={typeof field.params.max_count === "number" ? field.params.max_count : ""}
+              aria-describedby={`${ids}-max-count-note`}
+              onChange={(event) => {
+                const typed = Number(event.target.value);
+                const max_count =
+                  event.target.value === "" || !Number.isFinite(typed)
+                    ? null
+                    : Math.min(Math.max(Math.trunc(typed), 1), MAX_IDENTITY_COUNT);
+                onChange({ ...field, params: { ...field.params, max_count } });
+              }}
+            />
+            <p id={`${ids}-max-count-note`} className="text-xs text-muted-foreground">
+              {t("maxCountHint")}
+            </p>
+          </div>
         ) : null}
 
         {supportsValidation(field) ? (

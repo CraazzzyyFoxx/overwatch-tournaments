@@ -103,7 +103,7 @@ function team(overrides: Partial<RegistrationTeam> = {}): RegistrationTeam {
       {
         registration_id: 11,
         display_name: "Nyx",
-        battle_tag: "Nyx#2100",
+        primary_handle: "Nyx#2100",
         slot_code: "tank",
         is_substitute: false,
         is_captain: true,
@@ -116,7 +116,7 @@ function team(overrides: Partial<RegistrationTeam> = {}): RegistrationTeam {
         slot_code: "damage",
         is_substitute: false,
         state: "pending",
-        target_battle_tag: null,
+        target_handle: null,
         is_link: true,
         expires_at: "2027-09-01T12:00:00Z",
         invited_at: "2026-08-20T12:00:00Z"
@@ -277,8 +277,8 @@ beforeEach(() => {
   // Only read once the place dialog opens.
   listFreeAgents.mockReset().mockResolvedValue({
     items: [
-      { registration_id: 41, battle_tag: "Ana#1111", roles: ["support"] },
-      { registration_id: 42, battle_tag: "Rein#2222", roles: ["tank"] }
+      { registration_id: 41, primary_handle: "Ana#1111", roles: ["support"] },
+      { registration_id: 42, primary_handle: "Rein#2222", roles: ["tank"] }
     ],
     total: 2
   });
@@ -560,7 +560,7 @@ describe("RegistrationTeamsBrowser", () => {
     expect(attachMemberAdmin).not.toHaveBeenCalled();
   });
 
-  it("attaches an unregistered player by BattleTag", async () => {
+  it("attaches an unregistered player by handle", async () => {
     const scope = await mount();
 
     await click(menuItem(await rowMenu(scope, "Team Alpha"), "Place player"));
@@ -569,7 +569,7 @@ describe("RegistrationTeamsBrowser", () => {
     await submit(dialog);
 
     expect(attachMemberAdmin).toHaveBeenCalledWith(TOURNAMENT_ID, 1, {
-      battle_tag: "Ghost#9999",
+      handle: "Ghost#9999",
       slot_code: "tank",
       is_substitute: false
     });

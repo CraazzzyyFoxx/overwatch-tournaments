@@ -1,10 +1,10 @@
 """The name somebody goes by inside a tournament.
 
 Participant lists, rosters and the draft board already show the in-game handle
-a player registered with (``registration.battle_tag``). This is the same rule
-for surfaces that start from an auth account instead of a registration (room
-chat), so a captain is not "the Discord handle they signed up with" there and
-"their BattleTag" everywhere else.
+a player registered with (the registration's primary ``battlenet`` identity).
+This is the same rule for surfaces that start from an auth account instead of a
+registration (room chat), so a captain is not "the Discord handle they signed up
+with" there and "their BattleTag" everywhere else.
 """
 
 from __future__ import annotations
@@ -26,13 +26,18 @@ async def tournament_display_name(session: AsyncSession, *, auth_user: models.Au
     """Registered tag for this tournament, else the account's game handle, else
     the site name (staff need not play). One round trip."""
     registered = (
-        sa.select(models.BalancerRegistration.battle_tag)
+        sa.select(models.BalancerRegistrationIdentity.handle)
+        .join(
+            models.BalancerRegistration,
+            models.BalancerRegistration.id == models.BalancerRegistrationIdentity.registration_id,
+        )
         .join(models.WorkspaceMember, models.WorkspaceMember.id == models.BalancerRegistration.workspace_member_id)
         .join(models.User, models.User.id == models.WorkspaceMember.player_id)
         .where(
             models.BalancerRegistration.tournament_id == tournament_id,
             models.BalancerRegistration.deleted_at.is_(None),
-            models.BalancerRegistration.battle_tag.is_not(None),
+            models.BalancerRegistrationIdentity.provider == GAME_HANDLE_PROVIDER,
+            models.BalancerRegistrationIdentity.position == 0,
             models.User.auth_user_id == auth_user.id,
         )
         .limit(1)

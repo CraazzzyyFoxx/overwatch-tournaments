@@ -80,8 +80,6 @@ var RegistrationAdminRoutes = []edge.RouteSpec{
 	{Method: "POST", Pattern: "/api/v1/admin/balancer/tournaments/{tournament_id}/registrations/rank-autofill/apply", Queue: "rpc.tournament.reg_rank_autofill_apply", IDParam: "tournament_id", Body: true, Auth: edge.AuthRequired},
 	// per-user rank history (path user_id + query workspace_id).
 	{Method: "GET", Pattern: "/api/v1/admin/balancer/users/{user_id}/registration-rank-history", Queue: "rpc.tournament.reg_user_rank_history", Path: []string{"user_id"}, Query: []string{"workspace_id"}, Auth: edge.AuthRequired, Timeout: regReadTimeout},
-	// export approved registrations into users.
-	{Method: "POST", Pattern: "/api/v1/admin/balancer/tournaments/{tournament_id}/registrations/export-users", Queue: "rpc.tournament.reg_export_users", IDParam: "tournament_id", Auth: edge.AuthRequired},
 	// check-in toggle.
 	{Method: "PATCH", Pattern: "/api/v1/admin/balancer/registrations/{registration_id}/check-in", Queue: "rpc.tournament.reg_check_in", IDParam: "registration_id", Body: true, Auth: edge.AuthRequired},
 

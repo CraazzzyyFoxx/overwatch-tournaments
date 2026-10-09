@@ -55,7 +55,7 @@ const TEAM: RegistrationTeam = {
     {
       registration_id: 100,
       display_name: "Cap",
-      battle_tag: "Cap#1111",
+      primary_handle: "Cap#1111",
       slot_code: "tank",
       is_substitute: false,
       is_captain: true,
@@ -64,7 +64,7 @@ const TEAM: RegistrationTeam = {
     {
       registration_id: 101,
       display_name: "Mate",
-      battle_tag: "Mate#2222",
+      primary_handle: "Mate#2222",
       slot_code: "damage",
       is_substitute: false,
       is_captain: false,
@@ -73,7 +73,7 @@ const TEAM: RegistrationTeam = {
     {
       registration_id: 102,
       display_name: "Bench",
-      battle_tag: "Bench#3333",
+      primary_handle: "Bench#3333",
       slot_code: "damage",
       is_substitute: true,
       is_captain: false,
@@ -86,7 +86,7 @@ const TEAM: RegistrationTeam = {
       slot_code: "support",
       is_substitute: false,
       state: "pending",
-      target_battle_tag: null,
+      target_handle: null,
       is_link: true,
       expires_at: "2026-09-01T10:00:00Z",
       invited_at: "2026-08-20T10:00:00Z",

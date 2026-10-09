@@ -32,10 +32,9 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.balancer_subrole_catalog import resolve_subrole_catalog
-from shared.core.social import SocialProvider, normalize_social_handle
+from shared.core.social import VERIFIABLE_PROVIDERS, normalize_social_handle
 from shared.domain.forms import (
     IDENTITY_PROVIDERS,
-    BattleTagParams,
     ErrorCode,
     FieldError,
     FormField,
@@ -52,7 +51,6 @@ from shared.domain.forms import (
 from shared.domain.roster import flex_role_mode_from_schema
 from shared.hero_catalog import HeroCatalog
 from src import models
-from src.domain.registration.utils import normalize_battle_tag, normalize_battle_tag_key
 from src.services.registration._common import build_registration_roles
 from src.services.registration.roles_rules import validate_roles
 
@@ -63,10 +61,9 @@ __all__ = (
     "merge_custom_answers",
 )
 
-#: Builtin answer key -> the column it lands in. ``battle_tag`` (two columns),
-#: ``identity_*`` (rows) and ``roles`` (rows) are handled on their own.
+#: Builtin answer key -> the column it lands in. ``identity_*`` (rows) and
+#: ``roles`` (rows) are handled on their own.
 _ANSWER_COLUMNS: dict[str, str] = {
-    "smurf_tags": "smurf_tags_json",
     "stream_pov": "stream_pov",
     "reserve": "is_reserve",
     "public_notes": "public_notes",
@@ -107,13 +104,11 @@ def _verified_provider(field: FormField) -> str | None:
 
     Derived from the field's own params rather than a hand-kept field->provider
     table: a question is verifiable exactly when the catalog says its provider
-    can prove ownership, and ``battle_tag`` is Battle.net's handle under its own
-    builtin key.
+    can prove ownership. ``require_verified`` on a provider that cannot be
+    verified (boosty, vk, ...) is meaningless and ignored.
     """
-    if field.key == "battle_tag":
-        return SocialProvider.BATTLENET if BattleTagParams.model_validate(field.params).require_verified else None
     provider = identity_provider(field.key)
-    if provider is None:
+    if provider is None or provider not in VERIFIABLE_PROVIDERS:
         return None
     return provider if IdentityParams.model_validate(field.params).require_verified else None
 
@@ -228,18 +223,23 @@ class RegistrationAnswerService:
         ``errored_keys`` are the fields normalisation already refused. They are
         skipped, not re-judged: an unreadable answer is not evidence about who
         owns it, and the registrant gets one verdict per field.
+
+        An identity answer carries several handles: EVERY one of them must be
+        verified. A smurf nobody proved ownership of is exactly what the gate
+        exists to keep out, and "primary only" would let it in beside a verified
+        main.
         """
-        gated: list[tuple[str, str, str]] = []
+        gated: list[tuple[str, str, list[str]]] = []
         errors: list[FieldError] = []
         for field in visible_fields(schema, answers):
             provider = _verified_provider(field)
             if provider is None or field.key in errored_keys or (partial and field.key not in answers):
                 continue
-            handle = values.get(field.key)
-            if not handle:
+            handles = values.get(field.key) or []
+            if not handles:
                 errors.append(_not_verified(field.key))
                 continue
-            gated.append((field.key, provider, normalize_social_handle(provider, str(handle))))
+            gated.append((field.key, provider, [normalize_social_handle(provider, handle) for handle in handles]))
 
         if not gated:
             return errors
@@ -251,7 +251,9 @@ class RegistrationAnswerService:
             session, player_id=player_id, providers={provider for _, provider, _ in gated}
         )
         errors.extend(
-            _not_verified(key) for key, provider, handle in gated if handle not in verified.get(provider, frozenset())
+            _not_verified(key)
+            for key, provider, handles in gated
+            if not set(handles) <= verified.get(provider, frozenset())
         )
         return errors
 
@@ -293,10 +295,6 @@ class RegistrationAnswerService:
         is what lets the team flows land a registration and its team slot
         together.
         """
-        if "battle_tag" in values:
-            tag = normalize_battle_tag(values["battle_tag"])
-            registration.battle_tag = tag
-            registration.battle_tag_normalized = normalize_battle_tag_key(tag)
         for key, column in _ANSWER_COLUMNS.items():
             if key not in values:
                 continue
@@ -316,34 +314,41 @@ class RegistrationAnswerService:
         *,
         schema: FormSchema,
     ) -> None:
-        """One ``registration_identity`` row per provider the form asks about.
+        """The ``registration_identity`` rows of every provider the form asks about.
 
-        Upserted by provider, and DELETED when the answer is present-and-blank:
-        an identity the registrant removed must leave the table, not linger where
-        ``team_eligibility`` and the stream targets still read it.
+        An answer is a LIST of handles, primary first: the rows are rewritten in
+        place by position (so a promoted smurf is an UPDATE, not a
+        delete-insert), surplus rows are dropped, and a present-and-blank answer
+        removes the provider entirely -- an identity the registrant removed must
+        leave the table, not linger where ``team_eligibility`` and the stream
+        targets still read it. The positional/handle uniques are DEFERRED, so a
+        swap mid-rewrite is fine.
         """
-        rows = {row.provider: row for row in registration.identities}
+        rows_by_provider: dict[str, list[models.BalancerRegistrationIdentity]] = {}
+        for row in registration.identities:
+            rows_by_provider.setdefault(row.provider, []).append(row)
         for provider in IDENTITY_PROVIDERS:
             key = identity_key(provider)
             if key not in values or schema.field(key) is None:
                 continue
-            handle = values[key]
-            row = rows.get(provider)
-            if not handle:
-                if row is not None:
-                    registration.identities.remove(row)
-                continue
-            if row is None:
-                registration.identities.append(
-                    models.BalancerRegistrationIdentity(
-                        provider=provider,
-                        handle=handle,
-                        handle_normalized=normalize_social_handle(provider, handle),
+            handles = values[key] or []
+            rows = sorted(rows_by_provider.get(provider, ()), key=lambda row: row.position)
+            for position, handle in enumerate(handles):
+                normalized = normalize_social_handle(provider, handle)
+                if position < len(rows):
+                    rows[position].handle = handle
+                    rows[position].handle_normalized = normalized
+                else:
+                    registration.identities.append(
+                        models.BalancerRegistrationIdentity(
+                            provider=provider,
+                            position=position,
+                            handle=handle,
+                            handle_normalized=normalized,
+                        )
                     )
-                )
-            else:
-                row.handle = handle
-                row.handle_normalized = normalize_social_handle(provider, handle)
+            for surplus in rows[len(handles) :]:
+                registration.identities.remove(surplus)
 
     def _apply_roles(
         self,
@@ -395,6 +400,10 @@ class RegistrationAnswerService:
     def answers_of(self, registration: models.BalancerRegistration) -> dict[str, Any]:
         """The flat answer document a registration reads back as.
 
+        Every ``identity_<provider>`` answer is a list of handles, primary first
+        (sorted by ``position`` rather than trusting the in-session order of a
+        collection the writer just appended to).
+
         ``__dict__`` for ``identities`` for the same reason ``_reg_to_read`` uses
         it for the team: the relationship is documented as never lazy-loadable in
         async code, and a row that did not eager-load it has no identities to
@@ -405,8 +414,9 @@ class RegistrationAnswerService:
             value = getattr(registration, column, None)
             if value is not None:
                 out[key] = value
-        for identity in registration.__dict__.get("identities") or ():
-            out[identity_key(identity.provider)] = identity.handle
+        identities = sorted(registration.__dict__.get("identities") or (), key=lambda row: row.position)
+        for identity in identities:
+            out.setdefault(identity_key(identity.provider), []).append(identity.handle)
         for key, value in (getattr(registration, "custom_fields_json", None) or {}).items():
             if value is not None:
                 out[key] = value

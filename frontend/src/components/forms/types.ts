@@ -2,11 +2,11 @@
  * The renderer contract `SchemaForm` drives.
  *
  * A schema field is rendered by whichever component the registry names for its
- * KEY (a builtin: `battle_tag`, `roles`, `identity_discord`, …) or, failing
- * that, for its KIND (`text`, `select`, …). Every renderer takes the same four
- * props plus a shared context, so the form never has to know which of the two
- * it dispatched on — that is the whole point of one field model for builtins
- * and custom questions alike.
+ * KEY (a builtin: `identity_battlenet`, `roles`, `identity_discord`, …) or,
+ * failing that, for its KIND (`text`, `select`, …). Every renderer takes the
+ * same four props plus a shared context, so the form never has to know which of
+ * the two it dispatched on — that is the whole point of one field model for
+ * builtins and custom questions alike.
  */
 
 import type { ComponentType } from "react";

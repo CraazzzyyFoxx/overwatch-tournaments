@@ -26,11 +26,11 @@ from typing import Any, NoReturn
 from shared.core.errors import ApiExc, ApiHTTPException
 from shared.core.social import (
     InvalidHandlePattern,
-    SocialProvider,
     compile_handle_pattern,
+    display_social_handle,
     normalize_social_handle,
 )
-from shared.domain.forms.builtins import default_pattern, identity_provider
+from shared.domain.forms.builtins import default_pattern, identity_max_count, identity_provider
 from shared.domain.forms.schema import Condition, FormField, FormSchema
 from shared.domain.player_sub_roles import REGISTRATION_ROLE_CODES
 
@@ -113,16 +113,6 @@ def evaluate_condition(cond: Condition, answers: Mapping[str, Any]) -> bool:
 def visible_fields(schema: FormSchema, answers: Mapping[str, Any]) -> list[FormField]:
     """The fields ``answers`` is asked for. Conditions read the RAW answers."""
     return [f for f in schema.fields() if f.visible_when is None or evaluate_condition(f.visible_when, answers)]
-
-
-def _battle_tag_candidate(value: str) -> str:
-    """The canonical form a BattleTag pattern is matched against.
-
-    The provider's own rule, not a second copy of it: the name is
-    case-insensitive, the discriminator is not part of it, and the spacing a
-    human types around the ``#`` is not either.
-    """
-    return normalize_social_handle(SocialProvider.BATTLENET, value)
 
 
 def _coerce_number(key: str, raw: Any) -> tuple[Any, FieldError | None]:
@@ -242,19 +232,33 @@ def _coerce_role_ranks(key: str, raw: Any) -> tuple[Any, FieldError | None]:
     return (ranks or None), None
 
 
-def _coerce_tags(key: str, raw: Any) -> tuple[Any, FieldError | None]:
+def _coerce_identity(field: FormField, provider: str, raw: Any) -> tuple[Any, FieldError | None]:
+    """``identity_<provider>``: a list of handles, primary first.
+
+    Stored in display form (``display_social_handle``); duplicates by the
+    provider's matching rule are dropped, so ``Player#1`` and ``player # 1`` are
+    one handle. Longer than the field's ``max_count`` is ``too_many``.
+    """
+    key = field.key
     if raw is None:
         return None, None
+    bad = _err(key, ErrorCode.INVALID_TYPE, "Expected a list of handles.")
     if not isinstance(raw, list):
-        return None, _err(key, ErrorCode.INVALID_TYPE, "Expected a list of BattleTags.")
-    tags: list[str] = []
+        return None, bad
+    handles: list[str] = []
+    seen: set[str] = set()
     for item in raw:
         if not isinstance(item, str):
-            return None, _err(key, ErrorCode.INVALID_TYPE, "Expected a list of BattleTags.")
-        text = item.strip()
-        if text and text not in tags:
-            tags.append(text)
-    return tags, None
+            return None, bad
+        handle = display_social_handle(provider, item)
+        normalized = normalize_social_handle(provider, handle)
+        if handle and normalized not in seen:
+            seen.add(normalized)
+            handles.append(handle)
+    limit = identity_max_count(provider, field.params)
+    if len(handles) > limit:
+        return None, _err(key, ErrorCode.TOO_MANY, f"At most {limit} handles.", max=limit)
+    return handles, None
 
 
 def _coerce_roles(key: str, raw: Any) -> tuple[Any, FieldError | None]:
@@ -304,25 +308,21 @@ def _coerce(field: FormField, raw: Any) -> tuple[Any, FieldError | None]:
         return _coerce_multi_select(field, raw)
     if kind == "role_ranks":
         return _coerce_role_ranks(key, raw)
-    if key == "smurf_tags":
-        return _coerce_tags(key, raw)
     if key == "roles":
         return _coerce_roles(key, raw)
     provider = identity_provider(key)
-    value, error = _coerce_text(key, raw)
-    if error is not None or provider is None or not value:
-        return value, error
-    return normalize_social_handle(provider, value), None
+    if provider is not None:
+        return _coerce_identity(field, provider, raw)
+    return _coerce_text(key, raw)
 
 
 def _pattern_targets(field: FormField, value: Any) -> list[str]:
-    """What the pattern actually runs on: BattleTags match in canonical form,
-    ``smurf_tags`` matches every tag."""
-    if field.key == "smurf_tags":
-        return [_battle_tag_candidate(tag) for tag in value]
-    if not isinstance(value, str):
-        return []
-    return [_battle_tag_candidate(value) if field.key == "battle_tag" else value]
+    """What the pattern actually runs on: every handle of an identity answer,
+    in the provider's canonical (normalized) form."""
+    provider = identity_provider(field.key)
+    if provider is not None:
+        return [normalize_social_handle(provider, handle) for handle in value]
+    return [value] if isinstance(value, str) else []
 
 
 def _check_pattern(field: FormField, value: Any) -> FieldError | None:

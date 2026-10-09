@@ -350,7 +350,8 @@
       }
     },
     "accounts": {
-      "battleTag": "BattleTag",
+      "battlenet": "BattleTag",
+      "battlenetPlaceholder": "Player#1234",
       "smurfs": "Smurf Accounts",
       "discord": "Discord",
       "twitch": "Twitch",
@@ -6312,8 +6313,7 @@
       "staleHint": "Those answers were filed against an earlier version of this form. Editing them re-files them against the current one."
     },
     "builtins": {
-      "battle_tag": "BattleTag",
-      "smurf_tags": "Smurf accounts",
+      "identity_battlenet": "BattleTag",
       "roles": "Roles",
       "stream_pov": "Stream POV",
       "reserve": "On call",
@@ -6378,6 +6378,8 @@
       "editableHintRoles": "The registrant may change their roles until the application enters the balancer pool or a team roster — after that the roles re-lock anyway.",
       "requireVerified": "Require a verified account",
       "requireVerifiedHint": "The registrant must pick one of their OAuth-verified accounts instead of typing a handle.",
+      "maxCount": "Handles allowed",
+      "maxCountHint": "How many accounts the registrant may list, the first one being the main. Leave empty for the provider's default.",
       "keyLocked": "Answer key: {key}",
       "keyPending": "Answer key: {key} — set from the label when you leave the box, then locked.",
       "issues": {

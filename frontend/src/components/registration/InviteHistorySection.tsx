@@ -160,8 +160,8 @@ export default function InviteHistorySection({
                         {known ? t(`history.state.${known}`) : entry.state}
                       </span>
                       <span className="text-[color:var(--aqt-fg-muted)]">
-                        {entry.target_battle_tag
-                          ? t("invite.targetLabel", { name: entry.target_battle_tag })
+                        {entry.target_handle
+                          ? t("invite.targetLabel", { name: entry.target_handle })
                           : t("invite.linkLabel")}
                       </span>
                     </div>

@@ -736,7 +736,7 @@ class TargetedInviteShapeTests(TestCase):
         an internal identity travelling outward. A captain needs a name."""
         fields = set(RegistrationTeamInviteRead.model_fields)
 
-        self.assertIn("target_battle_tag", fields)
+        self.assertIn("target_handle", fields)
         self.assertNotIn("target_auth_user_id", fields)
 
     def test_the_invite_input_takes_a_registration_not_an_account(self) -> None:
@@ -936,7 +936,7 @@ class InviteHistoryTests(TestCase):
         handler authorizes `team.read` on one tournament, the public handler
         authorizes captaincy of one team. Either way, a foreign `team_id` from a
         different tournament must 404 instead of leaking its invite history and
-        target BattleTags -- the same property `revoke_invite_as_organizer`
+        target handles -- the same property `revoke_invite_as_organizer`
         already has to hold for the same reason."""
         source = self._source()
 
@@ -1011,7 +1011,7 @@ class OrganizerAttachTests(TestCase):
     def test_attach_creates_when_the_tag_is_new(self) -> None:
         source = _code_of(teams.teams_service.attach_member_as_organizer)
 
-        self.assertIn("battle_tag_normalized", source)
+        self.assertIn("handle_normalized", source)
         self.assertIn("BalancerRegistration(", source)
         self.assertIn("ensure_player_identity", source)
 

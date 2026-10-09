@@ -29,7 +29,7 @@ function slugifyKey(value: string): string {
  * Two namespaces have to be dodged, not one. `existingKeys` is what the form
  * asks RIGHT NOW; the builtin keys and the whole `identity_` prefix are
  * reserved whether or not the form currently uses them, because the schema
- * refuses a custom field on either. Dropping the `battle_tag` builtin and then
+ * refuses a custom field on either. Dropping the `identity_battlenet` builtin and then
  * adding a question labelled "Battle Tag" would otherwise build a document the
  * server rejects on a path the organizer cannot act on.
  */

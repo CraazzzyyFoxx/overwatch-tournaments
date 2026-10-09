@@ -33,6 +33,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from shared.core.enums import HeroClass, TournamentStatus  # noqa: E402
 from shared.core.errors import BaseAPIException as HTTPException  # noqa: E402
+from shared.core.social import SocialProvider  # noqa: E402
 from shared.domain.forms import FormField, FormSchema, FormSection  # noqa: E402
 from shared.domain.roster import PlayerRoster, RosterRole  # noqa: E402
 from shared.services.roster import roster_engine  # noqa: E402
@@ -42,8 +43,8 @@ from src.services.registration import service as reg_service  # noqa: E402
 
 
 def _schema() -> FormSchema:
-    """A form asking a BattleTag, one identity, roles, both notes and one custom
-    question -- enough for every branch the writers have.
+    """A form asking a game identity, one more identity, roles, both notes and
+    one custom question -- enough for every branch the writers have.
 
     Every question is ``editable``: this suite is about what a write path
     PERSISTS, and the self-PATCH refuses a question the organizer never opened
@@ -54,9 +55,8 @@ def _schema() -> FormSchema:
             FormSection(
                 key="all",
                 fields=[
-                    FormField(key="battle_tag", kind="builtin", editable=True),
+                    FormField(key="identity_battlenet", kind="builtin", editable=True),
                     FormField(key="identity_discord", kind="builtin", editable=True),
-                    FormField(key="smurf_tags", kind="builtin", editable=True),
                     FormField(key="roles", kind="builtin", editable=True),
                     FormField(key="public_notes", kind="builtin", editable=True),
                     FormField(key="organizer_notes", kind="builtin", visibility="organizers", editable=True),
@@ -149,7 +149,7 @@ def _roster_of(registration: models.BalancerRegistration) -> PlayerRoster:
     registration's own layer only, over the roles it declares active."""
     return PlayerRoster(
         registration_id=registration.id,
-        battle_tag=registration.battle_tag,
+        battle_tag=registration.primary_handle(SocialProvider.BATTLENET),
         display_name=registration.display_name,
         player_id=None,
         auth_user_id=None,
@@ -179,6 +179,7 @@ class TestPublicCreatePersistsEveryAnswer(IsolatedAsyncioTestCase):
         patches = _wp_patches()
         with (
             mock.patch.object(reg_service.registration_service, "ensure_player_identity", _noop),
+            mock.patch.object(reg_service.registration_service, "ensure_unique_primary_game_handles", _noop),
             mock.patch.object(reg_service, "assign_workspace_system_role", _noop),
             mock.patch.object(reg_service, "enqueue_registration_approved", _noop),
             patches[0],
@@ -194,36 +195,47 @@ class TestPublicCreatePersistsEveryAnswer(IsolatedAsyncioTestCase):
                 form_version_id=3,
             )
 
-    async def test_the_battle_tag_lands_in_both_of_its_columns(self) -> None:
-        registration = await self._create({"battle_tag": "Player # 1234"})
+    async def test_the_game_handle_lands_as_the_primary_identity_row(self) -> None:
+        registration = await self._create({"identity_battlenet": ["Player#1234"]})
 
-        assert registration.battle_tag == "Player#1234"
-        assert registration.battle_tag_normalized == "player#1234"
-        # The row is named after the tag, as it always was.
+        assert [(row.provider, row.position, row.handle, row.handle_normalized) for row in registration.identities] == [
+            ("battlenet", 0, "Player#1234", "player#1234")
+        ]
+        # The row is named after the primary game handle, as it always was.
+        assert registration.display_name == "Player#1234"
+
+    async def test_smurfs_are_extra_rows_behind_the_primary(self) -> None:
+        registration = await self._create({"identity_battlenet": ["Player#1234", "Alt#5678"]})
+
+        assert [(row.position, row.handle) for row in registration.identities] == [
+            (0, "Player#1234"),
+            (1, "Alt#5678"),
+        ]
         assert registration.display_name == "Player#1234"
 
     async def test_an_identity_answer_becomes_a_provider_row(self) -> None:
-        registration = await self._create({"battle_tag": "Player#1234", "identity_discord": "Player"})
+        registration = await self._create({"identity_battlenet": ["Player#1234"], "identity_discord": ["Player"]})
 
         assert [(row.provider, row.handle, row.handle_normalized) for row in registration.identities] == [
-            ("discord", "Player", "player")
+            ("battlenet", "Player#1234", "player#1234"),
+            ("discord", "Player", "player"),
         ]
 
     async def test_custom_answers_reach_the_json_column(self) -> None:
-        registration = await self._create({"battle_tag": "Player#1234", "vk": "vk.com/player"})
+        registration = await self._create({"identity_battlenet": ["Player#1234"], "vk": "vk.com/player"})
 
         assert registration.custom_fields_json == {"vk": "vk.com/player"}
 
     async def test_the_two_note_questions_land_in_their_own_columns(self) -> None:
         registration = await self._create(
-            {"battle_tag": "Player#1234", "public_notes": "hi", "organizer_notes": "seed me low"}
+            {"identity_battlenet": ["Player#1234"], "public_notes": "hi", "organizer_notes": "seed me low"}
         )
 
         assert registration.public_notes == "hi"
         assert registration.organizer_notes == "seed me low"
 
     async def test_the_answered_version_is_stamped_on_the_row(self) -> None:
-        registration = await self._create({"battle_tag": "Player#1234"})
+        registration = await self._create({"identity_battlenet": ["Player#1234"]})
 
         assert registration.form_version_id == 3
 
@@ -232,15 +244,38 @@ class TestSelfUpdateAppliesAnswers(IsolatedAsyncioTestCase):
     def _registration(self, **kwargs: Any) -> models.BalancerRegistration:
         return models.BalancerRegistration(id=1, tournament_id=7, status="pending", **kwargs)
 
-    async def _update(self, registration: models.BalancerRegistration, values: dict[str, Any]) -> None:
-        await reg_service.registration_service.update_registration(
-            _RecordingSession(),
-            registration,
-            tournament=_open_tournament(),
-            values=values,
-            schema=SCHEMA,
-            form_version_id=5,
+    async def _update(
+        self,
+        registration: models.BalancerRegistration,
+        values: dict[str, Any],
+        *,
+        ensure_player_identity: Any = _noop,
+    ) -> None:
+        with (
+            mock.patch.object(reg_service.registration_service, "ensure_unique_primary_game_handles", _noop),
+            mock.patch.object(reg_service.registration_service, "ensure_player_identity", ensure_player_identity),
+        ):
+            await reg_service.registration_service.update_registration(
+                _RecordingSession(),
+                registration,
+                tournament=_open_tournament(),
+                values=values,
+                schema=SCHEMA,
+                form_version_id=5,
+            )
+
+    async def test_an_edited_handle_reaches_the_profile_and_a_custom_answer_does_not_touch_it(self) -> None:
+        """A handle added after submitting must land on the player's profile like
+        one given at submit; an edit that names no identity resolves nothing."""
+        ensured = mock.AsyncMock(return_value=None)
+
+        await self._update(self._registration(), {"vk": "x"}, ensure_player_identity=ensured)
+        ensured.assert_not_awaited()
+
+        await self._update(
+            self._registration(), {"identity_battlenet": ["Player#1234"]}, ensure_player_identity=ensured
         )
+        ensured.assert_awaited_once()
 
     async def test_custom_answers_merge_with_the_stored_ones(self) -> None:
         """A PATCH names only the questions it changes; replacing wholesale would
@@ -261,23 +296,24 @@ class TestSelfUpdateAppliesAnswers(IsolatedAsyncioTestCase):
     async def test_an_unmentioned_question_is_left_alone(self) -> None:
         registration = self._registration(public_notes="kept", custom_fields_json={"vk": "kept"})
 
-        await self._update(registration, {"battle_tag": "Player#1234"})
+        await self._update(registration, {"identity_battlenet": ["Player#1234"]})
 
         assert registration.public_notes == "kept"
         assert registration.custom_fields_json == {"vk": "kept"}
 
-    async def test_battle_tag_is_cleaned_and_normalized(self) -> None:
+    async def test_the_game_handle_lands_as_an_identity_row(self) -> None:
         registration = self._registration()
 
-        await self._update(registration, {"battle_tag": "Player # 1234"})
+        await self._update(registration, {"identity_battlenet": ["Player#1234"]})
 
-        assert registration.battle_tag == "Player#1234"
-        assert registration.battle_tag_normalized == "player#1234"
+        assert [(row.provider, row.position, row.handle, row.handle_normalized) for row in registration.identities] == [
+            ("battlenet", 0, "Player#1234", "player#1234")
+        ]
 
     async def test_the_edit_moves_the_row_onto_the_version_it_answered(self) -> None:
         registration = self._registration(form_version_id=4)
 
-        await self._update(registration, {"battle_tag": "Player#1234"})
+        await self._update(registration, {"identity_battlenet": ["Player#1234"]})
 
         assert registration.form_version_id == 5
 
@@ -286,7 +322,7 @@ class TestSelfUpdateAppliesAnswers(IsolatedAsyncioTestCase):
         registration = models.BalancerRegistration(id=1, tournament_id=7, status="withdrawn")
 
         with self.assertRaises(HTTPException) as caught:
-            await self._update(registration, {"battle_tag": "Player#1234"})
+            await self._update(registration, {"identity_battlenet": ["Player#1234"]})
 
         assert caught.exception.status_code == 409
 
@@ -325,13 +361,15 @@ class TestManualCreateHonorsTheEditor(IsolatedAsyncioTestCase):
             "tournament_id": 7,
             "display_name": None,
             "admin_notes": None,
-            "answers": {"battle_tag": "Player#1234"},
+            "answers": {"identity_battlenet": ["Player#1234"]},
             "roles": [],
             **overrides,
         }
         patches = _wp_patches()
         with (
-            mock.patch.object(reg_lifecycle.lifecycle_service, "ensure_unique_battle_tag", _noop),
+            mock.patch.object(
+                reg_lifecycle.lifecycle_service.registrations, "ensure_unique_primary_game_handles", _noop
+            ),
             mock.patch.object(
                 reg_lifecycle.lifecycle_service.common,
                 "get_registration_form",
@@ -385,7 +423,7 @@ class TestManualCreateHonorsTheEditor(IsolatedAsyncioTestCase):
 
     async def test_the_organizers_answers_are_written(self) -> None:
         registration, _ = await self._create(
-            answers={"battle_tag": "Player#1234", "vk": "vk.com/player", "organizer_notes": "walk-in"}
+            answers={"identity_battlenet": ["Player#1234"], "vk": "vk.com/player", "organizer_notes": "walk-in"}
         )
 
         assert registration.custom_fields_json == {"vk": "vk.com/player"}
@@ -395,7 +433,7 @@ class TestManualCreateHonorsTheEditor(IsolatedAsyncioTestCase):
         """``enforce_required=False``: an organizer enters what they know."""
         registration, _ = await self._create(answers={})
 
-        assert registration.battle_tag is None
+        assert registration.identities == []
 
     async def test_a_tournament_with_no_form_still_accepts_what_the_organizer_typed(self) -> None:
         """Before the form schema existed these were unconditional keyword
@@ -403,11 +441,14 @@ class TestManualCreateHonorsTheEditor(IsolatedAsyncioTestCase):
         Validating against nothing would silently drop all of it; the fallback is
         ``default_schema()``, the same one the sheet-sync feed uses."""
         registration, _ = await self._create(
-            form=None, answers={"battle_tag": "Walkin#4242", "public_notes": "signed up at the venue"}
+            form=None,
+            answers={"identity_battlenet": ["Walkin # 4242"], "public_notes": "signed up at the venue"},
         )
 
-        assert registration.battle_tag == "Walkin#4242"
-        assert registration.battle_tag_normalized == "walkin#4242"
+        # Validated through the real pipeline, so the typed spacing is cleaned off.
+        assert [(row.handle, row.handle_normalized) for row in registration.identities] == [
+            ("Walkin#4242", "walkin#4242")
+        ]
         assert registration.public_notes == "signed up at the venue"
 
 
@@ -432,7 +473,9 @@ class TestAdminProfileUpdateAnswers(IsolatedAsyncioTestCase):
                 mock.AsyncMock(return_value=_FormStub()),
             ),
             mock.patch.object(reg_lifecycle, "_resolve_top_heroes_config", mock.AsyncMock(return_value=(None, None))),
-            mock.patch.object(reg_lifecycle.lifecycle_service, "ensure_unique_battle_tag", _noop),
+            mock.patch.object(
+                reg_lifecycle.lifecycle_service.registrations, "ensure_unique_primary_game_handles", _noop
+            ),
             mock.patch.object(reg_lifecycle.lifecycle_service.registrations, "ensure_player_identity", _noop),
             mock.patch.object(
                 reg_lifecycle.lifecycle_service.common, "_register_registration_changed", mock.AsyncMock()
@@ -466,10 +509,10 @@ class TestAdminProfileUpdateAnswers(IsolatedAsyncioTestCase):
     async def test_a_blank_identity_answer_deletes_its_row(self) -> None:
         registration = self._registration()
         registration.identities.append(
-            models.BalancerRegistrationIdentity(provider="discord", handle="old", handle_normalized="old")
+            models.BalancerRegistrationIdentity(provider="discord", position=0, handle="old", handle_normalized="old")
         )
 
-        await self._update(registration, answers={"identity_discord": ""})
+        await self._update(registration, answers={"identity_discord": []})
 
         assert registration.identities == []
 

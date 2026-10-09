@@ -38,12 +38,12 @@ describe("participant column model", () => {
     const columns = buildParticipantColumns(form([field("public_notes")]), t);
 
     expect(
-      columns.filter((column) => ["battle_tag", "_status"].includes(column.id)).map((column) => column.id),
-    ).toEqual(["battle_tag", "_status"]);
+      columns.filter((column) => ["identity_battlenet", "_status"].includes(column.id)).map((column) => column.id),
+    ).toEqual(["identity_battlenet", "_status"]);
   });
 
   it("always offers the notes column even when the form does not ask for notes", () => {
-    for (const candidate of [form([field("battle_tag")]), form(), null]) {
+    for (const candidate of [form([field("identity_battlenet")]), form(), null]) {
       const notesColumns = buildParticipantColumns(candidate, t).filter(
         (column) => column.id === "public_notes",
       );
@@ -55,7 +55,7 @@ describe("participant column model", () => {
   it("offers a column for every identity handle the form collects", () => {
     const columns = buildParticipantColumns(
       form([
-        field("battle_tag"),
+        field("identity_battlenet"),
         field("identity_discord"),
         field("identity_twitch"),
         field("identity_boosty"),
@@ -67,6 +67,28 @@ describe("participant column model", () => {
     expect(ids).toContain("identity_discord");
     expect(ids).toContain("identity_twitch");
     expect(ids).toContain("identity_boosty");
+  });
+
+  it("splits the Battle.net answer into the primary handle and the extra handles", () => {
+    const columns = buildParticipantColumns(form([field("identity_battlenet")]), t);
+    const identity = columns.find((column) => column.id === "identity_battlenet");
+    const extras = columns.find((column) => column.id === "identity_battlenet_extras");
+    const registration = {
+      primary_handle: "Main#1111",
+      answers: { identity_battlenet: ["Main#1111", "Alt#2222", "Alt#3333"] },
+    } as never;
+
+    expect(identity?.searchValue?.(registration)).toBe("Main#1111");
+    expect(extras?.searchValue?.(registration)).toBe("Alt#2222 Alt#3333");
+  });
+
+  it("offers no extra-handle column when the form allows a single BattleTag", () => {
+    const ids = buildParticipantColumns(
+      form([field("identity_battlenet", { params: { max_count: 1 } })]),
+      t,
+    ).map((column) => column.id);
+
+    expect(ids).not.toContain("identity_battlenet_extras");
   });
 
   it("reads the boosty handle off the registration's answers", () => {
@@ -85,7 +107,7 @@ describe("participant column model", () => {
     // answers the reader is not allowed to have.
     const ids = buildParticipantColumns(
       form([
-        field("battle_tag"),
+        field("identity_battlenet"),
         field("organizer_notes", { visibility: "organizers" }),
         field("budget", { kind: "text", label: "Budget", visibility: "organizers" }),
       ]),
@@ -97,22 +119,22 @@ describe("participant column model", () => {
   });
 
   it("invents no columns for a form that asks the public nothing", () => {
-    // No invariant makes `battle_tag` mandatory and every question may be
-    // organizers-only, so this is a configured form with an empty public side
-    // — not the "no form at all" case, and it must not be given that case's
-    // roles/heroes/smurfs columns.
+    // No invariant makes `identity_battlenet` mandatory and every question may
+    // be organizers-only, so this is a configured form with an empty public
+    // side — not the "no form at all" case, and it must not be given that
+    // case's roles/heroes/smurfs columns.
     const ids = buildParticipantColumns(
       form([field("organizer_notes", { visibility: "organizers" })]),
       t,
     ).map((column) => column.id);
 
-    for (const invented of ["roles", "top_heroes", "smurf_tags"]) {
+    for (const invented of ["roles", "top_heroes", "identity_battlenet_extras"]) {
       expect(ids).not.toContain(invented);
     }
     // The roster's own identity column and the notes column stay: the first is
     // a registration column rather than an answer, the second may hold what a
     // sheet import wrote.
-    expect(ids).toContain("battle_tag");
+    expect(ids).toContain("identity_battlenet");
     expect(ids).toContain("public_notes");
   });
 

@@ -19,7 +19,6 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 const listRegistrations = vi.fn();
 const getRegistrationForm = vi.fn();
 const listStatusCatalog = vi.fn();
-const exportRegistrationsToUsers = vi.fn();
 const bulkApproveRegistrations = vi.fn();
 const updateRegistration = vi.fn();
 
@@ -28,7 +27,6 @@ vi.mock("@/services/balancer-admin.service", () => ({
     listRegistrations: (...args: unknown[]) => listRegistrations(...args),
     getRegistrationForm: (...args: unknown[]) => getRegistrationForm(...args),
     listStatusCatalog: (...args: unknown[]) => listStatusCatalog(...args),
-    exportRegistrationsToUsers: (...args: unknown[]) => exportRegistrationsToUsers(...args),
     createManualRegistration: vi.fn(),
     updateRegistration: (...args: unknown[]) => updateRegistration(...args),
     approveRegistration: vi.fn(),
@@ -120,10 +118,10 @@ function registration(id: number, overrides: Partial<AdminRegistration> = {}): A
     workspace_id: 1,
     user_id: id,
     display_name: `Player ${id}`,
-    battle_tag: `Player${id}#1234`,
+    primary_handle: `Player${id}#1234`,
     best_rank: null,
     roles: [],
-    answers: { stream_pov: false },
+    answers: { identity_battlenet: [`Player${id}#1234`], stream_pov: false },
     form_version_id: 3,
     form_version_stale: false,
     admin_notes: null,
@@ -237,9 +235,6 @@ beforeEach(() => {
   listRegistrations.mockReset().mockResolvedValue(POOL);
   getRegistrationForm.mockReset().mockResolvedValue({ require_open_profile: false });
   listStatusCatalog.mockReset().mockResolvedValue([]);
-  exportRegistrationsToUsers
-    .mockReset()
-    .mockResolvedValue({ processed: 25, skipped: 0, total: 25 });
   bulkApproveRegistrations.mockReset().mockResolvedValue({ approved: 1, skipped: 0 });
   updateRegistration.mockReset().mockResolvedValue(registration(1, { status: "pending" }));
   vi.mocked(notify.success).mockClear();

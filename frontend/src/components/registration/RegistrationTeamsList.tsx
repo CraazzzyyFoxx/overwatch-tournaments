@@ -33,7 +33,7 @@ function RosterRow({ member }: Readonly<{ member: RegistrationTeamMember }>) {
           drifted to the far edge of the card and read as a column of its own. */}
       <span className="flex min-w-0 items-center gap-1.5">
         <span className="truncate text-[color:var(--aqt-fg)]">
-          {member.display_name ?? member.battle_tag ?? "—"}
+          {member.display_name ?? member.primary_handle ?? "—"}
         </span>
         {member.is_captain ? (
           <span

@@ -55,25 +55,25 @@ describe("validateAnswer — patterns", () => {
   it("matches the whole answer, never a substring", () => {
     // `^https?://.+$` is anchored, but `([^#]{2,12}#[0-9]{4,})` is not: Python
     // matches it with `fullmatch`, so trailing junk must still be rejected.
-    const battleTag = field({ key: "battle_tag", kind: "builtin" });
-    expect(validateAnswer(battleTag, "Player#1234", t)).toBeNull();
-    expect(validateAnswer(battleTag, "Player#1234 and more", t)).toBe("invalid_format");
+    const battleTag = field({ key: "identity_battlenet", kind: "builtin" });
+    expect(validateAnswer(battleTag, ["Player#1234"], t)).toBeNull();
+    expect(validateAnswer(battleTag, ["Player#1234 and more"], t)).toBe("invalid_format");
   });
 
   it("matches a BattleTag in its canonical form, spacing and all", () => {
     // A BattleTag pasted out of a chat client arrives as "Player # 1234"; the
     // server normalizes the `#` spacing away before matching and accepts it, so
     // refusing it here would block a submission the server would have taken.
-    const battleTag = field({ key: "battle_tag", kind: "builtin" });
-    expect(validateAnswer(battleTag, "Player # 1234", t)).toBeNull();
-    expect(validateAnswer(battleTag, "  PLAYER#1234  ", t)).toBeNull();
+    const battleTag = field({ key: "identity_battlenet", kind: "builtin" });
+    expect(validateAnswer(battleTag, ["Player # 1234"], t)).toBeNull();
+    expect(validateAnswer(battleTag, ["  PLAYER#1234  "], t)).toBeNull();
   });
 
-  it("checks every tag of a list answer, each in canonical form", () => {
-    const smurfs = field({ key: "smurf_tags", kind: "builtin" });
-    expect(validateAnswer(smurfs, ["Alt#1111", "Alt2#2222"], t)).toBeNull();
-    expect(validateAnswer(smurfs, ["Alt #1111", "Alt2# 2222"], t)).toBeNull();
-    expect(validateAnswer(smurfs, ["Alt#1111", "nope"], t)).toBe("invalid_format");
+  it("checks every handle of an identity answer, each in canonical form", () => {
+    const battleTag = field({ key: "identity_battlenet", kind: "builtin" });
+    expect(validateAnswer(battleTag, ["Main#1111", "Alt#2222"], t)).toBeNull();
+    expect(validateAnswer(battleTag, ["Main #1111", "Alt# 2222"], t)).toBeNull();
+    expect(validateAnswer(battleTag, ["Main#1111", "nope"], t)).toBe("invalid_format");
   });
 
   it("casefolds an identity handle before matching, like the server", () => {
@@ -177,20 +177,18 @@ describe("validateAnswer — kinds", () => {
 });
 
 describe("normalizeAnswerText", () => {
-  const battleTag = field({ key: "battle_tag", kind: "builtin" });
+  const battleTag = field({ key: "identity_battlenet", kind: "builtin" });
 
-  it("only trims a BattleTag — the server stores it verbatim", () => {
-    // `_coerce_text`, not `_battle_tag_candidate`: `identity_provider()` returns
-    // None for `battle_tag`, so the server persists the spacing and casing the
-    // user typed. Canonicalizing here would submit a different string than the
-    // one the server would have stored for the same input.
-    expect(normalizeAnswerText(battleTag, "  Player # 1234 ")).toBe("Player # 1234");
-    expect(normalizeAnswerText(battleTag, " Player#1234 ")).toBe("Player#1234");
+  it("stores a handle in display form: trimmed, casing kept", () => {
+    // `display_social_handle`: a BattleTag additionally loses the spacing a
+    // human types around the `#`, because that spacing is not part of the tag.
+    expect(normalizeAnswerText(battleTag, "  Player # 1234 ")).toBe("Player#1234");
+    expect(normalizeAnswerText(battleTag, " PLAYER#1234 ")).toBe("PLAYER#1234");
   });
 
-  it("casefolds an identity handle, which is what the server stores", () => {
+  it("keeps the casing of a non-game identity too", () => {
     const discord = field({ key: "identity_discord", kind: "builtin" });
-    expect(normalizeAnswerText(discord, " CoolGuy ")).toBe("coolguy");
+    expect(normalizeAnswerText(discord, " CoolGuy ")).toBe("CoolGuy");
   });
 
   it("only trims everything else", () => {
@@ -198,15 +196,39 @@ describe("normalizeAnswerText", () => {
     expect(normalizeAnswerText(custom, "  ABC 123  ")).toBe("ABC 123");
   });
 
-  it("splits storage from matching: a spaced BattleTag is valid AND stored as typed", () => {
-    // The whole contract in one place. The pattern side normalizes so the answer
+  it("splits storage from matching: casing survives, the pattern still matches", () => {
+    // The whole contract in one place. The pattern side casefolds so the answer
     // is accepted; the storage side does not, so what is submitted is what the
     // server would have kept for the same raw input.
-    expect(validateAnswer(battleTag, "Player # 1234", t)).toBeNull();
-    expect(normalizeAnswerText(battleTag, "Player # 1234")).toBe("Player # 1234");
+    const discord = field({ key: "identity_discord", kind: "builtin" });
+    expect(validateAnswer(discord, ["CoolGuy"], t)).toBeNull();
+    expect(normalizeAnswerText(discord, "CoolGuy")).toBe("CoolGuy");
+  });
+});
 
-    const smurfs = field({ key: "smurf_tags", kind: "builtin" });
-    expect(validateAnswer(smurfs, ["Alt # 1111"], t)).toBeNull();
-    expect(normalizeAnswerText(smurfs, "Alt # 1111")).toBe("Alt # 1111");
+describe("validateAnswer — identity ceiling", () => {
+  it("refuses more handles than the field allows, counting distinct ones", () => {
+    const battleTag = field({ key: "identity_battlenet", kind: "builtin" });
+    // Battle.net's default is five handles.
+    const five = ["Aa#1111", "Bb#2222", "Cc#3333", "Dd#4444", "Ee#5555"];
+    expect(validateAnswer(battleTag, five, t)).toBeNull();
+    expect(validateAnswer(battleTag, [...five, "Ff#6666"], t)).toBe("too_many");
+    // Duplicates by the provider's own rule are dropped server-side, so they
+    // never push an answer over the ceiling.
+    expect(validateAnswer(battleTag, [...five, "aa # 1111"], t)).toBeNull();
+  });
+
+  it("honours the organizer's own max_count, and one handle by default elsewhere", () => {
+    const twoTags = field({
+      key: "identity_battlenet",
+      kind: "builtin",
+      params: { max_count: 2 },
+    });
+    expect(validateAnswer(twoTags, ["Aa#1111", "Bb#2222"], t)).toBeNull();
+    expect(validateAnswer(twoTags, ["Aa#1111", "Bb#2222", "Cc#3333"], t)).toBe("too_many");
+
+    const discord = field({ key: "identity_discord", kind: "builtin" });
+    expect(validateAnswer(discord, ["one"], t)).toBeNull();
+    expect(validateAnswer(discord, ["one", "two"], t)).toBe("too_many");
   });
 });

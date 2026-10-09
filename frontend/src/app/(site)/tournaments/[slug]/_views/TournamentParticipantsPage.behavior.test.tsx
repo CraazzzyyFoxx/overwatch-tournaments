@@ -146,9 +146,9 @@ function makeRegistration(overrides: Partial<Registration> = {}): Registration {
     tournament_id: TOURNAMENT_ID,
     workspace_id: 3,
     user_id: 5,
-    battle_tag: "Anak#2100",
+    primary_handle: "Anak#2100",
     roles: [{ role: "damage", subrole: null, is_primary: true, priority: 0, top_heroes: [] }],
-    answers: { stream_pov: false },
+    answers: { stream_pov: false, identity_battlenet: ["Anak#2100"] },
     form_version_id: 4,
     form_version_stale: false,
     status: "approved",
@@ -213,7 +213,7 @@ const FORM: RegistrationForm = {
         key: "accounts",
         fields: [
           {
-            key: "battle_tag",
+            key: "identity_battlenet",
             kind: "builtin",
             required: true,
             visibility: "public",
@@ -657,8 +657,8 @@ describe("a roster the organizer hid", () => {
     getMyRegistration.mockResolvedValue(
       makeRegistration({
         answers: {
-          identity_discord: "anak",
-          identity_youtube: "@anak",
+          identity_discord: ["anak"],
+          identity_youtube: ["@anak"],
           public_notes: "I can play late",
           stream_pov: true,
           scrims: false
@@ -785,7 +785,7 @@ describe("editing your own registration", () => {
             key: "details",
             fields: [
               {
-                key: "battle_tag",
+                key: "identity_battlenet",
                 kind: "builtin",
                 required: true,
                 visibility: "public",
@@ -840,8 +840,8 @@ describe("on-call players", () => {
   const ON_CALL = makeRegistration({
     id: 402,
     user_id: 9,
-    battle_tag: "Sub#1000",
-    answers: { reserve: true }
+    primary_handle: "Sub#1000",
+    answers: { reserve: true, identity_battlenet: ["Sub#1000"] }
   });
 
   it("leaves them in the one list and says nothing about how many there are", async () => {

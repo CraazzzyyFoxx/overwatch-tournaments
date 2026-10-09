@@ -157,20 +157,18 @@ class RankStateService:
     ) -> list[tuple[int, str]]:
         """Collection pool for one approved registration (registered tags + N extra)."""
         registered_normalized: set[str] = set()
-        registration = (
-            await session.scalar(
-                sa.select(models.BalancerRegistration).where(models.BalancerRegistration.id == registration_id)
+        if registration_id is not None:
+            registered_normalized = set(
+                (
+                    await session.scalars(
+                        sa.select(models.BalancerRegistrationIdentity.handle_normalized).where(
+                            models.BalancerRegistrationIdentity.registration_id == registration_id,
+                            models.BalancerRegistrationIdentity.provider == SocialProvider.BATTLENET,
+                        )
+                    )
+                ).all()
             )
-            if registration_id is not None
-            else None
-        )
-        if registration is not None:
-            if registration.battle_tag:
-                registered_normalized.add(normalize_social_handle(SocialProvider.BATTLENET, registration.battle_tag))
-            for smurf in registration.smurf_tags_json or []:
-                if smurf:
-                    registered_normalized.add(normalize_social_handle(SocialProvider.BATTLENET, str(smurf)))
-        elif fallback_battle_tag:
+        if not registered_normalized and fallback_battle_tag:
             registered_normalized.add(normalize_social_handle(SocialProvider.BATTLENET, fallback_battle_tag))
 
         return await self.resolve_user_registration_targets(session, user_id, registered_normalized, extra_accounts)
@@ -199,14 +197,24 @@ class RankStateService:
         # Registrations are anchored on workspace_member (dbarch02 dropped
         # user_id); LEFT JOIN so member-less rows still contribute their entered
         # battle tags (their player_id resolves to None, exactly like the old
-        # NULL user_id).
+        # NULL user_id). The entered tags (main + smurfs) are the registration's
+        # battlenet identity rows, so that join is a LEFT JOIN too: a
+        # registration with no battlenet handle still contributes its player.
         member = models.WorkspaceMember
+        identity = models.BalancerRegistrationIdentity
         rows = (
             await session.execute(
-                sa.select(member.player_id, reg.battle_tag, reg.smurf_tags_json)
+                sa.select(member.player_id, identity.handle_normalized)
                 .select_from(reg)
                 .join(tournament, tournament.id == reg.tournament_id)
                 .outerjoin(member, member.id == reg.workspace_member_id)
+                .outerjoin(
+                    identity,
+                    sa.and_(
+                        identity.registration_id == reg.id,
+                        identity.provider == SocialProvider.BATTLENET,
+                    ),
+                )
                 .where(
                     reg.deleted_at.is_(None),
                     tournament.status.notin_(INACTIVE_TOURNAMENT_STATUSES),
@@ -216,14 +224,11 @@ class RankStateService:
 
         registered_normalized: set[str] = set()
         user_ids: set[int] = set()
-        for user_id, battle_tag, smurfs in rows:
+        for user_id, handle_normalized in rows:
             if user_id is not None:
                 user_ids.add(user_id)
-            if battle_tag:
-                registered_normalized.add(normalize_social_handle(SocialProvider.BATTLENET, battle_tag))
-            for smurf in smurfs or []:
-                if smurf:
-                    registered_normalized.add(normalize_social_handle(SocialProvider.BATTLENET, str(smurf)))
+            if handle_normalized:
+                registered_normalized.add(handle_normalized)
 
         target_ids: set[int] = set()
 

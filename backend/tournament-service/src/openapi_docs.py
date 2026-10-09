@@ -912,10 +912,6 @@ DOCS: dict[str, dict] = {
         "summary": "Get user rank history",
         "description": "Permission: workspace `registration.read` on the workspace named by the required `workspace_id` query param. Returns a user's balancer rank history within that workspace.",
     },
-    "rpc.tournament.reg_export_users": {
-        "summary": "Export registrations to users",
-        "description": "Permission: workspace `registration.create` on the tournament's workspace. Exports a tournament's approved registrations into user records and returns the result summary.",
-    },
     "rpc.tournament.reg_check_in": {
         "summary": "Toggle registration check-in",
         "description": "Permission: workspace `registration.check_in` on the registration's workspace. Checks a registration in or out (per the body flag) and broadcasts a realtime change.",

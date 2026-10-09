@@ -207,7 +207,7 @@ function AccountRow({ account, userId, canManage, canSetVisibility, workspaceId,
             />
           ) : (
             canManage &&
-            config.oauthEligible && (
+            config.canBeVerified && (
               <Button
                 size="icon"
                 variant="ghost"

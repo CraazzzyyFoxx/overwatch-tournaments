@@ -15,8 +15,16 @@ from sqlalchemy.orm import selectinload
 
 from shared.balancer_registration_statuses import get_status_metas_map
 from shared.core.errors import BaseAPIException as HTTPException
-from shared.core.social import SocialProvider, normalize_social_handle
-from shared.domain.forms import ErrorCode, FieldError, FormSchema, raise_field_errors, schema_from_form
+from shared.core.social import GAME_PROVIDERS, normalize_social_handle
+from shared.domain.forms import (
+    ErrorCode,
+    FieldError,
+    FormSchema,
+    identity_key,
+    identity_provider,
+    raise_field_errors,
+    schema_from_form,
+)
 from shared.hero_catalog import HeroCatalog
 from shared.rbac import assign_workspace_system_role
 from shared.repository import (
@@ -75,6 +83,25 @@ _ANSWERS_REQUIRED = "This tournament's registration form has to be answered."
 _FORM_VERSION_STALE = "The registration form changed; reload and try again."
 
 _LOCKED_ANSWER = "This answer cannot be changed after submitting; ask an organizer."
+
+
+def _ordered_identities(
+    registration: models.BalancerRegistration,
+) -> list[models.BalancerRegistrationIdentity]:
+    """A registration's identity rows, GAME providers first in catalog order.
+
+    The relationship is ordered by provider NAME, which is alphabetical chance,
+    not the precedence the player lookup needs: the first game handle in this
+    list is the one a new player is named after.
+    """
+    return sorted(
+        registration.identities,
+        key=lambda row: (
+            GAME_PROVIDERS.index(row.provider) if row.provider in GAME_PROVIDERS else len(GAME_PROVIDERS),
+            row.provider,
+            row.position,
+        ),
+    )
 
 
 def _require_current_schema(
@@ -219,13 +246,21 @@ class RegistrationService:
         )
         return result.scalar_one_or_none()
 
-    async def _find_user_by_battle_tag(self, session: AsyncSession, battle_tag: str) -> models.User | None:
-        user_id = await social_identity_service.find_player_id_by_handle(
-            session, provider=SocialProvider.BATTLENET, username=battle_tag
-        )
+    async def _find_user_by_handle(self, session: AsyncSession, *, provider: str, handle: str) -> models.User | None:
+        user_id = await social_identity_service.find_player_id_by_handle(session, provider=provider, username=handle)
         if user_id is None:
             return None
         return await self.user_repo.get(session, user_id)
+
+    async def _find_user_by_game_handles(
+        self, session: AsyncSession, handles: Sequence[tuple[str, str]]
+    ) -> tuple[models.User, str] | None:
+        """The first player owning one of ``handles``, with the provider it matched on."""
+        for provider, handle in handles:
+            user = await self._find_user_by_handle(session, provider=provider, handle=handle)
+            if user is not None:
+                return user, provider
+        return None
 
     async def _find_owned_user(self, session: AsyncSession, auth_user_id: int | None) -> models.User | None:
         """The player already linked to this auth account via ``players.user.auth_user_id``."""
@@ -233,30 +268,29 @@ class RegistrationService:
             return None
         return await self.user_repo.get_by_auth_user_id(session, auth_user_id)
 
-    async def _move_battle_tag_identity(
+    async def _move_game_identity(
         self,
         session: AsyncSession,
         *,
+        provider: str,
         shadow: models.User,
         target: models.User,
     ) -> None:
-        """Move ``shadow``'s battlenet social accounts onto ``target``.
+        """Move ``shadow``'s ``provider`` social accounts onto ``target``.
 
         This is NOT a full user merge (achievements/match stats/registration history
         stay attributed to ``shadow``'s id — see ``ensure_player_identity`` docstring
         for why a full audited merge is out of scope here). It only resolves the
         narrow collision ``ensure_player_identity`` cares about: two distinct
-        ``players.user`` rows both claiming the same battletag handle. Moving the
+        ``players.user`` rows both claiming the same game handle. Moving the
         handle(s) means future lookups (registration, log import, CSV import) all
         converge on ``target`` instead of re-splitting the identity. Idempotent;
         flushes only, caller commits.
         """
-        accounts = await social_identity_service.list_for_player(
-            session, shadow.id, providers=[SocialProvider.BATTLENET]
-        )
+        accounts = await social_identity_service.list_for_player(session, shadow.id, providers=[provider])
         for account in accounts:
             existing = await social_identity_service.find_by_handle(
-                session, provider=SocialProvider.BATTLENET, username=account.username, user_id=target.id
+                session, provider=provider, username=account.username, user_id=target.id
             )
             if existing is not None:
                 # Target already owns this exact handle — drop the shadow's duplicate.
@@ -265,38 +299,30 @@ class RegistrationService:
                 account.user_id = target.id
                 account.is_primary = False
         await session.flush()
-        for provider in (SocialProvider.BATTLENET,):
-            # Ordered by creation, not by ``SocialAccountRepository.list_by_user``'s
-            # (provider, is_primary desc, id): the oldest account is the one promoted
-            # to primary below, and that repository ordering would pick a different row.
-            rows = (
-                (
-                    await session.execute(
-                        self.social_account_repo.select()
-                        .where(models.SocialAccount.user_id == target.id, models.SocialAccount.provider == provider)
-                        .order_by(models.SocialAccount.created_at, models.SocialAccount.id)
-                    )
+        # Ordered by creation, not by ``SocialAccountRepository.list_by_user``'s
+        # (provider, is_primary desc, id): the oldest account is the one promoted
+        # to primary below, and that repository ordering would pick a different row.
+        rows = (
+            (
+                await session.execute(
+                    self.social_account_repo.select()
+                    .where(models.SocialAccount.user_id == target.id, models.SocialAccount.provider == provider)
+                    .order_by(models.SocialAccount.created_at, models.SocialAccount.id)
                 )
-                .scalars()
-                .all()
             )
-            if rows and not any(row.is_primary for row in rows):
-                rows[0].is_primary = True
+            .scalars()
+            .all()
+        )
+        if rows and not any(row.is_primary for row in rows):
+            rows[0].is_primary = True
         await session.flush()
         logger.warning(
-            "Collapsed colliding shadow player's battletag identity onto account-owned player; "
+            "Collapsed colliding shadow player's game identity onto account-owned player; "
             "historical stats/achievements remain attributed to the shadow player id and are "
             "NOT reassigned — run the admin user-merge tool to fully consolidate if needed",
+            provider=provider,
             shadow_player_id=shadow.id,
             target_player_id=target.id,
-        )
-
-    async def _ensure_user_battle_tag(self, session: AsyncSession, user: models.User, battle_tag: str) -> None:
-        if "#" not in battle_tag:
-            return
-        # Idempotent on (user, battlenet, normalized handle); seeds global visibility.
-        await social_identity_service.upsert(
-            session, user_id=user.id, provider=SocialProvider.BATTLENET, username=battle_tag
         )
 
     async def _anchor_registration_member(
@@ -372,20 +398,31 @@ class RegistrationService:
         *,
         auth_user_id: int | None = None,
         workspace_id: int | None = None,
-        known_handles: set[tuple[int, str]] | None = None,
+        known_handles: set[tuple[int, str, str]] | None = None,
         defer_member_collision_to_db: bool = False,
     ) -> int | None:
-        """Find-or-create the domain player (players.user) for a registration's tags.
+        """Find-or-create the domain player (players.user) for a registration's identities.
 
         Anchors the registration on that player's ``workspace_member`` row
         (``registration.workspace_member_id`` — the row's ONLY identity column
-        since dbarch02 dropped ``user_id``) and ensures a battlenet
-        ``social_account`` for the main tag and each smurf. This is what lets
-        first-time registrants — who aren't yet in the analytics system — be
-        picked up by rank collection / the open-profile gate. Dedup is by the
-        normalized handle (case-insensitive), so a later log/CSV import reconciles
-        to the same player. Returns the resolved player id (``players.user.id`` ==
-        the member's ``player_id``). Flushes only; caller commits.
+        since dbarch02 dropped ``user_id``) and upserts a ``social_account`` for
+        EVERY handle the registration carries: all providers, primary and extras.
+        This is what lets first-time registrants — who aren't yet in the analytics
+        system — be picked up by rank collection / the open-profile gate, and what
+        keeps the player's profile showing the socials they just typed into the
+        form. Dedup is by the normalized handle (case-insensitive), so a later
+        log/CSV import reconciles to the same player. A handle that LEAVES a
+        registration is never removed from the profile. Returns the resolved
+        player id (``players.user.id`` == the member's ``player_id``). Flushes
+        only; caller commits.
+
+        Only GAME identities (``shared.core.social.GAME_PROVIDERS``, Battle.net
+        today) find or create a player: a discord or boosty handle says nothing
+        about which player this is, so a registration carrying only those and no
+        authenticated account resolves to no player at all.
+
+        ``registration.identities`` must be eager-loaded (or freshly written in
+        this session) — it is read directly here, as everywhere else in async code.
 
         ``auth_user_id`` is the *registering* account's auth identity, passed explicitly
         by self-service callers (``create_registration``); manual/sheet-sync callers have
@@ -409,26 +446,27 @@ class RegistrationService:
            set, e.g. by a prior save) is respected as-is — the member's
            ``player_id`` is the player.
         2. Else, if the registering auth account already owns a player
-           (``players.user.auth_user_id``), that player is reused — the battletag is
-           attached to it rather than find-or-create-by-battletag. If a *different*
-           shadow player (no auth link) already owns that exact battletag, its
-           battlenet identity is collapsed onto the account-owned player (see
-           ``_move_battle_tag_identity``) rather than silently leaving the handle
+           (``players.user.auth_user_id``), that player is reused — the game handle
+           is attached to it rather than find-or-create-by-handle. If a *different*
+           shadow player (no auth link) already owns one of those game handles, its
+           identity for that provider is collapsed onto the account-owned player
+           (see ``_move_game_identity``) rather than silently leaving the handle
            split across two player rows. This is an identity-only collapse, not a
            full user merge: non-identity data (stats, achievements, past
            registrations) stays on the shadow player id.
-        3. Else, fall back to the historical battletag dedup.
-        4. Else, create a new bare player for this battletag (linked to the auth
-           account when present).
+        3. Else, the first player owning any game handle of this registration
+           (primary of each game provider in catalog order, then the extras).
+        4. Else, create a new bare player named after the primary game handle
+           (linked to the auth account when present).
 
         ``known_handles`` is an optional bulk-prefetched cache of
-        ``(player_id, normalized_battlenet_handle)`` pairs used by the sheet-sync
+        ``(player_id, provider, normalized_handle)`` triples used by the sheet-sync
         loop (which calls this once per row every 5 minutes): when the registration
-        is already anchored and every tag is already a known handle of that player,
+        is already anchored and every handle is already known for that player,
         the call is a no-op with ZERO queries — provided the caller eager-loaded
         ``registration.workspace_member`` so the ``session.get`` below hits the
         identity map. The set is mutated (newly ensured handles are added) so
-        repeated tags within one sync are also deduplicated. Semantics for
+        repeated handles within one sync are also deduplicated. Semantics for
         ``known_handles=None`` callers are unchanged.
         """
         # Resolve the currently-anchored player, if any.
@@ -443,32 +481,35 @@ class RegistrationService:
             linked_member = await session.get(models.WorkspaceMember, registration.workspace_member_id)
         linked_player_id = linked_member.player_id if linked_member is not None else None
 
-        battle_tag = registration.battle_tag
-        if not battle_tag:
+        handles = [(row.provider, row.handle) for row in _ordered_identities(registration) if row.handle]
+        game_handles = [(provider, handle) for provider, handle in handles if provider in GAME_PROVIDERS]
+
+        if not game_handles:
             if linked_player_id is not None:
-                return linked_player_id
-            # No battletag on the form: the only identity we can still anchor is
-            # the registering account's own player (preserves the pre-dbarch02
-            # behavior where the pre-resolved player id was linked directly).
-            owned = await self._find_owned_user(session, auth_user_id)
-            if owned is None:
-                return None
-            await self._anchor_registration_member(
-                session,
-                registration,
-                player_id=owned.id,
-                workspace_id=workspace_id,
-                defer_collision_to_db=defer_member_collision_to_db,
-            )
-            return owned.id
+                player_id = linked_player_id
+            else:
+                # No game identity on the form: the only player we can still anchor
+                # is the registering account's own (preserves the pre-dbarch02
+                # behavior where the pre-resolved player id was linked directly).
+                owned = await self._find_owned_user(session, auth_user_id)
+                if owned is None:
+                    return None
+                player_id = owned.id
+                await self._anchor_registration_member(
+                    session,
+                    registration,
+                    player_id=player_id,
+                    workspace_id=workspace_id,
+                    defer_collision_to_db=defer_member_collision_to_db,
+                )
+            await self._ensure_social_accounts(session, player_id, handles, known_handles=known_handles)
+            return player_id
 
-        tags = [battle_tag, *[smurf for smurf in (registration.smurf_tags_json or []) if smurf]]
-
-        def _handle_key(player_id: int, tag: str) -> tuple[int, str]:
-            return (player_id, normalize_social_handle(SocialProvider.BATTLENET, tag))
+        def _handle_key(player_id: int, provider: str, handle: str) -> tuple[int, str, str]:
+            return (player_id, provider, normalize_social_handle(provider, handle))
 
         if linked_player_id is not None and known_handles is not None:
-            keys = [_handle_key(linked_player_id, tag) for tag in tags if "#" in tag]
+            keys = [_handle_key(linked_player_id, provider, handle) for provider, handle in handles]
             if all(key in known_handles for key in keys):
                 return linked_player_id
 
@@ -481,23 +522,19 @@ class RegistrationService:
             owned = await self._find_owned_user(session, auth_user_id)
             if owned is not None:
                 user = owned
-                shadow = await self._find_user_by_battle_tag(session, battle_tag)
-                if shadow is not None and shadow.id != owned.id:
-                    await self._move_battle_tag_identity(session, shadow=shadow, target=owned)
+                found = await self._find_user_by_game_handles(session, game_handles)
+                if found is not None and found[0].id != owned.id:
+                    shadow, provider = found
+                    await self._move_game_identity(session, provider=provider, shadow=shadow, target=owned)
 
         if user is None:
-            user = await self._find_user_by_battle_tag(session, battle_tag)
+            found = await self._find_user_by_game_handles(session, game_handles)
+            user = found[0] if found is not None else None
 
         if user is None:
-            user = await self.user_repo.create(session, models.User(name=battle_tag, auth_user_id=auth_user_id))
+            user = await self.user_repo.create(session, models.User(name=game_handles[0][1], auth_user_id=auth_user_id))
 
-        for tag in tags:
-            if known_handles is not None and "#" in tag:
-                key = _handle_key(user.id, tag)
-                if key in known_handles:
-                    continue
-                known_handles.add(key)
-            await self._ensure_user_battle_tag(session, user, tag)
+        await self._ensure_social_accounts(session, user.id, handles, known_handles=known_handles)
 
         if linked_member is None or linked_member.player_id != user.id:
             await self._anchor_registration_member(
@@ -508,6 +545,28 @@ class RegistrationService:
                 defer_collision_to_db=defer_member_collision_to_db,
             )
         return user.id
+
+    async def _ensure_social_accounts(
+        self,
+        session: AsyncSession,
+        player_id: int,
+        handles: Sequence[tuple[str, str]],
+        *,
+        known_handles: set[tuple[int, str, str]] | None = None,
+    ) -> None:
+        """Upsert every registration handle onto the player's profile.
+
+        Idempotent on (player, provider, normalized handle); seeds global
+        visibility, so a handle the registrant typed into the form shows up on
+        their profile without a second "export" step.
+        """
+        for provider, handle in handles:
+            if known_handles is not None:
+                key = (player_id, provider, normalize_social_handle(provider, handle))
+                if key in known_handles:
+                    continue
+                known_handles.add(key)
+            await social_identity_service.upsert(session, user_id=player_id, provider=provider, username=handle)
 
     async def create_registration(
         self,
@@ -562,11 +621,13 @@ class RegistrationService:
             submitted_at=datetime.now(UTC),
             reviewed_at=datetime.now(UTC) if auto_approve else None,
         )
-        # Before the INSERT: the answers carry the BattleTag the row is named
+        # Before the INSERT: the answers carry the game handle the row is named
         # after, and ``ensure_player_identity`` below resolves the domain player
         # from it.
+        await self.ensure_unique_primary_game_handles(session, tournament_id=tournament_id, values=values)
         answer_service.apply(registration, values, schema=schema, hero_catalog=hero_catalog)
-        registration.display_name = registration.battle_tag
+        primary_identity = registration.primary_game_identity()
+        registration.display_name = primary_identity.handle if primary_identity is not None else None
         registration = await self.registration_repo.create(session, registration)
         # Provision the domain player identity so first-time registrants are picked
         # up by rank collection / the open-profile gate. Done before the approval
@@ -602,12 +663,13 @@ class RegistrationService:
             )
         elif auth_user_id is not None:
             # ensure_player_identity returns None when the registration has no
-            # battle_tag (see its docstring) — there's no domain player to anchor
-            # a workspace_member on, so auto-enroll is skipped for this
-            # registration. Logged (not raised) since a missing battle_tag is a
-            # form-config choice, not an error.
+            # game identity and no account-owned player (see its docstring) —
+            # there's no domain player to anchor a workspace_member on, so
+            # auto-enroll is skipped for this registration. Logged (not raised)
+            # since a form without a game identity question is a config choice,
+            # not an error.
             logger.debug(
-                "Skipping workspace_member auto-enroll: no player_id resolved (no battle_tag)",
+                "Skipping workspace_member auto-enroll: no player_id resolved (no game identity)",
                 tournament_id=tournament_id,
                 workspace_id=workspace_id,
                 auth_user_id=auth_user_id,
@@ -683,12 +745,58 @@ class RegistrationService:
                 [FieldError(key, ErrorCode.LOCKED.value, _LOCKED_ANSWER) for key in locked],
                 status_code=409,
             )
+        await self.ensure_unique_primary_game_handles(
+            session, tournament_id=registration.tournament_id, values=values, exclude_registration_id=registration.id
+        )
         answer_service.apply(registration, values, schema=schema, hero_catalog=hero_catalog)
         if form_version_id is not None:
             registration.form_version_id = form_version_id
+        if any(identity_provider(key) for key in values):
+            # A handle the registrant just added belongs on their profile now,
+            # same as on submit; an anchored row keeps its player.
+            await self.ensure_player_identity(session, registration, workspace_id=tournament.workspace_id)
         await self._registration_changed(session, registration)
         await session.commit()
         return await self._reload_for_read(session, registration)
+
+    async def ensure_unique_primary_game_handles(
+        self,
+        session: AsyncSession,
+        *,
+        tournament_id: int,
+        values: Mapping[str, Any],
+        exclude_registration_id: int | None = None,
+    ) -> None:
+        """No two live registrations of a tournament share a primary game handle.
+
+        Only the PRIMARY handle of each game provider is unique: smurfs are the
+        same person playing, and non-game identities (discord, boosty) are
+        deliberately shareable. App-level because the handles live in a child
+        table and "live" means ``deleted_at IS NULL``; every write path (public
+        submit, self-edit, organizer create/edit) calls it.
+        """
+        for provider in GAME_PROVIDERS:
+            handles = values.get(identity_key(provider)) or []
+            if not handles:
+                continue
+            filters: list[sa.ColumnElement[bool]] = [
+                models.BalancerRegistration.tournament_id == tournament_id,
+                models.BalancerRegistration.deleted_at.is_(None),
+                models.BalancerRegistration.identities.any(
+                    sa.and_(
+                        models.BalancerRegistrationIdentity.provider == provider,
+                        models.BalancerRegistrationIdentity.position == 0,
+                        models.BalancerRegistrationIdentity.handle_normalized
+                        == normalize_social_handle(provider, handles[0]),
+                    )
+                ),
+            ]
+            if exclude_registration_id is not None:
+                filters.append(models.BalancerRegistration.id != exclude_registration_id)
+            if await self.registration_repo.exists(session, filters=filters):
+                raise HTTPException(
+                    status_code=409, detail="A registration with this handle already exists in this tournament"
+                )
 
     async def get_registration_count_by_tournament(
         self,

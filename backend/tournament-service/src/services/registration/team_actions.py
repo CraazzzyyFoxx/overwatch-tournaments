@@ -13,8 +13,10 @@ from typing import Any
 import sqlalchemy as sa
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from shared import models
+from shared.core.social import GAME_PROVIDERS, display_social_handle, normalize_social_handle
 from shared.domain.player_sub_roles import REGISTRATION_ROLE_CODES
 from shared.domain.team_roster import RosterMember
 from shared.domain.team_subscription import SUBSCRIPTION_SCOPE_TEAM, team_subscription_is_current
@@ -23,7 +25,6 @@ from shared.services.notifications import notify
 from shared.services.realtime import Resource, Scope, emit
 from src.core.broker import optional_broker
 from src.core.config import settings
-from src.domain.registration.utils import normalize_battle_tag, normalize_battle_tag_key
 from src.services.registration._common import replace_registration_roles
 from src.services.registration.subscription_codes import redeem_challenge_code
 from src.services.registration.team_eligibility import team_eligibility
@@ -635,39 +636,52 @@ def install_team_actions(cls: type) -> None:
         *,
         tournament_id: int,
         team_id: int,
-        battle_tag: str,
+        handle: str,
         slot_code: str,
         is_substitute: bool = False,
     ) -> models.BalancerRegistrationTeam:
-        """Place by BattleTag, creating a shadow registration when none exists.
+        """Place by game handle, creating a shadow registration when none exists.
 
         Organizer override: eligibility is shown on the team card and still
         blocks export, but it must not refuse the write — a player with no
         Discord/account is exactly who this path exists to add.
         """
-        tag = normalize_battle_tag(battle_tag)
+        # ponytail: one game provider (battlenet). A shadow registration is created
+        # under it; widen when a second game provider lands and the organizer has
+        # to say which game the handle belongs to.
+        provider = GAME_PROVIDERS[0]
+        tag = display_social_handle(provider, handle)
         if not tag:
-            raise _fail(400, "battle_tag_required", "A battle tag is required")
+            raise _fail(400, "handle_required", "A game handle is required")
         dest_probe = await self.team_repo.get_by(session, id=team_id, deleted_at=None)
         if dest_probe is None or dest_probe.tournament_id != tournament_id:
             raise _fail(404, "team_not_found", "Team not found")
-        key = normalize_battle_tag_key(tag)
+        key = normalize_social_handle(provider, tag)
         registration = await session.scalar(
-            self.registration_repo.select().where(
+            self.registration_repo.select()
+            .where(
                 models.BalancerRegistration.tournament_id == tournament_id,
-                models.BalancerRegistration.battle_tag_normalized == key,
                 models.BalancerRegistration.deleted_at.is_(None),
+                models.BalancerRegistration.identities.any(
+                    sa.and_(
+                        models.BalancerRegistrationIdentity.provider.in_(GAME_PROVIDERS),
+                        models.BalancerRegistrationIdentity.position == 0,
+                        models.BalancerRegistrationIdentity.handle_normalized == key,
+                    )
+                ),
             )
+            .options(selectinload(models.BalancerRegistration.identities))
         )
         if registration is None:
             role = slot_code if slot_code in REGISTRATION_ROLE_CODES else REGISTRATION_ROLE_CODES[0]
             registration = models.BalancerRegistration(
                 tournament_id=tournament_id,
                 display_name=tag,
-                battle_tag=tag,
-                battle_tag_normalized=key,
                 status="approved",
                 balancer_status="not_in_balancer",
+            )
+            registration.identities.append(
+                models.BalancerRegistrationIdentity(provider=provider, position=0, handle=tag, handle_normalized=key)
             )
             replace_registration_roles(registration, [{"role": role, "is_primary": True}])
             await self.registration_repo.create(session, registration)
@@ -692,7 +706,7 @@ def install_team_actions(cls: type) -> None:
         try:
             await session.commit()
         except IntegrityError as exc:
-            raise _fail(409, "already_registered", "A player with this BattleTag is already registered") from exc
+            raise _fail(409, "already_registered", "A player with this handle is already registered") from exc
         return dest
 
     async def _maybe_cover_from_personal(

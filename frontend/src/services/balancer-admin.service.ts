@@ -20,7 +20,6 @@ import {
   AdminGoogleSheetMappingValidationError,
   MappingCatalog,
   MappingPreviewResponseV2,
-  RegistrationUserExportResponse,
   BalanceExportResponse,
   RanksExportResponse,
   BalanceSaveInput,
@@ -327,18 +326,6 @@ export default class balancerAdminService {
       method: "POST",
       body: {}
     });
-    return response.json();
-  }
-
-  static async exportRegistrationsToUsers(
-    tournamentId: number
-  ): Promise<RegistrationUserExportResponse> {
-    const response = await apiFetch(`/api/v1/admin/balancer/tournaments/${tournamentId}/registrations/export-users`,
-      {
-        method: "POST",
-        body: {}
-      }
-    );
     return response.json();
   }
 

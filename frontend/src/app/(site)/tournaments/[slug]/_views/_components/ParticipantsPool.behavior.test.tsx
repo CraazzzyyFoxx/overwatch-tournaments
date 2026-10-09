@@ -207,9 +207,9 @@ function makeRegistration(
     tournament_id: TOURNAMENT_ID,
     workspace_id: 3,
     user_id: null,
-    battle_tag: battleTag,
+    primary_handle: battleTag,
     roles,
-    answers: { stream_pov: false },
+    answers: { stream_pov: false, identity_battlenet: [battleTag] },
     form_version_id: 7,
     form_version_stale: false,
     status,
@@ -254,20 +254,19 @@ function makeForm(overrides: Partial<RegistrationForm> = {}): RegistrationForm {
     require_open_profile: false,
     require_subscription: false,
     // Explicit: an empty schema means "this form asks nothing", which would
-    // leave the gated `public_notes`/`smurf_tags` columns out for an unrelated
-    // reason.
+    // leave the gated `public_notes`/`identity_battlenet_extras` columns out
+    // for an unrelated reason.
     form_schema: {
       schema_version: 1,
       sections: [
         {
           key: "main",
           fields: [
-            builtin("battle_tag", { required: true }),
+            builtin("identity_battlenet", { required: true }),
             builtin("roles", {
               required: true,
               params: { top_heroes: { enabled: true, required: false, max: 5 } }
             }),
-            builtin("smurf_tags"),
             builtin("public_notes")
           ]
         }
@@ -492,13 +491,13 @@ describe("participants pool", () => {
     const columns = (
       container.querySelector('[data-testid="roster"]')?.getAttribute("data-columns") ?? ""
     ).split(",");
-    for (const id of ["public_notes", "smurf_tags"]) {
+    for (const id of ["public_notes", "identity_battlenet_extras"]) {
       expect(columns).not.toContain(id);
     }
     // The registration's own state is public: check-in, the subscription
     // verdict and the balancer status answer "am I in and what is still
     // missing", which is why the roster is opened at all.
-    for (const id of ["battle_tag", "_check_in", "_subscription", "_balancer_status"]) {
+    for (const id of ["identity_battlenet", "_check_in", "_subscription", "_balancer_status"]) {
       expect(columns).toContain(id);
     }
   });
@@ -512,7 +511,7 @@ describe("participants pool", () => {
     const columns = (
       container.querySelector('[data-testid="roster"]')?.getAttribute("data-columns") ?? ""
     ).split(",");
-    for (const id of ["public_notes", "smurf_tags"]) {
+    for (const id of ["public_notes", "identity_battlenet_extras"]) {
       expect(columns).toContain(id);
     }
   });

@@ -48,6 +48,7 @@ reg_admin = importlib.import_module("src.services.registration.sheet_sync")
 reg_service = importlib.import_module("src.services.registration.service")
 
 from shared.core import enums  # noqa: E402
+from shared.core.social import SocialProvider, normalize_social_handle  # noqa: E402
 from shared.domain.forms import FormField, FormSchema, FormSection  # noqa: E402
 from shared.models.registration.registration import (  # noqa: E402
     BalancerRegistrationForm,
@@ -100,7 +101,7 @@ class SheetSyncIdentityWiringTests(IsolatedAsyncioTestCase):
             fields={
                 "source_record_key": "k1",
                 "display_name": "Existing",
-                "answers": {"battle_tag": "Existing#1111"},
+                "answers": {"identity_battlenet": ["Existing#1111"]},
             },
             errors=[],
         )
@@ -136,7 +137,7 @@ class SheetSyncIdentityWiringTests(IsolatedAsyncioTestCase):
             call_session, call_registration = identity_mock.await_args.args
             self.assertIs(call_session, session)
             self.assertIsInstance(call_registration, reg_admin.models.BalancerRegistration)
-            self.assertEqual(call_registration.battle_tag, "Existing#1111")
+            self.assertEqual(call_registration.primary_handle(SocialProvider.BATTLENET), "Existing#1111")
             # The sync passes the tournament's workspace so the member anchor
             # is created in the right workspace without an extra query.
             self.assertEqual(
@@ -154,18 +155,30 @@ _WORKSPACE_ID = 1
 _MEMBER_ID = 501
 
 
+def _identity_row(provider: str, handle: str, position: int = 0) -> models.BalancerRegistrationIdentity:
+    return models.BalancerRegistrationIdentity(
+        provider=provider,
+        position=position,
+        handle=handle,
+        handle_normalized=normalize_social_handle(provider, handle),
+    )
+
+
 def _reg_stub(
-    battle_tag: str | None,
+    handle: str | None,
     *,
     workspace_member_id: int | None = None,
+    extra_identities: list[models.BalancerRegistrationIdentity] | None = None,
 ) -> SimpleNamespace:
     """A registration stub mirroring the ORM row: no user_id column (dropped
-    by dbarch02); identity is the ``workspace_member_id`` anchor."""
+    by dbarch02); identity is the ``workspace_member_id`` anchor, and the
+    handles live in ``identities`` rows, not on the row itself."""
+    identities = [] if handle is None else [_identity_row(SocialProvider.BATTLENET, handle)]
+    identities += extra_identities or []
     return SimpleNamespace(
         id=321,
         tournament_id=77,
-        battle_tag=battle_tag,
-        smurf_tags_json=None,
+        identities=identities,
         workspace_member_id=workspace_member_id,
         deleted_at=None,
     )
@@ -212,16 +225,18 @@ def _member_anchor_patch() -> AsyncMock:
 
 
 class EnsurePlayerIdentitySemanticsTests(IsolatedAsyncioTestCase):
-    async def test_links_existing_account_by_battle_tag(self) -> None:
+    async def test_links_existing_account_by_game_handle(self) -> None:
         registration = _reg_stub("Existing#111")
         existing_user = SimpleNamespace(id=7)
         session = _identity_session()
 
         with (
             patch.object(
-                reg_service.registration_service, "_find_user_by_battle_tag", AsyncMock(return_value=existing_user)
+                reg_service.registration_service,
+                "_find_user_by_game_handles",
+                AsyncMock(return_value=(existing_user, SocialProvider.BATTLENET)),
             ),
-            patch.object(reg_service.registration_service, "_ensure_user_battle_tag", AsyncMock()),
+            patch.object(reg_service.registration_service, "_ensure_social_accounts", AsyncMock()),
             patch.object(reg_service, "get_or_create_workspace_member", _member_anchor_patch()) as member_mock,
         ):
             resolved = await reg_service.registration_service.ensure_player_identity(
@@ -250,8 +265,8 @@ class EnsurePlayerIdentitySemanticsTests(IsolatedAsyncioTestCase):
         find_mock = AsyncMock()
 
         with (
-            patch.object(reg_service.registration_service, "_find_user_by_battle_tag", find_mock),
-            patch.object(reg_service.registration_service, "_ensure_user_battle_tag", AsyncMock()),
+            patch.object(reg_service.registration_service, "_find_user_by_game_handles", find_mock),
+            patch.object(reg_service.registration_service, "_ensure_social_accounts", AsyncMock()),
             patch.object(reg_service, "get_or_create_workspace_member", _member_anchor_patch()) as member_mock,
         ):
             resolved = await reg_service.registration_service.ensure_player_identity(
@@ -269,8 +284,8 @@ class EnsurePlayerIdentitySemanticsTests(IsolatedAsyncioTestCase):
         session = _identity_session()
 
         with (
-            patch.object(reg_service.registration_service, "_find_user_by_battle_tag", AsyncMock(return_value=None)),
-            patch.object(reg_service.registration_service, "_ensure_user_battle_tag", AsyncMock()),
+            patch.object(reg_service.registration_service, "_find_user_by_game_handles", AsyncMock(return_value=None)),
+            patch.object(reg_service.registration_service, "_ensure_social_accounts", AsyncMock()),
             patch.object(reg_service, "get_or_create_workspace_member", _member_anchor_patch()) as member_mock,
         ):
             resolved = await reg_service.registration_service.ensure_player_identity(
@@ -291,8 +306,8 @@ class EnsurePlayerIdentitySemanticsTests(IsolatedAsyncioTestCase):
         session = _identity_session()
 
         with (
-            patch.object(reg_service.registration_service, "_find_user_by_battle_tag", AsyncMock(return_value=None)),
-            patch.object(reg_service.registration_service, "_ensure_user_battle_tag", AsyncMock()),
+            patch.object(reg_service.registration_service, "_find_user_by_game_handles", AsyncMock(return_value=None)),
+            patch.object(reg_service.registration_service, "_ensure_social_accounts", AsyncMock()),
             patch.object(reg_service, "get_or_create_workspace_member", _member_anchor_patch()),
         ):
             resolved = await reg_service.registration_service.ensure_player_identity(
@@ -301,8 +316,8 @@ class EnsurePlayerIdentitySemanticsTests(IsolatedAsyncioTestCase):
 
         self.assertEqual(resolved, 999)
 
-    async def test_reuses_account_owned_player_over_battle_tag_dedup(self) -> None:
-        """Case (a): the auth account already owns a player and the battletag has
+    async def test_reuses_account_owned_player_over_game_handle_dedup(self) -> None:
+        """Case (a): the auth account already owns a player and the game handle has
         no distinct shadow owner — the account-owned player wins, no collapse."""
         registration = _reg_stub("AccountOwner#111")
         owned_user = SimpleNamespace(id=7)
@@ -311,10 +326,12 @@ class EnsurePlayerIdentitySemanticsTests(IsolatedAsyncioTestCase):
         with (
             patch.object(reg_service.registration_service, "_find_owned_user", AsyncMock(return_value=owned_user)),
             patch.object(
-                reg_service.registration_service, "_find_user_by_battle_tag", AsyncMock(return_value=owned_user)
+                reg_service.registration_service,
+                "_find_user_by_game_handles",
+                AsyncMock(return_value=(owned_user, SocialProvider.BATTLENET)),
             ),
-            patch.object(reg_service.registration_service, "_move_battle_tag_identity", AsyncMock()) as move_mock,
-            patch.object(reg_service.registration_service, "_ensure_user_battle_tag", AsyncMock()),
+            patch.object(reg_service.registration_service, "_move_game_identity", AsyncMock()) as move_mock,
+            patch.object(reg_service.registration_service, "_ensure_social_accounts", AsyncMock()),
             patch.object(reg_service, "get_or_create_workspace_member", _member_anchor_patch()) as member_mock,
         ):
             resolved = await reg_service.registration_service.ensure_player_identity(
@@ -326,10 +343,10 @@ class EnsurePlayerIdentitySemanticsTests(IsolatedAsyncioTestCase):
         self.assertEqual(registration.workspace_member_id, _MEMBER_ID)
         move_mock.assert_not_awaited()
 
-    async def test_colliding_shadow_battle_tag_triggers_identity_collapse(self) -> None:
+    async def test_colliding_shadow_game_handle_triggers_identity_collapse(self) -> None:
         """Case (b): the auth account owns a player, but a DIFFERENT shadow
-        player already holds the battletag — collapse the shadow's battlenet
-        identity onto the account-owned player instead of splitting it."""
+        player already holds the game handle — collapse the shadow's identity for
+        that provider onto the account-owned player instead of splitting it."""
         registration = _reg_stub("Shadow#222")
         owned_user = SimpleNamespace(id=7)
         shadow_user = SimpleNamespace(id=13)
@@ -338,10 +355,12 @@ class EnsurePlayerIdentitySemanticsTests(IsolatedAsyncioTestCase):
         with (
             patch.object(reg_service.registration_service, "_find_owned_user", AsyncMock(return_value=owned_user)),
             patch.object(
-                reg_service.registration_service, "_find_user_by_battle_tag", AsyncMock(return_value=shadow_user)
+                reg_service.registration_service,
+                "_find_user_by_game_handles",
+                AsyncMock(return_value=(shadow_user, SocialProvider.BATTLENET)),
             ),
-            patch.object(reg_service.registration_service, "_move_battle_tag_identity", AsyncMock()) as move_mock,
-            patch.object(reg_service.registration_service, "_ensure_user_battle_tag", AsyncMock()),
+            patch.object(reg_service.registration_service, "_move_game_identity", AsyncMock()) as move_mock,
+            patch.object(reg_service.registration_service, "_ensure_social_accounts", AsyncMock()),
             patch.object(reg_service, "get_or_create_workspace_member", _member_anchor_patch()) as member_mock,
         ):
             resolved = await reg_service.registration_service.ensure_player_identity(
@@ -351,11 +370,13 @@ class EnsurePlayerIdentitySemanticsTests(IsolatedAsyncioTestCase):
         self.assertEqual(resolved, 7)
         member_mock.assert_awaited_once_with(session, workspace_id=_WORKSPACE_ID, player_id=7)
         self.assertEqual(registration.workspace_member_id, _MEMBER_ID)
-        move_mock.assert_awaited_once_with(session, shadow=shadow_user, target=owned_user)
+        move_mock.assert_awaited_once_with(
+            session, provider=SocialProvider.BATTLENET, shadow=shadow_user, target=owned_user
+        )
 
     async def test_shadow_only_no_account_unchanged(self) -> None:
         """Case (c): no auth account owns a player (anonymous/sheet import) —
-        behaviour is exactly the pre-existing battletag dedup, plus the member
+        behaviour is exactly the pre-existing game-handle dedup, plus the member
         anchor for the resolved shadow player."""
         registration = _reg_stub("ShadowOnly#333")
         shadow_user = SimpleNamespace(id=21)
@@ -366,10 +387,12 @@ class EnsurePlayerIdentitySemanticsTests(IsolatedAsyncioTestCase):
                 reg_service.registration_service, "_find_owned_user", AsyncMock(return_value=None)
             ) as owned_mock,
             patch.object(
-                reg_service.registration_service, "_find_user_by_battle_tag", AsyncMock(return_value=shadow_user)
+                reg_service.registration_service,
+                "_find_user_by_game_handles",
+                AsyncMock(return_value=(shadow_user, SocialProvider.BATTLENET)),
             ),
-            patch.object(reg_service.registration_service, "_move_battle_tag_identity", AsyncMock()) as move_mock,
-            patch.object(reg_service.registration_service, "_ensure_user_battle_tag", AsyncMock()),
+            patch.object(reg_service.registration_service, "_move_game_identity", AsyncMock()) as move_mock,
+            patch.object(reg_service.registration_service, "_ensure_social_accounts", AsyncMock()),
             patch.object(reg_service, "get_or_create_workspace_member", _member_anchor_patch()) as member_mock,
         ):
             resolved = await reg_service.registration_service.ensure_player_identity(
@@ -383,15 +406,15 @@ class EnsurePlayerIdentitySemanticsTests(IsolatedAsyncioTestCase):
         move_mock.assert_not_awaited()
 
     async def test_creates_new_player_linked_to_auth_account_when_no_match(self) -> None:
-        """When neither an owned player nor a battletag match exists, the new
+        """When neither an owned player nor a game-handle match exists, the new
         player is created pre-linked to the registering auth account."""
         registration = _reg_stub("BrandNew#444")
         session = _identity_session()
 
         with (
             patch.object(reg_service.registration_service, "_find_owned_user", AsyncMock(return_value=None)),
-            patch.object(reg_service.registration_service, "_find_user_by_battle_tag", AsyncMock(return_value=None)),
-            patch.object(reg_service.registration_service, "_ensure_user_battle_tag", AsyncMock()),
+            patch.object(reg_service.registration_service, "_find_user_by_game_handles", AsyncMock(return_value=None)),
+            patch.object(reg_service.registration_service, "_ensure_social_accounts", AsyncMock()),
             patch.object(reg_service, "get_or_create_workspace_member", _member_anchor_patch()),
         ):
             resolved = await reg_service.registration_service.ensure_player_identity(
@@ -413,9 +436,11 @@ class EnsurePlayerIdentitySemanticsTests(IsolatedAsyncioTestCase):
 
         with (
             patch.object(
-                reg_service.registration_service, "_find_user_by_battle_tag", AsyncMock(return_value=existing_user)
+                reg_service.registration_service,
+                "_find_user_by_game_handles",
+                AsyncMock(return_value=(existing_user, SocialProvider.BATTLENET)),
             ),
-            patch.object(reg_service.registration_service, "_ensure_user_battle_tag", AsyncMock()),
+            patch.object(reg_service.registration_service, "_ensure_social_accounts", AsyncMock()),
             patch.object(reg_service, "get_or_create_workspace_member", _member_anchor_patch()),
         ):
             resolved = await reg_service.registration_service.ensure_player_identity(
@@ -423,6 +448,27 @@ class EnsurePlayerIdentitySemanticsTests(IsolatedAsyncioTestCase):
             )
 
         self.assertEqual(resolved, 7)
+        self.assertIsNone(registration.workspace_member_id)
+
+    async def test_a_registration_with_no_game_handle_resolves_to_no_player(self) -> None:
+        """A discord handle says nothing about WHICH player this is: with no game
+        identity and no auth account owning one, nothing is found and nothing is
+        created -- the row stays unanchored."""
+        registration = _reg_stub(None, extra_identities=[_identity_row(SocialProvider.DISCORD, "someone")])
+        session = _identity_session()
+
+        with (
+            patch.object(reg_service.registration_service, "_ensure_social_accounts", AsyncMock()) as ensure_mock,
+            patch.object(reg_service, "get_or_create_workspace_member", _member_anchor_patch()) as member_mock,
+        ):
+            resolved = await reg_service.registration_service.ensure_player_identity(
+                session, registration, workspace_id=_WORKSPACE_ID
+            )
+
+        self.assertIsNone(resolved)
+        self.assertEqual(session._added, [])
+        ensure_mock.assert_not_awaited()
+        member_mock.assert_not_awaited()
         self.assertIsNone(registration.workspace_member_id)
 
 
@@ -437,7 +483,7 @@ _ATOMIC_SCHEMA = FormSchema(
         FormSection(
             key="accounts",
             fields=[
-                FormField(key="battle_tag", kind="builtin", required=True),
+                FormField(key="identity_battlenet", kind="builtin", required=True),
                 FormField(key="identity_discord", kind="builtin"),
                 FormField(key="public_notes", kind="builtin"),
             ],
@@ -449,7 +495,7 @@ _ATOMIC_HEADERS = ["BattleTag", "Discord", "Note"]
 _ATOMIC_MAPPING = {
     "targets": {
         "source_record_key": {"mode": "columns", "columns": ["BattleTag"], "parser": "battle_tag"},
-        "battle_tag": {"mode": "columns", "columns": ["BattleTag"], "parser": "battle_tag"},
+        "identity_battlenet": {"mode": "columns", "columns": ["BattleTag"], "parser": "battle_tag_list"},
         "identity_discord": {"mode": "columns", "columns": ["Discord"], "parser": "string"},
         "public_notes": {"mode": "columns", "columns": ["Note"], "parser": "join_lines"},
     }
@@ -532,9 +578,12 @@ def test_a_row_whose_answers_do_not_validate_is_skipped_whole(db_session, monkey
         )
         # The bad row left no registration at all -- not an empty one, not one
         # with only the columns validated before the failure.
-        assert [row.battle_tag for row in rows] == ["Good#2222"]
+        assert [row.primary_handle(SocialProvider.BATTLENET) for row in rows] == ["Good#2222"]
         assert rows[0].public_notes == "good note"
-        assert [(i.provider, i.handle) for i in rows[0].identities] == [("discord", "gooddiscord")]
+        assert [(i.provider, i.handle) for i in rows[0].identities] == [
+            ("battlenet", "Good#2222"),
+            ("discord", "gooddiscord"),
+        ]
 
         await db_session.execute(sa.delete(Workspace).where(Workspace.id == seeded["workspace_id"]))
         await db_session.commit()

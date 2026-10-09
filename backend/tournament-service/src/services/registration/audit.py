@@ -25,10 +25,10 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.core.social import display_social_handle
 from shared.domain.forms import IDENTITY_PROVIDERS, identity_key
 from shared.services.audit import AuditSource, record_audit
 from src import models
-from src.domain.registration.utils import normalize_battle_tag
 from src.services.registration.answers import custom_answers, merge_custom_answers
 
 __all__ = ("ENTITY", "audit_service", "label", "profile_changes", "role_snapshot")
@@ -46,12 +46,9 @@ _ADMIN_FIELDS: dict[str, str] = {
 }
 
 # Answer key -> model attribute for the builtin questions that land in a column.
-# Keyed by the ANSWER key, which is what the feed should name: the wire says
-# ``smurf_tags``, the column happens to be ``smurf_tags_json``. ``roles`` and
+# Keyed by the ANSWER key, which is what the feed should name. ``roles`` and
 # ``identity_*`` are rows, handled below.
 _ANSWER_FIELDS: dict[str, str] = {
-    "battle_tag": "battle_tag",
-    "smurf_tags": "smurf_tags_json",
     "stream_pov": "stream_pov",
     "reserve": "is_reserve",
     "public_notes": "public_notes",
@@ -60,12 +57,13 @@ _ANSWER_FIELDS: dict[str, str] = {
 
 # Columns the service persists as NULL when handed an empty container, so an
 # empty request value and a stored NULL are the same state -- not a change.
-_EMPTY_IS_NULL = frozenset({"smurf_tags_json", "custom_fields_json"})
+_EMPTY_IS_NULL = frozenset({"custom_fields_json"})
 
 
 def label(registration: models.BalancerRegistration) -> str | None:
     """Snapshot name for the row, so the feed stays readable after a delete."""
-    return registration.display_name or registration.battle_tag
+    identity = registration.primary_game_identity()
+    return registration.display_name or (identity.handle if identity is not None else None)
 
 
 def _role_key(value: Any) -> str:
@@ -127,10 +125,6 @@ def _requested_roles(roles: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def _requested_value(attr: str, value: Any) -> Any:
-    if attr == "battle_tag":
-        # Compared against the stored, already-normalised tag: without this a
-        # resave of the same tag in different casing reads as an edit.
-        return normalize_battle_tag(value)
     if attr in _EMPTY_IS_NULL and not value:
         return None
     return value
@@ -168,11 +162,21 @@ def profile_changes(
             continue
         record(key, getattr(registration, attr), _requested_value(attr, answers[key]))
 
-    stored_handles = {row.provider: row.handle for row in (registration.identities or [])}
+    # Identity answers are LISTS (primary first), so the two images are lists too:
+    # adding a smurf is a change, and so is promoting one to primary. The
+    # requested handles are compared in the DISPLAY form the writer will store
+    # them in -- otherwise a resave of the same account in other spacing
+    # (``Ferz #2100``) reads as an edit.
+    stored_handles: dict[str, list[str]] = {}
+    for row in sorted(registration.identities or (), key=lambda row: row.position):
+        stored_handles.setdefault(row.provider, []).append(row.handle)
     for provider in IDENTITY_PROVIDERS:
         key = identity_key(provider)
         if key in answers:
-            record(key, stored_handles.get(provider), answers[key] or None)
+            raw = answers[key] or []
+            items = raw if isinstance(raw, list) else [raw]
+            requested_handles = [display_social_handle(provider, str(item)) for item in items]
+            record(key, stored_handles.get(provider) or None, requested_handles or None)
 
     custom = custom_answers(answers)
     if custom:

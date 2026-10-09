@@ -141,8 +141,7 @@ def _reg(reg_id: int, *, tag: str | None = "Player#1", checked_in: bool = False)
         status="approved",
         balancer_status="ready",
         checked_in=checked_in,
-        battle_tag=tag,
-        smurf_tags_json=None,
+        handles=lambda _provider: [tag] if tag else [],
     )
 
 

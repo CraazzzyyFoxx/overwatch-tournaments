@@ -52,7 +52,7 @@ ALL_FLEX = {"flex": 3}
 
 #: The least a registrant can be asked, so the assertions stay about slots.
 SCHEMA = FormSchema(
-    sections=[FormSection(key="all", fields=[FormField(key="battle_tag", kind="builtin", required=True)])]
+    sections=[FormSection(key="all", fields=[FormField(key="identity_battlenet", kind="builtin", required=True)])]
 )
 
 
@@ -128,7 +128,7 @@ async def _drop(session: Any, seeded: SimpleNamespace) -> None:
 
 
 def _submit(seeded: SimpleNamespace, battle_tag: str) -> RegistrationSubmit:
-    return RegistrationSubmit(form_version_id=seeded.version_id, answers={"battle_tag": battle_tag})
+    return RegistrationSubmit(form_version_id=seeded.version_id, answers={"identity_battlenet": [battle_tag]})
 
 
 async def _slots_held(session: Any, team_id: int) -> list[str]:

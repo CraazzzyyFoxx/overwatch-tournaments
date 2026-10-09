@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import sys
 import warnings
+from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
@@ -51,6 +52,7 @@ sys.path.insert(0, str(backend_root / "tournament-service"))
 
 from shared.core import enums  # noqa: E402
 from shared.core.enums import TournamentStatus  # noqa: E402
+from shared.core.social import SocialProvider, normalize_social_handle  # noqa: E402
 from shared.domain.roster_shape import parse_roster_slots  # noqa: E402
 from shared.models.identity.rbac import (  # noqa: E402
     Permission,
@@ -174,6 +176,28 @@ class _AsyncSessionShim:
         return getattr(self._session, name)
 
 
+@contextmanager
+def _sqlite_creatable(tables: list[sa.Table]):
+    """SQLite's parser rejects ``DEFERRABLE`` on a UNIQUE constraint, which the
+    registration-identity table declares (positions are renumbered inside one
+    flush). Create those constraints immediate here and restore the real
+    Postgres DDL afterwards."""
+    deferred = [
+        constraint
+        for table in tables
+        for constraint in table.constraints
+        if constraint.deferrable or constraint.initially
+    ]
+    saved = [(constraint.deferrable, constraint.initially) for constraint in deferred]
+    for constraint in deferred:
+        constraint.deferrable = constraint.initially = None
+    try:
+        yield
+    finally:
+        for constraint, (deferrable, initially) in zip(deferred, saved, strict=True):
+            constraint.deferrable, constraint.initially = deferrable, initially
+
+
 class _Fixture:
     """A throwaway in-memory database plus the row builders these flows need."""
 
@@ -188,8 +212,9 @@ class _Fixture:
         with self.engine.begin() as conn:
             for schema in sorted({table.schema for table in tables if table.schema}):
                 conn.exec_driver_sql(f"ATTACH DATABASE ':memory:' AS {schema}")
-            for table in tables:
-                table.create(conn)
+            with _sqlite_creatable(tables):
+                for table in tables:
+                    table.create(conn)
         self.session = Session(self.engine, expire_on_commit=False)
         self.shim = _AsyncSessionShim(self.session)
         self.tournament = models.Tournament(
@@ -236,7 +261,14 @@ class _Fixture:
         registration = models.BalancerRegistration(
             tournament_id=TOURNAMENT_ID,
             workspace_member_id=member.id,
-            battle_tag=battle_tag,
+            identities=[
+                models.BalancerRegistrationIdentity(
+                    provider=SocialProvider.BATTLENET,
+                    position=0,
+                    handle=battle_tag,
+                    handle_normalized=normalize_social_handle(SocialProvider.BATTLENET, battle_tag),
+                )
+            ],
             status=status,
             registration_team_id=team_id,
             team_slot_code=slot_code,

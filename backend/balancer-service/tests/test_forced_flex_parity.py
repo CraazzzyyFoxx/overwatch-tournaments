@@ -75,7 +75,7 @@ def _flex_form(mode: str) -> SimpleNamespace:
 
 
 def _resolve(case: dict[str, Any], mode: str) -> PlayerRoster:
-    registration = BalancerRegistration(id=1, tournament_id=1, battle_tag="Reg#1")
+    registration = BalancerRegistration(id=1, tournament_id=1)
     registration.roles = [
         BalancerRegistrationRole(
             role=spec["role"],

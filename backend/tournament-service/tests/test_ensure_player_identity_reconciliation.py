@@ -73,18 +73,26 @@ async def _battle_tag_account(session, *, user_id: int, battle_tag: str):
     )
 
 
-def _registration(*, battle_tag: str):
+def _registration(*, battlenet: list[str] | None = None, discord: str | None = None):
     # BalancerRegistration no longer carries auth_user_id or user_id (identity is
     # anchored via workspace_member_id — dbarch02); ensure_player_identity takes
     # the registering account's auth_user_id as an explicit keyword argument
     # instead of reading it off the row. tournament_id=None makes the member
     # anchoring a no-op (no workspace resolvable), which keeps these tests
     # focused on player reconciliation without provisioning workspaces.
+    #
+    # Handles live on `identities` rows now (position 0 = primary), never on a
+    # `battle_tag` column.
+    identities = [
+        SimpleNamespace(provider=SocialProvider.BATTLENET, position=index, handle=handle)
+        for index, handle in enumerate(battlenet or [])
+    ]
+    if discord is not None:
+        identities.append(SimpleNamespace(provider=SocialProvider.DISCORD, position=0, handle=discord))
     return SimpleNamespace(
         id=None,
         tournament_id=None,
-        battle_tag=battle_tag,
-        smurf_tags_json=None,
+        identities=identities,
         workspace_member_id=None,
         deleted_at=None,
     )
@@ -106,7 +114,7 @@ def test_reuses_account_owned_player_and_attaches_new_battle_tag() -> None:
                 auth_user_id, player_id = auth_user.id, player.id
 
             async with session_maker() as session:
-                registration = _registration(battle_tag=battle_tag)
+                registration = _registration(battlenet=[battle_tag])
                 resolved = await reg_service.registration_service.ensure_player_identity(
                     session, registration, auth_user_id=auth_user_id
                 )
@@ -148,7 +156,7 @@ def test_colliding_shadow_battle_tag_collapses_onto_account_owned_player() -> No
                 owned_id, shadow_id = owned_player.id, shadow_player.id
 
             async with session_maker() as session:
-                registration = _registration(battle_tag=battle_tag)
+                registration = _registration(battlenet=[battle_tag])
                 resolved = await reg_service.registration_service.ensure_player_identity(
                     session, registration, auth_user_id=auth_user_id
                 )
@@ -194,7 +202,7 @@ def test_shadow_only_no_account_falls_back_to_battle_tag_dedup() -> None:
                 shadow_id = shadow_player.id
 
             async with session_maker() as session:
-                registration = _registration(battle_tag=battle_tag)
+                registration = _registration(battlenet=[battle_tag])
                 resolved = await reg_service.registration_service.ensure_player_identity(
                     session, registration, auth_user_id=None
                 )
@@ -204,3 +212,21 @@ def test_shadow_only_no_account_falls_back_to_battle_tag_dedup() -> None:
 
     shadow_id, resolved = asyncio.run(_run())
     assert resolved == shadow_id
+
+
+def test_non_game_identity_alone_resolves_to_no_player() -> None:
+    """Case (d): a discord handle says nothing about WHICH player this is, so a
+    registration carrying only non-game identities and no auth account resolves
+    to nothing — it must not mint a player named after a discord tag."""
+
+    async def _run():
+        async with _db_sessions() as session_maker:
+            async with session_maker() as session:
+                registration = _registration(discord=f"only_discord_{uuid.uuid4().hex[:10]}")
+                resolved = await reg_service.registration_service.ensure_player_identity(
+                    session, registration, auth_user_id=None
+                )
+                await session.rollback()
+            return resolved
+
+    assert asyncio.run(_run()) is None

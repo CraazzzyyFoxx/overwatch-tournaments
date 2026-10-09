@@ -19,7 +19,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
-from shared.core.social import SocialProvider
+from shared.core.social import GAME_PROVIDERS, SocialProvider
 from shared.domain.forms import IDENTITY_PROVIDERS, FormField, FormSchema, identity_key
 from shared.domain.player_sub_roles import catalog_slugs, normalize_sub_role
 from src.domain.registration.utils import (
@@ -35,8 +35,6 @@ ROLE_CODES = ("tank", "damage", "support")
 #: can map -- ``display_name``, ``admin_notes``, ``submitted_at`` and the
 #: role/rank targets -- is organizer state the form never asks a player about.
 ANSWER_TARGET_KEYS: tuple[str, ...] = (
-    "battle_tag",
-    "smurf_tags",
     *(identity_key(provider) for provider in IDENTITY_PROVIDERS),
     "stream_pov",
     "reserve",
@@ -48,6 +46,7 @@ ANSWER_TARGET_KEYS: tuple[str, ...] = (
 #: Data, not branches: a new provider in ``IDENTITY_PROVIDERS`` only needs a row
 #: here to become mappable (and is mappable without one, minus the suggester).
 _IDENTITY_HEADERS: dict[str, tuple[str, tuple[str, ...]]] = {
+    SocialProvider.BATTLENET: ("Battle tag", ("battle tag", "battletag", "ваш battle tag", "smurf", "alt", "смурф")),
     SocialProvider.DISCORD: ("Discord", ("discord", "дискорд", "дискор")),
     SocialProvider.TWITCH: ("Twitch", ("twitch", "твич")),
     SocialProvider.BOOSTY: ("Boosty", ("boosty", "бусти")),
@@ -128,17 +127,26 @@ def _role_label(role_code: str) -> str:
 
 
 def _identity_specs() -> list[MappingTargetSpec]:
-    """One mappable target per identity provider the form can ask about."""
+    """One mappable target per identity provider the form can ask about.
+
+    A GAME provider's answer is a list of handles -- main first, smurfs after --
+    so its target takes several columns and parses each as a battle tag. The
+    others are single handles.
+    """
     specs: list[MappingTargetSpec] = []
     for provider in IDENTITY_PROVIDERS:
         label, aliases = _IDENTITY_HEADERS.get(provider, (provider.title(), ()))
+        is_game = provider in GAME_PROVIDERS
         specs.append(
             MappingTargetSpec(
                 key=identity_key(provider),
                 label=label,
-                group="profile",
-                accepted_parsers=(PARSER_STRING,),
-                default_parser=PARSER_STRING,
+                group="identity" if is_game else "profile",
+                accepted_parsers=(PARSER_BATTLE_TAG_LIST,) if is_game else (PARSER_STRING,),
+                default_parser=PARSER_BATTLE_TAG_LIST if is_game else PARSER_STRING,
+                default_is_list=is_game,
+                multi_column=is_game,
+                required=is_game,
                 aliases=aliases,
             )
         )
@@ -156,15 +164,6 @@ def _build_builtin_specs() -> tuple[MappingTargetSpec, ...]:
             aliases=("battle tag", "battletag", "ваш battle tag"),
         ),
         MappingTargetSpec(
-            key="battle_tag",
-            label="Battle tag",
-            group="identity",
-            accepted_parsers=(PARSER_BATTLE_TAG, PARSER_STRING),
-            default_parser=PARSER_BATTLE_TAG,
-            required=True,
-            aliases=("battle tag", "battletag", "ваш battle tag"),
-        ),
-        MappingTargetSpec(
             key="display_name",
             label="Display name",
             group="profile",
@@ -179,15 +178,6 @@ def _build_builtin_specs() -> tuple[MappingTargetSpec, ...]:
             accepted_parsers=(PARSER_DATETIME,),
             default_parser=PARSER_DATETIME,
             aliases=("timestamp", "submitted", "отметка времени"),
-        ),
-        MappingTargetSpec(
-            key="smurf_tags",
-            label="Smurf accounts",
-            group="profile",
-            accepted_parsers=(PARSER_BATTLE_TAG_LIST,),
-            default_parser=PARSER_BATTLE_TAG_LIST,
-            multi_column=True,
-            aliases=("smurf", "alt", "смурф"),
         ),
         *_identity_specs(),
         MappingTargetSpec(
@@ -479,7 +469,7 @@ class MappingValidationIssue:
     column: str | None = None
 
 
-IDENTITY_TARGETS = ("source_record_key", "battle_tag")
+IDENTITY_TARGETS = ("source_record_key", identity_key(SocialProvider.BATTLENET))
 
 
 def _target_is_mapped(target_config: dict[str, Any] | None) -> bool:
@@ -690,23 +680,23 @@ def validate_value_mapping_subroles(
 
 def classify_row_disposition(
     source_record_key: str | None,
-    battle_tag_key: str | None,
+    handle_key: str | None,
     *,
     known_source_keys: set[str],
-    known_battle_tag_keys: set[str],
+    known_handle_keys: set[str],
 ) -> str:
     """Return 'create' | 'update' | 'skip' for a parsed row.
 
     Mirrors the reuse logic in ``sync_google_sheet_feed``: a row updates an
-    existing registration when its source key has a binding, or its battle tag
-    matches an existing registration; otherwise it creates a new one. Rows that
-    produced no identity are skipped.
+    existing registration when its source key has a binding, or its primary game
+    handle matches an existing registration; otherwise it creates a new one. Rows
+    that produced no identity are skipped.
     """
     if not source_record_key:
         return "skip"
     if source_record_key in known_source_keys:
         return "update"
-    if battle_tag_key and battle_tag_key in known_battle_tag_keys:
+    if handle_key and handle_key in known_handle_keys:
         return "update"
     return "create"
 

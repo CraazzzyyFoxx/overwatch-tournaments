@@ -86,7 +86,7 @@ function template(id: number, name: string, sectionTitle: string) {
           description: null,
           fields: [
             {
-              key: "battle_tag",
+              key: "identity_battlenet",
               kind: "builtin",
               label: null,
               help: null,
@@ -203,7 +203,7 @@ describe("workspace registration form templates", () => {
 
     await click(button("Edit questions"));
     // Dirty the draft: open the one question and flip Required.
-    await click(button("BattleTagbattle_tagRequired"));
+    await click(button("BattleTagidentity_battlenetRequired"));
     await click(labelled("Required"));
 
     // The second template's "Edit questions" — the first row now reads "Editing".

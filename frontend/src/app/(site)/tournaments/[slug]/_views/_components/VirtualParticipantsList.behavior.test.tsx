@@ -186,9 +186,9 @@ function registration(id: number): Registration {
     tournament_id: 72,
     workspace_id: 1,
     user_id: id,
-    battle_tag: `Player${id}#1234`,
+    primary_handle: `Player${id}#1234`,
     roles: [],
-    answers: { stream_pov: false },
+    answers: { stream_pov: false, identity_battlenet: [`Player${id}#1234`] },
     form_version_id: 1,
     form_version_stale: false,
     status: "approved",
@@ -213,14 +213,14 @@ function registration(id: number): Registration {
 
 const registrations = Array.from({ length: 500 }, (_, index) => registration(index + 1));
 const imageColumn: ColumnDefinition = {
-  id: "battle_tag",
+  id: "identity_battlenet",
   label: "Player",
   category: "built_in",
   defaultVisible: true,
   render: (row) => (
     // eslint-disable-next-line @next/next/no-img-element -- verifies image DOM mount cost
     <img
-      alt={row.battle_tag ?? "Player"}
+      alt={row.primary_handle ?? "Player"}
       data-registration-image={row.id}
       src={`/avatars/${row.id}.png`}
     />
@@ -508,7 +508,7 @@ describe("VirtualParticipantsList mount budget", () => {
           columns={[imageColumn, statusColumn, heavyColumn]}
           onReset={() => {}}
           onToggle={(id) => toggled.push(id)}
-          visibility={{ battle_tag: true, _status: true, notes: false }}
+          visibility={{ identity_battlenet: true, _status: true, notes: false }}
         />
       );
     });

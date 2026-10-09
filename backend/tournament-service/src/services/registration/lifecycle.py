@@ -35,10 +35,6 @@ from shared.repository import (
 )
 from shared.services.roster import registration_load_options, roster_engine
 from src import models
-from src.domain.registration.utils import (
-    normalize_battle_tag,
-    normalize_battle_tag_key,
-)
 from src.schemas.registration_build import _resolve_top_heroes_config, registration_read_loaders
 from src.services.registration._common import (
     AUTO_MANAGED_BALANCER_STATUSES,
@@ -188,29 +184,6 @@ class RegistrationLifecycleService:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Registration not found")
         return registration
 
-    async def ensure_unique_battle_tag(
-        self,
-        session: AsyncSession,
-        *,
-        tournament_id: int,
-        battle_tag: str | None,
-        exclude_registration_id: int | None = None,
-    ) -> None:
-        normalized = normalize_battle_tag_key(battle_tag)
-        if not normalized:
-            return
-        filters: list[sa.ColumnElement[bool]] = [
-            models.BalancerRegistration.tournament_id == tournament_id,
-            models.BalancerRegistration.deleted_at.is_(None),
-            models.BalancerRegistration.battle_tag_normalized == normalized,
-        ]
-        if exclude_registration_id is not None:
-            filters.append(models.BalancerRegistration.id != exclude_registration_id)
-        if await self.registration_repo.exists(session, filters=filters):
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT, detail="Registration with this BattleTag already exists"
-            )
-
     async def validate_registration_status_value(
         self,
         session: AsyncSession,
@@ -309,9 +282,7 @@ class RegistrationLifecycleService:
             # they win outright over a ``roles`` answer sent alongside them.
             values.pop("roles", None)
 
-        await self.ensure_unique_battle_tag(
-            session, tournament_id=tournament_id, battle_tag=normalize_battle_tag(values.get("battle_tag"))
-        )
+        await self.registrations.ensure_unique_primary_game_handles(session, tournament_id=tournament_id, values=values)
 
         registration = models.BalancerRegistration(
             tournament_id=tournament_id,
@@ -321,7 +292,8 @@ class RegistrationLifecycleService:
             balancer_status=NOT_ADDED_BALANCER_STATUS,
         )
         answer_service.apply(registration, values, schema=schema, hero_catalog=hero_catalog)
-        registration.display_name = display_name or registration.battle_tag
+        primary_identity = registration.primary_game_identity()
+        registration.display_name = display_name or (primary_identity.handle if primary_identity else None)
         if roles:
             replace_registration_roles(
                 registration,
@@ -335,7 +307,7 @@ class RegistrationLifecycleService:
             registration.balancer_status = balancer_status_value
         await self.registration_repo.create(session, registration)
         # Unconditional, and with the workspace: a manual registration has no auth
-        # account, but its BattleTag is still the identity every inherited rank
+        # account, but its game handle is still the identity every inherited rank
         # layer is read through. Gating this on ``auth_user_id`` left admin-created
         # rows with no ``workspace_member``, hence no canon to inherit.
         await self.registrations.ensure_player_identity(
@@ -393,18 +365,18 @@ class RegistrationLifecycleService:
         )
         if roles is not None:
             values.pop("roles", None)
-        if "battle_tag" in values:
-            await self.ensure_unique_battle_tag(
-                session,
-                tournament_id=registration.tournament_id,
-                battle_tag=normalize_battle_tag(values["battle_tag"]),
-                exclude_registration_id=registration.id,
-            )
+        await self.registrations.ensure_unique_primary_game_handles(
+            session,
+            tournament_id=registration.tournament_id,
+            values=values,
+            exclude_registration_id=registration.id,
+        )
         answer_service.apply(registration, values, schema=schema, hero_catalog=hero_catalog)
         if form is not None:
             registration.form_version_id = form.current_version_id
         if display_name is not None:
-            registration.display_name = display_name or registration.battle_tag
+            primary_identity = registration.primary_game_identity()
+            registration.display_name = display_name or (primary_identity.handle if primary_identity else None)
         if admin_notes is not None:
             registration.admin_notes = admin_notes
         if status_value is not None:

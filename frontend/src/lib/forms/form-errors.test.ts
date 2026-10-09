@@ -28,13 +28,13 @@ describe("fieldErrorsFrom", () => {
     const result = fieldErrorsFrom(
       apiError(
         422,
-        { code: "required", msg: "This field is required.", field: "battle_tag" },
+        { code: "required", msg: "This field is required.", field: "identity_battlenet" },
         { code: "invalid_option", msg: "Not one of the options.", field: "server" },
       ),
       t,
     );
     expect(result.fields).toEqual({
-      battle_tag: "ru:required",
+      identity_battlenet: "ru:required",
       server: "ru:invalid_option",
     });
     expect(result.form).toBeNull();

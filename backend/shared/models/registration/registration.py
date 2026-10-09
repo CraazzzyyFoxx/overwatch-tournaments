@@ -18,6 +18,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from shared.core import db, enums
+from shared.core.social import GAME_PROVIDERS
 
 if TYPE_CHECKING:
     from shared.models.catalog.hero import Hero
@@ -241,6 +242,7 @@ class BalancerRegistration(db.TimeStampIntegerMixin):
             unique=True,
             postgresql_where="deleted_at IS NULL",
         ),
+        # Legacy -- see the battle_tag columns below; dropped with them.
         Index(
             "uq_balancer_registration_tournament_tag_active",
             "tournament_id",
@@ -268,9 +270,14 @@ class BalancerRegistration(db.TimeStampIntegerMixin):
         ForeignKey("workspace_member.id", ondelete="SET NULL"), nullable=True, index=True
     )
     display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    battle_tag: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    battle_tag_normalized: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    smurf_tags_json: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    # LEGACY, no reader and no writer: Battle.net handles live in ``identities``
+    # (provider ``battlenet``, smurfs at position > 0) since regident01. Kept on
+    # the table and the model only until the gated contract-step drop
+    # (CONTRIBUTING.md, "Destructive migrations are gated"). Deferred so that an
+    # accidental read fails loudly in async code instead of returning stale data.
+    battle_tag: Mapped[str | None] = mapped_column(String(255), nullable=True, deferred=True)
+    battle_tag_normalized: Mapped[str | None] = mapped_column(String(255), nullable=True, deferred=True)
+    smurf_tags_json: Mapped[list[str] | None] = mapped_column(JSON, nullable=True, deferred=True)
     stream_pov: Mapped[bool] = mapped_column(Boolean(), nullable=False, server_default="false", default=False)
     #: "Call me in if a replacement is needed." The registrant's OWN declaration,
     #: answered through the ``reserve`` builtin question. It is not a pool state:
@@ -356,23 +363,61 @@ class BalancerRegistration(db.TimeStampIntegerMixin):
     # schema version must eager-load them (the same standing rule as
     # ``workspace_member`` above); ``registration_load_options`` does.
     identities: Mapped[list[BalancerRegistrationIdentity]] = relationship(
-        back_populates="registration", cascade="all, delete-orphan"
+        back_populates="registration",
+        cascade="all, delete-orphan",
+        order_by=lambda: [BalancerRegistrationIdentity.provider, BalancerRegistrationIdentity.position],
     )
     form_version: Mapped[BalancerRegistrationFormVersion | None] = relationship(foreign_keys=[form_version_id])
 
+    def handles(self, provider: str) -> list[str]:
+        """This registration's handles for ``provider``, primary first."""
+        return [row.handle for row in self.identities if row.provider == provider]
+
+    def primary_handle(self, provider: str) -> str | None:
+        return next((row.handle for row in self.identities if row.provider == provider and row.position == 0), None)
+
+    def primary_game_identity(self) -> BalancerRegistrationIdentity | None:
+        """The primary handle of the first game provider (catalog order) this
+        registration carries: its identity for sheet keys, rosters and lookups."""
+        primaries = {row.provider: row for row in self.identities if row.position == 0}
+        return next((primaries[p] for p in GAME_PROVIDERS if p in primaries), None)
+
 
 class BalancerRegistrationIdentity(db.TimeStampIntegerMixin):
-    """A social handle the registrant typed for one provider (``identity_<provider>``)."""
+    """One social handle the registrant gave for a provider (``identity_<provider>``).
+
+    A provider may carry several handles (Battle.net smurfs): ``position`` 0 is
+    the primary, the rest follow in the order given.
+    """
 
     __tablename__ = "registration_identity"
+    # Deferred: rewriting a provider's handles in place (promoting a smurf to
+    # primary swaps two rows' handles) passes through states that collide
+    # mid-flush and are consistent again at commit.
     __table_args__ = (
-        UniqueConstraint("registration_id", "provider", name="uq_balancer_registration_identity_provider"),
+        UniqueConstraint(
+            "registration_id",
+            "provider",
+            "position",
+            name="uq_balancer_registration_identity_position",
+            deferrable=True,
+            initially="DEFERRED",
+        ),
+        UniqueConstraint(
+            "registration_id",
+            "provider",
+            "handle_normalized",
+            name="uq_balancer_registration_identity_handle",
+            deferrable=True,
+            initially="DEFERRED",
+        ),
         Index("ix_balancer_registration_identity_handle", "provider", "handle_normalized"),
         {"schema": "balancer"},
     )
 
     registration_id: Mapped[int] = mapped_column(ForeignKey("balancer.registration.id", ondelete="CASCADE"), index=True)
     provider: Mapped[str] = mapped_column(String(32), nullable=False)
+    position: Mapped[int] = mapped_column(Integer(), nullable=False, server_default="0", default=0)
     handle: Mapped[str] = mapped_column(String(255), nullable=False)
     handle_normalized: Mapped[str] = mapped_column(String(255), nullable=False)
 
@@ -526,7 +571,7 @@ class BalancerRegistrationTeam(db.TimeStampIntegerMixin):
     workspace_id: Mapped[int] = mapped_column(ForeignKey("workspace.id", ondelete="CASCADE"), index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     #: Lowercased ``name``, maintained by the service layer — same convention as
-    #: ``BalancerRegistration.battle_tag_normalized``. The unique index above is
+    #: ``BalancerRegistrationIdentity.handle_normalized``. The unique index above is
     #: on this, not on ``name``.
     name_normalized: Mapped[str] = mapped_column(String(255), nullable=False)
     image_url: Mapped[str | None] = mapped_column(String(255), nullable=True)

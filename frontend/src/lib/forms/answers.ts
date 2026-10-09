@@ -41,7 +41,8 @@ export function answerText(answers: AnswerDocument, key: string): string | null 
   return null;
 }
 
-/** A list answer (`smurf_tags`, `multi_select`) as strings; `[]` when absent. */
+/** A list answer (`identity_battlenet`, `multi_select`) as strings; `[]` when
+ *  absent. */
 export function answerList(answers: AnswerDocument, key: string): string[] {
   const value = answers?.[key];
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];

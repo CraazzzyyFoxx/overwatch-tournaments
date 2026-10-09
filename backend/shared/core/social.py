@@ -30,14 +30,17 @@ from functools import lru_cache
 from typing import Final, Literal
 
 __all__ = (
+    "GAME_PROVIDERS",
     "MAX_HANDLE_PATTERN_LENGTH",
     "OAUTH_PROVIDERS",
     "PROVIDERS",
     "SOCIAL_PROVIDERS",
+    "VERIFIABLE_PROVIDERS",
     "InvalidHandlePattern",
     "ProviderSpec",
     "SocialProvider",
     "compile_handle_pattern",
+    "display_social_handle",
     "get_provider",
     "handle_pattern_for",
     "is_oauth_provider",
@@ -96,14 +99,25 @@ class ProviderSpec:
 
     #: Whether a handle may be typed in by hand.
     supports_text: bool = True
-    #: Whether ownership can be proven by OAuth (``social_account.is_verified``).
+    #: Whether ownership can be proven by OAuth login/linking.
     supports_oauth: bool = False
+    #: Whether ownership of a handle can be proven (``social_account.is_verified``),
+    #: which is what a form's ``require_verified`` gate and the admin "verify"
+    #: action demand. Separate from ``supports_oauth``: logging in through a
+    #: provider and proving a nickname are different facts, and a future proof
+    #: path (challenge code) needs no OAuth at all.
+    can_be_verified: bool = False
     #: Whether a paid subscription on this provider can be resolved.
     supports_subscription: bool = False
+    #: Whether this is a GAME account (Battle.net now; Steam, Riot later). A
+    #: game handle identifies the player: registration finds or creates the
+    #: domain player by it. Every other provider only ever attaches to a player
+    #: found that way, never creates one.
+    is_game_provider: bool = False
 
     #: Default ceiling on how many handles of this provider one registration may
     #: carry. Five for BattleNet — smurfs are a normal Overwatch fact — one
-    #: everywhere else. Per-tournament config may narrow or widen it.
+    #: everywhere else. A form field's ``max_count`` param overrides it.
     default_max_count: int = 1
 
     #: ``str.format`` template for a public profile URL, or None when the
@@ -134,6 +148,8 @@ PROVIDERS: Final[dict[str, ProviderSpec]] = {
             handle_error_key="identity.battlenet.format",
             normalize="battletag",
             supports_oauth=True,
+            can_be_verified=True,
+            is_game_provider=True,
             default_max_count=5,
             oauth_primary_fields=("battletag", "battle_tag"),
             oauth_alias_fields=("battletag", "battle_tag", "preferred_username"),
@@ -148,6 +164,7 @@ PROVIDERS: Final[dict[str, ProviderSpec]] = {
             handle_pattern=r"[a-z0-9_.]{2,32}(?:#\d{4})?",
             handle_error_key="identity.discord.format",
             supports_oauth=True,
+            can_be_verified=True,
             supports_subscription=True,
             oauth_alias_fields=("username", "global_name"),
         ),
@@ -158,6 +175,7 @@ PROVIDERS: Final[dict[str, ProviderSpec]] = {
             handle_pattern=r"[a-z0-9_]{4,25}",
             handle_error_key="identity.twitch.format",
             supports_oauth=True,
+            can_be_verified=True,
             supports_subscription=True,
             profile_url="https://twitch.tv/{handle}",
             oauth_alias_fields=("login",),
@@ -198,6 +216,15 @@ SOCIAL_PROVIDERS: Final[frozenset[str]] = frozenset(PROVIDERS)
 
 # Providers that can be OAuth-verified (ownership proven → ``is_verified``).
 OAUTH_PROVIDERS: Final[frozenset[str]] = frozenset(spec.id for spec in PROVIDERS.values() if spec.supports_oauth)
+
+#: Providers whose handle ownership can be proven (``require_verified`` is meaningful).
+VERIFIABLE_PROVIDERS: Final[frozenset[str]] = frozenset(spec.id for spec in PROVIDERS.values() if spec.can_be_verified)
+
+#: Game providers in catalog order: the order a registration's game handles are
+#: tried in when resolving its player and its primary handle.
+GAME_PROVIDERS: Final[tuple[str, ...]] = tuple(
+    spec.id for spec in sorted(PROVIDERS.values(), key=lambda spec: spec.order) if spec.is_game_provider
+)
 
 #: Ceiling on an organizer-supplied handle pattern. The pattern is compiled and
 #: run server-side on every submission, so an unbounded one is a ReDoS handed to
@@ -248,6 +275,19 @@ def normalize_social_handle(provider: str, username: str | None) -> str:
     if spec is not None and spec.normalize == "battletag":
         text = _BATTLE_TAG_HASH.sub("#", text).replace(" ", "").strip()
     return text.casefold()
+
+
+def display_social_handle(provider: str, username: str | None) -> str:
+    """The handle as STORED for display: trimmed, casing kept.
+
+    A BattleTag additionally loses the spacing a human types around ``#``
+    (``Player # 1234`` -> ``Player#1234``); everything else is only trimmed.
+    """
+    text = (username or "").strip()
+    spec = PROVIDERS.get(provider)
+    if spec is not None and spec.normalize == "battletag":
+        text = _BATTLE_TAG_HASH.sub("#", text)
+    return text
 
 
 def handle_pattern_for(provider: str, override: str | None = None) -> str | None:

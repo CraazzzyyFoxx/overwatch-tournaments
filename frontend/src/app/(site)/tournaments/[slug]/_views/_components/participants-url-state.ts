@@ -18,7 +18,7 @@ function isParticipantView(value: string | null): value is ParticipantView {
 }
 
 export const PARTICIPANT_SEARCH_MAX_LENGTH = 120;
-const PARTICIPANT_MANDATORY_COLUMN_IDS = ["battle_tag", "_status"] as const;
+const PARTICIPANT_MANDATORY_COLUMN_IDS = ["identity_battlenet", "_status"] as const;
 
 const PARTICIPANT_MANDATORY_COLUMN_ID_SET = new Set<string>(
   PARTICIPANT_MANDATORY_COLUMN_IDS,

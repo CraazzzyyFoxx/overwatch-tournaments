@@ -190,14 +190,16 @@ class _Resolver:
         return self._code_providers
 
 
-def _registration(*, battle_tag: str | None = None, smurfs: list[str] | None = None, checked_in: bool = False) -> Any:
+def _registration(*, handle: str | None = None, checked_in: bool = False) -> Any:
+    # Battle.net handles live on `registration.identities` now; the gate reads
+    # them through `registration.handles(provider)`, which is all this stub owes it.
+    handles = [handle] if handle else []
     return SimpleNamespace(
         id=REG_ID,
         status="approved",
         balancer_status="ready",
         checked_in=checked_in,
-        battle_tag=battle_tag,
-        smurf_tags_json=smurfs,
+        handles=lambda _provider: list(handles),
     )
 
 
@@ -248,7 +250,7 @@ class TestClosedProfileRefusesCheckIn(_GateCase):
             await self.gate(
                 _Form(require_open_profile=True),
                 stage=AdmissionStage.check_in,
-                registration=_registration(battle_tag="Player#1"),
+                registration=_registration(handle="Player#1"),
                 session=_Session({"player#1": "private"}),
             )
         assert ctx.exception.status_code == 400
@@ -260,7 +262,7 @@ class TestClosedProfileRefusesCheckIn(_GateCase):
             await self.gate(
                 _Form(require_open_profile=True),
                 stage=AdmissionStage.check_in,
-                registration=_registration(battle_tag="Player#1"),
+                registration=_registration(handle="Player#1"),
                 session=_Session({"player#1": "private"}),
             )
         assert [item["code"] for item in ctx.exception.detail] == ["profile_private"]
@@ -270,7 +272,7 @@ class TestClosedProfileRefusesCheckIn(_GateCase):
         evaluation, _resolver, _session = await self.gate(
             _Form(require_open_profile=True),
             stage=AdmissionStage.check_in,
-            registration=_registration(battle_tag="Player#1"),
+            registration=_registration(handle="Player#1"),
             session=_Session({"player#1": "ok"}),
         )
         assert evaluation.requirement("open_profile").state is RequirementState.satisfied
@@ -281,7 +283,7 @@ class TestClosedProfileRefusesCheckIn(_GateCase):
         evaluation, _resolver, _session = await self.gate(
             _Form(require_open_profile=True),
             stage=AdmissionStage.check_in,
-            registration=_registration(battle_tag="Player#1"),
+            registration=_registration(handle="Player#1"),
             session=_Session({}),
         )
         assert evaluation.requirement("open_profile").state is RequirementState.undetermined
@@ -291,7 +293,7 @@ class TestClosedProfileRefusesCheckIn(_GateCase):
         _evaluation, _resolver, session = await self.gate(
             _Form(require_open_profile=False),
             stage=AdmissionStage.check_in,
-            registration=_registration(battle_tag="Player#1"),
+            registration=_registration(handle="Player#1"),
             session=_Session({"player#1": "private"}),
         )
         assert session.statements == 0
@@ -303,7 +305,7 @@ class TestClosedProfileRefusesCheckIn(_GateCase):
         evaluation, _resolver, _session = await self.gate(
             _Form(require_open_profile=True),
             stage=AdmissionStage.registration,
-            registration=_registration(battle_tag="Player#1"),
+            registration=_registration(handle="Player#1"),
             session=_Session({"player#1": "private"}),
         )
         assert evaluation.requirement("open_profile").state is RequirementState.blocked
@@ -365,7 +367,7 @@ class TestNothingToEnforce(_GateCase):
         _evaluation, resolver, session = await self.gate(
             None,
             stage=AdmissionStage.check_in,
-            registration=_registration(battle_tag="Player#1"),
+            registration=_registration(handle="Player#1"),
             session=_Session({"player#1": "private"}),
         )
         assert resolver.rule_reads == []
@@ -538,7 +540,7 @@ class TestForcedCheckInIsAnOverride(_GateCase):
         evaluation, _resolver, _session = await self.gate(
             _Form(require_open_profile=True),
             stage=AdmissionStage.check_in,
-            registration=_registration(battle_tag="Player#1", checked_in=True),
+            registration=_registration(handle="Player#1", checked_in=True),
             session=_Session({"player#1": "private"}),
         )
         assert evaluation.blockers == ()

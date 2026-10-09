@@ -13,8 +13,9 @@ import re
 from datetime import UTC, datetime
 from typing import Any
 
+from shared.core.social import GAME_PROVIDERS
 from shared.division_grid import DivisionGrid
-from shared.domain.forms import FormSchema
+from shared.domain.forms import IDENTITY_PROVIDERS, FormSchema, identity_key
 from shared.domain.player_sub_roles import catalog_slugs, normalize_sub_role
 from src.domain.registration.mapping_catalog import (
     ANSWER_TARGET_KEYS,
@@ -263,11 +264,12 @@ def suggest_mapping_from_headers(
         columns = found if spec.multi_column else [found[0]]
         targets[spec.key] = {"mode": "columns", "columns": columns, "parser": spec.default_parser}
 
-    # The battle-tag column also seeds the dedup key and the display name, matching
+    # The game-handle column also seeds the dedup key and the display name, matching
     # the legacy behavior where a single column drives all three identity fields.
-    battle_tag_config = targets.get("battle_tag")
-    if battle_tag_config and battle_tag_config.get("mode") == "columns":
-        column = battle_tag_config["columns"][0]
+    game_key = identity_key(GAME_PROVIDERS[0]) if GAME_PROVIDERS else None
+    game_config = targets.get(game_key) if game_key else None
+    if game_config and game_config.get("mode") == "columns" and game_config.get("columns"):
+        column = game_config["columns"][0]
         targets["source_record_key"] = {"mode": "columns", "columns": [column], "parser": "battle_tag"}
         if targets.get("display_name", {}).get("mode") != "columns":
             targets["display_name"] = {"mode": "columns", "columns": [column], "parser": "string"}
@@ -422,24 +424,35 @@ def parse_sheet_row_detailed(
             flat_values[target_key] = None
             errors.append({"target": target_key, "column": None, "message": str(exc)})
 
-    source_record_key = flat_values.get("source_record_key") or flat_values.get("battle_tag")
+    answers: dict[str, Any] = {key: flat_values.get(key) for key in ANSWER_TARGET_KEYS if key in mapped}
+    # Every identity answer is a LIST of handles, primary first -- a sheet column
+    # parsed as a single string still has to arrive as one.
+    for provider in IDENTITY_PROVIDERS:
+        key = identity_key(provider)
+        if key not in answers:
+            continue
+        raw = answers[key]
+        handles = [handle for handle in (raw if isinstance(raw, list) else [raw]) if handle]
+        if not handles and provider in GAME_PROVIDERS:
+            # The one answer a sheet may never blank: it is this row's own identity
+            # and the key every re-sync matches on.
+            answers.pop(key)
+            continue
+        answers[key] = handles
+
+    primary_handle = next(
+        (handles[0] for provider in GAME_PROVIDERS if (handles := answers.get(identity_key(provider)))),
+        None,
+    )
+    source_record_key = flat_values.get("source_record_key") or primary_handle
     if isinstance(source_record_key, str):
         source_record_key = normalize_battle_tag_key(source_record_key) or source_record_key.strip()
     if not source_record_key:
         return ParsedRowResult(fields=None, errors=errors, warnings=warnings)
 
-    battle_tag = normalize_battle_tag(flat_values.get("battle_tag"))
-    answers: dict[str, Any] = {key: flat_values.get(key) for key in ANSWER_TARGET_KEYS if key in mapped}
-    if battle_tag is None:
-        # The one answer a sheet may never blank: it is this row's own identity
-        # and the key every re-sync matches on.
-        answers.pop("battle_tag", None)
-    else:
-        answers["battle_tag"] = battle_tag
-
     parsed: dict[str, Any] = {
         "source_record_key": str(source_record_key),
-        "display_name": flat_values.get("display_name") or battle_tag,
+        "display_name": flat_values.get("display_name") or primary_handle,
         "submitted_at": flat_values.get("submitted_at"),
         "answers": answers,
         "source_roles": {

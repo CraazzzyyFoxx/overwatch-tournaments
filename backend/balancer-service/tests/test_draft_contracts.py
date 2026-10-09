@@ -551,7 +551,7 @@ def test_visible_custom_fields_takes_every_public_custom_definition_in_form_orde
             {"key": "rules", "label": "", "kind": "checkbox", "visibility": "public"},
             # A builtin never reaches the custom-answer strip: its answer is not in
             # ``custom_fields_json`` at all.
-            {"key": "battle_tag", "kind": "builtin", "visibility": "public"},
+            {"key": "identity_battlenet", "kind": "builtin", "visibility": "public"},
             # An organizers-only question must not leak.
             {"key": "phone", "label": "Phone", "kind": "text", "visibility": "organizers"},
             "not a definition",

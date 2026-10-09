@@ -34,6 +34,7 @@ from sqlalchemy.orm import selectinload
 
 from shared.balancer_registration_statuses import balancer_pool_included_clause
 from shared.core.enums import HERO_TYPE_CLASSES, HeroClass
+from shared.core.social import SocialProvider
 from shared.division_grid import DivisionGrid
 from shared.domain.member_rank import RankScope, ResolvedRank
 from shared.domain.roster import HeroRef, PlayerRoster, RosterRole, flex_role_mode
@@ -41,6 +42,7 @@ from shared.domain.roster_shape import RosterShape
 from shared.models.registration.registration import (
     BalancerRegistration,
     BalancerRegistrationForm,
+    BalancerRegistrationIdentity,
     BalancerRegistrationRole,
     BalancerRegistrationRoleHero,
 )
@@ -68,6 +70,28 @@ def registration_load_options() -> list[Any]:
         selectinload(BalancerRegistration.identities),
         selectinload(BalancerRegistration.form_version),
     ]
+
+
+def _primary_tag_order() -> sa.ScalarSelect[str]:
+    """The registration's primary battlenet handle, as a correlated scalar.
+
+    A scalar subquery rather than a join: a registrant with smurfs owns several
+    battlenet rows, and joining them would multiply the result.
+
+    ponytail: one game (Overwatch -> battlenet). When a second game provider
+    lands, widen this to the first ``GAME_PROVIDERS`` entry present.
+    """
+    return (
+        sa.select(BalancerRegistrationIdentity.handle_normalized)
+        .where(
+            BalancerRegistrationIdentity.registration_id == BalancerRegistration.id,
+            BalancerRegistrationIdentity.provider == SocialProvider.BATTLENET,
+            BalancerRegistrationIdentity.position == 0,
+        )
+        .limit(1)
+        .correlate(BalancerRegistration)
+        .scalar_subquery()
+    )
 
 
 def _pool_clauses(tournament_id: int) -> tuple[Any, ...]:
@@ -128,7 +152,7 @@ class RosterEngine:
             sa.select(BalancerRegistration)
             .where(BalancerRegistration.tournament_id == tournament_id)
             .options(*registration_load_options())
-            .order_by(BalancerRegistration.battle_tag_normalized.asc(), BalancerRegistration.id.asc())
+            .order_by(_primary_tag_order().asc(), BalancerRegistration.id.asc())
         )
         if not include_deleted:
             query = query.where(BalancerRegistration.deleted_at.is_(None))
@@ -399,9 +423,10 @@ class RosterEngine:
 
         member = reg.workspace_member
         player = member.player if member is not None else None
+        battle_tags = reg.handles(SocialProvider.BATTLENET)
         return PlayerRoster(
             registration_id=reg.id,
-            battle_tag=reg.battle_tag,
+            battle_tag=battle_tags[0] if battle_tags else None,
             display_name=reg.display_name,
             player_id=member.player_id if member is not None else None,
             auth_user_id=player.auth_user_id if player is not None else None,
@@ -418,9 +443,9 @@ class RosterEngine:
             registration_team_id=reg.registration_team_id,
             team_slot_code=reg.team_slot_code,
             is_substitute=bool(reg.is_substitute),
-            identities={identity.provider: identity.handle for identity in reg.identities},
+            identities={identity.provider: identity.handle for identity in reg.identities if identity.position == 0},
             stream_pov=bool(reg.stream_pov),
-            smurf_tags=tuple(reg.smurf_tags_json or ()),
+            smurf_tags=tuple(battle_tags[1:]),
         )
 
     # -- algorithm input -----------------------------------------------------

@@ -44,8 +44,8 @@ export default function MyTeamInvitesList({
             >
               <RosterSlotGlyph code={invite.slot_code} />
               <span className="text-xs text-[color:var(--aqt-fg-muted)]">
-                {invite.target_battle_tag
-                  ? t("invite.targetLabel", { name: invite.target_battle_tag })
+                {invite.target_handle
+                  ? t("invite.targetLabel", { name: invite.target_handle })
                   : t("invite.linkLabel")}
               </span>
               {invite.is_substitute && (

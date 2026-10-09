@@ -6,20 +6,41 @@ loads the revision module **by path**. The last two tests close the loop the
 migration itself cannot: they feed the converter's output through the real
 ``FormSchema`` validator, which is the only proof that the rows the migration
 writes are readable by the application afterwards.
+
+Version #1 is not the document the application finally loads, though: the later
+``regident01`` revision merges ``battle_tag`` + ``smurf_tags`` into the
+``identity_battlenet`` builtin, and those two keys are no longer builtins at
+all. So everything validated here goes through BOTH converters, in the order a
+fresh database runs them -- ``readable()`` below.
 """
 
 from __future__ import annotations
 
 import importlib.util
 import pathlib
+from typing import Any
 
 from shared.domain.forms.schema import FormSchema
 
-_PATH = pathlib.Path(__file__).resolve().parents[1] / "migrations" / "versions" / "regform01_form_schema.py"
-spec = importlib.util.spec_from_file_location("regform01", _PATH)
-assert spec is not None and spec.loader is not None
-mod = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(mod)
+_VERSIONS = pathlib.Path(__file__).resolve().parents[1] / "migrations" / "versions"
+
+
+def _load(name: str, path: pathlib.Path) -> Any:
+    spec = importlib.util.spec_from_file_location(name, path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+mod = _load("regform01", _VERSIONS / "regform01_form_schema.py")
+regident = _load("regident01", _VERSIONS / "regident01_identity_positions.py")
+
+
+def readable(raw: dict) -> FormSchema:
+    """What the application ends up loading: version #1, then ``regident01``."""
+    return FormSchema.model_validate(regident.convert_schema(raw))
+
 
 LEGACY_DEFAULT_BUILTINS = {
     "battle_tag": {"enabled": True, "required": True, "validation": {"regex": "([^#]{2,12}#[0-9]{4,})"}},
@@ -174,10 +195,9 @@ def test_nicks_and_sheet_targets_are_remapped():
 
 
 def test_converted_default_form_is_a_schema_the_application_can_read():
-    schema = FormSchema.model_validate(mod.legacy_to_schema(LEGACY_DEFAULT_BUILTINS, LEGACY_CUSTOM))
+    schema = readable(mod.legacy_to_schema(LEGACY_DEFAULT_BUILTINS, LEGACY_CUSTOM))
     assert [f.key for f in schema.fields()] == [
-        "battle_tag",
-        "smurf_tags",
+        "identity_battlenet",
         "identity_discord",
         "identity_twitch",
         "roles",
@@ -186,16 +206,17 @@ def test_converted_default_form_is_a_schema_the_application_can_read():
         "vk",
         "age",
     ]
+    # The legacy pair asked for smurfs, so the merged field carries five handles.
+    assert schema.builtin("identity_battlenet").params == {"require_verified": False, "max_count": 5}
     assert schema.builtin("roles").params["flex_mode"] == "all_roles"
     assert schema.public_keys() == frozenset(f.key for f in schema.fields())
 
 
 def test_converted_every_toggle_form_validates_and_drops_an_uncompilable_regex():
     raw = mod.legacy_to_schema(LEGACY_EVERY_TOGGLE, LEGACY_EVERY_CUSTOM)
-    schema = FormSchema.model_validate(raw)
+    schema = readable(raw)
     assert [f.key for f in schema.fields()] == [
-        "battle_tag",
-        "smurf_tags",
+        "identity_battlenet",
         "identity_discord",
         "identity_twitch",
         "identity_boosty",
@@ -219,7 +240,7 @@ def test_converted_every_toggle_form_validates_and_drops_an_uncompilable_regex()
 def test_a_regex_too_long_to_compile_safely_is_dropped():
     long_pattern = "a" * 257
     raw = mod.legacy_to_schema({"battle_tag": {"enabled": True, "validation": {"regex": long_pattern}}}, [])
-    FormSchema.model_validate(raw)
+    readable(raw)
     assert "validation" not in raw["sections"][0]["fields"][0]
 
 
@@ -249,7 +270,7 @@ def test_hostile_legacy_custom_fields_still_convert_to_a_schema_the_model_accept
     raw = mod.legacy_to_schema(LEGACY_DEFAULT_BUILTINS, HOSTILE_CUSTOM)
     # THE guarantee: the converter may not emit a document ``FormSchema`` refuses,
     # because a refused version #1 breaks every later read of that tournament.
-    schema = FormSchema.model_validate(raw)
+    schema = readable(raw)
 
     assert [f.key for f in schema.fields() if not f.is_builtin] == [
         # Reserved keys are escaped at the FRONT, like the shipped builder's
@@ -271,7 +292,7 @@ def test_hostile_legacy_custom_fields_still_convert_to_a_schema_the_model_accept
     ]
     # Repaired, never dropped: the organizer's question survives under a new key.
     assert schema.field("f_battle_tag").label == "Battle Tag"
-    assert schema.builtin("battle_tag") is not None
+    assert schema.builtin("identity_battlenet") is not None
     # A select with nothing left to select degrades to free text instead of
     # being emitted invalid.
     assert (schema.field("region").kind, schema.field("region").options) == ("text", None)
@@ -285,7 +306,7 @@ def test_a_long_or_blank_key_is_repaired_inside_the_cap():
     raw = mod.legacy_to_schema({}, [{"key": "a" * 40, "label": "One"}, {"key": "a" * 40, "label": "Two"}])
     keys = [f["key"] for f in raw["sections"][-1]["fields"] if f["kind"] != "builtin"]
     assert keys == ["a" * 32, "a" * 30 + "_2"]
-    FormSchema.model_validate(raw)
+    readable(raw)
 
 
 def test_a_repaired_key_carries_its_stored_answers_over():

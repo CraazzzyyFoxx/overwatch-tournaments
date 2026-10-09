@@ -50,18 +50,24 @@ vi.mock("@/lib/notify", () => ({
 const CATALOG: MappingCatalog = {
   targets: [
     {
-      key: "battle_tag",
-      label: "Battle tag",
+      // One identity target per provider, and Battle.net's is a LIST: the main
+      // tag and the smurfs land in the same answer. The parser ids below name
+      // the VALUE FORMAT a column is read in, not the field.
+      key: "identity_battlenet",
+      label: "BattleTag",
       group: "identity",
-      accepted_parsers: ["text"],
-      default_parser: "text",
+      accepted_parsers: ["battle_tag", "battle_tag_list"],
+      default_parser: "battle_tag",
       default_mode: "columns",
-      default_is_list: false,
-      multi_column: false,
+      default_is_list: true,
+      multi_column: true,
       required: true
     }
   ],
-  parsers: [{ parser: "text", label: "Text", cardinality: "single", produces: "string" }],
+  parsers: [
+    { parser: "battle_tag", label: "BattleTag", cardinality: "single", produces: "string" },
+    { parser: "battle_tag_list", label: "BattleTag list", cardinality: "multi", produces: "string" }
+  ],
   value_categories: [],
   custom_fields: [],
   header_keys: ["BattleTag"]

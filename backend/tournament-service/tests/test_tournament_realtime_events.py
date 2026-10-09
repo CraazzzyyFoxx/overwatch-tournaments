@@ -63,7 +63,12 @@ class TournamentProducerResourceTests(IsolatedAsyncioTestCase):
         # enqueue_registration_approved derives it via a tournament lookup, and
         # the event's user_id likewise comes from the workspace_member anchor.
         session = _fake_session(scalar=AsyncMock(return_value=3))
-        registration = SimpleNamespace(id=77, tournament_id=42, battle_tag="tag#1", workspace_member_id=5)
+        registration = SimpleNamespace(
+            id=77,
+            tournament_id=42,
+            primary_handle=lambda _provider: "tag#1",
+            workspace_member_id=5,
+        )
 
         with (
             patch.object(tournament_events, "_notify_registration_decision", AsyncMock()),

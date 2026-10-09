@@ -52,12 +52,13 @@ from src.services.registration.service import registration_service  # noqa: E402
 
 
 def _schema(**overrides: Any) -> FormSchema:
-    """A form that asks a required BattleTag, one identity, roles, both notes and
-    two custom questions."""
+    """A form that asks a required Battle.net identity, a second identity, roles,
+    both notes and two custom questions."""
     fields = [
-        FormField(key="battle_tag", kind="builtin", required=True, params=overrides.get("battle_tag_params", {})),
+        FormField(
+            key="identity_battlenet", kind="builtin", required=True, params=overrides.get("battlenet_params", {})
+        ),
         FormField(key="identity_discord", kind="builtin", params=overrides.get("discord_params", {})),
-        FormField(key="smurf_tags", kind="builtin"),
         FormField(key="roles", kind="builtin"),
         FormField(key="public_notes", kind="builtin"),
         FormField(key="organizer_notes", kind="builtin", visibility="organizers"),
@@ -137,16 +138,18 @@ def _errors(exc: ApiHTTPException) -> list[dict[str, Any]]:
 def test_a_submission_is_reduced_to_typed_values() -> None:
     values = _validate(
         {
-            "battle_tag": " Player # 1234 ",
-            "identity_discord": "Player",
+            "identity_battlenet": [" Player # 1234 "],
+            "identity_discord": ["Player"],
             "age": "21",
             "roles": [{"role": "tank", "is_primary": True}],
         }
     )
 
-    assert values["battle_tag"] == "Player # 1234"
-    # Identity handles are normalised by the provider's own rule at coercion time.
-    assert values["identity_discord"] == "player"
+    # A handle is stored in its DISPLAY form -- a BattleTag loses the spacing a
+    # human types around '#', casing is kept -- and normalisation is only ever
+    # the matching key.
+    assert values["identity_battlenet"] == ["Player#1234"]
+    assert values["identity_discord"] == ["Player"]
     assert values["age"] == 21
     assert values["roles"] == [{"role": "tank", "is_primary": True}]
 
@@ -159,14 +162,14 @@ def test_every_stage_reports_before_anything_is_raised() -> None:
 
     with pytest.raises(ApiHTTPException) as caught:
         _validate(
-            {"age": "not a number", "identity_discord": "ghost", "roles": [{"role": "tank", "is_primary": False}]},
+            {"age": "not a number", "identity_discord": ["ghost"], "roles": [{"role": "tank", "is_primary": False}]},
             schema=schema,
             session=_FakeSession([]),
         )
 
     by_field = {error["field"]: error["code"] for error in _errors(caught.value)}
     assert by_field["age"] == "invalid_type"
-    assert by_field["battle_tag"] == "required"
+    assert by_field["identity_battlenet"] == "required"
     assert by_field["roles"] == "roles.primary_required"
     assert by_field["identity_discord"] == "not_verified"
 
@@ -180,7 +183,7 @@ def test_an_unreadable_gated_answer_gets_one_verdict_not_two() -> None:
 
     with pytest.raises(ApiHTTPException) as caught:
         _validate(
-            {"battle_tag": "Player#1234", "identity_discord": "Bad Name!"},
+            {"identity_battlenet": ["Player#1234"], "identity_discord": ["Bad Name!"]},
             schema=schema,
             session=_FakeSession([("discord", "bad name!")]),
         )
@@ -189,13 +192,18 @@ def test_an_unreadable_gated_answer_gets_one_verdict_not_two() -> None:
 
 
 def test_a_gated_answer_left_blank_is_still_not_verified() -> None:
-    """The other half: ``require_verified`` implies the field is required, so a
-    genuinely blank answer must keep failing the gate even though the field
-    itself is optional and normalisation therefore said nothing about it."""
+    """The other half: ``require_verified`` implies the field is required, so an
+    answer that carries no handle at all must keep failing the gate even though
+    the field itself is optional and normalisation therefore said nothing about
+    it."""
     schema = _schema(discord_params={"require_verified": True})
 
     with pytest.raises(ApiHTTPException) as caught:
-        _validate({"battle_tag": "Player#1234", "identity_discord": ""}, schema=schema, session=_FakeSession([]))
+        _validate(
+            {"identity_battlenet": ["Player#1234"], "identity_discord": []},
+            schema=schema,
+            session=_FakeSession([]),
+        )
 
     assert [(e["field"], e["code"]) for e in _errors(caught.value)] == [("identity_discord", "not_verified")]
 
@@ -204,12 +212,12 @@ def test_a_gated_identity_matching_a_verified_account_passes() -> None:
     schema = _schema(discord_params={"require_verified": True})
 
     values = _validate(
-        {"battle_tag": "Player#1234", "identity_discord": "Player"},
+        {"identity_battlenet": ["Player#1234"], "identity_discord": ["Player"]},
         schema=schema,
         session=_FakeSession([("discord", "player")]),
     )
 
-    assert values["identity_discord"] == "player"
+    assert values["identity_discord"] == ["Player"]
 
 
 def test_a_gated_identity_with_no_linked_player_is_not_verified() -> None:
@@ -220,7 +228,10 @@ def test_a_gated_identity_with_no_linked_player_is_not_verified() -> None:
 
     with pytest.raises(ApiHTTPException) as caught:
         _validate(
-            {"battle_tag": "Player#1234", "identity_discord": "Player"}, schema=schema, session=session, player_id=None
+            {"identity_battlenet": ["Player#1234"], "identity_discord": ["Player"]},
+            schema=schema,
+            session=session,
+            player_id=None,
         )
 
     assert _errors(caught.value) == [
@@ -234,20 +245,39 @@ def test_a_gated_identity_with_no_linked_player_is_not_verified() -> None:
     assert session.executed == 0
 
 
-def test_a_gated_battle_tag_is_checked_against_the_battlenet_account() -> None:
-    schema = _schema(battle_tag_params={"require_verified": True})
+def test_a_gated_battle_net_identity_is_checked_against_the_battlenet_account() -> None:
+    schema = _schema(battlenet_params={"require_verified": True})
 
     with pytest.raises(ApiHTTPException) as caught:
-        _validate({"battle_tag": "Other#9999"}, schema=schema, session=_FakeSession([("battlenet", "player#1234")]))
-
-    assert _errors(caught.value)[0]["field"] == "battle_tag"
-    # The same tag in another casing/spacing is the same account.
-    assert (
         _validate(
-            {"battle_tag": " PLAYER # 1234 "}, schema=schema, session=_FakeSession([("battlenet", "player#1234")])
-        )["battle_tag"]
-        == "PLAYER # 1234"
-    )
+            {"identity_battlenet": ["Other#9999"]},
+            schema=schema,
+            session=_FakeSession([("battlenet", "player#1234")]),
+        )
+
+    assert _errors(caught.value)[0]["field"] == "identity_battlenet"
+    # The same tag in another casing/spacing is the same account.
+    assert _validate(
+        {"identity_battlenet": [" PLAYER # 1234 "]},
+        schema=schema,
+        session=_FakeSession([("battlenet", "player#1234")]),
+    )["identity_battlenet"] == ["PLAYER#1234"]
+
+
+def test_a_gated_identity_verifies_every_handle_it_carries() -> None:
+    """An identity answer is a list, and ownership is claimed for all of it: a
+    smurf nobody proved is exactly what the gate exists to keep out, so it must
+    not ride in beside a verified main."""
+    schema = _schema(battlenet_params={"require_verified": True})
+
+    with pytest.raises(ApiHTTPException) as caught:
+        _validate(
+            {"identity_battlenet": ["Player#1234", "Alt#9999"]},
+            schema=schema,
+            session=_FakeSession([("battlenet", "player#1234")]),
+        )
+
+    assert [(e["field"], e["code"]) for e in _errors(caught.value)] == [("identity_battlenet", "not_verified")]
 
 
 def test_an_organizers_draft_neither_requires_nor_verifies() -> None:
@@ -257,7 +287,7 @@ def test_an_organizers_draft_neither_requires_nor_verifies() -> None:
     session = _FakeSession([])
 
     values = _validate(
-        {"identity_discord": "ghost"},
+        {"identity_discord": ["ghost"]},
         schema=schema,
         session=session,
         partial=True,
@@ -265,7 +295,7 @@ def test_an_organizers_draft_neither_requires_nor_verifies() -> None:
         player_id=None,
     )
 
-    assert values["identity_discord"] == "ghost"
+    assert values["identity_discord"] == ["ghost"]
     assert session.executed == 0
 
 
@@ -324,7 +354,7 @@ def test_a_role_edit_does_not_leave_a_parentless_role_row_in_the_session() -> No
             FormSection(
                 key="all",
                 fields=[
-                    FormField(key="battle_tag", kind="builtin", required=True),
+                    FormField(key="identity_battlenet", kind="builtin", required=True),
                     FormField(key="roles", kind="builtin", params={"top_heroes": {"enabled": True, "max": 3}}),
                 ],
             )
@@ -348,16 +378,26 @@ def test_a_role_edit_does_not_leave_a_parentless_role_row_in_the_session() -> No
     assert [entry.hero_id for entry in registration.roles[0].hero_entries] == [11]
 
 
-def test_an_identity_answer_upserts_and_a_blank_one_deletes() -> None:
+def test_an_identity_answer_rewrites_its_rows_in_place_and_a_blank_one_deletes() -> None:
     registration = _registration()
 
-    answer_service.apply(registration, {"identity_discord": "Player"}, schema=SCHEMA, hero_catalog=None)
-    assert [(row.provider, row.handle_normalized) for row in registration.identities] == [("discord", "player")]
+    answer_service.apply(
+        registration, {"identity_battlenet": ["Main#1111", "Alt#2222"]}, schema=SCHEMA, hero_catalog=None
+    )
+    assert [(row.position, row.handle, row.handle_normalized) for row in registration.identities] == [
+        (0, "Main#1111", "main#1111"),
+        (1, "Alt#2222", "alt#2222"),
+    ]
 
-    answer_service.apply(registration, {"identity_discord": "Renamed"}, schema=SCHEMA, hero_catalog=None)
-    assert [row.handle for row in registration.identities] == ["Renamed"]
+    # Promoting the smurf REWRITES the surviving row instead of re-inserting it
+    # (the positional unique is deferred so the swap can happen in place), and
+    # the row left over is dropped.
+    primary = registration.identities[0]
+    answer_service.apply(registration, {"identity_battlenet": ["Alt#2222"]}, schema=SCHEMA, hero_catalog=None)
+    assert [(row.position, row.handle) for row in registration.identities] == [(0, "Alt#2222")]
+    assert registration.identities[0] is primary
 
-    answer_service.apply(registration, {"identity_discord": None}, schema=SCHEMA, hero_catalog=None)
+    answer_service.apply(registration, {"identity_battlenet": None}, schema=SCHEMA, hero_catalog=None)
     assert registration.identities == []
 
 
@@ -366,7 +406,7 @@ def test_an_identity_the_form_does_not_ask_about_is_not_written() -> None:
     inventing a key must not create a row for it."""
     registration = _registration()
 
-    answer_service.apply(registration, {"identity_twitch": "player_tv"}, schema=SCHEMA, hero_catalog=None)
+    answer_service.apply(registration, {"identity_twitch": ["player_tv"]}, schema=SCHEMA, hero_catalog=None)
 
     assert registration.identities == []
 
@@ -376,9 +416,8 @@ def test_answers_of_projects_what_apply_wrote() -> None:
     answer_service.apply(
         registration,
         {
-            "battle_tag": "Player#1234",
-            "smurf_tags": ["Alt#1111"],
-            "identity_discord": "player",
+            "identity_battlenet": ["Player#1234", "Alt#1111"],
+            "identity_discord": ["player"],
             "stream_pov": True,
             "public_notes": "hi",
             "organizer_notes": "seed me low",
@@ -389,9 +428,9 @@ def test_answers_of_projects_what_apply_wrote() -> None:
     )
 
     assert answer_service.answers_of(registration) == {
-        "smurf_tags": ["Alt#1111"],
+        "identity_battlenet": ["Player#1234", "Alt#1111"],
+        "identity_discord": ["player"],
         "stream_pov": True,
-        "identity_discord": "player",
         "public_notes": "hi",
         "organizer_notes": "seed me low",
         "vk": "vk.com/player",
@@ -464,9 +503,8 @@ def test_public_submit_validates_against_the_current_version_and_stamps_it(db_se
                 body=RegistrationSubmit(
                     form_version_id=seeded["version_id"],
                     answers={
-                        "battle_tag": "Answerer#1234",
-                        "identity_discord": "Answerer",
-                        "smurf_tags": ["Alt#1111"],
+                        "identity_battlenet": ["Answerer#1234", "Alt#1111"],
+                        "identity_discord": ["Answerer"],
                         "public_notes": "hi organizers",
                         "vk": "vk.com/answerer",
                         "roles": [{"role": "tank", "is_primary": True}],
@@ -488,32 +526,30 @@ def test_public_submit_validates_against_the_current_version_and_stamps_it(db_se
     read, image = asyncio.run(_run())
 
     assert image == {
-        "battle_tag": "Answerer#1234",
-        "battle_tag_normalized": "answerer#1234",
         "display_name": "Answerer#1234",
-        "smurf_tags_json": ["Alt#1111"],
         "public_notes": "hi organizers",
         "custom_fields_json": {"vk": "vk.com/answerer"},
-        "identities": [("discord", "answerer", "answerer")],
+        "identities": [
+            ("battlenet", "Answerer#1234", "answerer#1234", 0),
+            ("battlenet", "Alt#1111", "alt#1111", 1),
+            ("discord", "Answerer", "answerer", 0),
+        ],
         "roles": [("tank", True)],
         "stamped_current_version": True,
     }
     # The read model the caller gets back carries the same answers, flat.
-    assert read.battle_tag == "Answerer#1234"
-    assert read.answers["identity_discord"] == "answerer"
+    assert read.primary_handle == "Answerer#1234"
+    assert read.answers["identity_discord"] == ["Answerer"]
     assert read.answers["vk"] == "vk.com/answerer"
     assert read.form_version_stale is False
 
 
 def _row_image(row: Any, version_id: int) -> dict[str, Any]:
     return {
-        "battle_tag": row.battle_tag,
-        "battle_tag_normalized": row.battle_tag_normalized,
         "display_name": row.display_name,
-        "smurf_tags_json": row.smurf_tags_json,
         "public_notes": row.public_notes,
         "custom_fields_json": row.custom_fields_json,
-        "identities": [(i.provider, i.handle, i.handle_normalized) for i in row.identities],
+        "identities": [(i.provider, i.handle, i.handle_normalized, i.position) for i in row.identities],
         "roles": [(r.role, r.is_primary) for r in row.roles],
         "stamped_current_version": row.form_version_id == version_id,
     }
@@ -533,7 +569,7 @@ def test_submit_with_stale_version_is_409_form_version_stale(db_session) -> None
                     auth_user=seeded["auth_user"],
                     body=RegistrationSubmit(
                         form_version_id=seeded["version_id"] + 1000,
-                        answers={"battle_tag": "Answerer#1234"},
+                        answers={"identity_battlenet": ["Answerer#1234"]},
                     ),
                 )
             return caught.value
@@ -589,7 +625,10 @@ def test_a_gated_identity_is_refused_end_to_end(db_session) -> None:
                     auth_user=seeded["auth_user"],
                     body=RegistrationSubmit(
                         form_version_id=seeded["version_id"],
-                        answers={"battle_tag": "Answerer#1234", "identity_discord": "someone_else"},
+                        answers={
+                            "identity_battlenet": ["Answerer#1234"],
+                            "identity_discord": ["someone_else"],
+                        },
                     ),
                 )
             await db_session.rollback()
@@ -617,7 +656,7 @@ def _heroes_schema() -> FormSchema:
             FormSection(
                 key="all",
                 fields=[
-                    FormField(key="battle_tag", kind="builtin", required=True),
+                    FormField(key="identity_battlenet", kind="builtin", required=True),
                     FormField(
                         key="roles",
                         kind="builtin",
@@ -664,7 +703,7 @@ def test_a_role_top_hero_list_survives_being_replaced_in_place(db_session) -> No
                     # Run-unique: the BattleTag is the GLOBAL player anchor, so a
                     # fixed one would re-resolve the player a previous run left
                     # behind and this registration would belong to that account.
-                    answers={"battle_tag": f"H{suffix}#1234", "roles": picks},
+                    answers={"identity_battlenet": [f"H{suffix}#1234"], "roles": picks},
                 ),
             )
             registration = await registration_service.get_registration(
@@ -779,7 +818,7 @@ def test_an_edit_that_changes_the_role_set_keeps_its_overlapping_picks(db_sessio
                 body=RegistrationSubmit(
                     form_version_id=seeded["version_id"],
                     answers={
-                        "battle_tag": f"E{suffix}#1234",
+                        "identity_battlenet": [f"E{suffix}#1234"],
                         "roles": [
                             {"role": "tank", "is_primary": True, "top_heroes": [tank_hero]},
                             {"role": "damage", "is_primary": False, "top_heroes": [damage_a, damage_b]},

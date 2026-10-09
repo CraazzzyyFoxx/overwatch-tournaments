@@ -232,7 +232,7 @@ CUSTOM_FIELD_SCHEMA = {
         {
             "key": "accounts",
             "fields": [
-                {"key": "battle_tag", "kind": "builtin", "required": True},
+                {"key": "identity_battlenet", "kind": "builtin", "required": True},
                 {"key": "roles", "kind": "builtin"},
             ],
         },
@@ -299,8 +299,6 @@ async def seed(session_factory: async_sessionmaker[AsyncSession], suffix: str) -
             tag = f"P{suffix}-{i}#{1000 + i}"
             reg = BalancerRegistration(
                 tournament_id=tourn.id,
-                battle_tag=tag,
-                battle_tag_normalized=tag.lower(),
                 display_name=f"Player {i}",
                 status="approved",
                 balancer_status="ready",
@@ -336,7 +334,17 @@ async def seed(session_factory: async_sessionmaker[AsyncSession], suffix: str) -
             s.add(
                 BalancerRegistrationIdentity(
                     registration_id=reg.id,
+                    provider="battlenet",
+                    position=0,
+                    handle=tag,
+                    handle_normalized=tag.lower(),
+                )
+            )
+            s.add(
+                BalancerRegistrationIdentity(
+                    registration_id=reg.id,
                     provider="discord",
+                    position=0,
                     handle=f"player{i}",
                     handle_normalized=f"player{i}",
                 )

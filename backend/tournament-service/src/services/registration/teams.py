@@ -36,6 +36,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from shared.core.errors import ApiExc, ApiHTTPException
+from shared.core.social import GAME_PROVIDERS
 from shared.domain.invite_token import generate_invite_token, hash_invite_token
 from shared.domain.roster_shape import RosterShape, RosterShapeError, resolve_roster_shape
 from shared.domain.team_roster import RosterMember, RosterOccupancy
@@ -802,14 +803,14 @@ class RegistrationTeamService:
         permission checked against it, or the captain's own tournament in the public
         handler) — required and checked against the team's own, like
         ``reset_invite_cap``, so a foreign ``team_id`` 404s instead of leaking another
-        tournament's invite history and target BattleTags.
+        tournament's invite history and target handles.
         """
         team = await self.team_repo.get(session, team_id)
         if team is None or team.tournament_id != tournament_id:
             raise _fail(404, "team_not_found", "Team not found")
 
         rows = list(await self.invite_repo.list_for_team(session, team_id))
-        tags = await self._battle_tags_by_account(
+        tags = await self._handles_by_account(
             session,
             tournament_id=team.tournament_id,
             auth_user_ids={r.target_auth_user_id for r in rows if r.target_auth_user_id is not None},
@@ -828,7 +829,7 @@ class RegistrationTeamService:
                     state="expired"
                     if row.state == INVITE_PENDING and row.expires_at is not None and row.expires_at <= now
                     else row.state,
-                    target_battle_tag=tags.get(row.target_auth_user_id),
+                    target_handle=tags.get(row.target_auth_user_id),
                     is_link=row.token_sha256 is not None,
                     invited_at=row.invited_at,
                     expires_at=row.expires_at,
@@ -1086,7 +1087,8 @@ class RegistrationTeamService:
             existing.is_substitute = bool(invite.is_substitute)
             await session.flush()
             registration_id = existing.id
-            responder_name = existing.battle_tag or auth_user.username
+            existing_identity = existing.primary_game_identity()
+            responder_name = (existing_identity.handle if existing_identity else None) or auth_user.username
         else:
             read = await self.registrations.submit_public_registration(
                 session,
@@ -1101,7 +1103,7 @@ class RegistrationTeamService:
                 commit=False,
             )
             registration_id = read.id
-            responder_name = read.battle_tag or auth_user.username
+            responder_name = read.primary_handle or auth_user.username
         invite.accepted_registration_id = registration_id
         # Projected, not re-read: the new member's row is already flushed, but
         # computing the post-write status here keeps it inside the lock.
@@ -1160,11 +1162,11 @@ class RegistrationTeamService:
             )
         ).one_or_none()
         if team_row is not None:
-            # The battle tag the captain picked them by, not the account handle:
+            # The game handle the captain picked them by, not the account handle:
             # a targeted invite was chosen off the free-agent list, which shows
             # exactly this. Accepting gets it for free off the registration it
             # just wrote; declining has to read it.
-            tags = await self._battle_tags_by_account(
+            tags = await self._handles_by_account(
                 session, tournament_id=team_row.tournament_id, auth_user_ids={auth_user.id}
             )
             await self._notify_invite_answered(
@@ -1409,13 +1411,16 @@ class RegistrationTeamService:
         rows = await session.scalars(
             self.registration_repo.select()
             .where(*_free_agent_clause(tournament_id))
-            .options(selectinload(models.BalancerRegistration.roles))
+            .options(
+                selectinload(models.BalancerRegistration.roles),
+                selectinload(models.BalancerRegistration.identities),
+            )
             .order_by(models.BalancerRegistration.submitted_at.asc())
         )
         return [
             RegistrationFreeAgentRead(
                 registration_id=row.id,
-                battle_tag=row.battle_tag,
+                primary_handle=(identity.handle if (identity := row.primary_game_identity()) else None),
                 # Primary first: it is the role they actually want, and the captain
                 # scanning for one reads the first chip.
                 roles=[entry.role for entry in sorted(row.roles, key=lambda r: not r.is_primary)],
@@ -1575,7 +1580,7 @@ class RegistrationTeamService:
             RegistrationTeamMemberRead(
                 registration_id=registration.id,
                 display_name=registration.display_name,
-                battle_tag=registration.battle_tag,
+                primary_handle=(identity.handle if (identity := registration.primary_game_identity()) else None),
                 slot_code=registration.team_slot_code,
                 is_substitute=bool(registration.is_substitute),
                 is_captain=registration.id == team.captain_registration_id,
@@ -1588,13 +1593,13 @@ class RegistrationTeamService:
         invites: list[RegistrationTeamInviteRead] = []
         if include_invites:
             pending = await self._pending_invites(session, team.id)
-            tags = await self._battle_tags_by_account(
+            tags = await self._handles_by_account(
                 session,
                 tournament_id=team.tournament_id,
                 auth_user_ids={i.target_auth_user_id for i in pending if i.target_auth_user_id is not None},
             )
             invites = [
-                serialize_invite(invite, target_battle_tag=tags.get(invite.target_auth_user_id)) for invite in pending
+                serialize_invite(invite, target_handle=tags.get(invite.target_auth_user_id)) for invite in pending
             ]
         eligibility_issues = []
         if include_invites:
@@ -1642,36 +1647,45 @@ class RegistrationTeamService:
             subscription_covered=team_subscription_is_current(team),
         )
 
-    async def _battle_tags_by_account(
+    async def _handles_by_account(
         self,
         session: AsyncSession,
         *,
         tournament_id: int,
         auth_user_ids: set[int],
     ) -> dict[int, str]:
-        """Battle tags for the accounts a team's pending invites address.
+        """Primary game handles for the accounts a team's pending invites address.
 
         One query for every invite on the team rather than one per invite: the
         organizer's page describes every team at once, so a per-invite lookup would be
         an N+1 that grows with the field.
 
         Read from the addressee's registration in THIS tournament, not from their
-        profile: the battle tag they entered on the form is the one the captain picked
+        profile: the handle they entered on the form is the one the captain picked
         them by, and a profile rename must not make a pending offer unrecognisable.
         """
         if not auth_user_ids:
             return {}
         # Analytical: a two-column projection across a member -> player join.
         rows = await session.execute(
-            sa.select(models.User.auth_user_id, models.BalancerRegistration.battle_tag)
+            sa.select(models.User.auth_user_id, models.BalancerRegistrationIdentity.handle)
+            # Neither projected column is the left side: name the registration
+            # explicitly, or the first join has two candidate FROMs to start from.
+            .select_from(models.BalancerRegistration)
             .join(
                 models.WorkspaceMember,
                 models.WorkspaceMember.id == models.BalancerRegistration.workspace_member_id,
             )
             .join(models.User, models.User.id == models.WorkspaceMember.player_id)
+            .join(
+                models.BalancerRegistrationIdentity,
+                models.BalancerRegistrationIdentity.registration_id == models.BalancerRegistration.id,
+            )
             .where(
                 models.BalancerRegistration.tournament_id == tournament_id,
                 models.BalancerRegistration.deleted_at.is_(None),
+                models.BalancerRegistrationIdentity.provider.in_(GAME_PROVIDERS),
+                models.BalancerRegistrationIdentity.position == 0,
                 models.User.auth_user_id.in_(sorted(auth_user_ids)),
             )
         )

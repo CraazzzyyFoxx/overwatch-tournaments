@@ -109,14 +109,21 @@ def _role(role: str, rank_value: int | None) -> SimpleNamespace:
     )
 
 
+def _identity(provider: str, handle: str, position: int = 0) -> SimpleNamespace:
+    return SimpleNamespace(provider=provider, handle=handle, position=position)
+
+
 def _registration(**overrides: Any) -> SimpleNamespace:
+    identities = overrides.pop("identities", None) or [
+        _identity("battlenet", "Ferz#2100"),
+        _identity("discord", "ferz"),
+    ]
     base: dict[str, Any] = {
         "id": REGISTRATION_ID,
         "tournament_id": 3,
         "display_name": "Ferz",
-        "battle_tag": "Ferz#2100",
-        "smurf_tags_json": None,
-        "identities": [SimpleNamespace(provider="discord", handle="ferz")],
+        "identities": identities,
+        "primary_game_identity": lambda: next((row for row in identities if row.provider == "battlenet"), None),
         "stream_pov": False,
         "public_notes": None,
         "organizer_notes": None,
@@ -137,8 +144,8 @@ def _update_payload(**overrides: Any) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "display_name": "Ferz",
         "answers": {
-            "battle_tag": "Ferz#2100",
-            "identity_discord": "ferz",
+            "identity_battlenet": ["Ferz#2100"],
+            "identity_discord": ["ferz"],
             "stream_pov": False,
         },
         "status": "pending",
@@ -262,16 +269,21 @@ class RegistrationAuditTests(IsolatedAsyncioTestCase):
         self.assertTrue(envelope["ok"], envelope)
         self.assertEqual([], session.rows)
 
-    async def test_battle_tag_resave_in_other_casing_is_not_a_change(self):
-        """``normalize_battle_tag`` collapses spacing around '#'; without applying
-        it to the requested value first, a resave reads as an edit."""
+    async def test_a_handle_resave_in_other_spacing_is_not_a_change(self):
+        """A handle is stored in its display form (a BattleTag loses the spacing
+        around '#'); without applying that to the requested value first, a resave
+        of the same account reads as an edit."""
         envelope, session, _ = await self._invoke(
             "rpc.tournament.reg_update",
             {
                 "identity": IDENTITY,
                 "id": REGISTRATION_ID,
                 "payload": _update_payload(
-                    answers={"battle_tag": "Ferz #2100", "identity_discord": "ferz", "stream_pov": False}
+                    answers={
+                        "identity_battlenet": ["Ferz #2100"],
+                        "identity_discord": ["ferz"],
+                        "stream_pov": False,
+                    }
                 ),
             },
             stored=_registration(),
@@ -292,8 +304,8 @@ class RegistrationAuditTests(IsolatedAsyncioTestCase):
                 "id": REGISTRATION_ID,
                 "payload": _update_payload(
                     answers={
-                        "battle_tag": "Ferz#2100",
-                        "identity_discord": "ferz_new",
+                        "identity_battlenet": ["Ferz#2100"],
+                        "identity_discord": ["ferz_new"],
                         "public_notes": "please seed me low",
                         "stream_pov": False,
                     }
@@ -305,8 +317,8 @@ class RegistrationAuditTests(IsolatedAsyncioTestCase):
 
         row = session.rows[0]
         self.assertEqual({"identity_discord", "public_notes"}, set(row.after_json))
-        self.assertEqual("ferz", row.before_json["identity_discord"])
-        self.assertEqual("ferz_new", row.after_json["identity_discord"])
+        self.assertEqual(["ferz"], row.before_json["identity_discord"])
+        self.assertEqual(["ferz_new"], row.after_json["identity_discord"])
         self.assertIsNone(row.before_json["public_notes"])
 
     async def test_a_custom_answer_is_diffed_against_the_merged_document(self):
@@ -318,7 +330,12 @@ class RegistrationAuditTests(IsolatedAsyncioTestCase):
                 "identity": IDENTITY,
                 "id": REGISTRATION_ID,
                 "payload": _update_payload(
-                    answers={"battle_tag": "Ferz#2100", "identity_discord": "ferz", "stream_pov": False, "vk": "new"}
+                    answers={
+                        "identity_battlenet": ["Ferz#2100"],
+                        "identity_discord": ["ferz"],
+                        "stream_pov": False,
+                        "vk": "new",
+                    }
                 ),
             },
             stored=_registration(custom_fields_json={"vk": "old", "tg": "kept"}),

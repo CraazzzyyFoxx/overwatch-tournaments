@@ -44,7 +44,7 @@ const ENTRY = {
   slot_code: "damage",
   is_substitute: false,
   state: "declined",
-  target_battle_tag: "Ana#1111",
+  target_handle: "Ana#1111",
   is_link: false,
   invited_at: "2026-08-20T12:00:00Z",
   expires_at: null,
@@ -167,7 +167,7 @@ describe("invite history drawer", () => {
   it("labels a link invite instead of leaving its addressee blank", async () => {
     listInviteHistory.mockResolvedValue({
       ...LEDGER,
-      items: [{ ...ENTRY, target_battle_tag: null, is_link: true }],
+      items: [{ ...ENTRY, target_handle: null, is_link: true }],
     });
 
     await mount();

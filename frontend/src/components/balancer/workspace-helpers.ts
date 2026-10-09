@@ -453,7 +453,7 @@ export function convertBalanceResponseToInternalPayload(
 }
 
 function getRegistrationDisplayName(registration: AdminRegistration): string {
-  return registration.battle_tag ?? registration.display_name ?? `registration-${registration.id}`;
+  return registration.primary_handle ?? registration.display_name ?? `registration-${registration.id}`;
 }
 
 export function isRegistrationIncludedInBalancer(registration: AdminRegistration): boolean {
@@ -480,7 +480,7 @@ export function createSyntheticPlayerFromRegistration(
     tournament_id: registration.tournament_id,
     application_id: registration.id,
     battle_tag: battleTag,
-    battle_tag_normalized: registration.battle_tag_normalized ?? battleTag.toLowerCase(),
+    battle_tag_normalized: battleTag.toLowerCase(),
     user_id: registration.user_id,
     // Roles come from the API exactly as the roster engine resolved them:
     // `is_active` IS "playable" and `rank_value` IS the resolved rank, flex
@@ -522,10 +522,13 @@ export function createSyntheticApplicationFromRegistration(
     tournament_id: registration.tournament_id,
     tournament_sheet_id: 0,
     battle_tag: battleTag,
-    battle_tag_normalized: registration.battle_tag_normalized ?? battleTag.toLowerCase(),
-    smurf_tags_json: answerList(registration.answers, "smurf_tags"),
-    twitch_nick: answerText(registration.answers, "identity_twitch"),
-    discord_nick: answerText(registration.answers, "identity_discord"),
+    battle_tag_normalized: battleTag.toLowerCase(),
+    // The sheet application record keeps its own smurf column; the extras of
+    // the registration's Battle.net answer are what fills it, the primary
+    // handle above being its first entry.
+    smurf_tags_json: answerList(registration.answers, "identity_battlenet").slice(1),
+    twitch_nick: answerList(registration.answers, "identity_twitch")[0] ?? null,
+    discord_nick: answerList(registration.answers, "identity_discord")[0] ?? null,
     stream_pov: answerFlag(registration.answers, "stream_pov"),
     last_tournament_text: null,
     primary_role: primaryRole,

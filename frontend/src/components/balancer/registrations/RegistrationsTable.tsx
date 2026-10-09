@@ -223,7 +223,7 @@ export default function RegistrationsTable({
           }),
         {
           rowLabel: (registration) =>
-            registration.battle_tag ?? registration.display_name ?? `registration ${registration.id}`
+            registration.primary_handle ?? registration.display_name ?? `registration ${registration.id}`
         }
       )
     ],
@@ -375,7 +375,7 @@ export default function RegistrationsTable({
       <Inspector
         openId={inspected ? openId : null}
         onClose={() => setParams({ id: null })}
-        title={inspected?.battle_tag ?? inspected?.display_name ?? "Registration"}
+        title={inspected?.primary_handle ?? inspected?.display_name ?? "Registration"}
         subtitle={
           inspected
             ? `${inspected.status} · ${ADMISSION_LABELS[inspected.admission.decision]}`
@@ -411,7 +411,7 @@ export default function RegistrationsTable({
         onOpenChange={(open) => (open ? undefined : setPendingDelete(null))}
         intent={{
           title: "Delete this registration?",
-          description: `${pendingDelete?.battle_tag ?? pendingDelete?.display_name ?? "The registration"} is removed from the pool. Withdraw instead to keep the record.`,
+          description: `${pendingDelete?.primary_handle ?? pendingDelete?.display_name ?? "The registration"} is removed from the pool. Withdraw instead to keep the record.`,
           confirmLabel: "Delete registration",
           tone: "danger"
         }}

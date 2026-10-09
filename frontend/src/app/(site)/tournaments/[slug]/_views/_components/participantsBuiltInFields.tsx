@@ -37,36 +37,40 @@ export interface BuiltInFieldDef {
 }
 
 export const BUILT_IN_FIELD_DEFS: Record<string, BuiltInFieldDef> = {
-  battle_tag: {
-    id: "battle_tag",
+  identity_battlenet: {
+    id: "identity_battlenet",
     label: "BattleTag",
     defaultVisible: true,
     responsive: "always",
     render: (reg) => (
       <span className="font-medium text-[color:var(--aqt-fg)]">
-        {reg.battle_tag ? (
+        {reg.primary_handle ? (
           <a
-            href={`/users/${getPlayerSlug(reg.battle_tag)}`}
+            href={`/users/${getPlayerSlug(reg.primary_handle)}`}
             target="_blank"
             rel="noopener noreferrer"
             className="transition hover:text-[color:var(--aqt-teal)] hover:underline"
           >
-            {reg.battle_tag}
+            {reg.primary_handle}
           </a>
         ) : (
           "\u2014"
         )}
       </span>
     ),
-    searchValue: (reg) => reg.battle_tag,
+    searchValue: (reg) => reg.primary_handle,
   },
-  smurf_tags: {
-    id: "smurf_tags",
+  // The handles after the primary one. A column of its own rather than a
+  // second line under the identity: the identity column is mandatory, and
+  // these stay organizers-only (`ADMIN_ONLY_COLUMN_IDS`) exactly as the smurf
+  // column they replace did.
+  identity_battlenet_extras: {
+    id: "identity_battlenet_extras",
     label: "Smurfs",
     defaultVisible: true,
     responsive: "md",
-    render: (reg) => <SmurfTagsCell tags={answerList(reg.answers, "smurf_tags")} />,
-    searchValue: (reg) => answerSearchText(reg.answers?.smurf_tags),
+    render: (reg) => <SmurfTagsCell tags={answerList(reg.answers, "identity_battlenet").slice(1)} />,
+    searchValue: (reg) => answerSearchText(answerList(reg.answers, "identity_battlenet").slice(1)),
   },
   roles: {
     id: "roles",
@@ -118,9 +122,9 @@ export const BUILT_IN_FIELD_DEFS: Record<string, BuiltInFieldDef> = {
  *  registrations still exist (a Google-Sheets feed writes them), and these are
  *  the answers such a row can carry. */
 export const FALLBACK_FIELD_KEYS = [
-  "battle_tag",
+  "identity_battlenet",
   "roles",
   "top_heroes",
-  "smurf_tags",
+  "identity_battlenet_extras",
   "public_notes",
 ] as const;

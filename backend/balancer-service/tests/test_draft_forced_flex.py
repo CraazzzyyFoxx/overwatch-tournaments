@@ -88,7 +88,7 @@ def _resolve(roles: list[BalancerRegistrationRole], *, mode: str | None = None) 
     which is exactly what these fixtures are about. ``form``/``grid`` are passed
     so the engine never reaches for a session.
     """
-    registration = BalancerRegistration(id=1, tournament_id=1, battle_tag="Reg#1")
+    registration = BalancerRegistration(id=1, tournament_id=1)
     registration.roles = roles
     rosters = asyncio.run(
         roster_engine.resolve(

@@ -35,18 +35,18 @@ Content-Type: application/json
 {
   "form_version_id": 7,
   "answers": {
-    "battle_tag": "Player#2100",
+    "identity_battlenet": ["Player#2100", "Smurf#2101"],
     "roles": [
       { "role": "damage", "is_primary": true, "subrole": "hitscan" },
       { "role": "support", "is_primary": false }
     ],
-    "identity_discord": "player",
+    "identity_discord": ["player"],
     "stream_pov": true
   }
 }
 ```
 
-Ключи встроенных вопросов фиксированы: `battle_tag`, `smurf_tags`, `roles`, `stream_pov`, `reserve`, `public_notes`, `organizer_notes` и `identity_<provider>` для `discord`, `twitch`, `boosty`, `vk`, `youtube`. BattleTag — отдельный встроенный вопрос со своей грамматикой, среди `identity_*` его нет. Порядок элементов в `roles` задаёт приоритет ролей; неизвестные и повторяющиеся коды отбрасываются.
+Ключи встроенных вопросов фиксированы: `roles`, `stream_pov`, `reserve`, `public_notes`, `organizer_notes` и `identity_<provider>` для `battlenet`, `discord`, `twitch`, `boosty`, `vk`, `youtube`. Ответ на любой `identity_<provider>` — СПИСОК ников, первый из них основной: вопрос про Battle.net несёт и основной BattleTag, и смурфы, но не больше, чем `max_count` вопроса (по умолчанию пять, у остальных провайдеров — один). Порядок элементов в `roles` задаёт приоритет ролей; неизвестные и повторяющиеся коды отбрасываются.
 
 Режим флекса у вопроса `roles` — `optional` (игрок сам называет роли), `all_roles` (играбельны все роли, приоритет игрок всё равно указывает) или `forced` (все роли играбельны и все основные). Форма, у которой не читается схема, ведёт себя как `optional`.
 

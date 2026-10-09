@@ -92,7 +92,7 @@ export function TeamRosterStrip({
           </StatusPill>
           <RosterSlotGlyph code={invite.slot_code} size={14} />
           <span className="text-muted-foreground">
-            {invite.target_battle_tag ?? t("invite.linkLabel")}
+            {invite.target_handle ?? t("invite.linkLabel")}
           </span>
           {invite.is_substitute && (
             <RosterMark

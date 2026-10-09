@@ -21,9 +21,20 @@ export interface SocialProviderConfig {
   placeholder: string;
   /** Build a public profile URL from the handle, when the provider has one. */
   profileUrl?: (username: string) => string;
-  /** Whether this provider can be OAuth-verified (mirrors backend `OAUTH_PROVIDERS`) —
-   *  gates the admin "manually verify" action. */
-  oauthEligible?: boolean;
+  /** Whether ownership of a handle can be proven (`social_account.is_verified`) —
+   *  gates the admin "manually verify" action and a form's `require_verified`
+   *  toggle. Mirrors backend `ProviderSpec.can_be_verified`. */
+  canBeVerified?: boolean;
+  /** Whether this is a GAME account (Battle.net now; Steam, Riot later). The
+   *  primary game handle is a registration's public identity. Mirrors
+   *  `ProviderSpec.is_game_provider`. */
+  isGameProvider?: boolean;
+  /** Default ceiling on handles of this provider in one registration answer;
+   *  `undefined` means one. Mirrors `ProviderSpec.default_max_count`. */
+  defaultMaxCount?: number;
+  /** `battletag` additionally collapses the spacing a human types around `#`.
+   *  Mirrors `ProviderSpec.normalize`. */
+  normalizeRule?: "battletag";
 }
 
 /** Display/selection order. */
@@ -43,7 +54,11 @@ const SOCIAL_PROVIDER_CONFIG: Record<SocialProvider, SocialProviderConfig> = {
     icon: "/battlenet.svg",
     color: "var(--aqt-brand-battlenet)",
     placeholder: "Name#1234",
-    oauthEligible: true
+    canBeVerified: true,
+    isGameProvider: true,
+    // Smurfs are a normal Overwatch fact, so a registration may carry five.
+    defaultMaxCount: 5,
+    normalizeRule: "battletag"
   },
   discord: {
     value: "discord",
@@ -51,7 +66,7 @@ const SOCIAL_PROVIDER_CONFIG: Record<SocialProvider, SocialProviderConfig> = {
     icon: "/discord.png",
     color: "var(--aqt-brand-discord)",
     placeholder: "username",
-    oauthEligible: true
+    canBeVerified: true
   },
   twitch: {
     value: "twitch",
@@ -60,7 +75,7 @@ const SOCIAL_PROVIDER_CONFIG: Record<SocialProvider, SocialProviderConfig> = {
     color: "var(--aqt-brand-twitch)",
     placeholder: "username",
     profileUrl: (u) => `https://twitch.tv/${encodeURIComponent(u)}`,
-    oauthEligible: true
+    canBeVerified: true
   },
   boosty: {
     value: "boosty",
@@ -113,3 +128,31 @@ export function socialProfileUrl(account: SocialAccount): string | null {
   return derived ?? account.url ?? null;
 }
 
+/** `\s*#\s*` around a BattleTag's separator, as `shared.core.social` spells it. */
+const BATTLE_TAG_HASH = /\s*#\s*/g;
+
+/**
+ * The handle as STORED, mirroring `shared.core.social.display_social_handle`:
+ * trimmed, casing kept; a BattleTag additionally loses the spacing a human
+ * types around `#` (`Player # 1234` → `Player#1234`).
+ */
+export function displaySocialHandle(provider: string, handle: string): string {
+  const text = handle.trim();
+  return getSocialProviderConfig(provider).normalizeRule === "battletag"
+    ? text.replace(BATTLE_TAG_HASH, "#")
+    : text;
+}
+
+/**
+ * The handle as MATCHED, mirroring `shared.core.social.normalize_social_handle`:
+ * the display form casefolded, with every remaining space dropped for a
+ * BattleTag. This — never the raw input — is what a provider's grammar runs on.
+ */
+export function normalizeSocialHandle(provider: string, handle: string): string {
+  const display = displaySocialHandle(provider, handle);
+  return (
+    getSocialProviderConfig(provider).normalizeRule === "battletag"
+      ? display.replaceAll(" ", "").trim()
+      : display
+  ).toLowerCase();
+}

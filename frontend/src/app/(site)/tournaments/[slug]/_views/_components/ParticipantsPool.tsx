@@ -154,7 +154,7 @@ function PoolRow({
   const { registration, role, division, isFlex } = entry;
   const rank = role.rank_value ?? null;
   const heroes = topHeroes(role, heroesMap, 3);
-  const battleTag = registration.battle_tag ?? "\u2014";
+  const battleTag = registration.primary_handle ?? "\u2014";
   // BattleTags are `Name#1234`; the discriminator is how you tell two Kennys
   // apart and nothing else, so it stays present and stops competing with the
   // name for attention.
@@ -203,9 +203,9 @@ function PoolRow({
         {position}
       </span>
       <span className="flex min-w-0 items-baseline text-caption">
-        {registration.battle_tag ? (
+        {registration.primary_handle ? (
           <a
-            href={`/users/${getPlayerSlug(registration.battle_tag)}`}
+            href={`/users/${getPlayerSlug(registration.primary_handle)}`}
             target="_blank"
             rel="noopener noreferrer"
             className={cn(
@@ -395,7 +395,7 @@ export default function ParticipantsPool({
     for (const registration of active) {
       if (
         normalizedSearch.length > 0 &&
-        !(registration.battle_tag?.toLowerCase().includes(normalizedSearch) ?? false)
+        !(registration.primary_handle?.toLowerCase().includes(normalizedSearch) ?? false)
       ) {
         continue;
       }
@@ -417,8 +417,8 @@ export default function ParticipantsPool({
         if (leftRank !== rightRank) return rightRank - leftRank;
         // Players who main this role before those who only also play it.
         if (left.role.is_primary !== right.role.is_primary) return left.role.is_primary ? -1 : 1;
-        return (left.registration.battle_tag ?? "").localeCompare(
-          right.registration.battle_tag ?? ""
+        return (left.registration.primary_handle ?? "").localeCompare(
+          right.registration.primary_handle ?? ""
         );
       });
     }
@@ -431,7 +431,7 @@ export default function ParticipantsPool({
         (registration) =>
           isWithdrawn(registration) &&
           (normalizedSearch.length === 0 ||
-            (registration.battle_tag?.toLowerCase().includes(normalizedSearch) ?? false))
+            (registration.primary_handle?.toLowerCase().includes(normalizedSearch) ?? false))
       ),
     [normalizedSearch, registrations]
   );
@@ -447,7 +447,7 @@ export default function ParticipantsPool({
           !isWithdrawn(registration) &&
           isReserve(registration) &&
           (normalizedSearch.length === 0 ||
-            (registration.battle_tag?.toLowerCase().includes(normalizedSearch) ?? false))
+            (registration.primary_handle?.toLowerCase().includes(normalizedSearch) ?? false))
       ),
     [normalizedSearch, registrations]
   );
@@ -520,7 +520,7 @@ export default function ParticipantsPool({
           <ul className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
             {reserves.map((registration) => (
               <li key={registration.id} className="text-xs text-[color:var(--aqt-fg-muted)]">
-                {registration.battle_tag ?? "\u2014"}
+                {registration.primary_handle ?? "\u2014"}
               </li>
             ))}
           </ul>
@@ -543,7 +543,7 @@ export default function ParticipantsPool({
                 key={registration.id}
                 className="text-xs text-[color:var(--aqt-fg-dim)] line-through"
               >
-                {registration.battle_tag ?? "\u2014"}
+                {registration.primary_handle ?? "\u2014"}
               </li>
             ))}
           </ul>

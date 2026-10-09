@@ -20,6 +20,7 @@ function field(key: string, overrides: Partial<FormField> = {}): FormField {
 }
 
 const SCHEMA_FIELDS: FormField[] = [
+  field("identity_battlenet"),
   field("identity_discord"),
   field("identity_twitch"),
   field("identity_boosty"),
@@ -30,12 +31,13 @@ const SCHEMA_FIELDS: FormField[] = [
 function registration(overrides: Partial<AdminRegistration> = {}): AdminRegistration {
   return {
     id: 1,
-    battle_tag: "Player#1234",
+    primary_handle: "Player#1234",
     display_name: "Player",
     answers: {
-      identity_discord: "player",
-      identity_twitch: "player_tv",
-      identity_boosty: "player_boosty",
+      identity_battlenet: ["Player#1234", "Smurf#5678"],
+      identity_discord: ["player"],
+      identity_twitch: ["player_tv"],
+      identity_boosty: ["player_boosty"],
     },
     source: "manual",
     source_record_key: null,
@@ -66,16 +68,16 @@ describe("balancer registration column model", () => {
     expect(ids).toContain("answer_identity_boosty");
   });
 
-  it("keeps the dedicated BattleTag and roles columns out of the answer set", () => {
+  it("keeps only the roles column out of the answer set — the BattleTags get one", () => {
     const ids = buildBalancerRegistrationColumns(undefined, false, [
-      field("battle_tag"),
+      field("identity_battlenet"),
       field("roles"),
-      field("smurf_tags"),
     ]).map((candidate) => candidate.id);
 
-    expect(ids).not.toContain("answer_battle_tag");
     expect(ids).not.toContain("answer_roles");
-    expect(ids).toContain("answer_smurf_tags");
+    // The participant column shows the primary handle; this one shows every
+    // handle behind it, smurfs included.
+    expect(ids).toContain("answer_identity_battlenet");
   });
 
   it("reads the stored answer for its own question", () => {
@@ -92,12 +94,15 @@ describe("balancer registration column model", () => {
     expect(ids.some((id) => id?.startsWith("answer_"))).toBe(false);
   });
 
-  it("searches the participant by every handle the form collects, boosty included", () => {
+  it("searches the participant by every handle the form collects, smurfs and boosty included", () => {
     const meta = readColumnMeta<AdminRegistration>(
       column("participant", undefined, false, SCHEMA_FIELDS).meta,
     );
 
-    expect(meta.searchValue?.(registration())).toContain("player_boosty");
+    const searchText = meta.searchValue?.(registration());
+    expect(searchText).toContain("player_boosty");
+    expect(searchText).toContain("Player#1234");
+    expect(searchText).toContain("Smurf#5678");
   });
 
   it("offers the status values the caller collected, not a hardcoded list", () => {
