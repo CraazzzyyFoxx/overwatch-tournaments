@@ -3,15 +3,16 @@ import { create } from "zustand";
 import type { AuthProfile } from "@/stores/auth-profile.store";
 import { Workspace } from "@/types/workspace.types";
 import workspaceService from "@/services/workspace.service";
+import { STATS_SCOPE_COOKIE, type StatsScope } from "@/lib/site/stats-scope";
+import { resolveHost } from "@/lib/site/host";
 
 // Canonical workspace cookie name. LEGACY_WORKSPACE_COOKIE is read as a
 // fallback during the aqt->owt rename so an active workspace selection is
 // not lost; it is never written.
 export const WORKSPACE_COOKIE = "owt-workspace-id";
 export const LEGACY_WORKSPACE_COOKIE = "aqt-workspace-id";
-// Persist for a year so the active workspace survives browser restarts and is
-// present on the very first server render of each new session — otherwise SSR
-// reads no workspace and server components render unscoped (cross-workspace) data.
+// Local workspace for operations that require a concrete community. The public
+// viewing scope is independent and defaults to all communities.
 const WORKSPACE_COOKIE_TTL_DAYS = 365;
 // Key of the removed zustand `persist` bucket. The workspace id had three
 // persisted homes (this bucket, the cookie, and the server's read of the
@@ -36,9 +37,21 @@ function workspaceIdFromCookie(): number | null {
   return Number.isFinite(id) ? id : null;
 }
 
+function statsScopeFromCookie(): StatsScope {
+  if (typeof window !== "undefined" && resolveHost(window.location.hostname).mode === "tenant") {
+    return "workspace";
+  }
+  return typeof document !== "undefined" && Cookies.get(STATS_SCOPE_COOKIE) === "workspace"
+    ? "workspace"
+    : "all";
+}
+
 type WorkspaceState = {
   workspaces: Workspace[];
   currentWorkspaceId: number | null;
+  statsScope: StatsScope;
+  /** Runtime-only owner of the opened object; never changes the viewing preference. */
+  entityWorkspaceId: number | null;
   /**
    * On a tenant (white-label) host the workspace is fixed by the request host,
    * not the cookie/store. When set, the store scope is locked to this id so
@@ -51,6 +64,8 @@ type WorkspaceState = {
 
   fetchWorkspaces: () => Promise<void>;
   setCurrentWorkspace: (id: number) => void;
+  setStatsScope: (scope: StatsScope) => void;
+  setEntityWorkspace: (id: number | null) => void;
   setHostLock: (id: number | null) => void;
   getCurrentWorkspace: () => Workspace | undefined;
 };
@@ -90,6 +105,8 @@ export function resolveCurrentWorkspaceId(
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   workspaces: [],
   currentWorkspaceId: workspaceIdFromCookie(),
+  statsScope: statsScopeFromCookie(),
+  entityWorkspaceId: null,
   hostLockedWorkspaceId: null,
   isLoading: false,
 
@@ -136,6 +153,17 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     set({ currentWorkspaceId: id });
   },
 
+  setStatsScope: (statsScope) => {
+    if (get().hostLockedWorkspaceId != null) return;
+    Cookies.set(STATS_SCOPE_COOKIE, statsScope, {
+      sameSite: "lax",
+      expires: WORKSPACE_COOKIE_TTL_DAYS
+    });
+    set({ statsScope });
+  },
+
+  setEntityWorkspace: (entityWorkspaceId) => set({ entityWorkspaceId }),
+
   setHostLock: (id: number | null) => {
     // Lock (tenant host) or clear (apex) the client-side workspace scope.
     // Forcing currentWorkspaceId corrects it even if fetchWorkspaces ran
@@ -145,14 +173,15 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       // written, so the "no cookie on a locked host" invariant holds
       // regardless of effect order (SSR scopes by the host header anyway).
       Cookies.remove(WORKSPACE_COOKIE);
-      set({ hostLockedWorkspaceId: id, currentWorkspaceId: id });
+      set({ hostLockedWorkspaceId: id, currentWorkspaceId: id, statsScope: "workspace" });
     } else {
-      set({ hostLockedWorkspaceId: null });
+      set({ hostLockedWorkspaceId: null, statsScope: statsScopeFromCookie() });
     }
   },
 
   getCurrentWorkspace: () => {
-    const { workspaces, currentWorkspaceId } = get();
-    return workspaces.find((w) => w.id === currentWorkspaceId);
+    const { workspaces, currentWorkspaceId, entityWorkspaceId, hostLockedWorkspaceId } = get();
+    const id = hostLockedWorkspaceId ?? entityWorkspaceId ?? currentWorkspaceId;
+    return workspaces.find((w) => w.id === id);
   }
 }));

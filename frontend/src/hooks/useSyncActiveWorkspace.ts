@@ -3,9 +3,8 @@ import { useEffect } from "react";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 
 /**
- * Syncs the active workspace to the owning workspace of the resource the viewer
- * opened (a tournament, its analytics, etc.), so the rest of the app — nav,
- * data scoping, the workspace switcher — follows that resource.
+ * Aligns the admin workspace with the opened tournament. Public entity pages
+ * use useEntityWorkspace instead, without rewriting the viewing filter.
  *
  * Apex-only: a no-op on a locked tenant (subdomain / custom-domain) host, where
  * the workspace is fixed by the request host. Keyed on `workspaceId` alone, so a

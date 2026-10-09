@@ -1,77 +1,50 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { usePathname, useRouter } from "next/navigation";
-import { useQueryClient } from "@tanstack/react-query";
-import { shouldRefreshWorkspaceScope } from "./WorkspaceBootstrap.helpers";
+import { useRouter } from "next/navigation";
+import { useQueryClient, type InfiniteData } from "@tanstack/react-query";
 import { resolveHost } from "@/lib/site/host";
-import {
-  LEGACY_WORKSPACE_COOKIE,
-  useWorkspaceStore,
-  WORKSPACE_COOKIE
-} from "@/stores/workspace.store";
+import { useWorkspaceStore } from "@/stores/workspace.store";
 
 export default function WorkspaceBootstrap() {
   const fetchWorkspaces = useWorkspaceStore((s) => s.fetchWorkspaces);
   const currentWorkspaceId = useWorkspaceStore((s) => s.currentWorkspaceId);
+  const statsScope = useWorkspaceStore((s) => s.statsScope);
   const queryClient = useQueryClient();
   const router = useRouter();
-  // The correction applies to the initial SSR, not to later client navigations.
-  const initialPathname = useRef(usePathname());
-  const prevWorkspaceId = useRef(currentWorkspaceId);
-  // Whether the server render that produced the current HTML carried a workspace
-  // cookie. When it didn't (fresh session — the cookie is absent), server
-  // components rendered unscoped (cross-workspace) data, so once we resolve the
-  // active workspace on the client we must refresh them exactly once.
-  const ssrHadWorkspaceCookie = useRef(
-    typeof document !== "undefined" &&
-      (document.cookie.includes(`${WORKSPACE_COOKIE}=`) ||
-        document.cookie.includes(`${LEGACY_WORKSPACE_COOKIE}=`))
-  );
-  const correctedInitialSsr = useRef(false);
+  const previous = useRef({ currentWorkspaceId, statsScope });
 
   useEffect(() => {
-    fetchWorkspaces();
+    void fetchWorkspaces();
   }, [fetchWorkspaces]);
 
   useEffect(() => {
-    // On a tenant (white-label) host the SSR is already scoped by the
-    // `x-owt-workspace-id` header (host beats cookie), the workspace is fixed,
-    // and no workspace cookie is written — so the cookie-absence "correction"
-    // below would fire a needless router.refresh()+invalidateQueries() on every
-    // load. Skip it entirely there.
-    const isTenantHost = resolveHost(window.location.hostname).mode === "tenant";
+    const before = previous.current;
+    previous.current = { currentWorkspaceId, statsScope };
+    if (resolveHost(window.location.hostname).mode === "tenant") return;
+    const changed = before.statsScope !== statsScope ||
+      (statsScope === "workspace" && before.currentWorkspaceId !== currentWorkspaceId);
+    if (!changed) return;
 
-    const workspaceChanged =
-      prevWorkspaceId.current !== null &&
-      currentWorkspaceId !== null &&
-      prevWorkspaceId.current !== currentWorkspaceId;
-
-    // First-load correction: the initial SSR had no workspace cookie, so its
-    // server components rendered unscoped. Now that a workspace is resolved (and
-    // fetchWorkspaces has set the cookie), re-render them once so they scope.
-    const needsInitialCorrection =
-      !ssrHadWorkspaceCookie.current && !correctedInitialSsr.current && currentWorkspaceId !== null;
-
-    const shouldRefresh = shouldRefreshWorkspaceScope({
-      isTenantHost,
-      pathname: window.location.pathname,
-      initialPathname: initialPathname.current,
-      workspaceChanged,
-      needsInitialCorrection
-    });
-
-    // The client cache is workspace-scoped even where the server render is not.
-    if ((workspaceChanged && !isTenantHost) || shouldRefresh) {
-      queryClient.invalidateQueries();
+    const url = new URL(window.location.href);
+    const fixedEntity = useWorkspaceStore.getState().entityWorkspaceId != null ||
+      url.pathname.startsWith("/workspace/");
+    queryClient.setQueriesData<InfiniteData<unknown>>({
+      predicate: (query) => {
+        const data = query.state.data as InfiniteData<unknown> | undefined;
+        return Array.isArray(data?.pages) && Array.isArray(data?.pageParams) &&
+          (!fixedEntity || query.getObserversCount() === 0);
+      }
+    }, (data) => data && data.pages.length > 1
+      ? { ...data, pages: data.pages.slice(0, 1), pageParams: data.pageParams.slice(0, 1) }
+      : data);
+    void queryClient.invalidateQueries();
+    if (!fixedEntity && url.searchParams.has("page")) {
+      url.searchParams.delete("page");
+      router.replace(`${url.pathname}${url.search}${url.hash}`, { scroll: false });
     }
-    if (shouldRefresh) {
-      correctedInitialSsr.current = true;
-      // Re-render server components with the resolved workspace cookie
-      router.refresh();
-    }
-    prevWorkspaceId.current = currentWorkspaceId;
-  }, [currentWorkspaceId, queryClient, router]);
+    router.refresh();
+  }, [currentWorkspaceId, statsScope, queryClient, router]);
 
   return null;
 }

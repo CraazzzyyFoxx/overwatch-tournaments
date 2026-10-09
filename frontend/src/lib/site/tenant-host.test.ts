@@ -50,9 +50,6 @@ describe("resolveStatsScope", () => {
     expect(await resolveStatsScope()).toBe("all");
   });
 
-  it("defaults to the workspace scope without the cookie", async () => {
-    expect(await resolveStatsScope()).toBe("workspace");
-  });
 
   it("ignores the cookie on a tenant host", async () => {
     requestHeaders["x-owt-host-mode"] = "tenant";

@@ -130,7 +130,7 @@ The stack collapses into `+N`; the overlap is −9px; player avatars (as opposed
 - **No SR/MMR** — they do not exist in the system; do not invent them, neither in statistics nor in achievements.
 - **Encounter ⊃ Matches**: an encounter is a series against an opponent (the `3–1` score), and inside it are the map matches; statistics (heroes/KDA/MVP) live per match, while the encounter shows aggregates (median MVP, avg KDA, hero stack). Do not label an encounter with the name of a single map.
 - **Mix tournaments**: a player has no permanent team — a team is meaningful only in the context of a tournament. No "pre-filled" teams in the profile.
-- **Per workspace**: profile numbers live in the context of a single community; we do not show aggregated community lists as a caption to the numbers.
+- **Viewing scope**: profile numbers follow the selected community or **All communities**. The viewing filter does not change an opened tournament or match's owner. Mix leaderboards stay per community; never merge community-local player IDs or rankings into an invented global rank.
 - **Low-sample gate**: percentiles and vs-avg are hidden below **n < 10 games** — an em dash + a `title` with the rule + a `LOW SAMPLE` badge. "Top 2%" off 3 games is noise.
 - **No "seasons"** — tournaments only; frame everything by tournaments/periods.
 - One term per metric: **Closeness** (not Proximity), with a glossary `title` on first use.

@@ -4,7 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronDown, LogIn, Menu, Plus, Search, X } from "lucide-react";
+import { ChevronDown, Globe, LogIn, Menu, Plus, Search, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import ActiveEvents from "@/components/ActiveEvents";
@@ -27,6 +27,7 @@ import { BRAND_NAME } from "@/config/site";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { getCurrentPathForAuthRedirect } from "@/lib/auth/redirect";
 import { cn } from "@/lib/utils";
+import { PLATFORM_ZONE } from "@/lib/site/host";
 import { useAuthModalStore } from "@/stores/auth-modal.store";
 
 /** Mock `.btn.btn--outline.btn--icon`: the plate's square 36px controls. */
@@ -179,7 +180,14 @@ const Header = ({ tenantMode, tenantWorkspace }: HeaderProps) => {
                 ))}
               </div>
 
-              {tenantMode ? null : (
+              {tenantMode ? (
+                <SheetClose asChild>
+                  <a href={`https://${PLATFORM_ZONE}`} className={cn(MENU_ITEM_CLASS, "mt-[18px]")}>
+                    <Globe className="size-4 shrink-0" aria-hidden />
+                    <span className="min-w-0 flex-1">{t("nav.platformCommunities")}</span>
+                  </a>
+                </SheetClose>
+              ) : (
                 <div className="mt-[18px]">
                   <p className={EYEBROW_CLASS}>{t("nav.groups.organizers")}</p>
                   <SheetClose asChild>
@@ -205,6 +213,7 @@ const Header = ({ tenantMode, tenantWorkspace }: HeaderProps) => {
             // in every viewport, and `/` is force-dynamic — Next's default
             // would server-render the home page for every visitor who never
             // clicks it. Measured 463 such renders in 23 minutes on 2026-08-15.
+            <>
             <Link
               prefetch={false}
               href="/"
@@ -216,6 +225,15 @@ const Header = ({ tenantMode, tenantWorkspace }: HeaderProps) => {
                 {tenant.name}
               </span>
             </Link>
+              <a
+                href={`https://${PLATFORM_ZONE}`}
+                className={cn(ICON_BUTTON_CLASS, "hidden sm:inline-flex")}
+                aria-label={t("nav.platformCommunities")}
+                title={t("nav.platformCommunities")}
+              >
+                <Globe className="size-4" aria-hidden />
+              </a>
+            </>
           ) : (
             <>
               <Link

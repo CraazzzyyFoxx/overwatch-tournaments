@@ -478,12 +478,12 @@ class CustomGameService:
         self,
         session: AsyncSession,
         *,
-        workspace_id: int,
+        workspace_id: int | None,
         custom_game_id: int,
         options: Sequence[Any] = (),
     ) -> models.CustomGame:
         game = await self.games.get(session, custom_game_id, options=options)
-        if game is None or game.workspace_id != workspace_id:
+        if game is None or (workspace_id is not None and game.workspace_id != workspace_id):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Custom game not found")
         return game
 

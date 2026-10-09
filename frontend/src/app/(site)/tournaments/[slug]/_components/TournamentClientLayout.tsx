@@ -18,7 +18,7 @@ import { formatDateRange } from "@/lib/datetime";
 import { useFormatter } from "@/lib/datetime/client";
 import { useInvalidation } from "@/hooks/useInvalidation";
 import { useTournamentQuery } from "@/hooks/useTournamentClientData";
-import { useSyncActiveWorkspace } from "@/hooks/useSyncActiveWorkspace";
+import { useEntityWorkspace } from "@/hooks/useEntityWorkspace";
 import { useTournamentStreamsQuery } from "../_hooks/useTournamentStreams";
 import type { Tournament } from "@/types/tournament.types";
 
@@ -111,9 +111,8 @@ export default function TournamentClientLayout({
     detailRef: slug,
   });
 
-  // Follow the tournament the viewer opened: switch the active workspace to its
-  // owner (apex-only; a manual switch on the page is not fought).
-  useSyncActiveWorkspace(tournament?.workspace_id);
+  // Object-local queries and actions must not change the saved viewing filter.
+  useEntityWorkspace(tournament?.workspace_id);
 
   // The shell owns the tournament's streams, for two consumers that outlive any
   // one section: the persistent broadcast block below the hero, and the Stream

@@ -69,7 +69,7 @@ vi.mock("@/services/custom-game.service", () => ({
   },
   customGameService: {
     list: (...args: unknown[]) => listGames(...args),
-    get: (...args: unknown[]) => getGame(...args),
+    getById: (...args: unknown[]) => getGame(...args),
     updateRoster: (...args: unknown[]) => updateRoster(...args),
     updatePlayer: (...args: unknown[]) => updatePlayer(...args),
     listMatches: (...args: unknown[]) => listMatches(...args),
@@ -220,9 +220,7 @@ async function mount() {
       </QueryClientProvider>,
     );
   });
-  // Two passes: the mix list resolves first, and only then does a selected mix
-  // exist for the detail and rotation queries to start against. Settling once
-  // left them in flight, so a mutation reading them raced the fetch.
+  // Settle independent detail, rotation and workspace-list reads.
   await act(async () => {
     await tick();
   });
@@ -263,6 +261,19 @@ beforeEach(() => {
 });
 
 describe("usePickupMix", () => {
+  it("keeps the route game pinned when the workspace list contains a different mix", async () => {
+    listGames.mockResolvedValue([game({ id: 99 })]);
+    const { setRoster } = await mount();
+    expect(getGame).toHaveBeenCalledWith(GAME_ID, WORKSPACE_ID);
+    expect(listMatches).toHaveBeenCalledWith(WORKSPACE_ID, GAME_ID);
+    await act(async () => {
+      setRoster([9]);
+      await tick();
+    });
+    expect(updateRoster).toHaveBeenCalledWith(WORKSPACE_ID, GAME_ID, [9]);
+    expect(getGame.mock.calls.every(([id]) => id === GAME_ID)).toBe(true);
+  });
+
   it("invalidates the workspace-player cache after updating the roster", async () => {
     const { setRoster, client } = await mount();
     // Seed a cache entry the same way the add-players dialog's queries would,

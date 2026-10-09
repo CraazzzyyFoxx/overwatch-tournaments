@@ -5,7 +5,7 @@ import { useWorkspaceStore } from "@/stores/workspace.store";
 import { DivisionGrid, DivisionGridVersion } from "@/types/workspace.types";
 
 export function useCurrentWorkspaceId(): number | null {
-  return useWorkspaceStore((s) => s.currentWorkspaceId);
+  return useWorkspaceStore((s) => s.hostLockedWorkspaceId ?? s.entityWorkspaceId ?? s.currentWorkspaceId);
 }
 
 export function useDivisionGrid(): DivisionGrid {

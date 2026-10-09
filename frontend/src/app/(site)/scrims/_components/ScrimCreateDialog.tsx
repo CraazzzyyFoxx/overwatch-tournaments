@@ -69,12 +69,11 @@ type PoolSource = "copy" | "custom";
 const POOL_SOURCES: PoolSource[] = ["copy", "custom"];
 
 export function ScrimCreateDialog({
-  workspaceId,
-  listQueryKey
+  workspaceId: scopedWorkspaceId,
+  workspaces
 }: Readonly<{
-  workspaceId: number;
-  /** Invalidated on success so the new room shows up behind the closing dialog. */
-  listQueryKey: readonly unknown[];
+  workspaceId: number | null;
+  workspaces: ReadonlyArray<{ id: number; name: string }>;
 }>) {
   const t = useTranslations("scrims.create");
   const tAdmin = useTranslations("pickBan.admin");
@@ -83,6 +82,11 @@ export function ScrimCreateDialog({
   const queryClient = useQueryClient();
 
   const [open, setOpen] = useState(false);
+  const [chosenWorkspaceId, setChosenWorkspaceId] = useState<number | null>(null);
+  const candidateWorkspaceId = scopedWorkspaceId ?? chosenWorkspaceId;
+  const workspaceId = workspaces.some((workspace) => workspace.id === candidateWorkspaceId)
+    ? candidateWorkspaceId
+    : null;
   const [label, setLabel] = useState("");
   const [bestOf, setBestOf] = useState(DEFAULT_BEST_OF);
   const [homeName, setHomeName] = useState("");
@@ -96,13 +100,13 @@ export function ScrimCreateDialog({
   const tournamentsQuery = useQuery({
     queryKey: scrimQueryKeys.tournamentsLookup(workspaceId),
     queryFn: () => tournamentService.lookup(workspaceId),
-    enabled: open && source === "copy",
+    enabled: open && source === "copy" && workspaceId != null,
     staleTime: 5 * 60 * 1000
   });
   const stagesQuery = useQuery({
     queryKey: scrimQueryKeys.stages(copyTournamentId),
     queryFn: () => tournamentService.getStages(copyTournamentId as number),
-    enabled: open && source === "copy" && copyTournamentId != null
+    enabled: open && source === "copy" && workspaceId != null && copyTournamentId != null
   });
   // Rounds come from the bracket's real encounters rather than a local guess —
   // elimination numbering is not derivable client-side (see `stageRoundOptions`),
@@ -113,7 +117,7 @@ export function ScrimCreateDialog({
       encounterService.getAll(1, "", copyTournamentId, -1, "id", "asc", workspaceId, {
         entities: []
       }),
-    enabled: open && source === "copy" && copyStageId != null
+    enabled: open && source === "copy" && workspaceId != null && copyStageId != null
   });
 
   const stages = useMemo(
@@ -141,12 +145,13 @@ export function ScrimCreateDialog({
   const poolIssues = source === "custom" ? validateScrimPoolDraft(pool) : [];
   const namesFilled = label.trim() !== "" && homeName.trim() !== "" && awayName.trim() !== "";
   const canSubmit =
-    namesFilled && (source === "copy" ? copyTournamentId != null : poolIssues.length === 0);
+    workspaceId != null && namesFilled &&
+    (source === "copy" ? copyTournamentId != null : poolIssues.length === 0);
 
   const createMutation = useMutation({
     mutationFn: (data: ScrimCreateInput) => scrimService.createRoom(data),
     onSuccess: async (room) => {
-      await queryClient.invalidateQueries({ queryKey: listQueryKey });
+      await queryClient.invalidateQueries({ queryKey: scrimQueryKeys.lists(room.workspace_id) });
       notify.success(t("created"));
       setOpen(false);
       // Straight into the room: creating one is how a captain starts a veto, and
@@ -160,6 +165,7 @@ export function ScrimCreateDialog({
   });
 
   const submit = () => {
+    if (workspaceId == null || !canSubmit) return;
     const poolInput: ScrimPoolInput =
       source === "copy"
         ? {
@@ -208,6 +214,29 @@ export function ScrimCreateDialog({
 
         <FieldSet disabled={createMutation.isPending}>
           <FieldGroup>
+            {scopedWorkspaceId == null ? (
+              <Field>
+                <FieldLabel htmlFor={`${ids}-workspace`}>{t("communityLabel")}</FieldLabel>
+                <select
+                  id={`${ids}-workspace`}
+                  className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
+                  value={workspaceId ?? ""}
+                  required
+                  onChange={(event) => {
+                    setChosenWorkspaceId(event.target.value ? Number(event.target.value) : null);
+                    setCopyTournamentId(null);
+                    setCopyStageId(null);
+                    setCopyRound(null);
+                  }}
+                >
+                  <option value="">{t("communityPlaceholder")}</option>
+                  {workspaces.map((workspace) => (
+                    <option key={workspace.id} value={workspace.id}>{workspace.name}</option>
+                  ))}
+                </select>
+                <FieldDescription>{t("communityHint")}</FieldDescription>
+              </Field>
+            ) : null}
             <Field>
               <FieldLabel htmlFor={`${ids}-label`}>{t("labelLabel")}</FieldLabel>
               <Input
@@ -284,6 +313,7 @@ export function ScrimCreateDialog({
                   <FieldLabel htmlFor={`${ids}-tournament`}>{t("tournamentLabel")}</FieldLabel>
                   <Select
                     value={copyTournamentId == null ? undefined : String(copyTournamentId)}
+                    disabled={workspaceId == null || tournamentsQuery.isPending}
                     onValueChange={(value) => {
                       setCopyTournamentId(Number(value));
                       setCopyStageId(null);

@@ -89,7 +89,7 @@ var RosterRoutes = []edge.RouteSpec{
 	// already gives this literal segment the win over {game_id} whatever the
 	// order; it is listed above that row so the table reads the same way.
 	{Method: "GET", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/stats", Queue: "rpc.balancer.custom.stats", Path: []string{"workspace_id"}, AllQuery: true, Auth: edge.AuthNone, Timeout: fastReadTimeout},
-	{Method: "GET", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}", Queue: "rpc.balancer.custom.get", IDParam: "game_id", Path: []string{"workspace_id"}, Auth: edge.AuthNone, Timeout: fastReadTimeout},
+	{Method: "GET", Pattern: "/api/v1/balancer/custom-games/{custom_game_id}", Queue: "rpc.balancer.custom.get", IDParam: "custom_game_id", Query: []string{"workspace_id"}, Auth: edge.AuthNone, Timeout: fastReadTimeout},
 	{Method: "POST", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/roster", Queue: "rpc.balancer.custom.update_roster", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
 	{Method: "PUT", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/name", Queue: "rpc.balancer.custom.rename", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
 	{Method: "PUT", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/players/{workspace_member_id}", Queue: "rpc.balancer.custom.update_player", IDParam: "game_id", Path: []string{"workspace_id", "workspace_member_id"}, Body: true, Auth: edge.AuthRequired},

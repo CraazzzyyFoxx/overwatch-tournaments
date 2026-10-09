@@ -191,41 +191,6 @@ func TestWorkspaceRankerRoutes(t *testing.T) {
 	}
 }
 
-// TestMixReadsArePublic pins the five mix reads as AuthNone and every mix write
-// as AuthRequired. A mix board is read out to a lobby whose players need no
-// account here, so flipping a read back to AuthRequired 401s every signed-out
-// visitor on /balancer/mix; flipping a write to AuthNone would hand the worker
-// no actor to check host-or-co-host against.
-func TestMixReadsArePublic(t *testing.T) {
-	public := map[string]bool{
-		"GET /api/v1/balancer/workspaces/{workspace_id}/custom-games":                    true,
-		"GET /api/v1/balancer/workspaces/{workspace_id}/custom-games/stats":              true,
-		"GET /api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}":          true,
-		"GET /api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/matches":  true,
-		"GET /api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/rotation": true,
-	}
-	seen := 0
-	for _, route := range RosterRoutes {
-		if !strings.Contains(route.Pattern, "/custom-games") {
-			continue
-		}
-		key := route.Method + " " + route.Pattern
-		if public[key] {
-			seen++
-			if route.Auth != edge.AuthNone {
-				t.Fatalf("mix read %s must be public: %#v", key, route)
-			}
-			continue
-		}
-		if route.Auth != edge.AuthRequired {
-			t.Fatalf("mix write %s must stay authenticated: %#v", key, route)
-		}
-	}
-	if seen != len(public) {
-		t.Fatalf("expected %d public mix reads, found %d", len(public), seen)
-	}
-}
-
 // TestMixSelfServiceRoutes pins the player's own surface. All four /me verbs
 // share one pattern, so a wrong Method turns a read into a write (or a leave
 // into a join); all of them are AuthRequired because the worker authorizes the

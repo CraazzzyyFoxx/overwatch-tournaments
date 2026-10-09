@@ -18,17 +18,16 @@ export async function isTenantHost(): Promise<boolean> {
 }
 
 /**
- * The public-statistics read scope for this request: the switcher's
- * {@link STATS_SCOPE_COOKIE} opts into cross-workspace numbers, but only on the
- * platform apex — a tenant host has no such mode, so the cookie is ignored.
+ * The saved public viewing scope. First visits span all communities on the
+ * platform; a tenant host always overrides the preference with its own scope.
  * Server-only.
  */
 export async function resolveStatsScope(): Promise<StatsScope> {
   if (await isTenantHost()) return "workspace";
   try {
-    return (await cookies()).get(STATS_SCOPE_COOKIE)?.value === "all" ? "all" : "workspace";
+    return (await cookies()).get(STATS_SCOPE_COOKIE)?.value === "workspace" ? "workspace" : "all";
   } catch {
-    return "workspace";
+    return "all";
   }
 }
 

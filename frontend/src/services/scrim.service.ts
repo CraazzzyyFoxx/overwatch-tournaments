@@ -1,4 +1,5 @@
 import { apiFetch } from "@/lib/api/fetch";
+import { parseApiError } from "@/lib/api/error";
 import type { ScrimCreateInput, ScrimListScope, ScrimRoom } from "@/types/scrim.types";
 
 /** The share token is a path segment, so it is escaped rather than interpolated raw. */
@@ -8,7 +9,9 @@ function tokenPath(token: string): string {
 
 class ScrimService {
   async createRoom(data: ScrimCreateInput): Promise<ScrimRoom> {
-    const response = await apiFetch("/api/v1/scrims", { method: "POST", body: data });
+    const response = await apiFetch("/api/v1/scrims", {
+      method: "POST", body: data, skipWorkspace: true
+    });
     return response.json();
   }
 
@@ -18,11 +21,13 @@ class ScrimService {
    * for staff holding `match.result`.
    */
   async listRooms(
-    workspaceId: number | null,
+    workspaceId: number,
     scope: ScrimListScope = "mine"
   ): Promise<{ rooms: ScrimRoom[] }> {
     const response = await apiFetch("/api/v1/scrims", {
-      query: { workspace_id: workspaceId, scope }
+      query: { workspace_id: workspaceId, scope },
+      skipWorkspace: true,
+      cache: "no-store"
     });
     return response.json();
   }
@@ -34,8 +39,13 @@ class ScrimService {
    * room page routes both to `notFound()`.
    */
   async getRoom(token: string): Promise<ScrimRoom | null> {
-    const response = await apiFetch(tokenPath(token), { throwOnError: false });
-    if (!response.ok) return null;
+    // The token handlers load the owning room and enforce its own visibility;
+    // an unrelated browse filter must never constrain that entity read.
+    const response = await apiFetch(tokenPath(token), {
+      throwOnError: false, skipWorkspace: true, cache: "no-store"
+    });
+    if (response.status === 404) return null;
+    if (!response.ok) throw await parseApiError(response);
     return response.json();
   }
 
@@ -44,13 +54,17 @@ class ScrimService {
    * two viewers racing the same link produce one captain and one plain spectator.
    */
   async claimSide(token: string): Promise<ScrimRoom> {
-    const response = await apiFetch(`${tokenPath(token)}/claim`, { method: "POST" });
+    const response = await apiFetch(`${tokenPath(token)}/claim`, {
+      method: "POST", skipWorkspace: true
+    });
     return response.json();
   }
 
   /** Retires the room. History is kept: a closed room stays readable to its participants. */
   async closeRoom(token: string): Promise<ScrimRoom> {
-    const response = await apiFetch(`${tokenPath(token)}/close`, { method: "POST" });
+    const response = await apiFetch(`${tokenPath(token)}/close`, {
+      method: "POST", skipWorkspace: true
+    });
     return response.json();
   }
 }

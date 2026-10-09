@@ -12,6 +12,8 @@ import Header from "@/components/Header";
 import { Spinner } from "@/components/ui/spinner";
 import { adminEntryPermissions } from "@/lib/auth/admin-permissions";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useWorkspaceStore } from "@/stores/workspace.store";
+import type { Workspace } from "@/types/workspace.types";
 
 function LoadingState() {
   return (
@@ -75,16 +77,18 @@ function NoTournamentState() {
 
 type BalancerLayoutClientProps = {
   children: ReactNode;
+  tenantWorkspace?: Workspace | null;
 };
 
-export function BalancerLayoutClient({ children }: Readonly<BalancerLayoutClientProps>) {
+export function BalancerLayoutClient({ children, tenantWorkspace }: Readonly<BalancerLayoutClientProps>) {
   const pathname = usePathname();
   const { isLoaded, canAccessAdminRoute } = usePermissions();
   const { status: contextStatus, summary } = useToolContext();
   const isMix = pathname.startsWith("/balancer/mix");
+  const hostWorkspaceId = useWorkspaceStore((state) => state.hostLockedWorkspaceId);
 
   if (isMix) {
-    if (!isLoaded) {
+    if (!isLoaded || (tenantWorkspace != null && hostWorkspaceId !== tenantWorkspace.id)) {
       return <LoadingState />;
     }
     // Viewing a mix is public -- signed out included, so this branch runs
@@ -101,7 +105,7 @@ export function BalancerLayoutClient({ children }: Readonly<BalancerLayoutClient
     return (
       <div className="site-theme min-h-screen w-full">
         <div className="mx-auto h-full w-full max-w-screen-3xl px-4 pt-6 md:px-6 xl:px-10">
-          <Header />
+          <Header tenantMode={tenantWorkspace != null} tenantWorkspace={tenantWorkspace ?? undefined} />
           <div className="flex w-full flex-col min-h-[95%]">
             <main
               id="main-content"
@@ -111,7 +115,7 @@ export function BalancerLayoutClient({ children }: Readonly<BalancerLayoutClient
               <BalancerShell>{children}</BalancerShell>
             </main>
           </div>
-          <Footer tenant={null} />
+          <Footer tenant={tenantWorkspace ?? null} />
         </div>
       </div>
     );

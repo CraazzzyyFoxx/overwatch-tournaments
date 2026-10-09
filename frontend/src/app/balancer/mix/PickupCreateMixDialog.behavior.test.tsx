@@ -67,8 +67,9 @@ async function mount(
   games: CustomGame[] = [],
   props: {
     creating?: boolean;
-    onCreate?: (name: string, cloneFromGameId: number | null) => Promise<unknown>;
+    onCreate?: (name: string, cloneFromGameId: number | null, workspaceId: number) => Promise<unknown>;
     onClose?: () => void;
+    scopedWorkspaceId?: number | null;
   } = {}
 ) {
   const container = document.createElement("div");
@@ -84,6 +85,8 @@ async function mount(
         <Dialog open={true}>
           <PickupCreateMixDialog
             games={games}
+            workspaces={[{ id: 1, name: "Alpha" }, { id: 2, name: "Beta" }]}
+            scopedWorkspaceId={props.scopedWorkspaceId === undefined ? 1 : props.scopedWorkspaceId}
             creating={props.creating ?? false}
             onCreate={onCreate}
             onClose={onClose}
@@ -134,7 +137,7 @@ describe("PickupCreateMixDialog", () => {
     await typeInto(input, "Friday Scrim");
     await submit(scope);
 
-    expect(onCreate).toHaveBeenCalledWith("Friday Scrim", null);
+    expect(onCreate).toHaveBeenCalledWith("Friday Scrim", null, 1);
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
@@ -164,10 +167,39 @@ describe("PickupCreateMixDialog", () => {
     await typeInto(input, "Kept Name");
     await submit(scope);
 
-    expect(onCreate).toHaveBeenCalledWith("Kept Name", null);
+    expect(onCreate).toHaveBeenCalledWith("Kept Name", null, 1);
     expect(onClose).not.toHaveBeenCalled();
     const keptInput = scope.querySelector('input[name="name"]') as HTMLInputElement;
     expect(keptInput.value).toBe("Kept Name");
     expect(scope.textContent).toContain("Network exploded");
+  });
+
+  it("requires an explicit community in all mode and offers clones only from that community", async () => {
+    const alpha = sampleGame(12, "Alpha mix");
+    const beta = { ...sampleGame(13, "Beta mix"), workspace_id: 2 };
+    const { scope, onCreate } = await mount([alpha, beta], { scopedWorkspaceId: null });
+    await submit(scope);
+    expect(onCreate).not.toHaveBeenCalled();
+    const select = scope.querySelector("#pickup-workspace") as HTMLSelectElement;
+    expect(select.getAttribute("aria-invalid")).toBe("true");
+    await act(async () => {
+      select.value = "2";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await act(async () => {
+      scope.querySelectorAll('input[type="radio"]')[1].dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await act(async () => {
+      (scope.querySelector("#pickup-clone-from") as HTMLButtonElement).click();
+    });
+    expect(scope.textContent).toContain("Beta mix");
+    expect(scope.textContent).not.toContain("Alpha mix");
+    await act(async () => {
+      select.value = "1";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(scope.querySelector("#pickup-clone-from")).toBeNull();
+    await submit(scope);
+    expect(onCreate).toHaveBeenCalledWith(expect.any(String), null, 1);
   });
 });

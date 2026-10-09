@@ -44,7 +44,7 @@ import registrationService from "@/services/registration.service";
 import type { AdminRegistration } from "@/types/balancer-admin.types";
 import type { RegistrationForm } from "@/types/registration.types";
 import { cn } from "@/lib/utils";
-import { useWorkspaceStore } from "@/stores/workspace.store";
+import { useCurrentWorkspaceId } from "@/hooks/useCurrentWorkspace";
 import { balancerQueryKeys } from "@/lib/balancer/query-keys";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 
@@ -64,10 +64,8 @@ export default function RegistrationsTable({
   const { searchParams, setParams } = useQueryParams({ resetOnChange: [] });
   const { canAccessPermission } = usePermissions();
   const { open: openAuditTrail } = useAuditTrail();
-  // D25: status/sub-role catalogs are read from the workspace store. In the hub
-  // the store is already aligned to the tournament's workspace by
-  // useSyncActiveWorkspace, so no extra wiring is needed here.
-  const workspaceId = useWorkspaceStore((state) => state.currentWorkspaceId);
+  // Catalogs follow the opened tournament, not the public viewing filter.
+  const workspaceId = useCurrentWorkspaceId();
 
   const [groupBy, setGroupBy] = useState<RegistrationGroupingMode>(
     normalizeRegistrationGroupingMode(searchParams?.get("group") ?? null)

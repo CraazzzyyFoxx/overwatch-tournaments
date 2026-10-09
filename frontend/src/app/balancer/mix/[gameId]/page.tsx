@@ -3,6 +3,10 @@
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useTranslations } from "next-intl";
+import { PageStateCard } from "@/components/ui/page-state-card";
+import type { CustomGame } from "@/services/custom-game.service";
+import { useEntityWorkspace } from "@/hooks/useEntityWorkspace";
 
 import { PickupAddPlayersDialog } from "@/app/balancer/mix/PickupAddPlayersDialog";
 import { PickupGettingStarted } from "@/app/balancer/mix/PickupGettingStarted";
@@ -55,9 +59,30 @@ import { useMapsCatalog } from "@/hooks/useMapsCatalog";
 export default function BalancerPickupMixPage() {
   const params = useParams<{ gameId: string }>();
   const routeGameId = Number(params.gameId);
-  const pickedGameId = Number.isFinite(routeGameId) ? routeGameId : null;
+  const pickedGameId = Number.isSafeInteger(routeGameId) && routeGameId > 0 ? routeGameId : null;
+  const hostWorkspaceId = useWorkspaceStore((state) => state.hostLockedWorkspaceId);
+  const t = useTranslations("mixes");
+  const entityQuery = useQuery({
+    queryKey: customGameKeys.byId(pickedGameId ?? 0, hostWorkspaceId),
+    queryFn: () => customGameService.getById(pickedGameId as number, hostWorkspaceId),
+    enabled: pickedGameId != null,
+  });
+  if (entityQuery.isError || pickedGameId == null) {
+    return (
+      <PageStateCard state="error" title={t("list.errorTitle")} description={t("list.errorDescription")}
+        actionLabel={t("retry")} onAction={() => void entityQuery.refetch()} />
+    );
+  }
+  if (!entityQuery.data) {
+    return <div role="status" className="py-12 text-center text-muted-foreground">{t("loading")}</div>;
+  }
+  return <PickupMixDetail key={entityQuery.data.id} initialGame={entityQuery.data} />;
+}
 
-  const workspaceId = useWorkspaceStore((state) => state.currentWorkspaceId);
+function PickupMixDetail({ initialGame }: Readonly<{ initialGame: CustomGame }>) {
+  const workspaceId = initialGame.workspace_id;
+  const pickedGameId = initialGame.id;
+  useEntityWorkspace(workspaceId);
   const currentUserId = useAuthProfileStore((state) => state.user?.id ?? null);
   // The board is public (`config/auth.ts`), so the seat read is the one thing
   // here that needs an actual session: without one `GET …/me` 401s and the
@@ -131,9 +156,10 @@ export default function BalancerPickupMixPage() {
     setVoiceChannels,
     voiceMove,
     voiceReturn,
-  } = usePickupMix(workspaceId ?? 0, pickedGameId, {
+  } = usePickupMix(workspaceId, pickedGameId, {
     seatEnabled: isSignedIn,
     voiceEnabled,
+    initialGame,
   });
 
   const game = gameQuery.data;
@@ -179,13 +205,6 @@ export default function BalancerPickupMixPage() {
       (setAuthorRanks.isPending &&
         setAuthorRanks.variables?.workspaceMemberId === openRow.workspace_member_id));
 
-  if (workspaceId == null) {
-    return (
-      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
-        Pick a workspace in the top bar to open mixes.
-      </div>
-    );
-  }
 
   const togglePoolMember = (memberId: number) => {
     if (selectedGameId == null) return;
@@ -274,9 +293,9 @@ export default function BalancerPickupMixPage() {
             />
             <PickupTeamsPanel
               canWrite={canWrite}
-              gamesLoading={gamesQuery.isLoading}
-              gamesError={gamesQuery.isError}
-              onRetryGames={() => void gamesQuery.refetch()}
+              gamesLoading={gamesQuery.isLoading || gameQuery.isLoading}
+              gamesError={gamesQuery.isError || gameQuery.isError}
+              onRetryGames={() => { void gamesQuery.refetch(); void gameQuery.refetch(); }}
               game={game}
               lobby={lobby}
               lobbyIndex={activeLobby}

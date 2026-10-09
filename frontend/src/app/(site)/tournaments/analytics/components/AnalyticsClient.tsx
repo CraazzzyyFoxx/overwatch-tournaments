@@ -28,11 +28,11 @@ import {
 import { useAnalyticsViewModel } from "@/app/(site)/tournaments/analytics/useAnalyticsViewModel";
 import { cn } from "@/lib/utils";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useEntityWorkspace } from "@/hooks/useEntityWorkspace";
 import { useTranslations } from "next-intl";
 import tournamentService from "@/services/tournament.service";
 import analyticsService from "@/services/analytics.service";
 import { useWorkspaceStore } from "@/stores/workspace.store";
-import { useSyncActiveWorkspace } from "@/hooks/useSyncActiveWorkspace";
 import { analyticsQueryKeys } from "@/lib/analytics/query-keys";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import type { StatsScope } from "@/lib/site/stats-scope";
@@ -55,16 +55,20 @@ const AnalyticsPage = ({ scope }: Readonly<{ scope: StatsScope }>) => {
   const tournamentId = useMemo(() => parseId(searchParams.get("tournamentId")), [parseId, searchParams]);
   const algorithmId = useMemo(() => parseId(searchParams.get("algorithm")), [parseId, searchParams]);
 
-  // Resolve the selected tournament's owning workspace independently of the
-  // current scope (skipWorkspace), then follow it — so a shared analytics link
-  // to a tournament in another workspace switches the active workspace to match.
-  const { data: selectedTournamentOverview } = useQuery({
+  // Resolve the selected tournament's owner without changing the viewing filter.
+  const {
+    data: selectedTournamentOverview,
+    isLoading: loadingSelectedTournament,
+    isError: isErrorSelectedTournament,
+    refetch: refetchSelectedTournament
+  } = useQuery({
     queryKey: tournamentQueryKeys.overview(tournamentId),
     queryFn: () => tournamentService.getPublicOverview(tournamentId!),
     enabled: tournamentId != null,
     staleTime: 5 * 60_000
   });
-  useSyncActiveWorkspace(selectedTournamentOverview?.workspace_id);
+  const selectedWorkspaceId = selectedTournamentOverview?.workspace_id ?? null;
+  useEntityWorkspace(selectedWorkspaceId);
   const pickerWorkspaceId = scope === "all" ? "all" : currentWorkspaceId;
 
   const {
@@ -73,11 +77,17 @@ const AnalyticsPage = ({ scope }: Readonly<{ scope: StatsScope }>) => {
     isLoading: loadingTournaments,
     isError: isErrorTournaments
   } = useQuery({
-    // The picker follows the visitor's scope; the reads below follow the
-    // selected tournament's own workspace (synced above).
+    // The picker follows the viewing filter; the selected event keeps its owner.
     queryKey: tournamentQueryKeys.byWorkspace(pickerWorkspaceId ?? "global"),
     queryFn: () => tournamentService.getAll(null, pickerWorkspaceId)
   });
+
+  const availableTournaments = useMemo(() => {
+    const results = tournamentsData?.results ?? [];
+    return selectedTournamentOverview && !results.some((item) => item.id === selectedTournamentOverview.id)
+      ? [selectedTournamentOverview, ...results]
+      : results;
+  }, [tournamentsData?.results, selectedTournamentOverview]);
 
   const {
     data: algorithmData,
@@ -101,12 +111,12 @@ const AnalyticsPage = ({ scope }: Readonly<{ scope: StatsScope }>) => {
   const isKnownAlgorithmId =
     algorithmId != null && availableAlgorithms.some((algorithm) => algorithm.id === algorithmId);
   const canQueryAnalytics =
-    tournamentId != null && algorithmId != null && (!isSuccessAlgorithm || isKnownAlgorithmId);
+    tournamentId != null && selectedWorkspaceId != null && algorithmId != null && (!isSuccessAlgorithm || isKnownAlgorithmId);
   const canRecalculateAnalytics = canShowAnalyticsAdminToolbar(hasPermission("analytics.update"));
   // v2 ML reads (performance, Monte-Carlo distribution, match quality, SHAP) are
   // permission-gated server-side. Gate the fetches too so the public/community
   // baseline (v1 + derived impact) never fires a 403 query.
-  const canReadV2 = canAccessPermission("analytics.read", currentWorkspaceId);
+  const canReadV2 = selectedWorkspaceId != null && canAccessPermission("analytics.read", selectedWorkspaceId);
 
   const {
     data: analytics,
@@ -114,8 +124,8 @@ const AnalyticsPage = ({ scope }: Readonly<{ scope: StatsScope }>) => {
     isError: isErrorAnalytics,
     refetch: refetchAnalytics
   } = useQuery({
-    queryKey: analyticsQueryKeys.performance(currentWorkspaceId ?? "global", tournamentId, algorithmId),
-    queryFn: () => analyticsService.getAnalytics(tournamentId!, algorithmId!, currentWorkspaceId),
+    queryKey: analyticsQueryKeys.performance(selectedWorkspaceId ?? "global", tournamentId, algorithmId),
+    queryFn: () => analyticsService.getAnalytics(tournamentId!, algorithmId!, selectedWorkspaceId),
     enabled: canQueryAnalytics
   });
 
@@ -170,8 +180,8 @@ const AnalyticsPage = ({ scope }: Readonly<{ scope: StatsScope }>) => {
 
   const activeTournament = useMemo(() => {
     if (!tournamentId) return null;
-    return tournamentsData?.results?.find((tournament) => tournament.id === tournamentId) ?? null;
-  }, [tournamentId, tournamentsData?.results]);
+    return availableTournaments.find((tournament) => tournament.id === tournamentId) ?? null;
+  }, [tournamentId, availableTournaments]);
 
   const activeAlgorithm = useMemo(() => {
     if (!algorithmId) return null;
@@ -230,11 +240,11 @@ const AnalyticsPage = ({ scope }: Readonly<{ scope: StatsScope }>) => {
     router.push(`${pathname}?${newSearchParams.toString()}`);
   };
 
-  const isFiltersReady = !loadingTournaments && !loadingAlgorithms;
+  const isFiltersReady = !loadingTournaments && !loadingAlgorithms && !loadingSelectedTournament;
   const isEmptyTeams = canQueryAnalytics && !!analytics && analytics.teams.length === 0;
   const picker = (
     <AnalyticsPicker
-      tournaments={tournamentsData?.results ?? []}
+      tournaments={availableTournaments}
       algorithms={availableAlgorithms}
       tournamentId={tournamentId}
       algorithmId={algorithmId}
@@ -263,13 +273,13 @@ const AnalyticsPage = ({ scope }: Readonly<{ scope: StatsScope }>) => {
         />
       );
     }
-    if (isErrorAnalytics) {
+    if (isErrorSelectedTournament || isErrorAnalytics) {
       return (
         <PageStateCard
           state="error"
           title={t("analytics.page.unavailable")}
           description={t("analytics.page.unavailableDesc")}
-          onAction={() => void refetchAnalytics()}
+          onAction={() => void (isErrorSelectedTournament ? refetchSelectedTournament() : refetchAnalytics())}
         />
       );
     }

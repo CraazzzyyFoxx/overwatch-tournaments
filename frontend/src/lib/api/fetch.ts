@@ -250,10 +250,10 @@ export async function apiFetch(
     !options.query?.workspace_id &&
     !params.has("workspace_id")
   ) {
-    const workspaceId =
-      typeof window !== "undefined"
-        ? useWorkspaceStore.getState().currentWorkspaceId
-        : await getServerWorkspaceId();
+    const clientScope = typeof window !== "undefined" ? useWorkspaceStore.getState() : null;
+    const workspaceId = clientScope
+      ? clientScope.hostLockedWorkspaceId ?? clientScope.entityWorkspaceId ?? clientScope.currentWorkspaceId
+      : await getServerWorkspaceId();
 
     if (workspaceId != null) {
       params.append("workspace_id", String(workspaceId));

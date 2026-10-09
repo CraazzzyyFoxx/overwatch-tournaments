@@ -12,6 +12,7 @@ import { apiFetch } from "@/lib/api/fetch";
 export default class encounterService {
   static async getEncounter(id: number): Promise<Encounter> {
     return apiFetch(`/api/v1/encounters/${id}`, {
+      skipWorkspace: true,
       query: {
         entities: [
           "matches",
@@ -37,6 +38,7 @@ export default class encounterService {
   }
   static async getMatch(match_id: number): Promise<MatchWithStats> {
     return apiFetch(`/api/v1/matches/${match_id}`, {
+      skipWorkspace: true,
       query: {
         entities: [
           "teams",
@@ -53,7 +55,7 @@ export default class encounterService {
     }).then((res) => res.json());
   }
   static async getMatchKillFeed(match_id: number): Promise<MatchKillFeed> {
-    return apiFetch(`/api/v1/matches/${match_id}/kill-feed`).then((res) => res.json());
+    return apiFetch(`/api/v1/matches/${match_id}/kill-feed`, { skipWorkspace: true }).then((res) => res.json());
   }
   static async getAll(
     page: number,

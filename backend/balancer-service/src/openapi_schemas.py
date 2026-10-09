@@ -117,6 +117,14 @@ OPERATIONS: dict[str, Op] = {
     "rpc.balancer.draft.pick_autopick": Op(request=schemas.DraftPickAutopickRequest, response=schemas.DraftSessionRead),
     "rpc.balancer.draft.pick_extend": Op(request=schemas.DraftPickExtendRequest, response=schemas.DraftSessionRead),
     "rpc.balancer.draft.pick_override": Op(request=schemas.DraftPickOverrideRequest, response=schemas.DraftSessionRead),
+    # ── pickup mixes: canonical public entity read ────────────────────────
+    "rpc.balancer.custom.get": Op(
+        query_params=(
+            QueryParam(
+                "workspace_id", "integer", description="Optional community restriction; a foreign mix returns 404."
+            ),
+        ),
+    ),
     # ── pickup mixes: writes (responses are hand-built dicts, see DOCS) ─────
     "rpc.balancer.custom.create": Op(request=custom_game.CustomGameCreate),
     "rpc.balancer.custom.update_roster": Op(request=custom_game.CustomGameRosterUpdate),

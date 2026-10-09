@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 import { useTranslations } from "next-intl";
 
@@ -33,41 +33,60 @@ export default function BalancerPickupListPage() {
   const queryClient = useQueryClient();
   const t = useTranslations("mixes");
   const workspaceId = useWorkspaceStore((state) => state.currentWorkspaceId);
+  const statsScope = useWorkspaceStore((state) => state.statsScope);
+  const hostWorkspaceId = useWorkspaceStore((state) => state.hostLockedWorkspaceId);
+  const workspaces = useWorkspaceStore((state) => state.workspaces);
+  const workspacesLoading = useWorkspaceStore((state) => state.isLoading);
+  const all = statsScope === "all" && hostWorkspaceId == null;
+  const visibleWorkspaces = workspaces.filter((workspace) =>
+    all || workspace.id === (hostWorkspaceId ?? workspaceId)
+  );
   const { canAccessPermission } = usePermissions();
-  // The mix-hosting grant, not a tournament permission: a workspace member can
-  // run a pickup game without holding admin rights over teams.
-  const canEdit = workspaceId != null && canAccessPermission("custom_game.create", workspaceId);
-
+  const creationWorkspaces = visibleWorkspaces.filter((workspace) =>
+    canAccessPermission("custom_game.create", workspace.id)
+  );
+  const canEdit = creationWorkspaces.length > 0;
   const [createOpen, setCreateOpen] = useState(false);
-
-  const gamesQuery = useQuery({
-    queryKey: customGameKeys.list(workspaceId ?? 0),
-    queryFn: () => customGameService.list(workspaceId as number),
-    enabled: workspaceId != null
+  const gamesQueries = useQueries({
+    queries: visibleWorkspaces.map((workspace) => ({
+      queryKey: customGameKeys.list(workspace.id),
+      queryFn: () => customGameService.list(workspace.id),
+    })),
   });
+  const games = gamesQueries.flatMap((query) => query.data ?? []).sort((a, b) => b.id - a.id);
 
   const [period, setPeriod] = useState<StatsPeriodKey>("all");
   // Pinned to the period, not recomputed per render: a `since` that drifted
   // with the clock would be a new query key every render.
   const since = useMemo(() => sinceFor(period, new Date()), [period]);
-  const statsQuery = useQuery({
-    queryKey: customGameKeys.stats(workspaceId ?? 0, since),
-    queryFn: () => customGameService.stats(workspaceId as number, since),
-    enabled: workspaceId != null,
-    staleTime: 60_000
+  const statsQueries = useQueries({
+    queries: visibleWorkspaces.map((workspace) => ({
+      queryKey: customGameKeys.stats(workspace.id, since),
+      queryFn: () => customGameService.stats(workspace.id, since),
+      staleTime: 60_000,
+    })),
   });
 
   const createGame = useMutation({
-    mutationFn: (input: { name: string; cloneFromGameId: number | null }) =>
-      customGameService.create(workspaceId as number, input.name, input.cloneFromGameId),
+    mutationFn: (input: { workspaceId: number; name: string; cloneFromGameId: number | null }) => {
+      if (!creationWorkspaces.some((workspace) => workspace.id === input.workspaceId)) {
+        throw new Error(t("create.workspaceRequired"));
+      }
+      if (input.cloneFromGameId != null && !games.some((game) =>
+        game.id === input.cloneFromGameId && game.workspace_id === input.workspaceId
+      )) {
+        throw new Error(t("create.sourceRequired"));
+      }
+      return customGameService.create(input.workspaceId, input.name, input.cloneFromGameId);
+    },
     onSuccess: (created) => {
-      void queryClient.invalidateQueries({ queryKey: customGameKeys.list(workspaceId as number) });
+      void queryClient.invalidateQueries({ queryKey: customGameKeys.list(created.workspace_id) });
       router.push(`/balancer/mix/${created.id}`);
     },
     onError: (error) => notify.apiError(error)
   });
 
-  if (workspaceId == null) {
+  if (!all && workspaceId == null && hostWorkspaceId == null) {
     return (
       <div className="flex flex-1 items-center justify-center py-12">
         <PageStateCard
@@ -101,32 +120,40 @@ export default function BalancerPickupListPage() {
         <div className="min-w-0 w-full">
           <PickupMixList
             canEdit={canEdit}
-            games={gamesQuery.data ?? []}
-            loading={gamesQuery.isLoading}
-            error={gamesQuery.isError}
-            onRetry={() => void gamesQuery.refetch()}
+            games={games}
+            communities={all ? Object.fromEntries(visibleWorkspaces.map((workspace) => [workspace.id, workspace.name])) : undefined}
+            loading={workspacesLoading || gamesQueries.some((query) => query.isLoading)}
+            error={gamesQueries.some((query) => query.isError)}
+            onRetry={() => { for (const query of gamesQueries) void query.refetch(); }}
             onCreateGame={() => setCreateOpen(true)}
           />
         </div>
-        <div className="min-w-0 w-full">
-          <PickupLeaderboard
-            members={leaderboardRows(statsQuery.data?.members ?? [], LEADERBOARD_MIN_GAMES)}
-            loading={statsQuery.isLoading}
-            error={statsQuery.isError}
-            onRetry={() => void statsQuery.refetch()}
-            period={period}
-            onPeriodChange={setPeriod}
-          />
+        <div className="flex min-w-0 w-full flex-col gap-4">
+          {visibleWorkspaces.map((workspace, index) => (
+            <div key={workspace.id} className="min-w-0 space-y-2">
+              {all ? <h2 className="text-ui font-semibold">{workspace.name}</h2> : null}
+              <PickupLeaderboard
+                members={leaderboardRows(statsQueries[index]?.data?.members ?? [], LEADERBOARD_MIN_GAMES)}
+                loading={workspacesLoading || statsQueries[index]?.isLoading === true}
+                error={statsQueries[index]?.isError === true}
+                onRetry={() => void statsQueries[index]?.refetch()}
+                period={period}
+                onPeriodChange={setPeriod}
+              />
+            </div>
+          ))}
         </div>
       </div>
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         {createOpen ? (
           <PickupCreateMixDialog
-            games={gamesQuery.data ?? []}
+            games={games}
+            workspaces={creationWorkspaces}
+            scopedWorkspaceId={all ? null : (hostWorkspaceId ?? workspaceId)}
             creating={createGame.isPending}
-            onCreate={async (name, cloneFromGameId) => {
-              await createGame.mutateAsync({ name, cloneFromGameId });
+            onCreate={async (name, cloneFromGameId, creationWorkspaceId) => {
+              await createGame.mutateAsync({ workspaceId: creationWorkspaceId, name, cloneFromGameId });
             }}
             onClose={() => setCreateOpen(false)}
           />

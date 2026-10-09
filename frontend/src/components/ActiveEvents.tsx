@@ -17,15 +17,14 @@ import type { Tournament } from "@/types/tournament.types";
 import type { Workspace } from "@/types/workspace.types";
 
 /**
- * "What is running right now, everywhere" — the header's live counter and the
- * list behind it, grouped by community. Where the location already fixes one
- * community (a community page, a white-label host) it lists only that one.
+ * Active events under the same viewing filter as the public browse pages.
+ * A tenant host fixes that filter; an opened object does not.
  * Renders nothing when nothing is active.
  */
 export default function ActiveEvents() {
   const t = useTranslations();
   const format = useFormatter();
-  const { workspaces, pinned } = useActiveWorkspace();
+  const { workspaces, workspace: viewingWorkspace } = useActiveWorkspace();
 
   const { data: allTournaments } = useQuery({
     queryKey: tournamentQueryKeys.allActive(),
@@ -39,7 +38,7 @@ export default function ActiveEvents() {
     const byWorkspace = new Map<number, Tournament[]>();
     for (const tournament of allTournaments.results) {
       if (!isTournamentStatusActive(tournament.status)) continue;
-      if (pinned && tournament.workspace_id !== pinned.id) continue;
+      if (viewingWorkspace && tournament.workspace_id !== viewingWorkspace.id) continue;
       const list = byWorkspace.get(tournament.workspace_id) ?? [];
       list.push(tournament);
       byWorkspace.set(tournament.workspace_id, list);
@@ -60,7 +59,7 @@ export default function ActiveEvents() {
           : [];
       })
       .sort((a, b) => a.workspace.name.localeCompare(b.workspace.name));
-  }, [allTournaments, workspaces, pinned]);
+  }, [allTournaments, workspaces, viewingWorkspace]);
 
   const total = groups.reduce((sum, group) => sum + group.tournaments.length, 0);
   if (total === 0) return null;

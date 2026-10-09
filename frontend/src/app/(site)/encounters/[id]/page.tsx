@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { HeroCoord, HeroStamp, HeroStat, PageHero } from "@/components/site/PageHero";
 import { StagePill } from "@/components/match/cells";
 import MatchLogIndicator from "@/components/match/MatchLogIndicator";
+import { EntityWorkspace } from "@/components/workspace/EntityWorkspace";
 import { SITE_NAME, SITE_URL } from "@/config/site";
 import encounterService from "@/services/encounter.service";
 import ffaService from "@/services/ffa.service";
@@ -136,6 +137,7 @@ const EncounterPage = async (props: { params: Promise<{ id: number }> }) => {
 
   return (
     <div className={styles.surface}>
+      <EntityWorkspace workspaceId={encounter.tournament?.workspace_id} />
       <PageHero
         align="start"
         titleClassName="text-[clamp(1.35rem,2.4vw,2rem)]"
@@ -400,6 +402,7 @@ const FfaLobbyPage = async ({ encounter }: Readonly<{ encounter: Encounter }>) =
 
   return (
     <div className={styles.surface}>
+      <EntityWorkspace workspaceId={encounter.tournament?.workspace_id} />
       <PageHero
         align="start"
         titleClassName="text-[clamp(1.35rem,2.4vw,2rem)]"

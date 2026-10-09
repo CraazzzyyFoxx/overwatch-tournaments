@@ -81,6 +81,35 @@ describe("workspace store host lock (tenant white-label)", () => {
   });
 });
 
+describe("viewing scope and opened entity", () => {
+  it("keeps the opened entity local without overwriting the saved viewing filter", () => {
+    const initial = useWorkspaceStore.getState();
+    try {
+      initial.setHostLock(null);
+      initial.setCurrentWorkspace(4);
+      initial.setStatsScope("workspace");
+      initial.setEntityWorkspace(7);
+
+      expect(useWorkspaceStore.getState().currentWorkspaceId).toBe(4);
+      expect(document.cookie).toContain("owt-workspace-id=4");
+
+      initial.setStatsScope("all");
+      expect(useWorkspaceStore.getState().entityWorkspaceId).toBe(7);
+      expect(useWorkspaceStore.getState().currentWorkspaceId).toBe(4);
+      expect(document.cookie).toContain("owt-stats-scope=all");
+
+      initial.setHostLock(9);
+      initial.setStatsScope("all");
+      expect(useWorkspaceStore.getState().statsScope).toBe("workspace");
+      expect(useWorkspaceStore.getState().currentWorkspaceId).toBe(9);
+    } finally {
+      useWorkspaceStore.setState(initial);
+      document.cookie = "owt-workspace-id=; Max-Age=0; path=/";
+      document.cookie = "owt-stats-scope=; Max-Age=0; path=/";
+    }
+  });
+});
+
 // The workspace id has ONE persisted home now (the cookie the server also
 // reads); the store is a runtime cache hydrated from it at module load. This
 // covers the way that hydration can silently regress: reading the wrong cookie

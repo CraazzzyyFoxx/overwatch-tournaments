@@ -98,6 +98,30 @@ The browser uses **relative same-origin paths**; SSR and the proxy use `NEXT_INT
 `frontend/src/lib/api/routes.ts`. Multidomain / white-label tenancy is resolved in
 `frontend/src/proxy.ts`, which maps the request `Host` to a workspace.
 
+## Community viewing scope
+
+The platform defaults to **All communities**. `owt-stats-scope` remembers the viewing
+filter (`all` or `workspace`); `owt-workspace-id` remembers the selected community.
+Switching refreshes the current route without adding a workspace to its URL. Tabs,
+search and compatible filters stay selected; affected lists restart from page one.
+
+The viewing filter is separate from the opened entity's `entityWorkspaceId`.
+Community, tournament, encounter, match, scrim and mix reads resolve their actual owner without
+overwriting the saved viewing preference. Permissions and writes use that owner.
+The switcher names the page's community separately; opening a community is an
+explicit link, not a filter-selection side effect.
+
+Global mixes combine public community lists and keep leaderboards separate by
+community. Global scrims list the signed-in viewer's memberships, with staff
+visibility checked per community. Creation in global mode requires selecting an
+authorized community. Tenant/custom domains stay locked to their community and
+offer a separate link to the platform.
+
+Mix detail reads use `GET /api/v1/balancer/custom-games/{custom_game_id}`. Its optional
+`workspace_id` restricts a tenant-host read; a different viewing filter must not
+replace the opened mix. Deploy the frontend, gateway and balancer service together
+for this route cutover.
+
 ## Pre-game room refresh
 
 Map and hero state share one 250–749 ms realtime batch. Ordinary pick/ban changes refresh the
