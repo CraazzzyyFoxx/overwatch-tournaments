@@ -5,8 +5,9 @@ import { answerFlag, answerList, answerSearchText, answerText } from "@/lib/form
 /**
  * The typed reads every roster, table and chip goes through. Each case here is
  * a value shape the server really stores for some field kind — a checkbox that
- * round-tripped as a string, a `smurf_tags` list, a number answer — plus the
- * one shape the types forbid and a cell must survive anyway: no document.
+ * round-tripped as a string, an `identity_battlenet` handle list, a number
+ * answer — plus the one shape the types forbid and a cell must survive anyway:
+ * no document.
  */
 describe("answer readers", () => {
   it("reads text, list and checkbox answers in the shapes the server stores them", () => {
@@ -14,7 +15,7 @@ describe("answer readers", () => {
       identity_discord: "anak",
       blank: "   ",
       seed: 7,
-      smurf_tags: ["Alt#2222", 5, "Main#1111"],
+      identity_battlenet: ["Alt#2222", 5, "Main#1111"],
       stream_pov: "true",
       rules: false,
     };
@@ -23,7 +24,7 @@ describe("answer readers", () => {
     expect(answerText(answers, "blank")).toBeNull();
     expect(answerText(answers, "seed")).toBe("7");
     // A non-string item is not a tag; dropping it beats rendering "5" as one.
-    expect(answerList(answers, "smurf_tags")).toEqual(["Alt#2222", "Main#1111"]);
+    expect(answerList(answers, "identity_battlenet")).toEqual(["Alt#2222", "Main#1111"]);
     expect(answerFlag(answers, "stream_pov")).toBe(true);
     expect(answerFlag(answers, "rules")).toBe(false);
   });
@@ -34,7 +35,7 @@ describe("answer readers", () => {
     // without its document must not take the screen down.
     for (const document of [undefined, null]) {
       expect(answerText(document, "public_notes")).toBeNull();
-      expect(answerList(document, "smurf_tags")).toEqual([]);
+      expect(answerList(document, "identity_battlenet")).toEqual([]);
       expect(answerFlag(document, "stream_pov")).toBe(false);
     }
   });

@@ -41,8 +41,8 @@ export function OverviewRegistrationView({
     .sort((left, right) => String(right.submitted_at).localeCompare(String(left.submitted_at)));
   const latest = submitted
     .slice(0, 3)
-    .map((registration) => registration.battle_tag)
-    .filter((tag): tag is string => typeof tag === "string" && tag.length > 0);
+    .map((registration) => registration.primary_handle)
+    .filter((handle): handle is string => typeof handle === "string" && handle.length > 0);
   const latestAt = submitted[0]?.submitted_at ?? null;
   const latestAgo =
     latestAt !== null && clockNow !== null

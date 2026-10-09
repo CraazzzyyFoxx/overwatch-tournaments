@@ -22,7 +22,11 @@ from shared.core.enums import DraftFormat, DraftPickStatus, DraftPlayerStatus, D
 from shared.core.errors import ApiHTTPException
 from shared.domain.roster_shape import parse_roster_slots
 from shared.models.balancer.draft import DraftPick
-from shared.models.registration.registration import BalancerRegistration, BalancerRegistrationRole
+from shared.models.registration.registration import (
+    BalancerRegistration,
+    BalancerRegistrationIdentity,
+    BalancerRegistrationRole,
+)
 from shared.models.tenancy.workspace import Workspace
 from shared.models.tournament import Tournament
 from shared.testing import create_test_async_engine  # noqa: E402
@@ -94,14 +98,21 @@ class DraftCustomRulesTests(IsolatedAsyncioTestCase):
         """One approved, in-pool ``balancer.registration`` with its role rows."""
         reg = BalancerRegistration(
             tournament_id=self.tournament_id,
-            battle_tag=tag,
-            battle_tag_normalized=tag.lower(),
             display_name=tag,
             status="approved",
             balancer_status="ready",
         )
         s.add(reg)
         await s.flush()
+        s.add(
+            BalancerRegistrationIdentity(
+                registration_id=reg.id,
+                provider="battlenet",
+                position=0,
+                handle=tag,
+                handle_normalized=tag.lower(),
+            )
+        )
         for priority, (role, rank) in enumerate(ranks.items()):
             s.add(
                 BalancerRegistrationRole(

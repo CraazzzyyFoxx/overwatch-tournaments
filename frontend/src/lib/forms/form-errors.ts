@@ -68,7 +68,7 @@ export type Translate = ((key: FormErrorCode) => string) & {
 };
 
 export interface FormErrors {
-  /** Keyed by answer key (`battle_tag`, `roles`, a custom field key). */
+  /** Keyed by answer key (`identity_battlenet`, `roles`, a custom field key). */
   fields: Record<string, string>;
   /** The rejection that belongs to no single field. */
   form: string | null;

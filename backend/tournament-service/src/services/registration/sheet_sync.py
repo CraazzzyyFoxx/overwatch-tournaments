@@ -31,8 +31,8 @@ from shared.balancer_subrole_catalog import resolve_subrole_catalog
 from shared.core import http_status as status
 from shared.core.errors import ApiHTTPException
 from shared.core.errors import BaseAPIException as HTTPException
-from shared.core.social import SocialProvider
-from shared.domain.forms import FormSchema, default_schema, schema_from_form
+from shared.core.social import GAME_PROVIDERS, normalize_social_handle
+from shared.domain.forms import FormSchema, default_schema, identity_key, schema_from_form
 from shared.domain.roster import FlexRoleMode, flex_role_mode_from_schema
 from shared.repository import (
     BalancerRegistrationRepository,
@@ -66,7 +66,6 @@ from src.domain.registration.utils import (
     build_header_keys,
     extract_sheet_source,
     fetch_csv_rows,
-    normalize_battle_tag_key,
     row_to_json,
 )
 from src.services.registration._common import (
@@ -81,6 +80,19 @@ from src.services.registration.service import registration_service
 logger = logging.getLogger(__name__)
 
 SYNC_ERROR_SAMPLE_LIMIT = 20
+
+
+def _primary_game_handle_key(answers: Mapping[str, Any]) -> str | None:
+    """Normalized PRIMARY game handle of an answer document, or ``None``.
+
+    The key sheet rows are matched against: a registration is the same person as
+    a sheet row when their first game handle agrees.
+    """
+    for provider in GAME_PROVIDERS:
+        handles = answers.get(identity_key(provider)) or []
+        if handles:
+            return normalize_social_handle(provider, handles[0])
+    return None
 
 
 async def fetch_google_sheet_rows(
@@ -418,7 +430,7 @@ class SheetSyncService:
         tournament = await self.common.ensure_tournament_exists(session, tournament_id)
         subrole_catalog = await resolve_subrole_catalog(session, tournament.workspace_id)
 
-        known_source_keys, known_battle_tag_keys = await self._existing_match_keys(session, tournament_id, feed)
+        known_source_keys, known_handle_keys = await self._existing_match_keys(session, tournament_id, feed)
 
         preview_rows: list[dict[str, Any]] = []
         create_count = 0
@@ -436,12 +448,12 @@ class SheetSyncService:
             )
             fields = result.fields
             source_record_key = fields.get("source_record_key") if fields else None
-            battle_tag_key = normalize_battle_tag_key(((fields or {}).get("answers") or {}).get("battle_tag"))
+            handle_key = _primary_game_handle_key((fields or {}).get("answers") or {})
             disposition = classify_row_disposition(
                 source_record_key,
-                battle_tag_key,
+                handle_key,
                 known_source_keys=known_source_keys,
-                known_battle_tag_keys=known_battle_tag_keys,
+                known_handle_keys=known_handle_keys,
             )
             if disposition == "create":
                 create_count += 1
@@ -479,19 +491,25 @@ class SheetSyncService:
         tournament_id: int,
         feed: models.BalancerRegistrationGoogleSheetFeed | None,
     ) -> tuple[set[str], set[str]]:
-        """Existing source-record keys (bound rows) and battle-tag keys for disposition."""
-        battle_tag_result = await session.execute(
-            sa.select(models.BalancerRegistration.battle_tag_normalized).where(
+        """Existing source-record keys (bound rows) and primary game handle keys."""
+        handle_result = await session.execute(
+            sa.select(models.BalancerRegistrationIdentity.handle_normalized)
+            .join(
+                models.BalancerRegistration,
+                models.BalancerRegistration.id == models.BalancerRegistrationIdentity.registration_id,
+            )
+            .where(
                 models.BalancerRegistration.tournament_id == tournament_id,
                 models.BalancerRegistration.deleted_at.is_(None),
-                models.BalancerRegistration.battle_tag_normalized.is_not(None),
+                models.BalancerRegistrationIdentity.provider.in_(GAME_PROVIDERS),
+                models.BalancerRegistrationIdentity.position == 0,
             )
         )
-        battle_tag_keys = set(battle_tag_result.scalars().all())
+        handle_keys = set(handle_result.scalars().all())
         source_keys: set[str] = set()
         if feed is not None:
             source_keys = set(await self.binding_repo.list_source_record_keys(session, feed.id))
-        return source_keys, battle_tag_keys
+        return source_keys, handle_keys
 
     async def _list_auto_sync_feeds(
         self,
@@ -629,14 +647,13 @@ class SheetSyncService:
             # Bulk prefetches for the per-row loop (this sync runs every 5 minutes
             # per tournament; per-row lookups used to cost 2-4 queries even for
             # unchanged rows):
-            # 1. Active registrations keyed by normalized battle tag — replaces the
-            #    per-new-row reuse query.
+            # 1. Active registrations keyed by normalized primary game handle —
+            #    replaces the per-new-row reuse query.
             reuse_rows = await session.execute(
                 self.registration_repo.select()
                 .where(
                     models.BalancerRegistration.tournament_id == tournament_id,
                     models.BalancerRegistration.deleted_at.is_(None),
-                    models.BalancerRegistration.battle_tag_normalized.isnot(None),
                 )
                 .options(
                     selectinload(models.BalancerRegistration.roles),
@@ -647,27 +664,30 @@ class SheetSyncService:
                 )
                 .order_by(models.BalancerRegistration.id.asc())
             )
-            registrations_by_tag: dict[str, models.BalancerRegistration] = {}
+            registrations_by_handle: dict[str, models.BalancerRegistration] = {}
             for reg_row in reuse_rows.scalars().all():
-                registrations_by_tag.setdefault(reg_row.battle_tag_normalized, reg_row)
+                identity = reg_row.primary_game_identity()
+                if identity is not None:
+                    registrations_by_handle.setdefault(identity.handle_normalized, reg_row)
 
-            # 2. Already-known battlenet handles of the anchored players — lets
+            # 2. Already-known social handles of the anchored players — lets
             #    ensure_player_identity below no-op (zero queries) for rows whose
             #    identity is already fully provisioned.
             linked_player_ids = {
                 reg_row.workspace_member.player_id
-                for reg_row in registrations_by_tag.values()
+                for reg_row in registrations_by_handle.values()
                 if reg_row.workspace_member is not None
             }
-            known_handles: set[tuple[int, str]] = set()
+            known_handles: set[tuple[int, str, str]] = set()
             if linked_player_ids:
                 handle_rows = await session.execute(
-                    sa.select(models.SocialAccount.user_id, models.SocialAccount.username_normalized).where(
-                        models.SocialAccount.user_id.in_(linked_player_ids),
-                        models.SocialAccount.provider == SocialProvider.BATTLENET,
-                    )
+                    sa.select(
+                        models.SocialAccount.user_id,
+                        models.SocialAccount.provider,
+                        models.SocialAccount.username_normalized,
+                    ).where(models.SocialAccount.user_id.in_(linked_player_ids))
                 )
-                known_handles = {(player_id, handle) for player_id, handle in handle_rows.all()}
+                known_handles = {(player_id, provider, handle) for player_id, provider, handle in handle_rows.all()}
 
             created = 0
             updated = 0
@@ -698,13 +718,13 @@ class SheetSyncService:
                 registration = binding.registration if binding else None
 
                 if registration is None:
-                    battle_tag_key = normalize_battle_tag_key(values.get("battle_tag"))
-                    if battle_tag_key:
-                        registration = registrations_by_tag.get(battle_tag_key)
+                    handle_key = _primary_game_handle_key(values)
+                    if handle_key:
+                        registration = registrations_by_handle.get(handle_key)
 
                 if registration is None:
                     # Sheet-sync-created registrations have no registering auth account;
-                    # their workspace_member anchor is provisioned from the battle tag by
+                    # their workspace_member anchor is provisioned from the game handle by
                     # ensure_player_identity below.
                     registration = models.BalancerRegistration(
                         tournament_id=tournament_id,
@@ -721,8 +741,9 @@ class SheetSyncService:
                         mode=mode,
                     )
                     await self.registration_repo.create(session, registration)
-                    if registration.battle_tag_normalized:
-                        registrations_by_tag.setdefault(registration.battle_tag_normalized, registration)
+                    new_identity = registration.primary_game_identity()
+                    if new_identity is not None:
+                        registrations_by_handle.setdefault(new_identity.handle_normalized, registration)
                     created += 1
                 else:
                     allow_balancer_overwrite = registration.balancer_profile_overridden_at is None

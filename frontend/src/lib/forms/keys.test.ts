@@ -41,10 +41,10 @@ describe("makeUniqueFieldKey", () => {
 
   it("never lands in the namespace the schema reserves for builtins", () => {
     // The reserved set does not depend on what the form currently asks: drop
-    // the `battle_tag` builtin and a question labelled "Battle Tag" still may
-    // not take its key, because `_invariants` refuses any non-builtin field
-    // whose key is a builtin one or starts with `identity_`.
-    expect(makeUniqueFieldKey("Battle Tag", [])).not.toBe("battle_tag");
+    // the `identity_battlenet` builtin and a question labelled "Roles" still
+    // may not take its key, because `_invariants` refuses any non-builtin
+    // field whose key is a builtin one or starts with `identity_`.
+    expect(makeUniqueFieldKey("Roles", [])).not.toBe("roles");
     expect(makeUniqueFieldKey("Stream POV", [])).not.toBe("stream_pov");
     // A label that merely resembles one is left alone.
     expect(makeUniqueFieldKey("Notes", ["public_notes"])).toBe("notes");

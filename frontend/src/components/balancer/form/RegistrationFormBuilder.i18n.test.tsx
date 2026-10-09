@@ -62,7 +62,7 @@ function schemaFixture(): FormSchema {
         key: "accounts",
         title: null,
         description: null,
-        fields: [builtin("battle_tag", true), builtin("identity_discord")]
+        fields: [builtin("identity_battlenet", true), builtin("identity_discord")]
       },
       { key: "roles", title: null, description: null, fields: [builtin("roles")] }
     ]

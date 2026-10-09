@@ -76,19 +76,13 @@ export default function RegistrationInspectorBody({
   // that version asked and this one does not.
   const asked = schemaFields.filter(
     (field) =>
-      field.key !== "battle_tag" &&
-      field.key !== "roles" &&
-      (registration.answers?.[field.key] ?? null) !== null
+      field.key !== "roles" && (registration.answers?.[field.key] ?? null) !== null
   );
   const askedKeys: Record<string, true> = Object.fromEntries(
     schemaFields.map((field) => [field.key, true] as const)
   );
   const orphaned = Object.entries(registration.answers ?? {}).filter(
-    ([key, value]) =>
-      askedKeys[key] !== true &&
-      key !== "battle_tag" &&
-      key !== "roles" &&
-      (value ?? null) !== null
+    ([key, value]) => askedKeys[key] !== true && key !== "roles" && (value ?? null) !== null
   );
   const blockers = registration.admission.blockers.flatMap(
     (requirement) => requirement.reasons

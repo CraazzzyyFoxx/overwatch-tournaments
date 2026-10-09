@@ -53,8 +53,8 @@ function orderedColumns(
   // The identity column stays leftmost: the grid gives the first track its
   // wide minmax and the mobile card layout promotes cell 0 to the title row.
   return [
-    ...display.filter((column) => column.id === "battle_tag"),
-    ...display.filter((column) => column.id !== "battle_tag"),
+    ...display.filter((column) => column.id === "identity_battlenet"),
+    ...display.filter((column) => column.id !== "identity_battlenet"),
   ];
 }
 
@@ -321,7 +321,7 @@ const VirtualParticipantsList = memo(function VirtualParticipantsList({
                         {registration.user_id != null ? (
                           <RankHistory userId={registration.user_id} />
                         ) : (
-                          <RankHistory battleTag={registration.battle_tag} />
+                          <RankHistory battleTag={registration.primary_handle} />
                         )}
                       </div>
                       <div className={styles.participantHiddenFields}>

@@ -70,7 +70,7 @@ const SNAKE: DraftFormatSettings = {
 function registration(id: number, roles: string[], rank: number | null): AdminRegistration {
   return {
     id,
-    battle_tag: `Player${id}#1000`,
+    primary_handle: `Player${id}#1000`,
     display_name: null,
     user_id: id,
     deleted_at: null,

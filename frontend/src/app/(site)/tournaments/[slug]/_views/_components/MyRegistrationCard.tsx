@@ -31,7 +31,7 @@ import { formatShortfall } from "@/lib/registration/team-shortfall";
 import { getRegistrationTeamStatus } from "@/lib/registration/team-tone";
 import { normalizePlayerRole, playerRoleSlotCode } from "@/lib/roster/player-role";
 import { reachedAtLeast } from "@/lib/tournament/lifecycle";
-import { answerFlag, answerText } from "@/lib/forms/answers";
+import { answerFlag, answerList, answerText } from "@/lib/forms/answers";
 import { IDENTITY_PROVIDERS, identityKey, identityProvider } from "@/lib/forms/builtin-keys";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import registrationTeamService from "@/services/registration-team.service";
@@ -146,6 +146,14 @@ const IDENTITY_ICONS: Record<
   string,
   { Icon: (props: React.SVGProps<SVGSVGElement>) => React.ReactElement; className: string }
 > = {
+  // Battle.net ships as a file in /public rather than as a path in this module.
+  battlenet: {
+    Icon: (props) => (
+      // eslint-disable-next-line @next/next/no-img-element -- small static asset from /public
+      <img alt="Battle.net" className={props.className} src="/battlenet.svg" />
+    ),
+    className: ""
+  },
   discord: { Icon: DiscordIcon, className: "text-[color:var(--aqt-brand-discord)]" },
   twitch: { Icon: TwitchIcon, className: "text-[color:var(--aqt-brand-twitch)]" },
   boosty: { Icon: BoostyIcon, className: "text-[color:var(--aqt-brand-boosty)]" }
@@ -233,7 +241,7 @@ const QUEUE_CHIP_CLASS =
 /** Answers the card lays out by hand — chips for roles, brand chips for the
  *  handles, a quote for the notes — so the generic details block skips them. */
 const CARD_OWN_COLUMN_IDS: Record<string, true> = {
-  battle_tag: true,
+  identity_battlenet: true,
   roles: true,
   public_notes: true
 };
@@ -886,17 +894,14 @@ function MyRegistrationCard({
                 {t("registration.myCard.accounts")}
               </h4>
               <div className="flex flex-wrap gap-1.5 text-xs">
-                {registration.battle_tag && (
-                  <div className="flex items-center gap-1.5 rounded-md border border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-1)] px-2 py-1">
-                    {/* eslint-disable-next-line @next/next/no-img-element -- small static asset from /public */}
-                    <img alt="Battle.net" className="size-3.5" src="/battlenet.svg" />
-                    <span className="font-semibold text-[color:var(--aqt-fg)]">
-                      {registration.battle_tag}
-                    </span>
-                  </div>
-                )}
                 {IDENTITY_PROVIDERS.map((provider) => {
-                  const handle = answerText(registration.answers, identityKey(provider));
+                  // Index 0 is the primary handle; the rest of a Battle.net
+                  // answer are smurfs and belong in the details block, not in
+                  // a row of five identical chips. A sheet-imported entry may
+                  // carry no identity answer at all, hence `primary_handle`.
+                  const handle =
+                    answerList(registration.answers, identityKey(provider))[0] ??
+                    (provider === "battlenet" ? registration.primary_handle : null);
                   if (!handle) return null;
                   const brand = IDENTITY_ICONS[provider];
                   return (

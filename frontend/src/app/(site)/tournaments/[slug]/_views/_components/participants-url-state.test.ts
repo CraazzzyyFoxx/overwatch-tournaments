@@ -29,7 +29,7 @@ function memoryStorage(initial: Record<string, string> = {}) {
 }
 
 const columns = [
-  { id: "battle_tag", defaultVisible: true },
+  { id: "identity_battlenet", defaultVisible: true },
   { id: "roles", defaultVisible: true },
   { id: "notes", defaultVisible: false },
   { id: "_status", defaultVisible: true },
@@ -45,7 +45,7 @@ describe("participant URL state", () => {
   it("falls back to defaults when invalid columns are mixed with legacy core ids", () => {
     const result = readParticipantUrlState(
       new URLSearchParams(
-        "participantStatus=unknown&participantColumns=battle_tag,unknown&tab=rules",
+        "participantStatus=unknown&participantColumns=identity_battlenet,unknown&tab=rules",
       ),
       ["approved", "pending"],
       columns,
@@ -54,7 +54,7 @@ describe("participant URL state", () => {
     expect(result.state).toEqual({
       search: "",
       status: "all",
-      visibleColumnIds: ["battle_tag", "_status", "roles"],
+      visibleColumnIds: ["identity_battlenet", "_status", "roles"],
       view: "table",
       division: null,
     });
@@ -69,14 +69,14 @@ describe("participant URL state", () => {
   it("removes explicit defaults and restores custom status/column state deterministically", () => {
     const defaults = readParticipantUrlState(
       new URLSearchParams(
-        "q=%20%00%20&participantStatus=all&participantColumns=battle_tag,roles,_status",
+        "q=%20%00%20&participantStatus=all&participantColumns=identity_battlenet,roles,_status",
       ),
       ["approved", "custom_review"],
       columns,
     );
     const restored = readParticipantUrlState(
       new URLSearchParams(
-        "participantStatus=custom_review&participantColumns=notes,battle_tag",
+        "participantStatus=custom_review&participantColumns=notes,identity_battlenet",
       ),
       ["approved", "custom_review"],
       columns,
@@ -86,7 +86,7 @@ describe("participant URL state", () => {
     expect(restored.state).toEqual({
       search: "",
       status: "custom_review",
-      visibleColumnIds: ["battle_tag", "_status", "notes"],
+      visibleColumnIds: ["identity_battlenet", "_status", "notes"],
       view: "table",
       division: null,
     });
@@ -105,28 +105,28 @@ describe("participant URL state", () => {
       columns,
     );
     const custom = readParticipantUrlState(
-      new URLSearchParams("participantColumns=notes,unknown,battle_tag"),
+      new URLSearchParams("participantColumns=notes,unknown,identity_battlenet"),
       ["approved"],
       columns,
     );
     const legacyCoreOnly = readParticipantUrlState(
-      new URLSearchParams("participantColumns=battle_tag,_status"),
+      new URLSearchParams("participantColumns=identity_battlenet,_status"),
       ["approved"],
       columns,
     );
 
-    expect(none.state.visibleColumnIds).toEqual(["battle_tag", "_status"]);
+    expect(none.state.visibleColumnIds).toEqual(["identity_battlenet", "_status"]);
     expect(none.params.get("participantColumns")).toBe("none");
     expect(unsupported.state.visibleColumnIds).toEqual([
-      "battle_tag",
+      "identity_battlenet",
       "_status",
       "roles",
     ]);
     expect(unsupported.params.get("participantColumns")).toBeNull();
-    expect(custom.state.visibleColumnIds).toEqual(["battle_tag", "_status", "notes"]);
+    expect(custom.state.visibleColumnIds).toEqual(["identity_battlenet", "_status", "notes"]);
     expect(custom.params.get("participantColumns")).toBe("notes");
     // Core ids were valid selectable columns in legacy URLs, so core-only means no optionals.
-    expect(legacyCoreOnly.state.visibleColumnIds).toEqual(["battle_tag", "_status"]);
+    expect(legacyCoreOnly.state.visibleColumnIds).toEqual(["identity_battlenet", "_status"]);
     expect(legacyCoreOnly.params.get("participantColumns")).toBe("none");
   });
 
@@ -244,13 +244,13 @@ describe("participant URL state", () => {
   it("pushes column changes and omits the default column set", () => {
     const changed = updateParticipantUrlState(new URLSearchParams("tab=rules"), {
       type: "columns",
-      value: ["battle_tag", "_status", "notes"],
-      defaultValue: ["battle_tag", "_status", "roles"],
+      value: ["identity_battlenet", "_status", "notes"],
+      defaultValue: ["identity_battlenet", "_status", "roles"],
     });
     const reset = updateParticipantUrlState(changed.params, {
       type: "columns",
-      value: ["battle_tag", "_status", "roles"],
-      defaultValue: ["battle_tag", "_status", "roles"],
+      value: ["identity_battlenet", "_status", "roles"],
+      defaultValue: ["identity_battlenet", "_status", "roles"],
     });
 
     expect(changed.history).toBe("push");
@@ -281,7 +281,7 @@ describe("participant URL state", () => {
     const baseUrlState = {
       search: "ana",
       status: "approved",
-      visibleColumnIds: ["battle_tag", "_status", "roles"],
+      visibleColumnIds: ["identity_battlenet", "_status", "roles"],
     };
     const beforeResult = {
       ...baseUrlState,
@@ -306,7 +306,7 @@ describe("participant URL state", () => {
   it("computes the same default set the Reset button applies (mandatory first)", () => {
     const defaults = participantDefaultColumnIds(columns);
 
-    expect(defaults).toEqual(["battle_tag", "_status", "roles"]);
+    expect(defaults).toEqual(["identity_battlenet", "_status", "roles"]);
     expect(
       readParticipantUrlState(new URLSearchParams(), ["approved"], columns).state
         .visibleColumnIds,
@@ -333,12 +333,12 @@ describe("participant URL state", () => {
       ["ghost_column"],
     );
 
-    expect(stored.state.visibleColumnIds).toEqual(["battle_tag", "_status", "notes"]);
+    expect(stored.state.visibleColumnIds).toEqual(["identity_battlenet", "_status", "notes"]);
     expect(stored.needsNormalization).toBe(false);
     expect(stored.params.toString()).toBe("tab=rules");
-    expect(storedNone.state.visibleColumnIds).toEqual(["battle_tag", "_status"]);
+    expect(storedNone.state.visibleColumnIds).toEqual(["identity_battlenet", "_status"]);
     expect(storedInvalid.state.visibleColumnIds).toEqual([
-      "battle_tag",
+      "identity_battlenet",
       "_status",
       "roles",
     ]);
@@ -352,7 +352,7 @@ describe("participant URL state", () => {
       ["notes"],
     );
 
-    expect(result.state.visibleColumnIds).toEqual(["battle_tag", "_status", "roles"]);
+    expect(result.state.visibleColumnIds).toEqual(["identity_battlenet", "_status", "roles"]);
   });
 
   it("round-trips the stored selection and removes it for defaults or garbage", () => {
@@ -360,7 +360,7 @@ describe("participant URL state", () => {
     const defaults = participantDefaultColumnIds(columns);
 
     expect(
-      writeStoredParticipantColumnIds(storage, 7, ["battle_tag", "_status", "notes"], defaults),
+      writeStoredParticipantColumnIds(storage, 7, ["identity_battlenet", "_status", "notes"], defaults),
     ).toEqual(["notes"]);
     expect(readStoredParticipantColumnIds(storage, 7)).toEqual(["notes"]);
     // Another tournament never sees a foreign selection.

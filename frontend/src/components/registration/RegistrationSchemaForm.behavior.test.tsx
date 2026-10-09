@@ -259,7 +259,7 @@ describe("RegistrationSchemaForm", () => {
 /** A stored registration, only as much of one as the form reads. */
 const STORED = {
   id: 55,
-  battle_tag: "Anak#2100",
+  primary_handle: "Anak#2100",
   roles: [],
   answers: { public_notes: "mine", organizer_notes: "theirs" },
   can_edit: true,

@@ -12,9 +12,10 @@
  */
 
 import { declaredRoles } from "@/lib/forms/answers";
-import { identityProvider } from "@/lib/forms/builtin-keys";
+import { identityMaxCount, identityProvider } from "@/lib/forms/builtin-keys";
 import type { Translate } from "@/lib/forms/form-errors";
 import { REGISTRATION_TO_CANONICAL } from "@/lib/roster/roles";
+import { displaySocialHandle, normalizeSocialHandle } from "@/lib/social/providers";
 import type { Answers, FormField } from "@/types/forms.types";
 
 /**
@@ -23,8 +24,7 @@ import type { Answers, FormField } from "@/types/forms.types";
  * then by kind — exactly like `default_pattern`.
  */
 const DEFAULT_PATTERNS: Record<string, string> = {
-  battle_tag: String.raw`([^#]{2,12}#[0-9]{4,})`,
-  smurf_tags: String.raw`([^#]{2,12}#[0-9]{4,})`,
+  identity_battlenet: String.raw`([^#]{2,12}#[0-9]{4,})`,
   identity_discord: String.raw`^[a-z0-9_.]{2,32}$`,
   identity_twitch: String.raw`^[a-zA-Z0-9_]{4,25}$`,
   identity_boosty: String.raw`^[^#]{2,50}$`,
@@ -41,23 +41,20 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-/** `\s*#\s*` around a BattleTag's separator, as `shared.core.social` spells it. */
-const BATTLE_TAG_HASH = /\s*#\s*/g;
-
 /**
  * The canonical form of a text answer — what the SERVER STORES for this field.
  *
  * This is the one the inputs commit into `answers`, so the value the user sees
- * is the value the server keeps. Mirrors `_coerce`'s text path EXACTLY, which is
- * less aggressive than it looks: `identity_*` is trimmed and casefolded
- * (`normalize_social_handle`), and everything else — `battle_tag` and
- * `smurf_tags` included, since `identity_provider()` returns `None` for them —
- * is only TRIMMED. A BattleTag is persisted with its internal spacing and casing
- * verbatim; the aggressive form below exists solely to run a pattern against.
+ * is the value the server keeps. Mirrors `_coerce`'s text path EXACTLY: an
+ * `identity_*` handle is stored in DISPLAY form (`display_social_handle` —
+ * trimmed, casing kept, a BattleTag's `#` spacing collapsed), and everything
+ * else is only trimmed. `Player # 1234` is therefore stored as `Player#1234`
+ * and `CoolGuy` stays `CoolGuy`; the matching form below exists solely to run a
+ * pattern against.
  */
 export function normalizeAnswerText(field: FormField, value: string): string {
-  const trimmed = value.trim();
-  return identityProvider(field.key) ? trimmed.toLowerCase() : trimmed;
+  const provider = identityProvider(field.key);
+  return provider ? displaySocialHandle(provider, value) : value.trim();
 }
 
 /**
@@ -66,26 +63,21 @@ export function normalizeAnswerText(field: FormField, value: string): string {
  *
  * `shared/core/social.py` owns this rule and states the invariant: a grammar is
  * written once against the normalized handle, which is why `identity_discord`
- * may say `[a-z0-9_.]` without refusing `CoolGuy`. Mirrors `_pattern_targets`:
- * `battle_tag` and every `smurf_tags` entry are run through
- * `_battle_tag_candidate` (= `normalize_social_handle(BATTLENET, …)`), which
- * drops the spacing a human types around the `#` and casefolds, so
- * `Player # 1234` matches the same grammar as `player#1234` — and is still
- * STORED as `Player # 1234`.
+ * may say `[a-z0-9_.]` without refusing `CoolGuy`, and why `Player # 1234`
+ * matches the same BattleTag grammar as `player#1234` while still being STORED
+ * as `Player#1234`. Mirrors `_pattern_targets`.
  *
  * Everything else — `url`, custom text, an organizer's own regex — is matched
  * case-SENSITIVELY, because the server only trims those.
  */
 function patternCandidate(field: FormField, raw: string): string {
-  if (field.key === "battle_tag" || field.key === "smurf_tags") {
-    // `replace(" ", "")`, not `\s+`: this is `shared.core.social` character for
-    // character.
-    return raw.trim().replace(BATTLE_TAG_HASH, "#").replaceAll(" ", "").trim().toLowerCase();
-  }
-  return normalizeAnswerText(field, raw);
+  const provider = identityProvider(field.key);
+  return provider ? normalizeSocialHandle(provider, raw) : raw.trim();
 }
 
-/** The strings a pattern actually runs on: a list answer is matched tag by tag. */
+/** The strings a pattern actually runs on: an identity answer is matched handle
+ *  by handle, and the single-value form is what a live control checks while one
+ *  handle is being typed. */
 function patternTargets(field: FormField, value: unknown): string[] {
   if (Array.isArray(value)) {
     return value
@@ -136,9 +128,8 @@ function isRealDate(value: string): boolean {
  * two never disagree about WHICH complaint a bad answer earns.
  *
  * `answers` is the whole document, needed by the rules that read a SECOND
- * answer: a required `role_ranks` block wants a rank on every role the `roles`
- * answer declares. Optional, so a caller validating one value in isolation (a
- * BattleTag being typed into a combobox) keeps passing three arguments.
+ * answer declares. Optional, so a caller validating one value in isolation (one
+ * handle being typed into a combobox) keeps passing three arguments.
  */
 export function validateAnswer(
   field: FormField,
@@ -172,6 +163,21 @@ export function validateAnswer(
     case "checkbox":
       if (typeof value !== "boolean") return t("invalid_type");
       break;
+    case "builtin": {
+      // `identity_*` answers are LISTS of handles, primary first — the string
+      // form only ever reaches here from a control checking one handle as it is
+      // typed. Mirrors `_coerce_identity`: duplicates by the provider's own
+      // matching rule are dropped server-side, so only distinct handles count
+      // towards the ceiling.
+      const provider = identityProvider(field.key);
+      if (!provider || !Array.isArray(value)) break;
+      if (value.some((handle) => typeof handle !== "string")) return t("invalid_type");
+      const distinct = new Set(
+        (value as string[]).map((handle) => normalizeSocialHandle(provider, handle)).filter(Boolean),
+      );
+      if (distinct.size > identityMaxCount(provider, field.params)) return t("too_many");
+      break;
+    }
     case "role_ranks": {
       if (!isPlainObject(value)) return t("invalid_type");
       const entries = Object.entries(value);

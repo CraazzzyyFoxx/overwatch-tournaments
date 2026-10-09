@@ -55,7 +55,7 @@ export default function MyTeamRosterList({
           className="flex flex-wrap items-center gap-2 py-2.5 text-sm first:pt-0 last:pb-0"
         >
           <RosterSlotGlyph code={member.slot_code} />
-          <span className="font-medium">{member.display_name ?? member.battle_tag}</span>
+          <span className="font-medium">{member.display_name ?? member.primary_handle}</span>
           {member.is_captain && (
             <span className="inline-flex items-center gap-1 text-xs text-[color:var(--aqt-amber)]">
               <Crown className="size-3.5" aria-hidden />

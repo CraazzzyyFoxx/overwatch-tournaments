@@ -5,7 +5,7 @@ so what they do with an exception IS the service's error contract. They used to
 map ``ApiHTTPException`` with ``rpc_error(code, str(exc.detail))`` -- and
 ``exc.detail`` is a *list* of ``ApiExc``, so the whole per-item structure
 reached the browser as ``"[{'msg': 'Invalid format.', 'code': 'invalid_format',
-'field': 'battle_tag'}]"``: one string, in a key (``detail``) the frontend can
+'field': 'identity_battlenet'}]"``: one string, in a key (``detail``) the frontend can
 only render as a banner. The registration form's per-field errors, which are
 addressed by ``field`` and translated by ``code``, all landed as one generic
 message.
@@ -41,7 +41,7 @@ helpers = importlib.import_module("src.rpc._helpers")  # noqa: E402
 
 
 class _Answers(BaseModel):
-    battle_tag: str
+    identity_battlenet: str
 
 
 class _FakeSession:
@@ -60,7 +60,7 @@ class _FakeLogger:
 #: The rejection a registration PATCH produces: two bad answers, each naming the
 #: answer key it belongs to.
 FIELD_ERRORS = [
-    ApiExc(msg="Invalid format.", code="invalid_format", field="battle_tag"),
+    ApiExc(msg="Invalid format.", code="invalid_format", field="identity_battlenet"),
     ApiExc(msg="Not one of the options.", code="invalid_option", field="server"),
 ]
 
@@ -87,7 +87,7 @@ class RunnerErrorDetailTests(IsolatedAsyncioTestCase):
         self.assertEqual("unprocessable", envelope["error"]["code"])
         self.assertEqual(
             [
-                {"field": "battle_tag", "msg": "Invalid format.", "code": "invalid_format"},
+                {"field": "identity_battlenet", "msg": "Invalid format.", "code": "invalid_format"},
                 {"field": "server", "msg": "Not one of the options.", "code": "invalid_option"},
             ],
             envelope["error"]["details"]["fields"],
@@ -125,7 +125,7 @@ class RunnerErrorDetailTests(IsolatedAsyncioTestCase):
 
     async def test_validation_error_names_the_field_instead_of_dumping_the_repr(self) -> None:
         try:
-            _Answers(battle_tag=None)
+            _Answers(identity_battlenet=None)
         except ValidationError as exc:
             envelope = await self._run(exc)
         else:  # pragma: no cover - the model rejects None
@@ -133,4 +133,4 @@ class RunnerErrorDetailTests(IsolatedAsyncioTestCase):
 
         self.assertEqual("unprocessable", envelope["error"]["code"])
         self.assertNotIn("validation error for", envelope["error"]["message"])
-        self.assertEqual("battle_tag", envelope["error"]["details"]["fields"][0]["field"])
+        self.assertEqual("identity_battlenet", envelope["error"]["details"]["fields"][0]["field"])

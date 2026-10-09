@@ -34,7 +34,7 @@ import type { RegistrationTeamActions } from "./useRegistrationTeamActions";
  * agents, the same list the captain's invite picker reads, so a pick cannot be
  * refused for being on a team already.
  *
- * The BattleTag field below it is the other case: someone this tournament has
+ * The handle field below it is the other case: someone this tournament has
  * never seen, who has no registration to pick.
  */
 export function PlaceMemberDialog({
@@ -56,7 +56,7 @@ export function PlaceMemberDialog({
   const fieldId = useId();
 
   const [registrationId, setRegistrationId] = useState<number | null>(null);
-  const [battleTag, setBattleTag] = useState("");
+  const [handle, setHandle] = useState("");
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const [slot, setSlot] = useState<string>(ROSTER_SLOT_CODES[0]);
@@ -69,7 +69,7 @@ export function PlaceMemberDialog({
   if (target !== team) {
     setTarget(team);
     setRegistrationId(null);
-    setBattleTag("");
+    setHandle("");
     setSearch("");
     setSlot(ROSTER_SLOT_CODES[0]);
     setSubstitute(false);
@@ -108,11 +108,11 @@ export function PlaceMemberDialog({
           });
           return;
         }
-        const tag = battleTag.trim();
+        const tag = handle.trim();
         if (!tag) return;
         actions.attachMember({
           teamId: team.id,
-          battle_tag: tag,
+          handle: tag,
           slot_code: slot,
           is_substitute: substitute
         });
@@ -124,7 +124,7 @@ export function PlaceMemberDialog({
           id={fieldId}
           open={open}
           onOpenChange={setOpen}
-          label={selectedAgent?.battle_tag ?? t("admin.placePlayerPick")}
+          label={selectedAgent?.primary_handle ?? t("admin.placePlayerPick")}
           disabled={actions.isPlacing}
           searchValue={search}
           onSearchValueChange={setSearch}
@@ -147,14 +147,14 @@ export function PlaceMemberDialog({
             {(freeAgentsQuery.data?.items ?? []).map((agent) => (
               <CommandItem
                 key={agent.registration_id}
-                value={agent.battle_tag}
+                value={agent.primary_handle}
                 onSelect={() => {
                   setRegistrationId(agent.registration_id);
                   setOpen(false);
                 }}
               >
                 <ComboboxCheck selected={agent.registration_id === registrationId} />
-                <span className="truncate">{agent.battle_tag}</span>
+                <span className="truncate">{agent.primary_handle}</span>
                 {/* The roles the player registered for, as glyphs: the
                     organizer is filling one specific slot. */}
                 <span className="ml-auto flex items-center gap-1">
@@ -171,9 +171,9 @@ export function PlaceMemberDialog({
         <Label htmlFor={`${fieldId}-tag`}>{t("admin.placeBattleTag")}</Label>
         <Input
           id={`${fieldId}-tag`}
-          value={battleTag}
+          value={handle}
           disabled={actions.isPlacing || registrationId != null}
-          onChange={(event) => setBattleTag(event.target.value)}
+          onChange={(event) => setHandle(event.target.value)}
         />
       </div>
       <div className="grid gap-1.5">

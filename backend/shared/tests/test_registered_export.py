@@ -72,7 +72,6 @@ def _registration(registration_id: int = 1, *, slot_code: str | None = "tank") -
         id=registration_id,
         registration_team_id=7,
         team_slot_code=slot_code,
-        battle_tag="Player#1111",
         display_name=None,
         workspace_member_id=None,
         is_substitute=False,

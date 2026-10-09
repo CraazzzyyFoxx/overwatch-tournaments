@@ -36,10 +36,10 @@ export const TERMINAL_REGISTRATION_STATUSES = new Set<string>([
 /** Team formations whose roster is a player pool rather than a list of teams. */
 export const POOL_TEAM_FORMATIONS: Record<string, true> = { balancer: true, draft: true };
 
-/** Organizer-only columns: the player's notes and smurf tags — what the roster
- *  shows ABOUT a player rather than the state of their own entry. Filtered out
- *  of the column CONFIG rather than blanked per cell, so they leave the table,
- *  the search and the column picker together.
+/** Organizer-only columns: the player's notes and their extra BattleTags —
+ *  what the roster shows ABOUT a player rather than the state of their own
+ *  entry. Filtered out of the column CONFIG rather than blanked per cell, so
+ *  they leave the table, the search and the column picker together.
  *
  *  This is a roster-surface decision on top of the schema's `visibility`, which
  *  the server already enforces: an organizers-only answer never reaches a
@@ -52,7 +52,7 @@ export const POOL_TEAM_FORMATIONS: Record<string, true> = { balancer: true, draf
  *  and `balancer_status` on every row. */
 export const ADMIN_ONLY_COLUMN_IDS: Record<string, true> = {
   public_notes: true,
-  smurf_tags: true
+  identity_battlenet_extras: true
 };
 
 /** How many rows each status holds, for the filter chips' counts. */

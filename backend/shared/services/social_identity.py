@@ -21,7 +21,7 @@ from collections.abc import Sequence
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
-from shared.core.social import OAUTH_PROVIDERS, normalize_social_handle, oauth_handle_candidates
+from shared.core.social import VERIFIABLE_PROVIDERS, normalize_social_handle, oauth_handle_candidates
 from shared.repository import (
     OAuthConnectionRepository,
     SocialAccountRepository,
@@ -268,8 +268,8 @@ class SocialIdentityService:
         if account.is_verified:
             return account
 
-        if account.provider not in OAUTH_PROVIDERS:
-            raise SocialAccountNotOAuthLinked(f"{account.provider} accounts cannot be OAuth-verified")
+        if account.provider not in VERIFIABLE_PROVIDERS:
+            raise SocialAccountNotOAuthLinked(f"{account.provider} accounts cannot be verified")
 
         player = await self.players.get(session, user_id)
         auth_user_id = player.auth_user_id if player is not None else None

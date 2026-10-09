@@ -36,6 +36,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
 from shared.core import enums
+from shared.core.social import SocialProvider
 from shared.services.admission.reasons import reason
 from shared.services.admission.signals import ProfileSignal
 from shared.services.admission.types import AdmissionReason
@@ -71,12 +72,10 @@ _NO_BATTLE_TAG: Final = ProfileSignal(is_open=None, reasons=(reason("no_battle_t
 
 
 def _registration_tags(registration: Any, scope: str) -> list[str]:
-    tags: list[str] = []
-    if registration.battle_tag:
-        tags.append(registration.battle_tag)
-    if scope == "all":
-        tags.extend(tag for tag in (registration.smurf_tags_json or []) if tag)
-    return tags
+    """The battlenet handles to check: the primary one, or every one under
+    ``scope="all"``. Read off the eager-loaded ``identities`` rows."""
+    handles = registration.handles(SocialProvider.BATTLENET)
+    return [tag for tag in (handles if scope == "all" else handles[:1]) if tag]
 
 
 def _reason_for(tag: str, status: str | None) -> AdmissionReason:

@@ -36,8 +36,7 @@ def _schema(*fields: FormField) -> FormSchema:
 ALL_ANSWER_FIELDS = tuple(
     FormField(key=key, kind="builtin", visibility="organizers" if key == "organizer_notes" else "public")
     for key in (
-        "battle_tag",
-        "smurf_tags",
+        "identity_battlenet",
         "identity_discord",
         "identity_twitch",
         "identity_boosty",
@@ -52,15 +51,14 @@ ALL_ANSWER_FIELDS = tuple(
 
 #: The targets a form declaring every builtin question offers. The three
 #: ``*_nick`` targets became one ``identity_<provider>`` per
-#: ``IDENTITY_PROVIDERS`` and ``notes`` became ``public_notes`` +
-#: ``organizer_notes`` — the same renames migration ``regform01`` applied to
-#: every saved ``mapping_config_json``.
+#: ``IDENTITY_PROVIDERS``, ``battle_tag`` + ``smurf_tags`` became the single
+#: ``identity_battlenet`` list target, and ``notes`` became ``public_notes`` +
+#: ``organizer_notes``.
 BUILTIN_TARGETS = {
     "source_record_key",
     "display_name",
-    "battle_tag",
     "submitted_at",
-    "smurf_tags",
+    "identity_battlenet",
     "identity_discord",
     "identity_twitch",
     "identity_boosty",
@@ -114,12 +112,12 @@ def test_an_answer_target_is_offered_only_while_its_question_exists():
     that column with nothing said anywhere.
     """
     schema = _schema(
-        FormField(key="battle_tag", kind="builtin", required=True),
+        FormField(key="identity_battlenet", kind="builtin", required=True),
         FormField(key="identity_discord", kind="builtin"),
     )
     keys = {spec.key for spec in catalog.build_target_specs(schema)}
 
-    assert "battle_tag" in keys
+    assert "identity_battlenet" in keys
     assert "identity_discord" in keys
     assert not keys & {"identity_boosty", "identity_vk", "identity_youtube", "stream_pov", "organizer_notes"}
     # Organizer state is never a question, so it is always offered.
@@ -229,7 +227,7 @@ def _codes(issues):
 
 
 def test_validate_valid_config_has_no_issues():
-    config = {"targets": {"battle_tag": {"mode": "columns", "columns": ["A"], "parser": "battle_tag"}}}
+    config = {"targets": {"identity_battlenet": {"mode": "columns", "columns": ["A"], "parser": "battle_tag_list"}}}
     issues = catalog.validate_mapping_config(config, target_specs=_specs(), header_keys=["A", "B"])
     assert issues == []
 
@@ -241,22 +239,25 @@ def test_validate_unknown_target():
 
 
 def test_validate_unknown_column():
-    config = {"targets": {"battle_tag": {"mode": "columns", "columns": ["Z"], "parser": "battle_tag"}}}
+    config = {"targets": {"identity_battlenet": {"mode": "columns", "columns": ["Z"], "parser": "battle_tag_list"}}}
     issues = catalog.validate_mapping_config(config, target_specs=_specs(), header_keys=["A"])
     assert "unknown_column" in _codes(issues)
 
 
 def test_validate_too_many_columns_on_single():
-    config = {"targets": {"battle_tag": {"mode": "columns", "columns": ["A", "B"], "parser": "battle_tag"}}}
+    # ``source_record_key`` is the single-column identity target; the game
+    # identity itself takes main + smurf columns (below).
+    config = {"targets": {"source_record_key": {"mode": "columns", "columns": ["A", "B"], "parser": "battle_tag"}}}
     issues = catalog.validate_mapping_config(config, target_specs=_specs(), header_keys=["A", "B"])
     assert "too_many_columns" in _codes(issues)
 
 
-def test_validate_multi_column_allowed_on_smurf_tags():
+def test_validate_multi_column_allowed_on_game_identity():
+    # One target, main first and smurfs after -- what used to be battle_tag +
+    # smurf_tags.
     config = {
         "targets": {
-            "battle_tag": {"mode": "columns", "columns": ["A"], "parser": "battle_tag"},
-            "smurf_tags": {"mode": "columns", "columns": ["B", "C"], "parser": "battle_tag_list"},
+            "identity_battlenet": {"mode": "columns", "columns": ["A", "B", "C"], "parser": "battle_tag_list"},
         }
     }
     issues = catalog.validate_mapping_config(config, target_specs=_specs(), header_keys=["A", "B", "C"])
@@ -264,7 +265,7 @@ def test_validate_multi_column_allowed_on_smurf_tags():
 
 
 def test_validate_invalid_parser_for_target():
-    config = {"targets": {"battle_tag": {"mode": "columns", "columns": ["A"], "parser": "datetime"}}}
+    config = {"targets": {"identity_battlenet": {"mode": "columns", "columns": ["A"], "parser": "datetime"}}}
     issues = catalog.validate_mapping_config(config, target_specs=_specs(), header_keys=["A"])
     assert "invalid_parser_for_target" in _codes(issues)
 
@@ -272,7 +273,7 @@ def test_validate_invalid_parser_for_target():
 def test_validate_missing_constant_value():
     config = {
         "targets": {
-            "battle_tag": {"mode": "columns", "columns": ["A"], "parser": "battle_tag"},
+            "identity_battlenet": {"mode": "columns", "columns": ["A"], "parser": "battle_tag_list"},
             "stream_pov": {"mode": "constant", "parser": "boolean"},
         }
     }
@@ -287,7 +288,7 @@ def test_validate_missing_identity_target():
 
 
 def test_validate_skips_column_checks_without_headers():
-    config = {"targets": {"battle_tag": {"mode": "columns", "columns": ["Z"], "parser": "battle_tag"}}}
+    config = {"targets": {"identity_battlenet": {"mode": "columns", "columns": ["Z"], "parser": "battle_tag_list"}}}
     issues = catalog.validate_mapping_config(config, target_specs=_specs(), header_keys=None)
     assert "unknown_column" not in _codes(issues)
 
@@ -299,24 +300,24 @@ def test_validate_skips_column_checks_without_headers():
 
 def test_classify_row_disposition():
     known_keys = {"abc#1"}
-    known_tags = {"def#2"}
+    known_handles = {"def#2"}
     assert (
-        catalog.classify_row_disposition(None, None, known_source_keys=known_keys, known_battle_tag_keys=known_tags)
+        catalog.classify_row_disposition(None, None, known_source_keys=known_keys, known_handle_keys=known_handles)
         == "skip"
     )
     assert (
-        catalog.classify_row_disposition("abc#1", None, known_source_keys=known_keys, known_battle_tag_keys=known_tags)
+        catalog.classify_row_disposition("abc#1", None, known_source_keys=known_keys, known_handle_keys=known_handles)
         == "update"
     )
     assert (
         catalog.classify_row_disposition(
-            "new#9", "def#2", known_source_keys=known_keys, known_battle_tag_keys=known_tags
+            "new#9", "def#2", known_source_keys=known_keys, known_handle_keys=known_handles
         )
         == "update"
     )
     assert (
         catalog.classify_row_disposition(
-            "new#9", "zzz#3", known_source_keys=known_keys, known_battle_tag_keys=known_tags
+            "new#9", "zzz#3", known_source_keys=known_keys, known_handle_keys=known_handles
         )
         == "create"
     )
@@ -333,16 +334,18 @@ def test_suggest_mapping_matches_english_and_russian_headers():
     for headers in (russian, english):
         mapping = sheet_parsing.suggest_mapping_from_headers(headers, schema=FULL_SCHEMA)
         targets = mapping["targets"]
-        assert targets["battle_tag"]["mode"] == "columns"
+        # Main and smurf columns are now ONE multi-column target, main first.
+        assert targets["identity_battlenet"]["mode"] == "columns"
+        assert len(targets["identity_battlenet"]["columns"]) == 2
+        assert targets["identity_battlenet"]["columns"][0] == headers[1]
         assert targets["submitted_at"]["mode"] == "columns"
         assert targets["source_roles.primary"]["mode"] == "columns"
-        assert targets["smurf_tags"]["mode"] == "columns"
 
 
 def test_suggest_disabled_targets_present_as_hints():
     mapping = sheet_parsing.suggest_mapping_from_headers(["Random column"], schema=FULL_SCHEMA)
     # Unmatched targets remain present but disabled (hints, not mappings).
-    assert mapping["targets"]["battle_tag"]["mode"] == "disabled"
+    assert mapping["targets"]["identity_battlenet"]["mode"] == "disabled"
 
 
 def test_suggest_mapping_matches_custom_field_label_case_insensitively():
@@ -373,17 +376,17 @@ def test_division_value_mapping_returns_configured_rank():
 
 def test_parse_sheet_row_writes_custom_fields():
     headers = ["BattleTag", "Age", "Region"]
-    row = ["Player#1", "25", "EU"]
+    row = ["Player#1111", "25", "EU"]
     mapping = {
         "targets": {
-            "battle_tag": {"mode": "columns", "columns": ["BattleTag"], "parser": "battle_tag"},
+            "identity_battlenet": {"mode": "columns", "columns": ["BattleTag"], "parser": "battle_tag_list"},
             "source_record_key": {"mode": "columns", "columns": ["BattleTag"], "parser": "battle_tag"},
             "custom_fields.age": {"mode": "columns", "columns": ["Age"], "parser": "integer"},
             "custom_fields.region": {"mode": "columns", "columns": ["Region"], "parser": "string"},
         }
     }
     schema = _schema(
-        FormField(key="battle_tag", kind="builtin"),
+        FormField(key="identity_battlenet", kind="builtin"),
         FormField(key="age", label="Age", kind="number"),
         FormField(key="region", label="Region", kind="select", options=["EU", "NA"]),
     )
@@ -396,19 +399,22 @@ def test_parse_sheet_row_writes_custom_fields():
         schema=schema,
     )
     assert result.fields is not None
-    assert result.fields["answers"] == {"battle_tag": "Player#1", "age": 25, "region": "EU"}
+    # Every identity answer is a list of handles, primary first.
+    assert result.fields["answers"] == {"identity_battlenet": ["Player#1111"], "age": 25, "region": "EU"}
 
 
 def test_parse_sheet_row_omits_unmapped_custom_fields():
     headers = ["BattleTag", "Age"]
-    row = ["Player#1", "25"]
+    row = ["Player#1111", "25"]
     mapping = {
         "targets": {
-            "battle_tag": {"mode": "columns", "columns": ["BattleTag"], "parser": "battle_tag"},
+            "identity_battlenet": {"mode": "columns", "columns": ["BattleTag"], "parser": "battle_tag_list"},
             "custom_fields.age": {"mode": "disabled", "parser": "integer"},
         }
     }
-    schema = _schema(FormField(key="battle_tag", kind="builtin"), FormField(key="age", label="Age", kind="number"))
+    schema = _schema(
+        FormField(key="identity_battlenet", kind="builtin"), FormField(key="age", label="Age", kind="number")
+    )
     result = sheet_parsing.parse_sheet_row_detailed(
         headers=headers,
         row=row,
@@ -418,19 +424,21 @@ def test_parse_sheet_row_omits_unmapped_custom_fields():
         schema=schema,
     )
     assert result.fields is not None
-    assert result.fields["answers"] == {"battle_tag": "Player#1"}
+    assert result.fields["answers"] == {"identity_battlenet": ["Player#1111"]}
 
 
 def test_parse_sheet_row_collects_custom_field_error():
     headers = ["BattleTag", "Age"]
-    row = ["Player#1", "not-a-number"]
+    row = ["Player#1111", "not-a-number"]
     mapping = {
         "targets": {
-            "battle_tag": {"mode": "columns", "columns": ["BattleTag"], "parser": "battle_tag"},
+            "identity_battlenet": {"mode": "columns", "columns": ["BattleTag"], "parser": "battle_tag_list"},
             "custom_fields.age": {"mode": "columns", "columns": ["Age"], "parser": "integer"},
         }
     }
-    schema = _schema(FormField(key="battle_tag", kind="builtin"), FormField(key="age", label="Age", kind="number"))
+    schema = _schema(
+        FormField(key="identity_battlenet", kind="builtin"), FormField(key="age", label="Age", kind="number")
+    )
     result = sheet_parsing.parse_sheet_row_detailed(
         headers=headers,
         row=row,

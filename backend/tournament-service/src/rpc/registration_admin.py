@@ -35,7 +35,7 @@ Commit semantics: every registration mutation service called here commits
 internally (create_manual_registration / update_registration_profile /
 approve / reject / bulk_approve / set_exclusion / withdraw / restore /
 soft_delete / set_balancer_status / bulk_add_to_balancer / check_in /
-uncheck_in / export_registrations_to_users) and so do all status_catalog
+uncheck_in) and so do all status_catalog
 mutations (create/update/delete custom, upsert/reset builtin override). The
 rank-autofill service commits internally on ``apply=True`` when something
 changed (preview never writes). The form upsert is done inline here exactly as
@@ -52,6 +52,7 @@ from faststream.rabbit.annotations import RabbitMessage
 
 from shared.balancer_registration_statuses import get_status_metas_map
 from shared.core.errors import BaseAPIException as HTTPException
+from shared.core.social import SocialProvider
 from shared.rpc.identity import ensure_workspace_permission
 from shared.services.rank_snapshots import (
     fetch_latest_ow_ranks_by_account,
@@ -84,7 +85,6 @@ from src.schemas.registration_team import (
 )
 from src.services.registration import _common as reg_common
 from src.services.registration import audit as reg_audit
-from src.services.registration import export as reg_export
 from src.services.registration import (
     lifecycle,
     rank_autofill,
@@ -780,7 +780,7 @@ def register(broker: Any, logger: Any) -> None:
                 entity_type="registration_team",
                 after={
                     "tournament_id": ctx.id,
-                    "battle_tag": body.battle_tag,
+                    "handle": body.handle,
                     "slot_code": body.slot_code,
                     "is_substitute": body.is_substitute,
                 },
@@ -789,7 +789,7 @@ def register(broker: Any, logger: Any) -> None:
                 session,
                 tournament_id=ctx.id,
                 team_id=team_id,
-                battle_tag=body.battle_tag,
+                handle=body.handle,
                 slot_code=body.slot_code,
                 is_substitute=body.is_substitute,
             )
@@ -828,7 +828,8 @@ def register(broker: Any, logger: Any) -> None:
             raw_ow_ranks_by_registration = {
                 registration.id: select_main_account_ow_ranks(
                     accounts_by_user.get(registration.workspace_member.player_id, {}),
-                    registration.smurf_tags_json,
+                    # Extras of the battlenet identity ARE the declared smurfs.
+                    registration.handles(SocialProvider.BATTLENET)[1:],
                 )
                 for registration in registrations
                 if registration.workspace_member is not None
@@ -893,6 +894,7 @@ def register(broker: Any, logger: Any) -> None:
             # trade-off as shared.rpc.crud's service-backed create). Ceiling: a
             # crash between the two commits loses the trail, never the other way
             # round.
+            primary_identity = registration.primary_game_identity()
             await reg_audit.audit_service.stage(
                 session,
                 action="registration.create",
@@ -902,7 +904,7 @@ def register(broker: Any, logger: Any) -> None:
                 entity_id=registration.id,
                 entity_label=reg_audit.label(registration),
                 after={
-                    "battle_tag": registration.battle_tag,
+                    "primary_handle": primary_identity.handle if primary_identity else None,
                     "status": registration.status,
                     "balancer_status": registration.balancer_status,
                     "roles": reg_audit.role_snapshot(registration),
@@ -1277,17 +1279,6 @@ def register(broker: Any, logger: Any) -> None:
                 workspace_id=workspace_id,
             )
             return _dump(schemas.BalancerRegistrationRankHistoryResponse(entries=entries))
-
-        return await _run(logger, op)
-
-    # POST /balancer/tournaments/{tournament_id}/registrations/export-users
-    #   require_tournament_permission("registration", "create")
-    @broker.subscriber("rpc.tournament.reg_export_users")
-    async def _reg_export_users(data: dict, msg: RabbitMessage) -> dict:
-        async def op(session: Any) -> Any:
-            ctx = await _tournament_ctx(session, data, "create", resource="registration")
-            result = await reg_export.export_service.export_registrations_to_users(session, ctx.id)
-            return _dump(schemas.RegistrationUserExportResponse(**result))
 
         return await _run(logger, op)
 

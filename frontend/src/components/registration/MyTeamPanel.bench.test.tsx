@@ -48,7 +48,7 @@ vi.mock("@/services/registration-team.service", () => ({
 const member = (registration_id: number, slot_code: string, is_captain = false) => ({
   registration_id,
   display_name: `P${registration_id}`,
-  battle_tag: `P${registration_id}#1000`,
+  primary_handle: `P${registration_id}#1000`,
   slot_code,
   is_substitute: false,
   is_captain,

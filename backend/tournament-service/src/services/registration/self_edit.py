@@ -28,7 +28,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 
-from shared.domain.forms import FormSchema
+from shared.core.social import GAME_PROVIDERS
+from shared.domain.forms import FormSchema, identity_key
 from shared.services.registration_window import is_registration_late
 from src import models
 from src.services.registration._common import is_included_in_balancer
@@ -80,9 +81,10 @@ def _floor(
 ) -> frozenset[str]:
     """Keys the organizer cannot open, and why.
 
-    ``battle_tag`` once the row has been reviewed: it is the row's identity
-    anchor -- a partial unique index per tournament, the ``workspace_member`` →
-    ``player_id`` resolution and every inherited rank layer read through it.
+    The GAME identity answers (``identity_battlenet``) once the row has been
+    reviewed: that handle is the row's identity anchor -- uniqueness per
+    tournament, the ``workspace_member`` → ``player_id`` resolution and every
+    inherited rank layer read through it.
 
     ``roles`` once the row is in the balancer pool or on a registered team: the
     balancer/draft has already consumed them, and on a team the slot is the
@@ -93,7 +95,7 @@ def _floor(
     """
     locked: set[str] = set()
     if registration.reviewed_at is not None:
-        locked.add("battle_tag")
+        locked.update(identity_key(provider) for provider in GAME_PROVIDERS)
     if is_included_in_balancer(registration) or registration.registration_team_id is not None:
         locked.add("roles")
     return frozenset(locked)
@@ -103,18 +105,15 @@ def _answered_keys(registration: models.BalancerRegistration) -> frozenset[str]:
     """The questions this row has an answer for.
 
     ``answers_of`` covers the answer COLUMNS, the identity rows and the custom
-    document, but not the two builtins with storage of their own: the BattleTag
-    lives in two columns of its own and ``roles`` in a child table. Without them
-    a frozen ``battle_tag`` would read as "never answered" -- and therefore
-    writable -- on every registration ever made.
+    document, but not ``roles``, which lives in a child table. Without it a
+    frozen ``roles`` would read as "never answered" -- and therefore writable --
+    on every registration ever made.
 
     ``__dict__`` for ``roles`` for the same reason the serializers use it: the
     relationship is never lazy-loadable in async code, so a caller that did not
     eager-load it has no roles to report rather than a ``MissingGreenlet``.
     """
     answered = set(answer_service.answers_of(registration))
-    if registration.battle_tag:
-        answered.add("battle_tag")
     if registration.__dict__.get("roles"):
         answered.add("roles")
     return frozenset(answered)

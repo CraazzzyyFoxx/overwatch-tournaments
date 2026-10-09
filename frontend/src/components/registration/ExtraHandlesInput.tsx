@@ -7,78 +7,85 @@ import { useTranslations } from "next-intl";
 import { normalizeAnswerText, validateAnswer } from "@/lib/forms/validate";
 import FormField from "./FormField";
 
-interface SmurfTagsInputProps {
-  tags: string[];
-  onChange: (tags: string[]) => void;
+interface ExtraHandlesInputProps {
+  /** The handles BESIDE the primary one, in order. */
+  handles: string[];
+  onChange: (handles: string[]) => void;
+  /** How many extras the field's `max_count` still allows. */
+  max: number;
   suggestions: string[];
   label?: string;
   icon?: string;
-  required?: boolean;
-  /** The schema field this control answers; drives the per-tag format check. */
+  /** The schema field these handles answer; drives the per-handle format check. */
   field?: FormFieldSchema;
-  /** Error owned by the form: a server rejection, or a revealed step objection. */
-  error?: string | null;
 }
 
-export default function SmurfTagsInput({
-  tags,
+/**
+ * The extra handles of an identity answer — a BattleTag's smurfs, in practice.
+ *
+ * One chip per stored handle, one box for the next: the field's pattern
+ * describes a SINGLE handle, so each one is checked on its own before it joins
+ * the list. The primary handle is the parent's business; this control never
+ * sees it.
+ */
+export default function ExtraHandlesInput({
+  handles,
   onChange,
+  max,
   suggestions,
   label,
   icon,
-  required = false,
   field,
-  error = null,
-}: Readonly<SmurfTagsInputProps>) {
+}: Readonly<ExtraHandlesInputProps>) {
   const t = useTranslations();
   const tErrors = useTranslations("forms.errors");
   const inputId = useId();
   const [inputValue, setInputValue] = useState("");
   const trimmedInputValue = inputValue.trim();
-  /** Canonical form of the pending tag, or the raw text when this control is
+  /** Canonical form of the pending handle, or the raw text when this control is
    *  not bound to a field (nothing to normalize against). */
-  const normalize = (tag: string): string =>
-    field ? normalizeAnswerText(field, tag) : tag.trim();
+  const normalize = (handle: string): string =>
+    field ? normalizeAnswerText(field, handle) : handle.trim();
   const normalizedInputValue = normalize(inputValue);
+  const full = handles.length >= max;
 
-  /** One tag at a time: the field's pattern describes a single BattleTag, and
-   *  the pending box is not yet part of the stored list. */
-  const tagError = (tag: string): string | null =>
-    field && tag.trim() ? validateAnswer(field, tag, tErrors) : null;
+  /** One handle at a time: the pending box is not yet part of the stored list,
+   *  so the list-level rules (the ceiling, duplicates) are checked here. */
+  const handleError = (handle: string): string | null =>
+    field && handle.trim() ? validateAnswer(field, handle, tErrors) : null;
 
-  const inputValidationError = tagError(inputValue);
+  const inputValidationError = handleError(inputValue);
 
-  const addTag = (tag: string, options?: { clearInput?: boolean }) => {
-    const normalized = normalize(tag);
-    if (!normalized || tagError(tag) || tags.includes(normalized)) return;
-    onChange([...tags, normalized]);
+  const addHandle = (handle: string, options?: { clearInput?: boolean }) => {
+    const normalized = normalize(handle);
+    if (!normalized || full || handleError(handle) || handles.includes(normalized)) return;
+    onChange([...handles, normalized]);
     if (options?.clearInput ?? true) {
       setInputValue("");
     }
   };
 
-  const removeTag = (index: number) => {
-    onChange(tags.filter((_, i) => i !== index));
+  const removeHandle = (index: number) => {
+    onChange(handles.filter((_, i) => i !== index));
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     if (e.key === "Enter") {
       e.preventDefault();
-      addTag(inputValue, { clearInput: true });
+      addHandle(inputValue, { clearInput: true });
     }
-    if (e.key === "Backspace" && !inputValue && tags.length > 0) {
-      removeTag(tags.length - 1);
+    if (e.key === "Backspace" && !inputValue && handles.length > 0) {
+      removeHandle(handles.length - 1);
     }
   };
 
-  const unusedSuggestions = suggestions.filter((s) => !tags.includes(s));
+  const unusedSuggestions = full ? [] : suggestions.filter((s) => !handles.includes(s));
 
   return (
     <div className="space-y-1.5">
       <FormField
         id={inputId}
         label={label ?? t("registration.accounts.smurfs")}
-        required={required}
         icon={
           icon
             ? (
@@ -88,18 +95,18 @@ export default function SmurfTagsInput({
             : undefined
         }
         beforeControl={
-          tags.length > 0 ? (
+          handles.length > 0 ? (
             <div className="flex flex-wrap gap-1.5">
-              {tags.map((tag, i) => (
+              {handles.map((handle, i) => (
                 <span
-                  key={tag}
+                  key={handle}
                   className="inline-flex items-center gap-1 rounded-md border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-3)] px-2 py-0.5 text-xs text-[color:var(--aqt-fg-muted)]"
                 >
-                  {tag}
+                  {handle}
                   <button
                     type="button"
-                    onClick={() => removeTag(i)}
-                    aria-label={t("registration.accounts.removeSmurf", { tag })}
+                    onClick={() => removeHandle(i)}
+                    aria-label={t("registration.accounts.removeSmurf", { tag: handle })}
                     className="ml-0.5 rounded text-[color:var(--aqt-fg-dim)] transition-colors hover:text-[color:var(--aqt-fg-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <X className="size-3" aria-hidden />
@@ -113,13 +120,19 @@ export default function SmurfTagsInput({
         value={inputValue}
         onChange={setInputValue}
         onKeyDown={handleKeyDown}
-        error={error ?? inputValidationError}
+        disabled={full}
+        error={inputValidationError}
         className="pr-16"
         endAdornment={
           <button
             type="button"
-            onClick={() => addTag(inputValue, { clearInput: true })}
-            disabled={!trimmedInputValue || Boolean(inputValidationError) || tags.includes(normalizedInputValue)}
+            onClick={() => addHandle(inputValue, { clearInput: true })}
+            disabled={
+              full ||
+              !trimmedInputValue ||
+              Boolean(inputValidationError) ||
+              handles.includes(normalizedInputValue)
+            }
             className="absolute right-1 top-1/2 h-7 -translate-y-1/2 rounded-md border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-3)] px-2.5 text-xs font-medium text-[color:var(--aqt-fg)] transition-colors hover:bg-[color:var(--aqt-overlay-3)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40"
           >
             {t("registration.accounts.addSmurfButton")}
@@ -132,7 +145,7 @@ export default function SmurfTagsInput({
             <button
               key={s}
               type="button"
-              onClick={() => addTag(s, { clearInput: false })}
+              onClick={() => addHandle(s, { clearInput: false })}
               className="rounded border border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-1)] px-2 py-0.5 text-label text-[color:var(--aqt-fg-dim)] transition-colors hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-fg-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               + {s}

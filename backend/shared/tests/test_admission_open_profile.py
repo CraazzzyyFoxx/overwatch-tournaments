@@ -87,7 +87,9 @@ class _Session:
 
 
 def _reg(reg_id: int, battle_tag: str | None, smurfs: list[str] | None = None) -> SimpleNamespace:
-    return SimpleNamespace(id=reg_id, battle_tag=battle_tag, smurf_tags_json=smurfs)
+    """A registration double: its battlenet handles, primary first."""
+    tags = [tag for tag in (battle_tag, *(smurfs or ())) if tag]
+    return SimpleNamespace(id=reg_id, handles=lambda _provider: list(tags))
 
 
 def _codes(signal: ProfileSignal) -> set[tuple[str, str | None]]:

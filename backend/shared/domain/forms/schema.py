@@ -185,7 +185,7 @@ def default_schema() -> FormSchema:
         sections=[
             FormSection(
                 key="accounts",
-                fields=[b("battle_tag", required=True), b("smurf_tags"), b("identity_discord"), b("identity_twitch")],
+                fields=[b("identity_battlenet", required=True), b("identity_discord"), b("identity_twitch")],
             ),
             FormSection(key="roles", fields=[b("roles")]),
             FormSection(key="details", fields=[b("public_notes")]),

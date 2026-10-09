@@ -300,9 +300,11 @@ export interface Registration {
   tournament_id: number;
   workspace_id: number;
   user_id: number | null;
-  /** Stays top-level: it is a column, the roster's identity, and the key the
-   *  Google-Sheets feed matches on. */
-  battle_tag: string | null;
+  /** The registration's public identity: the PRIMARY handle of its first game
+   *  identity (the BattleTag, today). Derived from
+   *  `answers.identity_battlenet[0]` server-side, and the key the Google-Sheets
+   *  feed matches on. */
+  primary_handle: string | null;
   /** Stays top-level: normalized rows with ranks and heroes, not a JSON answer. */
   roles: RegistrationRole[];
   /** Every other answer, keyed by field key. `organizers`-only fields are
@@ -360,7 +362,7 @@ export interface Registration {
    *
    * Never re-derive this (or `edit_writable_keys`) from `FormField.editable`:
    * the server's answer already folds in the schema flag, the system floors
-   * (`battle_tag` after review, `roles` once pooled, `reserve` on a late
+   * (`identity_battlenet` after review, `roles` once pooled, `reserve` on a late
    * sign-up) and the "a key this row has never answered is writable anyway"
    * exception. Three consumers re-deriving it would grow three different
    * answers to "may I edit".
@@ -415,7 +417,7 @@ export interface RoleInput {
  * The whole write payload, for both the first submission and every edit.
  *
  * There is nothing else on the wire: the server rejects unknown keys outright,
- * so a stale client sending `battle_tag` at the top level is refused rather
+ * so a stale client sending `primary_handle` at the top level is refused rather
  * than silently half-applied. `form_version_id` is the version the answers were
  * written against; a schema change since then is a 409 `form_version_stale`.
  */

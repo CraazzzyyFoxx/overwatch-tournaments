@@ -4,7 +4,7 @@ import { Crown } from "lucide-react";
 
 import type { RegistrationForm } from "@/types/registration.types";
 import { answerSearchText } from "@/lib/forms/answers";
-import { isBuiltinKey } from "@/lib/forms/builtin-keys";
+import { identityMaxCount, isBuiltinKey } from "@/lib/forms/builtin-keys";
 import type { Hero } from "@/types/hero.types";
 
 import {
@@ -135,10 +135,10 @@ export function buildParticipantColumns(
   //
   // The fallback below is for "this tournament HAS no form", not for "its form
   // asks the public nothing". The second is reachable — no invariant makes
-  // `battle_tag` mandatory and every question may be organizers-only — and it
-  // must render an empty roster rather than five columns the organizer never
-  // asked for. Only `battle_tag` and the notes column survive that, and both
-  // for reasons of their own, below.
+  // `identity_battlenet` mandatory and every question may be organizers-only —
+  // and it must render an empty roster rather than five columns the organizer
+  // never asked for. Only the identity column and the notes column survive
+  // that, and both for reasons of their own, below.
   const schema = form?.form_schema ?? null;
   const publicFields = (schema?.sections ?? [])
     .flatMap((section) => section.fields)
@@ -151,6 +151,16 @@ export function buildParticipantColumns(
         pushBuiltIn(field.key, field.label || def.label, def.defaultVisible);
         if (field.key === "roles" && asksTopHeroes(field)) {
           pushBuiltIn("top_heroes", BUILT_IN_FIELD_DEFS.top_heroes.label, true);
+        }
+        // One question, two columns: the primary handle is the roster's
+        // identity and the rest are an organizers-only aside, so they are
+        // split the way `roles` splits off its top heroes.
+        if (field.key === "identity_battlenet" && identityMaxCount("battlenet", field.params) > 1) {
+          pushBuiltIn(
+            "identity_battlenet_extras",
+            BUILT_IN_FIELD_DEFS.identity_battlenet_extras.label,
+            true,
+          );
         }
         continue;
       }
@@ -179,11 +189,11 @@ export function buildParticipantColumns(
     }
   }
 
-  if (!columns.some((column) => column.id === "battle_tag")) {
-    const identity = BUILT_IN_FIELD_DEFS.battle_tag;
+  if (!columns.some((column) => column.id === "identity_battlenet")) {
+    const identity = BUILT_IN_FIELD_DEFS.identity_battlenet;
     columns.splice(1, 0, {
       id: identity.id,
-      label: getLocalizedColumnLabel(t, "battle_tag", identity.label),
+      label: getLocalizedColumnLabel(t, "identity_battlenet", identity.label),
       category: "built_in",
       defaultVisible: true,
       responsive: "always",

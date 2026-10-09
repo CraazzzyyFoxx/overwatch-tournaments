@@ -39,7 +39,6 @@ RankAutofillOwValue = Literal["composite", "current", "peak"]
 RankAutofillMode = Literal["ow_first", "balancer_first"]
 
 __all__ = (
-    "RegistrationUserExportResponse",
     "BalanceExportResponse",
     "BalanceRead",
     "BalanceSaveRequest",
@@ -433,8 +432,10 @@ class BalancerRegistrationRead(BaseRead):
     workspace_id: int
     user_id: int | None = None
     display_name: str | None = None
-    battle_tag: str | None = None
-    battle_tag_normalized: str | None = None
+    #: Primary handle of the registration's first GAME identity (battlenet
+    #: today). Every battlenet handle, smurfs included, is in
+    #: ``answers["identity_battlenet"]``.
+    primary_handle: str | None = None
     source: RegistrationSource
     source_record_key: str | None = None
     #: Every answer the registration carries, flat and UNFILTERED -- the admin
@@ -585,9 +586,3 @@ class BalanceExportResponse(BaseModel):
     removed_teams: int
     imported_teams: int
     balance_id: int
-
-
-class RegistrationUserExportResponse(BaseModel):
-    processed: int
-    skipped: int
-    total: int

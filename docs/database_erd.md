@@ -12,7 +12,7 @@ schema name — `ranks/` writes to `overwatch_rank`, `ingestion/` to `log_proces
 > `--check` and fails on drift, so the diagrams cannot fall behind the models again.
 
 <!-- ERD:auto _alembic_head -->
-Alembic head: **`wsprof01`** (107 revisions in `backend/migrations/versions/`).
+Alembic head: **`regidsoc01`** (109 revisions in `backend/migrations/versions/`).
 <!-- /ERD:auto -->
 
 **Reading the diagrams**
@@ -1493,9 +1493,13 @@ preferences, team invites, and the Google Sheets import binding.
 
 `registration` is the application. `workspace_member_id` is its only identity anchor and is
 nullable, because a form can be submitted before membership exists; the earlier `user_id` column
-was dropped rather than kept alongside. Live entries are deduplicated per tournament on
-`battle_tag_normalized`, and deletion is soft (`deleted_at` / `deleted_by`), which both preserves
-the audit and frees the tag for reuse. Role preferences and top heroes are normalized into
+was dropped rather than kept alongside. The registrant's accounts live in `registration_identity`,
+one row per handle: `position` 0 is a provider's primary, Battle.net smurfs follow at 1..n.
+Live entries are deduplicated per tournament on the primary handle of each game provider (checked
+in the application, since the handles sit in that child table), and deletion is soft
+(`deleted_at` / `deleted_by`), which both preserves the audit and frees the handle for reuse.
+`battle_tag`, `battle_tag_normalized` and `smurf_tags_json` are legacy columns with no reader or
+writer, kept only until their gated drop. Role preferences and top heroes are normalized into
 `registration_role` and `registration_role_hero` — a hero is unique both per priority and per
 role, so a top-three cannot contain the same hero twice or two heroes in one slot.
 
@@ -1624,6 +1628,7 @@ erDiagram
         timestamptz updated_at "nullable"
         bigint registration_id FK
         varchar(32) provider
+        int position
         varchar(255) handle
         varchar(255) handle_normalized
     }
@@ -1753,7 +1758,8 @@ Composite unique keys:
 
 - `BALANCER_REGISTRATION_FORM_VERSION` unique on (`form_id`, `number`)
 - `BALANCER_REGISTRATION_GOOGLE_SHEET_BINDING` unique on (`feed_id`, `source_record_key`)
-- `BALANCER_REGISTRATION_IDENTITY` unique on (`registration_id`, `provider`)
+- `BALANCER_REGISTRATION_IDENTITY` unique on (`registration_id`, `provider`, `handle_normalized`)
+- `BALANCER_REGISTRATION_IDENTITY` unique on (`registration_id`, `provider`, `position`)
 - `BALANCER_REGISTRATION_ROLE` unique on (`registration_id`, `role`)
 - `BALANCER_REGISTRATION_ROLE_HERO` unique on (`role_id`, `hero_id`)
 - `BALANCER_REGISTRATION_ROLE_HERO` unique on (`role_id`, `priority`)

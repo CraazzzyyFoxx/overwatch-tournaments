@@ -3,7 +3,7 @@
  *
  * One field model for builtins and custom questions alike: a builtin is a field
  * whose `kind` is `"builtin"` and whose `key` names a server-known behaviour
- * (`battle_tag`, `roles`, `identity_discord`, …); everything else is a generic
+ * (`identity_battlenet`, `roles`, `identity_discord`, …); everything else is a generic
  * question rendered from `kind`. Answers are a flat `{key: value}` map, so a
  * consumer never needs to know which of the two a key came from.
  */

@@ -37,6 +37,7 @@ from shared.models.identity.user import User  # noqa: E402
 from shared.models.registration.registration import (  # noqa: E402
     BalancerRegistration,
     BalancerRegistrationForm,
+    BalancerRegistrationIdentity,
     BalancerRegistrationRole,
     BalancerRegistrationTeam,
 )
@@ -142,12 +143,11 @@ class RegisteredExportIntegrationTests(IsolatedAsyncioTestCase):
 
         first_registration_id: int | None = None
         for member_index, slot_code, rank, is_substitute in roster:
+            tag = f"m{member_index}-{self.suffix}#1111"
             registration = BalancerRegistration(
                 tournament_id=self.tournament_id,
                 workspace_member_id=self.member_ids[member_index],
                 display_name=f"m{member_index}-{self.suffix}",
-                battle_tag=f"m{member_index}-{self.suffix}#1111",
-                battle_tag_normalized=f"m{member_index}-{self.suffix}#1111".lower(),
                 status="approved",
                 registration_team_id=team.id,
                 team_slot_code=slot_code,
@@ -155,6 +155,15 @@ class RegisteredExportIntegrationTests(IsolatedAsyncioTestCase):
             )
             session.add(registration)
             await session.flush()
+            session.add(
+                BalancerRegistrationIdentity(
+                    registration_id=registration.id,
+                    provider="battlenet",
+                    position=0,
+                    handle=tag,
+                    handle_normalized=tag.lower(),
+                )
+            )
             session.add(
                 BalancerRegistrationRole(
                     registration_id=registration.id,

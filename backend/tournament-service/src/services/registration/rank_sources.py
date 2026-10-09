@@ -35,7 +35,43 @@ from shared.services.division_grid.normalization import (
 )
 from shared.services.roster import registration_load_options
 from src import models
-from src.domain.registration.utils import normalize_battle_tag_key
+
+__all__ = ("primary_battlenet_key", "rank_sources_service")
+
+
+def primary_battlenet_key(registration: models.BalancerRegistration) -> str | None:
+    """The normalized PRIMARY battlenet handle of a registration, or ``None``.
+
+    ``handle_normalized`` is written with the battletag rule, so it is exactly the
+    ``social_account.username_normalized`` the OW rank tables key on.
+    """
+    return next(
+        (
+            row.handle_normalized
+            for row in registration.identities
+            if row.provider == SocialProvider.BATTLENET and row.position == 0
+        ),
+        None,
+    )
+
+
+def _primary_battlenet_order() -> sa.ScalarSelect[str]:
+    """The primary battlenet handle as a correlated scalar, for ORDER BY.
+
+    A scalar subquery rather than a join: a registrant with smurfs owns several
+    battlenet identity rows, and joining them would multiply the result.
+    """
+    return (
+        sa.select(models.BalancerRegistrationIdentity.handle_normalized)
+        .where(
+            models.BalancerRegistrationIdentity.registration_id == models.BalancerRegistration.id,
+            models.BalancerRegistrationIdentity.provider == SocialProvider.BATTLENET,
+            models.BalancerRegistrationIdentity.position == 0,
+        )
+        .limit(1)
+        .correlate(models.BalancerRegistration)
+        .scalar_subquery()
+    )
 
 
 @dataclass
@@ -566,7 +602,7 @@ class RankSourcesService:
             # lazy-load on an async session.
             .options(*registration_load_options())
             .order_by(
-                models.BalancerRegistration.battle_tag_normalized.asc().nullslast(),
+                _primary_battlenet_order().asc().nullslast(),
                 models.BalancerRegistration.id.asc(),
             )
         )
@@ -584,14 +620,10 @@ class RankSourcesService:
     ) -> dict[str, models.SocialAccount]:
         """Map normalized battletag key → the battlenet ``social_account`` it belongs to.
 
-        ``social_account.username_normalized`` (battlenet) is exactly
-        ``normalize_battle_tag_key`` of the handle, so registration keys match directly.
+        A registration's ``handle_normalized`` IS ``social_account.username_normalized``
+        for battlenet, so the keys match directly.
         """
-        tag_keys = {
-            key
-            for registration in registrations
-            if (key := (registration.battle_tag_normalized or normalize_battle_tag_key(registration.battle_tag)))
-        }
+        tag_keys = {key for registration in registrations if (key := primary_battlenet_key(registration))}
         if not tag_keys:
             return {}
 

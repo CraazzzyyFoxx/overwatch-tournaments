@@ -62,11 +62,11 @@ from shared.testing import real_db_sessionmaker as _db_sessions  # noqa: E402
 from src.services.registration import service as reg_service  # noqa: E402
 from src.services.registration import windows  # noqa: E402
 
-#: The one question these tests answer: the BattleTag every identity anchor is
-#: resolved through. The gate and the enrolment are what is under test, not the
-#: form.
+#: The one question these tests answer: the battlenet identity every player
+#: anchor is resolved through. The gate and the enrolment are what is under
+#: test, not the form.
 _SCHEMA = FormSchema(
-    sections=[FormSection(key="accounts", fields=[FormField(key="battle_tag", kind="builtin", required=True)])]
+    sections=[FormSection(key="accounts", fields=[FormField(key="identity_battlenet", kind="builtin", required=True)])]
 )
 
 
@@ -153,7 +153,7 @@ def test_first_registration_creates_member_and_player_role() -> None:
                         tournament_id=tournament_id,
                         workspace_id=workspace_id,
                         auth_user_id=auth_user_id,
-                        values={"battle_tag": f"SelfReg{suffix}#111"},
+                        values={"identity_battlenet": [f"SelfReg{suffix}#111"]},
                         schema=_SCHEMA,
                         auto_approve=False,
                         auth_user=actor,
@@ -220,7 +220,7 @@ def test_workspace_scoped_self_register_deny_returns_403() -> None:
                             tournament_id=tournament_id,
                             workspace_id=workspace_id,
                             auth_user_id=auth_user_id,
-                            values={"battle_tag": f"Denied{suffix}#222"},
+                            values={"identity_battlenet": [f"Denied{suffix}#222"]},
                             schema=_SCHEMA,
                             auto_approve=False,
                             auth_user=actor,
@@ -269,7 +269,7 @@ def test_second_registration_does_not_duplicate_member() -> None:
                         tournament_id=tournament_a_id,
                         workspace_id=workspace_id,
                         auth_user_id=auth_user_id,
-                        values={"battle_tag": f"Dup{suffix}#333"},
+                        values={"identity_battlenet": [f"Dup{suffix}#333"]},
                         schema=_SCHEMA,
                         auto_approve=False,
                         auth_user=actor,
@@ -281,7 +281,7 @@ def test_second_registration_does_not_duplicate_member() -> None:
                         tournament_id=tournament_b_id,
                         workspace_id=workspace_id,
                         auth_user_id=auth_user_id,
-                        values={"battle_tag": f"Dup{suffix}#333"},
+                        values={"identity_battlenet": [f"Dup{suffix}#333"]},
                         schema=_SCHEMA,
                         auto_approve=False,
                         auth_user=actor,

@@ -27,7 +27,7 @@ const REGISTRATION_422 = {
   code: "unprocessable",
   detail: "Invalid format.; Not one of the options.",
   fields: [
-    { field: "battle_tag", msg: "Invalid format.", code: "invalid_format" },
+    { field: "identity_battlenet", msg: "Invalid format.", code: "invalid_format" },
     { field: "server", msg: "Not one of the options.", code: "invalid_option" },
   ],
 };
@@ -38,7 +38,7 @@ describe("parseApiError", () => {
 
     expect(error.status).toBe(422);
     expect(error.details).toEqual([
-      { msg: "Invalid format.", code: "invalid_format", field: "battle_tag" },
+      { msg: "Invalid format.", code: "invalid_format", field: "identity_battlenet" },
       { msg: "Not one of the options.", code: "invalid_option", field: "server" },
     ]);
   });
@@ -51,7 +51,7 @@ describe("parseApiError", () => {
     const result = fieldErrorsFrom(await parseApiError(response(422, REGISTRATION_422)), t);
 
     expect(result.fields).toEqual({
-      battle_tag: "ru:invalid_format",
+      identity_battlenet: "ru:invalid_format",
       server: "ru:invalid_option",
     });
     expect(result.form).toBeNull();
@@ -88,13 +88,15 @@ describe("parseApiError", () => {
         error: {
           code: "unprocessable",
           message: "Invalid format.",
-          details: { fields: [{ field: "battle_tag", msg: "Invalid format.", code: "invalid_format" }] },
+          details: {
+            fields: [{ field: "identity_battlenet", msg: "Invalid format.", code: "invalid_format" }],
+          },
         },
       }),
     );
 
     expect(error.details).toEqual([
-      { msg: "Invalid format.", code: "invalid_format", field: "battle_tag" },
+      { msg: "Invalid format.", code: "invalid_format", field: "identity_battlenet" },
     ]);
   });
 

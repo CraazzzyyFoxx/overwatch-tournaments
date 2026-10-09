@@ -208,15 +208,15 @@ class _Fixture:
         self,
         member: models.WorkspaceMember,
         *,
-        battle_tag: str,
         status: str = "approved",
         checked_in: bool = False,
         deleted_at: datetime | None = None,
     ) -> models.BalancerRegistration:
+        """A registration row. No identities: the check-in reminders address
+        accounts, and never read a handle."""
         registration = models.BalancerRegistration(
             tournament_id=TOURNAMENT_ID,
             workspace_member_id=member.id,
-            battle_tag=battle_tag,
             status=status,
             checked_in=checked_in,
             deleted_at=deleted_at,
@@ -413,23 +413,11 @@ class CheckInOpenedTests(_LifecycleTestCase):
     def setUp(self) -> None:
         super().setUp()
         self.expected = self.fx.member("Approved", auth_user_id=601)
-        self.fx.registration(self.expected, battle_tag="Approved#1")
-        self.fx.registration(
-            self.fx.member("Pending", auth_user_id=602),
-            battle_tag="Pending#1",
-            status="pending",
-        )
-        self.fx.registration(
-            self.fx.member("Checked", auth_user_id=603),
-            battle_tag="Checked#1",
-            checked_in=True,
-        )
-        self.fx.registration(
-            self.fx.member("Withdrawn", auth_user_id=604),
-            battle_tag="Withdrawn#1",
-            deleted_at=datetime.now(UTC),
-        )
-        self.fx.registration(self.fx.member("Shadow", auth_user_id=None), battle_tag="Shadow#1")
+        self.fx.registration(self.expected)
+        self.fx.registration(self.fx.member("Pending", auth_user_id=602), status="pending")
+        self.fx.registration(self.fx.member("Checked", auth_user_id=603), checked_in=True)
+        self.fx.registration(self.fx.member("Withdrawn", auth_user_id=604), deleted_at=datetime.now(UTC))
+        self.fx.registration(self.fx.member("Shadow", auth_user_id=None))
 
     async def test_only_approved_unchecked_registrations_with_an_account_are_told(self) -> None:
         self.fx.schedule(TournamentStatus.CHECK_IN, starts_at=datetime.now(UTC) - timedelta(minutes=5))

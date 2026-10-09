@@ -122,7 +122,7 @@ export function useRegistrationTeamColumns({
           // The two things an organizer knows a team by.
           searchValue: (team) => {
             const captain = captainOf(team);
-            return `${team.name} ${captain ? memberName(captain) : ""} ${captain?.battle_tag ?? ""}`;
+            return `${team.name} ${captain ? memberName(captain) : ""} ${captain?.primary_handle ?? ""}`;
           }
         })
       },
@@ -168,9 +168,9 @@ export function useRegistrationTeamColumns({
           return (
             <div className="min-w-0">
               <p className="break-words">{name}</p>
-              {captain.battle_tag && captain.battle_tag !== name ? (
+              {captain.primary_handle && captain.primary_handle !== name ? (
                 <p className="break-words text-caption text-muted-foreground">
-                  {captain.battle_tag}
+                  {captain.primary_handle}
                 </p>
               ) : null}
             </div>

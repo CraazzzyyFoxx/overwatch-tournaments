@@ -1097,10 +1097,12 @@ CREATE TABLE balancer.registration_identity (
 	updated_at TIMESTAMP WITH TIME ZONE, 
 	registration_id BIGINT NOT NULL, 
 	provider VARCHAR(32) NOT NULL, 
+	position INTEGER DEFAULT '0' NOT NULL, 
 	handle VARCHAR(255) NOT NULL, 
 	handle_normalized VARCHAR(255) NOT NULL, 
 	PRIMARY KEY (id), 
-	CONSTRAINT uq_balancer_registration_identity_provider UNIQUE (registration_id, provider), 
+	CONSTRAINT uq_balancer_registration_identity_position UNIQUE (registration_id, provider, position) DEFERRABLE INITIALLY DEFERRED, 
+	CONSTRAINT uq_balancer_registration_identity_handle UNIQUE (registration_id, provider, handle_normalized) DEFERRABLE INITIALLY DEFERRED, 
 	FOREIGN KEY(registration_id) REFERENCES balancer.registration (id) ON DELETE CASCADE
 );
 

@@ -113,6 +113,8 @@ class PlayerRoster:
     """
 
     registration_id: int
+    #: The registrant's PRIMARY battlenet handle (``registration_identity``
+    #: ``provider='battlenet'``, ``position=0``); ``None`` when they gave none.
     battle_tag: str | None
     display_name: str | None
     #: ``players.user.id`` via ``workspace_member`` -- ``None`` for a registration
@@ -144,10 +146,13 @@ class PlayerRoster:
     team_slot_code: str | None = None
     is_substitute: bool = False
     # ── Contact/private answers ─────────────────────────────────────────────
-    #: ``provider -> handle`` from ``registration_identity``; absent provider =
-    #: the registrant answered nothing for it.
+    #: ``provider -> PRIMARY handle`` from ``registration_identity``; absent
+    #: provider = the registrant answered nothing for it. Extra handles of a
+    #: provider (smurfs) are not here; battlenet's are in :attr:`smurf_tags`.
     identities: Mapping[str, str] = field(default_factory=dict)
     stream_pov: bool = False
+    #: The registrant's battlenet handles beyond the primary one, in the order
+    #: given. :attr:`battle_tag` is the primary.
     smurf_tags: tuple[str, ...] = ()
 
     # -- roles ---------------------------------------------------------------

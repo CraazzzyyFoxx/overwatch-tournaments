@@ -64,15 +64,17 @@ export function getPoolDropPatch(targetLane: PoolLane): PoolDropPatch {
   return { is_in_pool: targetLane !== "excluded" };
 }
 
+/** Every BattleTag the registration carries — its primary handle first, the
+ *  smurfs after — deduplicated case-insensitively. `fallbackBattleTag` stands
+ *  in when there is no registration behind the row, or it answered no
+ *  Battle.net identity at all. */
 export function getRegistrationBattleTags(
-  registration: Pick<AdminRegistration, "battle_tag" | "answers"> | null | undefined,
+  registration: Pick<AdminRegistration, "answers"> | null | undefined,
   fallbackBattleTag: string
 ): string[] {
+  const handles = registration ? answerList(registration.answers, "identity_battlenet") : [];
   const seen = new Set<string>();
-  const tags = [
-    registration?.battle_tag ?? fallbackBattleTag,
-    ...(registration ? answerList(registration.answers, "smurf_tags") : [])
-  ]
+  const tags = [handles[0] ?? fallbackBattleTag, ...handles.slice(1)]
     .map((tag) => tag?.trim())
     .filter((tag): tag is string => Boolean(tag));
 

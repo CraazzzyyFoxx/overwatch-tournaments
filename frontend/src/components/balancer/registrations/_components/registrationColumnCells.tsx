@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { formatAdmissionReason, primaryAdmissionReason } from "@/lib/registration/admission";
 import { cn } from "@/lib/utils";
 import { ROLE_LABELS, getRoleIconName, getSubroleLabel } from "@/lib/roster/roles";
-import { answerText } from "@/lib/forms/answers";
+import { answerList } from "@/lib/forms/answers";
 import type { AdminRegistration, AdminRegistrationRole } from "@/types/balancer-admin.types";
 import type { SubroleCatalog } from "@/types/registration.types";
 
@@ -22,7 +22,7 @@ import type { SubroleCatalog } from "@/types/registration.types";
  * like every other header here.
  */
 export const BUILTIN_ANSWER_LABELS: Record<string, string> = {
-  smurf_tags: "Smurfs",
+  identity_battlenet: "BattleTags",
   stream_pov: "Stream POV",
   reserve: "On call",
   public_notes: "Notes",
@@ -36,17 +36,17 @@ export const BUILTIN_ANSWER_LABELS: Record<string, string> = {
 
 /** The answers that had a visible column before the schema existed. Every other
  *  question starts hidden: a form may ask a dozen of them. */
-export const DEFAULT_VISIBLE_ANSWER_KEYS: Record<string, true> = { smurf_tags: true };
+export const DEFAULT_VISIBLE_ANSWER_KEYS: Record<string, true> = { identity_battlenet: true };
 
-/** The identity handles this form asks for, in schema order, off the row's own
- *  answers — a form that asks for VK shows VK without a code change here. */
+/** Every handle this form asks for, in schema order, off the row's own answers
+ *  — a form that asks for VK shows VK without a code change here. An identity
+ *  answer is a LIST, primary handle first, so Battle.net contributes the main
+ *  BattleTag and every smurf beside it. */
 export function identityHandles(
   registration: AdminRegistration,
   keys: readonly string[],
 ): string[] {
-  return keys
-    .map((key) => answerText(registration.answers, key))
-    .filter((handle): handle is string => handle !== null);
+  return keys.flatMap((key) => answerList(registration.answers, key));
 }
 
 /**
@@ -115,15 +115,21 @@ export function ParticipantCell({
   identityKeys,
 }: Readonly<{ registration: AdminRegistration; identityKeys: readonly string[] }>) {
   const primary =
-    registration.battle_tag ??
+    registration.primary_handle ??
     registration.display_name ??
     `Registration #${registration.id}`;
 
   const secondaryParts = [
-    registration.battle_tag && registration.display_name && registration.display_name !== registration.battle_tag
+    registration.primary_handle &&
+    registration.display_name &&
+    registration.display_name !== registration.primary_handle
       ? registration.display_name
       : null,
-    ...identityHandles(registration, identityKeys),
+    // The primary handle is the line above already; its smurfs and the other
+    // providers' handles are not.
+    ...identityHandles(registration, identityKeys).filter(
+      (handle) => handle !== registration.primary_handle,
+    ),
     registration.source_record_key,
   ].filter(Boolean);
 

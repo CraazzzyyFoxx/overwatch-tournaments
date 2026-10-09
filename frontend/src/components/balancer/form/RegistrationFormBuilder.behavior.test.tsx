@@ -124,7 +124,7 @@ const SERVER_SCHEMA: FormSchema = {
       key: "accounts",
       title: null,
       description: null,
-      fields: [builtin("battle_tag", true), builtin("stream_pov")]
+      fields: [builtin("identity_battlenet", true), builtin("stream_pov")]
     }
   ]
 };
@@ -132,7 +132,12 @@ const SERVER_SCHEMA: FormSchema = {
 const TEMPLATE_SCHEMA: FormSchema = {
   schema_version: 1,
   sections: [
-    { key: "identity", title: "Who are you", description: null, fields: [builtin("battle_tag", true)] }
+    {
+      key: "identity",
+      title: "Who are you",
+      description: null,
+      fields: [builtin("identity_battlenet", true)]
+    }
   ]
 };
 
@@ -309,7 +314,7 @@ describe("registration form builder", () => {
           title: null,
           description: null,
           fields: [
-            { ...builtin("battle_tag", true) },
+            { ...builtin("identity_battlenet", true) },
             { ...builtin("stream_pov") }
           ]
         },
@@ -394,7 +399,11 @@ describe("registration form builder", () => {
 
     const [, body] = upsertRegistrationForm.mock.calls[0];
     const fields: FormField[] = body.form_schema.sections[0].fields;
-    expect(fields.map((one) => one.key)).toEqual(["battle_tag", "stream_pov", "reserve"]);
+    expect(fields.map((one) => one.key)).toEqual([
+      "identity_battlenet",
+      "stream_pov",
+      "reserve"
+    ]);
     // Closed stays closed on the questions nobody touched; the ticked one opens.
     expect(fields.map((one) => one.editable)).toEqual([false, false, true]);
     // The catalog pins the reserve's readership, so the builder cannot send another.

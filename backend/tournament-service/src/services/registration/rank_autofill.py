@@ -18,11 +18,11 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.balancer_registration_statuses import is_balancer_status_excluded
+from shared.core.social import SocialProvider
 from shared.division_grid import DivisionGrid
 from shared.domain.roster import PlayerRoster
 from shared.services.roster import roster_engine
 from src import models
-from src.domain.registration.utils import normalize_battle_tag_key
 from src.services.registration._common import (
     RegistrationCommonService,
     _common_service,
@@ -38,6 +38,7 @@ from src.services.registration.rank_sources import (
     _build_priority_rank_data,
     _OwRankSignals,
     _RankData,
+    primary_battlenet_key,
     rank_sources_service,
 )
 
@@ -118,7 +119,7 @@ def build_registration_rank_autofill_plan(
     """
 
     display_name = getattr(registration, "display_name", None)
-    battle_tag = getattr(registration, "battle_tag", None)
+    battle_tag = registration.primary_handle(SocialProvider.BATTLENET)
     row = {
         "registration_id": registration.id,
         "display_name": display_name,
@@ -430,7 +431,7 @@ class RankAutofillService:
         balancer_additions = 0
 
         for registration in registrations:
-            tag_key = registration.battle_tag_normalized or normalize_battle_tag_key(registration.battle_tag)
+            tag_key = primary_battlenet_key(registration)
             main_battle_tag = battle_tags_by_key.get(tag_key or "")
             ow_signals_by_role = ow_signals_by_tag_id.get(main_battle_tag.id, {}) if main_battle_tag else {}
             user_id = getattr(main_battle_tag, "user_id", None) if main_battle_tag else None

@@ -1,9 +1,10 @@
 """Public participants list visibility contract for ``_reg_to_read``.
 
 The roster renders a column per question the organizer chose to ask, so every
-PUBLIC answer has to survive serialization for an anonymous caller — smurf tags
-(declared alternate battle tags, the anti-smurf transparency the roster exists
-for), the participant-facing notes, and the organizer's own custom questions.
+PUBLIC answer has to survive serialization for an anonymous caller — the
+battlenet identity with every smurf the registrant declared (the anti-smurf
+transparency the roster exists for), the participant-facing notes, and the
+organizer's own custom questions.
 
 The rule is now the schema's, not this module's: ``_reg_to_read`` filters the
 flat ``answers`` document to the ``public_keys`` its caller resolved from the
@@ -23,7 +24,7 @@ from src.schemas.registration_build import _reg_to_read  # noqa: E402
 #: What a form that asks the four public questions publishes. ``organizer_notes``
 #: is fixed-visibility ``organizers`` in the builtin catalog, and ``staff_note``
 #: stands for an organizer-only CUSTOM question.
-PUBLIC_KEYS = frozenset({"battle_tag", "smurf_tags", "stream_pov", "public_notes", "roles", "vk"})
+PUBLIC_KEYS = frozenset({"identity_battlenet", "stream_pov", "public_notes", "roles", "vk"})
 
 
 def _roster(rank: int | None, source: str = "registration", *extra: RosterRole) -> PlayerRoster:
@@ -50,17 +51,24 @@ def _roster(rank: int | None, source: str = "registration", *extra: RosterRole) 
     )
 
 
+def _identity(provider: str, handle: str, position: int = 0) -> SimpleNamespace:
+    return SimpleNamespace(provider=provider, handle=handle, position=position)
+
+
 def _reg_stub() -> SimpleNamespace:
+    identities = [
+        _identity("battlenet", "Player#1234"),
+        _identity("battlenet", "Alt#1111", 1),
+        _identity("battlenet", "Alt#2222", 2),
+        _identity("discord", "player"),
+        _identity("twitch", "player_tv"),
+    ]
     return SimpleNamespace(
         id=1,
         tournament_id=78,
         workspace_member=SimpleNamespace(player_id=42),
-        battle_tag="Player#1234",
-        smurf_tags_json=["Alt#1111", "Alt#2222"],
-        identities=[
-            SimpleNamespace(provider="discord", handle="player"),
-            SimpleNamespace(provider="twitch", handle="player_tv"),
-        ],
+        identities=identities,
+        primary_game_identity=lambda: identities[0],
         stream_pov=False,
         roles=[],
         public_notes="anything you'd like organizers to know",
@@ -78,15 +86,16 @@ def _reg_stub() -> SimpleNamespace:
 def test_the_roster_read_carries_every_public_answer_it_renders():
     read = _reg_to_read(_reg_stub(), workspace_id=1, public_keys=PUBLIC_KEYS)
 
-    # Anti-smurf transparency data (the roster's whole point).
-    assert read.answers["smurf_tags"] == ["Alt#1111", "Alt#2222"]
+    # Anti-smurf transparency data (the roster's whole point): the declared
+    # alternates ride in the battlenet answer, primary first.
+    assert read.answers["identity_battlenet"] == ["Player#1234", "Alt#1111", "Alt#2222"]
     # Notes are a roster column.
     assert read.answers["public_notes"] == "anything you'd like organizers to know"
     # The custom columns are built from the form's definitions, so their
     # answers have to arrive or the header lies.
     assert read.answers["vk"] == "vk.com/player"
-    # The BattleTag stays top-level: every surface renders it.
-    assert read.battle_tag == "Player#1234"
+    # The primary game handle stays top-level: every surface renders it.
+    assert read.primary_handle == "Player#1234"
     # Balancer progress is public: the roster shows it and the registrant's
     # own card renders the balancing step from it.
     assert read.balancer_status == "ready"
@@ -107,8 +116,8 @@ def test_no_public_key_set_is_the_organizer_context_and_filters_nothing():
 
     assert read.answers["organizer_notes"] == "please seed me low"
     assert read.answers["staff_note"] == "watch this one"
-    assert read.answers["identity_discord"] == "player"
-    assert read.answers["identity_twitch"] == "player_tv"
+    assert read.answers["identity_discord"] == ["player"]
+    assert read.answers["identity_twitch"] == ["player_tv"]
 
 
 def test_a_registration_answered_against_an_older_version_reads_stale():

@@ -21,6 +21,7 @@ rank_autofill = importlib.import_module("src.services.registration.rank_autofill
 rank_sources = importlib.import_module("src.services.registration.rank_sources")
 
 from shared.core.enums import HeroClass  # noqa: E402
+from shared.core.social import SocialProvider  # noqa: E402
 from shared.division_grid import DivisionGrid, DivisionTier  # noqa: E402
 from shared.domain.roster import PlayerRoster, RosterRole  # noqa: E402
 from shared.services.division_grid.normalization import DivisionGridNormalizer  # noqa: E402
@@ -41,10 +42,12 @@ def _role(role: str, rank_value: int | None = None, priority: int = 0) -> Simple
 
 
 def _registration(*roles: SimpleNamespace, battle_tag: str | None = "Main#123") -> SimpleNamespace:
+    """Battle.net is an ordinary identity: the plan reads it through
+    ``primary_handle(SocialProvider.BATTLENET)``, not a column."""
     return SimpleNamespace(
         id=42,
         display_name="Main",
-        battle_tag=battle_tag,
+        primary_handle=lambda _provider: battle_tag,
         status="approved",
         balancer_status="not_in_balancer",
         roles=list(roles),
@@ -68,7 +71,7 @@ def _roster_for(registration: SimpleNamespace) -> PlayerRoster:
     order, over every role the registration declares."""
     return PlayerRoster(
         registration_id=registration.id,
-        battle_tag=registration.battle_tag,
+        battle_tag=registration.primary_handle(SocialProvider.BATTLENET),
         display_name=registration.display_name,
         player_id=None,
         auth_user_id=None,

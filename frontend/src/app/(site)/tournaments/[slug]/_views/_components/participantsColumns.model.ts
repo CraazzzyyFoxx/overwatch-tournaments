@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import type { useTranslations } from "next-intl";
 
 import type { Registration } from "@/types/registration.types";
+import { identityProvider } from "@/lib/forms/builtin-keys";
 import type { FormField, RolesParams } from "@/types/forms.types";
 
 // ---------------------------------------------------------------------------
@@ -63,21 +64,15 @@ export function getRoleLabel(role: string, t: Translator): string {
  * words. A key with no entry here keeps whatever label the form carries.
  */
 export function getLocalizedColumnLabel(t: Translator, key: string, fallback: string): string {
+  // Every `identity_<provider>` question is named by its provider, Battle.net
+  // included, so the six of them share one line rather than six cases.
+  const provider = identityProvider(key);
+  if (provider) return t(`registration.accounts.${provider}`);
   switch (key) {
-    case "battle_tag":
-      return t("registration.accounts.battleTag");
-    case "smurf_tags":
+    // Not an identity key of its own: the handles after the primary one, split
+    // out of the `identity_battlenet` answer into a column of their own.
+    case "identity_battlenet_extras":
       return t("registration.accounts.smurfs");
-    case "identity_discord":
-      return t("registration.accounts.discord");
-    case "identity_twitch":
-      return t("registration.accounts.twitch");
-    case "identity_boosty":
-      return t("registration.accounts.boosty");
-    case "identity_vk":
-      return t("registration.accounts.vk");
-    case "identity_youtube":
-      return t("registration.accounts.youtube");
     case "roles":
       return t("common.rolesList");
     case "top_heroes":

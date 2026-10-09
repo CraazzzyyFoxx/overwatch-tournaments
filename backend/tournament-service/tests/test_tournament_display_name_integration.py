@@ -21,14 +21,28 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from shared.core import enums  # noqa: E402
-from shared.core.social import SocialProvider  # noqa: E402
+from shared.core.social import SocialProvider, normalize_social_handle  # noqa: E402
 from shared.models.identity.auth_user import AuthUser  # noqa: E402
 from shared.models.identity.social import SocialAccount  # noqa: E402
 from shared.models.identity.user import User  # noqa: E402
-from shared.models.registration.registration import BalancerRegistration  # noqa: E402
+from shared.models.registration.registration import (  # noqa: E402
+    BalancerRegistration,
+    BalancerRegistrationIdentity,
+)
 from shared.models.tenancy.workspace import Workspace, WorkspaceMember  # noqa: E402
 from shared.models.tournament import Tournament  # noqa: E402
 from shared.services.tournament.display_name import tournament_display_name  # noqa: E402
+
+
+def _battlenet_identity(handle: str) -> BalancerRegistrationIdentity:
+    """The registration's primary battlenet identity -- what the tournament
+    shows this player as."""
+    return BalancerRegistrationIdentity(
+        provider=SocialProvider.BATTLENET,
+        position=0,
+        handle=handle,
+        handle_normalized=normalize_social_handle(SocialProvider.BATTLENET, handle),
+    )
 
 
 def test_registered_tag_then_linked_battletag_then_site_name(db_session) -> None:
@@ -66,12 +80,16 @@ def test_registered_tag_then_linked_battletag_then_site_name(db_session) -> None
         db_session.add_all(
             [
                 # Registered for THIS tournament on a smurf.
-                BalancerRegistration(tournament_id=this.id, workspace_member_id=member.id, battle_tag="Smurf#2222"),
+                BalancerRegistration(
+                    tournament_id=this.id,
+                    workspace_member_id=member.id,
+                    identities=[_battlenet_identity("Smurf#2222")],
+                ),
                 # A withdrawn entry elsewhere names nobody.
                 BalancerRegistration(
                     tournament_id=other.id,
                     workspace_member_id=member.id,
-                    battle_tag="Old#3333",
+                    identities=[_battlenet_identity("Old#3333")],
                     deleted_at=datetime.now(UTC),
                 ),
             ]

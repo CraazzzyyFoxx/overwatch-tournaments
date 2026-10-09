@@ -101,5 +101,5 @@ export function captainSeat(
 }
 
 export function registrationLabel(registration: AdminRegistration): string {
-  return registration.battle_tag || registration.display_name || `#${registration.id}`;
+  return registration.primary_handle || registration.display_name || `#${registration.id}`;
 }

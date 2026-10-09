@@ -162,16 +162,17 @@ class RegistrationTeamPlaceAdminRequest(BaseModel):
 
 
 class RegistrationTeamAttachAdminRequest(BaseModel):
-    battle_tag: str = Field(min_length=1, max_length=255)
+    #: Matched against the primary game handle of the tournament's registrations.
+    handle: str = Field(min_length=1, max_length=255)
     slot_code: RosterSlotCode
     is_substitute: bool = False
 
-    @field_validator("battle_tag")
+    @field_validator("handle")
     @classmethod
-    def _strip_tag(cls, value: str) -> str:
+    def _strip_handle(cls, value: str) -> str:
         cleaned = value.strip()
         if not cleaned:
-            raise ValueError("A battle tag is required")
+            raise ValueError("A game handle is required")
         return cleaned
 
 
@@ -197,7 +198,7 @@ class TeamEligibilityIssueRead(BaseModel):
 class RegistrationTeamMemberRead(BaseModel):
     registration_id: int
     display_name: str | None = None
-    battle_tag: str | None = None
+    primary_handle: str | None = None
     slot_code: str | None = None
     is_substitute: bool = False
     is_captain: bool = False
@@ -216,7 +217,7 @@ class RegistrationTeamInviteRead(BaseModel):
     #: identity leaking outward; a captain managing pending offers needs a name,
     #: otherwise two chips are indistinguishable and neither can be revoked on
     #: purpose. ``None`` on a link invite, which has no addressee.
-    target_battle_tag: str | None = None
+    target_handle: str | None = None
     #: True when the invite is a shareable link. The token itself is never
     #: serialized — it is returned once, by the create call.
     is_link: bool = False
@@ -309,7 +310,7 @@ class RegistrationFreeAgentRead(BaseModel):
     """
 
     registration_id: int
-    battle_tag: str
+    primary_handle: str | None = None
     #: Role codes, primary first. The captain is filling one slot; a list of bare
     #: names would make them open every profile to find a tank.
     roles: list[str] = Field(default_factory=list)
@@ -354,8 +355,7 @@ class RegistrationTeamInviteHistoryEntry(BaseModel):
     is_substitute: bool
     #: Includes ``expired``, which is not a stored state but a pending row past its
     #: clock. A lapsed offer and a live one are not the same entry to a reader.
-    state: str
-    target_battle_tag: str | None = None
+    target_handle: str | None = None
     is_link: bool = False
     invited_at: datetime | None = None
     expires_at: datetime | None = None
@@ -431,7 +431,7 @@ def serialize_registration_team(
 def serialize_invite(
     invite: models.BalancerRegistrationTeamInvite,
     *,
-    target_battle_tag: str | None = None,
+    target_handle: str | None = None,
 ) -> RegistrationTeamInviteRead:
     """Serialize an outstanding offer.
 
@@ -439,7 +439,7 @@ def serialize_invite(
     but serving it would let a caller confirm a guessed token offline, and nothing
     downstream needs it.
 
-    ``target_battle_tag`` is passed IN rather than resolved here: the addressee
+    ``target_handle`` is passed IN rather than resolved here: the addressee
     lives two joins away (member -> player -> account), and a lookup inside a
     per-invite serializer would be an N+1 across every team on the organizer's
     page. The caller batches it.
@@ -449,7 +449,7 @@ def serialize_invite(
         slot_code=invite.slot_code,
         is_substitute=bool(invite.is_substitute),
         state=invite.state,
-        target_battle_tag=target_battle_tag,
+        target_handle=target_handle,
         is_link=invite.token_sha256 is not None,
         expires_at=invite.expires_at,
         invited_at=invite.invited_at,

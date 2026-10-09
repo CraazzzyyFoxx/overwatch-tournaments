@@ -3575,7 +3575,7 @@ export interface paths {
         };
         /**
          * Get overall statistics
-         * @description Permission: public; no authentication required. Returns aggregate tournament statistics across the workspace.
+         * @description Permission: public; no authentication required. Returns aggregate tournament statistics across the workspace: counts of tournaments, teams, players and champions, plus played volume — finished encounters, maps, distinct calendar days covered (overlapping tournaments counted once) and whole hours of logged map time.
          *
          *     RPC subject: `rpc.tournament.statistics_overall`
          */
@@ -4532,6 +4532,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/staff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List workspace staff
+         * @description Permission: public; no authentication required. The organizers credited on the workspace's public page: one row per person at their highest of the `owner`/`admin`/`referee` system roles, ordered owner → admin → referee then by name. `name` is the person's linked player name (BattleTag); an account with no linked player is omitted. 404 if the workspace does not exist.
+         *
+         *     RPC subject: `rpc.app.workspaces.staff`
+         */
+        get: operations["get__api_v1_workspaces__workspace_id__staff"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/achievement/calculate": {
         parameters: {
             query?: never;
@@ -5306,28 +5328,6 @@ export interface paths {
          *     RPC subject: `rpc.tournament.reg_bulk_set_balancer_status`
          */
         post: operations["post__api_v1_admin_balancer_tournaments__tournament_id__registrations_bulk_set_balancer_status"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/admin/balancer/tournaments/{tournament_id}/registrations/export-users": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Export registrations to users
-         * @description Permission: workspace `registration.create` on the tournament's workspace. Exports a tournament's approved registrations into user records and returns the result summary.
-         *
-         *     RPC subject: `rpc.tournament.reg_export_users`
-         */
-        post: operations["post__api_v1_admin_balancer_tournaments__tournament_id__registrations_export_users"];
         delete?: never;
         options?: never;
         head?: never;
@@ -9702,6 +9702,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/balancer/custom-games/{custom_game_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get custom game
+         * @description Permission: public; no authentication required. Returns one mix with its full lineup: each seat's participation state, role order, the ranks the balancer would use and which layer each came from. Resolves ownership from the mix id; an optional workspace_id restricts the read and returns 404 if the mix belongs to another workspace.
+         *
+         *     RPC subject: `rpc.balancer.custom.get`
+         */
+        get: operations["get__api_v1_balancer_custom_games__custom_game_id_"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/balancer/me/mix-preferences": {
         parameters: {
             query?: never;
@@ -9911,13 +9933,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Get custom game
-         * @description Permission: public; no authentication required. Returns one mix with its full lineup: each seat's participation state, role order, the ranks the balancer would use and which layer each came from. 404 when the mix belongs to another workspace.
-         *
-         *     RPC subject: `rpc.balancer.custom.get`
-         */
-        get: operations["get__api_v1_balancer_workspaces__workspace_id__custom_games__game_id_"];
+        get?: never;
         put?: never;
         post?: never;
         /**
@@ -10524,8 +10540,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Voice options
-         * @description RPC subject: `rpc.balancer.custom.voice_options`
+         * List custom game voice channels
+         * @description Permission: workspace membership plus being the mix's host or co-host (or a superuser). Returns the voice channels of the workspace's mix voice category, split into `general` and `team` voices, each with the bot's `missing_permissions`. `error` is set instead of failing when Discord is unreachable or the category is gone (`category_not_found`); with no category configured both lists are empty.
+         *
+         *     RPC subject: `rpc.balancer.custom.voice_options`
          */
         get: operations["get__api_v1_balancer_workspaces__workspace_id__custom_games__game_id__voice_options"];
         put?: never;
@@ -13897,6 +13915,16 @@ export interface components {
         /** WorkspaceRead */
         "app.WorkspaceRead": {
             /**
+             * About
+             * @default null
+             */
+            about: string | null;
+            /**
+             * Boosty Url
+             * @default null
+             */
+            boosty_url: string | null;
+            /**
              * Brand Accent
              * @default null
              */
@@ -13989,6 +14017,11 @@ export interface components {
              * @default null
              */
             discord_guild_verified_at: string | null;
+            /**
+             * Discord Url
+             * @default null
+             */
+            discord_url: string | null;
             /** Icon Url */
             icon_url: string | null;
             /** Id */
@@ -14026,15 +14059,43 @@ export interface components {
              */
             subdomain: string | null;
             /**
+             * Tagline
+             * @default null
+             */
+            tagline: string | null;
+            /**
              * Timezone
              * @default Europe/Moscow
              */
             timezone: string;
             /**
+             * Twitch Url
+             * @default null
+             */
+            twitch_url: string | null;
+            /**
              * Verification Status
              * @default unverified
              */
             verification_status: string;
+        };
+        /**
+         * WorkspaceStaffMember
+         * @description One publicly credited organizer of a workspace.
+         *
+         *     A NAME and a role, nothing else: unlike ``WorkspaceOwnerRead`` above this
+         *     model IS served anonymously, so it carries no account identifier, no email
+         *     and no auth-user id — only the player name the site already shows on every
+         *     roster and profile page.
+         */
+        "app.WorkspaceStaffMember": {
+            /** Name */
+            name: string;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: AppWorkspaceStaffMemberRole;
         };
         /** BalanceJobResult */
         "balancer.BalanceJobResult": {
@@ -17288,6 +17349,14 @@ export interface components {
         "tournament.OverallStatistics": {
             /** Champions */
             champions: number;
+            /** Days */
+            days: number;
+            /** Encounters */
+            encounters: number;
+            /** Hours */
+            hours: number;
+            /** Maps */
+            maps: number;
             /** Players */
             players: number;
             /** Teams */
@@ -17498,8 +17567,11 @@ export interface components {
          *     global account search.
          */
         "tournament.RegistrationFreeAgentRead": {
-            /** Battle Tag */
-            battle_tag: string;
+            /**
+             * Primary Handle
+             * @default null
+             */
+            primary_handle: string | null;
             /** Registration Id */
             registration_id: number;
             /** Roles */
@@ -17524,11 +17596,6 @@ export interface components {
             balancer_status_meta: {
                 [key: string]: unknown;
             } | null;
-            /**
-             * Battle Tag
-             * @default null
-             */
-            battle_tag: string | null;
             /**
              * Can Edit
              * @default false
@@ -17558,6 +17625,11 @@ export interface components {
             form_version_stale: boolean;
             /** Id */
             id: number;
+            /**
+             * Primary Handle
+             * @default null
+             */
+            primary_handle: string | null;
             /**
              * Profiles Open
              * @default null
@@ -17872,13 +17944,11 @@ export interface components {
             revoked_by_organizer: boolean;
             /** Slot Code */
             slot_code: string;
-            /** State */
-            state: string;
             /**
-             * Target Battle Tag
+             * Target Handle
              * @default null
              */
-            target_battle_tag: string | null;
+            target_handle: string | null;
         };
         /**
          * RegistrationTeamInviteHistoryResponse
@@ -18001,10 +18071,10 @@ export interface components {
             /** State */
             state: string;
             /**
-             * Target Battle Tag
+             * Target Handle
              * @default null
              */
-            target_battle_tag: string | null;
+            target_handle: string | null;
         };
         /** RegistrationTeamListResponse */
         "tournament.RegistrationTeamListResponse": {
@@ -18023,11 +18093,6 @@ export interface components {
         };
         /** RegistrationTeamMemberRead */
         "tournament.RegistrationTeamMemberRead": {
-            /**
-             * Battle Tag
-             * @default null
-             */
-            battle_tag: string | null;
             /**
              * Checked In
              * @default false
@@ -18053,6 +18118,11 @@ export interface components {
              * @default false
              */
             is_substitute: boolean;
+            /**
+             * Primary Handle
+             * @default null
+             */
+            primary_handle: string | null;
             /** Registration Id */
             registration_id: number;
             /**
@@ -23474,16 +23544,6 @@ export interface components {
             balancer_status: string;
             balancer_status_meta: components["schemas"]["tournament.StatusMetaRead"];
             /**
-             * Battle Tag
-             * @default null
-             */
-            battle_tag: string | null;
-            /**
-             * Battle Tag Normalized
-             * @default null
-             */
-            battle_tag_normalized: string | null;
-            /**
              * Best Rank
              * @default null
              */
@@ -23525,6 +23585,11 @@ export interface components {
              * @default false
              */
             is_flex: boolean;
+            /**
+             * Primary Handle
+             * @default null
+             */
+            primary_handle: string | null;
             /**
              * Profiles Open
              * @default null
@@ -26327,8 +26392,8 @@ export interface components {
         };
         /** RegistrationTeamAttachAdminRequest */
         "tournament.RegistrationTeamAttachAdminRequest": {
-            /** Battle Tag */
-            battle_tag: string;
+            /** Handle */
+            handle: string;
             /**
              * Is Substitute
              * @default false
@@ -26357,15 +26422,6 @@ export interface components {
              * @default false
              */
             withdraw_members: boolean;
-        };
-        /** RegistrationUserExportResponse */
-        "tournament.RegistrationUserExportResponse": {
-            /** Processed */
-            processed: number;
-            /** Skipped */
-            skipped: number;
-            /** Total */
-            total: number;
         };
         /** ReportBuiltInFieldConfig */
         "tournament.ReportBuiltInFieldConfig": {
@@ -43418,6 +43474,66 @@ export interface operations {
             };
         };
     };
+    get__api_v1_workspaces__workspace_id__staff: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["app.WorkspaceStaffMember"][];
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     post__api_v1_achievement_calculate: {
         parameters: {
             query?: never;
@@ -46500,84 +46616,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["tournament.BulkBalancerStatusResponse"];
-                };
-            };
-            /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Not authorized (`forbidden`). Authenticated, but the credential lacks the permission, workspace, or scope. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
-            429: {
-                headers: {
-                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
-                    "Retry-After"?: number;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    post__api_v1_admin_balancer_tournaments__tournament_id__registrations_export_users: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                tournament_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Success */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["tournament.RegistrationUserExportResponse"];
                 };
             };
             /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
@@ -65540,6 +65578,68 @@ export interface operations {
             };
         };
     };
+    get__api_v1_balancer_custom_games__custom_game_id_: {
+        parameters: {
+            query?: {
+                workspace_id?: number;
+            };
+            header?: never;
+            path: {
+                custom_game_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     get__api_v1_balancer_me_mix_preferences: {
         parameters: {
             query?: never;
@@ -66402,67 +66502,6 @@ export interface operations {
             header?: never;
             path: {
                 workspace_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Success */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": Record<string, never>;
-                };
-            };
-            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
-            429: {
-                headers: {
-                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
-                    "Retry-After"?: number;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    get__api_v1_balancer_workspaces__workspace_id__custom_games__game_id_: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                workspace_id: string;
-                game_id: string;
             };
             cookie?: never;
         };
@@ -73663,6 +73702,11 @@ export enum AppUserHeroCompareMetricBetter_worseAnyOf0 {
 export enum AppWorkspaceReadNewcomer_scope {
     global = "global",
     workspace = "workspace"
+}
+export enum AppWorkspaceStaffMemberRole {
+    owner = "owner",
+    admin = "admin",
+    referee = "referee"
 }
 export enum BalancerCreateJobResponseStatus {
     queued = "queued",

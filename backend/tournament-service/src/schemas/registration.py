@@ -81,11 +81,13 @@ class RegistrationRead(BaseModel):
     tournament_id: int
     workspace_id: int
     user_id: int | None = None
-    battle_tag: str | None = None
+    #: Primary handle of the registration's first GAME identity (battlenet
+    #: today), the name every surface renders this row by.
+    primary_handle: str | None = None
     #: Every answer this registration carries that the READER may see: the
     #: public participants list passes the form version's ``public_keys()``, an
-    #: organizer context passes nothing and gets everything. ``battle_tag`` and
-    #: ``roles`` stay top-level because every surface renders them.
+    #: organizer context passes nothing and gets everything. ``primary_handle``
+    #: and ``roles`` stay top-level because every surface renders them.
     answers: dict[str, Any] = Field(default_factory=dict)
     roles: list[RegistrationRoleRead] = Field(default_factory=list)
     #: The schema version these answers were validated against, and whether the

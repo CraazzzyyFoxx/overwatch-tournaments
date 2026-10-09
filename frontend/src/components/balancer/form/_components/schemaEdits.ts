@@ -24,14 +24,15 @@ const OPTION_KINDS: Record<string, true> = { select: true, multi_select: true };
 /** The server compiles a pattern at save time and caps it; see `shared.core.social`. */
 export const MAX_REGEX_LENGTH = 256;
 
-/** Kinds and builtin keys whose answer is a string a pattern can run on. */
+/** Kinds whose answer is a string a pattern can run on. Among the builtins only
+ *  the identities carry one — every other builtin is a flag, a list of roles or
+ *  free text the server owns. */
 const VALIDATABLE_KINDS: Record<string, true> = {
   text: true,
   textarea: true,
   url: true,
   number: true
 };
-const VALIDATABLE_KEYS: Record<string, true> = { battle_tag: true, smurf_tags: true };
 
 // ---------------------------------------------------------------------------
 // Reading a schema
@@ -59,9 +60,7 @@ export function earlierFields(schema: FormSchema, key: string): FormField[] {
 }
 
 export function supportsValidation(field: FormField): boolean {
-  if (field.kind === "builtin") {
-    return VALIDATABLE_KEYS[field.key] === true || builtinParamsKind(field.key) === "identity";
-  }
+  if (field.kind === "builtin") return builtinParamsKind(field.key) === "identity";
   return VALIDATABLE_KINDS[field.kind] === true;
 }
 

@@ -100,8 +100,7 @@ function createRegistration(overrides: Partial<AdminRegistration> = {}): AdminRe
     workspace_id: 3,
     user_id: 1,
     display_name: "Player",
-    battle_tag: "player#1234",
-    battle_tag_normalized: "player#1234",
+    primary_handle: "player#1234",
     source: "manual",
     source_record_key: null,
     answers: {},
@@ -361,8 +360,9 @@ describe("pool lane helpers", () => {
 describe("battle tag clipboard helpers", () => {
   it("returns the primary BattleTag followed by unique non-empty smurf tags", () => {
     const registration = createRegistration({
-      battle_tag: "Main#1111",
-      answers: { smurf_tags: ["Alt#2222", " ", "Main#1111", "alt#2222", "Pocket#3333"] },
+      answers: {
+        identity_battlenet: ["Main#1111", " ", "Main#1111", "Alt#2222", "alt#2222", "Pocket#3333"],
+      },
     });
 
     expect(getRegistrationBattleTags(registration, "Fallback#0000")).toEqual([
@@ -372,16 +372,13 @@ describe("battle tag clipboard helpers", () => {
     ]);
   });
 
-  it("falls back to the player BattleTag and formats tags for clipboard", () => {
-    const registration = createRegistration({
-      battle_tag: null,
-      answers: { smurf_tags: ["Practice#4444"] },
-    });
+  it("falls back to the player BattleTag when the row answered no Battle.net identity", () => {
+    const registration = createRegistration({ answers: {} });
 
     const battleTags = getRegistrationBattleTags(registration, "Player#1234");
 
-    expect(battleTags).toEqual(["Player#1234", "Practice#4444"]);
-    expect(formatBattleTagsForClipboard(battleTags)).toBe("Player#1234\nPractice#4444");
+    expect(battleTags).toEqual(["Player#1234"]);
+    expect(formatBattleTagsForClipboard(battleTags)).toBe("Player#1234");
   });
 
   it("formats smurf count labels for collapsed UI", () => {

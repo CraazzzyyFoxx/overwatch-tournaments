@@ -159,7 +159,7 @@ export default function MyTeamInviteDialog({
                 />
                 {invite.targetAgent && (
                   <div className="flex flex-wrap items-center gap-2 text-sm">
-                    <span>{t("picker.selected", { name: invite.targetAgent.battle_tag })}</span>
+                    <span>{t("picker.selected", { name: invite.targetAgent.primary_handle })}</span>
                     <Button
                       type="button"
                       variant="ghost"
@@ -223,7 +223,7 @@ export default function MyTeamInviteDialog({
                                   selected ? OPTION_SELECTED_CLASS : OPTION_IDLE_CLASS
                                 )}
                               >
-                                <span className="truncate">{agent.battle_tag}</span>
+                                <span className="truncate">{agent.primary_handle}</span>
                                 {/* Roles on the row: the captain is filling one specific
                                     slot and should spot a tank without opening a profile. */}
                                 {agent.roles.map((role) => (

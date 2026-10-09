@@ -42,6 +42,7 @@ from shared.models.identity.user import User  # noqa: E402
 from shared.models.platform.realtime import WorkspaceEvent  # noqa: E402
 from shared.models.registration.registration import (  # noqa: E402
     BalancerRegistration,
+    BalancerRegistrationIdentity,
     BalancerRegistrationRole,
 )
 from shared.models.tenancy.workspace import Workspace, WorkspaceMember  # noqa: E402
@@ -222,8 +223,6 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
         """
         reg = BalancerRegistration(
             tournament_id=self.tournament_id,
-            battle_tag=tag,
-            battle_tag_normalized=tag.lower(),
             display_name=tag,
             status="approved",
             balancer_status="ready",
@@ -231,6 +230,15 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
         )
         s.add(reg)
         await s.flush()
+        s.add(
+            BalancerRegistrationIdentity(
+                registration_id=reg.id,
+                provider="battlenet",
+                position=0,
+                handle=tag,
+                handle_normalized=tag.lower(),
+            )
+        )
         lead = primary or next(iter(ranks))
         for priority, (role, rank) in enumerate(ranks.items()):
             s.add(

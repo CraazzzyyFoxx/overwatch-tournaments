@@ -9336,14 +9336,6 @@
       "description": "Permission: workspace `registration.delete` on the registration's workspace. Soft-deletes a registration (204 no body) and broadcasts a realtime change.",
       "summary": "Delete registration"
     },
-    "rpc.tournament.reg_export_users": {
-      "description": "Permission: workspace `registration.create` on the tournament's workspace. Exports a tournament's approved registrations into user records and returns the result summary.",
-      "response": {
-        "array": false,
-        "ref": "tournament.RegistrationUserExportResponse"
-      },
-      "summary": "Export registrations to users"
-    },
     "rpc.tournament.reg_form_get": {
       "description": "Permission: workspace `registration_form.read` on the tournament's workspace. Returns a tournament's registration form config, or null if none.",
       "response": {
@@ -35234,30 +35226,6 @@
         "balancer_status_meta": {
           "$ref": "#/components/schemas/tournament.StatusMetaRead"
         },
-        "battle_tag": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Battle Tag"
-        },
-        "battle_tag_normalized": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Battle Tag Normalized"
-        },
         "best_rank": {
           "anyOf": [
             {
@@ -35345,6 +35313,18 @@
           "default": false,
           "title": "Is Flex",
           "type": "boolean"
+        },
+        "primary_handle": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Primary Handle"
         },
         "profiles_open": {
           "anyOf": [
@@ -45419,9 +45399,17 @@
     "tournament.RegistrationFreeAgentRead": {
       "description": "A registrant on no team, as a captain sees them in the invite picker.\n\nCarries the registration id rather than an account id: the client never learns\nan ``auth_user_id``, and the server resolves the identity itself. Everything\nhere is already on the public participants list, so the picker opens no new\nprivacy surface \u2014 which is what makes targeted invites possible without a\nglobal account search.",
       "properties": {
-        "battle_tag": {
-          "title": "Battle Tag",
-          "type": "string"
+        "primary_handle": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Primary Handle"
         },
         "registration_id": {
           "title": "Registration Id",
@@ -45436,8 +45424,7 @@
         }
       },
       "required": [
-        "registration_id",
-        "battle_tag"
+        "registration_id"
       ],
       "title": "RegistrationFreeAgentRead",
       "type": "object"
@@ -45469,18 +45456,6 @@
           ],
           "default": null,
           "title": "Balancer Status Meta"
-        },
-        "battle_tag": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Battle Tag"
         },
         "can_edit": {
           "default": false,
@@ -45531,6 +45506,18 @@
         "id": {
           "title": "Id",
           "type": "integer"
+        },
+        "primary_handle": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Primary Handle"
         },
         "profiles_open": {
           "anyOf": [
@@ -45878,10 +45865,10 @@
     },
     "tournament.RegistrationTeamAttachAdminRequest": {
       "properties": {
-        "battle_tag": {
+        "handle": {
           "maxLength": 255,
           "minLength": 1,
-          "title": "Battle Tag",
+          "title": "Handle",
           "type": "string"
         },
         "is_substitute": {
@@ -45901,7 +45888,7 @@
         }
       },
       "required": [
-        "battle_tag",
+        "handle",
         "slot_code"
       ],
       "title": "RegistrationTeamAttachAdminRequest",
@@ -46137,11 +46124,7 @@
           "title": "Slot Code",
           "type": "string"
         },
-        "state": {
-          "title": "State",
-          "type": "string"
-        },
-        "target_battle_tag": {
+        "target_handle": {
           "anyOf": [
             {
               "type": "string"
@@ -46151,14 +46134,13 @@
             }
           ],
           "default": null,
-          "title": "Target Battle Tag"
+          "title": "Target Handle"
         }
       },
       "required": [
         "id",
         "slot_code",
-        "is_substitute",
-        "state"
+        "is_substitute"
       ],
       "title": "RegistrationTeamInviteHistoryEntry",
       "type": "object"
@@ -46376,7 +46358,7 @@
           "title": "State",
           "type": "string"
         },
-        "target_battle_tag": {
+        "target_handle": {
           "anyOf": [
             {
               "type": "string"
@@ -46386,7 +46368,7 @@
             }
           ],
           "default": null,
-          "title": "Target Battle Tag"
+          "title": "Target Handle"
         }
       },
       "required": [
@@ -46423,18 +46405,6 @@
     },
     "tournament.RegistrationTeamMemberRead": {
       "properties": {
-        "battle_tag": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Battle Tag"
-        },
         "checked_in": {
           "default": false,
           "title": "Checked In",
@@ -46466,6 +46436,18 @@
           "default": false,
           "title": "Is Substitute",
           "type": "boolean"
+        },
+        "primary_handle": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Primary Handle"
         },
         "registration_id": {
           "title": "Registration Id",
@@ -46819,29 +46801,6 @@
         "form_version_id"
       ],
       "title": "RegistrationUpdate",
-      "type": "object"
-    },
-    "tournament.RegistrationUserExportResponse": {
-      "properties": {
-        "processed": {
-          "title": "Processed",
-          "type": "integer"
-        },
-        "skipped": {
-          "title": "Skipped",
-          "type": "integer"
-        },
-        "total": {
-          "title": "Total",
-          "type": "integer"
-        }
-      },
-      "required": [
-        "processed",
-        "skipped",
-        "total"
-      ],
-      "title": "RegistrationUserExportResponse",
       "type": "object"
     },
     "tournament.ReportBuiltInFieldConfig": {

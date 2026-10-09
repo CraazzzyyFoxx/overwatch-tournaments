@@ -31,6 +31,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from shared.core.enums import HeroClass  # noqa: E402
+from shared.core.social import SocialProvider  # noqa: E402
 from shared.division_grid import load_runtime_grid  # noqa: E402
 from shared.domain.forms import FormField, FormSchema, FormSection  # noqa: E402
 from shared.domain.member_rank import ResolvedRank  # noqa: E402
@@ -88,12 +89,12 @@ def _registration(
     member_id: int | None,
     inactive: frozenset[str] = frozenset(),
 ) -> SimpleNamespace:
+    identity = SimpleNamespace(provider=SocialProvider.BATTLENET, position=0, handle="Player#1234")
     return SimpleNamespace(
         id=registration_id,
         tournament_id=7,
         workspace_member_id=member_id,
         workspace_member=SimpleNamespace(player_id=77, player=None) if member_id is not None else None,
-        battle_tag="Player#1234",
         display_name="Player",
         public_notes=None,
         organizer_notes=None,
@@ -107,8 +108,8 @@ def _registration(
         team_slot_code=None,
         is_substitute=False,
         stream_pov=False,
-        smurf_tags_json=None,
-        identities=[],
+        identities=[identity],
+        handles=lambda provider: [identity.handle] if provider == SocialProvider.BATTLENET else [],
         roles=[
             SimpleNamespace(
                 id=index,

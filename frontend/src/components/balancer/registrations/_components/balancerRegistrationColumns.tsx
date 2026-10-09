@@ -49,12 +49,14 @@ export function buildBalancerRegistrationColumns(
    *  is read off each row, so the old `requireOpenProfile` twin of this flag is
    *  gone: nothing outside that column needed either of them. */
   requireSubscription = false,
-  /** Every question the tournament's CURRENT schema asks. `battle_tag` and
-   *  `roles` are dropped here — they keep their own columns — and the rest
-   *  become one column each. A row filed against an OLDER version still renders
-   *  in these columns (its answers are read by key); an answer whose question
-   *  the current schema no longer asks has no column to live in and is shown in
-   *  the row's inspector instead, under its stale-version notice. */
+  /** Every question the tournament's CURRENT schema asks. `roles` is dropped
+   *  here — it keeps its own column — and the rest become one column each,
+   *  `identity_battlenet` included: the participant column shows the primary
+   *  handle, and the BattleTag column shows the whole list behind it. A row
+   *  filed against an OLDER version still renders in these columns (its answers
+   *  are read by key); an answer whose question the current schema no longer
+   *  asks has no column to live in and is shown in the row's inspector instead,
+   *  under its stale-version notice. */
   fields: FormField[] = [],
   /** Values offered by the `status` header filter, as the endpoint reports them. */
   statusOptions: readonly { value: string; label: string }[] = [],
@@ -89,9 +91,7 @@ export function buildBalancerRegistrationColumns(
       ]
     : [];
 
-  const answerFields = fields.filter(
-    (field) => field.key !== "battle_tag" && field.key !== "roles",
-  );
+  const answerFields = fields.filter((field) => field.key !== "roles");
   const identityKeys = answerFields
     .map((field) => field.key)
     .filter((key) => identityProvider(key) !== null);
@@ -120,7 +120,7 @@ export function buildBalancerRegistrationColumns(
     {
       id: "participant",
       header: "Participant",
-      accessorFn: (registration) => registration.battle_tag || registration.display_name || "",
+      accessorFn: (registration) => registration.primary_handle || registration.display_name || "",
       sortingFn: localeTextSort,
       cell: ({ row }) => <ParticipantCell registration={row.original} identityKeys={identityKeys} />,
       meta: columnMeta<AdminRegistration>({
@@ -131,7 +131,7 @@ export function buildBalancerRegistrationColumns(
         className: "min-w-[240px]",
         searchValue: (registration) =>
           [
-            registration.battle_tag,
+            registration.primary_handle,
             registration.display_name,
             ...identityHandles(registration, identityKeys),
             registration.source_record_key,

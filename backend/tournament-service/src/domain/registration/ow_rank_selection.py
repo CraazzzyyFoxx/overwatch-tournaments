@@ -5,7 +5,8 @@ A player can own several Battle.net accounts (a main plus declared smurfs), all 
 the player's *true* rank: the maximum across their accounts, while preferring the main account(s) and
 only falling back to smurfs when no main account has data for a role.
 
-The smurf set comes from the registration form (``smurf_tags_json``); the DB has no per-account smurf
+The smurf set comes from the registration form: the EXTRA handles of its
+``identity_battlenet`` answer (position > 0). The DB has no per-account smurf
 flag, so the form is the authoritative source. Functions here are pure (no DB) so they can be unit
 tested in isolation.
 """

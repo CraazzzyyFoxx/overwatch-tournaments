@@ -186,12 +186,6 @@ export interface BalancerPlayerExportResponse {
   } | null;
 }
 
-export interface RegistrationUserExportResponse {
-  processed: number;
-  skipped: number;
-  total: number;
-}
-
 type RegistrationRankAutofillPlayerStatus =
   | "will_update"
   | "applied"
@@ -478,15 +472,17 @@ export interface AdminRegistration {
   workspace_id: number;
   user_id: number | null;
   display_name: string | null;
-  battle_tag: string | null;
-  battle_tag_normalized: string | null;
+  /** The registration's public identity: the primary handle of its first game
+   *  identity (the BattleTag, today). */
+  primary_handle: string | null;
   source: "manual" | "google_sheets";
   source_record_key: string | null;
   /**
    * Every answer this registration carries, flat and UNFILTERED: the admin
    * table IS the organizer context, so `organizer_notes` and organizers-only
-   * questions are part of it. `battle_tag` and `roles` stay beside it because
-   * they are columns and rows, not JSON.
+   * questions are part of it. The BattleTags live here too, under
+   * `identity_battlenet` (primary first, smurfs after); only `roles` stays
+   * beside it, because those are rows and not JSON.
    */
   answers: Answers;
   /** The schema version the answers were written against, and whether the form
@@ -537,7 +533,7 @@ export interface AdminRegistrationCreateInput {
   admin_notes?: string | null;
   /** The same flat document the public form submits, validated against the
    *  form's current schema with requirements OFF: an organizer enters what they
-   *  know. `battle_tag` and the identities are answers like any other. */
+   *  know. The identities, the BattleTag included, are answers like any other. */
   answers?: Answers;
   status?: string | null;
   balancer_status?: string | null;

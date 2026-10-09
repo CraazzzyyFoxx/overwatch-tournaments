@@ -338,7 +338,7 @@ def _reg_to_read(
         # API shape preserved: user_id stays in the payload, derived from the
         # workspace_member anchor (callers eager-load it; see helper).
         user_id=_registration_player_id(reg),
-        battle_tag=reg.battle_tag,
+        primary_handle=(identity.handle if (identity := reg.primary_game_identity()) else None),
         answers=answers,
         roles=roles,
         form_version_id=reg.form_version_id,

@@ -36,8 +36,7 @@ export function defaultFormSchema(): FormSchema {
       {
         key: "accounts",
         fields: [
-          builtin("battle_tag", true),
-          builtin("smurf_tags"),
+          builtin(identityKey("battlenet"), true),
           builtin(identityKey("discord")),
           builtin(identityKey("twitch")),
         ],

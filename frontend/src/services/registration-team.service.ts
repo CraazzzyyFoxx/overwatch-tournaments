@@ -344,7 +344,7 @@ const registrationTeamService = {
   async attachMemberAdmin(
     tournamentId: number,
     teamId: number,
-    input: { battle_tag: string; slot_code: string; is_substitute?: boolean },
+    input: { handle: string; slot_code: string; is_substitute?: boolean },
   ): Promise<RegistrationTeam> {
     const response = await apiFetch(
       `/api/v1/admin/balancer/tournaments/${tournamentId}/registration-teams/${teamId}/members/attach`,

@@ -1133,10 +1133,12 @@ Table balancer.registration_identity {
   updated_at timestamptz
   registration_id bigint [not null]
   provider VARCHAR(32) [not null]
+  position int [not null, default: 0]
   handle VARCHAR(255) [not null]
   handle_normalized VARCHAR(255) [not null]
   indexes {
-    (registration_id, provider) [unique, name: "uq_balancer_registration_identity_provider"]
+    (registration_id, provider, position) [unique, name: "uq_balancer_registration_identity_position"]
+    (registration_id, provider, handle_normalized) [unique, name: "uq_balancer_registration_identity_handle"]
     (provider, handle_normalized) [name: "ix_balancer_registration_identity_handle"]
     (registration_id) [name: "ix_balancer_registration_identity_registration_id"]
   }
