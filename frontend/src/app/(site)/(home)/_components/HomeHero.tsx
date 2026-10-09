@@ -19,25 +19,26 @@ export function HomeHero() {
 
   return (
     <HeroFrame
-      variant="plain"
+      // Half-strength glow: the hairline and bloom stay, but quieter than PageHero's.
+      tint="color-mix(in srgb, var(--aqt-teal) 55%, transparent)"
       className="bg-[linear-gradient(135deg,var(--aqt-bg-2),var(--aqt-bg))]"
     >
-      <div className="px-[clamp(20px,4vw,48px)] py-[clamp(28px,4vw,48px)]">
-        <p className={cn(EYEBROW_CLASS, "normal-case tracking-normal")}>{t("eyebrow")}</p>
+      <div className="px-[clamp(20px,3.2vw,40px)] py-[clamp(24px,3.2vw,40px)]">
+        <p className={EYEBROW_CLASS}>{t("eyebrow")}</p>
         <h1
           id="home-hero-title"
           className={cn(
             HERO_TITLE_SIZE_CLASS,
-            "mt-4 max-w-[22em] text-balance font-display font-semibold leading-[1.12] tracking-[-0.03em] text-[color:var(--aqt-fg)]"
+            "mt-3 max-w-[22em] text-balance font-display font-semibold leading-[1.08] tracking-[-0.02em] text-[color:var(--aqt-fg)]"
           )}
         >
           {t.rich("title", {
             accent: (chunks) => <span className="text-[color:var(--aqt-teal)]">{chunks}</span>
           })}
         </h1>
-        <p className={cn(LEDE_CLASS, "mt-4")}>{t("lede")}</p>
+        <p className={cn(LEDE_CLASS, "mt-3")}>{t("lede")}</p>
 
-        <div className="mt-7 flex flex-wrap items-center gap-3">
+        <div className="mt-6 flex flex-wrap items-center gap-3">
           <PlayerSearchCombobox
             size="lg"
             placeholder={t("searchPlaceholder")}
@@ -52,7 +53,7 @@ export function HomeHero() {
           </Link>
         </div>
 
-        <div className="mt-2 flex flex-wrap items-center gap-x-6">
+        <div className="mt-1.5 flex flex-wrap items-center gap-x-6">
           <HomeProfileLink />
           <Link href="/get-workspace" prefetch={false} className={TEXT_LINK_CLASS}>
             <Trophy aria-hidden />

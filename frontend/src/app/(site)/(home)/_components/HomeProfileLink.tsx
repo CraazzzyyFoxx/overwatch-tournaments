@@ -9,7 +9,7 @@ import { getAuthProfileHref } from "@/lib/auth/profile-links";
 
 /** Secondary text link under the hero's search row (mock `.text-link`). */
 export const TEXT_LINK_CLASS =
-  "inline-flex min-h-11 items-center gap-2 rounded-sm text-body text-[color:var(--aqt-fg-muted)] transition-colors duration-150 hover:text-[color:var(--aqt-fg)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[color:var(--aqt-teal)] [&_svg]:size-4 [&_svg]:text-[color:var(--aqt-fg-dim)]";
+  "inline-flex min-h-11 items-center gap-2 rounded-sm text-body text-[color:var(--aqt-fg-muted)] transition-colors duration-150 hover:text-[color:var(--aqt-fg)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[color:var(--aqt-teal)] [&_svg]:size-4 [&_svg]:text-[color:var(--aqt-teal)]";
 
 /**
  * "My profile and statistics" — only for a signed-in account that is linked to
