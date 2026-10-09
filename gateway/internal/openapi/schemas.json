@@ -3966,7 +3966,17 @@
       "summary": "Delete one custom game Discord post"
     },
     "rpc.balancer.custom.get": {
-      "description": "Permission: public; no authentication required. Returns one mix with its full lineup: each seat's participation state, role order, the ranks the balancer would use and which layer each came from. 404 when the mix belongs to another workspace.",
+      "description": "Permission: public; no authentication required. Returns one mix with its full lineup: each seat's participation state, role order, the ranks the balancer would use and which layer each came from. Resolves ownership from the mix id; an optional workspace_id restricts the read and returns 404 if the mix belongs to another workspace.",
+      "query_params": [
+        {
+          "name": "workspace_id",
+          "required": false,
+          "schema": {
+            "description": "Optional community restriction; a foreign mix returns 404.",
+            "type": "integer"
+          }
+        }
+      ],
       "summary": "Get custom game"
     },
     "rpc.balancer.custom.hard_delete": {

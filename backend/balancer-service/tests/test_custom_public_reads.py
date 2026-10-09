@@ -17,6 +17,7 @@ for candidate in (str(REPO_BACKEND_ROOT), str(BALANCER_SERVICE_ROOT)):
 
 from shared.services import discord_messages  # noqa: E402
 from src.rpc import custom  # noqa: E402
+from src.services.custom_game import CustomGameService  # noqa: E402
 
 
 def _message(**fields) -> SimpleNamespace:
@@ -274,6 +275,24 @@ class CustomMixPublicReadTests(IsolatedAsyncioTestCase):
         self.assertEqual(0, data["lobbies"][1]["matches_count"])
         self.assertFalse(data["lobbies"][1]["lineup_recorded"])
         self.assertIsNotNone(data["lobbies"][0]["balance_result"])
+
+    async def test_canonical_read_keeps_the_optional_query_scope_boundary(self) -> None:
+        game = SimpleNamespace(id=3, workspace_id=7)
+        service = CustomGameService(games=SimpleNamespace(get=AsyncMock(return_value=game)))
+        with (
+            patch.object(custom, "custom_game_service", service),
+            patch.object(custom, "_with_roster", AsyncMock(return_value={"id": game.id})),
+        ):
+            public = await self._call("rpc.balancer.custom.get", {"id": "3"})
+            own = await self._call("rpc.balancer.custom.get", {"id": "3", "query": {"workspace_id": ["7"]}})
+            foreign = await self._call("rpc.balancer.custom.get", {"id": "3", "query": {"workspace_id": ["8"]}})
+            invalid = await self._call("rpc.balancer.custom.get", {"id": "3", "query": {"workspace_id": ["invalid"]}})
+        self.assertTrue(public["ok"], public)
+        self.assertTrue(own["ok"], own)
+        self.assertFalse(foreign["ok"], foreign)
+        self.assertEqual("not_found", foreign["error"]["code"])
+        self.assertFalse(invalid["ok"], invalid)
+        self.assertEqual("unprocessable", invalid["error"]["code"])
 
     async def test_writing_one_still_requires_an_authenticated_actor(self) -> None:
         service = MagicMock()

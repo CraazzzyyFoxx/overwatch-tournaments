@@ -3,10 +3,8 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import Cookies from "js-cookie";
 import { ArrowRight } from "lucide-react";
 
-import { STATS_SCOPE_COOKIE } from "@/lib/site/stats-scope";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 
 /**
@@ -33,6 +31,7 @@ export function WorkspaceScopeLink({
 }>) {
   const router = useRouter();
   const setCurrentWorkspace = useWorkspaceStore((state) => state.setCurrentWorkspace);
+  const setStatsScope = useWorkspaceStore((state) => state.setStatsScope);
 
   return (
     <Link
@@ -45,8 +44,7 @@ export function WorkspaceScopeLink({
         if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
         event.preventDefault();
         setCurrentWorkspace(workspaceId);
-        // The "all workspaces" preference would otherwise outrank the community.
-        Cookies.remove(STATS_SCOPE_COOKIE);
+        setStatsScope("workspace");
         router.push(href);
       }}
     >

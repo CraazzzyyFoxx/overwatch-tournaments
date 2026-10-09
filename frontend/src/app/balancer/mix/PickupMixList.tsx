@@ -16,6 +16,7 @@ import type { CustomGame } from "@/services/custom-game.service";
 type PickupMixListProps = {
   canEdit: boolean;
   games: CustomGame[];
+  communities?: Record<number, string>;
   loading: boolean;
   error: boolean;
   onRetry: () => void;
@@ -25,6 +26,7 @@ type PickupMixListProps = {
 export function PickupMixList({
   canEdit,
   games,
+  communities,
   loading,
   error,
   onRetry,
@@ -111,7 +113,7 @@ export function PickupMixList({
           )}
         >
           {visibleGames.map((game) => (
-            <PickupMixRow key={game.id} game={game} />
+            <PickupMixRow key={game.id} game={game} community={communities?.[game.workspace_id]} />
           ))}
         </ul>
       )}
@@ -119,7 +121,7 @@ export function PickupMixList({
   );
 }
 
-function PickupMixRow({ game }: Readonly<{ game: CustomGame }>) {
+function PickupMixRow({ game, community }: Readonly<{ game: CustomGame; community?: string }>) {
   const t = useTranslations("mixes.list");
   const tLobbies = useTranslations("mixes.lobbies");
   const format = useFormatter();
@@ -144,6 +146,7 @@ function PickupMixRow({ game }: Readonly<{ game: CustomGame }>) {
           </span>
         </span>
         <span className="flex min-w-0 flex-wrap gap-x-4 gap-y-1 text-caption text-[color:var(--aqt-fg-muted)] [overflow-wrap:anywhere]">
+          {community ? <span className="min-w-0 max-w-full font-medium">{community}</span> : null}
           <span className="min-w-0 max-w-full">
             {t("host", { name: game.host_display_name ?? `#${game.host_user_id}` })}
           </span>

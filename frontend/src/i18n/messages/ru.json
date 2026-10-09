@@ -5220,9 +5220,13 @@
       "playerLabel": "Игрок:"
     },
     "workspaces": "Сообщества",
-    "switchWorkspace": "Сменить сообщество",
+    "switchWorkspace": "Фильтр по сообществу",
     "allWorkspaces": "Все сообщества",
     "createWorkspace": "Создать сообщество",
+    "viewingScope": "Область просмотра",
+    "entityCommunity": "Сообщество страницы: {name}",
+    "openWorkspace": "Открыть страницу сообщества",
+    "platformCommunities": "Все сообщества на OWT",
     "activeEvents": {
       "title": "Активные события",
       "trigger": "Активные события: {count}",
@@ -6760,9 +6764,13 @@
       "scopeMine": "Мои комнаты",
       "scopeWorkspace": "Все комнаты воркспейса",
       "emptyWorkspaceTitle": "В этом воркспейсе нет комнат",
-      "emptyWorkspaceDescription": "Их пока никто не создал."
+      "emptyWorkspaceDescription": "Их пока никто не создал.",
+      "communityId": "Сообщество №{id}"
     },
     "create": {
+      "communityLabel": "Сообщество",
+      "communityPlaceholder": "Выберите сообщество",
+      "communityHint": "Выберите, где создать комнату. Фильтр просмотра не изменится.",
       "open": "Новая комната",
       "title": "Новая комната для скрима",
       "description": "Две команды, одна серия и тот же предматч, что и в официальном матче.",
@@ -7166,7 +7174,10 @@
       "submit": "Создать микс",
       "pending": "Создание микса...",
       "error": "Не удалось создать микс. Введённые данные сохранены. Проверьте подробности и повторите попытку.",
-      "sourceRequired": "Выберите предыдущий микс."
+      "sourceRequired": "Выберите предыдущий микс.",
+      "workspace": "Сообщество",
+      "workspacePlaceholder": "Выберите сообщество",
+      "workspaceRequired": "Выберите сообщество, в котором вы можете создать микс."
     },
     "leaderboard": {
       "title": "Лидеры по победам",

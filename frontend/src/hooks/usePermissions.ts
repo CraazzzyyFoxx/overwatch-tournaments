@@ -1,6 +1,6 @@
 "use client";
 
-import { useWorkspaceStore } from "@/stores/workspace.store";
+import { useCurrentWorkspaceId } from "@/hooks/useCurrentWorkspace";
 import { useAuthProfileStore } from "@/stores/auth-profile.store";
 
 export type AppRole = "admin" | "moderator" | "user";
@@ -190,7 +190,7 @@ export function canAccessAnyPermissionForProfile(
 export function usePermissions() {
   const user = useAuthProfileStore((s) => s.user);
   const status = useAuthProfileStore((s) => s.status);
-  const currentWorkspaceId = useWorkspaceStore((s) => s.currentWorkspaceId);
+  const currentWorkspaceId = useCurrentWorkspaceId();
 
   const isLoaded = status !== "idle" && status !== "loading";
   const isAuthenticated = status === "authenticated";

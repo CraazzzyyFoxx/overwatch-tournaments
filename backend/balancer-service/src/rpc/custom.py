@@ -85,6 +85,8 @@ def _opt_int(data: dict[str, Any], key: str) -> int | None:
     body = c.payload(data)
     raw = body.get(key, data.get(key))
     if raw is None:
+        raw = c.q1(data, key)
+    if raw is None:
         return None
     try:
         return int(raw)
@@ -638,7 +640,7 @@ def register(broker: Any, logger: Any) -> None:
     @broker.subscriber("rpc.balancer.custom.get")
     async def _get(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            workspace_id = _int(data, "workspace_id")
+            workspace_id = _opt_int(data, "workspace_id")
             game = await custom_game_service.get(session, workspace_id=workspace_id, custom_game_id=_game_id(data))
             return await _with_roster(session, game)
 

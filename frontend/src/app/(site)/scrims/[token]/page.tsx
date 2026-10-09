@@ -16,6 +16,7 @@ import { RETURN_TO_PARAM, withReturnTo } from "@/lib/auth/return-to";
 import scrimService from "@/services/scrim.service";
 import type { ScrimRoom } from "@/types/scrim.types";
 
+import { useEntityWorkspace } from "@/hooks/useEntityWorkspace";
 import { PregameRoom } from "@/app/(site)/tournaments/[slug]/pregame/[encounterId]/_components/PregameRoom";
 import { Spinner } from "@/components/ui/spinner";
 import { scrimQueryKeys } from "@/lib/scrims/query-keys";
@@ -90,6 +91,7 @@ export default function ScrimRoomPage() {
     queryFn: () => scrimService.getRoom(token),
     enabled: Boolean(token)
   });
+  useEntityWorkspace(roomQuery.data?.workspace_id ?? null);
 
   // `PregameRoom` reads its exit target off the URL and has no prop for it, so
   // the param is planted here rather than passed. Without it the room would fall
@@ -104,8 +106,11 @@ export default function ScrimRoomPage() {
 
   const claimMutation = useMutation({
     mutationFn: () => scrimService.claimSide(token),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: roomQueryKey });
+    onSuccess: async (room) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: roomQueryKey }),
+        queryClient.invalidateQueries({ queryKey: scrimQueryKeys.lists(room.workspace_id) })
+      ]);
       notify.success(t("claimed"));
     },
     onError: (error) => notify.error(getApiErrorMessage(error, t("claimFailed")))
@@ -115,9 +120,8 @@ export default function ScrimRoomPage() {
     return <Skeleton className="h-96 w-full rounded-xl" />;
   }
 
-  // A thrown error is a transport failure, never a rejected read: `getRoom`
-  // swallows non-ok responses into `null`. Retrying beats 404-ing a captain out
-  // of a live room over one dropped request.
+  // Missing/hidden tokens are 404; authorization and transport failures retain
+  // the page's error state instead of pretending the room does not exist.
   if (roomQuery.isError) {
     return (
       <PageStateCard

@@ -1,7 +1,6 @@
 /**
- * Cross-workspace ("all workspaces") reads for the public site: every browse
- * page except the Play section (scrims and mixes are hosted inside one
- * workspace). `/` and `/statistics` are platform-wide on the apex already.
+ * Cross-workspace public browsing, including Play lists. Actions and opened
+ * objects retain their own concrete workspace. The platform defaults to "all".
  *
  * The mode is a visitor preference stored in {@link STATS_SCOPE_COOKIE} and
  * toggled from the workspace switcher. It exists only on the platform apex

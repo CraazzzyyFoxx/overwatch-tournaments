@@ -294,7 +294,8 @@ DOCS: dict[str, dict] = {
             "Permission: public; no authentication required. "
             "Returns one mix with its full lineup: each seat's participation state, role "
             "order, the ranks the balancer would use and which layer each came from. "
-            "404 when the mix belongs to another workspace."
+            "Resolves ownership from the mix id; an optional workspace_id restricts the read "
+            "and returns 404 if the mix belongs to another workspace."
         ),
     },
     "rpc.balancer.custom.update_roster": {

@@ -472,6 +472,18 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         )
         self.session = _session()
 
+    async def test_entity_read_resolves_owner_but_explicit_workspace_still_isolates(self) -> None:
+        game = _game(workspace_id=2)
+        self.games.get.return_value = game
+        self.assertIs(
+            await self.service.get(self.session, workspace_id=None, custom_game_id=game.id),
+            game,
+        )
+        with self.assertRaises(HTTPException) as ctx:
+            await self.service.get(self.session, workspace_id=1, custom_game_id=game.id)
+        self.assertEqual(ctx.exception.status_code, 404)
+        self.co_hosts.user_ids_for_game.assert_not_awaited()
+
     def _discord_links(self, by_member: dict[int, str]) -> None:
         """The one batched read behind ``discord_mentions``: member id -> snowflake."""
         rows = MagicMock()

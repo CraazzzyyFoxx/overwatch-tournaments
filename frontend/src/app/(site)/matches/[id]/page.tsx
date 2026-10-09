@@ -4,6 +4,7 @@ import Image from "next/image";
 import MatchStatsSection from "@/app/(site)/matches/[id]/components/MatchStatsSection";
 import { Card, CardHeader } from "@/components/ui/card";
 import TeamName from "@/components/TeamName";
+import { EntityWorkspace } from "@/components/workspace/EntityWorkspace";
 import { getTranslations } from "next-intl/server";
 import { SITE_NAME, SITE_URL } from "@/config/site";
 
@@ -62,6 +63,7 @@ const EncounterPage = async (props: { params: Promise<{ id: number }> }) => {
 
   return (
     <div className="flex flex-col gap-4">
+      <EntityWorkspace workspaceId={match.encounter?.tournament?.workspace_id} />
       <Card>
         <CardHeader>
           <div className="flex flex-row gap-8 items-center">

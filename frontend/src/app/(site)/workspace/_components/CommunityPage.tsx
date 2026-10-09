@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 
 import { SectionStack } from "@/components/site/open-layout";
+import { EntityWorkspace } from "@/components/workspace/EntityWorkspace";
 import type { Workspace } from "@/types/workspace.types";
 
 import { AboutStaff, AboutStaffSkeleton } from "./AboutStaff";
@@ -23,6 +24,7 @@ export async function CommunityPage({
 }: Readonly<{ workspace: Workspace; ownHost: boolean }>) {
   return (
     <SectionStack className="pt-5">
+      <EntityWorkspace workspaceId={workspace.id} />
       <CommunityTop workspace={workspace} ownHost={ownHost} />
       <Suspense fallback={<NowInCommunitySkeleton workspace={workspace} />}>
         <NowInCommunity workspace={workspace} />

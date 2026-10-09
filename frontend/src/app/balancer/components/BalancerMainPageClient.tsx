@@ -88,7 +88,7 @@ import {
 export function BalancerMainPageClient() {
   const tournamentId = useBalancerTournamentId();
   const divisionGrid = useDivisionGrid();
-  const workspaceId = useWorkspaceStore((state) => state.currentWorkspaceId);
+  const workspaceId = useWorkspaceStore((state) => state.entityWorkspaceId ?? state.currentWorkspaceId);
   const { canAccessPermission } = usePermissions();
   const currentUserId = useAuthProfileStore((state) => state.user?.id ?? null);
   const queryClient = useQueryClient();

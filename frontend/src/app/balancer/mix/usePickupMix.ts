@@ -61,11 +61,6 @@ export type PickupBalanceInput = { scope: "lobby"; lobbyIndex: number } | { scop
 /** The two fields a player owns on their own row. `roles: null` is `all_ranked`. */
 export type PickupMySeatInput = { roles: RoleCode[] | null; is_flex: boolean };
 
-export type PickupCreateGameInput = {
-  name: string;
-  /** Copy a previous mix's lineup and settings, or `null` to start empty. */
-  cloneFromGameId: number | null;
-};
 
 /**
  * Every read and write for one workspace's mixes, in one place.
@@ -74,16 +69,13 @@ export type PickupCreateGameInput = {
  * write returns the whole game, so the cache is seeded from the response
  * instead of a refetch, and no panel keeps a private copy of the roster.
  *
- * `pickedGameId` is what the host explicitly chose. The resolved
- * `selectedGameId` is derived rather than synced through an effect: an explicit
- * pick wins while that mix still exists, otherwise the newest mix (the list is
- * id-descending) is shown, which is also how the view recovers when another
- * host cancels the mix being watched.
+ * The route's explicit game stays selected even if it was deleted or is absent
+ * from the workspace list: show its real read error, never a different mix.
  */
 export function usePickupMix(
   workspaceId: number,
   pickedGameId: number | null,
-  options: { seatEnabled?: boolean; voiceEnabled?: boolean } = {},
+  options: { seatEnabled?: boolean; voiceEnabled?: boolean; initialGame?: CustomGame } = {},
 ) {
   const queryClient = useQueryClient();
   const tVoiceError = useTranslations("mixes.voice.errors");
@@ -93,15 +85,12 @@ export function usePickupMix(
     queryFn: () => customGameService.list(workspaceId),
   });
 
-  const games = gamesQuery.data ?? [];
-  const selectedGameId =
-    pickedGameId != null && games.some((item) => item.id === pickedGameId)
-      ? pickedGameId
-      : (games[0]?.id ?? null);
+  const selectedGameId = pickedGameId;
 
   const gameQuery = useQuery({
     queryKey: customGameKeys.one(workspaceId, selectedGameId ?? 0),
-    queryFn: () => customGameService.get(workspaceId, selectedGameId as number),
+    queryFn: () => customGameService.getById(selectedGameId as number, workspaceId),
+    initialData: options.initialGame,
     enabled: selectedGameId != null,
   });
 
@@ -182,12 +171,6 @@ export function usePickupMix(
     void queryClient.invalidateQueries({ queryKey: customGameKeys.matches(workspaceId, game.id) });
   };
 
-  const createGame = useMutation({
-    mutationFn: (input: PickupCreateGameInput) =>
-      customGameService.create(workspaceId, input.name, input.cloneFromGameId),
-    onSuccess: applyGame,
-    onError: (error) => notify.apiError(error),
-  });
 
   const setRoster = useMutation({
     mutationFn: (playerIds: number[]) =>
@@ -617,7 +600,6 @@ export function usePickupMix(
     rotationQuery,
     mySeatQuery,
     voiceOptionsQuery,
-    createGame,
     setRoster,
     patchPlayer,
     applyRotationHints,

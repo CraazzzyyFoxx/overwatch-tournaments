@@ -19,17 +19,22 @@ import { Label } from "@/components/ui/label";
 import { getApiErrorMessage } from "@/lib/api/error";
 import type { CustomGame } from "@/services/custom-game.service";
 import { Spinner } from "@/components/ui/spinner";
+import type { Workspace } from "@/types/workspace.types";
 
 type PickupCreateMixDialogProps = {
   games: CustomGame[];
+  workspaces: Pick<Workspace, "id" | "name">[];
+  scopedWorkspaceId: number | null;
   creating: boolean;
-  onCreate: (name: string, cloneFromGameId: number | null) => Promise<unknown>;
+  onCreate: (name: string, cloneFromGameId: number | null, workspaceId: number) => Promise<unknown>;
   onClose: () => void;
 };
 
 /** Mounted only while open, so dismissal starts a fresh form; failed requests do not. */
 export function PickupCreateMixDialog({
   games,
+  workspaces,
+  scopedWorkspaceId,
   creating,
   onCreate,
   onClose
@@ -45,10 +50,15 @@ export function PickupCreateMixDialog({
   const [search, setSearch] = useState("");
   const [nameInvalid, setNameInvalid] = useState(false);
   const [sourceInvalid, setSourceInvalid] = useState(false);
+  const [pickedWorkspaceId, setPickedWorkspaceId] = useState<number | null>(null);
+  const [workspaceInvalid, setWorkspaceInvalid] = useState(false);
+  const workspaceId = scopedWorkspaceId ?? pickedWorkspaceId;
+  const workspace = workspaces.find((item) => item.id === workspaceId);
+  const sourceGames = games.filter((game) => game.workspace_id === workspaceId);
   const [error, setError] = useState<string | null>(null);
   const nameRef = useRef<HTMLInputElement>(null);
   const submitting = useRef(false);
-  const source = games.find((game) => game.id === sourceId);
+  const source = sourceGames.find((game) => game.id === sourceId);
   const sourceLabel = (game: CustomGame) =>
     `${game.name} · ${game.host_display_name ?? `#${game.host_user_id}`}`;
 
@@ -66,17 +76,20 @@ export function PickupCreateMixDialog({
           if (submitting.current || creating) return;
           const invalidName = name.trim().length === 0;
           const invalidSource = copyLineup && !source;
+          const invalidWorkspace = !workspace;
+          setWorkspaceInvalid(invalidWorkspace);
           setNameInvalid(invalidName);
           setSourceInvalid(invalidSource);
-          if (invalidName || invalidSource) {
-            if (invalidName) nameRef.current?.focus();
+          if (invalidName || invalidWorkspace || invalidSource) {
+            if (invalidWorkspace) document.getElementById("pickup-workspace")?.focus();
+            else if (invalidName) nameRef.current?.focus();
             else document.getElementById("pickup-clone-from")?.focus();
             return;
           }
           submitting.current = true;
           setError(null);
           try {
-            await onCreate(name.trim(), copyLineup ? sourceId : null);
+            await onCreate(name.trim(), copyLineup ? sourceId : null, workspace!.id);
             onClose();
           } catch (cause) {
             setError(getApiErrorMessage(cause, t("error")));
@@ -86,6 +99,27 @@ export function PickupCreateMixDialog({
         }}
       >
         <fieldset disabled={creating} className="min-w-0 space-y-5">
+          {scopedWorkspaceId == null ? (
+            <div className="space-y-2">
+              <Label htmlFor="pickup-workspace">{t("workspace")}</Label>
+              <select id="pickup-workspace" required value={pickedWorkspaceId ?? ""}
+                className="h-10 w-full rounded-md border border-input bg-background px-3 text-body"
+                aria-invalid={workspaceInvalid || undefined}
+                aria-describedby={workspaceInvalid ? "pickup-workspace-error" : undefined}
+                onChange={(event) => {
+                  setPickedWorkspaceId(event.target.value ? Number(event.target.value) : null);
+                  setWorkspaceInvalid(false);
+                  setSourceId(null);
+                  setCopyLineup(false);
+                  setSourceInvalid(false);
+                  setSearch("");
+                }}>
+                <option value="">{t("workspacePlaceholder")}</option>
+                {workspaces.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+              </select>
+              {workspaceInvalid ? <p id="pickup-workspace-error" className="text-caption text-destructive">{t("workspaceRequired")}</p> : null}
+            </div>
+          ) : null}
           <div className="space-y-2">
             <Label htmlFor="pickup-new-mix">{t("name")}</Label>
             <Input
@@ -125,7 +159,7 @@ export function PickupCreateMixDialog({
               />
               {t("empty")}
             </label>
-            {games.length > 0 ? (
+            {sourceGames.length > 0 ? (
               <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-border px-3 py-2 text-body has-checked:border-primary has-checked:bg-primary/5">
                 <input
                   type="radio"
@@ -156,7 +190,7 @@ export function PickupCreateMixDialog({
                 emptyMessage={t("noResults")}
               >
                 <CommandGroup>
-                  {games.map((game) => (
+                  {sourceGames.map((game) => (
                     <CommandItem
                       key={game.id}
                       value={`${sourceLabel(game)} ${game.id}`}

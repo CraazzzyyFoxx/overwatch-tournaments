@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { useFormatter } from "@/lib/datetime/client";
 import { ArrowRight, Copy, Swords } from "lucide-react";
@@ -30,10 +30,12 @@ import { scrimQueryKeys } from "@/lib/scrims/query-keys";
 
 function RoomCard({
   room,
+  communityName,
   onClose,
   isClosing
 }: Readonly<{
   room: ScrimRoom;
+  communityName?: string;
   onClose: () => void;
   isClosing: boolean;
 }>) {
@@ -48,6 +50,7 @@ function RoomCard({
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="font-onest truncate text-base font-semibold">{room.label}</h2>
             <Badge variant="secondary">{t("bestOf", { count: room.best_of })}</Badge>
+            {communityName ? <Badge variant="outline">{communityName}</Badge> : null}
             {room.closed_at != null ? (
               <Badge variant="outline">{t("closed")}</Badge>
             ) : room.away_team.captain_claimed ? null : (
@@ -116,37 +119,57 @@ export default function ScrimsPage() {
   const { user, status } = useAuthProfile();
   const openAuthModal = useAuthModalStore((state) => state.open);
   const workspaceId = useWorkspaceStore((state) => state.currentWorkspaceId);
+  const statsScope = useWorkspaceStore((state) => state.statsScope);
+  const hostLockedWorkspaceId = useWorkspaceStore((state) => state.hostLockedWorkspaceId);
+  const workspaces = useWorkspaceStore((state) => state.workspaces);
+  const workspacesLoading = useWorkspaceStore((state) => state.isLoading);
+  const isAll = statsScope === "all" && hostLockedWorkspaceId == null;
   const { hasWorkspacePermission } = usePermissions();
   const queryClient = useQueryClient();
 
-  // `match.result` is the referee grant, the same one the pre-game organizer
-  // controls run on: it is what lets staff find and retire a room they are no
-  // part of. Everyone else only ever sees their own.
-  const isStaff = workspaceId != null && hasWorkspacePermission(workspaceId, "match.result");
+  const accessibleWorkspaceIds = user?.isSuperuser
+    ? workspaces.map((workspace) => workspace.id)
+    : (user?.workspaces.map((workspace) => workspace.workspace_id) ?? []);
+  const listWorkspaceIds = isAll
+    ? accessibleWorkspaceIds
+    : [hostLockedWorkspaceId ?? workspaceId].filter(
+        (id): id is number => id != null && (user?.isSuperuser || accessibleWorkspaceIds.includes(id))
+      );
+  // Scope is evaluated per community: a referee in A is still a player in B.
+  const isStaff = listWorkspaceIds.some((id) => hasWorkspacePermission(id, "match.result"));
   const [scope, setScope] = useState<ScrimListScope>("mine");
   const effectiveScope: ScrimListScope = isStaff ? scope : "mine";
-
-  const listQueryKey = useMemo(
-    () => scrimQueryKeys.list(workspaceId, effectiveScope),
-    [workspaceId, effectiveScope]
-  );
-
-  const roomsQuery = useQuery({
-    queryKey: listQueryKey,
-    queryFn: () => scrimService.listRooms(workspaceId, effectiveScope),
-    enabled: Boolean(user) && workspaceId != null
+  const roomsQueries = useQueries({
+    queries: listWorkspaceIds.map((id) => {
+      const localScope = hasWorkspacePermission(id, "match.result") ? scope : "mine";
+      return {
+        queryKey: [...scrimQueryKeys.list(id, localScope), user?.id],
+        queryFn: () => scrimService.listRooms(id, localScope),
+        enabled: Boolean(user)
+      };
+    })
   });
+  const creationWorkspaces = accessibleWorkspaceIds.map((id) => ({
+    id,
+    name: workspaces.find((workspace) => workspace.id === id)?.name ?? t("list.communityId", { id })
+  }));
 
   const closeMutation = useMutation({
     mutationFn: (token: string) => scrimService.closeRoom(token),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: listQueryKey });
+    onSuccess: async (room) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: scrimQueryKeys.lists(room.workspace_id) }),
+        queryClient.invalidateQueries({ queryKey: scrimQueryKeys.room(room.token) })
+      ]);
       notify.success(t("list.closedToast"));
     },
     onError: (error) => notify.error(getApiErrorMessage(error, t("list.closeFailed")))
   });
 
-  const rooms = roomsQuery.data?.rooms ?? [];
+  const rooms = roomsQueries.flatMap((query) => query.data?.rooms ?? []).sort(
+    (left, right) =>
+      Number(left.closed_at != null) - Number(right.closed_at != null) || right.id - left.id
+  );
 
   // One body per state, in priority order. `idle` counts as loading: the
   // profile fetch has not run yet, and flashing the sign-in card at an
@@ -166,7 +189,7 @@ export default function ScrimsPage() {
         />
       );
     }
-    if (workspaceId == null) {
+    if (!isAll && listWorkspaceIds.length === 0) {
       return (
         <PageStateCard
           state="empty"
@@ -175,7 +198,7 @@ export default function ScrimsPage() {
         />
       );
     }
-    if (roomsQuery.isPending) {
+    if (roomsQueries.some((query) => query.isPending) || (isAll && workspacesLoading)) {
       return (
         <div className="space-y-3">
           <Skeleton className="h-24 w-full rounded-xl" />
@@ -183,12 +206,12 @@ export default function ScrimsPage() {
         </div>
       );
     }
-    if (roomsQuery.isError) {
+    if (roomsQueries.some((query) => query.isError)) {
       return (
         <PageStateCard
           state="error"
           actionLabel={t("list.retry")}
-          onAction={() => void roomsQuery.refetch()}
+          onAction={() => void Promise.all(roomsQueries.map((query) => query.refetch()))}
         />
       );
     }
@@ -213,6 +236,10 @@ export default function ScrimsPage() {
           <RoomCard
             key={room.id}
             room={room}
+            communityName={isAll
+              ? workspaces.find((workspace) => workspace.id === room.workspace_id)?.name
+                ?? t("list.communityId", { id: room.workspace_id })
+              : undefined}
             isClosing={closeMutation.isPending && closeMutation.variables === room.token}
             onClose={() => closeMutation.mutate(room.token)}
           />
@@ -228,8 +255,12 @@ export default function ScrimsPage() {
         title={t("hero.title")}
         lede={t("hero.lede")}
         actions={
-          user && workspaceId != null ? (
-            <ScrimCreateDialog workspaceId={workspaceId} listQueryKey={listQueryKey} />
+          user && (isAll ? creationWorkspaces.length > 0 : listWorkspaceIds.length > 0) ? (
+            <ScrimCreateDialog
+              key={isAll ? "all" : hostLockedWorkspaceId ?? workspaceId}
+              workspaceId={isAll ? null : hostLockedWorkspaceId ?? workspaceId}
+              workspaces={creationWorkspaces}
+            />
           ) : null
         }
       />
@@ -239,7 +270,7 @@ export default function ScrimsPage() {
           type="single"
           variant="pill"
           value={scope}
-          onValueChange={(next) => setScope(next as ScrimListScope)}
+          onValueChange={(next) => { if (next) setScope(next as ScrimListScope); }}
           aria-label={t("list.scopeLabel")}
         >
           <ToggleGroupItem value="mine">{t("list.scopeMine")}</ToggleGroupItem>
