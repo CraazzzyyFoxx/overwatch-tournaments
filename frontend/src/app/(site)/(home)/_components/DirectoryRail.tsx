@@ -21,7 +21,9 @@ import { cn } from "@/lib/utils";
  * positions are card indices, a stop is index × (card + gap), the last stop is
  * cards − perView, so a card is never cut in half.
  *
- * Autoplay advances one card every 6 s and rewinds at the end. It waits while
+ * The arrows step one card and wrap: next on the last stop returns to the
+ * first, prev on the first jumps to the last. Autoplay advances one card every
+ * 6 s and rewinds the same way. It waits while
  * the pointer is over the section, focus is inside it, the rail is off-screen
  * or the tab is hidden, and it is OFF by default under prefers-reduced-motion.
  * Any manual navigation (arrows, dots, drag, wheel, swipe, keys) turns it off
@@ -44,8 +46,6 @@ interface RailMetrics {
   stops: number;
   perView: number;
   cards: number;
-  atStart: boolean;
-  atEnd: boolean;
   overflow: boolean;
 }
 
@@ -54,8 +54,6 @@ const INITIAL: RailMetrics = {
   stops: 1,
   perView: 1,
   cards: 0,
-  atStart: true,
-  atEnd: true,
   overflow: false
 };
 
@@ -131,8 +129,6 @@ export function DirectoryRail({
       stops: geo.lastIndex + 1,
       perView: geo.perView,
       cards: geo.cards,
-      atStart: geo.rail.scrollLeft <= 1,
-      atEnd: geo.rail.scrollLeft >= geo.maxLeft - 1,
       overflow: geo.maxLeft > 1
     });
   }, [geometry]);
@@ -237,7 +233,7 @@ export function DirectoryRail({
     variant: "ghost",
     size: "icon",
     className:
-      "size-11 text-[color:var(--aqt-fg-dim)] hover:bg-transparent hover:text-[color:var(--aqt-teal)] disabled:opacity-40 [&_svg]:size-5"
+      "size-11 text-[color:var(--aqt-fg-dim)] hover:bg-transparent hover:text-[color:var(--aqt-teal)] [&_svg]:size-5"
   });
 
   return (
@@ -261,10 +257,9 @@ export function DirectoryRail({
           )}
           aria-controls={RAIL_ID}
           aria-label={t("prev")}
-          disabled={metrics.atStart}
           onClick={() => {
             setOverride(false);
-            goTo(metrics.index - metrics.perView);
+            goTo(metrics.index <= 0 ? metrics.stops - 1 : metrics.index - 1);
           }}
         >
           <ChevronLeft aria-hidden strokeWidth={1.5} />
@@ -320,10 +315,9 @@ export function DirectoryRail({
           )}
           aria-controls={RAIL_ID}
           aria-label={t("next")}
-          disabled={metrics.atEnd}
           onClick={() => {
             setOverride(false);
-            goTo(metrics.index + metrics.perView);
+            goTo(metrics.index >= metrics.stops - 1 ? 0 : metrics.index + 1);
           }}
         >
           <ChevronRight aria-hidden strokeWidth={1.5} />
