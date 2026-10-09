@@ -120,7 +120,9 @@ OPERATIONS: dict[str, Op] = {
     # ── pickup mixes: canonical public entity read ────────────────────────
     "rpc.balancer.custom.get": Op(
         query_params=(
-            QueryParam("workspace_id", "integer", description="Optional community restriction; a foreign mix returns 404."),
+            QueryParam(
+                "workspace_id", "integer", description="Optional community restriction; a foreign mix returns 404."
+            ),
         ),
     ),
     # ── pickup mixes: writes (responses are hand-built dicts, see DOCS) ─────
