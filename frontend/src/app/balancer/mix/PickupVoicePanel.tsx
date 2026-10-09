@@ -13,6 +13,7 @@ import {
 import { teamNamesByIndex } from "@/app/balancer/mix/pickup-lineup";
 import { busyVoices, voiceBlocker, voicePatch, type BusyVoice } from "@/app/balancer/mix/pickup-voice";
 import { PANEL_CLASS } from "@/components/balancer/balancer-page-helpers";
+import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -56,6 +57,9 @@ type PickupVoicePanelProps = {
   onMove: (lobbyIndex: number | null) => void;
   onReturn: (lobbyIndex: number | null) => void;
 };
+
+/** The voice action waiting on the host's "yes": which way, and one lobby or every one (`null`). */
+type VoiceAsk = { kind: "move" | "return"; lobbyIndex: number | null };
 
 /** The team a voice belongs to: its colour bar and its name, as the teams panel shows them. */
 function TeamTag({ index, name }: Readonly<{ index: number; name: string }>) {
@@ -226,6 +230,13 @@ export function PickupVoicePanel({
 }: Readonly<PickupVoicePanelProps>) {
   const t = useTranslations("mixes.voice");
   const [editing, setEditing] = useState(false);
+  const [asking, setAsking] = useState(false);
+  // Kept after the dialog closes so its text does not flip during the close animation.
+  const [ask, setAsk] = useState<VoiceAsk>({ kind: "move", lobbyIndex: null });
+  const confirm = (next: VoiceAsk) => {
+    setAsk(next);
+    setAsking(true);
+  };
 
   const general = game.general_voice_channel_id;
   const busy = busyVoices(games, game.id);
@@ -350,7 +361,7 @@ export function PickupVoicePanel({
                       variant={multi ? "ghost" : "default"}
                       className={cn("h-8 shrink-0 gap-1.5 px-2.5", multi && ROW_ACTION_CLASS)}
                       disabled={running || !canMove}
-                      onClick={() => onMove(lobby.lobby_index)}
+                      onClick={() => confirm({ kind: "move", lobbyIndex: lobby.lobby_index })}
                     >
                       <Split className="size-3.5" />
                       {t("move")}
@@ -361,7 +372,7 @@ export function PickupVoicePanel({
                       variant="ghost"
                       className={cn("h-8 shrink-0 gap-1.5 px-2.5", ROW_ACTION_CLASS)}
                       disabled={running || !canReturn}
-                      onClick={() => onReturn(lobby.lobby_index)}
+                      onClick={() => confirm({ kind: "return", lobbyIndex: lobby.lobby_index })}
                     >
                       <Undo2 className="size-3.5" />
                       {t("return")}
@@ -383,7 +394,7 @@ export function PickupVoicePanel({
                   variant="outline"
                   className="h-9"
                   disabled={running || !rows.every((row) => row.canReturn)}
-                  onClick={() => onReturn(null)}
+                  onClick={() => confirm({ kind: "return", lobbyIndex: null })}
                 >
                   {t("returnAll")}
                 </Button>
@@ -391,7 +402,7 @@ export function PickupVoicePanel({
                   type="button"
                   className="h-9"
                   disabled={running || !rows.every((row) => row.canMove)}
-                  onClick={() => onMove(null)}
+                  onClick={() => confirm({ kind: "move", lobbyIndex: null })}
                 >
                   {t("moveAll")}
                 </Button>
@@ -401,6 +412,27 @@ export function PickupVoicePanel({
           ) : null}
         </>
       )}
+
+      <ConfirmDialog
+        open={asking}
+        onOpenChange={setAsking}
+        intent={{
+          title: t(ask.kind === "move" ? "confirm.moveTitle" : "confirm.returnTitle"),
+          description: t("confirm.where", {
+            mix: game.name,
+            lobby:
+              ask.lobbyIndex == null
+                ? t("confirm.allLobbies")
+                : t("lobby", { letter: lobbyLetter(ask.lobbyIndex) }),
+          }),
+          confirmLabel: t(ask.kind),
+          tone: "warning",
+        }}
+        onConfirm={() => {
+          setAsking(false);
+          (ask.kind === "move" ? onMove : onReturn)(ask.lobbyIndex);
+        }}
+      />
     </section>
   );
 }

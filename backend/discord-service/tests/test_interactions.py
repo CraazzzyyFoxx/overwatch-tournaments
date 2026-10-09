@@ -67,13 +67,20 @@ def _session_maker() -> MagicMock:
     return maker
 
 
-def _dispatcher(workspaces: Any = None) -> ActionDispatcher:
+def _dispatcher(workspaces: Any = None, games: Any = None) -> ActionDispatcher:
     return ActionDispatcher(
         site_url=SITE,
         broker=lambda: object(),
         session_maker=_session_maker() if workspaces is not None else None,
         workspaces=workspaces if workspaces is not None else MagicMock(),
+        games=games if games is not None else MagicMock(),
     )
+
+
+def _games(*, workspace_id: int, name: str = "Пятничный микс") -> MagicMock:
+    game = MagicMock(workspace_id=workspace_id)
+    game.name = name
+    return MagicMock(get=AsyncMock(return_value=game))
 
 
 def _invite_card() -> DiscordCard:
@@ -614,19 +621,19 @@ def _report(**overrides: Any) -> dict[str, Any]:
 
 
 class VoiceControlsTests(IsolatedAsyncioTestCase):
-    """The lineup card's voice buttons and ``/mix move|return``: one call, one report."""
+    """The lineup card's voice buttons and ``/mix move|return``: ask first, then one call, one report."""
 
     def test_a_voice_button_names_one_mix_and_one_lobby_or_all_of_them(self) -> None:
         self.assertEqual(parse_custom_id("owt:voice.move:42-0"), ("voice.move", "42-0"))
-        self.assertEqual(parse_custom_id("owt:voice.return:42-all"), ("voice.return", "42-all"))
-        for refused in ("owt:voice.move:42-6", "owt:voice.move:42", "owt:voice.move:all-0"):
+        self.assertEqual(parse_custom_id("owt:voice.return_confirm:42-all"), ("voice.return_confirm", "42-all"))
+        for refused in ("owt:voice.move:42-6", "owt:voice.move:42", "owt:voice.move_confirm:all-0"):
             self.assertIsNone(parse_custom_id(refused), refused)
 
     async def test_moving_every_lobby_is_one_call_with_room_for_discords_rate_limit(self) -> None:
         rpc = _Rpc({IDENTITY_SUBJECT: rpc_ok(IDENTITY), "rpc.balancer.custom.voice_move": rpc_ok(_report())})
 
         with patch.object(dispatcher_module, "request_rpc", rpc):
-            outcome = await _dispatcher().perform(4242, "voice.move", "42-all")
+            outcome = await _dispatcher().perform(4242, "voice.move_confirm", "42-all")
 
         self.assertEqual(outcome.status, "ok")
         self.assertEqual(
@@ -638,21 +645,60 @@ class VoiceControlsTests(IsolatedAsyncioTestCase):
         )
         self.assertEqual(rpc.timeouts[-1], 40.0)
 
-    async def test_the_slash_command_moves_one_lobby_and_answers_the_host_alone(self) -> None:
-        rpc = _Rpc({IDENTITY_SUBJECT: rpc_ok(IDENTITY), "rpc.balancer.custom.voice_return": rpc_ok(_report())})
-        command = _interaction(guild_id=555)
+    async def test_the_card_button_only_asks_and_names_the_guilds_own_mix(self) -> None:
+        rpc = _Rpc({})
+        click = _interaction(guild_id=555)
+        workspaces = MagicMock(list_ids_by_discord_guild=AsyncMock(return_value=[7]))
+        dispatcher = _dispatcher(workspaces=workspaces, games=_games(workspace_id=7))
 
         with patch.object(dispatcher_module, "request_rpc", rpc):
-            await _dispatcher().run_voice(command, "voice.return", 42, "1")
+            await dispatcher.handle(click, "voice.move", "42-0")
+
+        self.assertEqual(rpc.calls, [])
+        sent = click.followup.send.await_args.kwargs
+        self.assertTrue(sent["ephemeral"])
+        self.assertIn("Микс «Пятничный микс» · Лобби A", _reply_text(sent["view"]))
+        _container, row = sent["view"].to_components()
+        self.assertEqual([b.get("custom_id") for b in row["components"]], ["owt:voice.move_confirm:42-0"])
+
+    async def test_the_prompt_never_names_another_workspaces_mix(self) -> None:
+        workspaces = MagicMock(list_ids_by_discord_guild=AsyncMock(return_value=[7]))
+        dispatcher = _dispatcher(workspaces=workspaces, games=_games(workspace_id=8))
+        command = _interaction(guild_id=555)
+
+        await dispatcher.run_voice(command, "voice.move", 42, "all")
+
+        text = _reply_text(command.followup.send.await_args.kwargs["view"])
+        self.assertNotIn("Микс", text)
+        self.assertIn("Все лобби", text)
+
+    async def test_the_slash_command_asks_and_the_confirm_moves_in_place(self) -> None:
+        rpc = _Rpc({IDENTITY_SUBJECT: rpc_ok(IDENTITY), "rpc.balancer.custom.voice_return": rpc_ok(_report())})
+        command = _interaction(guild_id=555)
+        dispatcher = _dispatcher()
+
+        with patch.object(dispatcher_module, "request_rpc", rpc):
+            await dispatcher.run_voice(command, "voice.return", 42, "1")
 
         command.response.defer.assert_awaited_once_with(ephemeral=True, thinking=True)
+        self.assertEqual(rpc.calls, [])
+        self.assertTrue(command.followup.send.await_args.kwargs["ephemeral"])
+        _container, row = command.followup.send.await_args.kwargs["view"].to_components()
+        self.assertEqual([b.get("custom_id") for b in row["components"]], ["owt:voice.return_confirm:42-1"])
+
+        prompt = _interaction(guild_id=555, ephemeral=True)
+        with patch.object(dispatcher_module, "request_rpc", rpc):
+            await dispatcher.handle(prompt, "voice.return_confirm", "42-1")
+
         subject, body = rpc.calls[-1]
         self.assertEqual(subject, "rpc.balancer.custom.voice_return")
         self.assertEqual(body, {"identity": IDENTITY, "custom_game_id": 42, "payload": {"lobby_index": 1}})
-        self.assertTrue(command.followup.send.await_args.kwargs["ephemeral"])
+        # The prompt becomes the report rather than gaining a second reply beneath it.
+        prompt.followup.send.assert_not_awaited()
+        self.assertIn("Перенесено: 1", _reply_text(prompt.edit_original_response.await_args.kwargs["view"]))
 
     def test_the_report_counts_who_moved_and_names_everyone_who_did_not(self) -> None:
-        text = _reply_text(_dispatcher().reply(Outcome("ok", data=_report()), "voice.move", "ru"))
+        text = _reply_text(_dispatcher().reply(Outcome("ok", data=_report()), "voice.move_confirm", "ru"))
 
         self.assertIn("Перенесено: 1", text)
         self.assertIn("**Не в войсе:** Bob", text)
@@ -666,10 +712,11 @@ class VoiceControlsTests(IsolatedAsyncioTestCase):
         dispatcher = _dispatcher()
 
         with patch.object(dispatcher_module, "request_rpc", rpc):
-            outcome = await dispatcher.perform(4242, "voice.return", "42-all")
+            outcome = await dispatcher.perform(4242, "voice.return_confirm", "42-all")
 
         self.assertEqual((outcome.status, outcome.code), ("failed", "conflict"))
-        self.assertIn("У микса не выбран общий войс.", _reply_text(dispatcher.reply(outcome, "voice.return", "ru")))
+        reply = dispatcher.reply(outcome, "voice.return_confirm", "ru")
+        self.assertIn("У микса не выбран общий войс.", _reply_text(reply))
 
     async def test_autocomplete_offers_the_open_mixes_matching_what_was_typed(self) -> None:
         hosted = [

@@ -34,6 +34,7 @@ __all__ = (
     "parse_custom_id",
     "parse_setup_target",
     "setup_target",
+    "parse_voice_target",
     "voice_target",
 )
 
@@ -153,12 +154,18 @@ def _voice_accepts(target: str) -> bool:
     return _VOICE_TARGET.match(target) is not None
 
 
-def _voice(target: str, fields: Mapping[str, str]) -> dict[str, Any]:
+def parse_voice_target(target: str) -> tuple[int, int | None]:
+    """``(game id, lobby index or None for every lobby)``; raises on anything else."""
     match = _VOICE_TARGET.match(target)
     if match is None:
         raise ValueError(f"not a voice target: {target!r}")
     lobby = match["lobby"]
-    return {"custom_game_id": int(match["game"]), "payload": {"lobby_index": None if lobby == "all" else int(lobby)}}
+    return int(match["game"]), None if lobby == "all" else int(lobby)
+
+
+def _voice(target: str, fields: Mapping[str, str]) -> dict[str, Any]:
+    game_id, lobby_index = parse_voice_target(target)
+    return {"custom_game_id": game_id, "payload": {"lobby_index": lobby_index}}
 
 
 @dataclass(frozen=True, slots=True)
@@ -216,9 +223,17 @@ ACTIONS: dict[str, Action] = {
     "mix.setup": Action(None, accepts=_setup),
     "mix.seat_set": Action("rpc.balancer.custom.self_update", _mix_seat_set),
     # The host's voice controls: the lineup card's buttons and ``/mix move|return``.
-    # The RPC re-checks host-or-co-host, so a player clicking gets a refusal.
-    "voice.move": Action("rpc.balancer.custom.voice_move", _voice, accepts=_voice_accepts, timeout=VOICE_TIMEOUT),
-    "voice.return": Action("rpc.balancer.custom.voice_return", _voice, accepts=_voice_accepts, timeout=VOICE_TIMEOUT),
+    # The first click only asks (answered by the bot alone); the ``*_confirm``
+    # button on that private prompt is what moves people. The RPC re-checks
+    # host-or-co-host, so a player confirming gets a refusal.
+    "voice.move": Action(None, accepts=_voice_accepts),
+    "voice.return": Action(None, accepts=_voice_accepts),
+    "voice.move_confirm": Action(
+        "rpc.balancer.custom.voice_move", _voice, accepts=_voice_accepts, timeout=VOICE_TIMEOUT
+    ),
+    "voice.return_confirm": Action(
+        "rpc.balancer.custom.voice_return", _voice, accepts=_voice_accepts, timeout=VOICE_TIMEOUT
+    ),
 }
 
 

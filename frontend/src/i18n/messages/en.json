@@ -7346,6 +7346,12 @@
       "done": "Done",
       "pickTeams": "Pick a voice for both teams to split this lobby.",
       "pickGeneral": "Pick a general voice to return players to.",
+      "confirm": {
+        "moveTitle": "Split players into their team voices?",
+        "returnTitle": "Return everyone from the team voices to the general one?",
+        "where": "Mix “{mix}” · {lobby}",
+        "allLobbies": "All lobbies"
+      },
       "report": {
         "moved": "Moved: {count}"
       },

@@ -43,6 +43,8 @@ DiscordAction = Literal[
     "mix.seat_set",
     "voice.move",
     "voice.return",
+    "voice.move_confirm",
+    "voice.return_confirm",
 ]
 
 #: An emoji by name, as ``shared.domain.discord_ui.EMOJI`` spells it (``tank``,
