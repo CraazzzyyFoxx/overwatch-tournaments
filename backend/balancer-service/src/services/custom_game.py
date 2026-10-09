@@ -2294,7 +2294,9 @@ class CustomGameService:
 
         The mix page calls this after the lineup changed; ``image_b64`` is its fresh
         capture, and without one the card falls back to the text roster. The
-        match number stays the one the card was posted with (its slot).
+        match number stays the one the card was posted with (its slot). A card
+        whose match is already recorded is history: the next round's lineup is
+        the host's next post, not an edit of the one that was played.
         """
         game = await self._writable(
             session,
@@ -2309,6 +2311,10 @@ class CustomGameService:
             return []
         row = await discord_messages.repository.get_for_update(session, live[-1].id)
         if row is None or row.status not in LIVE_STATUSES:
+            return []
+        match_number = int(row.slot.rsplit(":", 1)[1])
+        activity = await self.casual_matches.activity_for_lobbies(session, game.id)
+        if match_number <= activity.get(lobby_index, (0, None))[0]:
             return []
         result = as_lobby_document(lobby.balance_result_json)
         variants = result.get("variants") if isinstance(result, dict) else None
@@ -2325,7 +2331,7 @@ class CustomGameService:
             lobby,
             variant=variants[index],
             variant_index=index,
-            match_number=int(row.slot.rsplit(":", 1)[1]),
+            match_number=match_number,
             board_url_base=board_url_base,
             image=image_b64 is not None,
         )

@@ -621,4 +621,16 @@ describe("liveLineupPostOf", () => {
     expect(liveLineupPostOf(game({ discord_posts: [] }), 0)).toBeNull();
     expect(liveLineupPostOf(game(), 0)).toBeNull();
   });
+
+  it("leaves a played round's card alone until the next one is posted", () => {
+    const current = game({
+      lobbies: [lobbyRow(0, { matches_count: 1 })],
+      discord_posts: [post({ id: 1, slot: "lineup:0:1", kind: "mix.lineup" })]
+    });
+
+    expect(liveLineupPostOf(current, 0)).toBeNull();
+    expect(
+      liveLineupPostOf({ ...current, discord_posts: [...current.discord_posts!, post({ id: 2, slot: "lineup:0:2", kind: "mix.lineup" })] }, 0)?.id
+    ).toBe(2);
+  });
 });
