@@ -309,7 +309,7 @@ export function Showcase({
       {/* An explicit ratio wins at every width, as the mock's inline style does. */}
       <div
         className={cn(
-          "overflow-hidden rounded-[var(--aqt-radius-card)] border border-[color:var(--aqt-border)] bg-[color:var(--aqt-card)] [mask-image:linear-gradient(to_bottom,black_75%,transparent)]",
+          "overflow-hidden rounded-[var(--aqt-radius-card)] bg-[color:var(--aqt-card)] [mask-image:linear-gradient(to_bottom,black_75%,transparent)]",
           ratio ? "aspect-[var(--shot-ratio)]" : "aspect-[4/3] md:aspect-[2/1]"
         )}
         style={ratio ? ({ "--shot-ratio": ratio } as CSSProperties) : undefined}
