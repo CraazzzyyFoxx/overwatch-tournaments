@@ -10,7 +10,7 @@ export function HomeShowcase() {
 
   return (
     <Section labelledBy={TITLE_ID}>
-      <SectionHead rubric={t("rubric")} title={t("title")} titleId={TITLE_ID} sub={t("sub")} />
+      <SectionHead title={t("title")} titleId={TITLE_ID} sub={t("sub")} />
       <Showcase
         title={t("profile.title")}
         text={t("profile.text")}

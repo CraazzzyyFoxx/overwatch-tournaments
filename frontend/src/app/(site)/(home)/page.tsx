@@ -48,7 +48,7 @@ export default async function Home() {
   if (workspace) return <CommunityPage workspace={workspace} ownHost />;
 
   return (
-    <SectionStack className="pt-5">
+    <SectionStack className="mx-auto w-full max-w-7xl gap-[clamp(56px,7vw,96px)] pt-5">
       <HomeHero />
       <Suspense fallback={<NowSkeleton />}>
         <NowOnPlatform />

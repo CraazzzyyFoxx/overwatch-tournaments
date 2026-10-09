@@ -233,7 +233,11 @@ export function DirectoryRail({
     if (geo) goTo(Math.round(geo.rail.scrollLeft / geo.step));
   };
 
-  const navButton = owtButton({ variant: "outline", size: "icon", className: "disabled:opacity-40" });
+  const navButton = owtButton({
+    variant: "outline",
+    size: "icon",
+    className: "size-11 disabled:opacity-40 sm:size-9"
+  });
 
   return (
     <div
@@ -245,7 +249,6 @@ export function DirectoryRail({
       }}
     >
       <SectionHead
-        rubric={t("rubric")}
         title={t("title")}
         titleId={titleId}
         sub={t("sub")}
@@ -296,7 +299,7 @@ export function DirectoryRail({
       <div
         ref={railRef}
         id={RAIL_ID}
-        role="region"
+        role="group"
         aria-label={t("railLabel")}
         tabIndex={0}
         data-dragging={dragging || undefined}
@@ -338,13 +341,13 @@ export function DirectoryRail({
       <div
         role="group"
         aria-label={t("dotsLabel")}
-        className={cn("mt-3 flex justify-center gap-0.5", !metrics.overflow && "hidden")}
+        className={cn("mt-3 flex flex-wrap justify-center gap-0.5", !metrics.overflow && "hidden")}
       >
         {Array.from({ length: metrics.stops }).map((_, stop) => (
           <button
             key={stop}
             type="button"
-            className="group inline-flex size-6 items-center justify-center rounded-md"
+            className="group inline-flex size-11 items-center justify-center rounded-md sm:size-6"
             aria-current={stop === metrics.index}
             aria-label={
               metrics.perView > 1

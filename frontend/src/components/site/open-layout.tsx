@@ -273,10 +273,8 @@ export function EmptyNote({ children }: Readonly<{ children?: ReactNode }>) {
 }
 
 /**
- * A product showcase row: split head (title | text + link), then a real
- * production screenshot with no frame, fading into the page at the bottom
- * (mock `.show`). `ratio` overrides the 2:1 window when the interesting part
- * of the shot sits lower.
+ * A product showcase: a focused caption above a real production screenshot.
+ * `ratio` overrides the 2:1 window when the interesting part sits lower.
  */
 export function Showcase({
   title,
@@ -295,11 +293,11 @@ export function Showcase({
 }>) {
   return (
     <div className="mt-8 [&+&]:mt-[clamp(56px,7vw,96px)]">
-      <div className="mb-7 grid grid-cols-1 items-end gap-x-12 gap-y-3 md:grid-cols-2">
+      <div className="mb-7 flex flex-col items-start gap-3">
         <h3 className="text-balance font-display text-[length:clamp(22px,2.2vw,28px)] font-semibold leading-[1.1] tracking-[-0.02em] text-[color:var(--aqt-fg)]">
           {title}
         </h3>
-        <div className="max-w-[34rem] text-pretty text-base leading-[1.55] text-[color:var(--aqt-fg-muted)]">
+        <div className="max-w-[65ch] text-pretty text-ui leading-[1.6] text-[color:var(--aqt-fg-muted)]">
           <p>{text}</p>
           {more ? (
             <MoreLink href={more.href} className="mt-3">
@@ -311,7 +309,7 @@ export function Showcase({
       {/* An explicit ratio wins at every width, as the mock's inline style does. */}
       <div
         className={cn(
-          "overflow-hidden [mask-image:linear-gradient(to_bottom,black_50%,transparent)]",
+          "overflow-hidden rounded-[var(--aqt-radius-card)] border border-[color:var(--aqt-border)] bg-[color:var(--aqt-card)] [mask-image:linear-gradient(to_bottom,black_75%,transparent)]",
           ratio ? "aspect-[var(--shot-ratio)]" : "aspect-[4/3] md:aspect-[2/1]"
         )}
         style={ratio ? ({ "--shot-ratio": ratio } as CSSProperties) : undefined}

@@ -252,7 +252,7 @@ export function DomainSteps({
   };
 
   return (
-    <div className={styles.dom}>
+    <div className={cn(styles.dom, !example && styles.textOnly)}>
       <ol
         ref={listRef}
         className={styles.steps}

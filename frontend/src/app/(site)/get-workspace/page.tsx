@@ -18,8 +18,6 @@ import {
 
 import { HeroFrame } from "@/components/site/PageHero";
 import {
-  EYEBROW_CLASS,
-  HERO_TITLE_SIZE_CLASS,
   LEDE_CLASS,
   MoreLink,
   Section,
@@ -41,7 +39,7 @@ export function generateMetadata(): Promise<Metadata> {
   });
 }
 
-const HERO_PADDING = "px-[clamp(24px,3.2vw,44px)] py-[clamp(24px,3.2vw,44px)]";
+const HERO_PADDING = "px-[clamp(20px,3vw,40px)] py-[clamp(24px,3vw,40px)]";
 
 /**
  * The organizer page: what the platform gives a community and the form that
@@ -55,22 +53,19 @@ export default async function GetWorkspacePage() {
   const t = await getTranslations("getWorkspace");
 
   return (
-    <SectionStack className="pt-5">
-      <HeroFrame>
+    <SectionStack className="mx-auto w-full max-w-7xl gap-[clamp(56px,7vw,96px)] pt-5">
+      <HeroFrame variant="plain">
         <div
           className={cn(
-            "grid grid-cols-1 gap-x-14 gap-y-8 min-[1024px]:grid-cols-[minmax(0,1.5fr)_minmax(300px,1fr)]",
+            "grid grid-cols-1 gap-x-[clamp(24px,4vw,48px)] gap-y-8 min-[1024px]:grid-cols-[minmax(0,1.8fr)_minmax(260px,1fr)]",
             HERO_PADDING
           )}
         >
           <div className="min-w-0">
-            <p className={EYEBROW_CLASS}>{t("hero.eyebrow")}</p>
+            <p className="text-body font-medium text-[color:var(--aqt-fg-dim)]">{t("hero.eyebrow")}</p>
             <h1
               id="gw-title"
-              className={cn(
-                "mt-3.5 max-w-[14em] text-balance font-display font-semibold leading-[1.03] tracking-[-0.01em] text-[color:var(--aqt-fg)]",
-                HERO_TITLE_SIZE_CLASS
-              )}
+              className="mt-3 max-w-[18em] text-balance font-display text-[length:clamp(2rem,3.2vw,2.75rem)] font-semibold leading-[1.12] tracking-[-0.025em] text-[color:var(--aqt-fg)]"
             >
               {t.rich("hero.title", {
                 accent: (chunks) => (
@@ -78,14 +73,14 @@ export default async function GetWorkspacePage() {
                 )
               })}
             </h1>
-            <p className={cn(LEDE_CLASS, "mt-3.5")}>{t("hero.lede")}</p>
+            <p className={cn(LEDE_CLASS, "mt-4 max-w-[38rem]")}>{t("hero.lede")}</p>
             <CreateForm />
           </div>
           <ol
             aria-label={t("hero.stepsLabel")}
             className={cn(
               "grid content-start border-[color:var(--aqt-border)]",
-              "min-[1024px]:border-l min-[1024px]:pl-10",
+              "min-[1024px]:border-l min-[1024px]:pl-7",
               "max-[1023px]:border-t max-[1023px]:pt-6"
             )}
           >
@@ -96,15 +91,15 @@ export default async function GetWorkspacePage() {
             ].map((step) => (
               <li
                 key={step.n}
-                className="grid grid-cols-[32px_minmax(0,1fr)] gap-x-3 gap-y-1 border-b border-[color:var(--aqt-border)] py-4 first:pt-0 last:border-b-0"
+                className="grid grid-cols-[24px_minmax(0,1fr)] gap-x-3 gap-y-1.5 border-b border-[color:var(--aqt-border)] py-5 first:pt-0 last:border-b-0 last:pb-0"
               >
-                <span className="row-span-2 font-[family-name:var(--aqt-data)] text-label font-bold leading-normal tabular-nums text-[color:var(--aqt-teal)]">
+                <span aria-hidden className="row-span-2 text-caption font-medium leading-relaxed tabular-nums text-[color:var(--aqt-fg-dim)]">
                   {step.n}
                 </span>
-                <b className="font-display text-ui font-bold leading-[1.3] text-[color:var(--aqt-fg)]">
+                <b className="font-display text-ui font-semibold leading-[1.4] text-[color:var(--aqt-fg)]">
                   {step.title}
                 </b>
-                <p className="text-body text-[color:var(--aqt-fg-muted)]">{step.text}</p>
+                <p className="text-body leading-relaxed text-[color:var(--aqt-fg-muted)]">{step.text}</p>
               </li>
             ))}
           </ol>
@@ -113,7 +108,6 @@ export default async function GetWorkspacePage() {
 
       <Section labelledBy="gw-feat-title">
         <SectionHead
-          rubric={t("features.rubric")}
           title={t("features.title")}
           titleId="gw-feat-title"
           aside={<MoreLink href="/docs">{t("features.docs")}</MoreLink>}
@@ -173,13 +167,13 @@ export default async function GetWorkspacePage() {
               <Link
                 href={href}
                 prefetch={false}
-                className="flex h-full flex-col gap-2 border-t border-[color:var(--aqt-border-3)] pt-[18px] transition-colors duration-150 hover:border-t-[color:var(--aqt-teal)] focus-visible:outline-offset-4"
+                className="flex h-full flex-col gap-2.5 border-t border-[color:var(--aqt-border)] pt-5 transition-colors duration-150 hover:border-t-[color:var(--aqt-teal)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[color:var(--aqt-teal)]"
               >
                 <Icon className="size-5 text-[color:var(--aqt-teal)]" aria-hidden />
-                <b className="font-display text-heading font-bold leading-[1.3] text-[color:var(--aqt-fg)]">
+                <b className="font-display text-heading font-semibold leading-[1.3] text-[color:var(--aqt-fg)]">
                   {t(`features.grid.${key}.title` as "features.grid.registration.title")}
                 </b>
-                <p className="text-body text-[color:var(--aqt-fg-muted)]">
+                <p className="text-body leading-relaxed text-[color:var(--aqt-fg-muted)]">
                   {t(`features.grid.${key}.text` as "features.grid.registration.text")}
                 </p>
               </Link>
@@ -198,11 +192,11 @@ export default async function GetWorkspacePage() {
         <PlatformFact icon={CodeXml}>{t.rich("facts.api", { b: bold })}</PlatformFact>
       </div>
 
-      <HeroFrame>
+      <HeroFrame variant="plain">
         <div
           className={cn(
             "grid grid-cols-1 items-center gap-x-10 gap-y-5 md:grid-cols-[minmax(0,1fr)_auto]",
-            "px-[clamp(24px,3.2vw,44px)] py-[clamp(24px,3vw,36px)]"
+            "px-[clamp(20px,3vw,40px)] py-[clamp(24px,3vw,36px)]"
           )}
         >
           <div>

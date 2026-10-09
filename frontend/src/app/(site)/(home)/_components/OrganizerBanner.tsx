@@ -12,19 +12,19 @@ export function OrganizerBanner() {
   const t = useTranslations("home.organizer");
 
   return (
-    <HeroFrame>
-      <div className="grid grid-cols-1 items-center gap-x-10 gap-y-5 px-[clamp(24px,3.2vw,44px)] py-[clamp(24px,3vw,36px)] md:grid-cols-[minmax(0,1fr)_auto]">
+    <HeroFrame variant="plain">
+      <div className="grid grid-cols-1 items-center gap-x-10 gap-y-6 px-[clamp(20px,4vw,48px)] py-[clamp(28px,3.5vw,44px)] md:grid-cols-[minmax(0,1fr)_auto]">
         <div>
-          <p className={EYEBROW_CLASS}>{t("eyebrow")}</p>
-          <h2 id="home-org-title" className={cn(SECTION_TITLE_CLASS, "mt-2")}>
+          <p className={cn(EYEBROW_CLASS, "normal-case tracking-normal")}>{t("eyebrow")}</p>
+          <h2 id="home-org-title" className={cn(SECTION_TITLE_CLASS, "mt-3 font-semibold")}>
             {t("title")}
           </h2>
-          <p className={cn(LEDE_CLASS, "mt-2")}>{t("lede")}</p>
+          <p className={cn(LEDE_CLASS, "mt-3")}>{t("lede")}</p>
         </div>
         <Link
           href="/get-workspace"
           prefetch={false}
-          className={cn(owtButton({ variant: "primary", size: "lg" }), "justify-self-start")}
+          className={cn(owtButton({ variant: "primary", size: "lg" }), "w-full justify-self-start sm:w-auto")}
         >
           {t("cta")}
           <ArrowRight aria-hidden />

@@ -2693,14 +2693,13 @@
     "hero": {
       "eyebrow": "OWT · Overwatch community tournaments",
       "title": "Overwatch community tournaments and player <accent>statistics</accent>",
-      "lede": "Schedules, brackets and matches from every community — and a player's whole history in one profile.",
+      "lede": "Schedules, brackets and matches from every community - and a player's whole history in one profile.",
       "searchPlaceholder": "Player or BattleTag",
       "browseTournaments": "Browse tournaments",
       "myProfile": "My profile and statistics",
       "hostTournament": "Run a tournament on OWT"
     },
     "now": {
-      "rubric": "Tournaments",
       "title": "On the platform now",
       "more": "All tournaments",
       "error": "active tournaments",
@@ -2729,7 +2728,6 @@
       "participantsCount": "{count, plural, one {# participant} other {# participants}}"
     },
     "directory": {
-      "rubric": "Directory",
       "title": "Communities on OWT",
       "sub": "The directory lists communities that passed verification.",
       "error": "the community directory",
@@ -2739,7 +2737,7 @@
       "play": "Start autoplay",
       "prev": "Previous communities",
       "next": "Next communities",
-      "dotRange": "Communities {from}–{to} of {total}",
+      "dotRange": "Communities {from}-{to} of {total}",
       "dotOne": "Community {index} of {total}",
       "live": "Tournament running",
       "tournamentsLabel": "{count, plural, one {tournament} other {tournaments}}",
@@ -2756,18 +2754,17 @@
       "winrateTitle": "Only players with more than 3 tournaments are counted"
     },
     "showcase": {
-      "rubric": "Platform",
       "title": "What it looks like",
       "sub": "Screenshots of the live platform: real players, tournaments and matches.",
       "profile": {
         "title": "Player profile",
-        "text": "Tournaments, win rate, form over the last ten, roles and favourite heroes — in one profile.",
+        "text": "Tournaments, win rate, form over the last ten, roles and favourite heroes - in one profile.",
         "more": "Find a player",
         "alt": "CraazzzyyFox's player profile: 26 tournaments, 50% win rate, form over the last 10 tournaments, role split and last tournament's stats"
       },
       "tournament": {
         "title": "Tournament page",
-        "text": "The result, the playoff bracket, the most-played heroes and the format — on one page.",
+        "text": "The result, the playoff bracket, the most-played heroes and the format - on one page.",
         "more": "All tournaments",
         "alt": "The «Турнир Сабов Anakq #42» tournament page: champion Tref, the bracket final, the most-played heroes"
       },
@@ -2791,12 +2788,12 @@
     "hero": {
       "eyebrow": "For organizers",
       "title": "Run your community's tournaments on <accent>OWT</accent>",
-      "lede": "Registration, the balancer, the draft, brackets and match stats — on your community's own page. It opens the moment you create it.",
+      "lede": "Registration, the balancer, the draft, brackets and match stats - on your community's own page. It opens the moment you create it.",
       "stepsLabel": "How to launch a community",
       "steps": {
         "create": {
           "title": "Create the community",
-          "text": "A name and an address — the page opens right away and can be linked to directly."
+          "text": "A name and an address - the page opens right away and can be linked to directly."
         },
         "discord": {
           "title": "Connect your Discord server",
@@ -2813,8 +2810,8 @@
       "namePlaceholder": "For example, Funny Cup",
       "address": "Page address",
       "slug": {
-        "hint": "Latin a–z, digits, hyphen and underscore.",
-        "format": "Latin a–z, digits, hyphen and underscore only",
+        "hint": "Latin a-z, digits, hyphen and underscore.",
+        "format": "Latin a-z, digits, hyphen and underscore only",
         "edges": "The address cannot start or end with a hyphen",
         "reserved": "“{slug}” is reserved by the platform",
         "ok": "The format works. Whether the address is free we check on create.",
@@ -2828,23 +2825,22 @@
         "hint": "If that is a mistake, message the platform team on Discord."
       },
       "error": {
-        "limit": "You already own a community. One per account — message the platform team if you need another.",
+        "limit": "You already own a community. One per account - message the platform team if you need another.",
         "generic": "Could not create the community."
       }
     },
     "features": {
-      "rubric": "Features",
-      "title": "Everything a tournament needs — from entry to archive",
+      "title": "Everything a tournament needs - from entry to archive",
       "docs": "Documentation",
       "shots": {
         "form": {
           "title": "Registration form",
-          "text": "A questionnaire of sections and questions with required fields and a preview. Save it as a template — every tournament of the community starts from it.",
-          "alt": "The “Form with ranks” registration form builder in the admin panel: the Accounts, Roles, Ranks, Scrims and Extra info sections and the Accounts questions — BattleTag, Smurf accounts, Discord, Twitch, Boosty"
+          "text": "A questionnaire of sections and questions with required fields and a preview. Save it as a template - every tournament of the community starts from it.",
+          "alt": "The “Form with ranks” registration form builder in the admin panel: the Accounts, Roles, Ranks, Scrims and Extra info sections and the Accounts questions - BattleTag, Smurf accounts, Discord, Twitch, Boosty"
         },
         "registration": {
           "title": "Registration",
-          "text": "The phase schedule — registration, check-in, start — with a countdown, the entry count and the tournament format.",
+          "text": "The phase schedule - registration, check-in, start - with a countdown, the entry count and the tournament format.",
           "alt": "The SEITA: Last Duel tournament page during registration: the phase schedule, 19 entries, solo format"
         },
         "entries": {
@@ -2854,7 +2850,7 @@
         },
         "stages": {
           "title": "Brackets and stages",
-          "text": "A tournament is built from stages — Swiss groups, a double-elimination playoff. Each stage has its own seeding, series format and round schedule, and the bracket is visible at once.",
+          "text": "A tournament is built from stages - Swiss groups, a double-elimination playoff. Each stage has its own seeding, series format and round schedule, and the bracket is visible at once.",
           "alt": "The stage builder of “Турнир Тхао #5” in the admin panel: the Groups and Playoffs stages, double-elimination playoff settings and a bracket preview"
         },
         "bracket": {
@@ -2895,7 +2891,7 @@
         },
         "roles": {
           "title": "Roles and access",
-          "text": "Owner, administrators, referees and mix hosts — each with their own rights."
+          "text": "Owner, administrators, referees and mix hosts - each with their own rights."
         },
         "api": {
           "title": "API and keys",
@@ -2904,8 +2900,7 @@
       }
     },
     "domains": {
-      "rubric": "Domains",
-      "title": "The community site — at your own address",
+      "title": "The community site - at your own address",
       "sub": "Player links and tournament history do not change when the address does.",
       "steps": {
         "platform": {

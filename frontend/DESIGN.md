@@ -153,6 +153,21 @@ Principle: any new primitive must preserve:
 - reasonable touch targets (typically 36px+ height, 44px+ for primary actions on mobile)
 - predictable hover/active behavior
 
+### Public marketing pages
+
+`/` and `/get-workspace` keep the dark theme, teal accent, existing content and
+section order. Their `SectionStack` is contained at `max-w-7xl`, with responsive
+56-96px section gaps. `HeroFrame variant="plain"` uses `--aqt-bg-2` without the
+accent hairline or corner glow; default and profile heroes stay unchanged.
+
+`Showcase` stacks its caption above the existing real screenshot, caps body copy
+at 65ch and uses the card-radius token with a bottom fade beginning at 75%.
+The community form keeps its name/slug contract: the host and `/workspace/`
+prefix sit in an associated, wrapping URL preview below the full-width slug
+input, not inside its typing area. Inputs use 16px text, 48px shells, visible
+focus/invalid states and the existing validation/authentication behavior.
+Repeated section eyebrows are omitted; semantic headings and links stay intact.
+
 ## Admin kit
 
 `/admin` is one product with one shape. Every screen there is an instance of
