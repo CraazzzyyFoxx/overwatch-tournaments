@@ -26,7 +26,7 @@ import { cn } from "@/lib/utils";
  * or the tab is hidden, and it is OFF by default under prefers-reduced-motion.
  * Any manual navigation (arrows, dots, drag, wheel, swipe, keys) turns it off
  * for good — the visitor has taken over; the pause/play button turns it back
- * on (WCAG 2.2.2: the control is on every viewport, the arrows are ≥ md only).
+ * on (WCAG 2.2.2: pause/play and navigation are available on every viewport).
  *
  * Drag is mouse-only — touch already swipes natively. Past a 6 px threshold the
  * drag owns the gesture, the click that ends it is swallowed, and the rail
@@ -234,9 +234,10 @@ export function DirectoryRail({
   };
 
   const navButton = owtButton({
-    variant: "outline",
+    variant: "ghost",
     size: "icon",
-    className: "size-11 disabled:opacity-40 sm:size-9"
+    className:
+      "size-11 text-[color:var(--aqt-fg-dim)] hover:bg-transparent hover:text-[color:var(--aqt-teal)] disabled:opacity-40 [&_svg]:size-5"
   });
 
   return (
@@ -248,124 +249,138 @@ export function DirectoryRail({
         hovered.current = false;
       }}
     >
-      <SectionHead
-        title={t("title")}
-        titleId={titleId}
-        sub={t("sub")}
-        aside={
-          <div className={cn("flex gap-1.5", !metrics.overflow && "hidden")}>
-            <button
-              type="button"
-              className={navButton}
-              aria-controls={RAIL_ID}
-              aria-label={autoplay ? t("pause") : t("play")}
-              onClick={() => {
-                lastStep.current = Date.now();
-                setOverride(!autoplay);
-              }}
-            >
-              {autoplay ? <Pause aria-hidden /> : <Play aria-hidden />}
-            </button>
-            <button
-              type="button"
-              className={cn(navButton, "hidden md:inline-flex")}
-              aria-controls={RAIL_ID}
-              aria-label={t("prev")}
-              disabled={metrics.atStart}
-              onClick={() => {
-                setOverride(false);
-                goTo(metrics.index - metrics.perView);
-              }}
-            >
-              <ChevronLeft aria-hidden />
-            </button>
-            <button
-              type="button"
-              className={cn(navButton, "hidden md:inline-flex")}
-              aria-controls={RAIL_ID}
-              aria-label={t("next")}
-              disabled={metrics.atEnd}
-              onClick={() => {
-                setOverride(false);
-                goTo(metrics.index + metrics.perView);
-              }}
-            >
-              <ChevronRight aria-hidden />
-            </button>
+      <SectionHead title={t("title")} titleId={titleId} sub={t("sub")} />
+
+      <div className="grid grid-cols-[44px_minmax(0,1fr)_44px] items-center gap-x-2 md:gap-x-3">
+        <button
+          type="button"
+          className={cn(
+            navButton,
+            "col-start-1 row-start-3 md:row-start-1",
+            !metrics.overflow && "hidden"
+          )}
+          aria-controls={RAIL_ID}
+          aria-label={t("prev")}
+          disabled={metrics.atStart}
+          onClick={() => {
+            setOverride(false);
+            goTo(metrics.index - metrics.perView);
+          }}
+        >
+          <ChevronLeft aria-hidden strokeWidth={1.5} />
+        </button>
+        <div
+          ref={railRef}
+          id={RAIL_ID}
+          role="group"
+          aria-label={t("railLabel")}
+          tabIndex={0}
+          data-dragging={dragging || undefined}
+          className={cn(
+            "col-span-3 row-start-1 md:col-span-1 md:col-start-2",
+            "snap-x snap-mandatory overflow-x-auto overscroll-x-contain py-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+            "[@media(pointer:fine)]:cursor-grab",
+            "data-[dragging]:cursor-grabbing data-[dragging]:snap-none data-[dragging]:select-none data-[dragging]:[&_a]:pointer-events-none"
+          )}
+          onFocus={() => {
+            focused.current = true;
+          }}
+          onBlur={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget)) focused.current = false;
+          }}
+          onWheel={(event) => {
+            if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) setOverride(false);
+          }}
+          onTouchStart={() => setOverride(false)}
+          onKeyDown={(event) => {
+            if (TAKEOVER_KEYS.includes(event.key)) setOverride(false);
+          }}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={endDrag}
+          onPointerCancel={endDrag}
+          onClickCapture={(event) => {
+            if (!moved.current) return;
+            event.preventDefault();
+            event.stopPropagation();
+            moved.current = false;
+          }}
+          onDragStart={(event) => event.preventDefault()}
+        >
+          <ul className="grid auto-cols-[100%] grid-flow-col gap-8 min-[640px]:auto-cols-[calc((100%-32px)/2)] min-[1100px]:auto-cols-[calc((100%-2*32px)/3)]">
+            {children}
+          </ul>
+        </div>
+        <button
+          type="button"
+          className={cn(
+            navButton,
+            "col-start-3 row-start-3 md:row-start-1",
+            !metrics.overflow && "hidden"
+          )}
+          aria-controls={RAIL_ID}
+          aria-label={t("next")}
+          disabled={metrics.atEnd}
+          onClick={() => {
+            setOverride(false);
+            goTo(metrics.index + metrics.perView);
+          }}
+        >
+          <ChevronRight aria-hidden strokeWidth={1.5} />
+        </button>
+
+        <div
+          className={cn(
+            "contents md:col-span-3 md:col-start-1 md:row-start-2 md:mt-3 md:flex md:items-center md:justify-center md:gap-x-2",
+            !metrics.overflow && "hidden md:hidden"
+          )}
+        >
+          <div
+            role="group"
+            aria-label={t("dotsLabel")}
+            className="col-span-3 row-start-2 mt-3 flex max-w-full flex-wrap justify-center gap-0.5 md:mt-0"
+          >
+            {Array.from({ length: metrics.stops }).map((_, stop) => (
+              <button
+                key={stop}
+                type="button"
+                className="group inline-flex size-11 items-center justify-center rounded-md sm:size-6"
+                aria-current={stop === metrics.index}
+                aria-label={
+                  metrics.perView > 1
+                    ? t("dotRange", {
+                        from: stop + 1,
+                        to: stop + metrics.perView,
+                        total: metrics.cards
+                      })
+                    : t("dotOne", { index: stop + 1, total: metrics.cards })
+                }
+                onClick={() => {
+                  setOverride(false);
+                  goTo(stop);
+                }}
+              >
+                <span className="block size-1.5 rounded-full bg-[color:var(--aqt-border-3)] transition-[width,background-color] duration-200 group-hover:bg-[color:var(--aqt-fg-faint)] group-aria-[current=true]:w-[18px] group-aria-[current=true]:bg-[color:var(--aqt-teal)]" />
+              </button>
+            ))}
           </div>
-        }
-      />
-
-      <div
-        ref={railRef}
-        id={RAIL_ID}
-        role="group"
-        aria-label={t("railLabel")}
-        tabIndex={0}
-        data-dragging={dragging || undefined}
-        className={cn(
-          "snap-x snap-mandatory overflow-x-auto overscroll-x-contain py-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
-          "[@media(pointer:fine)]:cursor-grab",
-          "data-[dragging]:cursor-grabbing data-[dragging]:snap-none data-[dragging]:select-none data-[dragging]:[&_a]:pointer-events-none"
-        )}
-        onFocus={() => {
-          focused.current = true;
-        }}
-        onBlur={(event) => {
-          if (!event.currentTarget.contains(event.relatedTarget)) focused.current = false;
-        }}
-        onWheel={(event) => {
-          if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) setOverride(false);
-        }}
-        onTouchStart={() => setOverride(false)}
-        onKeyDown={(event) => {
-          if (TAKEOVER_KEYS.includes(event.key)) setOverride(false);
-        }}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={endDrag}
-        onPointerCancel={endDrag}
-        onClickCapture={(event) => {
-          if (!moved.current) return;
-          event.preventDefault();
-          event.stopPropagation();
-          moved.current = false;
-        }}
-        onDragStart={(event) => event.preventDefault()}
-      >
-        <ul className="grid auto-cols-[100%] grid-flow-col gap-8 min-[640px]:auto-cols-[calc((100%-32px)/2)] min-[1100px]:auto-cols-[calc((100%-2*32px)/3)]">
-          {children}
-        </ul>
-      </div>
-
-      <div
-        role="group"
-        aria-label={t("dotsLabel")}
-        className={cn("mt-3 flex flex-wrap justify-center gap-0.5", !metrics.overflow && "hidden")}
-      >
-        {Array.from({ length: metrics.stops }).map((_, stop) => (
           <button
-            key={stop}
             type="button"
-            className="group inline-flex size-11 items-center justify-center rounded-md sm:size-6"
-            aria-current={stop === metrics.index}
-            aria-label={
-              metrics.perView > 1
-                ? t("dotRange", {
-                    from: stop + 1,
-                    to: stop + metrics.perView,
-                    total: metrics.cards
-                  })
-                : t("dotOne", { index: stop + 1, total: metrics.cards })
-            }
+            className={cn(navButton, "col-start-2 row-start-3 justify-self-center")}
+            aria-controls={RAIL_ID}
+            aria-label={autoplay ? t("pause") : t("play")}
             onClick={() => {
-              setOverride(false);
-              goTo(stop);
+              lastStep.current = Date.now();
+              setOverride(!autoplay);
             }}
           >
-            <span className="block size-1.5 rounded-full bg-[color:var(--aqt-border-3)] transition-[width,background-color] duration-200 group-hover:bg-[color:var(--aqt-fg-faint)] group-aria-[current=true]:w-[18px] group-aria-[current=true]:bg-[color:var(--aqt-teal)]" />
+            {autoplay ? (
+              <Pause aria-hidden strokeWidth={1.5} />
+            ) : (
+              <Play aria-hidden strokeWidth={1.5} />
+            )}
           </button>
-        ))}
+        </div>
       </div>
     </div>
   );

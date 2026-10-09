@@ -18,7 +18,10 @@ export function HomeHero() {
   const t = useTranslations("home.hero");
 
   return (
-    <HeroFrame variant="plain">
+    <HeroFrame
+      variant="plain"
+      className="bg-[linear-gradient(135deg,var(--aqt-bg-2),var(--aqt-bg))]"
+    >
       <div className="px-[clamp(20px,4vw,48px)] py-[clamp(28px,4vw,48px)]">
         <p className={cn(EYEBROW_CLASS, "normal-case tracking-normal")}>{t("eyebrow")}</p>
         <h1

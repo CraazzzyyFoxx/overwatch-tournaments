@@ -26,7 +26,10 @@ interface DirectoryEntry {
 }
 
 async function loadDirectory(): Promise<DirectoryEntry[]> {
-  const [workspaces, activePage] = await Promise.all([getPublicWorkspaces(), getActiveTournaments()]);
+  const [workspaces, activePage] = await Promise.all([
+    getPublicWorkspaces(),
+    getActiveTournaments()
+  ]);
   const active = activePage.results.filter((tournament) =>
     isTournamentStatusActive(tournament.status)
   );
@@ -42,7 +45,9 @@ async function loadDirectory(): Promise<DirectoryEntry[]> {
       return {
         workspace,
         active:
-          mine.find((tournament) => getTournamentStatusMeta(tournament.status).variant === "live") ??
+          mine.find(
+            (tournament) => getTournamentStatusMeta(tournament.status).variant === "live"
+          ) ??
           mine[0] ??
           null,
         tournaments: totals?.tournaments ?? null,
@@ -124,7 +129,9 @@ async function CommunityCard({ entry }: Readonly<{ entry: DirectoryEntry }>) {
             <TrustedBadge status={workspace.verification_status} />
           </div>
           {host ? (
-            <div className="mt-0.5 truncate text-caption text-[color:var(--aqt-fg-dim)]">{host}</div>
+            <div className="mt-0.5 truncate text-caption text-[color:var(--aqt-fg-dim)]">
+              {host}
+            </div>
           ) : null}
         </div>
       </div>
@@ -170,29 +177,33 @@ export function DirectorySkeleton() {
           <Skeleton className="h-7 w-52" />
           <Skeleton className="mt-1.5 h-4 w-72 max-w-full" />
         </div>
-        <Skeleton className="h-11 w-[132px] sm:h-9" />
       </div>
-      <ul className="grid auto-cols-[100%] grid-flow-col gap-8 overflow-hidden min-[640px]:auto-cols-[calc((100%-32px)/2)] min-[1100px]:auto-cols-[calc((100%-2*32px)/3)]">
-        {Array.from({ length: 3 }).map((_, index) => (
-          <li
-            key={index}
-            className="flex min-w-0 flex-col gap-3 border-t border-[color:var(--aqt-border-3)] pt-5"
-          >
-            <div className="flex items-center gap-3">
-              <Skeleton className="size-11 rounded-[11px]" />
-              <div className="flex-1">
-                <Skeleton className="h-5 w-32" />
-                <Skeleton className="mt-1.5 h-3.5 w-24" />
+      <div className="md:px-14">
+        <ul className="grid auto-cols-[100%] grid-flow-col gap-8 overflow-hidden min-[640px]:auto-cols-[calc((100%-32px)/2)] min-[1100px]:auto-cols-[calc((100%-2*32px)/3)]">
+          {Array.from({ length: 3 }).map((_, index) => (
+            <li
+              key={index}
+              className="flex min-w-0 flex-col gap-3 border-t border-[color:var(--aqt-border-3)] pt-5"
+            >
+              <div className="flex items-center gap-3">
+                <Skeleton className="size-11 rounded-[11px]" />
+                <div className="flex-1">
+                  <Skeleton className="h-5 w-32" />
+                  <Skeleton className="mt-1.5 h-3.5 w-24" />
+                </div>
               </div>
-            </div>
-            <Skeleton className="h-10 w-full" />
-            <div className="flex gap-6 pt-3">
-              <Skeleton className="h-9 w-16" />
-              <Skeleton className="h-9 w-16" />
-            </div>
-          </li>
-        ))}
-      </ul>
+              <Skeleton className="h-10 w-full" />
+              <div className="flex gap-6 pt-3">
+                <Skeleton className="h-9 w-16" />
+                <Skeleton className="h-9 w-16" />
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
+      <div className="mt-3 flex justify-center">
+        <Skeleton className="h-11 w-[132px]" />
+      </div>
     </Section>
   );
 }

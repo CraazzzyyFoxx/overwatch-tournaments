@@ -159,6 +159,8 @@ Principle: any new primitive must preserve:
 section order. Their `SectionStack` is contained at `max-w-7xl`, with responsive
 56-96px section gaps. `HeroFrame variant="plain"` uses `--aqt-bg-2` without the
 accent hairline or corner glow; default and profile heroes stay unchanged.
+The home hero adds a near-black `135deg` gradient from `--aqt-bg-2` to `--aqt-bg`,
+keeping the same 1px frame border.
 
 `Showcase` stacks its caption above the existing real screenshot, caps body copy
 at 65ch and uses the card-radius token with a bottom fade beginning at 75%.
@@ -167,6 +169,13 @@ prefix sit in an associated, wrapping URL preview below the full-width slug
 input, not inside its typing area. Inputs use 16px text, 48px shells, visible
 focus/invalid states and the existing validation/authentication behavior.
 Repeated section eyebrows are omitted; semantic headings and links stay intact.
+
+`DirectoryRail` uses borderless ghost controls with 20px SVG icons, 1.5px strokes
+and 44px hit targets. Desktop arrows sit in reserved gutters beside the cards;
+pause/play sits next to pagination. Below `md`, pagination gets a full-width row
+and the previous, pause/play and next controls sit on the row below it. The
+44px gutters plus 12px gaps match the loading skeleton's desktop padding.
+Existing autoplay, reduced-motion defaults and manual takeover remain unchanged.
 
 ## Admin kit
 
