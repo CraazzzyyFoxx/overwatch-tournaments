@@ -7,7 +7,7 @@ import { useTranslations } from "next-intl";
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { WorkspaceAvatar } from "@/components/workspace/WorkspaceAvatar";
-import { useActiveWorkspace } from "@/components/workspace/WorkspaceSwitcher";
+import { useWorkspaceStore } from "@/stores/workspace.store";
 import { useFormatter } from "@/lib/datetime/client";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import { isTournamentStatusActive } from "@/lib/tournament/status";
@@ -17,14 +17,14 @@ import type { Tournament } from "@/types/tournament.types";
 import type { Workspace } from "@/types/workspace.types";
 
 /**
- * Active events under the same viewing filter as the public browse pages.
- * A tenant host fixes that filter; an opened object does not.
+ * "What is running right now, everywhere": the header's live counter and the
+ * list behind it, grouped by community. Deliberately not workspace-scoped.
  * Renders nothing when nothing is active.
  */
 export default function ActiveEvents() {
   const t = useTranslations();
   const format = useFormatter();
-  const { workspaces, workspace: viewingWorkspace } = useActiveWorkspace();
+  const workspaces = useWorkspaceStore((s) => s.workspaces);
 
   const { data: allTournaments } = useQuery({
     queryKey: tournamentQueryKeys.allActive(),
@@ -38,7 +38,6 @@ export default function ActiveEvents() {
     const byWorkspace = new Map<number, Tournament[]>();
     for (const tournament of allTournaments.results) {
       if (!isTournamentStatusActive(tournament.status)) continue;
-      if (viewingWorkspace && tournament.workspace_id !== viewingWorkspace.id) continue;
       const list = byWorkspace.get(tournament.workspace_id) ?? [];
       list.push(tournament);
       byWorkspace.set(tournament.workspace_id, list);
@@ -59,7 +58,7 @@ export default function ActiveEvents() {
           : [];
       })
       .sort((a, b) => a.workspace.name.localeCompare(b.workspace.name));
-  }, [allTournaments, workspaces, viewingWorkspace]);
+  }, [allTournaments, workspaces]);
 
   const total = groups.reduce((sum, group) => sum + group.tournaments.length, 0);
   if (total === 0) return null;

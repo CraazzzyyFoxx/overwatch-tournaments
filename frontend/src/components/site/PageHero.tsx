@@ -30,9 +30,10 @@ interface HeroFrameProps {
    * Accent treatment. `"default"` (used by every list/dashboard hero) keeps the
    * calm teal top hairline. `"profile"` is the player-page signature from the
    * design-book: the role-spectrum hairline at the BASE — the one place the
-   * multi-hue spectrum reads as identity rather than decoration.
+   * multi-hue spectrum reads as identity rather than decoration. `"plain"`
+   * keeps marketing surfaces neutral, without the hairline or corner glow.
    */
-  variant?: "default" | "profile";
+  variant?: "default" | "profile" | "plain";
   /**
    * Colour of the soft corner glow (any CSS colour). Defaults to teal; the
    * player profile passes its main-role hue. Ignored when `coverUrl` is set —
@@ -98,11 +99,13 @@ export function HeroFrame({
   tint = "var(--aqt-teal)",
 }: Readonly<HeroFrameProps>) {
   const isProfile = variant === "profile";
+  const isPlain = variant === "plain";
   const fadeRight = Boolean(coverUrl) && coverFade === "right";
   return (
     <section
       className={cn(
         "relative isolate overflow-hidden rounded-2xl border border-[color:var(--aqt-border)] bg-[color:var(--aqt-bg)]",
+        isPlain && "bg-[color:var(--aqt-bg-2)]",
         className
       )}
     >
@@ -115,12 +118,12 @@ export function HeroFrame({
           className="pointer-events-none absolute inset-x-0 bottom-0 z-[2] h-0.5 opacity-90"
           style={{ background: "var(--aqt-spectrum)" }}
         />
-      ) : (
+      ) : !isPlain ? (
         <span
           aria-hidden
           className="pointer-events-none absolute inset-x-0 top-0 z-[2] h-0.5 bg-[color:var(--aqt-teal)]"
         />
-      )}
+      ) : null}
       {fadeRight ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
@@ -176,13 +179,13 @@ export function HeroFrame({
             filter: `blur(${COVER_BLUR_PX}px) saturate(2.2)`,
           }}
         />
-      ) : (
+      ) : !isPlain ? (
         <span
           aria-hidden
           className="aqt-hero-tint pointer-events-none absolute inset-0"
           style={{ "--aqt-hero-tint": tint } as React.CSSProperties}
         />
-      )}
+      ) : null}
       <div className="relative z-[1]">{children}</div>
     </section>
   );

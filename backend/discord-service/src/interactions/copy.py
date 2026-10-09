@@ -31,6 +31,7 @@ __all__ = (
     "settle_note",
     "success_text",
     "text",
+    "voice_prompt_text",
     "voice_text",
 )
 
@@ -326,6 +327,26 @@ _VOICE: dict[Locale, dict[str, str]] = {
     },
 }
 
+#: The question ``voice.move|return`` asks before anyone is moved.
+_VOICE_PROMPT: dict[Locale, dict[str, str]] = {
+    "ru": {
+        "voice.move": "### Развести игроков по войсам команд?",
+        "voice.return": "### Вернуть всех из войсов команд в общий?",
+        "mix": "Микс «{name}»",
+        "lobby": "Лобби {letter}",
+        "all_lobbies": "Все лобби",
+        "confirm": "Подтвердить",
+    },
+    "en": {
+        "voice.move": "### Move players into their team voices?",
+        "voice.return": "### Return everyone from the team voices to the general one?",
+        "mix": "Mix “{name}”",
+        "lobby": "Lobby {letter}",
+        "all_lobbies": "All lobbies",
+        "confirm": "Confirm",
+    },
+}
+
 #: Every refusal the bot words itself; anything else is the service's message.
 MIX_BLOCKERS: frozenset[str] = frozenset(_MIX_BLOCKERS["ru"])
 #: The refusals a profile link can actually fix.
@@ -533,6 +554,17 @@ def voice_text(locale: Locale, report: Mapping[str, Any]) -> tuple[str, str | No
     lines = [f"**{words.get(status, status)}:** {', '.join(names)}" for status, names in missed.items()]
     heading = words["heading"].format(count=sum(row.get("status") == "moved" for row in results))
     return heading, "\n".join(lines) or None
+
+
+def voice_prompt_text(
+    locale: Locale, action_name: str, mix_name: str | None, lobby_index: int | None
+) -> tuple[str, str]:
+    """``(question, confirm label)`` for a voice control: what will happen, to which mix and lobby."""
+    words = _VOICE_PROMPT[locale]
+    where = words["all_lobbies"] if lobby_index is None else words["lobby"].format(letter=LOBBY_LETTERS[lobby_index])
+    if mix_name:
+        where = f"{words['mix'].format(name=escape_markdown(mix_name))} · {where}"
+    return f"{words[action_name]}\n{where}", words["confirm"]
 
 
 def seat_modal_text(locale: Locale) -> Mapping[str, str]:

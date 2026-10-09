@@ -18,9 +18,11 @@
 //  6. moving is per lobby, and across all of them only when there is more than
 //     one; a lobby splits only with both team voices picked, and returns only
 //     with a general voice to return to;
-//  7. the report says how many moved and, per status, exactly who did not,
+//  7. moving and returning people waits for the host's confirmation, which
+//     names the mix and the lobby (or every lobby) it is about;
+//  8. the report says how many moved and, per status, exactly who did not,
 //     next to the action that produced it;
-//  8. once every voice is picked the selects fold into read-only cells, and
+//  9. once every voice is picked the selects fold into read-only cells, and
 //     the host reopens them on purpose.
 import { act } from "react";
 import { createRoot } from "react-dom/client";
@@ -242,6 +244,13 @@ function optionByText(scope: ParentNode, text: string) {
   );
 }
 
+/** The open confirmation's own text and buttons (Radix portals it to `body`). */
+function dialog() {
+  const node = document.querySelector("[role='alertdialog']");
+  if (!node) throw new Error("Expected a confirmation dialog");
+  return node;
+}
+
 beforeEach(() => {
   document.body.innerHTML = "";
   vi.clearAllMocks();
@@ -361,18 +370,25 @@ describe("PickupVoicePanel", () => {
     expect(noGeneral.textContent).toContain("pickGeneral");
   });
 
-  it("moves one lobby, and every lobby only when the mix runs more than one", async () => {
+  it("moves one lobby, and every lobby only when the mix runs more than one, once confirmed", async () => {
     const single = await mount({ game: ready() });
 
     await click(byName(single, "move"));
+    expect(onMove).not.toHaveBeenCalled();
+    expect(dialog().textContent).toContain("confirm.moveTitle");
+    expect(dialog().textContent).toContain("confirm.where(mix=Thursday scrim,lobby=lobby(letter=A))");
+    await click(byName(dialog(), "move"));
     expect(onMove).toHaveBeenCalledWith(0);
     expect(byName(single, "moveAll")).toBeNull();
 
     const many = await mount({ game: ready(2) });
 
     await click(byName(many, "moveAll"));
+    expect(dialog().textContent).toContain("confirm.allLobbies");
+    await click(byName(dialog(), "move"));
     expect(onMove).toHaveBeenCalledWith(null);
     await click(byName(many, "returnAll"));
+    await click(byName(dialog(), "return"));
     expect(onReturn).toHaveBeenCalledWith(null);
   });
 
@@ -385,11 +401,16 @@ describe("PickupVoicePanel", () => {
     expect(byName(container, "returnAll")?.disabled).toBe(true);
   });
 
-  it("returns one lobby on its own row", async () => {
+  it("returns one lobby on its own row once confirmed, and nothing when cancelled", async () => {
     const container = await mount({ game: ready() });
 
     await click(byName(container, "return"));
+    expect(dialog().textContent).toContain("confirm.returnTitle");
+    await click(byName(dialog(), "cancel"));
+    expect(onReturn).not.toHaveBeenCalled();
 
+    await click(byName(container, "return"));
+    await click(byName(dialog(), "return"));
     expect(onReturn).toHaveBeenCalledWith(0);
   });
 

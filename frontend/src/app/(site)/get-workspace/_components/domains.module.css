@@ -1,6 +1,6 @@
 /* Scroll-driven domain steps (mock `.dom`). Utilities cannot express this:
-   the current step is a state three elements react to at once (its own
-   opacity, its number's colour, the sticky stage's cross-fade), and the teal
+   the current step coordinates its number's colour with the sticky stage's
+   cross-fade, and the teal
    rule is positioned from a measured offset. Everything else in the section —
    the browser frame, the DNS table — is plain Tailwind. */
 
@@ -22,8 +22,7 @@
   align-content: start;
   min-height: 46vh;
   padding-top: 18px;
-  border-top: 1px solid var(--aqt-border-3);
-  transition: opacity 0.3s ease;
+  border-top: 1px solid var(--aqt-border);
 }
 
 /* Enough track that the sticky stage (with the DNS table) stays put on the
@@ -36,7 +35,7 @@
   grid-row: span 3;
   padding-top: 3px;
   font:
-    700 var(--text-caption) / 1.4 var(--aqt-data);
+    600 var(--text-caption) / 1.4 var(--aqt-data);
   font-variant-numeric: tabular-nums;
   color: var(--aqt-fg-faint);
   transition: color 0.3s ease;
@@ -70,10 +69,6 @@
 }
 
 @media (min-width: 1024px) {
-  .step:not(.on) {
-    opacity: 0.4;
-  }
-
   /* One teal rule slides to the current step (--bar-y is its offsetTop). */
   .steps::before {
     content: "";
@@ -113,8 +108,33 @@
   }
 }
 
+/* No real example: keep the same instructions without an empty preview track. */
+.textOnly {
+  grid-template-columns: 1fr;
+}
+
+.textOnly .steps {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 32px;
+}
+
+.textOnly .step {
+  min-height: 0;
+  padding-bottom: 32px;
+}
+
+.textOnly .steps::before {
+  display: none;
+}
+
+@media (max-width: 639px) {
+  .textOnly .steps {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .step,
   .n,
   .frame,
   .steps::before {

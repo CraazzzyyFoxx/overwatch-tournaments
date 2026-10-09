@@ -117,10 +117,9 @@ export async function NowOnPlatform() {
   return (
     <Section id="now" labelledBy={TITLE_ID} closed>
       <SectionHead
-        rubric={t("rubric")}
         title={t("title")}
         titleId={TITLE_ID}
-        aside={<MoreLink href="/tournaments">{t("more")}</MoreLink>}
+        aside={<MoreLink href="/tournaments" className="min-h-11">{t("more")}</MoreLink>}
       />
       {data === null ? (
         <LoadError what={t("error")} dashed />
@@ -222,11 +221,11 @@ async function LeadFeat({
             />
           ) : null}
         </Facts>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-3">
           <Link
             href={tournamentHref(tournament, "/bracket")}
             prefetch={false}
-            className={owtButton({ variant: "outline", size: "sm" })}
+            className={owtButton({ variant: "outline", size: "sm", className: "h-11 sm:h-8" })}
           >
             <Network aria-hidden />
             {t("bracket")}
@@ -234,7 +233,7 @@ async function LeadFeat({
           <Link
             href={tournamentHref(tournament, "/matches")}
             prefetch={false}
-            className={owtButton({ variant: "ghost", size: "sm" })}
+            className={owtButton({ variant: "ghost", size: "sm", className: "h-11 sm:h-8" })}
           >
             {t("matches")}
           </Link>
@@ -307,18 +306,18 @@ async function LeadFeat({
       </Facts>
       {/* Registration opens from a dialog in the tournament page's header rail;
           there is no standalone registration route to deep-link to. */}
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-3">
         <Link
           href={tournamentHref(tournament)}
           prefetch={false}
-          className={owtButton({ variant: "outline", size: "sm" })}
+          className={owtButton({ variant: "outline", size: "sm", className: "h-11 sm:h-8" })}
         >
           {t("apply")}
         </Link>
         <Link
           href={tournamentHref(tournament)}
           prefetch={false}
-          className={owtButton({ variant: "ghost", size: "sm" })}
+          className={owtButton({ variant: "ghost", size: "sm", className: "h-11 sm:h-8" })}
         >
           {t("about")}
         </Link>
@@ -383,7 +382,7 @@ async function LastFinishedFeat({
         </>
       }
     >
-      <MoreLink href="/tournaments">{t("archive")}</MoreLink>
+      <MoreLink href="/tournaments" className="min-h-11">{t("archive")}</MoreLink>
     </Feat>
   );
 }
@@ -453,10 +452,10 @@ async function TCard({
     <Link
       href={tournamentHref(tournament)}
       prefetch={false}
-      className="flex min-w-0 flex-col items-start gap-2.5 border-t border-[color:var(--aqt-border-3)] pt-4 transition-colors duration-150 hover:border-t-[color:var(--aqt-teal)] focus-visible:outline-offset-4"
+      className="flex min-w-0 flex-col items-start gap-3 border-t border-[color:var(--aqt-border-3)] pt-5 transition-colors duration-150 hover:border-t-[color:var(--aqt-teal)] focus-visible:outline-offset-4"
     >
       <TournamentStatusPill status={variant}>{statusLabel(tournament.status)}</TournamentStatusPill>
-      <b className="line-clamp-2 font-display text-ui font-bold leading-[1.3] text-[color:var(--aqt-fg)]">
+      <b className="line-clamp-2 font-display text-ui font-semibold leading-[1.3] text-[color:var(--aqt-fg)]">
         {tournament.name}
       </b>
       {workspace ? (
@@ -475,11 +474,8 @@ export function NowSkeleton() {
   return (
     <Section id="now" labelledBy={TITLE_ID} closed>
       <div className="mb-4 flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
-        <div>
-          <Skeleton className="h-3 w-20" />
-          <Skeleton className="mt-2 h-7 w-56" />
-        </div>
-        <Skeleton className="h-4 w-28" />
+        <Skeleton className="h-7 w-56" />
+        <Skeleton className="h-11 w-28" />
       </div>
       <div className={BENTO_CLASS}>
         <div className={cn(FEAT_SPAN, "border-t-2 border-[color:var(--aqt-border-3)] pt-5")}>
@@ -490,15 +486,15 @@ export function NowSkeleton() {
             <Skeleton className="h-9 w-20" />
             <Skeleton className="h-9 w-20" />
           </div>
-          <div className="mt-[22px] flex gap-2">
-            <Skeleton className="h-8 w-24" />
-            <Skeleton className="h-8 w-20" />
+          <div className="mt-[22px] flex gap-3">
+            <Skeleton className="h-11 w-24 sm:h-8" />
+            <Skeleton className="h-11 w-20 sm:h-8" />
           </div>
         </div>
         {Array.from({ length: 4 }).map((_, index) => (
           <div
             key={index}
-            className="flex flex-col items-start gap-2.5 border-t border-[color:var(--aqt-border-3)] pt-4"
+            className="flex flex-col items-start gap-3 border-t border-[color:var(--aqt-border-3)] pt-5"
           >
             <Skeleton className="h-[26px] w-20" />
             <Skeleton className="h-5 w-full" />

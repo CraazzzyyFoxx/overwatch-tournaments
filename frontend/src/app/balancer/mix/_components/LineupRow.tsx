@@ -159,8 +159,10 @@ export function LineupRow({
       ref={(node) => draggable.setNodeRef(node)}
       {...draggable.listeners}
       {...draggable.attributes}
-      title={`${label} \u2014 roles and ranks`}
+      title={canWrite ? `${label} \u2014 roles and ranks` : undefined}
       onClick={(event) => {
+        // The sheet is a writer's tool: a read-only viewer opens nothing.
+        if (!canWrite) return;
         // `event.target` on a click landing on the role/remove buttons' SVG
         // icon is an `SVGElement`, which is not an `HTMLElement` \u2014 checking
         // the narrower type let those clicks fall through to `onOpen()`.
@@ -227,8 +229,9 @@ export function LineupRow({
       <IconTooltip control label="Advanced settings" className="shrink-0">
         <button
           type="button"
+          disabled={!canWrite}
           onClick={onOpen}
-          className="flex size-6 items-center justify-center rounded-md text-[color:var(--aqt-fg-faint)] transition-colors hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-fg-muted)]"
+          className="flex size-6 items-center justify-center rounded-md text-[color:var(--aqt-fg-faint)] transition-colors hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-fg-muted)] disabled:pointer-events-none disabled:opacity-40"
         >
           <SlidersHorizontal className="size-[15px]" aria-hidden="true" />
           <span className="sr-only">{`Advanced settings for ${label}`}</span>

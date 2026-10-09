@@ -2933,6 +2933,30 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         self.lobby_rows[0] = _lobby(0, selected_variant_index=4, balance_result_json=lobby_document([{"teams": []}]))
         self.assertEqual([], await self.service.refresh_lineup(self.session, **kwargs))
 
+    async def test_refresh_lineup_leaves_a_recorded_rounds_card_alone(self) -> None:
+        """The round on the newest card was recorded: the next shuffle belongs to
+        the next post, so the played card is not rewritten under its result."""
+        self.games.get.return_value = _game()
+        self.lobby_rows[0] = _lobby(0, balance_result_json=lobby_document([{"teams": []}]))
+        row = self.messages.add(
+            subject="mix:11", slot="lineup:0:1", kind="mix.lineup", status="posted", card_json=_voice_card_json("11-0")
+        )
+        self.casual_matches.activity_for_lobbies = AsyncMock(return_value={0: (1, datetime(2026, 1, 1, 20, 0))})
+        before = dict(row.card_json)
+
+        commands = await self.service.refresh_lineup(
+            self.session,
+            workspace_id=1,
+            custom_game_id=11,
+            lobby_index=0,
+            image_b64=None,
+            actor_user_id=9,
+            board_url_base="https://owt.example",
+        )
+
+        self.assertEqual([], commands)
+        self.assertEqual(before, row.card_json)
+
     async def test_set_voice_channels_writes_the_mixs_general_voice_and_both_team_voices(self) -> None:
         """One write for the whole mix: the general voice everyone returns to,
         and each listed lobby's two team voices."""

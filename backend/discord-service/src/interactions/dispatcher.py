@@ -13,7 +13,8 @@ clicker privately, and in a DM take the spent buttons off the card.
 ``show_current_mix`` is ``/mix seat``: the same two RPCs, with the workspace read
 from the guild the command was typed in rather than from a button's target;
 ``run_voice`` is ``/mix move|return``, which is the lineup card's voice button
-with the mix named by the command instead of by the button.
+with the mix named by the command instead of by the button. Both only ask: the
+confirm button on that private prompt is what moves people.
 """
 
 from __future__ import annotations
@@ -30,11 +31,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from shared.domain.discord_ui import AMBER, BLUE, GREEN, RED, emoji
 from shared.messaging.rpc import request_rpc
-from shared.repository import WorkspaceRepository
+from shared.repository import CustomGameRepository, WorkspaceRepository
 from shared.schemas.events import DiscordActionButton, DiscordButton, DiscordCard, DiscordLinkButton
 from src.core.broker import optional_broker
 from src.interactions import copy
-from src.interactions.actions import ACTIONS, parse_setup_target, setup_target, voice_target
+from src.interactions.actions import ACTIONS, parse_setup_target, parse_voice_target, setup_target, voice_target
 from src.interactions.cards import card_view, seat_modal, settle
 
 __all__ = ("IDENTITY_SUBJECT", "MIX_CURRENT_SUBJECT", "MIX_HOSTED_SUBJECT", "ActionDispatcher", "Outcome")
@@ -88,7 +89,9 @@ _MIX_CURRENT_ACTION = "mix.roles"
 #: allows only as the *first* response to the click -- never after a defer.
 _SEAT_SETUP = "mix.setup"
 #: The host's voice controls; their reply is a per-person report, not a sentence.
-_VOICE_ACTIONS = frozenset({"voice.move", "voice.return"})
+_VOICE_ACTIONS = frozenset({"voice.move_confirm", "voice.return_confirm"})
+#: The card buttons and ``/mix move|return`` ask first; the answer carries the button that runs.
+_VOICE_PROMPTS = {"voice.move": "voice.move_confirm", "voice.return": "voice.return_confirm"}
 #: Autocomplete must answer inside Discord's 3 s; an identity already cached leaves room for this.
 _AUTOCOMPLETE_TIMEOUT = 2.0
 
@@ -122,12 +125,14 @@ class ActionDispatcher:
         broker: Callable[[], Any] = optional_broker,
         session_maker: async_sessionmaker[AsyncSession] | None = None,
         workspaces: WorkspaceRepository = WorkspaceRepository(),
+        games: CustomGameRepository = CustomGameRepository(),
         timeout: float = 5.0,
     ) -> None:
         self._site = site_url.rstrip("/")
         self._broker = broker
         self._session_maker = session_maker
         self._workspaces = workspaces
+        self._games = games
         self._timeout = timeout
         # Keyed by Discord user id; holds the identity payload alone, never a
         # refusal (see IDENTITY_CACHE_TTL). One per dispatcher, i.e. one per bot.
@@ -339,6 +344,31 @@ class ActionDispatcher:
         everyone = all(isinstance(row, Mapping) and row.get("status") == "moved" for row in results)
         return card_view(DiscordCard(accent_color=GREEN if everyone else AMBER, text=text, details=details))
 
+    async def _voice_prompt(
+        self, guild_id: int | None, action_name: str, target: str, locale: copy.Locale
+    ) -> discord.ui.LayoutView:
+        """What a voice control is about to do, with the one button that does it."""
+        game_id, lobby_index = parse_voice_target(target)
+        question, label = copy.voice_prompt_text(
+            locale, action_name, await self._mix_name(guild_id, game_id), lobby_index
+        )
+        confirm = DiscordActionButton(label=label, action=_VOICE_PROMPTS[action_name], target=target, style="primary")
+        return self._card(AMBER, question, confirm)
+
+    async def _mix_name(self, guild_id: int | None, game_id: int) -> str | None:
+        """The mix's name, only if a workspace wired to this guild owns it: a prompt never names another's mix."""
+        if guild_id is None or self._session_maker is None:
+            return None
+        try:
+            async with self._session_maker() as session:
+                workspace_ids = await self._workspaces.list_ids_by_discord_guild(session, str(guild_id))
+                game = await self._games.get(session, game_id)
+        except Exception:
+            # The name is a courtesy; the prompt still asks without it.
+            logger.exception(f"Discord voice prompt could not read mix {game_id}")
+            return None
+        return game.name if game is not None and game.workspace_id in workspace_ids else None
+
     async def handle(
         self, interaction: discord.Interaction, action_name: str, target: str, fields: Mapping[str, str] | None = None
     ) -> None:
@@ -353,6 +383,10 @@ class ActionDispatcher:
         # seconds, and two RPCs can take longer. For a button this is a silent
         # "update the message later", so nothing flashes in the channel.
         await interaction.response.defer()
+        if action_name in _VOICE_PROMPTS:
+            view = await self._voice_prompt(interaction.guild_id, action_name, target, locale)
+            await interaction.followup.send(view=view, ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
+            return
         try:
             outcome = await self.perform(interaction.user.id, action_name, target, fields)
         except Exception:
@@ -411,19 +445,11 @@ class ActionDispatcher:
     async def run_voice(
         self, interaction: discord.Interaction, action_name: str, custom_game_id: int, lobby: str
     ) -> None:
-        """``/mix move`` and ``/mix return``: the same call as the card's buttons, answered to the caller alone."""
+        """``/mix move`` and ``/mix return``: the card button's prompt, for the caller alone."""
         locale = copy.locale_of(interaction.locale)
         await interaction.response.defer(ephemeral=True, thinking=True)
         target = voice_target(custom_game_id, None if lobby == "all" else int(lobby))
-        try:
-            outcome = await self.perform(interaction.user.id, action_name, target)
-        except Exception:
-            logger.exception(f"Discord /mix {action_name} crashed")
-            outcome = Outcome("unavailable")
-        logger.bind(action=action_name, target=target, status=outcome.status, discord_user_id=interaction.user.id).info(
-            f"Discord /mix {action_name}: {outcome.status}"
-        )
-        view = self.reply(outcome, action_name, locale)
+        view = await self._voice_prompt(interaction.guild_id, action_name, target, locale)
         await interaction.followup.send(view=view, ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
 
     async def hosted_mixes(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[int]]:

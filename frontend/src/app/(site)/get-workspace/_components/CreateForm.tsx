@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Check, CircleAlert, Lock, LogIn } from "lucide-react";
 
-import { EYEBROW_CLASS } from "@/components/site/open-layout";
 import { owtButton } from "@/components/site/owt-button";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -46,14 +45,15 @@ const EDGE_RE = /^[-_]|[-_]$/;
 type HelpKind = "neutral" | "ok" | "err";
 
 const INPUT_SHELL =
-  "flex h-11 min-w-0 items-center gap-2.5 rounded-[var(--aqt-radius-sm)] border " +
+  "flex h-12 min-w-0 items-center rounded-[var(--aqt-radius-sm)] border " +
   "border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-2)] px-3.5 " +
   "transition-[border-color,background-color] duration-150 " +
-  "focus-within:border-[color:var(--aqt-teal)] focus-within:bg-[color:var(--aqt-overlay-3)]";
+  "focus-within:border-[color:var(--aqt-teal)] focus-within:bg-[color:var(--aqt-overlay-3)] " +
+  "focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[color:var(--aqt-teal)]";
 
 const INPUT_FIELD =
-  "h-full min-w-0 flex-1 border-0 bg-transparent text-ui leading-none text-[color:var(--aqt-fg)] " +
-  "outline-none placeholder:text-[color:var(--aqt-fg-faint)]";
+  "h-full min-w-0 w-full flex-1 border-0 bg-transparent text-base leading-none text-[color:var(--aqt-fg)] " +
+  "outline-none placeholder:text-[color:var(--aqt-fg-dim)]";
 
 /**
  * The create form of the organizer page (mock `.create`).
@@ -149,11 +149,11 @@ export function CreateForm() {
       id="create"
       noValidate
       onSubmit={onSubmit}
-      className="mt-7 grid max-w-[620px] scroll-mt-[var(--aqt-sticky-top)] gap-4"
+      className="mt-6 grid max-w-[640px] scroll-mt-[var(--aqt-sticky-top)] gap-5"
     >
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
-        <div>
-          <label htmlFor="ws-name" className={cn(EYEBROW_CLASS, "mb-2 block")}>
+      <div className="grid grid-cols-1 gap-x-4 gap-y-5 sm:grid-cols-2">
+        <div className="min-w-0">
+          <label htmlFor="ws-name" className="mb-2 block text-body font-medium text-[color:var(--aqt-fg)]">
             {t("name")}
           </label>
           <div className={INPUT_SHELL}>
@@ -165,27 +165,21 @@ export function CreateForm() {
               placeholder={t("namePlaceholder")}
               autoComplete="off"
               required
-              className={cn(INPUT_FIELD, "font-[family-name:var(--aqt-data)]")}
+              className={INPUT_FIELD}
             />
           </div>
         </div>
-        <div>
-          <label htmlFor="ws-slug" className={cn(EYEBROW_CLASS, "mb-2 block")}>
+        <div className="min-w-0">
+          <label htmlFor="ws-slug" className="mb-2 block text-body font-medium text-[color:var(--aqt-fg)]">
             {t("address")}
           </label>
           <div
             className={cn(
               INPUT_SHELL,
               help.kind === "err" &&
-                "border-[color:color-mix(in_srgb,var(--aqt-rose)_70%,transparent)]"
+                "border-[color:var(--aqt-rose)] focus-within:border-[color:var(--aqt-rose)] focus-within:outline-[color:var(--aqt-rose)]"
             )}
           >
-            <span
-              aria-hidden
-              className="hidden whitespace-nowrap font-mono text-body leading-none text-[color:var(--aqt-fg-dim)] min-[480px]:inline"
-            >
-              {PLATFORM_ZONE}/workspace/
-            </span>
             <input
               id="ws-slug"
               name="slug"
@@ -197,16 +191,22 @@ export function CreateForm() {
               spellCheck={false}
               autoComplete="off"
               required
-              aria-describedby="slug-help"
+              aria-describedby="slug-preview slug-help"
               aria-invalid={help.kind === "err"}
-              className={cn(INPUT_FIELD, "font-mono text-body")}
+              className={cn(INPUT_FIELD, "font-mono")}
             />
           </div>
+          <p
+            id="slug-preview"
+            className="mt-2 font-mono text-caption leading-relaxed text-[color:var(--aqt-fg-dim)] [overflow-wrap:anywhere]"
+          >
+            {PLATFORM_ZONE}/workspace/<span className="text-[color:var(--aqt-fg-muted)]">{slug}</span>
+          </p>
           <p
             id="slug-help"
             aria-live="polite"
             className={cn(
-              "mt-2 flex min-h-5 items-center gap-[7px] text-caption",
+              "mt-1.5 flex min-h-5 items-start gap-1.5 text-caption leading-relaxed",
               help.kind === "ok"
                 ? "text-[color:var(--aqt-emerald)]"
                 : help.kind === "err"
@@ -214,14 +214,14 @@ export function CreateForm() {
                   : "text-[color:var(--aqt-fg-dim)]"
             )}
           >
-            {help.kind === "ok" ? <Check className="size-3.5 shrink-0" aria-hidden /> : null}
-            {help.kind === "err" ? <CircleAlert className="size-3.5 shrink-0" aria-hidden /> : null}
+            {help.kind === "ok" ? <Check className="mt-0.5 size-3.5 shrink-0" aria-hidden /> : null}
+            {help.kind === "err" ? <CircleAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden /> : null}
             <span>{help.msg}</span>
           </p>
         </div>
       </div>
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
-        <button type="submit" disabled={pending} className={owtButton({ variant: "primary", size: "lg" })}>
+      <div className="flex flex-col items-start gap-3">
+        <button type="submit" disabled={pending} aria-busy={pending} className={owtButton({ variant: "primary", size: "lg" })}>
           {user ? (
             t("submit")
           ) : (
@@ -231,10 +231,10 @@ export function CreateForm() {
             </>
           )}
         </button>
-        <small className="text-caption text-[color:var(--aqt-fg-dim)]">{t("note")}</small>
+        <small className="max-w-[38rem] text-pretty text-caption leading-relaxed text-[color:var(--aqt-fg-dim)]">{t("note")}</small>
       </div>
       {formError ? (
-        <p role="alert" className="text-caption text-[color:var(--aqt-rose-text)]">
+        <p role="alert" className="text-body leading-relaxed text-[color:var(--aqt-rose-text)]">
           {formError}
         </p>
       ) : null}

@@ -72,7 +72,7 @@ export async function DomainsSection() {
 
   return (
     <Section labelledBy="gw-dom-title">
-      <SectionHead rubric={t("rubric")} title={t("title")} titleId="gw-dom-title" sub={t("sub")} />
+      <SectionHead title={t("title")} titleId="gw-dom-title" sub={t("sub")} />
       <DomainSteps example={example} zone={PLATFORM_ZONE} />
     </Section>
   );
@@ -81,16 +81,15 @@ export async function DomainsSection() {
 /** Same boxes as the loaded section: a head, four steps, one preview frame. */
 export function DomainsSkeleton() {
   return (
-    <div>
+    <div aria-hidden>
       <div className="mb-4">
-        <Skeleton className="h-3 w-24" />
-        <Skeleton className="mt-2 h-7 w-[22rem] max-w-full" />
+        <Skeleton className="h-7 w-[22rem] max-w-full" />
         <Skeleton className="mt-2.5 h-4 w-[26rem] max-w-full" />
       </div>
       <div className="grid items-start gap-x-14 min-[1024px]:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)]">
         <div>
           {[0, 1, 2, 3].map((step) => (
-            <div key={step} className="border-t border-[color:var(--aqt-border-3)] pt-[18px] pb-8">
+            <div key={step} className="border-t border-[color:var(--aqt-border)] pt-[18px] pb-8 min-[1024px]:min-h-[46vh] min-[1024px]:last:min-h-[40vh]">
               <Skeleton className="h-6 w-56 max-w-full" />
               <Skeleton className="mt-2 h-3.5 w-64 max-w-full" />
               <Skeleton className="mt-2 h-4 w-80 max-w-full" />

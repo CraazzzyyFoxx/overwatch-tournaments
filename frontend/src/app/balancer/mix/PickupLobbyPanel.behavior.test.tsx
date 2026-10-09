@@ -484,12 +484,14 @@ describe("PickupLobbyPanel", () => {
     expect(onPatchPlayer).toHaveBeenCalled();
   });
 
-  it("keeps the settings control reachable without a pointer", async () => {
-    // The row's own click is a pointer affordance; the button is what a keyboard
-    // reaches, so it has to stay even when nothing else on the row is writable.
+  it("keeps the player sheet shut for a read-only viewer", async () => {
+    // The sheet only writes, so a viewer gets a visibly inert control instead
+    // of a drawer full of disabled fields.
     const scope = await mount([row()], { canWrite: false });
 
-    expect(byName(scope, "Advanced settings for Aria#1111")).not.toBeNull();
+    expect(byName(scope, "Advanced settings for Aria#1111")?.hasAttribute("disabled")).toBe(true);
+    await click(byLabel(scope, "In the pool")?.querySelector("li"));
+    expect(onOpenPlayer).not.toHaveBeenCalled();
   });
 
   it("confirms before emptying the lobby", async () => {
