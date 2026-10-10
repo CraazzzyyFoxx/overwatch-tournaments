@@ -1,5 +1,6 @@
 "use client";
 
+import type { CSSProperties } from "react";
 import { usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
@@ -24,7 +25,8 @@ import { useTournamentQuery } from "@/hooks/useTournamentClientData";
 import { useTournamentStreamsQuery } from "../_hooks/useTournamentStreams";
 import { buildLiveTeamStreams } from "../bracket/bracketLiveStreams";
 import { getPublicPageQueryPresentation } from "@/lib/public-page-query-presentation";
-import { groupDisplayName } from "@/lib/tournament/group";
+import { TournamentTeamCardFrame } from "@/components/TournamentTeamCard";
+import { groupDisplayName, groupHue } from "@/lib/tournament/group";
 import { useFfaStageLobbies } from "../_hooks/useFfaStageLobbies";
 import { MatchesFfaLobbies } from "./_components/MatchesFfaLobbies";
 import { MatchesToolbar } from "./_components/MatchesToolbar";
@@ -45,14 +47,8 @@ const HEADING_CLASS =
 
 /** The stage over its rounds. Every round heading used to carry the stage name
  *  glued in front of it ("DOUBLE ELIMINATION · UB Final"); it is said once here
- *  instead, so the round is what a round heading says. */
-const STAGE_HEADING_CLASS = "mb-1 mt-6 text-ui font-semibold text-[color:var(--aqt-fg)]";
-
-/** The section fills its container, so a wide viewport would otherwise stretch
- *  the two name tracks and leave the chevron alone at the far edge. Here the
- *  names sit in fixed tracks around the score and the spare width goes to the
- *  outer tracks, keeping time · teams · score · format · chevron one block. */
-const WIDE_ROW_CLASS = "lg:grid-cols-[minmax(0,1fr)_14rem_5.5rem_14rem_minmax(0,1fr)]";
+ *  instead, so the round is what a round card says. */
+const STAGE_HEADING_CLASS = "mt-6 text-ui font-semibold text-[color:var(--aqt-fg)]";
 
 interface TournamentEncountersPageProps {
   tournamentId: number;
@@ -378,28 +374,40 @@ const TournamentEncountersPage = ({ tournamentId, slug, now }: TournamentEncount
                   {group.name ? (
                     <h2 className={STAGE_HEADING_CLASS}>{group.name}</h2>
                   ) : null}
-                  {group.blocks.map((block) => (
-                    <section key={block.key} aria-label={block.heading}>
-                      {group.name ? (
-                        <h3 className={HEADING_CLASS}>{block.heading}</h3>
-                      ) : (
-                        <h2 className={HEADING_CLASS}>{block.heading}</h2>
-                      )}
-                      <div className="border-t border-[color:var(--aqt-border)]">
+                  {/* One card per round (or day), two abreast from lg: a row
+                      across the full container left the names and score
+                      stranded in the middle of empty tracks. */}
+                  <div className="mt-3 grid gap-3 lg:grid-cols-2 lg:items-start">
+                    {group.blocks.map((block) => (
+                      <TournamentTeamCardFrame
+                        key={block.key}
+                        name={block.heading}
+                        metricValue={block.meta}
+                      >
                         {block.rows.map((row) => (
                           <MatchRow
                             key={row.encounter.id}
                             encounter={row.encounter}
-                            leading={row.leading}
+                            leading={
+                              row.group ? (
+                                <span
+                                  className="group-chip"
+                                  style={{ "--group-hue": groupHue(row.group) } as CSSProperties}
+                                >
+                                  {groupDisplayName(row.group, groupWord)}
+                                </span>
+                              ) : (
+                                row.leading
+                              )
+                            }
                             trailing={row.trailing}
                             bracketHref={bracketHref(row.encounter)}
                             returnTo={returnTo}
-                            className={WIDE_ROW_CLASS}
                           />
                         ))}
-                      </div>
-                    </section>
-                  ))}
+                      </TournamentTeamCardFrame>
+                    ))}
+                  </div>
                 </section>
               ))}
               <MatchesFfaLobbies

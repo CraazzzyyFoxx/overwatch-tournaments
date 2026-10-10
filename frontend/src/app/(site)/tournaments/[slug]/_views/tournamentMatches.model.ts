@@ -77,20 +77,26 @@ export function collectStages(encounters: Encounter[], tournament: Tournament): 
 
 export type MatchListRow = {
   encounter: Encounter;
-  leading: string;
+  /** Mono leading cell: a match number, a clock time. */
+  leading?: string;
+  /** A round-robin or swiss row's group; the page draws it as a chip. */
+  group?: string;
   trailing?: string;
 };
 
 export type MatchBlock = {
   key: string;
-  /** Mono heading, already joined with " · ". */
+  /** The round or the day, as the block's card title. */
   heading: string;
+  /** What every row shares, beside the title: "Bo3 · 2 matches". */
+  meta?: string;
   rows: MatchListRow[];
 };
 
 /**
  * One stage's rounds in reading order — final first — with the leading and
- * trailing mono cells of every row.
+ * trailing cells of every row. A format the whole round shares is said once,
+ * in the block's meta; a round that mixes formats keeps it on every row.
  *
  * Elimination stages come from `orderEliminationRounds` reversed: the
  * bracket's own match numbering is the only thing that knows the lower final
@@ -118,32 +124,35 @@ export function buildStageBlocks(
   }
 
   return groups.map((group) => {
-    const rows: MatchListRow[] = [];
-    for (const match of group.matches) {
-      const encounter = byId.get(match.id);
-      if (!encounter) continue;
-      const bo = `Bo${encounter.best_of}`;
+    const encountersOfRound = group.matches.flatMap((match) => byId.get(match.id) ?? []);
+    const formats = new Set(encountersOfRound.map((encounter) => encounter.best_of));
+    const sharedBo = formats.size === 1 ? `Bo${encountersOfRound[0].best_of}` : null;
+
+    const rows: MatchListRow[] = encountersOfRound.map((encounter) => {
+      const bo = sharedBo === null ? `Bo${encounter.best_of}` : null;
       if (isElimination) {
         const number = matchNumbers.get(encounter.id);
-        // The group heading already names the round, so a trailing cell would
+        // The card title already names the round, so a trailing cell would
         // only repeat it — wireframe §7: playoff rows carry no trailing text.
-        rows.push({ encounter, leading: number == null ? bo : `M${number} · ${bo}` });
-        continue;
+        const leading = [number == null ? null : `M${number}`, bo].filter(Boolean).join(" · ");
+        return { encounter, leading: leading || undefined };
       }
-      // Wireframe §7 ⑥: the group letter leads, the format trails. The round is
-      // in the heading and the group is already the leading cell, so the
-      // trailing cell says only what neither of them does.
-      rows.push({ encounter, leading: encounter.stage_item?.name ?? bo, trailing: bo });
-    }
+      // Wireframe §7 ⑥: the group leads, the format trails when the round
+      // does not share one.
+      return {
+        encounter,
+        group: encounter.stage_item?.name ?? undefined,
+        trailing: bo ?? undefined
+      };
+    });
 
     return {
       key: `${stageKey(stage.id)}:${group.round}`,
       // The round only. The stage names the block of rounds above it in the
       // page, so repeating it per round read as "DOUBLE ELIMINATION · " glued
       // to every heading.
-      heading: [roundLabel(group.round, shape), rows.length > 1 ? countLabel(rows.length) : null]
-        .filter(Boolean)
-        .join(" · "),
+      heading: roundLabel(group.round, shape),
+      meta: [sharedBo, rows.length > 1 ? countLabel(rows.length) : null].filter(Boolean).join(" · ") || undefined,
       rows
     };
   });
@@ -222,11 +231,11 @@ export function buildTimeSections(
         key === today && ordered.some((row) => !isEncounterCompleted(row.encounter))
           ? `${labels.laterToday} · ${labels.day(date)}`
           : labels.day(date),
-        unanimousStage ?? labels.phase(date),
-        ordered.length > 1 ? labels.count(ordered.length) : null
+        unanimousStage ?? labels.phase(date)
       ]
         .filter(Boolean)
         .join(" · "),
+      meta: ordered.length > 1 ? labels.count(ordered.length) : undefined,
       rows: ordered.map((row) => ({
         encounter: row.encounter,
         leading: labels.time(row.at),
@@ -247,7 +256,8 @@ export function buildTimeSections(
   if (undated.length > 0) {
     days.push({
       key: "undated",
-      heading: [labels.unscheduled, labels.count(undated.length)].join(" · "),
+      heading: labels.unscheduled,
+      meta: labels.count(undated.length),
       rows: undated.map((encounter) => ({
         encounter,
         leading: "—",

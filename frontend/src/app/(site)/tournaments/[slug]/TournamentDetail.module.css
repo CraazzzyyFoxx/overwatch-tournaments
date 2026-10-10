@@ -556,6 +556,43 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* One match row. Under 640px it is the bracket node: each team on its own
+   line with its score on the right, so neither name is cut to fit the other.
+   From 640px it is the scoreboard line: home · score · away, the names
+   leaning on the score. Every cell is placed by area, so the DOM is one. */
+.matchRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-areas:
+    "lead lead act"
+    "home hs hs"
+    "away as as";
+  align-items: center;
+  column-gap: 0.75rem;
+  row-gap: 0.25rem;
+}
+
+.matchRow > [data-cell="lead"] { grid-area: lead; }
+.matchRow > [data-cell="home"] { grid-area: home; }
+.matchRow > [data-cell="hs"] { grid-area: hs; justify-self: end; }
+.matchRow > [data-cell="dash"] { display: none; }
+.matchRow > [data-cell="as"] { grid-area: as; justify-self: end; }
+.matchRow > [data-cell="away"] { grid-area: away; }
+.matchRow > [data-cell="act"] { grid-area: act; }
+
+@media (min-width: 640px) {
+  .matchRow {
+    grid-template-columns: minmax(4.5rem, auto) minmax(0, 1fr) 1.5rem auto 1.5rem minmax(0, 1fr) auto;
+    grid-template-areas: "lead home hs dash as away act";
+    row-gap: 0;
+  }
+
+  .matchRow > [data-cell="home"] { justify-self: end; }
+  .matchRow > [data-cell="hs"] { justify-self: end; }
+  .matchRow > [data-cell="dash"] { display: block; grid-area: dash; }
+  .matchRow > [data-cell="as"] { justify-self: start; }
+}
+
 /* The bracket canvas is intrinsically wider than any viewport. It owns its own
    horizontal scroll so the page never scrolls sideways; the caller marks it as
    a focusable labelled region so keyboard users can reach that scroll.
