@@ -19,7 +19,6 @@ import { useTournamentQuery } from "@/hooks/useTournamentClientData";
 import { getPublicPageQueryPresentation } from "@/lib/public-page-query-presentation";
 import { groupDisplayName } from "@/lib/tournament/group";
 import { isTournamentStatusEnded } from "@/lib/tournament/status";
-import { cn } from "@/lib/utils";
 import { Tournament } from "@/types/tournament.types";
 
 import { SectionToolbar } from "../_components/SectionToolbar";
@@ -30,7 +29,6 @@ import { ViewSegment, readViewParam } from "../_components/ViewSegment";
 import { TeamListRow } from "./_components/TeamListRow";
 import {
   compareTeams,
-  listGrid,
   MARK_CLASS,
   matchesSearch,
   TEAMS_SORTS,
@@ -48,7 +46,6 @@ const TournamentTeamsView = ({ tournament, slug }: { tournament: Tournament; slu
   const { searchParams, setParams } = useQueryParams({ resetOnChange: [] });
   const storedView = useStoredTeamsView();
   const narrow = useIsNarrowViewport();
-  const withRoles = tournament.roster_shape?.has_role_slots ?? true;
 
   const teams = useMemo(() => teamsQuery.data?.results ?? [], [teamsQuery.data]);
 
@@ -212,23 +209,7 @@ const TournamentTeamsView = ({ tournament, slug }: { tournament: Tournament; slu
               })}
             </div>
           ) : (
-            <div className="border-t border-[color:var(--aqt-border)]">
-              <div
-                className={cn(
-                  listGrid(withRoles),
-                  "border-b border-[color:var(--aqt-border)] px-2 py-1.5 text-label uppercase tracking-label text-[color:var(--aqt-fg-faint)]"
-                )}
-              >
-                <span>#</span>
-                <span />
-                <span>{t("tournamentDetail.teams.team")}</span>
-                <span>{t("teams.roster.avgSr")}</span>
-                {withRoles ? (
-                  <span className="hidden sm:block">{t("tournamentDetail.teams.rosterColumn")}</span>
-                ) : null}
-                <span className="text-right">{t("tournamentDetail.teams.record")}</span>
-                <span />
-              </div>
+            <div className="space-y-2">
               {visibleTeams.map((team) => (
                 <TeamListRow
                   key={team.id}

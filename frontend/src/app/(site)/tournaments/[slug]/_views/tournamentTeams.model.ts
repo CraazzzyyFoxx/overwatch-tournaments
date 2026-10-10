@@ -1,13 +1,9 @@
 import { isEncounterCompleted } from "@/lib/encounter/status";
-import { normalizePlayerRole, type PlayerRoleOption } from "@/lib/roster/player-role";
-import { ROSTER_SLOT_CODES, type RosterSlotCode } from "@/lib/roster/shape";
-import { cn } from "@/lib/utils";
+import { normalizePlayerRole } from "@/lib/roster/player-role";
 import type { Encounter } from "@/types/encounter.types";
 import type { Hero } from "@/types/hero.types";
 import type { Registration } from "@/types/registration.types";
 import type { Player, Team } from "@/types/team.types";
-import type { Tournament } from "@/types/tournament.types";
-import { sortTeamPlayers } from "@/lib/player";
 
 export const TEAMS_VIEWS = ["list", "cards"] as const;
 export type TeamsView = (typeof TEAMS_VIEWS)[number];
@@ -22,14 +18,6 @@ export type TeamsSortBy = (typeof TEAMS_SORTS)[number];
  */
 export const MARK_CLASS =
   "rounded-[3px] bg-[color:color-mix(in_srgb,var(--aqt-teal)_22%,transparent)] px-0.5 text-[color:var(--aqt-fg)]";
-
-/** Slot code -> the canonical role name `PlayerRoleIcon` maps to a glyph. */
-const SLOT_ROLE: Record<RosterSlotCode, PlayerRoleOption> = {
-  tank: "Tank",
-  damage: "Damage",
-  support: "Support",
-  flex: "Flex"
-};
 
 /** A team's settled series record. `null` when encounters are unavailable. */
 export type TeamRecord = { won: number; lost: number };
@@ -86,66 +74,6 @@ export function buildRecords(encounters: Encounter[]): Map<number, TeamRecord> {
   }
 
   return records;
-}
-
-/**
- * The roster slots of the tournament, one entry per player the shape asks for,
- * paired positionally with the team's roster. `sortTeamPlayers` orders players
- * tank -> damage -> support -> flex, the same canonical order the slot codes
- * come in, so index pairing lands each glyph on its own player.
- */
-export function rosterSlots(
-  tournament: Tournament,
-  team: Team
-): { role: PlayerRoleOption; player?: Player }[] {
-  const players = sortTeamPlayers(team.players);
-  const shape = tournament.roster_shape;
-
-  if (!shape) {
-    // No shape entity on this read: the team's own roster is the shape.
-    return players.map((player) => ({ role: normalizePlayerRole(player.role), player }));
-  }
-
-  const slots: { role: PlayerRoleOption; player?: Player }[] = [];
-  for (const code of ROSTER_SLOT_CODES) {
-    for (let index = 0; index < (shape.slots[code] ?? 0); index += 1) {
-      slots.push({ role: SLOT_ROLE[code] });
-    }
-  }
-  return slots.map((slot, index) => {
-    const player = players[index];
-    // The player's own role is the truth when one fills the slot; the slot's
-    // role only labels a seat nobody took.
-    return player ? { role: normalizePlayerRole(player.role), player } : slot;
-  });
-}
-
-/**
- * The list's column tracks: seed · logo slot · name · AVG SR · [role glyphs] ·
- * W–L · chevron. The logo track is always reserved so names align whether or
- * not a team uploaded an image (`TeamLogo` renders nothing without one). The
- * glyph track exists only for a shape with role slots — an all-flex roster
- * would show five identical glyphs, which says nothing.
- */
-export function listGrid(withRoles: boolean): string {
-  return cn(
-    "grid items-center gap-2 text-ui sm:gap-3",
-    "grid-cols-[2rem_1.25rem_minmax(0,1fr)_3.5rem_2.75rem_1.25rem]",
-    withRoles
-      ? "sm:grid-cols-[2.5rem_1.25rem_minmax(0,1fr)_4rem_auto_3.5rem_1.25rem]"
-      : "sm:grid-cols-[2.5rem_1.25rem_minmax(0,1fr)_4rem_3.5rem_1.25rem]"
-  );
-}
-
-/** Role · battletag · division+SR · [heroes] · notes. The name track is capped
- *  so the division does not drift to the far edge of a wide row. */
-export function rosterGrid(withHeroes: boolean): string {
-  return cn(
-    "grid items-center gap-2",
-    withHeroes
-      ? "grid-cols-[3rem_minmax(0,16rem)_6rem_4.5rem_minmax(0,1fr)]"
-      : "grid-cols-[3rem_minmax(0,16rem)_6rem_minmax(0,1fr)]"
-  );
 }
 
 /**

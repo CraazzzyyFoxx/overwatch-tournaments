@@ -22,7 +22,7 @@ import { IconTooltip } from "@/components/ui/icon-tooltip";
 import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
 import { getDivisionLabel } from "@/lib/divisions/grid";
 import { normalizePlayerRole, PLAYER_ROLE_LABEL_KEY } from "@/lib/roster/player-role";
-import { groupDisplayName } from "@/lib/tournament/group";
+import { groupDisplayName, groupHue } from "@/lib/tournament/group";
 import { cn } from "@/lib/utils";
 import type { DivisionGridVersion } from "@/types/workspace.types";
 
@@ -239,9 +239,10 @@ export const TournamentTeamTable = ({
 }) => {
   const t = useTranslations();
 
-  // Only render the dossier columns when at least one row carries the data;
+  // Each dossier column renders only when at least one row carries its data;
   // other callers (team cards) pass rosters without these fields.
-  const showExtra = players.some((p) => p.avg_mvp != null || (p.heroes?.length ?? 0) > 0);
+  const showMvp = players.some((p) => p.avg_mvp != null);
+  const showHeroes = players.some((p) => (p.heroes?.length ?? 0) > 0);
   const signatureTitle = t("users.tournaments.roster.signatureHeroes");
 
   return (
@@ -256,15 +257,15 @@ export const TournamentTeamTable = ({
             <th scope="col" style={{ width: 96 }}>
               {t("teams.roster.rank")}
             </th>
-            {showExtra ? (
-              <>
-                <th scope="col" style={{ width: 64, textAlign: "right" }}>
-                  {t("users.tournaments.roster.avgMvp")}
-                </th>
-                <th scope="col" style={{ width: 100 }}>
-                  {t("users.tournaments.roster.heroes")}
-                </th>
-              </>
+            {showMvp ? (
+              <th scope="col" style={{ width: 64, textAlign: "right" }}>
+                {t("users.tournaments.roster.avgMvp")}
+              </th>
+            ) : null}
+            {showHeroes ? (
+              <th scope="col" style={{ width: 100 }}>
+                {t("users.tournaments.roster.heroes")}
+              </th>
             ) : null}
           </tr>
         </thead>
@@ -296,30 +297,30 @@ export const TournamentTeamTable = ({
                       dimmed={dimmed}
                     />
                   </td>
-                  {showExtra ? (
-                    <>
-                      <td
-                        className="aqt-tnum tabular-nums"
-                        style={{
-                          textAlign: "right",
-                          color:
-                            player.avg_mvp != null
-                              ? avgMvpColor(player.avg_mvp)
-                              : "var(--aqt-fg-dim)"
-                        }}
-                      >
-                        {player.avg_mvp != null ? player.avg_mvp.toFixed(1) : "—"}
-                      </td>
-                      <td>
-                        {player.heroes && player.heroes.length > 0 ? (
-                          <div title={signatureTitle} aria-label={signatureTitle}>
-                            <HeroStrip heroes={player.heroes} size="sm" limit={3} />
-                          </div>
-                        ) : (
-                          <span className="text-[color:var(--aqt-fg-dim)]">—</span>
-                        )}
-                      </td>
-                    </>
+                  {showMvp ? (
+                    <td
+                      className="aqt-tnum tabular-nums"
+                      style={{
+                        textAlign: "right",
+                        color:
+                          player.avg_mvp != null
+                            ? avgMvpColor(player.avg_mvp)
+                            : "var(--aqt-fg-dim)"
+                      }}
+                    >
+                      {player.avg_mvp != null ? player.avg_mvp.toFixed(1) : "—"}
+                    </td>
+                  ) : null}
+                  {showHeroes ? (
+                    <td>
+                      {player.heroes && player.heroes.length > 0 ? (
+                        <div title={signatureTitle} aria-label={signatureTitle}>
+                          <HeroStrip heroes={player.heroes} size="sm" limit={3} />
+                        </div>
+                      ) : (
+                        <span className="text-[color:var(--aqt-fg-dim)]">—</span>
+                      )}
+                    </td>
                   ) : null}
                 </tr>
               );
@@ -331,20 +332,7 @@ export const TournamentTeamTable = ({
   );
 };
 
-function groupChipClass(name?: string | null): string {
-  switch (name?.trim().toUpperCase()) {
-    case "B":
-      return "b";
-    case "C":
-      return "c";
-    case "D":
-      return "d";
-    default:
-      return "a";
-  }
-}
-
-function placementClass(placement: number): string {
+export function placementClass(placement: number): string {
   if (placement === 1) return "gold";
   if (placement === 2) return "silver";
   if (placement === 3) return "bronze";
@@ -410,7 +398,10 @@ export const TournamentTeamCard = ({ team }: { team: Team }) => {
       name={<TeamName team={team} size="md" />}
       leadingTag={
         team.group?.name ? (
-          <span className={cn("group-chip", groupChipClass(team.group.name))}>
+          <span
+            className="group-chip"
+            style={{ "--group-hue": groupHue(team.group.name) } as React.CSSProperties}
+          >
             {groupDisplayName(team.group.name, t("common.group"))}
           </span>
         ) : (
