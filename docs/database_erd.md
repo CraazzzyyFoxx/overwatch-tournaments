@@ -12,7 +12,7 @@ schema name — `ranks/` writes to `overwatch_rank`, `ingestion/` to `log_proces
 > `--check` and fails on drift, so the diagrams cannot fall behind the models again.
 
 <!-- ERD:auto _alembic_head -->
-Alembic head: **`regidsoc01`** (109 revisions in `backend/migrations/versions/`).
+Alembic head: **`apikeysu01`** (110 revisions in `backend/migrations/versions/`).
 <!-- /ERD:auto -->
 
 **Reading the diagrams**
@@ -214,6 +214,7 @@ erDiagram
         timestamptz expires_at "nullable"
         timestamptz revoked_at "nullable"
         timestamptz last_used_at "nullable"
+        boolean is_superuser
     }
     AUTH_API_KEY_SCOPE {
         bigint api_key_id PK,FK
