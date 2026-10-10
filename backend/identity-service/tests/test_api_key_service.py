@@ -337,6 +337,86 @@ def test_validate_api_key_never_inherits_superuser_or_role_names(monkeypatch: py
     assert payload.workspaces[0].rbac_permissions == _TEAM_CREATE
 
 
+@pytest.mark.parametrize(("owner_is_superuser", "expected"), [(True, True), (False, False)])
+def test_validate_superuser_key_holds_superuser_only_while_its_owner_does(
+    monkeypatch: pytest.MonkeyPatch, owner_is_superuser: bool, expected: bool
+) -> None:
+    """Demoting the owner demotes every superuser key they minted, without a revoke."""
+    row = _api_key_row(scopes=[])
+    row.is_superuser = True
+    session = _FakeSession([{"scalar": row}])
+    _patch_owner(
+        monkeypatch,
+        _owner_payload(workspace_permissions=_WILDCARD, is_superuser=owner_is_superuser),
+    )
+
+    payload = asyncio.run(api_keys.validate(session, "aqt_sk_publicid_secret-token"))
+
+    assert payload is not None
+    assert payload.is_superuser is expected
+    assert payload.roles == []
+
+
+def _superuser() -> models.AuthUser:
+    user = _user()
+    user.is_superuser = True
+    return user
+
+
+_IN_A_DAY = datetime.now(UTC) + timedelta(days=1)
+
+
+@pytest.mark.parametrize(
+    ("user", "expires_at", "expected_status"),
+    [
+        (_user(), _IN_A_DAY, 403),
+        (_superuser(), None, 422),
+        (_superuser(), datetime.now(UTC) - timedelta(minutes=1), 422),
+    ],
+    ids=["not-a-superuser", "no-expiry", "already-expired"],
+)
+def test_create_superuser_key_is_refused(
+    monkeypatch: pytest.MonkeyPatch, user: models.AuthUser, expires_at: datetime | None, expected_status: int
+) -> None:
+    async def allow_manage(*args, **kwargs) -> None:
+        return None
+
+    monkeypatch.setattr(api_keys, "ensure_can_manage", allow_manage)
+    session = _FakeSession()
+
+    with pytest.raises(api_keys_module.HTTPException) as exc_info:
+        asyncio.run(
+            api_keys.create(
+                session,
+                user=user,
+                payload=schemas.ApiKeyCreate(name="Ops", workspace_id=11, is_superuser=True, expires_at=expires_at),
+            )
+        )
+
+    assert exc_info.value.status_code == expected_status
+    assert session.added == []
+
+
+def test_create_superuser_key_stores_the_flag(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def allow_manage(*args, **kwargs) -> None:
+        return None
+
+    monkeypatch.setattr(api_keys, "ensure_can_manage", allow_manage)
+    session = _FakeSession()
+
+    response = asyncio.run(
+        api_keys.create(
+            session,
+            user=_superuser(),
+            payload=schemas.ApiKeyCreate(name="Ops", workspace_id=11, is_superuser=True, expires_at=_IN_A_DAY),
+        )
+    )
+
+    assert session.added[0].is_superuser is True
+    assert response.api_key.is_superuser is True
+
+
+
 @pytest.mark.parametrize(
     ("owner_permissions", "expected"),
     [(_WILDCARD, _WILDCARD), (_TEAM_CREATE, [])],

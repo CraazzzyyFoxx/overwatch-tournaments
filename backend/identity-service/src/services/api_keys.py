@@ -122,6 +122,7 @@ class ApiKeyService:
             owner_id=row.auth_user_id,
             owner_username=_owner_username(row, owner),
             scopes=_scope_names(row),
+            is_superuser=bool(row.is_superuser),
             expires_at=row.expires_at,
             revoked_at=row.revoked_at,
             last_used_at=row.last_used_at,
@@ -304,6 +305,22 @@ class ApiKeyService:
         user_agent: str | None = None,
     ) -> schemas.ApiKeyCreateResponse:
         await self.ensure_can_manage(session, user=user, workspace_id=payload.workspace_id)
+        if payload.is_superuser:
+            # A blanket bypass that outlives the browser session it was minted
+            # from: only a superuser may hand one out, and never without an end.
+            if not user.is_superuser:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Only a superuser can create a superuser API key",
+                )
+            expires = payload.expires_at
+            if expires is not None and expires.tzinfo is None:
+                expires = expires.replace(tzinfo=UTC)
+            if expires is None or expires <= _now():
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="A superuser API key needs an expiry in the future",
+                )
 
         unknown = unknown_scopes(payload.scopes)
         if unknown:
@@ -335,6 +352,7 @@ class ApiKeyService:
             name=self._clean_name(payload.name),
             scopes=[models.ApiKeyScope(scope=name) for name in scopes],
             expires_at=payload.expires_at,
+            is_superuser=payload.is_superuser,
         )
         await self.keys.create(session, row)
         # Never the secret, its hash, or the public id: an API key is identified in
@@ -352,6 +370,7 @@ class ApiKeyService:
             after={
                 "name": row.name,
                 "scopes": list(scopes),
+                "is_superuser": row.is_superuser,
                 "expires_at": _isoformat(row.expires_at),
             },
             ip_address=ip_address,
@@ -606,11 +625,12 @@ class ApiKeyService:
             sub=api_key.user.id,
             email=api_key.user.email,
             username=api_key.user.username,
-            # Never a superuser and never carrying role NAMES: both are blanket
-            # bypasses in AuthUser (is_superuser, _has_admin_equivalent_role,
-            # _has_admin_panel_role), and a delegated credential must be fully
-            # described by the permission list below.
-            is_superuser=False,
+            # Never carrying role NAMES: they are blanket bypasses in AuthUser
+            # (_has_admin_equivalent_role, _has_admin_panel_role), and a delegated
+            # credential must be fully described by the permission list below.
+            # ``is_superuser`` is the one bypass a key may carry, and only while
+            # its owner still holds it: demoting the owner demotes every key.
+            is_superuser=bool(api_key.is_superuser) and owner.is_superuser,
             roles=[],
             # Global permissions stay empty by construction: the key is scoped to
             # one workspace, and a global grant would reach every other one.

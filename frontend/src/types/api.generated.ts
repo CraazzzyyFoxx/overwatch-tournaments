@@ -15530,6 +15530,11 @@ export interface components {
              * @default null
              */
             expires_at: string | null;
+            /**
+             * Is Superuser
+             * @default false
+             */
+            is_superuser: boolean;
             /** Name */
             name: string;
             /** Scopes */
@@ -15588,6 +15593,11 @@ export interface components {
             expires_at: string | null;
             /** Id */
             id: number;
+            /**
+             * Is Superuser
+             * @default false
+             */
+            is_superuser: boolean;
             /**
              * Last Used At
              * @default null

@@ -26,6 +26,7 @@ export interface AccountApiKey {
   owner_id: number;
   owner_username: string;
   scopes: string[];
+  is_superuser?: boolean;
   expires_at?: string | null;
   revoked_at?: string | null;
   last_used_at?: string | null;
@@ -46,6 +47,8 @@ export interface AccountApiKeyCreateInput {
   workspace_id: number;
   scopes: string[];
   expires_at?: string | null;
+  /** Superuser-only; the server also demands a future `expires_at`. */
+  is_superuser?: boolean;
 }
 
 export interface AccountApiKeyCreateResponse {
