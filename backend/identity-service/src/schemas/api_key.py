@@ -31,6 +31,8 @@ class ApiKeyCreate(BaseModel):
     # empty list authenticates but authorizes nothing, which is the only safe
     # thing to hand out when the caller did not say what the key is for.
     scopes: list[str] = Field(default_factory=list)
+    # Superuser-only, and only with ``expires_at``: see ``ApiKeyService.create``.
+    is_superuser: bool = False
 
 
 class ApiKeyUpdate(BaseModel):
@@ -55,6 +57,7 @@ class ApiKeyRead(BaseModel):
     owner_id: int
     owner_username: str
     scopes: list[str] = Field(default_factory=list)
+    is_superuser: bool = False
     expires_at: datetime | None = None
     revoked_at: datetime | None = None
     last_used_at: datetime | None = None

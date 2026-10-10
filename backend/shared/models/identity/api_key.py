@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, Index, String
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String, false
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from shared.core import db
@@ -32,6 +32,9 @@ class ApiKey(db.TimeStampIntegerMixin):
     expires_at: Mapped[db.DateTime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     revoked_at: Mapped[db.DateTime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_used_at: Mapped[db.DateTime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Only ever set by a superuser, and only honoured while the owner still is one
+    # (see ``ApiKeyService.validate``).
+    is_superuser: Mapped[bool] = mapped_column(Boolean, server_default=false(), default=False, nullable=False)
 
     user: Mapped[AuthUser] = relationship()
     workspace: Mapped[Workspace] = relationship()

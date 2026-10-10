@@ -91,8 +91,10 @@ export function useBracketActions({
   };
 
   const canEdit = isAdmin ? () => true : undefined;
+  // A confirmed result is settled: the captain has nothing left to report.
   const canReport = isAuthenticated
     ? (encounter: Encounter) =>
+        encounter.result_status !== "confirmed" &&
         isEncounterCaptain(encounter) &&
         isStageReportable(
           encounter.stage_id == null ? undefined : stageById.get(encounter.stage_id)

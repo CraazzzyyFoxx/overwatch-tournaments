@@ -2,13 +2,14 @@
 
 import { useEffect, useId, useMemo, useState, type FormEvent } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Check, Clipboard, Gauge, KeyRound, Plus, Trash2, X } from "lucide-react";
+import { Check, Clipboard, Gauge, KeyRound, Plus, ShieldAlert, Trash2, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useFormatter } from "@/lib/datetime/client";
 
 import { DataTable, createKebabColumn } from "@/components/data-table";
 import { InlineEditText } from "@/components/kit/InlineEditText";
 import { StatTile, StatTileGrid } from "@/components/admin/StatTile";
+import { StatusIcon } from "@/components/admin/StatusIcon";
 import { ApiKeyQuotaDialog } from "@/components/admin/quota/ApiKeyQuotaDialog";
 import {
   PermissionPicker,
@@ -26,6 +27,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { StatusDot } from "@/components/ui/status-dot";
+import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   fetchAccountApiKeys,
@@ -171,6 +173,7 @@ export default function AccessAdminApiKeysPage() {
   const [createName, setCreateName] = useState("");
   const [createExpiresAt, setCreateExpiresAt] = useState("");
   const [createScopes, setCreateScopes] = useState<Set<string>>(new Set());
+  const [createSuperuser, setCreateSuperuser] = useState(false);
   const [oneTimeKey, setOneTimeKey] = useState<string | null>(null);
   const [copiedSecret, setCopiedSecret] = useState(false);
   const [pendingRevoke, setPendingRevoke] = useState<AccountApiKey | null>(null);
@@ -179,6 +182,7 @@ export default function AccessAdminApiKeysPage() {
   const [availableScopes, setAvailableScopes] = useState<string[]>([]);
   const createNameId = useId();
   const secretId = useId();
+  const superuserId = useId();
 
   useEffect(() => {
     if (workspaces.length === 0) {
@@ -263,8 +267,11 @@ export default function AccessAdminApiKeysPage() {
                     )
                   }
                 />
-                <p className="truncate font-mono text-xs text-muted-foreground">
+                <p className="flex items-center gap-1.5 truncate font-mono text-xs text-muted-foreground">
                   owt_sk_{apiKey.public_id}_…
+                  {apiKey.is_superuser ? (
+                    <StatusIcon icon={ShieldAlert} label="Superuser" variant="destructive" />
+                  ) : null}
                 </p>
               </div>
             </div>
@@ -440,6 +447,7 @@ export default function AccessAdminApiKeysPage() {
                   setCreateName("");
                   setCreateExpiresAt("");
                   setCreateScopes(new Set());
+                  setCreateSuperuser(false);
                   setCreateOpen(true);
                 }}
               >
@@ -503,7 +511,7 @@ export default function AccessAdminApiKeysPage() {
         submitLabel="Create key"
         submittingLabel="Creating…"
         isSubmitting={createMutation.isPending}
-        isDirty={createName.trim().length > 0 || createScopes.size > 0}
+        isDirty={createName.trim().length > 0 || createScopes.size > 0 || createSuperuser}
         contentClassName="!max-w-2xl"
         onSubmit={(event: FormEvent) => {
           event.preventDefault();
@@ -514,7 +522,13 @@ export default function AccessAdminApiKeysPage() {
             return;
           }
           if (workspaceId === null) return;
-          if (createScopes.size === 0) {
+          if (createSuperuser && !createExpiresAt) {
+            notify.error("Set an expiry for a superuser key.", {
+              description: "A superuser key bypasses every permission check, so it cannot live forever."
+            });
+            return;
+          }
+          if (createScopes.size === 0 && !createSuperuser) {
             // Not a blocker: a scope-less key is a legitimate placeholder. It
             // is only worth saying out loud, because it will 403 on everything.
             notify.warning("Creating a key with no scopes.", {
@@ -529,7 +543,8 @@ export default function AccessAdminApiKeysPage() {
               expires_at:
                 expires && !Number.isNaN(expires.getTime()) ? expires.toISOString() : null,
               name: createName.trim(),
-              scopes: [...createScopes]
+              scopes: [...createScopes],
+              is_superuser: createSuperuser
             },
             {
               onSuccess: (result) => {
@@ -539,6 +554,7 @@ export default function AccessAdminApiKeysPage() {
                 setCreateName("");
                 setCreateExpiresAt("");
                 setCreateScopes(new Set());
+                setCreateSuperuser(false);
                 notify.success("API key created", {
                   description: "Copy the secret now. It will not be shown again."
                 });
@@ -571,6 +587,24 @@ export default function AccessAdminApiKeysPage() {
             minDate={new Date()}
             disabled={createMutation.isPending}
           />
+
+          {isSuperuser ? (
+            <div className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5">
+              <div className="space-y-0.5">
+                <Label htmlFor={superuserId}>Superuser access</Label>
+                <p className="text-xs text-muted-foreground">
+                  The key passes every permission check, not only the scopes below. It stops
+                  working once you lose superuser rights. Requires an expiry.
+                </p>
+              </div>
+              <Switch
+                id={superuserId}
+                checked={createSuperuser}
+                onCheckedChange={setCreateSuperuser}
+                disabled={createMutation.isPending}
+              />
+            </div>
+          ) : null}
 
           {availableScopes.length === 0 ? (
             <EmptyNote size="sm">

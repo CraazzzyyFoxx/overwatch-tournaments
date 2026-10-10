@@ -27494,6 +27494,11 @@
           "default": null,
           "title": "Expires At"
         },
+        "is_superuser": {
+          "default": false,
+          "title": "Is Superuser",
+          "type": "boolean"
+        },
         "name": {
           "maxLength": 100,
           "minLength": 1,
@@ -27687,6 +27692,11 @@
         "id": {
           "title": "Id",
           "type": "integer"
+        },
+        "is_superuser": {
+          "default": false,
+          "title": "Is Superuser",
+          "type": "boolean"
         },
         "last_used_at": {
           "anyOf": [

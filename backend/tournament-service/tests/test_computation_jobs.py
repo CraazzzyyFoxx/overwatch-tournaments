@@ -125,7 +125,7 @@ class ComputationJobTests(IsolatedAsyncioTestCase):
             patch.object(jobs.jobs_service, "get_job", AsyncMock(return_value=job)),
             patch.object(jobs, "dispatch_job", AsyncMock()) as dispatch,
         ):
-            disposition = await jobs.jobs_service.mark_job_failed(session, 7, "late failure")
+            disposition = await jobs.jobs_service.mark_job_failed(session, 7, RuntimeError("late failure"))
 
         self.assertEqual("ignored", disposition)
         self.assertEqual("succeeded", job.status)
@@ -140,11 +140,11 @@ class ComputationJobTests(IsolatedAsyncioTestCase):
             patch.object(jobs.jobs_service, "get_job", AsyncMock(return_value=job)),
             patch.object(jobs, "dispatch_job", AsyncMock()) as dispatch,
         ):
-            disposition = await jobs.jobs_service.mark_job_failed(session, 7, "temporary")
+            disposition = await jobs.jobs_service.mark_job_failed(session, 7, RuntimeError("temporary"))
 
         self.assertEqual("retry", disposition)
         self.assertEqual("pending", job.status)
-        self.assertEqual("temporary", job.error)
+        self.assertEqual("RuntimeError: temporary", job.error)
         dispatch.assert_awaited_once_with(session, job)
         session.commit.assert_awaited_once()
 
@@ -156,12 +156,42 @@ class ComputationJobTests(IsolatedAsyncioTestCase):
             patch.object(jobs.jobs_service, "get_job", AsyncMock(return_value=job)),
             patch.object(jobs, "dispatch_job", AsyncMock()) as dispatch,
         ):
-            disposition = await jobs.jobs_service.mark_job_failed(session, 7, "permanent")
+            disposition = await jobs.jobs_service.mark_job_failed(session, 7, RuntimeError("permanent"))
 
         self.assertEqual("failed", disposition)
         self.assertEqual("failed", job.status)
         dispatch.assert_not_awaited()
         session.commit.assert_awaited_once()
+
+    async def test_domain_refusal_fails_on_first_attempt_without_redispatch(self) -> None:
+        job = SimpleNamespace(status="running", attempts=1, error=None, finished_at=None)
+        session = SimpleNamespace(commit=AsyncMock())
+        refusal = jobs.BaseAPIException(409, "This stage already has generated matches.")
+
+        with (
+            patch.object(jobs.jobs_service, "get_job", AsyncMock(return_value=job)),
+            patch.object(jobs, "dispatch_job", AsyncMock()) as dispatch,
+        ):
+            disposition = await jobs.jobs_service.mark_job_failed(session, 7, refusal)
+
+        # "refused", not "failed": the worker acks instead of dead-lettering.
+        self.assertEqual("refused", disposition)
+        self.assertEqual("failed", job.status)
+        self.assertEqual("This stage already has generated matches.", job.error)
+        dispatch.assert_not_awaited()
+        session.commit.assert_awaited_once()
+
+    async def test_server_error_exception_is_still_retried(self) -> None:
+        job = SimpleNamespace(status="running", attempts=1, error=None, finished_at=None)
+        session = SimpleNamespace(commit=AsyncMock())
+
+        with (
+            patch.object(jobs.jobs_service, "get_job", AsyncMock(return_value=job)),
+            patch.object(jobs, "dispatch_job", AsyncMock()),
+        ):
+            disposition = await jobs.jobs_service.mark_job_failed(session, 7, jobs.BaseAPIException(503, "down"))
+
+        self.assertEqual("retry", disposition)
 
     def test_failure_message_is_the_refusal_not_a_traceback(self) -> None:
         refusal = jobs.BaseAPIException(400, "Need at least 2 teams to generate a bracket")
