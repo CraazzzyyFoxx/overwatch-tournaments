@@ -2678,6 +2678,8 @@
       "clearTeamFilter": "Clear the team filter",
       "addTeam": "+ Team",
       "pickTeam": "Filter by team",
+      "searchTeam": "Search teams…",
+      "noTeamMatch": "No teams match that search.",
       "mapFilter": "Map: {name}",
       "clearMapFilter": "Clear the map filter"
     }

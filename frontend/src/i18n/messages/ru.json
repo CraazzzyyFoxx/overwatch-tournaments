@@ -2678,6 +2678,8 @@
       "clearTeamFilter": "Убрать фильтр по команде",
       "addTeam": "+ Команда",
       "pickTeam": "Фильтр по команде",
+      "searchTeam": "Поиск команды…",
+      "noTeamMatch": "Команды не найдены.",
       "mapFilter": "Карта: {name}",
       "clearMapFilter": "Убрать фильтр по карте"
     }

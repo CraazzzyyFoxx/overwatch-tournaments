@@ -2,15 +2,11 @@
 
 import { CalendarClock, ListOrdered } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { useState } from "react";
 
+import { Combobox } from "@/components/kit/Combobox";
+import { CommandGroup, CommandItem } from "@/components/ui/command";
 import { FilterChip } from "@/components/ui/filter-chip";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from "@/components/ui/select";
 
 import { SectionToolbar } from "../../_components/SectionToolbar";
 import { ViewSegment } from "../../_components/ViewSegment";
@@ -52,6 +48,8 @@ export function MatchesToolbar({
   setParams
 }: Readonly<MatchesToolbarProps>) {
   const t = useTranslations();
+  const [teamPickerOpen, setTeamPickerOpen] = useState(false);
+  const [teamSearch, setTeamSearch] = useState("");
 
   return (
     <SectionToolbar
@@ -115,21 +113,36 @@ export function MatchesToolbar({
         /* Wireframe §7 ②: one "+ Team" chip, not a filter panel. The
            picker lists every team that played, and the chosen team
            becomes the removable chip above. */
-        <Select value="" onValueChange={(value) => setParams({ team: value })}>
-          <SelectTrigger
-            aria-label={t("tournamentDetail.matches.pickTeam")}
-            className="filter-sort h-8 w-auto gap-1.5 shadow-none focus:ring-0 focus:ring-offset-0"
-          >
-            <SelectValue placeholder={t("tournamentDetail.matches.addTeam")} />
-          </SelectTrigger>
-          <SelectContent>
+        <Combobox
+          open={teamPickerOpen}
+          onOpenChange={(open) => {
+            setTeamPickerOpen(open);
+            if (!open) setTeamSearch("");
+          }}
+          label={t("tournamentDetail.matches.addTeam")}
+          triggerAriaLabel={t("tournamentDetail.matches.pickTeam")}
+          triggerClassName="filter-sort h-8 w-auto gap-1.5 shadow-none"
+          searchValue={teamSearch}
+          onSearchValueChange={setTeamSearch}
+          searchPlaceholder={t("tournamentDetail.matches.searchTeam")}
+          emptyMessage={t("tournamentDetail.matches.noTeamMatch")}
+        >
+          <CommandGroup>
             {teamOptions.map((team) => (
-              <SelectItem key={team.id} value={String(team.id)}>
-                {team.name}
-              </SelectItem>
+              <CommandItem
+                key={team.id}
+                value={`${team.name} ${team.id}`}
+                onSelect={() => {
+                  setTeamPickerOpen(false);
+                  setTeamSearch("");
+                  setParams({ team: String(team.id) });
+                }}
+              >
+                <span className="min-w-0 flex-1 truncate">{team.name}</span>
+              </CommandItem>
             ))}
-          </SelectContent>
-        </Select>
+          </CommandGroup>
+        </Combobox>
       ) : null}
       {mapFilter !== null ? (
         <FilterChip
