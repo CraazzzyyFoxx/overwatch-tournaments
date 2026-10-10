@@ -30,30 +30,24 @@ interface EncounterMapRowProps {
   slot: SeriesSlot;
   homeName: string;
   awayName: string;
-  /** Drives the copy for a slot the format allows but that carries no map. */
-  seriesCompleted: boolean;
   tournamentGrid?: DivisionGridVersion | null;
-  /** Localized duration unit suffixes for the playtime fact. */
+  /** Localized duration unit suffixes for the playtime. */
   clockUnits: { h: string; m: string; s: string };
 }
 
 /**
- * One map of the series.
+ * One map of the series, on one line: position, map, the accepted score, the
+ * playtime and the log/scoreboard controls. Provenance (who reported it, the
+ * lobby code, the log file) lives in the scoreboard dialog, where the log is.
  *
- * The old page rendered each map as a 115x230 image tile carrying only the map
- * name, so the per-map score, duration, in-game code, result provenance and log
- * name were reachable only by opening a modal. They are on the row now; the
- * modal is reserved for the full scoreboard.
- *
- * The scoreboard itself is still lazy: a Bo5 must not ship five stat tables in
- * the initial payload for content nobody opened. The query key matches the one
+ * The scoreboard itself is lazy: a Bo5 must not ship five stat tables in the
+ * initial payload for content nobody opened. The query key matches the one
  * the series-statistics panel uses, so whichever loads first warms the other.
  */
 export default function EncounterMapRow({
   slot,
   homeName,
   awayName,
-  seriesCompleted,
   tournamentGrid,
   clockUnits
 }: Readonly<EncounterMapRowProps>) {
@@ -62,10 +56,9 @@ export default function EncounterMapRow({
   const match = slot.match;
   const game = slot.game;
   // Two contracts for one position: the game carries the result the encounter
-  // stands behind, the match is the parsed log. Rendered as two facts — a
-  // parsed score that disagrees with the accepted one is information, not a
-  // correction (spec §11).
+  // stands behind, the match is the parsed log (spec §11).
   const accepted = acceptedScore(game);
+  const parsed = slot.parsedScore;
 
   const matchQuery = useQuery({
     queryKey: encounterQueryKeys.matchDetail(match?.id),
@@ -75,41 +68,21 @@ export default function EncounterMapRow({
   });
 
   if (!match && game == null) {
-    // An empty slot means three different things. Saying "the series ended
-    // before this map" while the series is live — or while it is the very map
-    // being played — is simply false.
-    const inProgress = slot.isLive;
+    // The page only hands over an empty position while it is being played.
     return (
-      <div className={cn(styles.mapRow, inProgress ? styles.mapRowLive : styles.mapRowEmpty)}>
+      <div className={cn(styles.mapRow, styles.mapRowLive)}>
         <span className={styles.mapIndex}>{slot.index}</span>
         <span className={cn(styles.mapThumb, styles.mapThumbPlaceholder)}>
           <ImageOff aria-hidden width={18} height={18} />
         </span>
         <span className={styles.mapIdentity}>
-          <span className={styles.mapName}>
-            {inProgress
-              ? t("encounters.detail.mapInProgress")
-              : t("encounters.detail.mapNotPlayed")}
-          </span>
+          <span className={styles.mapName}>{t("encounters.detail.mapInProgress")}</span>
           <span className={styles.mapMode}>
-            {inProgress
-              ? t("encounters.detail.mapInProgressHint")
-              : seriesCompleted
-                ? t("encounters.detail.mapNotPlayedHint")
-                : t("encounters.detail.mapPendingHint")}
-          </span>
-        </span>
-        <span className={cn(styles.mapScore, styles.mono)} aria-hidden>
-          —
-        </span>
-        <span className={styles.mapFacts}>
-          {inProgress ? (
-            <Pill tone="danger" live className={styles.mapFactWide}>
+            <Pill tone="danger" live>
               {t("encounters.state.live")}
             </Pill>
-          ) : null}
+          </span>
         </span>
-        <span className={styles.mapAction} />
       </div>
     );
   }
@@ -119,7 +92,13 @@ export default function EncounterMapRow({
   const map = match?.map ?? game?.map ?? null;
   const mapName = map?.name ?? t("encounters.match.mapAlt");
   const duration = match != null ? formatSeriesClock(match.time, clockUnits) : null;
-  const shown = accepted ?? (game == null && match != null ? match.score : null);
+  const shown = accepted ?? (game == null ? parsed : null);
+  // The log's own score is news only when it is not the score above: a map no
+  // one confirmed yet, or a log that disagrees with the confirmed result.
+  const parsedDiffers =
+    parsed != null &&
+    shown !== parsed &&
+    (shown == null || shown.home !== parsed.home || shown.away !== parsed.away);
   const scoreLabel =
     shown != null
       ? t("encounters.detail.mapScoreAria", {
@@ -136,7 +115,7 @@ export default function EncounterMapRow({
 
       <span className={cn(styles.mapThumb, !map && styles.mapThumbPlaceholder)}>
         {map ? (
-          <Image src={map.image_path} alt="" fill sizes="104px" className={styles.mapThumbImage} />
+          <Image src={map.image_path} alt="" fill sizes="80px" className={styles.mapThumbImage} />
         ) : (
           <ImageOff aria-hidden width={18} height={18} />
         )}
@@ -157,6 +136,17 @@ export default function EncounterMapRow({
             <Pill tone="danger" live>
               {t("encounters.state.live")}
             </Pill>
+          ) : null}
+          {parsedDiffers ? (
+            <Pill tone={shown == null ? "neutral" : "warn"}>
+              <span className={styles.label}>{t("encounters.game.parsedScore")}</span>
+              <span className={styles.mono}>
+                {parsed.home}:{parsed.away}
+              </span>
+            </Pill>
+          ) : null}
+          {map?.in_competitive === false ? (
+            <Pill tone="warn">{t("encounters.match.nonCompetitive")}</Pill>
           ) : null}
         </span>
       </span>
@@ -186,67 +176,18 @@ export default function EncounterMapRow({
         )}
       </span>
 
-      <span className={styles.mapFacts}>
-        {duration ? (
-          <span className={styles.mapFact}>
-            <span className={styles.label}>{t("encounters.match.playtime")}</span>
-            <span className={styles.mapFactValue}>
-              <span className={styles.mapFactText}>{duration}</span>
-            </span>
-          </span>
-        ) : null}
-        {game?.result_source != null ? (
-          <span className={styles.mapFact}>
-            <span className={styles.label}>{t("encounters.match.source")}</span>
-            <span className={styles.mapFactValue}>
-              <span className={styles.mapFactText}>
-                {t(`encounters.game.source.${game.result_source}` as never)}
-              </span>
-            </span>
-          </span>
-        ) : null}
-        {/* The parsed log's own score, next to the accepted one rather than in
-            place of it: a log that disagrees is a fact about the log. */}
-        {match != null ? (
-          <span className={styles.mapFact}>
-            <span className={styles.label}>{t("encounters.game.parsedScore")}</span>
-            <span className={styles.mapFactValue}>
-              <span className={styles.mapFactText}>
-                {match.score.home}:{match.score.away}
-              </span>
-            </span>
-          </span>
-        ) : null}
-        {match?.code ? (
-          <span className={styles.mapFact}>
-            <span className={styles.label}>{t("encounters.match.code")}</span>
-            <span className={styles.mapFactValue}>
-              <span className={styles.mapFactText}>{match.code}</span>
-            </span>
-          </span>
-        ) : null}
-        {match?.log_name ? (
-          <span className={styles.mapFact}>
-            <span className={styles.label}>{t("encounters.match.logName")}</span>
-            <span className={styles.mapFactValue}>
-              <span className={styles.mapFactText}>{match.log_name}</span>
-              <MatchLogIndicator
-                hasLogs
-                logs={[{ matchId: match.id, label: match.map?.name ?? undefined }]}
-              />
-            </span>
-          </span>
-        ) : null}
-        {map?.in_competitive === false ? (
-          <Pill tone="warn" className={styles.mapFactWide}>
-            {t("encounters.match.nonCompetitive")}
-          </Pill>
-        ) : null}
-      </span>
+      <span className={styles.mapTime}>{duration}</span>
 
       {/* The scoreboard is the parsed log's; a position with a result but no
           log has nothing to open. */}
-      <span className={styles.mapAction}>{match == null ? null : (
+      <span className={styles.mapAction}>
+        {match?.log_name ? (
+          <MatchLogIndicator
+            hasLogs
+            logs={[{ matchId: match.id, label: match.map?.name ?? undefined }]}
+          />
+        ) : null}
+        {match == null ? null : (
         <Dialog open={open} onOpenChange={setOpen}>
           {/* Every row's button reads "Scoreboard", so the accessible name has
               to carry the map — otherwise a Bo5 offers five identical buttons. */}
@@ -255,7 +196,7 @@ export default function EncounterMapRow({
             aria-label={t("encounters.match.openStats", { map: mapName })}
           >
             <BarChart3 aria-hidden width={14} height={14} />
-            {t("encounters.detail.openScoreboard")}
+            <span className={styles.mapActionLabel}>{t("encounters.detail.openScoreboard")}</span>
           </DialogTrigger>
           <DialogContent className="flex max-h-[90vh] w-[95vw] max-w-[1100px] flex-col gap-0 overflow-hidden p-0">
             <DialogHeader className={cn(styles.dialogHead, "space-y-0")}>
@@ -274,13 +215,13 @@ export default function EncounterMapRow({
               <span className={styles.dialogScore}>
                 <span className={cn(styles.dialogTeam, styles.scoreHome)}>{homeName}</span>
                 <span className={cn(styles.scoreHome, "text-lg font-bold")}>
-                  {match.score.home}
+                  {parsed?.home}
                 </span>
                 <span aria-hidden className={styles.scoreSep}>
                   :
                 </span>
                 <span className={cn(styles.scoreAway, "text-lg font-bold")}>
-                  {match.score.away}
+                  {parsed?.away}
                 </span>
                 <span className={cn(styles.dialogTeam, styles.scoreAway)}>{awayName}</span>
               </span>
@@ -289,6 +230,20 @@ export default function EncounterMapRow({
                   <span className={styles.dialogFact}>
                     <span className={styles.label}>{t("encounters.match.playtime")}</span>
                     <span className={styles.mapFactValue}>{duration}</span>
+                  </span>
+                ) : null}
+                {game?.result_source != null ? (
+                  <span className={styles.dialogFact}>
+                    <span className={styles.label}>{t("encounters.match.source")}</span>
+                    <span className={styles.mapFactValue}>
+                      {t(`encounters.game.source.${game.result_source}` as never)}
+                    </span>
+                  </span>
+                ) : null}
+                {match.code ? (
+                  <span className={styles.dialogFact}>
+                    <span className={styles.label}>{t("encounters.match.code")}</span>
+                    <span className={styles.mapFactValue}>{match.code}</span>
                   </span>
                 ) : null}
                 {match.log_name ? (
@@ -329,7 +284,8 @@ export default function EncounterMapRow({
             </div>
           </DialogContent>
         </Dialog>
-      )}</span>
+        )}
+      </span>
     </div>
   );
 }

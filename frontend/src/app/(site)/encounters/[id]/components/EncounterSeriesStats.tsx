@@ -28,7 +28,6 @@ import {
   GROUP_COLOR
 } from "@/lib/match-stats";
 import { aggregateSeriesStats, type SeriesAggregate } from "@/lib/encounter/detail";
-import { Fact } from "@/components/match/EncounterAtoms";
 import styles from "@/components/match/EncounterDetail.module.css";
 import { encounterQueryKeys } from "@/lib/encounters/query-keys";
 
@@ -45,6 +44,8 @@ interface EncounterSeriesStatsProps {
   homeTeamId: number;
   awayTeamId: number;
   tournamentGrid?: DivisionGridVersion | null;
+  /** `overview`: the teams compared and the leaders. `players`: every player's totals and contribution. */
+  view: "overview" | "players";
 }
 
 /**
@@ -55,15 +56,17 @@ interface EncounterSeriesStatsProps {
  * could not answer. Each map is fetched under the same `["match-detail", id]`
  * key the per-map dialogs use, so opening a map afterwards costs nothing.
  *
- * The three panels are the existing per-map components fed synthetic
- * whole-series teams (see `aggregateSeriesStats`), rather than a parallel set of
- * charts that could drift from them.
+ * The panels are the existing per-map components fed synthetic whole-series
+ * teams (see `aggregateSeriesStats`), rather than a parallel set of charts
+ * that could drift from them. Both tabs read the same per-map queries, so
+ * switching tabs refetches nothing.
  */
 export default function EncounterSeriesStats({
   matchIds,
   homeTeamId,
   awayTeamId,
-  tournamentGrid
+  tournamentGrid,
+  view
 }: Readonly<EncounterSeriesStatsProps>) {
   const t = useTranslations();
 
@@ -106,45 +109,35 @@ export default function EncounterSeriesStats({
 
   return (
     <div className={styles.statsStack}>
-      <div className={styles.card}>
-        <div className={cn(styles.factGrid, styles.factGridFlush)}>
-          <Fact label={t("encounters.detail.statsMapsCounted")}>
-            {t("encounters.detail.statsMapsCountedValue", {
-              counted: aggregate.mapsCounted,
-              total: matchIds.length
-            })}
-          </Fact>
-          <Fact label={t("encounters.detail.statsScope")}>
-            {t("encounters.detail.statsScopeValue")}
-          </Fact>
-          <Fact label={t("encounters.detail.statsRoster")}>
-            {aggregate.home.players.length + aggregate.away.players.length}
-          </Fact>
+      {partial ? (
+        <output className={cn("block", styles.card, styles.cardBody, styles.statsNotice)}>
+          {t("encounters.detail.statsPartial", {
+            counted: loaded.length,
+            total: matchIds.length
+          })}
+        </output>
+      ) : null}
+
+      {view === "overview" ? (
+        <div className={styles.statsGrid}>
+          <MatchTeamComparison home={aggregate.home} away={aggregate.away} round={aggregate.round} />
+          <MatchLeaders
+            home={aggregate.home}
+            away={aggregate.away}
+            round={aggregate.round}
+            gridClassName="sm:grid-cols-3 xl:grid-cols-2"
+          />
         </div>
-        {/* `block`: <output> is inline by default, so .cardBody's padding
-            would not reserve any vertical space. */}
-        {partial ? (
-          <output className={cn("block", styles.cardBody, styles.statsNotice)}>
-            {t("encounters.detail.statsPartial", {
-              counted: loaded.length,
-              total: matchIds.length
-            })}
-          </output>
-        ) : null}
-      </div>
-
-      <div className={styles.statsGrid}>
-        <MatchTeamComparison home={aggregate.home} away={aggregate.away} round={aggregate.round} />
-        <MatchContributionChart
-          home={aggregate.home}
-          away={aggregate.away}
-          round={aggregate.round}
-        />
-      </div>
-
-      <MatchLeaders home={aggregate.home} away={aggregate.away} round={aggregate.round} />
-
-      <SeriesPlayerTable aggregate={aggregate} tournamentGrid={tournamentGrid} />
+      ) : (
+        <>
+          <SeriesPlayerTable aggregate={aggregate} tournamentGrid={tournamentGrid} />
+          <MatchContributionChart
+            home={aggregate.home}
+            away={aggregate.away}
+            round={aggregate.round}
+          />
+        </>
+      )}
     </div>
   );
 }
@@ -192,8 +185,8 @@ function SeriesPlayerTable({
                   <th
                     key={name}
                     scope="col"
-                    title={t(`matches.stat.${meta.labelKey}` as never)}
-                    aria-label={t(`matches.stat.${meta.labelKey}` as never)}
+                    title={t(meta.labelKey as never)}
+                    aria-label={t(meta.labelKey as never)}
                   >
                     {meta.abbr}
                   </th>

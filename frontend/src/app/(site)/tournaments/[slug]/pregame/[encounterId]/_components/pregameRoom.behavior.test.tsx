@@ -804,11 +804,14 @@ describe("phase selection", () => {
       ...encounter(),
       best_of: 5,
       games: hasGames ? [game({ position: 1, map_id: 21 }), game({ position: 2, map_id: 22 })] : [],
+      // Every Match the API sends carries its score; the series slots read it.
       matches: [
-        { id: 501, map_id: 21, map_index: null, source: "log_parser" },
-        { id: 503, map_id: 22, map_index: 2, source: "captain_report" },
-        { id: 504, map_id: 23, map_index: null, source: "log_parser" },
-        ...(hasLog ? [{ id: 502, map_id: 22, map_index: null, source: "log_parser" }] : [])
+        { id: 501, map_id: 21, map_index: null, source: "log_parser", score: { home: 0, away: 0 } },
+        { id: 503, map_id: 22, map_index: 2, source: "captain_report", score: { home: 0, away: 0 } },
+        { id: 504, map_id: 23, map_index: null, source: "log_parser", score: { home: 0, away: 0 } },
+        ...(hasLog
+          ? [{ id: 502, map_id: 22, map_index: null, source: "log_parser", score: { home: 0, away: 0 } }]
+          : [])
       ]
     });
     getMatch.mockImplementation(async (id: number) => ({

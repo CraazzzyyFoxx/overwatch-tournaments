@@ -170,12 +170,113 @@
   flex-shrink: 0;
 }
 
-/* ============ Hero extras ============ */
-.heroStats {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 20px 28px;
+/* ============ Match header ============
+   Crumbs and actions, the board, then the series facts: one card. */
+.header {
+  border-top: 2px solid color-mix(in srgb, var(--ed-teal) 55%, var(--ed-border));
+}
+
+.headerTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 14px 24px 0;
+}
+
+.headerCrumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
   min-width: 0;
+  font-family: var(--ed-mono);
+  font-size: var(--text-label);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--ed-faint);
+}
+
+.headerFoot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 24px;
+  flex-wrap: wrap;
+  padding: 14px 24px;
+  border-top: 1px solid var(--ed-border);
+}
+
+.headerFacts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 28px;
+  margin: 0;
+}
+
+.headerFact {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.headerFactValue {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+  font-family: var(--ed-display);
+  font-weight: 700;
+  font-size: var(--text-ui);
+  font-variant-numeric: tabular-nums;
+  color: var(--ed-fg);
+}
+
+.headerFactSub {
+  font-family: var(--ed-mono);
+  font-weight: 400;
+  font-size: var(--text-label);
+  color: var(--ed-dim);
+}
+
+/* ============ Tabs ============
+   Links, not buttons: each tab is its own URL (`?tab=`), rendered on the
+   server, so a tab can be shared and the back button walks them. */
+.tabs {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--ed-border);
+  scrollbar-width: none;
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 14px;
+  margin-bottom: -1px;
+  border-bottom: 2px solid transparent;
+  font-size: var(--text-ui);
+  font-weight: 600;
+  color: var(--ed-muted);
+  white-space: nowrap;
+  transition: 0.15s;
+}
+
+.tab:hover {
+  color: var(--ed-fg);
+}
+
+.tab:focus-visible {
+  outline: 2px solid var(--ed-teal);
+  outline-offset: -2px;
+}
+
+.tabActive {
+  color: var(--ed-fg);
+  border-bottom-color: var(--ed-teal);
 }
 
 .heroActions {
@@ -372,21 +473,17 @@
   flex-direction: column;
 }
 
-/* Every track is fixed or `1fr` on purpose. Each row is its OWN grid (rows are
-   siblings, not a single table), so an `auto` track would size to that row's
-   content and the score/action columns would drift row to row.
-
-   The slack lives in the FACTS track, not the name track. When the name took
-   it, a wide viewport left a few hundred pixels of void between a short map
-   name and its score, splitting each row into a far-left and a far-right group;
-   giving it to the facts instead keeps the row together and lets long parsed
-   log filenames show more of themselves before truncating. */
+/* One line per map. Every track is fixed or `1fr`: each row is its own grid,
+   so an `auto` track would size to that row and the score column would drift
+   row to row. The action track is the one exception — it holds the same two
+   controls on every row that has a log, and nothing on a row that has none. */
 .mapRow {
   display: grid;
-  grid-template-columns: 2rem 6.5rem minmax(0, 20rem) 4.5rem minmax(0, 1fr) 9.75rem;
+  grid-template-columns: 1.5rem 5rem minmax(0, 1fr) 4.5rem 4.5rem 10rem;
+  grid-template-areas: "index thumb identity score time action";
   align-items: center;
-  gap: 16px;
-  padding: 12px 18px;
+  gap: 14px;
+  padding: 10px 18px;
   border-bottom: 1px solid color-mix(in srgb, var(--ed-border) 60%, var(--ed-card));
   transition: 0.15s;
 }
@@ -403,11 +500,16 @@
   background: color-mix(in srgb, var(--ed-rose) 5%, transparent);
 }
 
-.mapRowEmpty {
-  opacity: 0.55;
+/* The slots a series never needed, said once instead of one ghost row each. */
+.mapRowNote {
+  padding: 12px 18px;
+  font-family: var(--ed-mono);
+  font-size: var(--text-label);
+  color: var(--ed-faint);
 }
 
 .mapIndex {
+  grid-area: index;
   font-family: var(--ed-mono);
   font-size: var(--text-label);
   font-weight: 700;
@@ -416,8 +518,9 @@
 }
 
 .mapThumb {
+  grid-area: thumb;
   position: relative;
-  width: 6.5rem;
+  width: 5rem;
   aspect-ratio: 16 / 9;
   border-radius: 6px;
   overflow: hidden;
@@ -437,6 +540,7 @@
 }
 
 .mapIdentity {
+  grid-area: identity;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -453,6 +557,7 @@
 
 .mapMode {
   display: inline-flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
   font-family: var(--ed-mono);
@@ -461,6 +566,7 @@
 }
 
 .mapScore {
+  grid-area: score;
   display: flex;
   align-items: baseline;
   gap: 7px;
@@ -488,29 +594,16 @@
   font-size: 0.7em;
 }
 
-/* A two-column label/value grid, not a wrapping inline row: with four facts of
-   unequal width, `flex-wrap` produced a different ragged shape per map. */
-.mapFacts {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 3px 10px;
-  align-items: baseline;
-  min-width: 0;
+.mapTime {
+  grid-area: time;
+  justify-self: end;
   font-family: var(--ed-mono);
   font-size: var(--text-label);
-  color: var(--ed-dim);
+  color: var(--ed-muted);
+  font-variant-numeric: tabular-nums;
 }
 
-/* The wrapper only groups a pair for the JSX; the cells are the grid items. */
-.mapFact {
-  display: contents;
-}
-
-.mapFactWide {
-  grid-column: 1 / -1;
-  justify-self: start;
-}
-
+/* Shared by the scoreboard dialog's fact strip. */
 .mapFactValue {
   display: inline-flex;
   align-items: center;
@@ -526,12 +619,11 @@
 }
 
 .mapAction {
-  justify-self: stretch;
-}
-
-.mapAction .button {
-  width: 100%;
-  justify-content: center;
+  grid-area: action;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 /* Token-native button. shadcn's <Button> resolves against the shadcn theme
@@ -955,33 +1047,6 @@
   .reportGrid {
     grid-template-columns: 1fr;
   }
-
-  /* Facts move to a second line under the identity, so row 1 keeps the name,
-     the score and the action.
-
-     Score and action MUST be placed explicitly. With the facts spanning row 2
-     and every other child auto-placing, the action button was pushed onto a
-     THIRD row at column 1 — it escaped the row and sat against the card's left
-     edge. Column 5 is a bare spacer so the score stays beside the name and the
-     action still pins to the right edge. */
-  .mapRow {
-    grid-template-columns: 2rem 6.5rem minmax(0, 20rem) 4.5rem 1fr 9.75rem;
-  }
-
-  .mapScore {
-    grid-column: 4;
-    grid-row: 1;
-  }
-
-  .mapAction {
-    grid-column: 6;
-    grid-row: 1;
-  }
-
-  .mapFacts {
-    grid-column: 3 / -1;
-    grid-row: 2;
-  }
 }
 
 @media (max-width: 980px) {
@@ -991,56 +1056,48 @@
 }
 
 @media (max-width: 720px) {
-  .heroStats {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 16px 20px;
-  }
-
-  /* The map row stops being a row: the thumbnail leads, everything else stacks
-     under it, so nothing is clipped on a 375px viewport. */
+  /* Two lines beside the thumbnail: the map and its score, then the playtime
+     and the controls. The position number is the thumbnail's order. */
   .mapRow {
-    grid-template-columns: 2rem minmax(0, 1fr);
+    grid-template-columns: 4.5rem minmax(0, 1fr) auto;
     grid-template-areas:
-      "index identity"
-      "thumb score"
-      "facts facts"
-      "action action";
-    row-gap: 10px;
+      "thumb identity score"
+      "thumb time action";
+    gap: 6px 12px;
+    padding: 10px 14px;
   }
 
   .mapIndex {
-    grid-area: index;
+    display: none;
   }
 
   .mapThumb {
-    grid-area: thumb;
-    width: 100%;
-    max-width: 10rem;
-  }
-
-  .mapIdentity {
-    grid-area: identity;
+    width: 4.5rem;
   }
 
   .mapScore {
-    grid-area: score;
     justify-self: end;
   }
 
-  /* `grid-area` alone: a trailing `grid-column: auto` here would undo the
-     column half of the named area and drop facts into one narrow track. */
-  .mapFacts {
-    grid-area: facts;
+  .mapTime {
+    justify-self: start;
   }
 
-  .mapAction {
-    grid-area: action;
+  /* Icon only: the button keeps its map-naming aria-label, and the label's
+     width belongs to the map name on a 375px row. */
+  .mapActionLabel {
+    display: none;
+  }
+
+  .headerTop {
+    padding: 12px 14px;
   }
 
   .board {
     grid-template-columns: 1fr;
     gap: 18px;
     justify-items: center;
+    padding: 18px 14px;
   }
 
   .boardSide,
@@ -1052,6 +1109,10 @@
 
   .boardSideAway .boardTags {
     justify-content: flex-start;
+  }
+
+  .headerFoot {
+    padding: 12px 14px;
   }
 }
 

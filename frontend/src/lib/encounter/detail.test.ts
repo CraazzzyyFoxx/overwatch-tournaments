@@ -71,9 +71,30 @@ function encounter(overrides: Partial<Encounter> = {}): Encounter {
 
 describe("getMatchWinner", () => {
   it("names the higher score and treats a level map as drawn", () => {
-    expect(getMatchWinner(match(1, 2, 1))).toBe("home");
-    expect(getMatchWinner(match(1, 1, 2))).toBe("away");
-    expect(getMatchWinner(match(1, 1, 1))).toBeNull();
+    expect(getMatchWinner({ home: 2, away: 1 })).toBe("home");
+    expect(getMatchWinner({ home: 1, away: 2 })).toBe("away");
+    expect(getMatchWinner({ home: 1, away: 1 })).toBeNull();
+  });
+});
+
+describe("parsed scores from the encounter's sides", () => {
+  // The lobby put the encounter's away team first: the log's home is team 2.
+  const flipped = (id: number, home: number, away: number): Match => ({
+    ...match(id, home, away),
+    home_team_id: 2,
+    away_team_id: 1
+  });
+
+  it("turns a log recorded with the sides flipped around", () => {
+    const slots = buildSeriesSlots(encounter({ best_of: 1, matches: [flipped(1, 0, 3)] }));
+    expect(slots[0].parsedScore).toEqual({ home: 3, away: 0 });
+    expect(slots[0].winner).toBe("home");
+  });
+
+  it("counts a flipped log's map for the side that actually won it", () => {
+    expect(
+      countMapWins(encounter({ matches: [flipped(1, 0, 3), match(2, 2, 1), flipped(3, 2, 1)] }))
+    ).toEqual({ home: 2, away: 1, drawn: 0 });
   });
 });
 
