@@ -55,21 +55,3 @@ export function Pill({
     </span>
   );
 }
-
-/** A `label: value` pair inside a pill, for compact team/series facts. */
-export function PillFact({
-  label,
-  value,
-  tone
-}: Readonly<{
-  label: React.ReactNode;
-  value: React.ReactNode;
-  tone?: PillTone;
-}>) {
-  return (
-    <Pill tone={tone}>
-      <span className={styles.label}>{label}</span>
-      <span className={styles.mono}>{value}</span>
-    </Pill>
-  );
-}

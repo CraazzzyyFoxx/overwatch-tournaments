@@ -7,7 +7,6 @@ import { ArrowLeft, MessageSquare } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { HeroCoord, HeroStamp, PageHero } from "@/components/site/PageHero";
-import { StagePill } from "@/components/match/cells";
 import MatchLogIndicator from "@/components/match/MatchLogIndicator";
 import { EntityWorkspace } from "@/components/workspace/EntityWorkspace";
 import { SITE_NAME, SITE_URL } from "@/config/site";
@@ -34,8 +33,7 @@ import {
   countMapWins,
   formatCloseness,
   formatSeriesClock,
-  getSeriesSeconds,
-  getStageKind
+  getSeriesSeconds
 } from "@/lib/encounter/detail";
 import styles from "@/components/match/EncounterDetail.module.css";
 
@@ -228,8 +226,14 @@ const EncounterPage = async (props: {
         ]
       : []),
     ...(closeness ? [{ label: t("encounters.col.closeness"), value: closeness }] : []),
-    ...dateFacts
+    ...dateFacts,
+    ...(encounter.challonge_id != null
+      ? [{ label: t("encounters.detail.challonge"), value: `#${encounter.challonge_id}` }]
+      : [])
   ];
+  // Stage, format, "final" and "confirmed" are already said by the crumbs, the
+  // pips and the facts; a chip is left only for a state that wants attention.
+  const openResult = encounter.result_status !== "none" && encounter.result_status !== "confirmed";
 
   return (
     <div className={styles.surface}>
@@ -255,6 +259,10 @@ const EncounterPage = async (props: {
                   /
                 </span>
                 <span>{t("encounters.roundNum", { round: encounter.round })}</span>
+                <span aria-hidden className={styles.crumbSep}>
+                  /
+                </span>
+                <span>{t("encounters.bestOfShort", { count: encounter.best_of })}</span>
               </span>
             </>
           }
@@ -271,43 +279,20 @@ const EncounterPage = async (props: {
             </>
           }
           pills={
-            <>
-              <Pill
-                tone={
-                  state === "Live"
-                    ? "danger"
-                    : state === "Final"
-                      ? "good"
-                      : state === "Upcoming"
-                        ? "warn"
-                        : "neutral"
-                }
-                live={state === "Live"}
-              >
-                {t(`encounters.state.${STATE_KEY[state]}` as never)}
-              </Pill>
-              <Pill>{t("encounters.bestOfShort", { count: encounter.best_of })}</Pill>
-              <StagePill kind={getStageKind(encounter)}>{stageLabel}</StagePill>
-              {encounter.result_status !== "none" ? (
-                <Pill
-                  tone={
-                    encounter.result_status === "confirmed"
-                      ? "good"
-                      : encounter.result_status === "disputed"
-                        ? "danger"
-                        : "warn"
-                  }
-                >
-                  {t(`encounters.result.${RESULT_KEY[encounter.result_status]}` as never)}
-                </Pill>
-              ) : null}
-              {encounter.challonge_id != null ? (
-                <Pill>
-                  <span className={styles.label}>{t("encounters.detail.challonge")}</span>
-                  <span className={styles.mono}>#{encounter.challonge_id}</span>
-                </Pill>
-              ) : null}
-            </>
+            state === "Live" || openResult ? (
+              <>
+                {state === "Live" ? (
+                  <Pill tone="danger" live>
+                    {t(`encounters.state.${STATE_KEY[state]}` as never)}
+                  </Pill>
+                ) : null}
+                {openResult ? (
+                  <Pill tone={encounter.result_status === "disputed" ? "danger" : "warn"}>
+                    {t(`encounters.result.${RESULT_KEY[encounter.result_status]}` as never)}
+                  </Pill>
+                ) : null}
+              </>
+            ) : null
           }
           facts={facts}
         />

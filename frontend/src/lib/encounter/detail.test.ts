@@ -11,8 +11,7 @@ import {
   formatSeriesClock,
   getMatchWinner,
   getSeriesSeconds,
-  getSeriesVerdict,
-  getStageKind
+  getSeriesVerdict
 } from "@/lib/encounter/detail";
 
 function match(id: number, home: number, away: number, time: number | null = 600): Match {
@@ -280,41 +279,6 @@ describe("formatCloseness", () => {
     expect(formatCloseness(0.72)).toBe("72%");
     expect(formatCloseness(0)).toBe("0%");
     expect(formatCloseness(null)).toBeNull();
-  });
-});
-
-describe("getStageKind", () => {
-  it("reads finals from the name regardless of the item type", () => {
-    expect(
-      getStageKind(encounter({ stage_item: { name: "Grand Final" } as Encounter["stage_item"] }))
-    ).toBe("finals");
-    expect(
-      getStageKind(encounter({ stage_item: { name: "Финал" } as Encounter["stage_item"] }))
-    ).toBe("finals");
-  });
-
-  it("maps group and bracket item types", () => {
-    expect(
-      getStageKind(
-        encounter({ stage_item: { name: "Group A", type: "group" } as Encounter["stage_item"] })
-      )
-    ).toBe("group");
-    expect(
-      getStageKind(
-        encounter({
-          stage_item: { name: "Upper", type: "bracket_upper" } as Encounter["stage_item"]
-        })
-      )
-    ).toBe("playoffs");
-  });
-
-  it("falls back to the stage type, then to default", () => {
-    expect(
-      getStageKind(
-        encounter({ stage: { name: "Swiss", stage_type: "swiss" } as Encounter["stage"] })
-      )
-    ).toBe("group");
-    expect(getStageKind(encounter())).toBe("default");
   });
 });
 

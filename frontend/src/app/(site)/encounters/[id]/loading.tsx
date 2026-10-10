@@ -23,7 +23,7 @@ export default function Loading() {
           <div className={styles.boardSide}>
             <div className="flex min-w-0 flex-1 flex-col gap-2">
               <Block className="h-5 w-40" />
-              <Block className="h-5 w-28 rounded-full" />
+              <Block className="h-3 w-28" />
             </div>
           </div>
           <div className={styles.boardCenter}>
@@ -34,12 +34,11 @@ export default function Loading() {
           <div className={cn(styles.boardSide, styles.boardSideAway)}>
             <div className="flex min-w-0 flex-1 flex-col items-end gap-2">
               <Block className="h-5 w-40" />
-              <Block className="h-5 w-28 rounded-full" />
+              <Block className="h-3 w-28" />
             </div>
           </div>
         </div>
         <div className={styles.headerFoot}>
-          <Block className="h-5 w-64 max-w-full rounded-full" />
           <Block className="h-8 w-80 max-w-full" />
         </div>
       </div>

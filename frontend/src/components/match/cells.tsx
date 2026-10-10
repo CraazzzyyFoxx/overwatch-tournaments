@@ -1,4 +1,3 @@
-import React from "react";
 import { cn } from "@/lib/utils";
 
 /**
@@ -6,12 +5,6 @@ import { cn } from "@/lib/utils";
  * (player profile, encounters, teams). Styled with the global `aqt-*`
  * classes + `--aqt-*` tokens (promoted to :root), so they work anywhere.
  */
-
-export type StageKind = "group" | "playoffs" | "finals" | "default";
-
-export const StagePill = ({ children, kind = "default", className }: { children: React.ReactNode; kind?: StageKind; className?: string }) => {
-  return <span className={cn("aqt-stage-pill", kind !== "default" && kind, className)}>{children}</span>;
-};
 
 export type ResTagKind = "w" | "l" | "d";
 

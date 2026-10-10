@@ -196,23 +196,6 @@ export function formatCloseness(value: number | null | undefined): string | null
   return `${Math.round(value * 100)}%`;
 }
 
-/**
- * Stage kind for the shared `StagePill`, inferred from the stage/stage-item the
- * encounter belongs to. Finals read as finals, brackets as playoffs.
- */
-export function getStageKind(encounter: Encounter): "group" | "playoffs" | "finals" | "default" {
-  const itemType = encounter.stage_item?.type ?? null;
-  const name = `${encounter.stage_item?.name ?? ""} ${encounter.stage?.name ?? ""}`.toLowerCase();
-  if (/final/.test(name) || /финал/.test(name)) return "finals";
-  if (itemType === "group") return "group";
-  if (itemType && itemType.startsWith("bracket")) return "playoffs";
-  if (itemType === "single_bracket") return "playoffs";
-  const stageType = encounter.stage?.stage_type ?? null;
-  if (stageType === "round_robin" || stageType === "swiss") return "group";
-  if (stageType) return "playoffs";
-  return "default";
-}
-
 // ─── Series statistics aggregation ──────────────────────────────────────────
 //
 // Per-map stats arrive as `Record<round, Record<LogStatsName, number>>` with

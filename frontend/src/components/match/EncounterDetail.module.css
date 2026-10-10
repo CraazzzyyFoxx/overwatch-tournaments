@@ -346,8 +346,20 @@
   gap: 6px;
 }
 
-.boardSideAway .boardTags {
-  justify-content: flex-end;
+/* Placement and group under a team name: read as text, not as chips. */
+.boardMeta {
+  margin: 0;
+  font-family: var(--ed-mono);
+  font-size: var(--text-label);
+  color: var(--ed-dim);
+}
+
+.metaWarn {
+  color: var(--ed-amber);
+}
+
+.metaGood {
+  color: var(--ed-emerald);
 }
 
 .boardCenter {
@@ -913,17 +925,13 @@
 .reportCodes {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 4px 16px;
 }
 
 .reportCode {
   font-family: var(--ed-mono);
   font-size: var(--text-label);
   letter-spacing: 0.06em;
-  padding: 3px 8px;
-  border-radius: 6px;
-  border: 1px solid var(--ed-border-2);
-  background: var(--aqt-overlay-2);
   color: var(--ed-muted);
 }
 
@@ -1105,10 +1113,6 @@
     flex-direction: row;
     text-align: left;
     width: 100%;
-  }
-
-  .boardSideAway .boardTags {
-    justify-content: flex-start;
   }
 
   .headerFoot {

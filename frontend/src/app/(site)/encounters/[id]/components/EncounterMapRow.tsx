@@ -138,15 +138,15 @@ export default function EncounterMapRow({
             </Pill>
           ) : null}
           {parsedDiffers ? (
-            <Pill tone={shown == null ? "neutral" : "warn"}>
-              <span className={styles.label}>{t("encounters.game.parsedScore")}</span>
+            <span className={cn(shown != null && styles.metaWarn)}>
+              · {t("encounters.game.parsedScore")}{" "}
               <span className={styles.mono}>
                 {parsed.home}:{parsed.away}
               </span>
-            </Pill>
+            </span>
           ) : null}
           {map?.in_competitive === false ? (
-            <Pill tone="warn">{t("encounters.match.nonCompetitive")}</Pill>
+            <span className={styles.metaWarn}>· {t("encounters.match.nonCompetitive")}</span>
           ) : null}
         </span>
       </span>

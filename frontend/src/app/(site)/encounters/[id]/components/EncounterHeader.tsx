@@ -11,7 +11,6 @@ import {
   type SeriesSide,
   type SeriesSlot
 } from "@/lib/encounter/detail";
-import { Pill, PillFact } from "@/components/match/EncounterAtoms";
 import styles from "@/components/match/EncounterDetail.module.css";
 
 export type EncounterHeaderFact = { label: string; value: string; sub?: string };
@@ -32,7 +31,8 @@ export default function EncounterHeader({
   encounter: Encounter;
   crumbs: ReactNode;
   actions: ReactNode;
-  pills: ReactNode;
+  /** Chips for states that want attention; nothing is rendered without one. */
+  pills?: ReactNode;
   facts: EncounterHeaderFact[];
 }>) {
   const t = useTranslations();
@@ -76,7 +76,7 @@ export default function EncounterHeader({
       </div>
 
       <div className={styles.headerFoot}>
-        <div className={styles.boardTags}>{pills}</div>
+        {pills ? <div className={styles.boardTags}>{pills}</div> : null}
         {facts.length > 0 ? (
           <dl className={styles.headerFacts}>
             {facts.map((fact) => (
@@ -98,7 +98,10 @@ export default function EncounterHeader({
 function TeamBlock({ encounter, side }: Readonly<{ encounter: Encounter; side: SeriesSide }>) {
   const t = useTranslations();
   const team = side === "home" ? encounter.home_team : encounter.away_team;
-  const verdict = getSeriesVerdict(encounter);
+  const meta = [
+    team?.placement != null ? `${t("encounters.detail.placementShort")} #${team.placement}` : null,
+    team?.group?.name ? `${t("common.group")} ${team.group.name}` : null
+  ].filter(Boolean);
 
   return (
     <div
@@ -112,15 +115,8 @@ function TeamBlock({ encounter, side }: Readonly<{ encounter: Encounter; side: S
       <div className={styles.boardIdentity}>
         {/* Not a heading: a scoreboard label. The h1 above names the matchup. */}
         <p className={styles.boardName}>{team?.name ?? t("common.tbd")}</p>
-        <div className={styles.boardTags}>
-          {verdict.winner === side ? <Pill tone="good">{t("encounters.detail.winner")}</Pill> : null}
-          {team?.placement != null ? (
-            <PillFact label={t("encounters.detail.placementShort")} value={`#${team.placement}`} />
-          ) : null}
-          {team?.group?.name ? (
-            <PillFact label={t("common.group")} value={team.group.name} />
-          ) : null}
-        </div>
+        {/* Plain text, not chips: the winner is already the verdict and the pips. */}
+        {meta.length > 0 ? <p className={styles.boardMeta}>{meta.join(" · ")}</p> : null}
       </div>
     </div>
   );

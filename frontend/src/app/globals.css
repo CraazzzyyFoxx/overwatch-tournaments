@@ -485,24 +485,6 @@
   font-family: var(--aqt-data);
 }
 
-.aqt-stage-pill.playoffs {
-  background: color-mix(in srgb, var(--aqt-amber) 8%, transparent);
-  border-color: color-mix(in srgb, var(--aqt-amber) 25%, transparent);
-  color: var(--aqt-amber);
-}
-
-.aqt-stage-pill.group {
-  background: color-mix(in srgb, var(--aqt-blue) 8%, transparent);
-  border-color: color-mix(in srgb, var(--aqt-blue) 25%, transparent);
-  color: var(--aqt-blue);
-}
-
-.aqt-stage-pill.finals {
-  background: color-mix(in srgb, var(--aqt-rose) 8%, transparent);
-  border-color: color-mix(in srgb, var(--aqt-rose) 25%, transparent);
-  color: var(--aqt-rose);
-}
-
 /* result tag */
 .aqt-res-tag {
   display: inline-block;
