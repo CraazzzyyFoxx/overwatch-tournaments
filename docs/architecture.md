@@ -213,8 +213,9 @@ and [`monitoring/README.md`](../monitoring/README.md)):
 
 Shared substrate: **PostgreSQL** (optionally behind pgBouncer), **Redis** (cache + realtime
 bus + active-user counters), **RabbitMQ** (all RPC/events/jobs), **S3/MinIO** (avatars,
-icons, match-log files). Workers that call external APIs (Discord, OverFast, Challonge, S3)
-egress through the outbound `proxy` container (xray).
+icons, match-log files). Workers that call external APIs (Discord, Twitch, Challonge, S3)
+egress through the outbound `proxy` container (xray); the self-hosted OverFast runs on the
+production host and is called directly.
 
 **Releases.** Pushing a `v*` tag is the whole ritual:
 
