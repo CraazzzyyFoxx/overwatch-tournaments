@@ -168,12 +168,12 @@ export default function FfaLobbyTable({ lobby }: Readonly<{ lobby: FfaLobby }>) 
 
   return (
     <div>
-      {/* Column spacing is the cell padding alone: 32px between columns
-          (`px-4`, the primitive has 16px). Widths on the cells would be dead,
+      {/* Column spacing is the cell padding alone: 40px between columns
+          (`px-5`, the primitive has 16px). Widths on the cells would be dead,
           the trailing filler cell takes every pixel of slack. */}
       <Table
         aria-label={t("ffa.tableLabel", { lobby: lobby.name })}
-        className="[&_td]:px-4 [&_th]:px-4"
+        className="[&_td]:px-5 [&_th]:px-5"
       >
         <TableHeader>
           <TableRow className="hover:bg-transparent">
@@ -241,7 +241,7 @@ export default function FfaLobbyTable({ lobby }: Readonly<{ lobby: FfaLobby }>) 
                     <span className="flex items-center gap-3 py-1.5 text-label font-bold uppercase tracking-label text-[color:var(--aqt-teal)]">
                       {/* Leading and sticky, not centred: on a phone the table
                           scrolls sideways and a centred label sat off-screen. */}
-                      <span className="sticky left-4 whitespace-nowrap">
+                      <span className="sticky left-5 whitespace-nowrap">
                         {t("common.topAdvance", { count: advanceCount })}
                       </span>
                       <span
@@ -256,7 +256,7 @@ export default function FfaLobbyTable({ lobby }: Readonly<{ lobby: FfaLobby }>) 
           ))}
         </TableBody>
       </Table>
-      <p className="flex flex-wrap gap-x-4 gap-y-1 px-4 pt-2 text-caption text-[color:var(--aqt-fg-dim)]">
+      <p className="flex flex-wrap gap-x-4 gap-y-1 px-5 pt-2 text-caption text-[color:var(--aqt-fg-dim)]">
         <span>
           {t.rich("ffa.legendFormula", {
             formula: lobby.rules.formula,
