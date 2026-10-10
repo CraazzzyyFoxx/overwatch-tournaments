@@ -12,7 +12,7 @@ from shared.services.tournament.computation import dispatch_job
 from src import models
 from src.core import db
 from src.services.admin.stage import stage_service as admin_stage_service
-from src.services.computation.jobs import failure_message, jobs_service
+from src.services.computation.jobs import failure_message, is_refusal, jobs_service
 from src.services.standings.service import standings_service
 from src.services.standings.swiss_auto_round import swiss_rounds_service
 from src.services.tournament.events import (
@@ -131,8 +131,11 @@ async def process_standings_job(job_id: int) -> None:
                 await jobs_service.request_followup_standings_job(session, current.tournament_id)
             await session.commit()
     except Exception as exc:
-        logger.exception("Standings computation job failed", job_id=job_id)
+        if is_refusal(exc):
+            logger.info("Standings computation job refused: {}", failure_message(exc), job_id=job_id)
+        else:
+            logger.exception("Standings computation job failed", job_id=job_id)
         async with db.async_session_maker() as session:
-            disposition = await jobs_service.mark_job_failed(session, job_id, failure_message(exc))
+            disposition = await jobs_service.mark_job_failed(session, job_id, exc)
         if disposition == "failed":
             raise RejectMessage() from exc

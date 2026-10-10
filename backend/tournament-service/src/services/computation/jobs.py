@@ -21,7 +21,7 @@ from src import models
 
 JobKind = Literal["bracket", "standings"]
 JobStatus = Literal["pending", "running", "succeeded", "failed", "superseded"]
-FailureDisposition = Literal["retry", "failed", "ignored"]
+FailureDisposition = Literal["retry", "failed", "refused", "ignored"]
 
 TERMINAL_STATUSES = ("succeeded", "failed", "superseded")
 MAX_ATTEMPTS = 3
@@ -41,6 +41,11 @@ def failure_message(exc: Exception) -> str:
         return f"{detail['code']}: {detail['message']}"
     message, _ = http_error(exc)
     return message
+
+
+def is_refusal(exc: Exception) -> bool:
+    """A 4xx domain refusal gives the same answer on every attempt: not a worker failure."""
+    return isinstance(exc, BaseAPIException) and exc.status_code < 500
 
 
 class _ComputationJobStore:
@@ -200,9 +205,21 @@ class ComputationJobsService:
         self,
         session: AsyncSession,
         job_id: int,
-        error: str,
+        exc: Exception,
     ) -> FailureDisposition:
-        job = await self.runtime.mark_failed(session, job_id, error=error[:4000])
+        error = failure_message(exc)[:4000]
+        if is_refusal(exc):
+            # Retrying cannot change the answer, and dead-lettering it pages ops for
+            # an admin's input (RabbitMQDLQMessagesGrowing): fail now, ack the message.
+            job = await self.get_job(session, job_id, for_update=True)
+            if job is None or job.status in TERMINAL_STATUSES:
+                return "ignored"
+            job.status = "failed"
+            job.error = error
+            job.finished_at = datetime.now(UTC)
+            await session.commit()
+            return "refused"
+        job = await self.runtime.mark_failed(session, job_id, error=error)
         if job is None or job.status in ("succeeded", "superseded"):
             return "ignored"
         if job.status == Status.FAILED:
