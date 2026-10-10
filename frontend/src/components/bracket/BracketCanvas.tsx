@@ -25,6 +25,10 @@ interface BracketCanvasProps extends Pick<BracketViewport, "scale" | "isGrabbing
   renderActions: (encounter: BracketMatch) => ReactNode;
 }
 
+/** A round header's chip; a Swiss pool's record wears the same one. */
+export const HEADER_CHIP =
+  "inline-flex items-center rounded-full border border-[color:var(--aqt-border-2)] bg-[hsl(0_0%_0%/0.55)] px-2.5 py-0.5 text-label font-semibold uppercase tabular-nums tracking-label text-[color:var(--aqt-fg-muted)] backdrop-blur-sm";
+
 function RoundHeader({ header, scale, sticky }: Readonly<{ header: LayoutHeader; scale: number; sticky: boolean }>) {
   return (
     <div
@@ -36,16 +40,7 @@ function RoundHeader({ header, scale, sticky }: Readonly<{ header: LayoutHeader;
           : { left: header.x, top: header.y, width: CARD_WIDTH }
       }
     >
-      {header.pool ? (
-        // A record inside the round, not a round: plain text, so it never reads as a column name.
-        <div className="px-1 text-label font-semibold tabular-nums tracking-label text-[color:var(--aqt-fg-dim)]">
-          {header.label}
-        </div>
-      ) : (
-        <div className="inline-flex items-center rounded-full border border-[color:var(--aqt-border-2)] bg-[hsl(0_0%_0%/0.55)] px-2.5 py-0.5 text-label font-semibold uppercase tracking-label text-[color:var(--aqt-fg-muted)] backdrop-blur-sm">
-          {header.label}
-        </div>
-      )}
+      <div className={HEADER_CHIP}>{header.label}</div>
     </div>
   );
 }

@@ -5,6 +5,7 @@ import { FileEdit, Pencil } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { activeRoundNumber, bracketRoundShape, buildRoundGroups } from "@/lib/bracket/view";
+import { HEADER_CHIP } from "@/components/bracket/BracketCanvas";
 import { FilterChip, FilterChipGroup } from "@/components/ui/filter-chip";
 import { swissPools } from "@/lib/bracket/swiss";
 import { useBracketRoundLabel } from "@/hooks/useBracketRoundLabel";
@@ -99,8 +100,8 @@ export function MobileBracket({
       {sections.map((section) => (
         <section key={section.label ?? "all"} className="space-y-2">
           {section.label !== null ? (
-            <h3 className="px-1 text-label font-semibold tabular-nums tracking-label text-[color:var(--aqt-fg-dim)]">
-              {section.label}
+            <h3>
+              <span className={HEADER_CHIP}>{section.label}</span>
             </h3>
           ) : null}
           <ul className="space-y-2">

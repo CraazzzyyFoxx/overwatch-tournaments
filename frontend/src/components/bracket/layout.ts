@@ -33,8 +33,8 @@ export const HEADER_GAP_Y = 14;
 export const SECTION_GAP_Y = 52;
 export const PADDING_X = 16;
 export const PADDING_Y = 14;
-// A Swiss pool's record label ("1-0") above its cards, and the gap between pools.
-export const POOL_HEADER_HEIGHT = 20;
+// A Swiss pool's record chip ("1-0") above its cards, and the gap between pools.
+export const POOL_HEADER_HEIGHT = 30;
 export const POOL_GAP_Y = 18;
 
 export type Side = "home" | "away";
@@ -407,7 +407,8 @@ export function buildLayout(
         section: "upper",
         round: group.round
       });
-      let y = upperTop + (upperSectionHeight - poolColumnHeight(pools)) / 2;
+      // Top-aligned: centring columns of different pool counts draws a staircase.
+      let y = upperTop;
       for (const pool of pools) {
         headers.push({
           id: `pool-header-${group.round}-${pool.label}`,
