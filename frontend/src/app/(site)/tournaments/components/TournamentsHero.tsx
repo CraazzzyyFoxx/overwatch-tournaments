@@ -1,12 +1,10 @@
 "use client";
 
-import type { ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import { useFormatter } from "@/lib/datetime/client";
 
-import { PageHero } from "@/components/site/PageHero";
+import { PageHero, HeroCoord, HeroStat } from "@/components/site/PageHero";
 import { StatusDot } from "@/components/ui/status-dot";
-import { cn } from "@/lib/utils";
 
 interface TournamentsHeroProps {
   workspaceName?: string | null;
@@ -16,35 +14,10 @@ interface TournamentsHeroProps {
 }
 
 /**
- * One stat: value and label on a single baseline below `md` (three stats cost
- * one line on a phone), label-over-value from `md` like every other hero.
- *
- * Not `HeroStat`: its ~34px value is sized for a landing hero and would outweigh
- * the 30px title of this header band.
- */
-const Stat = ({
-  label,
-  value,
-  accent = false
-}: Readonly<{ label: ReactNode; value: ReactNode; accent?: boolean }>) => (
-  <div className="flex items-baseline gap-1.5 md:flex-col-reverse md:items-start md:gap-1">
-    <span
-      className={cn(
-        "font-onest text-title font-bold leading-none tabular-nums",
-        accent ? "text-[color:var(--aqt-teal)]" : "text-[color:var(--aqt-fg)]"
-      )}
-    >
-      {value}
-    </span>
-    <span className="text-label font-semibold uppercase tracking-label text-[color:var(--aqt-fg-muted)]">
-      {label}
-    </span>
-  </div>
-);
-
-/**
- * A page HEADER, not a landing block: title, one sentence and the counters in
- * one compact band, so the first row of cards is on screen without scrolling.
+ * The same full-size hero as the other top-level pages. A compact header band
+ * was tried and read as a thin strip with an empty middle; with descriptions
+ * gone from the cards, the first card row fits under this hero on a 900px
+ * viewport anyway.
  *
  * There is deliberately NO "total tournaments" stat here.
  *
@@ -68,32 +41,26 @@ const TournamentsHero = ({
 
   return (
     <PageHero
-      compact
-      eyebrow={
-        workspaceName ? (
-          <span className="text-caption text-[color:var(--aqt-fg-muted)]">{workspaceName}</span>
-        ) : null
-      }
+      eyebrow={workspaceName ? <HeroCoord>{workspaceName}</HeroCoord> : null}
       title={t("tournamentsList.hero.title")}
       lede={t("tournamentsList.hero.lede")}
       aside={
-        <div className="flex flex-wrap items-baseline gap-x-6 gap-y-2 md:gap-x-8">
+        <div className="flex flex-wrap gap-x-8 gap-y-5 lg:justify-end">
           {liveEvents > 0 ? (
-            <Stat
-              accent
+            <HeroStat
               label={
                 <span className="inline-flex items-center gap-1.5">
                   <StatusDot className="text-[color:var(--aqt-status-live)] [animation:aqtPulse_2s_ease-in-out_infinite] motion-reduce:animate-none" />
                   {t("tournamentsList.hero.liveNow")}
                 </span>
               }
-              value={liveEvents}
+              value={<span className="text-[color:var(--aqt-teal)]">{liveEvents}</span>}
             />
           ) : null}
           {/* Numbers go through the locale formatter: the raw value used to render
               `1164` beside an ICU-formatted `1,453` in the very next tile. */}
-          <Stat label={t("common.playersLabel")} value={format.number(totalPlayers)} />
-          <Stat
+          <HeroStat label={t("common.playersLabel")} value={format.number(totalPlayers)} />
+          <HeroStat
             label={t("tournamentsList.hero.teamsBalancedLabel")}
             value={format.number(totalTeams)}
           />
