@@ -397,6 +397,25 @@ describe("the toolbar orders both views", () => {
   });
 });
 
+describe("the champion label", () => {
+  const firstRowText = () =>
+    container.querySelector("details > summary")?.textContent ?? "";
+
+  it("names the first-placed team champion once the tournament is over", async () => {
+    await render();
+
+    expect(firstRowText()).toContain(en.tournamentDetail.teams.champion);
+  });
+
+  it("does not crown the current leader while the tournament is live", async () => {
+    tournament = makeTournament("live");
+    await render();
+
+    expect(listRows()[0]).toBe("Emerald and a dot");
+    expect(firstRowText()).not.toContain(en.tournamentDetail.teams.champion);
+  });
+});
+
 describe("the W-L column", () => {
   it("counts the tournament's settled encounters", async () => {
     await render();

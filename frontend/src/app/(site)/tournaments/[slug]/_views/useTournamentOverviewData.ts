@@ -15,12 +15,12 @@ import { getPublicPageQueryPresentation } from "@/lib/public-page-query-presenta
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import { pickCurrentStage } from "@/lib/tournament/stages";
 import encounterService from "@/services/encounter.service";
-import ffaService from "@/services/ffa.service";
 import heroService from "@/services/hero.service";
 import registrationService from "@/services/registration.service";
 import teamService from "@/services/team.service";
 import tournamentService from "@/services/tournament.service";
 
+import { useFfaStageLobbies } from "../_hooks/useFfaStageLobbies";
 import { useTournamentStreamsQuery } from "../_hooks/useTournamentStreams";
 import { getBracketRefetchInterval } from "../bracket/bracketData";
 import { buildLiveTeamStreams } from "../bracket/bracketLiveStreams";
@@ -97,12 +97,9 @@ export function useTournamentOverviewData(tournamentId: number, slug: string) {
     enabled: tournament !== undefined && variant === "completed"
   });
 
-  // Same key and fetcher as the bracket's `FfaStagePanel`.
-  const ffaQuery = useQuery({
-    queryKey: tournamentQueryKeys.ffaStage(tournamentId, stage?.id ?? 0),
-    queryFn: () => ffaService.getStage(tournamentId, stage!.id),
-    enabled: showsFfaTable
-  });
+  // Every FFA stage, not only the current one: the live "played" tile counts
+  // lobbies across the tournament, and the encounter list never answers one.
+  const ffa = useFfaStageLobbies(tournament, variant !== null && variant !== "registration");
 
   // Same key as `TournamentHeroPlaytimePage`.
   const heroesQuery = useQuery({
@@ -122,7 +119,11 @@ export function useTournamentOverviewData(tournamentId: number, slug: string) {
   const registrations = registrationList?.registrations ?? [];
   const standings = standingsQuery.data ?? [];
   const teams = teamsQuery.data ? teamsQuery.data.results : [];
-  const ffaLobbies = showsFfaTable ? (ffaQuery.data ?? []) : [];
+  const allFfaLobbies = ffa.lobbies;
+  const ffaLobbies = useMemo(
+    () => (showsFfaTable ? allFfaLobbies.filter((lobby) => lobby.stage_id === stage?.id) : []),
+    [allFfaLobbies, showsFfaTable, stage?.id]
+  );
 
   const stageId = stage?.id ?? null;
   const stageEncounters = useMemo(
@@ -214,6 +215,7 @@ export function useTournamentOverviewData(tournamentId: number, slug: string) {
     stageEncounters,
     stageStandings,
     ffaLobbies,
+    allFfaLobbies,
     roundGroups,
     roundShapeByStage,
     roundShape,

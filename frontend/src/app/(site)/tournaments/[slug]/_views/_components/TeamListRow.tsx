@@ -26,6 +26,7 @@ import {
   rosterSlots,
   type TeamRecord
 } from "../tournamentTeams.model";
+import { overviewVariant } from "../tournamentOverview.model";
 
 const TeamRosterRow = ({
   player,
@@ -129,7 +130,10 @@ export const TeamListRow = ({
   const slots = withRoles ? rosterSlots(tournament, team) : [];
   const subtitle = [
     team.group?.name ? t("teams.groupLabel", { name: team.group.name }) : null,
-    team.placement === 1 ? t("tournamentDetail.teams.champion") : null
+    // A live leader is first, not champion: `placement` moves with every result.
+    team.placement === 1 && overviewVariant(tournament.status) === "completed"
+      ? t("tournamentDetail.teams.champion")
+      : null
   ].filter(Boolean);
   const roster = sortTeamPlayers(team.players).map((player) => ({
     player,

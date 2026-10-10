@@ -441,7 +441,10 @@ const FfaLobbyPage = async ({ encounter }: Readonly<{ encounter: Encounter }>) =
               }
               live={state === "Live"}
             >
-              {t(`encounters.state.${STATE_KEY[state]}` as never)}
+              {/* "Final" is a duel's word and reads as the bracket's final here. */}
+              {state === "Final"
+                ? t("ffa.lobbyCompleted")
+                : t(`encounters.state.${STATE_KEY[state]}` as never)}
             </Pill>
             <Pill>
               <span className={styles.label}>{t("ffa.gamesPerLobby")}</span>
