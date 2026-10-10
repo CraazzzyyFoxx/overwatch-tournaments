@@ -140,6 +140,15 @@ function SlotRow({
           size="xs"
           nameClassName={isTbd ? "text-label italic text-[color:var(--aqt-fg-faint)]" : "text-caption"}
         />
+        {data.floatRecord?.side === side ? (
+          // Swiss: this team came in with a worse record than the pool the match sits in.
+          <span
+            className="shrink-0 text-label tabular-nums text-[color:var(--aqt-fg-faint)]"
+            title={t("bracket.floatRecord", { record: data.floatRecord.label })}
+          >
+            {data.floatRecord.label}
+          </span>
+        ) : null}
         {liveStream !== undefined && liveLabel !== null ? (
           <span
             // Indication, NOT navigation: the Streams tab lists every channel as

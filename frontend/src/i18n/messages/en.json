@@ -3120,6 +3120,7 @@
     "rearrangeFailed": "Could not swap teams",
     "dragTeam": "Drag {team}",
     "matchAria": "{label}: {home} vs {away}",
+    "floatRecord": "Record coming into this round: {record}",
     "dnd": {
       "instructions": "Press Space or Enter to pick up a team, move it with the arrow keys onto another slot, then press Space or Enter to swap. Escape cancels.",
       "pickedUp": "Picked up {team}",
