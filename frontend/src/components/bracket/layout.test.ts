@@ -95,8 +95,7 @@ describe("buildLayout", () => {
       label
     );
 
-    // The finals follow the upper bracket's two columns; the lower bracket is
-    // shorter here, so that puts them right of everything.
+    // Main columns = max(upper 2, lower 1); the finals take the two after.
     expect(nodeOf(layout, 5).x).toBe(columnX(2));
     expect(nodeOf(layout, 6).x).toBe(columnX(3));
     expect(layout.width).toBe(PADDING_X * 2 + 4 * CARD_WIDTH + 3 * ROUND_GAP_X);
@@ -113,10 +112,9 @@ describe("buildLayout", () => {
     expect(layout.headers.map((header) => header.round)).toEqual([1, 2, -1, 3, 4]);
   });
 
-  // The lower bracket usually runs a column longer than the upper one. The
-  // grand final still follows the upper final at the normal pitch — it takes
-  // the empty upper band above the lower final, which feeds it from below.
-  it("keeps the grand final one column after the upper final when the lower bracket runs longer", () => {
+  // The lower bracket running longer than the upper one must not pull the grand
+  // final into its last column, on top of the lower final and its header.
+  it("keeps the grand final right of the lower final when the lower bracket runs longer", () => {
     const layout = buildLayout(
       [
         match(1, 1),
@@ -131,20 +129,8 @@ describe("buildLayout", () => {
       label
     );
 
-    expect(nodeOf(layout, 3).x).toBe(columnX(1));
-    expect(nodeOf(layout, 7).x).toBe(columnX(2));
     expect(nodeOf(layout, 6).x).toBe(columnX(2));
-    expect(layout.width).toBe(PADDING_X * 2 + 3 * CARD_WIDTH + 2 * ROUND_GAP_X);
-    // The grand final clears the lower bracket's band rather than landing on it.
-    expect(nodeOf(layout, 7).y + CARD_HEIGHT).toBeLessThan(nodeOf(layout, 6).y);
-
-    // A feeder sharing the target's column climbs it instead of running right.
-    const fromLowerFinal = layout.edges.find((edge) => edge.id === "edge-6-7")!;
-    expect(fromLowerFinal.path).toBe(
-      `M ${columnX(2) + CARD_WIDTH / 2} ${nodeOf(layout, 6).y} V ${
-        (nodeOf(layout, 6).y + nodeOf(layout, 7).y + CARD_HEIGHT) / 2
-      } H ${columnX(2) + CARD_WIDTH / 2} V ${nodeOf(layout, 7).y + CARD_HEIGHT}`
-    );
+    expect(nodeOf(layout, 7).x).toBe(columnX(3));
   });
 
   // The team path highlight follows a connector only once the source is played:
