@@ -21,6 +21,7 @@ export function OverviewRegistrationView({
   registrations,
   overviewHref,
   clockNow,
+  aboutCard,
   formatCard,
   linksCard
 }: Readonly<{
@@ -29,6 +30,7 @@ export function OverviewRegistrationView({
   registrations: readonly Registration[];
   overviewHref: string;
   clockNow: number | null;
+  aboutCard: React.ReactNode;
   formatCard: React.ReactNode;
   linksCard: React.ReactNode;
 }>) {
@@ -117,6 +119,10 @@ export function OverviewRegistrationView({
           </div>
         ) : null}
       </div>
+
+      {/* Full width, under the columns: the description is prose, and prose in
+          the aside wrapped every three words. */}
+      {aboutCard}
     </>
   );
 }

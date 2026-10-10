@@ -7,6 +7,7 @@ import { useBracketRoundLabel } from "@/hooks/useBracketRoundLabel";
 import type { BracketRoundShape } from "@/lib/bracket/round-name";
 import type { RoundGroup } from "@/lib/bracket/view";
 import { cn } from "@/lib/utils";
+import { groupDisplayName } from "@/lib/tournament/group";
 import type { Encounter } from "@/types/encounter.types";
 import type { FfaLobby } from "@/types/ffa.types";
 import type { StageSummary, Standings } from "@/types/tournament.types";
@@ -119,7 +120,7 @@ export function OverviewGroupTable({
             >
               {group.name === null
                 ? t("tournamentDetail.overview.groupTable.title", { stage: stage.name })
-                : `${t("common.group")} ${group.name}`}
+                : groupDisplayName(group.name, t("common.group"))}
             </caption>
             <thead>
               <tr className="border-b border-[color:var(--aqt-border)] text-label uppercase tracking-label text-[color:var(--aqt-fg-faint)]">

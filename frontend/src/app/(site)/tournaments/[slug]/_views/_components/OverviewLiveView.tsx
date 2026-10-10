@@ -7,7 +7,6 @@ import { isEncounterCompleted } from "@/lib/encounter/status";
 import type { Encounter } from "@/types/encounter.types";
 import type { FfaLobby } from "@/types/ffa.types";
 import type { StreamEntry } from "@/types/stream.types";
-import type { Tournament } from "@/types/tournament.types";
 
 import { CardLink, OverviewCard, OverviewStreamCard } from "./OverviewCards";
 import { StatTile } from "./RegistrationSummary";
@@ -17,7 +16,6 @@ import { StatTile } from "./RegistrationSummary";
  * column is the timeline, the official broadcast and the reference tail.
  */
 export function OverviewLiveView({
-  tournament,
   encounters,
   lobbies,
   overviewHref,
@@ -26,11 +24,11 @@ export function OverviewLiveView({
   nowBlock,
   miniBracket,
   groupTable,
+  aboutCard,
   phasesCard,
   formatCard,
   linksCard
 }: Readonly<{
-  tournament: Tournament;
   encounters: readonly Encounter[];
   lobbies: readonly FfaLobby[];
   overviewHref: string;
@@ -39,6 +37,7 @@ export function OverviewLiveView({
   nowBlock: React.ReactNode;
   miniBracket: React.ReactNode;
   groupTable: React.ReactNode;
+  aboutCard: React.ReactNode;
   phasesCard: React.ReactNode;
   formatCard: React.ReactNode;
   linksCard: React.ReactNode;
@@ -46,7 +45,6 @@ export function OverviewLiveView({
   const t = useTranslations();
   const format = useFormatter();
 
-  const teamsCount = tournament.teams_count ?? 0;
   // A lobby is one match of its stage: duels and lobbies share the tile.
   const playedCount =
     encounters.filter(isEncounterCompleted).length + lobbies.filter(isEncounterCompleted).length;
@@ -58,6 +56,7 @@ export function OverviewLiveView({
         {nowBlock}
         {miniBracket}
         {groupTable}
+        {aboutCard}
       </div>
       <div className="grid content-start gap-4">
         {/* ⑦ The same timeline, second orientation. */}
@@ -86,17 +85,13 @@ export function OverviewLiveView({
             }
           />
         ) : null}
+        {/* Teams and players are the header's stamps; the only figure this card
+            adds while play runs is how far along it is. */}
         <OverviewCard title={t("tournamentDetail.overview.numbers.title")}>
-          <div className="grid gap-2 sm:grid-cols-2">
-            <StatTile
-              label={t(tournament.team_formation === "registration" ? "registrationTeams.list.inTournament" : "tournamentDetail.overview.numbers.teams")}
-              value={String(teamsCount)}
-            />
-            <StatTile
-              label={t("tournamentDetail.overview.numbers.played")}
-              value={`${playedCount}/${matchesCount}`}
-            />
-          </div>
+          <StatTile
+            label={t("tournamentDetail.overview.numbers.played")}
+            value={`${playedCount}/${matchesCount}`}
+          />
         </OverviewCard>
         {/* Reference tail, identical in the completed branch: what this
             tournament is, then where the organizer's channels are. */}

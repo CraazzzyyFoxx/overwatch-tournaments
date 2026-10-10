@@ -22,6 +22,7 @@ export type MatchRowProps = {
   bracketHref?: string;
   /** This page's own location, so the pre-game room can send viewers back. */
   returnTo: string;
+  /** Extra classes on the row grid — a wide host overrides the column tracks here. */
   className?: string;
 };
 
@@ -54,7 +55,7 @@ export function MatchRow({
         className
       )}
     >
-      <span className="text-label text-[color:var(--aqt-fg-faint)]">{leading}</span>
+      <span className="text-label text-[color:var(--aqt-fg-faint)] lg:justify-self-end">{leading}</span>
       <span className={cn("flex min-w-0 justify-end", winner === "home" && "font-semibold", winner === "away" && "text-[color:var(--aqt-fg-dim)]")}>
         <TeamName team={encounter.home_team} fallback={t("common.tbd")} size="sm" reverse />
       </span>
@@ -72,12 +73,14 @@ export function MatchRow({
       <span className={cn("flex min-w-0", winner === "away" && "font-semibold", winner === "home" && "text-[color:var(--aqt-fg-dim)]")}>
         <TeamName team={encounter.away_team} fallback={t("common.tbd")} size="sm" />
       </span>
-      <span className="flex items-center justify-end gap-2 text-label text-[color:var(--aqt-fg-faint)]">
+      <span className="flex items-center justify-end gap-2 text-label text-[color:var(--aqt-fg-faint)] lg:justify-start">
         {trailing ? <span className="hidden sm:inline">{trailing}</span> : null}
         {bracketHref ? (
           <HoverPrefetchLink
             href={bracketHref}
-            className="inline-flex hover:text-[color:var(--aqt-teal)]"
+            /* Negative margin, not a bigger row: the touch target reaches 40px
+               while the row keeps its density. */
+            className="-m-2 inline-flex p-2 hover:text-[color:var(--aqt-teal)] md:m-0 md:p-0"
             aria-label={t("tournamentDetail.matchRow.openInBracket")}
             title={t("tournamentDetail.matchRow.openInBracket")}
           >

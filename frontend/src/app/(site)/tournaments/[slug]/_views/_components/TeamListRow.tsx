@@ -1,16 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Medal, Trophy } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import DivisionIcon from "@/components/DivisionIcon";
 import { HeroStrip } from "@/components/hero/HeroImage";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
+import { STATUS_CHIP_CLASS } from "@/components/status/StatusIconBadge";
 import { TeamLogo } from "@/components/TeamName";
 import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
 import { getDivisionLabel } from "@/lib/divisions/grid";
-import { normalizePlayerRole } from "@/lib/roster/player-role";
+import { normalizePlayerRole, PLAYER_ROLE_LABEL_KEY } from "@/lib/roster/player-role";
+import { groupDisplayName } from "@/lib/tournament/group";
 import { cn } from "@/lib/utils";
 import type { Hero } from "@/types/hero.types";
 import type { Registration } from "@/types/registration.types";
@@ -27,6 +29,16 @@ import {
   type TeamRecord
 } from "../tournamentTeams.model";
 import { overviewVariant } from "../tournamentOverview.model";
+
+type MedalPlace = 1 | 2 | 3;
+
+/** The podium chip, drawn like every other status pill but in the placement
+ *  medal hues (`--aqt-medal-*`, the site's one source for gold/silver/bronze). */
+const MEDAL_PILL: Record<MedalPlace, string> = {
+  1: "border-[color:color-mix(in_srgb,var(--aqt-medal-gold)_26%,transparent)] bg-[color:color-mix(in_srgb,var(--aqt-medal-gold)_12%,transparent)] text-[color:var(--aqt-medal-gold)]",
+  2: "border-[color:color-mix(in_srgb,var(--aqt-medal-silver)_26%,transparent)] bg-[color:color-mix(in_srgb,var(--aqt-medal-silver)_12%,transparent)] text-[color:var(--aqt-medal-silver)]",
+  3: "border-[color:color-mix(in_srgb,var(--aqt-medal-bronze)_26%,transparent)] bg-[color:color-mix(in_srgb,var(--aqt-medal-bronze)_12%,transparent)] text-[color:var(--aqt-medal-bronze)]"
+};
 
 const TeamRosterRow = ({
   player,
@@ -128,13 +140,18 @@ export const TeamListRow = ({
   const t = useTranslations();
   const withRoles = tournament.roster_shape?.has_role_slots ?? true;
   const slots = withRoles ? rosterSlots(tournament, team) : [];
-  const subtitle = [
-    team.group?.name ? t("teams.groupLabel", { name: team.group.name }) : null,
-    // A live leader is first, not champion: `placement` moves with every result.
-    team.placement === 1 && overviewVariant(tournament.status) === "completed"
-      ? t("tournamentDetail.teams.champion")
-      : null
-  ].filter(Boolean);
+  // The group's own name, with the word in front of it only when the organizer
+  // left it a bare letter — it used to read "Group Группа А".
+  const groupName = team.group?.name
+    ? groupDisplayName(team.group.name, t("common.group"))
+    : null;
+  // A live leader is not on the podium yet: `placement` moves with every result.
+  const medal =
+    team.placement != null &&
+    team.placement <= 3 &&
+    overviewVariant(tournament.status) === "completed"
+      ? (team.placement as MedalPlace)
+      : null;
   const roster = sortTeamPlayers(team.players).map((player) => ({
     player,
     heroes: declaredHeroes(player, registrationsByUser.get(player.user_id), heroesMap)
@@ -156,24 +173,50 @@ export const TeamListRow = ({
             <span className="truncate font-medium" title={team.name}>
               {team.name}
             </span>
-            {subtitle.length > 0 ? (
-              <span className="truncate text-label text-[color:var(--aqt-fg-dim)]">
-                {subtitle.join(" · ")}
+            {medal !== null || groupName !== null ? (
+              <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-label text-[color:var(--aqt-fg-dim)]">
+                {medal !== null ? (
+                  <span className={cn(STATUS_CHIP_CLASS, MEDAL_PILL[medal])}>
+                    {medal === 1 ? (
+                      <Trophy className="size-3 shrink-0" aria-hidden />
+                    ) : (
+                      <Medal className="size-3 shrink-0" aria-hidden />
+                    )}
+                    {t(`tournamentDetail.podium.place${medal}`)}
+                  </span>
+                ) : null}
+                {groupName !== null ? <span className="truncate">{groupName}</span> : null}
               </span>
             ) : null}
           </span>
           <span className="aqt-tnum text-[color:var(--aqt-fg-muted)]">{team.avg_sr.toFixed(0)}</span>
           {withRoles ? (
             <span className="hidden items-center gap-0.5 sm:flex">
-              {slots.map((slot, index) => (
-                <span
-                  key={index}
-                  title={slot.player?.name ?? undefined}
-                  className={cn("inline-flex", slot.player == null && "opacity-40")}
-                >
-                  <PlayerRoleIcon role={slot.role} size={16} label={slot.player?.name ?? undefined} />
-                </span>
-              ))}
+              {slots.map((slot, index) => {
+                // Both the name and the tooltip carry the role: a bare glyph
+                // with a battletag on it said who, never what seat they take.
+                const name = [
+                  t(PLAYER_ROLE_LABEL_KEY[slot.role] as Parameters<typeof t>[0]),
+                  slot.player?.name
+                ]
+                  .filter(Boolean)
+                  .join(" · ");
+                return (
+                  <span
+                    key={index}
+                    title={name}
+                    className={cn(
+                      "inline-flex",
+                      slot.player == null && "opacity-40",
+                      // Air between the tank / damage / support runs, so the
+                      // strip reads as role groups and not one glyph ribbon.
+                      index > 0 && slots[index - 1].role !== slot.role && "ml-2"
+                    )}
+                  >
+                    <PlayerRoleIcon role={slot.role} size={16} label={name} />
+                  </span>
+                );
+              })}
             </span>
           ) : null}
           <span className="aqt-tnum text-right text-[color:var(--aqt-fg-muted)]">

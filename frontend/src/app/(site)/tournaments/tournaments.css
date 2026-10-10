@@ -212,6 +212,16 @@
   padding: 10px;
 }
 
+/* Touch target for the tournaments list chip row: the shared 32px chip is under
+   the 40px minimum on a phone, and `.aqt-filter-chip` is unlayered, so no
+   utility class can raise it. Scoped to that row, not to every chip in the
+   `.aqt-tn` scope. */
+@media (max-width: 767px) {
+  .aqt-tn .tn-filter-chips .aqt-filter-chip {
+    height: 40px;
+  }
+}
+
 .aqt-tn .filter-search {
   position: relative;
   flex: 1;
@@ -666,7 +676,9 @@
   font-weight: 700;
   letter-spacing: var(--tracking-label);
   text-transform: uppercase;
-  color: var(--fg-faint);
+  /* `--fg-muted`, not `--fg-faint`: 12px uppercase at 52% lightness on this
+     near-black sits on the AA floor, and these are the column names. */
+  color: var(--fg-muted);
   text-align: left;
   padding: 11px 14px;
   background: var(--aqt-overlay-1);

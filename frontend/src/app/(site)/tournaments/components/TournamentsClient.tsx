@@ -211,30 +211,20 @@ const TournamentsClient = ({ scope }: Readonly<{ scope: StatsScope }>) => {
       <TournamentsHero
         workspaceName={workspaceName}
         liveEvents={facets?.live ?? 0}
-        liveMatches={overview?.kpis.live_now_count ?? 0}
         totalPlayers={overall?.players ?? 0}
         totalTeams={overall?.teams ?? 0}
       />
 
-      <section className="toolbar">
-        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-          <h2 className="m-0 font-display text-title font-bold">
-            {t("tournamentsList.heading.all")}
-          </h2>
-          <span
-            className="tn-id"
-            style={{
-              marginLeft: 6,
-              background: "var(--aqt-overlay-1)",
-              border: "1px solid var(--aqt-border)",
-              padding: "3px 8px",
-              borderRadius: 6
-            }}
-          >
-            {t("tournamentsList.heading.shown", { count: matchedTotal })}
-          </span>
-        </div>
-      </section>
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <h2 className="m-0 font-display text-title font-bold text-[color:var(--aqt-fg)]">
+          {t("tournamentsList.heading.all")}
+        </h2>
+        {/* The size of the result set, named: "77 shown" sat above twelve cards
+            and read as a claim about the screen. */}
+        <span className="aqt-tnum text-caption text-[color:var(--aqt-fg-muted)]">
+          {t("tournamentsList.heading.count", { count: matchedTotal })}
+        </span>
+      </div>
 
       <FeaturedLive groups={liveGroups} />
 
@@ -271,7 +261,14 @@ const TournamentsClient = ({ scope }: Readonly<{ scope: StatsScope }>) => {
       ) : (
         <>
           {view === "list" ? (
-            <TournamentsTable tournaments={results} />
+            /* Both layouts, one chosen by the viewport. Below `md` the table
+               shows two of its six columns, so the cards are the mobile list
+               whatever `?view=` says — and a JS media query would have to flash
+               the wrong one through hydration first. */
+            <>
+              <TournamentsTable tournaments={results} className="max-md:hidden" />
+              <TournamentsGrid tournaments={results} className="md:hidden" />
+            </>
           ) : (
             <TournamentsGrid tournaments={results} />
           )}
@@ -284,12 +281,15 @@ const TournamentsClient = ({ scope }: Readonly<{ scope: StatsScope }>) => {
             isFetchingNextPage={isFetchingNextPage}
             isError={isFetchNextPageError}
             fetchNextPage={() => void fetchNextPage()}
-            loadMoreLabel={t("tournamentsList.footer.loadMore")}
+            loadMoreLabel={t("tournamentsList.footer.loadMore", {
+              count: matchedTotal - results.length
+            })}
             progressLabel={t("tournamentsList.footer.progress", {
               loaded: results.length,
               total: matchedTotal
             })}
             errorLabel={t("tournamentsList.footer.error")}
+            className="[&>button]:h-11 [&>button]:w-full [&>button]:max-w-sm [&>button]:border-[color:var(--aqt-border-2)] [&>button]:bg-[color:var(--aqt-overlay-2)] [&>button]:text-ui [&>button]:font-semibold [&>button]:text-[color:var(--aqt-fg)] [&>button:hover]:border-[color:var(--aqt-teal)] [&>button:hover]:bg-[color:var(--aqt-overlay-3)]"
           />
         </>
       )}

@@ -23,20 +23,21 @@ export function OverviewPhasesCard({ tournament }: Readonly<{ tournament: Tourna
 }
 
 /**
- * ③ Format, team formation and the full description — what the header used to
- * carry as two pills and one clamped line.
+ * ③ Format and team formation — what the header used to carry as two pills.
  *
- * Present in EVERY branch, not only before the start: the header is now the
- * tournament's state and its actions, so this is the only place the
- * description is readable, and "what is this tournament" does not stop being
- * a question once the first match is played.
+ * Present in EVERY branch, not only before the start: "how is this played" does
+ * not stop being a question once the first match is played. The description is
+ * NOT here — it is a paragraph, and a paragraph in the narrow aside column
+ * broke into three-word lines; it has its own card in the wide column.
  */
 export function OverviewFormatCard({ tournament }: Readonly<{ tournament: Tournament }>) {
   const t = useTranslations();
+  const tSlot = useTranslations("rosterShape.slotCodes");
 
   // Slots as role glyphs, not "2 × Урон": the icon is the site's role
-  // vocabulary everywhere else, and `RosterSlotGlyph` still announces the slot
-  // name for screen readers.
+  // vocabulary everywhere else. `RosterSlotGlyph` announces the slot name for
+  // screen readers, and the wrapper's `title` names it for a pointer, which an
+  // unlabelled shield-and-×2 pair could not.
   const rosterShape = tournament.roster_shape;
   const rosterSlots = rosterShape
     ? ROSTER_SLOT_CODES.filter((code) => (rosterShape.slots[code] ?? 0) > 0).map((code) => ({
@@ -59,16 +60,24 @@ export function OverviewFormatCard({ tournament }: Readonly<{ tournament: Tourna
                 ) : null}
                 {wave.map((stage, stageIndex) => {
                   const typeKey = STAGE_TYPE_LABEL[stage.stage_type];
+                  const typeLabel = typeKey ? t(typeKey) : null;
+                  // The suffix names the format behind an organizer's own stage
+                  // name; a stage called "Swiss" does not need "(swiss)" after
+                  // it. Case- and space-insensitive, because the name is typed
+                  // by hand and the label comes from the message catalogue.
+                  const showType =
+                    typeLabel !== null &&
+                    typeLabel.trim().toLowerCase() !== stage.name.trim().toLowerCase();
                   return (
                     <span key={stage.id}>
                       {stageIndex > 0 ? (
                         <span className="text-[color:var(--aqt-fg-faint)]">{" / "}</span>
                       ) : null}
                       {stage.name}
-                      {typeKey ? (
+                      {showType ? (
                         <span className="text-[color:var(--aqt-fg-faint)]">
                           {" ("}
-                          {t(typeKey).toLowerCase()}
+                          {typeLabel.toLowerCase()}
                           {")"}
                         </span>
                       ) : null}
@@ -86,7 +95,11 @@ export function OverviewFormatCard({ tournament }: Readonly<{ tournament: Tourna
           {rosterSlots.length > 0 ? (
             <span className="ml-2 inline-flex items-center gap-2 align-middle">
               {rosterSlots.map(({ code, count }) => (
-                <span key={code} className="inline-flex items-center gap-1">
+                <span
+                  key={code}
+                  className="inline-flex items-center gap-1"
+                  title={`${tSlot(code)} ×${count}`}
+                >
                   <RosterSlotGlyph code={code} size={14} />
                   <span className="aqt-tnum text-[color:var(--aqt-fg-faint)]">×{count}</span>
                 </span>
@@ -94,14 +107,24 @@ export function OverviewFormatCard({ tournament }: Readonly<{ tournament: Tourna
             </span>
           ) : null}
         </KeyValue>
-        {tournament.description ? (
-          <KeyValue term={t("tournamentDetail.overview.format.description")}>
-            <span className="block whitespace-pre-line leading-relaxed">
-              {tournament.description}
-            </span>
-          </KeyValue>
-        ) : null}
       </dl>
+    </OverviewCard>
+  );
+}
+
+/**
+ * The organizer's own description, in the WIDE column of every branch. It used
+ * to be the last row of the format card, which sits in the ~22rem aside — wide
+ * enough for "Double Elimination", not for a paragraph, which broke into
+ * three-word lines there.
+ */
+export function OverviewAboutCard({ description }: Readonly<{ description: string }>) {
+  const t = useTranslations();
+  return (
+    <OverviewCard title={t("tournamentDetail.overview.about.title")}>
+      <p className="max-w-[70ch] whitespace-pre-line text-ui leading-relaxed text-[color:var(--aqt-fg-muted)]">
+        {description}
+      </p>
     </OverviewCard>
   );
 }

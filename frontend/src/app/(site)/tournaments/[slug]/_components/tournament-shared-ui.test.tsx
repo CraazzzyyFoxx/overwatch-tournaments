@@ -9,6 +9,13 @@ vi.mock("next-intl", () => ({
   useTranslations: () => (key: string) => key
 }));
 
+// The shell fallback reserves the header its route will get, so it reads the
+// pathname; every other skeleton ignores it.
+let pathname = "/tournaments/anak-cup";
+vi.mock("next/navigation", () => ({
+  usePathname: () => pathname
+}));
+
 import {
   TournamentBracketSkeleton,
   TournamentHeroesSkeleton,
@@ -51,7 +58,7 @@ describe("tournament skeleton compositions", () => {
     expect(source).toContain(`return <${exportName} />`);
   });
 
-  it("matches the Bracket hierarchy and keeps the shell fallback route-agnostic", () => {
+  it("matches the Bracket hierarchy and reserves the header the shell will render", () => {
     const skeletonSource = readFileSync(
       resolve(tournamentRoot, "_components/TournamentSkeletons.tsx"),
       "utf8"
@@ -75,6 +82,23 @@ describe("tournament skeleton compositions", () => {
     expect(bracketSkeletonSource).toContain('data-skeleton-region="bracket-toolbar"');
     expect(bracketSkeletonSource).not.toContain("<ControlRowSkeleton />");
     expect(shellSource).not.toContain("styles.skeletonGrid");
+  });
+
+  it("falls back to the hero on the overview and to the one-row header elsewhere", () => {
+    // `aqt-hero-tint` is the cover-less hero's own wash: present means the full
+    // ~220px hero was reserved, absent means the compact header the shell
+    // actually renders on a section route.
+    pathname = "/tournaments/anak-cup";
+    expect(renderToStaticMarkup(<TournamentShellSkeleton />)).toContain("aqt-hero-tint");
+
+    for (const section of ["/tournaments/anak-cup/bracket", "/tournaments/anak-cup/teams/"]) {
+      pathname = section;
+      const html = renderToStaticMarkup(<TournamentShellSkeleton />);
+      expect(html).not.toContain("aqt-hero-tint");
+      expect(html).toContain('data-shell-region="compact-header"');
+    }
+
+    pathname = "/tournaments/anak-cup";
   });
 });
 

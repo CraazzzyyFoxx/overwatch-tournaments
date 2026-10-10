@@ -138,11 +138,10 @@ export function buildStageBlocks(
 
     return {
       key: `${stageKey(stage.id)}:${group.round}`,
-      heading: [
-        stage.name,
-        roundLabel(group.round, shape),
-        rows.length > 1 ? countLabel(rows.length) : null
-      ]
+      // The round only. The stage names the block of rounds above it in the
+      // page, so repeating it per round read as "DOUBLE ELIMINATION · " glued
+      // to every heading.
+      heading: [roundLabel(group.round, shape), rows.length > 1 ? countLabel(rows.length) : null]
         .filter(Boolean)
         .join(" · "),
       rows

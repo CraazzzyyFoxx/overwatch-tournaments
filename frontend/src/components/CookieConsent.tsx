@@ -65,11 +65,7 @@ type CookieConsentProps = {
  * from coming back. "Cookie settings" in the footer reopens it, and then the
  * notice names the choice in force and can be closed without changing it.
  */
-export default function CookieConsent({
-  initial,
-  gaId,
-  ymId
-}: Readonly<CookieConsentProps>) {
+export default function CookieConsent({ initial, gaId, ymId }: Readonly<CookieConsentProps>) {
   const t = useTranslations();
   const [consent, setConsent] = useState<CookieConsentValue | null>(initial);
   const isReopened = useCookieConsentStore((state) => state.isReopened);
@@ -136,61 +132,64 @@ ym(${ymId}, 'init', {clickmap:true, trackLinks:true, accurateTrackBounce:true});
       ) : null}
 
       {(consent === null || isReopened) && (
-        // Pinned to the inline end on wide viewports so it never covers the
-        // page's own content column; inset within the layout margins (and the
-        // safe area) on narrow ones, matching the floating command bars.
+        // A bottom strip on wide viewports: a corner card sat on top of the
+        // page's first content row (the tournaments grid), while a short,
+        // full-width bar only overlaps the bottom edge, which is below the
+        // fold on load. Inset within the safe area on narrow viewports.
         <section
           aria-labelledby="cookie-consent-title"
-          className="fixed bottom-4 start-4 end-4 z-50 max-w-md rounded-xl border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-card)]/95 p-4 shadow-xl backdrop-blur animate-in fade-in slide-in-from-bottom-4 duration-300 motion-reduce:animate-none supports-[padding:max(0px)]:pb-[max(1rem,env(safe-area-inset-bottom))] sm:start-auto"
+          className="fixed inset-x-4 bottom-4 z-50 mx-auto max-w-5xl rounded-xl border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-card)]/95 p-4 shadow-xl backdrop-blur animate-in fade-in slide-in-from-bottom-4 duration-300 motion-reduce:animate-none supports-[padding:max(0px)]:pb-[max(1rem,env(safe-area-inset-bottom))] md:flex md:items-center md:gap-6"
         >
-          <div className="flex items-start justify-between gap-2">
-            <h2
-              id="cookie-consent-title"
-              className="text-sm font-semibold text-[color:var(--aqt-fg)]"
-            >
-              {t("legal.cookieConsent.title")}
-            </h2>
-
-            {/* Only once a choice exists: reopening must be escapable, but an
-                undecided visitor has nothing to fall back to. */}
-            {consent !== null && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                aria-label={t("common.close")}
-                className={`-me-1.5 -mt-1.5 shrink-0 text-[color:var(--aqt-fg-muted)] ${CHOICE_CLASS}`}
-                onClick={closeNotice}
+          <div className="min-w-0 md:flex-1">
+            <div className="flex items-start justify-between gap-2">
+              <h2
+                id="cookie-consent-title"
+                className="text-sm font-semibold text-[color:var(--aqt-fg)]"
               >
-                <X aria-hidden />
-              </Button>
+                {t("legal.cookieConsent.title")}
+              </h2>
+
+              {/* Only once a choice exists: reopening must be escapable, but an
+                undecided visitor has nothing to fall back to. */}
+              {consent !== null && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label={t("common.close")}
+                  className={`-me-1.5 -mt-1.5 shrink-0 text-[color:var(--aqt-fg-muted)] ${CHOICE_CLASS}`}
+                  onClick={closeNotice}
+                >
+                  <X aria-hidden />
+                </Button>
+              )}
+            </div>
+
+            <p className="mt-1.5 text-pretty text-caption leading-relaxed text-[color:var(--aqt-fg-dim)]">
+              {t.rich("legal.cookieConsent.body", {
+                siteName: SITE_NAME,
+                privacy: (chunks) => (
+                  <Link
+                    prefetch={false}
+                    href="/privacy"
+                    className="font-medium text-[color:var(--aqt-fg-muted)] underline underline-offset-2 hover:text-[color:var(--aqt-fg)]"
+                  >
+                    {chunks}
+                  </Link>
+                )
+              })}
+            </p>
+
+            {consent !== null && (
+              <p className="mt-2 text-caption font-medium text-[color:var(--aqt-fg-muted)]">
+                {consent === "accepted"
+                  ? t("legal.cookieConsent.statusOn")
+                  : t("legal.cookieConsent.statusOff")}
+              </p>
             )}
           </div>
 
-          <p className="mt-1.5 text-pretty text-caption leading-relaxed text-[color:var(--aqt-fg-dim)]">
-            {t.rich("legal.cookieConsent.body", {
-              siteName: SITE_NAME,
-              privacy: (chunks) => (
-                <Link
-                  prefetch={false}
-                  href="/privacy"
-                  className="font-medium text-[color:var(--aqt-fg-muted)] underline underline-offset-2 hover:text-[color:var(--aqt-fg)]"
-                >
-                  {chunks}
-                </Link>
-              )
-            })}
-          </p>
-
-          {consent !== null && (
-            <p className="mt-2 text-caption font-medium text-[color:var(--aqt-fg-muted)]">
-              {consent === "accepted"
-                ? t("legal.cookieConsent.statusOn")
-                : t("legal.cookieConsent.statusOff")}
-            </p>
-          )}
-
-          <div className="mt-4 flex flex-wrap gap-2">
+          <div className="mt-4 flex shrink-0 flex-wrap gap-2 md:mt-0">
             <Button type="button" className={CHOICE_CLASS} onClick={() => decide("accepted")}>
               {t("legal.cookieConsent.accept")}
             </Button>

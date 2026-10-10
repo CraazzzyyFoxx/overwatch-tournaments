@@ -17,6 +17,7 @@ import {
 import { useQueryParams } from "@/hooks/useQueryParams";
 import { useTournamentQuery } from "@/hooks/useTournamentClientData";
 import { getPublicPageQueryPresentation } from "@/lib/public-page-query-presentation";
+import { groupDisplayName } from "@/lib/tournament/group";
 import { isTournamentStatusEnded } from "@/lib/tournament/status";
 import { cn } from "@/lib/utils";
 import { Tournament } from "@/types/tournament.types";
@@ -170,7 +171,7 @@ const TournamentTeamsView = ({ tournament, slug }: { tournament: Tournament; slu
                 count={count}
                 onClick={() => setParams({ group: name })}
               >
-                {t("common.group")} {name}
+                {groupDisplayName(name, t("common.group"))}
               </FilterChip>
             ))}
           </SectionToolbar>

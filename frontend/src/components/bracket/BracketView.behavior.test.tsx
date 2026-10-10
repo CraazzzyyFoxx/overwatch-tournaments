@@ -248,7 +248,8 @@ describe("BracketView live-stream indicator", () => {
 });
 
 // The tree is routinely wider than its scroller, and round 1 of a running
-// playoff was decided days ago. So the canvas opens on the round in play.
+// playoff was decided days ago. So the canvas opens on the round in play - and
+// on its own left edge once there is no round in play left to open on.
 describe("BracketView opening round", () => {
   const scroller = () => container.querySelector<HTMLDivElement>("[data-bracket-focused]");
   /** The laid-out x of a match's card, which is its round's column. */
@@ -278,7 +279,7 @@ describe("BracketView opening round", () => {
     expect(opensOnColumnOf(scroller()!, 3, 4)).toBe(true);
   });
 
-  it("leaves a settled bracket on its last round", () => {
+  it("leaves a settled bracket at its left edge, whole", () => {
     render(
       <BracketView
         encounters={threeRounds.map((match) => ({ ...match, status: "completed" }))}
@@ -286,8 +287,8 @@ describe("BracketView opening round", () => {
       />
     );
 
-    // Round 3 (match 4) is last, so nothing lies to its right to bracket it.
-    expect(scroller()!.scrollLeft).toBeGreaterThanOrEqual(columnX(4));
+    // Nothing is in play, so no column is worth cutting round 1 off the left for.
+    expect(scroller()).toBeNull();
   });
 
   it("yields to a deep link, which scrolls its own node into view instead", () => {

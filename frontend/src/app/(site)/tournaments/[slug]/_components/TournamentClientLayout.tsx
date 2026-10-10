@@ -2,6 +2,7 @@
 
 import React from "react";
 import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
+import { usePathname } from "next/navigation";
 import { ExternalLink } from "lucide-react";
 
 import TournamentBroadcastDock from "./TournamentBroadcastDock";
@@ -24,7 +25,7 @@ import type { Tournament } from "@/types/tournament.types";
 
 import { useTranslations } from "next-intl";
 import TournamentSectionNav from "./TournamentSectionNav";
-import { collapsedRailTitle } from "./tournament-section-nav";
+import { collapsedRailTitle, isTournamentOverviewPath } from "./tournament-section-nav";
 import { TournamentShellSkeleton } from "./TournamentSkeletons";
 import TournamentShellError from "../TournamentShellError";
 import { PageHero, HeroCoord, HeroStamp } from "@/components/site/PageHero";
@@ -52,7 +53,8 @@ export function tournamentPlayersCount(
 }
 
 /**
- * Whether the hero has scrolled under the site header. Drives the rail's
+ * Whether the page's header block — the overview's hero, or the one-row header
+ * every other section gets — has scrolled under the site header. Drives the rail's
  * collapsed slots: the rail is the only sticky surface this page adds under the
  * site header, so the tournament's name moves INTO it rather than into a second
  * bar. `false` on the server and until the observer fires, so SSR never renders
@@ -86,6 +88,7 @@ export default function TournamentClientLayout({
 }: Readonly<TournamentClientLayoutProps>) {
   const t = useTranslations();
   const format = useFormatter();
+  const pathname = usePathname();
   const tournamentQuery = useTournamentQuery(slug);
   const tournament = tournamentQuery.data;
   // Known immediately once the overview resolves; `undefined` while pending —
@@ -164,6 +167,9 @@ export default function TournamentClientLayout({
   const isEnded = isTournamentStatusEnded(tournament.status);
   const statusVariant = getTournamentStatusMeta(tournament.status).variant;
   const overviewHref = `/tournaments/${tournament.slug}`;
+  // The full hero belongs to the section it describes. Resolved exactly the way
+  // the rail resolves its own active tab, so the two cannot disagree.
+  const isOverviewSection = isTournamentOverviewPath(pathname, tournament.slug);
   // The draft room is an external route, so it cannot be a rail tab. It appears
   // once registration is over — before that there is no room to open, and
   // "before" now includes the announcement phase that precedes registration.
@@ -201,90 +207,138 @@ export default function TournamentClientLayout({
           <p className="text-xs opacity-70">{t("tournamentDetail.previewBannerDescription")}</p>
         </div>
       )}
-      <div ref={heroRef}>
-        <PageHero
-          /* Cover fades in from the right. Without one, only the CTAs move
-             into that column — stamps stay under the title. */
-          coverUrl={tournament.cover_image_url}
-          coverFade={tournament.cover_image_url ? "right" : undefined}
-          align={tournament.cover_image_url ? "start" : "end"}
-          eyebrow={
-            <HeroCoord className="inline-flex flex-wrap items-center gap-x-4 gap-y-1">
-              <HoverPrefetchLink
-                href="/tournaments"
-                className="transition-colors hover:text-[color:var(--aqt-teal)]"
-              >
-                {t("common.tournaments")}
-              </HoverPrefetchLink>
-              <span className="opacity-50">/</span>
-              <span>{formatDateRange(format, tournament.start_date, tournament.end_date)}</span>
-              {tournament.is_league ? (
-                <>
-                  <span className="opacity-50">/</span>
-                  <span>{t("common.league")}</span>
-                </>
-              ) : null}
-            </HeroCoord>
-          }
-          title={
-            <span className="flex flex-wrap items-center gap-x-3 gap-y-2">
-              {tournament.logo_url ? (
-                /* Plain `<img>`, like every other S3 image on the site: the URL
-                   points at whatever host the deployment configured, and
-                   `next/image` hard-errors on a hostname missing from
-                   `remotePatterns`. Decorative — the h1 beside it is the name. */
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={tournament.logo_url}
-                  alt=""
-                  aria-hidden
-                  width={56}
-                  height={56}
-                  loading="lazy"
-                  decoding="async"
-                  className="size-14 shrink-0 rounded-lg border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg)] object-cover"
-                />
-              ) : null}
-              <span className="min-w-0">{tournament.name}</span>
-              <TournamentStatusPill status={statusVariant} className="shrink-0">
-                {t(`common.statusBadge.${tournament.status}`)}
-              </TournamentStatusPill>
-            </span>
-          }
-          stamp={
-            <span className="flex w-full flex-col items-start gap-5">
-              <span className="flex flex-wrap items-end gap-x-8 gap-y-3">
-                <NextPhaseChip
-                  variant="stamp"
-                  tournament={tournament}
-                  href={`${overviewHref}#phases`}
-                />
-                {teamsCount > 0 || tournament.team_formation === "registration" ? (
-                  <HeroStamp
-                    label={t(tournament.team_formation === "registration" ? "registrationTeams.list.inTournament" : "tournamentDetail.overview.numbers.teams")}
-                    value={teamsCount}
+      {isOverviewSection ? (
+        <div ref={heroRef}>
+          <PageHero
+            /* Cover fades in from the right. Without one, only the CTAs move
+               into that column — stamps stay under the title. */
+            coverUrl={tournament.cover_image_url}
+            coverFade={tournament.cover_image_url ? "right" : undefined}
+            align={tournament.cover_image_url ? "start" : "end"}
+            eyebrow={
+              <HeroCoord className="inline-flex flex-wrap items-center gap-x-4 gap-y-1">
+                <HoverPrefetchLink
+                  href="/tournaments"
+                  className="transition-colors hover:text-[color:var(--aqt-teal)]"
+                >
+                  {t("common.tournaments")}
+                </HoverPrefetchLink>
+                <span className="opacity-50">/</span>
+                <span>{formatDateRange(format, tournament.start_date, tournament.end_date)}</span>
+                {tournament.is_league ? (
+                  <>
+                    <span className="opacity-50">/</span>
+                    <span>{t("common.league")}</span>
+                  </>
+                ) : null}
+              </HeroCoord>
+            }
+            title={
+              <span className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                {tournament.logo_url ? (
+                  /* Plain `<img>`, like every other S3 image on the site: the URL
+                     points at whatever host the deployment configured, and
+                     `next/image` hard-errors on a hostname missing from
+                     `remotePatterns`. Decorative — the h1 beside it is the name. */
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={tournament.logo_url}
+                    alt=""
+                    aria-hidden
+                    width={56}
+                    height={56}
+                    loading="lazy"
+                    decoding="async"
+                    className="size-14 shrink-0 rounded-lg border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg)] object-cover"
                   />
                 ) : null}
-                <HeroStamp label={t("common.playersLabel")} value={players} />
+                <span className="min-w-0">{tournament.name}</span>
+                <TournamentStatusPill status={statusVariant} className="shrink-0">
+                  {t(`common.statusBadge.${tournament.status}`)}
+                </TournamentStatusPill>
               </span>
-              {tournament.cover_image_url && (registerButton || draftButton) ? (
-                <span className="flex flex-wrap items-center gap-2.5">
+            }
+            stamp={
+              <span className="flex w-full flex-col items-start gap-5">
+                <span className="flex flex-wrap items-end gap-x-8 gap-y-3">
+                  <NextPhaseChip
+                    variant="stamp"
+                    tournament={tournament}
+                    href={`${overviewHref}#phases`}
+                  />
+                  {teamsCount > 0 || tournament.team_formation === "registration" ? (
+                    <HeroStamp
+                      label={t(tournament.team_formation === "registration" ? "registrationTeams.list.inTournament" : "tournamentDetail.overview.numbers.teams")}
+                      value={teamsCount}
+                    />
+                  ) : null}
+                  <HeroStamp label={t("common.playersLabel")} value={players} />
+                </span>
+                {tournament.cover_image_url && (registerButton || draftButton) ? (
+                  <span className="flex flex-wrap items-center gap-2.5">
+                    {registerButton}
+                    {draftButton}
+                  </span>
+                ) : null}
+              </span>
+            }
+            aside={
+              tournament.cover_image_url || !(registerButton || draftButton) ? undefined : (
+                <div className="flex flex-wrap items-center gap-2.5 lg:justify-end">
                   {registerButton}
                   {draftButton}
-                </span>
-              ) : null}
+                </div>
+              )
+            }
+          />
+        </div>
+      ) : (
+        /* Every other section opens on its own content. The banner, the
+           breadcrumb and the stamps are the overview's answer to "what is this
+           tournament"; repeating them above a bracket or a match list cost
+           ~220px before the content a reader navigated to. What is left is what
+           keeps the reader oriented — the mark, the name, the state, the dates —
+           in one row, with the actions that are not reachable from any tab. */
+        <div
+          ref={heroRef}
+          className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-2)] px-3 py-2.5 sm:px-4"
+        >
+          <HoverPrefetchLink
+            href={overviewHref}
+            className="flex min-h-10 min-w-0 items-center gap-2.5 transition-colors hover:text-[color:var(--aqt-teal)]"
+          >
+            {tournament.logo_url ? (
+              /* Same plain `<img>` as the hero's, for the same reason. */
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={tournament.logo_url}
+                alt=""
+                aria-hidden
+                width={40}
+                height={40}
+                loading="lazy"
+                decoding="async"
+                className="size-10 shrink-0 rounded-lg border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg)] object-cover"
+              />
+            ) : null}
+            <span className="truncate font-onest text-base font-bold leading-tight">
+              {tournament.name}
             </span>
-          }
-          aside={
-            tournament.cover_image_url || !(registerButton || draftButton) ? undefined : (
-              <div className="flex flex-wrap items-center gap-2.5 lg:justify-end">
-                {registerButton}
-                {draftButton}
-              </div>
-            )
-          }
-        />
-      </div>
+          </HoverPrefetchLink>
+          <TournamentStatusPill status={statusVariant} className="shrink-0">
+            {t(`common.statusBadge.${tournament.status}`)}
+          </TournamentStatusPill>
+          <span className="text-caption text-[color:var(--aqt-fg-faint)]">
+            {formatDateRange(format, tournament.start_date, tournament.end_date)}
+          </span>
+          {registerButton || draftButton ? (
+            <span className="ms-auto flex flex-wrap items-center gap-2.5">
+              {registerButton}
+              {draftButton}
+            </span>
+          ) : null}
+        </div>
+      )}
 
       <TournamentSectionNav
         tournamentId={tournament.slug}

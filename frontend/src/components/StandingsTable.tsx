@@ -6,6 +6,7 @@ import { Encounter } from "@/types/encounter.types";
 import { Stage, StageItem, Standings } from "@/types/tournament.types";
 import { cn } from "@/lib/utils";
 import { sortStandingsMatches } from "@/lib/tournament/match-order";
+import { groupDisplayName } from "@/lib/tournament/group";
 import { straddlingTieGroups } from "@/lib/tournament/tie-clusters";
 import { useTranslations } from "next-intl";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
@@ -114,9 +115,7 @@ function TeamCell({ standing, showGroup }: Readonly<{ standing: Standings; showG
       <div className="stack">
         <TeamName team={standing.team} size="xs" nameClassName="nm" />
         {showGroup && groupName && (
-          <span className="sub">
-            {t("common.group")} {groupName}
-          </span>
+          <span className="sub">{groupDisplayName(groupName, t("common.group"))}</span>
         )}
       </div>
     </div>

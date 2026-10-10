@@ -101,6 +101,29 @@ describe("TournamentCard", () => {
     expect(host.querySelector("[data-cover-fallback]")).toBeNull();
   });
 
+  it("draws the tournament's name as its cover when there is no image", () => {
+    // The fallback is a second kind of cover, not a placeholder — and stays
+    // `aria-hidden`, because the `<h3>` below already announces the name.
+    const fallback = render().querySelector("[data-cover-fallback]");
+
+    expect(fallback?.textContent).toContain("Spring Cup");
+    expect(fallback?.getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("drops the status chip and the progress bar once a tournament is over", () => {
+    // "COMPLETED" beside a permanently full "Final" bar is on most of the grid
+    // and distinguishes nothing. A tournament still running earns both.
+    const open = render();
+    expect(open.querySelector(".tn-status")).toBeTruthy();
+    expect(open.querySelector(".tn-stage")).toBeTruthy();
+
+    const done = render({ status: "completed" });
+    expect(done.querySelector(".tn-status")).toBeNull();
+    expect(done.querySelector(".tn-stage")).toBeNull();
+    // The counts are what still tell completed cards apart.
+    expect(done.textContent).toContain("30 players");
+  });
+
   it("renders no logo element at all when there is no logo", () => {
     // Not an empty-src `<img>` and not a stand-in glyph: a tournament without a
     // logo shows no logo anywhere on the site.

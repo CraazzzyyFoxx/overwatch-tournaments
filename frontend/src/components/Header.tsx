@@ -75,7 +75,9 @@ const Header = ({ tenantMode, tenantWorkspace }: HeaderProps) => {
   const tenant = tenantMode ? tenantWorkspace : undefined;
 
   return (
-    <header className="sticky top-0 z-50 pt-2.5">
+    // The page background fills the gap above the floating plate, so scrolled
+    // content does not show through as a sliver over the header.
+    <header className="sticky top-0 z-50 bg-[linear-gradient(to_bottom,var(--aqt-bg)_10px,transparent)] pt-2.5">
       {/* First focusable element on every page: a keyboard user can jump the
         whole nav tree instead of tabbing through it on each navigation.
         Targets the <main id="main-content"> in (site)/layout.tsx. */}

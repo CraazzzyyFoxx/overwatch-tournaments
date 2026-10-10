@@ -24,6 +24,7 @@ import { useTournamentQuery } from "@/hooks/useTournamentClientData";
 import { useTournamentStreamsQuery } from "../_hooks/useTournamentStreams";
 import { buildLiveTeamStreams } from "../bracket/bracketLiveStreams";
 import { getPublicPageQueryPresentation } from "@/lib/public-page-query-presentation";
+import { groupDisplayName } from "@/lib/tournament/group";
 import { useFfaStageLobbies } from "../_hooks/useFfaStageLobbies";
 import { MatchesFfaLobbies } from "./_components/MatchesFfaLobbies";
 import { MatchesToolbar } from "./_components/MatchesToolbar";
@@ -35,11 +36,23 @@ import {
   MATCHES_VIEWS,
   stageKey,
   toDate,
+  type MatchBlock,
   type MatchesView
 } from "./tournamentMatches.model";
 
 const HEADING_CLASS =
   "aqt-tnum mb-1 mt-5 text-label uppercase tracking-[.06em] text-[color:var(--aqt-fg-faint)]";
+
+/** The stage over its rounds. Every round heading used to carry the stage name
+ *  glued in front of it ("DOUBLE ELIMINATION · UB Final"); it is said once here
+ *  instead, so the round is what a round heading says. */
+const STAGE_HEADING_CLASS = "mb-1 mt-6 text-ui font-semibold text-[color:var(--aqt-fg)]";
+
+/** The section fills its container, so a wide viewport would otherwise stretch
+ *  the two name tracks and leave the chevron alone at the far edge. Here the
+ *  names sit in fixed tracks around the score and the spare width goes to the
+ *  outer tracks, keeping time · teams · score · format · chevron one block. */
+const WIDE_ROW_CLASS = "lg:grid-cols-[minmax(0,1fr)_14rem_5.5rem_14rem_minmax(0,1fr)]";
 
 interface TournamentEncountersPageProps {
   tournamentId: number;
@@ -206,23 +219,29 @@ const TournamentEncountersPage = ({ tournamentId, slug, now }: TournamentEncount
     }
     return [
       roundLabel(encounter.round, shape),
-      name ? (name.length <= 2 ? `${groupWord} ${name}` : name) : null,
+      name ? groupDisplayName(name, groupWord) : null,
       bo
     ]
       .filter(Boolean)
       .join(" · ");
   };
 
-  const roundBlocks =
+  /**
+   * The round view, one entry per stage: the stage names the block of rounds
+   * below it, so no round heading has to repeat it.
+   */
+  const stageGroups =
     view === "round" && tournament
-      ? collectStages(rows, tournament).flatMap((stage) =>
-          buildStageBlocks(
+      ? collectStages(rows, tournament).map((stage) => ({
+          key: stageKey(stage.id),
+          name: stage.name,
+          blocks: buildStageBlocks(
             stage,
             rows.filter((encounter) => encounter.stage_id === stage.id),
             roundLabel,
             countLabel
           )
-        )
+        }))
       : [];
 
   const nowMs = now ?? clock;
@@ -288,7 +307,11 @@ const TournamentEncountersPage = ({ tournamentId, slug, now }: TournamentEncount
       .join(" · ");
   };
 
-  const blocks = view === "time" ? timeSections?.days ?? [] : roundBlocks;
+  /** Both views as one shape: a named stage with its rounds, or one unnamed day list. */
+  const groups: { key: string; name: string; blocks: MatchBlock[] }[] =
+    view === "time"
+      ? [{ key: "time", name: "", blocks: timeSections?.days ?? [] }]
+      : stageGroups;
 
   const content = (
     <section
@@ -326,10 +349,11 @@ const TournamentEncountersPage = ({ tournamentId, slug, now }: TournamentEncount
               onReset={() => setParams({ stage: null, team: null, map: null })}
             />
           ) : (
-            /* A scoreboard reads at a column's width. Stretched across a wide
-               viewport the two team names drift apart from the score they
-               belong to, so the list stops at roughly the wireframe's frame. */
-            <div className="max-w-[64rem]">
+            /* Full container width: the scoreboard no longer needs the list
+               narrowed to keep the two team names near their score — the row
+               itself bounds them (`MatchRow`), so the slack sits outside the
+               cluster instead of pushing the chevron off to a far edge. */
+            <div className="min-w-0">
               {timeSections && timeSections.live.length > 0 ? (
                 <section aria-label={t("tournamentDetail.matches.now")}>
                   <h2 className={HEADING_CLASS}>{t("tournamentDetail.matches.now")}</h2>
@@ -349,21 +373,33 @@ const TournamentEncountersPage = ({ tournamentId, slug, now }: TournamentEncount
                   </div>
                 </section>
               ) : null}
-              {blocks.map((block) => (
-                <section key={block.key} aria-label={block.heading}>
-                  <h2 className={HEADING_CLASS}>{block.heading}</h2>
-                  <div className="border-t border-[color:var(--aqt-border)]">
-                    {block.rows.map((row) => (
-                      <MatchRow
-                        key={row.encounter.id}
-                        encounter={row.encounter}
-                        leading={row.leading}
-                        trailing={row.trailing}
-                        bracketHref={bracketHref(row.encounter)}
-                        returnTo={returnTo}
-                      />
-                    ))}
-                  </div>
+              {groups.map((group) => (
+                <section key={group.key} aria-label={group.name || undefined}>
+                  {group.name ? (
+                    <h2 className={STAGE_HEADING_CLASS}>{group.name}</h2>
+                  ) : null}
+                  {group.blocks.map((block) => (
+                    <section key={block.key} aria-label={block.heading}>
+                      {group.name ? (
+                        <h3 className={HEADING_CLASS}>{block.heading}</h3>
+                      ) : (
+                        <h2 className={HEADING_CLASS}>{block.heading}</h2>
+                      )}
+                      <div className="border-t border-[color:var(--aqt-border)]">
+                        {block.rows.map((row) => (
+                          <MatchRow
+                            key={row.encounter.id}
+                            encounter={row.encounter}
+                            leading={row.leading}
+                            trailing={row.trailing}
+                            bracketHref={bracketHref(row.encounter)}
+                            returnTo={returnTo}
+                            className={WIDE_ROW_CLASS}
+                          />
+                        ))}
+                      </div>
+                    </section>
+                  ))}
                 </section>
               ))}
               <MatchesFfaLobbies

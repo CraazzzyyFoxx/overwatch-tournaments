@@ -1,5 +1,5 @@
 import { isEncounterCompleted } from "@/lib/encounter/status";
-import { normalizePlayerRole } from "@/lib/roster/player-role";
+import { normalizePlayerRole, type PlayerRoleOption } from "@/lib/roster/player-role";
 import { ROSTER_SLOT_CODES, type RosterSlotCode } from "@/lib/roster/shape";
 import { cn } from "@/lib/utils";
 import type { Encounter } from "@/types/encounter.types";
@@ -24,7 +24,7 @@ export const MARK_CLASS =
   "rounded-[3px] bg-[color:color-mix(in_srgb,var(--aqt-teal)_22%,transparent)] px-0.5 text-[color:var(--aqt-fg)]";
 
 /** Slot code -> the canonical role name `PlayerRoleIcon` maps to a glyph. */
-const SLOT_ROLE: Record<RosterSlotCode, string> = {
+const SLOT_ROLE: Record<RosterSlotCode, PlayerRoleOption> = {
   tank: "Tank",
   damage: "Damage",
   support: "Support",
@@ -97,7 +97,7 @@ export function buildRecords(encounters: Encounter[]): Map<number, TeamRecord> {
 export function rosterSlots(
   tournament: Tournament,
   team: Team
-): { role: string; player?: Player }[] {
+): { role: PlayerRoleOption; player?: Player }[] {
   const players = sortTeamPlayers(team.players);
   const shape = tournament.roster_shape;
 
@@ -106,7 +106,7 @@ export function rosterSlots(
     return players.map((player) => ({ role: normalizePlayerRole(player.role), player }));
   }
 
-  const slots: { role: string; player?: Player }[] = [];
+  const slots: { role: PlayerRoleOption; player?: Player }[] = [];
   for (const code of ROSTER_SLOT_CODES) {
     for (let index = 0; index < (shape.slots[code] ?? 0); index += 1) {
       slots.push({ role: SLOT_ROLE[code] });

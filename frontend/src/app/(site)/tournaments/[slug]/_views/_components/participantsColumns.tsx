@@ -2,7 +2,7 @@
 
 import { Crown } from "lucide-react";
 
-import type { RegistrationForm } from "@/types/registration.types";
+import type { AdmissionDecision, RegistrationForm } from "@/types/registration.types";
 import { answerSearchText } from "@/lib/forms/answers";
 import { identityMaxCount, isBuiltinKey } from "@/lib/forms/builtin-keys";
 import type { Hero } from "@/types/hero.types";
@@ -33,6 +33,31 @@ import {
   type ColumnDefinition,
   type Translator,
 } from "./participantsColumns.model";
+
+// ---------------------------------------------------------------------------
+// Icon-only status columns
+// ---------------------------------------------------------------------------
+
+/**
+ * The word beside a status glyph in the check-in and admission columns, so the
+ * state does not hang on hue alone (amber clock vs. rose cross vs. grey ring).
+ * `aria-hidden`: the badge's own `aria-label` already carries the full verdict,
+ * reasons included. Hidden below `lg`, where the icon track has no room.
+ */
+function StatusWord({ children }: Readonly<{ children: string }>) {
+  return (
+    <span className="hidden text-label text-[color:var(--aqt-fg-muted)] lg:inline" aria-hidden>
+      {children}
+    </span>
+  );
+}
+
+/** The composed decision as one word. Switches on `decision` and nothing else. */
+function admissionWord(decision: AdmissionDecision, t: Translator): string {
+  if (decision === "not_admitted") return t("common.no");
+  if (decision === "pending_check_in") return t("common.admissionStatus.pendingShort");
+  return t("common.yes");
+}
 
 // ---------------------------------------------------------------------------
 // Main builder
@@ -278,7 +303,12 @@ export function buildParticipantColumns(
     responsive: "md",
     align: "center",
     width: "icon",
-    render: (reg) => <CheckInStatusBadge checkedIn={reg.checked_in} />,
+    render: (reg) => (
+      <span className="inline-flex items-center gap-1">
+        <CheckInStatusBadge checkedIn={reg.checked_in} />
+        <StatusWord>{reg.checked_in === true ? t("common.yes") : t("common.no")}</StatusWord>
+      </span>
+    ),
   });
 
   // Meta: profile open/closed — only when the tournament requires it.
@@ -320,7 +350,12 @@ export function buildParticipantColumns(
     responsive: "always",
     align: "center",
     width: "icon",
-    render: (reg) => <AdmissionStatusBadge admission={reg.admission} />,
+    render: (reg) => (
+      <span className="inline-flex items-center gap-1">
+        <AdmissionStatusBadge admission={reg.admission} />
+        <StatusWord>{admissionWord(reg.admission.decision, t)}</StatusWord>
+      </span>
+    ),
   });
 
   return columns;

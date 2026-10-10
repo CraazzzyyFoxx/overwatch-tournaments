@@ -48,8 +48,28 @@ const CHIP_META: Record<TournamentLinkKind, ChipMeta | null> = {
 };
 
 /**
- * The links that actually render as chips: active, and with a chip in the
- * registry (`stream` has none — official broadcasts belong to the dock).
+ * A `bracket` link that only leads back to this site's own bracket section. The
+ * rail has that tab and the overview previews the bracket with its own link, so
+ * a chip for it is the third copy of one address. The organizer's EXTERNAL
+ * bracket (Challonge, Battlefy) is why the kind exists, and stays.
+ *
+ * Matched on the path alone: the link may be stored relative, the public site
+ * answers on more than one hostname, and `window.location` does not exist in
+ * the server render this list also runs in.
+ */
+const INTERNAL_BRACKET_PATH = /^\/tournaments\/[^/]+\/bracket(?:[/?#]|$)/;
+
+function isInternalBracketLink(link: TournamentLink): boolean {
+  return (
+    link.kind === "bracket" &&
+    INTERNAL_BRACKET_PATH.test(link.url.trim().replace(/^[a-z]+:\/\/[^/]+/i, ""))
+  );
+}
+
+/**
+ * The links that actually render as chips: active, not a link back into this
+ * page (see above), and with a chip in the registry (`stream` has none —
+ * official broadcasts belong to the dock).
  *
  * Ordered by `(sort_order, id)` — the same order the backend returns and the
  * organizer sets in the admin Links tab, mirrored here so a client-side sort can
@@ -65,7 +85,7 @@ export function visibleTournamentLinks(links: TournamentLink[] | undefined) {
   // cast to convince the compiler the entry is there.
   return (links ?? [])
     .flatMap((link) => {
-      const meta = link.is_active ? CHIP_META[link.kind] : null;
+      const meta = link.is_active && !isInternalBracketLink(link) ? CHIP_META[link.kind] : null;
       return meta ? [{ link, meta }] : [];
     })
     .sort((a, b) => a.link.sort_order - b.link.sort_order || a.link.id - b.link.id);

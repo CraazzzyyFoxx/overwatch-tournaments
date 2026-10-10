@@ -36,13 +36,8 @@ function RoundHeader({ header, scale, sticky }: Readonly<{ header: LayoutHeader;
           : { left: header.x, top: header.y, width: CARD_WIDTH }
       }
     >
-      <div className="inline-flex items-center gap-2 rounded-full border border-[color:var(--aqt-border-2)] bg-[hsl(0_0%_0%/0.55)] px-2.5 py-0.5 text-label font-semibold uppercase tracking-label text-[color:var(--aqt-fg-muted)] backdrop-blur-sm">
-        <span
-          aria-hidden
-          className="h-2 w-2 rounded-full"
-          style={{ background: header.section === "upper" ? "var(--aqt-teal)" : "var(--aqt-blue)" }}
-        />
-        <span>{header.label}</span>
+      <div className="inline-flex items-center rounded-full border border-[color:var(--aqt-border-2)] bg-[hsl(0_0%_0%/0.55)] px-2.5 py-0.5 text-label font-semibold uppercase tracking-label text-[color:var(--aqt-fg-muted)] backdrop-blur-sm">
+        {header.label}
       </div>
     </div>
   );

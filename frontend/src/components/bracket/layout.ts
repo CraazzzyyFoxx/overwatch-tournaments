@@ -140,16 +140,27 @@ const ELBOW_RADIUS = 8;
  *
  * The vertical run sits in the gap just before the TARGET column, not just after
  * the source: for neighbouring rounds the two are the same gap, but a connector
- * that spans columns (upper final → grand final over the whole lower bracket)
- * then travels along its own row, where nothing is drawn, and turns only at the
- * end — instead of dropping at once and cutting across every column between.
- * Both feeders of one match therefore share one vertical bar at its door.
+ * that spans columns then travels along its own row, where nothing is drawn, and
+ * turns only at the end — instead of dropping at once and cutting across every
+ * column between. Both feeders of one match therefore share one vertical bar at
+ * its door.
+ *
+ * A feeder that shares its target's column (the lower final, with the grand
+ * final in the empty band above it) has no gap to run through, so it leaves its
+ * own top edge and climbs straight into the target's bottom edge.
  */
 function buildPath(source: LayoutNode, target: LayoutNode) {
   const startX = source.x + CARD_WIDTH;
   const startY = source.y + CARD_HEIGHT / 2;
   const endX = target.x;
   const endY = target.y + CARD_HEIGHT / 2;
+  if (endX < startX) {
+    const up = target.y < source.y;
+    const fromY = up ? source.y : source.y + CARD_HEIGHT;
+    const toY = up ? target.y + CARD_HEIGHT : target.y;
+    const midY = (fromY + toY) / 2;
+    return `M ${source.x + CARD_WIDTH / 2} ${fromY} V ${midY} H ${target.x + CARD_WIDTH / 2} V ${toY}`;
+  }
   const middleX = Math.max(startX, endX - ROUND_GAP_X / 2);
   const dy = endY - startY;
   const r = Math.min(ELBOW_RADIUS, Math.abs(dy) / 2, (middleX - startX) / 2, (endX - middleX) / 2);
@@ -332,9 +343,15 @@ export function buildLayout(
   );
   const lowerRounds = isDE ? buildRoundGroups(encounters.filter((match) => match.round < 0)) : [];
 
-  // Main bracket columns (UB and LB); finals go in extra columns at the right.
+  // Main bracket columns (UB and LB).
   const mainColumns = Math.max(upperRounds.length, lowerRounds.length, 1);
-  const totalColumns = mainColumns + finalRounds.length;
+  // The finals follow the upper bracket, so the grand final sits one normal gap
+  // after the upper final rather than a column or two further right with an
+  // empty band between them. The lower bracket runs longer, so that lands the
+  // grand final in its last column — above the lower final, which is empty
+  // there and is where that feeder's connector comes up from.
+  const finalsColumn = Math.max(upperRounds.length, lowerRounds.length - 1);
+  const totalColumns = Math.max(mainColumns, finalsColumn + finalRounds.length);
   const contentWidth = totalColumns * CARD_WIDTH + Math.max(totalColumns - 1, 0) * ROUND_GAP_X;
   const width = PADDING_X * 2 + contentWidth;
 
@@ -426,15 +443,16 @@ export function buildLayout(
     });
   });
 
-  // Grand Final section: right of both UB and LB, centred in the bracket body
-  // — below the header row, or the card lands on top of its own header.
+  // Grand Final section: right of the upper bracket, centred in the bracket body
+  // — below the header row, or the card lands on top of its own header, and
+  // clear of the lower bracket's own band under it.
   const fullContentHeight = hasLowerBracket ? lowerTop + lowerSectionHeight : upperTop + upperSectionHeight;
 
   finalRounds.forEach((group, finalIndex) => {
     const totalHeight = sectionHeight(group.matches.length);
     layoutColumn({
       group,
-      x: columnX(mainColumns + finalIndex),
+      x: columnX(finalsColumn + finalIndex),
       headerY: PADDING_Y,
       headerId: `final-header-${group.round}`,
       headerSection: "upper",

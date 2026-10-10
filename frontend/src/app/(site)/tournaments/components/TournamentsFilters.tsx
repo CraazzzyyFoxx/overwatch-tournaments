@@ -3,7 +3,7 @@
 import { LayoutGrid, List } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { FilterChip, FilterChipGroup } from "@/components/ui/filter-chip";
+import { FilterChip } from "@/components/ui/filter-chip";
 import { SearchField } from "@/components/ui/search-field";
 import { TOURNAMENT_STATUS_ORDER, getTournamentStatusMeta } from "@/lib/tournament/status";
 import type { TournamentStatus } from "@/types/tournament.types";
@@ -72,94 +72,122 @@ const TournamentsFilters = ({
     onTypeChange(typeFilter === value ? "all" : value);
 
   return (
-    <FilterChipGroup label={t("common.filters")} className="filters">
-      <FilterChip
-        active={statusFilter === "all"}
-        count={total}
-        onClick={() => onStatusChange("all")}
-      >
-        {t("common.all")}
-      </FilterChip>
-
-      {TOURNAMENT_STATUS_ORDER.map((status) => {
-        const count = statusCounts[status] ?? 0;
-        if (count === 0 && statusFilter !== status) return null;
-
-        return (
+    /* Phone first: one horizontally scrollable chip row (wrapping chips used to
+       strand the group divider on its own line), the search on its own full
+       width line, and sort beside the view toggle. From `md` it is the single
+       toolbar row again. */
+    <div className="flex flex-col gap-2.5 rounded-xl border border-[color:var(--aqt-border)] bg-[color:var(--aqt-card)] p-2.5 md:flex-row md:flex-wrap md:items-center md:gap-2">
+      <div className="tn-filter-chips -mx-2.5 flex items-center gap-x-5 gap-y-2 overflow-x-auto px-2.5 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:mx-0 md:flex-wrap md:overflow-visible md:px-0 md:pb-0">
+        {/* Two groups, not one run of chips split by a hairline: status and
+            format answer different questions, and a divider between them
+            disappeared (or stranded itself) the moment the row wrapped. */}
+        <div
+          role="group"
+          aria-label={t("common.status")}
+          className="flex shrink-0 items-center gap-2"
+        >
           <FilterChip
-            key={status}
-            active={statusFilter === status}
-            count={count}
-            dotColor={VARIANT_DOT[getTournamentStatusMeta(status).variant]}
-            onClick={() => onStatusChange(status)}
+            active={statusFilter === "all"}
+            count={total}
+            onClick={() => onStatusChange("all")}
           >
-            {t(`common.statusBadge.${status}`)}
+            {t("common.all")}
           </FilterChip>
-        );
-      })}
 
-      <div aria-hidden className="aqt-filter-divider" />
+          {TOURNAMENT_STATUS_ORDER.map((status) => {
+            const count = statusCounts[status] ?? 0;
+            // A chip is only worth its place when it narrows something: an empty
+            // bucket narrows to nothing, and one that matches the total ("All 77"
+            // beside "Completed 77") is the same list under a second name. The
+            // active chip always stays, or the filter could not be read or undone.
+            if (statusFilter !== status && (count === 0 || count === total)) return null;
 
-      <FilterChip
-        active={typeFilter === "standard"}
-        count={standardCount}
-        onClick={() => toggleType("standard")}
-      >
-        {t("tournamentsList.filters.standard")}
-      </FilterChip>
-      <FilterChip
-        active={typeFilter === "league"}
-        count={leagueCount}
-        onClick={() => toggleType("league")}
-      >
-        {t("common.league")}
-      </FilterChip>
+            return (
+              <FilterChip
+                key={status}
+                active={statusFilter === status}
+                count={count}
+                dotColor={VARIANT_DOT[getTournamentStatusMeta(status).variant]}
+                onClick={() => onStatusChange(status)}
+              >
+                {t(`common.statusBadge.${status}`)}
+              </FilterChip>
+            );
+          })}
+        </div>
+
+        <div
+          role="group"
+          aria-label={t("tournamentsList.filters.typeLabel")}
+          className="flex shrink-0 items-center gap-2"
+        >
+          <FilterChip
+            active={typeFilter === "standard"}
+            count={standardCount}
+            onClick={() => toggleType("standard")}
+          >
+            {t("tournamentsList.filters.standard")}
+          </FilterChip>
+          <FilterChip
+            active={typeFilter === "league"}
+            count={leagueCount}
+            onClick={() => toggleType("league")}
+          >
+            {t("common.league")}
+          </FilterChip>
+        </div>
+      </div>
 
       <SearchField
         value={search}
         onValueChange={onSearchChange}
         label={t("common.searchLabel")}
         placeholder={t("tournamentsList.filters.searchPlaceholder")}
-        containerClassName="ml-auto min-w-[200px] max-w-[300px] flex-1"
+        containerClassName="md:ml-auto md:w-[240px]"
+        className="max-md:h-10"
       />
 
-      <Select value={sortBy} onValueChange={(value) => onSortChange(value as SortBy)}>
-        <SelectTrigger
-          aria-label={t("common.sortBy")}
-          className="filter-sort h-8 w-[155px] shadow-none focus:ring-0 focus:ring-offset-0"
-        >
-          <SelectValue placeholder={t("common.sortBy")} />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="latest">{t("tournamentsList.filters.sort.newest")}</SelectItem>
-          <SelectItem value="oldest">{t("tournamentsList.filters.sort.oldest")}</SelectItem>
-          <SelectItem value="participants">
-            {t("tournamentsList.filters.sort.participants")}
-          </SelectItem>
-        </SelectContent>
-      </Select>
+      <div className="flex items-center gap-2">
+        <Select value={sortBy} onValueChange={(value) => onSortChange(value as SortBy)}>
+          <SelectTrigger
+            aria-label={t("common.sortBy")}
+            className="filter-sort h-8 w-[155px] shadow-none focus:ring-0 focus:ring-offset-0 max-md:h-10 max-md:w-full"
+          >
+            <SelectValue placeholder={t("common.sortBy")} />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="latest">{t("tournamentsList.filters.sort.newest")}</SelectItem>
+            <SelectItem value="oldest">{t("tournamentsList.filters.sort.oldest")}</SelectItem>
+            <SelectItem value="participants">
+              {t("tournamentsList.filters.sort.participants")}
+            </SelectItem>
+          </SelectContent>
+        </Select>
 
-      {/* The item labels are `sr-only` text, not `aria-label`: the icons alone
-          give the radios no accessible name, and `ToggleGroupItem` forwards no
-          ARIA props of its own. */}
-      <ToggleGroup
-        type="single"
-        value={view}
-        onValueChange={(value) => onViewChange(value as ViewMode)}
-        aria-label={t("tournamentsList.view.label")}
-        variant="pill"
-        size="sm"
-      >
-        <ToggleGroupItem value="cards">
-          <LayoutGrid aria-hidden width={14} height={14} />
-          <span className="sr-only">{t("tournamentsList.view.cards")}</span>
-        </ToggleGroupItem>
-        <ToggleGroupItem value="list">
-          <List aria-hidden width={14} height={14} />
-          <span className="sr-only">{t("tournamentsList.view.list")}</span>
-        </ToggleGroupItem>
-      </ToggleGroup>
-    </FilterChipGroup>
+        {/* Hidden below `md`, where the page always renders cards: a toggle that
+            cannot change what you see is a lie. The item labels are `sr-only`
+            text, not `aria-label`: the icons alone give the radios no accessible
+            name, and `ToggleGroupItem` forwards no ARIA props of its own. */}
+        <ToggleGroup
+          type="single"
+          value={view}
+          onValueChange={(value) => onViewChange(value as ViewMode)}
+          aria-label={t("tournamentsList.view.label")}
+          variant="pill"
+          size="sm"
+          className="max-md:hidden"
+        >
+          <ToggleGroupItem value="cards">
+            <LayoutGrid aria-hidden width={14} height={14} />
+            <span className="sr-only">{t("tournamentsList.view.cards")}</span>
+          </ToggleGroupItem>
+          <ToggleGroupItem value="list">
+            <List aria-hidden width={14} height={14} />
+            <span className="sr-only">{t("tournamentsList.view.list")}</span>
+          </ToggleGroupItem>
+        </ToggleGroup>
+      </div>
+    </div>
   );
 };
 

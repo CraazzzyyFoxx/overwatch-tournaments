@@ -22,6 +22,7 @@ import MetricTooltip from "@/app/(site)/tournaments/analytics/components/MetricT
 import TeamName from "@/components/TeamName";
 import { useTranslations } from "next-intl";
 import { sortTeamPlayers } from "@/lib/player";
+import { groupDisplayName } from "@/lib/tournament/group";
 import { cn } from "@/lib/utils";
 import { usePermissions } from "@/hooks/usePermissions";
 import analyticsService from "@/services/analytics.service";
@@ -476,7 +477,7 @@ const TeamRow = ({
             <TeamName team={team} size="xs" />
           </div>
           <div className={styles.teamMeta}>
-            <span>{t("common.group")} {groupName}</span>
+            <span>{groupDisplayName(groupName, t("common.group"))}</span>
             {distribution ? (
               <span
                 title={t("analytics.standings.monteCarloTitle", {

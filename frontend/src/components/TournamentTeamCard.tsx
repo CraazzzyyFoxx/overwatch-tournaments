@@ -22,6 +22,7 @@ import { IconTooltip } from "@/components/ui/icon-tooltip";
 import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
 import { getDivisionLabel } from "@/lib/divisions/grid";
 import { normalizePlayerRole, PLAYER_ROLE_LABEL_KEY } from "@/lib/roster/player-role";
+import { groupDisplayName } from "@/lib/tournament/group";
 import { cn } from "@/lib/utils";
 import type { DivisionGridVersion } from "@/types/workspace.types";
 
@@ -410,7 +411,7 @@ export const TournamentTeamCard = ({ team }: { team: Team }) => {
       leadingTag={
         team.group?.name ? (
           <span className={cn("group-chip", groupChipClass(team.group.name))}>
-            {t("teams.groupLabel", { name: team.group.name })}
+            {groupDisplayName(team.group.name, t("common.group"))}
           </span>
         ) : (
           <span />

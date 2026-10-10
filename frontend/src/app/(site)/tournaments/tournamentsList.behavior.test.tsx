@@ -8,7 +8,8 @@
 // from it, write `?q=` per keystroke for free, and slice pages locally. None of
 // that survives a server-side list:
 //  1. cards are the default view; the toggle is a URL fact (`?view=list`) so a
-//     shared link opens in the layout the sender was reading;
+//     shared link opens in the layout the sender was reading - on a phone the
+//     cards win regardless, so the list view ships both layouts;
 //  2. the list view no longer paginates — the page owns scroll depth, and a
 //     second slice inside the table would hide rows already fetched;
 //  3. a filter change is a DIFFERENT list: the pages accumulated for the old
@@ -323,7 +324,11 @@ describe("tournaments list", () => {
 
     expect(urlsWritten()).toContain("/tournaments?view=list");
     expect(container.querySelector("table.tn")).toBeTruthy();
-    expect(container.querySelector("[data-tournament-grid]")).toBeNull();
+    // The list view ships BOTH layouts and lets the viewport pick: the table is
+    // desktop-only (two of its six columns fit on a phone), the grid is the
+    // mobile list whatever `?view=` says.
+    expect(container.querySelector(".tn-card")?.className).toContain("max-md:hidden");
+    expect(container.querySelector("[data-tournament-grid]")?.className).toContain("md:hidden");
     // `DataPagination` renders a labelled `<nav>` as soon as there is more than
     // one page. Nothing on this page may.
     expect(container.querySelector("nav")).toBeNull();
@@ -333,7 +338,7 @@ describe("tournaments list", () => {
     const container = await mount("?view=list");
 
     expect(container.querySelector("table.tn")).toBeTruthy();
-    expect(container.querySelector("[data-tournament-grid]")).toBeNull();
+    expect(container.querySelector("[data-tournament-grid]")?.className).toContain("md:hidden");
     // One footer, under BOTH views: scroll depth belongs to the page, not to
     // whichever layout is rendering the rows.
     expect(container.textContent).toContain("Showing 12 of 24 tournaments");
@@ -342,7 +347,7 @@ describe("tournaments list", () => {
   it("keeps accumulated pages while scrolling, and drops them when a filter moves", async () => {
     const container = await mount();
 
-    await click(button(en.tournamentsList.footer.loadMore));
+    await click(button("Show 12 more"));
     expect(cards(container)).toHaveLength(24);
     // The localized progress line, not the component's English fallback — the
     // only place the nested ICU plural in `footer.progress` gets exercised.
@@ -361,7 +366,7 @@ describe("tournaments list", () => {
   it("changes layout without re-fetching or losing scroll depth", async () => {
     const container = await mount();
 
-    await click(button(en.tournamentsList.footer.loadMore));
+    await click(button("Show 12 more"));
     const requests = listTournaments.mock.calls.length;
 
     await click(radio(en.tournamentsList.view.list));
@@ -403,19 +408,28 @@ describe("tournaments list", () => {
     expect(chipCount(en.common.statusBadge.completed)).toBe("30");
     expect(chipCount(en.tournamentsList.filters.standard)).toBe("36");
     expect(chipCount(en.common.league)).toBe("6");
-    // "N shown" is what the filter matches server-side, not what is on screen.
-    expect(container.textContent).toContain("2 shown");
+    // The heading states the size of the result set, not the rows on screen.
+    expect(container.querySelector("h2")?.parentElement?.textContent).toContain("2 tournaments");
   });
 
   it("reports live events from the unfiltered facet, not from the loaded rows", async () => {
     const container = await mount();
 
     // `facets.live` is 3 while the loaded page holds no live tournament at all.
-    expect(container.textContent).toContain(en.tournamentsList.hero.liveNow);
-    const liveStat = Array.from(container.querySelectorAll(".hero-stat, div")).find((node) =>
-      node.textContent?.trim().startsWith(en.tournamentsList.hero.liveNow)
+    const label = Array.from(container.querySelectorAll("span")).find(
+      (node) => node.textContent?.trim() === en.tournamentsList.hero.liveNow
     );
-    expect(liveStat?.textContent).toContain("3");
+    expect(label?.closest("div")?.textContent).toContain("3");
+  });
+
+  it("says nothing about live events when none are running", async () => {
+    // A zero in the hero's most prominent slot advertises an empty site, so the
+    // stat is absent rather than zero.
+    getFacets.mockResolvedValue(facets({ live: 0 }));
+
+    const container = await mount();
+
+    expect(container.textContent).not.toContain(en.tournamentsList.hero.liveNow);
   });
 
   it("reads every workspace when the visitor chose all workspaces", async () => {
