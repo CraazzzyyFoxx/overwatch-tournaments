@@ -305,4 +305,17 @@ describe("Bracket preview", () => {
     // "top 2 of each" would be a lie about group A, and 4 onward a lie about both.
     expect(container.textContent).toContain("top 3 / 2 of each advance, 5 teams onward");
   });
+
+  it("offers drag-to-reseed on a Draft skeleton only while seeds go in slot order", async () => {
+    const toggle = () => container.querySelector("[data-bracket-rearrange]");
+
+    await mount();
+    expect(toggle()).not.toBeNull();
+
+    act(() => root!.unmount());
+    // An SR ranking re-sorts the seeds whatever their slots: a drop would do nothing.
+    await mount({ ...stage(), seed_ranking: "avg_sr" });
+    expect(toggle()).toBeNull();
+    expect(container.textContent).toContain("Set Bracket seeds to slot order");
+  });
 });

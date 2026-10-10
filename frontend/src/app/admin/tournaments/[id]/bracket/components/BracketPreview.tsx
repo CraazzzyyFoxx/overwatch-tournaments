@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useMemo } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { EYEBROW_CLASS, TONE_TEXT } from "@/components/kit/tone";
 import { BracketView, type BracketSlotRef } from "@/components/bracket/BracketView";
@@ -31,7 +31,7 @@ const COUNT_SOURCE_NOTE: Record<BracketTeamCountSource, string> = {
 };
 
 /**
- * The stage as it would be generated right now — read only.
+ * The stage as it would be generated right now.
  *
  * The bracket itself is the real tree, drawn by the same `BracketView` the
  * public page uses: once the stage has matches it draws those (scores, live
@@ -44,8 +44,9 @@ const COUNT_SOURCE_NOTE: Record<BracketTeamCountSource, string> = {
  * this section used to list beside them are gone. The drawn tree follows the
  * SAVED stage — a format or best-of edit shows up once it is saved.
  *
- * Matches are NOT editable here. Editing them is the Matches tab's job, and
- * the Items section carries the cross-link.
+ * Teams can be rearranged by drag: generated matches swap encounter slots, and
+ * a Draft skeleton seeded in slot order swaps the seed inputs behind it.
+ * Everything else about a match is the Matches tab's job.
  */
 export function BracketPreview({
   projection,
@@ -76,7 +77,10 @@ export function BracketPreview({
     queryKey: adminQueryKeys.stageBracketPreview(stage.id, stage),
     queryFn: () => adminService.getStageBracketPreview(stage.id),
     // A group stage has no bracket to project, so it never asks.
-    enabled: isBracket && !encountersQuery.isPending && generated.length === 0
+    enabled: isBracket && !encountersQuery.isPending && generated.length === 0,
+    // A reseed changes the stage and so the key: keep the old tree on screen
+    // while the new one loads instead of flashing the skeleton loader.
+    placeholderData: keepPreviousData
   });
 
   const teamById = useMemo(() => new Map(teams.map((team) => [team.id, team])), [teams]);
@@ -107,7 +111,34 @@ export function BracketPreview({
     },
     [queryClient, stage.tournament_id]
   );
-  const onSwapSlots = generated.length > 0 ? swapSlots : undefined;
+  // Before generation the drawn teams ARE the stage's seed inputs, so a drag
+  // trades two inputs' teams (the input PATCH swaps with whichever input holds
+  // the team it is given). Only in slot order: an SR ranking re-sorts the seeds
+  // whatever their slots, so the drop would change nothing.
+  const canReseed = isBracket && generated.length === 0 && stage.seed_ranking === "slot";
+  const swapSeeds = useCallback(
+    async (source: BracketSlotRef, target: BracketSlotRef) => {
+      const teamAt = ({ encounter, slot }: BracketSlotRef) =>
+        slot === "home" ? encounter.home_team_id : encounter.away_team_id;
+      const sourceTeam = teamAt(source);
+      const targetTeam = teamAt(target);
+      const input = stage.items
+        .flatMap((item) => item.inputs)
+        .find((row) => row.team_id === sourceTeam);
+      // Team ↔ team only: a TBD slot is a later round or an unseeded
+      // placeholder (id <= 0), not a seed to trade places with.
+      if (!input || targetTeam <= 0 || targetTeam === sourceTeam) return;
+      try {
+        await adminService.updateStageItemInput(input.id, { team_id: targetTeam, input_type: "final" });
+        notify.success("Teams swapped");
+      } catch (error) {
+        notify.apiError(error, { title: "Could not swap teams" });
+      }
+      invalidateTournamentWorkspace(queryClient, stage.tournament_id);
+    },
+    [queryClient, stage]
+  );
+  const onSwapSlots = generated.length > 0 ? swapSlots : canReseed ? swapSeeds : undefined;
 
   // A group stage's matches otherwise land in one flat "Round 1" column:
   // `BracketView` draws rounds, not groups, so Group A and Group B interleave
@@ -141,9 +172,19 @@ export function BracketPreview({
           Bracket preview
         </h3>
         <p className={EYEBROW_CLASS}>
-          {generated.length > 0 ? "generated matches" : "read-only projection"}
+          {generated.length > 0
+            ? "generated matches"
+            : canReseed
+              ? "projection · drag to reseed"
+              : "read-only projection"}
         </p>
       </div>
+
+      {isBracket && generated.length === 0 && !canReseed ? (
+        <p className="mt-1 text-xs text-muted-foreground">
+          Set Bracket seeds to slot order to rearrange teams here.
+        </p>
+      ) : null}
 
       <p className="mt-1 text-xs text-muted-foreground">
         <span className="tabular-nums">{projection.itemCount}</span> item
