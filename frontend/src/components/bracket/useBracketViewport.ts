@@ -6,7 +6,16 @@ import { CARD_HEIGHT, CARD_WIDTH } from "./layout";
 
 export const MIN_SCALE = 0.4;
 export const MAX_SCALE = 2;
-const ZOOM_STEP = 1.2;
+/** Zoom steps per 1:1 — 10%. */
+const ZOOM_MARKS = 10;
+
+/** The next 10% mark up or down: 100 → 90 → 80, and an off-grid fit (73%) lands on 80 / 70. */
+function steppedScale(scale: number, direction: 1 | -1) {
+  const marks = scale * ZOOM_MARKS;
+  // The epsilon keeps float noise (0.7 * 10 = 7.000000000000001) from skipping a mark.
+  const base = direction > 0 ? Math.floor(marks + 1e-6) : Math.ceil(marks - 1e-6);
+  return (base + direction) / ZOOM_MARKS;
+}
 
 export interface BracketViewport {
   scale: number;
@@ -88,11 +97,7 @@ export function useBracketViewport(params: {
       // React registers wheel listeners passive, so this has to be a native one
       // for the browser's own page zoom to stay out of it.
       event.preventDefault();
-      zoomAround(
-        scaleRef.current * (event.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP),
-        event.clientX,
-        event.clientY
-      );
+      zoomAround(steppedScale(scaleRef.current, event.deltaY < 0 ? 1 : -1), event.clientX, event.clientY);
     },
     [zoomAround]
   );
@@ -147,8 +152,8 @@ export function useBracketViewport(params: {
     setIsGrabbing(false);
   }, []);
 
-  const zoomIn = useCallback(() => zoomAround(scaleRef.current * ZOOM_STEP), [zoomAround]);
-  const zoomOut = useCallback(() => zoomAround(scaleRef.current / ZOOM_STEP), [zoomAround]);
+  const zoomIn = useCallback(() => zoomAround(steppedScale(scaleRef.current, 1)), [zoomAround]);
+  const zoomOut = useCallback(() => zoomAround(steppedScale(scaleRef.current, -1)), [zoomAround]);
   const fit = useCallback(() => {
     const el = elRef.current;
     if (!el || layoutWidth === 0) return;
