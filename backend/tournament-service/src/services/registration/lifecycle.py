@@ -491,12 +491,16 @@ class RegistrationLifecycleService:
         reviewed_by: int | None,
     ) -> tuple[int, int]:
         result = await session.execute(
-            self.registration_repo.select().where(
+            self.registration_repo.select()
+            .where(
                 models.BalancerRegistration.tournament_id == tournament_id,
                 models.BalancerRegistration.deleted_at.is_(None),
                 models.BalancerRegistration.id.in_(registration_ids),
                 models.BalancerRegistration.status == "pending",
             )
+            # enqueue_registration_approved reads primary_handle() -> identities;
+            # an unloaded collection raises MissingGreenlet on an async session.
+            .options(selectinload(models.BalancerRegistration.identities))
         )
         registrations = list(result.scalars().all())
         now = datetime.now(UTC)
