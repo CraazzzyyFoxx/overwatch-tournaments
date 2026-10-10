@@ -24,6 +24,8 @@ import { useTournamentQuery } from "@/hooks/useTournamentClientData";
 import { useTournamentStreamsQuery } from "../_hooks/useTournamentStreams";
 import { buildLiveTeamStreams } from "../bracket/bracketLiveStreams";
 import { getPublicPageQueryPresentation } from "@/lib/public-page-query-presentation";
+import { useFfaStageLobbies } from "../_hooks/useFfaStageLobbies";
+import { MatchesFfaLobbies } from "./_components/MatchesFfaLobbies";
 import { MatchesToolbar } from "./_components/MatchesToolbar";
 import {
   buildStageBlocks,
@@ -77,13 +79,18 @@ const TournamentEncountersPage = ({ tournamentId, slug, now }: TournamentEncount
     tournament && areStreamsVisible(tournament.status) ? tournamentId : undefined
   );
 
+  // The encounter list answers duels only; an FFA stage's matches are its lobbies.
+  const ffa = useFfaStageLobbies(tournament);
+
   const encounters = encountersQuery.data?.results ?? [];
   const presentation = getPublicPageQueryPresentation({
-    data: encountersQuery.data,
-    itemCount: encounters.length,
-    isPending: encountersQuery.isPending,
+    // Held until the lobbies land too, or an FFA-only tournament flashes the
+    // "no matches" state first.
+    data: ffa.isPending ? undefined : encountersQuery.data,
+    itemCount: encounters.length + ffa.lobbies.length,
+    isPending: encountersQuery.isPending || ffa.isPending,
     isError: encountersQuery.isError,
-    isFetching: encountersQuery.isFetching
+    isFetching: encountersQuery.isFetching || ffa.isFetching
   });
 
   const stageParam = searchParams?.get("stage") ?? null;
@@ -130,11 +137,20 @@ const TournamentEncountersPage = ({ tournamentId, slug, now }: TournamentEncount
     stageFilter === null
       ? entityFiltered
       : entityFiltered.filter((encounter) => stageKey(encounter.stage_id) === stageFilter);
+  // A lobby has no maps and no stage chip (the chips are the duel stages), so
+  // either filter leaves only duels; a team filter keeps the lobbies it sits in.
+  const entityLobbies =
+    mapFilter !== null
+      ? []
+      : ffa.lobbies.filter(
+          (lobby) => teamFilter === null || lobby.rows.some((row) => row.team_id === teamFilter)
+        );
+  const lobbies = stageFilter === null ? entityLobbies : [];
 
   const teamName =
     teamFilter === null
       ? null
-      : encounters
+      : (encounters
           .map((encounter) =>
             encounter.home_team_id === teamFilter
               ? encounter.home_team?.name
@@ -142,13 +158,19 @@ const TournamentEncountersPage = ({ tournamentId, slug, now }: TournamentEncount
                 ? encounter.away_team?.name
                 : null
           )
-          .find(Boolean) ?? null;
-  /** Every team with a match, once, by name — the picker's options. */
+          .find(Boolean) ??
+        ffa.lobbies.flatMap((lobby) => lobby.rows).find((row) => row.team_id === teamFilter)
+          ?.team_name ??
+        null);
+  /** Every team with a match or a lobby seat, once, by name — the picker's options. */
   const teamOptions = (() => {
     const byId: Record<number, string> = {};
     for (const encounter of encounters) {
       if (encounter.home_team) byId[encounter.home_team_id] = encounter.home_team.name;
       if (encounter.away_team) byId[encounter.away_team_id] = encounter.away_team.name;
+    }
+    for (const lobby of ffa.lobbies) {
+      for (const row of lobby.rows) byId[row.team_id] = row.team_name;
     }
     return Object.entries(byId)
       .map(([id, name]) => ({ id: Number(id), name }))
@@ -287,7 +309,7 @@ const TournamentEncountersPage = ({ tournamentId, slug, now }: TournamentEncount
             stages={stages}
             stageFilter={stageFilter}
             stageCounts={stageCounts}
-            totalCount={entityFiltered.length}
+            totalCount={entityFiltered.length + entityLobbies.length}
             hasSchedule={hasSchedule}
             teamFilter={teamFilter}
             teamName={teamName}
@@ -297,7 +319,7 @@ const TournamentEncountersPage = ({ tournamentId, slug, now }: TournamentEncount
             setParams={setParams}
           />
 
-          {rows.length === 0 ? (
+          {rows.length === 0 && lobbies.length === 0 ? (
             <TournamentPageState
               className="mt-4"
               state="filtered-empty"
@@ -344,6 +366,11 @@ const TournamentEncountersPage = ({ tournamentId, slug, now }: TournamentEncount
                   </div>
                 </section>
               ))}
+              <MatchesFfaLobbies
+                tournament={tournament}
+                lobbies={lobbies}
+                headingClassName={HEADING_CLASS}
+              />
             </div>
           )}
         </div>

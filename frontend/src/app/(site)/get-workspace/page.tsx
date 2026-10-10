@@ -18,6 +18,8 @@ import {
 
 import { HeroFrame } from "@/components/site/PageHero";
 import {
+  EYEBROW_CLASS,
+  HERO_TITLE_SIZE_CLASS,
   LEDE_CLASS,
   MoreLink,
   Section,
@@ -39,7 +41,7 @@ export function generateMetadata(): Promise<Metadata> {
   });
 }
 
-const HERO_PADDING = "px-[clamp(20px,3vw,40px)] py-[clamp(24px,3vw,40px)]";
+const HERO_PADDING = "px-[clamp(20px,3.2vw,40px)] py-[clamp(24px,3.2vw,40px)]";
 
 /**
  * The organizer page: what the platform gives a community and the form that
@@ -54,7 +56,11 @@ export default async function GetWorkspacePage() {
 
   return (
     <SectionStack className="mx-auto w-full max-w-7xl gap-[clamp(56px,7vw,96px)] pt-5">
-      <HeroFrame variant="plain">
+      <HeroFrame
+        // Same quieter glow as the home hero.
+        tint="color-mix(in srgb, var(--aqt-teal) 55%, transparent)"
+        className="bg-[linear-gradient(135deg,var(--aqt-bg-2),var(--aqt-bg))]"
+      >
         <div
           className={cn(
             "grid grid-cols-1 gap-x-[clamp(24px,4vw,48px)] gap-y-8 min-[1024px]:grid-cols-[minmax(0,1.8fr)_minmax(260px,1fr)]",
@@ -62,10 +68,13 @@ export default async function GetWorkspacePage() {
           )}
         >
           <div className="min-w-0">
-            <p className="text-body font-medium text-[color:var(--aqt-fg-dim)]">{t("hero.eyebrow")}</p>
+            <p className={EYEBROW_CLASS}>{t("hero.eyebrow")}</p>
             <h1
               id="gw-title"
-              className="mt-3 max-w-[18em] text-balance font-display text-[length:clamp(2rem,3.2vw,2.75rem)] font-semibold leading-[1.12] tracking-[-0.025em] text-[color:var(--aqt-fg)]"
+              className={cn(
+                HERO_TITLE_SIZE_CLASS,
+                "mt-3 max-w-[18em] text-balance font-display font-semibold leading-[1.08] tracking-[-0.02em] text-[color:var(--aqt-fg)]"
+              )}
             >
               {t.rich("hero.title", {
                 accent: (chunks) => (
@@ -73,7 +82,7 @@ export default async function GetWorkspacePage() {
                 )
               })}
             </h1>
-            <p className={cn(LEDE_CLASS, "mt-4 max-w-[38rem]")}>{t("hero.lede")}</p>
+            <p className={cn(LEDE_CLASS, "mt-3 max-w-[38rem]")}>{t("hero.lede")}</p>
             <CreateForm />
           </div>
           <ol

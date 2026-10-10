@@ -336,13 +336,13 @@ describe("ffa lobby legend", () => {
     await mount(lobby([row(1)], { rules: rules({ formula: "place_pts + kills * 2 - deaths" }) }));
 
     expect(container.querySelector("code")?.textContent).toBe("place_pts + kills * 2 - deaths");
-    expect(container.textContent).toContain("10 · 6 · 3");
+    expect(container.textContent).toContain("10 / 6 / 3");
   });
 
   it("says nothing about place points when the stage pays none", async () => {
     await mount(lobby([row(1)], { rules: rules({ placement_points: [], formula: "kills" }) }));
 
-    expect(container.textContent).not.toContain("10 · 6 · 3");
+    expect(container.textContent).not.toContain("10 / 6 / 3");
     expect(container.querySelector("code")?.textContent).toBe("kills");
   });
 });

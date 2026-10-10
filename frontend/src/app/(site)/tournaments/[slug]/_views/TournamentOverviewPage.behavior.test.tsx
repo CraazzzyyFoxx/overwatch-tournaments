@@ -752,6 +752,9 @@ describe("while it is being played (§3B)", () => {
       (node) => node.textContent === COPY.groupTable.open
     );
     expect(link?.getAttribute("href")).toBe(`/tournaments/${SLUG}/bracket?stage=7`);
+    // No duels is not "nothing published": the lobbies are the matches.
+    expect(text).not.toContain(COPY.empty.title);
+    expect(text).toContain("0/1");
   });
 
   it("keeps the two groups of one stage apart instead of interleaving their ranks", async () => {

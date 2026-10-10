@@ -475,6 +475,31 @@ func TestBroadcastBracketChangedScopesToEncounters(t *testing.T) {
 	}
 }
 
+// An FFA result write publishes tournament.encounters, and the recalculation it
+// enqueues tournament.standings: either must evict the stage's lobby tables, or
+// a spectator's refetch is served the pre-result table for a whole TTL.
+func TestBroadcastResultEventsEvictFfaStage(t *testing.T) {
+	for _, resource := range []string{"tournament.encounters", "tournament.standings"} {
+		var calls atomic.Int64
+		c := testCache(t)
+		h := c.Wrap(upstream(&calls), Rule{Extract: FromPathValue("id")})
+		get := func() *httptest.ResponseRecorder {
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/tournaments/72/stages/9/ffa", nil)
+			req.SetPathValue("id", "72")
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, req)
+			return rec
+		}
+
+		get()
+		c.Broadcast("tournament:72:invalidation", invalidationFrame(resource))
+
+		if rec := get(); rec.Header().Get("X-Cache") == "HIT" {
+			t.Fatalf("%s must evict the FFA stage entry", resource)
+		}
+	}
+}
+
 // tournament.registrations covers the participants list AND the detail entry
 // (it embeds live participants_count/registrations_count), but leaves
 // encounters/standings/teams alone.

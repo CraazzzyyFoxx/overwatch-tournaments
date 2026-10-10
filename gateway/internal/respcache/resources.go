@@ -20,9 +20,13 @@ var resourcePatterns = map[string][]string{
 	"tournament.detail": {bareTournamentDetailPattern},
 	"tournament.stages": {"/stages"},
 	// Encounter reads carry tournament_id as a query param; the list route and
-	// the overview share the prefix.
-	"tournament.encounters": {"/api/v1/encounters"},
-	"tournament.standings":  {"/standings"},
+	// the overview share the prefix. "/ffa" is the stage's lobby tables
+	// (/tournaments/{id}/stages/{stage_id}/ffa): an FFA result write emits
+	// only tournament.encounters and the recalculation it enqueues only
+	// standings/detail/encounters, so without it the entry lived out its TTL
+	// while the standings beside it were already fresh.
+	"tournament.encounters": {"/api/v1/encounters", "/ffa"},
+	"tournament.standings":  {"/standings", "/ffa"},
 	"tournament.teams":      {"/api/v1/teams"},
 	// A section appearing or disappearing changes every page-shell read.
 	"tournament.structure": {

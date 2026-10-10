@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { useFormatter } from "@/lib/datetime/client";
 import { isEncounterCompleted } from "@/lib/encounter/status";
 import type { Encounter } from "@/types/encounter.types";
+import type { FfaLobby } from "@/types/ffa.types";
 import type { StreamEntry } from "@/types/stream.types";
 import type { Tournament } from "@/types/tournament.types";
 
@@ -18,6 +19,7 @@ import { StatTile } from "./RegistrationSummary";
 export function OverviewLiveView({
   tournament,
   encounters,
+  lobbies,
   overviewHref,
   officialStream,
   participantsOnAir,
@@ -30,6 +32,7 @@ export function OverviewLiveView({
 }: Readonly<{
   tournament: Tournament;
   encounters: readonly Encounter[];
+  lobbies: readonly FfaLobby[];
   overviewHref: string;
   officialStream: StreamEntry | undefined;
   participantsOnAir: number;
@@ -44,7 +47,10 @@ export function OverviewLiveView({
   const format = useFormatter();
 
   const teamsCount = tournament.teams_count ?? 0;
-  const playedCount = encounters.filter(isEncounterCompleted).length;
+  // A lobby is one match of its stage: duels and lobbies share the tile.
+  const playedCount =
+    encounters.filter(isEncounterCompleted).length + lobbies.filter(isEncounterCompleted).length;
+  const matchesCount = encounters.length + lobbies.length;
 
   return (
     <div className="grid gap-4 lg:grid-cols-[7fr_3fr]">
@@ -88,7 +94,7 @@ export function OverviewLiveView({
             />
             <StatTile
               label={t("tournamentDetail.overview.numbers.played")}
-              value={`${playedCount}/${encounters.length}`}
+              value={`${playedCount}/${matchesCount}`}
             />
           </div>
         </OverviewCard>

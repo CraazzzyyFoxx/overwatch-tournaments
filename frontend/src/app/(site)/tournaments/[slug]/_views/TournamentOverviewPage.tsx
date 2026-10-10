@@ -119,14 +119,17 @@ export default function TournamentOverviewPage({
       <OverviewFfaTable stage={stage} lobbies={data.ffaLobbies} overviewHref={overviewHref} />
     ) : null;
 
-  const nowBlock = (
-    <OverviewMatchBlock
-      encounters={data.encounters}
-      clockNow={clockNow}
-      overviewHref={overviewHref}
-      presenter={presenter}
-    />
-  );
+  // An FFA stage with no duels has its lobby tables in place of matches; the
+  // duel block's "nothing published" would contradict them.
+  const nowBlock =
+    data.encounters.length === 0 && data.hasFfaTable ? null : (
+      <OverviewMatchBlock
+        encounters={data.encounters}
+        clockNow={clockNow}
+        overviewHref={overviewHref}
+        presenter={presenter}
+      />
+    );
 
   const branch =
     variant === "registration" ? (
@@ -143,6 +146,7 @@ export default function TournamentOverviewPage({
       <OverviewLiveView
         tournament={tournament}
         encounters={data.encounters}
+        lobbies={data.allFfaLobbies}
         overviewHref={overviewHref}
         officialStream={data.officialStream}
         participantsOnAir={data.participantsOnAir}

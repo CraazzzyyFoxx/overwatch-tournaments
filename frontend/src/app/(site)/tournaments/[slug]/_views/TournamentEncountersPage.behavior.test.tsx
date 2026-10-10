@@ -66,7 +66,12 @@ vi.mock("next/link", () => ({
 }));
 
 vi.mock("@/hooks/useTournamentClientData", () => ({
-  useTournamentQuery: () => ({ data: TOURNAMENT, isError: false, refetch: () => {} })
+  useTournamentQuery: () => ({ data: tournament, isError: false, refetch: () => {} })
+}));
+
+const getFfaStage = vi.fn();
+vi.mock("@/services/ffa.service", () => ({
+  default: { getStage: (...args: unknown[]) => getFfaStage(...args) }
 }));
 
 /**
@@ -141,6 +146,9 @@ const TOURNAMENT: Tournament = {
   roster_shape: null,
   roster_locked_by_draft: null
 };
+
+/** The tournament the page reads; a test may swap it for a differently staged one. */
+let tournament: Tournament = TOURNAMENT;
 
 function team(id: number, name: string): Team {
   return {
@@ -268,6 +276,7 @@ let root: Root;
 
 beforeEach(() => {
   vi.clearAllMocks();
+  tournament = TOURNAMENT;
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -439,5 +448,73 @@ describe("tournament matches", () => {
 
     expect(text).toContain(en.tournamentDetail.pageState.filteredEmpty.title);
     expect(headings()).toEqual([]);
+  });
+});
+
+describe("FFA lobbies", () => {
+  const LEAGUE = stage(300, "League", 0, "ffa_league");
+  const row = (teamId: number, name: string, position: number | null, points: number, played: number) => ({
+    team_id: teamId,
+    team_name: name,
+    team_image_url: null,
+    slot: teamId,
+    position,
+    tie_group: null,
+    is_pinned: false,
+    points,
+    games_played: played,
+    wins: 0,
+    stats: {},
+    games: [
+      { position: 1, state: played > 0 ? ("confirmed" as const) : null, placement: null, points: null, stats: null },
+      { position: 2, state: null, placement: null, points: null, stats: null }
+    ]
+  });
+  const lobby = (id: number, name: string, status: string, rows: ReturnType<typeof row>[]) => ({
+    encounter_id: id,
+    tournament_id: TOURNAMENT_ID,
+    stage_id: LEAGUE.id,
+    stage_item_id: null,
+    name,
+    status,
+    result_status: "none" as const,
+    best_of: 2,
+    scheduled_at: null,
+    advance_count: null,
+    rules: { columns: [], placement_points: [], formula: "place_pts", requires_placement: true },
+    rows
+  });
+
+  beforeEach(() => {
+    tournament = { ...TOURNAMENT, status: "live", stages: [LEAGUE] };
+    getFfaStage.mockResolvedValue([
+      lobby(6687, "Lobby A", "open", [row(1, "QA-Alpha", 2, 7, 1), row(2, "QA-Bravo", 1, 18, 1)]),
+      lobby(6688, "Lobby B", "open", [row(3, "QA-Charlie", null, 0, 0)])
+    ]);
+  });
+  afterEach(() => {
+    tournament = TOURNAMENT;
+  });
+
+  it("lists an FFA-only tournament's lobbies instead of saying nothing exists", async () => {
+    const text = await render([]);
+
+    expect(getFfaStage).toHaveBeenCalledWith(TOURNAMENT_ID, LEAGUE.id);
+    expect(text).not.toContain(en.tournamentDetail.publicPages.matches.emptyTitle);
+    expect(headings()).toEqual(["League · Lobbies"]);
+    expect(text).toContain("Lobby A");
+    expect(text).toContain("Leader: QA-Bravo");
+    // No game played in B, so no leader to name.
+    expect(text).toContain("Lobby B");
+    expect(text).not.toContain("Leader: QA-Charlie");
+    const hrefs = Array.from(container.querySelectorAll("a")).map((a) => a.getAttribute("href"));
+    expect(hrefs).toContain("/encounters/6687");
+  });
+
+  it("keeps only the lobby a filtered team sits in", async () => {
+    const text = await render([], "team=3");
+
+    expect(text).toContain("Lobby B");
+    expect(text).not.toContain("Lobby A");
   });
 });
