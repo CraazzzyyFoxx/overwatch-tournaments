@@ -211,8 +211,10 @@ roster seat, recorded mix seat). `ranks.list` (`src/services/rank_overview.py`) 
 screen as a long-format table: one row per rank value, no grouping, a single `UNION ALL` so the
 filters, the sort, the exact total and the page all run in Postgres. The two effective layers are
 computed in SQL rather than read from a table, which is why `tests/test_rank_overview.py` pins them
-against `MemberRankService.resolve` for both orders on the same fixture. It is read-only and needs
-`team.update` — the same grant writing the canon needs, because it shows every author's book at once.
+against `MemberRankService.resolve` for both orders on the same fixture. The hidden layer shows the
+ranker's projection of `(mu, sigma)` onto the open scale (`Ranker.projection`, workspace knobs), not
+the raw `mu`. It is read-only and needs `team.update` — the same grant writing the canon needs,
+because it shows every author's book at once.
 
 ### Mix ranker
 

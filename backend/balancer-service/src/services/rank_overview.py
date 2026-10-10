@@ -17,6 +17,7 @@ mixes use today). ``tests/test_rank_overview.py`` pins that parity.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
@@ -39,10 +40,12 @@ from shared.services.rank_snapshots import OW_RANK_MAX_AGE
 # ``rpc.balancer.players.list``.
 from shared.services.workspace_roster import _filters as _roster_filters
 from shared.services.workspace_roster import _main_battle_tag, hosts_by_user_id
+from src.domain.mix_ranker import RankerSettings
 
 # The layer/sort vocabulary lives in the schemas module so the OpenAPI export
 # can name it without importing this query.
 from src.schemas.ranks import CURRENT_LAYERS, LAYERS, SORTS
+from src.services.mix_ranker import mix_ranker_service
 
 __all__ = ("RankOverviewFilters", "parse_layers", "rank_overview_page")
 
@@ -109,6 +112,21 @@ def _grid_rank_case(ow_rank: sa.ColumnElement[int], grid: DivisionGrid) -> sa.Co
 
 def _null(type_: Any) -> sa.ColumnElement[Any]:
     return sa.cast(sa.null(), type_)
+
+
+def _hidden_projection(mu: Any, sigma: Any, s: RankerSettings) -> sa.ColumnElement[int]:
+    """SQL twin of ``Ranker.projection``: the hidden ``(mu, sigma)`` on the open scale.
+
+    Raw ``mu`` is centred on 0 in hidden units; this is the number the ranker
+    itself compares with the open rating, so it reads like any other rank.
+    """
+    span = s.rating_max - s.rating_min
+    p_avg = (s.rating_avg - s.rating_min) / span
+    offset = math.log(p_avg / (1.0 - p_avg))
+    ordinal = mu / (1.0 + s.gravity * sigma / s.sigma_init)
+    logit = ordinal / (4.0 * s.sigma_init) + offset
+    share = 1.0 / (1.0 + sa.func.exp(-logit, type_=sa.Float))
+    return sa.cast(sa.func.round(s.rating_min + span * share), sa.Integer)
 
 
 def _at(model: Any) -> sa.ColumnElement[datetime]:
@@ -223,6 +241,7 @@ def _branches(
     members: Any,
     ws_grid: DivisionGrid,
     global_grid: DivisionGrid,
+    ranker: RankerSettings,
 ) -> list[Any]:
     wanted = set(filters.layers)
     rank = models.MemberRank
@@ -326,7 +345,7 @@ def _branches(
                     "hidden",
                     members,
                     role=hidden.role,
-                    rank_value=sa.func.round(hidden.mu),
+                    rank_value=_hidden_projection(hidden.mu, hidden.sigma, ranker),
                     sigma=hidden.sigma,
                     at=_at(hidden),
                     row_id=hidden.id,
@@ -578,7 +597,9 @@ async def rank_overview_page(
     ws_grid = await get_effective_division_grid(session, workspace_id)
     global_grid = await get_effective_division_grid(session, None)
     members = _members_cte(workspace_id, filters)
-    branches = _branches(workspace_id, filters, members, ws_grid, global_grid)
+    branches = _branches(
+        workspace_id, filters, members, ws_grid, global_grid, await mix_ranker_service.settings(session, workspace_id)
+    )
     if not branches:
         return [], 0
 
