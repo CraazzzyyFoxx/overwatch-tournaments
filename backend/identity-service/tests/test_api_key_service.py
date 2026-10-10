@@ -416,7 +416,6 @@ def test_create_superuser_key_stores_the_flag(monkeypatch: pytest.MonkeyPatch) -
     assert response.api_key.is_superuser is True
 
 
-
 @pytest.mark.parametrize(
     ("owner_permissions", "expected"),
     [(_WILDCARD, _WILDCARD), (_TEAM_CREATE, [])],
