@@ -168,27 +168,33 @@ export default function FfaLobbyTable({ lobby }: Readonly<{ lobby: FfaLobby }>) 
 
   return (
     <div>
-      <Table aria-label={t("ffa.tableLabel", { lobby: lobby.name })}>
+      {/* Column spacing is the cell padding alone: 32px between columns
+          (`px-4`, the primitive has 16px). Widths on the cells would be dead,
+          the trailing filler cell takes every pixel of slack. */}
+      <Table
+        aria-label={t("ffa.tableLabel", { lobby: lobby.name })}
+        className="[&_td]:px-4 [&_th]:px-4"
+      >
         <TableHeader>
           <TableRow className="hover:bg-transparent">
-            <TableHead scope="col" className="w-[52px] whitespace-nowrap">
+            <TableHead scope="col" className="whitespace-nowrap">
               <span className="sr-only">{t("ffa.colPlace")}</span>
               <span aria-hidden>#</span>
             </TableHead>
             <TableHead scope="col" className={cn(STICKY_TEAM, "min-w-[9rem] bg-card")}>
               {t("ffa.colTeam")}
             </TableHead>
-            <TableHead scope="col" className="w-16 text-right text-[color:var(--aqt-fg)]">
+            <TableHead scope="col" className="text-right text-[color:var(--aqt-fg)]">
               {t("ffa.colPoints")}
             </TableHead>
-            <TableHead scope="col" className="w-16 text-right">
+            <TableHead scope="col" className="text-right">
               {t("ffa.colGames")}
             </TableHead>
             {columns.map((column) => (
               <TableHead
                 key={column.key}
                 scope="col"
-                className="w-20 text-right whitespace-nowrap"
+                className="text-right whitespace-nowrap"
               >
                 {column.label}
               </TableHead>
@@ -197,7 +203,7 @@ export default function FfaLobbyTable({ lobby }: Readonly<{ lobby: FfaLobby }>) 
               <TableHead
                 key={position}
                 scope="col"
-                className="w-14 text-center whitespace-nowrap"
+                className="text-center whitespace-nowrap"
                 // The visible text is an abbreviation; assistive technology gets
                 // the spelled-out game number.
                 aria-label={t("ffa.gameLabel", { position })}
@@ -207,7 +213,7 @@ export default function FfaLobbyTable({ lobby }: Readonly<{ lobby: FfaLobby }>) 
               </TableHead>
             ))}
             {showStatus && (
-              <TableHead scope="col" className="w-20 text-center">
+              <TableHead scope="col" className="text-center">
                 <span className="sr-only">{t("common.status")}</span>
               </TableHead>
             )}
@@ -232,10 +238,10 @@ export default function FfaLobbyTable({ lobby }: Readonly<{ lobby: FfaLobby }>) 
               {showCut && index === advanceCount - 1 && (
                 <TableRow className="hover:bg-transparent">
                   <TableCell colSpan={columnCount} className="p-0" data-ffa-cut>
-                    <span className="flex items-center gap-3 px-2 py-1.5 text-label font-bold uppercase tracking-label text-[color:var(--aqt-teal)]">
+                    <span className="flex items-center gap-3 py-1.5 text-label font-bold uppercase tracking-label text-[color:var(--aqt-teal)]">
                       {/* Leading and sticky, not centred: on a phone the table
                           scrolls sideways and a centred label sat off-screen. */}
-                      <span className="sticky left-2 whitespace-nowrap">
+                      <span className="sticky left-4 whitespace-nowrap">
                         {t("common.topAdvance", { count: advanceCount })}
                       </span>
                       <span
@@ -250,7 +256,7 @@ export default function FfaLobbyTable({ lobby }: Readonly<{ lobby: FfaLobby }>) 
           ))}
         </TableBody>
       </Table>
-      <p className="flex flex-wrap gap-x-4 gap-y-1 px-2 pt-2 text-caption text-[color:var(--aqt-fg-dim)]">
+      <p className="flex flex-wrap gap-x-4 gap-y-1 px-4 pt-2 text-caption text-[color:var(--aqt-fg-dim)]">
         <span>
           {t.rich("ffa.legendFormula", {
             formula: lobby.rules.formula,
