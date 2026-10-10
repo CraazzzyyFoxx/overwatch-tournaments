@@ -7550,7 +7550,6 @@
     "tieDecidesAdvance": "Tied on every tiebreaker — the assigned order, not the lobby results, decides whether this team advances",
     "gamesPerLobby": "Games per lobby",
     "gamesProgress": "{played} of {total, plural, one {# game} other {# games}} played",
-    "legendCells": "Game cells: place / points",
     "legendFormula": "Points = <code>{formula}</code>",
     "legendPlacement": "Place points: {placements}",
     "participants": "{count, plural, one {# team} other {# teams}}",

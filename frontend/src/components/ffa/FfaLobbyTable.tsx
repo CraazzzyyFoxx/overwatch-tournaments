@@ -46,7 +46,23 @@ function formatFfaNumber(value: number): string {
 }
 
 /**
- * One played game: the place above, the points it paid below.
+ * Medal tones for places 1-3; everything below stays neutral. Full class
+ * strings (not built from the place) so Tailwind sees every one of them.
+ */
+const MEDAL_TEXT: Record<number, string> = {
+  1: "text-[color:var(--aqt-gold)]",
+  2: "text-[color:var(--aqt-silver)]",
+  3: "text-[color:var(--aqt-bronze)]"
+};
+
+const MEDAL_CHIP: Record<number, string> = {
+  1: "bg-[color:color-mix(in_srgb,var(--aqt-gold)_16%,transparent)] text-[color:var(--aqt-gold)]",
+  2: "bg-[color:color-mix(in_srgb,var(--aqt-silver)_14%,transparent)] text-[color:var(--aqt-silver)]",
+  3: "bg-[color:color-mix(in_srgb,var(--aqt-bronze)_16%,transparent)] text-[color:var(--aqt-bronze)]"
+};
+
+/**
+ * One played game: the place as a medal-toned chip, the points it paid below.
  *
  * Two stacked bare numbers are read aloud as "3 16" and say nothing about where
  * 16 came from, so the cell carries ONE sentence — place, points and every
@@ -66,12 +82,19 @@ function GameCell({ cell, columns }: Readonly<{ cell: FfaGameCell; columns: FfaC
   const description = parts.join(", ");
 
   return (
-    <span className="inline-flex flex-col items-center leading-tight" title={description}>
-      <span aria-hidden className="aqt-tnum text-caption font-semibold text-[color:var(--aqt-fg)]">
+    <span className="inline-flex flex-col items-center gap-1" title={description}>
+      <span
+        aria-hidden
+        className={cn(
+          "aqt-tnum inline-flex size-7 items-center justify-center rounded-md text-caption font-bold",
+          (cell.placement != null && MEDAL_CHIP[cell.placement]) ||
+            "text-[color:var(--aqt-fg-dim)] ring-1 ring-inset ring-[color:var(--aqt-border)]"
+        )}
+      >
         {cell.placement ?? "—"}
       </span>
       {cell.points != null && (
-        <span aria-hidden className="aqt-tnum text-label text-[color:var(--aqt-fg-faint)]">
+        <span aria-hidden className="aqt-tnum text-label leading-none text-[color:var(--aqt-fg-faint)]">
           {formatFfaNumber(cell.points)}
         </span>
       )}
@@ -136,11 +159,12 @@ export default function FfaLobbyTable({ lobby }: Readonly<{ lobby: FfaLobby }>) 
   // component is what makes "a spectator never sees a hidden value" a property
   // of the markup instead of a property of whoever picked the endpoint.
   const columns = lobby.rules.columns.filter((column) => column.public);
-  const columnCount = 4 + columns.length + positions.length + (showStatus ? 1 : 0);
+  // `5`: rank, team, points, games and the trailing filler cell.
+  const columnCount = 5 + columns.length + positions.length + (showStatus ? 1 : 0);
 
   // What turns the numbers back into something a reader can check: the rule
   // this lobby was actually scored by, printed as the organizer wrote it.
-  const placementPoints = lobby.rules.placement_points.join(" · ");
+  const placementPoints = lobby.rules.placement_points.join(" / ");
 
   return (
     <div>
@@ -154,7 +178,7 @@ export default function FfaLobbyTable({ lobby }: Readonly<{ lobby: FfaLobby }>) 
             <TableHead scope="col" className={cn(STICKY_TEAM, "min-w-[9rem] bg-card")}>
               {t("ffa.colTeam")}
             </TableHead>
-            <TableHead scope="col" className="w-16 text-right">
+            <TableHead scope="col" className="w-16 text-right text-[color:var(--aqt-fg)]">
               {t("ffa.colPoints")}
             </TableHead>
             <TableHead scope="col" className="w-16 text-right">
@@ -173,7 +197,7 @@ export default function FfaLobbyTable({ lobby }: Readonly<{ lobby: FfaLobby }>) 
               <TableHead
                 key={position}
                 scope="col"
-                className="w-12 text-center whitespace-nowrap"
+                className="w-14 text-center whitespace-nowrap"
                 // The visible text is an abbreviation; assistive technology gets
                 // the spelled-out game number.
                 aria-label={t("ffa.gameLabel", { position })}
@@ -187,6 +211,9 @@ export default function FfaLobbyTable({ lobby }: Readonly<{ lobby: FfaLobby }>) 
                 <span className="sr-only">{t("common.status")}</span>
               </TableHead>
             )}
+            {/* Takes the slack width, so the numbers sit next to the team name
+                instead of being pushed to the far edge. A `td`: it heads nothing. */}
+            <TableCell aria-hidden className="w-full p-0" />
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -196,6 +223,7 @@ export default function FfaLobbyTable({ lobby }: Readonly<{ lobby: FfaLobby }>) 
                 row={row}
                 positions={positions}
                 ranked={ranked}
+                medals={ranked && advanceCount == null}
                 advancing={showStatus && row.position != null && row.position <= advanceCount}
                 tied={row.tie_group != null && tiedAtCut.has(row.tie_group)}
                 showStatus={showStatus}
@@ -222,13 +250,14 @@ export default function FfaLobbyTable({ lobby }: Readonly<{ lobby: FfaLobby }>) 
           ))}
         </TableBody>
       </Table>
-      <p className="flex flex-wrap gap-x-4 gap-y-1 px-2 pt-3 text-caption text-[color:var(--aqt-fg-dim)]">
-        <span>{t("ffa.legendCells")}</span>
+      <p className="flex flex-wrap gap-x-4 gap-y-1 px-2 pt-2 text-caption text-[color:var(--aqt-fg-dim)]">
         <span>
           {t.rich("ffa.legendFormula", {
             formula: lobby.rules.formula,
             code: (chunks) => (
-              <code className="font-[family-name:var(--aqt-data)]">{chunks}</code>
+              <code className="font-[family-name:var(--aqt-data)] text-[color:var(--aqt-fg-muted)]">
+                {chunks}
+              </code>
             )
           })}
         </span>
@@ -268,6 +297,7 @@ function LobbyRow({
   positions,
   columns,
   ranked,
+  medals,
   advancing,
   tied,
   showStatus
@@ -277,6 +307,8 @@ function LobbyRow({
   /** The public columns, already filtered by the table. */
   columns: FfaColumn[];
   ranked: boolean;
+  /** No advance line: the rank is plain standings, so the top three get medals. */
+  medals: boolean;
   advancing: boolean;
   tied: boolean;
   showStatus: boolean;
@@ -284,6 +316,9 @@ function LobbyRow({
   const t = useTranslations();
   const gameAt = new Map(row.games.map((cell) => [cell.position, cell]));
   const clustered = ranked && row.tie_group != null;
+  // Every row of a cluster prints its head's position, so 2/2/4 reads as
+  // "these two were never separated".
+  const rank = ranked ? (row.tie_group ?? row.position) : null;
 
   return (
     <TableRow
@@ -294,20 +329,18 @@ function LobbyRow({
       className={tied ? ROW_TONE.tie : advancing ? ROW_TONE.advancing : ROW_TONE.none}
     >
       <TableCell className="whitespace-nowrap">
-        {/* Every row of a cluster prints its head's position, so 2/2/4 reads
-            as "these two were never separated". */}
         <span
           data-ffa-rank
           className={cn(
-            "aqt-tnum text-title font-bold leading-none",
+            "aqt-tnum text-heading font-bold leading-none",
             tied
               ? "text-[color:var(--aqt-amber)]"
               : advancing
                 ? "text-[color:var(--aqt-teal)]"
-                : "text-[color:var(--aqt-fg-faint)]"
+                : (medals && rank != null && MEDAL_TEXT[rank]) || "text-[color:var(--aqt-fg-faint)]"
           )}
         >
-          {ranked ? (row.tie_group ?? row.position ?? "—") : "—"}
+          {rank ?? "—"}
         </span>
         {clustered && (
           <>
@@ -327,7 +360,7 @@ function LobbyRow({
           </span>
         )}
       </TableCell>
-      <TableCell className={cn(STICKY_TEAM, "bg-inherit")}>
+      <TableCell className={cn(STICKY_TEAM, "bg-inherit whitespace-nowrap")}>
         <TeamName
           team={{ name: row.team_name, image_url: row.team_image_url }}
           size="xs"
@@ -335,7 +368,7 @@ function LobbyRow({
           nameClassName="font-semibold text-[color:var(--aqt-fg)]"
         />
       </TableCell>
-      <TableCell className="aqt-tnum text-right text-[color:var(--aqt-fg)]">
+      <TableCell className="aqt-tnum text-right text-body font-bold text-[color:var(--aqt-fg)]">
         {row.points.toFixed(1)}
       </TableCell>
       <TableCell className="aqt-tnum text-right text-[color:var(--aqt-fg-dim)]">
@@ -356,7 +389,7 @@ function LobbyRow({
       {positions.map((position) => {
         const cell = gameAt.get(position);
         return (
-          <TableCell key={position} className="text-center" data-ffa-game={position}>
+          <TableCell key={position} className="py-1.5 text-center" data-ffa-game={position}>
             {/* A game nobody has entered renders NOTHING. A `0` here would read
                 as "played it, scored nothing" — a different claim entirely. */}
             {cell?.state == null ? null : <GameCell cell={cell} columns={columns} />}
@@ -381,6 +414,7 @@ function LobbyRow({
           </span>
         </TableCell>
       )}
+      <TableCell aria-hidden className="p-0" />
     </TableRow>
   );
 }

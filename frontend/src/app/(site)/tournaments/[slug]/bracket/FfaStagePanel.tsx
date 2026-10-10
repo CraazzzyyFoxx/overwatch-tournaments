@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { SegmentedLinks, type SegmentedLinkItem } from "@/components/ui/segmented";
 import { Skeleton } from "@/components/ui/skeleton";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
+import { cn } from "@/lib/utils";
 import ffaService from "@/services/ffa.service";
 import type { Stage } from "@/types/tournament.types";
 
@@ -91,42 +92,64 @@ export function FfaStagePanel({
             {t("ffa.stageEmpty")}
           </div>
         ) : (
-          lobbies.map((lobby) => (
-            <section key={lobby.encounter_id} className="min-w-0 space-y-2">
-              <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <h4 className="text-sm font-semibold uppercase tracking-label">
-                  {isPreview ? (
-                    <span className="text-[color:var(--aqt-fg)]">{lobby.name}</span>
-                  ) : (
-                    <Link
-                      href={`/encounters/${lobby.encounter_id}`}
-                      className="inline-flex items-center gap-1 text-[color:var(--aqt-fg)] underline-offset-4 hover:text-[color:var(--aqt-teal)] hover:underline"
-                    >
-                      {lobby.name}
-                      <ChevronRight aria-hidden className="size-3.5" />
-                    </Link>
-                  )}
-                </h4>
-                <span className="text-xs uppercase tracking-label text-[color:var(--aqt-fg-dim)]">
-                  {t("ffa.gamesProgress", {
-                    played: new Set(
-                      lobby.rows.flatMap((row) =>
-                        row.games.filter((game) => game.state === "confirmed").map((game) => game.position)
-                      )
-                    ).size,
-                    total: lobbyGamePositions(lobby).length
-                  })}
-                </span>
-              </div>
-              {lobby.rows.length === 0 ? (
-                <p className="py-4 text-center text-[color:var(--aqt-fg-muted)]">
-                  {t("ffa.lobbyEmpty")}
-                </p>
-              ) : (
-                <FfaLobbyTable lobby={lobby} />
-              )}
-            </section>
-          ))
+          lobbies.map((lobby) => {
+            const confirmed = new Set(
+              lobby.rows.flatMap((row) =>
+                row.games.filter((game) => game.state === "confirmed").map((game) => game.position)
+              )
+            );
+            const positions = lobbyGamePositions(lobby);
+            return (
+              <section key={lobby.encounter_id} className="min-w-0 space-y-1">
+                <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-2">
+                  <h4 className="text-base font-semibold">
+                    {isPreview ? (
+                      <span className="text-[color:var(--aqt-fg)]">{lobby.name}</span>
+                    ) : (
+                      <Link
+                        href={`/encounters/${lobby.encounter_id}`}
+                        className="inline-flex items-center gap-1 text-[color:var(--aqt-fg)] underline-offset-4 hover:text-[color:var(--aqt-teal)] hover:underline"
+                      >
+                        {lobby.name}
+                        <ChevronRight aria-hidden className="size-4" />
+                      </Link>
+                    )}
+                  </h4>
+                  {/* One segment per game of the series, lit where that game is
+                      confirmed: a played game 3 with game 2 still open shows as such. */}
+                  <div
+                    role="img"
+                    aria-label={t("ffa.gamesProgress", { played: confirmed.size, total: positions.length })}
+                    className="flex items-center gap-2"
+                  >
+                    <span aria-hidden className="flex gap-1">
+                      {positions.map((position) => (
+                        <span
+                          key={position}
+                          className={cn(
+                            "h-1.5 w-5 rounded-full",
+                            confirmed.has(position)
+                              ? "bg-[color:var(--aqt-teal)]"
+                              : "bg-[color:var(--aqt-overlay-3)] ring-1 ring-inset ring-[color:var(--aqt-border)]"
+                          )}
+                        />
+                      ))}
+                    </span>
+                    <span aria-hidden className="aqt-tnum text-caption text-[color:var(--aqt-fg-dim)]">
+                      {confirmed.size}/{positions.length}
+                    </span>
+                  </div>
+                </div>
+                {lobby.rows.length === 0 ? (
+                  <p className="py-4 text-center text-[color:var(--aqt-fg-muted)]">
+                    {t("ffa.lobbyEmpty")}
+                  </p>
+                ) : (
+                  <FfaLobbyTable lobby={lobby} />
+                )}
+              </section>
+            );
+          })
         )}
       </div>
     </div>
