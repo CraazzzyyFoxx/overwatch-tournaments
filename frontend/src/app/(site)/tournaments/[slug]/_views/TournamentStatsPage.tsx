@@ -171,11 +171,13 @@ function HeroesTab({
                   <span className="inline-flex items-center gap-2">
                     <PlayerRoleIcon role={normalizePlayerRole(role)} size={18} decorative />
                     {roleName}
+                    {/* The role's share of all play-time, said beside its name;
+                        every value below carries its own % sign. */}
+                    <span className="aqt-tnum font-normal text-[color:var(--aqt-fg-dim)]">
+                      · {roleShare.toFixed(1)}%
+                    </span>
                   </span>
                 }
-                // The unit is said once, here, instead of under every row.
-                metricLabel={t("common.playtimeLabel")}
-                metricValue={<span className="tabular-nums">{roleShare.toFixed(1)}</span>}
               >
                 <ol className="py-1.5">
                   {roleHeroes.map((hero, index) => {
@@ -188,7 +190,7 @@ function HeroesTab({
                       <li
                         key={hero.hero.id}
                         data-rank={index + 1}
-                        className="grid grid-cols-[1.25rem_28px_minmax(0,1fr)_2.75rem] items-center gap-x-2.5 px-3.5 py-1.5"
+                        className="grid grid-cols-[1.25rem_28px_minmax(0,1fr)_3.25rem] items-center gap-x-2.5 px-3.5 py-1.5"
                       >
                         <span
                           aria-hidden="true"
@@ -229,7 +231,7 @@ function HeroesTab({
                           </span>
                         </span>
                         <span className="aqt-tnum text-right text-caption font-semibold text-[color:var(--aqt-fg)]">
-                          {sharePercent.toFixed(1)}
+                          {sharePercent.toFixed(1)}%
                         </span>
                       </li>
                     );
