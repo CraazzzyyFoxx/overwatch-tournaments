@@ -130,6 +130,12 @@ const nextConfig = {
         hostname: "s3.twcstorage.ru",
         port: "",
         pathname: "/**"
+      },
+      {
+        protocol: "https",
+        hostname: "cdn.craazzzyyfoxx.me",
+        port: "",
+        pathname: "/**"
       }
     ]
   }

@@ -14,6 +14,7 @@ import { OverviewLiveView } from "./_components/OverviewLiveView";
 import { OverviewMatchBlock } from "./_components/OverviewMatchBlock";
 import { OverviewRegistrationView } from "./_components/OverviewRegistrationView";
 import {
+  OverviewAboutCard,
   OverviewFormatCard,
   OverviewLinksCard,
   OverviewPhasesCard
@@ -81,9 +82,15 @@ export default function TournamentOverviewPage({
 
   const overviewHref = `/tournaments/${slug}`;
 
-  // ---- shared right-column blocks -----------------------------------------
+  // ---- shared blocks -------------------------------------------------------
   const phasesCard = <OverviewPhasesCard tournament={tournament} />;
   const formatCard = <OverviewFormatCard tournament={tournament} />;
+  /* The description belongs to the WIDE column, not to the aside the format
+     card sits in: it is prose, and prose in a 22rem column wraps every three
+     words. `null` when the organizer wrote none. */
+  const aboutCard = tournament.description?.trim() ? (
+    <OverviewAboutCard description={tournament.description} />
+  ) : null;
   /* `null` when nothing renders: `visibleTournamentLinks` owns that judgement,
      so a tournament whose only link is the official stream does not get a
      heading over an empty row — and the registration branch reads this very
@@ -139,12 +146,12 @@ export default function TournamentOverviewPage({
         registrations={data.registrations}
         overviewHref={overviewHref}
         clockNow={clockNow}
+        aboutCard={aboutCard}
         formatCard={formatCard}
         linksCard={linksCard}
       />
     ) : variant === "live" ? (
       <OverviewLiveView
-        tournament={tournament}
         encounters={data.encounters}
         lobbies={data.allFfaLobbies}
         overviewHref={overviewHref}
@@ -153,6 +160,7 @@ export default function TournamentOverviewPage({
         nowBlock={nowBlock}
         miniBracket={miniBracket}
         groupTable={groupTable}
+        aboutCard={aboutCard}
         phasesCard={phasesCard}
         formatCard={formatCard}
         linksCard={linksCard}
@@ -172,6 +180,7 @@ export default function TournamentOverviewPage({
         nowBlock={nowBlock}
         miniBracket={miniBracket}
         groupTable={groupTable}
+        aboutCard={aboutCard}
         formatCard={formatCard}
         linksCard={linksCard}
       />

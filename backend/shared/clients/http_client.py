@@ -51,7 +51,6 @@ class ResilientHttpClient:
         max_retries: int = 3,
         circuit_breaker: CircuitBreaker | None = None,
         headers: dict[str, str] | None = None,
-        proxy: str | None = None,
     ):
         """Initialize the resilient HTTP client.
 
@@ -61,7 +60,6 @@ class ResilientHttpClient:
             max_retries: Maximum number of retry attempts
             circuit_breaker: Optional circuit breaker instance (creates default if None)
             headers: Optional default headers to include in all requests
-            proxy: Optional proxy URL (``http://`` or ``socks5://``) for every request
         """
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
@@ -70,7 +68,6 @@ class ResilientHttpClient:
         # every "circuit open" line say WHICH dependency is down.
         self.circuit_breaker = circuit_breaker or CircuitBreaker(name=self.base_url)
         self.default_headers = headers or {}
-        self.proxy = proxy
         self._client: httpx.AsyncClient | None = None
 
     async def __aenter__(self) -> ResilientHttpClient:
@@ -100,7 +97,6 @@ class ResilientHttpClient:
                 timeout=self.timeout,
                 limits=limits,
                 headers=self.default_headers,
-                proxy=self.proxy,
             )
 
     async def close(self) -> None:

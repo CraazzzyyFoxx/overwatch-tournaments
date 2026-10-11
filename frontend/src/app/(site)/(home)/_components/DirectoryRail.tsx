@@ -247,7 +247,8 @@ export function DirectoryRail({
     >
       <SectionHead title={t("title")} titleId={titleId} sub={t("sub")} />
 
-      <div className="grid grid-cols-[44px_minmax(0,1fr)_44px] items-center gap-x-2 md:gap-x-3">
+      {/* ≥1440px: the grid bleeds 44px + 12px gap past each side, so the rail spans the full container and the arrows sit outside it. */}
+      <div className="grid grid-cols-[44px_minmax(0,1fr)_44px] items-center gap-x-2 md:gap-x-3 min-[1440px]:-mx-14">
         <button
           type="button"
           className={cn(

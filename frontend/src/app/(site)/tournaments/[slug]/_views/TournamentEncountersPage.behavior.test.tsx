@@ -325,11 +325,20 @@ async function render(encounters: Encounter[], query = "") {
   return container.textContent ?? "";
 }
 
-/** Every group heading, in DOM order — the page's whole structure in one array. */
+/** Every heading, in DOM order — the stage (`h2`) over its round cards (`h3`),
+ *  and the time view's own day cards. The page's whole structure in one array. */
 function headings(): string[] {
-  return Array.from(container.querySelectorAll("h2")).map((heading) =>
+  return Array.from(container.querySelectorAll("h2, h3")).map((heading) =>
     (heading.textContent ?? "").trim()
   );
+}
+
+/** What each round or day card says beside its title ("Bo2 · 2 matches"). */
+function cardMeta(): string[] {
+  return Array.from(container.querySelectorAll("article header")).map((header) => {
+    const title = header.querySelector("h3")?.textContent ?? "";
+    return (header.textContent ?? "").replace(title, "").trim();
+  });
 }
 
 /** The view switcher, or `null` when the section offers a single view. */
@@ -344,17 +353,10 @@ function segment(): { labels: string[]; selected: string | null } | null {
   };
 }
 
-/**
- * The leading mono cell of every row, in DOM order. Addressed through the
- * structure — each heading is followed by its list, each row's first `span` is
- * the leading cell — rather than through a utility class, so a visual pass that
- * renames one does not fail this.
- */
+/** The leading cell of every match row, in DOM order. */
 function leadingCells(): string[] {
-  return Array.from(container.querySelectorAll("h2")).flatMap((heading) =>
-    Array.from(heading.nextElementSibling?.children ?? []).map((row) =>
-      (row.querySelector("span")?.textContent ?? "").trim()
-    )
+  return Array.from(container.querySelectorAll('[data-match-row] > [data-cell="lead"]')).map(
+    (cell) => (cell.textContent ?? "").trim()
   );
 }
 
@@ -365,18 +367,23 @@ describe("tournament matches", () => {
     await render(fixtures(false));
 
     // Playoffs first (later stage), its Grand Final ahead of the round that fed
-    // it, then the group rounds counting down.
+    // it, then the group rounds counting down. The stage is said once, over its
+    // rounds, instead of in front of every one of them.
     expect(headings()).toEqual([
-      "Playoffs · Grand Final",
-      "Playoffs · UB Final · 2 matches",
-      "Groups · Round 5",
-      "Groups · Round 4"
+      "Playoffs",
+      "Grand Final",
+      "UB Final",
+      "Groups",
+      "Round 5",
+      "Round 4"
     ]);
+    // The round's shared format is said once, on its card, with the count.
+    expect(cardMeta()).toEqual(["Bo2", "Bo2 · 2 matches", "Bo2", "Bo2"]);
     // No `scheduled_at` anywhere: one view, so no switcher at all.
     expect(segment()).toBeNull();
-    // Elimination rows lead with the bracket's match number, group rows with the
-    // group's own letter.
-    expect(leadingCells()).toEqual(["M3 · Bo2", "M1 · Bo2", "M2 · Bo2", "B", "A"]);
+    // Elimination rows lead with the bracket's match number, group rows with
+    // the group.
+    expect(leadingCells()).toEqual(["M3", "M1", "M2", "Group B", "Group A"]);
   });
 
   it("offers the time view once anything is scheduled, and groups it by day", async () => {
@@ -394,7 +401,7 @@ describe("tournament matches", () => {
     // belong to one, and the count is the day's own.
     expect(days[0]).toContain("Aug 16");
     expect(days[0]).toContain("Playoffs");
-    expect(days[0]).toContain("3 matches");
+    expect(cardMeta()[0]).toBe("3 matches");
     expect(days[1]).toContain("Aug 15");
     expect(days[1]).toContain("Groups");
     expect(days[2]).toContain("Aug 14");
@@ -421,18 +428,15 @@ describe("tournament matches", () => {
   it("narrows the list to one team, and to one stage", async () => {
     const byTeam = await render(fixtures(false), "team=11");
 
-    expect(headings()).toEqual([
-      "Playoffs · Grand Final",
-      "Playoffs · UB Final",
-      "Groups · Round 5"
-    ]);
+    expect(headings()).toEqual(["Playoffs", "Grand Final", "UB Final", "Groups", "Round 5"]);
     expect(byTeam).toContain("Alpha");
     // Alpha never played Delta, so the only opponent left out is observable.
     expect(byTeam).not.toContain("Delta");
 
     const byStage = await render(fixtures(false), `stage=${GROUPS.id}`);
-    expect(headings()).toEqual(["Groups · Round 5", "Groups · Round 4"]);
-    expect(byStage).not.toContain("Playoffs · ");
+    expect(headings()).toEqual(["Groups", "Round 5", "Round 4"]);
+    // The playoff rows are gone with their stage: no bracket match number left.
+    expect(byStage).not.toContain("M3");
   });
 
   it("says nothing exists rather than showing an empty grouping", async () => {

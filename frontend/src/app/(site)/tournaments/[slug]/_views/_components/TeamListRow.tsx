@@ -1,112 +1,39 @@
 "use client";
 
+import type { CSSProperties } from "react";
 import Link from "next/link";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Crown, Medal, Trophy } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import DivisionIcon from "@/components/DivisionIcon";
-import { HeroStrip } from "@/components/hero/HeroImage";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
-import { TeamLogo } from "@/components/TeamName";
-import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
-import { getDivisionLabel } from "@/lib/divisions/grid";
-import { normalizePlayerRole } from "@/lib/roster/player-role";
+import { STATUS_CHIP_CLASS } from "@/components/status/StatusIconBadge";
+import { placementClass, TournamentTeamTable } from "@/components/TournamentTeamCard";
+import TeamName from "@/components/TeamName";
+import { sortTeamPlayers } from "@/lib/player";
+import { groupDisplayName, groupHue } from "@/lib/tournament/group";
 import { cn } from "@/lib/utils";
 import type { Hero } from "@/types/hero.types";
 import type { Registration } from "@/types/registration.types";
-import type { Player, Team } from "@/types/team.types";
+import type { Team } from "@/types/team.types";
 import type { Tournament } from "@/types/tournament.types";
-import { formatSubRoleLabel, getPlayerSlug, sortTeamPlayers } from "@/lib/player";
 
-import {
-  declaredHeroes,
-  listGrid,
-  MARK_CLASS,
-  rosterGrid,
-  rosterSlots,
-  type TeamRecord
-} from "../tournamentTeams.model";
+import { declaredHeroes, MARK_CLASS, type TeamRecord } from "../tournamentTeams.model";
 import { overviewVariant } from "../tournamentOverview.model";
 
-const TeamRosterRow = ({
-  player,
-  tournament,
-  needle,
-  heroes,
-  withHeroes
-}: {
-  player: Player;
-  tournament: Tournament;
-  needle: string;
-  heroes: Hero[];
-  withHeroes: boolean;
-}) => {
-  const t = useTranslations();
-  const workspaceGrid = useDivisionGrid();
-  const grid = tournament.division_grid_version ?? workspaceGrid;
-  const name = player.name;
-  const role = normalizePlayerRole(player.role);
-  const notes = [
-    formatSubRoleLabel(player.sub_role),
-    // "New role" is a fact about a role: a flex player has none to be new to,
-    // and in a flex tournament the flag is set on everyone.
-    player.is_newcomer_role && role !== "Flex" ? t("teams.roster.newcomerRole") : null,
-    player.is_newcomer ? t("teams.roster.newcomer") : null
-  ].filter(Boolean);
+type MedalPlace = 1 | 2 | 3;
 
-  return (
-    <div className={cn(rosterGrid(withHeroes), "py-1")}>
-      <span className="aqt-tnum text-label uppercase tracking-label text-[color:var(--aqt-fg-faint)]">
-        {role}
-      </span>
-      <Link
-        href={`/users/${getPlayerSlug(name)}`}
-        className="truncate hover:text-[color:var(--aqt-teal)]"
-        title={name}
-      >
-        {needle !== "" && name.toLowerCase().includes(needle) ? (
-          <mark className={MARK_CLASS}>{name}</mark>
-        ) : (
-          name
-        )}
-      </Link>
-      {/* Division as its icon (the tier name in `title`) beside the SR — one
-          cell, so neither can run into the other. */}
-      <span
-        className="flex items-center gap-1.5"
-        title={getDivisionLabel(grid, player.division) ?? undefined}
-      >
-        <DivisionIcon
-          division={player.division}
-          width={18}
-          height={18}
-          tournamentGrid={tournament.division_grid_version}
-        />
-        <span className="aqt-tnum text-label text-[color:var(--aqt-fg-muted)]">{player.rank}</span>
-      </span>
-      {withHeroes ? (
-        heroes.length > 0 ? (
-          <HeroStrip
-            heroes={heroes}
-            size={18}
-            limit={3}
-            className="justify-self-start"
-          />
-        ) : (
-          <span className="text-[color:var(--aqt-fg-dim)]">—</span>
-        )
-      ) : null}
-      <span className="truncate text-label text-[color:var(--aqt-fg-dim)]">
-        {notes.join(" · ")}
-      </span>
-    </div>
-  );
+/** The podium chip, drawn like every other status pill but in the placement
+ *  medal hues (`--aqt-medal-*`, the site's one source for gold/silver/bronze). */
+const MEDAL_PILL: Record<MedalPlace, string> = {
+  1: "border-[color:color-mix(in_srgb,var(--aqt-medal-gold)_26%,transparent)] bg-[color:color-mix(in_srgb,var(--aqt-medal-gold)_12%,transparent)] text-[color:var(--aqt-medal-gold)]",
+  2: "border-[color:color-mix(in_srgb,var(--aqt-medal-silver)_26%,transparent)] bg-[color:color-mix(in_srgb,var(--aqt-medal-silver)_12%,transparent)] text-[color:var(--aqt-medal-silver)]",
+  3: "border-[color:color-mix(in_srgb,var(--aqt-medal-bronze)_26%,transparent)] bg-[color:color-mix(in_srgb,var(--aqt-medal-bronze)_12%,transparent)] text-[color:var(--aqt-medal-bronze)]"
 };
 
 /**
- * One team as a collapsed row that unfolds its roster. `<details>` and not
- * per-row state, so several teams stay open at once and the browser keeps them
- * open across a re-render.
+ * One team as a collapsed team card that unfolds the card's own roster table.
+ * `<details>` and not per-row state, so several teams stay open at once and the
+ * browser keeps them open across a re-render.
  */
 export const TeamListRow = ({
   team,
@@ -126,98 +53,122 @@ export const TeamListRow = ({
   heroesMap: Map<string, Hero>;
 }) => {
   const t = useTranslations();
-  const withRoles = tournament.roster_shape?.has_role_slots ?? true;
-  const slots = withRoles ? rosterSlots(tournament, team) : [];
-  const subtitle = [
-    team.group?.name ? t("teams.groupLabel", { name: team.group.name }) : null,
-    // A live leader is first, not champion: `placement` moves with every result.
-    team.placement === 1 && overviewVariant(tournament.status) === "completed"
-      ? t("tournamentDetail.teams.champion")
-      : null
-  ].filter(Boolean);
-  const roster = sortTeamPlayers(team.players).map((player) => ({
-    player,
+  // A live leader is not on the podium yet: `placement` moves with every result.
+  const medal =
+    team.placement != null &&
+    team.placement <= 3 &&
+    overviewVariant(tournament.status) === "completed"
+      ? (team.placement as MedalPlace)
+      : null;
+  const players = sortTeamPlayers(team.players);
+  const roster = team.players.map((player) => ({
+    ...player,
     heroes: declaredHeroes(player, registrationsByUser.get(player.user_id), heroesMap)
   }));
-  // A column of dashes says nothing: it exists only when someone declared heroes.
-  const withHeroes = roster.some((entry) => entry.heroes.length > 0);
 
   return (
-    <details className="group border-b border-[color:var(--aqt-border)]/60">
-      <summary className="cursor-pointer list-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[color:var(--aqt-teal)] [&::-webkit-details-marker]:hidden">
-        <div className={cn(listGrid(withRoles), "px-2 py-2.5")}>
-          <span className="aqt-tnum tabular-nums text-label text-[color:var(--aqt-fg-faint)]">
-            {team.placement != null ? `#${team.placement}` : ""}
-          </span>
-          <span className="inline-flex size-5 items-center justify-center">
-            <TeamLogo team={team} size="sm" />
-          </span>
-          <span className="flex min-w-0 flex-col">
-            <span className="truncate font-medium" title={team.name}>
-              {team.name}
-            </span>
-            {subtitle.length > 0 ? (
-              <span className="truncate text-label text-[color:var(--aqt-fg-dim)]">
-                {subtitle.join(" · ")}
+    <details className="team-card group">
+      <summary className="cursor-pointer list-none rounded-[12px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[color:var(--aqt-teal)] [&::-webkit-details-marker]:hidden">
+        <div className="tc-header grid grid-cols-[2.75rem_minmax(0,1fr)_auto_auto_1rem] items-center gap-2.5 sm:gap-5">
+          <span>
+            {team.placement != null ? (
+              <span
+                className={cn(
+                  "placement tabular-nums",
+                  medal !== null ? placementClass(medal) : "def"
+                )}
+              >
+                #{team.placement}
               </span>
             ) : null}
           </span>
-          <span className="aqt-tnum text-[color:var(--aqt-fg-muted)]">{team.avg_sr.toFixed(0)}</span>
-          {withRoles ? (
-            <span className="hidden items-center gap-0.5 sm:flex">
-              {slots.map((slot, index) => (
-                <span
-                  key={index}
-                  title={slot.player?.name ?? undefined}
-                  className={cn("inline-flex", slot.player == null && "opacity-40")}
-                >
-                  <PlayerRoleIcon role={slot.role} size={16} label={slot.player?.name ?? undefined} />
-                </span>
-              ))}
+          <span className="flex min-w-0 flex-col gap-1">
+            <span className="flex min-w-0 items-center gap-2">
+              <span className="tc-name">
+                <TeamName team={team} size="sm" />
+              </span>
+              {/* Wrapped: `.group-chip` sets its own display, which would
+                  outrank a `hidden` utility on the chip itself. */}
+              <span className="hidden shrink-0 items-center gap-2 sm:inline-flex">
+                {medal !== null ? (
+                  <span className={cn(STATUS_CHIP_CLASS, MEDAL_PILL[medal])}>
+                    {medal === 1 ? (
+                      <Trophy className="size-3 shrink-0" aria-hidden />
+                    ) : (
+                      <Medal className="size-3 shrink-0" aria-hidden />
+                    )}
+                    {t(`tournamentDetail.podium.place${medal}`)}
+                  </span>
+                ) : null}
+                {team.group?.name ? (
+                  <span
+                    className="group-chip"
+                    style={{ "--group-hue": groupHue(team.group.name) } as CSSProperties}
+                  >
+                    {groupDisplayName(team.group.name, t("common.group"))}
+                  </span>
+                ) : null}
+              </span>
             </span>
-          ) : null}
-          <span className="aqt-tnum text-right text-[color:var(--aqt-fg-muted)]">
-            {record ? `${record.won}–${record.lost}` : "—"}
+            {/* The roster at a glance: role glyph + nick, captain crowned. A
+                searched battletag shows in full, marked. */}
+            <span className="truncate text-caption text-[color:var(--aqt-fg-muted)]">
+              {players.map((player) => {
+                const matched = needle !== "" && player.name.toLowerCase().includes(needle);
+                return (
+                  <span
+                    key={player.id}
+                    className={cn("mr-3 last:mr-0", player.is_substitution && "opacity-60")}
+                  >
+                    {/* Inline, not flex: an atomic box is clipped whole, so
+                        `truncate` could only ellipsize plain text runs. */}
+                    <span className="mr-1 inline-block align-[-2px]">
+                      <PlayerRoleIcon role={player.role} size={13} decorative />
+                    </span>
+                    {matched ? (
+                      <mark className={MARK_CLASS}>{player.name}</mark>
+                    ) : (
+                      player.name.split("#")[0]
+                    )}
+                    {player.user_id === team.captain_id ? (
+                      <Crown
+                        aria-hidden
+                        className="ml-1 inline-block size-3 align-[-1px] text-[color:var(--aqt-amber)]"
+                      />
+                    ) : null}
+                  </span>
+                );
+              })}
+            </span>
           </span>
-          <span className="flex justify-end">
-            <ChevronDown
-              className="size-3.5 text-[color:var(--aqt-fg-faint)] transition-transform group-open:rotate-180"
-              aria-hidden
-            />
+          <span className="tc-sr">
+            <span className="l block">{t("teams.roster.avgSr")}</span>
+            <span className="v block">{team.avg_sr.toFixed(0)}</span>
           </span>
+          <span className="tc-sr min-w-[2.5rem]">
+            <span className="l block">{t("tournamentDetail.teams.record")}</span>
+            <span className="v block">{record ? `${record.won}–${record.lost}` : "—"}</span>
+          </span>
+          <ChevronDown
+            className="size-4 text-[color:var(--aqt-fg-faint)] transition-transform group-open:rotate-180"
+            aria-hidden
+          />
         </div>
       </summary>
-      <div className="mb-2 ml-2 mr-2 border-l-2 border-[color:var(--aqt-border)] py-1 pl-3 text-caption sm:ml-[4.75rem]">
-        <div className={cn(rosterGrid(withHeroes), "py-0.5 text-label uppercase tracking-label text-[color:var(--aqt-fg-faint)]")}>
-          <span>{t("teams.roster.role")}</span>
-          <span>{t("teams.roster.battleTag")}</span>
-          <span>
-            {t("teams.roster.rank")} · {t("tournamentDetail.teams.sr")}
-          </span>
-          {withHeroes ? <span>{t("common.heroes")}</span> : null}
-          <span />
-        </div>
-        {roster.map(({ player, heroes }) => (
-          <TeamRosterRow
-            key={player.id}
-            player={player}
-            tournament={tournament}
-            needle={needle}
-            heroes={heroes}
-            withHeroes={withHeroes}
-          />
-        ))}
-        <div className="mt-1.5 flex flex-wrap gap-3 border-t border-[color:var(--aqt-border)]/60 pt-1.5 text-label">
-          <Link
-            href={`/tournaments/${slug}/matches?team=${team.id}`}
-            className="text-[color:var(--aqt-fg-muted)] hover:text-[color:var(--aqt-teal)]"
-          >
-            {t("tournamentDetail.teams.teamMatches")}
-          </Link>
-          {/* Wireframe §5 ④ offers "Team profile" only when a team route exists.
-              The public site has no team page, so the button is absent rather
-              than dead. */}
-        </div>
+      <div className="tc-divider" />
+      <TournamentTeamTable
+        players={roster}
+        tournamentGrid={tournament.division_grid_version}
+        captainUserId={team.captain_id}
+      />
+      <div className="tc-divider" />
+      <div className="px-3.5 py-2.5 text-label">
+        <Link
+          href={`/tournaments/${slug}/matches?team=${team.id}`}
+          className="text-[color:var(--aqt-fg-muted)] hover:text-[color:var(--aqt-teal)]"
+        >
+          {t("tournamentDetail.teams.teamMatches")}
+        </Link>
       </div>
     </details>
   );

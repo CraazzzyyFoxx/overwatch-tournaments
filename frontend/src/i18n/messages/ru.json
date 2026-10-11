@@ -179,6 +179,7 @@
       "admitted": "Допущен",
       "notAdmitted": "Не допущен",
       "pendingCheckIn": "Допущен (ожидается чек-ин)",
+      "pendingShort": "Ожидание",
       "overridden": "требование не выполнено — допуск уже подтверждён"
     },
     "yes": "Да",
@@ -2062,29 +2063,26 @@
     },
     "heading": {
       "all": "Все турниры",
-      "shown": "{count, plural, one {# показан} few {# показано} many {# показано} other {# показано}}"
+      "count": "{count, plural, one {# турнир} few {# турнира} many {# турниров} other {# турнира}}"
     },
     "row": {
-      "bracketAria": "Сетка турнира {name}",
-      "openAria": "Открыть турнир {name}"
+      "bracketAria": "Сетка турнира {name}"
     },
     "empty": {
       "title": "Турниры не найдены",
       "body": "Попробуйте изменить фильтры или загляните позже — скоро появятся новые турниры."
     },
     "hero": {
-      "coord": "OWT // Турниры",
       "sector": "Сектор · {name}",
       "title": "Все турниры в одном месте",
-      "lede": "От драфта до титула: следите за каждым турниром вашего сообщества. Живые сетки, зафиксированные составы и коронованные чемпионы — всё в одном месте.",
+      "lede": "Все турниры вашего сообщества: от заявок до финала.",
       "liveNow": "Идёт сейчас",
-      "matchesInFlight": "{count, plural, one {# матч в игре} few {# матча в игре} many {# матчей в игре} other {# матчей в игре}}",
-      "noMatchesInFlight": "Нет активных матчей",
       "teamsBalancedLabel": "Команд сбалансировано"
     },
     "filters": {
       "standard": "Обычные",
-      "searchPlaceholder": "Поиск по названию или номеру…",
+      "searchPlaceholder": "Найти турнир",
+      "typeLabel": "Тип",
       "sort": {
         "newest": "Сначала новые",
         "oldest": "Сначала старые",
@@ -2098,7 +2096,7 @@
     },
     "footer": {
       "unit": "турниров",
-      "loadMore": "Показать ещё",
+      "loadMore": "Показать ещё {count}",
       "progress": "Показано {loaded} из {total, plural, one {# турнира} few {# турниров} many {# турниров} other {# турниров}}",
       "error": "Не удалось загрузить ещё турниры. Проверьте соединение и попробуйте снова."
     },
@@ -2124,7 +2122,6 @@
     }
   },
   "teams": {
-    "groupLabel": "Группа {name}",
     "roster": {
       "role": "Роль",
       "battleTag": "BattleTag",
@@ -2427,8 +2424,10 @@
         "latest": "Последние"
       },
       "format": {
-        "title": "Формат",
-        "description": "Описание"
+        "title": "Формат"
+      },
+      "about": {
+        "title": "Описание"
       },
       "live": {
         "title": "Сейчас играют",
@@ -2468,7 +2467,6 @@
       "numbers": {
         "title": "Цифры",
         "teams": "Команд",
-        "players": "Игроков",
         "matches": "Матчей",
         "days": "Дней",
         "played": "Сыграно"
@@ -2511,7 +2509,6 @@
       "title": "Статистика",
       "tabsLabel": "Вложенные вкладки статистики",
       "heroes": {
-        "roleLabel": "Фильтр героев по роли",
         "emptyTitle": "Данных о героях пока нет",
         "emptyDescription": "Игровое время героев появится после обработки статистики матчей."
       },
@@ -2539,7 +2536,6 @@
       "rosterColumn": "Состав",
       "sr": "SR",
       "record": "W–L",
-      "champion": "чемпион",
       "byGroup": "По группе",
       "searchLabel": "Поиск команды или игрока",
       "searchPlaceholder": "Команда или игрок…",
@@ -2681,6 +2677,8 @@
       "clearTeamFilter": "Убрать фильтр по команде",
       "addTeam": "+ Команда",
       "pickTeam": "Фильтр по команде",
+      "searchTeam": "Поиск команды…",
+      "noTeamMatch": "Команды не найдены.",
       "mapFilter": "Карта: {name}",
       "clearMapFilter": "Убрать фильтр по карте"
     }
@@ -3123,6 +3121,7 @@
     "rearrangeFailed": "Не удалось переставить команды",
     "dragTeam": "Перетащить {team}",
     "matchAria": "{label}: {home} — {away}",
+    "floatRecord": "Счёт перед этим раундом: {record}",
     "dnd": {
       "instructions": "Нажмите Пробел или Enter, чтобы взять команду, стрелками переместите её на другой слот и нажмите Пробел или Enter, чтобы поменять местами. Escape отменяет.",
       "pickedUp": "Взята команда {team}",
@@ -3188,8 +3187,6 @@
       "upset": "Апсет"
     },
     "media": {
-      "logsAvailable": "Логи матча доступны",
-      "noLogs": "Нет логов матча",
       "comingTwitch": "Появится с интеграцией Twitch"
     },
     "sort": {
@@ -3309,16 +3306,11 @@
       "metaDescription": "Обзор встречи {home} против {away} на {siteName}.",
       "back": "Назад к встречам",
       "tie": "Ничья",
-      "winner": "Победитель",
-      "loser": "Проигравший",
       "pregameRoom": "Предигровая комната",
       "heroTitle": "{home} против {away}",
       "verdictWin": "Победа в серии: {team}",
       "verdictDraw": "Серия сыграна вничью",
       "verdictPending": "Серия не завершена",
-      "ledeWin": "{winner} выиграла серию {winnerScore}–{loserScore} у {loser} за {maps, plural, one {# карту} few {# карты} many {# карт} other {# карты}}.",
-      "ledeDraw": "Серия завершилась вничью после {maps, plural, one {# карты} few {# карт} many {# карт} other {# карты}}.",
-      "ledePending": "Серия Bo{format} ещё не доиграна.",
       "placementShort": "Место",
       "pipsAria": "Результаты карт: {summary}",
       "pipUnplayed": "не сыграна",
@@ -3327,9 +3319,6 @@
       "statMapsSub": "{format} · {home}–{away} по картам",
       "statDuration": "Время серии",
       "statDurationSub": "в среднем {value} на карту",
-      "statNoTiming": "Время карт не зафиксировано",
-      "statClosenessSub": "По отчётам капитанов",
-      "statNoCloseness": "Оценка не выставлена",
       "scheduledAt": "Назначено",
       "startedAt": "Начало",
       "endedAt": "Окончание",
@@ -3337,24 +3326,15 @@
       "scoreboard": "Результат серии",
       "mapsMeta": "Сыграно {played} из {slots} слотов",
       "mapNotPlayed": "Не сыграна",
-      "mapNotPlayedHint": "Серия закончилась раньше этой карты",
       "mapInProgress": "Идёт сейчас",
       "mapInProgressHint": "Результат этой карты ещё не внесён",
-      "mapPendingHint": "Предусмотрена форматом, до неё ещё не дошли",
       "mapScoreAria": "{home} {homeScore}, {away} {awayScore}",
       "openScoreboard": "Статистика",
       "rosters": "Составы",
-      "rostersMeta": "Замены — веткой от заменённого игрока",
       "seriesStats": "Статистика серии",
-      "seriesStatsMeta": "Суммарно за {maps, plural, one {# карту} few {# карты} many {# карт} other {# карты}}",
       "seriesStatsNoLogs": "Логи этой серии не разобраны, поэтому статистика по игрокам недоступна.",
       "seriesTableTitle": "Итоги игроков",
       "seriesTableSub": "Вся серия · те же колонки, что и на отдельной карте",
-      "statsMapsCounted": "Учтено карт",
-      "statsMapsCountedValue": "{counted} из {total}",
-      "statsScope": "Область",
-      "statsScopeValue": "Вся серия",
-      "statsRoster": "Игроков",
       "statsPartial": "Показано {counted} из {total} карт — остальные не удалось загрузить.",
       "colMaps": "КАРТЫ",
       "colMapsTitle": "Карты, на которых играл этот игрок",
@@ -3362,7 +3342,6 @@
       "reportsMeta": "Подано {count, plural, one {# отчёт} few {# отчёта} many {# отчётов} other {# отчёта}}",
       "reportsDisagree": "Капитаны указали разный счёт. Официальный результат определяет организатор.",
       "reportAria": "Отчёт команды {team}",
-      "reportBy": "Отправил",
       "reportedScore": "Указанный счёт",
       "reportedCloseness": "Качество матча",
       "reportedClosenessValue": "{value} из 10",
@@ -3379,7 +3358,14 @@
       "pregameSeeds": "Посев (хозяева / гости)",
       "pregameTurn": "Текущий ход",
       "readinessHome": "Готовность хозяев",
-      "readinessAway": "Готовность гостей"
+      "readinessAway": "Готовность гостей",
+      "tabsLabel": "Разделы матча",
+      "tabs": {
+        "overview": "Обзор",
+        "players": "Игроки",
+        "pregame": "Пре-гейм"
+      },
+      "mapsUnplayed": "{count, plural, one {Ещё # карта не сыграна} few {Ещё # карты не сыграны} many {Ещё # карт не сыграно} other {Ещё # карты не сыграно}}"
     },
     "match": {
       "mapAlt": "Карта",

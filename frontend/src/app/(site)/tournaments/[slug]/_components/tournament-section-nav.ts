@@ -92,6 +92,24 @@ function normalizePathname(pathname: string): string {
   return path.length > 1 ? path.replace(/\/+$/, "") : path;
 }
 
+/**
+ * Whether `pathname` is a tournament's overview route. The shell shows the full
+ * hero there and a one-row header on every other section, and with a
+ * `tournamentId` this is the same comparison `buildTournamentSectionNav` makes
+ * for the overview item - so the hero and the rail's `aria-current` can never
+ * disagree about which section is open.
+ *
+ * Without one it answers the same question about the route SHAPE, for the
+ * loading fallback: it renders before any tournament is known, and must still
+ * reserve the header the resolved shell will put there.
+ */
+export function isTournamentOverviewPath(pathname: string, tournamentId?: string): boolean {
+  const path = normalizePathname(pathname);
+  return tournamentId === undefined
+    ? /^\/tournaments\/[^/]+$/.test(path)
+    : path === `/tournaments/${tournamentId}`;
+}
+
 function resolveBracketHref(
   tournamentId: string,
   status: TournamentStatus,

@@ -45,7 +45,10 @@
   gap: 10px;
 }
 
+/* `--group-hue` comes from `groupHue()` (lib/tournament/group.ts), so any
+   number of groups gets a colour without a class per letter. */
 .group-chip {
+  --group-hue: var(--aqt-teal);
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -55,31 +58,9 @@
   text-transform: uppercase;
   padding: 3px 9px;
   border-radius: 999px;
-  border: 1px solid transparent;
-}
-
-.group-chip.a {
-  color: var(--aqt-teal);
-  background: color-mix(in srgb, var(--aqt-teal) 10%, transparent);
-  border-color: color-mix(in srgb, var(--aqt-teal) 22%, transparent);
-}
-
-.group-chip.b {
-  color: var(--aqt-amber);
-  background: hsl(38 95% 60% / 0.1);
-  border-color: hsl(38 95% 60% / 0.22);
-}
-
-.group-chip.c {
-  color: var(--aqt-violet);
-  background: hsl(270 70% 65% / 0.1);
-  border-color: hsl(270 70% 65% / 0.22);
-}
-
-.group-chip.d {
-  color: var(--aqt-blue);
-  background: hsl(210 80% 62% / 0.1);
-  border-color: hsl(210 80% 62% / 0.22);
+  border: 1px solid color-mix(in srgb, var(--group-hue) 22%, transparent);
+  color: var(--group-hue);
+  background: color-mix(in srgb, var(--group-hue) 10%, transparent);
 }
 
 .placement {

@@ -8,7 +8,7 @@ import type { MapRead } from "@/types/map.types";
 
 export type MapCardProps = {
   map: MapRead;
-  /** `md` — the pool grid; `sm` — the per-round strips, where three stack up. */
+  /** `md` — the pool grid; `sm` — the per-round strips: a wider 2:1 crop, so a Bo5's five rows stay short. */
   size?: "sm" | "md";
   className?: string;
 };
@@ -32,7 +32,7 @@ export function MapCard({ map, size = "md", className }: Readonly<MapCardProps>)
         className
       )}
     >
-      <div className="relative aspect-video">
+      <div className={cn("relative", small ? "aspect-[2/1]" : "aspect-video")}>
         {map.image_path ? (
           <Image
             src={map.image_path}

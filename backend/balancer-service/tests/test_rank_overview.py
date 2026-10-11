@@ -39,6 +39,7 @@ from shared.division_grid import DivisionGrid  # noqa: E402
 from shared.services.division_grid.access import get_effective_division_grid  # noqa: E402
 from shared.services.member_rank import MIX_ORDER, TOURNAMENT_ORDER, member_rank_service  # noqa: E402
 from shared.testing import create_test_async_engine, division_grid  # noqa: E402
+from src.domain.mix_ranker import HiddenRating, Ranker  # noqa: E402
 from src.rpc import ranks as ranks_rpc  # noqa: E402
 from src.schemas.ranks import LAYERS  # noqa: E402
 from src.services.rank_overview import (  # noqa: E402
@@ -238,7 +239,7 @@ class RankOverviewQueryTests(IsolatedAsyncioTestCase):
             )
             s.add(
                 models.MemberHiddenRating(
-                    workspace_id=workspace.id, workspace_member_id=member.id, role="tank", mu=2345.6, sigma=120.5
+                    workspace_id=workspace.id, workspace_member_id=member.id, role="tank", mu=150.0, sigma=20.0
                 )
             )
 
@@ -422,9 +423,11 @@ class RankOverviewQueryTests(IsolatedAsyncioTestCase):
             "lobby_index": None,
         }
 
+        # The hidden rating reaches the wire on the open scale, through the
+        # workspace's ranker (defaults here), not as the raw hidden mu.
         hidden = by_layer["hidden"][0]
-        assert hidden["rank_value"] == 2346
-        assert hidden["sigma"] == 120.5
+        assert hidden["rank_value"] == round(Ranker().projection(HiddenRating(150.0, 20.0))) == 3647
+        assert hidden["sigma"] == 20.0
 
         registration = by_layer["registration"][0]
         assert registration["rank_value"] == 2200

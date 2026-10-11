@@ -2,7 +2,8 @@ import type {
   Encounter,
   EncounterGameWithMap,
   Match,
-  MatchWithStats
+  MatchWithStats,
+  Score
 } from "@/types/encounter.types";
 import { acceptedScore, seriesMatchesByPosition } from "@/components/pick-ban/pick-ban-model";
 import type { PlayerWithStats, TeamWithStats } from "@/types/team.types";
@@ -20,9 +21,23 @@ import { isEncounterCompleted } from "@/lib/encounter/status";
 export type SeriesSide = "home" | "away";
 
 /** Which side won a single map, or `null` when it was drawn / not played. */
-export function getMatchWinner(match: Pick<Match, "score">): SeriesSide | null {
-  if (match.score.home === match.score.away) return null;
-  return match.score.home > match.score.away ? "home" : "away";
+export function getMatchWinner(score: Score): SeriesSide | null {
+  if (score.home === score.away) return null;
+  return score.home > score.away ? "home" : "away";
+}
+
+/**
+ * A parsed map's score from the encounter's side of the table. A log records
+ * its own home/away, which is the encounter's flipped whenever the lobby put
+ * the away team first — read raw, a 3–0 for the home side printed as 0–3.
+ */
+export function encounterSideScore(
+  match: Pick<Match, "score" | "home_team_id">,
+  encounter: Pick<Encounter, "away_team_id">
+): Score {
+  return match.home_team_id === encounter.away_team_id
+    ? { home: match.score.away, away: match.score.home }
+    : match.score;
 }
 
 /**
@@ -41,6 +56,8 @@ export interface SeriesSlot {
   /** The encounter's own result for this position; null on a pre-games payload. */
   game: EncounterGameWithMap | null;
   match: Match | null;
+  /** The parsed log's score, oriented to the encounter's sides. */
+  parsedScore: Score | null;
   winner: SeriesSide | null;
   /** The map the encounter says is being played right now. */
   isLive: boolean;
@@ -60,11 +77,13 @@ export function buildSeriesSlots(encounter: Encounter): SeriesSlot[] {
   if (games.length === 0) {
     return positions.map((position) => {
       const match = matches[position - 1] ?? null;
+      const parsedScore = match ? encounterSideScore(match, encounter) : null;
       return {
         index: position,
         game: null,
         match,
-        winner: match ? getMatchWinner(match) : null,
+        parsedScore,
+        winner: parsedScore ? getMatchWinner(parsedScore) : null,
         isLive: live != null && live === position - 1
       };
     });
@@ -83,10 +102,12 @@ export function buildSeriesSlots(encounter: Encounter): SeriesSlot[] {
   return positions.map((position, index) => {
     const game = gameAt(position);
     const accepted = acceptedScore(game);
+    const match = byPosition[index];
     return {
       index: position,
       game,
-      match: byPosition[index],
+      match,
+      parsedScore: match ? encounterSideScore(match, encounter) : null,
       // The accepted score decides the position; the parsed log is a separate
       // fact and never overrides it.
       winner:
@@ -108,7 +129,7 @@ export function countMapWins(encounter: Encounter): { home: number; away: number
   let away = 0;
   let drawn = 0;
   for (const match of encounter.matches ?? []) {
-    const winner = getMatchWinner(match);
+    const winner = getMatchWinner(encounterSideScore(match, encounter));
     if (winner === "home") home += 1;
     else if (winner === "away") away += 1;
     else drawn += 1;
@@ -173,23 +194,6 @@ export function formatSeriesClock(
 export function formatCloseness(value: number | null | undefined): string | null {
   if (value == null || !Number.isFinite(value)) return null;
   return `${Math.round(value * 100)}%`;
-}
-
-/**
- * Stage kind for the shared `StagePill`, inferred from the stage/stage-item the
- * encounter belongs to. Finals read as finals, brackets as playoffs.
- */
-export function getStageKind(encounter: Encounter): "group" | "playoffs" | "finals" | "default" {
-  const itemType = encounter.stage_item?.type ?? null;
-  const name = `${encounter.stage_item?.name ?? ""} ${encounter.stage?.name ?? ""}`.toLowerCase();
-  if (/final/.test(name) || /финал/.test(name)) return "finals";
-  if (itemType === "group") return "group";
-  if (itemType && itemType.startsWith("bracket")) return "playoffs";
-  if (itemType === "single_bracket") return "playoffs";
-  const stageType = encounter.stage?.stage_type ?? null;
-  if (stageType === "round_robin" || stageType === "swiss") return "group";
-  if (stageType) return "playoffs";
-  return "default";
 }
 
 // ─── Series statistics aggregation ──────────────────────────────────────────

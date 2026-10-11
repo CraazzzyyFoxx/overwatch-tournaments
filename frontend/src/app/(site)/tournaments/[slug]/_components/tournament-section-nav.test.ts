@@ -6,6 +6,7 @@ import {
   buildTournamentSectionNav,
   collapsedRailTitle,
   getTournamentRailScrollState,
+  isTournamentOverviewPath,
   observeTournamentRail,
   scrollTournamentRail,
   type TournamentRailElement
@@ -243,6 +244,29 @@ describe("buildTournamentSectionNav", () => {
 
     const nested = model("playoffs", `/tournaments/${tournamentId}/matches/`);
     expect(nested.filter((item) => item.active).map((item) => item.id)).toEqual(["matches"]);
+  });
+});
+
+describe("isTournamentOverviewPath", () => {
+  it("agrees with the rail about which section is open", () => {
+    for (const pathname of [
+      `/tournaments/${tournamentId}`,
+      `/tournaments/${tournamentId}/`,
+      `/tournaments/${tournamentId}?from=list`,
+      `/tournaments/${tournamentId}/matches`,
+      `/tournaments/${tournamentId}/bracket`
+    ]) {
+      const overviewIsActive =
+        model("playoffs", pathname).find((item) => item.id === "overview")?.active === true;
+      expect(isTournamentOverviewPath(pathname, tournamentId)).toBe(overviewIsActive);
+    }
+
+    // Without a slug it answers the same question about the route shape, which
+    // is all the loading fallback has.
+    expect(isTournamentOverviewPath(`/tournaments/${tournamentId}`)).toBe(true);
+    expect(isTournamentOverviewPath(`/tournaments/${tournamentId}/?ref=1`)).toBe(true);
+    expect(isTournamentOverviewPath(`/tournaments/${tournamentId}/stats`)).toBe(false);
+    expect(isTournamentOverviewPath("/tournaments")).toBe(false);
   });
 });
 

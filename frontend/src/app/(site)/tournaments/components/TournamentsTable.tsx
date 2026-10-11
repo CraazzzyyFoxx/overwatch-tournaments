@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useFormatter } from "@/lib/datetime/client";
-import { LayoutGrid, ArrowUpRight } from "lucide-react";
+import { LayoutGrid } from "lucide-react";
 
 import type { TeamFormation, Tournament } from "@/types/tournament.types";
 import { formatDateRange } from "@/lib/datetime";
@@ -95,25 +95,24 @@ const TournamentRow = ({ tournament }: { tournament: Tournament }) => {
         </div>
       </td>
       <td className="r">
-        <span className="tn-id">
+        <span className="aqt-tnum text-label text-[color:var(--aqt-fg-muted)]">
           {format.relativeTime(new Date(tournament.updated_at ?? tournament.start_date))}
         </span>
       </td>
       <td className="r">
+        {/* One action, not two: the "open" arrow repeated the name link next to
+            it, so every row cost keyboard users a second stop to the same page.
+            The bracket is the shortcut the row cannot otherwise reach, and its
+            box is forced inline because `.aqt-tn .icon-btn` (28px, shared with
+            the detail pages) outranks any utility class. */}
         <div className="tn-actions">
           <Link
             href={tournamentHref(tournament, "/bracket")}
             className="icon-btn"
+            style={{ width: 36, height: 36 }}
             aria-label={t("tournamentsList.row.bracketAria", { name: tournament.name })}
           >
-            <LayoutGrid aria-hidden width={13} height={13} />
-          </Link>
-          <Link
-            href={tournamentHref(tournament)}
-            className="icon-btn"
-            aria-label={t("tournamentsList.row.openAria", { name: tournament.name })}
-          >
-            <ArrowUpRight aria-hidden width={13} height={13} />
+            <LayoutGrid aria-hidden width={16} height={16} />
           </Link>
         </div>
       </td>
@@ -125,12 +124,21 @@ const TournamentRow = ({ tournament }: { tournament: Tournament }) => {
  * The list view. Renders exactly the tournaments it is handed: paging moved to
  * the page's infinite query, so slicing here would hide rows the page had
  * already fetched and counted.
+ *
+ * `className` is how the page hides it below `md`, where six columns cannot
+ * fit and the cards are the only readable layout.
  */
-const TournamentsTable = ({ tournaments }: { tournaments: Tournament[] }) => {
+const TournamentsTable = ({
+  tournaments,
+  className
+}: {
+  tournaments: Tournament[];
+  className?: string;
+}) => {
   const t = useTranslations();
 
   return (
-    <section className="tn-card">
+    <section className={cn("tn-card", className)}>
       {/* Labelled, focusable scroll region. Without it the 780px table is
           clipped by the card at narrow widths — the last three columns were
           simply unreachable on a phone — and the row-wide overlay link leaked

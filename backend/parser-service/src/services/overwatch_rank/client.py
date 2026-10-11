@@ -111,8 +111,8 @@ def parse_competitive(competitive: dict[str, Any] | None) -> list[ParsedRank]:
 class OverFastRankClient:
     """Thin wrapper around the resilient client scoped to player summaries."""
 
-    def __init__(self, base_url: str, *, timeout: float = 15.0, max_retries: int = 3, proxy: str | None = None) -> None:
-        self._http = ResilientHttpClient(base_url=base_url, timeout=timeout, max_retries=max_retries, proxy=proxy)
+    def __init__(self, base_url: str, *, timeout: float = 15.0, max_retries: int = 3) -> None:
+        self._http = ResilientHttpClient(base_url=base_url, timeout=timeout, max_retries=max_retries)
 
     @property
     def base_url(self) -> str:

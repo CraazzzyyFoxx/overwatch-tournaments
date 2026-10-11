@@ -1,12 +1,14 @@
 "use client";
 
 import React from "react";
+import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 
 import { PageHero } from "@/components/site/PageHero";
 import { cn } from "@/lib/utils";
 
 import styles from "../TournamentDetail.module.css";
+import { isTournamentOverviewPath } from "./tournament-section-nav";
 
 type SkeletonBlockProps = React.HTMLAttributes<HTMLSpanElement>;
 
@@ -78,23 +80,42 @@ function TournamentPageSkeletonLayout({ children }: Readonly<{ children: React.R
 
 export function TournamentShellSkeleton() {
   const t = useTranslations();
+  // The resolved shell draws the full hero on the overview and a one-row header
+  // on every other section (see `TournamentClientLayout`). Without the same
+  // split here the fallback stood ~220px tall in front of a ~60px header, and
+  // every direct load of a section jumped once the overview resolved. The slug
+  // is not known yet, so the route SHAPE answers it.
+  const isOverview = isTournamentOverviewPath(usePathname());
 
   return (
     <SkeletonRegion variant="shell" message={t("common.loading")}>
       <div className="aqt-tn min-w-0 space-y-4">
-        <PageHero
-          align="start"
-          eyebrow={<SkeletonBlock style={{ width: "14rem", height: "0.65rem" }} />}
-          title={<SkeletonBlock style={{ width: "min(28rem, 70vw)", height: "2.4rem" }} />}
-          meta={
-            <>
-              <SkeletonBlock style={{ width: "5rem", height: "1.75rem" }} />
-              <SkeletonBlock style={{ width: "9rem", height: "1.75rem" }} />
-              <SkeletonBlock style={{ width: "7rem", height: "1.75rem" }} />
-              <SkeletonBlock style={{ width: "6rem", height: "1.75rem" }} />
-            </>
-          }
-        />
+        {isOverview ? (
+          <PageHero
+            align="start"
+            eyebrow={<SkeletonBlock style={{ width: "14rem", height: "0.65rem" }} />}
+            title={<SkeletonBlock style={{ width: "min(28rem, 70vw)", height: "2.4rem" }} />}
+            meta={
+              <>
+                <SkeletonBlock style={{ width: "5rem", height: "1.75rem" }} />
+                <SkeletonBlock style={{ width: "9rem", height: "1.75rem" }} />
+                <SkeletonBlock style={{ width: "7rem", height: "1.75rem" }} />
+                <SkeletonBlock style={{ width: "6rem", height: "1.75rem" }} />
+              </>
+            }
+          />
+        ) : (
+          /* The compact header's own box: 40px mark, name, state, in the same
+             framed row at the same height. */
+          <div
+            className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-2)] px-3 py-2.5 sm:px-4"
+            data-shell-region="compact-header"
+          >
+            <SkeletonBlock style={{ width: "2.5rem", height: "2.5rem", flex: "0 0 auto" }} />
+            <SkeletonBlock style={{ width: "min(18rem, 50vw)", height: "1.25rem" }} />
+            <SkeletonBlock style={{ width: "5rem", height: "1.25rem", flex: "0 0 auto" }} />
+          </div>
+        )}
 
         <div className={styles.navRegion} data-shell-region="tabs">
           <div className={cn(styles.railFrame, styles.railFrameWithControls)}>

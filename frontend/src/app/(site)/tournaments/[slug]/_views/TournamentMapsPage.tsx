@@ -10,6 +10,7 @@ import type { MapRead } from "@/types/map.types";
 
 import styles from "../TournamentDetail.module.css";
 import { MapCard } from "../_components/MapCard";
+import { TournamentTeamCardFrame } from "@/components/TournamentTeamCard";
 import { SectionToolbar } from "../_components/SectionToolbar";
 import { TournamentPageState } from "../_components/TournamentPageState";
 import { TournamentMapsSkeleton } from "../_components/TournamentSkeletons";
@@ -134,12 +135,16 @@ export default function TournamentMapsPage({
           ) : null}
 
           <div id="map-pool" className="scroll-mt-28 border-t border-[color:var(--aqt-border)] pt-3">
-            <h2 className={cn(EYEBROW, "mb-1")}>
-              {t("tournamentDetail.mapPool.title", { count: pool.total })}
-            </h2>
-            <p className="mb-3 text-caption text-[color:var(--aqt-fg-faint)]">
-              {t("tournamentDetail.mapPool.rounds.lede")}
-            </p>
+            {/* Title and lede on one line: together they are one caption for
+                everything below, not two blocks of their own. */}
+            <div className="mb-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <h2 className={EYEBROW}>
+                {t("tournamentDetail.mapPool.title", { count: pool.total })}
+              </h2>
+              <p className="text-caption text-[color:var(--aqt-fg-faint)]">
+                {t("tournamentDetail.mapPool.rounds.lede")}
+              </p>
+            </div>
             {/* The pool is only ever shown per round: a merged list of every map
                 the tournament may touch answers no question a reader has, since
                 no single match plays from it. The flat grid below is the
@@ -176,37 +181,36 @@ export default function TournamentMapsPage({
                 ))}
               </div>
             ) : (
-              <div className="grid gap-5">
+              <div className="grid gap-6">
                 {stages.map((stage) => (
-                  <section key={stage.stageId}>
-                    <h3 className={cn(LABEL, "mb-2")}>{stage.stageName}</h3>
-                    <div className="grid">
+                  <section key={stage.stageId} aria-label={stage.stageName}>
+                    <h3 className="text-ui font-semibold text-[color:var(--aqt-fg)]">
+                      {stage.stageName}
+                    </h3>
+                    {/* One card per round, two abreast from lg — the same
+                        grouping the Matches section uses for a stage's rounds. */}
+                    <div className="mt-3 grid gap-3 lg:grid-cols-2 lg:items-start">
                       {stage.rounds.map((round) => {
                         const roundMode = singleGamemode(
                           round.pool.byGamemode.flatMap((group) => group.maps)
                         );
                         return (
-                          <div
+                          <TournamentTeamCardFrame
                             key={round.key}
                             data-map-pool-round={round.key}
-                            className="grid grid-cols-1 gap-x-5 gap-y-2 border-t border-[color:var(--aqt-border)] py-3 sm:grid-cols-[minmax(5rem,7rem)_minmax(0,1fr)]"
-                          >
-                            <div className="flex items-baseline gap-2 sm:block">
-                              <div className="flex items-center gap-1.5 text-caption font-semibold">
+                            name={
+                              <span className="inline-flex items-center gap-1.5">
                                 <ModeIcon gamemode={roundMode} />
                                 {round.round ?? t("tournamentDetail.mapPool.rounds.wholeStage")}
-                              </div>
-                              {round.slots ? (
-                                <div className={cn(LABEL, "aqt-tnum sm:mt-0.5")}>
-                                  Bo{round.slots.length}
-                                </div>
-                              ) : null}
-                            </div>
+                              </span>
+                            }
+                            metricValue={round.slots ? `Bo${round.slots.length}` : undefined}
+                          >
                             {/* One ROW per map of the series: the candidates for
                                 map 1 read left to right, map 2 on the line
                                 below. Stacking them into columns made a round
                                 read top-to-bottom, against the order it plays. */}
-                            <div className="grid gap-2">
+                            <div className="divide-y divide-[color:var(--aqt-overlay-border)]">
                               {(round.slots ?? [{ position: 0, maps: roundPoolMaps(round) }]).map(
                                 (slot) => {
                                   // A slot is usually one mode (three Control
@@ -218,27 +222,29 @@ export default function TournamentMapsPage({
                                   return (
                                     <div
                                       key={slot.position}
-                                      className="grid grid-cols-1 gap-1 sm:grid-cols-[minmax(4.5rem,6.5rem)_minmax(0,1fr)] sm:items-start sm:gap-3"
+                                      className="grid grid-cols-1 gap-2 px-3.5 py-3 sm:grid-cols-[minmax(4.5rem,5.5rem)_minmax(0,1fr)] sm:items-center sm:gap-3"
                                     >
                                       {slot.position > 0 ? (
-                                        <div
-                                          className={cn(LABEL, "flex items-center gap-1.5 sm:pt-1")}
-                                        >
+                                        <div className={cn(LABEL, "flex items-center gap-1.5")}>
                                           <ModeIcon gamemode={slotMode} />
                                           {t("tournamentDetail.mapPool.slot", {
                                             n: slot.position
                                           })}
                                         </div>
                                       ) : (
-                                        <span />
+                                        <span className="hidden sm:block" />
                                       )}
-                                      <div className="flex flex-wrap gap-2">
+                                      {/* Under 640px a slot stays one line and
+                                          scrolls, so the series still reads map
+                                          1, map 2 top to bottom; from 640px the
+                                          candidates share the row in thirds. */}
+                                      <div className="-mx-3.5 flex snap-x snap-mandatory scroll-px-3.5 gap-2 overflow-x-auto px-3.5 sm:mx-0 sm:grid sm:grid-cols-3 sm:overflow-visible sm:px-0">
                                         {slot.maps.map((map) => (
                                           <MapCard
                                             key={map.id}
                                             map={map}
                                             size="sm"
-                                            className="w-[9rem]"
+                                            className="w-[9rem] shrink-0 snap-start sm:w-auto"
                                           />
                                         ))}
                                       </div>
@@ -247,7 +253,7 @@ export default function TournamentMapsPage({
                                 }
                               )}
                             </div>
-                          </div>
+                          </TournamentTeamCardFrame>
                         );
                       })}
                     </div>

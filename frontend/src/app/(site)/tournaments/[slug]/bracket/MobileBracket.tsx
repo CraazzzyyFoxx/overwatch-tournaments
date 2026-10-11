@@ -4,12 +4,10 @@ import { useMemo, useState } from "react";
 import { FileEdit, Pencil } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import {
-  activeRoundNumber,
-  bracketRoundShape,
-  buildRoundGroups
-} from "@/lib/bracket/view";
+import { activeRoundNumber, bracketRoundShape, buildRoundGroups } from "@/lib/bracket/view";
+import { HEADER_CHIP } from "@/components/bracket/BracketCanvas";
 import { FilterChip, FilterChipGroup } from "@/components/ui/filter-chip";
+import { swissPools } from "@/lib/bracket/swiss";
 import { useBracketRoundLabel } from "@/hooks/useBracketRoundLabel";
 import type { Encounter } from "@/types/encounter.types";
 import type { StageType } from "@/types/tournament.types";
@@ -53,11 +51,15 @@ export function MobileBracket({
   const t = useTranslations();
   const roundLabel = useBracketRoundLabel();
 
-  const { rounds, shape } = useMemo(() => {
+  const { rounds, shape, swiss } = useMemo(() => {
     const groups = buildRoundGroups(encounters);
     const upper = groups.filter((g) => g.round > 0).sort((a, b) => a.round - b.round);
     const lower = groups.filter((g) => g.round < 0).sort((a, b) => b.round - a.round);
-    return { rounds: [...upper, ...lower], shape: bracketRoundShape(type, encounters) };
+    return {
+      rounds: [...upper, ...lower],
+      shape: bracketRoundShape(type, encounters),
+      swiss: type === "swiss" ? swissPools(upper) : null
+    };
   }, [encounters, type]);
 
   const initialRound =
@@ -67,65 +69,93 @@ export function MobileBracket({
   const current = rounds.find((g) => g.round === round) ?? rounds[0];
 
   if (!current) {
-    return <div className="py-8 text-center text-[color:var(--aqt-fg-muted)]">{t("common.noBracketMatches")}</div>;
+    return (
+      <div className="py-8 text-center text-[color:var(--aqt-fg-muted)]">
+        {t("common.noBracketMatches")}
+      </div>
+    );
   }
 
   // The chips list both brackets in one row, so their names keep the UB/LB
   // prefix the tree's own columns can do without.
   const label = (r: number) => roundLabel(r, shape);
+  // Swiss: the round's matches under their record pools, the way the tree splits its column.
+  const sections: { label: string | null; matches: typeof current.matches }[] = swiss?.rounds.find(
+    (entry) => entry.round === current.round
+  )?.pools ?? [{ label: null, matches: current.matches }];
 
   return (
     <div className="space-y-3">
       <FilterChipGroup label={t("tournamentDetail.bracketRegion")} className="overflow-x-auto">
         {rounds.map((g) => (
-          <FilterChip key={g.round} active={g.round === current.round} onClick={() => setRound(g.round)}>
+          <FilterChip
+            key={g.round}
+            active={g.round === current.round}
+            onClick={() => setRound(g.round)}
+          >
             {label(g.round)}
           </FilterChip>
         ))}
       </FilterChipGroup>
-      <ul className="space-y-2">
-        {current.matches.map((match) => {
-          const encounter = encounters.find((e) => e.id === match.id);
-          if (!encounter) return null;
-          // The same gates the tree applies: an organizer on a phone edits, a
-          // captain reports — the list is not a read-only copy of the bracket.
-          const editable = onEdit && (canEdit?.(encounter) ?? true);
-          const reportable = onReport && (canReport?.(encounter) ?? false);
-          return (
-            <li key={match.id} className={match.id === highlightMatchId ? "rounded-[10px] ring-2 ring-[color:var(--aqt-teal)]" : undefined}>
-              <MatchCard
-                encounter={encounter}
-                eyebrow={`${label(match.round)} · Bo${encounter.best_of}`}
-                href={interactive ? `/encounters/${match.id}` : undefined}
-              />
-              {editable || reportable ? (
-                <div className="mt-1.5 flex justify-end gap-2">
-                  {editable ? (
-                    <button
-                      type="button"
-                      className={`${ACTION_BUTTON} border-[color:var(--aqt-border-2)] text-[color:var(--aqt-fg-muted)] hover:text-[color:var(--aqt-fg)]`}
-                      onClick={() => onEdit(encounter)}
-                    >
-                      <Pencil className="size-3.5" aria-hidden />
-                      {t("bracket.editMatch")}
-                    </button>
+      {sections.map((section) => (
+        <section key={section.label ?? "all"} className="space-y-2">
+          {section.label !== null ? (
+            <h3>
+              <span className={HEADER_CHIP}>{section.label}</span>
+            </h3>
+          ) : null}
+          <ul className="space-y-2">
+            {section.matches.map((match) => {
+              const encounter = encounters.find((e) => e.id === match.id);
+              if (!encounter) return null;
+              // The same gates the tree applies: an organizer on a phone edits, a
+              // captain reports — the list is not a read-only copy of the bracket.
+              const editable = onEdit && (canEdit?.(encounter) ?? true);
+              const reportable = onReport && (canReport?.(encounter) ?? false);
+              return (
+                <li
+                  key={match.id}
+                  className={
+                    match.id === highlightMatchId
+                      ? "rounded-[10px] ring-2 ring-[color:var(--aqt-teal)]"
+                      : undefined
+                  }
+                >
+                  <MatchCard
+                    encounter={encounter}
+                    eyebrow={`${label(match.round)} · Bo${encounter.best_of}`}
+                    href={interactive ? `/encounters/${match.id}` : undefined}
+                  />
+                  {editable || reportable ? (
+                    <div className="mt-1.5 flex justify-end gap-2">
+                      {editable ? (
+                        <button
+                          type="button"
+                          className={`${ACTION_BUTTON} border-[color:var(--aqt-border-2)] text-[color:var(--aqt-fg-muted)] hover:text-[color:var(--aqt-fg)]`}
+                          onClick={() => onEdit(encounter)}
+                        >
+                          <Pencil className="size-3.5" aria-hidden />
+                          {t("bracket.editMatch")}
+                        </button>
+                      ) : null}
+                      {reportable ? (
+                        <button
+                          type="button"
+                          className={`${ACTION_BUTTON} border-[color:color-mix(in_srgb,var(--aqt-teal)_30%,transparent)] bg-[color:color-mix(in_srgb,var(--aqt-teal)_16%,transparent)] text-[color:var(--aqt-teal)]`}
+                          onClick={() => onReport(encounter)}
+                        >
+                          <FileEdit className="size-3.5" aria-hidden />
+                          {t("bracket.reportMatch")}
+                        </button>
+                      ) : null}
+                    </div>
                   ) : null}
-                  {reportable ? (
-                    <button
-                      type="button"
-                      className={`${ACTION_BUTTON} border-[color:color-mix(in_srgb,var(--aqt-teal)_30%,transparent)] bg-[color:color-mix(in_srgb,var(--aqt-teal)_16%,transparent)] text-[color:var(--aqt-teal)]`}
-                      onClick={() => onReport(encounter)}
-                    >
-                      <FileEdit className="size-3.5" aria-hidden />
-                      {t("bracket.reportMatch")}
-                    </button>
-                  ) : null}
-                </div>
-              ) : null}
-            </li>
-          );
-        })}
-      </ul>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ))}
     </div>
   );
 }

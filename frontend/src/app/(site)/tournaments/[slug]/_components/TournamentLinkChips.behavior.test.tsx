@@ -70,6 +70,25 @@ describe("TournamentLinkChips", () => {
     expect(html).toBe("");
   });
 
+  it("drops a bracket link that only points back at this site's bracket tab", () => {
+    // The rail already has the tab and the overview already previews it; the
+    // organizer's EXTERNAL bracket is the one worth a chip.
+    const internal = renderToStaticMarkup(
+      <TournamentLinkChips
+        links={[
+          link({ kind: "bracket", url: "/tournaments/gandon-cup-10/bracket?stage=3" }),
+          link({ kind: "bracket", url: "https://owt.craazzzyyfoxx.me/tournaments/gandon-cup-10/bracket" })
+        ]}
+      />
+    );
+    expect(internal).toBe("");
+
+    const external = renderToStaticMarkup(
+      <TournamentLinkChips links={[link({ kind: "bracket", url: "https://challonge.com/anak" })]} />
+    );
+    expect(external).toContain("https://challonge.com/anak");
+  });
+
   it("orders by sort_order, breaking ties on id like the backend does", () => {
     const html = renderToStaticMarkup(
       <TournamentLinkChips

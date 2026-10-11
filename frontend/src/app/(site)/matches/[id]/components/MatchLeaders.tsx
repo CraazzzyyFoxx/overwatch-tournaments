@@ -7,14 +7,17 @@ import { TeamWithStats } from "@/types/team.types";
 import { LEADER_STATS, STAT_META, findLeader, formatStat } from "@/lib/match-stats";
 import { HeroStrip } from "@/components/hero/HeroImage";
 import { getPlayerSlug } from "@/lib/player";
+import { cn } from "@/lib/utils";
 
 interface MatchLeadersProps {
   home: TeamWithStats;
   away: TeamWithStats;
   round: number;
+  /** Column overrides for a narrower host than the full-width match page. */
+  gridClassName?: string;
 }
 
-const MatchLeaders = ({ home, away, round }: MatchLeadersProps) => {
+const MatchLeaders = ({ home, away, round, gridClassName }: MatchLeadersProps) => {
   const t = useTranslations<never>();
   const format = useFormatter();
 
@@ -29,7 +32,7 @@ const MatchLeaders = ({ home, away, round }: MatchLeadersProps) => {
       <span className="aqt-tnum mb-2 block text-label font-bold uppercase tracking-label text-[color:var(--aqt-fg-faint)]">
         {t("matches.leaders.title")}
       </span>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+      <div className={cn("grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6", gridClassName)}>
         {cards.map(({ name, leader }) => {
           if (!leader) return null;
           const accent = leader.side === "home" ? "var(--aqt-teal)" : "var(--aqt-rose)";

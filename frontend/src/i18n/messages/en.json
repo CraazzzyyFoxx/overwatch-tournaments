@@ -179,6 +179,7 @@
       "admitted": "Admitted",
       "notAdmitted": "Not Admitted",
       "pendingCheckIn": "Admitted (Check-in pending)",
+      "pendingShort": "Pending",
       "overridden": "requirement unmet, admission already granted"
     },
     "yes": "Yes",
@@ -2062,29 +2063,26 @@
     },
     "heading": {
       "all": "All tournaments",
-      "shown": "{count, plural, one {# shown} other {# shown}}"
+      "count": "{count, plural, one {# tournament} other {# tournaments}}"
     },
     "row": {
-      "bracketAria": "Bracket for {name}",
-      "openAria": "Open tournament {name}"
+      "bracketAria": "Bracket for {name}"
     },
     "empty": {
       "title": "No tournaments found",
       "body": "Try adjusting your filters or check back soon for upcoming tournaments."
     },
     "hero": {
-      "coord": "OWT // Tournaments",
       "sector": "Sector · {name}",
       "title": "All tournaments in one place",
-      "lede": "From draft to crown: track every event your community has run. Live brackets, locked rosters, and crowned champions — all in one ledger.",
+      "lede": "Every event your community has run, from sign-ups to the final.",
       "liveNow": "Live now",
-      "matchesInFlight": "{count, plural, one {# match in flight} other {# matches in flight}}",
-      "noMatchesInFlight": "No matches in flight",
       "teamsBalancedLabel": "Teams balanced"
     },
     "filters": {
       "standard": "Standard",
-      "searchPlaceholder": "Filter by name or number…",
+      "searchPlaceholder": "Search tournaments",
+      "typeLabel": "Type",
       "sort": {
         "newest": "Newest first",
         "oldest": "Oldest first",
@@ -2098,7 +2096,7 @@
     },
     "footer": {
       "unit": "tournaments",
-      "loadMore": "Load more tournaments",
+      "loadMore": "Show {count} more",
       "progress": "Showing {loaded} of {total, plural, one {# tournament} other {# tournaments}}",
       "error": "Couldn't load more tournaments. Check your connection and try again."
     },
@@ -2124,7 +2122,6 @@
     }
   },
   "teams": {
-    "groupLabel": "Group {name}",
     "roster": {
       "role": "Role",
       "battleTag": "Battle tag",
@@ -2427,8 +2424,10 @@
         "latest": "Latest"
       },
       "format": {
-        "title": "Format",
-        "description": "About"
+        "title": "Format"
+      },
+      "about": {
+        "title": "About"
       },
       "live": {
         "title": "Now playing",
@@ -2468,7 +2467,6 @@
       "numbers": {
         "title": "Numbers",
         "teams": "Teams",
-        "players": "Players",
         "matches": "Matches",
         "days": "Days",
         "played": "Played"
@@ -2511,7 +2509,6 @@
       "title": "Statistics",
       "tabsLabel": "Statistics sub-tabs",
       "heroes": {
-        "roleLabel": "Filter heroes by role",
         "emptyTitle": "No hero data yet",
         "emptyDescription": "Hero play-time data will appear after match statistics are processed."
       },
@@ -2539,7 +2536,6 @@
       "rosterColumn": "Roster",
       "sr": "SR",
       "record": "W–L",
-      "champion": "champion",
       "byGroup": "By group",
       "searchLabel": "Search team or player",
       "searchPlaceholder": "Team or player…",
@@ -2681,6 +2677,8 @@
       "clearTeamFilter": "Clear the team filter",
       "addTeam": "+ Team",
       "pickTeam": "Filter by team",
+      "searchTeam": "Search teams…",
+      "noTeamMatch": "No teams match that search.",
       "mapFilter": "Map: {name}",
       "clearMapFilter": "Clear the map filter"
     }
@@ -3123,6 +3121,7 @@
     "rearrangeFailed": "Could not swap teams",
     "dragTeam": "Drag {team}",
     "matchAria": "{label}: {home} vs {away}",
+    "floatRecord": "Record coming into this round: {record}",
     "dnd": {
       "instructions": "Press Space or Enter to pick up a team, move it with the arrow keys onto another slot, then press Space or Enter to swap. Escape cancels.",
       "pickedUp": "Picked up {team}",
@@ -3188,8 +3187,6 @@
       "upset": "Upset"
     },
     "media": {
-      "logsAvailable": "Game logs available",
-      "noLogs": "No game logs",
       "comingTwitch": "Coming with Twitch integration"
     },
     "sort": {
@@ -3309,16 +3306,11 @@
       "metaDescription": "Overview for {home} vs {away} on {siteName}.",
       "back": "Back to encounters",
       "tie": "Tie",
-      "winner": "Winner",
-      "loser": "Loser",
       "pregameRoom": "Pre-game room",
       "heroTitle": "{home} vs {away}",
       "verdictWin": "Series won by {team}",
       "verdictDraw": "Series drawn",
       "verdictPending": "Series not decided",
-      "ledeWin": "{winner} took the series {winnerScore}–{loserScore} against {loser} across {maps, plural, one {# map} other {# maps}}.",
-      "ledeDraw": "The series ended level after {maps, plural, one {# map} other {# maps}}.",
-      "ledePending": "A Bo{format} series that has not been played out yet.",
       "placementShort": "Placement",
       "pipsAria": "Map results: {summary}",
       "pipUnplayed": "not played",
@@ -3327,9 +3319,6 @@
       "statMapsSub": "{format} · {home}–{away} on maps",
       "statDuration": "Series time",
       "statDurationSub": "{value} average per map",
-      "statNoTiming": "No map timings reported",
-      "statClosenessSub": "Reported by captains",
-      "statNoCloseness": "Not rated",
       "scheduledAt": "Scheduled",
       "startedAt": "Started",
       "endedAt": "Ended",
@@ -3337,24 +3326,15 @@
       "scoreboard": "Series result",
       "mapsMeta": "{played} of {slots} slots played",
       "mapNotPlayed": "Not played",
-      "mapNotPlayedHint": "The series ended before this map",
       "mapInProgress": "In progress",
       "mapInProgressHint": "The result of this map has not been reported yet",
-      "mapPendingHint": "Allowed by the format, not reached yet",
       "mapScoreAria": "{home} {homeScore}, {away} {awayScore}",
       "openScoreboard": "Scoreboard",
       "rosters": "Rosters",
-      "rostersMeta": "Substitutes branch off the player they replaced",
       "seriesStats": "Series statistics",
-      "seriesStatsMeta": "Totalled across {maps, plural, one {# map} other {# maps}}",
       "seriesStatsNoLogs": "No game logs were parsed for this series, so per-player statistics are unavailable.",
       "seriesTableTitle": "Player totals",
       "seriesTableSub": "Whole series · same columns as a single map",
-      "statsMapsCounted": "Maps counted",
-      "statsMapsCountedValue": "{counted} of {total}",
-      "statsScope": "Scope",
-      "statsScopeValue": "Whole series",
-      "statsRoster": "Players",
       "statsPartial": "Showing {counted} of {total} maps — the rest could not be loaded.",
       "colMaps": "MAPS",
       "colMapsTitle": "Maps this player appeared on",
@@ -3362,7 +3342,6 @@
       "reportsMeta": "{count, plural, one {# report} other {# reports}} filed",
       "reportsDisagree": "The captains reported different scores. An organizer decides the official result.",
       "reportAria": "Report from {team}",
-      "reportBy": "Filed by",
       "reportedScore": "Reported score",
       "reportedCloseness": "Match quality",
       "reportedClosenessValue": "{value} of 10",
@@ -3379,7 +3358,14 @@
       "pregameSeeds": "Seeds (home / away)",
       "pregameTurn": "Current turn",
       "readinessHome": "Home ready",
-      "readinessAway": "Away ready"
+      "readinessAway": "Away ready",
+      "tabsLabel": "Match sections",
+      "tabs": {
+        "overview": "Overview",
+        "players": "Players",
+        "pregame": "Pre-game"
+      },
+      "mapsUnplayed": "{count, plural, one {# more map} other {# more maps}} not played"
     },
     "match": {
       "mapAlt": "Map",

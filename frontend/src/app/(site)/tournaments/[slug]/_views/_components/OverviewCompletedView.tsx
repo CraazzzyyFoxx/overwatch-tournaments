@@ -12,7 +12,6 @@ import type { Team } from "@/types/team.types";
 import type { StageSummary, Standings, Tournament } from "@/types/tournament.types";
 
 import { Podium, type PodiumTeam } from "../../_components/Podium";
-import { tournamentPlayersCount } from "../../_components/TournamentClientLayout";
 import {
   ELIMINATION_TYPES,
   findGrandFinal,
@@ -107,6 +106,7 @@ export function OverviewCompletedView({
   nowBlock,
   miniBracket,
   groupTable,
+  aboutCard,
   formatCard,
   linksCard
 }: Readonly<{
@@ -123,14 +123,12 @@ export function OverviewCompletedView({
   nowBlock: React.ReactNode;
   miniBracket: React.ReactNode;
   groupTable: React.ReactNode;
+  aboutCard: React.ReactNode;
   formatCard: React.ReactNode;
   linksCard: React.ReactNode;
 }>) {
   const t = useTranslations();
   const roundLabel = useBracketRoundLabel();
-
-  const teamsCount = tournament.teams_count ?? 0;
-  const playersCount = tournamentPlayersCount(tournament);
 
   const teamById = new Map(teams.map((team) => [team.id, team]));
   // Only a bracket crowns a champion by its last match. A group stage's final
@@ -229,21 +227,16 @@ export function OverviewCompletedView({
         {miniBracket}
         {groupTable}
         {podium === null && miniBracket === null && groupTable === null ? nowBlock : null}
+        {aboutCard}
       </div>
       <div className="grid content-start gap-4">
         {topHeroes.length > 0 ? (
           <TopHeroesCard topHeroes={topHeroes} overviewHref={overviewHref} />
         ) : null}
+        {/* Teams and players are the header's stamps — this card counts what
+            the header cannot: how much was played, and over how long. */}
         <OverviewCard title={t("tournamentDetail.overview.numbers.title")}>
           <div className="grid gap-2 sm:grid-cols-2">
-            <StatTile
-              label={t(tournament.team_formation === "registration" ? "registrationTeams.list.inTournament" : "tournamentDetail.overview.numbers.teams")}
-              value={String(teamsCount)}
-            />
-            <StatTile
-              label={t("tournamentDetail.overview.numbers.players")}
-              value={String(playersCount)}
-            />
             <StatTile
               label={t("tournamentDetail.overview.numbers.matches")}
               value={String(encounters.length)}

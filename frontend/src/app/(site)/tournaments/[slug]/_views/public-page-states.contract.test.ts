@@ -36,7 +36,7 @@ const encountersModule =
 const heroesModule =
   (await import("./TournamentStatsPage")) as typeof import("./TournamentStatsPage") & {
     getHeroesQueryPresentation?: GetQueryPresentation;
-    getHeroPlaytimeMetric?: (playtime: number) => {
+    getHeroPlaytimeMetric?: (playtime: number, leaderPlaytime: number) => {
       sharePercent: number;
       barWidthPercent: number;
     };
@@ -215,22 +215,23 @@ describe("public tournament data interactions", () => {
     expect(table).toContain("event.stopPropagation()");
   });
 
-  it("uses one finite absolute playtime scale for the bar and accessibility value", () => {
+  it("scales a hero's bar against its column's leader, keeping the exact share finite", () => {
     const metric = heroesModule.getHeroPlaytimeMetric;
-    const cases: Array<[number, number]> = [
-      [0.25, 25],
-      [0.125, 12.5],
-      [0, 0],
-      [-0.5, 0],
-      [Number.NaN, 0],
-      [Number.POSITIVE_INFINITY, 0],
-      [1.5, 100],
-      [101, 100]
+    const cases: Array<[number, number, number, number]> = [
+      // playtime, leader, share %, bar %
+      [0.16, 0.16, 16, 100],
+      [0.04, 0.16, 4, 25],
+      [0, 0.16, 0, 0],
+      [-0.5, 0.16, 0, 0],
+      [Number.NaN, 0.16, 0, 0],
+      [Number.POSITIVE_INFINITY, 0.16, 0, 0],
+      [0.1, 0, 10, 0],
+      [1.5, 1.5, 100, 100]
     ];
 
-    for (const [playtime, expected] of cases) {
-      const result = metric?.(playtime);
-      expect(result).toEqual({ sharePercent: expected, barWidthPercent: expected });
+    for (const [playtime, leader, share, bar] of cases) {
+      const result = metric?.(playtime, leader);
+      expect(result).toEqual({ sharePercent: share, barWidthPercent: bar });
       expect(Number.isFinite(result?.barWidthPercent)).toBe(true);
     }
   });
@@ -282,23 +283,6 @@ describe("public tournament data page contracts", () => {
     expect(table).not.toContain("setSearchValue(search)");
     expect(table).toContain("searchInputRef");
     expect(table).toContain("nextSearch");
-  });
-
-  it("keeps hero role controls and exposes ranked quantitative bars", () => {
-    const source = pageSource("TournamentStatsPage.tsx");
-    const chip = readFileSync(join(componentsRoot, "ui/filter-chip.tsx"), "utf8");
-
-    expect(source).toContain("ROLE_ORDER");
-    expect(source).toContain('roleFilter === "all"');
-    // The pressed state now lives in the one shared chip rather than being
-    // re-declared per page, so assert it where it is implemented.
-    expect(source).toContain("<FilterChip");
-    expect(chip).toContain("aria-pressed={active}");
-    expect(source).toContain("aria-label={");
-    expect(source).toContain('role="progressbar"');
-    expect(source).toContain("aria-valuenow");
-    expect(source).toContain("data-rank");
-    expect(source).toContain("getHeroPlaytimeMetric");
   });
 
   it("keeps the standings table contained, sticky and semantic", () => {

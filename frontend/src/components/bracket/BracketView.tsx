@@ -24,6 +24,7 @@ import {
   orderEliminationRounds,
   type BracketMatch
 } from "@/lib/bracket/view";
+import { isEncounterCompleted } from "@/lib/encounter/status";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useBracketRoundLabel } from "@/hooks/useBracketRoundLabel";
 import { cn } from "@/lib/utils";
@@ -167,8 +168,13 @@ export function BracketView<M extends BracketMatch>({
   // Where the tree opens when nothing is deep-linked: the top-left corner of
   // the round in play. A finished round 1 is not what a viewer came for, and
   // the canvas is routinely wider than the viewport.
+  //
+  // A played-out bracket has no round in play — `activeRoundNumber` falls back
+  // to the grand final there, and scrolling to it would open the tree with its
+  // first round cut off the left edge. It opens at its origin instead, whole.
   const focus = useMemo(() => {
     if (highlightMatchId !== null) return null;
+    if (encounters.every(isEncounterCompleted)) return null;
     const round = activeRoundNumber(orderEliminationRounds(encounters, type).groups);
     if (round === null) return null;
     const column = layout.nodes.filter((node) => node.encounter.round === round);

@@ -35,6 +35,24 @@ import {
 } from "./participantsColumns.model";
 
 // ---------------------------------------------------------------------------
+// Icon-only status columns
+// ---------------------------------------------------------------------------
+
+/**
+ * The word beside the admission glyph for the pending state only, so an amber
+ * clock does not hang on hue alone. `aria-hidden`: the badge's own `aria-label`
+ * already carries the full verdict. Hidden below `lg`, where the icon track has
+ * no room.
+ */
+function StatusWord({ children }: Readonly<{ children: string }>) {
+  return (
+    <span className="hidden text-label text-[color:var(--aqt-fg-muted)] lg:inline" aria-hidden>
+      {children}
+    </span>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main builder
 // ---------------------------------------------------------------------------
 
@@ -320,7 +338,14 @@ export function buildParticipantColumns(
     responsive: "always",
     align: "center",
     width: "icon",
-    render: (reg) => <AdmissionStatusBadge admission={reg.admission} />,
+    render: (reg) => (
+      <span className="inline-flex items-center gap-1">
+        <AdmissionStatusBadge admission={reg.admission} />
+        {reg.admission.decision === "pending_check_in" ? (
+          <StatusWord>{t("common.admissionStatus.pendingShort")}</StatusWord>
+        ) : null}
+      </span>
+    ),
   });
 
   return columns;

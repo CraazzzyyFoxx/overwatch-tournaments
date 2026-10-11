@@ -364,6 +364,10 @@ services:
       - WORKER_METRICS_PORT=9100
     extra_hosts:
       - "host.docker.internal:host-gateway"
+      # OverFast runs on this host (/root/overfast-api behind the host HAProxy). Its public
+      # name resolves to a front on another box; pin it here so rank and catalog calls stay
+      # local. TLS still checks the real certificate.
+      - "overfast.craazzzyyfoxx.me:host-gateway"
     depends_on:
       redis:
         condition: service_healthy

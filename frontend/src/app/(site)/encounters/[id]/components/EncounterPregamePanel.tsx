@@ -120,14 +120,17 @@ function PregameSection({
     <div className={styles.card}>
       <div className={styles.cardHead}>
         <h3 className={styles.cardTitle}>{title}</h3>
-        {session ? (
-          <Pill tone={state.is_complete ? "good" : "accent"} live={!state.is_complete}>
-            {state.is_complete
-              ? t("encounters.veto.room.statusChip.completed")
-              : t("encounters.veto.room.statusChip.active")}
+        {/* Only the running session keeps a chip: it is the one state that moves. */}
+        {session && !state.is_complete ? (
+          <Pill tone="accent" live>
+            {t("encounters.veto.room.statusChip.active")}
           </Pill>
         ) : (
-          <Pill>{t(`encounters.veto.room.empty.${reasonKey(state)}` as never)}</Pill>
+          <span className={cn(styles.cardSub, session && styles.metaGood)}>
+            {session
+              ? t("encounters.veto.room.statusChip.completed")
+              : t(`encounters.veto.room.empty.${reasonKey(state)}` as never)}
+          </span>
         )}
       </div>
 

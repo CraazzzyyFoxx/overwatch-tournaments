@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -9,7 +9,8 @@ import { useTranslations } from "next-intl";
 import { ImageOff } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { FilterChip } from "@/components/ui/filter-chip";
+import PlayerRoleIcon from "@/components/PlayerRoleIcon";
+import { TournamentTeamCardFrame } from "@/components/TournamentTeamCard";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import { tournamentHref } from "@/lib/tournament/url";
 import { cn } from "@/lib/utils";
@@ -36,17 +37,26 @@ import {
 } from "@/lib/public-page-query-presentation";
 
 type RoleKey = Exclude<PlayerRoleSlotCode, "flex">;
-type RoleFilter = "all" | RoleKey;
-
 const ROLE_ORDER: RoleKey[] = ["tank", "damage", "support"];
 
 export const getHeroesQueryPresentation = (state: PublicPageQueryState) =>
   getPublicPageQueryPresentation(state);
 
-export function getHeroPlaytimeMetric(playtime: number) {
-  const sharePercent = Number.isFinite(playtime) ? Math.min(100, Math.max(0, playtime * 100)) : 0;
+const toPercent = (share: number) =>
+  Number.isFinite(share) ? Math.min(100, Math.max(0, share * 100)) : 0;
 
-  return { sharePercent, barWidthPercent: sharePercent };
+/**
+ * A hero's share of all play-time, and its bar against the column's leader.
+ * On the absolute 0–100% scale the leader of a 53-hero pool filled a sixth of
+ * the track and most bars were slivers; the exact share is still printed.
+ */
+export function getHeroPlaytimeMetric(playtime: number, leaderPlaytime: number) {
+  const sharePercent = toPercent(playtime);
+  const leaderPercent = toPercent(leaderPlaytime);
+  return {
+    sharePercent,
+    barWidthPercent: leaderPercent > 0 ? Math.min(100, (sharePercent / leaderPercent) * 100) : 0
+  };
 }
 
 function heroRole(playtime: HeroPlaytime): RoleKey {
@@ -112,20 +122,17 @@ function HeroesTab({
         workspaceId: tournament.workspace_id
       })
   });
-  const [roleFilter, setRoleFilter] = useState<RoleFilter>("all");
-
   const heroes = useMemo(
     () =>
       statsQuery.data ? [...statsQuery.data.results].sort((a, b) => b.playtime - a.playtime) : [],
     [statsQuery.data]
   );
-  const roleCounts = useMemo(() => {
-    const counts: Record<RoleKey, number> = { tank: 0, damage: 0, support: 0 };
-    for (const hero of heroes) counts[heroRole(hero)] += 1;
-    return counts;
-  }, [heroes]);
-  const visible =
-    roleFilter === "all" ? heroes : heroes.filter((hero) => heroRole(hero) === roleFilter);
+  // One ranked column per role: the columns are the filter, so a reader
+  // compares the tank pool with itself instead of scrolling past 53 rows.
+  const columns = ROLE_ORDER.map((role) => ({
+    role,
+    heroes: heroes.filter((hero) => heroRole(hero) === role)
+  })).filter((column) => column.heroes.length > 0);
   const presentation = getHeroesQueryPresentation({
     data: statsQuery.data,
     itemCount: heroes.length,
@@ -145,97 +152,94 @@ function HeroesTab({
     <>
       {presentation.showUpdating ? <UpdatingBadge /> : null}
 
-      {heroes.length > 0 ? (
-        <div
-          className={styles.controlRail}
-          role="group"
-          aria-label={t("tournamentDetail.stats.heroes.roleLabel")}
-        >
-          <FilterChip
-            active={roleFilter === "all"}
-            count={heroes.length}
-            onClick={() => setRoleFilter("all")}
-          >
-            {t("common.all")}
-          </FilterChip>
-          {ROLE_ORDER.filter((role) => roleCounts[role] > 0).map((role) => (
-            <FilterChip
-              key={role}
-              active={roleFilter === role}
-              count={roleCounts[role]}
-              onClick={() => setRoleFilter(role)}
-            >
-              {t(`common.roles.${role}`)}
-            </FilterChip>
-          ))}
-        </div>
-      ) : null}
-
       {presentation.contentState === "empty" ? (
         <TournamentPageState
           state="empty"
           title={t("tournamentDetail.stats.heroes.emptyTitle")}
           description={t("tournamentDetail.stats.heroes.emptyDescription")}
         />
-      ) : visible.length === 0 ? (
-        <TournamentPageState state="filtered-empty" onReset={() => setRoleFilter("all")} />
       ) : (
-        <div className={cn("tn-card", styles.heroList)}>
-          <div className="hero-bars">
-            {visible.map((hero, index) => {
-              const role = heroRole(hero);
-              const { sharePercent, barWidthPercent } = getHeroPlaytimeMetric(hero.playtime);
-              return (
-                <div className="hero-row" key={hero.hero.id} data-rank={index + 1}>
-                  <div className="hero-name">
-                    <span className={styles.heroRank} aria-hidden="true">
-                      {String(index + 1).padStart(2, "0")}
+        <div className="grid gap-3 lg:grid-cols-3 lg:items-start">
+          {columns.map(({ role, heroes: roleHeroes }) => {
+            const roleName = t(`common.roles.${role}`);
+            const roleShare = roleHeroes.reduce((sum, hero) => sum + toPercent(hero.playtime), 0);
+            return (
+              <TournamentTeamCardFrame
+                key={role}
+                aria-label={roleName}
+                name={
+                  <span className="inline-flex items-center gap-2">
+                    <PlayerRoleIcon role={normalizePlayerRole(role)} size={18} decorative />
+                    {roleName}
+                    {/* The role's share of all play-time, said beside its name;
+                        every value below carries its own % sign. */}
+                    <span className="aqt-tnum font-normal text-[color:var(--aqt-fg-dim)]">
+                      · {roleShare.toFixed(1)}%
                     </span>
-                    <Avatar className="h-[34px] w-[34px] border-none bg-transparent">
-                      {hero.hero.image_path ? (
-                        <AvatarImage
-                          src={hero.hero.image_path}
-                          alt={hero.hero.name}
-                          className="object-contain"
-                        />
-                      ) : null}
-                      <AvatarFallback className="bg-transparent" />
-                    </Avatar>
-                    <div className="stack">
-                      <span className="nm">{hero.hero.name}</span>
-                      <span className="meta">{t(`common.roles.${role}`)}</span>
-                    </div>
-                  </div>
-                  <div
-                    className="hero-bar"
-                    role="progressbar"
-                    aria-label={`${hero.hero.name}: ${sharePercent.toFixed(1)} ${t("common.playtimeLabel")}`}
-                    aria-valuemin={0}
-                    aria-valuemax={100}
-                    aria-valuenow={sharePercent}
-                    aria-valuetext={`${sharePercent.toFixed(1)} ${t("common.playtimeLabel")}`}
-                  >
-                    <div
-                      className={cn(
-                        "fill",
-                        styles.heroBarFill,
-                        !hero.hero.color && role,
-                        barWidthPercent === 0 && styles.zeroHeroBar
-                      )}
-                      style={{
-                        width: `${barWidthPercent}%`,
-                        backgroundColor: hero.hero.color || undefined
-                      }}
-                    />
-                  </div>
-                  <div className="hero-stats">
-                    <span className="val">{sharePercent.toFixed(1)}</span>
-                    <span className="pct">{t("common.playtimeLabel")}</span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                  </span>
+                }
+              >
+                <ol className="py-1.5">
+                  {roleHeroes.map((hero, index) => {
+                    const { sharePercent, barWidthPercent } = getHeroPlaytimeMetric(
+                      hero.playtime,
+                      roleHeroes[0].playtime
+                    );
+                    const valueText = `${sharePercent.toFixed(1)} ${t("common.playtimeLabel")}`;
+                    return (
+                      <li
+                        key={hero.hero.id}
+                        data-rank={index + 1}
+                        className="grid grid-cols-[1.25rem_28px_minmax(0,1fr)_3.25rem] items-center gap-x-2.5 px-3.5 py-1.5"
+                      >
+                        <span
+                          aria-hidden="true"
+                          className="aqt-tnum text-label text-[color:var(--aqt-fg-faint)]"
+                        >
+                          {String(index + 1).padStart(2, "0")}
+                        </span>
+                        <Avatar className="size-7 border-none bg-transparent">
+                          {hero.hero.image_path ? (
+                            <AvatarImage
+                              src={hero.hero.image_path}
+                              alt=""
+                              className="object-contain"
+                            />
+                          ) : null}
+                          <AvatarFallback className="bg-transparent" />
+                        </Avatar>
+                        <span className="flex min-w-0 flex-col gap-1">
+                          <span className="truncate text-caption font-semibold">
+                            {hero.hero.name}
+                          </span>
+                          <span
+                            role="progressbar"
+                            aria-label={`${hero.hero.name}: ${valueText}`}
+                            aria-valuemin={0}
+                            aria-valuemax={100}
+                            aria-valuenow={sharePercent}
+                            aria-valuetext={valueText}
+                            className="block h-1.5 overflow-hidden rounded-full bg-[color:var(--aqt-overlay-2)]"
+                          >
+                            <span
+                              className="block h-full rounded-full"
+                              style={{
+                                width: `${barWidthPercent}%`,
+                                backgroundColor: hero.hero.color || `var(--aqt-${role})`
+                              }}
+                            />
+                          </span>
+                        </span>
+                        <span className="aqt-tnum text-right text-caption font-semibold text-[color:var(--aqt-fg)]">
+                          {sharePercent.toFixed(1)}%
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ol>
+              </TournamentTeamCardFrame>
+            );
+          })}
         </div>
       )}
     </>
@@ -309,6 +313,9 @@ function MapsTab({ tournament, slug }: Readonly<{ tournament: Tournament; slug: 
         (playedCounts[right.map.id]?.played ?? 0) - (playedCounts[left.map.id]?.played ?? 0);
       return delta !== 0 ? delta : left.map.name.localeCompare(right.map.name);
     });
+  // The bars are read against the most-played map, like the hero bars against
+  // their leader: the question is "how popular", not "what fraction of 100".
+  const mostPlayed = Math.max(1, ...rows.map(({ map }) => playedCounts[map.id]?.played ?? 0));
 
   const content = (
     <>
@@ -321,29 +328,21 @@ function MapsTab({ tournament, slug }: Readonly<{ tournament: Tournament; slug: 
           description={t("tournamentDetail.stats.maps.emptyDescription")}
         />
       ) : (
-        // No card: the table sits on the page like the match list does (§11),
-        // with its own horizontal scroller inside.
         <div
           id="map-stats"
-          className="scroll-mt-28 overflow-x-auto border-t border-[color:var(--aqt-border)] pt-3"
+          className="scroll-mt-28 overflow-x-auto rounded-[12px] border border-[color:var(--aqt-overlay-border)] bg-[color:var(--aqt-overlay-1)]"
         >
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-[color:var(--aqt-border)] text-label uppercase tracking-label text-[color:var(--aqt-fg-faint)]">
-                <th scope="col" className="py-2 pr-3 text-left font-medium">
+              <tr className="border-b border-[color:var(--aqt-overlay-border)] text-label uppercase tracking-label text-[color:var(--aqt-fg-faint)]">
+                <th scope="col" className="py-2.5 pl-3.5 pr-3 text-left font-medium">
                   {t("tournamentDetail.mapPool.col.map")}
                 </th>
-                <th scope="col" className="py-2 pr-3 text-left font-medium">
-                  {t("tournamentDetail.mapPool.col.mode")}
-                </th>
-                <th scope="col" className="py-2 pr-3 text-right font-medium">
+                <th scope="col" className="py-2.5 pr-3 text-right font-medium sm:w-[45%] sm:text-left">
                   {t("tournamentDetail.mapPool.col.played")}
                 </th>
-                <th scope="col" className="py-2 pr-3 text-right font-medium">
+                <th scope="col" className="py-2.5 pr-3.5 text-right font-medium">
                   {t("tournamentDetail.mapPool.col.avgDuration")}
-                </th>
-                <th scope="col" className="py-2">
-                  <span className="sr-only">{t("common.matches")}</span>
                 </th>
               </tr>
             </thead>
@@ -356,38 +355,76 @@ function MapsTab({ tournament, slug }: Readonly<{ tournament: Tournament; slug: 
                   <tr
                     key={map.id}
                     className={cn(
-                      "border-b border-[color:var(--aqt-border)]/60",
-                      muted && "text-[color:var(--aqt-fg-dim)]"
+                      "relative border-b border-[color:var(--aqt-overlay-border)] last:border-b-0",
+                      muted
+                        ? "text-[color:var(--aqt-fg-dim)]"
+                        : "transition-colors hover:bg-[color:var(--aqt-overlay-2)]"
                     )}
                   >
-                    <td className="py-2 pr-3">
-                      <span className="flex items-center gap-2.5">
-                        <span className="relative block aspect-video w-14 shrink-0 overflow-hidden rounded border border-[color:var(--aqt-border)]">
+                    <td className="py-2 pl-3.5 pr-3">
+                      <span className="flex items-center gap-3">
+                        <span className="relative hidden aspect-video w-16 shrink-0 overflow-hidden rounded border border-[color:var(--aqt-border)] sm:block">
                           {map.image_path ? (
-                            <Image src={map.image_path} alt="" fill sizes="56px" className="object-cover" />
+                            <Image src={map.image_path} alt="" fill sizes="64px" className="object-cover" />
                           ) : (
                             <span className="grid h-full place-items-center text-[color:var(--aqt-fg-faint)]">
                               <ImageOff aria-hidden width={12} height={12} />
                             </span>
                           )}
                         </span>
-                        <span className={cn("truncate", !muted && "font-semibold")}>{map.name}</span>
+                        <span className="flex min-w-0 flex-col">
+                          {/* A played map is one link for the whole row: its
+                              name, stretched over the row. */}
+                          {played > 0 ? (
+                            <Link
+                              data-map-name
+                              href={tournamentHref({ slug }, `/matches?map=${map.id}`)}
+                              title={t("common.matches")}
+                              className="truncate font-semibold after:absolute after:inset-0 hover:text-[color:var(--aqt-teal)] focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-[color:var(--aqt-teal)]"
+                            >
+                              {map.name}
+                            </Link>
+                          ) : (
+                            <span data-map-name className="truncate">
+                              {map.name}
+                            </span>
+                          )}
+                          <span
+                            data-map-mode
+                            className="flex items-center gap-1.5 text-label text-[color:var(--aqt-fg-muted)]"
+                          >
+                            {map.gamemode?.image_path ? (
+                              <Image
+                                src={map.gamemode.image_path}
+                                alt=""
+                                width={12}
+                                height={12}
+                                aria-hidden
+                              />
+                            ) : null}
+                            {mode}
+                          </span>
+                        </span>
                       </span>
                     </td>
-                    <td className="py-2 pr-3 text-[color:var(--aqt-fg-muted)]">{mode}</td>
-                    <td className="aqt-tnum py-2 pr-3 text-right">{played}</td>
-                    <td className="aqt-tnum py-2 pr-3 text-right">
-                      {counts?.avgDurationSec != null ? clock(counts.avgDurationSec) : "—"}
-                    </td>
-                    <td className="py-2 text-right">
-                      {played > 0 ? (
-                        <Link
-                          href={tournamentHref({ slug }, `/matches?map=${map.id}`)}
-                          className="text-label text-[color:var(--aqt-fg-muted)] hover:text-[color:var(--aqt-teal)]"
+                    <td className="py-2 pr-3">
+                      <span className="flex items-center justify-end gap-3 sm:justify-start">
+                        {/* The bar is the glance; under 640px the count alone
+                            keeps the row on screen. */}
+                        <span
+                          aria-hidden
+                          className="hidden h-1.5 flex-1 overflow-hidden rounded-full bg-[color:var(--aqt-overlay-2)] sm:block"
                         >
-                          {t("common.matches")} →
-                        </Link>
-                      ) : null}
+                          <span
+                            className="block h-full rounded-full bg-[color:var(--aqt-teal)]"
+                            style={{ width: `${(played / mostPlayed) * 100}%` }}
+                          />
+                        </span>
+                        <span className="aqt-tnum w-6 text-right font-semibold">{played}</span>
+                      </span>
+                    </td>
+                    <td className="aqt-tnum py-2 pr-3.5 text-right">
+                      {counts?.avgDurationSec != null ? clock(counts.avgDurationSec) : "—"}
                     </td>
                   </tr>
                 );

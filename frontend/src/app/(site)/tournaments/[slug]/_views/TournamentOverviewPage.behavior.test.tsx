@@ -917,12 +917,15 @@ describe("once it is over (§3C)", () => {
     expect(titles).toContain(COPY.numbers.title);
     expect(titles).toContain(COPY.heroes.title);
     expect(container.textContent).toContain("Kiriko");
-    // Two calendar days, 4 matches, 4 teams, 20 players.
+    // 4 matches over two calendar days. Teams and players are the header's
+    // stamps — the card used to repeat both one screen below them.
     const numbers = Array.from(container.querySelectorAll("section")).find((node) =>
       node.querySelector("h2")?.textContent?.includes(COPY.numbers.title)
     );
+    expect(numbers?.textContent).toContain(COPY.numbers.matches);
+    expect(numbers?.textContent).toContain(COPY.numbers.days);
+    expect(numbers?.textContent).not.toContain(COPY.numbers.teams);
     expect(numbers?.textContent).toContain("4");
-    expect(numbers?.textContent).toContain("20");
     expect(numbers?.textContent).toContain("2");
   });
 
@@ -1041,6 +1044,27 @@ describe("the reference tail", () => {
     expect(text).toContain(
       `Groups (${en.common.roundRobin}) → Playoffs (${en.bracket.doubleElimination.toLowerCase()})`
     );
+  });
+
+  it("drops the type suffix when the organizer named the stage after it", async () => {
+    // "Swiss (swiss) → Double Elimination (double elimination)" is the same
+    // word twice; the suffix exists for names that do NOT state the format.
+    tournament = makeTournament("live", {
+      stages: [
+        makeStage({ id: 6, name: "Swiss", stage_type: "swiss", order: 0 }),
+        makeStage({ id: 7, name: " double elimination ", stage_type: "double_elimination", order: 1 })
+      ]
+    });
+    await mount();
+
+    const card = Array.from(container.querySelectorAll("section")).find((node) =>
+      node.querySelector("h2")?.textContent?.includes(COPY.format.title)
+    );
+    const text = card?.textContent ?? "";
+
+    expect(text).toContain("Swiss");
+    expect(text).not.toContain(`(${en.common.swiss})`);
+    expect(text).not.toContain(`(${en.bracket.doubleElimination.toLowerCase()})`);
   });
 
   it("joins stages that share a phase order as parallel brackets", async () => {

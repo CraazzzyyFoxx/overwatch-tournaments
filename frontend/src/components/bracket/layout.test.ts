@@ -11,6 +11,8 @@ import {
   MATCH_GAP_Y,
   PADDING_X,
   PADDING_Y,
+  POOL_GAP_Y,
+  POOL_HEADER_HEIGHT,
   ROUND_GAP_X
 } from "./layout";
 
@@ -110,6 +112,48 @@ describe("buildLayout", () => {
     // Each header names the signed round its column holds — the editor adds a
     // match to that round, and an id-derived guess gets the sign wrong.
     expect(layout.headers.map((header) => header.round)).toEqual([1, 2, -1, 3, 4]);
+  });
+
+  // The lower bracket running longer than the upper one must not pull the grand
+  // final into its last column, on top of the lower final and its header.
+  it("keeps the grand final right of the lower final when the lower bracket runs longer", () => {
+    const layout = buildLayout(
+      [
+        match(1, 1),
+        match(2, 1),
+        match(3, 2), // UB final
+        match(4, -1),
+        match(5, -2),
+        match(6, -3), // LB final
+        match(7, 3) // Grand Final
+      ],
+      "double_elimination",
+      label
+    );
+
+    expect(nodeOf(layout, 6).x).toBe(columnX(2));
+    expect(nodeOf(layout, 7).x).toBe(columnX(3));
+  });
+
+  it("splits a Swiss round's column into record pools, each card under its pool's label", () => {
+    const done = (home: number, away: number) => ({ status: "completed", score: { home, away } });
+    const layout = buildLayout(
+      [
+        match(1, 1, done(2, 0)),
+        match(2, 1, done(0, 2)),
+        match(3, 2, { home_team_id: 10, away_team_id: 21 }), // both 1-0
+        match(4, 2, { home_team_id: 11, away_team_id: 20 }) // both 0-1
+      ],
+      "swiss",
+      label
+    );
+
+    const pools = layout.headers.filter((header) => header.pool && header.round === 2);
+    expect(pools.map((header) => header.label)).toEqual(["1-0", "0-1"]);
+    expect(nodeOf(layout, 3).y).toBe(pools[0].y + POOL_HEADER_HEIGHT);
+    expect(nodeOf(layout, 4).y).toBe(pools[1].y + POOL_HEADER_HEIGHT);
+    expect(pools[1].y).toBe(nodeOf(layout, 3).y + CARD_HEIGHT + POOL_GAP_Y);
+    expect(layout.edges).toEqual([]);
   });
 
   // The team path highlight follows a connector only once the source is played:

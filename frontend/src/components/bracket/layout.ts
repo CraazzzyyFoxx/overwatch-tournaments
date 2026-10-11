@@ -17,6 +17,7 @@ import {
   type RoundGroup,
   type SlotHint
 } from "@/lib/bracket/view";
+import { swissPools } from "@/lib/bracket/swiss";
 import { isEncounterCompleted } from "@/lib/encounter/status";
 
 /** The match-number strip down a card's left edge; part of `CARD_WIDTH`. */
@@ -32,6 +33,9 @@ export const HEADER_GAP_Y = 14;
 export const SECTION_GAP_Y = 52;
 export const PADDING_X = 16;
 export const PADDING_Y = 14;
+// A Swiss pool's record chip ("1-0") above its cards, and the gap between pools.
+export const POOL_HEADER_HEIGHT = 30;
+export const POOL_GAP_Y = 18;
 
 export type Side = "home" | "away";
 
@@ -56,6 +60,8 @@ export interface MatchNodeData {
   awayScore: number;
   winner: Side | null;
   isCompleted: boolean;
+  /** Swiss: the team that floated into a better pool, and the record it brought. */
+  floatRecord: { side: Side; label: string } | null;
 }
 
 export interface LayoutNode {
@@ -86,6 +92,8 @@ export interface LayoutHeader {
   section: "upper" | "lower";
   /** The signed round this column holds — positive upstairs, negative downstairs. */
   round: number;
+  /** A Swiss record pool inside the round's column, not the column's own name. */
+  pool?: true;
 }
 
 export interface BracketLayout {
@@ -187,7 +195,8 @@ function createNode(
   y: number,
   matchNumber: number,
   hint: SlotHint,
-  latestMatchByTeam: Map<number, number>
+  latestMatchByTeam: Map<number, number>,
+  floatRecord: MatchNodeData["floatRecord"] = null
 ): LayoutNode {
   const names = getMatchNames(match);
   return {
@@ -208,7 +217,8 @@ function createNode(
       homeScore: match.score.home,
       awayScore: match.score.away,
       winner: getWinner(match),
-      isCompleted: isEncounterCompleted(match)
+      isCompleted: isEncounterCompleted(match),
+      floatRecord
     },
     encounter: match
   };
@@ -366,7 +376,17 @@ export function buildLayout(
   const columnX = (index: number) => PADDING_X + index * (CARD_WIDTH + ROUND_GAP_X);
 
   const upperBaseMatches = getRoundSectionMatchCapacity(upperRounds);
-  const upperSectionHeight = sectionHeight(upperBaseMatches);
+  // Swiss splits each round's column into record pools, each under its own label.
+  const swiss = type === "swiss" ? swissPools(upperRounds) : null;
+  const poolColumnHeight = (pools: { matches: BracketMatch[] }[]) =>
+    pools.reduce(
+      (height, pool, index) =>
+        height + (index > 0 ? POOL_GAP_Y : 0) + POOL_HEADER_HEIGHT + sectionHeight(pool.matches.length),
+      0
+    );
+  const upperSectionHeight = swiss
+    ? Math.max(CARD_HEIGHT, ...swiss.rounds.map((round) => poolColumnHeight(round.pools)))
+    : sectionHeight(upperBaseMatches);
   const widestUpperRoundIndex = Math.max(
     0,
     upperRounds.findIndex((group) => group.matches.length === upperBaseMatches)
@@ -375,6 +395,50 @@ export function buildLayout(
   const upperTop = upperHeaderY + HEADER_HEIGHT + HEADER_GAP_Y;
 
   upperRounds.forEach((group, columnIndex) => {
+    if (swiss) {
+      // Same ascending round order as `upperRounds`, so the index is the round's.
+      const { pools } = swiss.rounds[columnIndex];
+      const x = columnX(columnIndex);
+      headers.push({
+        id: `upper-header-${group.round}`,
+        x,
+        y: upperHeaderY,
+        label: roundLabel(group.round, roundShape),
+        section: "upper",
+        round: group.round
+      });
+      // Top-aligned: centring columns of different pool counts draws a staircase.
+      let y = upperTop;
+      for (const pool of pools) {
+        headers.push({
+          id: `pool-header-${group.round}-${pool.label}`,
+          x,
+          y,
+          label: pool.label,
+          section: "upper",
+          round: group.round,
+          pool: true
+        });
+        y += POOL_HEADER_HEIGHT;
+        for (const match of pool.matches) {
+          nodes.push(
+            createNode(
+              match,
+              x,
+              y,
+              matchNumbers.get(match.id) ?? 0,
+              slotHints.get(match.id) ?? { home: null, away: null },
+              latestMatchByTeam,
+              swiss.floats.get(match.id) ?? null
+            )
+          );
+          y += CARD_HEIGHT + MATCH_GAP_Y;
+        }
+        y += POOL_GAP_Y - MATCH_GAP_Y;
+      }
+      return;
+    }
+
     // A play-in round narrower than the round after it sits half a pitch down,
     // so its cards land between the pairs they feed rather than centred over
     // the whole section.

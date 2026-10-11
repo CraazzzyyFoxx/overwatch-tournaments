@@ -8,7 +8,6 @@ import { TriangleAlert } from "lucide-react";
 import { cn } from "@/lib/utils";
 import captainService from "@/services/captain.service";
 import type { CaptainReport, MatchReportForm } from "@/types/encounter.types";
-import { Pill, PillFact } from "@/components/match/EncounterAtoms";
 import styles from "@/components/match/EncounterDetail.module.css";
 import { encounterQueryKeys } from "@/lib/encounters/query-keys";
 
@@ -114,23 +113,21 @@ function ReportCard({
     <div className={cn(styles.card, side === "home" ? styles.sideHome : styles.sideAway)}>
       <div className={styles.rosterHead}>
         <h3 className={styles.rosterName}>{teamName}</h3>
-        <div className={styles.rosterFacts}>
-          {report.reporter_name ? (
-            <PillFact label={t("encounters.detail.reportBy")} value={report.reporter_name} />
-          ) : null}
-          {submittedAt ? (
-            <Pill>
-              <span className={styles.mono}>
-                {format.dateTime(new Date(submittedAt), {
+        <span className={styles.cardSub}>
+          {[
+            report.reporter_name,
+            submittedAt
+              ? format.dateTime(new Date(submittedAt), {
                   day: "numeric",
                   month: "short",
                   hour: "2-digit",
                   minute: "2-digit"
-                })}
-              </span>
-            </Pill>
-          ) : null}
-        </div>
+                })
+              : null
+          ]
+            .filter(Boolean)
+            .join(" · ")}
+        </span>
       </div>
 
       <div className={cn(styles.cardBody, styles.reportFields)}>
