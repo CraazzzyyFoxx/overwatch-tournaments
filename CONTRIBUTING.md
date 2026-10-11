@@ -99,8 +99,10 @@ point: a new domain gets one sentence of explanation or it does not ship.
 
 ## Checks before you push
 
-Install the hooks once — `pre-commit install` — which runs ruff plus file hygiene on staged
-files. Then, per area you touched:
+Install the hooks once — `cd backend && uv run pre-commit install` (unset a stale `core.hooksPath`
+first, pre-commit refuses to install over it). On commit: ruff `--fix` + format and file hygiene on
+staged files. On push: the CI ruff gate (`ruff check` + `ruff format --check` over `backend/`), with
+the ruff version from `backend/uv.lock`. Then, per area you touched:
 
 ```bash
 # Backend
