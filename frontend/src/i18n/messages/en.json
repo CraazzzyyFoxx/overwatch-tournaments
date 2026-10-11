@@ -2509,7 +2509,6 @@
       "title": "Statistics",
       "tabsLabel": "Statistics sub-tabs",
       "heroes": {
-        "roleLabel": "Filter heroes by role",
         "emptyTitle": "No hero data yet",
         "emptyDescription": "Hero play-time data will appear after match statistics are processed."
       },

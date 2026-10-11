@@ -362,11 +362,11 @@ function mapRows() {
   return [...container.querySelectorAll("tbody tr")].map((row) => {
     const cells = [...row.querySelectorAll("td")];
     return {
-      map: cells[0]?.textContent ?? "",
+      map: row.querySelector("[data-map-name]")?.textContent ?? "",
       thumb: cells[0]?.querySelector("img")?.getAttribute("src") ?? null,
-      mode: cells[1]?.textContent ?? "",
-      played: cells[2]?.textContent ?? "",
-      duration: cells[3]?.textContent ?? "",
+      mode: row.querySelector("[data-map-mode]")?.textContent ?? "",
+      played: cells[1]?.textContent ?? "",
+      duration: cells[2]?.textContent ?? "",
       matchesHref: row.querySelector("a")?.getAttribute("href") ?? null
     };
   });

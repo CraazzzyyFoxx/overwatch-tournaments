@@ -631,29 +631,6 @@
   flex: 0 0 auto;
 }
 
-.heroList {
-  min-width: 0;
-  padding: 1.1rem;
-  overflow: hidden;
-}
-
-.heroRank {
-  flex: 0 0 auto;
-  color: var(--aqt-fg-faint);
-  font-family: var(--aqt-data);
-  font-size: var(--text-label);
-  font-variant-numeric: tabular-nums;
-}
-
-.heroBarFill {
-  background-color: var(--aqt-teal);
-  box-shadow: inset -1px 0 hsl(0 0% 100% / 0.22);
-}
-
-.zeroHeroBar {
-  min-width: 0 !important;
-}
-
 .standingsSections {
   display: grid;
   min-width: 0;
@@ -903,10 +880,6 @@
   .skeletonHeader {
     align-items: start;
     flex-direction: column;
-  }
-
-  .heroList {
-    padding: 0.85rem;
   }
 
   .skeletonRow {
