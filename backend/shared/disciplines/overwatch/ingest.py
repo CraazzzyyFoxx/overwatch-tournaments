@@ -146,7 +146,7 @@ class _Log:
 
         def add(name: str, declared: str) -> None:
             if not name or declared not in names:
-                raise ValueError("Log participant has no declared team")
+                raise ValueError(f"Log participant {name!r} has no declared team (got team {declared!r})")
             team = names[declared]
             if name in side and side[name] != team:
                 raise ValueError("Log participant appears on both teams")
