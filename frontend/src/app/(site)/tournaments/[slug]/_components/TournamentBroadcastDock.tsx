@@ -17,6 +17,9 @@ import type { TournamentStreams } from "@/types/stream.types";
 type TournamentBroadcastDockProps = {
   /** The tournament's streams, or `undefined` while the read is in flight. */
   streams: TournamentStreams | undefined;
+  /** Controlled open state (see `TournamentStreamDocks`); omitted, the dock keeps its own. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
   className?: string;
 };
 
@@ -55,6 +58,8 @@ type TournamentBroadcastDockProps = {
  */
 export function TournamentBroadcastDock({
   streams,
+  open,
+  onOpenChange,
   className
 }: Readonly<TournamentBroadcastDockProps>) {
   const t = useTranslations();
@@ -87,6 +92,8 @@ export function TournamentBroadcastDock({
           <StatusDot className="size-[7px] text-[color:var(--aqt-status-live)]" />
         ) : null
       }
+      open={open}
+      onOpenChange={onOpenChange}
       className={className}
     >
       {featuredChannel ? (

@@ -7,7 +7,7 @@ import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { usePathname } from "next/navigation";
 import { ExternalLink, Radio } from "lucide-react";
 
-import { TournamentBroadcastDock } from "./TournamentBroadcastDock";
+import { TournamentStreamDocks } from "./TournamentStreamDocks";
 import TournamentRegisterButton from "./TournamentRegisterButton";
 import { HeroPhaseFact } from "./HeroPhaseFact";
 import { NextPhaseChip } from "./NextPhaseChip";
@@ -376,13 +376,14 @@ export default function TournamentClientLayout({
         }
       />
 
-      <section className="min-w-0">{children}</section>
-
-      {/* Fixed to the bottom-trailing corner, so it takes no room in this
-          stack. Rendered LAST on purpose: a complementary panel that a
-          keyboard user reaches after the section content, rather than two tab
-          stops standing in front of every page. */}
-      <TournamentBroadcastDock streams={streams} />
+      {/* The docks are fixed to the bottom-trailing corner, so they take no
+          room in this stack. Rendered AFTER the section on purpose: a
+          complementary panel that a keyboard user reaches after the content,
+          rather than two tab stops standing in front of every page. The owner
+          wraps the section because the bracket's live markers open its POV dock. */}
+      <TournamentStreamDocks streams={streams}>
+        <section className="min-w-0">{children}</section>
+      </TournamentStreamDocks>
     </div>
   );
 }

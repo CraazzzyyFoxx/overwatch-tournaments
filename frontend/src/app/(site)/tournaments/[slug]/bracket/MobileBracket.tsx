@@ -1,16 +1,28 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useContext, useMemo, useState } from "react";
 import { FileEdit, Pencil } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { activeRoundNumber, bracketRoundShape, buildRoundGroups } from "@/lib/bracket/view";
+import {
+  activeRoundNumber,
+  bracketRoundShape,
+  buildRoundGroups,
+  computeLatestMatchByTeam,
+  orderEliminationRounds
+} from "@/lib/bracket/view";
 import { HEADER_CHIP } from "@/components/bracket/BracketCanvas";
+import { StreamWatchContext } from "@/components/stream/stream-watch";
 import { Button } from "@/components/ui/button";
 import { FilterChip, FilterChipGroup } from "@/components/ui/filter-chip";
+import { StatusDot } from "@/components/ui/status-dot";
 import { swissPools } from "@/lib/bracket/swiss";
+import { duelSeats } from "@/lib/encounter/seats";
+import { isEncounterCompleted } from "@/lib/encounter/status";
+import { streamEntryKey } from "@/lib/social/stream-platform";
 import { useBracketRoundLabel } from "@/hooks/useBracketRoundLabel";
 import type { Encounter } from "@/types/encounter.types";
+import type { StreamEntry } from "@/types/stream.types";
 import type { StageType } from "@/types/tournament.types";
 
 import { MatchCard } from "../_components/MatchCard";
@@ -26,6 +38,8 @@ type MobileBracketProps = {
   canReport?: (encounter: Encounter) => boolean;
   /** `false`: cards do not link to the encounter page (a stage still in preview). */
   interactive?: boolean;
+  /** Team id → its participant stream on air; see `buildLiveTeamStreams`. */
+  liveTeamStreams?: ReadonlyMap<number, StreamEntry>;
 };
 
 /**
@@ -44,10 +58,12 @@ export function MobileBracket({
   onReport,
   canEdit,
   canReport,
-  interactive = true
+  interactive = true,
+  liveTeamStreams
 }: Readonly<MobileBracketProps>) {
   const t = useTranslations();
   const roundLabel = useBracketRoundLabel();
+  const watcher = useContext(StreamWatchContext);
 
   const { rounds, shape, swiss } = useMemo(() => {
     const groups = buildRoundGroups(encounters);
@@ -59,6 +75,12 @@ export function MobileBracket({
       swiss: type === "swiss" ? swissPools(upper) : null
     };
   }, [encounters, type]);
+  // The tree's rule (`MatchNodeSeat.isLatest`): a team's stream is news for its
+  // newest match only.
+  const latestMatchByTeam = useMemo(
+    () => computeLatestMatchByTeam(encounters, orderEliminationRounds(encounters, type).matchNumbers),
+    [encounters, type]
+  );
 
   const initialRound =
     rounds.find((g) => g.matches.some((m) => m.id === highlightMatchId))?.round ??
@@ -110,6 +132,16 @@ export function MobileBracket({
               // captain reports — the list is not a read-only copy of the bracket.
               const editable = onEdit && (canEdit?.(encounter) ?? true);
               const reportable = onReport && (canReport?.(encounter) ?? false);
+              // The whole card is a link, and a button cannot live inside one,
+              // so the tree's live dot becomes a labelled button under the card.
+              const liveStreams =
+                watcher === null || liveTeamStreams === undefined || isEncounterCompleted(encounter)
+                  ? []
+                  : duelSeats(encounter.teams).flatMap((seat) => {
+                      if (!seat?.team_id || latestMatchByTeam.get(seat.team_id) !== match.id) return [];
+                      const stream = liveTeamStreams.get(seat.team_id);
+                      return stream ? [stream] : [];
+                    });
               return (
                 <li
                   key={match.id}
@@ -124,29 +156,57 @@ export function MobileBracket({
                     eyebrow={`${label(match.round)} · Bo${encounter.best_of}`}
                     href={interactive ? `/encounters/${match.id}` : undefined}
                   />
-                  {editable || reportable ? (
-                    <div className="mt-1.5 flex justify-end gap-2">
-                      {editable ? (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => onEdit(encounter)}
-                        >
-                          <Pencil aria-hidden />
-                          {t("bracket.editMatch")}
-                        </Button>
-                      ) : null}
-                      {reportable ? (
-                        <Button
-                          type="button"
-                          variant="accent"
-                          size="sm"
-                          onClick={() => onReport(encounter)}
-                        >
-                          <FileEdit aria-hidden />
-                          {t("bracket.reportMatch")}
-                        </Button>
+                  {editable || reportable || liveStreams.length > 0 ? (
+                    <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                      {liveStreams.map((stream) => {
+                        const player = stream.player?.name ?? stream.channel;
+                        const watchLabel =
+                          stream.viewer_count == null
+                            ? t("bracket.watchTeamStream", { player })
+                            : t("bracket.watchTeamStreamWithViewers", { player, count: stream.viewer_count });
+                        return (
+                          <Button
+                            key={streamEntryKey(stream)}
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            aria-label={watchLabel}
+                            title={watchLabel}
+                            aria-pressed={watcher?.watchingKey === streamEntryKey(stream)}
+                            data-live-team-stream={stream.channel}
+                            onClick={(event) => watcher?.watch(stream, event.currentTarget)}
+                            className="aria-pressed:border-[color:var(--aqt-status-live)]"
+                          >
+                            <StatusDot pulse className="size-[7px] text-[color:var(--aqt-status-live)]" />
+                            {player}
+                          </Button>
+                        );
+                      })}
+                      {editable || reportable ? (
+                        <span className="ms-auto flex gap-2">
+                          {editable ? (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => onEdit(encounter)}
+                            >
+                              <Pencil aria-hidden />
+                              {t("bracket.editMatch")}
+                            </Button>
+                          ) : null}
+                          {reportable ? (
+                            <Button
+                              type="button"
+                              variant="accent"
+                              size="sm"
+                              onClick={() => onReport(encounter)}
+                            >
+                              <FileEdit aria-hidden />
+                              {t("bracket.reportMatch")}
+                            </Button>
+                          ) : null}
+                        </span>
                       ) : null}
                     </div>
                   ) : null}

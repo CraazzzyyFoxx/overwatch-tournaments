@@ -256,6 +256,30 @@ export function orderEliminationRounds(
 }
 
 /**
+ * Team id → the encounter with its highest match number. Match numbers follow
+ * play order across UB, LB and the finals, so "highest" is "newest": the match
+ * the team is playing or waiting to play. A result awaiting confirmation can
+ * leave the winner standing in two open matches; this names the newer.
+ */
+export function computeLatestMatchByTeam(
+  encounters: BracketMatch[],
+  matchNumbers: Map<number, number>
+): Map<number, number> {
+  const latest = new Map<number, number>();
+  for (const match of encounters) {
+    for (const seat of match.teams) {
+      const teamId = seat.team_id ?? 0;
+      if (teamId <= 0) continue;
+      const held = latest.get(teamId);
+      if (held === undefined || (matchNumbers.get(held) ?? 0) < (matchNumbers.get(match.id) ?? 0)) {
+        latest.set(teamId, match.id);
+      }
+    }
+  }
+  return latest;
+}
+
+/**
  * Whether an admin may still move a team in or out of this match: nothing has
  * been played, decided or reported. Mirrors the server's `swap-slot` guards so
  * a drop the server would refuse is never offered.

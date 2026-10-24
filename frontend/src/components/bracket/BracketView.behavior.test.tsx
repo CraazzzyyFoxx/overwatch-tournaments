@@ -13,6 +13,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import en from "@/i18n/messages/en.json";
 import type { Encounter } from "@/types/encounter.types";
 import type { StreamEntry } from "@/types/stream.types";
+import { StreamWatchContext } from "@/components/stream/stream-watch";
 
 import { BracketView } from "./BracketView";
 
@@ -196,26 +197,28 @@ describe("BracketView live-stream indicator", () => {
     );
   });
 
-  // Indication, not navigation: the Streams tab owns the links.
-  it("carries the animated dot without becoming a link or a tab stop", () => {
-    render(
-      <BracketView
-        encounters={[inPlay()]}
-        type="single_elimination"
-        liveTeamStreams={new Map([[7, stream({ channel: "aria", viewer_count: 412 })]])}
-      />
+  // Inside the tournament shell the dot opens the shell's POV dock.
+  it("hands the slot's stream to the page's player and reads pressed while it plays", () => {
+    const aria = stream({ channel: "aria", viewer_count: 412 });
+    const watch = vi.fn();
+    const view = (watchingKey: string | null) => (
+      <StreamWatchContext.Provider value={{ watchingKey, watch }}>
+        <BracketView encounters={[inPlay()]} type="single_elimination" liveTeamStreams={new Map([[7, aria]])} />
+      </StreamWatchContext.Provider>
     );
 
-    const indicator = container.querySelector("[data-live-team-stream]") as HTMLElement;
-    expect(indicator.tagName).toBe("SPAN");
-    expect(indicator.hasAttribute("href")).toBe(false);
-    expect(indicator.hasAttribute("tabindex")).toBe(false);
-    expect(indicator.querySelector("a")).toBeNull();
-    // The site's single liveness language: the shared pulsing dot, decorative
-    // because the indicator's own `aria-label` carries the fact.
-    const dot = indicator.firstElementChild as HTMLElement;
-    expect(dot.getAttribute("aria-hidden")).toBe("true");
-    expect(dot.className).toContain("animate-pulse");
+    render(view(null));
+    const button = container.querySelector("[data-live-team-stream]") as HTMLButtonElement;
+    expect(button.tagName).toBe("BUTTON");
+    expect(button.getAttribute("aria-label")).toBe("Watch Aria live · 412 viewers");
+    expect(button.getAttribute("aria-pressed")).toBe("false");
+
+    act(() => button.click());
+    expect(watch).toHaveBeenCalledWith(aria, button);
+
+    act(() => root!.unmount());
+    render(view("twitch:aria"));
+    expect(container.querySelector("[data-live-team-stream]")?.getAttribute("aria-pressed")).toBe("true");
   });
 
   // An unfilled slot has no team, so there is nothing for a stream to belong to
