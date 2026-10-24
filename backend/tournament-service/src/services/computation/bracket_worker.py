@@ -5,11 +5,14 @@ from faststream.exceptions import RejectMessage
 from loguru import logger
 
 from shared import models
+from shared.repository import TournamentRepository
 from src.core import db
 from src.services.admin.stage import stage_service
 from src.services.computation.jobs import failure_message, is_refusal, jobs_service
 from src.services.standings.swiss_auto_round import swiss_rounds_service
 from src.services.tournament.events import STRUCTURE_RESOURCES, publish_tournament_invalidation
+
+_tournaments = TournamentRepository()
 
 
 async def process_bracket_job(job_id: int) -> None:
@@ -24,9 +27,7 @@ async def process_bracket_job(job_id: int) -> None:
             if current is None or current.status != "running" or current.stage_id is None:
                 return
 
-            await session.scalar(
-                sa.select(models.Tournament.id).where(models.Tournament.id == current.tournament_id).with_for_update()
-            )
+            await _tournaments.lock_for_computation(session, current.tournament_id)
             await session.scalar(
                 sa.select(models.Stage.id).where(models.Stage.id == current.stage_id).with_for_update()
             )

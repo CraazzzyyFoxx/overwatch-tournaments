@@ -265,7 +265,7 @@ class ComputationJobTests(IsolatedAsyncioTestCase):
             id=7, status="running", attempts=2, error="old", started_at="now", tournament_id=1, payload_json={}
         )
         session = SimpleNamespace(
-            # FOR UPDATE SKIP LOCKED finds nothing, the tournament still exists.
+            # The SKIP LOCKED tournament lock finds nothing, the tournament still exists.
             scalar=AsyncMock(side_effect=[None, 1]),
             commit=AsyncMock(),
         )
