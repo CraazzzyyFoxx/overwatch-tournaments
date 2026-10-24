@@ -456,20 +456,42 @@ describe("MatchReportDialog required rules", () => {
 });
 
 describe("MatchReportDialog submission", () => {
-  it("lets a captain submit a report after the result is confirmed", async () => {
-    getReports.mockResolvedValue({ reports: [], form: form() });
+  it("files a late report with the score on record, offering no way to change it", async () => {
+    // The captain's own earlier report said 1–2; the result was confirmed 2–1.
+    getReports.mockResolvedValue({
+      reports: [
+        {
+          id: 9,
+          encounter_id: 42,
+          encounter_team_id: 1,
+          reporter_user_id: 3,
+          games_played: 3,
+          basis_version: 1,
+          results: [
+            { encounter_team_id: 1, score: 1, placement: null, wins: 1 },
+            { encounter_team_id: 2, score: 2, placement: null, wins: 2 }
+          ],
+          closeness: null,
+          comment: null,
+          custom_fields: {},
+          created_at: null,
+          updated_at: null
+        }
+      ],
+      form: form()
+    });
     submitReport.mockResolvedValue({
       id: 42,
       result_status: "confirmed",
       status: "completed",
-      result_source: "series_claim",
+      result_source: "games",
       result_version: 2,
       teams: [],
       closeness: 0.7,
       reports: []
     });
     let closed = false;
-    await mount(
+    const body = await mount(
       <MatchReportDialog
         open
         onOpenChange={(open) => { closed = !open; }}
@@ -477,12 +499,22 @@ describe("MatchReportDialog submission", () => {
       />
     );
 
-    expect(submitButton()?.disabled).toBe(false);
+    expect(body.querySelector("#match-report-42-first-score")).toBeNull();
+    expect(body.querySelector("#match-report-42-games-played")).toBeNull();
+    expect(body.textContent).toContain(messages.matchReport.confirmedReportHint);
     await type("match-report-42-comment", "Late captain report");
     await act(async () => {
       submitButton()!.click();
     });
 
+    expect(submitReport.mock.calls[0][1]).toMatchObject({
+      games_played: 3,
+      results: [
+        { encounter_team_id: 1, score: 2, wins: 2 },
+        { encounter_team_id: 2, score: 1, wins: 1 }
+      ],
+      comment: "Late captain report"
+    });
     expect(closed).toBe(true);
   });
 

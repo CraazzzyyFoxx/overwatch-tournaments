@@ -1529,7 +1529,7 @@
     "autoConfirmed": "Reports match. Result confirmed.",
     "autoDisputed": "Reports differ. Result disputed.",
     "savedAfterConfirmation": "Report saved. The confirmed result is unchanged.",
-    "confirmedReportHint": "The result is already confirmed. You can submit or update your report without changing the official score.",
+    "confirmedReportHint": "The score is confirmed and can't be changed in the report. You can still fill in or update everything else.",
     "mapCodes": "Map replay codes",
     "mapCodePlaceholder": "Replay code",
     "mapLabel": "Map {index}",
@@ -3632,6 +3632,8 @@
     "viewRosters": "Team rosters",
     "liveTeamStream": "{player} is streaming live",
     "liveTeamStreamWithViewers": "{player} is streaming live · {count, plural, one {# viewer} other {# viewers}}",
+    "watchTeamStream": "Watch {player} live",
+    "watchTeamStreamWithViewers": "Watch {player} live · {count, plural, one {# viewer} other {# viewers}}",
     "rosters": {
       "title": "Team Rosters",
       "description": "{first} vs {second}"
@@ -7406,6 +7408,9 @@
       "moreLinks": "Other broadcast links",
       "hide": "Hide the broadcast",
       "show": "Show the broadcast"
+    },
+    "pov": {
+      "close": "Close the stream"
     },
     "card": {
       "team": "Team {team}",

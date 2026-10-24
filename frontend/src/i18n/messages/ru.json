@@ -1529,7 +1529,7 @@
     "autoConfirmed": "Репорты совпали — результат подтверждён",
     "autoDisputed": "Репорты расходятся — результат оспорен",
     "savedAfterConfirmation": "Репорт сохранён — подтверждённый результат не изменён",
-    "confirmedReportHint": "Результат уже подтверждён. Вы можете отправить или обновить свой репорт — официальный счёт не изменится.",
+    "confirmedReportHint": "Счёт подтверждён и в репорте не меняется. Остальные поля можно заполнить или обновить.",
     "mapCodes": "Коды реплеев по картам",
     "mapCodePlaceholder": "Код реплея",
     "mapLabel": "Карта {index}",
@@ -3632,6 +3632,8 @@
     "viewRosters": "Составы команд",
     "liveTeamStream": "{player} сейчас в эфире",
     "liveTeamStreamWithViewers": "{player} сейчас в эфире · {count, plural, one {# зритель} few {# зрителя} many {# зрителей} other {# зрителя}}",
+    "watchTeamStream": "Смотреть стрим {player}",
+    "watchTeamStreamWithViewers": "Смотреть стрим {player} · {count, plural, one {# зритель} few {# зрителя} many {# зрителей} other {# зрителя}}",
     "rosters": {
       "title": "Составы команд",
       "description": "{first} vs {second}"
@@ -7406,6 +7408,9 @@
       "moreLinks": "Другие ссылки на трансляцию",
       "hide": "Скрыть трансляцию",
       "show": "Показать трансляцию"
+    },
+    "pov": {
+      "close": "Закрыть стрим"
     },
     "card": {
       "team": "Команда {team}",
