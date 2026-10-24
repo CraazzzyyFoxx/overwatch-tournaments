@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import importlib
 from datetime import UTC, datetime
+from statistics import NormalDist
 from types import SimpleNamespace
-from unittest import IsolatedAsyncioTestCase
+from unittest import IsolatedAsyncioTestCase, TestCase
 from unittest.mock import AsyncMock, patch
 
+from shared.division_grid import DEFAULT_GRID, DivisionGrid, DivisionTier
 from shared.schemas.role import RoleRef
+from src.domain.forecast import predict_player_division
 
 analytics_flows = importlib.import_module("src.services.analytics.reads")
 
@@ -96,11 +99,11 @@ def _analytics(
 def _shift(
     *,
     value: float = 1.25,
-    confidence: float = 0.82,
+    sd: float | None = 0.01,
 ) -> SimpleNamespace:
     return SimpleNamespace(
         shift=value,
-        confidence=confidence,
+        shift_sd=sd,
         effective_evidence=2.4,
         sample_tournaments=4,
         sample_matches=9,
@@ -127,13 +130,57 @@ class AnalyticsFlowsTests(IsolatedAsyncioTestCase):
         self.assertEqual(404, raised.exception.status_code)
         rows.assert_not_awaited()
 
+    async def _read(self, rows: list) -> analytics_flows.schemas.TournamentAnalytics:
+        service = analytics_flows.analytics_read_service
+        with (
+            patch.object(service, "get_algorithm", AsyncMock(return_value=SimpleNamespace(id=11))),
+            patch.object(service, "get_analytics", AsyncMock(return_value=rows)),
+            patch.object(service, "get_predicted_places", AsyncMock(return_value={})),
+            patch.object(service, "get_match_quality_anomalies", AsyncMock(return_value=[])),
+            patch.object(analytics_flows, "get_division_grid", AsyncMock(return_value=DEFAULT_GRID)),
+        ):
+            return await analytics_flows.flows_service.get_analytics(
+                SimpleNamespace(), tournament_id=7, algorithm_id=11
+            )
+
+    async def test_team_row_sums_forecasts_and_compares_rosters_on_the_canonical_ladder(self) -> None:
+        rank = DEFAULT_GRID.resolve_rank_from_division
+        strong, weak = _team(team_id=1, name="Strong"), _team(team_id=2, name="Weak")
+        rows = [
+            (strong, _player(player_id=1, team_id=1, rank=rank(10)), _shift(value=2.0), _analytics(shift_one=200)),
+            (strong, _player(player_id=2, team_id=1, rank=rank(12)), _shift(value=-1.0), _analytics(shift_one=-50)),
+            (weak, _player(player_id=3, team_id=2, rank=rank(20)), _shift(value=0.0), _analytics(shift_one=None)),
+            (weak, _player(player_id=4, team_id=2, rank=rank(22)), _shift(value=0.0), _analytics(shift_one=None)),
+        ]
+
+        teams = {team.id: team for team in (await self._read(rows)).teams}
+
+        # Two divisions up and one down: the team forecast climbs one tournament-grid division.
+        self.assertEqual(1, teams[1].total_shift)
+        self.assertEqual(0, teams[2].total_shift)
+        # Mean canonical divisions 11 and 21 against a field mean of 16; stronger than the field reads negative.
+        self.assertEqual(-5.0, teams[1].balancer_shift)
+        self.assertEqual(5.0, teams[2].balancer_shift)
+        # Σ move_1 = 150 canonical points = 1.5 divisions.
+        self.assertEqual(150, teams[1].manual_shift_points)
+        self.assertEqual(1.5, teams[1].manual_shift)
+
+    async def test_forecast_threshold_is_read_from_settings(self) -> None:
+        # P(m ≥ 1.5) for m ~ N(1.4, 0.5²) is Φ(−0.2) ≈ 0.42: a two-division climb only below that gate.
+        player = _player(rank=DEFAULT_GRID.resolve_rank_from_division(20))
+        rows = [(_team(), player, _shift(value=1.4, sd=0.5), _analytics())]
+
+        self.assertEqual(-1, (await self._read(rows)).teams[0].players[0].predicted_delta)
+        with patch.object(analytics_flows.settings, "forecast_confidence_threshold", 0.4):
+            self.assertEqual(-2, (await self._read(rows)).teams[0].players[0].predicted_delta)
+
     async def test_get_analytics_serializes_enriched_fields(self) -> None:
         session = SimpleNamespace()
         algorithm = SimpleNamespace(id=11)
         team = _team()
         player = _player()
         analytics = _analytics(wins=4, losses=1, shift_one=200)
-        shift = _shift(value=1.6, confidence=0.82)
+        shift = _shift(value=1.6, sd=0.1)
 
         with (
             patch.object(analytics_flows.analytics_read_service, "get_algorithm", AsyncMock(return_value=algorithm)),
@@ -166,7 +213,7 @@ class AnalyticsFlowsTests(IsolatedAsyncioTestCase):
                     ]
                 ),
             ),
-            patch.object(analytics_flows, "get_division_grid", AsyncMock(return_value=None)),
+            patch.object(analytics_flows, "get_division_grid", AsyncMock(return_value=DEFAULT_GRID)),
         ):
             result = await analytics_flows.flows_service.get_analytics(session, tournament_id=7, algorithm_id=11)
 
@@ -178,13 +225,15 @@ class AnalyticsFlowsTests(IsolatedAsyncioTestCase):
         self.assertEqual(3, serialized_team.predicted_place)
         self.assertEqual(2, serialized_team.placement_delta)
         self.assertEqual(200, serialized_team.manual_shift_points)
-        self.assertEqual(0.2, serialized_team.manual_shift)
-        self.assertEqual(0.82, serialized_team.avg_confidence)
+        self.assertEqual(2.0, serialized_team.manual_shift)
+        self.assertEqual(2, serialized_team.total_shift)
+        self.assertEqual(0.8413, serialized_team.avg_confidence)
         self.assertEqual("smurf", serialized_team.anomalies[0].kind)
         self.assertEqual("smurf", serialized_player.anomalies[0].kind)
         self.assertEqual("promote", serialized_player.predicted_direction)
         self.assertEqual(-2, serialized_player.predicted_delta)
-        self.assertEqual(0.82, serialized_player.confidence)
+        # P(m ≥ 1.5) for m ~ N(1.6, 0.1²): the probability of the shown two-division climb.
+        self.assertAlmostEqual(NormalDist().cdf(1.0), serialized_player.confidence)
         self.assertEqual(2.4, serialized_player.effective_evidence)
         self.assertEqual(4, serialized_player.sample_tournaments)
         self.assertEqual(9, serialized_player.sample_matches)
@@ -218,7 +267,7 @@ class AnalyticsFlowsTests(IsolatedAsyncioTestCase):
                 "get_match_quality_anomalies",
                 AsyncMock(return_value=[]),
             ),
-            patch.object(analytics_flows, "get_division_grid", AsyncMock(return_value=None)),
+            patch.object(analytics_flows, "get_division_grid", AsyncMock(return_value=DEFAULT_GRID)),
         ):
             result = await analytics_flows.flows_service.get_analytics(session, tournament_id=7, algorithm_id=11)
 
@@ -243,7 +292,7 @@ class AnalyticsFlowsTests(IsolatedAsyncioTestCase):
                 "get_match_quality_anomalies",
                 AsyncMock(return_value=[]),
             ),
-            patch.object(analytics_flows, "get_division_grid", AsyncMock(return_value=None)),
+            patch.object(analytics_flows, "get_division_grid", AsyncMock(return_value=DEFAULT_GRID)),
         ):
             result = await analytics_flows.flows_service.get_analytics(session, tournament_id=7, algorithm_id=11)
 
@@ -274,7 +323,7 @@ class AnalyticsFlowsTests(IsolatedAsyncioTestCase):
                 "get_match_quality_anomalies",
                 AsyncMock(return_value=[]),
             ),
-            patch.object(analytics_flows, "get_division_grid", AsyncMock(return_value=None)),
+            patch.object(analytics_flows, "get_division_grid", AsyncMock(return_value=DEFAULT_GRID)),
         ):
             await analytics_flows.flows_service.get_analytics(
                 session,
@@ -286,45 +335,95 @@ class AnalyticsFlowsTests(IsolatedAsyncioTestCase):
         get_analytics.assert_awaited_once_with(session, 7, algorithm, workspace_id=5)
 
 
-class PredictPlayerDivisionTests(IsolatedAsyncioTestCase):
-    """A division is 100 signal points, so the forecast moves whole divisions
-    only: a Signal below 1.0 (< 100 points) is ignored — the forecast holds at
-    the current division and the direction is "flat" (no Climb/Drop). At/above a
-    full division the magnitude rounds, bounded to ±3."""
+def _grid(tiers: int) -> DivisionGrid:
+    """A grid of ``tiers`` 100-wide tiers on a rank scale of its own (no native ranges), top tier first."""
+    return DivisionGrid(
+        version_id=99,
+        tiers=tuple(
+            DivisionTier(
+                id=None,
+                slug=None,
+                number=number,
+                name=f"Tier {number}",
+                rank_min=(tiers - number) * 100,
+                rank_max=None if number == 1 else (tiers - number) * 100 + 99,
+                icon_url="",
+            )
+            for number in range(1, tiers + 1)
+        ),
+    )
+
+
+TIGHT = 1e-6  # an sd small enough to make the forecast a step function of the estimate
+
+
+class PredictPlayerDivisionTests(TestCase):
+    """The player's mis-rating is N(shift, shift_sd²) in canonical-ladder divisions. The shown move is the largest
+    k ≤ 3 that is at least 80% certain, its confidence the probability of the shown outcome; the forecast lands on a
+    tier of the tournament's own grid."""
 
     @staticmethod
-    def _player(division: int | None = 10) -> SimpleNamespace:
-        return SimpleNamespace(division=division)
+    def _predict(
+        division: int,
+        shift: float,
+        sd: float | None = TIGHT,
+        grid: DivisionGrid = DEFAULT_GRID,
+        threshold: float = 0.8,
+    ):
+        rank = grid.resolve_rank_from_division(division)
+        return predict_player_division(rank, grid, shift, sd, threshold=threshold)
 
-    async def test_full_division_promotes_or_demotes(self) -> None:
-        predict = analytics_flows._predict_player_division
-        # +1.2 (>= a full division) → promote one division.
-        div, direction, delta = predict(self._player(), points=1.2)
-        self.assertEqual("promote", direction)
-        self.assertEqual(-1, delta)
-        self.assertEqual(9, div)
-        # -1.6 → demote two divisions.
-        _, d_neg, delta_neg = predict(self._player(), points=-1.6)
-        self.assertEqual("demote", d_neg)
-        self.assertEqual(2, delta_neg)
-        # Exactly 1.0 (a full division) still moves.
-        _, d_one, delta_one = predict(self._player(), points=1.0)
-        self.assertEqual("promote", d_one)
-        self.assertEqual(-1, delta_one)
+    def test_a_tight_estimate_moves_at_the_half_division_boundaries(self) -> None:
+        for shift, delta in {0.49: 0, 0.51: -1, 1.49: -1, 1.51: -2, 2.49: -2, 2.51: -3, 9.0: -3}.items():
+            self.assertEqual(delta, self._predict(20, shift)[2], msg=f"shift={shift}")
+            self.assertEqual(-delta, self._predict(20, -shift)[2], msg=f"shift={-shift}")
 
-    async def test_sub_division_signal_is_flat(self) -> None:
-        # A Signal below a full division (< 100 points) must show "flat", not
-        # Climb/Drop, and must hold the predicted division.
-        predict = analytics_flows._predict_player_division
-        for pts in (0.7, 0.99, 0.4, -0.7, -0.99, 0.0):
-            div, direction, delta = predict(self._player(), points=pts)
-            self.assertEqual("flat", direction, msg=f"points={pts}")
-            self.assertEqual(0, delta, msg=f"points={pts}")
-            self.assertEqual(10, div, msg=f"points={pts}")
+    def test_a_wide_estimate_holds_with_low_confidence(self) -> None:
+        division, direction, delta, confidence = self._predict(10, 1.2, sd=3.0)
+        estimate = NormalDist(1.2, 3.0)
+        self.assertEqual((10, "flat", 0), (division, direction, delta))
+        self.assertAlmostEqual(estimate.cdf(0.5) - estimate.cdf(-0.5), confidence)
+        self.assertLess(confidence, 0.5)
 
-    async def test_clamped_to_three_divisions(self) -> None:
-        predict = analytics_flows._predict_player_division
-        div, direction, delta = predict(self._player(20), points=9.0)
-        self.assertEqual("promote", direction)
-        self.assertEqual(-3, delta)
-        self.assertEqual(17, div)
+    def test_the_move_is_the_largest_one_that_certain(self) -> None:
+        # P(m ≥ 1.5) = Φ(0.7) ≈ 0.76 < 0.8 ≤ P(m ≥ 0.5) = Φ(1.7): one division, not the rounded two.
+        division, direction, delta, confidence = self._predict(20, 2.2, sd=1.0)
+        self.assertEqual((19, "promote", -1), (division, direction, delta))
+        self.assertAlmostEqual(NormalDist().cdf(1.7), confidence)
+        self.assertEqual((21, "demote", 1), self._predict(20, -2.2, sd=1.0)[:3])
+
+    def test_hold_confidence_is_the_chance_of_belonging_in_the_current_division(self) -> None:
+        division, direction, delta, confidence = self._predict(10, 0.0, sd=0.5)
+        self.assertEqual((10, "flat", 0), (division, direction, delta))
+        self.assertAlmostEqual(NormalDist().cdf(1.0) - NormalDist().cdf(-1.0), confidence)
+
+    def test_a_row_without_an_sd_holds_with_zero_confidence(self) -> None:
+        self.assertEqual((10, "flat", 0, 0.0), self._predict(10, 2.9, sd=None))
+
+    def test_a_zero_sd_is_certain(self) -> None:
+        self.assertEqual((9, "promote", -1, 1.0), self._predict(10, 0.6, sd=0.0))
+
+    def test_the_threshold_gates_the_move(self) -> None:
+        # P(m ≥ 1.5) = Φ(−0.2) ≈ 0.42.
+        self.assertEqual(-1, self._predict(20, 1.4, sd=0.5)[2])
+        self.assertEqual(-2, self._predict(20, 1.4, sd=0.5, threshold=0.4)[2])
+
+    def test_unranked_player_has_no_division(self) -> None:
+        predicted = predict_player_division(None, DEFAULT_GRID, 2.0, TIGHT, threshold=0.8)
+        self.assertEqual((None, "promote", 0), predicted[:3])
+
+    def test_non_default_grid_moves_on_the_canonical_ladder(self) -> None:
+        # 23 tiers spread over the 45 canonical divisions: tier n sits at canonical 2n - 1, so a two-division
+        # shift is one tier, not two.
+        grid = _grid(23)
+        self.assertEqual((9, "promote", -1), self._predict(10, 2.0, grid=grid)[:3])
+        self.assertEqual((11, "demote", 1), self._predict(10, -2.0, grid=grid)[:3])
+        # Canonical 16 is equidistant from tiers 9 (17) and 8 (15): the tie moves past the half-way point.
+        self.assertEqual((8, "promote", -2), self._predict(10, 3.0, grid=grid)[:3])
+
+    def test_forecast_stays_inside_the_grid(self) -> None:
+        self.assertEqual((45, "demote", 1), self._predict(44, -3.0)[:3])
+        self.assertEqual((1, "promote", -1), self._predict(2, 3.0)[:3])
+        coarse = _grid(5)  # tiers at canonical 1, 12, 23, 34, 45
+        self.assertEqual((5, "demote", 0), self._predict(5, -3.0, grid=coarse)[:3])
+        self.assertEqual((1, "promote", 0), self._predict(1, 3.0, grid=coarse)[:3])

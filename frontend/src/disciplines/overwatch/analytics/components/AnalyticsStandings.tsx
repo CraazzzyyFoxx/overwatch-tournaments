@@ -185,6 +185,8 @@ function TeamRows({
   const players = useMemo(() => sortTeamPlayers(team.players, ontology), [team.players, ontology]);
   const tournamentGrid = team.tournament?.division_grid_version;
   const decimal = (value: number, digits = 2) => format.number(value, { maximumFractionDigits: digits });
+  // A move is stored in canonical divisions ×100; an unknown one (no earlier ranked tournament) shows a dash.
+  const move = (value: number | null) => (value === null ? "—" : decimal(value / 100));
   const percent = (value: number) =>
     format.number(Math.min(1, Math.max(0, value)), { style: "percent" });
   const editLabel = t("analytics.standings.editManualShift");
@@ -315,8 +317,8 @@ function TeamRows({
                 <TableCell className={CELL_CLASS}>
                   <DivisionIcon division={player.division} tournamentGrid={tournamentGrid} width={22} height={22} tooltip />
                 </TableCell>
-                <TableCell className={cn(CELL_CLASS, NUM_CLASS)}>{decimal(player.move_2)}</TableCell>
-                <TableCell className={cn(CELL_CLASS, NUM_CLASS)}>{decimal(player.move_1)}</TableCell>
+                <TableCell className={cn(CELL_CLASS, NUM_CLASS)}>{move(player.move_2)}</TableCell>
+                <TableCell className={cn(CELL_CLASS, NUM_CLASS)}>{move(player.move_1)}</TableCell>
                 <TableCell className={cn(CELL_CLASS, NUM_CLASS)}>{format.number(player.points, SIGNED)}</TableCell>
                 {canReadV2 ? (
                   <>

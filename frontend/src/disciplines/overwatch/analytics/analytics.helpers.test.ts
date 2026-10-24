@@ -6,12 +6,12 @@ import {
   buildVerdict,
   canShowAnalyticsAdminToolbar,
   confidenceWord,
-  deriveImpact,
   formatAnalyticsNumber,
   getAnalyticsRefreshKeys,
   getPreferredAnalyticsAlgorithmId,
   ordinal,
   resolveImpact,
+  sortAnalyticsAlgorithms,
   standingsRank,
 } from "@/disciplines/overwatch/analytics/analytics.helpers";
 
@@ -96,6 +96,16 @@ describe("analytics helpers", () => {
     ).toBe(3);
   });
 
+  it("lists the algorithms Linear, Points, OpenSkill, OpenSkill + ML", () => {
+    const sorted = sortAnalyticsAlgorithms([
+      { id: 1, name: "OpenSkill + ML" },
+      { id: 2, name: "OpenSkill" },
+      { id: 3, name: "Points" },
+      { id: 4, name: "Linear" },
+    ]);
+    expect(sorted.map((algorithm) => algorithm.name)).toEqual(["Linear", "Points", "OpenSkill", "OpenSkill + ML"]);
+  });
+
   it("prefers OpenSkill + ML when it has computed data for the tournament", () => {
     expect(
       getPreferredAnalyticsAlgorithmId([
@@ -171,21 +181,10 @@ describe("analytics helpers", () => {
     expect(getAnalyticsRefreshKeys(null, 42, null)).toEqual([["analytics", "global", 42]]);
   });
 
-  it("derives a clamped 0–100 impact from raw shift points", () => {
-    expect(deriveImpact(0)).toBe(40);
-    expect(deriveImpact(0.4)).toBe(50);
-    // tails clamp so a bar never reads as empty or full
-    expect(deriveImpact(-5)).toBe(3);
-    expect(deriveImpact(5)).toBe(99);
-    expect(deriveImpact(Number.NaN)).toBe(50);
-  });
-
-  it("prefers the v2 impact score only when allowed and present", () => {
-    expect(resolveImpact({ points: 0 }, { impact_score: 88 }, true)).toBe(88);
-    // not allowed → fall back to derived
-    expect(resolveImpact({ points: 0 }, { impact_score: 88 }, false)).toBe(40);
-    // allowed but no row → derived
-    expect(resolveImpact({ points: 0.4 }, undefined, true)).toBe(50);
+  it("shows the v2 impact score only when allowed and present, never one derived from the shift", () => {
+    expect(resolveImpact({ impact_score: 88 }, true)).toBe(88);
+    expect(resolveImpact({ impact_score: 88 }, false)).toBeNull();
+    expect(resolveImpact(undefined, true)).toBeNull();
   });
 
   it("formats English ordinals", () => {

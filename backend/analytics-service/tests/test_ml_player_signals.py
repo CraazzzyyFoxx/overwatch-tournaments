@@ -16,6 +16,7 @@ from tests.ow_analytics import module as ow_module  # noqa: E402
 local_performance = ow_module("features.local_performance")
 extractors = ow_module("features.extractors")
 anomalies = ow_module("models.anomalies")
+mvp_dominance = ow_module("features.mvp_dominance")
 
 
 class LocalPerformanceTests(TestCase):
@@ -166,6 +167,7 @@ class PlayerAnomalyTests(TestCase):
                 "weapon_accuracy": [30.0, 31.0, 28.0, 32.0],
                 "final_blows_p10": [4.0, 4.5, 4.2, 5.0],
                 "mvp_dominance": [0.5, 0.45, 0.55, 0.85],
+                "mvp_matches": [6, 6, 6, 6],
             }
         )
 
@@ -176,6 +178,26 @@ class PlayerAnomalyTests(TestCase):
         self.assertIn("raw_mvp_dominance", smurf["reasons"])
         self.assertNotIn("strong_cohort_outlier", smurf["reasons"])
         self.assertAlmostEqual(0.85, smurf["evidence"]["mvp_dominance"], places=2)
+
+    def test_smurf_ignores_dominance_over_too_few_logged_matches(self) -> None:
+        # The same dominator over fewer than MVP_MIN_MATCHES logged matches is noise, not a flag.
+        frame = pd.DataFrame(
+            {
+                "player_id": [1, 2, 3, 4],
+                "role": ["Tank"] * 4,
+                "rank": [1100, 1200, 1000, 1300],
+                "impact_score": [55.0, 50.0, 60.0, 58.0],
+                "local_zscore": [0.0, -0.1, 0.2, 0.3],
+                "local_percentile": [50.0, 45.0, 55.0, 56.0],
+                "kd": [1.0, 1.1, 1.0, 1.2],
+                "weapon_accuracy": [30.0, 31.0, 28.0, 32.0],
+                "final_blows_p10": [4.0, 4.5, 4.2, 5.0],
+                "mvp_dominance": [0.5, 0.45, 0.55, 0.85],
+                "mvp_matches": [mvp_dominance.MVP_MIN_MATCHES - 1] * 4,
+            }
+        )
+
+        self.assertEqual([], anomalies.detect_smurfs(frame))
 
     def test_smurf_dominance_threshold_respected(self) -> None:
         # mvp_dominance below threshold and nothing else suspicious → no flag.
@@ -191,6 +213,7 @@ class PlayerAnomalyTests(TestCase):
                 "weapon_accuracy": [30.0, 31.0, 28.0, 32.0],
                 "final_blows_p10": [4.0, 4.5, 4.2, 5.0],
                 "mvp_dominance": [0.5, 0.45, 0.55, 0.70],
+                "mvp_matches": [6, 6, 6, 6],
             }
         )
 

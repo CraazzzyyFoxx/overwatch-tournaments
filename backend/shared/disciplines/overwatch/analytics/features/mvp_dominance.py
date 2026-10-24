@@ -15,7 +15,8 @@ This module derives that raw-dominance signal straight from the match log:
 score is 1.0 for a player who is always match MVP, ~0.5 for a median player and
 0.0 for a player who is always last. It is consumed by the smurf detector (flag
 a consistent raw dominator) and as a secondary lift for the Shift v2 individual
-modifier (so such a player actually moves, not only gets flagged).
+modifier (so such a player actually moves, not only gets flagged) — both only
+once the player has :data:`MVP_MIN_MATCHES` logged matches.
 """
 
 from __future__ import annotations
@@ -29,7 +30,10 @@ from shared import models
 from shared.core.enums import LogStatsName
 from shared.repository.stats_queries import player_facts
 
-__all__ = ("compute_mvp_dominance", "dominance_from_perf_ranks")
+__all__ = ("MVP_MIN_MATCHES", "compute_mvp_dominance", "dominance_from_perf_ranks")
+
+# A dominance mean over fewer logged matches is noise: both consumers treat it as neutral below this count.
+MVP_MIN_MATCHES: int = 5
 
 
 def dominance_from_perf_ranks(df: pd.DataFrame) -> pd.DataFrame:

@@ -34,21 +34,26 @@ _MIN_SCALE = 1e-9
 
 def compute_drift_report(
     df: pd.DataFrame,
+    tournament_ids: typing.Sequence[int],
     *,
     threshold: float = 0.25,
     recent_window: int = 3,
 ) -> dict[str, typing.Any]:
     """Return ``{feature: scale-normalised distance}`` plus a flagged list.
 
-    ``df`` must contain a ``tournament_id`` column. Features compared are all
-    numeric columns excluding identifiers. Each distance is expressed in baseline
-    standard deviations, so ``threshold`` is unit-free; features whose baseline is
-    effectively constant are omitted entirely rather than flagged.
+    ``df`` must contain a ``tournament_id`` column; ``tournament_ids`` orders its
+    tournaments chronologically (oldest first, as :func:`tournament_ids_up_to`
+    returns them) — ids are not chronological, so the recent window cannot come
+    from sorting them. Features compared are all numeric columns excluding
+    identifiers. Each distance is expressed in baseline standard deviations, so
+    ``threshold`` is unit-free; features whose baseline is effectively constant
+    are omitted entirely rather than flagged.
     """
     if df.empty or "tournament_id" not in df.columns:
         return {"flags": [], "distances": {}, "threshold": threshold}
 
-    ordered_ids = sorted(df["tournament_id"].unique())
+    present = set(df["tournament_id"].unique())
+    ordered_ids = [tid for tid in tournament_ids if tid in present]
     if len(ordered_ids) <= recent_window:
         return {"flags": [], "distances": {}, "threshold": threshold}
 

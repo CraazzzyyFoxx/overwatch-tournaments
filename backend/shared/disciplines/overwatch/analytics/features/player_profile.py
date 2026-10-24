@@ -119,6 +119,25 @@ async def load_player_signal_profile(
         base_df["mvp_dominance"] = float("nan")
         base_df["mvp_matches"] = 0
 
+    # The window is the evaluated tournament plus the ``history_depth`` tournaments before it in the same scope, by
+    # chronology ``(coalesce(start_date, created_at), id)``: ids are global and not chronological. Like the id range it
+    # replaces, it counts every tournament of the scope, hidden ones included.
+    chrono = sa.func.coalesce(models.Tournament.start_date, models.Tournament.created_at)
+    evaluated_key = (
+        await session.execute(sa.select(chrono, models.Tournament.id).where(models.Tournament.id == tournament_id))
+    ).one()
+    window_ids = (
+        await session.scalars(
+            sa.select(models.Tournament.id)
+            .where(
+                sa.tuple_(chrono, models.Tournament.id) <= sa.tuple_(*evaluated_key),
+                models.Tournament.discipline == "overwatch",
+                *workspace_filter(workspace_id),
+            )
+            .order_by(chrono.desc(), models.Tournament.id.desc())
+            .limit(history_depth + 1)
+        )
+    ).all()
     history_query = (
         sa.select(
             models.WorkspaceMember.player_id.label("user_id"),
@@ -139,14 +158,14 @@ async def load_player_signal_profile(
         .where(
             models.Tournament.discipline == "overwatch",
             models.AnalyticsAlgorithm.name == PERFORMANCE_MODEL.algorithm_name,
-            models.AnalyticsPerformance.tournament_id <= tournament_id,
-            models.AnalyticsPerformance.tournament_id >= max(1, tournament_id - history_depth),
+            models.AnalyticsPerformance.tournament_id.in_(window_ids),
             models.WorkspaceMember.player_id.in_(user_ids),
             *workspace_filter(workspace_id),
         )
         .order_by(
             models.WorkspaceMember.player_id,
             models.Player.role,
+            chrono,
             models.AnalyticsPerformance.tournament_id,
         )
     )

@@ -95,7 +95,7 @@ OPERATIONS: dict[str, Op] = {
     ),
     "rpc.analytics.jobs_get": Op(response=AnalyticsJobRow),
     # ── mutations / job-control ────────────────────────────────────────────
-    "rpc.analytics.shift": Op(request=PlayerShiftUpdate, response=schemas.PlayerAnalytics),
+    "rpc.analytics.shift": Op(request=PlayerShiftUpdate, response=PlayerShiftUpdate),
     "rpc.analytics.feedback_submit": Op(request=AnomalyFeedbackBody, response=AnomalyFeedbackRow),
     "rpc.analytics.create_job": Op(request=AnalyticsJobCreate, response=AnalyticsJobRow, query_params=(_WS,)),
     "rpc.analytics.recalculate": Op(response=AnalyticsJobRow, query_params=(_WS,)),

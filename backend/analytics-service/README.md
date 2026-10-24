@@ -35,9 +35,11 @@ sets 9108 and is consistent. This is a defect, not a convention.
 
 ## Responsibilities
 
-- **Rating shifts** — the OpenSkill/Plackett-Luce and linear/points algorithms that turn
-  tournament results into per-player division shifts (`src/domain/ratings.py`,
-  `src/services/analytics/`).
+- **Rating shifts** — the Points, Linear and OpenSkill (Plackett-Luce) algorithms that turn
+  tournament results into per-player division shifts, each stored with its posterior sd
+  (`shift_sd`); the read API turns `(shift, shift_sd)` into a probability-gated division
+  forecast (`src/domain/`, `src/services/analytics/`). Recalculating a tournament also rewrites
+  the v1 rows of every later tournament of its workspace that already has them.
 - **ML signals** — LightGBM/XGBoost with a Bayesian layer and Monte Carlo simulation, for
   player performance, shift v2, predicted standings, match quality and player anomalies
   (`src/services/ml/`). `analytics.standings_distribution` is the only source of placement
@@ -128,7 +130,15 @@ another algorithm sharing a kind and another game's same-code role (`support`) a
 loaded. A discipline that declares no analytics module (LoL) offers no algorithm, returns an empty summary from
 automatic enrichment without a single write, and answers explicit train/infer/model requests with 422 before a job is
 admitted or quota is charged. The CLI takes an optional `--discipline` that must agree with the tournament; a
-`backtest` without `--cutoff` requires it, and `backfill` visits only existing, non-hidden, supported tournaments.
+`backtest` without `--cutoff` and an `evaluate` without `--from`/`--to` require it, and `backfill` visits only
+existing, non-hidden, supported tournaments.
+
+**Measuring the shift methods.** `backtest` trains, activates and infers for real inside a transaction it rolls back,
+with fold artifacts in a removed temporary directory, and scores the v2 shift and its baselines (no move, Points,
+Linear, OpenSkill) by their agreement with the organizers' realised moves — what organizers did, not ground truth.
+`evaluate` is read-only and scores the levels each method implies (organizer rank, no move, previous rank minus the
+stored shift) on who wins the duel encounters of the next tournament: per method k of P(home wins) = σ(−k·Δlevel),
+log-loss, Brier, AUC and coverage of stored rows.
 
 The P4 regression oracle (`tests/fixtures/stats_feature_parity.json`) covers all six
 feature/profile families and the actual aligned main/coarse predictor inputs; it supplies no
@@ -199,6 +209,8 @@ Settings that change behaviour:
 - `LINEAR_SHIFT_SCALE` and `SMURF_STRONG_LOCAL_Z` / `SMURF_MVP_DOMINANCE` — v1 linear scale
   (applied at read time; recompute v1 shifts to refresh stored rows) and the smurf flag
   thresholds.
+- `FORECAST_CONFIDENCE_THRESHOLD` (0.8) — the probability a climb/drop needs before the
+  forecast shows it; applied at read time, no recompute.
 - `WORKER_METRICS_PORT` — Prometheus exposition only, not an API.
 - `RPC_PREFETCH_COUNT` (default 16) — `analytics-svc` concurrency; the worker uses the
   broker default.
@@ -258,6 +270,9 @@ docker compose -f docker-compose.yml -f docker-compose.gpu.yml --profile workers
 - **Cost traps.** Training builds feature frames across every tournament up to the cutoff;
   the feature cache is what keeps that tolerable, and clearing it makes the next training
   run far more expensive.
+- **Compute rebuilds its frames.** A compute job runs inference under
+  `refreshing_feature_cache()`, so it never reads a frame cached before the job and sees
+  results corrected after the tournament; training and backfill keep using the cache.
 
 Shift and model recompute procedures live in
 [`docs/runbook-shift-recompute.md`](docs/runbook-shift-recompute.md).

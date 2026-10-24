@@ -13,7 +13,7 @@ Beside it in the header, above the tournament and algorithm pickers, sit six bra
 | **Climbing** | Players the model thinks belong a division higher |
 | **Dropping** | Players performing below their division |
 | **Watch flags** | Cases raised automatically that need a human look |
-| **Avg confidence** | How much data sits behind the calls across the bracket |
+| **Avg confidence** | The average confidence of the players' forecasts across the bracket |
 | **Upsets** | Teams that finished four or more places off the forecast |
 | **New faces** | Players in their first tournament or on a new role |
 
@@ -27,23 +27,23 @@ For every team the model names an expected place, and after the games the actual
 
 Inside a team card you also see **Predicted standings distribution** — the team's chance of finishing in the top 1, top 3 and top 8. That block is for organizers only.
 
-None of this is final: the read is live and sharpens as the bracket plays out.
+None of this is final: the figures are computed when the tournament completes, and again whenever an organizer recalculates.
 
 ## A player's numbers
 
-A player card carries three main figures:
+A player card carries up to three main figures:
 
-- **Impact** — how much better or worse the player did than expected for the match-up, scored 0 to 100 within their role.
-- **Confidence** — how much data sits behind that call. On a small sample it is low, and that is normal.
-- **Predicted move** — **Climb**, **Drop** or **Hold**: whether the model thinks the player belongs in a higher or lower division.
+- **Impact** — how much better or worse the player did than expected for the match-up, scored 0 to 100 within their role. Only viewers allowed to read the v2 model see it.
+- **Confidence** — the chance the shown forecast is right: for a climb or drop, that the player belongs at least that many divisions higher or lower; for a hold, that they belong in their current division. On a small sample it is low, and that is normal.
+- **Predicted move** — **Climb**, **Drop** or **Hold**. Climb and Drop appear only when the model is at least 80% sure the player belongs in a higher or lower division, and the size is the largest move it is that sure of; otherwise the player holds.
 
 The **Why the model says this** block expands into the detail: which of their numbers pushed the score up, and which pulled it down.
 
-## Division adjustment
+## Manual shift
 
-The division adjustment is the suggested change to a player's division for the next tournament: plus moves them up, minus moves them down.
+The **Manual** column holds your own override for a player; it is 0 until someone sets it.
 
-If you disagree with the computed value, you can override it. On the player card open **Edit manual shift**, type a number into the **Manual** field and press **Save changes**. The final adjustment is the computed value plus yours — the tooltip shows both parts. Your manual value stays put and is not overwritten by a recompute.
+To set it, open **Edit manual shift** on the player card, type a number into the **Manual** field and press **Save changes**. It does not change the model's forecast, and a recompute never overwrites it.
 
 ## Match quality and anomalies
 
@@ -89,7 +89,7 @@ Training the models is a separate action, available only to platform administrat
 | "No teams" | The selected tournament has no registered teams yet |
 | **Run analytics** is unavailable | A run is already in progress in this workspace — wait for it to finish |
 | Match quality is empty | Press **Run analytics**: the block is filled from the results of a run |
-| Everyone's confidence is low | Few maps have been played; the calls sharpen as the tournament goes on |
+| Everyone's confidence is low | The players have little history or few processed maps; once more logs are processed, recalculate |
 | No **Organizer tools** panel | Your role cannot change analytics — see [Roles and permissions](/docs/organizers/roles) |
 
 ## See also

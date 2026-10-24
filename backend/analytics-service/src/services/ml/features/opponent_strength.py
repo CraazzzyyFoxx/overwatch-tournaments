@@ -5,10 +5,8 @@ both need an estimate of *each team's strength as it was before the
 encounter was played* — using the post-encounter rating would leak the
 outcome.
 
-The current OpenSkill replay in
-:mod:`src.services.analytics.flows.compute_openskill_shift_map` produces
-post-replay ratings. The helpers in this module run the same replay but
-freeze the rating snapshot *before* applying each encounter, yielding a
+The helpers in this module replay the window from the players' seed ratings
+and freeze the rating snapshot *before* applying each encounter, yielding a
 ``(encounter_id, team_id) → mu`` map that can be merged into feature frames.
 """
 
@@ -21,8 +19,7 @@ from openskill.models import PlackettLuce, PlackettLuceRating
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.analytics_exports import analytics_exports
-from src.domain.ratings import get_id_role, get_plackett_luce, prepare_openskill_data
-from src.services.analytics.flows import flows_service
+from src.domain.ratings import get_id_role, get_plackett_luce, get_player_rating, prepare_openskill_data
 from src.services.analytics.service import analytics_service
 
 from .cache import get_or_build_dataframe, scope_cache_params
@@ -73,28 +70,17 @@ async def _snapshot_pre_encounter_team_mu_uncached(
 
     Algorithm:
 
-    1. Build the analytics DataFrame for the ``look_back`` most recent tournaments
-       up to and including ``tournament_id`` (chronological window, same range as
-       the v1 OpenSkill flow).
-    2. Initialise per-player ratings via :func:`prepare_openskill_data`.
-    3. Replay every match in chronological order; **before** each encounter, snapshot
-       the team-average mu of its home and away rosters.
+    1. Load the encounters of the ``look_back`` most recent tournaments up to and
+       including ``tournament_id`` (chronological window, same range as the v1
+       OpenSkill flow).
+    2. Replay them in chronological order from the seed ratings: a player is seeded
+       from their roster rank on first appearance (:func:`get_player_rating`, the
+       seeding :func:`prepare_openskill_data` uses). **Before** each encounter,
+       snapshot the team-average mu of its rosters, then rate it once.
 
     Output columns: ``encounter_id``, ``team_id``, ``avg_mu``, ``max_mu``,
     ``min_mu``, ``std_mu`` (NaN-safe).
     """
-    # ``get_data_frame`` loads every analytics-eligible tournament row in one
-    # query — there is no range parameter; ``look_back`` is applied via the
-    # chronological window resolved by ``lookback_start_tournament_id`` below.
-    df = await flows_service.get_data_frame(
-        session,
-        workspace_id=workspace_id,
-        workspace_ids=workspace_ids,
-        discipline=discipline,
-    )
-    if df.empty:
-        return pd.DataFrame(columns=["encounter_id", "team_id", "avg_mu", "max_mu", "min_mu", "std_mu"])
-
     window_ids = await analytics_service.lookback_tournament_ids(
         session,
         tournament_id,
@@ -110,14 +96,12 @@ async def _snapshot_pre_encounter_team_mu_uncached(
         workspace_ids=workspace_ids,
         discipline=discipline,
     )
-    teams = await analytics_service.get_teams_with_players(session, tournament_id)
-
     pl: PlackettLuce = get_plackett_luce()
     rosters = await analytics_service.get_rosters(session, matches)
-    _, players_rating, _ = prepare_openskill_data(df, pl, teams, matches, rosters)
 
-    # Players keyed by (user_id, role).
-    rating_map: dict[str, PlackettLuceRating] = dict(players_rating)
+    # Players keyed by (user_id, role). Starts empty: seeding from post-replay ratings
+    # would leak every window outcome into its own "pre-encounter" snapshot.
+    rating_map: dict[str, PlackettLuceRating] = {}
 
     # Group matches by encounter so we snapshot pre-encounter (not pre-match).
     snapshots: list[dict[str, typing.Any]] = []
@@ -142,12 +126,10 @@ async def _snapshot_pre_encounter_team_mu_uncached(
                 continue
             mus: list[float] = []
             for player in team.players:
-                rating = rating_map.get(get_id_role(player))
-                if rating is None:
-                    continue
-                mus.append(float(rating.mu))
-            if not mus:
-                continue
+                key = get_id_role(player)
+                if key not in rating_map:
+                    rating_map[key] = get_player_rating(pl, player)
+                mus.append(float(rating_map[key].mu))
             snapshots.append(
                 {
                     "encounter_id": int(encounter.id),
@@ -158,14 +140,12 @@ async def _snapshot_pre_encounter_team_mu_uncached(
                     "std_mu": float(pd.Series(mus).std(ddof=0)) if len(mus) > 1 else 0.0,
                 }
             )
-            replay.append((seat, [p for p in team.players if get_id_role(p) in rating_map]))
+            replay.append((seat, team.players))
 
         # Update ratings *after* snapshotting, replicating the v1 replay order: every
         # live seat is one team, ranked by its placement. An encounter without a
-        # result, or with a seat that has no rated roster, rates nobody.
+        # result, or with a seat that has no roster, rates nobody.
         if len(replay) < 2 or len(replay) != len(seats) or any(seat.placement is None for seat, _ in replay):
-            continue
-        if not all(players for _, players in replay):
             continue
         rated = pl.rate(
             [[rating_map[get_id_role(p)] for p in players] for _, players in replay],

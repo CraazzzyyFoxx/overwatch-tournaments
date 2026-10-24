@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from statistics import fmean
@@ -11,6 +12,10 @@ STABLE_SHIFT_SCALE = 6.25
 STABLE_SHRINKAGE_PRIOR = 1.5
 STABLE_SHIFT_CLAMP = 3.0
 TREND_SHIFT_CLAMP = 3.5
+# A tournament's evidence grows with its maps as n/(n + MAP_WEIGHT_PRIOR): one map is barely a sample, twenty are.
+MAP_WEIGHT_PRIOR = 4
+# A raw-signal sd below this is float rounding of a constant signal, not noise.
+_MIN_NOISE_SD = 1e-9
 
 # The shift signal is the TEAM RESULT: how much the team over/under-performed in
 # this tournament. On balancer-formed rosters (≈equal by rank) a team that wins
@@ -36,7 +41,8 @@ class TournamentSignal:
     placement_score: float
     recency_decay: float
     coverage_weight: float
-    newcomer_weight: float
+    #: Maps played (wins + losses); the match count when the tournament recorded no maps.
+    maps: int
     match_count: int
     log_available: float
 
@@ -45,16 +51,21 @@ class TournamentSignal:
 class LinearAnalyticsMetrics:
     stable_shift: float
     trend_shift: float
-    hybrid_shift: float
-    confidence: float
+    #: Posterior sd of ``stable_shift`` in divisions; None when the signal noise is unknown.
+    shift_sd: float | None
     effective_evidence: float
     sample_tournaments: int
     sample_matches: int
     log_coverage: float
 
 
+def map_weight(maps: int) -> float:
+    """Evidence of one tournament's sample: n/(n + MAP_WEIGHT_PRIOR) for n maps; no maps carry none."""
+    return maps / (maps + MAP_WEIGHT_PRIOR) if maps > 0 else 0.0
+
+
 def _weight(signal: TournamentSignal) -> float:
-    return signal.recency_decay * signal.coverage_weight * signal.newcomer_weight
+    return signal.recency_decay * signal.coverage_weight * map_weight(signal.maps)
 
 
 def _raw_signal(signal: TournamentSignal, weights: Mapping[str, float] = RAW_SIGNAL_WEIGHTS) -> float:
@@ -71,6 +82,26 @@ def _ema(values: Sequence[float], period: int) -> float:
     return result
 
 
+def raw_signal_sd(
+    signals: Sequence[TournamentSignal],
+    weights: Mapping[str, float] = RAW_SIGNAL_WEIGHTS,
+) -> float | None:
+    """Noise sd ``s`` of one tournament's raw signal: its map-weighted sd across ``signals``.
+
+    None when it is undefined (no maps anywhere) or zero (every signal equal, up to float rounding): no posterior sd
+    follows from it.
+    """
+    map_weights = [map_weight(signal.maps) for signal in signals]
+    total = sum(map_weights)
+    if total <= 0:
+        return None
+    raws = [_raw_signal(signal, weights) for signal in signals]
+    mean = sum(w * raw for w, raw in zip(map_weights, raws, strict=True)) / total
+    variance = sum(w * (raw - mean) ** 2 for w, raw in zip(map_weights, raws, strict=True)) / total
+    noise_sd = math.sqrt(variance)
+    return noise_sd if noise_sd > _MIN_NOISE_SD else None
+
+
 def _apply_low_evidence_cap(value: float, *, sample_tournaments: int, effective_evidence: float) -> float:
     if sample_tournaments <= 1 or effective_evidence < 1.0:
         return clamp(value, -LOW_EVIDENCE_SHIFT_CAP, LOW_EVIDENCE_SHIFT_CAP)
@@ -80,16 +111,19 @@ def _apply_low_evidence_cap(value: float, *, sample_tournaments: int, effective_
 def score_history(
     signals: Sequence[TournamentSignal],
     *,
-    openskill_shift: float | None = None,
+    noise_sd: float | None,
     weights: Mapping[str, float] = RAW_SIGNAL_WEIGHTS,
     shift_scale: float = STABLE_SHIFT_SCALE,
 ) -> LinearAnalyticsMetrics:
+    """Score one player's history; ``noise_sd`` is the raw-signal noise ``s`` (:func:`raw_signal_sd`).
+
+    ``shift_sd`` is the posterior sd of the shrunk mean: shift_scale · s / sqrt(STABLE_SHRINKAGE_PRIOR + evidence).
+    """
     if not signals:
         return LinearAnalyticsMetrics(
             stable_shift=0.0,
             trend_shift=0.0,
-            hybrid_shift=0.0,
-            confidence=0.0,
+            shift_sd=None,
             effective_evidence=0.0,
             sample_tournaments=0,
             sample_matches=0,
@@ -127,28 +161,16 @@ def score_history(
         effective_evidence=effective_evidence,
     )
 
-    if openskill_shift is None:
-        hybrid_shift = stable_shift
-    else:
-        alpha_eff = 0.35 * min(1.0, sample_matches / 12.0)
-        hybrid_shift = (1.0 - alpha_eff) * stable_shift + alpha_eff * openskill_shift
-    hybrid_shift = _apply_low_evidence_cap(
-        hybrid_shift,
-        sample_tournaments=sample_tournaments,
-        effective_evidence=effective_evidence,
-    )
-
-    confidence = clamp(
-        0.55 * min(1.0, effective_evidence / 3.0) + 0.25 * min(1.0, sample_matches / 10.0) + 0.20 * log_coverage,
-        0.0,
-        1.0,
+    shift_sd = (
+        shift_scale * noise_sd / math.sqrt(STABLE_SHRINKAGE_PRIOR + effective_evidence)
+        if noise_sd is not None
+        else None
     )
 
     return LinearAnalyticsMetrics(
         stable_shift=stable_shift,
         trend_shift=trend_shift,
-        hybrid_shift=hybrid_shift,
-        confidence=confidence,
+        shift_sd=shift_sd,
         effective_evidence=effective_evidence,
         sample_tournaments=sample_tournaments,
         sample_matches=sample_matches,

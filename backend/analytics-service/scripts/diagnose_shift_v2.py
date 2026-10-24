@@ -106,9 +106,9 @@ async def main() -> int:
                        max(shift) AS max_shift,
                        avg(shift) AS avg_shift,
                        avg(abs(shift)) AS avg_abs,
-                       avg(confidence) AS avg_conf,
+                       avg(shift_sd) AS avg_sd,
                        count(*) FILTER (WHERE shift = double precision 'NaN') AS nan_shift,
-                       count(*) FILTER (WHERE confidence = double precision 'NaN') AS nan_conf,
+                       count(*) FILTER (WHERE shift_sd IS NULL) AS null_sd,
                        count(*) FILTER (WHERE abs(shift) >= 2.99) AS clamped,
                        count(*) FILTER (WHERE shift = 0) AS zero_shift
                 FROM analytics.shifts
@@ -125,9 +125,9 @@ async def main() -> int:
                 print(
                     f"  t#{r['tournament_id']:>4}  n={r['n']:>3}  "
                     f"shift[min/avg/max]={r['min_shift']:+.2f}/{r['avg_shift']:+.2f}/{r['max_shift']:+.2f}  "
-                    f"avg|shift|={r['avg_abs']:.2f}  conf={r['avg_conf']:.2f}  "
+                    f"avg|shift|={r['avg_abs']:.2f}  sd={r['avg_sd'] if r['avg_sd'] is None else round(r['avg_sd'], 2)}  "
                     f"clamped(±3)={r['clamped']}  zero={r['zero_shift']}  "
-                    f"NaN(shift/conf)={r['nan_shift']}/{r['nan_conf']}"
+                    f"NaN shift={r['nan_shift']}  NULL sd={r['null_sd']}"
                 )
             print()
 
@@ -139,7 +139,7 @@ async def main() -> int:
             if recent_t is not None:
                 sample = await conn.fetch(
                     """
-                    SELECT player_id, shift, confidence, sample_matches, sample_tournaments, log_coverage
+                    SELECT player_id, shift, shift_sd, sample_matches, sample_tournaments, log_coverage
                     FROM analytics.shifts
                     WHERE algorithm_id = $1 AND tournament_id = $2
                     ORDER BY abs(shift) DESC
@@ -151,7 +151,7 @@ async def main() -> int:
                 print(f"  tournament #{recent_t}:")
                 for r in sample:
                     print(
-                        f"    player={r['player_id']:>6}  shift={r['shift']:+.2f}  conf={r['confidence']:.2f}  "
+                        f"    player={r['player_id']:>6}  shift={r['shift']:+.2f}  sd={r['shift_sd']}  "
                         f"matches={r['sample_matches']}  tnmts={r['sample_tournaments']}  log_cov={r['log_coverage']:.2f}"
                     )
             print()

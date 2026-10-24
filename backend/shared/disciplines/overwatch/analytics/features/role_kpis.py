@@ -3,7 +3,7 @@
 The Performance v2 model trains one LightGBM regressor per role using the
 column list from :data:`ROLE_KPIS`. When per-match logs are missing
 (``log_coverage = 0``), inference falls back to the much smaller
-:data:`COARSE_FEATURES` list — score / standings / opponent-strength only.
+:data:`COARSE_FEATURES` list — rank / opponent-strength only.
 
 Column names match the per-10-min rate columns produced by
 :func:`shared.disciplines.overwatch.analytics.features.extractors.extract_match_features` and the
@@ -57,12 +57,9 @@ ROLE_KPIS: dict[str, list[str]] = {
 }
 
 # Coarse fallback features used when no usable player facts are available.
-# Score / standings / opponent strength only — no per-stat detail.
+# Rank / opponent strength only — no per-stat detail, and no match outcome
+# (``won``, scores): the Performance target is ``won - P(win)``, so those columns leak the label.
 COARSE_FEATURES: list[str] = [
-    "won",
-    "home_score",
-    "away_score",
-    "score_delta",
     "mu_gap",
     "opp_avg_mu",
     "team_avg_mu",

@@ -35,7 +35,7 @@ function ShiftForm({ player, onSaved }: Readonly<{ player: PlayerAnalytics; onSa
     if (shift === null) return;
     setSaving(true);
     try {
-      await analyticsService.patchPlayerShift(player.team_id, player.id, shift);
+      await analyticsService.patchPlayerShift(player.id, shift);
       await queryClient.invalidateQueries({ queryKey: analyticsQueryKeys.all() });
       onSaved();
     } catch (error) {

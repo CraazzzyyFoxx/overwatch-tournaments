@@ -49,19 +49,24 @@ async def load_player_rank_history(
     workspace_id: int | None = None,
     workspace_ids: typing.Sequence[int] | None = None,
 ) -> pd.DataFrame:
-    """Return ``(user_id, role, tournament_id, rank, div, prior_*, next_*)`` rows.
+    """Return ``(user_id, role, tournament_id, started_at, rank, div, prior_*, next_*)`` rows.
 
-    ``history_through_tournament_id`` lets training include the known future
-    rows needed to label the last tournament in ``tournament_ids``. This must be
-    an actual tournament horizon, not a numeric-id lookahead, because tournament
-    IDs can be sparse.
+    Each player's chronology is tournament start order ``(coalesce(start_date, created_at), id)``: ids are not
+    chronological. The history runs through the chronologically latest of ``tournament_ids`` and
+    ``history_through_tournament_id``; the latter lets training include the known future rows needed to label the
+    last tournament in ``tournament_ids``.
     """
     if not tournament_ids:
         return pd.DataFrame()
 
-    history_max_tid = max(
-        max(tournament_ids),
-        history_through_tournament_id or max(tournament_ids),
+    chrono = sa.func.coalesce(models.Tournament.start_date, models.Tournament.created_at)
+    horizon_ids = [*tournament_ids, *([history_through_tournament_id] if history_through_tournament_id else [])]
+    horizon = (
+        sa.select(chrono.label("started_at"), models.Tournament.id.label("tournament_id"))
+        .where(models.Tournament.id.in_(horizon_ids))
+        .order_by(chrono.desc(), models.Tournament.id.desc())
+        .limit(1)
+        .subquery("horizon")
     )
 
     query = (
@@ -70,6 +75,7 @@ async def load_player_rank_history(
             models.WorkspaceMember.player_id.label("user_id"),
             models.Player.role.label("role"),
             models.Player.tournament_id.label("tournament_id"),
+            chrono.label("started_at"),
             models.Player.rank.label("rank"),
             models.Player.is_newcomer.label("is_newcomer"),
             models.Tournament.division_grid_version_id.label("version_id"),
@@ -79,8 +85,11 @@ async def load_player_rank_history(
             models.WorkspaceMember.id == models.Player.workspace_member_id,
         )
         .join(models.Tournament, models.Tournament.id == models.Player.tournament_id)
+        .join(
+            horizon,
+            sa.tuple_(chrono, models.Tournament.id) <= sa.tuple_(horizon.c.started_at, horizon.c.tournament_id),
+        )
         .where(
-            models.Player.tournament_id <= history_max_tid,
             models.Player.is_substitution.is_(False),
             models.Tournament.discipline == "overwatch",
             *workspace_scope_filter(workspace_id, workspace_ids),
@@ -93,7 +102,7 @@ async def load_player_rank_history(
         return df
 
     df["tournament_id"] = df["tournament_id"].astype(int)
-    df = df.sort_values(["user_id", "role", "tournament_id"]).reset_index(drop=True)
+    df = df.sort_values(["user_id", "role", "started_at", "tournament_id"]).reset_index(drop=True)
 
     # Resolve every player's division on the canonical OW grid so
     # div/prior_div/next_tournament_div are comparable across workspaces.
@@ -165,14 +174,15 @@ def assemble_shift_tournament_frame(
     tournament_features: pd.DataFrame,
     rank_history: pd.DataFrame,
     history: pd.DataFrame,
-    shift_map: Mapping[int, float],
+    shift_map: Mapping[int, tuple[float, float]],
     performance_features: pd.DataFrame,
     dominance: pd.DataFrame,
 ) -> pd.DataFrame:
     """One tournament's shift frame from its already-loaded parts.
 
-    ``history`` is the v1 linear-metrics frame, ``shift_map`` the v1 OpenSkill ``{player_id: os_shift}`` map (empty when
-    the replay failed), ``dominance`` the per-player :func:`compute_mvp_dominance` frame.
+    ``history`` is the v1 linear-metrics frame, ``shift_map`` the v1 OpenSkill ``{player_id: (os_shift, os_shift_sd)}``
+    map (empty when the replay failed), ``dominance`` the per-player :func:`compute_mvp_dominance` frame. The sd columns
+    (``linear_shift_sd``, ``os_shift_sd``) stay NaN where unknown: an sd of 0 would claim certainty.
     """
     ranks_t = rank_history[rank_history["tournament_id"] == tournament_id]
     merged = tournament_features.merge(
@@ -195,7 +205,7 @@ def assemble_shift_tournament_frame(
             "player_id",
             "linear_stable_shift",
             "linear_trend_shift",
-            "confidence",
+            "linear_shift_sd",
             "effective_evidence",
             "sample_tournaments",
             "sample_matches",
@@ -204,7 +214,6 @@ def assemble_shift_tournament_frame(
         ]
     ].rename(
         columns={
-            "confidence": "linear_confidence",
             "effective_evidence": "linear_effective_evidence",
             "sample_tournaments": "linear_sample_tournaments",
             "sample_matches": "linear_sample_matches",
@@ -212,7 +221,9 @@ def assemble_shift_tournament_frame(
     )
     merged = merged.merge(linear_t, on="player_id", how="left")
     merged["current_div"] = merged["div"]
-    merged["os_shift"] = merged["player_id"].map(lambda pid, lookup=shift_map: lookup.get(int(pid))).astype(float)
+    os_pairs = merged["player_id"].map(lambda pid, lookup=shift_map: lookup.get(int(pid), (np.nan, np.nan)))
+    merged["os_shift"] = os_pairs.map(lambda pair: pair[0]).astype(float)
+    merged["os_shift_sd"] = os_pairs.map(lambda pair: pair[1]).astype(float)
     if not performance_features.empty:
         merged = merged.merge(
             performance_features[performance_features["tournament_id"] == tournament_id],
@@ -236,7 +247,6 @@ def assemble_shift_tournament_frame(
         if "performance_v2_local_zscore" in merged.columns
         else pd.Series(False, index=merged.index)
     )
-    merged["confidence_v1"] = 0.0  # filled if/when v1 shift rows are joined
     for column in (
         "performance_v2_raw",
         "performance_v2_confidence",
@@ -246,7 +256,6 @@ def assemble_shift_tournament_frame(
         "performance_v2_local_reference_n",
         "linear_stable_shift",
         "linear_trend_shift",
-        "linear_confidence",
         "linear_effective_evidence",
         "linear_sample_tournaments",
         "linear_sample_matches",

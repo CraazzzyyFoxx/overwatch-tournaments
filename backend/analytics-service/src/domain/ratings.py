@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+import math
 import typing
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 
+import numpy as np
 import pandas as pd
 from openskill.models import PlackettLuce, PlackettLuceRating
 
-from src.domain.linear import STABLE_SHIFT_SCALE, TournamentSignal, score_history
+from shared.division_grid import DivisionGrid, DivisionTier
+from src.domain.linear import STABLE_SHIFT_SCALE, TournamentSignal, raw_signal_sd, score_history
 
 __all__ = (
     "AnalyticsMatch",
@@ -17,16 +20,17 @@ __all__ = (
     "COEF_NOVICE_SECOND",
     "COEF_REGULAR",
     "LINEAR",
+    "OPENSKILL",
     "OPENSKILL_LOOKBACK",
     "POINTS",
     "compute_linear_metrics",
     "compute_points_shifts",
     "division_delta_points",
     "get_id_role",
-    "get_linear_hybrid_shift_lookup",
     "get_plackett_luce",
     "get_player_rating",
     "prepare_openskill_data",
+    "rank_sd_to_divisions",
 )
 
 COEF_NOVICE_FIRST = 1 / 0.15
@@ -34,6 +38,7 @@ COEF_NOVICE_SECOND = 1 / 0.11
 COEF_REGULAR = 1 / 0.065
 OPENSKILL_LOOKBACK = 10
 LINEAR = "Linear"
+OPENSKILL = "OpenSkill"
 POINTS = "Points"
 _MU = 1100
 
@@ -66,58 +71,80 @@ def division_delta_points(
     return int(round((float(previous_div) - float(current_div)) * 100))
 
 
-def compute_points_shifts(df: pd.DataFrame) -> pd.Series:
-    output = pd.Series(0.0, index=df.index, dtype=float)
-    for id_role, rows in df.groupby("id_role", sort=False):
-        del id_role
-        rows = rows.sort_values("tournament_id")
+def compute_points_shifts(df: pd.DataFrame) -> pd.DataFrame:
+    """Write ``points_shift`` and its sd ``points_shift_sd`` per row of ``df``; return ``df``.
+
+    A map adds ±1 to ``wins - losses``, so a row scored as ``delta · coef`` over ``maps`` maps has variance
+    ``coef² · maps``; the sd sums that over the rows the shift accumulates. No maps in that window: NaN.
+    """
+    for _, rows in df.groupby("id_role", sort=False):
+        rows = rows.sort_values(["started_at", "tournament_id"])
         is_novice = True
         previous_shift = 0.0
+        previous_variance = 0.0
         for index, row in rows.iterrows():
             delta = row["wins"] - row["losses"]
+            maps = row["wins"] + row["losses"]
             if is_novice:
                 if row["is_changed"]:
                     shift = delta / COEF_NOVICE_FIRST
+                    variance = maps / COEF_NOVICE_FIRST**2
                     is_novice = False
                 else:
                     shift = delta / COEF_NOVICE_SECOND
+                    variance = maps / COEF_NOVICE_SECOND**2
             else:
                 shift = delta / COEF_REGULAR
                 if row["is_changed"]:
                     shift += delta / COEF_REGULAR
+                    variance = maps * (2 / COEF_REGULAR) ** 2
                 else:
                     shift += previous_shift
+                    variance = maps / COEF_REGULAR**2 + previous_variance
             previous_shift = shift
-            output.at[index] = round(float(shift), 2)
-    return output
+            previous_variance = variance
+            df.at[index, "points_shift"] = round(float(shift), 2)
+            df.at[index, "points_shift_sd"] = math.sqrt(variance) if variance > 0 else np.nan
+    return df
 
 
 def compute_linear_metrics(df: pd.DataFrame, *, shift_scale: float = STABLE_SHIFT_SCALE) -> pd.DataFrame:
+    """Write the Linear columns per row of ``df``; return ``df``.
+
+    A player's history restarts at their latest division change (``is_changed``; an unranked row never restarts it):
+    the tournaments before the move describe the old division. ``linear_shift_sd`` comes from one raw-signal noise
+    estimate for the whole frame (NaN when it is undefined).
+    """
     if df.empty:
         return df
 
-    for _, group in df.groupby("id_role", sort=False):
-        group = group.sort_values("tournament_id")
-        group_rows = group.to_dict("records")
-        for position, (index, row) in enumerate(zip(group.index, group_rows, strict=True)):
-            del row
-            signals: list[TournamentSignal] = []
-            for history_position in range(position + 1):
-                history = group_rows[history_position]
-                signals.append(
-                    TournamentSignal(
-                        map_diff=float(history["map_diff"]),
-                        placement_score=float(history["placement_score"]),
-                        recency_decay=float(0.85 ** (position - history_position)),
-                        coverage_weight=float(0.7 + 0.3 * history["log_available"]),
-                        newcomer_weight=0.75 if history["is_newcomer"] or history["is_newcomer_role"] else 1.0,
-                        match_count=int(history["match_count"] or 0),
-                        log_available=float(history["log_available"]),
-                    )
-                )
+    signals = {
+        index: TournamentSignal(
+            map_diff=float(row["map_diff"]),
+            placement_score=float(row["placement_score"]),
+            recency_decay=1.0,
+            coverage_weight=float(0.7 + 0.3 * row["log_available"]),
+            maps=int(row["wins"] + row["losses"]) or int(row["match_count"] or 0),
+            match_count=int(row["match_count"] or 0),
+            log_available=float(row["log_available"]),
+        )
+        for index, row in zip(df.index, df.to_dict("records"), strict=True)
+    }
+    noise_sd = raw_signal_sd(list(signals.values()))
 
-            metrics = score_history(signals, shift_scale=shift_scale)
-            df.at[index, "confidence"] = metrics.confidence
+    for _, group in df.groupby("id_role", sort=False):
+        group = group.sort_values(["started_at", "tournament_id"])
+        start = 0
+        for position, (index, is_changed) in enumerate(zip(group.index, group["is_changed"], strict=True)):
+            if is_changed:
+                start = position
+            history = [
+                replace(signals[history_index], recency_decay=float(0.85 ** (position - history_position)))
+                for history_position, history_index in enumerate(group.index[start : position + 1], start)
+            ]
+
+            metrics = score_history(history, noise_sd=noise_sd, shift_scale=shift_scale)
+            df.at[index, "linear_shift_sd"] = metrics.shift_sd if metrics.shift_sd is not None else np.nan
             df.at[index, "effective_evidence"] = metrics.effective_evidence
             df.at[index, "sample_tournaments"] = metrics.sample_tournaments
             df.at[index, "sample_matches"] = metrics.sample_matches
@@ -126,6 +153,35 @@ def compute_linear_metrics(df: pd.DataFrame, *, shift_scale: float = STABLE_SHIF
             df.at[index, "linear_trend_shift"] = metrics.trend_shift
 
     return df
+
+
+def _tier_width(grid: DivisionGrid, tier: DivisionTier) -> int:
+    """Rank span of ``tier`` (bounds inclusive); an open-ended edge tier takes its neighbour's."""
+    if tier.rank_max is not None:
+        return tier.rank_max - tier.rank_min + 1
+    by_rank = sorted(grid.tiers, key=lambda candidate: candidate.rank_min)
+    position = by_rank.index(tier)
+    neighbour = by_rank[position - 1] if position > 0 else by_rank[position + 1]
+    return _tier_width(grid, neighbour)
+
+
+def rank_sd_to_divisions(grid: DivisionGrid, ladder: DivisionGrid, rank: float, sd: float) -> float:
+    """``sd`` in ``grid`` rank units at ``rank`` as canonical divisions on ``ladder``.
+
+    Through the width of the tier ``rank`` falls in, then the canonical divisions that tier spans: its native range
+    over the ladder tier at the range's midpoint, else the proportional placement ``canonical_tier_number`` uses. On
+    the canonical grid itself that is ``sd / 100``.
+    """
+    tier = grid.resolve_division(int(round(rank)))
+    if tier.native_rank_min is not None and tier.native_rank_max is not None:
+        low = min(tier.native_rank_min, tier.native_rank_max)
+        high = max(tier.native_rank_min, tier.native_rank_max)
+        canonical_per_tier = (high - low + 1) / _tier_width(ladder, ladder.resolve_division((low + high) // 2))
+    else:
+        source_span = grid.max_division - grid.min_division
+        ladder_span = ladder.max_division - ladder.min_division
+        canonical_per_tier = ladder_span / source_span if source_span > 0 else 0.0
+    return sd / _tier_width(grid, tier) * canonical_per_tier
 
 
 def get_plackett_luce() -> PlackettLuce:
@@ -212,26 +268,3 @@ def prepare_openskill_data(
                 players_rating[id_role] = rating
 
     return agents, players_rating, analytics_matches
-
-
-def get_linear_hybrid_shift_lookup(
-    current_df: pd.DataFrame,
-    openskill_shift_map: dict[int, float],
-    has_match_history: bool,
-) -> dict[int, float]:
-    output: dict[int, float] = {}
-    for _, row in current_df.iterrows():
-        player_id = int(row["player_id"])
-        stable_shift = float(row["linear_stable_shift"])
-        if not has_match_history:
-            output[player_id] = round(stable_shift, 2)
-            continue
-
-        openskill_shift = openskill_shift_map.get(player_id)
-        if openskill_shift is None:
-            output[player_id] = round(stable_shift, 2)
-            continue
-
-        alpha_eff = 0.35 * min(1.0, int(row["sample_matches"]) / 12.0)
-        output[player_id] = round((1.0 - alpha_eff) * stable_shift + alpha_eff * openskill_shift, 2)
-    return output

@@ -354,7 +354,8 @@ def _outputs(kind: str, obj: typing.Any, frames: dict[str, typing.Any]) -> dict[
     """Run every prediction surface of the wrapper and its estimators on the supplied frames."""
     out: dict[str, typing.Any] = {}
     if kind == "performance":
-        out["predict_match"] = obj.predict_match(frames["frame"])
+        # Confidence and coarse bands changed on purpose after the move; the quantile boosters are compared below.
+        out["predict_match"] = obj.predict_match(frames["frame"])[["y_hat"]]
         out["predict"] = obj.predict(frames["frame"])
         out["booster"] = obj.booster.predict(frames["main"])
         out["booster_q10"] = obj.booster_q10.predict(frames["main"])
@@ -368,9 +369,7 @@ def _outputs(kind: str, obj: typing.Any, frames: dict[str, typing.Any]) -> dict[
         out["predict"] = obj.predict(frames["frame"])
         out["booster"] = obj.booster.predict_proba(frames["matrix"])
         out["baseline"] = obj.baseline.predict_proba(frames["matrix"])
-    else:
-        out["predict"] = obj.predict(frames["frame"])
-        out["predict_with_confidence"] = obj.predict_with_confidence(frames["frame"])
+    # Shift v2 holds only blend constants, proven by the state digest; its blend code changed on purpose after the move.
     return {name: _record(value) for name, value in out.items()}
 
 

@@ -1,7 +1,6 @@
 import typing
 
 import sqlalchemy as sa
-from sqlalchemy.exc import NoResultFound
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
@@ -138,9 +137,9 @@ class AnalyticsService:
                 models.WorkspaceMember.player_id.label("user_id"),
                 models.Player.role.label("role"),
                 models.Player.rank.label("rank"),
-                models.Player.is_newcomer.label("is_newcomer"),
-                models.Player.is_newcomer_role.label("is_newcomer_role"),
                 models.Tournament.id.label("tournament_id"),
+                # Tournament chronology: ids are not chronological, so every per-player history orders by this.
+                sa.func.coalesce(models.Tournament.start_date, models.Tournament.created_at).label("started_at"),
                 sa.func.coalesce(points.c.wins, 0).label("wins"),
                 sa.func.coalesce(points.c.losses, 0).label("losses"),
                 sa.func.coalesce(matches.c.match_count, 0).label("match_count"),
@@ -187,77 +186,6 @@ class AnalyticsService:
         result = await session.execute(query)
         return result.mappings().all()
 
-    async def get_matches(
-        self,
-        session: AsyncSession,
-        start_range: int,
-        end_range: int,
-        workspace_id: int | None = None,
-        workspace_ids: typing.Sequence[int] | None = None,
-        *,
-        discipline: str,
-    ) -> typing.Sequence[models.Encounter]:
-        query = (
-            sa.select(models.Encounter)
-            .options(
-                sa.orm.selectinload(models.Encounter.teams),
-                sa.orm.joinedload(models.Encounter.tournament),
-            )
-            .join(models.Tournament, models.Encounter.tournament_id == models.Tournament.id)
-            .where(
-                models.Encounter.tournament_id.between(start_range, end_range),
-                # NOT inert, unlike the player-scoped CTEs above: this read reaches
-                # the encounters through ``joinedload``, so a scrim encounter comes
-                # back with two real teams and empty rosters, and
-                # ``prepare_openskill_data`` then calls ``PlackettLuce.rate`` with two
-                # empty sides -- a hard ValueError for every tournament whose lookback
-                # window spans the hidden scrim container. Scope it out at the source.
-                models.Tournament.is_hidden.is_(False),
-                models.Tournament.discipline == discipline,
-                *workspace_scope_filter(workspace_id, workspace_ids),
-            )
-            .order_by(models.Encounter.tournament_id, models.Encounter.id)
-        )
-        result = await session.scalars(query)
-        return result.unique().all()  # type: ignore
-
-    async def lookback_start_tournament_id(
-        self,
-        session: AsyncSession,
-        end_tournament_id: int,
-        look_back: int,
-        workspace_id: int | None = None,
-        workspace_ids: typing.Sequence[int] | None = None,
-        *,
-        discipline: str,
-    ) -> int:
-        """Chronological start id for an OpenSkill lookback window.
-
-        Returns the smallest tournament id among the ``look_back`` most recent
-        tournaments with ``id <= end_tournament_id`` (within scope). Not
-        ``end_tournament_id - look_back``: tournament ids are sparse (cancelled
-        events, cross-workspace gaps), so a numeric offset would shrink — or empty —
-        the history window and bias the OpenSkill ratings.
-        Falls back to ``end_tournament_id`` when no rows match.
-        """
-        rows = await session.scalars(
-            sa.select(models.Tournament.id)
-            .where(
-                models.Tournament.id <= end_tournament_id,
-                # Hidden tournaments are containers, not seasons. The per-workspace
-                # scrim container would occupy one of the ``look_back`` slots while
-                # contributing no encounters to the replay — the same window
-                # shrinkage this helper exists to avoid.
-                models.Tournament.is_hidden.is_(False),
-                models.Tournament.discipline == discipline,
-                *workspace_scope_filter(workspace_id, workspace_ids),
-            )
-            .order_by(models.Tournament.id.desc())
-            .limit(max(int(look_back), 1))
-        )
-        ids = [int(i) for i in rows.all()]
-        return min(ids) if ids else int(end_tournament_id)
-
     async def lookback_tournament_ids(
         self,
         session: AsyncSession,
@@ -270,12 +198,11 @@ class AnalyticsService:
     ) -> list[int]:
         """The ``look_back`` most recent tournament ids up to the end tournament, by START DATE.
 
-        Chronology is ``(coalesce(start_date, created_at), id)``. Unlike
-        :func:`lookback_start_tournament_id` this returns the explicit id list, not
-        an id interval: ids are not chronological in this database (tournament 62
-        started months before 61), so an ``id BETWEEN`` window around an
-        out-of-order tournament would pull in events played after it.
-        Result is ordered oldest → newest and includes ``end_tournament_id`` itself.
+        Chronology is ``(coalesce(start_date, created_at), id)``. Returns the
+        explicit id list, not an id interval: ids are not chronological in this
+        database (tournament 62 started months before 61), so an ``id BETWEEN``
+        window around an out-of-order tournament would pull in events played after
+        it. Result is ordered oldest → newest and includes ``end_tournament_id`` itself.
         """
         chrono = sa.func.coalesce(models.Tournament.start_date, models.Tournament.created_at)
         end_key = (
@@ -289,8 +216,9 @@ class AnalyticsService:
             sa.select(models.Tournament.id)
             .where(
                 sa.tuple_(chrono, models.Tournament.id) <= sa.tuple_(*end_key),
-                # Same exclusion as ``lookback_start_tournament_id``: hidden
-                # containers occupy window slots while contributing no encounters.
+                # Hidden tournaments are containers, not seasons. The per-workspace
+                # scrim container would occupy one of the ``look_back`` slots while
+                # contributing no encounters to the replay.
                 models.Tournament.is_hidden.is_(False),
                 models.Tournament.discipline == discipline,
                 *workspace_scope_filter(workspace_id, workspace_ids),
@@ -329,8 +257,12 @@ class AnalyticsService:
             .join(models.Tournament, models.Encounter.tournament_id == models.Tournament.id)
             .where(
                 models.Encounter.tournament_id.in_([int(t) for t in tournament_ids]),
-                # See get_matches: scrim containers come back with empty rosters and
-                # crash the OpenSkill replay.
+                # NOT inert, unlike the player-scoped CTEs of ``get_analytics``: this
+                # read reaches the encounters through ``joinedload``, so a scrim
+                # encounter comes back with two real teams and empty rosters, and
+                # ``prepare_openskill_data`` then calls ``PlackettLuce.rate`` with two
+                # empty sides -- a hard ValueError for every tournament whose lookback
+                # window spans the hidden scrim container. Scope it out at the source.
                 models.Tournament.is_hidden.is_(False),
                 models.Tournament.discipline == discipline,
                 *workspace_scope_filter(workspace_id, workspace_ids),
@@ -340,11 +272,37 @@ class AnalyticsService:
         result = await session.scalars(query)
         return result.unique().all()  # type: ignore
 
-    async def get_algorithm(self, session: AsyncSession, name: str) -> models.AnalyticsAlgorithm:
-        algorithm = await self.algorithms.get_by_name(session, name)
-        if algorithm is None:
-            raise NoResultFound()
-        return algorithm
+    async def computed_tournament_ids_after(
+        self,
+        session: AsyncSession,
+        tournament_id: int,
+        workspace_id: int | None = None,
+        *,
+        discipline: str,
+    ) -> list[int]:
+        """Tournaments of the scope started after ``tournament_id`` that already have v1 rows, oldest first.
+
+        Chronology is ``(coalesce(start_date, created_at), id)``; "has v1 rows" means ``analytics.player_shift`` rows.
+        """
+        chrono = sa.func.coalesce(models.Tournament.start_date, models.Tournament.created_at)
+        key = (
+            await session.execute(sa.select(chrono, models.Tournament.id).where(models.Tournament.id == tournament_id))
+        ).one()
+        rows = await session.execute(
+            sa.select(models.Tournament.id)
+            .where(
+                sa.tuple_(chrono, models.Tournament.id) > sa.tuple_(*key),
+                models.Tournament.discipline == discipline,
+                *workspace_scope_filter(workspace_id),
+                sa.exists().where(models.AnalyticsPlayer.tournament_id == models.Tournament.id),
+            )
+            .order_by(chrono, models.Tournament.id)
+        )
+        return [int(row[0]) for row in rows.all()]
+
+    async def ensure_algorithm(self, session: AsyncSession, name: str) -> models.AnalyticsAlgorithm:
+        """The algorithm row by name, created on first use: a fresh environment needs no seed rows."""
+        return await self.algorithms.ensure(session, name)
 
     async def list_algorithm_names_by_ids(self, session: AsyncSession, ids: typing.Sequence[int]) -> list[str]:
         return await self.algorithms.list_names_by_ids(session, ids)

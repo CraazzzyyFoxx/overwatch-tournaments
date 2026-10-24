@@ -94,7 +94,7 @@ def test_model_declarations_keep_the_registered_names_and_versions() -> None:
     assert exports.INFERENCE_KINDS == ("performance", "player_anomalies", "shift", "standings", "match_quality")
     from src.services.ml import FEATURE_VERSION
 
-    assert FEATURE_VERSION == "v1.4"
+    assert FEATURE_VERSION == "v1.6"
 
 
 @pytest.mark.parametrize("role", ["tank", "Damage", "SUPPORT"])
@@ -199,3 +199,44 @@ def test_tournament_strength_averages_match_mu_and_is_nan_without_matches() -> N
     assert out["team_avg_mu"].tolist() == [15.0, 5.0] and out["mu_gap"].tolist() == [13.0, 3.0]
     empty = exports.attach_tournament_strength(tournament.copy(), matches.iloc[0:0])
     assert empty[["team_avg_mu", "opp_avg_mu", "mu_gap"]].isna().all().all()
+
+
+def test_the_coarse_fallback_reads_no_match_outcome() -> None:
+    """The Performance target is ``won - P(win)``: an outcome column among the coarse inputs leaks the label."""
+    assert not {"won", "home_score", "away_score", "score_delta"} & set(exports.COARSE_FEATURES)
+
+
+class _ScaledBooster:
+    def __init__(self, scale: float) -> None:
+        self.scale = scale
+
+    def predict(self, frame: pd.DataFrame) -> np.ndarray:
+        return self.scale * frame["x"].to_numpy(dtype=float)
+
+
+def test_performance_confidence_spans_the_target_band_and_is_zero_without_one() -> None:
+    """The target lies in (-1, 1), so a q10..q90 band of 0..2 maps to confidence 1..0; the coarse fallback has none."""
+    model = exports.PerformanceModelV2(
+        role="tank",
+        booster=_ScaledBooster(0.0),
+        booster_q10=_ScaledBooster(-1.0),
+        booster_q90=_ScaledBooster(1.0),
+        feature_order=["x"],
+        coarse_booster=_ScaledBooster(0.1),
+        coarse_feature_order=["x"],
+    )
+    frame = pd.DataFrame(
+        {
+            "x": [0.0, 0.5, 1.0, 0.3],
+            "hero_time_played": [600.0, 600.0, 600.0, 0.0],
+            "tournament_id": 1,
+            "player_id": [1, 2, 3, 4],
+            "role": "tank",
+        }
+    )
+
+    predicted = model.predict_match(frame)
+    per_player = exports.aggregate_to_tournament(frame, predicted["y_hat"], predicted["y_q10"], predicted["y_q90"])
+
+    assert predicted["confidence"].tolist() == [1.0, 0.5, 0.0, 0.0]
+    assert per_player.set_index("player_id")["confidence"].to_dict() == {1: 1.0, 2: 0.5, 3: 0.0, 4: 0.0}

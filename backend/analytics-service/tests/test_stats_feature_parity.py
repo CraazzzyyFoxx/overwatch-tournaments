@@ -27,7 +27,7 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from shared import models
-from shared.disciplines.overwatch.analytics import COARSE_FEATURES, PerformanceModelV2
+from shared.disciplines.overwatch.analytics import PerformanceModelV2
 from src.core import config
 from src.services.analytics.read_queries import analytics_read_service
 from src.services.analytics.service import analytics_service
@@ -46,6 +46,12 @@ features_for_role = ow.features_for_role
 load_player_signal_profile = ow.load_player_signal_profile
 
 GOLDEN = Path(__file__).parent / "fixtures" / "stats_feature_parity.json"
+# The coarse order the golden captured, which every artifact trained before the label-leak fix still stores; the live
+# ``COARSE_FEATURES`` dropped the outcome columns (``won`` and the scores).
+PRE_FIX_COARSE_FEATURES = [
+    "won", "home_score", "away_score", "score_delta", "mu_gap",
+    "opp_avg_mu", "team_avg_mu", "is_home", "rank", "is_newcomer",
+]  # fmt: skip
 
 
 def _value(value: Any) -> Any:
@@ -136,7 +142,7 @@ def _predictor_inputs(frame: pd.DataFrame) -> dict:
                 booster_q90=quantile,
                 feature_order=list(features_for_role(role)),
                 coarse_booster=coarse,
-                coarse_feature_order=list(COARSE_FEATURES),
+                coarse_feature_order=list(PRE_FIX_COARSE_FEATURES),
             )
             try:
                 model.predict_match(selected)
@@ -234,9 +240,14 @@ _REDUCTIONS = {
     "round": {"y_perf"},
     "dominance": {"mvp_dominance"},
     "profile": {"kd", "weapon_accuracy", "final_blows_p10", "mvp_dominance"},
-    "enriched": {"team_avg_mu", "team_max_mu", "team_min_mu", "opp_avg_mu", "opp_max_mu", "opp_min_mu", "mu_gap"},
 }
-_REDUCTIONS["predictor_inputs"] = _REDUCTIONS["enriched"]
+# The pre-encounter mu replay now starts from the seed ratings instead of the post-replay ones (an outcome leak), so the
+# frozen mu cells of the enriched frame and of the inputs carrying it are no longer comparable.
+_RESEEDED_MU = {"team_avg_mu", "team_max_mu", "team_min_mu", "opp_avg_mu", "opp_max_mu", "opp_min_mu", "mu_gap"}
+_RESEEDED = {"enriched": _RESEEDED_MU, "predictor_inputs": _RESEEDED_MU}
+# The profile history window is now the latest tournaments by start date, not an id range (ids are not chronological):
+# it reaches tournaments the frozen id window missed, which stays its chronologically latest part.
+_CHRONOLOGICAL_HISTORY = {"profile": {"raw_value_history", "local_residual_history", "local_zscore_history"}}
 
 
 def _assert_equal(actual: Any, expected: Any, path: tuple = ()) -> None:
@@ -252,6 +263,12 @@ def _assert_equal(actual: Any, expected: Any, path: tuple = ()) -> None:
                 assert len(row) == len(old_row) == len(expected["columns"]), path
                 for column, value, old_value in zip(expected["columns"], row, old_row, strict=True):
                     cell = (*path, "rows", row_number, column)
+                    if column in _RESEEDED.get(path[0], ()):
+                        continue
+                    if column in _CHRONOLOGICAL_HISTORY.get(path[0], ()):
+                        assert type(value) is list and len(value) >= len(old_value), cell
+                        _assert_equal(value[len(value) - len(old_value) :], old_value, cell)
+                        continue
                     if column in reductions and type(value) is float and type(old_value) is float:
                         assert math.isclose(value, old_value, rel_tol=0.0, abs_tol=1e-12), cell
                     else:

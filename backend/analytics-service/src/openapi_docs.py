@@ -63,7 +63,7 @@ DOCS: dict[str, dict] = {
     },
     "rpc.analytics.shift": {
         "summary": "Override player shift",
-        "description": "Permission: global `analytics.update`. Applies a manual shift override for a player and returns recomputed player analytics.",
+        "description": "Permission: global `analytics.update`. Sets the organizer's manual shift override (`AnalyticsPlayer.shift`) for a player and returns the saved value; 404 if the player has no analytics row.",
     },
     "rpc.analytics.feedback_submit": {
         "summary": "Submit anomaly feedback",

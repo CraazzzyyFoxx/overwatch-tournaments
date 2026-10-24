@@ -367,7 +367,7 @@ CREATE TABLE analytics.shifts (
 	algorithm_id BIGINT NOT NULL,
 	player_id BIGINT NOT NULL,
 	shift FLOAT NOT NULL,
-	confidence FLOAT DEFAULT '0' NOT NULL,
+	shift_sd FLOAT,
 	effective_evidence FLOAT DEFAULT '0' NOT NULL,
 	sample_tournaments INTEGER DEFAULT '0' NOT NULL,
 	sample_matches INTEGER DEFAULT '0' NOT NULL,

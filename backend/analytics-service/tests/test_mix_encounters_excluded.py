@@ -21,7 +21,7 @@ class MixEncountersExcludedTests(EncounterWriterCase):
             await self.mix_encounter(s)
             await s.commit()
         async with self.Session() as s:
-            rows = await analytics_service.AnalyticsService().get_matches(
-                s, 0, self.ids["t"], workspace_id=self.ids["ws"], discipline="overwatch"
+            rows = await analytics_service.AnalyticsService().get_matches_for_tournaments(
+                s, [self.ids["t"]], workspace_id=self.ids["ws"], discipline="overwatch"
             )
         self.assertEqual([self.ids["e"]], [row.id for row in rows])

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import IsolatedAsyncioTestCase, TestCase
@@ -14,13 +15,16 @@ sys.path.insert(0, str(backend_root))
 sys.path.insert(0, str(backend_root / "analytics-service"))
 
 
+from tests.ow_analytics import exports as ow_exports  # noqa: E402
 from tests.ow_analytics import module as ow_module  # noqa: E402
 
 performance_v2 = ow_module("models.performance_v2")
 shift_features = ow_module("features.shift_features")
 shift_v2 = ow_module("models.shift_v2")
+MVP_MIN_MATCHES = ow_module("features.mvp_dominance").MVP_MIN_MATCHES
 
 from shared.division_grid import DEFAULT_GRID  # noqa: E402
+from src.services.ml.inference import runner  # noqa: E402
 from tests.factories import identity_assign as _identity_assign
 
 # The shift ramps are keyed on the canonical ladder (DEFAULT_GRID), so tests that
@@ -41,6 +45,7 @@ class ShiftRankHistoryTests(IsolatedAsyncioTestCase):
                 "user_id": 10,
                 "role": "tank",
                 "tournament_id": 10,
+                "started_at": datetime(2026, 1, 10, tzinfo=UTC),
                 "rank": 7,
                 "is_newcomer": False,
                 "version_id": 2,
@@ -50,6 +55,7 @@ class ShiftRankHistoryTests(IsolatedAsyncioTestCase):
                 "user_id": 10,
                 "role": "tank",
                 "tournament_id": 20,
+                "started_at": datetime(2026, 1, 20, tzinfo=UTC),
                 "rank": 6,
                 "is_newcomer": False,
                 "version_id": 11,
@@ -74,9 +80,11 @@ class ShiftRankHistoryTests(IsolatedAsyncioTestCase):
         self.assertEqual(7, first_row["div"])
         self.assertEqual(6, first_row["next_tournament_div"])
 
+        # The horizon tournament reaches the SQL bound (an IN-list param of the horizon subquery).
         query = session.execute.await_args.args[0]
-        params = query.compile().params
-        self.assertIn(20, params.values())
+        values = query.compile().params.values()
+        params = [v for value in values for v in (value if isinstance(value, list) else [value])]
+        self.assertIn(20, params)
 
     async def test_unranked_tournament_has_no_division_and_does_not_break_the_chronology(self) -> None:
         rows = [
@@ -85,6 +93,7 @@ class ShiftRankHistoryTests(IsolatedAsyncioTestCase):
                 "user_id": 10,
                 "role": "tank",
                 "tournament_id": tid,
+                "started_at": datetime(2026, 1, tid, tzinfo=UTC),
                 "rank": rank,
                 "is_newcomer": False,
                 "version_id": None,
@@ -338,6 +347,7 @@ class ShiftBlendTests(TestCase):
             "grid_n_div": [40],
             "tournaments_played": [5],
             "is_newcomer": [False],
+            "mvp_matches": [MVP_MIN_MATCHES],
         }
         # dominance 0.81 → dominance_z=(0.81-0.5)*4=1.24, under out_clamp (~2.49),
         # NOT scaled by the local 0.5 → individual term 1.24 (was 0.62 when scaled).
@@ -366,6 +376,7 @@ class ShiftBlendTests(TestCase):
             "tournaments_played": [5],
             "is_newcomer": [False],
             "mvp_dominance": [1.0],
+            "mvp_matches": [MVP_MIN_MATCHES],
         }
         top = float(model.predict(pd.DataFrame({**base, "current_div": [1]})).iloc[0])
         mid = float(model.predict(pd.DataFrame({**base, "current_div": [CANONICAL_MID_DIV]})).iloc[0])
@@ -457,10 +468,142 @@ class ShiftBlendTests(TestCase):
                 "tournaments_played": [5],
                 "is_newcomer": [False],
                 "mvp_dominance": [0.1],
+                "mvp_matches": [MVP_MIN_MATCHES],
             }
         )
         # dominance_z floored at 0; local_z 0 → individual term 0.
         self.assertAlmostEqual(0.0, float(model.predict(frame).iloc[0]), places=6)
+
+    def _mvp_model(self) -> shift_v2.ShiftModelV2:
+        return shift_v2.ShiftModelV2(
+            w_team=0.7,
+            w_os=0.3,
+            indiv_scale_top=0.5,
+            indiv_scale_bottom=0.5,
+            indiv_clamp_top=1.5,
+            indiv_clamp_bottom=1.5,
+            dominance_gain=4.0,
+            dominance_cap=2.0,
+        )
+
+    def test_negative_local_z_lowers_the_shift_unless_an_mvp_lift_wins(self) -> None:
+        model = self._mvp_model()
+        base = {
+            "linear_stable_shift": [0.0],
+            "os_shift": [0.0],
+            "performance_v2_local_zscore": [-2.0],
+            "tournaments_played": [3],
+            "is_newcomer": [False],
+        }
+        # No MVP lift: the local term applies as is, 0.5 * -2 = -1.0.
+        self.assertAlmostEqual(-1.0, float(model.predict(pd.DataFrame(base)).iloc[0]), places=6)
+        # An MVP lift (upward only) replaces the smaller local term: (0.81 - 0.5) * 4 = 1.24.
+        lifted = {**base, "mvp_dominance": [0.81], "mvp_matches": [MVP_MIN_MATCHES]}
+        self.assertAlmostEqual(1.24, float(model.predict(pd.DataFrame(lifted)).iloc[0]), places=6)
+
+    def test_mvp_lift_needs_the_minimum_logged_matches(self) -> None:
+        model = self._mvp_model()
+        base = {
+            "linear_stable_shift": [0.0],
+            "os_shift": [0.0],
+            "performance_v2_local_zscore": [0.0],
+            "tournaments_played": [3],
+            "is_newcomer": [False],
+            "mvp_dominance": [0.81],
+        }
+        few = pd.DataFrame({**base, "mvp_matches": [MVP_MIN_MATCHES - 1]})
+        enough = pd.DataFrame({**base, "mvp_matches": [MVP_MIN_MATCHES]})
+        self.assertAlmostEqual(0.0, float(model.predict(few).iloc[0]), places=6)
+        self.assertAlmostEqual(1.24, float(model.predict(enough).iloc[0]), places=6)
+
+
+class ShiftUncertaintyTests(TestCase):
+    BASE = {
+        "linear_stable_shift": [0.0],
+        "linear_shift_sd": [0.4],
+        "os_shift": [0.0],
+        "os_shift_sd": [0.3],
+        "tournaments_played": [3],
+        "is_newcomer": [False],
+    }
+    # (w_team * sd_lin)^2 + (w_os * sd_os)^2
+    BACKBONE_VAR = (0.7 * 0.4) ** 2 + (0.3 * 0.3) ** 2
+
+    def _predict(self, **columns: list) -> pd.Series:
+        model = shift_v2.ShiftModelV2(
+            w_team=0.7,
+            w_os=0.3,
+            indiv_scale_top=0.5,
+            indiv_scale_bottom=0.5,
+            indiv_clamp_top=1.5,
+            indiv_clamp_bottom=1.5,
+            dominance_gain=4.0,
+            dominance_cap=2.0,
+        )
+        return model.predict_with_uncertainty(pd.DataFrame({**self.BASE, **columns})).iloc[0]
+
+    def test_sd_combines_the_backbone_and_the_active_individual_term(self) -> None:
+        # No individual term applies: the backbone alone.
+        self.assertAlmostEqual(np.sqrt(self.BACKBONE_VAR), self._predict()["shift_sd"])
+        # The local term: its per-match scale (0.5) over sqrt(logged matches).
+        local = self._predict(performance_v2_local_zscore=[-1.0], mvp_matches=[4])
+        self.assertAlmostEqual(np.sqrt(self.BACKBONE_VAR + (0.5 / 2) ** 2), local["shift_sd"])
+        # The MVP lift: gain x the sd of a uniform rank position (1/sqrt(12)), over sqrt(logged matches).
+        mvp = self._predict(performance_v2_local_zscore=[0.3], mvp_dominance=[0.81], mvp_matches=[9])
+        self.assertAlmostEqual(np.sqrt(self.BACKBONE_VAR + (4.0 / np.sqrt(12.0) / 3) ** 2), mvp["shift_sd"])
+
+    def test_newcomer_sd_is_the_backbone_only(self) -> None:
+        newcomer = self._predict(
+            performance_v2_local_zscore=[-2.0], mvp_matches=[4], tournaments_played=[1], is_newcomer=[True]
+        )
+        self.assertAlmostEqual(np.sqrt(self.BACKBONE_VAR), newcomer["shift_sd"])
+
+    def test_placement_gate_scales_the_sd_with_the_shift(self) -> None:
+        ungated = self._predict(linear_stable_shift=[2.0])
+        # Third of five teams: the positive shift and its sd are both halved.
+        gated = self._predict(linear_stable_shift=[2.0], overall_position=[3], team_count=[5])
+        self.assertAlmostEqual(0.5 * ungated["shift_v2"], gated["shift_v2"])
+        self.assertAlmostEqual(0.5 * ungated["shift_sd"], gated["shift_sd"])
+
+    def test_missing_linear_falls_back_to_the_openskill_sd_and_an_unknown_sd_stays_unknown(self) -> None:
+        fallback = self._predict(linear_stable_shift=[np.nan])
+        self.assertAlmostEqual(np.sqrt((0.7 * 0.3) ** 2 + (0.3 * 0.3) ** 2), fallback["shift_sd"])
+        self.assertTrue(np.isnan(self._predict(linear_shift_sd=[np.nan])["shift_sd"]))
+
+
+class ShiftRunnerTests(IsolatedAsyncioTestCase):
+    async def test_the_runner_persists_the_shift_sd(self) -> None:
+        frame = pd.DataFrame(
+            {
+                "tournament_id": [7, 7],
+                "player_id": [1, 2],
+                "linear_stable_shift": [1.0, 0.5],
+                "linear_shift_sd": [0.4, np.nan],
+                "os_shift": [0.5, 0.0],
+                "os_shift_sd": [0.3, 0.2],
+                "tournaments_played": [3, 3],
+            }
+        )
+        session = SimpleNamespace(execute=AsyncMock(), commit=AsyncMock())
+        model = shift_v2.ShiftModelV2()
+        with (
+            patch.object(runner, "tournament_module", AsyncMock(return_value=("overwatch", ow_exports))),
+            patch.object(runner, "_algorithm_id", AsyncMock(return_value=4)),
+            patch.object(
+                runner.registry_service,
+                "load_active_artifact",
+                AsyncMock(return_value=SimpleNamespace(storage_uri="s")),
+            ),
+            patch.object(runner, "load_artifact_or_none", lambda _uri: model),
+            patch.object(runner, "build_shift_feature_frame", AsyncMock(return_value=frame)),
+        ):
+            written = await runner.run_shift_for_tournament(session, 7, workspace_id=3)
+
+        self.assertEqual(2, written)
+        rows = session.execute.await_args_list[-1].args[1]
+        self.assertAlmostEqual(np.sqrt((0.7 * 0.4) ** 2 + (0.3 * 0.3) ** 2), rows[0]["shift_sd"])
+        self.assertIsNone(rows[1]["shift_sd"])  # an unknown Linear sd leaves the shift sd unknown
+        self.assertNotIn("confidence", rows[0])
 
 
 class ShiftTrainTests(TestCase):

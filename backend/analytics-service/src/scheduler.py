@@ -37,10 +37,15 @@ logger = logging.getLogger(__name__)
 
 async def _drift_check(session: AsyncSession, code: str) -> None:
     """Feature drift of one discipline's recent tournaments; alert when over threshold."""
+    # The chronologically latest tournament, not ``max(id)``: ids are not chronological.
     latest = await session.scalar(
-        sa.select(sa.func.max(models.Tournament.id)).where(
-            models.Tournament.discipline == code, models.Tournament.is_hidden.is_(False)
+        sa.select(models.Tournament.id)
+        .where(models.Tournament.discipline == code, models.Tournament.is_hidden.is_(False))
+        .order_by(
+            sa.func.coalesce(models.Tournament.start_date, models.Tournament.created_at).desc(),
+            models.Tournament.id.desc(),
         )
+        .limit(1)
     )
     if not latest:
         logger.info("No %s tournaments yet — skipping drift check", code)
@@ -56,7 +61,7 @@ async def _drift_check(session: AsyncSession, code: str) -> None:
     if not frames:
         return
 
-    report = compute_drift_report(pd.concat(frames, ignore_index=True))
+    report = compute_drift_report(pd.concat(frames, ignore_index=True), recent_ids)
     if report["flags"]:
         msg = (
             f"Feature drift detected for {code} ({len(report['flags'])} features above "

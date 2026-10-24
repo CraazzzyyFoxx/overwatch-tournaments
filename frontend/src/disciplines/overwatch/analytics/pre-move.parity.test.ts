@@ -125,11 +125,10 @@ function reproduce(capture: Capture, file: string): Record<string, unknown> {
               }
             ])
         ),
-        deriveImpact: helpers.deriveImpact(player.points),
         resolveImpact: {
-          public: helpers.resolveImpact(player, perfByPlayer.get(player.id), false),
-          authorized: helpers.resolveImpact(player, perfByPlayer.get(player.id), true),
-          no_v2_row: helpers.resolveImpact(player, undefined, true)
+          public: helpers.resolveImpact(perfByPlayer.get(player.id), false),
+          authorized: helpers.resolveImpact(perfByPlayer.get(player.id), true),
+          no_v2_row: helpers.resolveImpact(undefined, true)
         }
       }))
     ),
@@ -147,6 +146,40 @@ function reproduce(capture: Capture, file: string): Record<string, unknown> {
   };
 }
 
+interface CapturedPlayer {
+  player_id: number;
+  deriveImpact?: number;
+  resolveImpact: Record<"public" | "authorized" | "no_v2_row", number | null>;
+}
+type CapturedViewModel = { teams: Array<{ players: Array<{ id: number; impact: number | null }> }> } | null;
+
+/**
+ * Impact is no longer derived from the shift (`deriveImpact` is gone): every captured impact that came from that
+ * formula is `null` now and only a readable v2 score survives. The rest of the capture is compared unchanged.
+ */
+function withoutDerivedImpact(capture: Capture): unknown {
+  const scores = new Map(capture.input_old_wire.performance.body.map((row) => [row.player_id, row.impact_score]));
+  const expected = structuredClone(capture.output) as {
+    players: CapturedPlayer[];
+    useAnalyticsViewModel: Record<string, CapturedViewModel>;
+  };
+  for (const player of expected.players) {
+    delete player.deriveImpact;
+    player.resolveImpact = {
+      public: null,
+      authorized: Number.isFinite(scores.get(player.player_id)) ? player.resolveImpact.authorized : null,
+      no_v2_row: null
+    };
+  }
+  for (const [key, model] of Object.entries(expected.useAnalyticsViewModel)) {
+    const readable = key === "canReadV2=true;hasPerformance=true";
+    for (const player of model?.teams.flatMap((team) => team.players) ?? []) {
+      if (!readable || !Number.isFinite(scores.get(player.id))) player.impact = null;
+    }
+  }
+  return expected;
+}
+
 describe("analytics presentation keeps its captured pre-move outputs", () => {
   it("covers both captured algorithms of every captured tournament", () => {
     expect(FILES).toHaveLength(10);
@@ -158,7 +191,7 @@ describe("analytics presentation keeps its captured pre-move outputs", () => {
       for (const envelope of Object.values(capture.input_old_wire)) expect(envelope.status).toBe(200);
       expect(capture.input_old_wire.analytics.body.teams.length).toBeGreaterThan(0);
 
-      expect(encoded(reproduce(capture, name))).toEqual(capture.output);
+      expect(encoded(reproduce(capture, name))).toEqual(withoutDerivedImpact(capture));
     });
   }
 });

@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from shared.jobs import Status
 from src.core.jobs import JOB_KIND_COMPUTE, JOB_KIND_TRAIN_ML, job_runtime, update_progress
 from src.services.analytics.flows import flows_service
+from src.services.ml.features.cache import refreshing_feature_cache
 from src.services.ml.inference.runner import run_for_tournament
 from src.services.ml.training.orchestrator import train_all_models
 from src.worker.job_realtime import emit_job_event
@@ -95,11 +96,14 @@ class AnalyticsJobRunner:
 
         await update_progress(session, job_id, stage="ml_inference", state="running")
         try:
-            ml = await run_for_tournament(
-                session,
-                tournament_id,
-                workspace_id=workspace_id,
-            )
+            # Rebuild cached feature frames: the ratings were just recalculated, so a frame cached by an earlier job
+            # (within the TTL) lacks this tournament's new or corrected results.
+            with refreshing_feature_cache():
+                ml = await run_for_tournament(
+                    session,
+                    tournament_id,
+                    workspace_id=workspace_id,
+                )
             summary["ml"] = ml
             await update_progress(session, job_id, stage="ml_inference", state="done", detail=ml)
         except Exception as exc:

@@ -11,4 +11,4 @@ Subpackages:
 
 # Bump on any change to feature-frame semantics so the file/disk feature cache
 # is invalidated.
-FEATURE_VERSION = "v1.4"
+FEATURE_VERSION = "v1.6"

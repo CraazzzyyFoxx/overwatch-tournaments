@@ -18,10 +18,12 @@ export interface AlgorithmAnalytics {
 }
 
 export interface PlayerAnalytics extends Player {
-  move_1: number;
-  move_2: number;
+  /** Division change into this tournament (move_1) and the previous one (move_2) in canonical divisions ×100, + up; `null` when unknown. */
+  move_1: number | null;
+  move_2: number | null;
   points: number;
   shift: number;
+  /** Probability (0–1) of the shown forecast: the climb/drop, or for a hold that the player belongs where they are. */
   confidence: number;
   effective_evidence: number;
   sample_tournaments: number;
@@ -33,6 +35,12 @@ export interface PlayerAnalytics extends Player {
   anomalies: AnalyticsAnomaly[];
 }
 
+/** The organizer's manual shift override as saved by `POST /analytics/shift`. */
+export interface PlayerShiftUpdate {
+  player_id: number;
+  shift: number;
+}
+
 export interface TeamAnalytics extends Team {
   players: PlayerAnalytics[];
   wins: number;
@@ -42,8 +50,11 @@ export interface TeamAnalytics extends Team {
   avg_confidence: number;
   manual_shift_points: number;
   anomalies: AnalyticsAnomaly[];
+  /** Team mean canonical division minus the field's: negative = a stronger roster than the field. Context only. */
   balancer_shift: number;
+  /** Σ `move_1` in canonical divisions. Context only. */
   manual_shift: number;
+  /** The team's division forecast: −Σ players' `predicted_delta`, in tournament-grid divisions, + = up. */
   total_shift: number;
 }
 

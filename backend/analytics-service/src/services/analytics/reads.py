@@ -6,16 +6,14 @@ Responses are serialised inline with the lightweight Pydantic readers from
 
 from __future__ import annotations
 
-import math
 import typing
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload
 
 from shared import models
 from shared.core import enums, errors, pagination
 from shared.disciplines import discipline
-from shared.division_grid import DivisionGrid
+from shared.division_grid import DEFAULT_GRID, DivisionGrid, canonical_division_number
 from shared.domain.analytics import MATCH_QUALITY_MODEL, PERFORMANCE_MODEL, STANDINGS_MODEL, ModelDeclaration
 from shared.repository import (
     AnalyticsAlgorithmRepository,
@@ -25,13 +23,13 @@ from shared.repository import (
     AnalyticsPlayerAnomalyRepository,
     AnalyticsStandingsDistributionRepository,
     MLModelArtifactRepository,
-    PlayerRepository,
 )
 from shared.schemas.role import RoleRef
 from shared.services.division_grid.resolution import resolve_tournament_division
 from shared.services.workspace_scope import get_division_grid
 from src import schemas
 from src.core.analytics_exports import supports_analytics, tournament_discipline
+from src.core.config import settings
 from src.domain.forecast import predict_player_division
 
 from .read_queries import analytics_read_service
@@ -186,15 +184,6 @@ def _build_anomalies_by_player(
     return anomalies
 
 
-def _predict_player_division(
-    player: schemas.PlayerRead,
-    *,
-    points: float,
-) -> tuple[int | None, schemas.PredictedDirection, int]:
-    predicted, direction, delta = predict_player_division(player.division, points)
-    return predicted, direction, delta
-
-
 def _average(values: typing.Iterable[float]) -> float:
     values_list = list(values)
     if not values_list:
@@ -206,7 +195,6 @@ class AnalyticsReadFlowsService:
     def __init__(
         self,
         *,
-        players: PlayerRepository = PlayerRepository(),
         performance: AnalyticsPerformanceRepository = AnalyticsPerformanceRepository(),
         standings: AnalyticsStandingsDistributionRepository = AnalyticsStandingsDistributionRepository(),
         match_quality: AnalyticsMatchQualityRepository = AnalyticsMatchQualityRepository(),
@@ -215,7 +203,6 @@ class AnalyticsReadFlowsService:
         artifacts: MLModelArtifactRepository = MLModelArtifactRepository(),
         algorithms: AnalyticsAlgorithmRepository = AnalyticsAlgorithmRepository(),
     ) -> None:
-        self.players = players
         self.performance = performance
         self.standings = standings
         self.match_quality = match_quality
@@ -318,27 +305,36 @@ class AnalyticsReadFlowsService:
             if team.id not in cache_teams_losses:
                 cache_teams_losses[team.id] = analytics.losses
 
-        avg_team_cost = round(sum(t.avg_sr for t in cache_teams.values()) / max(len(cache_teams), 1))
-
         grid = await get_division_grid(session, workspace_id, tournament_id=tournament_id)
         predicted_places = await analytics_read_service.get_predicted_places(session, tournament_id, algorithm.id)
         anomalies_by_player = _build_anomalies_by_player(
             await analytics_read_service.get_match_quality_anomalies(session, tournament_id, algorithm.id)
         )
+        threshold = settings.forecast_confidence_threshold
+
+        # Balancer context: a team's mean canonical division against the field's (the mean over teams), so a roster
+        # stronger than the field reads negative. Unranked players carry no division; a team of them has no offset.
+        canonical_means: dict[int, float] = {}
+        for team_id, players in cache_players.items():
+            divisions = [canonical_division_number(grid, player.rank, DEFAULT_GRID) for player, _, _ in players]
+            ranked = [division for division in divisions if division is not None]
+            if ranked:
+                canonical_means[team_id] = sum(ranked) / len(ranked)
+        field_mean = sum(canonical_means.values()) / len(canonical_means) if canonical_means else 0.0
 
         for team_id, team in cache_teams.items():
             players = cache_players[team_id]
             team_read = _team_to_pydantic(team)
-            balancer_shift = -math.ceil(((team.avg_sr - (team.avg_sr % 10)) - avg_team_cost) / 20)
+            team_mean = canonical_means.get(team_id)
+            balancer_shift = round(team_mean - field_mean, 2) if team_mean is not None else 0.0
             manual_shift_points = cache_teams_manual_shift[team_id]
-            manual_shift = round(manual_shift_points / 1000, 2)
+            manual_shift = round(manual_shift_points / 100, 2)
             team_players: list[schemas.PlayerAnalytics] = []
 
             for player, analytics, shift in players:
                 player_read = _player_to_pydantic(player, grid=grid)
-                predicted_division, predicted_direction, predicted_delta = _predict_player_division(
-                    player_read,
-                    points=shift.shift,
+                predicted_division, predicted_direction, predicted_delta, confidence = predict_player_division(
+                    player.rank, grid, shift.shift, shift.shift_sd, threshold=threshold
                 )
                 team_players.append(
                     schemas.PlayerAnalytics(
@@ -347,7 +343,7 @@ class AnalyticsReadFlowsService:
                         move_2=analytics.shift_two,
                         points=shift.shift,
                         shift=analytics.shift,
-                        confidence=shift.confidence,
+                        confidence=confidence,
                         effective_evidence=shift.effective_evidence,
                         sample_tournaments=shift.sample_tournaments,
                         sample_matches=shift.sample_matches,
@@ -379,7 +375,7 @@ class AnalyticsReadFlowsService:
                     anomalies=team_anomalies,
                     balancer_shift=balancer_shift,
                     manual_shift=manual_shift,
-                    total_shift=balancer_shift + manual_shift,
+                    total_shift=-sum(player.predicted_delta for player in team_players),
                     players=team_players,
                 )
             )
@@ -406,32 +402,14 @@ class AnalyticsReadFlowsService:
             summary=summary,
         )
 
-    async def change_shift(self, session: AsyncSession, player_id: int, shift: int) -> schemas.PlayerAnalytics:
-        analytics, calculated_shift = await analytics_read_service.change_shift(session, player_id, shift)
-        player = await self.players.get(
-            session,
-            player_id,
-            options=[joinedload(models.Player.workspace_member)],
-        )
-        if player is None:
+    async def change_shift(self, session: AsyncSession, player_id: int, shift: int) -> schemas.PlayerShiftUpdate:
+        analytics = await analytics_read_service.change_shift(session, player_id, shift)
+        if analytics is None:
             raise errors.ApiHTTPException(
                 status_code=404,
-                detail=[errors.ApiExc(code="not_found", msg="Player not found.")],
+                detail=[errors.ApiExc(code="not_found", msg="Player analytics not found.")],
             )
-        grid = await get_division_grid(session, None, tournament_id=player.tournament_id)
-        base = _player_to_pydantic(player, grid=grid)
-        return schemas.PlayerAnalytics(
-            **base.model_dump(),
-            move_1=analytics.shift_one,
-            move_2=analytics.shift_two,
-            points=calculated_shift.shift,
-            shift=analytics.shift,
-            confidence=calculated_shift.confidence,
-            effective_evidence=calculated_shift.effective_evidence,
-            sample_tournaments=calculated_shift.sample_tournaments,
-            sample_matches=calculated_shift.sample_matches,
-            log_coverage=calculated_shift.log_coverage,
-        )
+        return schemas.PlayerShiftUpdate(player_id=analytics.player_id, shift=analytics.shift)
 
     async def get_streaks(self, session: AsyncSession, tournament_id: int) -> list[schemas.PlayerStreak]:
         cache_pos: dict[tuple[int, RoleRef | None], list[int]] = {}

@@ -9,7 +9,7 @@ When both captains agree on a scrim's result, tournament-service publishes an
 with two ``Team`` rows, no ``Player`` rows, no ``Standing`` rows, no stage items,
 no ``division_grid_version_id`` and a NULL ``start_date``.
 
-Unlike ``analytics/service.py:get_matches`` — where the same "it will be inert"
+Unlike ``analytics/service.py:get_matches_for_tournaments`` — where the same "it will be inert"
 expectation turned out false because one read used an OUTER join where its
 siblings used an inner ``Player`` join — the engine really is inert here, and
 these tests are what pin that. They also pin *why*: the isolation rests entirely
