@@ -7,16 +7,16 @@ estimators are real small LightGBM / XGBoost / scikit-learn objects whose learne
 ``*.state.joblib`` (library objects and plain fields only -- no custom class); the model wrappers are rebuilt around
 that state without calling ``fit``.
 
-Everything compares bit-for-bit except the OpenSkill-mu reduction cells P4 documents (1e-12 absolute, by explicit path
-in ``_assert_equal``).
+Everything compares bit-for-bit except the cells later fixes changed on purpose, by explicit path in ``_assert_equal``:
+the reseeded pre-encounter OpenSkill mu and the rescaled Performance confidence.
 """
 
 from __future__ import annotations
 
 import asyncio
 import contextlib
+import functools
 import json
-import math
 import typing
 from pathlib import Path
 from types import SimpleNamespace
@@ -47,12 +47,13 @@ from src.services.ml.features.standings_features import (
 from src.services.ml.inference.match_quality_runner import _match_scores
 from tests.ow_analytics import exports
 from tests.ow_analytics import module as ow_module
-from tests.test_stats_feature_parity import _frame, native_analytics_reader  # noqa: F401
+from tests.test_stats_feature_parity import PRE_FIX_COARSE_FEATURES, _frame, native_analytics_reader  # noqa: F401
 
 ROLE_KPIS = ow_module("features.role_kpis").ROLE_KPIS
 STANDINGS_FEATURE_ORDER = ow_module("models.standings_v2").STANDINGS_FEATURE_ORDER
 SHIFT_BLEND_COLUMNS = ow_module("models.shift_v2").SHIFT_BLEND_COLUMNS
-COARSE_FEATURES = ow_analytics.COARSE_FEATURES
+COARSE_FEATURES = PRE_FIX_COARSE_FEATURES  # the order the golden and every pre-fix artifact carry
+MVP_MIN_MATCHES = ow_module("features.mvp_dominance").MVP_MIN_MATCHES
 
 # The concrete Overwatch code, reached through the registry; the three builders are the service's own.
 _ow = SimpleNamespace(
@@ -303,13 +304,27 @@ def _standings_outputs(models: dict, frame: pd.DataFrame) -> dict:
     return out
 
 
+def _legacy_equivalent(frame: pd.DataFrame) -> pd.DataFrame:
+    """Inputs on which the current shift blend and smurf MVP rule reproduce the frozen receipts.
+
+    Both changed on purpose after capture: a negative ``local_zscore`` now lowers the shift, and the MVP lift and the
+    smurf MVP rule need ``MVP_MIN_MATCHES`` logged matches. Clipping the z at 0 and granting the logged matches keeps the
+    rest of each model comparable bit-for-bit; the unit tests cover the two changes themselves.
+    """
+    legacy = frame.assign(mvp_matches=MVP_MIN_MATCHES)
+    if "performance_v2_local_zscore" in legacy:
+        legacy["performance_v2_local_zscore"] = legacy["performance_v2_local_zscore"].clip(lower=0.0)
+    return legacy
+
+
 def _shift_outputs(models: dict, frame: pd.DataFrame) -> dict:
     out: dict[str, typing.Any] = {"frame": _frame(frame)}
+    legacy = _legacy_equivalent(frame)
     for name in ("shift_default", "shift_tuned", "shift_old_missing"):
         model = models[name]
         out[name] = {
-            "confidence": _frame(model.predict_with_confidence(frame)),
-            "predict": _frame(model.predict(frame).to_frame()),
+            "confidence": _frame(model.predict_with_uncertainty(legacy)),
+            "predict": _frame(model.predict(legacy).to_frame()),
         }
     return out
 
@@ -334,8 +349,10 @@ def _synthetic_outputs(models: dict) -> dict:
     )
     out["shift"] = _shift_outputs(models, frame.assign(current_div=np.arange(12) % 7 + 1, grid_n_div=20))
     trained = _ow.train_shift_v2(
-        frame.assign(current_div=np.arange(12) % 7 + 1, next_tournament_div=np.arange(12) % 5 + 1, grid_n_div=20),
-        val_df=frame.assign(current_div=3, next_tournament_div=2, grid_n_div=20),
+        _legacy_equivalent(
+            frame.assign(current_div=np.arange(12) % 7 + 1, next_tournament_div=np.arange(12) % 5 + 1, grid_n_div=20)
+        ),
+        val_df=_legacy_equivalent(frame.assign(current_div=3, next_tournament_div=2, grid_n_div=20)),
         w_team=0.6,
         w_os=0.4,
         indiv_scale_top=0.25,
@@ -379,6 +396,7 @@ def _anomaly_outputs() -> dict:
             "confidence": rng.uniform(0.2, 1.0, size=n),
         }
     )
+    profile = _legacy_equivalent(profile)
     profile["local_zscore_history"] = [
         [float(v) for v in rng.normal(loc=0.4 if i % 3 else -1.0, size=3 + i % 2).round(3)] for i in range(n)
     ]
@@ -412,8 +430,9 @@ async def _database_outputs(session: AsyncSession, ids: dict[str, int], models: 
             enriched = await _ow.build_match_features(session, tid, discipline="overwatch", workspace_id=wid)
             entry: dict[str, typing.Any] = {"enriched": _frame(enriched)}
             if not enriched.empty:
-                entry["quantile_execution"] = _quantile_execution(enriched)
-                entry["fitted_performance"] = _fitted_performance(models, enriched)
+                replayed = _with_frozen(enriched, _golden()["database"][case]["enriched"], _MU_REDUCTION_COLUMNS)
+                entry["quantile_execution"] = _quantile_execution(replayed)
+                entry["fitted_performance"] = _fitted_performance(models, replayed)
             forecast = await _ow.build_forecast_frame(session, tid, discipline="overwatch", workspace_id=wid)
             entry["forecast"] = _standings_outputs(models, forecast)
             training = await _ow.build_training_frame(session, [tid], discipline="overwatch", workspace_id=wid)
@@ -437,7 +456,12 @@ async def _database_outputs(session: AsyncSession, ids: dict[str, int], models: 
                     ),
                 }
             shift = await _ow.build_shift_frame(session, [tid], discipline="overwatch", workspace_id=wid)
-            entry["shift"] = _shift_outputs(models, shift) if not shift.empty else {"frame": _frame(shift)}
+            if shift.empty:
+                entry["shift"] = {"frame": _frame(shift)}
+            else:
+                frozen = _golden()["database"][case]["shift"]["frame"]
+                outputs = _shift_outputs(models, _with_frozen(shift, frozen, _LINEAR_REDESIGNED))
+                entry["shift"] = {**outputs, "frame": _frame(shift)}
             out[case] = entry
     return out
 
@@ -451,45 +475,106 @@ async def collect_outputs(session: AsyncSession, ids: dict[str, int], models: di
 # ---------------------------------------------------------------------------
 
 
-# P4's ruling (``test_stats_feature_parity._REDUCTIONS``): only the floating reduction cells of the enriched match frame
-# (the OpenSkill-mu averages and their gap, whose summation order depends on the query plan) may differ by 1e-12 absolute.
-# Everything else - identities, orientation, raw stats, every other frame, every aligned matrix column, every prediction
-# and simulation - is compared bit-for-bit. The approximation is granted by explicit path, never by a flag: the enriched
-# frame itself and the aligned inputs that carry those same columns to the main/q10/q90/coarse boosters.
+# The pre-encounter mu replay now starts from the seed ratings, not the post-replay ones (an outcome leak), and the v1
+# Linear history was redesigned (restart at a division change, map weights): those live cells of the database enriched
+# and shift frames are not comparable to the frozen ones. The models are replayed on the frozen values
+# (``_with_frozen``), so everything they compute from a database frame still compares bit-for-bit.
 _MU_REDUCTION_COLUMNS = frozenset(
     {"team_avg_mu", "team_max_mu", "team_min_mu", "opp_avg_mu", "opp_max_mu", "opp_min_mu", "mu_gap"}
 )
-_BOOSTER_INPUTS = frozenset({"main", "q10", "q90", "coarse"})
+_LINEAR_REDESIGNED = frozenset(
+    {
+        "linear_stable_shift",
+        "linear_trend_shift",
+        "linear_effective_evidence",
+        "linear_sample_tournaments",
+        "linear_sample_matches",
+    }
+)
+# The shift frame's heuristic v1 confidences were replaced by posterior sds.
+_SHIFT_FRAME_REMOVED = {"linear_confidence", "confidence_v1"}
+_SHIFT_FRAME_ADDED = {"linear_shift_sd", "os_shift_sd"}
+# Performance confidence is rescaled to the target's own band (spread / 2, was / 4) and is 0 for a coarse-fallback
+# match, which no longer carries the fake ``y_hat -/+ 0.25`` quantile band.
+_COARSE_BAND = {"y_q10": -0.25, "y_q90": 0.25}
+
+
+@functools.cache
+def _golden() -> dict:
+    return json.loads(GOLDEN.read_text(encoding="utf-8"))
+
+
+def _with_frozen(frame: pd.DataFrame, golden: dict, columns: frozenset[str]) -> pd.DataFrame:
+    """``frame`` carrying the golden's values for ``columns``."""
+    frozen = pd.DataFrame(golden["rows"], columns=golden["columns"], index=frame.index)
+    return frame.assign(**{column: frozen[column].astype(frame[column].dtype) for column in columns & set(frozen)})
 
 
 def _is_frame(value: typing.Any) -> bool:
     return isinstance(value, dict) and {"columns", "dtypes", "index", "rows"} <= value.keys()
 
 
-def _reduction_frame(path: tuple) -> bool:
-    """A frame whose mu columns carry P4's documented reduction order (DB-derived enriched data only)."""
+def _changed_columns(path: tuple) -> frozenset[str]:
+    """Cells of a database frame that later fixes changed on purpose (see ``_MU_REDUCTION_COLUMNS``)."""
     if not path or path[0] != "database":
-        return False
+        return frozenset()
     names = [part for part in path if isinstance(part, str)]
-    return names[-1] == "enriched" or (names[-1] in _BOOSTER_INPUTS and "quantile_execution" in names)
+    if names[-1] == "enriched":
+        return _MU_REDUCTION_COLUMNS
+    if names[-2:] == ["shift", "frame"]:
+        return _MU_REDUCTION_COLUMNS | _LINEAR_REDESIGNED
+    return frozenset()
+
+
+def _project(frame: dict, columns: list[str]) -> dict:
+    keep = [frame["columns"].index(column) for column in columns]
+    return {
+        **frame,
+        "columns": columns,
+        "column_axis": {**frame["column_axis"], "values": columns},
+        "dtypes": [frame["dtypes"][i] for i in keep],
+        "rows": [[row[i] for i in keep] for row in frame["rows"]],
+    }
+
+
+def _shift_column(frame: dict) -> dict:
+    """The ``shift_v2`` column of a shift uncertainty frame: the heuristic v1 ``confidence`` it stood beside is gone."""
+    keep = frame["columns"].index("shift_v2")
+    return {
+        "dtype": frame["dtypes"][keep],
+        "index": frame["index"],
+        "rows": [row[keep] for row in frame["rows"]],
+    }
 
 
 def _assert_equal(actual: typing.Any, expected: typing.Any, path: tuple = ()) -> None:
     assert type(actual) is type(expected), path
-    if _is_frame(expected):
+    if _is_frame(expected) and path[-1:] == ("confidence",) and "shift" in path:
+        # ``predict_with_uncertainty`` replaced ``predict_with_confidence``: its ``shift_sd`` has no frozen counterpart.
+        _assert_equal(_shift_column(actual), _shift_column(expected), path)
+    elif _is_frame(expected):
+        changed = _changed_columns(path)
+        if _SHIFT_FRAME_REMOVED <= set(expected["columns"]):
+            assert set(expected["columns"]) - set(actual["columns"]) == _SHIFT_FRAME_REMOVED, path
+            assert set(actual["columns"]) - set(expected["columns"]) == _SHIFT_FRAME_ADDED, path
+            shared = [column for column in expected["columns"] if column in actual["columns"]]
+            actual, expected = _project(actual, shared), _project(expected, shared)
         assert actual.keys() == expected.keys(), path
         for key in expected.keys() - {"rows"}:
             _assert_equal(actual[key], expected[key], (*path, key))
         assert len(actual["rows"]) == len(expected["rows"]), path
-        approximate = _MU_REDUCTION_COLUMNS if _reduction_frame(path) else frozenset()
+        performance = "quantile_execution" in path or "fitted_performance" in path
         for number, (row, old_row) in enumerate(zip(actual["rows"], expected["rows"], strict=True)):
             assert len(row) == len(old_row) == len(expected["columns"]), path
             for column, value, old_value in zip(expected["columns"], row, old_row, strict=True):
                 cell = (*path, "rows", number, column)
-                if column in approximate and type(value) is float and type(old_value) is float:
-                    assert math.isclose(value, old_value, rel_tol=0.0, abs_tol=1e-12), cell
-                else:
-                    _assert_equal(value, old_value, cell)
+                if column in changed or (performance and column == "confidence"):
+                    continue
+                if performance and column in _COARSE_BAND and value is None and old_value is not None:
+                    old_y_hat = old_row[expected["columns"].index("y_hat")]
+                    assert old_value == old_y_hat + _COARSE_BAND[column], cell
+                    continue
+                _assert_equal(value, old_value, cell)
     elif isinstance(expected, dict):
         assert actual.keys() == expected.keys(), path
         for key in expected:

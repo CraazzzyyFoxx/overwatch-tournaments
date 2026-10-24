@@ -22,7 +22,7 @@ interface RosterRowProps {
 
 /**
  * A roster line in the team panel: role, division crest, nick with its
- * newcomer marks and watch flag, the impact bar, and the predicted move.
+ * newcomer marks and watch flag, the impact bar (v2 readers only), and the predicted move.
  * Selecting it opens the player panel.
  */
 export default function RosterRow({ player, tournamentGrid, ontology, onSelect }: Readonly<RosterRowProps>) {
@@ -39,7 +39,7 @@ export default function RosterRow({ player, tournamentGrid, ontology, onSelect }
         <PlayerNick player={player} className="text-ui font-semibold" />
         {/* The flag is a word in the meta line (DESIGN.md §4), beside the impact it qualifies. */}
         <span className="flex min-w-0 items-center gap-3">
-          <ImpactBar value={player.impact} className="w-full max-w-[8rem]" />
+          {player.impact !== null ? <ImpactBar value={player.impact} className="w-full max-w-[8rem]" /> : null}
           {flag ? <AnomalyFlag kind={flag.kind} reasons={flag.reasons} label="short" /> : null}
         </span>
       </span>

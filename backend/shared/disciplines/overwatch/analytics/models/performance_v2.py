@@ -59,6 +59,8 @@ logger = logging.getLogger(__name__)
 
 
 _BASELINE_FEATURES: tuple[str, ...] = ("team_avg_mu", "opp_avg_mu", "mu_gap")
+# The target ``won - P(win)`` lies in (-1, 1), so a q10..q90 band is at most this wide: confidence = 1 - band / span.
+_TARGET_SPAN = 2.0
 
 
 def _safe_baseline_features(df: pd.DataFrame) -> pd.DataFrame:
@@ -159,7 +161,7 @@ class PerformanceModelV2(MLModel):
     coarse_booster: lgb.LGBMRegressor | None = None
     coarse_feature_order: list[str] = field(default_factory=list)
     baseline: typing.Any = None  # LogisticRegression or _ConstantClassifier
-    shift_range: float = 2.0  # divisor for the confidence band scaling
+    shift_range: float = 2.0  # unused: kept so stored artifacts keep their state layout
 
     # ------------------------------------------------------------------
     # Inference
@@ -188,16 +190,14 @@ class PerformanceModelV2(MLModel):
             out.loc[has_logs, "y_q10"] = self.booster_q10.predict(X)
             out.loc[has_logs, "y_q90"] = self.booster_q90.predict(X)
 
-        # Rows without logs → coarse fallback if available, else NaN.
+        # Rows without logs → coarse fallback if available, else NaN. The fallback has
+        # no quantile model, so its rows carry no band and get confidence 0.
         if (~has_logs).any() and self.coarse_booster is not None and self.coarse_feature_order:
             X_coarse = align_features(df[~has_logs], self.coarse_feature_order)
             out.loc[~has_logs, "y_hat"] = self.coarse_booster.predict(X_coarse)
-            # No quantile bands trained for the coarse fallback → use main range.
-            out.loc[~has_logs, "y_q10"] = out.loc[~has_logs, "y_hat"] - 0.25
-            out.loc[~has_logs, "y_q90"] = out.loc[~has_logs, "y_hat"] + 0.25
 
         spread = (out["y_q90"] - out["y_q10"]).abs()
-        out["confidence"] = (1 - (spread / (2 * self.shift_range)).clip(0, 1)).fillna(0.0)
+        out["confidence"] = (1 - (spread / _TARGET_SPAN).clip(0, 1)).fillna(0.0)
         return out
 
     def predict(self, df: pd.DataFrame) -> pd.Series:
@@ -310,7 +310,7 @@ def _train_performance_v2_with_device(
     booster_q10.fit(X, role_df["_y"])
     booster_q90.fit(X, role_df["_y"])
 
-    # 4. coarse fallback booster (no per-stat columns, just standings/mu)
+    # 4. coarse fallback booster (no per-stat columns, just rank/mu)
     coarse_order = list(COARSE_FEATURES)
     coarse_booster: lgb.LGBMRegressor | None = None
     if all(col in role_df.columns for col in coarse_order):
@@ -402,7 +402,9 @@ def aggregate_to_tournament(
     Returns DataFrame with columns:
     ``tournament_id``, ``player_id``, ``role``, ``raw_value``, ``confidence``,
     ``log_coverage``, ``match_count``. ``impact_score`` (0-100 percentile) is
-    computed downstream after the role cohort is known.
+    computed downstream after the role cohort is known. ``confidence`` comes from
+    the quantile band of the player's banded matches; with none (coarse fallback
+    only) it is 0.
     """
     if match_df.empty:
         return pd.DataFrame(
@@ -436,10 +438,8 @@ def aggregate_to_tournament(
             raw_value = float(np.nanmean(values))
         else:
             raw_value = 0.0
-        q10 = float(np.nanmean(grp["_y_q10"]))
-        q90 = float(np.nanmean(grp["_y_q90"]))
-        spread = abs(q90 - q10)
-        confidence = float(np.clip(1 - spread / 4.0, 0.0, 1.0))
+        spread = abs(grp["_y_q90"].mean() - grp["_y_q10"].mean())
+        confidence = 0.0 if math.isnan(spread) else float(np.clip(1 - spread / _TARGET_SPAN, 0.0, 1.0))
         log_coverage = float((grp["hero_time_played"].fillna(0) > 0).mean())
         rows.append(
             {

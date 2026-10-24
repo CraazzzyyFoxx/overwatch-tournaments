@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import collections.abc
+import contextlib
+import contextvars
 import hashlib
 import json
 import logging
@@ -22,11 +24,30 @@ BuildFrame = collections.abc.Callable[[], collections.abc.Awaitable[pd.DataFrame
 logger = logging.getLogger(__name__)
 
 _memory_cache: dict[str, tuple[float, pd.DataFrame]] = {}
+# Keys rebuilt inside the active ``refreshing_feature_cache`` block; ``None`` outside one.
+_refreshed_keys: contextvars.ContextVar[set[str] | None] = contextvars.ContextVar(
+    "feature_cache_refreshed_keys", default=None
+)
 
 
 def clear_memory_cache() -> None:
     """Clear only the in-process cache layer; disk files stay intact."""
     _memory_cache.clear()
+
+
+@contextlib.contextmanager
+def refreshing_feature_cache() -> collections.abc.Iterator[None]:
+    """Rebuild every frame requested in the block instead of serving one cached before it.
+
+    The cache is TTL-only with no data version, so a recompute after new results or a correction would otherwise read
+    frames built from the old data. Each key is rebuilt once per block and written back as usual (memory and disk); a
+    repeat read inside the block gets that fresh entry.
+    """
+    token = _refreshed_keys.set(set())
+    try:
+        yield
+    finally:
+        _refreshed_keys.reset(token)
 
 
 def scope_cache_params(
@@ -52,12 +73,14 @@ async def get_or_build_dataframe(
         return await build()
 
     key = _cache_key(name, params, discipline)
-    cached = _memory_cache.get(key)
+    refreshed = _refreshed_keys.get()
+    reuse = refreshed is None or key in refreshed
+    cached = _memory_cache.get(key) if reuse else None
     if cached is not None and _is_fresh_ts(cached[0]):
         return cached[1].copy(deep=True)
 
     path = _cache_path(key)
-    if path.exists() and _is_fresh_path(path):
+    if reuse and path.exists() and _is_fresh_path(path):
         try:
             df = pd.read_pickle(path)
         except Exception:
@@ -74,6 +97,8 @@ async def get_or_build_dataframe(
     stored = df.copy(deep=True)
     _memory_cache[key] = (time.time(), stored)
     _write_cache_file(path, stored)
+    if refreshed is not None:
+        refreshed.add(key)
     return stored.copy(deep=True)
 
 

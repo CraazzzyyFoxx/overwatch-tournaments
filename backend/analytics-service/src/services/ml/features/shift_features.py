@@ -73,8 +73,11 @@ async def _openskill_shift_frame(
             discipline=discipline,
         )
         return pd.DataFrame(
-            [{"player_id": int(player_id), "os_shift": float(shift)} for player_id, shift in shift_map.items()],
-            columns=["player_id", "os_shift"],
+            [
+                {"player_id": int(player_id), "os_shift": float(shift), "os_shift_sd": float(sd)}
+                for player_id, (shift, sd) in shift_map.items()
+            ],
+            columns=["player_id", "os_shift", "os_shift_sd"],
         )
 
     return await get_or_build_dataframe("shift_openskill_map", params, _build, discipline=discipline)
@@ -146,7 +149,10 @@ async def build_shift_feature_frame(
                 workspace_ids=workspace_ids,
                 discipline=discipline,
             )
-            shift_map = {int(row.player_id): float(row.os_shift) for row in shift_frame.itertuples(index=False)}
+            shift_map = {
+                int(row.player_id): (float(row.os_shift), float(row.os_shift_sd))
+                for row in shift_frame.itertuples(index=False)
+            }
         except Exception:
             logger.exception(
                 "Failed to compute OpenSkill shift map for tournament_id=%d",

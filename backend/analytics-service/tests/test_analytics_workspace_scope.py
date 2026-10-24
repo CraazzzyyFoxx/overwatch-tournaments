@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import IsolatedAsyncioTestCase
@@ -60,12 +61,12 @@ class AnalyticsWorkspaceScopeTests(IsolatedAsyncioTestCase):
         with (
             patch.object(
                 analytics_flows.analytics_service,
-                "lookback_start_tournament_id",
-                AsyncMock(return_value=3),
-            ) as lookback_start,
+                "lookback_tournament_ids",
+                AsyncMock(return_value=[3, 7]),
+            ) as lookback,
             patch.object(
                 analytics_flows.analytics_service,
-                "get_matches",
+                "get_matches_for_tournaments",
                 AsyncMock(return_value=[]),
             ) as get_matches,
             patch.object(
@@ -89,9 +90,9 @@ class AnalyticsWorkspaceScopeTests(IsolatedAsyncioTestCase):
 
         self.assertEqual({}, shift_map)
         self.assertFalse(has_history)
-        # The OpenSkill window is resolved chronologically (not tid-10) and the
+        # The OpenSkill window is resolved by start date (an explicit id list, not an id interval) and the
         # workspace scope is threaded into both the lookup and the match query.
-        lookback_start.assert_awaited_once_with(
+        lookback.assert_awaited_once_with(
             session,
             7,
             analytics_flows.OPENSKILL_LOOKBACK,
@@ -99,12 +100,15 @@ class AnalyticsWorkspaceScopeTests(IsolatedAsyncioTestCase):
             workspace_ids=None,
             discipline="overwatch",
         )
-        get_matches.assert_awaited_once_with(session, 3, 7, workspace_id=5, workspace_ids=None, discipline="overwatch")
+        get_matches.assert_awaited_once_with(
+            session, [3, 7], workspace_id=5, workspace_ids=None, discipline="overwatch"
+        )
 
     async def test_previous_cost_skips_an_unranked_tournament(self) -> None:
         rows = [
             {
                 "tournament_id": tid,
+                "started_at": datetime(2026, 1, tid, tzinfo=UTC),
                 "team_id": tid,
                 "player_name": "p",
                 "player_id": tid,
@@ -117,8 +121,6 @@ class AnalyticsWorkspaceScopeTests(IsolatedAsyncioTestCase):
                 "overall_position": None,
                 "team_count": None,
                 "performance_points": None,
-                "is_newcomer": False,
-                "is_newcomer_role": False,
             }
             for tid, rank in ((1, 2500), (2, None), (3, 2600))
         ]
@@ -136,33 +138,3 @@ class AnalyticsWorkspaceScopeTests(IsolatedAsyncioTestCase):
         self.assertTrue(pd.isna(unranked["normalized_shift_one"]))
         self.assertEqual(2500, last["previous_cost"])
         self.assertEqual(frame.loc[frame["tournament_id"] == 1, "div"].iloc[0], last["previous_div"])
-
-
-class LookbackWindowTests(IsolatedAsyncioTestCase):
-    """Unit tests for the chronological OpenSkill lookback window helper."""
-
-    @staticmethod
-    def _session_returning(ids: list[int]) -> SimpleNamespace:
-        # ``lookback_start_tournament_id`` awaits ``session.scalars(...)`` and
-        # then reads ``.all()`` off the result.
-        scalars = AsyncMock(return_value=SimpleNamespace(all=lambda: ids))
-        return SimpleNamespace(scalars=scalars)
-
-    async def test_returns_min_of_recent_ids_not_numeric_offset(self) -> None:
-        service = importlib.import_module("src.services.analytics.service").analytics_service
-        # 10 most-recent tournaments up to #73, but ids are sparse: the oldest
-        # in the window is #28, far from the naive 73 - 10 = 63.
-        session = self._session_returning([73, 70, 64, 61, 55, 50, 44, 40, 33, 28])
-
-        start = await service.lookback_start_tournament_id(session, 73, 10, discipline="overwatch")
-
-        self.assertEqual(28, start)
-        self.assertNotEqual(63, start)  # would be the buggy tid - look_back
-
-    async def test_falls_back_to_end_when_no_rows(self) -> None:
-        service = importlib.import_module("src.services.analytics.service").analytics_service
-        session = self._session_returning([])
-
-        start = await service.lookback_start_tournament_id(session, 73, 10, discipline="overwatch")
-
-        self.assertEqual(73, start)

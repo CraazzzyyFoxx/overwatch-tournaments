@@ -1900,7 +1900,7 @@
       "editManualShift": "Edit manual shift",
       "save": "Save changes",
       "localPercentileTitle": "Local percentile {value} / n={n}",
-      "shiftBreakdownTooltip": "Balancer {balancer} · manual {manual}"
+      "shiftBreakdownTooltip": "Context, not part of the forecast: balancer {balancer} · manual {manual}"
     },
     "forecast": {
       "up": "Moving up",
@@ -1998,11 +1998,11 @@
     "glossary": {
       "confidence": {
         "label": "Confidence",
-        "plain": "How sure the model is about this forecast, based on how much history and match data it had."
+        "plain": "The chance the shown forecast is right: for a climb or drop, that the player belongs at least that many divisions higher or lower; for a hold, that they belong in their current division."
       },
       "shift": {
-        "label": "Division adjustment",
-        "plain": "Suggested change to a player's division for the next tournament (＋ moves up, − moves down)."
+        "label": "Manual shift",
+        "plain": "An organizer's manual override for this player (0 = none). Set by hand; recalculation never changes it."
       },
       "impact": {
         "label": "Impact",
@@ -2100,7 +2100,7 @@
       },
       "avg_confidence": {
         "label": "Average confidence",
-        "plain": "How much data is behind the calls across the whole bracket. It climbs as more maps are played."
+        "plain": "The average confidence of the players' forecasts across the whole bracket."
       },
       "upsets": {
         "label": "Upsets",
@@ -2112,7 +2112,7 @@
       },
       "predicted_move": {
         "label": "Predicted move",
-        "plain": "Whether the model thinks a player belongs in a higher (climb) or lower (drop) division than they're in now. Hold means they're right where they should be."
+        "plain": "Climb or drop appears only when the model is at least 80% sure the player belongs in a higher or lower division, and the size is the largest move it is that sure of. Otherwise the player holds."
       },
       "impact_percentile": {
         "label": "Impact percentile",
@@ -2166,7 +2166,7 @@
         "predictedMove": "Predicted move",
         "climb": "Predicted to climb",
         "drop": "Predicted to drop",
-        "hold": "Right where they belong",
+        "hold": "Predicted to hold",
         "divMove": "Div {from} → Div {to}",
         "impact": "Impact",
         "confidence": "Confidence",
@@ -2203,14 +2203,14 @@
     "howItWorks": {
       "kicker": "How this works",
       "title": "Reading the analytics",
-      "intro": "After every map, the model re-rates every player and team. This page turns that into three simple questions:",
+      "intro": "When a tournament completes, or an organizer recalculates it, the model rates every player and team. This page turns that into three simple questions:",
       "step1Title": "Who surprised us?",
       "step1Body": "The verdict up top names the team that beat its predicted finish by the most — and the one that fell short.",
       "step2Title": "Who's climbing or dropping?",
       "step2Body": "Each player gets a predicted move — the model's read on whether they're playing above or below their current division.",
       "step3Title": "How sure are we?",
       "step3Body": "Confidence shows how much data is behind each call. Tap the ⓘ next to any figure to see what it means.",
-      "foot": "Nothing here is final — it's a live read that sharpens as the bracket plays out."
+      "foot": "Nothing here is final — the figures are recomputed when the tournament completes or an organizer recalculates."
     },
     "sheet": {
       "glossaryKicker": "Glossary",
@@ -2892,13 +2892,43 @@
       "format": {
         "title": "How it's played",
         "rounds": "{count, plural, one {# round} other {# rounds}}",
-        "final": "final Bo{n}",
-        "advance": "top {count} advance",
-        "qualify": "through at {count, plural, one {# win} other {# wins}}",
-        "eliminate": "out at {count, plural, one {# loss} other {# losses}}",
-        "grandFinalReset": "grand final with bracket reset",
-        "grandFinalNoReset": "grand final without bracket reset",
-        "team": "Team"
+        "final": "Final Bo{n}",
+        "advance": "Top {count} advance",
+        "qualify": "Through at {count, plural, one {# win} other {# wins}}",
+        "eliminate": "Out at {count, plural, one {# loss} other {# losses}}",
+        "grandFinalReset": "Grand final with bracket reset",
+        "grandFinalNoReset": "Grand final without bracket reset",
+        "team": "Team",
+        "learnMore": "How a tournament works",
+        "types": {
+          "round_robin": {
+            "name": "Round-robin",
+            "description": "Every team plays every other team. There is no knockout: places come from the standings, by points first and then by tiebreakers."
+          },
+          "swiss": {
+            "name": "Swiss system",
+            "description": "A fixed number of rounds. In each one, teams with the same record play each other: a win moves a team up a row, a loss moves it down, and rematches are avoided. The organizer may end a team's run early: enough wins and it is through, enough losses and it is out."
+          },
+          "ffa_league": {
+            "name": "Free-for-all (FFA)",
+            "description": "Teams are not paired off: the whole group plays in one lobby, several games in a row. Every game gives each team a placement and points, and the points add up into the standings."
+          },
+          "single_elimination": {
+            "name": "Single elimination",
+            "description": "A knockout bracket: the winner of a match moves on, the loser is out. One loss and the team is done."
+          },
+          "double_elimination": {
+            "name": "Double elimination",
+            "description": "Two brackets, upper and lower. The first loss drops a team into the lower bracket, the second knocks it out. The winners of both brackets meet in the grand final."
+          }
+        },
+        "schema": {
+          "upper": "Upper bracket",
+          "lower": "Lower bracket",
+          "grandFinal": "Grand final",
+          "lobby": "Lobby",
+          "standings": "Standings"
+        }
       },
       "about": {
         "title": "About"

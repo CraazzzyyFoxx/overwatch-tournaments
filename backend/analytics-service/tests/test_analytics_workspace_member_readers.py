@@ -156,17 +156,13 @@ class ShiftFeaturesRankHistoryTests(IsolatedAsyncioTestCase):
 
 
 class BacktestRealisedShiftTests(IsolatedAsyncioTestCase):
-    """``_realised_shift_map`` labels + orders by the identity column feeding
-    the pandas ``groupby(["user_id", "role"])`` shift computation."""
+    """``_realised_shift_map`` labels the identity column feeding the pandas ``groupby(["user_id", "role"])`` shift
+    computation (its start-date order is covered by ``test_ml_backtest_scoring``)."""
 
-    async def test_query_labels_and_orders_by_workspace_member(self) -> None:
+    async def test_query_labels_by_workspace_member(self) -> None:
         session = _CapturingSession()
 
         await backtest._realised_shift_map(session, 1, history_through_tournament_id=5, discipline="overwatch")
 
         sql = _compiled(session.statements[0])
         self.assertIn("workspace_member.player_id AS user_id", sql)
-        self.assertRegex(
-            sql,
-            r"(?s)ORDER BY workspace_member\.player_id, \(SELECT coalesce\(rated_parent\.code, rated_leaf\.code\).*?LIMIT 1\), tournament\.tournament\.id$",
-        )

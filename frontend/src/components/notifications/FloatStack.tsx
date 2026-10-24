@@ -597,7 +597,7 @@ function MoreRow({ count, onOpen, className }: Readonly<{ count: number; onOpen:
       size="sm"
       onClick={onOpen}
       className={cn(
-        "h-9 w-full rounded-none border-t border-[color:var(--aqt-border)] font-medium text-[color:var(--aqt-fg-muted)] motion-safe:active:scale-100",
+        "h-9 w-full rounded-none border-t border-[color:var(--aqt-border)] font-medium text-[color:var(--aqt-fg-muted)]",
         className
       )}
     >

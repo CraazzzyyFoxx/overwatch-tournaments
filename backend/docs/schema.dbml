@@ -421,7 +421,7 @@ Table analytics.shifts {
   algorithm_id bigint [not null]
   player_id bigint [not null]
   shift float [not null]
-  confidence float [not null, default: 0]
+  shift_sd float
   effective_evidence float [not null, default: 0]
   sample_tournaments int [not null, default: 0]
   sample_matches int [not null, default: 0]

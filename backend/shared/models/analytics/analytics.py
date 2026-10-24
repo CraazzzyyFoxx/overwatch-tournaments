@@ -78,8 +78,10 @@ class AnalyticsShift(db.TimeStampIntegerMixin):
     tournament_id: Mapped[int] = mapped_column(ForeignKey(Tournament.id, ondelete="CASCADE"), index=True)
     algorithm_id: Mapped[int] = mapped_column(ForeignKey(AnalyticsAlgorithm.id, ondelete="CASCADE"), index=True)
     player_id: Mapped[int] = mapped_column(ForeignKey(Player.id, ondelete="CASCADE"), index=True)
+    #: The player's mis-rating in canonical-ladder divisions (+ = belongs higher).
     shift: Mapped[float] = mapped_column()
-    confidence: Mapped[float] = mapped_column(Float(), nullable=False, server_default="0", default=0.0)
+    #: Posterior sd of ``shift``, same units; NULL when unknown (rows written before it existed, unranked players).
+    shift_sd: Mapped[float | None] = mapped_column(Float(), nullable=True)
     effective_evidence: Mapped[float] = mapped_column(Float(), nullable=False, server_default="0", default=0.0)
     sample_tournaments: Mapped[int] = mapped_column(Integer(), nullable=False, server_default="0", default=0)
     sample_matches: Mapped[int] = mapped_column(Integer(), nullable=False, server_default="0", default=0)

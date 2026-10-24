@@ -1039,12 +1039,16 @@ describe("the reference tail", () => {
     const card = Array.from(container.querySelectorAll("section")).find((node) =>
       node.querySelector("h2")?.textContent?.includes(COPY.format.title)
     );
-    const steps = Array.from(card?.querySelectorAll("ol > li") ?? []).map(
-      (node) => node.textContent ?? ""
-    );
+    const items = Array.from(card?.querySelectorAll("ol > li") ?? []);
+    const steps = items.map((node) => node.textContent ?? "");
+    // The type is the chip that opens its explanation, beside the organizer's name.
+    const chips = (node: Element) =>
+      Array.from(node.querySelectorAll('button[aria-haspopup="dialog"]')).map((chip) => chip.textContent);
     expect(steps).toHaveLength(2);
-    expect(steps[0]).toContain(`Groups · ${en.common.roundRobin}`);
-    expect(steps[1]).toContain(`Playoffs · ${en.bracket.doubleElimination.toLowerCase()}`);
+    expect(steps[0]).toContain("Groups");
+    expect(chips(items[0])).toEqual([COPY.format.types.round_robin.name]);
+    expect(steps[1]).toContain("Playoffs");
+    expect(chips(items[1])).toEqual([COPY.format.types.double_elimination.name]);
     // Each name once: the stage list is not repeated under a second label.
     expect((card?.textContent ?? "").split("Playoffs").length - 1).toBe(1);
   });
@@ -1073,20 +1077,20 @@ describe("the reference tail", () => {
         ?.querySelectorAll("ol > li") ?? []
     ).map((node) => node.textContent ?? "");
     expect(steps[0]).toContain("5 rounds");
-    expect(steps[0]).toContain("through at 3 wins");
-    expect(steps[0]).toContain("out at 3 losses");
-    expect(steps[0]).toContain("top 8 advance");
+    expect(steps[0]).toContain("Through at 3 wins");
+    expect(steps[0]).toContain("Out at 3 losses");
+    expect(steps[0]).toContain("Top 8 advance");
     // The last stage advances nobody, whatever its `advance_count` says.
     expect(steps[1]).not.toContain("advance");
     expect(steps[1]).toContain(COPY.format.grandFinalNoReset);
   });
 
-  it("drops the type suffix when the organizer named the stage after it", async () => {
-    // "Swiss · swiss" is the same word twice; the qualifier exists for names
-    // that do NOT state the format.
+  it("shrinks the type chip to its icon when the organizer named the stage after it", async () => {
+    // "Swiss system · Swiss system" is the same words twice; the label exists
+    // for names that do NOT state the format. The chip still explains it.
     tournament = makeTournament("live", {
       stages: [
-        makeStage({ id: 6, name: "Swiss", stage_type: "swiss", order: 0 }),
+        makeStage({ id: 6, name: "Swiss system", stage_type: "swiss", order: 0 }),
         makeStage({ id: 7, name: " double elimination ", stage_type: "double_elimination", order: 1 })
       ]
     });
@@ -1095,11 +1099,12 @@ describe("the reference tail", () => {
     const card = Array.from(container.querySelectorAll("section")).find((node) =>
       node.querySelector("h2")?.textContent?.includes(COPY.format.title)
     );
-    const text = card?.textContent ?? "";
+    const chips = Array.from(card?.querySelectorAll('button[aria-haspopup="dialog"]') ?? []);
 
-    expect(text).toContain("Swiss");
-    expect(text).not.toContain(`· ${en.common.swiss}`);
-    expect(text).not.toContain(`· ${en.bracket.doubleElimination.toLowerCase()}`);
+    expect(chips.map((chip) => [chip.textContent, chip.getAttribute("aria-label")])).toEqual([
+      ["", COPY.format.types.swiss.name],
+      ["", COPY.format.types.double_elimination.name]
+    ]);
   });
 
   it("keeps stages that share a phase order in one step, and the next phase in the next", async () => {

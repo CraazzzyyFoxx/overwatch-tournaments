@@ -34,6 +34,12 @@ class AppConfig(BaseServiceSettings):
     # collapsing toward the median rank. Applied at inference (no retrain).
     standings_prob_sharpening: float = 1.5
 
+    # Division forecast gate: a player is shown climbing/dropping k divisions only
+    # when the probability that they belong at least k divisions higher/lower
+    # (from the stored shift and its sd) reaches this; otherwise "hold". Applied
+    # at read time (no recompute).
+    forecast_confidence_threshold: float = 0.8
+
     # Linear shift signal scale (the v1 "Linear" algorithm and the v2 baseline).
     # Maps the EMA-weighted per-tournament team-result signal to division units.
     # Applied at read time — recompute v1 shifts to refresh stored rows.

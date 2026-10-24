@@ -4,8 +4,9 @@ import importlib
 import sys
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from types import SimpleNamespace
 from unittest import IsolatedAsyncioTestCase
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pandas as pd
 
@@ -15,6 +16,28 @@ sys.path.insert(0, str(backend_root / "analytics-service"))
 
 
 feature_cache = importlib.import_module("src.services.ml.features.cache")
+job_runner = importlib.import_module("src.worker.job_runner")
+
+
+def _cache_on(cache_dir: str):
+    return patch.multiple(
+        feature_cache.settings,
+        analytics_feature_cache_enabled=True,
+        analytics_feature_cache_dir=cache_dir,
+        analytics_feature_cache_namespace="test",
+        analytics_feature_cache_ttl_seconds=3600,
+    )
+
+
+def _build(value: str):
+    async def build() -> pd.DataFrame:
+        return pd.DataFrame({"data": [value]})
+
+    return build
+
+
+async def _never() -> pd.DataFrame:
+    raise AssertionError("the cached entry was not used")
 
 
 class FeatureCacheTests(IsolatedAsyncioTestCase):
@@ -120,3 +143,43 @@ class FeatureCacheTests(IsolatedAsyncioTestCase):
             ).encode("utf-8")
         ).hexdigest()
         self.assertNotEqual(legacy, feature_cache._cache_key("demo", {"tournament_id": 7}, "overwatch"))
+
+    async def test_a_refresh_rebuilds_a_cached_frame_once_and_writes_it_back(self) -> None:
+        params = {"tournament_id": 7}
+        with TemporaryDirectory() as tmp, _cache_on(tmp):
+            feature_cache.clear_memory_cache()
+            await feature_cache.get_or_build_dataframe("demo", params, _build("stale"), discipline="overwatch")
+            with feature_cache.refreshing_feature_cache():
+                fresh = await feature_cache.get_or_build_dataframe(
+                    "demo", params, _build("fresh"), discipline="overwatch"
+                )
+                # One rebuild per block: a repeat read inside it gets the fresh entry.
+                again = await feature_cache.get_or_build_dataframe("demo", params, _never, discipline="overwatch")
+            feature_cache.clear_memory_cache()
+            # The rebuild was written to disk for later, unrefreshed reads.
+            after = await feature_cache.get_or_build_dataframe("demo", params, _never, discipline="overwatch")
+            feature_cache.clear_memory_cache()
+
+        self.assertEqual(["fresh", "fresh", "fresh"], [frame.loc[0, "data"] for frame in (fresh, again, after)])
+
+    async def test_the_compute_job_rebuilds_frames_an_earlier_job_cached(self) -> None:
+        """A recompute within the TTL must not read a frame built before the tournament's new or corrected results."""
+        params = {"tournament_id": 7}
+        job = SimpleNamespace(id=10, workspace_id=1, tournament_id=7, algorithms=None)
+
+        async def infer(*_args, **_kwargs) -> dict:
+            frame = await feature_cache.get_or_build_dataframe("demo", params, _build("fresh"), discipline="overwatch")
+            return {"data": frame.loc[0, "data"]}
+
+        with TemporaryDirectory() as tmp, _cache_on(tmp):
+            feature_cache.clear_memory_cache()
+            await feature_cache.get_or_build_dataframe("demo", params, _build("stale"), discipline="overwatch")
+            with (
+                patch.object(job_runner, "update_progress", AsyncMock()),
+                patch.object(job_runner.flows_service, "recalculate_analytics", AsyncMock(return_value=[])),
+                patch.object(job_runner, "run_for_tournament", AsyncMock(side_effect=infer)),
+            ):
+                summary = await job_runner.runner_service._run_compute(SimpleNamespace(), job)
+            feature_cache.clear_memory_cache()
+
+        self.assertEqual({"ml": {"data": "fresh"}}, summary)

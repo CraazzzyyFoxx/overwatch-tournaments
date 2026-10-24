@@ -12,7 +12,7 @@ import {
   MLModelKind,
   PerformanceV2,
   PlayerAnomaly,
-  PlayerAnalytics,
+  PlayerShiftUpdate,
   StandingsDistribution,
   TournamentAnalytics,
 } from "@/types/analytics.types";
@@ -43,15 +43,10 @@ export default class analyticsService {
     }).then((response) => response.json());
   }
 
-  static async patchPlayerShift(
-    teamId: number,
-    playerId: number,
-    shift: number,
-  ): Promise<PlayerAnalytics> {
+  static async patchPlayerShift(playerId: number, shift: number): Promise<PlayerShiftUpdate> {
     return apiFetch(`/api/v1/analytics/shift`, {
       method: "POST",
       body: {
-        team_id: teamId,
         player_id: playerId,
         shift: shift,
       },

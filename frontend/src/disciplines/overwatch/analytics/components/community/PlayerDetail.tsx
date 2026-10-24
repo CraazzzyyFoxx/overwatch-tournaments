@@ -15,6 +15,7 @@ import { getImpactColor } from "@/lib/colors";
 import { useFormatter } from "@/lib/datetime/client";
 import { findRole, type RoleOntology } from "@/lib/roster/ontology";
 import { roleOf } from "@/lib/roster/role-ref";
+import { cn } from "@/lib/utils";
 import type { DivisionGridVersion } from "@/types/workspace.types";
 import { type GlossaryTerm, isAnomalyGlossaryTerm } from "@/disciplines/overwatch/analytics/analytics-glossary";
 import type { PlayerVM } from "@/disciplines/overwatch/analytics/useAnalyticsViewModel";
@@ -40,7 +41,7 @@ interface PlayerDetailProps {
 }
 
 /**
- * Player drill-down as one card: identity, the predicted move, impact and
+ * Player drill-down as one card: identity, the predicted move, impact (v2 readers only) and
  * confidence, the impact percentile, the watch flag, why the model says so,
  * and (organizers) the manual shift.
  */
@@ -82,14 +83,20 @@ export default function PlayerDetail({
   // An unranked player has no division: the copy says "Div —" rather than inventing one.
   const division = player.division ?? "—";
 
+  // Impact exists only for viewers who may read the v2 row; without it the card shows none.
+  const impact = player.impact;
+  const eliteImpact = impact !== null && impact >= 80;
+  const lowImpact = impact !== null && impact < 34;
   const impactDesc =
-    player.impact >= 80
-      ? t("analytics.community.player.impactElite")
-      : player.impact >= 50
-        ? t("analytics.community.player.impactAbove")
-        : player.impact >= 34
-          ? t("analytics.community.player.impactMid")
-          : t("analytics.community.player.impactBelow");
+    impact === null
+      ? null
+      : eliteImpact
+        ? t("analytics.community.player.impactElite")
+        : impact >= 50
+          ? t("analytics.community.player.impactAbove")
+          : lowImpact
+            ? t("analytics.community.player.impactBelow")
+            : t("analytics.community.player.impactMid");
   const confDesc =
     player.confidence >= 0.8
       ? t("analytics.community.player.confidencePlenty")
@@ -105,10 +112,11 @@ export default function PlayerDetail({
     why.push(t("analytics.community.why.flag", { kind: flagLabel }));
     why.push(t("analytics.community.why.flagSignal", { pct: Math.round(flag.score * 100) }));
   } else if (up) {
-    why.push(t("analytics.community.why.climbImpact", { division, role: roleLower }));
+    // An impact line is said only when the score's own bucket agrees with it; a hidden impact says nothing.
+    if (eliteImpact) why.push(t("analytics.community.why.climbImpact", { division, role: roleLower }));
     why.push(t("analytics.community.why.climbConfidence", { pct: confPct }));
   } else if (down) {
-    why.push(t("analytics.community.why.dropImpact", { division, role: roleLower }));
+    if (lowImpact) why.push(t("analytics.community.why.dropImpact", { division, role: roleLower }));
     why.push(t("analytics.community.why.dropConsistent", { maps: player.sample_matches }));
   } else {
     why.push(t("analytics.community.why.holdInBand", { division }));
@@ -166,23 +174,25 @@ export default function PlayerDetail({
         </div>
       </section>
 
-      <dl className="grid grid-cols-2 border-t border-[color:var(--aqt-border)]">
-        <div className="px-4 py-3">
-          <Eyebrow as="dt" className="flex items-center gap-0.5">
-            {t("analytics.community.player.impact")}
-            <InfoDot term="impact" onExplain={onExplain} />
-          </Eyebrow>
-          <dd className="mt-1">
-            <span
-              className="aqt-tnum block font-onest text-title font-semibold"
-              style={{ color: getImpactColor(player.impact) }}
-            >
-              {format.number(player.impact)}
-            </span>
-            <span className="text-caption text-[color:var(--aqt-fg-muted)]">{impactDesc}</span>
-          </dd>
-        </div>
-        <div className="border-l border-[color:var(--aqt-border)] px-4 py-3">
+      <dl className={cn("grid border-t border-[color:var(--aqt-border)]", impact !== null && "grid-cols-2")}>
+        {impact !== null ? (
+          <div className="px-4 py-3">
+            <Eyebrow as="dt" className="flex items-center gap-0.5">
+              {t("analytics.community.player.impact")}
+              <InfoDot term="impact" onExplain={onExplain} />
+            </Eyebrow>
+            <dd className="mt-1">
+              <span
+                className="aqt-tnum block font-onest text-title font-semibold"
+                style={{ color: getImpactColor(impact) }}
+              >
+                {format.number(impact)}
+              </span>
+              <span className="text-caption text-[color:var(--aqt-fg-muted)]">{impactDesc}</span>
+            </dd>
+          </div>
+        ) : null}
+        <div className={cn("px-4 py-3", impact !== null && "border-l border-[color:var(--aqt-border)]")}>
           <Eyebrow as="dt" className="flex items-center gap-0.5">
             {t("analytics.community.player.confidence")}
             <InfoDot term="confidence" onExplain={onExplain} />
@@ -196,16 +206,18 @@ export default function PlayerDetail({
         </div>
       </dl>
 
-      <section className={SECTION}>
-        <div className="flex items-baseline justify-between gap-3">
-          <Eyebrow as="h3">{t("analytics.community.player.percentileTitle")}</Eyebrow>
-          <span className="text-caption text-[color:var(--aqt-fg-muted)]">
-            {t("analytics.community.player.percentileVs", { division, role: roleLower })}
-          </span>
-        </div>
-        {/* The figure is printed above; the bar places it on the 0–100 scale. */}
-        <ImpactBar value={player.impact} showValue={false} className="mt-2" />
-      </section>
+      {impact !== null ? (
+        <section className={SECTION}>
+          <div className="flex items-baseline justify-between gap-3">
+            <Eyebrow as="h3">{t("analytics.community.player.percentileTitle")}</Eyebrow>
+            <span className="text-caption text-[color:var(--aqt-fg-muted)]">
+              {t("analytics.community.player.percentileVs", { division, role: roleLower })}
+            </span>
+          </div>
+          {/* The figure is printed above; the bar places it on the 0–100 scale. */}
+          <ImpactBar value={impact} showValue={false} className="mt-2" />
+        </section>
+      ) : null}
 
       {flag ? (
         <section className={SECTION}>

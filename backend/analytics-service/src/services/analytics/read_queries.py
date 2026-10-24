@@ -12,7 +12,7 @@ from shared.repository import (
 from shared.repository.stats_queries import match_context
 from shared.services.workspace_scope import workspace_filter
 
-VISIBLE_SHIFT_ALGORITHM_NAMES = ("Linear", "Points", "OpenSkill + ML")
+VISIBLE_SHIFT_ALGORITHM_NAMES = ("Linear", "Points", "OpenSkill", "OpenSkill + ML")
 
 # v2 algorithm names — written by the analytics-worker training pipeline,
 # independent of the v1 ``algorithm_id`` the UI selects for shifts/points.
@@ -223,27 +223,14 @@ class AnalyticsReadService:
 
         return list(grouped.items())
 
-    async def change_shift(
-        self, session: AsyncSession, player_id: int, shift: int
-    ) -> tuple[models.AnalyticsPlayer, models.AnalyticsShift]:
-        query = (
-            sa.select(models.AnalyticsPlayer, models.AnalyticsShift)
-            .join(
-                models.AnalyticsShift,
-                models.AnalyticsShift.player_id == models.AnalyticsPlayer.player_id,
-            )
-            .where(
-                sa.and_(
-                    models.AnalyticsPlayer.player_id == player_id,
-                )
-            )
-        )
-        result = await session.execute(query)
-        analytics, calculated_shift = result.first()
-
+    async def change_shift(self, session: AsyncSession, player_id: int, shift: int) -> models.AnalyticsPlayer | None:
+        """Set the organizer's manual override ``AnalyticsPlayer.shift``; ``None`` when the player has no row."""
+        analytics = await self.players.get_by(session, player_id=player_id)
+        if analytics is None:
+            return None
         await self.players.update_fields(session, analytics, {"shift": shift})
         await session.commit()
-        return analytics, calculated_shift
+        return analytics
 
     async def get_streaks(
         self, session: AsyncSession, tournament_id: int

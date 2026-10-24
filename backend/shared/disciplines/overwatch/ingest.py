@@ -145,11 +145,17 @@ class _Log:
         side: dict[str, str] = {}
 
         def add(name: str, declared: str) -> None:
-            if not name or declared not in names:
-                raise ValueError("Log participant has no declared team")
+            if not name:
+                raise DecodeError("match_log_corrupt", f"A player of team {declared!r} has an empty name")
+            if declared not in names:
+                home, away = names
+                raise DecodeError(
+                    "match_log_corrupt",
+                    f"Player {name!r} is on team {declared!r}, but MatchStart declares only {home!r} and {away!r}",
+                )
             team = names[declared]
             if name in side and side[name] != team:
-                raise ValueError("Log participant appears on both teams")
+                raise DecodeError("match_log_corrupt", f"Player {name!r} appears on both teams")
             side[name] = team
             if name not in teams[team]:
                 teams[team].append(name)

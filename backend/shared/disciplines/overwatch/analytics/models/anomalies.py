@@ -23,6 +23,8 @@ import numpy as np
 import pandas as pd
 from sklearn.ensemble import IsolationForest
 
+from ..features.mvp_dominance import MVP_MIN_MATCHES
+
 __all__ = (
     "AnomalyReport",
     "detect_smurfs",
@@ -75,10 +77,11 @@ def detect_smurfs(
       if they are not low-rank, since cross-division ``impact_score`` and the rank
       gate otherwise hide mid/high-rank overperformers); OR
     - they are a **raw scoreboard dominator** — their match-log ``mvp_dominance``
-      (mean per-match MVP position) is at/above ``mvp_dominance_threshold``. This
-      catches a consistent top-of-the-scoreboard player that the
-      expectation-adjusted ``impact``/``local_zscore`` under-credit (e.g. a strong
-      player winning "as expected" on a favoured team).
+      (mean per-match MVP position) is at/above ``mvp_dominance_threshold`` over at
+      least ``MVP_MIN_MATCHES`` logged matches. This catches a consistent
+      top-of-the-scoreboard player that the expectation-adjusted
+      ``impact``/``local_zscore`` under-credit (e.g. a strong player winning "as
+      expected" on a favoured team).
     """
     if df.empty or not all(c in df.columns for c in _SMURF_FEATURES):
         return []
@@ -120,7 +123,13 @@ def detect_smurfs(
             local_suspicious = local_z >= local_z_threshold or local_pct >= local_percentile_threshold
             strong_local = local_z >= strong_local_z_threshold
             mvp_dominance = pd.to_numeric(row.get("mvp_dominance"), errors="coerce")
-            raw_dominator = pd.notna(mvp_dominance) and float(mvp_dominance) >= mvp_dominance_threshold
+            logged = pd.to_numeric(row.get("mvp_matches"), errors="coerce")
+            raw_dominator = (
+                pd.notna(mvp_dominance)
+                and pd.notna(logged)
+                and logged >= MVP_MIN_MATCHES
+                and float(mvp_dominance) >= mvp_dominance_threshold
+            )
             classic_smurf = impact_suspicious and rank_suspicious and local_suspicious
             deterministic_review = classic_smurf or strong_local or raw_dominator
             if deterministic_review:

@@ -17,9 +17,9 @@ import {
   standingsRank,
 } from "@/disciplines/overwatch/analytics/analytics.helpers";
 
-/** A player enriched with a resolved 0–100 impact (v2 score or derived). */
+/** A player enriched with the 0–100 v2 impact; `null` when the viewer may not read a v2 row for them. */
 export interface PlayerVM extends PlayerAnalytics {
-  impact: number;
+  impact: number | null;
 }
 
 /** A team with VM players plus the count of flagged players (watch flags). */
@@ -53,7 +53,7 @@ export function useAnalyticsViewModel(
     const teams: TeamVM[] = analytics.teams.map((team) => {
       const players = team.players.map<PlayerVM>((player) => ({
         ...player,
-        impact: resolveImpact(player, perfByPlayer?.get(player.id), canReadV2),
+        impact: resolveImpact(perfByPlayer?.get(player.id), canReadV2),
       }));
       const flagCount = players.reduce(
         (total, player) => total + (player.anomalies.length > 0 ? 1 : 0),

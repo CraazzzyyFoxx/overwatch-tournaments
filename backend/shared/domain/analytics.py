@@ -93,7 +93,7 @@ class PerformanceModel(MLModel, typing.Protocol):
 
 
 class ShiftModel(MLModel, typing.Protocol):
-    def predict_with_confidence(self, df: pd.DataFrame) -> pd.DataFrame: ...
+    def predict_with_uncertainty(self, df: pd.DataFrame) -> pd.DataFrame: ...
 
 
 class StandingsModel(MLModel, typing.Protocol):

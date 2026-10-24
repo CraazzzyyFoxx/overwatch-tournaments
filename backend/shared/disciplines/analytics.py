@@ -140,7 +140,7 @@ class AnalyticsExports(typing.Protocol):
         tournament_features: pd.DataFrame,
         rank_history: pd.DataFrame,
         history: pd.DataFrame,
-        shift_map: Mapping[int, float],
+        shift_map: Mapping[int, tuple[float, float]],
         performance_features: pd.DataFrame,
         dominance: pd.DataFrame,
     ) -> pd.DataFrame: ...

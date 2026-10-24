@@ -260,7 +260,7 @@ async def run_shift_for_tournament(
     if feature_frame.empty:
         return 0
 
-    preds = model.predict_with_confidence(feature_frame)
+    preds = model.predict_with_uncertainty(feature_frame)
     feature_frame = feature_frame.assign(**preds)
 
     await session.execute(
@@ -275,7 +275,7 @@ async def run_shift_for_tournament(
             "algorithm_id": algorithm_id,
             "player_id": int(row["player_id"]),
             "shift": float(row["shift_v2"]) if pd.notna(row["shift_v2"]) else 0.0,
-            "confidence": float(row["confidence"]) if pd.notna(row["confidence"]) else 0.0,
+            "shift_sd": float(row["shift_sd"]) if pd.notna(row["shift_sd"]) else None,
             "effective_evidence": float(row.get("match_count", 0) or 0),
             "sample_tournaments": int(row.get("tournaments_played", 0) or 0),
             "sample_matches": int(row.get("match_count", 0) or 0),

@@ -3,10 +3,11 @@
 Prod analysis showed the **team result** (W/L vs the balanced seeding) is by far
 the strongest predictor of realised division moves. So the backbone is a
 team-dominant convex mix of the v1 team-result Linear shift and the OpenSkill mu
-shift. On top of it an **additive individual skill term** lifts players whose
-individual signal is far from their cohort. It is the MAX of two channels:
-``local_zscore`` (skill vs same role + nearby division, softly clamped per
-division) and a **raw match-log MVP dominance** lift. The dominance channel is a
+shift. On top of it an **additive individual skill term** moves players whose
+individual signal is far from their cohort, either way: ``local_zscore`` (skill
+vs same role + nearby division, softly clamped per division) applies as is, and
+a **raw match-log MVP dominance** lift (upward only, and only over enough logged
+matches) replaces it when larger. The dominance channel is a
 first-class signal bounded only by the rank/grid output clamp (not the softer
 local clamp), so a consistent scoreboard-topper that the expectation-adjusted
 impact under-credits is pushed to their rank-appropriate ceiling. A clear
@@ -40,6 +41,11 @@ There is no learned regression toward the (mostly-zero) realised move — that
 collapsed the signal. Weights/scales are fixed (config-tunable) and snapshotted
 into the artifact at train time. Newcomers (no prior tournament) get the clipped
 team backbone only (no individual term — one tournament is too noisy).
+
+:meth:`ShiftModelV2.predict_with_uncertainty` adds ``shift_sd``, the sd of the
+shift in the same divisions: the backbone components' sds (the v1 Linear and
+OpenSkill posteriors, weighted like the shift) plus the active individual term's
+per-match scale over the square root of the logged matches.
 """
 
 from __future__ import annotations
@@ -52,6 +58,8 @@ import pandas as pd
 
 from shared.division_grid import DEFAULT_GRID
 from shared.domain.analytics import MLModel
+
+from ..features.mvp_dominance import MVP_MIN_MATCHES
 
 __all__ = (
     "ShiftModelV2",
@@ -89,9 +97,12 @@ INDIV_MOD_CLAMP_BOTTOM: float = 2.0
 # local clamp) — so a consistent scoreboard-topper that expectation-adjusted
 # impact under-credits is pushed to their rank-appropriate ceiling. Only lifts
 # (never lowers); high ranks stay protected by the tight output clamp.
+# ``DOMINANCE_RANK_SD`` is the per-match sd of the dominance score, a uniform rank
+# position on [0, 1] (1/sqrt(12)).
 DOMINANCE_PIVOT: float = 0.5
 DOMINANCE_GAIN: float = 6.0
 DOMINANCE_CAP: float = 3.0
+DOMINANCE_RANK_SD: float = 12.0**-0.5
 
 # Team final-placement gate on the POSITIVE individual lift. The lift is scaled
 # by a factor ∈ [PLACEMENT_FLOOR, 1] — 1.0 for the tournament winner, ramping to
@@ -124,6 +135,24 @@ def _team_result(df: pd.DataFrame) -> pd.Series:
 
 def _os_shift(df: pd.DataFrame) -> pd.Series:
     return pd.to_numeric(df.get("os_shift", pd.Series(0.0, index=df.index)), errors="coerce").fillna(0.0)
+
+
+def _sd(df: pd.DataFrame, column: str) -> pd.Series:
+    """A component's sd column; NaN (unknown) where the frame has none."""
+    return pd.to_numeric(df.get(column, pd.Series(np.nan, index=df.index)), errors="coerce")
+
+
+def _team_result_sd(df: pd.DataFrame) -> pd.Series:
+    """sd of :func:`_team_result`: Linear's, or the os fallback's where Linear is missing."""
+    fallback = _sd(df, "os_shift_sd")
+    if "linear_stable_shift" not in df.columns:
+        return fallback
+    stable = pd.to_numeric(df["linear_stable_shift"], errors="coerce")
+    return _sd(df, "linear_shift_sd").where(stable.notna(), fallback)
+
+
+def _logged_matches(df: pd.DataFrame) -> pd.Series:
+    return pd.to_numeric(df.get("mvp_matches", pd.Series(0, index=df.index)), errors="coerce").fillna(0)
 
 
 def _rank_ramp(div: pd.Series, *, top: float, bottom: float) -> pd.Series:
@@ -170,12 +199,14 @@ def _dominance_z(df: pd.DataFrame, *, gain: float, cap: float) -> pd.Series:
     ``mvp_dominance`` ∈ [0,1] (0.5 = median scoreboard position). Above the pivot
     it lifts (``(dom-0.5)*gain``, capped); at/below it contributes nothing — a low
     scoreboard position must not push a player *down* (that is the team result's
-    job). Neutral (0) where there is no match log.
+    job). Neutral (0) where there is no match log or fewer than
+    ``MVP_MIN_MATCHES`` logged matches.
     """
     dom = pd.to_numeric(
         df.get("mvp_dominance", pd.Series(DOMINANCE_PIVOT, index=df.index)),
         errors="coerce",
     ).fillna(DOMINANCE_PIVOT)
+    dom = dom.where(_logged_matches(df) >= MVP_MIN_MATCHES, DOMINANCE_PIVOT)
     return ((dom - DOMINANCE_PIVOT) * gain).clip(lower=0.0, upper=cap)
 
 
@@ -220,12 +251,6 @@ def _indiv_mod(
     return (scale * z).clip(lower=-clamp, upper=clamp)
 
 
-def _linear_confidence(df: pd.DataFrame) -> pd.Series:
-    if "linear_confidence" not in df.columns:
-        return pd.Series(0.0, index=df.index)
-    return pd.to_numeric(df["linear_confidence"], errors="coerce").fillna(0.0).clip(0.0, 1.0)
-
-
 def _newcomer_mask(df: pd.DataFrame) -> np.ndarray:
     is_newcomer = df.get("is_newcomer", pd.Series(False, index=df.index))
     played = pd.to_numeric(df.get("tournaments_played", pd.Series(0, index=df.index)), errors="coerce").fillna(0)
@@ -250,7 +275,11 @@ class ShiftModelV2(MLModel):
     feature_order: list[str] = field(default_factory=lambda: list(SHIFT_BLEND_COLUMNS))
 
     def _shift_array(self, df: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
+        """Return ``(shift, shift_sd)`` per row."""
         backbone = self.w_team * _team_result(df).to_numpy() + self.w_os * _os_shift(df).to_numpy()
+        backbone_var = (self.w_team * _team_result_sd(df).to_numpy()) ** 2 + (
+            self.w_os * _sd(df, "os_shift_sd").to_numpy()
+        ) ** 2
         # Rank- and grid-dependent output clamp: squeezed at the top of the
         # ladder so no source (backbone or individual) can yank a high-rank player
         # the full range from one tournament; top cap scales with grid size.
@@ -263,10 +292,12 @@ class ShiftModelV2(MLModel):
         ).to_numpy()
         # Local-cohort term — softer per-division clamp on the noisier
         # expectation-adjusted ``local_zscore``.
+        scale_top = getattr(self, "indiv_scale_top", INDIV_MOD_SCALE_TOP)
+        scale_bottom = getattr(self, "indiv_scale_bottom", INDIV_MOD_SCALE_BOTTOM)
         z_term = _indiv_mod(
             df,
-            scale_top=getattr(self, "indiv_scale_top", INDIV_MOD_SCALE_TOP),
-            scale_bottom=getattr(self, "indiv_scale_bottom", INDIV_MOD_SCALE_BOTTOM),
+            scale_top=scale_top,
+            scale_bottom=scale_bottom,
             clamp_top=getattr(self, "indiv_clamp_top", INDIV_MOD_CLAMP_TOP),
             clamp_bottom=getattr(self, "indiv_clamp_bottom", INDIV_MOD_CLAMP_BOTTOM),
         ).to_numpy()
@@ -274,13 +305,21 @@ class ShiftModelV2(MLModel):
         # rank/grid output clamp (not the softer local clamp), so a consistent
         # match-MVP is pushed to their rank-appropriate ceiling. High ranks stay
         # protected because the output clamp is tight there.
-        dom_z = _dominance_z(
-            df,
-            gain=getattr(self, "dominance_gain", DOMINANCE_GAIN),
-            cap=getattr(self, "dominance_cap", DOMINANCE_CAP),
-        ).to_numpy()
+        gain = getattr(self, "dominance_gain", DOMINANCE_GAIN)
+        dom_z = _dominance_z(df, gain=gain, cap=getattr(self, "dominance_cap", DOMINANCE_CAP)).to_numpy()
         dom_term = np.clip(dom_z, 0.0, out_clamp)
-        indiv = np.maximum(z_term, dom_term)
+        # A negative local term lowers the shift; an MVP lift (upward only) wins when larger.
+        mvp_lift = dom_term > 0.0
+        indiv = np.where(mvp_lift, np.maximum(z_term, dom_term), z_term)
+        # sd of the active individual term: its per-match scale over sqrt(logged matches); 0 when none applies.
+        # ponytail: a local term without a recorded logged match (coarse-only Performance) counts as one match.
+        div = df.get("current_div", pd.Series(np.nan, index=df.index))
+        per_match = np.where(
+            mvp_lift & (dom_term >= z_term),
+            gain * DOMINANCE_RANK_SD,
+            _rank_ramp(div, top=scale_top, bottom=scale_bottom).to_numpy(),
+        )
+        indiv_sd = np.where(indiv == 0.0, 0.0, per_match / np.sqrt(np.maximum(_logged_matches(df).to_numpy(), 1.0)))
         shift = np.clip(backbone + indiv, -out_clamp, out_clamp)
         # Newcomers: team backbone only (one tournament of individual signal is
         # too noisy), clipped to the conservative newcomer range but never looser
@@ -292,13 +331,17 @@ class ShiftModelV2(MLModel):
             np.clip(backbone, -newcomer_clamp, newcomer_clamp),
             shift,
         )
+        # Newcomers carry no individual term, so only the backbone's uncertainty.
+        shift_sd = np.sqrt(backbone_var + np.where(newcomer, 0.0, indiv_sd**2))
         # Gate the POSITIVE shift by the team's final placement — no promotion for
         # a poorly-placed team, however strong the individual play OR the rating
         # swing (a losing team's spurious os_shift cannot promote either). Applies
         # to the full shift, not just the individual lift; demotions pass through.
         placement = _placement_factor(df, floor=getattr(self, "placement_floor", PLACEMENT_FLOOR)).to_numpy()
-        shift = np.where(shift > 0.0, shift * placement, shift)
-        return shift, newcomer
+        gated = shift > 0.0
+        shift = np.where(gated, shift * placement, shift)
+        shift_sd = np.where(gated, shift_sd * placement, shift_sd)
+        return shift, shift_sd
 
     def predict(self, df: pd.DataFrame) -> pd.Series:
         if df.empty:
@@ -306,16 +349,12 @@ class ShiftModelV2(MLModel):
         shift, _ = self._shift_array(df)
         return pd.Series(shift, index=df.index, name="shift_v2")
 
-    def predict_with_confidence(self, df: pd.DataFrame) -> pd.DataFrame:
+    def predict_with_uncertainty(self, df: pd.DataFrame) -> pd.DataFrame:
+        """``shift_v2`` plus ``shift_sd``, its sd in the same divisions (NaN where a backbone sd is unknown)."""
         if df.empty:
-            return pd.DataFrame(columns=["shift_v2", "confidence"], dtype=float)
-        shift, newcomer = self._shift_array(df)
-        confidence = _linear_confidence(df).to_numpy()
-        confidence = np.where(newcomer, confidence * 0.5, confidence)
-        return pd.DataFrame(
-            {"shift_v2": shift, "confidence": np.clip(confidence, 0.0, 1.0)},
-            index=df.index,
-        )
+            return pd.DataFrame(columns=["shift_v2", "shift_sd"], dtype=float)
+        shift, shift_sd = self._shift_array(df)
+        return pd.DataFrame({"shift_v2": shift, "shift_sd": shift_sd}, index=df.index)
 
 
 @dataclass

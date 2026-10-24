@@ -21,7 +21,7 @@ class LinearAnalyticsTests(TestCase):
         placement_score: float = 0.0,
         recency_decay: float = 1.0,
         coverage_weight: float = 1.0,
-        newcomer_weight: float = 1.0,
+        maps: int = 12,
         match_count: int = 4,
         log_available: float = 1.0,
     ):
@@ -30,13 +30,13 @@ class LinearAnalyticsTests(TestCase):
             placement_score=placement_score,
             recency_decay=recency_decay,
             coverage_weight=coverage_weight,
-            newcomer_weight=newcomer_weight,
+            maps=maps,
             match_count=match_count,
             log_available=log_available,
         )
 
     def test_first_tournament_shift_is_hard_capped(self) -> None:
-        metrics = linear.score_history([self.signal(map_diff=1.0, match_count=3)])
+        metrics = linear.score_history([self.signal(map_diff=1.0, match_count=3)], noise_sd=None)
 
         self.assertEqual(1, metrics.sample_tournaments)
         self.assertLessEqual(abs(metrics.stable_shift), 1.5)
@@ -49,9 +49,11 @@ class LinearAnalyticsTests(TestCase):
                     map_diff=1.0,
                     coverage_weight=0.7,
                     log_available=0.0,
+                    maps=20,
                     match_count=3,
                 )
-            ]
+            ],
+            noise_sd=None,
         )
 
         self.assertGreaterEqual(metrics.stable_shift, 1.0)
@@ -62,27 +64,11 @@ class LinearAnalyticsTests(TestCase):
             [
                 self.signal(map_diff=0.3),
                 self.signal(map_diff=0.4, recency_decay=0.85),
-            ]
+            ],
+            noise_sd=None,
         )
 
         self.assertAlmostEqual(short_history.stable_shift, short_history.trend_shift, places=6)
-
-    def test_newcomer_weight_damps_shift_and_evidence(self) -> None:
-        veteran = linear.score_history(
-            [
-                self.signal(map_diff=0.6),
-                self.signal(map_diff=0.5, recency_decay=0.85),
-            ]
-        )
-        newcomer = linear.score_history(
-            [
-                self.signal(map_diff=0.6, newcomer_weight=0.75),
-                self.signal(map_diff=0.5, recency_decay=0.85, newcomer_weight=0.75),
-            ]
-        )
-
-        self.assertLess(newcomer.effective_evidence, veteran.effective_evidence)
-        self.assertLess(newcomer.stable_shift, veteran.stable_shift)
 
     def test_missing_logs_and_standings_fall_back_to_zero_residuals(self) -> None:
         metrics = linear.score_history(
@@ -100,30 +86,19 @@ class LinearAnalyticsTests(TestCase):
                     recency_decay=0.85,
                     match_count=1,
                 ),
-            ]
+            ],
+            noise_sd=None,
         )
 
         self.assertEqual(0.0, metrics.log_coverage)
-        self.assertGreaterEqual(metrics.confidence, 0.0)
-        self.assertLessEqual(metrics.confidence, 1.0)
-
-    def test_hybrid_stays_close_to_stable_when_match_sample_is_low(self) -> None:
-        metrics = linear.score_history(
-            [
-                self.signal(map_diff=0.2, match_count=1),
-                self.signal(map_diff=0.3, match_count=1, recency_decay=0.85),
-            ],
-            openskill_shift=1.8,
-        )
-
-        self.assertLess(abs(metrics.hybrid_shift - metrics.stable_shift), 0.1)
+        self.assertEqual(0.0, metrics.stable_shift)
 
     def test_custom_weights_change_stable_shift(self) -> None:
         signals = [self.signal(map_diff=1.0)]
 
-        default = linear.score_history(signals)
+        default = linear.score_history(signals, noise_sd=None)
         # Zero weight on every team component ⇒ the raw signal collapses to 0.
-        zeroed = linear.score_history(signals, weights={"map_diff": 0.0, "placement_score": 0.0})
+        zeroed = linear.score_history(signals, noise_sd=None, weights={"map_diff": 0.0, "placement_score": 0.0})
 
         self.assertGreater(abs(default.stable_shift), 0.0)
         self.assertAlmostEqual(0.0, zeroed.stable_shift, places=6)
@@ -135,7 +110,7 @@ class LinearAnalyticsTests(TestCase):
         # A small signal stays well below the clamps, so doubling the scale
         # doubles the stable shift.
         signals = [self.signal(map_diff=0.2)]
-        base = linear.score_history(signals, shift_scale=1.0)
-        doubled = linear.score_history(signals, shift_scale=2.0)
+        base = linear.score_history(signals, noise_sd=None, shift_scale=1.0)
+        doubled = linear.score_history(signals, noise_sd=None, shift_scale=2.0)
 
         self.assertAlmostEqual(2.0 * base.stable_shift, doubled.stable_shift, places=6)

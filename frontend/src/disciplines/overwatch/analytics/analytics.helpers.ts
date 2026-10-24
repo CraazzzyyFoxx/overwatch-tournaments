@@ -1,7 +1,6 @@
 import {
   AlgorithmAnalytics,
   PerformanceV2,
-  PlayerAnalytics,
   TeamAnalytics,
   TournamentAnalyticsSummary,
 } from "@/types/analytics.types";
@@ -10,6 +9,7 @@ import { GlossaryTerm } from "@/disciplines/overwatch/analytics/analytics-glossa
 const RECOMMENDED_ALGORITHM_ORDER = [
   "Linear",
   "Points",
+  "OpenSkill",
   "OpenSkill + ML",
 ] as const;
 
@@ -41,7 +41,7 @@ export function getPreferredAnalyticsAlgorithmId(
   algorithms: AlgorithmAnalytics[],
 ): number | null {
   // Prefer the ML shift algorithm when it has computed data for the tournament;
-  // otherwise fall back to the recommended display order (Linear › Points › ML).
+  // otherwise fall back to the recommended display order (Linear › Points › OpenSkill › ML).
   const mlWithData = algorithms.find(
     (algorithm) => algorithm.name === PREFERRED_ML_ALGORITHM_NAME && algorithm.has_data === true,
   );
@@ -182,36 +182,18 @@ export function formatAnalyticsNumber(
 // translate the returned keys/ids.
 // ────────────────────────────────────────────────────────────────────────────
 
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
-}
-
 /**
- * Map a raw shift `points` value to a 0–100 "impact" score for the public/
- * community view. Mirrors the design mock so anonymous users see the same
- * number without needing the permission-gated v2 `impact_score`. Points sit
- * roughly in [-1.6, +2.4]; we rescale to a percentile-ish band and clamp the
- * tails so a bar always reads as non-empty / non-full.
- */
-export function deriveImpact(points: number): number {
-  if (!Number.isFinite(points)) return 50;
-  return clamp(Math.round(((points + 1.6) / 4.0) * 100), 3, 99);
-}
-
-/**
- * Prefer the real v2 `impact_score` (0–100 percentile within tournament+role)
- * when the viewer may read it and a row exists; otherwise fall back to the
- * derived public impact. Keeps the community baseline working with v1 alone.
+ * The real v2 `impact_score` (0–100 percentile within tournament+role) when the viewer may read it and a row
+ * exists; otherwise none — impact is never derived from the shift.
  */
 export function resolveImpact(
-  player: Pick<PlayerAnalytics, "points">,
   perf: Pick<PerformanceV2, "impact_score"> | undefined,
   canReadV2: boolean,
-): number {
+): number | null {
   if (canReadV2 && perf && Number.isFinite(perf.impact_score)) {
-    return clamp(Math.round(perf.impact_score), 0, 100);
+    return Math.max(0, Math.min(100, Math.round(perf.impact_score)));
   }
-  return deriveImpact(player.points);
+  return null;
 }
 
 const ORDINAL_SUFFIX_RULES = new Intl.PluralRules("en-US", { type: "ordinal" });

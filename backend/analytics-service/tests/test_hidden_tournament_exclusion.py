@@ -65,7 +65,7 @@ def _compile_array_sqlite(type_, compiler, **kw):  # noqa: ANN001, ANN003, ANN20
 TABLES = (
     models.Tournament.__table__,
     # ``Tournament.phase_schedule`` is ``lazy="selectin"``, so loading a
-    # tournament through ``get_matches``' ``joinedload`` queries this table too.
+    # tournament through ``get_matches_for_tournaments``' ``joinedload`` queries this table too.
     models.TournamentPhaseSchedule.__table__,
     models.Team.__table__,
     models.Player.__table__,
@@ -393,9 +393,9 @@ class HiddenTournamentTimelineTests(_DatabaseTestCase):
         self.db.tournament(2)
         self.db.tournament(3, is_hidden=True, name="Scrims")
 
-        start = await analytics_service.lookback_start_tournament_id(self.db.shim, 3, 2, discipline="overwatch")
+        window = await analytics_service.lookback_tournament_ids(self.db.shim, 3, 2, discipline="overwatch")
 
-        self.assertEqual(1, start)
+        self.assertEqual([1, 2], window)
 
 
 class ScrimAggregateIsolationTests(_DatabaseTestCase):
@@ -479,11 +479,11 @@ class OpenSkillReplayIsolationTests(_DatabaseTestCase):
     """A scrim encounter must never reach the OpenSkill replay.
 
     The design (§5) expected every consumer downstream of an encounter range to
-    be inert because scrim teams carry no ``Player`` rows. ``get_matches`` is
-    the exception: it reaches encounters through ``joinedload``, an OUTER join,
+    be inert because scrim teams carry no ``Player`` rows. ``get_matches_for_tournaments``
+    is the exception: it reaches encounters through ``joinedload``, an OUTER join,
     so a Player-less scrim encounter arrives with two real teams and empty
     rosters. ``prepare_openskill_data`` then rates two empty sides and raises.
-    Hence the ``is_hidden`` filter on ``get_matches`` -- these tests hold it in
+    Hence the ``is_hidden`` filter on ``get_matches_for_tournaments`` -- these tests hold it in
     place.
     """
 
@@ -508,14 +508,18 @@ class OpenSkillReplayIsolationTests(_DatabaseTestCase):
     async def test_encounter_range_read_skips_the_hidden_container(self) -> None:
         scrims = self._timeline_with_a_scrim_in_the_middle()
 
-        encounters = await analytics_service.get_matches(self.db.shim, 1, 3, discipline="overwatch")
+        encounters = await analytics_service.get_matches_for_tournaments(
+            self.db.shim, [1, scrims, 3], discipline="overwatch"
+        )
 
         self.assertEqual([1, 3], sorted({int(e.tournament_id) for e in encounters}))
         self.assertNotIn(scrims, {int(e.tournament_id) for e in encounters})
 
     async def test_openskill_replay_survives_a_scrim_container_in_the_window(self) -> None:
-        self._timeline_with_a_scrim_in_the_middle()
-        encounters = await analytics_service.get_matches(self.db.shim, 1, 3, discipline="overwatch")
+        scrims = self._timeline_with_a_scrim_in_the_middle()
+        encounters = await analytics_service.get_matches_for_tournaments(
+            self.db.shim, [1, scrims, 3], discipline="overwatch"
+        )
         teams = await analytics_service.get_teams_with_players(self.db.shim, 3)
 
         # ``prepare_openskill_data`` ignores its ``df`` argument entirely.
