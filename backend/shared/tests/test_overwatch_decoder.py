@@ -169,10 +169,12 @@ def test_a_pair_naming_several_maps_is_refused_not_resolved_to_the_first():
 
 
 def test_a_participant_without_a_declared_team_or_on_both_teams_is_a_hard_error():
-    with pytest.raises(ValueError, match="no declared team"):
+    with pytest.raises(DecodeError, match="Player 'C' is on team 'Nobody'") as caught:
         ingest.decode(log(row("player_joined", 1, "C", "Nobody")), CTX)
-    with pytest.raises(ValueError, match="both teams"):
+    assert caught.value.code == "match_log_corrupt"
+    with pytest.raises(DecodeError, match="Player 'A' appears on both teams") as caught:
         ingest.decode(log(row("player_joined", 1, "A", "Away")), CTX)
+    assert caught.value.code == "match_log_corrupt"
 
 
 def test_a_map_is_only_that_map_inside_its_mode_and_a_miss_carries_both_names():
