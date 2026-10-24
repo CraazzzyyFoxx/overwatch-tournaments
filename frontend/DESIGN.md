@@ -413,9 +413,10 @@ system.
   "Back to the mix" shrinks the room back into it in 260ms, and the pages
   crossfade. The browser's own back is not animated.
 - No hover that changes size or shifts layout.
-- The one press: every `Button` sinks 1px while pressed (`translate-y-px`,
-  `motion-safe` only), the same on every width; the `inline` and `label`
-  sizes, which are text, do not.
+- The one press: every `Button` sinks 1px while pressed
+  (`active:[transform:translateY(1px)]`, `motion-safe` only), the same on every
+  width, and adding to a centring `-translate-y-1/2` rather than replacing it;
+  the `inline` and `label` sizes, which are text, do not.
 - `prefers-reduced-motion` mutes all of it; the static cue (colour, border,
   word) always remains.
 

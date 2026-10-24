@@ -16,11 +16,13 @@ const SOLID = "font-semibold shadow-[inset_0_1px_0_var(--aqt-sheen)] hover:brigh
 const buttonVariants = cva(
   [
     "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium",
-    "transition-[color,background-color,border-color,box-shadow,filter,translate] duration-150 ease-out",
+    "transition-[color,background-color,border-color,box-shadow,filter,transform] duration-150 ease-out",
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
     // The press: a 1px sink, the same on every width (a scale shrinks a wide
     // button by several pixels and blurs its text), off for reduced motion.
-    "motion-safe:active:translate-y-px",
+    // `transform`, not `translate-y-*`: it adds to a caller's centring
+    // `-translate-y-1/2` instead of replacing it (a 14px jump on a close X).
+    "motion-safe:active:[transform:translateY(1px)]",
     "disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0"
   ],
   {
@@ -59,10 +61,10 @@ const buttonVariants = cva(
         /** An icon inside a dense strip (a bracket card's footer, a wiring port): 20px box, 14px glyph or a label-size letter. */
         "icon-xs": "h-5 w-5 rounded text-label [&_svg]:size-3.5",
         /** Text action inside a sentence or row (`variant="link"`): no box, the surrounding text size, no press. */
-        inline: "h-auto rounded-sm p-0 text-[length:inherit] motion-safe:active:translate-y-0",
+        inline: "h-auto rounded-sm p-0 text-[length:inherit] motion-safe:active:[transform:none]",
         /** A sortable column head's own label (`variant="ghost"`): no box, the eyebrow voice, 12px glyph. Font family follows the cell. */
         label:
-          "h-auto gap-1 rounded-sm p-0 text-label font-semibold uppercase tracking-label motion-safe:active:translate-y-0 [&_svg]:size-3"
+          "h-auto gap-1 rounded-sm p-0 text-label font-semibold uppercase tracking-label motion-safe:active:[transform:none] [&_svg]:size-3"
       }
     },
     defaultVariants: {
