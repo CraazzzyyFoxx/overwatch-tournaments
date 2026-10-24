@@ -2892,13 +2892,43 @@
       "format": {
         "title": "How it's played",
         "rounds": "{count, plural, one {# round} other {# rounds}}",
-        "final": "final Bo{n}",
-        "advance": "top {count} advance",
-        "qualify": "through at {count, plural, one {# win} other {# wins}}",
-        "eliminate": "out at {count, plural, one {# loss} other {# losses}}",
-        "grandFinalReset": "grand final with bracket reset",
-        "grandFinalNoReset": "grand final without bracket reset",
-        "team": "Team"
+        "final": "Final Bo{n}",
+        "advance": "Top {count} advance",
+        "qualify": "Through at {count, plural, one {# win} other {# wins}}",
+        "eliminate": "Out at {count, plural, one {# loss} other {# losses}}",
+        "grandFinalReset": "Grand final with bracket reset",
+        "grandFinalNoReset": "Grand final without bracket reset",
+        "team": "Team",
+        "learnMore": "How a tournament works",
+        "types": {
+          "round_robin": {
+            "name": "Round-robin",
+            "description": "Every team plays every other team. There is no knockout: places come from the standings, by points first and then by tiebreakers."
+          },
+          "swiss": {
+            "name": "Swiss system",
+            "description": "A fixed number of rounds. In each one, teams with the same record play each other: a win moves a team up a row, a loss moves it down, and rematches are avoided. The organizer may end a team's run early: enough wins and it is through, enough losses and it is out."
+          },
+          "ffa_league": {
+            "name": "Free-for-all (FFA)",
+            "description": "Teams are not paired off: the whole group plays in one lobby, several games in a row. Every game gives each team a placement and points, and the points add up into the standings."
+          },
+          "single_elimination": {
+            "name": "Single elimination",
+            "description": "A knockout bracket: the winner of a match moves on, the loser is out. One loss and the team is done."
+          },
+          "double_elimination": {
+            "name": "Double elimination",
+            "description": "Two brackets, upper and lower. The first loss drops a team into the lower bracket, the second knocks it out. The winners of both brackets meet in the grand final."
+          }
+        },
+        "schema": {
+          "upper": "Upper bracket",
+          "lower": "Lower bracket",
+          "grandFinal": "Grand final",
+          "lobby": "Lobby",
+          "standings": "Standings"
+        }
       },
       "about": {
         "title": "About"

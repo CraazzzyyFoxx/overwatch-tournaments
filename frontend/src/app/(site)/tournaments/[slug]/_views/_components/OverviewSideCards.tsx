@@ -14,8 +14,9 @@ import type { TeamFormation, Tournament } from "@/types/tournament.types";
 
 import { PhaseTimeline } from "../../_components/PhaseTimeline";
 import { TournamentLinkChips } from "../../_components/TournamentLinkChips";
-import { STAGE_TYPE_LABEL, stageFacts, type StageFact } from "../tournamentOverview.model";
+import { stageFacts, stageFormatOf, type StageFact } from "../tournamentOverview.model";
 import { OverviewSection } from "./OverviewCards";
+import { StageFormatDialog } from "./StageFormatDialog";
 
 /** ⑦ The phase timeline once play has started: context in the side column, not content. */
 export function OverviewPhasesCard({ tournament }: Readonly<{ tournament: Tournament }>) {
@@ -96,25 +97,30 @@ export function OverviewFormatCard({ tournament }: Readonly<{ tournament: Tourna
                 </div>
                 <div className={cn("grid min-w-0 content-start gap-2 pt-0.5", isLast ? "pb-0" : "pb-4")}>
                   {wave.map((stage) => {
-                    const typeKey = STAGE_TYPE_LABEL[stage.stage_type];
-                    const typeLabel = typeKey ? t(typeKey) : null;
-                    // The suffix names the format behind an organizer's own stage
-                    // name; a stage called "Swiss" does not need "· Swiss" after
-                    // it. Case- and space-insensitive, because the name is typed
-                    // by hand and the label comes from the message catalogue.
+                    const format = stageFormatOf(stage.stage_type);
+                    const typeLabel = format
+                      ? t(`tournamentDetail.overview.format.types.${format}.name`)
+                      : null;
+                    // The chip names the format behind an organizer's own stage
+                    // name and opens its explanation; a stage called "Swiss
+                    // system" does not need the name twice, so its chip is the
+                    // icon alone. Case- and space-insensitive, because the name is
+                    // typed by hand and the label comes from the message catalogue.
                     const showType =
                       typeLabel !== null &&
                       typeLabel.trim().toLowerCase() !== stage.name.trim().toLowerCase();
                     const facts = stageFacts(stage, !isLast);
                     return (
                       <div key={stage.id} className="min-w-0">
-                        <p className="text-ui font-semibold text-[color:var(--aqt-fg)]">
+                        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-ui font-semibold text-[color:var(--aqt-fg)]">
                           {stage.name}
-                          {showType ? (
-                            <span className="font-normal text-[color:var(--aqt-fg-dim)]">
-                              {" · "}
-                              {typeLabel.toLowerCase()}
-                            </span>
+                          {format && typeLabel ? (
+                            <StageFormatDialog
+                              format={format}
+                              name={typeLabel}
+                              stageName={stage.name}
+                              showLabel={showType}
+                            />
                           ) : null}
                         </p>
                         {facts.length > 0 ? (

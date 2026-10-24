@@ -50,19 +50,23 @@ export const ELIMINATION_TYPES: Record<string, true> = {
 export const GROUP_TYPES: Record<string, true> = { round_robin: true, swiss: true };
 
 /**
- * How each stage type reads beside the organizer's own stage name. A registry
- * over the backend's vocabulary rather than a chain of ternaries — the reason
- * `CHIP_META` and `TOURNAMENT_STATUS_META` are registries — with existing keys,
- * so no new copy. `stage_type` is a free column, so an unlisted value renders
- * the name alone instead of a raw enum token.
+ * The stage formats the overview names and explains, each with its own
+ * `tournamentDetail.overview.format.types.<format>` copy. `stage_type` is a
+ * free column, so an unlisted value renders the name alone instead of a raw
+ * enum token.
  */
-export const STAGE_TYPE_LABEL: Record<string, "common.roundRobin" | "common.swiss" | "common.ffaLeague" | "bracket.singleElimination" | "bracket.doubleElimination"> = {
-  round_robin: "common.roundRobin",
-  swiss: "common.swiss",
-  ffa_league: "common.ffaLeague",
-  single_elimination: "bracket.singleElimination",
-  double_elimination: "bracket.doubleElimination"
-};
+const STAGE_FORMATS = [
+  "round_robin",
+  "swiss",
+  "ffa_league",
+  "single_elimination",
+  "double_elimination"
+] as const;
+export type StageFormat = (typeof STAGE_FORMATS)[number];
+
+export function stageFormatOf(stageType: string): StageFormat | null {
+  return (STAGE_FORMATS as readonly string[]).includes(stageType) ? (stageType as StageFormat) : null;
+}
 
 /** One regulation fact of a stage, as the overview's "How it's played" words it. */
 export type StageFact =

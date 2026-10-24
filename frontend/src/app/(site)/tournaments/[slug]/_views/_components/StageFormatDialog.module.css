@@ -1,0 +1,144 @@
+/* The format diagrams of StageFormatDialog. Every piece's own style is its
+   finished state and every keyframe animates only FROM somewhere, so a
+   diagram assembles once when the dialog opens and settles into a complete
+   picture — the same picture reduced motion gets straight away. `--at` is
+   when a piece starts, set inline per piece. */
+
+.schema {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.caption {
+  font-family: var(--aqt-data);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  fill: var(--aqt-fg-faint);
+}
+
+.record {
+  font-family: var(--aqt-data);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  fill: var(--aqt-fg-muted);
+}
+
+.slot {
+  fill: var(--aqt-card-2);
+  stroke: var(--aqt-border-3);
+  stroke-width: 1;
+}
+
+.name {
+  fill: var(--aqt-border-3);
+}
+
+/* The slot of the team that won it all: lights up when it does. */
+.champion {
+  stroke: var(--aqt-teal);
+  stroke-width: 1.5;
+  animation: crown 300ms ease-out var(--at, 0ms) backwards;
+}
+
+.trophy {
+  stroke: var(--aqt-gold);
+}
+
+.wire {
+  fill: none;
+  stroke: var(--aqt-border-3);
+  stroke-width: 1.25;
+  /* With `pathLength="1"`: one dash the length of the path, drawn by
+     sliding the offset to 0. */
+  stroke-dasharray: 1;
+  animation: draw 300ms ease-in-out var(--at, 0ms) backwards;
+}
+
+.win {
+  stroke: color-mix(in srgb, var(--aqt-teal) 65%, transparent);
+}
+
+.loss {
+  stroke: color-mix(in srgb, var(--aqt-rose) 60%, transparent);
+}
+
+/* A loss that sends a team down to the lower bracket. */
+.drop {
+  fill: none;
+  stroke: var(--aqt-rose);
+  stroke-width: 1.25;
+  stroke-dasharray: 3 3;
+  opacity: 0.75;
+}
+
+.fade {
+  animation: fade 300ms ease-out var(--at, 0ms) backwards;
+}
+
+.pop {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: pop 320ms cubic-bezier(0.2, 0.8, 0.2, 1.2) var(--at, 0ms) backwards;
+}
+
+/* A team whose run in this part of the diagram is over. */
+.out {
+  opacity: 0.35;
+  animation: dim 300ms ease-out var(--at, 0ms) backwards;
+}
+
+.grow {
+  transform-box: fill-box;
+  transform-origin: left center;
+  animation: grow 420ms cubic-bezier(0.2, 0.7, 0.2, 1) var(--at, 0ms) backwards;
+}
+
+@keyframes draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+}
+
+@keyframes dim {
+  from {
+    opacity: 1;
+  }
+}
+
+@keyframes grow {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+@keyframes crown {
+  from {
+    stroke: var(--aqt-border-3);
+    stroke-width: 1;
+  }
+}
+
+/* The global reset only shortens animations and keeps their delays, which
+   would still build the diagram piece by piece: show it finished instead. */
+@media (prefers-reduced-motion: reduce) {
+  .schema * {
+    animation: none !important;
+  }
+}
