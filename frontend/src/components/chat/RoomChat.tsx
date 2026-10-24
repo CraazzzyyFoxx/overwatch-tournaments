@@ -184,7 +184,7 @@ export function RoomChat({
       // panel instead of running off the screen on a laptop. On a phone the
       // panel is full width, so it keeps to the lower 40% and leaves the
       // room's own controls above it reachable while it is open.
-      className="@container/panel h-[min(32rem,40dvh)] w-[min(22rem,calc(100vw-2rem))] sm:h-[min(32rem,calc(100dvh-6rem-var(--overlay-bar-h,0px)))]"
+      className="@container/panel h-[min(32rem,40dvh)] w-[min(22rem,calc(100vw-2rem))] sm:h-[min(32rem,calc(100dvh-6rem-var(--dock-lift,0px)))]"
     >
       <div className="flex min-h-0 flex-1 flex-col">
         {/* `Conversation` is the stick-to-bottom scroller and already sets

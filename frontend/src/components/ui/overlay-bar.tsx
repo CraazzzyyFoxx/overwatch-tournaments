@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, type ReactNode } from "react";
 
+import { dockStack } from "@/components/ui/dock";
 import { cn } from "@/lib/utils";
 
 type OverlayBarTone = "neutral" | "warn" | "active";
@@ -26,13 +27,14 @@ interface OverlayBarProps {
  * Shared so any room anchoring a live turn/command bar (e.g. the pick-ban
  * pregame room) gets the same positioning and chrome instead of duplicating it.
  *
- * Pair with bottom padding on the page's scroll container so the fixed bar
- * never overlaps trailing content.
- *
- * While mounted it publishes its height as `--overlay-bar-h` on `<html>`: the
- * corner docks (`ui/dock`) stand on top of it instead of covering the very
- * control the bar exists for. Their stack is a portal on `<body>`, never this
- * bar's subtree, so a CSS variable is the only channel both can read.
+ * While mounted it publishes two CSS variables on `<html>` -- the footer and
+ * the corner docks are never this bar's subtree, so that is the only channel:
+ * - `--overlay-bar-h`, its height: the footer (`Footer`) reserves it under its
+ *   last row, so the page's end scrolls clear of the bar. Pages add no padding.
+ * - `--dock-lift`, the same height while the dock stack (`ui/dock`) runs under
+ *   the bar, so the docks stand on it instead of covering the controls it
+ *   carries; `0px` while they sit clear of it -- a capped bar on a wide screen
+ *   ends short of the corner, and docks lifted there float over nothing.
  */
 export function OverlayBar({ tone = "neutral", ariaLabel, className, children }: Readonly<OverlayBarProps>) {
   const ref = useRef<HTMLElement>(null);
@@ -41,14 +43,27 @@ export function OverlayBar({ tone = "neutral", ariaLabel, className, children }:
     const node = ref.current;
     if (node === null) return;
     const root = document.documentElement;
-    // ponytail: one bar per page; a second one would overwrite the first's height.
-    const publish = () => root.style.setProperty("--overlay-bar-h", `${node.offsetHeight}px`);
+    const stack = dockStack();
+    // ponytail: one bar per page; a second one would overwrite the first's values.
+    const publish = () => {
+      const bar = node.getBoundingClientRect();
+      const docks = stack.getBoundingClientRect();
+      const underBar = docks.left < bar.right && docks.right > bar.left;
+      root.style.setProperty("--overlay-bar-h", `${node.offsetHeight}px`);
+      root.style.setProperty("--dock-lift", `${underBar ? node.offsetHeight : 0}px`);
+    };
     publish();
+    // The stack widens when a dock opens; a capped bar keeps its size while the
+    // window resizes, but not its edges.
     const observer = new ResizeObserver(publish);
     observer.observe(node);
+    observer.observe(stack);
+    window.addEventListener("resize", publish);
     return () => {
       observer.disconnect();
+      window.removeEventListener("resize", publish);
       root.style.removeProperty("--overlay-bar-h");
+      root.style.removeProperty("--dock-lift");
     };
   }, []);
 
