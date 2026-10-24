@@ -7,6 +7,7 @@ from loguru import logger
 from shared import models
 from shared.messaging.config import ACHIEVEMENT_EVALUATE_QUEUE
 from shared.messaging.outbox import enqueue_outbox_event
+from shared.repository import TournamentRepository
 from shared.schemas.events import AchievementEvaluateEvent
 from shared.services.scrim_scope import is_scrim_container
 from shared.services.tournament.computation import dispatch_job
@@ -20,6 +21,8 @@ from src.services.tournament.events import (
     STRUCTURE_RESOURCES,
     publish_tournament_invalidation,
 )
+
+_tournaments = TournamentRepository()
 
 # Standings are the input to every placement-, streak- and playoff-shaped rule.
 # The outbox row goes out in the same transaction as the standings themselves,
@@ -83,11 +86,7 @@ async def process_standings_job(job_id: int) -> None:
             # AND one of the three attempts — three contended passes would
             # leave the standings permanently stale. The outbox drains every
             # second, so handing the job back costs a tick.
-            locked = await session.scalar(
-                sa.select(models.Tournament.id)
-                .where(models.Tournament.id == current.tournament_id)
-                .with_for_update(skip_locked=True)
-            )
+            locked = await _tournaments.lock_for_computation(session, current.tournament_id, skip_locked=True)
             if locked is None:
                 # SKIP LOCKED cannot tell "held by another writer" from "row is
                 # gone", and a deleted tournament must not requeue forever; it

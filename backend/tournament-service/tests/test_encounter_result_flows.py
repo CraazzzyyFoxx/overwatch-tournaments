@@ -507,6 +507,54 @@ class SeriesReportTests(ResultFlowCase):
             ],
         )
 
+    async def test_a_late_report_files_everything_but_the_confirmed_score(self) -> None:
+        # The pick-ban loop: the second map won ends the Bo3, so the games confirm it.
+        async with self.Session() as s:
+            first, second = await self.seats(s)
+            await self.play(s, 1, first.id, second.id)
+            await self.play(s, 2, first.id, second.id)
+            encounter = await self.encounter(s)
+            self.assertEqual(enums.EncounterResultStatus.CONFIRMED, encounter.result_status)
+            version = encounter.result_version
+
+        async def report(score: tuple[float, float], games_played: int) -> None:
+            async with self.Session() as s:
+                await captain_service.submit_team_report(
+                    s,
+                    self.ids["e"],
+                    encounter_team_id=first.id,
+                    reporter_user_id=self.users[0],
+                    games_played=games_played,
+                    results=[
+                        ReportResultIn(encounter_team_id=first.id, score=score[0], wins=int(score[0])),
+                        ReportResultIn(encounter_team_id=second.id, score=score[1], wins=int(score[1])),
+                    ],
+                    closeness=8,
+                    basis_version=version,
+                    map_codes=[(1, "M1 A1B2"), (3, "NEVER PLAYED")],
+                )
+
+        with self.assertRaises(BaseAPIException) as caught:
+            await report((2.0, 1.0), 3)
+        self.assertEqual(409, caught.exception.status_code)
+        self.assertEqual(["result_locked"], _codes(caught.exception))
+
+        await report((2.0, 0.0), 2)
+        async with self.Session() as s:
+            encounter = await self.encounter(s)
+            self.assertEqual(enums.EncounterResultStatus.CONFIRMED, encounter.result_status)
+            self.assertEqual(enums.EncounterResultSource.GAMES.value, encounter.result_source)
+            self.assertEqual(version, encounter.result_version)
+            self.assertAlmostEqual(0.8, encounter.closeness)
+            games = await encounter_game_service.list_games(s, self.ids["e"], include_cancelled=True)
+            # The code lands on the played map; the finished card opens no third one.
+            self.assertEqual([1, 2], [game.position for game in games])
+            lines = await encounter_game_service.lines_by_game(s, games)
+            self.assertEqual(
+                "M1 A1B2",
+                next(row.replay_code for row in lines[games[0].id] if row.encounter_team_id == first.id),
+            )
+
     async def file_report(self, seat, user, standing, *, basis_version: int) -> None:
         async with self.Session() as s:
             await captain_service.submit_team_report(

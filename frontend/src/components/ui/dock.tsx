@@ -27,13 +27,13 @@ const STACK_ID = "dock-stack";
 // safe-area floor so a panel clears an iOS home indicator. Logical `end`, not
 // `right`: the corner follows the writing direction. `z-40` puts the stack
 // under the real modals (`ui/dialog`) and under the cookie banner, both `z-50`.
-// `--overlay-bar-h` is the height of a page's fixed command bar
-// (`ui/overlay-bar`) while one is mounted: the stack stands on it rather than
-// over the controls it carries.
+// `--dock-lift` is the height of a page's fixed command bar (`ui/overlay-bar`)
+// while one is mounted AND runs under this stack: the stack stands on it
+// rather than over the controls it carries.
 const STACK_CLASS =
-  "fixed bottom-[calc(1rem+var(--overlay-bar-h,0px))] end-4 z-40 flex flex-col-reverse items-end gap-3 supports-[padding:max(0px)]:mb-[max(0px,env(safe-area-inset-bottom))]";
+  "fixed bottom-[calc(1rem+var(--dock-lift,0px))] end-4 z-40 flex flex-col-reverse items-end gap-3 supports-[padding:max(0px)]:mb-[max(0px,env(safe-area-inset-bottom))]";
 
-function dockStack(): HTMLElement {
+export function dockStack(): HTMLElement {
   const existing = document.getElementById(STACK_ID);
   if (existing !== null) return existing;
   const node = document.createElement("div");
@@ -61,8 +61,15 @@ export interface DockProps {
   badge?: ReactNode;
   /** Controls in the panel header, before the close button. */
   actions?: ReactNode;
-  /** Open on mount. A dock that replaced an in-flow panel wants this. */
+  /** Open on mount. A dock that replaced an in-flow panel wants this. Ignored when `open` is given. */
   defaultOpen?: boolean;
+  /**
+   * Controlled open state, for an owner that opens or folds this dock from
+   * outside (one player at a time across two docks). Omit for the dock's own.
+   */
+  open?: boolean;
+  /** Every user toggle (close, restore, Escape), controlled or not. */
+  onOpenChange?: (open: boolean) => void;
   /** On the panel: its box (width, height, container queries). */
   className?: string;
   children: ReactNode;
@@ -99,10 +106,14 @@ export function Dock({
   badge,
   actions,
   defaultOpen = false,
+  open,
+  onOpenChange,
   className,
   children
 }: Readonly<DockProps>) {
-  const [isOpen, setIsOpen] = useState(defaultOpen);
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(defaultOpen);
+  const isControlled = open !== undefined;
+  const isOpen = isControlled ? open : uncontrolledOpen;
   // `useSyncExternalStore` rather than a mount effect: React reads the SERVER
   // snapshot while hydrating and only then the client one, so the stack node
   // is appended to <body> after hydration — creating it during the hydration
@@ -137,17 +148,19 @@ export function Dock({
     const onEscape = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       shouldMoveFocus.current = true;
-      setIsOpen(false);
+      if (!isControlled) setUncontrolledOpen(false);
+      onOpenChange?.(false);
     };
     node.addEventListener("keydown", onEscape);
     return () => node.removeEventListener("keydown", onEscape);
-  }, [isOpen]);
+  }, [isOpen, isControlled, onOpenChange]);
 
   if (stack === null) return null;
 
   const toggle = (next: boolean) => {
     shouldMoveFocus.current = true;
-    setIsOpen(next);
+    if (!isControlled) setUncontrolledOpen(next);
+    onOpenChange?.(next);
   };
 
   if (!isOpen) {

@@ -1884,10 +1884,7 @@ describe("phase selection", () => {
     );
   }
 
-  it.each(["none", "confirmed"] as const)("offers the final report for %s results", async (resultStatus) => {
-    // The room used to end on a "nothing left to decide" notice and send
-    // captains off to hunt for the report dialog elsewhere. The form belongs
-    // here, prefilled with the score the room itself just collected map by map.
+  async function renderFinalReport(resultStatus: "none" | "confirmed") {
     getEncounter.mockResolvedValue({
       ...encounter(),
       best_of: 1,
@@ -1896,14 +1893,30 @@ describe("phase selection", () => {
     } as unknown as Encounter);
     settledSeries("home");
     await render();
+  }
+
+  const scoreInput = (label: string) =>
+    document.body.querySelector<HTMLInputElement>(`input[aria-label="Score for ${label}"]`);
+
+  it("offers the final report, prefilled with the score the room collected", async () => {
+    // The room used to end on a "nothing left to decide" notice and send
+    // captains off to hunt for the report dialog elsewhere. The form belongs
+    // here, prefilled with the score the room itself just collected map by map.
+    await renderFinalReport("none");
 
     expect(document.body.textContent).toContain(ROOM.finalReport.title);
     // Prefilled from the encounter's own series score, not left at 0:0.
-    const score = (label: string) =>
-      document.body.querySelector<HTMLInputElement>(`input[aria-label="Score for ${label}"]`)
-        ?.value;
-    expect(score("Bright Wolves")).toBe("1");
-    expect(score("Quiet Foxes")).toBe("0");
+    expect(scoreInput("Bright Wolves")?.value).toBe("1");
+    expect(scoreInput("Quiet Foxes")?.value).toBe("0");
+    expect(document.body.textContent).toContain(en.matchReport.submit);
+  });
+
+  it("offers the final report of a series the maps confirmed, its score read-only", async () => {
+    await renderFinalReport("confirmed");
+
+    expect(document.body.textContent).toContain(ROOM.finalReport.title);
+    expect(scoreInput("Bright Wolves")).toBeNull();
+    expect(document.body.textContent).toContain(en.matchReport.confirmedReportHint);
     expect(document.body.textContent).toContain(en.matchReport.submit);
   });
 

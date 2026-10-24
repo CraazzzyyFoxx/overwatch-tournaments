@@ -18,8 +18,10 @@ card, end the encounter under the rule's own end formula without having ended
 earlier (which is what makes a 3:0 in a Bo3 impossible), and agree with the
 computed totals when every claimed game is confirmed.
 
-A participation may re-file until the encounter's result is confirmed;
-afterwards only an organizer moves it, through :meth:`set_encounter_result` or
+A participation may re-file until the encounter's result is confirmed; a
+report filed afterwards still lands -- its codes, rating, comment and custom
+fields -- but must state the confirmed score (``_reject_score_change``). Only
+an organizer moves a confirmed result, through :meth:`set_encounter_result` or
 :meth:`reopen_encounter_result`.
 """
 
@@ -362,7 +364,9 @@ class CaptainService:
         are offered and mandatory comes from the tournament's report-form
         config; values for disabled fields are dropped rather than rejected, so
         a client holding a stale config cannot fail a submit it could not have
-        known about. Commits.
+        known about. On a confirmed encounter the report is evidence only: its
+        score has to be the confirmed one and the result is not re-derived, only
+        the encounter's closeness follows the new rating. Commits.
         """
         encounter = await lock_encounter(session, encounter_id)
         if not await is_encounter_live(session, encounter):
@@ -370,16 +374,9 @@ class CaptainService:
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Stage bracket is a preview and is not active yet; wait for the organizer to activate it",
             )
-        if encounter.result_status == EncounterResultStatus.CONFIRMED:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=[
-                    ApiExc(
-                        code="result_locked",
-                        msg="This encounter's result is already confirmed; ask an organizer to reopen it",
-                    )
-                ],
-            )
+        # A confirmed result is official -- the games, an agreement or an
+        # organizer decided it. A late report still files everything else.
+        locked = encounter.result_status == EncounterResultStatus.CONFIRMED
         # A filed report parks the result in ``pending_confirmation`` and that
         # takes a version of its own, but it moves no standing: the opponent's
         # form, filled in against the version before it, is still about the same
@@ -404,7 +401,10 @@ class CaptainService:
                 detail="That participation does not play in this encounter",
             )
         require_filled_seats(encounter, seats)
-        await self._reject_impossible_report(session, encounter, seats, games_played, results)
+        if locked:
+            self._reject_score_change(encounter, seats, games_played, results)
+        else:
+            await self._reject_impossible_report(session, encounter, seats, games_played, results)
 
         form = await self.report_forms.resolve_report_form(session, encounter.tournament_id)
         map_id_by_position = await self._position_map_ids(session, encounter.id)
@@ -469,6 +469,11 @@ class CaptainService:
                 data={"games_played": games_played},
             )
 
+        if locked:
+            encounter.closeness = self._closeness(await self.report_repo.list_for_encounter(session, encounter.id))
+            await session.commit()
+            return encounter
+
         confirmed = await self._recompute_from_reports(
             session, encounter, seats, actor_user_id=reporter_user_id, actor_auth_user_id=actor_auth_user_id
         )
@@ -478,6 +483,36 @@ class CaptainService:
             await enqueue_tournament_recalculation(session, encounter.tournament_id)
         await session.commit()
         return encounter
+
+    @staticmethod
+    def _reject_score_change(
+        encounter: Encounter,
+        seats: Sequence[EncounterTeam],
+        games_played: int,
+        results: Sequence[ReportResultIn],
+    ) -> None:
+        """Refuse a late report that moves the confirmed score.
+
+        Not :meth:`_reject_impossible_report`: the standing is already decided,
+        and an organizer's (a forfeit's 1:0 in a Bo3) need not be one the
+        captains could have claimed -- checking it again would leave the
+        captains no report to file.
+        """
+        if {item.encounter_team_id: float(item.score) for item in results} != {seat.id: seat.score for seat in seats}:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=[
+                    ApiExc(
+                        code="result_locked",
+                        msg="This encounter's result is confirmed; its score can only be changed by an organizer",
+                    )
+                ],
+            )
+        if games_played > encounter.best_of:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=[ApiExc(code="series_claim_games_played", msg="More games than the card holds")],
+            )
 
     async def _reject_impossible_report(
         self,
@@ -533,15 +568,21 @@ class CaptainService:
         positions with no row yet: those are opened (planned, every live seat
         in them, like ``ensure_next_game`` does) rather than losing the code.
         Only positions of the card (``1..best_of``) are accepted; a position
-        past it is dropped, not an error.
+        past it is dropped, not an error. A confirmed card is closed: its codes
+        land on the rows it has, including the positions a series claim
+        cancelled, and never open a new one.
         """
         if not map_codes:
             return
-        by_position = {game.position: game for game in await self.games.list_games(session, encounter.id)}
+        closed = encounter.result_status == EncounterResultStatus.CONFIRMED
+        # Series order, so a re-opened position's newest row is the one kept.
+        by_position = {
+            game.position: game for game in await self.games.list_games(session, encounter.id, include_cancelled=closed)
+        }
         wanted = {position for position, _code in map_codes if 1 <= position <= encounter.best_of}
         # From 1, so the room's "next position" never skips one the codes did not name.
         for position in range(1, max(wanted, default=0) + 1):
-            if position not in by_position:
+            if position not in by_position and not closed:
                 by_position[position] = await self.games.open_game(session, encounter, position=position)
         lines = await self.games.lines_by_game(session, list(by_position.values()))
         for position, code in map_codes:
@@ -564,6 +605,12 @@ class CaptainService:
     @staticmethod
     def _claim_shape(results: Sequence[ReportResultIn]) -> tuple:
         return tuple(sorted((item.encounter_team_id, float(item.score), item.placement, item.wins) for item in results))
+
+    @staticmethod
+    def _closeness(reports: Sequence[EncounterTeamReport]) -> float | None:
+        """The reports' mean rating (1..10 stars) as the encounter's 0..1 closeness."""
+        ratings = [row.closeness for row in reports if row.closeness is not None]
+        return (sum(ratings) / len(ratings)) / 10.0 if ratings else None
 
     async def _recompute_from_reports(
         self,
@@ -603,8 +650,7 @@ class CaptainService:
 
         agreed = next(row for row in reports if row.encounter_team_id in live)
         lines = results.get(agreed.id, [])
-        ratings = [row.closeness for row in reports if row.closeness is not None]
-        encounter.closeness = (sum(ratings) / len(ratings)) / 10.0 if ratings else None
+        encounter.closeness = self._closeness(reports)
         await apply_result(
             session,
             encounter,

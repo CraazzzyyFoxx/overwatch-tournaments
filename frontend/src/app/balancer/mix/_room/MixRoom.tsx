@@ -278,7 +278,7 @@ export function MixRoom({ initialGame, lobbyIndex }: Readonly<{ initialGame: Cus
     );
 
   return (
-    <div data-mix-room className="mx-auto flex w-full min-w-0 max-w-[1440px] flex-col gap-4 pb-40 sm:pb-28">
+    <div data-mix-room className="mx-auto flex w-full min-w-0 max-w-[1440px] flex-col gap-4">
       <header className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <BackLink href={mixHref} onClick={leaveRoom}>
           {t("back")}

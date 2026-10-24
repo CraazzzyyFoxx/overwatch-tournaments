@@ -50,6 +50,7 @@ export function ResponsiveBracket({ interactive = true, ...props }: Readonly<Res
         onReport={view.onReport}
         canEdit={view.canEdit}
         canReport={view.canReport}
+        liveTeamStreams={view.liveTeamStreams}
       />
     );
   }

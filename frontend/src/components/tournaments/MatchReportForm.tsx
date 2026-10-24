@@ -123,7 +123,8 @@ function BlockHeading({
  * every map has been played and reconciled. Both render the same fields, the
  * same per-field rules and the same submit, so neither can drift.
  *
- * Reports remain editable after confirmation without changing the official result.
+ * Once the result is confirmed the score is the one on record, shown read-only:
+ * a late report still files every other field, and only an organizer moves it.
  */
 export function MatchReportForm({
   encounter,
@@ -205,26 +206,32 @@ export function MatchReportForm({
   // The encounter's score is what makes this form arrive prefilled at the end
   // of a pre-game loop: `map_report.submit_map_report` counts every reconciled
   // map into it, so the series score is already there to confirm.
+  //
+  // A confirmed result locks it: the games, an agreement or an organizer
+  // decided it, and the server refuses a late report that states another one.
+  const locked = encounter.result_status === "confirmed";
+  const reported = new Map(ownReport?.results.map((line) => [line.encounter_team_id, line.score]));
   const scores: Record<number, number> = Object.fromEntries(
     seats.map((seat) => [
       seat.id,
-      draft.scores?.[seat.id] ??
-        ownReport?.results.find((line) => line.encounter_team_id === seat.id)?.score ??
-        seat.score
+      locked ? seat.score : (draft.scores?.[seat.id] ?? reported.get(seat.id) ?? seat.score)
     ])
   );
   const confirmedGames = encounter.games.filter((game) => game.state === "confirmed").length;
   // A duel's score is its wins, so the games it played are at least that many;
   // a lobby's card plays to its end.
-  const gamesPlayed =
-    draft.gamesPlayed ??
-    ownReport?.games_played ??
-    (duel
-      ? Math.min(
-          encounter.best_of,
-          Math.max(confirmedGames, Object.values(scores).reduce((sum, value) => sum + value, 0))
-        )
-      : encounter.best_of);
+  const derivedGamesPlayed = duel
+    ? Math.min(
+        encounter.best_of,
+        Math.max(confirmedGames, Object.values(scores).reduce((sum, value) => sum + value, 0))
+      )
+    : encounter.best_of;
+  // Locked, the captain's own count stands only beside the very score on record
+  // (it knows the draws the wins do not); next to any other it would contradict it.
+  const gamesPlayed = locked
+    ? ((seats.every((seat) => reported.get(seat.id) === seat.score) ? ownReport?.games_played : null) ??
+      derivedGamesPlayed)
+    : (draft.gamesPlayed ?? ownReport?.games_played ?? derivedGamesPlayed);
   // `encounter.closeness` is a 0..1 float; a report's is 1..10 stars.
   const reportCloseness =
     ownReport?.closeness != null ? clampCloseness(ownReport.closeness) : null;
@@ -264,13 +271,16 @@ export function MatchReportForm({
   // single reason the submit button is disabled, so the two can never disagree.
   const validation = (() => {
     // The same checks, with the same codes, the server runs on a series claim.
-    const claimErrors = seriesClaimErrors({
-      preset: encounter.scoring_preset,
-      bestOf: encounter.best_of,
-      teamIds: seats.map((seat) => seat.id),
-      games: encounter.games,
-      claim: { gamesPlayed, totals: scores, wins: duel ? scores : null }
-    });
+    // A locked score is the one on record, not a claim: nothing to check.
+    const claimErrors = locked
+      ? []
+      : seriesClaimErrors({
+          preset: encounter.scoring_preset,
+          bestOf: encounter.best_of,
+          teamIds: seats.map((seat) => seat.id),
+          games: encounter.games,
+          claim: { gamesPlayed, totals: scores, wins: duel ? scores : null }
+        });
     const score = claimErrors.length > 0 ? claimErrors.map((code) => t(`matchReport.errors.${code}`)).join(" ") : null;
 
     const closenessError =
@@ -341,7 +351,7 @@ export function MatchReportForm({
         )
       }),
     onSuccess: async (result: CaptainReportSubmitResult) => {
-      if (encounter.result_status === "confirmed") {
+      if (locked) {
         notify.success(t("matchReport.savedAfterConfirmation"));
       } else if (result.result_status === "confirmed") {
         notify.success(t("matchReport.autoConfirmed"));
@@ -377,74 +387,94 @@ export function MatchReportForm({
 
   return (
     <>
-      {encounter.result_status === "confirmed" ? (
-        <p className="text-sm text-[color:var(--aqt-fg-muted)]">
-          {t("matchReport.confirmedReportHint")}
-        </p>
-      ) : null}
       <div className={cn("space-y-4", fieldsClassName)}>
-        {duel ? (
-          first &&
-          second && (
-            <EncounterScoreControls
-              idPrefix={idPrefix}
-              one={scores[first.id]}
-              two={scores[second.id]}
-              firstLabel={first.name}
-              secondLabel={second.name}
-              presetLabel={t("matchReport.quickResult")}
-              bestOf={encounter.best_of}
-              onScoreChange={(score) =>
-                setDraft((prev) => ({
-                  ...prev,
-                  scores: { ...scores, [first.id]: score.one, [second.id]: score.two }
-                }))
-              }
-            />
-          )
-        ) : (
+        {locked ? (
           <div className={cn("space-y-3", FIELD_BLOCK_CLASS)}>
-            <BlockHeading label={t("matchReport.pointsLabel")} required />
-            {seats.map((seat) => (
-              <div key={seat.id} className="flex items-center gap-3">
-                <Label
-                  htmlFor={`${idPrefix}-points-${seat.id}`}
-                  className="w-28 shrink-0 truncate text-xs font-semibold text-[color:var(--aqt-fg-muted)]"
-                >
-                  {seat.name}
-                </Label>
-                <NumberInput
-                  id={`${idPrefix}-points-${seat.id}`}
-                  min={0}
-                  value={scores[seat.id]}
-                  onValueChange={(next) =>
-                    setDraft((prev) => ({ ...prev, scores: { ...scores, [seat.id]: next ?? 0 } }))
-                  }
-                  variant="surface"
-                />
+            <Eyebrow as="p" tone="dim">
+              {duel ? t("matchEdit.matchScore") : t("matchReport.pointsLabel")}
+            </Eyebrow>
+            <dl className="space-y-1.5 text-sm">
+              {seats.map((seat) => (
+                <div key={seat.id} className="flex items-baseline justify-between gap-3">
+                  <dt className="truncate font-semibold text-[color:var(--aqt-fg-muted)]">{seat.name}</dt>
+                  <dd className="font-bold tabular-nums text-[color:var(--aqt-fg)]">{scores[seat.id]}</dd>
+                </div>
+              ))}
+              <div className="flex items-baseline justify-between gap-3 border-t border-[color:var(--aqt-border-2)] pt-1.5">
+                <dt className="font-semibold text-[color:var(--aqt-fg-muted)]">{t("matchReport.gamesPlayed")}</dt>
+                <dd className="font-bold tabular-nums text-[color:var(--aqt-fg)]">{gamesPlayed}</dd>
               </div>
-            ))}
+            </dl>
+            <p className="text-label font-medium text-[color:var(--aqt-fg-dim)]">
+              {t("matchReport.confirmedReportHint")}
+            </p>
           </div>
-        )}
+        ) : (
+          <>
+            {duel ? (
+              first &&
+              second && (
+                <EncounterScoreControls
+                  idPrefix={idPrefix}
+                  one={scores[first.id]}
+                  two={scores[second.id]}
+                  firstLabel={first.name}
+                  secondLabel={second.name}
+                  presetLabel={t("matchReport.quickResult")}
+                  bestOf={encounter.best_of}
+                  onScoreChange={(score) =>
+                    setDraft((prev) => ({
+                      ...prev,
+                      scores: { ...scores, [first.id]: score.one, [second.id]: score.two }
+                    }))
+                  }
+                />
+              )
+            ) : (
+              <div className={cn("space-y-3", FIELD_BLOCK_CLASS)}>
+                <BlockHeading label={t("matchReport.pointsLabel")} required />
+                {seats.map((seat) => (
+                  <div key={seat.id} className="flex items-center gap-3">
+                    <Label
+                      htmlFor={`${idPrefix}-points-${seat.id}`}
+                      className="w-28 shrink-0 truncate text-xs font-semibold text-[color:var(--aqt-fg-muted)]"
+                    >
+                      {seat.name}
+                    </Label>
+                    <NumberInput
+                      id={`${idPrefix}-points-${seat.id}`}
+                      min={0}
+                      value={scores[seat.id]}
+                      onValueChange={(next) =>
+                        setDraft((prev) => ({ ...prev, scores: { ...scores, [seat.id]: next ?? 0 } }))
+                      }
+                      variant="surface"
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
 
-        <div className={cn("space-y-1.5", FIELD_BLOCK_CLASS)}>
-          <BlockHeading
-            htmlFor={gamesPlayedId}
-            label={t("matchReport.gamesPlayed")}
-            required
-            hint={t("matchReport.gamesPlayedHint")}
-          />
-          <NumberInput
-            id={gamesPlayedId}
-            integer
-            min={0}
-            max={encounter.best_of}
-            value={gamesPlayed}
-            onValueChange={(next) => setDraft((prev) => ({ ...prev, gamesPlayed: next ?? 0 }))}
-            aria-invalid={validation.score != null}
-            variant="surface"
-          />
-        </div>
+            <div className={cn("space-y-1.5", FIELD_BLOCK_CLASS)}>
+              <BlockHeading
+                htmlFor={gamesPlayedId}
+                label={t("matchReport.gamesPlayed")}
+                required
+                hint={t("matchReport.gamesPlayedHint")}
+              />
+              <NumberInput
+                id={gamesPlayedId}
+                integer
+                min={0}
+                max={encounter.best_of}
+                value={gamesPlayed}
+                onValueChange={(next) => setDraft((prev) => ({ ...prev, gamesPlayed: next ?? 0 }))}
+                aria-invalid={validation.score != null}
+                variant="surface"
+              />
+            </div>
+          </>
+        )}
 
         {closenessConfig.enabled && (
           <div className={cn("space-y-3", FIELD_BLOCK_CLASS)}>

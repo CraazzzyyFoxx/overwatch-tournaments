@@ -187,7 +187,9 @@ export function Footer({ tenant }: Readonly<{ tenant: Workspace | null }>) {
         )}
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-x-5 gap-y-2 border-t border-[color:var(--aqt-border)] pb-7 pt-4 text-caption text-[color:var(--aqt-fg-dim)]">
+      {/* The bottom padding grows by a fixed command bar's height (`ui/overlay-bar`)
+          while one is mounted, so the page's end scrolls clear of it. */}
+      <div className="flex flex-wrap items-center justify-between gap-x-5 gap-y-2 border-t border-[color:var(--aqt-border)] pb-[calc(1.75rem+var(--overlay-bar-h,0px))] pt-4 text-caption text-[color:var(--aqt-fg-dim)]">
         {tenant ? (
           <span className="inline-flex items-center gap-2">
             {t("common.footer.poweredBy")}

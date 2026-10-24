@@ -172,9 +172,10 @@ BO2 accepts a final 1:1 draw as well as 2:0 or 0:2. Even-length series show thei
 format on the scoreboard rather than a first-to-win target; odd-length series retain that
 target. Without a series summary, reaching the map limit also closes the pre-game loop.
 
-Captains can submit or update the series report after an organizer confirms the result,
-from the bracket, encounter page, or pre-game room. The form explains that late reports
-are saved without changing the official score; confirmation no longer hides the form.
+Captains can submit or update the series report after the result is confirmed (by the maps,
+the captains or an organizer), from the bracket, encounter page, or pre-game room. The score
+and games played are then read-only, the official ones; codes, rating, comment and custom
+fields stay editable, and the server refuses a late report that states another score.
 
 ## Pre-game hero history and match log folders
 

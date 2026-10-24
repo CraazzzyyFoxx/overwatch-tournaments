@@ -51,8 +51,7 @@ const UsersClient = ({ scope, initial }: Readonly<{ scope: StatsScope; initial: 
   }
 
   return (
-    // Bottom padding leaves room for the fixed compare bar.
-    <div className="space-y-4 pb-24">
+    <div className="space-y-4">
       <UsersIndexHero stats={data.statsQuery.data} />
       <UsersIndexFilters
         controls={controls}

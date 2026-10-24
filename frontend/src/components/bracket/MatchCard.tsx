@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, type HTMLAttributes, type ReactNode } from "react";
+import { memo, useContext, type HTMLAttributes, type ReactNode } from "react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { ListChecks, Search } from "lucide-react";
 import { useTranslations } from "next-intl";
@@ -14,6 +14,8 @@ import { Button } from "@/components/ui/button";
 import { Eyebrow } from "@/components/ui/eyebrow";
 import { StatusDot } from "@/components/ui/status-dot";
 import { withReturnTo } from "@/lib/auth/return-to";
+import { StreamWatchContext } from "@/components/stream/stream-watch";
+import { streamEntryKey } from "@/lib/social/stream-platform";
 import { cn } from "@/lib/utils";
 import type { StreamEntry } from "@/types/stream.types";
 
@@ -84,6 +86,7 @@ function SlotRow({
   rearranging
 }: Readonly<SlotRowProps>) {
   const t = useTranslations();
+  const watcher = useContext(StreamWatchContext);
   const { data, encounter } = node;
   const seat = slot === 1 ? data.seats.one : data.seats.two;
   const { teamId, name, score, isLatest } = seat;
@@ -113,12 +116,27 @@ function SlotRow({
   // the channel fallback exists because `player` is nullable on the wire (an
   // official broadcast has none).
   const streamer = liveStream === undefined ? null : (liveStream.player?.name ?? liveStream.channel);
+  // Opens the shell's POV dock when there is one. In rearrange mode the row is
+  // a drag handle, and outside the tournament shell there is no dock: there
+  // the marker stays an indication.
+  const canWatch = watcher !== null && !rearranging;
   const liveLabel =
     liveStream === undefined || streamer === null
       ? null
       : liveStream.viewer_count == null
-        ? t("bracket.liveTeamStream", { player: streamer })
-        : t("bracket.liveTeamStreamWithViewers", { player: streamer, count: liveStream.viewer_count });
+        ? t(canWatch ? "bracket.watchTeamStream" : "bracket.liveTeamStream", { player: streamer })
+        : t(canWatch ? "bracket.watchTeamStreamWithViewers" : "bracket.liveTeamStreamWithViewers", {
+            player: streamer,
+            count: liveStream.viewer_count
+          });
+  // The site's one liveness language, in its smallest form: the pill's chrome
+  // does not fit a 30px row, the pulsing dot does.
+  const liveDot = (
+    <StatusDot
+      pulse
+      className="size-[7px] text-[color:var(--aqt-status-live)] shadow-[0_0_0_3px_color-mix(in_srgb,var(--aqt-status-live)_18%,transparent)]"
+    />
+  );
 
   const tone =
     data.winner === slot
@@ -176,22 +194,35 @@ function SlotRow({
           </span>
         ) : null}
         {liveStream !== undefined && liveLabel !== null ? (
-          <span
-            // Indication, NOT navigation: the Streams tab lists every channel as
-            // a full-sized link, so this is a labelled image with no href.
-            role="img"
-            aria-label={liveLabel}
-            title={liveLabel}
-            data-live-team-stream={liveStream.channel}
-            className="inline-flex shrink-0 items-center"
-          >
-            {/* The site's one liveness language, in its smallest form: the pill's
-                chrome does not fit a 30px row, the pulsing dot does. */}
-            <StatusDot
-              pulse
-              className="size-[7px] text-[color:var(--aqt-status-live)] shadow-[0_0_0_3px_color-mix(in_srgb,var(--aqt-status-live)_18%,transparent)]"
-            />
-          </span>
+          canWatch ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              aria-label={liveLabel}
+              title={liveLabel}
+              // Which side of the match the dock is showing.
+              aria-pressed={watcher.watchingKey === streamEntryKey(liveStream)}
+              data-live-team-stream={liveStream.channel}
+              onClick={(event) => watcher.watch(liveStream, event.currentTarget)}
+              // 20px box, 24px hit area through the pseudo-element (WCAG 2.5.8)
+              // without growing the fixed-height row. The pressed outline is a
+              // shadow so it composes with the primitive's focus ring.
+              className="relative shrink-0 rounded-full before:absolute before:-inset-0.5 before:content-[''] hover:bg-[color:color-mix(in_srgb,var(--aqt-status-live)_16%,transparent)] aria-pressed:bg-[color:color-mix(in_srgb,var(--aqt-status-live)_16%,transparent)] aria-pressed:shadow-[inset_0_0_0_1.5px_var(--aqt-status-live)]"
+            >
+              {liveDot}
+            </Button>
+          ) : (
+            <span
+              role="img"
+              aria-label={liveLabel}
+              title={liveLabel}
+              data-live-team-stream={liveStream.channel}
+              className="inline-flex shrink-0 items-center"
+            >
+              {liveDot}
+            </span>
+          )
         ) : null}
       </span>
       <span

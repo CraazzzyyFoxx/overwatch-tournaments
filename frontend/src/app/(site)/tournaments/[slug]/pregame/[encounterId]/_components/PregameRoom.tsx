@@ -462,9 +462,7 @@ function PregameRoomBody({ encounterId, seriesReport = true }: Readonly<PregameR
     : ((encounter.matches ?? []).find((match) => match.map_index === previousRound)?.id ?? null);
 
   return (
-    // Bottom padding clears the fixed command bar. On mobile its tallest shape is
-    // a per-player blind draft (timer, slots, Lock, issue line): ~210px.
-    <div className="flex flex-col gap-4 pb-56 sm:pb-28">
+    <div className="flex flex-col gap-4">
       <PickBanPanel
         key={activeKind}
         kind={activeKind}

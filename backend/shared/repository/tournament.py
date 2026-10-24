@@ -51,6 +51,26 @@ class TournamentRepository(BaseRepository[models.Tournament]):
             sa.select(models.Tournament.workspace_id).where(models.Tournament.id == tournament_id)
         )
 
+    async def lock_for_computation(
+        self, session: AsyncSession, tournament_id: int, *, skip_locked: bool = False
+    ) -> int | None:
+        """The bracket/standings workers' lock on the tournament row, held to commit.
+
+        ``FOR NO KEY UPDATE``, not ``FOR UPDATE``: it still excludes every writer
+        of the row (the other worker, an admin ``UPDATE``), but not the
+        ``FOR KEY SHARE`` a foreign-key check takes for any insert that references
+        the tournament. An achievement run inserts such rows and holds them for its
+        whole 30-50 s transaction; under ``FOR UPDATE`` that held every standings
+        job, and with it the next Swiss round, for as long.
+
+        ``None`` with ``skip_locked`` when another writer holds the row (or it is gone).
+        """
+        return await session.scalar(
+            sa.select(models.Tournament.id)
+            .where(models.Tournament.id == tournament_id)
+            .with_for_update(skip_locked=skip_locked, key_share=True)
+        )
+
     async def get_owner(self, session: AsyncSession, tournament_id: int) -> tuple[int | None, str] | None:
         """``(workspace_id, discipline)`` of the tournament, or ``None`` when it does not exist.
 

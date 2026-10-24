@@ -9,6 +9,7 @@ import type { StageType } from "@/types/tournament.types";
 import {
   bracketRoundShape,
   buildRoundGroups,
+  computeLatestMatchByTeam,
   computeMatchNumbers,
   computeSlotHints,
   getDoubleEliminationFinalRounds,
@@ -361,19 +362,7 @@ export function buildLayout(
     isDE,
     hasBracketConnections
   );
-  // Team id → the encounter with its highest match number. Match numbers follow
-  // play order across UB, LB and the finals, so "highest" is "newest".
-  const latestMatchByTeam = new Map<number, number>();
-  for (const match of encounters) {
-    for (const seat of match.teams) {
-      const teamId = seat.team_id ?? 0;
-      if (teamId <= 0) continue;
-      const held = latestMatchByTeam.get(teamId);
-      if (held === undefined || (matchNumbers.get(held) ?? 0) < (matchNumbers.get(match.id) ?? 0)) {
-        latestMatchByTeam.set(teamId, match.id);
-      }
-    }
-  }
+  const latestMatchByTeam = computeLatestMatchByTeam(encounters, matchNumbers);
   const columnX = (index: number) => PADDING_X + index * (CARD_WIDTH + ROUND_GAP_X);
 
   const upperBaseMatches = getRoundSectionMatchCapacity(upperRounds);
