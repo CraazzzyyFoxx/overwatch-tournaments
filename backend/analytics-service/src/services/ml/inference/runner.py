@@ -42,6 +42,12 @@ async def _algorithm_id(session: AsyncSession, name: str) -> int | None:
     return await session.scalar(sa.select(models.AnalyticsAlgorithm.id).where(models.AnalyticsAlgorithm.name == name))
 
 
+def _count(value: typing.Any) -> float:
+    """A row's evidence figure, 0 when the frame has none: a flex player without a rated role reads NaN, and NaN is
+    truthy, so ``value or 0`` would pass it through."""
+    return float(value) if pd.notna(value) else 0.0
+
+
 def _shap_by_player(
     per_player: pd.DataFrame,
     feature_frame: pd.DataFrame,
@@ -279,10 +285,10 @@ async def run_shift_for_tournament(
             "player_id": int(row["player_id"]),
             "shift": float(row["shift_v2"]) if pd.notna(row["shift_v2"]) else 0.0,
             "shift_sd": float(row["shift_sd"]) if pd.notna(row["shift_sd"]) else None,
-            "effective_evidence": float(row.get("match_count", 0) or 0),
-            "sample_tournaments": int(row.get("tournaments_played", 0) or 0),
-            "sample_matches": int(row.get("match_count", 0) or 0),
-            "log_coverage": float(row.get("log_coverage", 0) or 0),
+            "effective_evidence": _count(row.get("match_count")),
+            "sample_tournaments": int(_count(row.get("tournaments_played"))),
+            "sample_matches": int(_count(row.get("match_count"))),
+            "log_coverage": _count(row.get("log_coverage")),
         }
         for _, row in feature_frame.iterrows()
         if pd.notna(row.get("player_id"))

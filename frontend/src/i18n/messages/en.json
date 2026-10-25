@@ -5340,7 +5340,20 @@
       "wld": "Wins–losses–draws",
       "openMatch": "Open match",
       "recordHolder": "Holder",
-      "pickHero": "Hero"
+      "pickHero": "Hero",
+      "radar": {
+        "hero_damage_dealt": "Damage",
+        "healing_dealt": "Healing",
+        "damage_blocked": "Blocked",
+        "solo_kills": "Solo kills",
+        "eliminations": "Eliminations",
+        "final_blows": "Final blows",
+        "deaths": "Deaths",
+        "ultimates_earned": "Ultimates"
+      },
+      "radarSummary": "{hero} against the hero average: {axes}",
+      "you": "You",
+      "average": "Average"
     },
     "maps": {
       "overallWinrate": "Overall winrate",

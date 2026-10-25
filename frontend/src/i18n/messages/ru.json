@@ -5340,7 +5340,20 @@
       "wld": "Победы–поражения–ничьи",
       "openMatch": "Открыть матч",
       "recordHolder": "Рекордсмен",
-      "pickHero": "Герой"
+      "pickHero": "Герой",
+      "radar": {
+        "hero_damage_dealt": "Урон",
+        "healing_dealt": "Лечение",
+        "damage_blocked": "Блок",
+        "solo_kills": "Соло-убийства",
+        "eliminations": "Убийства",
+        "final_blows": "Добивания",
+        "deaths": "Смерти",
+        "ultimates_earned": "Ульты"
+      },
+      "radarSummary": "{hero} против среднего на герое: {axes}",
+      "you": "Вы",
+      "average": "Среднее"
     },
     "maps": {
       "overallWinrate": "Общий винрейт",

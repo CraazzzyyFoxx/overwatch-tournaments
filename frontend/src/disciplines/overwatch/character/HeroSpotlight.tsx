@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { useTranslations } from "next-intl";
 
 import CatalogEntityImage from "@/components/catalog/CatalogEntityImage";
@@ -8,27 +9,37 @@ import { CardSurface, ProfileStat } from "@/components/profile/atoms";
 import { characterClass } from "@/lib/catalog/attrs";
 import { LOW_SAMPLE_GAMES, winrateColor } from "@/lib/colors";
 import { useFormatter } from "@/lib/datetime/client";
+import { cn } from "@/lib/utils";
 import { formatSeconds } from "@/lib/format";
 import type { CharacterWithUserStats } from "@/types/user.types";
 import type { DisciplineMetadata } from "@/types/discipline.types";
 
 import { LogStatsName } from "../stat-names";
 import { useHeroClass } from "./classes";
+import HeroRadar from "./HeroRadar";
+import type { RadarAxis } from "./hero-stats";
 import { computeDelta, deltaColor, formatDelta, formatStatValue, heroWinrate } from "./utils";
 
 /**
- * The selected hero's band: who it is, then the outcome of playing it — winrate, games, time and KDA. The per-10
- * figures live in the comparison below it, said once. Comparisons hide below `LOW_SAMPLE_GAMES`.
+ * The selected hero's band: who it is, with the tab's tournament filter in the top right corner; the outcome of
+ * playing it — winrate, games, time and KDA; and its radar against the average under the filter. The per-10 figures
+ * live in the comparison below it. Comparisons, the radar included, hide below `LOW_SAMPLE_GAMES`.
  */
 const HeroSpotlight = ({
   hero,
   playtime,
   share,
+  radar,
+  filterSlot,
   metadata
 }: {
   hero: CharacterWithUserStats;
   playtime: number;
   share: number;
+  /** `null` without enough comparisons to draw a shape. */
+  radar: RadarAxis[] | null;
+  /** The tournament filter: it scopes the whole tab, this band's own figures included. */
+  filterSlot?: ReactNode;
   metadata: DisciplineMetadata;
 }) => {
   const t = useTranslations();
@@ -44,7 +55,9 @@ const HeroSpotlight = ({
 
   return (
     <CardSurface>
-      <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between lg:gap-10">
+      {/* One grid, so the filter keeps one place in the DOM: under the name on a phone, in the band's top right corner
+          from sm, and above the radar from lg. */}
+      <div className="grid gap-x-8 gap-y-4 sm:grid-cols-[minmax(0,1fr)_auto]">
         <div className="flex min-w-0 items-center gap-4">
           <CatalogEntityImage entity={hero.character} size={56} rounded="lg" decorative />
           <div className="flex min-w-0 flex-col gap-1">
@@ -59,8 +72,15 @@ const HeroSpotlight = ({
             ) : null}
           </div>
         </div>
+        {filterSlot ? <div className="sm:self-center sm:justify-self-end">{filterSlot}</div> : null}
 
-        <div className="grid grid-cols-2 gap-x-8 gap-y-4 sm:grid-cols-4 lg:gap-x-10">
+        {/* Beside the radar the figures sit two by two, so they hold its height instead of one thin row. */}
+        <div
+          className={cn(
+            "grid grid-cols-2 gap-x-8 gap-y-4 sm:col-span-2 sm:grid-cols-4",
+            radar && "lg:col-span-1 lg:max-w-xl lg:grid-cols-2 lg:self-center"
+          )}
+        >
           <ProfileStat
             size="md"
             label={t("users.heroes.quick.winrate")}
@@ -98,6 +118,12 @@ const HeroSpotlight = ({
             )}
           </ProfileStat>
         </div>
+
+        {radar ? (
+          <div className="justify-self-center sm:col-span-2 lg:col-span-1 lg:justify-self-end">
+            <HeroRadar heroName={hero.character.name} axes={radar} />
+          </div>
+        ) : null}
       </div>
     </CardSurface>
   );
