@@ -140,7 +140,10 @@ class StatisticsQueries(DisciplineQueries):
             .join(models.Tournament, models.Tournament.id == models.Team.tournament_id)
             .where(*self._public_tournaments(workspace_id))
             .group_by(models.Team.id)
-            .having(sa.func.count(models.Player.rank) == sa.func.count(), sa.func.min(models.Player.rank) > 0)
+            # Every rank set and positive, as ONE boolean aggregate: the planner guesses 50% of groups pass it but
+            # 0.2% pass ``count(rank) = count(*) AND min(rank) > 0``, and at ~20 estimated rows (thousands real) the
+            # biggest-upset self-join of this CTE costed a quadratic nested loop as cheap as a hash join (timeout).
+            .having(sa.func.bool_and(sa.func.coalesce(models.Player.rank, 0) > 0))
             .cte("rated_teams")
         )
 
