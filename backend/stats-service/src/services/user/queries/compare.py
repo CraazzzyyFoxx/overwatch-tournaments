@@ -737,6 +737,10 @@ class UserCompareQueries(DisciplineQueries):
         # roster rows — and therefore which stat rows — belong to the baseline.
         has_roster_filter = role is not None or div_min is not None or div_max is not None or workspace_id is not None
         reduction_order = (self._facts.c.match_id, self._facts.c.workspace_member_id, self._facts.c.entity_id)
+        # Explicit ids also go straight onto the facts, not only through the ``candidates`` join: the constant reaches
+        # the member scan inside ``player_facts``, so a one-player compare reads that player's facts instead of
+        # joining every player's and only then meeting ``candidates``.
+        player_scope = [self._facts.c.player_id.in_(user_ids)] if user_ids is not None else []
 
         playtime_query = (
             sa.select(
@@ -758,6 +762,7 @@ class UserCompareQueries(DisciplineQueries):
                 self._facts.c.segment == 0,
                 self._facts.c.stat_code == enums.LogStatsName.HeroTimePlayed,
                 self._facts.c.entity_id.isnot(None),
+                *player_scope,
             )
         )
         if has_roster_filter:
@@ -801,6 +806,7 @@ class UserCompareQueries(DisciplineQueries):
                     hero_id=hero_id,
                 ),
                 self._facts.c.stat_code.in_(stats),
+                *player_scope,
                 sa.exists(
                     sa.select(1)
                     .select_from(eligible_hero_time)
