@@ -3487,10 +3487,10 @@ Ref: encounter.game_team.encounter_id > encounter.game.encounter_id
 Ref: encounter.game_team.encounter_team_id > encounter.team.id
 Ref: encounter.pick_ban_entry.session_id > encounter.pick_ban_session.id [delete: cascade]
 Ref: encounter.pick_ban_entry.encounter_id > encounter.pick_ban_session.encounter_id [delete: cascade]
-Ref: encounter.pick_ban_entry.encounter_id > encounter.team.encounter_id [delete: set null (protected_by_team_id)]
-Ref: encounter.pick_ban_entry.encounter_id > encounter.team.encounter_id [delete: set null (picked_by_team_id)]
-Ref: encounter.pick_ban_entry.picked_by_team_id > encounter.team.id [delete: set null (picked_by_team_id)]
-Ref: encounter.pick_ban_entry.protected_by_team_id > encounter.team.id [delete: set null (protected_by_team_id)]
+Ref: encounter.pick_ban_entry.encounter_id > encounter.team.encounter_id
+Ref: encounter.pick_ban_entry.encounter_id > encounter.team.encounter_id
+Ref: encounter.pick_ban_entry.picked_by_team_id > encounter.team.id
+Ref: encounter.pick_ban_entry.protected_by_team_id > encounter.team.id
 Ref: encounter.pick_ban_session.encounter_id > encounter.encounter.id [delete: cascade]
 Ref: encounter.pick_ban_session.encounter_id > encounter.team.encounter_id [delete: set null (undo_requested_by_team_id)]
 Ref: encounter.pick_ban_session.encounter_id > encounter.team.encounter_id [delete: set null (pending_chooser_team_id)]

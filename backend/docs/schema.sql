@@ -1206,8 +1206,8 @@ CREATE TABLE encounter.pick_ban_entry (
 	carried_from_round INTEGER,
 	PRIMARY KEY (id),
 	CONSTRAINT fk_pick_ban_entry_session FOREIGN KEY(session_id, encounter_id) REFERENCES encounter.pick_ban_session (id, encounter_id) ON DELETE CASCADE,
-	CONSTRAINT fk_pick_ban_entry_picked_by FOREIGN KEY(picked_by_team_id, encounter_id) REFERENCES encounter.team (id, encounter_id) ON DELETE SET NULL (picked_by_team_id),
-	CONSTRAINT fk_pick_ban_entry_protected_by FOREIGN KEY(protected_by_team_id, encounter_id) REFERENCES encounter.team (id, encounter_id) ON DELETE SET NULL (protected_by_team_id),
+	CONSTRAINT fk_pick_ban_entry_picked_by FOREIGN KEY(picked_by_team_id, encounter_id) REFERENCES encounter.team (id, encounter_id) DEFERRABLE INITIALLY DEFERRED,
+	CONSTRAINT fk_pick_ban_entry_protected_by FOREIGN KEY(protected_by_team_id, encounter_id) REFERENCES encounter.team (id, encounter_id) DEFERRABLE INITIALLY DEFERRED,
 	CONSTRAINT ck_pick_ban_entry_picked_by CHECK ((picked_by_kind = 'team') = (picked_by_team_id IS NOT NULL)),
 	CONSTRAINT ck_pick_ban_entry_protected_by CHECK ((protected_by_kind = 'team') = (protected_by_team_id IS NOT NULL))
 );

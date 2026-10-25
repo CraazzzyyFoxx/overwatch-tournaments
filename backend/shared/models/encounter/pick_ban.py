@@ -191,17 +191,23 @@ class PickBanEntry(db.TimeStampIntegerMixin):
             ondelete="CASCADE",
             name="fk_pick_ban_entry_session",
         ),
+        # Deferred, not ``SET NULL``: ``ck_pick_ban_entry_*_by`` cannot hold a
+        # ``team`` actor without its participation, and an encounter's delete
+        # reaches its participations and its rooms in whichever order Postgres
+        # fires their cascades -- the entries are gone by commit either way.
         ForeignKeyConstraint(
             ["picked_by_team_id", "encounter_id"],
             ["encounter.team.id", "encounter.team.encounter_id"],
-            ondelete="SET NULL (picked_by_team_id)",
             name="fk_pick_ban_entry_picked_by",
+            deferrable=True,
+            initially="DEFERRED",
         ),
         ForeignKeyConstraint(
             ["protected_by_team_id", "encounter_id"],
             ["encounter.team.id", "encounter.team.encounter_id"],
-            ondelete="SET NULL (protected_by_team_id)",
             name="fk_pick_ban_entry_protected_by",
+            deferrable=True,
+            initially="DEFERRED",
         ),
         ForeignKeyConstraint(
             ["picked_for_member_id"],
