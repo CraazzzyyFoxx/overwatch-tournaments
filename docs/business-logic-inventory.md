@@ -18,7 +18,7 @@ One PostgreSQL database, one SQLAlchemy metadata (`backend/shared`). Domain boun
 | `stats-svc` | Match logs, match import by external id, impact/MVP, achievements, native ranks (OverFast, Riot API, deadlock-api); public statistics, `/users/*` player statistics and achievement reads |
 | `analytics-svc` | OpenSkill / linear / ML shifts |
 | `app-svc` | Catalogs, player identity (directory, search, merge), workspaces, notifications, assets |
-| `stream-svc` | Twitch live status (Redis only, no Postgres schema) |
+| `stream-svc` | Twitch live status (Redis), participants' POV broadcasts and their VOD ids (`stream` schema), VOD match timestamps |
 | `discord-svc` | Log ingest, subscription resync |
 | Gateway | JWT, topic ACL — not domain |
 

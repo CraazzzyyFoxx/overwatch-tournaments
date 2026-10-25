@@ -350,3 +350,68 @@ class TransportTests(IsolatedAsyncioTestCase):
 
         with self.assertRaises(helix.HelixUnavailable):
             await client.get_live_streams(logins=["alpha"], token="tok")
+
+
+class VideosTests(IsolatedAsyncioTestCase):
+    """``GET /videos``: the VOD sync's two calls."""
+
+    async def test_archive_lookup_is_one_request_per_broadcaster(self) -> None:
+        recorder = _Recorder(
+            _ok([{"id": "900", "stream_id": "41", "user_id": "11"}, {"id": "901", "stream_id": None}]),
+            _ok([]),
+        )
+        client = _client(_FakeRedis(), request=recorder)
+
+        result = await client.get_archive_videos(user_ids=["11", "12"], token="tok")
+
+        self.assertEqual(
+            [_query(call) for call in recorder.gets],
+            [
+                "user_id=11&type=archive&first=20",
+                "user_id=12&type=archive&first=20",
+            ],
+        )
+        self.assertTrue(all(call["url"] == f"{HELIX_URL}/videos" for call in recorder.gets))
+        self.assertEqual(result.polled, frozenset({"11", "12"}))
+        self.assertEqual(result.videos, [helix.HelixVideo("900", "41", "11"), helix.HelixVideo("901", None, None)])
+
+    async def test_ids_repeat_in_batches_of_a_hundred(self) -> None:
+        ids = [str(i) for i in range(150)]
+        recorder = _Recorder(_ok([{"id": "0"}]), _ok([]))
+        client = _client(_FakeRedis(), request=recorder)
+
+        result = await client.get_videos(ids=ids, token="tok")
+
+        first = _query(recorder.gets[0])
+        self.assertTrue(first.startswith("id=0&id=1&"))
+        self.assertNotIn("%2C", first)
+        self.assertEqual([len(call["params"]) for call in recorder.gets], [100, 50])
+        self.assertEqual(result.polled, frozenset(ids))
+        self.assertEqual([video.id for video in result.videos], ["0"])
+
+    async def test_404_means_none_of_the_ids_exist(self) -> None:
+        recorder = _Recorder(httpx.Response(404, json={"error": "Not Found"}, headers={"Ratelimit-Remaining": "700"}))
+        client = _client(_FakeRedis(), request=recorder)
+
+        result = await client.get_videos(ids=["1", "2"], token="tok")
+
+        self.assertEqual(result.videos, [])
+        self.assertEqual(result.polled, frozenset({"1", "2"}))
+
+    async def test_the_floor_gates_the_archive_loop_too(self) -> None:
+        recorder = _Recorder(_ok([], remaining=5))
+        client = _client(_FakeRedis(), request=recorder)
+
+        result = await client.get_archive_videos(user_ids=["11", "12"], token="tok", ratelimit_floor=100)
+
+        self.assertTrue(result.truncated)
+        self.assertEqual(result.polled, frozenset({"11"}))
+
+    async def test_the_live_snapshot_carries_the_stream_id_but_never_stores_it(self) -> None:
+        recorder = _Recorder(_ok([_stream_row("caster", id="41")]))
+        client = _client(_FakeRedis(), request=recorder)
+
+        (snapshot,) = (await client.get_live_streams(logins=["caster"], token="tok")).snapshots
+
+        self.assertEqual(snapshot.stream_id, "41")
+        self.assertNotIn("stream_id", snapshot.as_dict())

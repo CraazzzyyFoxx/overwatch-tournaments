@@ -24,5 +24,6 @@ from .registration import *
 from .roster import *
 from .subscriptions import *
 from .stats import *
+from .stream import *
 from .tenancy import *
 from .tournament import *

@@ -15,6 +15,7 @@ import {
   areStreamsVisible,
   getTournamentStatusMeta,
   isTournamentStatusEnded,
+  mayHavePastBroadcasts,
 } from "@/lib/tournament/status";
 import { reachedAtLeast } from "@/lib/tournament/lifecycle";
 import { formatDateRange } from "@/lib/datetime";
@@ -22,13 +23,13 @@ import { useFormatter } from "@/lib/datetime/client";
 import { useInvalidation } from "@/hooks/useInvalidation";
 import { useTournamentQuery } from "@/hooks/useTournamentClientData";
 import { useEntityWorkspace } from "@/hooks/useEntityWorkspace";
-import { useTournamentStreamsQuery } from "../_hooks/useTournamentStreams";
+import { useTournamentStreamsQuery, useTournamentVodsQuery } from "../_hooks/useTournamentStreams";
 import { useTournamentHasMapPool } from "../_hooks/useTournamentMapPool";
 import type { Tournament } from "@/types/tournament.types";
 
 import { useTranslations } from "next-intl";
 import TournamentSectionNav from "./TournamentSectionNav";
-import { collapsedRailTitle, isTournamentOverviewPath } from "./tournament-section-nav";
+import { collapsedRailTitle, hasStreamSection, isTournamentOverviewPath } from "./tournament-section-nav";
 import { TournamentShellSkeleton } from "./TournamentSkeletons";
 import TournamentShellError from "../TournamentShellError";
 import { PageHero, HeroCoord } from "@/components/site/PageHero";
@@ -134,6 +135,12 @@ export default function TournamentClientLayout({
   const streamsTournamentId =
     tournament && areStreamsVisible(tournament.status) ? tournamentId : undefined;
   const streams = useTournamentStreamsQuery(streamsTournamentId).data;
+  // The past broadcasts are the Stream tab's other reason to exist, and the one
+  // that outlives the event. Read from check-in on, when the poller starts
+  // recording; no realtime resource carries them (see the query's staleTime).
+  const vods = useTournamentVodsQuery(
+    tournament && mayHavePastBroadcasts(tournament.status) ? tournamentId : undefined
+  ).data;
 
   const hasMapPool = useTournamentHasMapPool(tournamentId);
 
@@ -361,7 +368,7 @@ export default function TournamentClientLayout({
         status={tournament.status}
         stages={stages}
         hasTeams={teamsCount > 0}
-        hasStreams={(streams?.official?.length ?? 0) > 0 || (streams?.participants?.length ?? 0) > 0}
+        hasStreams={hasStreamSection(streams, vods)}
         hasRules={Boolean(tournament.rules?.trim())}
         hasMapPool={hasMapPool}
         collapsed={heroScrolledPast}

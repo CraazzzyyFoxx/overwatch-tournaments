@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 
+import type { StreamEntry, StreamVod } from "@/types/stream.types";
 import type { StageSummary, TournamentStatus } from "@/types/tournament.types";
 
 import {
   buildTournamentSectionNav,
   collapsedRailTitle,
   getTournamentRailScrollState,
+  hasStreamSection,
   isTournamentOverviewPath,
   observeTournamentRail,
   scrollTournamentRail,
@@ -225,6 +227,19 @@ describe("buildTournamentSectionNav", () => {
       href: `/tournaments/${tournamentId}/stream`
     });
     expect(model("live").some((item) => item.id === "stream")).toBe(false);
+  });
+
+  // After the event the shell no longer makes the live read at all, so a past
+  // broadcast is the one thing that keeps the tab on a finished tournament.
+  it("counts an official link, a live participant or a past broadcast as something to watch", () => {
+    const entry = {} as StreamEntry;
+    const vod = {} as StreamVod;
+
+    expect(hasStreamSection(undefined, undefined)).toBe(false);
+    expect(hasStreamSection({ official: [], participants: [] }, { vods: [] })).toBe(false);
+    expect(hasStreamSection({ official: [entry], participants: [] }, undefined)).toBe(true);
+    expect(hasStreamSection({ official: [], participants: [entry] }, { vods: [] })).toBe(true);
+    expect(hasStreamSection(undefined, { vods: [vod] })).toBe(true);
   });
 
   it("shows Rules only when the organizer published a document", () => {

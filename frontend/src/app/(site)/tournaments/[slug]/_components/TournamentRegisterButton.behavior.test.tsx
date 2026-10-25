@@ -72,6 +72,7 @@ function makeTournament(status: TournamentStatus): Tournament {
     discord_broadcasts_enabled: false,
     discord_dms_enabled: false,
     logs_official: false,
+    pov_stream_delay_s: 0,
     // Registration closed long ago, whatever the status says.
     phase_schedule: [
       {

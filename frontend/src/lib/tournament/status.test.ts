@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { areStreamsVisible, isRegistrationOpen } from "./status";
+import { areStreamsVisible, isRegistrationOpen, mayHavePastBroadcasts } from "./status";
 import type { Tournament, TournamentStatus } from "@/types/tournament.types";
 
 /**
@@ -29,6 +29,30 @@ describe("areStreamsVisible", () => {
   for (const [status, expected] of Object.entries(EXPECTED) as [TournamentStatus, boolean][]) {
     it(`${expected ? "shows" : "hides"} streams in ${status}`, () => {
       expect(areStreamsVisible(status)).toBe(expected);
+    });
+  }
+});
+
+/**
+ * The past-broadcast read, over the whole vocabulary like the live gate above.
+ * The poller records from check-in on, and a finished event keeps its VODs —
+ * the one place this gate must disagree with `areStreamsVisible`.
+ */
+const PAST_BROADCASTS: Record<TournamentStatus, boolean> = {
+  announcement: false,
+  registration: false,
+  check_in: true,
+  draft: true,
+  live: true,
+  playoffs: true,
+  completed: true,
+  archived: true
+};
+
+describe("mayHavePastBroadcasts", () => {
+  for (const [status, expected] of Object.entries(PAST_BROADCASTS) as [TournamentStatus, boolean][]) {
+    it(`${expected ? "reads" : "skips"} past broadcasts in ${status}`, () => {
+      expect(mayHavePastBroadcasts(status)).toBe(expected);
     });
   }
 });

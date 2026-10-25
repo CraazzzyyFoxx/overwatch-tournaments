@@ -17,3 +17,17 @@ export function tournamentStreamsQueryOptions(tournamentId: number) {
     meta: { suppressErrorToast: true },
   });
 }
+
+/**
+ * Participants' past broadcasts. No realtime resource carries them: chapters
+ * appear as matches are logged, minutes apart, so the gateway's cache and this
+ * floor are freshness enough. No toast, for the reasons above.
+ */
+export function tournamentVodsQueryOptions(tournamentId: number) {
+  return queryOptions({
+    queryKey: tournamentQueryKeys.vods(tournamentId),
+    queryFn: () => streamService.getTournamentVods(tournamentId),
+    staleTime: 60_000,
+    meta: { suppressErrorToast: true },
+  });
+}

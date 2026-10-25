@@ -103,6 +103,7 @@ from .stream import (
     TournamentPollTarget,
     VerifiedChannelRow,
 )
+from .stream_session import StreamChronologyRepository, StreamSessionObservation, StreamSessionRepository
 from .subscription import (
     SubscriptionCheckLogRepository,
     SubscriptionEntitlementRepository,
@@ -285,7 +286,10 @@ __all__ = (
     "StandingPinRepository",
     "StandingRepository",
     "StatBaselineRepository",
+    "StreamChronologyRepository",
     "StreamRosterRow",
+    "StreamSessionObservation",
+    "StreamSessionRepository",
     "StreamTargetRepository",
     "SubscriptionCheckLogRepository",
     "SubscriptionEntitlementRepository",

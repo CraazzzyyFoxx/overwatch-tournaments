@@ -21,15 +21,19 @@ import (
 // value and same reason as balancer's fastReadTimeout.
 const publicReadTimeout = 15 * time.Second
 
-// PublicRoutes is the spectator read: which channels are live for a
-// tournament. Anonymous-friendly, but AuthOptional rather than AuthNone: the
-// handler gates with assert_tournament_viewable, and that gate needs the viewer
+// PublicRoutes are the spectator reads: which channels are live for a
+// tournament, and the POV recordings (Twitch VODs) with the match timestamps
+// inside them, per tournament and per encounter. Anonymous-friendly, but
+// AuthOptional rather than AuthNone: the handlers gate with
+// ensure_tournament_viewable, and that gate needs the viewer
 // (`c.optional_actor`). Under AuthNone the dispatcher never injects
 // data["identity"], so a hidden tournament answered 404 for EVERY viewer —
 // including the workspace admin and the preview allowlist who can see the page
 // itself. Same mode as every other public tournament read (tournament.routes).
 var PublicRoutes = []edge.RouteSpec{
 	{Method: "GET", Pattern: "/api/v1/streams/tournament/{tournament_id}", Queue: "rpc.stream.tournament_streams", Path: []string{"tournament_id"}, AllQuery: true, Auth: edge.AuthOptional, Timeout: publicReadTimeout},
+	{Method: "GET", Pattern: "/api/v1/streams/tournament/{tournament_id}/vods", Queue: "rpc.stream.tournament_vods", Path: []string{"tournament_id"}, Auth: edge.AuthOptional, Timeout: publicReadTimeout},
+	{Method: "GET", Pattern: "/api/v1/streams/encounter/{encounter_id}/vods", Queue: "rpc.stream.encounter_vods", Path: []string{"encounter_id"}, Auth: edge.AuthOptional, Timeout: publicReadTimeout},
 }
 
 // AdminRoutes carries the operator surfaces:

@@ -81,6 +81,21 @@ describe("TwitchEmbed", () => {
     expect(new URL(src).searchParams.get("channel")).toBe("SomeStreamer");
   });
 
+  // A past broadcast plays from the chapter the viewer picked: the player wants
+  // the "v" prefix and Twitch's h/m/s time, and the same document-host parent.
+  // The viewer asked for it, so it is not muted.
+  it("plays a VOD from the requested moment, unmuted, with the same parent", () => {
+    render(<TwitchEmbed video="2212345678" start={2710} />);
+
+    const src = container.querySelector("iframe")?.getAttribute("src") ?? "";
+    const params = new URL(src).searchParams;
+    expect(params.get("video")).toBe("v2212345678");
+    expect(params.get("time")).toBe("0h45m10s");
+    expect(params.get("parent")).toBe(window.location.hostname);
+    expect(params.has("channel")).toBe(false);
+    expect(params.has("muted")).toBe(false);
+  });
+
   it("names the frame for assistive tech", () => {
     render(<TwitchEmbed channel="somestreamer" />);
 

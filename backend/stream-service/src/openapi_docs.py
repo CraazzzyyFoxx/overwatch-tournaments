@@ -21,6 +21,31 @@ DOCS: dict[str, dict] = {
             "official broadcast, which belongs to the organizer rather than to any participant."
         ),
     },
+    "rpc.stream.tournament_vods": {
+        "summary": "Get tournament POV VODs",
+        "description": (
+            "Permission: public; no authentication required (identity is optional and only used for "
+            "visibility). Returns the past Twitch broadcasts (VODs) of the tournament's participants' own POV "
+            "streams, newest first, each with its chapters: the matches of the streamer's team that the "
+            "broadcast shows and how many seconds into the VOD each starts, the tournament's stream delay already "
+            "applied. A chapter is one logged map when the encounter has maps with a trustworthy log time, "
+            "otherwise the whole series when the encounter has a start time; a VOD with no chapter is not listed. "
+            "Only broadcasts the poller saw live are known, a VOD Twitch no longer has is omitted, and a player "
+            "who no longer consents to being broadcast disappears from past broadcasts too. Official casts are "
+            "not included. A hidden tournament answers 404 for an ineligible viewer."
+        ),
+    },
+    "rpc.stream.encounter_vods": {
+        "summary": "Get encounter POV VODs",
+        "description": (
+            "Permission: public; no authentication required (identity is optional and only used for "
+            "visibility). The tournament POV VOD list narrowed to one encounter: only VODs that show it, each "
+            "with only that encounter's chapters, ordered by team name, player name and broadcast start, so both "
+            "teams' perspectives of the match sit side by side. An unknown encounter answers 404, as does one "
+            "whose tournament is hidden from the viewer; a mix encounter, which belongs to no tournament, "
+            "answers an empty list."
+        ),
+    },
     "rpc.stream.repoll": {
         "summary": "Re-poll tournament streams",
         "description": (

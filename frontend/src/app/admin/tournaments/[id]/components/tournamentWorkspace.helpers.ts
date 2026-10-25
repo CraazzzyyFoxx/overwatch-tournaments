@@ -36,6 +36,8 @@ export type TournamentFormState = {
   discord_broadcasts_enabled: boolean;
   discord_dms_enabled: boolean;
   logs_official: boolean;
+  /** Seconds, 0..900. */
+  pov_stream_delay_s: number;
   phase_schedule: PhaseScheduleFormState;
   division_grid_version_id: number | null;
   team_formation: string;
@@ -119,6 +121,7 @@ export function getTournamentForm(tournament: Tournament, timezone: string): Tou
     discord_broadcasts_enabled: tournament.discord_broadcasts_enabled ?? true,
     discord_dms_enabled: tournament.discord_dms_enabled ?? true,
     logs_official: tournament.logs_official ?? false,
+    pov_stream_delay_s: tournament.pov_stream_delay_s ?? 0,
     phase_schedule: getPhaseScheduleForm(tournament, timezone),
     division_grid_version_id: tournament.division_grid_version_id ?? null,
     team_formation: tournament.team_formation ?? "balancer",
@@ -162,6 +165,7 @@ function normalizeTournamentFormValues(form: TournamentFormState): TournamentUpd
     discord_broadcasts_enabled: form.discord_broadcasts_enabled,
     discord_dms_enabled: form.discord_dms_enabled,
     logs_official: form.logs_official,
+    pov_stream_delay_s: form.pov_stream_delay_s,
     division_grid_version_id: form.division_grid_version_id,
     team_formation: form.team_formation,
     draft_format_json: form.draft_format_json

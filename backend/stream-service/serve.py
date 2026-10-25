@@ -1,14 +1,17 @@
-"""Headless worker for tournament stream live-status.
+"""Headless worker for tournament stream live-status and POV VOD chronology.
 
-Hosts every ``rpc.stream.*`` subscriber (the public tournament-streams read and
-the admin re-poll) and runs the APScheduler Twitch poll tick in the same
-process. One process is enough: the tick is Redis leader-locked, so extra
-replicas add RPC capacity without multi-firing the poller.
+Hosts every ``rpc.stream.*`` subscriber (the public tournament-streams and VOD
+chronology reads, the admin re-poll and poller health) and runs the APScheduler
+Twitch poll tick — live poll plus VOD sync — in the same process. One process is
+enough: the tick is Redis leader-locked, so extra replicas add RPC capacity
+without multi-firing the poller.
 
-The service owns no Postgres schema. Live status lives in Redis
-(``stream:live:{tournament_id}``) with a TTL — everything it reads from
-``tournament.*`` / ``players.*`` / ``balancer.*`` is read-only, and the only row
-it ever writes is an audit entry for the admin re-poll.
+Live status lives in Redis (``stream:live:{tournament_id}``) with a TTL. The
+service owns one Postgres schema, ``stream``: the poll tick records each live
+POV broadcast in ``stream.session`` and resolves its VOD there. Everything it
+reads from ``tournament.*`` / ``players.*`` / ``balancer.*`` / ``encounter.*`` /
+``stats.*`` is read-only; the only other row it writes is an audit entry for the
+admin re-poll.
 
 Run with: ``faststream run serve:app``.
 """
@@ -46,9 +49,8 @@ app = FastStream(broker)
 configure_realtime(redis_url=str(config.settings.redis_url))
 
 # The admin re-poll is metered, so the gate needs its policy source (the ``quota``
-# schema) and its counters (Redis) before the first RPC. The service owns no
-# schema of its own but reads Postgres, so the handler's session factory is the
-# right one to hand over.
+# schema) and its counters (Redis) before the first RPC. The handler's session
+# factory reaches the shared database, so it is the right one to hand over.
 configure_quota(
     session_factory=db.async_session_maker,
     redis_url=str(config.settings.redis_url),

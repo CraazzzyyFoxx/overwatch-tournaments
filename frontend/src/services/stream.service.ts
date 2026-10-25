@@ -1,5 +1,5 @@
 import { apiFetch } from "@/lib/api/fetch";
-import type { TournamentStreams } from "@/types/stream.types";
+import type { StreamVods, TournamentStreams } from "@/types/stream.types";
 
 export default class streamService {
   /**
@@ -9,6 +9,20 @@ export default class streamService {
    */
   static async getTournamentStreams(tournamentId: number): Promise<TournamentStreams> {
     return apiFetch(`/api/v1/streams/tournament/${tournamentId}`, {
+      skipWorkspace: true,
+    }).then((response) => response.json());
+  }
+
+  /** Participants' past broadcasts with their match chapters, newest first. Public read, as above. */
+  static async getTournamentVods(tournamentId: number): Promise<StreamVods> {
+    return apiFetch(`/api/v1/streams/tournament/${tournamentId}/vods`, {
+      skipWorkspace: true,
+    }).then((response) => response.json());
+  }
+
+  /** The past broadcasts that cover one encounter, chapters limited to it. Public read, as above. */
+  static async getEncounterVods(encounterId: number): Promise<StreamVods> {
+    return apiFetch(`/api/v1/streams/encounter/${encounterId}/vods`, {
       skipWorkspace: true,
     }).then((response) => response.json());
   }

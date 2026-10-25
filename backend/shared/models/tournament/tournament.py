@@ -1,7 +1,7 @@
 import typing
 from datetime import datetime
 
-from sqlalchemy import Boolean, CheckConstraint, Enum, Float, ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, CheckConstraint, Enum, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -36,6 +36,7 @@ class Tournament(db.TimeStampIntegerMixin):
         # Target of ``fk_encounter_owner``: a match-layer row copies all three
         # and the database checks the copy against this key.
         UniqueConstraint("id", "workspace_id", "discipline", name="uq_tournament_owner_key"),
+        CheckConstraint("pov_stream_delay_s BETWEEN 0 AND 900", name="ck_tournament_pov_stream_delay_s"),
         {"schema": "tournament"},
     )
 
@@ -116,6 +117,9 @@ class Tournament(db.TimeStampIntegerMixin):
     # Owner policy for the canonical match ingest: when true, an unaccepted game's observed placements
     # may become its official ADMIN_LOG result. Off unless an organizer with ``tournament.update`` turns it on.
     logs_official: Mapped[bool] = mapped_column(Boolean(), default=False, server_default="false", nullable=False)
+    # Broadcast delay participants run on their POV streams, in seconds, so a stream's chapter timestamps land
+    # on the moment viewers saw rather than the moment it was played. 900 is Twitch's maximum delay.
+    pov_stream_delay_s: Mapped[int] = mapped_column(Integer(), default=0, server_default="0", nullable=False)
     win_points: Mapped[float] = mapped_column(Float(), default=1.0, server_default="1.0", nullable=False)
     draw_points: Mapped[float] = mapped_column(Float(), default=0.5, server_default="0.5", nullable=False)
     loss_points: Mapped[float] = mapped_column(Float(), default=0.0, server_default="0.0", nullable=False)

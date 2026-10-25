@@ -1,8 +1,9 @@
-"""Twitch Helix ``GET /streams`` under an **app** access token.
+"""Twitch Helix ``GET /streams`` and ``GET /videos`` under an **app** access token.
 
-Answers one question: which of these channels are on air right now.
+Answers two questions: which of these channels are on air right now, and which
+past broadcast (VOD) belongs to a stream we saw live — and is it still there.
 
-Three properties of Helix shape every line below:
+Four properties of Helix shape every line below:
 
 - **``GET /streams`` returns ONLY live channels.** There is no ``is_live`` field
   to read — a channel that is absent from the response is offline. Do not look
@@ -18,6 +19,9 @@ Three properties of Helix shape every line below:
   issuing requests while there is still headroom for the OAuth logins that
   service needs, and reports how far it got instead of pretending it polled
   everything.
+- **``GET /videos?id=…`` answers 404 when NONE of the ids exist**, and simply
+  omits the missing ones otherwise. A 404 there is an answer ("all gone"), not a
+  failure, so ``get_videos`` turns it into an empty result.
 
 The credential path is deliberately separate from
 ``shared/services/subscriptions/providers/twitch_helix.py``: that client runs on each
@@ -33,7 +37,7 @@ gate are all testable without a network or a live Twitch application.
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator, Awaitable, Callable, Iterator, Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterable, Iterator, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from typing import Any, Final
@@ -55,6 +59,8 @@ __all__ = (
     "HelixRateLimited",
     "HelixUnauthorized",
     "HelixUnavailable",
+    "HelixVideo",
+    "HelixVideosResult",
     "StreamSnapshot",
 )
 
@@ -79,6 +85,10 @@ THUMBNAIL_HEIGHT: Final = 248
 #: Renew slightly early: a token that expires between the check and the request
 #: costs a 401 round trip on every channel batch in flight.
 TOKEN_RENEWAL_MARGIN_SECONDS: Final = 60
+
+#: Archives asked for per broadcaster. The VOD being resolved is that channel's
+#: newest or one of its newest broadcasts; 20 is Helix's default page.
+ARCHIVE_PAGE_SIZE: Final = 20
 
 _TIMEOUT: Final = httpx.Timeout(10.0, connect=5.0)
 
@@ -131,6 +141,9 @@ class StreamSnapshot:
     thumbnail_url: str | None
     started_at: str | None
     platform: str = "twitch"
+    #: Helix stream ``id``: what a VOD names as its ``stream_id``. Kept out of
+    #: ``as_dict`` — the stored live set and the public read never carry it.
+    stream_id: str | None = None
 
     def as_dict(self) -> dict[str, Any]:
         """The JSON body stored in ``stream:live:{tournament_id}``.
@@ -167,6 +180,40 @@ class HelixBatchResult:
     polled_logins: frozenset[str] = field(default_factory=frozenset)
     polled_user_ids: frozenset[str] = field(default_factory=frozenset)
     truncated: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class HelixVideo:
+    """One ``GET /videos`` row, reduced to what matches it to a stream."""
+
+    id: str
+    stream_id: str | None
+    user_id: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class HelixVideosResult:
+    """Outcome of a ``GET /videos`` loop.
+
+    ``polled`` holds the broadcaster ids (archive lookup) or video ids (by-id
+    lookup) actually sent — the same rule as ``HelixBatchResult``: an id the
+    rate-limit gate never asked about has no answer, and "missing" from an
+    unasked batch is not "gone".
+    """
+
+    videos: list[HelixVideo]
+    polled: frozenset[str] = field(default_factory=frozenset)
+    ratelimit_remaining: int | None = None
+    truncated: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class _GatedRows:
+    rows: list[dict[str, Any]]
+    #: Every ``(name, value)`` param of every request actually sent.
+    sent: list[tuple[str, str]]
+    remaining: int | None
+    truncated: bool
 
 
 def _ratelimit_remaining(response: httpx.Response) -> int | None:
@@ -222,6 +269,17 @@ def _snapshot(row: dict[str, Any]) -> StreamSnapshot | None:
         viewer_count=_as_int(row.get("viewer_count")),
         thumbnail_url=_thumbnail(row.get("thumbnail_url")),
         started_at=str(row["started_at"]) if row.get("started_at") else None,
+        stream_id=str(row["id"]) if row.get("id") else None,
+    )
+
+
+def _video(row: dict[str, Any]) -> HelixVideo | None:
+    if not row.get("id"):
+        return None
+    return HelixVideo(
+        id=str(row["id"]),
+        stream_id=str(row["stream_id"]) if row.get("stream_id") else None,
+        user_id=str(row["user_id"]) if row.get("user_id") else None,
     )
 
 
@@ -323,6 +381,50 @@ class HelixClient:
         await self._redis.set(TOKEN_KEY, token, ex=ttl)
         return token
 
+    async def _get_gated(
+        self,
+        path: str,
+        requests: Iterable[list[tuple[str, str]]],
+        *,
+        token: str,
+        ratelimit_floor: int,
+        not_found_is_empty: bool = False,
+    ) -> _GatedRows:
+        """Issue one ``GET /{path}`` per params list until the rate-limit floor.
+
+        Every request here goes through the ``Ratelimit-Remaining`` gate: once a
+        response reports less than ``ratelimit_floor`` left, the loop stops and
+        says so (``truncated``) instead of draining the bucket identity-service's
+        logins share. Raises rather than returning partial garbage on 401/429/5xx.
+        """
+        assert self._client_id is not None  # get_app_token raises HelixNotConfigured otherwise
+        headers = {"Authorization": f"Bearer {token}", "Client-Id": self._client_id}
+        url = f"{self._helix_url.rstrip('/')}/{path}"
+
+        rows: list[dict[str, Any]] = []
+        sent: list[tuple[str, str]] = []
+        remaining: int | None = None
+        truncated = False
+
+        async with self._requester() as send:
+            for params in requests:
+                if remaining is not None and remaining < ratelimit_floor:
+                    truncated = True
+                    break
+                try:
+                    response = await send("GET", url, params=params, headers=headers)
+                except httpx.HTTPError as exc:
+                    raise HelixUnavailable(str(exc)) from exc
+
+                if not (not_found_is_empty and response.status_code == 404):
+                    _raise_for_status(response)
+                    payload: dict[str, Any] = response.json() or {}
+                    rows += [row for row in payload.get("data") or [] if isinstance(row, dict)]
+                remaining = _ratelimit_remaining(response)
+                sent += params
+
+        return _GatedRows(rows=rows, sent=sent, remaining=remaining, truncated=truncated)
+
     async def get_live_streams(
         self,
         *,
@@ -338,8 +440,7 @@ class HelixClient:
         streamer renames the channel, and a stale login silently reports offline
         forever.
 
-        Raises rather than returning partial garbage on 401/429/5xx. The one
-        partial outcome that IS returned is the rate-limit gate:
+        The one partial outcome that IS returned is the rate-limit gate:
         ``truncated=True`` with the identifiers that were actually polled.
         """
         size = max(1, min(int(batch_size), HELIX_MAX_PARAMS_PER_REQUEST))
@@ -348,52 +449,89 @@ class HelixClient:
         if not wanted:
             return HelixBatchResult(snapshots=[])
 
-        assert self._client_id is not None  # get_app_token raises HelixNotConfigured otherwise
-        headers = {"Authorization": f"Bearer {token}", "Client-Id": self._client_id}
-        url = f"{self._helix_url.rstrip('/')}/streams"
-
-        snapshots: list[StreamSnapshot] = []
-        polled_logins: set[str] = set()
-        polled_user_ids: set[str] = set()
-        remaining: int | None = None
-        truncated = False
-
-        async with self._requester() as send:
-            for chunk in _chunks(wanted, size):
-                if remaining is not None and remaining < ratelimit_floor:
-                    truncated = True
-                    break
-                # A list of pairs, NOT a dict: httpx encodes repeated keys as
-                # `user_login=a&user_login=b`, which is the only form Helix reads.
-                # Also pin `first` — the endpoint defaults to 20 and would
-                # silently drop the tail of a 100-channel batch.
-                params: list[tuple[str, str]] = [*chunk, ("first", str(len(chunk)))]
-                try:
-                    response = await send("GET", url, params=params, headers=headers)
-                except httpx.HTTPError as exc:
-                    raise HelixUnavailable(str(exc)) from exc
-
-                _raise_for_status(response)
-                remaining = _ratelimit_remaining(response)
-
-                for name, value in chunk:
-                    (polled_user_ids if name == "user_id" else polled_logins).add(value)
-
-                payload: dict[str, Any] = response.json() or {}
-                for row in payload.get("data") or []:
-                    if not isinstance(row, dict):
-                        continue
-                    snapshot = _snapshot(row)
-                    if snapshot is not None:
-                        snapshots.append(snapshot)
-
-        return HelixBatchResult(
-            snapshots=snapshots,
-            ratelimit_remaining=remaining,
-            polled_logins=frozenset(polled_logins),
-            polled_user_ids=frozenset(polled_user_ids),
-            truncated=truncated,
+        gated = await self._get_gated(
+            "streams",
+            # A list of pairs, NOT a dict: httpx encodes repeated keys as
+            # `user_login=a&user_login=b`, which is the only form Helix reads.
+            # Also pin `first` — the endpoint defaults to 20 and would silently
+            # drop the tail of a 100-channel batch.
+            ([*chunk, ("first", str(len(chunk)))] for chunk in _chunks(wanted, size)),
+            token=token,
+            ratelimit_floor=ratelimit_floor,
         )
+        return HelixBatchResult(
+            snapshots=[snapshot for row in gated.rows if (snapshot := _snapshot(row)) is not None],
+            ratelimit_remaining=gated.remaining,
+            polled_logins=frozenset(value for name, value in gated.sent if name == "user_login"),
+            polled_user_ids=frozenset(value for name, value in gated.sent if name == "user_id"),
+            truncated=gated.truncated,
+        )
+
+    async def get_archive_videos(
+        self,
+        *,
+        user_ids: Sequence[str],
+        token: str,
+        ratelimit_floor: int = RATELIMIT_FLOOR,
+    ) -> HelixVideosResult:
+        """The newest past broadcasts (``type=archive``) of each broadcaster in ``user_ids``.
+
+        One request per broadcaster: ``GET /videos`` takes a single ``user_id``.
+        The archive of a stream exists while it is still live, so a broadcast can
+        be resolved before it ends.
+        """
+        gated = await self._get_gated(
+            "videos",
+            ([("user_id", user_id), ("type", "archive"), ("first", str(ARCHIVE_PAGE_SIZE))] for user_id in user_ids),
+            token=token,
+            ratelimit_floor=ratelimit_floor,
+        )
+        return _videos_result(gated, "user_id")
+
+    async def get_videos(
+        self,
+        *,
+        ids: Sequence[str],
+        token: str,
+        ratelimit_floor: int = RATELIMIT_FLOOR,
+    ) -> HelixVideosResult:
+        """Which of the video ``ids`` still exist, in batches of 100 repeated ``id`` params.
+
+        A batch answering 404 means none of its ids exist; that is an answer,
+        so those ids count as polled with nothing found.
+        """
+        wanted = [("id", str(video_id)) for video_id in ids]
+        gated = await self._get_gated(
+            "videos",
+            _chunks(wanted, HELIX_MAX_PARAMS_PER_REQUEST),
+            token=token,
+            ratelimit_floor=ratelimit_floor,
+            not_found_is_empty=True,
+        )
+        return _videos_result(gated, "id")
+
+    async def _with_token[T](self, call: Callable[[str], Awaitable[T]]) -> T:
+        """Run ``call(token)`` with the token lifecycle attached.
+
+        The 401 -> drop the cached token -> retry once path lives here rather
+        than in the ``get_*`` methods because it needs the credentials and the
+        Redis cache, and those methods deliberately take neither: a method
+        handed a bare token stays trivially testable. A second 401 is not a
+        stale token, it is wrong credentials, so it surfaces as
+        ``HelixUnauthorized``.
+        """
+        token = await self.get_app_token()
+
+        for attempt in (1, 2):
+            try:
+                return await call(token)
+            except HelixUnauthorized:
+                if attempt == 2:
+                    raise
+                await self._redis.delete(TOKEN_KEY)
+                token = await self.get_app_token()
+
+        raise AssertionError("unreachable")  # pragma: no cover
 
     async def fetch_live_streams(
         self,
@@ -403,30 +541,36 @@ class HelixClient:
         batch_size: int = HELIX_MAX_PARAMS_PER_REQUEST,
         ratelimit_floor: int = RATELIMIT_FLOOR,
     ) -> HelixBatchResult:
-        """``get_live_streams`` with the token lifecycle attached.
+        """``get_live_streams`` with the token lifecycle attached."""
+        return await self._with_token(
+            lambda token: self.get_live_streams(
+                logins=logins,
+                user_ids=user_ids,
+                token=token,
+                batch_size=batch_size,
+                ratelimit_floor=ratelimit_floor,
+            )
+        )
 
-        The 401 -> drop the cached token -> retry once path lives here rather
-        than in ``get_live_streams`` because it needs the credentials and the
-        Redis cache, and ``get_live_streams`` deliberately takes neither: a
-        method handed a bare token stays trivially testable. A second 401 is not
-        a stale token, it is wrong credentials, so it surfaces as
-        ``HelixUnauthorized``.
-        """
-        token = await self.get_app_token()
+    async def fetch_archive_videos(
+        self, *, user_ids: Sequence[str], ratelimit_floor: int = RATELIMIT_FLOOR
+    ) -> HelixVideosResult:
+        """``get_archive_videos`` with the token lifecycle attached."""
+        return await self._with_token(
+            lambda token: self.get_archive_videos(user_ids=user_ids, token=token, ratelimit_floor=ratelimit_floor)
+        )
 
-        for attempt in (1, 2):
-            try:
-                return await self.get_live_streams(
-                    logins=logins,
-                    user_ids=user_ids,
-                    token=token,
-                    batch_size=batch_size,
-                    ratelimit_floor=ratelimit_floor,
-                )
-            except HelixUnauthorized:
-                if attempt == 2:
-                    raise
-                await self._redis.delete(TOKEN_KEY)
-                token = await self.get_app_token()
+    async def fetch_videos(self, *, ids: Sequence[str], ratelimit_floor: int = RATELIMIT_FLOOR) -> HelixVideosResult:
+        """``get_videos`` with the token lifecycle attached."""
+        return await self._with_token(
+            lambda token: self.get_videos(ids=ids, token=token, ratelimit_floor=ratelimit_floor)
+        )
 
-        raise AssertionError("unreachable")  # pragma: no cover
+
+def _videos_result(gated: _GatedRows, polled_param: str) -> HelixVideosResult:
+    return HelixVideosResult(
+        videos=[video for row in gated.rows if (video := _video(row)) is not None],
+        polled=frozenset(value for name, value in gated.sent if name == polled_param),
+        ratelimit_remaining=gated.remaining,
+        truncated=gated.truncated,
+    )

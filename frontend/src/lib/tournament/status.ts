@@ -1,3 +1,4 @@
+import { reachedAtLeast } from "@/lib/tournament/lifecycle";
 import type { Tournament, TournamentStatus } from "@/types/tournament.types";
 
 // Display text is `common.statusBadge.<status>` in the message catalogs, never here.
@@ -175,4 +176,13 @@ export function isRegistrationOpen(
  */
 export function areStreamsVisible(status: TournamentStatus) {
   return status === "draft" || TOURNAMENT_STATUS_META[status].variant === "live";
+}
+
+/**
+ * Whether a participant's broadcast may have been recorded, so the past
+ * broadcasts are worth a read. The poller records POV sessions from check-in
+ * on, and unlike live streams they stay worth showing after the event ends.
+ */
+export function mayHavePastBroadcasts(status: TournamentStatus) {
+  return reachedAtLeast(status, "check_in");
 }

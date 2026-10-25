@@ -7453,6 +7453,17 @@
       "liveCount": "{count} live",
       "channels": "Live channels",
       "play": "Play {name}"
+    },
+    "vods": {
+      "heading": "Past broadcasts",
+      "watchMatch": "Watch the match",
+      "map": "Map {position}",
+      "mapUnnamed": "Map",
+      "matchStart": "Match start",
+      "play": "Play from {time}: {chapter}",
+      "open": "Open on Twitch from {time}: {chapter}",
+      "watchVod": "Watch on Twitch: {name}’s broadcast",
+      "playerLabel": "Past broadcast · {name}"
     }
   },
   "admission": {
@@ -9794,6 +9805,11 @@
       "finished": "Mark tournament as finished",
       "logsOfficial": "Accept match logs as official results",
       "logsOfficialDescription": "An uploaded log decides a game that has no accepted result yet, from the placements it shows. Accepted, confirmed or admin results are never overwritten; reopen a game to correct it."
+    },
+    "povStreams": {
+      "title": "Participant streams",
+      "delay": "POV stream delay, seconds",
+      "delayHint": "Shifts the timestamps in participants’ past broadcasts. Set it to the delay the tournament rules require of POV streams."
     },
     "rules": {
       "hint": "Markdown, shown to everyone on the tournament's Rules tab. The tab appears only once this is not empty. Clearing it unpublishes the document. Write sections as <code>##</code> headings (<code>###</code> for subsections): two or more of them give the public page a table of contents. Bold text on its own line does not.",

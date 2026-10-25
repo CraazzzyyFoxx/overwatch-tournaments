@@ -13,7 +13,14 @@ import { describe, expect, it } from "vitest";
 
 import type { StreamEntry } from "@/types/stream.types";
 
-import { formatStreamUptime, sortStreamsByAudience, streamEntryKey } from "./stream-platform";
+import {
+  formatStreamUptime,
+  formatVodClock,
+  sortStreamsByAudience,
+  streamEntryKey,
+  twitchTimestamp,
+  twitchVodUrl
+} from "./stream-platform";
 
 function entry(overrides: Partial<StreamEntry> = {}): StreamEntry {
   return {
@@ -116,5 +123,35 @@ describe("formatStreamUptime", () => {
 
   it("renders nothing for an unparseable stamp", () => {
     expect(formatStreamUptime("not a date", UNITS, startedMs)).toBeNull();
+  });
+});
+
+// A chapter's offset becomes three strings: Twitch's `t`/`time` value, the
+// twitch.tv link built from it, and the clock printed beside the chapter. The
+// first two are parsed by Twitch, so a wrong unit lands the viewer elsewhere in
+// the VOD with nothing on screen to say so.
+describe("past broadcast moments", () => {
+  it("writes Twitch's h/m/s time with every unit", () => {
+    expect(twitchTimestamp(2710)).toBe("0h45m10s");
+    expect(twitchTimestamp(3723)).toBe("1h2m3s");
+    expect(twitchTimestamp(0)).toBe("0h0m0s");
+  });
+
+  it("floors fractions and clamps a negative offset to the start", () => {
+    expect(twitchTimestamp(59.9)).toBe("0h0m59s");
+    expect(twitchTimestamp(-5)).toBe("0h0m0s");
+  });
+
+  it("links the VOD on twitch.tv at the moment, without the player's v prefix", () => {
+    expect(twitchVodUrl("2212345678", 2710)).toBe(
+      "https://www.twitch.tv/videos/2212345678?t=0h45m10s"
+    );
+  });
+
+  it("prints the moment as the player's clock", () => {
+    expect(formatVodClock(2710)).toBe("0:45:10");
+    expect(formatVodClock(3723)).toBe("1:02:03");
+    expect(formatVodClock(5)).toBe("0:00:05");
+    expect(formatVodClock(36_000)).toBe("10:00:00");
   });
 });

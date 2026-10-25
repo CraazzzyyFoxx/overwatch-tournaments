@@ -20,9 +20,16 @@ Shape of the tick, and why:
 - **The target set is resolved in FOUR queries total, not four per tournament.**
   ``StreamTargetsService`` batches every active tournament's channels and
   official links into one pair of queries each — see ``_build_plans``.
+- **Every live POV broadcast is recorded, then its VOD is chased.** After the
+  live set is stored, each participant channel on air (never an official cast)
+  upserts a ``stream.session`` row; the VOD sync that follows every tick — active
+  tournaments or not, since completed tournaments' VODs still expire — resolves
+  pending broadcasts to their Twitch VOD and re-checks resolved VODs once a day.
+  The VOD sync shares the tick's slot but not its outcome: its Helix failures are
+  logged and swallowed, never written to the recorded tick status.
 
-State lives in ``state.py`` (Redis) — this module owns no persistence and writes
-to no Postgres schema.
+Live state lives in ``state.py`` (Redis). The one Postgres table this module
+writes is ``stream.session``, through ``StreamSessionRepository``.
 
 ``run_poll_tick`` is the entry point ``scheduler.py`` and the tests call; it runs
 one ``StreamPollTick``.
@@ -31,13 +38,15 @@ one ``StreamPollTick``.
 from __future__ import annotations
 
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Iterator
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from loguru import logger
 from redis.asyncio import Redis
 
+from shared.repository import StreamSessionObservation, StreamSessionRepository
 from shared.schemas.settings import StreamCollectionConfig
 from shared.services.realtime import DomainEvent, Resource, Scope, emit
 from src.core import metrics
@@ -45,10 +54,12 @@ from src.core.config import settings
 from src.services.helix import (
     HelixBatchResult,
     HelixClient,
+    HelixError,
     HelixNotConfigured,
     HelixRateLimited,
     HelixUnauthorized,
     HelixUnavailable,
+    HelixVideosResult,
     StreamSnapshot,
 )
 from src.services.state import StreamStateStore
@@ -66,9 +77,21 @@ POLL_STATUS_TRUNCATED = "truncated"
 POLL_STATUS_ERROR = "error"
 
 
-#: Injection seam for the tick's only network call. Loose (``...``) because
-#: ``HelixClient.fetch_live_streams`` carries defaulted knobs the tick never passes.
+#: Injection seams for the tick's network calls. Loose (``...``) because the
+#: ``HelixClient.fetch_*`` methods carry defaulted knobs the tick never passes.
 LiveStreamFetcher = Callable[..., Awaitable[HelixBatchResult]]
+VideosFetcher = Callable[..., Awaitable[HelixVideosResult]]
+
+#: VOD sync bounds. A broadcast is chased for a day after it was last seen live —
+#: the archive exists from the first minute of the broadcast, so one still missing
+#: a day later was never kept — and at most every 10 minutes, one Helix call per
+#: broadcaster, at most 20 broadcasters a tick.
+VOD_RESOLVE_WINDOW = timedelta(hours=24)
+VOD_RESOLVE_RETRY = timedelta(minutes=10)
+VOD_RESOLVE_MAX_BROADCASTERS = 20
+#: A resolved VOD is re-checked daily, in batches of 100 ids, at most 5 batches a tick.
+VOD_RECHECK_INTERVAL = timedelta(hours=24)
+VOD_RECHECK_MAX_IDS = 500
 
 
 @dataclass(frozen=True, slots=True)
@@ -118,11 +141,13 @@ class _TickReport:
 
 
 class StreamPollTick:
-    """One run of the Twitch live-status poll tick.
+    """One run of the Twitch live-status poll tick, then the VOD sync.
 
-    ``fetch`` is injected so the whole tick — dedup, fan-out, diffing, the hidden
-    tournament rule — is testable without a network or a Twitch application.
-    Defaults to a ``HelixClient`` built from the service's own settings.
+    ``fetch`` (and ``fetch_archives``/``fetch_videos`` for the VOD sync) are
+    injected so the whole tick — dedup, fan-out, diffing, the hidden tournament
+    rule, session recording — is testable without a network or a Twitch
+    application. They default to one ``HelixClient`` built from the service's
+    own settings.
     """
 
     def __init__(
@@ -132,15 +157,22 @@ class StreamPollTick:
         cfg: StreamCollectionConfig,
         *,
         fetch: LiveStreamFetcher | None = None,
+        fetch_archives: VideosFetcher | None = None,
+        fetch_videos: VideosFetcher | None = None,
         targets: StreamTargetsService = StreamTargetsService(),
+        sessions: StreamSessionRepository = StreamSessionRepository(),
         state: StreamStateStore | None = None,
     ) -> None:
         self._session = session
         self._redis = redis
         self._cfg = cfg
         self._targets = targets
+        self._sessions = sessions
         self._state = state or StreamStateStore(redis)
-        self._fetch = fetch or self._default_client().fetch_live_streams
+        client = self._default_client()
+        self._fetch = fetch or client.fetch_live_streams
+        self._fetch_archives = fetch_archives or client.fetch_archive_videos
+        self._fetch_videos = fetch_videos or client.fetch_videos
         self._report = _TickReport()
 
     def _default_client(self) -> HelixClient:
@@ -154,14 +186,14 @@ class StreamPollTick:
         )
 
     async def run(self) -> int:
-        """Poll every active tournament once. Returns the number of tournaments
-        updated."""
+        """Poll every active tournament once, then sync VODs. Returns the number
+        of tournaments updated."""
         if not self._cfg.enabled:
             logger.debug("Stream collection disabled in settings; skipping tick")
             return 0
 
         try:
-            return await self._run()
+            processed = await self._run()
         except Exception:
             self._report.status = POLL_STATUS_ERROR
             raise
@@ -175,6 +207,11 @@ class StreamPollTick:
             # After the cursor: if this write is the one that fails, the
             # interval is still respected and only the panel goes stale.
             await self._state.write_poll_status(self._report.as_status(ran_at=ran_at))
+
+        # After the status is recorded: that status describes the live poll, and
+        # nothing the VOD sync does may rewrite it.
+        await self._sync_vods()
+        return processed
 
     async def _run(self) -> int:
         plans = await self._build_plans()
@@ -206,6 +243,7 @@ class StreamPollTick:
         }
 
         processed = 0
+        observations: dict[tuple[int, str], StreamSessionObservation] = {}
         for plan in plans:
             if not plan.channels.keys() <= polled:
                 # Partial coverage is not a partial answer: writing it would mark
@@ -218,12 +256,19 @@ class StreamPollTick:
                 )
                 continue
             await self._apply(plan, live_by_login)
+            observations.update(
+                ((observation.tournament_id, observation.stream_id), observation)
+                for observation in self._observations(plan, live_by_login)
+            )
             processed += 1
 
-        # One commit for the whole tick: emit() publishes from after_commit, and
-        # a tick that touched twenty tournaments should pay one round trip, not
-        # twenty. The session holds nothing else — live status lives in Redis.
+        # One commit for the live sets: emit() publishes from after_commit, and a
+        # tick that touched twenty tournaments should pay one round trip, not
+        # twenty.
         await self._session.commit()
+        if observations:
+            await self._sessions.record_observed(self._session, list(observations.values()), seen_at=datetime.now(UTC))
+            await self._session.commit()
 
         self._report.status = POLL_STATUS_TRUNCATED if result.truncated else POLL_STATUS_OK
         self._report.tournaments_updated = processed
@@ -380,6 +425,26 @@ class StreamPollTick:
             return
         await self._emit(tournament_id, len(snapshots))
 
+    @staticmethod
+    def _observations(plan: _Plan, live_by_login: dict[str, StreamSnapshot]) -> Iterator[StreamSessionObservation]:
+        """The plan's live POV broadcasts worth recording: a participant's own
+        channel (an official cast is out of scope, even when a player runs it)
+        carrying everything a VOD is later matched by."""
+        for login, channel in plan.channels.items():
+            found = live_by_login.get(login)
+            if found is None or channel.player_id is None or channel.source == "official":
+                continue
+            if not (found.stream_id and found.user_id and found.started_at):
+                continue
+            yield StreamSessionObservation(
+                tournament_id=plan.tournament.tournament_id,
+                user_id=channel.player_id,
+                channel=login,
+                broadcaster_id=found.user_id,
+                stream_id=found.stream_id,
+                started_at=datetime.fromisoformat(found.started_at),
+            )
+
     async def _emit(self, tournament_id: int, live_count: int) -> None:
         """Thin ``stream.updated`` plus the ``tournament.streams`` invalidation.
 
@@ -390,8 +455,8 @@ class StreamPollTick:
         nothing. It carries no channel data — the authoritative read is the RPC,
         which applies the visibility rules this signal has no way to.
 
-        The tick's session is otherwise read-only; the commit in ``_run`` is what
-        persists the invalidation row and publishes both.
+        The commit in ``_run`` that closes the live sets is what persists the
+        invalidation row and publishes both.
         """
         await emit(
             self._session,
@@ -405,6 +470,78 @@ class StreamPollTick:
             ),
         )
 
+    async def _sync_vods(self) -> None:
+        """Resolve recorded broadcasts to their VOD, then re-check resolved VODs.
+
+        Commits only when it wrote something, so an idle sync costs its two
+        SELECTs and nothing else.
+        """
+        now = datetime.now(UTC)
+        resolved = await self._resolve_vods(now)
+        rechecked = await self._recheck_vods(now)
+        if resolved or rechecked:
+            await self._session.commit()
+
+    async def _resolve_vods(self, now: datetime) -> bool:
+        """One archive lookup per broadcaster (deduped across tournaments), the
+        longest-waiting first; every row of an answered broadcaster is stamped
+        attempted, and the ones whose ``stream_id`` Helix lists get their VOD."""
+        pending = await self._sessions.list_unresolved(
+            self._session, seen_since=now - VOD_RESOLVE_WINDOW, checked_before=now - VOD_RESOLVE_RETRY
+        )
+        rows_of: dict[str, list[Any]] = {}
+        for row in pending:
+            rows_of.setdefault(row.broadcaster_id, []).append(row)
+        if not rows_of:
+            return False
+        result = await self._videos(
+            self._fetch_archives(user_ids=list(rows_of)[:VOD_RESOLVE_MAX_BROADCASTERS]), "archive lookup"
+        )
+        if result is None:
+            return False
+        vod_of_stream = {video.stream_id: video.id for video in result.videos if video.stream_id}
+        attempted = [row for broadcaster in result.polled for row in rows_of.get(broadcaster, [])]
+        await self._sessions.mark_vod_attempts(
+            self._session,
+            attempted=[row.id for row in attempted],
+            resolved={row.id: vod_of_stream[row.stream_id] for row in attempted if row.stream_id in vod_of_stream},
+            checked_at=now,
+        )
+        return bool(attempted)
+
+    async def _recheck_vods(self, now: datetime) -> bool:
+        """Ask Helix which resolved VODs still exist; the ones it was asked about
+        and did not return are gone."""
+        due = await self._sessions.list_due_recheck(
+            self._session, checked_before=now - VOD_RECHECK_INTERVAL, limit=VOD_RECHECK_MAX_IDS
+        )
+        if not due:
+            return False
+        result = await self._videos(self._fetch_videos(ids=sorted({row.vod_id for row in due})), "VOD re-check")
+        if result is None:
+            return False
+        alive = {video.id for video in result.videos}
+        checked = [row for row in due if row.vod_id in result.polled]
+        await self._sessions.mark_rechecked(
+            self._session,
+            alive=[row.id for row in checked if row.vod_id in alive],
+            gone=[row.id for row in checked if row.vod_id not in alive],
+            checked_at=now,
+        )
+        return bool(checked)
+
+    @staticmethod
+    async def _videos(call: Awaitable[HelixVideosResult], what: str) -> HelixVideosResult | None:
+        """Await a VOD-sync Helix call; a failure is logged and means "learned nothing"."""
+        try:
+            return await call
+        except HelixNotConfigured:
+            # The live poll already records this as the tick's status.
+            return None
+        except HelixError as exc:
+            logger.warning("Helix {} failed during the VOD sync: {!r}", what, exc)
+            return None
+
 
 async def run_poll_tick(
     session: Any,
@@ -412,7 +549,10 @@ async def run_poll_tick(
     cfg: StreamCollectionConfig,
     *,
     fetch: LiveStreamFetcher | None = None,
+    fetch_archives: VideosFetcher | None = None,
+    fetch_videos: VideosFetcher | None = None,
     targets: StreamTargetsService | None = None,
+    sessions: StreamSessionRepository | None = None,
     state: StreamStateStore | None = None,
 ) -> int:
     """Poll every active tournament once via ``StreamPollTick``. Returns the
@@ -422,7 +562,10 @@ async def run_poll_tick(
         redis,
         cfg,
         fetch=fetch,
+        fetch_archives=fetch_archives,
+        fetch_videos=fetch_videos,
         targets=targets or StreamTargetsService(),
+        sessions=sessions or StreamSessionRepository(),
         state=state,
     )
     return await tick.run()

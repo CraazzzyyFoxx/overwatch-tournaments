@@ -21,6 +21,8 @@ export const encounterQueryKeys = {
     ["encounter", encounterId, "pick-ban-state", "map"] as const,
   captainReports: (encounterId: KeyPart) => ["encounter", encounterId, "reports"] as const,
   detailRoot: () => ["encounter"] as const,
+  /** The past broadcasts that cover the encounter (`/streams/encounter/{id}/vods`). */
+  vods: (encounterId: KeyPart) => ["encounter", encounterId, "vods"] as const,
   /** One game's index and its tournament picker (§2.6): `discipline` sits right after the workspace axis. */
   list: (workspaceId: KeyPart, discipline: KeyPart, page: KeyPart, filters: unknown, query: KeyPart) =>
     ["encounters-list", workspaceId, discipline, page, filters, query] as const,

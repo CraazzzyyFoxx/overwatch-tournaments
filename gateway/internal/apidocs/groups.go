@@ -60,7 +60,7 @@ func Groups() (public, admin []openapi.Group) {
 			Routes: concat(app.ReadRoutes, stats.PublicReadRoutes, stats.AchievementsSubtreeRoutes)},
 		{Tag: "Analytics", Description: "Analytics reads (v1 public; v2 require analytics.read).",
 			Routes: analytics.ReadRoutes},
-		{Tag: "Streams", Description: "Live stream channels for a tournament (public read).",
+		{Tag: "Streams", Description: "Live stream channels for a tournament and the match timestamps inside participants' POV recordings (public reads).",
 			Routes: stream.PublicRoutes},
 		{Tag: "Balancer & Draft", Description: "Balancer config, draft spectating reads, balance jobs.",
 			Routes: concat(balancer.PublicRoutes, balancer.DraftReadRoutes, balancer.JobRoutes, balancer.DraftRoutes, balancer.BinaryPublicDocRoutes)},
