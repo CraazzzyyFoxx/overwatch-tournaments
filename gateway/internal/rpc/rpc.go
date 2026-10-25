@@ -206,8 +206,8 @@ func (c *Client) connect() (chan *amqp.Error, error) {
 	}
 
 	// Publish-only channel pool on the same connection (see publishChannels).
-	// They live and die with the connection: NotifyClose on the connection
-	// covers them, and onDisconnect drops the pool wholesale.
+	// They live and die with the connection, and onDisconnect drops the pool
+	// wholesale.
 	pubChs := make([]*amqp.Channel, 0, publishChannels)
 	for range publishChannels {
 		pch, err := conn.Channel()
@@ -216,6 +216,25 @@ func (c *Client) connect() (chan *amqp.Error, error) {
 			return nil, fmt.Errorf("amqp publish channel: %w", err)
 		}
 		pubChs = append(pubChs, pch)
+	}
+
+	// A channel can also die on its own while the connection stays up (a
+	// broker channel.close, a cancelled reply consumer), and conn.NotifyClose
+	// never fires for that: the dead channel stayed in the pool failing every
+	// publishChannels-th publish with "channel/connection is not open" — or,
+	// for the reply channel, left every call waiting out its deadline — until
+	// the next connection drop (Sentry OWT-TOURNAMENTS-2AA/2AB/2A8). Closing
+	// the connection routes it through run()'s normal reconnect instead.
+	// ponytail: one dead channel recycles the whole connection; reopen just
+	// that channel if channel errors ever become routine.
+	for _, pch := range pubChs {
+		closed := pch.NotifyClose(make(chan *amqp.Error, 1))
+		safego.Go(func() {
+			if err := <-closed; err != nil && !conn.IsClosed() {
+				c.log.Warn("rpc publish channel closed, reconnecting", "err", err)
+				_ = conn.Close()
+			}
+		})
 	}
 
 	notify := conn.NotifyClose(make(chan *amqp.Error, 1))
@@ -228,7 +247,13 @@ func (c *Client) connect() (chan *amqp.Error, error) {
 	c.disconnect = make(chan struct{})
 	c.mu.Unlock()
 
-	safego.Go(func() { c.dispatchReplies(deliveries) })
+	safego.Go(func() {
+		c.dispatchReplies(deliveries)
+		if !conn.IsClosed() {
+			c.log.Warn("rpc reply consumer stopped, reconnecting")
+			_ = conn.Close()
+		}
+	})
 	return notify, nil
 }
 
@@ -331,6 +356,11 @@ func (c *Client) Call(ctx context.Context, queue string, body []byte) ([]byte, e
 	}()
 
 	if err := ch.PublishWithContext(ctx, "", queue, false, false, buildPublishing(ctx, id, replyQ, body, headers)); err != nil {
+		// ErrClosed is the channel/connection dying under this call (the
+		// window before run() notices): the same 503 as a drop mid-call.
+		if errors.Is(err, amqp.ErrClosed) {
+			err = fmt.Errorf("%w: %w", ErrDisconnected, err)
+		}
 		err = fmt.Errorf("publish rpc request to %q: %w", queue, err)
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "publish failed")
