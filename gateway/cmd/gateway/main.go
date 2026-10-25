@@ -341,7 +341,7 @@ func run() error {
 	appEdge.Register(mux, app.UsersAdminRoutes)
 	appEdge.Register(mux, app.QuotaAdminRoutes)
 	appEdge.Register(mux, app.NotificationRoutes)
-	appEdge.Register(mux, app.AnnouncementPublicRoutes)
+	respcache.RegisterCached(mux, appEdge, app.AnnouncementPublicRoutes, app.AnnouncementCacheableReads, respCache)
 	appEdge.Register(mux, app.AnnouncementAdminRoutes)
 	appEdge.Register(mux, app.NotificationAdminRoutes)
 	appEdge.Register(mux, app.NotificationUserAdminRoutes)
