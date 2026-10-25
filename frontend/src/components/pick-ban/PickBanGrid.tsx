@@ -319,11 +319,12 @@ export function PickBanGrid({
           lockedRound == null && !status.ineligible && !expired ? "disabled:opacity-100" : null
         )}
       >
+        {/* One frame: the tile's border carries the state; the portrait drops its own and fills the circle. */}
         <CatalogEntityImage
           entity={{ name, image_path: item?.image_path ?? null }}
-          size={38}
+          size={42}
           className={cn(
-            "transition-opacity",
+            "border-0 transition-opacity",
             taken ? "opacity-40 grayscale" : null,
             lockedRound != null ? "opacity-45 saturate-50" : null
           )}
