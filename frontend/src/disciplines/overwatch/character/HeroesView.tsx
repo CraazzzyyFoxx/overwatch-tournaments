@@ -18,7 +18,7 @@ import HeroSpotlight from "./HeroSpotlight";
 import HeroStatsTable from "./HeroStatsTable";
 import HeroVsAverage from "./HeroVsAverage";
 import MapsForHero from "./MapsForHero";
-import { heroMapRows, overviewRows, recordRows, statRows } from "./hero-stats";
+import { heroMapRows, overviewRows, radarAxes, recordRows, statRows } from "./hero-stats";
 import { getOverall, heroWinrate, isRevertedStat } from "./utils";
 
 type StatsView = "overview" | "all";
@@ -76,9 +76,26 @@ const HeroesView = ({ characters, filterSlot, maps, retryMaps, metadata }: SlotP
 
   const rows = useMemo(() => (selected ? statRows(selected.hero) : []), [selected]);
 
-  const toolbar = (
-    <div className="flex flex-wrap items-center justify-between gap-2 xl:justify-end">
-      {heroes.length > 1 && selected ? (
+  if (!selected) {
+    return (
+      <div className="aqt-player">
+        <CardSurface action={filterSlot}>
+          <p className="py-10 text-center text-caption text-[color:var(--aqt-fg-dim)]">{t("users.heroes.noStats")}</p>
+        </CardSurface>
+      </div>
+    );
+  }
+
+  const heroId = selected.hero.character.id;
+  const lowSampleNote =
+    selected.hero.games < LOW_SAMPLE_GAMES ? t("users.heroes.lowSample", { count: LOW_SAMPLE_GAMES }) : null;
+  const heroClass = characterClass(selected.hero.character);
+  const records = recordRows(rows, heroClass);
+
+  return (
+    <div className="aqt-player flex flex-col gap-3.5">
+      {/* Below xl the rail is hidden, so the hero is picked here. */}
+      {heroes.length > 1 ? (
         <div className="w-full sm:w-60 xl:hidden">
           <SearchableImageSelect
             options={heroes.map(({ hero }) => ({
@@ -86,7 +103,7 @@ const HeroesView = ({ characters, filterSlot, maps, retryMaps, metadata }: SlotP
               label: hero.character.name,
               imageSrc: hero.character.image_path
             }))}
-            value={String(selected.hero.character.id)}
+            value={String(heroId)}
             onValueChange={(value) => {
               if (value) setSelectedId(Number(value));
             }}
@@ -97,32 +114,16 @@ const HeroesView = ({ characters, filterSlot, maps, retryMaps, metadata }: SlotP
           />
         </div>
       ) : null}
-      {filterSlot}
-    </div>
-  );
-
-  if (!selected) {
-    return (
-      <div className="aqt-player flex flex-col gap-3.5">
-        {toolbar}
-        <CardSurface>
-          <p className="py-10 text-center text-caption text-[color:var(--aqt-fg-dim)]">{t("users.heroes.noStats")}</p>
-        </CardSurface>
-      </div>
-    );
-  }
-
-  const heroId = selected.hero.character.id;
-  const lowSampleNote =
-    selected.hero.games < LOW_SAMPLE_GAMES ? t("users.heroes.lowSample", { count: LOW_SAMPLE_GAMES }) : null;
-  const records = recordRows(rows, characterClass(selected.hero.character));
-
-  return (
-    <div className="aqt-player flex flex-col gap-3.5">
-      {toolbar}
       <div className="grid grid-cols-1 gap-3.5 xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start">
         <div className="flex min-w-0 flex-col gap-3.5">
-          <HeroSpotlight hero={selected.hero} playtime={selected.playtime} share={selected.share} metadata={metadata} />
+          <HeroSpotlight
+            hero={selected.hero}
+            playtime={selected.playtime}
+            share={selected.share}
+            radar={radarAxes(rows, heroClass)}
+            filterSlot={filterSlot}
+            metadata={metadata}
+          />
 
           <CardSurface
             title={t("users.heroes.vsAverage")}

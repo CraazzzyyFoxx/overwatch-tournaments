@@ -67,6 +67,34 @@ const RECORD_STATS: LogStatsName[] = [
   LogStatsName.SoloKills
 ];
 
+/** The radar's six axes per class, its headline first. */
+const RADAR_STATS: Record<string, LogStatsName[]> = {
+  damage: [
+    LogStatsName.HeroDamageDealt,
+    LogStatsName.SoloKills,
+    LogStatsName.Eliminations,
+    LogStatsName.FinalBlows,
+    LogStatsName.Deaths,
+    LogStatsName.UltimatesEarned
+  ],
+  support: [
+    LogStatsName.HealingDealt,
+    LogStatsName.HeroDamageDealt,
+    LogStatsName.Eliminations,
+    LogStatsName.FinalBlows,
+    LogStatsName.Deaths,
+    LogStatsName.UltimatesEarned
+  ],
+  tank: [
+    LogStatsName.DamageBlocked,
+    LogStatsName.HeroDamageDealt,
+    LogStatsName.Eliminations,
+    LogStatsName.FinalBlows,
+    LogStatsName.Deaths,
+    LogStatsName.UltimatesEarned
+  ]
+};
+
 export interface StatRow {
   name: LogStatsName;
   group: StatGroup;
@@ -145,6 +173,24 @@ export function recordRows(rows: StatRow[], heroClass: string | null | undefined
   const headline = CLASS_STATS[heroClass ?? ""]?.[0];
   const order = headline ? [headline, ...RECORD_STATS.filter((name) => name !== headline)] : RECORD_STATS;
   return order.flatMap((name) => rows.filter((row) => row.name === name && row.best !== null));
+}
+
+export interface RadarAxis {
+  name: LogStatsName;
+  /** The row's gain over the average: positive when better, whichever way the stat runs. */
+  delta: number;
+}
+
+/**
+ * The radar's axes: the class's six (a hero without a class reads as damage) that carry a comparison. `null` below
+ * three, where no shape is left to draw, which is also every hero under the sample floor.
+ */
+export function radarAxes(rows: StatRow[], heroClass: string | null | undefined): RadarAxis[] | null {
+  const axes = (RADAR_STATS[heroClass ?? ""] ?? RADAR_STATS.damage).flatMap((name) => {
+    const row = rows.find((candidate) => candidate.name === name);
+    return row && row.delta !== null ? [{ name, delta: row.delta }] : [];
+  });
+  return axes.length >= 3 ? axes : null;
 }
 
 export interface HeroMapRow {

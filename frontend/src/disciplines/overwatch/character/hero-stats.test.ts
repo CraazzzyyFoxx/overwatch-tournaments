@@ -4,7 +4,7 @@ import type { CatalogEntityRead } from "@/types/catalog.types";
 import type { CharacterStatBest, CharacterWithUserStats, UserMapRead } from "@/types/user.types";
 
 import { LogStatsName } from "../stat-names";
-import { heroMapRows, recordRows, sections, statRows, type StatRow } from "./hero-stats";
+import { heroMapRows, radarAxes, recordRows, sections, statRows, type StatRow } from "./hero-stats";
 
 const entity = (id: number, name: string, kind: CatalogEntityRead["kind"]): CatalogEntityRead => ({
   active: true,
@@ -145,6 +145,33 @@ describe("a hero's records", () => {
       LogStatsName.HeroDamageDealt,
       LogStatsName.Eliminations
     ]);
+  });
+});
+
+describe("a hero's radar", () => {
+  const stats = [
+    stat(LogStatsName.Deaths, 5.4, 4.05),
+    stat(LogStatsName.Eliminations, 13, 10),
+    stat(LogStatsName.HealingDealt, 9000, 8000),
+    stat(LogStatsName.HeroDamageDealt, 7200, 5100),
+    stat(LogStatsName.FinalBlows, 8.3, 5.3)
+  ];
+
+  it("reads the class's axes in order, the headline first, keeping only those with a comparison", () => {
+    const axes = radarAxes(statRows(hero(20, stats)), "support");
+    expect(axes?.map((axis) => axis.name)).toEqual([
+      LogStatsName.HealingDealt,
+      LogStatsName.HeroDamageDealt,
+      LogStatsName.Eliminations,
+      LogStatsName.FinalBlows,
+      LogStatsName.Deaths
+    ]);
+    expect(axes?.at(-1)?.delta).toBeCloseTo(-1 / 3);
+  });
+
+  it("draws nothing under three comparisons, which is every hero below the sample floor", () => {
+    expect(radarAxes(statRows(hero(9, stats)), "support")).toBeNull();
+    expect(radarAxes(statRows(hero(20, stats.slice(0, 2))), "damage")).toBeNull();
   });
 });
 
