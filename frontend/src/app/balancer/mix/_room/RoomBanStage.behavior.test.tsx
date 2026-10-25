@@ -393,12 +393,14 @@ async function settle(ticks = 3) {
   }
 }
 
-/** The stage as the room mounts it: the room's hook reads the state, the stage renders it once it has a session. */
+/** The stage as the room mounts it: the room's hook reads the state, the stage renders it once it has a session. The
+ * player a member pick is for comes from the room's rosters, here `chosenMember`. */
 function Stage({
   canHost,
   showAdmin,
+  chosenMember,
   onComplete
-}: Readonly<{ canHost: boolean; showAdmin: boolean; onComplete: () => void }>) {
+}: Readonly<{ canHost: boolean; showAdmin: boolean; chosenMember: number | null; onComplete: () => void }>) {
   const room = useMixBanRoom(50, "overwatch");
   if (room.state?.session == null) return null;
   return (
@@ -412,17 +414,23 @@ function Stage({
       heroesById={room.heroesById}
       canHost={canHost}
       showAdmin={showAdmin}
+      chosenMember={chosenMember}
       onComplete={onComplete}
     />
   );
 }
 
-async function render(onComplete: () => void, canHost = true, showAdmin = canHost) {
+async function render(
+  onComplete: () => void,
+  canHost = true,
+  showAdmin = canHost,
+  chosenMember: number | null = null,
+) {
   await act(async () => {
     root.render(
       <QueryClientProvider client={client}>
         <NextIntlClientProvider locale="en" messages={en} timeZone="UTC">
-          <Stage canHost={canHost} showAdmin={showAdmin} onComplete={onComplete} />
+          <Stage canHost={canHost} showAdmin={showAdmin} chosenMember={chosenMember} onComplete={onComplete} />
         </NextIntlClientProvider>
       </QueryClientProvider>,
     );
@@ -563,7 +571,8 @@ describe("RoomBanStage", () => {
 
     await act(async () => tile("Hero 101")?.click());
     expect(byLabel("Pick Hero 101 for P0")?.disabled).toBe(false);
-    await act(async () => byLabel("P1")?.click());
+    // The captain chooses P1 on the roster.
+    await render(() => {}, false, false, 502);
 
     const confirmations = [...document.body.querySelectorAll("button")].filter(
       (button) => button.textContent?.trim().startsWith("Pick ") && !button.disabled,

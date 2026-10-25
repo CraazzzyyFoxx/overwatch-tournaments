@@ -10,6 +10,7 @@ import { lobbyCandidateCount, buildMixOwner, canWriteMix, parseVariants, teamNam
 import { lobbyLetter } from "@/app/balancer/mix/pickup-chrome";
 import { usePickupMix } from "@/app/balancer/mix/usePickupMix";
 import { RoomChat } from "@/components/chat/RoomChat";
+import { memberChoice } from "@/components/pick-ban/pick-ban-model";
 import { useSideLabel } from "@/components/pick-ban/useSideLabel";
 import { BackLink } from "@/components/site/BackLink";
 import { Button } from "@/components/ui/button";
@@ -130,6 +131,8 @@ export function MixRoom({ initialGame, lobbyIndex }: Readonly<{ initialGame: Cus
 
   const [adminOpen, setAdminOpen] = useState(false);
   const [rostersOpen, setRostersOpen] = useState(true);
+  // The player a member pick is for (`PickBanMember.id`), chosen on the rosters; the ban stage picks for them.
+  const [chosenMember, setChosenMember] = useState<number | null>(null);
 
   if (lobby == null || shown.lobby == null) {
     return <PageStateCard state="not-found" headingLevel={1} description={tRoom("notFound")} />;
@@ -153,6 +156,9 @@ export function MixRoom({ initialGame, lobbyIndex }: Readonly<{ initialGame: Cus
         : emptyTeams(game, teamNames);
   const teams = withHeroRoom(baseTeams, shown.heroState, shownLobby.live_seats ?? []);
   const heroesById = heroRoom.heroesById;
+  // Only while the ban stage is up: its bar is what confirms the pick.
+  const pickFor =
+    shown.phase === "pregame" && shown.heroState != null ? memberChoice(shown.heroState, canWrite, chosenMember) : null;
   const awayIds = new Set((game.players ?? []).filter((row) => row.away).map((row) => row.workspace_member_id));
   const awayNames = teams
     .flatMap((team) => team.slots)
@@ -245,6 +251,7 @@ export function MixRoom({ initialGame, lobbyIndex }: Readonly<{ initialGame: Cus
           heroesById={heroesById}
           canHost={canWrite}
           showAdmin={adminOpen}
+          chosenMember={chosenMember}
           onComplete={() => void refetchGame()}
         />
       ) : (
@@ -326,7 +333,7 @@ export function MixRoom({ initialGame, lobbyIndex }: Readonly<{ initialGame: Cus
         <ChevronDown aria-hidden className={cn("size-4 transition-transform", rostersOpen && "rotate-180")} />
       </Button>
 
-      <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-[minmax(240px,300px)_minmax(0,1fr)_minmax(240px,300px)] lg:items-start lg:gap-5">
+      <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-[minmax(260px,360px)_minmax(0,1fr)_minmax(260px,360px)] lg:items-start lg:gap-5">
         {teams.slice(0, 2).map((team, index) => (
           <RoomTeamColumn
             key={index}
@@ -340,6 +347,7 @@ export function MixRoom({ initialGame, lobbyIndex }: Readonly<{ initialGame: Cus
             sideLabel={(code) => sideLabelOf(discipline, code)}
             captainOffline={shown.phase === "draft" && (captainOffline[index] ?? false)}
             captainControl={draftOrder[index] != null ? captainControl(draftOrder[index], index) : null}
+            pickFor={pickFor != null ? { ...pickFor, onChoose: setChosenMember } : undefined}
             className={cn(
               "row-start-1",
               index === 0 ? "col-start-1" : "col-start-2 lg:col-start-3",

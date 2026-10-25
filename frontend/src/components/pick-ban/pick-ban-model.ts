@@ -65,6 +65,30 @@ export function memberName(members: readonly PickBanMember[], memberId: number):
 }
 
 /**
+ * A member step's player choice (spec §11.6 R4-3, R4-9): whom the viewer may pick for -- themselves, as captain their
+ * teammates still owing, as a host anyone still owing -- and whom the pick is for: `chosen` while they still owe, else
+ * the first of them. Nothing to choose off a member step.
+ */
+export function memberChoice(
+  state: PickBanState,
+  isAdmin: boolean,
+  chosen: number | null
+): { choosable: number[]; acting: number | null } {
+  const choosable =
+    state.current_step?.member == null
+      ? []
+      : isAdmin
+        ? [
+            ...state.viewer_member_ids,
+            ...state.acting_member_ids.filter((id) => !state.viewer_member_ids.includes(id))
+          ]
+        : state.viewer_can_act
+          ? state.viewer_member_ids
+          : [];
+  return { choosable, acting: chosen != null && choosable.includes(chosen) ? chosen : (choosable[0] ?? null) };
+}
+
+/**
  * Picked items in their final play order (action_index, legacy `order`
  * fallback).
  *

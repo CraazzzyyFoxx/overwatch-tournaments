@@ -10,7 +10,7 @@ import { ElectOpenerDialog } from "@/components/pick-ban/ElectOpenerDialog";
 import { PickBanCommandBar } from "@/components/pick-ban/PickBanCommandBar";
 import { PickBanDraftTray } from "@/components/pick-ban/PickBanDraftTray";
 import { PickBanGrid, type PickBanItemLike } from "@/components/pick-ban/PickBanGrid";
-import { PickBanAssignBoard, PickBanMemberChooser } from "@/components/pick-ban/PickBanMemberTurn";
+import { PickBanAssignBoard } from "@/components/pick-ban/PickBanMemberTurn";
 import { PickBanRevealPanel } from "@/components/pick-ban/PickBanRevealPanel";
 import { PickBanSideChoice } from "@/components/pick-ban/PickBanSideChoice";
 import { PickBanUndoControl } from "@/components/pick-ban/PickBanUndoControl";
@@ -18,7 +18,6 @@ import { PregameAdminControls } from "@/components/pick-ban/PregameAdminControls
 import {
   CHARACTER_PICK_BAN_KIND,
   isSessionActive,
-  memberName,
   pickBanReserveMap,
   stepSubmissions,
   type PickBanSeat
@@ -36,10 +35,10 @@ import { heroTransitionName } from "./room-model";
 /**
  * A live match's hero bans and picks in the room's centre (spec §8, §11): the steps in order, the hero grid (or the
  * side choice, or the captains' assignment), and the bar that confirms the viewer's turn. The teams' bans and heroes
- * land in the columns beside it. A host acts for the team on the clock from the same bar, and reaches everything else
- * (a blind ban for an absent captain, a reopen, a reset) through the organizer controls the host menu unfolds here.
- * `onComplete` fires once when the room is done -- the steps finished or a host cancelled it -- so the room re-reads
- * the lobby, which then reads Live.
+ * land in the columns beside it, where a member step's player is chosen too (`chosenMember`). A host acts for the team
+ * on the clock from the same bar, and reaches everything else (a blind ban for an absent captain, a reopen, a reset)
+ * through the organizer controls the host menu unfolds here. `onComplete` fires once when the room is done -- the
+ * steps finished or a host cancelled it -- so the room re-reads the lobby, which then reads Live.
  */
 export function RoomBanStage({
   encounterId,
@@ -51,6 +50,7 @@ export function RoomBanStage({
   heroesById,
   canHost,
   showAdmin,
+  chosenMember,
   onComplete
 }: Readonly<{
   encounterId: number;
@@ -64,6 +64,8 @@ export function RoomBanStage({
   canHost: boolean;
   /** The host unfolded the organizer controls from the room's host menu. */
   showAdmin: boolean;
+  /** The player a member step picks for, as chosen on the rosters (`PickBanMember.id`). */
+  chosenMember: number | null;
   onComplete: () => void;
 }>) {
   const t = useTranslations("mixes.arena.bans");
@@ -85,7 +87,8 @@ export function RoomBanStage({
     session,
     queryKey,
     itemsById: heroesById,
-    isAdmin: canHost
+    isAdmin: canHost,
+    chosenMember
   });
 
   // A pick or an assignment says so in the tab title; a ban keeps its own (spec §11.6 R4-11). Each step (and each
@@ -140,13 +143,6 @@ export function RoomBanStage({
         <h2 className="font-display text-heading font-semibold text-[color:var(--aqt-fg)]">{title}</h2>
       </div>
       <StepStrip state={state} seats={seats} />
-      {room.memberStep && room.choosableMembers.length > 1 ? (
-        <PickBanMemberChooser
-          members={room.choosableMembers.map((id) => ({ id, name: memberName(state.members, id) }))}
-          value={room.actingMemberId}
-          onChange={room.chooseMember}
-        />
-      ) : null}
     </div>
   );
 

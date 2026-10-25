@@ -163,6 +163,8 @@ describe("withHeroRoom", () => {
 
     expect(teams.map((team) => team.bans)).toEqual([[2, 3], [1]]);
     expect(teams.map((team) => team.slots[0].seat?.heroId)).toEqual([4, 5]);
+    // The seat's player in the room, which a roster click picks for.
+    expect(teams.map((team) => team.slots[0].seat?.teamMemberId)).toEqual([501, 601]);
     expect(teams.map((team) => team.unassignedPicks)).toEqual([[], [6]]);
     expect(teams.map((team) => team.side)).toEqual(["blue", "red"]);
   });
