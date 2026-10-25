@@ -247,19 +247,38 @@ def test_the_mix_pick_presets_play_their_documented_orders() -> None:
             assert (assign.action, assign.actors, assign.count) == ("assign", "both", 5)
         assert [(step.action, step.actors) for step in draft] == [(action, f"side:{s}") for action, s in _LOL_ORDER]
         assert {step.member for step in draft if step.action == "pick"} == {member}
-    (phase,) = {preset.id: preset for preset in pbr.presets_for("deadlock")}["deadlock_bans_pick"].ruleset.phases
+    deadlock = {preset.id: preset for preset in pbr.presets_for("deadlock")}
+    bans = [("ban", "first", None), ("ban", "second", None), ("ban", "first", None), ("ban", "second", None)]
+    (phase,) = deadlock["deadlock_bans_pick"].ruleset.phases
+    assert [(step.action, step.actors, step.member) for step in phase.steps] == [*bans, ("pick", "both", "each")]
+    # Turn by turn: the same bans, then the snake A-BB-AA-BB-AA-B, each pick the next player's of its team.
+    (phase,) = deadlock["deadlock_bans_pick_turns"].ruleset.phases
+    snake = ["first", "second", "second", "first"] * 3
+    assert [(step.action, step.actors, step.member) for step in phase.steps] == [
+        *bans,
+        *(("pick", actors, "next") for actors in snake),
+    ]
+    # In two halves: a ban each (A, B), the snake's first six picks, a ban each (B, A), its last six.
+    (phase,) = deadlock["deadlock_two_phase_draft"].ruleset.phases
     assert [(step.action, step.actors, step.member) for step in phase.steps] == [
         ("ban", "first", None),
         ("ban", "second", None),
-        ("ban", "first", None),
+        *(("pick", actors, "next") for actors in snake[:6]),
         ("ban", "second", None),
-        ("pick", "both", "each"),
+        ("ban", "first", None),
+        *(("pick", actors, "next") for actors in snake[6:]),
     ]
     assert not any(_mix_only(preset) for preset in pbr.presets_for("overwatch"))
 
 
 def test_a_mix_plays_the_pick_presets_and_a_tournament_may_not() -> None:
-    for discipline, code in (("lol", "lol_draft"), ("lol", "lol_captains"), ("deadlock", "deadlock_bans_pick")):
+    for discipline, code in (
+        ("lol", "lol_draft"),
+        ("lol", "lol_captains"),
+        ("deadlock", "deadlock_bans_pick"),
+        ("deadlock", "deadlock_bans_pick_turns"),
+        ("deadlock", "deadlock_two_phase_draft"),
+    ):
         preset = pbr.mix_ban_preset(discipline, code)
         assert preset is not None and preset.id == code
         issues = pbr.validate_ruleset(preset.ruleset.to_json(), kind="hero", mode="pool", discipline=discipline)

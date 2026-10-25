@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef, useState, type ComponentPropsWithoutRef } from "react";
+import { forwardRef, useRef, useState, type ComponentPropsWithoutRef } from "react";
 import { useTranslations } from "next-intl";
 import {
   AlertTriangle,
@@ -33,11 +33,13 @@ import {
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
 import { Eyebrow, eyebrowClass } from "@/components/ui/eyebrow";
+import { NumberInput } from "@/components/ui/number-input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Slider } from "@/components/ui/slider";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
+import { useMixPresetClocks, type MixPresetClocks } from "@/hooks/useHeroBanPresets";
 import { cn } from "@/lib/utils";
 import type {
   CustomGame,
@@ -99,6 +101,8 @@ type PickupMixHeaderProps = {
   savingBanPreset?: boolean;
   /** Omitted -- Fearless is shown read-only (only while on), as it is to every viewer. */
   onSetFearless?: (fearless: boolean) => void;
+  /** Omitted -- the hero room's clocks are shown read-only (only when set), as they are to every viewer. */
+  onSetHeroClocks?: (clocks: HeroClocks) => void;
   /** Omitted -- the formation is shown read-only, as it is to every viewer. */
   onSetDraftSettings?: (settings: { team_formation: MixTeamFormation; draft_pick_seconds: number }) => void;
   savingDraftSettings?: boolean;
@@ -146,6 +150,7 @@ export function PickupMixHeader({
   onSetBanPreset,
   savingBanPreset = false,
   onSetFearless,
+  onSetHeroClocks,
   onSetDraftSettings,
   savingDraftSettings = false,
   onPostSignup,
@@ -160,6 +165,7 @@ export function PickupMixHeader({
   const th = useTranslations("mixes.header");
   const tb = useTranslations("pickBan.mixBans");
   const banPresetName = useBanPresetName();
+  const clocks = useMixPresetClocks(game?.discipline, game?.hero_ban_preset ?? null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [dropLobbyOpen, setDropLobbyOpen] = useState(false);
   const lobbyCount = game?.lobby_count ?? 1;
@@ -183,7 +189,9 @@ export function PickupMixHeader({
   const offerDelete = canDelete && onDeleteMix != null;
   // One lobby: its stage is the mix's, said beside the name. Several: each lobby card says its own, so nothing here.
   const onlyLobby = lobbyCount === 1 ? game?.lobbies.find((row) => row.lobby_index === 0) : undefined;
-  const offerRules = canWrite && (onSetBanPreset != null || onSetFearless != null || onSetDraftSettings != null);
+  const offerRules =
+    canWrite &&
+    (onSetBanPreset != null || onSetFearless != null || onSetHeroClocks != null || onSetDraftSettings != null);
   // What the next Start plays by, said once: the host's Rules trigger and the viewers' line read the same words.
   const rulesSummary =
     game == null
@@ -191,7 +199,14 @@ export function PickupMixHeader({
       : [
           banPresetName(game.hero_ban_preset),
           game.team_formation === "draft" ? th("formationDraft") : th("formationBalance"),
-          game.hero_fearless ? tb("fearless") : null
+          game.hero_fearless ? tb("fearless") : null,
+          // A clock only when it is the host's own and the preset takes such a step at all.
+          clocks.ban !== undefined && game.hero_ban_seconds != null
+            ? tb("banClock", { seconds: game.hero_ban_seconds })
+            : null,
+          clocks.pick !== undefined && game.hero_pick_seconds != null
+            ? tb("pickClock", { seconds: game.hero_pick_seconds })
+            : null
         ]
           .filter(Boolean)
           .join(" · ");
@@ -309,6 +324,8 @@ export function PickupMixHeader({
               savingBanPreset={savingBanPreset}
               onSetBanPreset={onSetBanPreset}
               onSetFearless={onSetFearless}
+              clocks={clocks}
+              onSetHeroClocks={onSetHeroClocks}
               savingDraftSettings={savingDraftSettings}
               onSetDraftSettings={onSetDraftSettings}
             />
@@ -411,10 +428,13 @@ const SettingTrigger = forwardRef<HTMLButtonElement, ComponentPropsWithoutRef<ty
   }
 );
 
+/** The hero room's clocks a header write sends; an omitted one stays as it is, null hands it back to the preset. */
+type HeroClocks = { hero_ban_seconds?: number | null; hero_pick_seconds?: number | null };
+
 /**
- * What the next Start plays by -- hero bans, Fearless, how teams form -- set
+ * What the next Start plays by -- hero bans, Fearless, the room's clocks, how teams form -- set
  * once an evening, so one trigger that reads the whole rule set instead of
- * three controls in the row. Every field writes on change.
+ * three controls in the row. Every field writes on change; a clock when it is left.
  */
 function RulesSettings({
   game,
@@ -422,6 +442,8 @@ function RulesSettings({
   savingBanPreset,
   onSetBanPreset,
   onSetFearless,
+  clocks,
+  onSetHeroClocks,
   savingDraftSettings,
   onSetDraftSettings
 }: Readonly<{
@@ -430,6 +452,9 @@ function RulesSettings({
   savingBanPreset: boolean;
   onSetBanPreset?: (preset: string | null) => void;
   onSetFearless?: (fearless: boolean) => void;
+  /** The preset's own clocks: a field only for a step the preset takes, its seconds the empty field's hint. */
+  clocks: MixPresetClocks;
+  onSetHeroClocks?: (clocks: HeroClocks) => void;
   savingDraftSettings: boolean;
   onSetDraftSettings?: (settings: { team_formation: MixTeamFormation; draft_pick_seconds: number }) => void;
 }>) {
@@ -478,6 +503,31 @@ function RulesSettings({
             {tb("fearless")}
           </label>
         ) : null}
+        {onSetHeroClocks && (clocks.ban !== undefined || clocks.pick !== undefined) ? (
+          <div className="space-y-1.5">
+            {clocks.ban !== undefined ? (
+              <HeroClockField
+                id="mix-header-ban-seconds"
+                label={tb("banSeconds")}
+                value={game.hero_ban_seconds}
+                presetSeconds={clocks.ban}
+                disabled={savingBanPreset}
+                onCommit={(seconds) => onSetHeroClocks({ hero_ban_seconds: seconds })}
+              />
+            ) : null}
+            {clocks.pick !== undefined ? (
+              <HeroClockField
+                id="mix-header-pick-seconds"
+                label={tb("pickSeconds")}
+                value={game.hero_pick_seconds}
+                presetSeconds={clocks.pick}
+                disabled={savingBanPreset}
+                onCommit={(seconds) => onSetHeroClocks({ hero_pick_seconds: seconds })}
+              />
+            ) : null}
+            <p className="text-caption text-[color:var(--aqt-fg-faint)]">{tb("clocksHint")}</p>
+          </div>
+        ) : null}
         <div className="space-y-1.5 border-t border-[color:var(--aqt-border)] pt-3">
           <Eyebrow as="label" htmlFor="mix-header-formation">
             {th("formation")}
@@ -498,6 +548,52 @@ function RulesSettings({
         </div>
       </PopoverContent>
     </Popover>
+  );
+}
+
+/**
+ * One of the hero room's clocks, in seconds (10..600). Empty is the preset's own, whose seconds the empty field
+ * shows; one write when the field is left, not "4" on the way to "45".
+ */
+function HeroClockField({
+  id,
+  label,
+  value,
+  presetSeconds,
+  disabled,
+  onCommit
+}: Readonly<{
+  id: string;
+  label: string;
+  value: number | null;
+  presetSeconds: number | null;
+  disabled: boolean;
+  onCommit: (seconds: number | null) => void;
+}>) {
+  // NumberInput reports the clamped value (or null when emptied) right before its onBlur, so this is never stale there.
+  const typed = useRef<number | null>(value);
+  return (
+    <label htmlFor={id} className="flex items-center gap-2 text-caption text-[color:var(--aqt-fg-muted)]">
+      <NumberInput
+        id={id}
+        integer
+        min={10}
+        max={600}
+        placeholder={presetSeconds != null ? String(presetSeconds) : undefined}
+        disabled={disabled}
+        value={value}
+        onValueChange={(next) => {
+          typed.current = next;
+        }}
+        onBlur={() => {
+          if (typed.current !== value) onCommit(typed.current);
+        }}
+        size="sm"
+        // The host's own seconds in the field's colour, the preset's (the placeholder) muted: the label's is muted too.
+        className="w-16 bg-background/50 px-2 tabular-nums text-[color:var(--aqt-fg)]"
+      />
+      {label}
+    </label>
   );
 }
 

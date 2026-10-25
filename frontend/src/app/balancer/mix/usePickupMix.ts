@@ -12,6 +12,7 @@ import {
   customGameService,
   type CustomGame,
   type CustomGamePlayerPatch,
+  type HeroRoomPatch,
   type MixSelfSignup,
   type MixSelfState,
   type MixTeamFormation,
@@ -550,9 +551,9 @@ export function usePickupMix(
     onError: (error) => notify.apiError(error),
   });
 
-  /** The mix's hero room (ban preset, Fearless). Returns the game, so the board is seeded like any other host write. */
+  /** The mix's hero room (preset, Fearless, clocks). Returns the game, so the board is seeded like any host write. */
   const setBanPreset = useMutation({
-    mutationFn: (patch: { hero_ban_preset: string | null; hero_fearless?: boolean }) =>
+    mutationFn: (patch: HeroRoomPatch) =>
       customGameService.setBanPreset(workspaceId, selectedGameId as number, patch),
     onSuccess: applyGame,
     onError: (error) => notify.apiError(error),

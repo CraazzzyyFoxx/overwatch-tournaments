@@ -63,6 +63,8 @@ class CustomGame(db.TimeStampIntegerMixin):
         CheckConstraint(f"lobby_count BETWEEN 1 AND {MAX_LOBBIES}", name="ck_custom_game_lobby_count"),
         CheckConstraint("team_formation IN ('balance', 'draft')", name="ck_custom_game_team_formation"),
         CheckConstraint("draft_pick_seconds BETWEEN 10 AND 600", name="ck_custom_game_draft_pick_seconds"),
+        CheckConstraint("hero_ban_seconds BETWEEN 10 AND 600", name="ck_custom_game_hero_ban_seconds"),
+        CheckConstraint("hero_pick_seconds BETWEEN 10 AND 600", name="ck_custom_game_hero_pick_seconds"),
         # Target of ``fk_encounter_custom_game``: owner, workspace and discipline in one key.
         UniqueConstraint("id", "workspace_id", "discipline", name="uq_custom_game_owner_key"),
         # Deferred like ``fk_encounter_scoring_rule``: a workspace delete removes rule and mix in one statement.
@@ -116,6 +118,10 @@ class CustomGame(db.TimeStampIntegerMixin):
     draft_pick_seconds: Mapped[int] = mapped_column(Integer(), nullable=False, default=30, server_default="30")
     #: Fearless (spec §11.4): a player cannot pick a hero they were recorded on in an earlier round of this mix.
     hero_fearless: Mapped[bool] = mapped_column(Boolean(), nullable=False, default=False, server_default="false")
+    #: The hero room's clock per ban (and protect) / per pick, in seconds (10..600); NULL = the preset's own. Every such
+    #: step of the next room runs on it -- an all-at-once pick is one step, so its clock is the whole pick's.
+    hero_ban_seconds: Mapped[int | None] = mapped_column(Integer(), nullable=True)
+    hero_pick_seconds: Mapped[int | None] = mapped_column(Integer(), nullable=True)
 
 
 class CustomGameCoHost(db.Base):

@@ -829,8 +829,8 @@ class CustomGameService:
                 workspace_id=workspace_id, preset="wins", game_formula="win", end_formula=WINS_END_FORMULA
             ),
         )
-        # A clone keeps its source's bans, Fearless and formation; a new mix starts from its host's defaults for this
-        # game (spec §4.3). A stored ban default the game no longer offers is no default.
+        # A clone keeps its source's bans, Fearless, clocks and formation; a new mix starts from its host's defaults for
+        # this game (spec §4.3). A stored ban default the game no longer offers is no default.
         if source is not None:
             ban_preset = source.hero_ban_preset
             team_formation, draft_pick_seconds = source.team_formation, source.draft_pick_seconds
@@ -857,6 +857,8 @@ class CustomGameService:
             lobby_count=source.lobby_count if source is not None else 1,
             hero_ban_preset=ban_preset,
             hero_fearless=source.hero_fearless if source is not None else False,
+            hero_ban_seconds=source.hero_ban_seconds if source is not None else None,
+            hero_pick_seconds=source.hero_pick_seconds if source is not None else None,
             team_formation=team_formation,
             draft_pick_seconds=draft_pick_seconds,
         )
@@ -1585,6 +1587,7 @@ class CustomGameService:
         custom_game_id: int,
         hero_ban_preset: str | None,
         hero_fearless: bool | None = None,
+        clocks: Mapping[str, int | None] | None = None,
         actor_user_id: int,
         actor_is_superuser: bool = False,
     ) -> models.CustomGame:
@@ -1592,6 +1595,8 @@ class CustomGameService:
 
         A live match keeps the room it started with; the change applies from the next Start. 422 ``unknown_ban_preset``.
         ``hero_fearless`` (when given) turns Fearless on or off; it too applies from the next room (spec §11.4).
+        ``clocks`` holds the sent ones of ``hero_ban_seconds`` / ``hero_pick_seconds``: the next room's seconds per
+        ban / per pick step, ``None`` for the preset's own clock.
         """
         game = await self._writable(
             session,
@@ -1605,6 +1610,11 @@ class CustomGameService:
         game.hero_ban_preset = hero_ban_preset
         if hero_fearless is not None:
             game.hero_fearless = hero_fearless
+        clocks = clocks or {}
+        if "hero_ban_seconds" in clocks:
+            game.hero_ban_seconds = clocks["hero_ban_seconds"]
+        if "hero_pick_seconds" in clocks:
+            game.hero_pick_seconds = clocks["hero_pick_seconds"]
         await session.flush()
         return game
 

@@ -4091,7 +4091,12 @@
     "mixBans": {
       "none": "No bans",
       "label": "Hero bans",
-      "fearless": "Fearless"
+      "fearless": "Fearless",
+      "banSeconds": "Ban clock, seconds",
+      "pickSeconds": "Pick clock, seconds",
+      "clocksHint": "Per turn; an all-at-once pick gets the whole clock. Empty: the preset's own.",
+      "banClock": "ban {seconds} s",
+      "pickClock": "pick {seconds} s"
     },
     "room": {
       "playerHeroes": {
@@ -4964,7 +4969,9 @@
         "valorant_vct_bo1": "VCT Bo1: six bans, side, decider",
         "lol_draft": "Draft: bans and picks by position",
         "lol_captains": "Draft: captains pick, then assign",
-        "deadlock_bans_pick": "Two bans each, then everyone picks"
+        "deadlock_bans_pick": "Two bans each, then everyone picks at once",
+        "deadlock_bans_pick_turns": "Two bans each, then picks in turn",
+        "deadlock_two_phase_draft": "Ban, three picks, ban, three picks"
       },
       "preview": {
         "title": "Over the series",

@@ -424,6 +424,9 @@ def _dump_game(
         "hero_ban_preset": game.hero_ban_preset,
         # Fearless (spec §11.4): a player never picks a hero they played earlier in this mix.
         "hero_fearless": game.hero_fearless,
+        # The room's clock per ban / per pick in seconds; null = the preset's own.
+        "hero_ban_seconds": game.hero_ban_seconds,
+        "hero_pick_seconds": game.hero_pick_seconds,
         # How a lobby forms its teams by default, and the draft's pick clock (spec §4.3).
         "team_formation": game.team_formation,
         "draft_pick_seconds": game.draft_pick_seconds,
@@ -1013,7 +1016,8 @@ def register(broker: Any, logger: Any) -> None:
 
     @broker.subscriber("rpc.balancer.custom.set_ban_preset")
     async def _set_ban_preset(data: dict, msg: RabbitMessage) -> dict:
-        """The mix's hero ban preset: an ordinary mix write, membership plus host-or-co-host in ``_writable``."""
+        """The mix's hero ban preset, Fearless and clocks: an ordinary mix write, membership plus host-or-co-host in
+        ``_writable``."""
 
         async def op(session: Any) -> Any:
             user = c.active_actor(data)
@@ -1026,6 +1030,8 @@ def register(broker: Any, logger: Any) -> None:
                 custom_game_id=_game_id(data),
                 hero_ban_preset=body.hero_ban_preset,
                 hero_fearless=body.hero_fearless,
+                # exclude_unset keeps "leave the clock alone" apart from "null" (= the preset's own clock).
+                clocks=body.model_dump(include={"hero_ban_seconds", "hero_pick_seconds"}, exclude_unset=True),
                 actor_user_id=user.id,
                 actor_is_superuser=user.is_superuser,
             )

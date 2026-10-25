@@ -312,7 +312,8 @@ DOCS: dict[str, dict] = {
             "Resolves ownership from the mix id; an optional workspace_id restricts the read "
             "and returns 404 if the mix belongs to another workspace."
             " It carries the mix's hero_ban_preset (null = no bans)."
-            " It carries hero_fearless (spec §11.4)."
+            " It carries hero_fearless (spec §11.4), and hero_ban_seconds / hero_pick_seconds (the hero room's clock"
+            " per ban / per pick step in seconds; null = the preset's own)."
             " Each lobby carries state (idle | ready | pregame | live), live_seats (the live match's participations"
             " {id, slot, name}) and opener_index (the lineup team that bans first in the next match, null without"
             " bans)."
@@ -415,11 +416,15 @@ DOCS: dict[str, dict] = {
         "description": (
             "Permission: workspace membership plus being the mix's host or co-host (or a superuser). "
             "Sets the hero ban preset the lobbies' next Start opens a room on -- a hero preset of the mix's own "
-            "game that bans no player on map 1 (deadlock_hero_bans, deadlock_bans_pick, lol_side_selection, "
-            "lol_draft, lol_captains, the Overwatch hero presets) -- or null for no bans, and returns the refreshed "
-            "mix. A live match keeps the room it started with. 422 unknown_ban_preset for any other code."
+            "game that bans no player on map 1 (deadlock_hero_bans, deadlock_bans_pick, deadlock_bans_pick_turns, "
+            "deadlock_two_phase_draft, lol_side_selection, lol_draft, lol_captains, the Overwatch hero presets) -- or "
+            "null for no bans, and returns the refreshed mix. A live match keeps the room it started with. 422 "
+            "unknown_ban_preset for any other code."
             " hero_fearless, when sent, turns Fearless on or off for the next room: a player cannot pick a hero they"
             " were recorded on earlier in the mix."
+            " hero_ban_seconds / hero_pick_seconds, when sent, set the next room's clock in seconds (10..600; null ="
+            " the preset's own) for every ban and protect step / every pick step -- an all-at-once pick is one step,"
+            " so its clock is the whole pick's; a side pick or an assignment keeps the preset's clock."
         ),
     },
     "rpc.balancer.custom.set_draft_settings": {

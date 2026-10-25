@@ -98,6 +98,8 @@ class WithRosterIdentityTests(IsolatedAsyncioTestCase):
                     self_role_edit=False,
                     hero_ban_preset=None,
                     hero_fearless=False,
+                    hero_ban_seconds=None,
+                    hero_pick_seconds=None,
                     team_formation="balance",
                     draft_pick_seconds=30,
                     general_voice_channel_id=None,
