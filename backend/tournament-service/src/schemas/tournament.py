@@ -75,6 +75,8 @@ class TournamentRead(BaseRead):
     discord_broadcasts_enabled: bool = True
     discord_dms_enabled: bool = True
     logs_official: bool = False
+    # Seconds participants' POV streams run behind real time; the stream VOD chapter offsets add it.
+    pov_stream_delay_s: int = 0
     phase_schedule: list[TournamentPhaseScheduleRead] = []
     win_points: float = 1.0
     draw_points: float = 0.5

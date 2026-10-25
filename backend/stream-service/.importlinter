@@ -12,6 +12,17 @@ source_modules =
 forbidden_modules =
     sqlalchemy
 
+[importlinter:contract:domain-is-pure]
+name = domain/ stays free of sessions and transport
+type = forbidden
+source_modules =
+    src.domain
+forbidden_modules =
+    src.services
+    src.rpc
+    src.core.db
+    sqlalchemy
+
 [importlinter:contract:services-dont-import-rpc]
 name = services never import rpc
 type = forbidden

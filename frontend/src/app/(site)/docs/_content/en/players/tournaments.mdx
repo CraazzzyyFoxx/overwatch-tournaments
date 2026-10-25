@@ -44,7 +44,7 @@ Tournament sections sit in one rail of tabs. Some of them show up later than oth
 | **Bracket** | The stage bracket plus a switch to **Standings** | Once tournament matches have started |
 | **Matches** | Every match with filters by stage, team and map | Once tournament matches have started |
 | **Statistics** | The **Heroes** and **Maps** tabs for this tournament | Once tournament matches have started |
-| **Streams** | Participant broadcasts | While the tournament runs and somebody is live |
+| **Streams** | Participant broadcasts, and the recordings of past ones with match timestamps | While the tournament runs and somebody is live, and after it while recordings with matches still exist |
 
 The order of the tabs follows the phase: before play starts **Participants** sits near the front, and once matches begin it moves to the end to make room for the bracket and the matches. If a section is still locked, the hint explains why: **Available when tournament play begins.**, **The organizer has not published tournament stages yet.** or **Available once teams are formed.**
 
@@ -113,6 +113,8 @@ The lobby code and the organizer's instructions arrive in the **lobby room** cha
 ## Streams
 
 If participants stream on Twitch, their broadcasts are collected in the **Streams** section: the live channels, how many people are watching and how long each has been on air. While the tournament is played, the header of the **Overview** offers **Watch the broadcast**, and the organizer's official broadcast also docks in a corner of the page.
+
+While a participant streams their POV, the site records when their team's matches happened on that stream. The recordings are collected under **Past broadcasts**: each lists the matches with their timestamps, and picking one plays the recording right on the page from the start of that map. The match page carries the same timestamps under **Watch the match**, where they open the recording on Twitch. A map's time comes from its match log; without a log the link goes to the match start the organizer recorded. Recordings only appear if the streamer keeps past broadcasts on Twitch, and they disappear once Twitch deletes them.
 
 Your own stream is only surfaced there if you allowed it. The **Show my live stream on tournament pages** switch lives in your account settings and overrides everything else. See [Account and sign-in](/docs/players/account).
 

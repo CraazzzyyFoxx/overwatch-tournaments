@@ -115,7 +115,10 @@ export type SlotProps = {
    */
   characterStats: {
     characters: CharacterWithUserStats[];
-    maps: UserMapRead[];
+    /** The player's maps with their per-character records; `undefined` while the read is in flight. */
+    maps: UserMapRead[] | undefined;
+    /** Set when the maps read failed: retries it. */
+    retryMaps?: () => void;
     filterSlot?: ReactNode;
     metadata: DisciplineMetadata;
   };

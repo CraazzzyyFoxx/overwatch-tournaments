@@ -14,6 +14,36 @@ const fmt = {
     new Intl.NumberFormat("en-US", options).format(value)
 };
 
+type ParityStat = { name: string; formatted_overall?: unknown; formatted_avg10?: unknown };
+type HeroesParity = {
+  per_response: Record<string, { hero_id: number; stats: ParityStat[] }[]>;
+  isRevertedStat_by_LogStatsName: Record<string, boolean>;
+};
+
+// Fixed after the move: lower-is-better follows the backend's directions, so damage per final blow, shots missed,
+// first deaths, performance and impact rank joined deaths, damage taken and environmental deaths. hero-stats.test.ts
+// pins the corrected sign; the captured direction and deltas of these stats are no longer the contract.
+const REDIRECTED = new Set(["damage_fb", "shots_missed", "first_deaths", "performance", "impact_rank"]);
+// Fixed after the move too: accuracy prints through the locale's percent format ("48,4 %" in Russian), not a
+// hard-coded "48.40%", so its captured text is no longer the contract.
+const withoutAccuracyText = ({ formatted_overall: _overall, formatted_avg10: _avg10, ...stat }: ParityStat) => stat;
+const comparable = (value: HeroesParity): HeroesParity => ({
+  per_response: Object.fromEntries(
+    Object.entries(value.per_response).map(([label, rows]) => [
+      label,
+      rows.map((row) => ({
+        ...row,
+        stats: row.stats
+          .filter((stat) => !REDIRECTED.has(stat.name))
+          .map((stat) => (stat.name.includes("accuracy") ? withoutAccuracyText(stat) : stat))
+      }))
+    ])
+  ),
+  isRevertedStat_by_LogStatsName: Object.fromEntries(
+    Object.entries(value.isRevertedStat_by_LogStatsName).filter(([name]) => !REDIRECTED.has(name))
+  )
+});
+
 describe("users/components/heroes/utils.ts → disciplines/overwatch/character/utils", () => {
   it("reproduces every captured character-stat derivation from the real native wire", () => {
     const fixture = read(PRE, "users-heroes-utils.json");
@@ -43,7 +73,8 @@ describe("users/components/heroes/utils.ts → disciplines/overwatch/character/u
     }
     const reverted = Object.fromEntries(Object.values(LogStatsName).map((n) => [n, characterUtils.isRevertedStat(n)]));
     expect(Object.keys(perResponse).length).toBe(18);
-    expect(norm({ per_response: perResponse, isRevertedStat_by_LogStatsName: reverted })).toEqual(fixture.output);
+    const actual = norm({ per_response: perResponse, isRevertedStat_by_LogStatsName: reverted }) as HeroesParity;
+    expect(comparable(actual)).toEqual(comparable(fixture.output as HeroesParity));
   });
 });
 

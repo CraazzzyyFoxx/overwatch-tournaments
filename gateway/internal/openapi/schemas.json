@@ -7446,6 +7446,14 @@
       },
       "summary": "User tournaments"
     },
+    "rpc.stream.encounter_vods": {
+      "description": "Permission: public; no authentication required (identity is optional and only used for visibility). The tournament POV VOD list narrowed to one encounter: only VODs that show it, each with only that encounter's chapters, ordered by team name, player name and broadcast start, so both teams' perspectives of the match sit side by side. An unknown encounter answers 404, as does one whose tournament is hidden from the viewer; a mix encounter, which belongs to no tournament, answers an empty list.",
+      "response": {
+        "array": false,
+        "ref": "stream.StreamVodsRead"
+      },
+      "summary": "Get encounter POV VODs"
+    },
     "rpc.stream.health": {
       "description": "Permission: global `stream.read`. Outcome of the last Twitch live-status poll tick next to the config that produced it: status, when it ran, how many tournaments and channels it covered, how many channels were live, and Twitch's remaining rate-limit budget. Exists because the tick swallows every Helix failure by design so an outage cannot kill the scheduler \u2014 without this a poller rejected by Twitch is indistinguishable from a working one. A null status means no tick has been recorded yet, which is not the same as a recorded failure. The grant is global rather than workspace-scoped because there is one poller for the whole platform, so the numbers carry no workspace dimension and a workspace-scoped grant is not enough.",
       "response": {
@@ -7487,6 +7495,14 @@
         "ref": "stream.TournamentStreamsRead"
       },
       "summary": "Get tournament streams"
+    },
+    "rpc.stream.tournament_vods": {
+      "description": "Permission: public; no authentication required (identity is optional and only used for visibility). Returns the past Twitch broadcasts (VODs) of the tournament's participants' own POV streams, newest first, each with its chapters: the matches of the streamer's team that the broadcast shows and how many seconds into the VOD each starts, the tournament's stream delay already applied. A chapter is one logged map when the encounter has maps with a trustworthy log time, otherwise the whole series when the encounter has a start time; a VOD with no chapter is not listed. Only broadcasts the poller saw live are known, a VOD Twitch no longer has is omitted, and a player who no longer consents to being broadcast disappears from past broadcasts too. Official casts are not included. A hidden tournament answers 404 for an ineligible viewer.",
+      "response": {
+        "array": false,
+        "ref": "stream.StreamVodsRead"
+      },
+      "summary": "Get tournament POV VODs"
     },
     "rpc.tournament.admin.create#encounter": {
       "description": "Permission: workspace `match.create`. Creates an encounter.",
@@ -38717,6 +38733,63 @@
       "title": "UserTournamentWithStats",
       "type": "object"
     },
+    "stream.StreamChapterRead": {
+      "description": "One match inside a POV VOD, and where it starts.",
+      "properties": {
+        "encounter_id": {
+          "title": "Encounter Id",
+          "type": "integer"
+        },
+        "encounter_name": {
+          "title": "Encounter Name",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "map",
+            "series"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "map_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Map Name"
+        },
+        "map_position": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Map Position"
+        },
+        "offset_s": {
+          "title": "Offset S",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "encounter_id",
+        "encounter_name",
+        "kind",
+        "offset_s"
+      ],
+      "title": "StreamChapterRead",
+      "type": "object"
+    },
     "stream.StreamEntryRead": {
       "description": "One channel in the tournament's stream block.",
       "properties": {
@@ -39089,6 +39162,71 @@
         "name"
       ],
       "title": "StreamTeamRead",
+      "type": "object"
+    },
+    "stream.StreamVodRead": {
+      "description": "One participant's past (or still running) POV broadcast with its chapters.",
+      "properties": {
+        "channel": {
+          "title": "Channel",
+          "type": "string"
+        },
+        "chapters": {
+          "items": {
+            "$ref": "#/components/schemas/stream.StreamChapterRead"
+          },
+          "title": "Chapters",
+          "type": "array"
+        },
+        "ended_at": {
+          "format": "date-time",
+          "title": "Ended At",
+          "type": "string"
+        },
+        "player": {
+          "$ref": "#/components/schemas/stream.StreamPlayerRead"
+        },
+        "started_at": {
+          "format": "date-time",
+          "title": "Started At",
+          "type": "string"
+        },
+        "url": {
+          "title": "Url",
+          "type": "string"
+        },
+        "vod_id": {
+          "title": "Vod Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "vod_id",
+        "url",
+        "channel",
+        "started_at",
+        "ended_at",
+        "player",
+        "chapters"
+      ],
+      "title": "StreamVodRead",
+      "type": "object"
+    },
+    "stream.StreamVodsRead": {
+      "description": "Body of both chronology reads. Only VODs with at least one chapter are listed.",
+      "properties": {
+        "vods": {
+          "items": {
+            "$ref": "#/components/schemas/stream.StreamVodRead"
+          },
+          "title": "Vods",
+          "type": "array"
+        }
+      },
+      "required": [
+        "vods"
+      ],
+      "title": "StreamVodsRead",
       "type": "object"
     },
     "stream.TournamentStreamsRead": {
@@ -58742,6 +58880,11 @@
           "title": "Phase Schedule",
           "type": "array"
         },
+        "pov_stream_delay_s": {
+          "default": 0,
+          "title": "Pov Stream Delay S",
+          "type": "integer"
+        },
         "registrations_count": {
           "anyOf": [
             {
@@ -59484,6 +59627,20 @@
           ],
           "default": null,
           "title": "Name"
+        },
+        "pov_stream_delay_s": {
+          "anyOf": [
+            {
+              "maximum": 900,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pov Stream Delay S"
         },
         "rules": {
           "anyOf": [

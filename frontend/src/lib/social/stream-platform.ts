@@ -217,3 +217,27 @@ export function formatStreamUptime(
   return hours > 0 ? `${hours}${units.h} ${minutes % 60}${units.m}` : `${minutes}${units.m}`;
 }
 
+/**
+ * Seconds as Twitch's `t` (twitch.tv link) and `time` (player) value:
+ * `2710` → `0h45m10s`. All three units, always — both parsers accept that form.
+ */
+export function twitchTimestamp(seconds: number): string {
+  const total = Math.max(0, Math.floor(seconds));
+  return `${Math.floor(total / 3600)}h${Math.floor((total % 3600) / 60)}m${total % 60}s`;
+}
+
+/** A past broadcast on twitch.tv, opened `seconds` in. `vodId` has no "v" prefix. */
+export function twitchVodUrl(vodId: string, seconds: number): string {
+  return `https://www.twitch.tv/videos/${encodeURIComponent(vodId)}?t=${twitchTimestamp(seconds)}`;
+}
+
+/**
+ * A moment of a past broadcast as the player's own clock shows it:
+ * `2710` → `0:45:10`. Not `formatSeriesClock`: this is a position to seek to,
+ * read against Twitch's scrubber, not a duration.
+ */
+export function formatVodClock(seconds: number): string {
+  const total = Math.max(0, Math.floor(seconds));
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${Math.floor(total / 3600)}:${pad(Math.floor((total % 3600) / 60))}:${pad(total % 60)}`;
+}

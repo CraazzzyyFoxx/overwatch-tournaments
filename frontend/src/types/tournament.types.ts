@@ -236,6 +236,11 @@ export interface Tournament {
    * game that has none yet. Off unless an organizer turned it on.
    */
   logs_official: boolean;
+  /**
+   * Seconds participants' POV streams run behind the match (0..900; the delay
+   * the rules require). Shifts the timestamps of their past broadcasts.
+   */
+  pov_stream_delay_s: number;
   phase_schedule: TournamentPhaseSchedule[];
   win_points: number;
   draw_points: number;

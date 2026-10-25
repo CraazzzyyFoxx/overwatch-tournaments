@@ -1,6 +1,7 @@
 """Response models for the ``rpc.stream.*`` contract.
 
-These are the wire shape of the public tournament-streams block. The hand-written
+These are the wire shape of the public tournament-streams block and of the POV
+VOD chronology (``rpc.stream.tournament_vods``/``encounter_vods``). The hand-written
 frontend mirror is ``frontend/src/types/stream.types.ts`` (no OpenAPI codegen in
 this project) — the two are kept in sync by eye, so field names and nullability
 here are the contract, not an implementation detail.
@@ -16,6 +17,7 @@ from pydantic import BaseModel
 from src.schemas.base import BaseRead
 
 __all__ = (
+    "StreamChapterRead",
     "StreamEntryRead",
     "StreamPlatform",
     "StreamPlayerRead",
@@ -24,6 +26,8 @@ __all__ = (
     "StreamPollTickRead",
     "StreamRepollRead",
     "StreamTeamRead",
+    "StreamVodRead",
+    "StreamVodsRead",
     "TournamentStreamsRead",
 )
 
@@ -94,6 +98,44 @@ class TournamentStreamsRead(BaseModel):
     #: Participant streams, and only the ones currently live: this list answers
     #: "who is on air right now", so an offline participant has nothing to say.
     participants: list[StreamEntryRead]
+
+
+class StreamChapterRead(BaseModel):
+    """One match inside a POV VOD, and where it starts."""
+
+    encounter_id: int
+    #: ``encounter.encounter.name``, e.g. "Team A vs Team B".
+    encounter_name: str
+    #: ``map`` — one logged map; ``series`` — the whole encounter, when no map of it has a trustworthy log time.
+    kind: Literal["map", "series"]
+    #: The game's position in the encounter when the log is bound to a game.
+    map_position: int | None = None
+    #: Catalog name of the logged map; null for a series chapter.
+    map_name: str | None = None
+    #: Seconds into the VOD, the tournament's stream delay already applied. 0 when the match was already running
+    #: as the broadcast began.
+    offset_s: int
+
+
+class StreamVodRead(BaseModel):
+    """One participant's past (or still running) POV broadcast with its chapters."""
+
+    #: Twitch video id, without the ``v`` prefix the embedded player needs.
+    vod_id: str
+    url: str
+    channel: str
+    #: When the broadcast started (Helix).
+    started_at: datetime
+    #: The last time the poller saw it live: about the end, or about now while it is still on air.
+    ended_at: datetime
+    player: StreamPlayerRead
+    chapters: list[StreamChapterRead]
+
+
+class StreamVodsRead(BaseModel):
+    """Body of both chronology reads. Only VODs with at least one chapter are listed."""
+
+    vods: list[StreamVodRead]
 
 
 class StreamRepollRead(BaseModel):

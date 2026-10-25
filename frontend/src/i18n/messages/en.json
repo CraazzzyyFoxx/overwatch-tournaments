@@ -2450,7 +2450,10 @@
       "scopedCriticalHitKills": "Scoped Crit Kills",
       "shotsFired": "Shots Fired",
       "shotsHit": "Shots Hit",
-      "shotsMissed": "Shots Missed"
+      "shotsMissed": "Shots Missed",
+      "fbe": "Final Blows per Elimination",
+      "scopedShotsFired": "Scoped Shots Fired",
+      "scopedShotsHit": "Scoped Shots Hit"
     },
     "round": "Round {round}",
     "gamemode": "Gamemode",
@@ -5277,24 +5280,13 @@
       "noStatsMatch": "No stats match search",
       "col": {
         "stat": "Stat",
-        "overall": "Overall",
+        "overall": "Total",
         "bestYou": "Best (you)",
         "avg10": "Avg /10",
-        "bestAll": "Best (all)",
+        "bestAll": "Record (all)",
         "global10": "Global /10",
         "delta": "Delta vs global average"
       },
-      "radar": {
-        "dmg": "DMG",
-        "elims": "ELIMS",
-        "crits": "CRITS",
-        "surv": "SURV",
-        "heal": "HEAL"
-      },
-      "you": "You",
-      "globalAvg": "Global avg",
-      "careerBest": "Career-best games",
-      "bestGamesSubtitle": "{hero} · personal records",
       "allTimeBest": "All-time best",
       "mapsFor": "Maps for {hero}",
       "mapsSubtitle": "{count, plural, one {# map} other {# maps}}",
@@ -5312,21 +5304,12 @@
       "wr": "WR {value}",
       "noHeroes": "No heroes",
       "noStats": "No hero stats available yet.",
-      "insights": "Insights",
-      "insightsSubtitle": "{hero} · vs global avg/10",
-      "highlights": "Highlights",
       "allStats": "All stats",
-      "radarAxes": "Radar axes · 3–8",
       "notEnoughData": "Not enough data for comparisons",
-      "addAxis": "Add an axis",
-      "upToAxes": "{count, plural, one {Up to # axis} other {Up to # axes}}",
-      "allStatsAdded": "All stats added",
-      "noMatch": "No match",
       "quick": {
         "winrate": "Winrate",
         "kda": "KDA",
         "dmg10": "Dmg/10",
-        "elims10": "Elims/10",
         "heal10": "Heal/10",
         "blocked10": "Blocked/10",
         "finalBlows10": "Final blows/10"
@@ -5337,11 +5320,27 @@
         "bestGame": "Best game",
         "recordValue": "{stat, select, damage_blocked {{value} blocked} hero_damage_dealt {{value} damage} healing_dealt {{value} healing} other {{value}}}"
       },
-      "played": "{time} played",
       "poolShare": "{pct}% pool share",
-      "playtimeShare": "Playtime share",
       "searchHeroes": "Search heroes…",
-      "removeAxis": "Remove {stat} axis"
+      "vsAverage": "Against the average",
+      "vsAverageSubtitle": "Every player on this hero, per 10 minutes",
+      "overview": "Overview",
+      "statsView": "Stats view",
+      "lowSample": "{count, plural, one {Comparisons from # game} other {Comparisons from # games}}",
+      "group": {
+        "combat": "Combat",
+        "damage": "Damage",
+        "tanking": "Survival",
+        "healing": "Healing",
+        "utility": "Ultimates",
+        "accuracy": "Accuracy"
+      },
+      "records": "Records",
+      "games": "Games",
+      "wld": "Wins–losses–draws",
+      "openMatch": "Open match",
+      "recordHolder": "Holder",
+      "pickHero": "Hero"
     },
     "maps": {
       "overallWinrate": "Overall winrate",
@@ -7454,6 +7453,17 @@
       "liveCount": "{count} live",
       "channels": "Live channels",
       "play": "Play {name}"
+    },
+    "vods": {
+      "heading": "Past broadcasts",
+      "watchMatch": "Watch the match",
+      "map": "Map {position}",
+      "mapUnnamed": "Map",
+      "matchStart": "Match start",
+      "play": "Play from {time}: {chapter}",
+      "open": "Open on Twitch from {time}: {chapter}",
+      "watchVod": "Watch on Twitch: {name}’s broadcast",
+      "playerLabel": "Past broadcast · {name}"
     }
   },
   "admission": {
@@ -9795,6 +9805,11 @@
       "finished": "Mark tournament as finished",
       "logsOfficial": "Accept match logs as official results",
       "logsOfficialDescription": "An uploaded log decides a game that has no accepted result yet, from the placements it shows. Accepted, confirmed or admin results are never overwritten; reopen a game to correct it."
+    },
+    "povStreams": {
+      "title": "Participant streams",
+      "delay": "POV stream delay, seconds",
+      "delayHint": "Shifts the timestamps in participants’ past broadcasts. Set it to the delay the tournament rules require of POV streams."
     },
     "rules": {
       "hint": "Markdown, shown to everyone on the tournament's Rules tab. The tab appears only once this is not empty. Clearing it unpublishes the document. Write sections as <code>##</code> headings (<code>###</code> for subsections): two or more of them give the public page a table of contents. Bold text on its own line does not.",

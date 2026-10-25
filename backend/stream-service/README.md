@@ -1,7 +1,8 @@
 # Stream Service (stream-svc)
 
 Live-stream discovery for tournaments: which Twitch channels — the organizer's official
-broadcast and the participants' own POV streams — are on air right now. It is a separate
+broadcast and the participants' own POV streams — are on air right now, and, once a POV
+broadcast is over, which matches its Twitch VOD shows and where. It is a separate
 process because that answer comes from polling a third-party API on a clock, over the
 outbound proxy, against a rate-limit bucket shared with identity-service's OAuth logins;
 folding it into tournament-service would attach a scheduler and an outbound Twitch
@@ -9,13 +10,14 @@ dependency to the service that owns the bracket. See
 [`../../docs/architecture.md`](../../docs/architecture.md) for how it fits into the wider
 platform.
 
-**The service owns no Postgres schema.** Live status is Redis-only, with a TTL;
-everything it reads from `tournament.*`, `players.*` and `balancer.*` belongs to other
-services and is read-only. The single durable row it ever writes is an audit entry for
-the admin re-poll.
+**The service owns one Postgres schema, `stream`.** Live status is Redis-only, with a TTL;
+the durable record is `stream.session`, one row per participant POV broadcast the poller
+saw live, with its resolved VOD. Everything it reads from `tournament.*`, `players.*`,
+`balancer.*`, `encounter.*`, `stats.*` and `catalog.*` belongs to other services and is
+read-only; the only other durable row it writes is an audit entry for the admin re-poll.
 
 It ships as one headless FastStream worker on RabbitMQ — no HTTP server, no `main.py`, no
-uvicorn port. External traffic arrives as `/api/streams/*` at the Go gateway, which turns
+uvicorn port. External traffic arrives as `/api/v1/streams/*` at the Go gateway, which turns
 each route into a request/reply RPC call on `rpc.stream.*` under an `x-deadline-ms` budget
 and reads back an `{ok, data, error}` envelope.
 
@@ -40,17 +42,25 @@ and reads back an `{ok, data, error}` envelope.
   `playoffs`. `registration` is excluded (it can run for weeks against an empty hall);
   `completed` and `archived` are never polled.
 - Running the **Twitch live-status poll tick** and announcing the result to spectators.
+- Owning the **POV VOD chronology**: recording each live participant POV broadcast (never an
+  official cast), resolving it to its Twitch VOD, and serving per-VOD chapters — "0:45:10 —
+  Team A vs Team B · Map 2 · King's Row" — cut from the logged map times (or the series
+  start when no map has a trustworthy log time), shifted by the tournament's
+  `pov_stream_delay_s`. Consent is re-applied on every read, with the same rules the poller
+  polls by.
 
 ## Interface
 
-One RPC namespace, `rpc.stream.*`, with four subjects:
+One RPC namespace, `rpc.stream.*`, with six subjects:
 
 | Subject | Route | Access |
 |---|---|---|
-| `rpc.stream.tournament_streams` | `GET /api/streams/tournament/{tournament_id}` | Public; hidden tournaments answer 404 |
-| `rpc.stream.repoll` | `POST /api/streams/tournament/{tournament_id}/repoll` | `stream.update` on the owning workspace |
-| `rpc.stream.health` | `GET /api/streams/health` | **Global** `stream.read` — the poller is platform-wide, so a workspace-scoped grant is not enough |
-| `rpc.stream.ticks` | `GET /api/streams/health/ticks` | **Global** `stream.read`, same as health — the last 200 tick outcomes, newest first |
+| `rpc.stream.tournament_streams` | `GET /api/v1/streams/tournament/{tournament_id}` | Public; hidden tournaments answer 404 |
+| `rpc.stream.tournament_vods` | `GET /api/v1/streams/tournament/{tournament_id}/vods` | Public; hidden tournaments answer 404. Every alive POV VOD with at least one chapter, newest first |
+| `rpc.stream.encounter_vods` | `GET /api/v1/streams/encounter/{encounter_id}/vods` | Public; unknown encounters and hidden tournaments answer 404, a mix encounter answers an empty list. Only that encounter's chapters, ordered by team, player, start |
+| `rpc.stream.repoll` | `POST /api/v1/streams/tournament/{tournament_id}/repoll` | `stream.update` on the owning workspace |
+| `rpc.stream.health` | `GET /api/v1/streams/health` | **Global** `stream.read` — the poller is platform-wide, so a workspace-scoped grant is not enough |
+| `rpc.stream.ticks` | `GET /api/v1/streams/health/ticks` | **Global** `stream.read`, same as health — the last 200 tick outcomes, newest first |
 
 The full method list with request/response schemas is published at `/api/docs`, generated
 from `src/openapi_schemas.py` (`OPERATIONS`) and `src/openapi_docs.py` (`DOCS`).
@@ -59,7 +69,7 @@ from `src/openapi_schemas.py` (`OPERATIONS`) and `src/openapi_docs.py` (`DOCS`).
 Helix over the proxy, which would blow the gateway's RPC deadline. It clears the poll
 cursor so the next scheduler heartbeat is due, which is what its 202 describes.
 
-**Durable queues consumed:** none. The worker subscribes only to its own four RPC
+**Durable queues consumed:** none. The worker subscribes only to its own six RPC
 subjects; it consumes no domain events and reads no outbox.
 
 **Domain events published:** none. It writes no outbox row.
@@ -80,13 +90,23 @@ rules are applied. Spectator-visible under the same "public unless hidden" gatew
 (`SCHEDULER_TICK_SECONDS`). The heartbeat decides *inside* the tick whether the
 admin-configured `interval_seconds` has elapsed, rather than being registered at that
 interval — the interval is runtime-editable, and a scheduler pinned to its start-up value
-would make the number the admin sees a lie.
+would make the number the admin sees a lie. Every tick that runs ends with the **VOD
+sync**, active tournaments or not: broadcasts seen live in the last 24h without a VOD are
+looked up via their broadcaster's archives (at most 20 broadcasters a tick, each retried
+at most every 10 minutes), and resolved VODs are re-checked once a day in batches of 100
+(at most 5 a tick); a VOD Twitch no longer returns is stamped gone and hidden. Its Helix
+failures are logged and never change the recorded tick status, which describes the live
+poll.
 
 ## Data owned
 
-**No Postgres schema, no tables, no migrations of its own.** All schema lives in the one
-shared SQLAlchemy metadata under `backend/shared/`, and the single Alembic project at
-`backend/migrations/` owns every migration on the platform.
+**One Postgres schema, `stream`, with one table.** All schema lives in the one shared
+SQLAlchemy metadata under `backend/shared/` (`shared/models/stream/`), and the single
+Alembic project at `backend/migrations/` owns every migration on the platform.
+
+| Table | Contents |
+|---|---|
+| `stream.session` | One participant POV broadcast per tournament, unique on `(tournament_id, stream_id)`: channel, Helix broadcaster and stream ids, `started_at`, `last_seen_at` (the last tick that saw it live), and the VOD id, last check and `vod_gone_at` once Helix answers. Written only through `shared.repository.StreamSessionRepository` |
 
 Live state is **Redis-only**, five keys, all TTL'd:
 
@@ -98,30 +118,35 @@ Live state is **Redis-only**, five keys, all TTL'd:
 | `stream:poll:last_status` | The last tick's outcome, for `rpc.stream.health` (7d TTL) |
 | `stream:poll:history` | The last 200 tick outcomes, newest first, for `rpc.stream.ticks` (7d TTL) |
 
-Postgres access is **read-only** apart from one write: `public.audit_log`, via
+Postgres writes are `stream.session` and one more: `public.audit_log`, via
 `shared.services.audit.record_audit`, journalling the admin re-poll. Read-only tables:
-`tournament.tournament`, `tournament.tournament_link`, `tournament.team`,
-`tournament.player`, `registration.registration`, `players.user`, `players.social_account`,
-`players.social_account_visibility`, `public.workspace_member`, and `public.settings` for
-the `stream.collection` config. The boundary rule — read freely through `shared`, write only
-what your service owns — is in [`../shared/README.md`](../shared/README.md);
-those tables are documented in
-[`../../docs/database_erd.md`](../../docs/database_erd.md) under **tournament**,
-**identity**, **registration** and **tenancy**.
+`tournament.tournament` (including `pov_stream_delay_s`), `tournament.tournament_link`,
+`tournament.team`, `tournament.player`, `registration.registration`, `players.user`,
+`players.social_account`, `players.social_account_visibility`, `public.workspace_member`,
+`encounter.encounter`, `encounter.team`, `encounter.game`, `stats.match`,
+`stats.ingest_job`, `catalog.entity`, and `public.settings` for the `stream.collection`
+config. The boundary rule — read freely through `shared`, write only what your service
+owns — is in [`../shared/README.md`](../shared/README.md); those tables are documented in
+[`../../docs/database_erd.md`](../../docs/database_erd.md) under **stream**, **tournament**,
+**encounter**, **stats**, **catalog**, **identity**, **registration** and **tenancy**.
 
 ## Dependencies
 
-- **PostgreSQL** — read-only, for the tables above. One shared database.
+- **PostgreSQL** — `stream.session`, plus read-only access to the tables above. One shared
+  database.
 - **Redis** — the four keys above, the scheduler leader lock, and the
   `tournament:{id}:streams` realtime topic the gateway relays to WebSocket clients.
 - **RabbitMQ** — `rpc.stream.*` request/reply transport.
-- **Twitch Helix** — `GET /streams` under an **app** access token
+- **Twitch Helix** — `GET /streams` and `GET /videos` under an **app** access token
   (`grant_type=client_credentials`): the poller asks who is live about channels it does
-  not own, which needs no user consent. Egress goes through the outbound **`proxy`**
-  container (`PROXY_*` in `common.env`). The 800-points/min app bucket is **shared with
-  identity-service**, which uses the same Twitch application for OAuth login — hence the
-  `Ratelimit-Remaining` floor of 100, below which the tick stops issuing batches and
-  reports itself truncated rather than draining the bucket the login flow needs.
+  not own, which needs no user consent, and later which archive (`GET
+  /videos?user_id=…&type=archive`) carries a stream it saw and whether a resolved VOD still
+  exists (`GET /videos?id=…`, up to 100 repeated ids; a 404 means none does). Egress goes
+  through the outbound **`proxy`** container (`PROXY_*` in `common.env`). The
+  800-points/min app bucket is **shared with identity-service**, which uses the same Twitch
+  application for OAuth login — hence the `Ratelimit-Remaining` floor of 100, below which
+  every Helix loop stops issuing requests and reports itself truncated rather than
+  draining the bucket the login flow needs.
 
 ## Configuration
 

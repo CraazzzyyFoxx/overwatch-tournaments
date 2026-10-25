@@ -14,6 +14,8 @@ export const tournamentQueryKeys = {
   stageBracketPreview: (tournamentId: number, stageId: number, stage: unknown) =>
     ["tournament", tournamentId, "stages", stageId, "bracket-preview", stage] as const,
   streams: (tournamentId: number) => ["tournament", tournamentId, "streams"] as const,
+  /** Participants' past broadcasts. No realtime resource: staleTime alone keeps it fresh. */
+  vods: (tournamentId: number) => ["tournament", tournamentId, "vods"] as const,
   links: (tournamentId: number) => ["tournament", tournamentId, "links"] as const,
   /** `tournamentId` is nullable here: the admin browsers key this list by the
    *  scope chip, and "no tournament picked" is its own cache entry. */

@@ -1,90 +1,102 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+
+import CatalogEntityImage from "@/components/catalog/CatalogEntityImage";
+import { signedPoints } from "@/components/profile/CharacterCard";
+import { CardSurface, ProfileStat } from "@/components/profile/atoms";
+import { characterClass } from "@/lib/catalog/attrs";
+import { LOW_SAMPLE_GAMES, winrateColor } from "@/lib/colors";
+import { useFormatter } from "@/lib/datetime/client";
+import { formatSeconds } from "@/lib/format";
 import type { CharacterWithUserStats } from "@/types/user.types";
 import type { DisciplineMetadata } from "@/types/discipline.types";
-import { characterClass } from "@/lib/catalog/attrs";
+
 import { LogStatsName } from "../stat-names";
-import CatalogEntityImage from "@/components/catalog/CatalogEntityImage";
-import { CardSurface, ProfileStat } from "@/components/profile/atoms";
-import { formatSeconds } from "@/lib/format";
-import { formatDelta } from "./utils";
 import { useHeroClass } from "./classes";
+import { computeDelta, deltaColor, formatDelta, formatStatValue, heroWinrate } from "./utils";
 
-// Quick-stats shown in the spotlight (first 4 present, in this order).
-export const QUICK_CANDIDATES: LogStatsName[] = [
-  LogStatsName.Winrate,
-  LogStatsName.KDA,
-  LogStatsName.HeroDamageDealt,
-  LogStatsName.Eliminations
-];
-
-interface QuickStatData {
-  name: LogStatsName;
-  label: string;
-  value: string;
-  delta: number | null;
-}
-
-interface SpotlightHero {
+/**
+ * The selected hero's band: who it is, then the outcome of playing it — winrate, games, time and KDA. The per-10
+ * figures live in the comparison below it, said once. Comparisons hide below `LOW_SAMPLE_GAMES`.
+ */
+const HeroSpotlight = ({
+  hero,
+  playtime,
+  share,
+  metadata
+}: {
   hero: CharacterWithUserStats;
   playtime: number;
   share: number;
-}
-const HeroSpotlight = ({
-  selected,
-  metadata,
-  quickStats
-}: {
-  selected: SpotlightHero;
   metadata: DisciplineMetadata;
-  quickStats: QuickStatData[];
 }) => {
   const t = useTranslations();
+  const format = useFormatter();
   const heroClass = useHeroClass(metadata);
-  const cls = characterClass(selected.hero.character);
+  const cls = characterClass(hero.character);
+  const lowSample = hero.games < LOW_SAMPLE_GAMES;
+  const winrate = heroWinrate(hero);
+  const winrateVs =
+    !lowSample && winrate != null && hero.win_rate_all != null ? signedPoints(winrate - hero.win_rate_all) : null;
+  const kda = hero.stats.find((stat) => stat.name === LogStatsName.KDA);
+  const kdaDelta = kda && !lowSample ? computeDelta(kda.avg_10, kda.avg_10_all, false) : null;
+
   return (
     <CardSurface>
-      <div className="flex flex-col gap-6">
-        <div className="flex items-center gap-4">
-          <CatalogEntityImage entity={selected.hero.character} size={80} rounded="lg" />
-          <div className="flex min-w-0 flex-col gap-1.5">
-            <h2 className="aqt-display m-0 truncate text-headline font-bold leading-tight text-[color:var(--aqt-fg)]">
-              {selected.hero.character.name}
+      <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between lg:gap-10">
+        <div className="flex min-w-0 items-center gap-4">
+          <CatalogEntityImage entity={hero.character} size={56} rounded="lg" decorative />
+          <div className="flex min-w-0 flex-col gap-1">
+            <h2 className="aqt-display m-0 truncate text-title font-bold text-[color:var(--aqt-fg)]">
+              {hero.character.name}
             </h2>
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-caption text-[color:var(--aqt-fg-muted)]">
-              <span className="inline-flex items-center gap-1.5" style={{ color: heroClass.color(cls) }}>
+            {cls ? (
+              <span className="inline-flex items-center gap-1.5 text-caption" style={{ color: heroClass.color(cls) }}>
                 {heroClass.icon(cls, 14)}
                 <span className="text-[color:var(--aqt-fg-muted)]">{heroClass.label(cls)}</span>
               </span>
-              <span className="aqt-tnum">{t("users.heroes.played", { time: formatSeconds(selected.playtime) })}</span>
-              <span className="aqt-tnum">
-                {t("users.heroes.poolShare", { pct: (selected.share * 100).toFixed(0) })}
-              </span>
-            </div>
+            ) : null}
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-x-6 gap-y-5 sm:grid-cols-4">
-          {quickStats.length > 0 ? (
-            quickStats.map((qs) => (
-              <ProfileStat key={qs.name} label={qs.label} value={qs.value}>
-                {qs.delta == null ? null : (
-                  <span
-                    className="aqt-tnum text-label font-bold"
-                    style={{ color: qs.delta >= 0 ? "var(--aqt-emerald)" : "var(--aqt-rose)" }}
-                  >
-                    {formatDelta(qs.delta)}
-                  </span>
-                )}
-              </ProfileStat>
-            ))
-          ) : (
-            <ProfileStat
-              label={t("users.heroes.playtimeShare")}
-              value={`${(selected.share * 100).toFixed(0)}%`}
-            />
-          )}
+        <div className="grid grid-cols-2 gap-x-8 gap-y-4 sm:grid-cols-4 lg:gap-x-10">
+          <ProfileStat
+            size="md"
+            label={t("users.heroes.quick.winrate")}
+            value={winrate == null ? "—" : `${(winrate * 100).toFixed(0)}%`}
+            color={winrate == null ? undefined : winrateColor(winrate * 100, lowSample)}
+          >
+            {winrateVs ? (
+              <span className="aqt-tnum text-label font-bold" style={{ color: winrateVs.color }}>
+                {t("users.heroes.card.vsAvg", { value: winrateVs.text })}
+              </span>
+            ) : null}
+          </ProfileStat>
+          <ProfileStat
+            size="md"
+            label={t("users.heroes.games")}
+            value={hero.games}
+            sub={`${hero.win}–${hero.loss}–${hero.draw}`}
+            title={t("users.heroes.wld")}
+          />
+          <ProfileStat
+            size="md"
+            label={t("matches.stat.heroTimePlayed")}
+            value={formatSeconds(playtime)}
+            sub={t("users.heroes.poolShare", { pct: (share * 100).toFixed(0) })}
+          />
+          <ProfileStat
+            size="md"
+            label={t("users.heroes.quick.kda")}
+            value={kda ? formatStatValue(format, kda.name, kda.avg_10) : "—"}
+          >
+            {kdaDelta == null ? null : (
+              <span className="aqt-tnum text-label font-bold" style={{ color: deltaColor(kdaDelta) }}>
+                {t("users.heroes.card.vsAvg", { value: formatDelta(kdaDelta) })}
+              </span>
+            )}
+          </ProfileStat>
         </div>
       </div>
     </CardSurface>

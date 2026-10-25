@@ -69,6 +69,8 @@ class TournamentUpdate(BaseModel):
     discord_broadcasts_enabled: bool | None = None
     discord_dms_enabled: bool | None = None
     logs_official: bool | None = None
+    # 900 is Twitch's maximum broadcast delay; the column carries the same CHECK.
+    pov_stream_delay_s: int | None = Field(default=None, ge=0, le=900)
     win_points: float | None = None
     draw_points: float | None = None
     loss_points: float | None = None

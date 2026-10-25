@@ -25,6 +25,7 @@ import { encounterQueryKeys } from "@/lib/encounters/query-keys";
 import EncounterHeader, { type EncounterHeaderFact } from "./components/EncounterHeader";
 import EncounterMapRow from "./components/EncounterMapRow";
 import EncounterHistory from "./components/EncounterHistory";
+import EncounterWatch from "./components/EncounterWatch";
 import EncounterRosterPanel from "@/components/match/EncounterRosterPanel";
 import EncounterSeriesStats from "./components/EncounterSeriesStats";
 import EncounterCaptainReports from "./components/EncounterCaptainReports";
@@ -350,6 +351,8 @@ const EncounterPage = async (props: {
                 ) : null}
               </div>
             </section>
+
+            <EncounterWatch encounterId={encounter.id} />
 
             <EncounterHistory matches={observations} />
 

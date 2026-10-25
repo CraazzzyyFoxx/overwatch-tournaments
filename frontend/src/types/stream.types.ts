@@ -3,7 +3,8 @@
  *
  * There is no OpenAPI type generation in this project — `src/types/*.types.ts`
  * are written by hand and kept in sync with the backend by eye. These mirror
- * `stream-service`'s `rpc.stream.tournament_streams` response and
+ * `stream-service`'s `rpc.stream.tournament_streams` and
+ * `rpc.stream.{tournament,encounter}_vods` responses and
  * `tournament.tournament_link`.
  */
 
@@ -66,6 +67,42 @@ export interface TournamentStreams {
   official: StreamEntry[];
   /** Participant streams — only the ones currently live. */
   participants: StreamEntry[];
+}
+
+/** A logged map, or — when no map of the encounter has a usable log — the series start. */
+export type StreamChapterKind = "map" | "series";
+
+/** Where in a past broadcast one of the streamer's team's matches begins. */
+export interface StreamChapter {
+  encounter_id: number;
+  /** `encounter.encounter.name`, e.g. "Team A vs Team B". */
+  encounter_name: string;
+  kind: StreamChapterKind;
+  /** The game's position in the series, when the log is bound to a game. */
+  map_position: number | null;
+  /** `null` for a series chapter. */
+  map_name: string | null;
+  /** Seconds into the VOD, the tournament's stream delay already applied. */
+  offset_s: number;
+}
+
+/** A participant's past POV broadcast whose Twitch VOD still exists. */
+export interface StreamVod {
+  /** Twitch video id, without the "v" prefix the player wants. */
+  vod_id: string;
+  url: string;
+  channel: string;
+  /** ISO8601, the stream start. */
+  started_at: string;
+  /** ISO8601, the last time the poller saw it live: the end, or about now while live. */
+  ended_at: string;
+  player: StreamStreamer;
+  chapters: StreamChapter[];
+}
+
+/** Body of both VOD reads (tournament and encounter). */
+export interface StreamVods {
+  vods: StreamVod[];
 }
 
 /** Mirrors `TOURNAMENT_LINK_KINDS` in `backend/shared/models/tournament/link.py`. */

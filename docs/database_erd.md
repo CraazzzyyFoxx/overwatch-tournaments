@@ -13,7 +13,7 @@ baselines and Discord channels live in `stats/`. `catalog/` writes only to `cata
 > `--check` and fails on drift, so the diagrams cannot fall behind the models again.
 
 <!-- ERD:auto _alembic_head -->
-Alembic head: **`anlsd01`** (150 revisions in `backend/migrations/versions/`).
+Alembic head: **`strchron01`** (151 revisions in `backend/migrations/versions/`).
 <!-- /ERD:auto -->
 
 **Reading the diagrams**
@@ -1358,6 +1358,7 @@ erDiagram
         boolean discord_broadcasts_enabled
         boolean discord_dms_enabled
         boolean logs_official
+        int pov_stream_delay_s
         float win_points
         float draw_points
         float loss_points
@@ -3496,6 +3497,43 @@ erDiagram
     PUBLIC_WORKSPACE ||--o| QUOTA_WORKSPACE_LIMIT : "workspace_id"
     QUOTA_PLAN ||--o| QUOTA_PLAN_LIMIT : "plan_id"
 ```
+<!-- /ERD:auto -->
+
+## stream — `stream`
+
+Participant POV broadcasts, owned by stream-service. The poll tick upserts one `session` row per
+live POV channel per tournament (never an official cast), keyed by Twitch's stream id, and the
+VOD sync after each tick resolves the broadcast's VOD and re-checks it daily; `vod_gone_at`
+hides a VOD Twitch no longer has. Chapters are not stored: the public read cuts them on the fly
+from the encounter and log times, shifted by `tournament.pov_stream_delay_s`, and re-applies
+consent each time, so a row is a fact about Twitch rather than permission to show it.
+
+<!-- ERD:auto stream -->
+```mermaid
+erDiagram
+    STREAM_SESSION {
+        bigint id PK
+        timestamptz created_at
+        timestamptz updated_at "nullable"
+        bigint tournament_id FK
+        bigint user_id FK
+        varchar(64) channel
+        varchar(32) broadcaster_id
+        varchar(32) stream_id
+        timestamptz started_at
+        timestamptz last_seen_at
+        varchar(32) vod_id "nullable"
+        timestamptz vod_checked_at "nullable"
+        timestamptz vod_gone_at "nullable"
+    }
+
+    PLAYERS_USER ||--o{ STREAM_SESSION : "user_id"
+    TOURNAMENT_TOURNAMENT ||--o{ STREAM_SESSION : "tournament_id"
+```
+
+Composite unique keys:
+
+- `STREAM_SESSION` unique on (`tournament_id`, `stream_id`)
 <!-- /ERD:auto -->
 
 ## Schema change history

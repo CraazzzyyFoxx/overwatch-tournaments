@@ -1,81 +1,36 @@
 "use client";
 
+import { useState } from "react";
+import { Crown } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { useFormatter } from "@/lib/datetime/client";
-import { ArrowDown, Crown } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { LogStatsName } from "../stat-names";
-import { formatDelta, formatStatValue } from "./utils";
-import { Button } from "@/components/ui/button";
+
 import { eyebrowClass } from "@/components/ui/eyebrow";
 import { SearchField } from "@/components/ui/search-field";
+import { useFormatter } from "@/lib/datetime/client";
+import { cn } from "@/lib/utils";
 
-export type StatSortKey = "delta" | "overall" | "avg10" | "name";
+import { sections, type StatRow } from "./hero-stats";
+import StatGameLink from "./StatGameLink";
+import { deltaColor, formatDelta, formatStatValue } from "./utils";
 
-interface AllStatsRow {
-  name: LogStatsName;
-  label: string;
-  overall: number;
-  bestYou: number | undefined;
-  avg10: number;
-  delta: number | null;
-  bestAll: number | null;
-  global10: number;
-  isRecord: boolean;
-}
+const HEAD = cn(
+  eyebrowClass(),
+  "aqt-tnum whitespace-nowrap border-b border-[color:var(--aqt-border)] px-3 py-2.5 text-right"
+);
+/** The stat column stays put while the figures scroll under it on a narrow screen. */
+const STICKY = "sticky left-0 z-10 bg-[color:var(--aqt-card)]";
 
-const HeroStatsTable = ({
-  rows,
-  sort,
-  onSortChange,
-  search,
-  onSearchChange
-}: {
-  rows: AllStatsRow[];
-  sort: StatSortKey;
-  onSortChange: (key: StatSortKey) => void;
-  search: string;
-  onSearchChange: (value: string) => void;
-}) => {
+/**
+ * Every stat of the hero in the overview's groups: the player's figure against every player's, the career total, the
+ * player's best game and the hero's record, each game linking to its match and naming its map or holder.
+ */
+const HeroStatsTable = ({ rows, lowSampleNote }: { rows: StatRow[]; lowSampleNote: string | null }) => {
   const t = useTranslations();
   const format = useFormatter();
-  // Plain render helper (not a component) to avoid recreating a component during render.
-  // `srLabel` names the column for assistive tech when the visible header is a
-  // bare symbol (the Δ column) that reads as nonsense on its own.
-  const sortTh = (label: string, k: StatSortKey, align: "left" | "right" = "right", srLabel?: string) => (
-    <th
-      scope="col"
-      aria-sort={sort === k ? "descending" : "none"}
-      className={cn(
-        eyebrowClass(),
-        "border-b border-[color:var(--aqt-border)] px-3 py-2.5",
-        align === "right" ? "text-right" : "text-left"
-      )}
-    >
-      <Button
-        type="button"
-        variant="ghost"
-        size="label"
-        onClick={() => onSortChange(k)}
-        className={cn(
-          "aqt-tnum select-none hover:bg-transparent",
-          sort === k
-            ? "text-[color:var(--aqt-teal)] hover:text-[color:var(--aqt-teal)]"
-            : "hover:text-[color:var(--aqt-fg-muted)]"
-        )}
-      >
-        {srLabel ? (
-          <>
-            <span aria-hidden>{label}</span>
-            <span className="sr-only">{srLabel}</span>
-          </>
-        ) : (
-          label
-        )}
-        {sort === k ? <ArrowDown aria-hidden /> : null}
-      </Button>
-    </th>
-  );
+  const [search, setSearch] = useState("");
+  const label = (row: StatRow) => t(row.labelKey as Parameters<typeof t>[0]);
+  const query = search.trim().toLocaleLowerCase();
+  const shown = sections(query ? rows.filter((row) => label(row).toLocaleLowerCase().includes(query)) : rows);
 
   return (
     <div className="flex flex-col gap-3">
@@ -84,61 +39,110 @@ const HeroStatsTable = ({
           label={t("users.heroes.searchStats")}
           placeholder={t("users.heroes.searchStats")}
           value={search}
-          onValueChange={onSearchChange}
+          onValueChange={setSearch}
           containerClassName="min-w-[180px] max-w-[280px] flex-1"
         />
-        <span className="aqt-tnum inline-flex items-center gap-1.5 text-label text-[color:var(--aqt-fg-faint)]">
-          <Crown aria-hidden className="h-3 w-3 text-[color:var(--aqt-amber)]" />
+        <span className="inline-flex items-center gap-1.5 text-label text-[color:var(--aqt-fg-faint)]">
+          <Crown aria-hidden className="size-3 text-[color:var(--aqt-amber)]" />
           {t("users.heroes.recordTitle")}
         </span>
       </div>
-      <div className="overflow-x-auto">
-        <table className="aqt-tnum w-full border-collapse text-caption">
+      <div
+        role="region"
+        aria-label={t("users.heroes.allStats")}
+        tabIndex={0}
+        // `relative`: the Δ head's screen-reader text is absolutely positioned, and would otherwise widen the page.
+        className="relative overflow-x-auto rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-[color:var(--aqt-teal)]"
+      >
+        <table className="aqt-tnum w-full min-w-[46rem] border-collapse text-caption">
           <thead>
             <tr>
-              {sortTh(t("users.heroes.col.stat"), "name", "left")}
-              {sortTh(t("users.heroes.col.overall"), "overall")}
-              <th scope="col" className={cn(eyebrowClass(), "aqt-tnum border-b border-[color:var(--aqt-border)] px-3 py-2.5 text-right")}>{t("users.heroes.col.bestYou")}</th>
-              {sortTh(t("users.heroes.col.avg10"), "avg10")}
-              {sortTh("Δ", "delta", "right", t("users.heroes.col.delta"))}
-              <th scope="col" className={cn(eyebrowClass(), "aqt-tnum border-b border-[color:var(--aqt-border)] px-3 py-2.5 text-right")}>{t("users.heroes.col.bestAll")}</th>
-              <th scope="col" className={cn(eyebrowClass(), "aqt-tnum border-b border-[color:var(--aqt-border)] px-3 py-2.5 text-right")}>{t("users.heroes.col.global10")}</th>
+              <th scope="col" className={cn(HEAD, STICKY, "text-left")}>
+                {t("users.heroes.col.stat")}
+              </th>
+              <th scope="col" className={HEAD}>
+                {t("users.heroes.col.avg10")}
+              </th>
+              <th scope="col" className={HEAD}>
+                {t("users.heroes.col.global10")}
+              </th>
+              <th scope="col" className={HEAD} title={lowSampleNote ?? undefined}>
+                <span aria-hidden>Δ</span>
+                <span className="sr-only">{t("users.heroes.col.delta")}</span>
+              </th>
+              <th scope="col" className={HEAD}>
+                {t("users.heroes.col.overall")}
+              </th>
+              <th scope="col" className={HEAD}>
+                {t("users.heroes.col.bestYou")}
+              </th>
+              <th scope="col" className={HEAD}>
+                {t("users.heroes.col.bestAll")}
+              </th>
             </tr>
           </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.name} className="border-b border-[color:var(--aqt-border)] last:border-b-0 hover:bg-[hsl(0_0%_100%/0.02)]">
-                <td className="px-3 py-2 text-left font-medium text-[color:var(--aqt-fg)]">
-                  {r.label}
-                  {r.isRecord ? (
-                    <Crown
-                      role="img"
-                      aria-label={t("users.heroes.recordTitle")}
-                      className="ml-1.5 inline h-3 w-3 text-[color:var(--aqt-amber)]"
-                    />
-                  ) : null}
-                </td>
-                <td className="aqt-tnum px-3 py-2 text-right text-[color:var(--aqt-fg-muted)]">{formatStatValue(format, r.name, r.overall)}</td>
-                <td className="aqt-tnum px-3 py-2 text-right text-[color:var(--aqt-fg-muted)]">
-                  {r.bestYou != null ? formatStatValue(format, r.name, r.bestYou) : "—"}
-                </td>
-                <td className="aqt-tnum px-3 py-2 text-right font-semibold text-[color:var(--aqt-fg)]">{formatStatValue(format, r.name, r.avg10)}</td>
-                <td
-                  className="aqt-tnum px-3 py-2 text-right font-bold"
-                  style={{ color: r.delta == null ? "var(--aqt-fg-faint)" : r.delta >= 0 ? "var(--aqt-emerald)" : "var(--aqt-rose)" }}
-                >
-                  {r.delta != null ? formatDelta(r.delta) : "—"}
-                </td>
-                <td className="aqt-tnum px-3 py-2 text-right text-[color:var(--aqt-fg-dim)]">
-                  {r.bestAll != null ? formatStatValue(format, r.name, r.bestAll) : "—"}
-                </td>
-                <td className="aqt-tnum px-3 py-2 text-right text-[color:var(--aqt-fg-dim)]">{formatStatValue(format, r.name, r.global10)}</td>
+          {shown.map((section) => (
+            <tbody key={section.group}>
+              <tr>
+                <th scope="rowgroup" colSpan={7} className={cn(eyebrowClass("dim"), "px-3 pb-1.5 pt-4 text-left")}>
+                  {t(`users.heroes.group.${section.group}`)}
+                </th>
               </tr>
-            ))}
-          </tbody>
+              {section.rows.map((row) => (
+                <tr key={row.name} className="h-11 border-b border-[color:var(--aqt-border)] last:border-b-0">
+                  <th scope="row" className={cn(STICKY, "px-3 py-2 text-left font-medium text-[color:var(--aqt-fg)]")}>
+                    <span className="inline-flex items-center gap-1.5">
+                      {label(row)}
+                      {row.holdsRecord ? (
+                        <Crown
+                          role="img"
+                          aria-label={t("users.heroes.recordTitle")}
+                          className="size-3 shrink-0 text-[color:var(--aqt-amber)]"
+                        />
+                      ) : null}
+                    </span>
+                  </th>
+                  <td className="px-3 py-2 text-right font-semibold text-[color:var(--aqt-fg)]">
+                    {formatStatValue(format, row.name, row.value)}
+                  </td>
+                  <td className="px-3 py-2 text-right text-[color:var(--aqt-fg-dim)]">
+                    {row.average == null ? "—" : formatStatValue(format, row.name, row.average)}
+                  </td>
+                  <td
+                    className="px-3 py-2 text-right font-bold"
+                    style={{ color: deltaColor(row.delta) }}
+                    title={row.delta == null ? (lowSampleNote ?? undefined) : undefined}
+                  >
+                    {row.delta == null ? "—" : formatDelta(row.delta)}
+                  </td>
+                  <td className="px-3 py-2 text-right text-[color:var(--aqt-fg-muted)]">
+                    {row.total == null ? "—" : formatStatValue(format, row.name, row.total)}
+                  </td>
+                  <td className="px-3 py-1.5 text-right text-[color:var(--aqt-fg-faint)]">
+                    {row.best ? (
+                      <StatGameLink game={row.best} value={formatStatValue(format, row.name, row.best.value)} />
+                    ) : (
+                      "—"
+                    )}
+                  </td>
+                  <td className="px-3 py-1.5 text-right text-[color:var(--aqt-fg-faint)]">
+                    {row.record ? (
+                      <StatGameLink
+                        game={row.record}
+                        value={formatStatValue(format, row.name, row.record.value)}
+                        holder
+                      />
+                    ) : (
+                      "—"
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          ))}
         </table>
-        {rows.length === 0 ? (
-          <div className="py-8 text-center text-caption text-[color:var(--aqt-fg-dim)]">{t("users.heroes.noStatsMatch")}</div>
+        {shown.length === 0 ? (
+          <p className="py-8 text-center text-caption text-[color:var(--aqt-fg-dim)]">{t("users.heroes.noStatsMatch")}</p>
         ) : null}
       </div>
     </div>

@@ -62,7 +62,7 @@ The providers themselves and the subscription rule are configured elsewhere, in 
 
 ### Streams
 
-Tracks who is live on Twitch right now, so streams can appear on tournament pages. The poll is platform-wide, so the page is not open to every organizer and carries no workspace split.
+Tracks who is live on Twitch right now, so streams can appear on tournament pages, and remembers participants' POV broadcasts, so their recordings get match timestamps. The poll is platform-wide, so the page is not open to every organizer and carries no workspace split.
 
 It shows **Last tick**, **Tournaments**, **Channels polled**, **Live now** and **Rate limit left**. There is no check history here: the page keeps no per-channel log.
 
@@ -74,6 +74,7 @@ It shows **Last tick**, **Tournaments**, **Channels polled**, **Live now** and *
 | A player's rank never arrives | Open their card in **Admin → People** and look at the account status; if collection is switched off, re-enable the accounts in **Collectors → Rank**. |
 | The subscription check blocks nobody | The provider is most likely half-configured — see [Subscriptions and admission](/docs/organizers/subscriptions). |
 | Streams do not show on a tournament page | Look at **Collectors → Streams**: if the poll is paused or failing, the tournament is not the problem. |
+| A participant's recording has no match timestamps | A map's timestamp comes from its match log's start time; without a log, from the match start set in the admin. The streamer must also keep past broadcasts on Twitch. If the timestamps are off, check the POV stream delay in the tournament's **Links** settings. |
 
 ## See also
 

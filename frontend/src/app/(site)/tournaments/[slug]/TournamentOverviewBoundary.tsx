@@ -3,11 +3,15 @@ import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { getTournamentOverviewState } from "./_data";
-import { tournamentStreamsQueryOptions } from "./_queries/tournamentStreams";
+import { tournamentStreamsQueryOptions, tournamentVodsQueryOptions } from "./_queries/tournamentStreams";
 import { mapPoolConfigsQueryOptions } from "@/lib/tournament/map-pool-query";
 import { tournamentOverviewQueryOptions } from "@/lib/tournament/overview-query";
 import { tournamentRegistrationFormQueryOptions } from "@/lib/tournament/registrations-query";
-import { areStreamsVisible, isTournamentStatusEnded } from "@/lib/tournament/status";
+import {
+  areStreamsVisible,
+  isTournamentStatusEnded,
+  mayHavePastBroadcasts
+} from "@/lib/tournament/status";
 
 type TournamentOverviewBoundaryProps = {
   slug: string;
@@ -66,6 +70,10 @@ export default async function TournamentOverviewBoundary({
     // The broadcast dock and the Stream tab, read only while streams show.
     areStreamsVisible(overview.status)
       ? queryClient.prefetchQuery(tournamentStreamsQueryOptions(overview.id))
+      : null,
+    // The Stream tab's other gate, and the Stream page's past broadcasts.
+    mayHavePastBroadcasts(overview.status)
+      ? queryClient.prefetchQuery(tournamentVodsQueryOptions(overview.id))
       : null
   ]);
 

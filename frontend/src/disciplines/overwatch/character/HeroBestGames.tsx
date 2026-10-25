@@ -1,105 +1,68 @@
 "use client";
 
-import Image from "@/components/ui/image";
-import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
-import { useTranslations } from "next-intl";
-import { useFormatter } from "@/lib/datetime/client";
 import { Crown } from "lucide-react";
-import { LogStatsName } from "../stat-names";
-import type { CharacterStatBest, CharacterWithUserStats } from "@/types/user.types";
-import { getHumanizedStats } from "../stat-names";
+import { useTranslations } from "next-intl";
+
+import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
+import CatalogEntityImage from "@/components/catalog/CatalogEntityImage";
 import { CardSurface } from "@/components/profile/atoms";
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { useFormatter } from "@/lib/datetime/client";
+
+import type { StatRow } from "./hero-stats";
 import { formatStatValue } from "./utils";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger
-} from "@/components/ui/tooltip";
 
-// Per-game "personal record" stats (higher = better) worth showcasing.
-const RECORD_STATS: LogStatsName[] = [
-  LogStatsName.Eliminations,
-  LogStatsName.FinalBlows,
-  LogStatsName.HeroDamageDealt,
-  LogStatsName.HealingDealt,
-  LogStatsName.DamageBlocked,
-  LogStatsName.SoloKills
-];
-
-interface Record {
-  name: LogStatsName;
-  best: CharacterStatBest;
-  /** The player's best is also the all-players best for this hero+stat. */
-  isGlobalRecord: boolean;
-}
-
-/** Career-best single-game performances for the selected hero, built from
- *  `HeroStat.best`. Each record links to the encounter where it happened and
- *  shows the map/tournament on hover; a crown marks an all-time (global) best. */
-const HeroBestGames = ({ hero }: { hero: CharacterWithUserStats }) => {
+/**
+ * The hero's single-game records: each row its map, the value, the stat, and the map and tournament it was set in,
+ * linking to the match. A crown marks a record that is also the best of every player on the hero.
+ */
+const HeroBestGames = ({ rows }: { rows: StatRow[] }) => {
   const t = useTranslations();
   const format = useFormatter();
-  const records: Record[] = RECORD_STATS.map((name) => {
-    const stat = hero.stats.find((s) => s.name === name);
-    if (!stat || !stat.best || !Number.isFinite(stat.best.value) || stat.best.value <= 0) return null;
-    return {
-      name,
-      best: stat.best,
-      isGlobalRecord: stat.best_all != null && stat.best.value >= stat.best_all.value
-    };
-  }).filter((r): r is Record => r !== null);
-
-  if (records.length === 0) return null;
 
   return (
-    <CardSurface
-      title={t("users.heroes.careerBest")}
-      subtitle={t("users.heroes.bestGamesSubtitle", { hero: hero.character.name })}
-    >
-      <TooltipProvider delayDuration={120}>
-        <div className="grid grid-cols-1 gap-x-6 gap-y-5 sm:grid-cols-2 lg:grid-cols-3">
-          {records.map(({ name, best, isGlobalRecord }) => (
-            <Tooltip key={name}>
-              <TooltipTrigger asChild>
-                <HoverPrefetchLink
-                  href={`/encounters/${best.encounter_id}`}
-                  className="-m-2 flex flex-col gap-1 rounded-lg p-2 transition-colors hover:bg-[hsl(0_0%_100%/0.03)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--aqt-teal)]"
-                >
-                  <Eyebrow className="flex items-center gap-1.5">
-                    {getHumanizedStats(name)}
-                    {isGlobalRecord ? (
-                      <Crown
-                        role="img"
-                        aria-label={t("users.heroes.allTimeBest")}
-                        className="h-3 w-3 text-[color:var(--aqt-amber)]"
-                      />
-                    ) : null}
-                  </Eyebrow>
-                  <span className="aqt-display text-[24px] font-bold leading-none text-[color:var(--aqt-fg)]">
-                    {formatStatValue(format, name, best.value)}
+    <CardSurface flush title={t("users.heroes.records")}>
+      <ul className="divide-y divide-[color:var(--aqt-border)]">
+        {rows.flatMap((row) => {
+          const best = row.best;
+          if (!best) return [];
+          const where = `${best.map_name} · ${best.tournament_name}`;
+          return [
+            <li key={row.name}>
+              <HoverPrefetchLink
+                href={`/encounters/${best.encounter_id}`}
+                className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 py-2.5 transition-colors hover:bg-[color:var(--aqt-overlay-2)] focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[color:var(--aqt-teal)]"
+              >
+                <CatalogEntityImage
+                  entity={{ name: best.map_name, image_path: best.map_image_path || null }}
+                  shape="wide"
+                  size={36}
+                  decorative
+                />
+                <span className="flex min-w-0 flex-col gap-0.5">
+                  <span className="flex min-w-0 items-baseline gap-2">
+                    <span className="aqt-display aqt-tnum text-heading font-bold leading-none text-[color:var(--aqt-fg)]">
+                      {formatStatValue(format, row.name, best.value)}
+                    </span>
+                    <span className="truncate text-caption text-[color:var(--aqt-fg-muted)]">
+                      {t(row.labelKey as Parameters<typeof t>[0])}
+                    </span>
                   </span>
-                  <span className="aqt-tnum truncate text-label text-[color:var(--aqt-fg-dim)]">
-                    {best.map_name} · {best.tournament_name}
+                  <span className="truncate text-label text-[color:var(--aqt-fg-dim)]" title={where}>
+                    {where}
                   </span>
-                </HoverPrefetchLink>
-              </TooltipTrigger>
-              <TooltipContent className="w-60 overflow-hidden p-0">
-                {best.map_image_path ? (
-                  <div className="relative h-24 w-full">
-                    <Image src={best.map_image_path} alt={best.map_name} fill sizes="240px" className="object-cover" />
-                  </div>
+                </span>
+                {row.holdsRecord ? (
+                  <Crown
+                    role="img"
+                    aria-label={t("users.heroes.allTimeBest")}
+                    className="size-4 text-[color:var(--aqt-amber)]"
+                  />
                 ) : null}
-                <div className="flex flex-col gap-0.5 px-3 py-2">
-                  <span className="text-caption font-semibold">{best.tournament_name}</span>
-                  <span className="aqt-tnum text-label opacity-80">{best.map_name}</span>
-                </div>
-              </TooltipContent>
-            </Tooltip>
-          ))}
-        </div>
-      </TooltipProvider>
+              </HoverPrefetchLink>
+            </li>
+          ];
+        })}
+      </ul>
     </CardSurface>
   );
 };

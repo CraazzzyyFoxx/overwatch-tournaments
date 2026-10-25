@@ -2,16 +2,30 @@
 
 import { useSyncExternalStore } from "react";
 
-interface TwitchEmbedProps {
-  /** Twitch login of the channel to play. */
-  channel: string;
+import { twitchTimestamp } from "@/lib/social/stream-platform";
+
+type TwitchEmbedProps = {
   /**
-   * Accessible name of the player frame. Defaults to `Twitch · {channel}`,
-   * which is brand + identifier and therefore locale-neutral.
+   * Accessible name of the player frame. Defaults to `Twitch · {channel}` (or
+   * the video id), which is brand + identifier and therefore locale-neutral.
    */
   title?: string;
   className?: string;
-}
+} & (
+  | {
+      /** Twitch login of the live channel to play. */
+      channel: string;
+      video?: never;
+      start?: never;
+    }
+  | {
+      /** Twitch video id of a past broadcast, without the "v" prefix. */
+      video: string;
+      /** Where to start, in seconds into the video. */
+      start: number;
+      channel?: never;
+    }
+);
 
 /**
  * The `parent` value Twitch will accept for a document served from `hostname`.
@@ -41,7 +55,9 @@ const clientHostname = () => window.location.hostname;
 const serverHostname = () => null;
 
 /**
- * Twitch player for a channel, muted (browsers block unmuted autoplay anyway).
+ * Twitch player for a live channel (muted: browsers block unmuted autoplay
+ * anyway) or for a past broadcast from a given moment. A VOD is only mounted
+ * once the viewer picked that moment, so it is not muted: they asked to hear it.
  *
  * ## Why `parent` is read from `window.location.hostname`
  *
@@ -63,21 +79,26 @@ const serverHostname = () => null;
  *    rendered at all during SSR/first paint — a frame emitted with a guessed
  *    `parent` would just be a dead iframe.
  */
-export function TwitchEmbed({ channel, title, className }: Readonly<TwitchEmbedProps>) {
+export function TwitchEmbed({ channel, video, start, title, className }: Readonly<TwitchEmbedProps>) {
   const parent = twitchParentFromHostname(useSyncExternalStore(subscribeToHostname, clientHostname, serverHostname));
+  const identifier = channel || video;
 
-  if (!parent || !channel) {
+  if (!parent || !identifier) {
     return null;
   }
 
-  const src = `https://player.twitch.tv/?channel=${encodeURIComponent(channel)}&parent=${encodeURIComponent(parent)}&muted=true`;
+  // The player wants the "v" prefix on a video id; twitch.tv links do not.
+  const source = channel
+    ? `channel=${encodeURIComponent(channel)}`
+    : `video=v${encodeURIComponent(identifier)}&time=${twitchTimestamp(start ?? 0)}`;
+  const src = `https://player.twitch.tv/?${source}&parent=${encodeURIComponent(parent)}${channel ? "&muted=true" : ""}`;
 
   return (
     // 400x300 is Twitch's documented minimum player size; the attributes carry
     // that floor while the CSS scales the frame up to its container.
     <iframe
       src={src}
-      title={title ?? `Twitch · ${channel}`}
+      title={title ?? `Twitch · ${identifier}`}
       width={400}
       height={300}
       allowFullScreen

@@ -1,5 +1,6 @@
 import { reachedAtLeast } from "@/lib/tournament/lifecycle";
 import { pickCurrentStage } from "@/lib/tournament/stages";
+import type { StreamVods, TournamentStreams } from "@/types/stream.types";
 import type { StageSummary, TournamentStatus } from "@/types/tournament.types";
 
 export type TournamentSectionId =
@@ -33,11 +34,11 @@ type BuildTournamentSectionNavInput = {
    */
   hasTeams?: boolean;
   /**
-   * Whether the tournament has any stream at all — an official broadcast link
-   * or a participant currently live. Unlike Teams, the Stream section does not
-   * lock when it is empty: it disappears. A lock advertises content the
-   * organizer has not published YET, and every tournament would carry that
-   * promise forever, because most of them never have a stream.
+   * Whether the tournament has anything to watch (`hasStreamSection`). Unlike
+   * Teams, the Stream section does not lock when it is empty: it disappears. A
+   * lock advertises content the organizer has not published YET, and every
+   * tournament would carry that promise forever, because most of them never
+   * have a stream.
    */
   hasStreams?: boolean;
   /**
@@ -145,6 +146,22 @@ function resolveNavLockReason(
   if (locks.stageLocked) return "tournamentDetail.nav.reasons.noStages";
   if (locks.teamsLocked) return "tournamentDetail.nav.reasons.noTeams";
   return null;
+}
+
+/**
+ * The Stream tab's gate: an official broadcast link, a participant live now, or
+ * a past participant broadcast. The last is what keeps the tab after the event
+ * ends, when the live read is no longer made at all.
+ */
+export function hasStreamSection(
+  streams: TournamentStreams | undefined,
+  vods: StreamVods | undefined
+): boolean {
+  return (
+    (streams?.official?.length ?? 0) > 0 ||
+    (streams?.participants?.length ?? 0) > 0 ||
+    (vods?.vods?.length ?? 0) > 0
+  );
 }
 
 export function buildTournamentSectionNav({

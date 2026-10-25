@@ -322,6 +322,7 @@ export interface TournamentUpdateInput {
   discord_broadcasts_enabled?: boolean;
   discord_dms_enabled?: boolean;
   logs_official?: boolean;
+  pov_stream_delay_s?: number;
   win_points?: number;
   draw_points?: number;
   loss_points?: number;

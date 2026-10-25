@@ -62,9 +62,9 @@ interface Props {
   metadata: DisciplineMetadata;
 }
 
-/** Sticky, sortable hero rail. Left column of the Heroes tab: ranks every
- *  tracked hero by the chosen metric (so cross-hero comparison stays possible)
- *  while keeping the detail panel beside it — switching heroes needs no scroll. */
+/** Sticky, sortable hero rail beside the hero's detail from `xl` up: ranks every tracked hero by the chosen metric
+ *  (so cross-hero comparison stays possible) and switches heroes without a scroll. Narrower screens pick the hero
+ *  from the tab's toolbar instead. */
 const HeroRail = ({ rows, selectedId, onSelect, metadata }: Props) => {
   const t = useTranslations();
   const format = useFormatter();
@@ -101,7 +101,7 @@ const HeroRail = ({ rows, selectedId, onSelect, metadata }: Props) => {
       flush
       title={t("users.heroes.yourHeroes")}
       subtitle={t("users.heroes.tracked", { count: rows.length })}
-      className="xl:sticky xl:top-[var(--aqt-sticky-top)] xl:z-30"
+      className="hidden xl:sticky xl:top-[var(--aqt-sticky-top)] xl:z-30 xl:block"
     >
       <div className="flex flex-col gap-2 border-b border-[color:var(--aqt-border)] px-3 py-2.5">
         <FilterChipGroup label={t("common.filters")}>

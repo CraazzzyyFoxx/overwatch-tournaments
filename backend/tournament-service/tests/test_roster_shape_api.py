@@ -63,6 +63,7 @@ def _tournament(
         discord_broadcasts_enabled=True,
         discord_dms_enabled=True,
         logs_official=False,
+        pov_stream_delay_s=0,
         win_points=1.0,
         draw_points=0.5,
         loss_points=0.0,

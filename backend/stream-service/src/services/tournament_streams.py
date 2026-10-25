@@ -24,6 +24,7 @@ ranks and vetoes the rows it gets back.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any, cast
 from urllib.parse import urlsplit
 
@@ -31,7 +32,7 @@ from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.models.tournament.link import TournamentLink
-from shared.repository import StreamTargetRepository
+from shared.repository import StreamRosterRow, StreamTargetRepository
 from src.schemas.stream import (
     StreamEntryRead,
     StreamPlatform,
@@ -43,7 +44,7 @@ from src.services import targets
 from src.services.state import StreamStateStore
 from src.services.targets import StreamTargetsService
 
-__all__ = ("TournamentStreamsReader", "tournament_streams_reader")
+__all__ = ("TournamentStreamsReader", "publishable_players", "tournament_streams_reader")
 
 _PLATFORMS: frozenset[str] = frozenset({"twitch", "youtube", "other"})
 
@@ -147,6 +148,51 @@ def _official_entry(link: TournamentLink, live: dict[str, dict[str, Any]]) -> St
     )
 
 
+def publishable_players(rows: Sequence[StreamRosterRow]) -> dict[int, StreamPlayerRead]:
+    """Name, avatar and team for every *publishable* user among ``list_roster`` rows.
+
+    PRIVACY: the display half of the stream veto. The poll-target query keeps a
+    vetoed player out of Redis only from the next tick on, so entries already in
+    the hash are dropped here too: a vetoed player never becomes a map entry.
+
+    Roster gate: before the tournament has rosters every approved registrant on
+    air is a participant (streaming during ``check_in``); once ``rosters_formed``
+    (carried by the same SELECT), a teamless participant is dropped.
+
+    Shared with the VOD chronology read, so a player renders with the same team on
+    the live block and under their past broadcasts.
+    """
+    # One user can come back on several rows (a substitute's second roster row,
+    # or a multi-workspace user's unmatched join). The pick is ranked so it is a
+    # function of the data alone — otherwise the participant would switch teams
+    # mid-broadcast from tick to tick.
+    best: dict[int, tuple[tuple[bool, bool, int], StreamRosterRow]] = {}
+    for row in rows:
+        # PRIVACY: the veto, applied before ranking. ``is False`` on purpose: only
+        # an explicit false is a veto, so a NULL fails open rather than silently
+        # un-publishing a whole tournament.
+        if row.stream_visible is False:
+            continue
+        # A real roster row beats none, a starter beats a substitute, and
+        # the lowest roster id breaks any remaining tie.
+        rank = (row.roster_id is None, row.is_substitution, row.roster_id or 0)
+        if (previous := best.get(row.user_id)) is None or rank < previous[0]:
+            best[row.user_id] = (rank, row)
+    # Tournament-wide flag, so any row answers for all; ``any`` because ``rows``
+    # may be empty.
+    rosters_formed = any(row.rosters_formed for row in rows)
+    return {
+        user_id: StreamPlayerRead(
+            id=user_id,
+            name=row.name,
+            avatar_url=row.avatar_url,
+            team=StreamTeamRead(id=row.team_id, name=row.team_name) if row.team_id is not None else None,
+        )
+        for user_id, (_, row) in best.items()
+        if row.team_id is not None or not rosters_formed
+    }
+
+
 class TournamentStreamsReader:
     """Assembles the public "who is on air" block for one tournament."""
 
@@ -165,51 +211,11 @@ class TournamentStreamsReader:
         player_ids: set[int],
         tournament_id: int,
     ) -> dict[int, StreamPlayerRead]:
-        """Name, avatar and team for every *publishable* streaming participant, in ONE query.
-
-        Batched because a public, cacheable page can carry dozens of live channels.
-
-        PRIVACY: the display half of the stream veto. The poll-target query keeps a
-        vetoed player out of Redis only from the next tick on, so entries already in
-        the hash are dropped here too: a vetoed player never becomes a map entry.
-
-        Roster gate: before the tournament has rosters every approved registrant on
-        air is a participant (streaming during ``check_in``); once ``rosters_formed``
-        (carried by the same SELECT), a teamless participant is dropped.
-        """
+        """``publishable_players`` for ``player_ids``, in ONE query — a public,
+        cacheable page can carry dozens of live channels."""
         if not player_ids:
             return {}
-        rows = await self._rosters.list_roster(session, tournament_id, player_ids)
-
-        # One user can come back on several rows (a substitute's second roster row,
-        # or a multi-workspace user's unmatched join). The pick is ranked so it is a
-        # function of the data alone — otherwise the participant would switch teams
-        # mid-broadcast from tick to tick.
-        best: dict[int, tuple[tuple[bool, bool, int], Any]] = {}
-        for row in rows:
-            # PRIVACY: the veto, applied before ranking. ``is False`` on purpose: only
-            # an explicit false is a veto, so a NULL fails open rather than silently
-            # un-publishing a whole tournament.
-            if row.stream_visible is False:
-                continue
-            # A real roster row beats none, a starter beats a substitute, and
-            # the lowest roster id breaks any remaining tie.
-            rank = (row.roster_id is None, row.is_substitution, row.roster_id or 0)
-            if (previous := best.get(row.user_id)) is None or rank < previous[0]:
-                best[row.user_id] = (rank, row)
-        # Tournament-wide flag, so any row answers for all; ``any`` because ``rows``
-        # may be empty.
-        rosters_formed = any(row.rosters_formed for row in rows)
-        return {
-            user_id: StreamPlayerRead(
-                id=user_id,
-                name=row.name,
-                avatar_url=row.avatar_url,
-                team=StreamTeamRead(id=row.team_id, name=row.team_name) if row.team_id is not None else None,
-            )
-            for user_id, (_, row) in best.items()
-            if row.team_id is not None or not rosters_formed
-        }
+        return publishable_players(await self._rosters.list_roster(session, tournament_id, player_ids))
 
     async def build(self, session: AsyncSession, redis: Redis, tournament_id: int) -> TournamentStreamsRead:
         """Assemble the stream block. Caller MUST have gated visibility already."""

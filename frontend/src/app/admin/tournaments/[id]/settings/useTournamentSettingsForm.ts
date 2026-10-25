@@ -45,6 +45,8 @@ const SETTINGS_SECTION_FIELDS = {
   schedule: ["start_date", "end_date", "auto_transitions_enabled", "allow_late_registration"],
   draft: ["draft_format_json"],
   challonge: ["challonge_slug"],
+  // Sits beside the stream links: the delay the rules require of a POV stream.
+  links: ["pov_stream_delay_s"],
   discord: ["discord_broadcasts_enabled", "discord_dms_enabled"],
   preview: ["is_hidden"]
 } as const satisfies Record<string, readonly (keyof TournamentUpdateInput)[]>;

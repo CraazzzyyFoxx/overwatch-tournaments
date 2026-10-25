@@ -16,10 +16,13 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any
 from unittest import IsolatedAsyncioTestCase
 from unittest.mock import patch
 
+from shared.repository import StreamSessionObservation  # noqa: E402
+from shared.repository.stream_session import PendingVodRow, ResolvedVodRow  # noqa: E402
 from shared.schemas.settings import StreamCollectionConfig  # noqa: E402
 from shared.services.realtime import Resource, Scope  # noqa: E402
 from src.services import helix, poller  # noqa: E402
@@ -115,7 +118,7 @@ class _FakeRedis:
         self.hashes.pop(key, None)
 
 
-def _snapshot(login: str, user_id: str | None = None) -> helix.StreamSnapshot:
+def _snapshot(login: str, user_id: str | None = None, stream_id: str | None = None) -> helix.StreamSnapshot:
     return helix.StreamSnapshot(
         channel=login,
         user_id=user_id or f"id-{login}",
@@ -125,18 +128,45 @@ def _snapshot(login: str, user_id: str | None = None) -> helix.StreamSnapshot:
         viewer_count=12,
         thumbnail_url=f"https://static-cdn.jtvnw.net/{login}-440x248.jpg",
         started_at="2026-08-16T12:00:00Z",
+        stream_id=stream_id,
     )
 
 
-class _Fetcher:
-    """Stands in for ``HelixClient.fetch_live_streams``; records how it was called."""
+class _FakeSessions:
+    """Stands in for ``StreamSessionRepository``: records the writes, serves canned worklists."""
 
-    def __init__(self, result: helix.HelixBatchResult | None = None, error: Exception | None = None) -> None:
+    def __init__(self) -> None:
+        self.observed: list[StreamSessionObservation] = []
+        self.pending: list[PendingVodRow] = []
+        self.due: list[ResolvedVodRow] = []
+        self.attempts: list[dict[str, Any]] = []
+        self.rechecks: list[dict[str, Any]] = []
+
+    async def record_observed(self, session: Any, observations: list[Any], *, seen_at: datetime) -> None:
+        self.observed += observations
+
+    async def list_unresolved(self, session: Any, **window: Any) -> list[PendingVodRow]:
+        return self.pending
+
+    async def mark_vod_attempts(self, session: Any, **marks: Any) -> None:
+        self.attempts.append({key: marks[key] for key in ("attempted", "resolved")})
+
+    async def list_due_recheck(self, session: Any, **window: Any) -> list[ResolvedVodRow]:
+        return self.due
+
+    async def mark_rechecked(self, session: Any, **marks: Any) -> None:
+        self.rechecks.append({key: marks[key] for key in ("alive", "gone")})
+
+
+class _Fetcher:
+    """Stands in for a ``HelixClient.fetch_*`` method; records how it was called."""
+
+    def __init__(self, result: Any = None, error: Exception | None = None) -> None:
         self._result = result
         self._error = error
         self.calls: list[dict[str, Any]] = []
 
-    async def __call__(self, **kwargs: Any) -> helix.HelixBatchResult:
+    async def __call__(self, **kwargs: Any) -> Any:
         self.calls.append(kwargs)
         if self._error is not None:
             raise self._error
@@ -188,6 +218,9 @@ class _TickCase(IsolatedAsyncioTestCase):
         self.cfg = StreamCollectionConfig(enabled=True, interval_seconds=60, batch_size=100)
         self.targets = _FakeTargetsService()
         self.session = _FakeSession()
+        self.sessions = _FakeSessions()
+        self.archives = _Fetcher(helix.HelixVideosResult(videos=[]))
+        self.videos = _Fetcher(helix.HelixVideosResult(videos=[]))
 
     def _tournament(self, tournament_id: int, *, hidden: bool = False) -> None:
         self.targets.tournaments.append(_Tournament(tournament_id=tournament_id, workspace_id=1, is_hidden=hidden))
@@ -216,7 +249,14 @@ class _TickCase(IsolatedAsyncioTestCase):
 
         with patch.object(poller, "emit", _record):
             return await poller.run_poll_tick(
-                self.session, self.redis, cfg or self.cfg, fetch=fetch, targets=self.targets
+                self.session,
+                self.redis,
+                cfg or self.cfg,
+                fetch=fetch,
+                fetch_archives=self.archives,
+                fetch_videos=self.videos,
+                targets=self.targets,
+                sessions=self.sessions,
             )
 
 
@@ -485,6 +525,83 @@ class PollStatusTests(_TickCase):
 
         history = await StreamStateStore(self.redis).read_poll_history()
         self.assertEqual([entry["status"] for entry in history], ["ok", "unauthorized"])
+
+
+class SessionRecordingTests(_TickCase):
+    """Every live POV broadcast becomes a ``stream.session`` row; an official cast never does."""
+
+    async def test_a_live_pov_channel_is_recorded_and_an_official_one_is_not(self) -> None:
+        self._tournament(7)
+        self._participant(7, "caster", player_id=99, source="verified")
+        self.targets.links[7] = [_Link(url="https://twitch.tv/owtmain")]
+        result = helix.HelixBatchResult(
+            snapshots=[_snapshot("caster", stream_id="41"), _snapshot("owtmain", stream_id="42")],
+            polled_logins=frozenset({"owtmain"}),
+            polled_user_ids=frozenset({"id-caster"}),
+        )
+
+        await self._run(_Fetcher(result))
+
+        self.assertEqual(
+            self.sessions.observed,
+            [
+                StreamSessionObservation(
+                    tournament_id=7,
+                    user_id=99,
+                    channel="caster",
+                    broadcaster_id="id-caster",
+                    stream_id="41",
+                    started_at=datetime(2026, 8, 16, 12, tzinfo=UTC),
+                )
+            ],
+        )
+        # The live sets' commit (which publishes), then the sessions'.
+        self.assertEqual(self.session.commits, 2)
+
+
+class VodSyncTests(_TickCase):
+    async def test_pending_broadcasts_resolve_by_stream_id_and_only_answered_ones_count_as_attempted(self) -> None:
+        # No active tournament at all: a completed tournament's VODs still need resolving.
+        self.sessions.pending = [
+            PendingVodRow(1, "b1", "41"),
+            PendingVodRow(2, "b1", "43"),
+            PendingVodRow(3, "b2", "44"),
+        ]
+        # The rate-limit floor stopped the loop before b2.
+        self.archives = _Fetcher(
+            helix.HelixVideosResult(videos=[helix.HelixVideo("900", "41", "b1")], polled=frozenset({"b1"}))
+        )
+
+        await self._run(_Fetcher(_batch([])))
+
+        self.assertEqual(self.archives.calls, [{"user_ids": ["b1", "b2"]}])
+        self.assertEqual(self.sessions.attempts, [{"attempted": [1, 2], "resolved": {1: "900"}}])
+        self.assertEqual(self.session.commits, 1)
+
+    async def test_recheck_marks_the_vods_helix_no_longer_returns_as_gone(self) -> None:
+        self.sessions.due = [ResolvedVodRow(1, "900"), ResolvedVodRow(2, "901"), ResolvedVodRow(3, "900")]
+        self.videos = _Fetcher(
+            helix.HelixVideosResult(videos=[helix.HelixVideo("900", None, None)], polled=frozenset({"900", "901"}))
+        )
+
+        await self._run(_Fetcher(_batch([])))
+
+        self.assertEqual(self.videos.calls, [{"ids": ["900", "901"]}])
+        self.assertEqual(self.sessions.rechecks, [{"alive": [1, 3], "gone": [2]}])
+
+    async def test_vod_sync_failures_never_touch_the_tick_status(self) -> None:
+        self._tournament(7)
+        self._participant(7, "caster")
+        self.sessions.pending = [PendingVodRow(1, "b1", "41")]
+        self.sessions.due = [ResolvedVodRow(2, "900")]
+        self.archives = _Fetcher(error=helix.HelixUnavailable("boom"))
+        self.videos = _Fetcher(error=helix.HelixRateLimited("slow down"))
+
+        processed = await self._run(_Fetcher(_batch(["caster"], logins=["caster"])))
+
+        self.assertEqual(processed, 1)
+        self.assertEqual((await StreamStateStore(self.redis).read_poll_status() or {})["status"], "ok")
+        self.assertEqual((self.sessions.attempts, self.sessions.rechecks), ([], []))
 
 
 def _batch(
