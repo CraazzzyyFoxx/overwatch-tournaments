@@ -1,6 +1,6 @@
 "use client";
 
-import { useId } from "react";
+import { useId, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Clock, UserX } from "lucide-react";
 
@@ -65,6 +65,7 @@ export function PickBanPanel({
   // The room's own game: its role dictionary names the targets' roles, its declared classes order the pool filter.
   const metadata = useDisciplineMetadata(encounter.workspace_id, encounter.discipline);
   const sideHintId = useId();
+  const [chosenMember, chooseMember] = useState<number | null>(null);
   const {
     step,
     seats,
@@ -74,7 +75,6 @@ export function PickBanPanel({
     assignStep,
     choosableMembers,
     actingMemberId,
-    chooseMember,
     actingMemberName,
     selectedItemId,
     selectedItemName,
@@ -109,7 +109,7 @@ export function PickBanPanel({
     acting,
     locking,
     dispute
-  } = usePickBanController({ kind, encounterId, encounter, state, session, queryKey, itemsById, isAdmin });
+  } = usePickBanController({ kind, encounterId, encounter, state, session, queryKey, itemsById, isAdmin, chosenMember });
 
   return (
     <>

@@ -22,6 +22,8 @@ import {
   PHASE_LABEL,
   PHASE_TONE,
   currentStep,
+  sortByKickoff,
+  sortByPhase,
   stepActionLabel
 } from "./model";
 
@@ -201,6 +203,9 @@ export function useRoomColumns({
         accessorKey: "scheduled_at",
         header: t("scheduled"),
         size: 132,
+        sortingFn: sortByKickoff,
+        // Picked again, it starts where the table's default does: newest first.
+        sortDescFirst: true,
         meta: columnMeta<PregameRoomRow>({ category: "core" }),
         cell: ({ row }) => <ScheduledAtCell value={row.original.scheduled_at} />
       },
@@ -208,6 +213,7 @@ export function useRoomColumns({
         accessorKey: "phase",
         header: t("phaseColumn"),
         size: 128,
+        sortingFn: sortByPhase,
         meta: columnMeta<PregameRoomRow>({ category: "core", align: "center" }),
         cell: ({ row }) => <PhaseCell room={row.original} t={t} />
       },
@@ -242,7 +248,9 @@ export function useRoomColumns({
         id: "attention",
         header: t("attentionColumn"),
         size: 96,
-        enableSorting: false,
+        // How many flags the room carries, the most first.
+        accessorFn: (row) => row.attention.length,
+        sortDescFirst: true,
         meta: columnMeta<PregameRoomRow>({ category: "core", align: "center" }),
         cell: ({ row }) => <AttentionCell room={row.original} t={t} />
       },

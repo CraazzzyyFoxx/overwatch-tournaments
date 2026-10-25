@@ -101,7 +101,10 @@ const HeroRail = ({ rows, selectedId, onSelect, metadata }: Props) => {
       flush
       title={t("users.heroes.yourHeroes")}
       subtitle={t("users.heroes.tracked", { count: rows.length })}
-      className="hidden xl:sticky xl:top-[var(--aqt-sticky-top)] xl:z-30 xl:block"
+      // Stretched over the row, so it ends with the hero's detail beside it, and capped at the screen under the sticky
+      // chrome, so its foot never sits below the fold while it sticks. The list scrolls in what the controls leave.
+      className="hidden xl:sticky xl:top-[var(--aqt-sticky-top)] xl:z-30 xl:flex xl:max-h-[calc(100dvh_-_var(--aqt-sticky-top)_-_1rem)] xl:flex-col xl:self-stretch"
+      bodyClassName="flex min-h-0 flex-1 flex-col"
     >
       <div className="flex flex-col gap-2 border-b border-[color:var(--aqt-border)] px-3 py-2.5">
         <FilterChipGroup label={t("common.filters")}>
@@ -141,7 +144,8 @@ const HeroRail = ({ rows, selectedId, onSelect, metadata }: Props) => {
         </div>
       </div>
 
-      <div className="max-h-[calc(100vh-200px)] overflow-y-auto">
+      {/* Sized as empty (`contain: size`), so the 37 rows never stretch the row past the detail column. */}
+      <div className="min-h-0 flex-1 overflow-y-auto [contain:size]">
         {visible.map((r) => {
           const active = r.id === selectedId;
           return (

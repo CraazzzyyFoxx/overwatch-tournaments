@@ -4,8 +4,10 @@ Publishers name an emoji and the bot resolves it (``src.ui``,
 ``src.interactions.emoji``); until one is uploaded every surface falls back to
 Unicode. This fills the application's emoji slots from ``assets/emoji/`` -- the
 set ``frontend/scripts/gen-discord-emoji.mjs`` renders (tinted role icons and
-lucide icons) -- plus the Overwatch rank badges in the repo's ``static/divisions``
-(``gold-3.png`` -> ``div_gold_3``), the ranks the seat panel badges with.
+lucide icons) -- plus every game's rank emblems: each native ladder tier's
+``icon_url`` under the repo's ``frontend/public``, named by
+:func:`src.ui.badge_name` (``/divisions/gold-3.png`` -> ``div_gold_3``,
+``/disciplines/deadlock/ranks/mystic.png`` -> ``div_deadlock_mystic``).
 
 Run it once per application (dev and prod are different applications with
 different emoji ids, which is exactly why no id is ever hard-coded); normally
@@ -27,17 +29,19 @@ from pathlib import Path
 
 import discord
 
+from shared.disciplines import DISCIPLINES
+from shared.division_grid import ladder_grid
 from src.core.config import Settings
-from src.ui import EMOJI, EMOJI_PREFIX, division_emoji
+from src.ui import EMOJI, EMOJI_PREFIX, badge_name
 
 #: ``backend/discord-service/src/tools/emoji_sync.py`` -> the repo root. Resolved
 #: from this file, not from the shell's CWD: the tool is run from wherever. In
 #: the image the service sits at ``/app/discord-service``, so the root is ``/``
-#: and the compose service mounts the checkout's ``static/divisions`` there.
+#: and the compose service mounts the checkout's ``frontend/public`` there.
 _SERVICE = Path(__file__).resolve().parents[2]
 _REPO = _SERVICE.parents[1]
 
-_DIVISIONS = _REPO / "static" / "divisions"
+_PUBLIC = _REPO / "frontend" / "public"
 _ASSETS = _SERVICE / "assets" / "emoji"
 
 _SUFFIXES = (".png", ".gif", ".webp")
@@ -50,28 +54,19 @@ _MAX_BYTES = 256 * 1024
 _MAX_EMOJI = 2000
 
 
-def badge_name(slug: str) -> str:
-    """``gold-3`` -> ``div_gold_3``: the very name the cards ask for.
-
-    Derived from :func:`src.ui.division_emoji` rather than
-    re-implementing its normalisation -- a second copy of that regex is a badge
-    that silently never resolves.
-    """
-    shortcode = division_emoji(slug)
-    return shortcode[1:-1].removeprefix(EMOJI_PREFIX) if shortcode else ""
-
-
 def _collect(extra_dirs: Sequence[Path]) -> dict[str, Path]:
     """Emoji name -> the picture to upload for it.
 
     Later sources win: a file in ``assets/emoji`` (or a ``--dir``) named like a
-    rank badge overrides the repo's picture, which is the point of the
+    rank badge overrides the site's emblem, which is the point of the
     directory. The site's own role icons are not a source: they are white and
     vanish on Discord's light theme; ``assets/emoji`` holds tinted ones.
     """
     found: dict[str, Path] = {}
-    for path in sorted(_DIVISIONS.glob("*.png")):
-        found[badge_name(path.stem)] = path
+    for code in DISCIPLINES:
+        ladder = ladder_grid(code)
+        for tier in ladder.tiers if ladder is not None else ():
+            found[badge_name(code, tier.icon_url)] = _PUBLIC / tier.icon_url.lstrip("/")
     for directory in (_ASSETS, *extra_dirs):
         for path in sorted(directory.glob("*")):
             if path.is_file() and path.suffix.lower() in _SUFFIXES:
@@ -88,6 +83,8 @@ def _plan(extra_dirs: Sequence[Path], existing: set[str]) -> tuple[list[tuple[st
             notes.append(f"skip {name}: not an emoji any publisher can name ({path})")
         elif name in existing:
             notes.append(f"skip {name}: already uploaded")
+        elif not path.is_file():
+            notes.append(f"skip {name}: no picture at {path}")
         elif path.stat().st_size > _MAX_BYTES:
             notes.append(f"skip {name}: {path.stat().st_size // 1024} KiB is over Discord's 256 KiB ({path})")
         else:

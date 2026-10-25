@@ -30,7 +30,7 @@ from urllib.parse import urljoin
 
 from shared.core.social import PROVIDERS
 from shared.disciplines import identity_provider
-from shared.division_grid import DEFAULT_GRID
+from shared.division_grid import DivisionGrid, ladder_grid
 from shared.domain.mix_lobby import LOBBY_LETTERS
 from src.render.card import DISCORD_CARD_TEXT_LIMIT, DiscordActionButton, DiscordCard, DiscordLinkButton
 from src.render.mix_lineup_image import LineupPicture, LineupSeat, LineupTeam
@@ -127,17 +127,15 @@ def _rendered_len(text: str) -> int:
     return len(text) + _SHORTCODE_GROWTH * len(SHORTCODE.findall(text))
 
 
-def _player_line(player: SignupPlayer, labels: Mapping[str, str] | None, overwatch: bool) -> str:
+def _player_line(player: SignupPlayer, labels: Mapping[str, str] | None, overwatch: bool, discipline: str) -> str:
     """``:role: :badge: Name · 2450``: the role they come for, and how good they are at it.
 
-    ``labels`` is ``None`` in a one-role game, whose rows carry no role mark. Only an Overwatch row wears the
-    badge -- the Overwatch rank the number lands in, the seat panel's own (spec §12.1 R3-5) -- and it simply
-    disappears until it is uploaded; the number stays. An away row says so last.
+    ``labels`` is ``None`` in a one-role game, whose rows carry no role mark. The badge is the emblem of the tier the
+    number lands in on the game's own ladder, the seat panel's own, and it simply disappears until it is uploaded; the
+    number stays. An away row says so last.
     """
     role = _role_mark(player.role, labels, overwatch) if labels is not None and player.role else ""
-    badge = (
-        division_emoji(DEFAULT_GRID.resolve_division(player.rank).slug) if overwatch and player.rank is not None else ""
-    )
+    badge = division_emoji(discipline, player.rank)
     rank = " · без ранга" if player.rank is None else f" · {player.rank}"
     return (
         " ".join(part for part in (role, badge, _escape(player.name)) if part)
@@ -147,7 +145,7 @@ def _player_line(player: SignupPlayer, labels: Mapping[str, str] | None, overwat
 
 
 def _player_lists(
-    players: Sequence[SignupPlayer], labels: Mapping[str, str] | None, overwatch: bool, budget: int
+    players: Sequence[SignupPlayer], labels: Mapping[str, str] | None, overwatch: bool, discipline: str, budget: int
 ) -> list[str]:
     """The pool, then the bench, one player a line, cut at ``budget`` with the rest counted."""
     sections = [
@@ -162,7 +160,7 @@ def _player_lists(
         lines.append(heading)
         used += _rendered_len(heading) + 1
         for index, player in enumerate(members):
-            line = _player_line(player, labels, overwatch)
+            line = _player_line(player, labels, overwatch, discipline)
             if used + _rendered_len(line) + 1 > budget:
                 lines.append(f"-# и ещё {len(members) - index}")
                 break
@@ -263,7 +261,7 @@ def signup_card(
     # ``<:owt_name:id>``, which the card's own length check cannot see. Everything else is kept whole, every
     # lobby line included; the lists take what is left.
     budget = DISCORD_CARD_TEXT_LIMIT - _rendered_len(text) - _rendered_len("\n".join([*head, *foot])) - _LISTS_OVERRUN
-    details = [*head, *_player_lists(players, labels, overwatch, budget), *foot]
+    details = [*head, *_player_lists(players, labels, overwatch, discipline, budget), *foot]
 
     target = str(custom_game_id)
     answers: list[DiscordActionButton] = (
@@ -288,28 +286,29 @@ def signup_card(
     )
 
 
-def _picture_seat(bucket: str, uuid: str, player: Mapping[str, Any], board_url: str, overwatch: bool) -> LineupSeat:
+def _picture_seat(
+    bucket: str, uuid: str, player: Mapping[str, Any], board_url: str, ladder: DivisionGrid | None
+) -> LineupSeat:
     # A lobby document's player carries one rating per role bucket (``Tank``, ``Damage``...).
     ratings = player.get("ratings")
     rating = int(ratings.get(bucket, 0)) if isinstance(ratings, Mapping) else 0
-    # Only an Overwatch seat wears a division badge (spec §12.1 R3-5): the ladder is Overwatch's.
-    icon = DEFAULT_GRID.resolve_division(rating).icon_url if overwatch else None
+    icon = ladder.resolve_division(rating).icon_url if ladder is not None else None
     return LineupSeat(
         role=bucket.strip().lower(),
         name=str(player.get("name") or f"#{uuid}"),
         rating=rating,
-        # The ladder's badges are site-relative (``/divisions/<slug>.png``), served by the site itself.
+        # The ladders' emblems are site-relative (``/divisions/<slug>.png``), served by the site itself.
         division_icon=urljoin(board_url, icon) if icon else None,
         captain=player.get("is_captain") is True,
     )
 
 
 def _picture_team(
-    name: str, team: Mapping[str, Any], players: Mapping[str, Any], board_url: str, overwatch: bool
+    name: str, team: Mapping[str, Any], players: Mapping[str, Any], board_url: str, ladder: DivisionGrid | None
 ) -> LineupTeam:
     roster = team.get("roster")
     seats = tuple(
-        _picture_seat(bucket, str(uuid), players.get(str(uuid)) or {}, board_url, overwatch)
+        _picture_seat(bucket, str(uuid), players.get(str(uuid)) or {}, board_url, ladder)
         for bucket, uuids in (roster.items() if isinstance(roster, Mapping) else ())
         if isinstance(uuids, list)
         for uuid in uuids
@@ -343,16 +342,16 @@ def lineup_picture(
     """What the matchup picture of one lobby shows.
 
     ``variant`` is one option of a stored ``lobby_document`` and ``players``
-    that document's player map, which its seat uuids resolve against. An
-    Overwatch seat's rank badge is the Overwatch 2 ladder tier its rating lands
-    in (``OW_REFERENCE_GRID``) -- not a workspace's tournament grid; another
-    game's seat shows its number alone (spec §12.1 R3-5). ``map_image`` is the
-    next map's art as the database stores its URL.
+    that document's player map, which its seat uuids resolve against. A
+    seat's rank badge is the emblem of the tier its rating lands in on the
+    game's own ladder -- never a workspace's tournament grid; a game without a
+    ladder shows the number alone. ``map_image`` is the next map's art as the
+    database stores its URL.
     """
-    overwatch = art_drawn_for(discipline)
+    ladder = ladder_grid(discipline)
     raw_teams = variant.get("teams")
     teams = tuple(
-        _picture_team(team_names.get(index) or f"Команда {index + 1}", team, players, board_url, overwatch)
+        _picture_team(team_names.get(index) or f"Команда {index + 1}", team, players, board_url, ladder)
         for index, team in enumerate(raw_teams if isinstance(raw_teams, list) else [])
         if isinstance(team, Mapping)
     )

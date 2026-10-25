@@ -8,6 +8,7 @@ import { LoadErrorNote } from "@/components/kit/EmptyNote";
 import { CardSurface } from "@/components/profile/atoms";
 import { Skeleton } from "@/components/ui/skeleton";
 import { LOW_SAMPLE_GAMES, winrateColor } from "@/lib/colors";
+import { cn } from "@/lib/utils";
 
 import type { HeroMapRow } from "./hero-stats";
 
@@ -19,11 +20,17 @@ const MapsForHero = ({
   heroName,
   rows,
   onRetry,
+  fill = false,
   className
 }: {
   heroName: string;
   rows: HeroMapRow[] | undefined;
   onRetry?: () => void;
+  /**
+   * Beside another card from `lg`: the card takes the row's height, which that card sets, and the list scrolls in it
+   * instead of growing the row (`contain: size`), so the two cards end on one line.
+   */
+  fill?: boolean;
   className?: string;
 }) => {
   const t = useTranslations();
@@ -45,14 +52,21 @@ const MapsForHero = ({
       </div>
     );
   } else if (rows.length === 0) {
-    body = <p className="py-6 text-center text-caption text-[color:var(--aqt-fg-dim)]">{t("users.heroes.noMapData")}</p>;
+    body = (
+      <p className={cn("py-6 text-center text-caption text-[color:var(--aqt-fg-dim)]", fill && "lg:my-auto")}>
+        {t("users.heroes.noMapData")}
+      </p>
+    );
   } else {
     body = (
       <div
         role="region"
         aria-label={title}
         tabIndex={0}
-        className="max-h-[22.5rem] overflow-y-auto focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[color:var(--aqt-teal)]"
+        className={cn(
+          "max-h-[22.5rem] overflow-y-auto focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[color:var(--aqt-teal)]",
+          fill && "lg:max-h-none lg:min-h-56 lg:flex-1 lg:[contain:size]"
+        )}
       >
         <ul className="divide-y divide-[color:var(--aqt-border)]">
           {rows.map((row) => {
@@ -90,7 +104,8 @@ const MapsForHero = ({
   return (
     <CardSurface
       flush
-      className={className}
+      className={cn(fill && "lg:flex lg:flex-col", className)}
+      bodyClassName={fill ? "lg:flex lg:min-h-0 lg:flex-1 lg:flex-col" : undefined}
       title={title}
       subtitle={rows && rows.length > 0 ? t("users.heroes.mapsSubtitle", { count: rows.length }) : undefined}
     >

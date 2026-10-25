@@ -38,14 +38,18 @@ $COMPOSE exec analytics-worker python -c \
 make migrate
 #   Cached feature frames need no clearing: FEATURE_VERSION (v1.6) keys them.
 
+# The CLI inherits the worker's DB_STATEMENT_TIMEOUT (30 s, SET LOCAL through pgBouncer); the training feature frames
+# over stats.fact need minutes, so every one-off run below gets its own (v2.2.0 retrain: performance train 74 min).
+ML="$COMPOSE exec -e DB_STATEMENT_TIMEOUT=1800000 analytics-worker python -m src.services.ml.cli"
+
 # 1a) (required for individual skill and the smurf flag) retrain Performance v2 — its pre-encounter strength no longer
 #     contains the encounter's own result and the logless fallback no longer sees the score — then materialize it
-$COMPOSE exec analytics-worker python -m src.services.ml.cli train --cutoff $LATEST --models performance
-$COMPOSE exec analytics-worker python -m src.services.ml.cli backfill --from 1 --to $LATEST --models performance
+$ML train --cutoff $LATEST --models performance
+$ML backfill --from 1 --to $LATEST --models performance
 
 # 1b) retrain shift v2 (weights snapshotted from env) and recompute
-$COMPOSE exec analytics-worker python -m src.services.ml.cli train --cutoff $LATEST --models shift
-$COMPOSE exec analytics-worker python -m src.services.ml.cli backfill --from 1 --to $LATEST
+$ML train --cutoff $LATEST --models shift
+$ML backfill --from 1 --to $LATEST
 #   ^ backfill (without --models) updates shift + player_anomalies (smurf) + match_quality + standings + performance
 
 # 2) v1 Points/Linear/OpenSkill — a compute job (v1 recalc + v2 infer together) via the API (analytics.update

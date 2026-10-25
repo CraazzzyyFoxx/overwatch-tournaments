@@ -19,7 +19,7 @@ import type { PregameRoomRow } from "@/types/admin.types";
 import { seatsBySlot } from "@/lib/encounter/seats";
 
 import { pregameRoomFilterDefs } from "./filters";
-import { PHASE_LABEL, PREGAME_ROOMS_REFETCH_MS, sortRooms } from "./model";
+import { PHASE_LABEL, PREGAME_ROOMS_REFETCH_MS } from "./model";
 import { useRoomColumns } from "./useRoomColumns";
 
 const PAGE_SIZE = 25;
@@ -47,7 +47,10 @@ export function PregameRoomsBrowser({ tournamentId }: Readonly<{ tournamentId: n
     refetchInterval: PREGAME_ROOMS_REFETCH_MS
   });
 
-  const rooms = useMemo(() => sortRooms(roomsQuery.data?.rooms ?? []), [roomsQuery.data]);
+  // Newest first. The server answers in bracket order (stage, round, id);
+  // reversed, that is the tie-break of every column sort (see
+  // `sortByKickoff`) and the order a cleared sort falls back to.
+  const rooms = useMemo(() => [...(roomsQuery.data?.rooms ?? [])].reverse(), [roomsQuery.data]);
 
   const defs = useMemo(() => pregameRoomFilterDefs(rooms, (key) => t(key as Parameters<typeof t>[0])), [rooms, t]);
   const filters = useFilters(defs);
@@ -105,6 +108,7 @@ export function PregameRoomsBrowser({ tournamentId }: Readonly<{ tournamentId: n
         columns={columns}
         filterKey={filters.filterKey}
         initialPageSize={PAGE_SIZE}
+        initialSort={{ field: "scheduled_at", dir: "desc" }}
         columnsStorageKey="pregame-rooms-table-columns"
         searchPlaceholder={t("search")}
         getRowId={(row) => String(row.encounter_id)}

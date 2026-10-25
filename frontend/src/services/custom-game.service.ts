@@ -32,6 +32,8 @@ type MixRoleSelectionMode = "all_ranked" | "explicit";
 export type CustomGamePlayer = {
   id: number;
   workspace_member_id: number;
+  /** `players.user.id`: rank history reads the player by it, never by a handle lookup. */
+  player_id: number | null;
   display_name: string | null;
   identity: PlayerIdentity | null;
   sort_order: number;

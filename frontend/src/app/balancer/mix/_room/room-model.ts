@@ -28,6 +28,8 @@ export interface RoomSeat {
   isCaptain: boolean;
   /** The hero picked for this player (a catalogue id); null until one is. */
   heroId: number | null;
+  /** This player in the hero room (`PickBanMember.id`); null outside one. */
+  teamMemberId: number | null;
 }
 
 export interface RoomSlot {
@@ -102,7 +104,8 @@ export function draftRoomTeams(board: DraftBoard, teamNames: readonly string[]):
                   role: cell.role,
                   rank: slotRankForPlayer(cell.player, cell.role, shape),
                   isCaptain: cell.player.is_captain,
-                  heroId: null
+                  heroId: null,
+                  teamMemberId: null
                 }
         })),
         bans: [],
@@ -130,7 +133,8 @@ export function lineupRoomTeams(variant: PickupVariant): RoomTeam[] {
           role: seat.role,
           rank: seat.rating,
           isCaptain: seat.isCaptain,
-          heroId: null
+          heroId: null,
+          teamMemberId: null
         }
       };
     }),
@@ -141,9 +145,9 @@ export function lineupRoomTeams(variant: PickupVariant): RoomTeam[] {
 }
 
 /**
- * The hero room laid over the teams: each team's bans in the order they landed, each player's hero, a captain's picks
- * not yet assigned, and the side a team starts on. A live seat is matched to a lineup team by slot order; a pick to a
- * player by workspace member, by name where the room does not say.
+ * The hero room laid over the teams: each team's bans in the order they landed, each player's hero and seat in the
+ * room, a captain's picks not yet assigned, and the side a team starts on. A live seat is matched to a lineup team by
+ * slot order; a player to the room's seat by workspace member, by name where the room does not say.
  */
 export function withHeroRoom(
   teams: readonly RoomTeam[],
@@ -155,10 +159,15 @@ export function withHeroRoom(
   const teamIndex = (encounterTeamId: number | null) =>
     encounterTeamId == null ? -1 : order.indexOf(encounterTeamId);
   const members = new Map(state.members.map((member) => [member.id, member]));
+  const memberByWorkspace = new Map<number, number>();
+  const memberByName = new Map<string, number>();
+  for (const member of state.members) {
+    if (member.workspace_member_id != null) memberByWorkspace.set(member.workspace_member_id, member.id);
+    else memberByName.set(member.name, member.id);
+  }
   const bans: number[][] = teams.map(() => []);
   const unassigned: number[][] = teams.map(() => []);
   const heroByMember = new Map<number, number>();
-  const heroByName = new Map<string, number>();
   const applied = [...state.pool].sort(
     (left, right) => (left.action_index ?? 0) - (right.action_index ?? 0) || left.id - right.id
   );
@@ -166,8 +175,7 @@ export function withHeroRoom(
     if (entry.status !== "banned" && entry.status !== "picked") continue;
     const member = entry.picked_for_member_id == null ? undefined : members.get(entry.picked_for_member_id);
     if (entry.status === "picked" && member != null) {
-      if (member.workspace_member_id != null) heroByMember.set(member.workspace_member_id, entry.item_id);
-      else heroByName.set(member.name, entry.item_id);
+      heroByMember.set(member.id, entry.item_id);
       continue;
     }
     const index = teamIndex(entry.picked_by_team_id);
@@ -180,20 +188,21 @@ export function withHeroRoom(
     bans: bans[index],
     unassignedPicks: unassigned[index],
     side: order[index] == null ? null : (sides[String(order[index])] ?? null),
-    slots: team.slots.map((slot) =>
-      slot.seat == null
-        ? slot
-        : {
-            ...slot,
-            seat: {
-              ...slot.seat,
-              heroId:
-                (slot.seat.memberId != null ? heroByMember.get(slot.seat.memberId) : undefined) ??
-                heroByName.get(slot.seat.name) ??
-                null
-            }
-          }
-    )
+    slots: team.slots.map((slot) => {
+      if (slot.seat == null) return slot;
+      const teamMemberId =
+        (slot.seat.memberId != null ? memberByWorkspace.get(slot.seat.memberId) : undefined) ??
+        memberByName.get(slot.seat.name) ??
+        null;
+      return {
+        ...slot,
+        seat: {
+          ...slot.seat,
+          heroId: teamMemberId != null ? (heroByMember.get(teamMemberId) ?? null) : null,
+          teamMemberId
+        }
+      };
+    })
   }));
 }
 

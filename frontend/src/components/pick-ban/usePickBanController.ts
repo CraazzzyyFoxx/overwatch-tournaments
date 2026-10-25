@@ -24,6 +24,7 @@ import {
   eligibleItemIds,
   isSessionActive,
   lastRevealedBlindStep,
+  memberChoice,
   memberName,
   pickBanSeats,
   seatName,
@@ -76,7 +77,6 @@ export interface PickBanController {
   /** Whom this viewer may pick for on a member step, themselves first. */
   choosableMembers: number[];
   actingMemberId: number | null;
-  chooseMember: (memberId: number | null) => void;
   /** The player a member step picks for, by name; null on a team step. */
   actingMemberName: string | null;
   selectedItemId: number | null;
@@ -124,9 +124,9 @@ export interface PickBanController {
 
 /**
  * Everything a pick-ban board decides that is not layout: which step is open and for whom, the viewer's selection,
- * their blind draft (debounced autosave, then the lock), the side a side step chose, the player a member step picks
- * for, and the writes that answer the step. The tournament pregame board and the mix room lay it out differently;
- * this is the one copy of the rules both obey.
+ * their blind draft (debounced autosave, then the lock), the side a side step chose, and the writes that answer the
+ * step. The tournament pregame board and the mix room lay it out differently; this is the one copy of the rules both
+ * obey. The player a member step picks for is the caller's (`chosenMember`): the mix room chooses it on its rosters.
  */
 export function usePickBanController({
   kind,
@@ -136,7 +136,8 @@ export function usePickBanController({
   session,
   queryKey,
   itemsById,
-  isAdmin
+  isAdmin,
+  chosenMember
 }: Readonly<{
   kind: PickBanKind;
   encounterId: number;
@@ -146,6 +147,8 @@ export function usePickBanController({
   queryKey: unknown[];
   itemsById: Record<number, PickBanItemLike | undefined>;
   isAdmin: boolean;
+  /** The player chosen to pick for on a member step (`PickBanMember.id`); see {@link memberChoice}. */
+  chosenMember: number | null;
 }>): PickBanController {
   const t = useTranslations("pickBan.room");
   const queryClient = useQueryClient();
@@ -158,20 +161,7 @@ export function usePickBanController({
   // A mix's hero picks (spec §11.6): a member step is answered for ONE player, an assignment by a captain at once.
   const memberStep = step?.member != null;
   const assignStep = step?.action === "assign";
-  // Whom this viewer may pick for: themselves, as captain their teammates still owing, as a host anyone still owing.
-  const choosableMembers = !memberStep
-    ? []
-    : isAdmin
-      ? [
-          ...state.viewer_member_ids,
-          ...state.acting_member_ids.filter((id) => !state.viewer_member_ids.includes(id))
-        ]
-      : state.viewer_can_act
-        ? state.viewer_member_ids
-        : [];
-  const [chosenMember, setChosenMember] = useState<number | null>(null);
-  const actingMemberId =
-    chosenMember != null && choosableMembers.includes(chosenMember) ? chosenMember : (choosableMembers[0] ?? null);
+  const { choosable: choosableMembers, acting: actingMemberId } = memberChoice(state, isAdmin, chosenMember);
   // On a member step the answer is that player's own: a teammate's lock never closes this pick.
   const submission = viewerSubmission(state, actingMemberId);
   const serverDraft = submission?.items ?? [];
@@ -471,7 +461,6 @@ export function usePickBanController({
     assignStep,
     choosableMembers,
     actingMemberId,
-    chooseMember: setChosenMember,
     actingMemberName: memberStep && actingMemberId != null ? memberName(state.members, actingMemberId) : null,
     selectedItemId,
     selectedItemName,

@@ -204,6 +204,9 @@ def _dump_row(
     return {
         "id": row.id,
         "workspace_member_id": row.workspace_member_id,
+        # ``players.user.id``: the sheet's live rank reads the player by it, since a game handle is no profile
+        # slug (a Steam account id never resolves by name).
+        "player_id": getattr(member, "player_id", None),
         "display_name": getattr(member, "display_name", None),
         "identity": identity.model_dump() if (identity := getattr(member, "identity", None)) is not None else None,
         "sort_order": row.sort_order,

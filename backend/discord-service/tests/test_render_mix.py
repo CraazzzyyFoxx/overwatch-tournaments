@@ -251,15 +251,15 @@ def test_six_running_lobbies_and_a_full_roster_still_fit_what_discord_renders() 
 
 
 def test_a_one_role_game_counts_heads_marks_no_role_and_asks_only_to_join() -> None:
-    """R3-1: Deadlock has one role -- no role counters, no role mark, nothing to set up; R3-5: its rank is a
-    number; Q3: the account it asks to link is the game's own."""
+    """R3-1: Deadlock has one role -- no role counters, no role mark, nothing to set up; its rank wears its own
+    ladder's emblem (4100 is Emissary 5); Q3: the account it asks to link is the game's own."""
     card = _signup(
         discipline="deadlock", roles=(("agent", "Agent"),), flex=False, players=[_player("agent", "Ana", rank=4100)]
     )
 
     lines = (card.details or "").splitlines()
     assert lines[0] == ":owt_players: **1** записано"
-    assert "Ana · 4100" in lines
+    assert ":owt_div_deadlock_emissary: Ana · 4100" in lines
     assert "Нажмите «Записаться»" in lines
     assert not any("Настройте роли" in line for line in lines)
     assert lines[-1] == f"-# Нужны привязанные Discord и Steam · обновлено <t:{int(NOW.timestamp())}:R>"
@@ -273,11 +273,11 @@ def test_lol_counts_its_positions_by_name_and_full_flex_by_its_icon() -> None:
     )
 
 
-def test_only_overwatch_rows_wear_a_division_badge() -> None:
-    """R3-5: the badge is the Overwatch ladder's; a LoL row shows its position and its number."""
+def test_a_row_wears_its_own_games_emblem_never_an_overwatch_badge() -> None:
+    """2450 is LoL's Diamond IV -- on the Overwatch ladder it would read Platinum 1."""
     card = _signup(discipline="lol", roles=LOL_ROLES, players=[_player("mid", "Ana", rank=2450)])
 
-    assert "Mid Ana · 2450" in (card.details or "").splitlines()
+    assert "Mid :owt_div_lol_diamond: Ana · 2450" in (card.details or "").splitlines()
 
 
 def test_an_away_player_is_marked_and_leaves_the_role_counters() -> None:
@@ -390,14 +390,13 @@ def test_the_picture_carries_the_gap_the_points_and_the_maps_art() -> None:
     assert _picture(document, map_image="https://s3.example/busan.jpg").map_image is None
 
 
-def test_only_an_overwatch_lineup_picture_carries_division_badges() -> None:
-    """R3-5: a LoL or Deadlock seat is drawn with its number alone, so nothing is fetched for a badge."""
-    document = _document({"Mid": [("Ana", 3000)]}, {"Mid": [("Bob", 2900)]})
+def test_a_lineup_seat_wears_its_own_games_emblem() -> None:
+    """Deadlock's 3000 and 2900 are Mystic 6 and 5: one emblem for both, fetched once from the site."""
+    document = _document({"Agent": [("Ana", 3000)]}, {"Agent": [("Bob", 2900)]})
 
-    picture = _picture(document, discipline="lol")
+    picture = _picture(document, discipline="deadlock")
 
-    assert all(seat.division_icon is None for team in picture.teams for seat in team.seats)
-    assert picture.image_urls == set()
+    assert picture.image_urls == {"https://owt.example/disciplines/deadlock/ranks/mystic.png"}
 
 
 def test_the_picture_names_the_same_lineup_the_same_file_and_a_swap_a_new_one() -> None:
@@ -555,7 +554,7 @@ class RenderMixRowTests(IsolatedAsyncioTestCase):
             ":owt_players: **1** записано · Top 0 · Jungle 0 · Mid 0 · Bot 0 · Support 0 · :owt_flex: 0", lines[0]
         )
         self.assertEqual(f":owt_lobby_a: Лобби A — Идёт матч · начат <t:{int(NOW.timestamp())}:R>", lines[1])
-        self.assertIn("Mid Ana · 2450 · отошёл", lines)
+        self.assertIn("Mid :owt_div_lol_diamond: Ana · 2450 · отошёл", lines)
 
     async def test_a_mix_balancer_no_longer_knows_has_nothing_to_show(self) -> None:
         missing = RpcReply(ok=False, error={"code": "not_found", "message": "gone"})

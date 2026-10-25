@@ -368,7 +368,7 @@ export function PickupPlayerSheet({
                   {tSheet("liveRank", { game: owner.nativeRankName })}
                 </Label>
                 <div className="rounded-lg border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-2)] p-2.5">
-                  <RankHistory battleTag={row.identity.handle} discipline={discipline} />
+                  <RankHistory userId={row.player_id} discipline={discipline} />
                 </div>
               </section>
             ) : null}

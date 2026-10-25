@@ -163,7 +163,7 @@ def _mix_state(**overrides: Any) -> dict[str, Any]:
             "roles": [{"dimension": "player_role", "role": code} for code in ("tank", "support")],
             "is_flex": False,
             "ranks": {"tank": 3100, "damage": None, "support": None},
-            "divisions": {"tank": {"name": "Gold 3", "slug": "gold-3"}, "damage": None, "support": None},
+            "divisions": {"tank": {"name": "Diamond 4", "slug": "diamond-4"}, "damage": None, "support": None},
         },
         "unranked_roles": ["support"],
         "policy": {
@@ -618,7 +618,7 @@ class MixSelfSignupTests(IsolatedAsyncioTestCase):
 
         self.assertIn("Пятничный микс", head)
         self.assertIn(":owt_ok: Вы в пуле", head)
-        self.assertIn("① :owt_tank: Танк — :owt_div_gold_3: Gold 3 · 3100", details)
+        self.assertIn("① :owt_tank: Танк — :owt_div_diamond_4: Diamond 4 · 3100", details)
         self.assertIn("② :owt_support: Саппорт — без ранга", details)
         # The role they did *not* pick is still on the card, so the panel
         # answers "and the others?" without a second click.
@@ -630,7 +630,7 @@ class MixSelfSignupTests(IsolatedAsyncioTestCase):
         every_ranked["seat"]["roles"] = None
         _head, all_details = copy.mix_text("ru", every_ranked)
         self.assertIn("все роли с рангом", all_details)
-        self.assertIn(":owt_tank: Танк — :owt_div_gold_3: Gold 3 · 3100", all_details)
+        self.assertIn(":owt_tank: Танк — :owt_div_diamond_4: Diamond 4 · 3100", all_details)
         self.assertNotIn("①", all_details)
 
         no_seat_head, _details = copy.mix_text("ru", _mix_state(seat=None))
@@ -718,7 +718,7 @@ class MixSelfSignupTests(IsolatedAsyncioTestCase):
         self.assertIn("Запись на этот микс закрыта", _reply_text(view))
 
     async def test_a_one_role_game_offers_no_role_form_and_shows_only_the_rank(self) -> None:
-        """R3-1: Deadlock has one role -- no form, no role lines, no flex; R3-5: its rank is a bare number."""
+        """R3-1: Deadlock has one role -- no form, no role lines, no flex; its rank wears its own ladder's emblem."""
         state = _mix_state(
             discipline="deadlock", discipline_roles=[{"code": "agent", "label": "Agent"}], discipline_flex=False
         )
@@ -726,7 +726,7 @@ class MixSelfSignupTests(IsolatedAsyncioTestCase):
             **state["seat"],
             "roles": None,
             "ranks": {"agent": 4100},
-            "divisions": {"agent": {"name": "Grandmaster", "slug": "grandmaster"}},
+            "divisions": {"agent": {"name": "Emissary 5", "slug": "emissary-5"}},
         }
         state["unranked_roles"] = []
 
@@ -734,10 +734,10 @@ class MixSelfSignupTests(IsolatedAsyncioTestCase):
         _head, details = copy.mix_text("ru", state)
 
         self.assertEqual(["owt:mix.leave:42"], [button["custom_id"] for button in buttons["components"]])
-        self.assertEqual("Ранг: 4100", details)
+        self.assertEqual("Ранг: :owt_div_deadlock_emissary: Emissary 5 · 4100", details)
 
-    def test_only_an_overwatch_seat_wears_a_division_badge(self) -> None:
-        """R3-5: a LoL seat names its position and its number, never an Overwatch badge."""
+    def test_a_seat_wears_its_own_games_emblem_never_an_overwatch_badge(self) -> None:
+        """A LoL seat names its position, and its rank by LoL's own emblem."""
         state = _mix_state(
             discipline="lol",
             discipline_roles=[
@@ -754,9 +754,8 @@ class MixSelfSignupTests(IsolatedAsyncioTestCase):
 
         _head, details = copy.mix_text("ru", state)
 
-        self.assertIn("① Mid — 3100", details)
+        self.assertIn("① Mid — :owt_div_lol_grandmaster: Grandmaster · 3100", details)
         self.assertIn("   Top — не играете", details)
-        self.assertNotIn("owt_div_", details)
 
     def test_the_panel_says_when_the_player_is_away(self) -> None:
         away = _mix_state()
