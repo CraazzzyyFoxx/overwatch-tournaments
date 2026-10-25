@@ -26,6 +26,7 @@ __all__ = (
     "CustomGameDraftSettingsPatch",
     "CustomGameHostTransfer",
     "CustomGameListQuery",
+    "CustomGameLobbyCodePatch",
     "CustomGameLobbyCountPatch",
     "CustomGameLobbyVoice",
     "CustomGameMatchRun",
@@ -158,6 +159,12 @@ class CustomGameNextMapPatch(_LobbyScoped):
     """``null`` clears the pick; the next match then records with no map."""
 
     map_id: int | None
+
+
+class CustomGameLobbyCodePatch(_LobbyScoped):
+    """The in-game lobby's join code, trimmed; ``null`` or a blank string clears it."""
+
+    lobby_code: Annotated[str, StringConstraints(strip_whitespace=True, max_length=64)] | None
 
 
 class CustomGameVariantIndexPatch(_LobbyScoped):

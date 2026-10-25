@@ -197,6 +197,9 @@ class CustomGameLobby(db.Base):
     # The hero ban preset Start froze for ``live_encounter_id`` (the mix's ``hero_ban_preset`` then; NULL = no bans):
     # the match's room opens -- and any reset reopens -- on it, whatever the header says meanwhile.
     live_ban_preset: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # The in-game lobby's join code, as the host pasted it (trimmed, 1..64 chars; NULL = none). Public like the
+    # rest of the lobby, kept across matches until the host changes it, and editable while a match is live.
+    lobby_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
 
 class CustomGamePlayer(db.TimeStampIntegerMixin):

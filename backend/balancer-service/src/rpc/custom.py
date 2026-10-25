@@ -295,6 +295,7 @@ def _dump_lobby(
         "lobby_index": lobby.lobby_index,
         "selected_variant_index": lobby.selected_variant_index,
         "next_map_id": lobby.next_map_id,
+        "lobby_code": lobby.lobby_code,
         "balanced_at": lobby.balanced_at.isoformat() if lobby.balanced_at else None,
         # Carried by the list read too: the page greys out a voice another
         # lobby of the same mix already took.
@@ -1291,6 +1292,30 @@ def register(broker: Any, logger: Any) -> None:
             return await _with_roster(session, game)
 
         return await c.envelope(logger, "custom.set_next_map", op, session_factory=_SF)
+
+    @broker.subscriber("rpc.balancer.custom.set_lobby_code")
+    async def _set_lobby_code(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = c.active_actor(data)
+            workspace_id = _int(data, "workspace_id")
+            _require_mix(user, workspace_id, "update")
+            body = _body(schemas.CustomGameLobbyCodePatch, data)
+            game = await custom_game_service.set_lobby_code(
+                session,
+                workspace_id=workspace_id,
+                custom_game_id=_game_id(data),
+                lobby_index=body.lobby_index,
+                lobby_code=body.lobby_code,
+                actor_user_id=user.id,
+                actor_is_superuser=user.is_superuser,
+            )
+            await emit_pickup_mix_changed(
+                session, workspace_id, custom_game_id=game.id, change="lobby_code", actor_user_id=user.id
+            )
+            await session.commit()
+            return await _with_roster(session, game)
+
+        return await c.envelope(logger, "custom.set_lobby_code", op, session_factory=_SF)
 
     @broker.subscriber("rpc.balancer.custom.set_variant_index")
     async def _set_variant_index(data: dict, msg: RabbitMessage) -> dict:

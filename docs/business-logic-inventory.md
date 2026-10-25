@@ -245,9 +245,11 @@ Strategies: `best_fit` (default), `best_available`, `role_need`. Fit is delibera
 
 **Lobbies.** A mix runs `lobby_count` lobbies (1..6, CHECK). Every per-match fact lives on
 `mix.lobby` keyed `(custom_game_id, lobby_index)` (0..5): `balance_result_json`,
-`balance_result_version`, `selected_variant_index`, `next_map_id`, `balanced_at`. The mix itself
+`balance_result_version`, `selected_variant_index`, `next_map_id`, `balanced_at`, `lobby_code`. The mix itself
 carries none of them. Team names stay in `CustomGameTeamName` at the global index
-`lobby_index * 2 + team` (A: 0-1, B: 2-3, …, F: 10-11).
+`lobby_index * 2 + team` (A: 0-1, B: 2-3, …, F: 10-11). `lobby_code` is the in-game lobby's join code a host sets
+(`PUT …/lobby-code`, trimmed, ≤ 64 chars, blank = none): public like the rest of the lobby, kept across matches (a
+clone starts blank) and writable while the match is live (no `match_live`).
 
 Lobby membership is **not stored**: a player's `current_lobby` is derived from the selected variant
 of each lobby, `null` = waiting. Only the host's tie is stored — `custom_game_player.lobby_pin`

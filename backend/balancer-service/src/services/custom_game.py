@@ -2461,6 +2461,34 @@ class CustomGameService:
         await session.flush()
         return game
 
+    async def set_lobby_code(
+        self,
+        session: AsyncSession,
+        *,
+        workspace_id: int,
+        custom_game_id: int,
+        lobby_index: int = 0,
+        lobby_code: str | None,
+        actor_user_id: int,
+        actor_is_superuser: bool = False,
+    ) -> models.CustomGame:
+        """The in-game lobby's join code, or ``None`` (or blank) to clear it.
+
+        Kept across matches until the host changes it, and writable while a match is live: a lobby re-created
+        mid-match needs its new code out at once.
+        """
+        game = await self._writable(
+            session,
+            workspace_id=workspace_id,
+            custom_game_id=custom_game_id,
+            actor_user_id=actor_user_id,
+            actor_is_superuser=actor_is_superuser,
+        )
+        lobby = await self._lobby(session, game, lobby_index)
+        lobby.lobby_code = lobby_code or None
+        await session.flush()
+        return game
+
     async def set_variant_index(
         self,
         session: AsyncSession,
@@ -2825,6 +2853,7 @@ class CustomGameService:
             "team_names": None,
             "next_map": None,
             "map_image": None,
+            "lobby_code": None,
             "points_per_win": None,
             "lobby_label": None,
             "mention_user_ids": [],
@@ -2858,6 +2887,7 @@ class CustomGameService:
             "team_names": {str(team): name for team, name in team_names.items()},
             "next_map": next_map,
             "map_image": map_image,
+            "lobby_code": lobby.lobby_code,
             "points_per_win": points_per_win,
             # Every lobby posts into the same channel, so a multi-lobby mix says
             # which one this lineup is; a one-lobby mix has nothing to qualify.

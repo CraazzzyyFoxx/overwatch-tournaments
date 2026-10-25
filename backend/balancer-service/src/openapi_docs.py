@@ -317,6 +317,7 @@ DOCS: dict[str, dict] = {
             " Each lobby carries state (idle | ready | pregame | live), live_seats (the live match's participations"
             " {id, slot, name}) and opener_index (the lineup team that bans first in the next match, null without"
             " bans)."
+            " Each lobby also carries lobby_code: the in-game lobby's join code its host set, null while none."
             " A lobby's `state` reads `draft_setup` / `draft_live` while its draft runs, with `draft_session_id`;"
             " a drafted lineup's document carries `source: \"draft\"`. A player in a drafting lobby's pool reads"
             " that lobby as `current_lobby`; an unpicked player who stepped away leaves the pool."
@@ -506,6 +507,16 @@ DOCS: dict[str, dict] = {
             "lobby's roll this is; a single-lobby mix leaves it at 0. 404 when "
             "the map is not in the catalogue."
             " 409 match_live while the lobby's match is live."
+        ),
+    },
+    "rpc.balancer.custom.set_lobby_code": {
+        "summary": "Set custom game lobby code",
+        "description": (
+            "Permission: workspace membership plus being the mix's host or co-host (or a superuser). "
+            "Stores the in-game lobby's join code (trimmed, up to 64 characters) so players do not have to ask "
+            "for it, or clears it with null or a blank string. Public like the rest of the lobby: the mix read and "
+            "the posted lineup card show it. Kept across matches until the host changes it, and writable while the "
+            "lobby's match is live. The lobby_index field names the lobby; a single-lobby mix leaves it at 0."
         ),
     },
     "rpc.balancer.custom.set_variant_index": {

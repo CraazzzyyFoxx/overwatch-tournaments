@@ -150,6 +150,7 @@ function PickupMixDetail({ initialGame }: Readonly<{ initialGame: CustomGame }>)
     setCaptain,
     undoMatch,
     setNextMap,
+    setLobbyCode,
     setVariantIndex,
     setLobbyCount,
     closeMix,
@@ -319,6 +320,8 @@ function PickupMixDetail({ initialGame }: Readonly<{ initialGame: CustomGame }>)
         onUndoMatch={(matchId) => undoMatch.mutate(matchId)}
         settingNextMap={setNextMap.isPending}
         onNextMapChange={(mapId) => setNextMap.mutate({ lobbyIndex: shownLobby, mapId })}
+        settingLobbyCode={setLobbyCode.isPending}
+        onLobbyCodeChange={(lobbyCode) => setLobbyCode.mutate({ lobbyIndex: shownLobby, lobbyCode })}
         closingMix={closeMix.isPending}
         onCloseMix={() => closeMix.mutate()}
         onRenameTeam={(teamIndex, name) => setTeamNames.mutateAsync({ teamIndex, name })}

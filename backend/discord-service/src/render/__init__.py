@@ -268,6 +268,7 @@ async def _lineup(session: AsyncSession, row: models.DiscordMessage, broker: Any
         board_url=view["board_url"],
         image_filename=picture.filename,
         lobby_label=lineup.get("lobby_label"),
+        lobby_code=lineup.get("lobby_code"),
         mentions=lineup.get("mention_user_ids") or (),
         voice_target=lineup["voice_target"] if newest else None,
     )

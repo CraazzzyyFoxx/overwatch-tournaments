@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { ChevronDown } from "lucide-react";
 
 import { LobbyStage } from "@/app/balancer/mix/_components/LobbyStage";
+import { LobbyCodeStrip } from "@/app/balancer/mix/_components/LobbyCodeStrip";
 import { useMixBanRoom } from "@/app/balancer/mix/_hooks/useMixBanRoom";
 import { lobbyCandidateCount, buildMixOwner, canWriteMix, parseVariants, teamNamesByIndex } from "@/app/balancer/mix/pickup-lineup";
 import { lobbyLetter } from "@/app/balancer/mix/pickup-chrome";
@@ -14,6 +15,7 @@ import { memberChoice } from "@/components/pick-ban/pick-ban-model";
 import { useSideLabel } from "@/components/pick-ban/useSideLabel";
 import { BackLink } from "@/components/site/BackLink";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -364,6 +366,18 @@ export function MixRoom({ initialGame, lobbyIndex }: Readonly<{ initialGame: Cus
             (shown.phase === "ready" || shown.phase === "live") && "lg:self-stretch"
           )}
         >
+          {/* Every phase: players join the game's lobby during the draft or the bans as often as before the start. */}
+          {canWrite || lobby?.lobby_code != null ? (
+            <Card variant="flat" className="overflow-hidden">
+              <LobbyCodeStrip
+                lobbyCode={lobby?.lobby_code ?? null}
+                canWrite={canWrite}
+                saving={mix.setLobbyCode.isPending}
+                className="border-b-0"
+                onLobbyCodeChange={(lobbyCode) => mix.setLobbyCode.mutate({ lobbyIndex, lobbyCode })}
+              />
+            </Card>
+          ) : null}
           {center}
         </section>
       </div>

@@ -145,7 +145,7 @@ the only caller) is the render input. Request `{custom_game_id, lineups: [{lobby
 match_number}]}`; reply: the mix's id, workspace, status and board url; `signup` (mix name, host,
 signup mode, status, lobby count, `updated_at`, and the roster as `{name, role, benched, rank}` at
 the ranks the balancer balances with); and one entry per requested lineup — the lobby's shown
-option (`variant`, `players`, `team_names`), next map and its art, points per win, lobby letter,
+option (`variant`, `players`, `team_names`), next map and its art, the lobby code, points per win, lobby letter,
 the seated players' Discord ids (`mention_user_ids`) and the voice-button target. A lineup is
 `current: false` once its match is recorded, when its lobby or shown option is gone, or when the
 mix is finished — the bot then leaves that card as it is. Unknown mix → `not_found`.

@@ -98,6 +98,7 @@ var RosterRoutes = []edge.RouteSpec{
 	{Method: "PUT", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/players", Queue: "rpc.balancer.custom.set_participation", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
 	{Method: "PUT", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/team-names", Queue: "rpc.balancer.custom.set_team_names", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
 	{Method: "PUT", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/next-map", Queue: "rpc.balancer.custom.set_next_map", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
+	{Method: "PUT", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/lobby-code", Queue: "rpc.balancer.custom.set_lobby_code", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
 	// The pager itself: which balance option the mix shows every viewer.
 	{Method: "PUT", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/variant", Queue: "rpc.balancer.custom.set_variant_index", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/discord/post", Queue: "rpc.balancer.custom.post_discord", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},

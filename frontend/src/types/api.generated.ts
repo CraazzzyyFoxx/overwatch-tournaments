@@ -9865,7 +9865,7 @@ export interface paths {
         };
         /**
          * Get custom game
-         * @description Permission: public; no authentication required. Returns one mix with its full lineup: each seat's participation state, role order, the ranks the balancer would use and which layer each came from. Resolves ownership from the mix id; an optional workspace_id restricts the read and returns 404 if the mix belongs to another workspace. It carries the mix's hero_ban_preset (null = no bans). It carries hero_fearless (spec §11.4), and hero_ban_seconds / hero_pick_seconds (the hero room's clock per ban / per pick step in seconds; null = the preset's own). Each lobby carries state (idle | ready | pregame | live), live_seats (the live match's participations {id, slot, name}) and opener_index (the lineup team that bans first in the next match, null without bans). A lobby's `state` reads `draft_setup` / `draft_live` while its draft runs, with `draft_session_id`; a drafted lineup's document carries `source: "draft"`. A player in a drafting lobby's pool reads that lobby as `current_lobby`; an unpicked player who stepped away leaves the pool.
+         * @description Permission: public; no authentication required. Returns one mix with its full lineup: each seat's participation state, role order, the ranks the balancer would use and which layer each came from. Resolves ownership from the mix id; an optional workspace_id restricts the read and returns 404 if the mix belongs to another workspace. It carries the mix's hero_ban_preset (null = no bans). It carries hero_fearless (spec §11.4), and hero_ban_seconds / hero_pick_seconds (the hero room's clock per ban / per pick step in seconds; null = the preset's own). Each lobby carries state (idle | ready | pregame | live), live_seats (the live match's participations {id, slot, name}) and opener_index (the lineup team that bans first in the next match, null without bans). Each lobby also carries lobby_code: the in-game lobby's join code its host set, null while none. A lobby's `state` reads `draft_setup` / `draft_live` while its draft runs, with `draft_session_id`; a drafted lineup's document carries `source: "draft"`. A player in a drafting lobby's pool reads that lobby as `current_lobby`; an unpicked player who stepped away leaves the pool.
          *
          *     RPC subject: `rpc.balancer.custom.get`
          */
@@ -10445,6 +10445,28 @@ export interface paths {
          *     RPC subject: `rpc.balancer.custom.set_lobby_count`
          */
         put: operations["put__api_v1_balancer_workspaces__workspace_id__custom_games__game_id__lobbies"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/lobby-code": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set custom game lobby code
+         * @description Permission: workspace membership plus being the mix's host or co-host (or a superuser). Stores the in-game lobby's join code (trimmed, up to 64 characters) so players do not have to ask for it, or clears it with null or a blank string. Public like the rest of the lobby: the mix read and the posted lineup card show it. Kept across matches until the host changes it, and writable while the lobby's match is live. The lobby_index field names the lobby; a single-lobby mix leaves it at 0.
+         *
+         *     RPC subject: `rpc.balancer.custom.set_lobby_code`
+         */
+        put: operations["put__api_v1_balancer_workspaces__workspace_id__custom_games__game_id__lobby_code"];
         post?: never;
         delete?: never;
         options?: never;
@@ -23453,6 +23475,19 @@ export interface components {
         "balancer.CustomGameHostTransfer": {
             /** New Host User Id */
             new_host_user_id: number;
+        };
+        /**
+         * CustomGameLobbyCodePatch
+         * @description The in-game lobby's join code, trimmed; ``null`` or a blank string clears it.
+         */
+        "balancer.CustomGameLobbyCodePatch": {
+            /** Lobby Code */
+            lobby_code: string | null;
+            /**
+             * Lobby Index
+             * @default 0
+             */
+            lobby_index: number;
         };
         /**
          * CustomGameLobbyCountPatch
@@ -72993,6 +73028,89 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["balancer.CustomGameLobbyCountPatch"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not authorized (`forbidden`). Authenticated, but the credential lacks the permission, workspace, or scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    put__api_v1_balancer_workspaces__workspace_id__custom_games__game_id__lobby_code: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                game_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["balancer.CustomGameLobbyCodePatch"];
             };
         };
         responses: {

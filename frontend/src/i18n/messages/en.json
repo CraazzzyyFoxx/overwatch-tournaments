@@ -8150,7 +8150,13 @@
       "nextMapLabel": "Next map",
       "notRolled": "Not rolled yet",
       "rollMode": "Roll within mode",
-      "roll": "Roll"
+      "roll": "Roll",
+      "lobbyCodeLabel": "Lobby code",
+      "lobbyCodePlaceholder": "Paste the code from the game",
+      "lobbyCodeSave": "Save",
+      "lobbyCodeCopy": "Copy lobby code",
+      "lobbyCodeCopied": "Lobby code copied",
+      "lobbyCodeCopyFailed": "Could not reach the clipboard"
     },
     "draft": {
       "captainOf": "Captain of {team}",

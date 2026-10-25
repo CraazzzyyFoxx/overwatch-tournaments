@@ -128,6 +128,8 @@ export type CustomGameLobby = {
   selected_variant_index: number;
   /** The map this lobby's next match is played on; cleared by recording it. */
   next_map_id: number | null;
+  /** The in-game lobby's join code the host shared, or `null`. Kept across matches until the host changes it. */
+  lobby_code: string | null;
   /** When this lobby was last balanced, or `null` while it never was. */
   balanced_at: string | null;
   /**
@@ -857,6 +859,20 @@ export const customGameService = {
       skipWorkspace: true,
       method: "PUT",
       body: { lobby_index: lobbyIndex, map_id: mapId },
+    }).then((r) => r.json());
+  },
+
+  /** Stores the in-game lobby's join code (trimmed, ≤ 64 chars), or clears it with `null` / a blank string. */
+  setLobbyCode(
+    workspaceId: number,
+    gameId: number,
+    lobbyIndex: number,
+    lobbyCode: string | null,
+  ): Promise<CustomGame> {
+    return apiFetch(`/api/v1/balancer/workspaces/${workspaceId}/custom-games/${gameId}/lobby-code`, {
+      skipWorkspace: true,
+      method: "PUT",
+      body: { lobby_index: lobbyIndex, lobby_code: lobbyCode },
     }).then((r) => r.json());
   },
 

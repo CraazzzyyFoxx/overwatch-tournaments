@@ -8150,7 +8150,13 @@
       "nextMapLabel": "Следующая карта",
       "notRolled": "Ещё не разыграна",
       "rollMode": "Разыграть в пределах режима",
-      "roll": "Разыграть"
+      "roll": "Разыграть",
+      "lobbyCodeLabel": "Код лобби",
+      "lobbyCodePlaceholder": "Вставьте код из игры",
+      "lobbyCodeSave": "Сохранить",
+      "lobbyCodeCopy": "Скопировать код лобби",
+      "lobbyCodeCopied": "Код лобби скопирован",
+      "lobbyCodeCopyFailed": "Нет доступа к буферу обмена"
     },
     "draft": {
       "captainOf": "Капитан {team}",
