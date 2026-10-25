@@ -4,7 +4,7 @@ import { useId, useMemo, useState } from "react";
 import { Plus, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { DataTable } from "@/components/data-table";
+import { DataTable, type TableCommand } from "@/components/data-table";
 import { ApiKeyQuotaDialog } from "@/components/admin/quota/ApiKeyQuotaDialog";
 import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import { FilterBar } from "@/components/kit/FilterBar";
@@ -84,6 +84,19 @@ export function ApiKeysBrowser({
     onRevoke: setPendingRevoke
   });
 
+  const commands: TableCommand[] = [
+    {
+      id: "create",
+      label: t("createKey"),
+      icon: Plus,
+      primary: true,
+      onSelect: () => {
+        setCreateRun((run) => run + 1);
+        setCreateOpen(true);
+      }
+    }
+  ];
+
   return (
     <div className="space-y-4">
       {oneTimeKey ? (
@@ -145,24 +158,8 @@ export function ApiKeysBrowser({
         filterKey={filters.filterKey}
         getRowId={(row) => String(row.id)}
         emptyMessage={ta("noKeys")}
-        toolbar={
-          <FilterBar
-            defs={defs}
-            filters={filters}
-            trailing={
-              <Button
-                size="sm"
-                onClick={() => {
-                  setCreateRun((run) => run + 1);
-                  setCreateOpen(true);
-                }}
-              >
-                <Plus aria-hidden className="size-4" />
-                {t("createKey")}
-              </Button>
-            }
-          />
-        }
+        toolbar={<FilterBar defs={defs} filters={filters} />}
+        commands={commands}
         renderMobileCard={(row) => (
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-medium">{row.original.name}</p>

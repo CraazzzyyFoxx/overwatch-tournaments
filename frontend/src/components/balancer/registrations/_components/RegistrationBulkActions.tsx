@@ -3,7 +3,6 @@
 import { Check } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { BulkBar } from "@/components/kit/BulkBar";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import type { AdminRegistration } from "@/types/balancer-admin.types";
@@ -25,7 +24,7 @@ interface RegistrationBulkActionsProps {
   addToBalancerPending: boolean;
 }
 
-/** The two batch writes the registrations table offers over a selection. */
+/** The two batch writes the registrations table offers over a selection, for its selection bar. */
 export default function RegistrationBulkActions({
   selected,
   clearSelection,
@@ -36,7 +35,7 @@ export default function RegistrationBulkActions({
 }: Readonly<RegistrationBulkActionsProps>) {
   const t = useTranslations("registrationsAdmin.bulk");
   return (
-    <BulkBar count={selected.length} onClear={clearSelection}>
+    <>
       <Button
         size="sm"
         onClick={() => {
@@ -79,6 +78,6 @@ export default function RegistrationBulkActions({
         )}
         {t("add", { count: selected.length })}
       </Button>
-    </BulkBar>
+    </>
   );
 }

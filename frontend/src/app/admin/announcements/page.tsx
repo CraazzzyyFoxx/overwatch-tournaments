@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
@@ -12,7 +11,6 @@ import { AnnouncementsTable } from "@/components/admin/announcements/Announcemen
 import type { AnnouncementAudience } from "@/components/admin/announcements/announcement-draft";
 import { LinkTabs } from "@/components/kit/LinkTabs";
 import { EmptyNote } from "@/components/kit/EmptyNote";
-import { Button } from "@/components/ui/button";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useQueryParams } from "@/hooks/useQueryParams";
@@ -131,14 +129,6 @@ export default function AdminAnnouncementsPage() {
         <AdminPageHeader
           title={t("notifications.admin.title")}
           description={t("notifications.admin.description")}
-          actions={
-            canPublish ? (
-              <Button size="sm" data-field="compose" onClick={() => setComposerOpen(true)}>
-                <Plus aria-hidden className="size-4" />
-                {t("notifications.admin.form.title")}
-              </Button>
-            ) : undefined
-          }
           /* Read and write are separate grants: without the second one the
              toolbar simply has no compose button, and this line is the only
              place that says why. */
@@ -173,6 +163,7 @@ export default function AdminAnnouncementsPage() {
               <AnnouncementsTable
                 rows={list.data ?? []}
                 isLoading={list.isLoading}
+                onCompose={canPublish ? () => setComposerOpen(true) : undefined}
                 onRetire={canRetire ? (row) => retire.mutate(row) : undefined}
                 isRetiring={retire.isPending}
               />

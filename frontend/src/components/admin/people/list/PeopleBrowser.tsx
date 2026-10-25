@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 
-import { DataTable } from "@/components/data-table";
+import { DataTable, type TableCommand } from "@/components/data-table";
 import { AuthUserSearchCombobox } from "@/components/kit/ServerSearchCombobox";
 import { EntityFormDialog } from "@/components/kit/EntityFormDialog";
 import { PlayerProfileDialog } from "@/components/admin/PlayerProfileDialog";
@@ -15,7 +15,6 @@ import { Inspector } from "@/components/kit/Inspector";
 import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import { useFilters } from "@/components/kit/useFilters";
 import { TOURNAMENT_QUERY_PARAM } from "@/components/admin/tournament-filter";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -176,6 +175,21 @@ export function PeopleBrowser({ workspaceId }: Readonly<{ workspaceId: number | 
       { name: "", authUserId: null }
     );
 
+  const commands: TableCommand[] = [
+    {
+      id: "create",
+      label: t("create"),
+      icon: Plus,
+      primary: true,
+      hidden: !canCreate,
+      onSelect: () => {
+        createMutation.reset();
+        resetCreateForm();
+        setCreateOpen(true);
+      }
+    }
+  ];
+
   return (
     <>
       <div
@@ -213,27 +227,8 @@ export function PeopleBrowser({ workspaceId }: Readonly<{ workspaceId: number | 
             filterKey={filters.filterKey}
             inspectorId={openId}
             getRowId={(person) => String(person.id)}
-            toolbar={
-              <FilterBar
-                defs={defs}
-                filters={filters}
-                trailing={
-                  canCreate ? (
-                    <Button
-                      size="sm"
-                      onClick={() => {
-                        createMutation.reset();
-                        resetCreateForm();
-                        setCreateOpen(true);
-                      }}
-                    >
-                      <Plus aria-hidden className="size-4" />
-                      {t("create")}
-                    </Button>
-                  ) : null
-                }
-              />
-            }
+            toolbar={<FilterBar defs={defs} filters={filters} />}
+            commands={commands}
             searchPlaceholder={t("search")}
             emptyMessage={t("empty")}
             onRowClick={(row) => setParams({ id: String(row.original.id) })}

@@ -5,7 +5,6 @@ import { useTranslations } from "next-intl";
 import { X } from "lucide-react";
 
 import { DataTable } from "@/components/data-table";
-import { BulkBar } from "@/components/kit/BulkBar";
 import { FilterBar } from "@/components/kit/FilterBar";
 import { Inspector } from "@/components/kit/Inspector";
 import { useFilters, type FilterDef } from "@/components/kit/useFilters";
@@ -284,20 +283,18 @@ export function RegistrationTeamsBrowser({
               bulkActions={
                 canExport
                   ? (selected, clear) => (
-                      <BulkBar count={selected.length} onClear={clear}>
-                        <Button
-                          type="button"
-                          size="sm"
-                          disabled={disabled}
-                          onClick={() => {
-                            setActionError(null);
-                            setConfirm({ kind: "export", teams: selected, clear });
-                          }}
-                        >
-                          {actions.isExporting ? <Spinner /> : null}
-                          {t("admin.exportSelected")}
-                        </Button>
-                      </BulkBar>
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={disabled}
+                        onClick={() => {
+                          setActionError(null);
+                          setConfirm({ kind: "export", teams: selected, clear });
+                        }}
+                      >
+                        {actions.isExporting ? <Spinner /> : null}
+                        {t("admin.exportSelected")}
+                      </Button>
                     )
                   : undefined
               }

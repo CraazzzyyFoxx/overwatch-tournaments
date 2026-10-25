@@ -2,15 +2,14 @@
 
 import { useIsFetching, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { RefreshCw } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useFormatter } from "@/lib/datetime/client";
-import { DataTable } from "@/components/data-table";
+import { DataTable, type TableCommand } from "@/components/data-table";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { FilterBar } from "@/components/kit/FilterBar";
 import { useFilters, type FilterDef } from "@/components/kit/useFilters";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useInvalidation } from "@/hooks/useInvalidation";
 import { notify } from "@/lib/notify";
 import adminService from "@/services/admin.service";
@@ -26,7 +25,10 @@ import { useLogColumns } from "./logs-tab/useLogColumns";
 import { getApiErrorMessage } from "@/lib/api/error";
 import type { LogBindRequest, LogProcessingRecord } from "@/types/admin.types";
 import type { Encounter } from "@/types/encounter.types";
-import { TournamentLogUploadDialog } from "@/components/logs/TournamentLogUploadDialog";
+import {
+  TournamentLogUploadDialog,
+  type TournamentLogUploadHandle
+} from "@/components/logs/TournamentLogUploadDialog";
 import {
   getTournamentWorkspaceQueryKeys,
   invalidateTournamentWorkspace
@@ -221,8 +223,36 @@ export function TournamentLogsTab({
     onAttach: setAttachTarget
   });
 
+  const uploadRef = useRef<TournamentLogUploadHandle>(null);
+  const commands: TableCommand[] = [
+    {
+      id: "upload",
+      label: t("upload"),
+      onSelect: () => uploadRef.current?.open(),
+      hidden: !(canUploadLogs && tournamentId != null)
+    },
+    // Both endpoints are per tournament, so the workspace-wide console reads
+    // without offering them.
+    {
+      id: "process-s3",
+      label: t("processS3"),
+      onSelect: () => processAllLogsMutation.mutate(),
+      hidden: tournamentId == null,
+      pending: processAllLogsMutation.isPending,
+      disabled: processAllLogsMutation.isPending
+    },
+    {
+      id: "refresh",
+      label: t("refresh"),
+      icon: RefreshCw,
+      onSelect: refreshAll,
+      pending: isFetching,
+      disabled: isFetching
+    }
+  ];
+
   return (
-    <TooltipProvider>
+    <>
       <div className="flex flex-col gap-3">
         {/* N failed -> Show failed (§15): the failures are the work on this tab. */}
         {stats && stats.failed > 0 && statusFilter !== "failed" ? (
@@ -277,7 +307,6 @@ export function TournamentLogsTab({
             <Button
               variant="outline"
               size="sm"
-              className="h-8"
               disabled={retryMutation.isPending || !selected.some(isRetryable)}
               onClick={() => {
                 const retryable = selected.filter(isRetryable);
@@ -290,78 +319,35 @@ export function TournamentLogsTab({
               {tx("retrySelected", { count: selected.length })}
             </Button>
           )}
-          toolbar={
-            <FilterBar
-              defs={defs}
-              filters={filters}
-              trailing={
-                stats ? (
-                  <p className="hidden shrink-0 text-xs text-muted-foreground sm:block">
-                    {stats.last_created_at
-                      ? tx("summaryNewest", {
-                          count: stats.total,
-                          average: stats.avg_duration_seconds?.toFixed(1) ?? "none",
-                          time: formatLogTime(format, stats.last_created_at)
-                        })
-                      : tx("summary", {
-                          count: stats.total,
-                          average: stats.avg_duration_seconds?.toFixed(1) ?? "none"
-                        })}
-                  </p>
-                ) : null
-              }
-            />
+          toolbar={<FilterBar defs={defs} filters={filters} />}
+          summary={
+            stats
+              ? stats.last_created_at
+                ? tx("summaryNewest", {
+                    count: stats.total,
+                    average: stats.avg_duration_seconds?.toFixed(1) ?? "none",
+                    time: formatLogTime(format, stats.last_created_at)
+                  })
+                : tx("summary", {
+                    count: stats.total,
+                    average: stats.avg_duration_seconds?.toFixed(1) ?? "none"
+                  })
+              : null
           }
-          actions={
-            <>
-              {canUploadLogs && tournamentId != null ? (
-                <TournamentLogUploadDialog
-                  tournamentId={tournamentId}
-                  encounters={encounters}
-                  onUploaded={() => {
-                    invalidateTournamentWorkspace(queryClient, tournamentId);
-                    refreshAll();
-                  }}
-                  trigger={
-                    <Button variant="outline" size="sm" className="h-8">
-                      {t("upload")}
-                    </Button>
-                  }
-                />
-              ) : null}
-              {/* Both endpoints are per tournament, so the workspace-wide
-                  console reads without offering them. */}
-              {tournamentId != null ? (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8"
-                  disabled={processAllLogsMutation.isPending}
-                  onClick={() => processAllLogsMutation.mutate()}
-                >
-                  {processAllLogsMutation.isPending ? <Spinner /> : null}
-                  {t("processS3")}
-                </Button>
-              ) : null}
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="size-8"
-                    aria-label={t("refreshAria")}
-                    onClick={refreshAll}
-                    disabled={isFetching}
-                  >
-                    {isFetching ? <Spinner /> : <RefreshCw aria-hidden />}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>{t("refresh")}</TooltipContent>
-              </Tooltip>
-            </>
-          }
+          commands={commands}
         />
       </div>
+      {canUploadLogs && tournamentId != null ? (
+        <TournamentLogUploadDialog
+          ref={uploadRef}
+          tournamentId={tournamentId}
+          encounters={encounters}
+          onUploaded={() => {
+            invalidateTournamentWorkspace(queryClient, tournamentId);
+            refreshAll();
+          }}
+        />
+      ) : null}
       {attachTarget ? (
         <AttachLogDialog
           key={attachTarget.id}
@@ -380,6 +366,6 @@ export function TournamentLogsTab({
           onClose={() => setAttachTarget(null)}
         />
       ) : null}
-    </TooltipProvider>
+    </>
   );
 }

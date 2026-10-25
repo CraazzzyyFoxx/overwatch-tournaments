@@ -1,16 +1,15 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Archive } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { DataTable } from "@/components/data-table";
+import { DataTable, type TableCommand } from "@/components/data-table";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { FilterBar } from "@/components/kit/FilterBar";
 import { useFilters, type FilterDef } from "@/components/kit/useFilters";
 import { ConfirmDialog, type ConfirmIntent } from "@/components/kit/ConfirmDialog";
-import { Button } from "@/components/ui/button";
 import { notificationQueryKeys } from "@/lib/notifications/query-keys";
 import { notify } from "@/lib/notify";
 import notificationService from "@/services/notification.service";
@@ -38,8 +37,8 @@ const PAGE_SIZE = 25;
  * an operator who expects a hard delete would otherwise assume the evidence is
  * gone.
  *
- * Renders its own page header: the retire-by-kind action in it runs this
- * screen's mutation and confirmation.
+ * Renders its own page header; the retire-by-kind action is the table's
+ * command and runs this screen's mutation and confirmation.
  */
 export function NotificationsBrowser({
   workspaceId,
@@ -55,7 +54,6 @@ export function NotificationsBrowser({
   const [confirming, setConfirming] = useState<{ ids?: number[]; kind?: string } | null>(null);
   // Seen from the table's own fetch: the kind retire is pointless on an empty kind.
   const [total, setTotal] = useState<number | null>(null);
-  const retireReasonId = useId();
 
   // The filter lives in the URL, not in component state: it decides which rows
   // a bulk retire would take, so "which kind was I looking at" must survive a
@@ -104,35 +102,25 @@ export function NotificationsBrowser({
     tone: "warning"
   };
 
+  const commands: TableCommand[] = [
+    {
+      id: "retire-kind",
+      label: t("notifications.workspaceAdmin.retire.kindAction"),
+      icon: Archive,
+      onSelect: () => kindFilter && setConfirming({ kind: kindFilter }),
+      hidden: !canRetire,
+      disabled: retire.isPending || total === 0,
+      // "Retire everything this workspace ever sent" is not a command, and
+      // the server refuses it too: until a kind is chosen the action waits.
+      disabledReason: kindFilter ? undefined : t("notifications.workspaceAdmin.retire.pickKind")
+    }
+  ];
+
   return (
     <div className="space-y-4">
       <AdminPageHeader
         title={t("notifications.workspaceAdmin.title")}
         description={t("notifications.workspaceAdmin.description")}
-        actions={
-          // "Retire everything this workspace ever sent" is not a button, and
-          // the server refuses it too: until a kind is chosen the action waits.
-          canRetire ? (
-            <>
-              {kindFilter ? null : (
-                <span id={retireReasonId} className="text-caption text-muted-foreground">
-                  {t("notifications.workspaceAdmin.retire.pickKind")}
-                </span>
-              )}
-              <Button
-                size="sm"
-                variant="outline"
-                data-field="retire-kind"
-                disabled={!kindFilter || retire.isPending || total === 0}
-                aria-describedby={kindFilter ? undefined : retireReasonId}
-                onClick={() => kindFilter && setConfirming({ kind: kindFilter })}
-              >
-                <Archive aria-hidden className="size-4" />
-                {t("notifications.workspaceAdmin.retire.kindAction")}
-              </Button>
-            </>
-          ) : undefined
-        }
         footer={
           canRetire ? undefined : (
             <p className="text-sm text-muted-foreground">
@@ -153,6 +141,7 @@ export function NotificationsBrowser({
         // `searchPlaceholder`, drops the built-in search box: the server does
         // not search, so a box there would type into nothing.
         toolbar={<FilterBar defs={filterDefs} filters={filters} />}
+        commands={commands}
         // Under the `list()` prefix, so a retire refetches the page on screen.
         queryKey={(page, _search, pageSize) => [
           ...notificationQueryKeys.workspaceNotifications(workspaceId, kindFilter),

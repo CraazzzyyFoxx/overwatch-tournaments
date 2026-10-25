@@ -111,7 +111,8 @@ export function AchievementUsersTable({
         columns={columns}
         getRowId={(row) => String(row.user_id)}
         emptyMessage={t("detail.noUsers")}
-        actions={
+        // No `searchPlaceholder`, so no search box: the server does not search this list (`queryFn` ignores `_search`).
+        toolbar={
           tournaments.length > 1 ? (
             <div className="w-64">
               <TournamentCombobox

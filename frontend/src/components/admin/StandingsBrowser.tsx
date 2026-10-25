@@ -234,12 +234,16 @@ export function StandingsBrowser({
   const canSync = canAccessPermission("challonge.update", workspaceId) && scopeTournamentId != null;
   const arranging = view === "arrange" && scopeTournamentId != null;
 
-  const toolbar = (
-    <FilterBar
-      defs={defs}
-      filters={filters}
-      trailing={
-        scopeTournamentId != null ? (
+  const toolbar = <FilterBar defs={defs} filters={filters} />;
+
+  return (
+    <div className="space-y-3">
+      {/* Shared by both views, above the filter surface: the switch between
+          them, and the actions on the whole table — the arrange view has no
+          table toolbar to host them. Only with a tournament scoped: without
+          one there is nothing to arrange, recalculate or sync. */}
+      {scopeTournamentId != null ? (
+        <div className="flex flex-wrap items-center gap-2">
           <ToggleGroup
             type="single"
             variant="pill"
@@ -253,37 +257,29 @@ export function StandingsBrowser({
             <ToggleGroupItem value="table">{t("table")}</ToggleGroupItem>
             <ToggleGroupItem value="arrange">{t("arrange")}</ToggleGroupItem>
           </ToggleGroup>
-        ) : null
-      }
-    />
-  );
-
-  return (
-    <div className="space-y-3">
-      {/* Actions on the whole table, not filters: above the filter surface. */}
-      {canRecalculate || canSync ? (
-        <div className="flex flex-wrap justify-end gap-2">
-          {canRecalculate ? (
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={recalculateMutation.isPending}
-              onClick={() => setRecalculateOpen(true)}
-            >
-              {t("recalculate")}
-            </Button>
-          ) : null}
-          {canSync ? (
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={syncMutation.isPending}
-              onClick={() => syncMutation.mutate()}
-            >
-              {syncMutation.isPending ? <Spinner /> : null}
-              {t("sync")}
-            </Button>
-          ) : null}
+          <div className="ml-auto flex flex-wrap gap-2">
+            {canRecalculate ? (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={recalculateMutation.isPending}
+                onClick={() => setRecalculateOpen(true)}
+              >
+                {t("recalculate")}
+              </Button>
+            ) : null}
+            {canSync ? (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={syncMutation.isPending}
+                onClick={() => syncMutation.mutate()}
+              >
+                {syncMutation.isPending ? <Spinner /> : null}
+                {t("sync")}
+              </Button>
+            ) : null}
+          </div>
         </div>
       ) : null}
       {arranging ? (

@@ -169,7 +169,10 @@ async function click(element: Element | null | undefined) {
  * takes the scope it works in rather than assuming the page's own subtree.
  */
 async function openComposer(container: HTMLElement): Promise<HTMLElement> {
-  await click(field(container, "compose"));
+  const compose = [...container.querySelectorAll("button")].find(
+    (button) => (button.getAttribute("aria-label") ?? button.textContent ?? "").trim() === LABEL.form.title
+  );
+  await click(compose);
   const dialog = document.querySelector<HTMLElement>('[role="dialog"]');
   if (!dialog) throw new Error("the composer did not open");
   return dialog;

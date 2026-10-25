@@ -548,6 +548,16 @@ Rules on every admin screen:
   footer's start (`footerStart`: switch off, delete). A list that already
   separates on and off rows (active above, the rest folded) puts no switch
   on each row: the place says the state, the fold offers "Restore".
+- **One command zone.** A command over a list — create, sync, upload, open a
+  tool — is a `TableCommand` in that table's `commands`: outline buttons, the
+  one `primary` last; on a narrow table the secondary ones fold into the
+  table's "View" menu and the primary keeps its icon. Never JSX in the
+  toolbar, never in the `FilterBar` (filters only: its `extraFilters` are
+  range pickers and filter shortcuts), never in the page header. A table that
+  is a `SettingGroup flush` body keeps its commands on the card's title line;
+  a view switch that swaps the table for another view sits above both. How
+  the rows are shown (CSV, density, grouping, saved views, columns) is the
+  "View" menu's; a total or an average is the table's `summary`, at its foot.
 - **Permission hides, state disables.** An action the reader may _never_
   perform (no grant) is absent. An action they may perform once something
   else is true (pick a tournament, a game, resolve the blockers, finish the

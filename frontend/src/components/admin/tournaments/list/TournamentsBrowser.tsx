@@ -4,8 +4,9 @@ import { useCallback, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Plus } from "lucide-react";
 
-import { DataTable } from "@/components/data-table";
+import { DataTable, type TableCommand } from "@/components/data-table";
 import { gameFilterDefs } from "@/components/admin/game-filter";
 import { CreateTournamentDialog } from "@/components/admin/tournaments/CreateTournamentDialog";
 import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
@@ -46,8 +47,8 @@ function isLifecycle(value: string): value is Lifecycle {
 /**
  * Every tournament in the workspace (T2). A row opens the hub; there is no
  * Inspector because the hub is one click away and says everything a panel
- * would. `?create=1` is the "Create tournament" dialog, so the page header,
- * the dashboard and other pages can open it with a link.
+ * would. `?create=1` is the "Create tournament" dialog: the table's Create
+ * command sets it, and the dashboard and other pages open it with a link.
  */
 export function TournamentsBrowser() {
   const t = useTranslations("adminTournaments.list");
@@ -122,6 +123,17 @@ export function TournamentsBrowser() {
     games
   });
 
+  const commands: TableCommand[] = [
+    {
+      id: "create",
+      label: t("create"),
+      icon: Plus,
+      onSelect: () => setParams({ create: 1 }),
+      primary: true,
+      hidden: !canCreate
+    }
+  ];
+
   if (gameKind === "invalid" || gameKind === "empty") {
     return <GameScopeControl scope={gameScope} variant="multi" />;
   }
@@ -147,6 +159,7 @@ export function TournamentsBrowser() {
         searchPlaceholder={t("searchPlaceholder")}
         filterKey={filters.filterKey}
         toolbar={<FilterBar defs={defs} filters={filters} />}
+        commands={commands}
         emptyMessage={t("empty")}
         onRowClick={(row) => router.push(`/admin/tournaments/${row.original.id}`)}
         renderMobileCard={(row) => <TournamentMobileCard tournament={row.original} games={games} />}

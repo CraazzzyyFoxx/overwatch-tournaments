@@ -414,8 +414,16 @@ describe("EncounterReportsBrowser", () => {
     );
     expect(cell?.textContent).toContain("2/10");
 
-    // The picker is what makes the rest of the fields reachable at all.
-    expect(button(container, "Columns")).toBeTruthy();
+    // The picker is what makes the rest of the fields reachable at all; it
+    // lives in the table's "View" menu, which portals onto `document.body`.
+    await click(button(container, "View"));
+    await waitFor(
+      () =>
+        Array.from(document.querySelectorAll('[role="menuitem"]')).find(
+          (item) => item.textContent?.trim() === "Columns"
+        ),
+      "the Columns picker in the View menu"
+    );
   });
 
   it("opens the whole filing, including the organizer's own questions", async () => {
