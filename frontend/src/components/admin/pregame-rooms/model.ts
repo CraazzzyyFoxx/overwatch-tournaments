@@ -1,3 +1,5 @@
+import type { SortingFn } from "@tanstack/react-table";
+
 import type { Tone } from "@/components/ui/tone";
 import type {
   PregameKindSummary,
@@ -92,21 +94,36 @@ export function currentStep(
   return null;
 }
 
-/**
- * Default order: whoever needs a human, then by kick-off, then whatever the
- * server decided (stage order, round, id) — which is already the order an
- * organizer reads a bracket in, so it is the right tie-break.
- *
- * Unscheduled rooms sink below scheduled ones rather than to the top: a row
- * with no time is not urgent, it is unplanned.
- */
-export function sortRooms(rooms: readonly PregameRoomRow[]): PregameRoomRow[] {
-  return rooms.map((room, index) => ({ room, index })).sort((a, b) => {
-    const attention = Number(b.room.attention.length > 0) - Number(a.room.attention.length > 0);
-    if (attention !== 0) return attention;
-    const aAt = a.room.scheduled_at ? Date.parse(a.room.scheduled_at) : Number.POSITIVE_INFINITY;
-    const bAt = b.room.scheduled_at ? Date.parse(b.room.scheduled_at) : Number.POSITIVE_INFINITY;
-    if (aAt !== bAt) return aAt - bAt;
-    return a.index - b.index;
-  }).map((entry) => entry.room);
+/** Kick-off as a number to compare; a room with no time yet is later than any time. */
+function kickoff(room: PregameRoomRow): number {
+  return room.scheduled_at ? Date.parse(room.scheduled_at) : Number.POSITIVE_INFINITY;
 }
+
+/**
+ * The "Scheduled" column, oldest first; the table flips it for its default,
+ * newest first.
+ *
+ * A room with no time yet counts as the latest — a match nobody has planned
+ * yet, not an old one — so it heads the newest-first list (two of them
+ * subtract to NaN, which falls through to the tie-break). Equal times fall
+ * back to the bracket: the browser hands the rows over in the server's bracket
+ * order reversed, so a higher index is an earlier bracket position. The
+ * tie-break lives here rather than in TanStack's own index fallback because
+ * only the comparator's result is flipped with the direction.
+ */
+export const sortByKickoff: SortingFn<PregameRoomRow> = (a, b) =>
+  kickoff(a.original) - kickoff(b.original) || b.index - a.index;
+
+/** The order a room moves through its phases: the "Phase" column sorts on this, not on the key's spelling. */
+const PHASE_RANK: Record<PregameRoomPhase, number> = {
+  teams_unknown: 0,
+  readiness: 1,
+  map: 2,
+  hero: 3,
+  idle: 4,
+  report: 5,
+  done: 6
+};
+
+export const sortByPhase: SortingFn<PregameRoomRow> = (a, b) =>
+  PHASE_RANK[a.original.phase] - PHASE_RANK[b.original.phase];
