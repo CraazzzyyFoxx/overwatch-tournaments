@@ -21,9 +21,9 @@ import type { RadarAxis } from "./hero-stats";
 import { computeDelta, deltaColor, formatDelta, formatStatValue, heroWinrate } from "./utils";
 
 /**
- * The selected hero's band: who it is with the tab's tournament filter beside it, the outcome of playing it —
- * winrate, games, time and KDA — and its radar against the average on the right. The per-10 figures live in the
- * comparison below it. Comparisons, the radar included, hide below `LOW_SAMPLE_GAMES`.
+ * The selected hero's band: who it is, with the tab's tournament filter in the top right corner; the outcome of
+ * playing it — winrate, games, time and KDA; and its radar against the average under the filter. The per-10 figures
+ * live in the comparison below it. Comparisons, the radar included, hide below `LOW_SAMPLE_GAMES`.
  */
 const HeroSpotlight = ({
   hero,
@@ -55,75 +55,75 @@ const HeroSpotlight = ({
 
   return (
     <CardSurface>
-      <div className={cn("grid gap-6", radar && "lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center lg:gap-x-8")}>
-        <div className="flex min-w-0 flex-col gap-6">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex min-w-0 items-center gap-4">
-              <CatalogEntityImage entity={hero.character} size={56} rounded="lg" decorative />
-              <div className="flex min-w-0 flex-col gap-1">
-                <h2 className="aqt-display m-0 truncate text-title font-bold text-[color:var(--aqt-fg)]">
-                  {hero.character.name}
-                </h2>
-                {cls ? (
-                  <span
-                    className="inline-flex items-center gap-1.5 text-caption"
-                    style={{ color: heroClass.color(cls) }}
-                  >
-                    {heroClass.icon(cls, 14)}
-                    <span className="text-[color:var(--aqt-fg-muted)]">{heroClass.label(cls)}</span>
-                  </span>
-                ) : null}
-              </div>
-            </div>
-            {filterSlot}
-          </div>
-
-          {/* Beside the radar the figures share the narrower column two by two, until it is wide again. */}
-          <div
-            className={cn(
-              "grid grid-cols-2 gap-x-8 gap-y-4 sm:grid-cols-4",
-              radar && "xl:grid-cols-2 2xl:grid-cols-4"
-            )}
-          >
-            <ProfileStat
-              size="md"
-              label={t("users.heroes.quick.winrate")}
-              value={winrate == null ? "—" : `${(winrate * 100).toFixed(0)}%`}
-              color={winrate == null ? undefined : winrateColor(winrate * 100, lowSample)}
-            >
-              {winrateVs ? (
-                <span className="aqt-tnum text-label font-bold" style={{ color: winrateVs.color }}>
-                  {t("users.heroes.card.vsAvg", { value: winrateVs.text })}
-                </span>
-              ) : null}
-            </ProfileStat>
-            <ProfileStat
-              size="md"
-              label={t("users.heroes.games")}
-              value={hero.games}
-              sub={`${hero.win}–${hero.loss}–${hero.draw}`}
-              title={t("users.heroes.wld")}
-            />
-            <ProfileStat
-              size="md"
-              label={t("matches.stat.heroTimePlayed")}
-              value={formatSeconds(playtime)}
-              sub={t("users.heroes.poolShare", { pct: (share * 100).toFixed(0) })}
-            />
-            <ProfileStat
-              size="md"
-              label={t("users.heroes.quick.kda")}
-              value={kda ? formatStatValue(format, kda.name, kda.avg_10) : "—"}
-            >
-              {kdaDelta == null ? null : (
-                <span className="aqt-tnum text-label font-bold" style={{ color: deltaColor(kdaDelta) }}>
-                  {t("users.heroes.card.vsAvg", { value: formatDelta(kdaDelta) })}
-                </span>
-              )}
-            </ProfileStat>
+      {/* One grid, so the filter keeps one place in the DOM: under the name on a phone, in the band's top right corner
+          from sm, and above the radar from lg. */}
+      <div className="grid gap-x-8 gap-y-4 sm:grid-cols-[minmax(0,1fr)_auto]">
+        <div className="flex min-w-0 items-center gap-4">
+          <CatalogEntityImage entity={hero.character} size={56} rounded="lg" decorative />
+          <div className="flex min-w-0 flex-col gap-1">
+            <h2 className="aqt-display m-0 truncate text-title font-bold text-[color:var(--aqt-fg)]">
+              {hero.character.name}
+            </h2>
+            {cls ? (
+              <span className="inline-flex items-center gap-1.5 text-caption" style={{ color: heroClass.color(cls) }}>
+                {heroClass.icon(cls, 14)}
+                <span className="text-[color:var(--aqt-fg-muted)]">{heroClass.label(cls)}</span>
+              </span>
+            ) : null}
           </div>
         </div>
-        {radar ? <HeroRadar heroName={hero.character.name} axes={radar} /> : null}
+        {filterSlot ? <div className="sm:self-center sm:justify-self-end">{filterSlot}</div> : null}
+
+        {/* Beside the radar the figures sit two by two, so they hold its height instead of one thin row. */}
+        <div
+          className={cn(
+            "grid grid-cols-2 gap-x-8 gap-y-4 sm:col-span-2 sm:grid-cols-4",
+            radar && "lg:col-span-1 lg:max-w-xl lg:grid-cols-2 lg:self-center"
+          )}
+        >
+          <ProfileStat
+            size="md"
+            label={t("users.heroes.quick.winrate")}
+            value={winrate == null ? "—" : `${(winrate * 100).toFixed(0)}%`}
+            color={winrate == null ? undefined : winrateColor(winrate * 100, lowSample)}
+          >
+            {winrateVs ? (
+              <span className="aqt-tnum text-label font-bold" style={{ color: winrateVs.color }}>
+                {t("users.heroes.card.vsAvg", { value: winrateVs.text })}
+              </span>
+            ) : null}
+          </ProfileStat>
+          <ProfileStat
+            size="md"
+            label={t("users.heroes.games")}
+            value={hero.games}
+            sub={`${hero.win}–${hero.loss}–${hero.draw}`}
+            title={t("users.heroes.wld")}
+          />
+          <ProfileStat
+            size="md"
+            label={t("matches.stat.heroTimePlayed")}
+            value={formatSeconds(playtime)}
+            sub={t("users.heroes.poolShare", { pct: (share * 100).toFixed(0) })}
+          />
+          <ProfileStat
+            size="md"
+            label={t("users.heroes.quick.kda")}
+            value={kda ? formatStatValue(format, kda.name, kda.avg_10) : "—"}
+          >
+            {kdaDelta == null ? null : (
+              <span className="aqt-tnum text-label font-bold" style={{ color: deltaColor(kdaDelta) }}>
+                {t("users.heroes.card.vsAvg", { value: formatDelta(kdaDelta) })}
+              </span>
+            )}
+          </ProfileStat>
+        </div>
+
+        {radar ? (
+          <div className="justify-self-center sm:col-span-2 lg:col-span-1 lg:justify-self-end">
+            <HeroRadar heroName={hero.character.name} axes={radar} />
+          </div>
+        ) : null}
       </div>
     </CardSurface>
   );

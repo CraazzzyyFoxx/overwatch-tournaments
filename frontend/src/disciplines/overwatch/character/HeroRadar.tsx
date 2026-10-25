@@ -6,7 +6,7 @@ import type { RadarAxis } from "./hero-stats";
 import { formatDelta } from "./utils";
 
 /** The outer ring: twice the average. */
-const RADIUS = 70;
+const RADIUS = 64;
 /** From the outer ring to an axis label. */
 const LABEL_GAP = 12;
 /** A side label's width: the longest, "Соло-убийства", runs about 80px at 12px. */

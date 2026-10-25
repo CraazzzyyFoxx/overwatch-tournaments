@@ -31,7 +31,7 @@ const HeroesSkeleton = () => (
     <Skeleton className="h-8 w-full rounded-lg sm:w-60 xl:hidden" />
     <div className="grid grid-cols-1 gap-3.5 xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start">
       <div className="flex min-w-0 flex-col gap-3.5">
-        <Skeleton className="h-[34rem] w-full rounded-xl md:h-[26.5rem] lg:h-[16.25rem]" />
+        <Skeleton className="h-[33rem] w-full rounded-xl md:h-[24.75rem] lg:h-[19.75rem]" />
         <Skeleton className="h-[21rem] w-full rounded-xl" />
         <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-2">
           <Skeleton className="h-80 w-full rounded-xl" />
