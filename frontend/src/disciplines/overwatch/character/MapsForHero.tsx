@@ -1,57 +1,100 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { useTranslations } from "next-intl";
+
+import CatalogEntityImage from "@/components/catalog/CatalogEntityImage";
+import { LoadErrorNote } from "@/components/kit/EmptyNote";
 import { CardSurface } from "@/components/profile/atoms";
-import { winrateColor } from "@/lib/colors";
+import { Skeleton } from "@/components/ui/skeleton";
+import { LOW_SAMPLE_GAMES, winrateColor } from "@/lib/colors";
 
-interface HeroMapRow {
-  id: number;
-  name: string;
-  mode: string;
-  winRate: number;
-  win: number;
-  loss: number;
-}
+import type { HeroMapRow } from "./hero-stats";
 
-const MapsForHero = ({ heroName, heroMaps }: { heroName: string; heroMaps: HeroMapRow[] }) => {
+/**
+ * The maps the hero was played on, most played first, with the record and winrate on each (greyed on a low sample).
+ * `rows` is `undefined` while the maps load; `onRetry` is set when they failed to.
+ */
+const MapsForHero = ({
+  heroName,
+  rows,
+  onRetry,
+  className
+}: {
+  heroName: string;
+  rows: HeroMapRow[] | undefined;
+  onRetry?: () => void;
+  className?: string;
+}) => {
   const t = useTranslations();
+  const title = t("users.heroes.mapsFor", { hero: heroName });
+
+  let body: ReactNode;
+  if (onRetry) {
+    body = (
+      <div className="p-4">
+        <LoadErrorNote onRetry={onRetry} />
+      </div>
+    );
+  } else if (rows === undefined) {
+    body = (
+      <div className="flex flex-col gap-3 px-4 py-3">
+        {Array.from({ length: 5 }, (_, i) => (
+          <Skeleton key={i} className="h-8 w-full" />
+        ))}
+      </div>
+    );
+  } else if (rows.length === 0) {
+    body = <p className="py-6 text-center text-caption text-[color:var(--aqt-fg-dim)]">{t("users.heroes.noMapData")}</p>;
+  } else {
+    body = (
+      <div
+        role="region"
+        aria-label={title}
+        tabIndex={0}
+        className="max-h-[22.5rem] overflow-y-auto focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[color:var(--aqt-teal)]"
+      >
+        <ul className="divide-y divide-[color:var(--aqt-border)]">
+          {rows.map((row) => {
+            const pct = row.winRate * 100;
+            return (
+              <li
+                key={row.map.id}
+                className="grid grid-cols-[auto_minmax(0,1fr)_auto_3rem] items-center gap-3 px-4 py-2"
+              >
+                <CatalogEntityImage entity={row.map} shape="wide" size={30} decorative />
+                <span className="flex min-w-0 flex-col">
+                  <span className="truncate text-body font-medium text-[color:var(--aqt-fg)]">{row.map.name}</span>
+                  {row.map.parent ? (
+                    <span className="truncate text-label text-[color:var(--aqt-fg-dim)]">{row.map.parent.name}</span>
+                  ) : null}
+                </span>
+                <span className="aqt-tnum text-caption text-[color:var(--aqt-fg-muted)]" title={t("users.heroes.wld")}>
+                  {row.win}–{row.loss}
+                  {row.draw > 0 ? `–${row.draw}` : ""}
+                </span>
+                <span
+                  className="aqt-tnum text-right text-caption font-bold"
+                  style={{ color: winrateColor(pct, row.games < LOW_SAMPLE_GAMES) }}
+                >
+                  {pct.toFixed(0)}%
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    );
+  }
+
   return (
     <CardSurface
       flush
-      title={t("users.heroes.mapsFor", { hero: heroName })}
-      subtitle={heroMaps.length > 0 ? t("users.heroes.mapsSubtitle", { count: heroMaps.length }) : undefined}
+      className={className}
+      title={title}
+      subtitle={rows && rows.length > 0 ? t("users.heroes.mapsSubtitle", { count: rows.length }) : undefined}
     >
-      {heroMaps.length > 0 ? (
-        <div className="max-h-[360px] overflow-y-auto">
-          {heroMaps.map((m) => {
-            const wr = m.winRate * 100;
-            return (
-              <div
-                key={m.id}
-                className="grid grid-cols-[1fr_auto_auto] items-center gap-3 border-b border-[color:var(--aqt-border)] px-4 py-2.5 last:border-b-0"
-              >
-                <div className="flex min-w-0 flex-col">
-                  <span className="truncate text-body font-medium text-[color:var(--aqt-fg)]">{m.name}</span>
-                  <span className="truncate text-label text-[color:var(--aqt-fg-dim)]">{m.mode}</span>
-                </div>
-                <span
-                  className="aqt-tnum text-right text-caption font-bold"
-                  style={{ color: winrateColor(wr) }}
-                >
-                  {wr.toFixed(0)}%
-                </span>
-                <span className="aqt-tnum text-right text-caption text-[color:var(--aqt-fg-muted)]">
-                  {m.win}-{m.loss}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      ) : (
-        <div className="py-6 text-center text-caption text-[color:var(--aqt-fg-dim)]">
-          {t("users.heroes.noMapData")}
-        </div>
-      )}
+      {body}
     </CardSurface>
   );
 };

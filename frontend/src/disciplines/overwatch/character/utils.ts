@@ -7,6 +7,7 @@ import type { CharacterSummary } from "@/types/user.types";
 export type NumberFormatter = Pick<Formatter, "number">;
 
 const STAT_NUMBER_OPTIONS = { maximumFractionDigits: 2 } as const;
+const ACCURACY_OPTIONS = { style: "percent", maximumFractionDigits: 1 } as const;
 
 export const formatStatValue = (format: NumberFormatter, name: string, value: number) => {
   if (!Number.isFinite(value)) {
@@ -15,7 +16,7 @@ export const formatStatValue = (format: NumberFormatter, name: string, value: nu
 
   if (name.includes("accuracy")) {
     if (value > 1) return "-";
-    return `${(value * 100).toFixed(2)}%`;
+    return format.number(value, ACCURACY_OPTIONS);
   }
 
   if (Math.abs(value) >= 1000) {
@@ -24,13 +25,19 @@ export const formatStatValue = (format: NumberFormatter, name: string, value: nu
   return format.number(value, STAT_NUMBER_OPTIONS);
 };
 
-export const isRevertedStat = (name: string) => {
-  return [
-    LogStatsName.Deaths,
-    LogStatsName.DamageTaken,
-    LogStatsName.EnvironmentalDeaths
-  ].includes(name as LogStatsName);
-};
+/** Lower is better: the backend's `asc` stats (`LOG_STATS_DEFAULT_DIRECTION`, `shared/core/enums.py`). */
+const LOWER_IS_BETTER = new Set<string>([
+  LogStatsName.Deaths,
+  LogStatsName.DamageTaken,
+  LogStatsName.EnvironmentalDeaths,
+  LogStatsName.ShotsMissed,
+  LogStatsName.DamageFB,
+  LogStatsName.Performance,
+  LogStatsName.FirstDeaths,
+  LogStatsName.ImpactRank
+]);
+
+export const isRevertedStat = (name: string) => LOWER_IS_BETTER.has(name);
 
 export const computeDelta = (userAvg: number, globalAvg: number, reversed: boolean) => {
   if (!Number.isFinite(userAvg) || !Number.isFinite(globalAvg) || globalAvg <= 0) {
@@ -44,6 +51,13 @@ export const computeDelta = (userAvg: number, globalAvg: number, reversed: boole
 export const formatDelta = (delta: number) => {
   const sign = delta > 0 ? "+" : "";
   return `${sign}${(delta * 100).toFixed(0)}%`;
+};
+
+/** A delta's quality colour: emerald when better, rose when worse, faint when there is none. */
+export const deltaColor = (delta: number | null) => {
+  if (delta == null) return "var(--aqt-fg-faint)";
+  if (delta > 0) return "var(--aqt-emerald)";
+  return delta < 0 ? "var(--aqt-rose)" : "var(--aqt-fg-muted)";
 };
 
 export const getOverall = (row: CharacterSummary, name: LogStatsName) => {

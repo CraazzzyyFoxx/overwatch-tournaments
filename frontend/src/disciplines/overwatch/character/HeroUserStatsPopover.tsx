@@ -15,14 +15,8 @@ import type { CharacterSummary } from "@/types/user.types";
 
 import { LogStatsName } from "../stat-names";
 import { useHeroClass } from "./classes";
+import { CLASS_STATS } from "./hero-stats";
 import { formatStatValue, getOverall, heroWinrate } from "./utils";
-
-/** Per class, the per-10 figures compared to the hero's average, the class's headline first. */
-const CLASS_STATS: Record<string, LogStatsName[]> = {
-  tank: [LogStatsName.DamageBlocked, LogStatsName.HeroDamageDealt, LogStatsName.KDA],
-  damage: [LogStatsName.HeroDamageDealt, LogStatsName.FinalBlows, LogStatsName.KDA],
-  support: [LogStatsName.HealingDealt, LogStatsName.HeroDamageDealt, LogStatsName.KDA]
-};
 
 /** The hero's class as a word in its role colour (no glyph: the card names it once). */
 function HeroClassLabel({

@@ -149,34 +149,6 @@
   color: var(--aqt-fg);
 }
 
-/* radar */
-.aqt-radar-grid {
-  fill: none;
-  stroke: hsl(0 0% 100% / 0.05);
-}
-
-.aqt-radar-spoke {
-  stroke: hsl(0 0% 100% / 0.05);
-}
-
-.aqt-radar-global {
-  fill: hsl(220 12% 50% / 0.18);
-  stroke: hsl(220 12% 60%);
-  stroke-width: 1.2;
-}
-
-.aqt-radar-you {
-  fill: color-mix(in srgb, var(--aqt-teal) 22%, transparent);
-  stroke: var(--aqt-teal);
-  stroke-width: 1.8;
-}
-
-.aqt-radar-axis {
-  font-family: var(--aqt-data);
-  font-size: var(--text-label);
-  fill: var(--aqt-fg-muted);
-}
-
 /* timeline */
 .aqt-timeline {
   position: relative;
