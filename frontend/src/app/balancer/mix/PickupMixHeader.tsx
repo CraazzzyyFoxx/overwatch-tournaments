@@ -39,7 +39,12 @@ import { Slider } from "@/components/ui/slider";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
-import { useMixPresetClocks, type MixPresetClocks } from "@/hooks/useHeroBanPresets";
+import {
+  useMixPresetClocks,
+  useMixPresetPickers,
+  type MixPresetClocks,
+  type MixPresetPickers
+} from "@/hooks/useHeroBanPresets";
 import { cn } from "@/lib/utils";
 import type {
   CustomGame,
@@ -103,6 +108,8 @@ type PickupMixHeaderProps = {
   onSetFearless?: (fearless: boolean) => void;
   /** Omitted -- the hero room's clocks are shown read-only (only when set), as they are to every viewer. */
   onSetHeroClocks?: (clocks: HeroClocks) => void;
+  /** Omitted -- who picks heroes is shown read-only (only when not the default), as it is to every viewer. */
+  onSetHeroPickers?: (pickers: HeroPickers) => void;
   /** Omitted -- the formation is shown read-only, as it is to every viewer. */
   onSetDraftSettings?: (settings: { team_formation: MixTeamFormation; draft_pick_seconds: number }) => void;
   savingDraftSettings?: boolean;
@@ -151,6 +158,7 @@ export function PickupMixHeader({
   savingBanPreset = false,
   onSetFearless,
   onSetHeroClocks,
+  onSetHeroPickers,
   onSetDraftSettings,
   savingDraftSettings = false,
   onPostSignup,
@@ -166,6 +174,7 @@ export function PickupMixHeader({
   const tb = useTranslations("pickBan.mixBans");
   const banPresetName = useBanPresetName();
   const clocks = useMixPresetClocks(game?.discipline, game?.hero_ban_preset ?? null);
+  const pickers = useMixPresetPickers(game?.discipline, game?.hero_ban_preset ?? null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [dropLobbyOpen, setDropLobbyOpen] = useState(false);
   const lobbyCount = game?.lobby_count ?? 1;
@@ -191,7 +200,11 @@ export function PickupMixHeader({
   const onlyLobby = lobbyCount === 1 ? game?.lobbies.find((row) => row.lobby_index === 0) : undefined;
   const offerRules =
     canWrite &&
-    (onSetBanPreset != null || onSetFearless != null || onSetHeroClocks != null || onSetDraftSettings != null);
+    (onSetBanPreset != null ||
+      onSetFearless != null ||
+      onSetHeroClocks != null ||
+      onSetHeroPickers != null ||
+      onSetDraftSettings != null);
   // What the next Start plays by, said once: the host's Rules trigger and the viewers' line read the same words.
   const rulesSummary =
     game == null
@@ -206,7 +219,10 @@ export function PickupMixHeader({
             : null,
           clocks.pick !== undefined && game.hero_pick_seconds != null
             ? tb("pickClock", { seconds: game.hero_pick_seconds })
-            : null
+            : null,
+          // Who picks, only when it is not the default and the preset has player picks for it to change.
+          pickers.turns && game.hero_free_order ? tb("freeOrder") : null,
+          pickers.players && game.hero_captains_only ? tb("captainsOnly") : null
         ]
           .filter(Boolean)
           .join(" · ");
@@ -326,6 +342,8 @@ export function PickupMixHeader({
               onSetFearless={onSetFearless}
               clocks={clocks}
               onSetHeroClocks={onSetHeroClocks}
+              pickers={pickers}
+              onSetHeroPickers={onSetHeroPickers}
               savingDraftSettings={savingDraftSettings}
               onSetDraftSettings={onSetDraftSettings}
             />
@@ -431,8 +449,11 @@ const SettingTrigger = forwardRef<HTMLButtonElement, ComponentPropsWithoutRef<ty
 /** The hero room's clocks a header write sends; an omitted one stays as it is, null hands it back to the preset. */
 type HeroClocks = { hero_ban_seconds?: number | null; hero_pick_seconds?: number | null };
 
+/** Who picks the room's heroes, as a header write sends it; an omitted one stays as it is. */
+type HeroPickers = { hero_free_order?: boolean; hero_captains_only?: boolean };
+
 /**
- * What the next Start plays by -- hero bans, Fearless, the room's clocks, how teams form -- set
+ * What the next Start plays by -- hero bans, Fearless, the room's clocks, who picks, how teams form -- set
  * once an evening, so one trigger that reads the whole rule set instead of
  * three controls in the row. Every field writes on change; a clock when it is left.
  */
@@ -444,6 +465,8 @@ function RulesSettings({
   onSetFearless,
   clocks,
   onSetHeroClocks,
+  pickers,
+  onSetHeroPickers,
   savingDraftSettings,
   onSetDraftSettings
 }: Readonly<{
@@ -455,6 +478,9 @@ function RulesSettings({
   /** The preset's own clocks: a field only for a step the preset takes, its seconds the empty field's hint. */
   clocks: MixPresetClocks;
   onSetHeroClocks?: (clocks: HeroClocks) => void;
+  /** Whether the preset has player picks at all, and turn-by-turn ones: a choice only for what it would change. */
+  pickers: MixPresetPickers;
+  onSetHeroPickers?: (pickers: HeroPickers) => void;
   savingDraftSettings: boolean;
   onSetDraftSettings?: (settings: { team_formation: MixTeamFormation; draft_pick_seconds: number }) => void;
 }>) {
@@ -528,6 +554,26 @@ function RulesSettings({
             <p className="text-caption text-[color:var(--aqt-fg-faint)]">{tb("clocksHint")}</p>
           </div>
         ) : null}
+        {onSetHeroPickers && pickers.turns ? (
+          <PickerChoice
+            label={tb("pickOrder")}
+            value={game.hero_free_order}
+            off={tb("pickOrderLineup")}
+            on={tb("pickOrderFree")}
+            disabled={savingBanPreset}
+            onChange={(free) => onSetHeroPickers({ hero_free_order: free })}
+          />
+        ) : null}
+        {onSetHeroPickers && pickers.players ? (
+          <PickerChoice
+            label={tb("pickers")}
+            value={game.hero_captains_only}
+            off={tb("pickersPlayers")}
+            on={tb("pickersCaptains")}
+            disabled={savingBanPreset}
+            onChange={(captainsOnly) => onSetHeroPickers({ hero_captains_only: captainsOnly })}
+          />
+        ) : null}
         <div className="space-y-1.5 border-t border-[color:var(--aqt-border)] pt-3">
           <Eyebrow as="label" htmlFor="mix-header-formation">
             {th("formation")}
@@ -594,6 +640,48 @@ function HeroClockField({
       />
       {label}
     </label>
+  );
+}
+
+/** One of who-picks' two-way choices (lineup or free order; players or captains only), `on` the non-default one. */
+function PickerChoice({
+  label,
+  value,
+  off,
+  on,
+  disabled,
+  onChange
+}: Readonly<{
+  label: string;
+  value: boolean;
+  off: string;
+  on: string;
+  disabled: boolean;
+  onChange: (value: boolean) => void;
+}>) {
+  return (
+    <div className="space-y-1.5">
+      <Eyebrow>{label}</Eyebrow>
+      <ToggleGroup
+        type="single"
+        variant="pill"
+        aria-label={label}
+        value={value ? "on" : "off"}
+        onValueChange={(next) => {
+          // A click on the pressed item deselects it in a single group: that is no change.
+          if (next === "" || (next === "on") === value) return;
+          onChange(next === "on");
+        }}
+        className="flex w-full"
+      >
+        <ToggleGroupItem value="off" disabled={disabled} className="flex-1 whitespace-nowrap px-2">
+          {off}
+        </ToggleGroupItem>
+        <ToggleGroupItem value="on" disabled={disabled} className="flex-1 whitespace-nowrap px-2">
+          {on}
+        </ToggleGroupItem>
+      </ToggleGroup>
+    </div>
   );
 }
 

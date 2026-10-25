@@ -6,6 +6,7 @@ import { Coffee, Crown, DoorOpen, Headphones, LogIn, LogOut } from "lucide-react
 
 import { PickupRoleOrderEditor } from "@/app/balancer/mix/PickupRoleOrderEditor";
 import { RoomLink } from "@/app/balancer/mix/_room/room-navigation";
+import { LobbyCode } from "@/app/balancer/mix/_components/LobbyCodeStrip";
 import { CAPTION_CLASS, CARD_TITLE_CLASS, lobbyLetter } from "@/app/balancer/mix/pickup-chrome";
 import { HandleLabel } from "@/components/HandleLabel";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
@@ -310,6 +311,12 @@ export function PickupMySeatPanel({
             ))}
           </p>
           {nextMapName ? <p className={CAPTION_CLASS}>{tRoom("nextMap", { map: nextMapName })}</p> : null}
+          {myTeam.lobbyCode ? (
+            <p className={cn(CAPTION_CLASS, "flex flex-wrap items-center gap-1.5")}>
+              {tRoom("lobbyCodeLabel")}
+              <LobbyCode code={myTeam.lobbyCode} />
+            </p>
+          ) : null}
         </div>
       ) : state.lobby_count > 1 ? (
         // Waiting with several lobbies running: where each one is, so they can tell how soon a seat frees up.

@@ -4096,7 +4096,15 @@
       "pickSeconds": "Pick clock, seconds",
       "clocksHint": "Per turn; an all-at-once pick gets the whole clock. Empty: the preset's own.",
       "banClock": "ban {seconds} s",
-      "pickClock": "pick {seconds} s"
+      "pickClock": "pick {seconds} s",
+      "pickOrder": "Pick order",
+      "pickOrderLineup": "By lineup",
+      "pickOrderFree": "Free",
+      "pickers": "Who picks heroes",
+      "pickersPlayers": "Players and captain",
+      "pickersCaptains": "Captains only",
+      "freeOrder": "free pick order",
+      "captainsOnly": "captains pick"
     },
     "room": {
       "playerHeroes": {
@@ -8150,7 +8158,13 @@
       "nextMapLabel": "Next map",
       "notRolled": "Not rolled yet",
       "rollMode": "Roll within mode",
-      "roll": "Roll"
+      "roll": "Roll",
+      "lobbyCodeLabel": "Lobby code",
+      "lobbyCodePlaceholder": "Paste the code from the game",
+      "lobbyCodeSave": "Save",
+      "lobbyCodeCopy": "Copy lobby code",
+      "lobbyCodeCopied": "Lobby code copied",
+      "lobbyCodeCopyFailed": "Could not reach the clipboard"
     },
     "draft": {
       "captainOf": "Captain of {team}",
@@ -8219,7 +8233,9 @@
           "decider": "Decider",
           "assign": "Assign"
         },
-        "everyone": "all"
+        "everyone": "all",
+        "choosePlayer": "Tap a player, then pick their hero",
+        "captainsPick": "The captains pick the heroes"
       },
       "match": {
         "idleTitle": "No teams yet",
@@ -8227,11 +8243,9 @@
         "idleViewer": "A host has not formed the teams yet.",
         "draftAgain": "New draft",
         "balanceAgain": "Balance again",
-        "readyTitle": "Teams are set",
-        "readyHost": "Start the match when everyone is in.",
         "readyViewer": "Waiting for a host to start the match.",
-        "liveTitle": "Match in progress",
-        "liveNoMap": "No map was rolled for this match.",
+        "map": "Map",
+        "noMap": "No map picked",
         "liveViewer": "A host records the result."
       },
       "host": {

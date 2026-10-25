@@ -79,7 +79,7 @@ The other outbound RPCs are the ones a card button makes (see *User-facing surfa
 | --- | --- | --- |
 | `discord_commands` | consumes | `DiscordCommandEvent` — `{action: send \| delete, message_ref}` and nothing else. `message_ref` is the `discord_message` row a publisher claimed (`shared/services/discord_messages.py`); the row says where the message goes (`channel` + `target`) and what it is about (`kind`, `subject`, `slot`, `payload_json`). `send` renders the row (`src/render/`) and posts it to the channel or DMs the user; `delete` removes the posted message. The bot writes back what Discord answered, so no publisher ever handles a Discord message id or a card, and one delete path serves DMs and channel posts alike. Edits are never commands: see `pickup_mix_changed`. |
 | `pickup_mix_changed` | consumes | `PickupMixChangedEvent` from balancer-service's and tournament-service's outboxes: re-render the live cards of that mix (or of every mix of the workspace) — `src/services/mix_projector.py`. |
-| `rpc.balancer.custom.discord_view` | requests | The view a mix card is rendered from: signup state and roster, and each requested lineup with its seats, map, team names, Discord ids to ping and whether it is still `current` (5 s timeout; `not_found` = the mix is gone). |
+| `rpc.balancer.custom.discord_view` | requests | The view a mix card is rendered from: signup state and roster, and each requested lineup with its seats, map, lobby code, team names, Discord ids to ping and whether it is still `current` (5 s timeout; `not_found` = the mix is gone). |
 | `rpc.identity.discord_identity` | requests | The linked account's identity payload for a clicking Discord user (`not_found` = not linked). A successful answer is cached for 30 s (see *Operational notes*). |
 | action subjects | requests | `rpc.tournament.regteam_accept` / `regteam_decline` / `reg_pub_check_in` / `reg_pub_get_me`, `rpc.app.notification_preferences_update`, `rpc.balancer.custom.self_*` — each called with that identity, exactly as the gateway would for the same person on the site. |
 | `discord_member_roles` | consumes, replies | Role ids held by a set of users in a guild. Called by the shared Discord-role subscription strategy (`shared/services/subscriptions/strategies.py`, 5 s timeout). |
@@ -235,7 +235,8 @@ the tree — never on boot.
 
 **Lineup post.** balancer-service claims a `mix.lineup` row (`slot='lineup:<lobby>:<match>'`); the
 bot renders one card from the view's lineup — mix · lobby · game, the map and the points a win
-moves, the matchup as a 1200×630 PNG it draws itself (`src/render/mix_lineup_image.py`, fonts and
+moves, the lobby's in-game join code as inline code (when the host set one; a backtick in it reads as `'`),
+the matchup as a 1200×630 PNG it draws itself (`src/render/mix_lineup_image.py`, fonts and
 role glyphs in `assets/lineup`, map art and rank badges fetched over HTTP), and a line mentioning
 every seated player with a linked Discord — the one post that pings. Only a lobby's newest live
 lineup card carries the voice buttons: posting a new one re-renders the lobby's older ones without

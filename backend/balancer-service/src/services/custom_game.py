@@ -829,8 +829,8 @@ class CustomGameService:
                 workspace_id=workspace_id, preset="wins", game_formula="win", end_formula=WINS_END_FORMULA
             ),
         )
-        # A clone keeps its source's bans, Fearless, clocks and formation; a new mix starts from its host's defaults for
-        # this game (spec §4.3). A stored ban default the game no longer offers is no default.
+        # A clone keeps its source's bans, Fearless, clocks, pickers and formation; a new mix starts from its host's
+        # defaults for this game (spec §4.3). A stored ban default the game no longer offers is no default.
         if source is not None:
             ban_preset = source.hero_ban_preset
             team_formation, draft_pick_seconds = source.team_formation, source.draft_pick_seconds
@@ -859,6 +859,8 @@ class CustomGameService:
             hero_fearless=source.hero_fearless if source is not None else False,
             hero_ban_seconds=source.hero_ban_seconds if source is not None else None,
             hero_pick_seconds=source.hero_pick_seconds if source is not None else None,
+            hero_free_order=source.hero_free_order if source is not None else False,
+            hero_captains_only=source.hero_captains_only if source is not None else False,
             team_formation=team_formation,
             draft_pick_seconds=draft_pick_seconds,
         )
@@ -1588,6 +1590,8 @@ class CustomGameService:
         hero_ban_preset: str | None,
         hero_fearless: bool | None = None,
         clocks: Mapping[str, int | None] | None = None,
+        hero_free_order: bool | None = None,
+        hero_captains_only: bool | None = None,
         actor_user_id: int,
         actor_is_superuser: bool = False,
     ) -> models.CustomGame:
@@ -1596,7 +1600,8 @@ class CustomGameService:
         A live match keeps the room it started with; the change applies from the next Start. 422 ``unknown_ban_preset``.
         ``hero_fearless`` (when given) turns Fearless on or off; it too applies from the next room (spec §11.4).
         ``clocks`` holds the sent ones of ``hero_ban_seconds`` / ``hero_pick_seconds``: the next room's seconds per
-        ban / per pick step, ``None`` for the preset's own clock.
+        ban / per pick step, ``None`` for the preset's own clock. ``hero_free_order`` / ``hero_captains_only`` (when
+        given) set who a turn-by-turn pick is for / who picks; both apply from the next room too.
         """
         game = await self._writable(
             session,
@@ -1615,6 +1620,10 @@ class CustomGameService:
             game.hero_ban_seconds = clocks["hero_ban_seconds"]
         if "hero_pick_seconds" in clocks:
             game.hero_pick_seconds = clocks["hero_pick_seconds"]
+        if hero_free_order is not None:
+            game.hero_free_order = hero_free_order
+        if hero_captains_only is not None:
+            game.hero_captains_only = hero_captains_only
         await session.flush()
         return game
 
@@ -2461,6 +2470,34 @@ class CustomGameService:
         await session.flush()
         return game
 
+    async def set_lobby_code(
+        self,
+        session: AsyncSession,
+        *,
+        workspace_id: int,
+        custom_game_id: int,
+        lobby_index: int = 0,
+        lobby_code: str | None,
+        actor_user_id: int,
+        actor_is_superuser: bool = False,
+    ) -> models.CustomGame:
+        """The in-game lobby's join code, or ``None`` (or blank) to clear it.
+
+        Kept across matches until the host changes it, and writable while a match is live: a lobby re-created
+        mid-match needs its new code out at once.
+        """
+        game = await self._writable(
+            session,
+            workspace_id=workspace_id,
+            custom_game_id=custom_game_id,
+            actor_user_id=actor_user_id,
+            actor_is_superuser=actor_is_superuser,
+        )
+        lobby = await self._lobby(session, game, lobby_index)
+        lobby.lobby_code = lobby_code or None
+        await session.flush()
+        return game
+
     async def set_variant_index(
         self,
         session: AsyncSession,
@@ -2825,6 +2862,7 @@ class CustomGameService:
             "team_names": None,
             "next_map": None,
             "map_image": None,
+            "lobby_code": None,
             "points_per_win": None,
             "lobby_label": None,
             "mention_user_ids": [],
@@ -2858,6 +2896,7 @@ class CustomGameService:
             "team_names": {str(team): name for team, name in team_names.items()},
             "next_map": next_map,
             "map_image": map_image,
+            "lobby_code": lobby.lobby_code,
             "points_per_win": points_per_win,
             # Every lobby posts into the same channel, so a multi-lobby mix says
             # which one this lineup is; a one-lobby mix has nothing to qualify.

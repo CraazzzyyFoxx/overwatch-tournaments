@@ -57,7 +57,11 @@ vi.mock("next-intl", () => ({
 }));
 // The server's catalog for the mix's game, with the `mix_eligible` flag it computes.
 vi.mock("@/services/pickBan.service", () => {
-  const step = (action: string, timer_seconds: number | null = null) => ({ action, timer_seconds });
+  const step = (action: string, timer_seconds: number | null = null, member?: string) => ({
+    action,
+    timer_seconds,
+    member
+  });
   const preset = (id: string, kind: "hero" | "map", mix_eligible: boolean, steps: unknown[] = []) => ({
     id,
     kind,
@@ -78,6 +82,9 @@ vi.mock("@/services/pickBan.service", () => {
           preset("hero_anti_one_trick", "hero", true),
           // Bans on the ruleset's clock (none), then a pick on its own minute.
           preset("bans_pick", "hero", true, [step("ban"), step("pick", 60)]),
+          // The players' own picks: one at a time in lineup order, or everyone at once.
+          preset("turns_pick", "hero", true, [step("ban"), step("pick", null, "next")]),
+          preset("each_pick", "hero", true, [step("ban"), step("pick", null, "each")]),
           preset("map_bracket", "map", false)
         ]
       })
@@ -156,6 +163,7 @@ type MountProps = {
   showsRoles?: boolean;
   onSetFearless?: (fearless: boolean) => void;
   onSetHeroClocks?: (clocks: { hero_ban_seconds?: number | null; hero_pick_seconds?: number | null }) => void;
+  onSetHeroPickers?: (pickers: { hero_free_order?: boolean; hero_captains_only?: boolean }) => void;
 };
 
 function header(currentGame: CustomGame | undefined, props: MountProps, client: QueryClient) {
@@ -175,6 +183,7 @@ function header(currentGame: CustomGame | undefined, props: MountProps, client: 
         onSetBanPreset={onSetBanPreset}
         onSetFearless={props.onSetFearless}
         onSetHeroClocks={props.onSetHeroClocks}
+        onSetHeroPickers={props.onSetHeroPickers}
         onPostSignup={onPostSignup}
         settingLobbyCount={false}
         onLobbyCountChange={onLobbyCountChange}
@@ -456,7 +465,9 @@ describe("PickupMixHeader hero bans", () => {
       "none",
       "hero_classic",
       "hero_anti_one_trick",
-      "bans_pick"
+      "bans_pick",
+      "turns_pick",
+      "each_pick"
     ]);
   });
 
@@ -512,6 +523,31 @@ describe("PickupMixHeader hero bans", () => {
 
     expect(popover.querySelector("#mix-header-ban-seconds")).not.toBeNull();
     expect(popover.querySelector("#mix-header-pick-seconds")).toBeNull();
+  });
+
+  it("gives a host who picks the heroes, each choice written once it changes", async () => {
+    const onSetHeroPickers = vi.fn();
+    const scope = await mount(
+      game({ hero_ban_preset: "turns_pick", hero_free_order: false, hero_captains_only: true }),
+      { onSetHeroPickers }
+    );
+    // Only what is not the default reads in the rules.
+    expect(scope.querySelector('[aria-label^="rulesTrigger"]')?.textContent).toContain(
+      "turns_pick · formationBalance · captainsOnly"
+    );
+    const popover = await openRules(scope);
+
+    await click(radio(popover, "pickOrderFree"));
+    await click(radio(popover, "pickersCaptains"));
+
+    expect(onSetHeroPickers.mock.calls).toEqual([[{ hero_free_order: true }]]);
+  });
+
+  it("offers no pick order over a preset whose players pick at once", async () => {
+    const popover = await openRules(await mount(game({ hero_ban_preset: "each_pick" }), { onSetHeroPickers: vi.fn() }));
+
+    expect(radio(popover, "pickOrderFree")).toBeNull();
+    expect(radio(popover, "pickersCaptains")).not.toBeNull();
   });
 });
 

@@ -133,6 +133,16 @@ export function RoomBanStage({
     onSettled: () => void queryClient.invalidateQueries({ queryKey })
   });
   const barAction = state.is_complete ? null : (room.captainAction ?? hostAction);
+  // Why the bar has nothing to confirm: a free-order pick waits for a player tapped on the rosters, and on a
+  // captains-only pick everyone else is told who answers it.
+  const pickHint =
+    !open || step?.member == null || barAction != null
+      ? null
+      : room.choosableMembers.length > 1 && room.actingMemberId == null
+        ? t("choosePlayer")
+        : step.captains_only === true && !state.viewer_can_act && !canHost
+          ? t("captainsPick")
+          : null;
   const sideActor = room.captainAction === "side_pick" || hostAction === "side_pick";
   const canSelect = room.canSelect || hostAction != null;
   const title = tRoom(state.sequence.some((candidate) => candidate.action === "pick") ? "picksTitle" : "bansTitle");
@@ -292,6 +302,7 @@ export function RoomBanStage({
           selectedItem={!room.isSideStep && room.selectedItemId != null ? heroesById[room.selectedItemId] : undefined}
           pending={room.acting || hostAct.isPending}
           forMember={room.actingMemberName}
+          hint={pickHint}
           onConfirm={(itemId) => {
             if (room.captainAction != null) {
               room.confirm(itemId);

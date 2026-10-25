@@ -401,6 +401,14 @@ export function usePickupMix(
     onError: (error) => notify.apiError(error),
   });
 
+  /** The in-game lobby's join code; `null` clears it. */
+  const setLobbyCode = useMutation({
+    mutationFn: ({ lobbyIndex, lobbyCode }: { lobbyIndex: number; lobbyCode: string | null }) =>
+      customGameService.setLobbyCode(workspaceId, selectedGameId as number, lobbyIndex, lobbyCode),
+    onSuccess: applyGame,
+    onError: (error) => notify.apiError(error),
+  });
+
   /**
    * Which balance option the mix shows -- stored on the mix, so a viewer reads
    * the matchup the host is calling out instead of whatever their own browser
@@ -695,6 +703,7 @@ export function usePickupMix(
     setCaptain,
     undoMatch,
     setNextMap,
+    setLobbyCode,
     setVariantIndex,
     setLobbyCount,
     closeMix,

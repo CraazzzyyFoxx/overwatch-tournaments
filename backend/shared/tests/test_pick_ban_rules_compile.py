@@ -391,6 +391,24 @@ def test_a_side_bound_member_step_gets_its_member_once_its_side_does():
     assert pbr.ResolvedStep.from_json(bound.to_json()) == bound
 
 
+def test_a_free_pick_names_its_player_and_hands_the_teams_later_turns_the_rest_in_pick_order():
+    steps = _member_steps(
+        *(
+            {"id": f"p{index}", "action": "pick", "actors": actors, "member": "any"}
+            for index, actors in enumerate(("first", "second", "first", "first"))
+        )
+    )
+    assert pbr.free_pick_choices(steps, steps[0], SLOT1, MEMBERS) == [101, 102, 103]
+
+    rebound = pbr.rebind_free_pick(steps, steps[0], SLOT1, 103, MEMBERS)
+
+    # The clock's stand-in for a later turn is the first player left in pick order; the other team is untouched.
+    assert [step.member_seats for step in rebound] == [[(SLOT1, 103)], [(SLOT2, 201)], [(SLOT1, 101)], [(SLOT1, 102)]]
+    assert pbr.free_pick_choices(rebound, rebound[2], SLOT1, MEMBERS) == [101, 102]
+    with pytest.raises(ValueError):
+        pbr.rebind_free_pick(rebound, rebound[2], SLOT1, 103, MEMBERS)
+
+
 def test_team_steps_store_no_member_keys():
     # R-F4a: a ruleset and a session of team steps only stay byte-compatible with readers that predate member picks.
     ruleset = pbr.parse_ruleset(
@@ -401,5 +419,5 @@ def test_team_steps_store_no_member_keys():
     assert pbr.parse_ruleset(ruleset.to_json()) == ruleset
 
     (step,) = pbr.resolve_round(ruleset, kind="hero", round=1, start_index=0, participants=SEATS, opener=SLOT1)
-    assert {"member", "member_seats"}.isdisjoint(step.to_json())
+    assert {"member", "member_seats", "captains_only"}.isdisjoint(step.to_json())
     assert pbr.ResolvedStep.from_json(step.to_json()) == step

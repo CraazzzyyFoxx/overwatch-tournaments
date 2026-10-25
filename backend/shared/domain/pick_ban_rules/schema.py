@@ -23,8 +23,9 @@ Condition = dict[str, Any]
 
 StepAction = Literal["ban", "pick", "protect", "decider", "side_pick", "assign"]
 #: Who answers a member step (spec §11.6 R4-1): ``next`` -- the acting team's next member in pick order, ``each`` --
-#: every member of every acting team at once.
-MemberMode = Literal["next", "each"]
+#: every member of every acting team at once, ``any`` -- whichever of the acting team's members still without a hero
+#: this round the pick is made for (bound like ``next`` until then, so the clock's stand-in is the first of them left).
+MemberMode = Literal["next", "each", "any"]
 TimeoutPolicy = Literal["random_fill", "lock_draft", "wait"]
 StepTarget = Literal["opponent_player"]
 Generator = Literal["bracket", "slot_veto"]
@@ -115,6 +116,9 @@ class Step(BaseModel):
     #: A mix room's hero pick made by a member rather than the team (``None``); see :data:`MemberMode`. Stored only
     #: when set, so a team-only ruleset stays byte-identical for readers that predate it.
     member: MemberMode | None = Field(default=None, exclude_if=lambda value: value is None)
+    #: A member step only the team's captain (or a host) answers, for any teammate -- a member without a captain on
+    #: the lineup still answers for themselves. Stored only when set, like ``member``.
+    captains_only: bool = Field(default=False, exclude_if=lambda value: not value)
 
     @field_validator("actors")
     @classmethod
@@ -196,6 +200,8 @@ class ResolvedStep(BaseModel):
     #: ``(participation, encounter.team_member id)`` per member a member step owes an answer from, in pick order --
     #: bound with the actors (:func:`compile.bind_members`). Empty for a team step and while the actors wait on a side.
     member_seats: list[tuple[int, int]] = Field(default_factory=list, exclude_if=lambda value: not value)
+    #: See :attr:`Step.captains_only`; stored only when set.
+    captains_only: bool = Field(default=False, exclude_if=lambda value: not value)
 
     @classmethod
     def from_json(cls, data: dict[str, Any]) -> ResolvedStep:

@@ -334,6 +334,13 @@ def test_the_lineup_says_so_before_anyone_rolled_a_map() -> None:
     assert ":owt_map: Карта ещё не выбрана" in _lineup().text
 
 
+def test_the_lineup_carries_the_lobby_code_ready_to_copy_and_no_line_without_one() -> None:
+    assert "Код лобби: `ABC 123`" in _lineup(lobby_code="ABC 123").text.splitlines()
+    # A backtick would close the code span early.
+    assert "Код лобби: `a'b`" in _lineup(lobby_code="a`b").text
+    assert "Код лобби" not in _lineup().text
+
+
 def _picture(document: dict, **overrides):
     kwargs = {
         "mix_name": "Friday Scrim",
@@ -485,6 +492,7 @@ def _view(**lineup: Any) -> dict:
                 "team_names": {"1": "Синие"},
                 "next_map": ["Busan", "Контроль"],
                 "map_image": None,
+                "lobby_code": "ABC123",
                 "points_per_win": 25,
                 "lobby_label": None,
                 "mention_user_ids": ["111"],
@@ -578,6 +586,7 @@ class RenderMixRowTests(IsolatedAsyncioTestCase):
             request.await_args.args[1], {"custom_game_id": 42, "lineups": [{"lobby_index": 0, "match_number": 3}]}
         )
         self.assertTrue(result.card.text.startswith("## :owt_vs: Friday Scrim · Игра 3"))
+        self.assertIn("Код лобби: `ABC123`", result.card.text)
         self.assertEqual([button.target for button in result.card.answers], ["42-0", "42-0"])
         self.assertEqual(result.card.details, "-# :owt_players: <@111>")
         self.assertEqual(result.allowed_mentions.to_dict(), {"parse": ["users"]})

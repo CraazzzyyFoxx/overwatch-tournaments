@@ -381,6 +381,7 @@ def lineup_card(
     board_url: str,
     image_filename: str,
     lobby_label: str | None = None,
+    lobby_code: str | None = None,
     mentions: Sequence[str] = (),
     voice_target: str | None = None,
 ) -> DiscordCard:
@@ -399,6 +400,9 @@ def lineup_card(
     ``mentions`` are the Discord ids of seated players whose account is linked;
     they ping, which is the point of posting a lineup at all.
 
+    ``lobby_code`` is the in-game lobby's join code the host set, in inline code so a tap copies it; a backtick in it
+    would end the span early, so it reads as an apostrophe.
+
     ``voice_target`` is the mix and lobby the voice buttons act on; only the
     lobby's newest card carries them.
     """
@@ -407,10 +411,11 @@ def lineup_card(
     where = f"{emoji('map')} " + (_escape(map_line) if map_line else "Карта ещё не выбрана")
     if points_per_win:
         where += f" · {emoji('points')} Победа: +{points_per_win}"
+    code_line = [f"Код лобби: `{lobby_code.replace('`', "'")}`"] if lobby_code else []
 
     return DiscordCard(
         accent_color=TEAL,
-        text="\n".join([f"## {emoji('vs')} {title}", where]),
+        text="\n".join([f"## {emoji('vs')} {title}", where, *code_line]),
         details=f"-# {emoji('players')} " + " ".join(f"<@{discord_id}>" for discord_id in mentions)
         if mentions
         else None,

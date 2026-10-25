@@ -213,6 +213,8 @@ const EACH_PICK: PickBanResolvedStep = {
     [72, 601],
   ],
 };
+/** A free-order pick for slot 1: either of its players, the clock's stand-in P0. */
+const FREE_PICK: PickBanResolvedStep = { ...MEMBER_PICK, member: "any" };
 const ASSIGN: PickBanResolvedStep = { ...BAN, action: "assign", actors: [71, 72], lifetime: null, count: 2 };
 
 /** The room once the step in play is answered by everyone: nothing left on the clock. */
@@ -578,6 +580,54 @@ describe("RoomBanStage", () => {
       (button) => button.textContent?.trim().startsWith("Pick ") && !button.disabled,
     );
     expect(confirmations).toEqual([]);
+  });
+
+  it("waits on a free-order pick for the player tapped, then picks the hero for them", async () => {
+    serve(
+      performPickBanAction,
+      stepState(FREE_PICK, {
+        expected_action: "pick",
+        viewer_team_id: 71,
+        viewer_can_act: true,
+        allowed_actions: ["pick"],
+        acting_member_ids: [501, 502],
+        viewer_member_ids: [501, 502],
+        member_eligible: { "501": [101, 102], "502": [101, 102] },
+      }),
+      afterPick,
+    );
+    await render(() => {}, false);
+
+    // Nobody is chosen yet: no hero to confirm, and the bar says why.
+    await act(async () => tile("Hero 101")?.click());
+    expect(byLabel("Pick Hero 101 for P0")).toBeNull();
+    expect(container.textContent).toContain(en.mixes.arena.bans.choosePlayer);
+    expect(container.textContent).not.toContain("Picking:");
+
+    // The captain taps P1 on the roster.
+    await render(() => {}, false, false, 502);
+    await act(async () => tile("Hero 101")?.click());
+    await act(async () => byLabel("Pick Hero 101 for P1")?.click());
+    await settle();
+
+    expect(performPickBanAction).toHaveBeenCalledWith("hero", 50, { item_id: 101, action: "pick", member_id: 502 });
+  });
+
+  it("tells a player on a captains-only pick that the captains pick", async () => {
+    getPickBanState.mockResolvedValue(
+      stepState(
+        { ...EACH_PICK, captains_only: true },
+        {
+          expected_action: "pick",
+          acting_team_ids: [71, 72],
+          acting_member_ids: [501, 502, 601],
+          member_eligible: { "501": [101], "502": [101], "601": [101] },
+        },
+      ),
+    );
+    await render(() => {}, false);
+
+    expect(container.textContent).toContain(en.mixes.arena.bans.captainsPick);
   });
 
   it("alerts a player on each of their picks with the pick title", async () => {

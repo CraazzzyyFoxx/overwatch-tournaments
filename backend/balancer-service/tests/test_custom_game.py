@@ -155,6 +155,8 @@ def _game(**overrides) -> SimpleNamespace:
         "hero_fearless": False,
         "hero_ban_seconds": None,
         "hero_pick_seconds": None,
+        "hero_free_order": False,
+        "hero_captains_only": False,
         "team_formation": "balance",
         "draft_pick_seconds": 30,
         "general_voice_channel_id": None,
@@ -176,6 +178,7 @@ def _lobby(lobby_index: int = 0, **overrides) -> SimpleNamespace:
         "balance_result_json": None,
         "balance_result_version": 1,
         "next_map_id": None,
+        "lobby_code": None,
         "balanced_at": None,
         "live_encounter_id": None,
         "team1_voice_channel_id": None,
@@ -2837,6 +2840,21 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
             )
         self.assertEqual(ctx.exception.status_code, 404)
 
+    async def test_set_lobby_code_is_writable_while_the_match_is_live_and_blank_clears_it(self) -> None:
+        """A lobby re-created mid-match needs its new code out at once; a cleared field stores no code."""
+        self.games.get.return_value = _game(status="balanced")
+        self.lobby_rows[0] = _lobby(0, live_encounter_id=900)
+
+        await self.service.set_lobby_code(
+            self.session, workspace_id=1, custom_game_id=11, lobby_code="ABC123", actor_user_id=9
+        )
+        self.assertEqual("ABC123", self.lobby_rows[0].lobby_code)
+
+        await self.service.set_lobby_code(
+            self.session, workspace_id=1, custom_game_id=11, lobby_code="", actor_user_id=9
+        )
+        self.assertIsNone(self.lobby_rows[0].lobby_code)
+
     async def test_set_variant_index_pages_the_mix_for_every_viewer(self) -> None:
         result = {"variants": [{"teams": []}, {"teams": []}, {"teams": []}]}
         self.games.get.return_value = _game(status="balanced")
@@ -2954,7 +2972,9 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
             ]
         )
         self.games.get.return_value = _game()
-        self.lobby_rows[0] = _lobby(0, next_map_id=42, selected_variant_index=1, balance_result_json=document)
+        self.lobby_rows[0] = _lobby(
+            0, next_map_id=42, lobby_code="ABC123", selected_variant_index=1, balance_result_json=document
+        )
         self.host_prefs.get_by_user.return_value = _prefs(points_per_win=25)
         self.team_names.mapping_for_game.return_value = {0: "Blue"}
         self.mix_rounds.activity_for_lobbies = AsyncMock(return_value={0: (3, datetime(2026, 1, 1, 20, 0))})
@@ -2978,6 +2998,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
                     "team_names": {"0": "Blue"},
                     "next_map": ["Busan", "Control"],
                     "map_image": "https://s3.example/busan.jpg",
+                    "lobby_code": "ABC123",
                     "points_per_win": 25,
                     "lobby_label": None,
                     "mention_user_ids": ["111"],
@@ -3014,6 +3035,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
                     "team_names": None,
                     "next_map": None,
                     "map_image": None,
+                    "lobby_code": None,
                     "points_per_win": None,
                     "lobby_label": None,
                     "mention_user_ids": [],

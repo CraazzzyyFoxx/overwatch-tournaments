@@ -198,6 +198,8 @@ export function AnnouncementsCard({
           <SettingRow label={t("language")} hint={t("languageHint")}>
             <ToggleGroup
               type="single"
+              variant="pill"
+              size="sm"
               value={values.locale}
               onValueChange={(next) => patch({ locale: next as "ru" | "en" })}
               aria-label={t("language")}

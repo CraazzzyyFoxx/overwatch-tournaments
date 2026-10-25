@@ -122,6 +122,11 @@ class CustomGame(db.TimeStampIntegerMixin):
     #: step of the next room runs on it -- an all-at-once pick is one step, so its clock is the whole pick's.
     hero_ban_seconds: Mapped[int | None] = mapped_column(Integer(), nullable=True)
     hero_pick_seconds: Mapped[int | None] = mapped_column(Integer(), nullable=True)
+    #: Free pick order: a turn-by-turn pick (member ``next``) is for whichever teammate still without a hero the picker
+    #: taps; one nobody takes falls to the first of them in lineup order.
+    hero_free_order: Mapped[bool] = mapped_column(Boolean(), nullable=False, default=False, server_default="false")
+    #: Only a team's captain (or a host) picks its heroes, for any teammate; off, each player also picks their own.
+    hero_captains_only: Mapped[bool] = mapped_column(Boolean(), nullable=False, default=False, server_default="false")
 
 
 class CustomGameCoHost(db.Base):
@@ -197,6 +202,9 @@ class CustomGameLobby(db.Base):
     # The hero ban preset Start froze for ``live_encounter_id`` (the mix's ``hero_ban_preset`` then; NULL = no bans):
     # the match's room opens -- and any reset reopens -- on it, whatever the header says meanwhile.
     live_ban_preset: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # The in-game lobby's join code, as the host pasted it (trimmed, 1..64 chars; NULL = none). Public like the
+    # rest of the lobby, kept across matches until the host changes it, and editable while a match is live.
+    lobby_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
 
 class CustomGamePlayer(db.TimeStampIntegerMixin):

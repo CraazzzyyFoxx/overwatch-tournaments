@@ -619,6 +619,8 @@ export type MySeatTeam = {
   lobbyIndex: number;
   teamName: string;
   nextMapId: number | null;
+  /** That lobby's in-game join code, or `null` while the host set none. */
+  lobbyCode: string | null;
   /** In seat order; `role` is the slot the option seats them on (the roster line's glyph). */
   members: { uuid: string; name: string; role: string; isCaptain: boolean; isMe: boolean }[];
 };
@@ -645,6 +647,7 @@ export function myLobbyTeam(
         lobbyIndex: lobby.lobby_index,
         teamName: team.name,
         nextMapId: lobby.next_map_id,
+        lobbyCode: lobby.lobby_code,
         members: team.seats.map((seat) => ({
           uuid: seat.uuid,
           name: seat.name,

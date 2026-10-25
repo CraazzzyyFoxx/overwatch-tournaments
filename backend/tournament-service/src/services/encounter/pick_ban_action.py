@@ -896,6 +896,50 @@ class PickBanActionService:
                 status_code=status.HTTP_400_BAD_REQUEST, detail="Your answer to this step is already locked"
             )
 
+    @staticmethod
+    def _bind_free_pick(rt: _Runtime, step: pbr.ResolvedStep, actor: int, member: int | None) -> pbr.ResolvedStep:
+        """A free-order pick (member ``any``) made for a teammate the step does not name yet: the step names them now,
+        and the team's later free picks of the round the rest (:func:`pbr.rebind_free_pick`). Anything else -- another
+        step, a member who is no choice -- is left to :meth:`_require_turn` to refuse."""
+        if (
+            step.member != "any"
+            or member is None
+            or (actor, member) in step.answers
+            or member not in pbr.free_pick_choices(rt.steps, step, actor, rt.members)
+        ):
+            return step
+        if any(
+            pbr.actor_submission(rt.submissions, step.index, seat_actor, seat_member) is not None
+            for seat_actor, seat_member in step.answers
+            if seat_actor == actor
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Your answer to this step is already locked"
+            )
+        rt.steps = pbr.rebind_free_pick(rt.steps, step, actor, member, rt.members)
+        rt.pick_ban.resolved_sequence_json = [other.to_json() for other in rt.steps]
+        return next(other for other in rt.steps if other.index == step.index)
+
+    @staticmethod
+    def _require_picker(
+        rt: _Runtime,
+        step: pbr.ResolvedStep,
+        actor: int,
+        member: int | None,
+        *,
+        viewer: int | None,
+        viewer_member: int | None,
+    ) -> None:
+        """A ``captains_only`` member step through the captain route: the team's captain picks, for any teammate; a
+        team whose lineup crowns nobody picks as without the rule, each member for themselves. A host acting through
+        the organizer route (``viewer`` None) is never refused here."""
+        if not step.captains_only or viewer != ACTING_VIEWER:
+            return
+        captain = next((seat.id for seat in rt.seats if seat.team_id == actor and seat.is_captain), None)
+        if viewer_member is not None and viewer_member == (captain if captain is not None else member):
+            return
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Your team's captain picks its heroes")
+
     # -- public API --------------------------------------------------------
     async def perform_pick_ban_action(
         self,
@@ -938,7 +982,9 @@ class PickBanActionService:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail=f"Expected action '{step.action}', got '{action}'"
             )
+        step = self._bind_free_pick(rt, step, encounter_team_id, member_id)
         self._require_turn(rt, step, encounter_team_id, member_id)
+        self._require_picker(rt, step, encounter_team_id, member_id, viewer=viewer, viewer_member=viewer_member)
 
         row = pbr.actor_submission(rt.submissions, step.index, encounter_team_id, member_id)
         items = [dict(item) for item in (row.items_json or [])] if row is not None else []
@@ -1412,18 +1458,28 @@ class PickBanActionService:
         if step is not None:
             progress = pbr.step_progress(step, rt.submissions)
             acting = [actor for actor in step.acting_actors if not progress[actor]["locked"]]
-            for actor, member in step.answers:
-                row = pbr.actor_submission(rt.submissions, step.index, actor, member)
-                if member is not None and (row is None or row.state not in (pbr.LOCKED, pbr.REVEALED)):
-                    acting_members.append(member)
+            if step.member == "any":
+                # A free-order pick is for any teammate still without a hero this round, whom it names on the act.
+                for actor in acting:
+                    acting_members.extend(pbr.free_pick_choices(rt.steps, step, actor, rt.members))
+            else:
+                for actor, member in step.answers:
+                    row = pbr.actor_submission(rt.submissions, step.index, actor, member)
+                    if member is not None and (row is None or row.state not in (pbr.LOCKED, pbr.REVEALED)):
+                        acting_members.append(member)
         team_of = {seat.id: seat.team_id for seat in rt.seats}
+        # A ``captains_only`` step leaves a member their own pick only on a team whose lineup crowns nobody.
+        crowned = (
+            {seat.team_id for seat in rt.seats if seat.is_captain} if step is not None and step.captains_only else set()
+        )
         # Whom this viewer may pick for on a member step: themselves first, then -- as captain -- every teammate
         # still owing (spec §11.3, §11.6 R4-9, R4-11). A host picks for anyone through the organizer route.
         viewer_members = sorted(
             (
                 member
                 for member in acting_members
-                if member == viewer_member or (viewer is not None and team_of.get(member) == viewer)
+                if (member == viewer_member and team_of.get(member) not in crowned)
+                or (viewer is not None and team_of.get(member) == viewer)
             ),
             key=lambda member: member != viewer_member,
         )

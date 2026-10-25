@@ -1,17 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
-import { Headphones, Shuffle, Users } from "lucide-react";
+import { Dices, Headphones, Shuffle, Users } from "lucide-react";
 
-import { NextMapStrip } from "@/app/balancer/mix/_components/NextMapStrip";
+import { MatchHistoryList } from "@/app/balancer/mix/_components/MatchHistoryList";
+import { NextMapRoll } from "@/app/balancer/mix/_components/NextMapStrip";
 import { StartMatchButton } from "@/app/balancer/mix/_components/StartMatchButton";
 import { PickupResultControls } from "@/app/balancer/mix/PickupResultControls";
 import { CAPTION_CLASS, CARD_TITLE_CLASS } from "@/app/balancer/mix/pickup-chrome";
 import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Eyebrow } from "@/components/ui/eyebrow";
+import Image from "@/components/ui/image";
 import { Spinner } from "@/components/ui/spinner";
+import { cn } from "@/lib/utils";
 import type { CatalogEntityRead } from "@/types/catalog.types";
 import type {
   CustomGame,
@@ -35,9 +39,10 @@ export interface RoomMatchActions {
 }
 
 /**
- * The room's centre outside the draft and the bans (spec §5): an idle lobby waiting for its teams, a formed one
- * waiting for its start (the map, who bans first), and a live one waiting for its result. A host's action for the
- * phase sits here; everyone else reads what the lobby waits for.
+ * The room's centre outside the draft and the bans (spec §5): an idle lobby waiting for its teams, and -- as one
+ * scoreboard under the map -- a formed one waiting for its start (the map, who bans first) and a live one waiting for
+ * its result. The scoreboard stretches to the rosters' height; the map's still takes up whatever they leave. A host's
+ * action for the phase sits at its foot; everyone else reads what the lobby waits for.
  */
 export function RoomMatchStage({
   phase,
@@ -74,8 +79,7 @@ export function RoomMatchStage({
   const tLobbies = useTranslations("mixes.lobbies");
   const [reformOpen, setReformOpen] = useState<"draft" | "balance" | null>(null);
   const draftMode = game.team_formation === "draft";
-  const mapName =
-    lobby.next_map_id == null ? null : (maps.find((map) => map.id === lobby.next_map_id)?.name ?? null);
+  const map = lobby.next_map_id == null ? null : (maps.find((row) => row.id === lobby.next_map_id) ?? null);
   // Re-forming replaces a lineup nobody recorded: that result would be lost, so the button asks first.
   const atRisk = lobby.lineup_recorded === false;
   const reform = (kind: "draft" | "balance") =>
@@ -145,66 +149,130 @@ export function RoomMatchStage({
     );
   }
 
-  if (phase === "ready") {
-    const opener = lobby.opener_index != null ? (teamNames[lobby.opener_index] ?? null) : null;
-    return (
-      <Card variant="flat" className="flex flex-col gap-0 overflow-hidden">
-        <NextMapStrip
+  const opener = lobby.opener_index != null ? (teamNames[lobby.opener_index] ?? null) : null;
+  const history = mixMatches.filter((match) => match.lobby_index === lobby.lobby_index).slice(0, 3);
+
+  return (
+    <Card variant="flat" className="flex flex-1 flex-col gap-0 overflow-hidden">
+      <MapBanner map={map} label={phase === "ready" ? tRoom("nextMapLabel") : t("map")} emptyName={t("noMap")}>
+        {phase === "live" && voiceUrl != null ? (
+          <Button asChild variant="outline" size="sm">
+            <a href={voiceUrl} target="_blank" rel="noreferrer">
+              <Headphones aria-hidden="true" />
+              {tRoom("voice")}
+            </a>
+          </Button>
+        ) : null}
+      </MapBanner>
+      {phase === "ready" && canWrite ? (
+        <NextMapRoll
           nextMapId={lobby.next_map_id}
           maps={maps}
           matches={mixMatches}
-          canWrite={canWrite}
           saving={actions.settingNextMap}
-          capturing={false}
           onNextMapChange={actions.onNextMapChange}
+          className="border-t border-[color:var(--aqt-border)] px-5 py-3"
         />
-        <div className="flex flex-col items-start gap-3 border-t border-[color:var(--aqt-border)] px-5 py-5">
-          <h2 className={CARD_TITLE_CLASS}>{t("readyTitle")}</h2>
-          <p className="text-body text-[color:var(--aqt-fg-muted)]">
-            {canWrite ? t("readyHost") : t("readyViewer")}
-          </p>
-          {opener != null ? <p className={CAPTION_CLASS}>{tRoom("opener", { team: opener })}</p> : null}
-          {canWrite ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <StartMatchButton
-                awayNames={awayNames}
-                opener={lobby.opener_index != null ? { names: teamNames, index: lobby.opener_index } : null}
-                starting={actions.starting}
-                onStart={actions.onStartMatch}
-              />
-              {formButtons}
-            </div>
-          ) : null}
-        </div>
-      </Card>
-    );
-  }
-
-  return (
-    <Card variant="flat" className="flex flex-col items-start gap-3 px-5 py-6">
-      <h2 className={CARD_TITLE_CLASS}>{t("liveTitle")}</h2>
-      <p className="text-body text-[color:var(--aqt-fg-muted)]">
-        {mapName != null ? tRoom("nextMap", { map: mapName }) : t("liveNoMap")}
-      </p>
-      {voiceUrl != null ? (
-        <Button asChild variant="outline" size="sm">
-          <a href={voiceUrl} target="_blank" rel="noreferrer">
-            <Headphones aria-hidden="true" />
-            {tRoom("voice")}
-          </a>
-        </Button>
       ) : null}
-      {canWrite ? (
-        <PickupResultControls
-          teamCount={2}
-          teamNames={teamNames}
-          saving={actions.recording}
-          pointsPerWin={game.settings.points_per_win ?? null}
-          onRecord={actions.onRecord}
+      {history.length > 0 ? (
+        <MatchHistoryList
+          matches={history}
+          lobbyCount={game.lobbies.length}
+          canWrite={false}
+          undoingMatchId={null}
+          discipline={game.discipline}
+          className="border-t border-[color:var(--aqt-border)] px-5 pb-1 pt-3"
         />
-      ) : (
-        <p className={CAPTION_CLASS}>{t("liveViewer")}</p>
-      )}
+      ) : null}
+      <div className="border-t border-[color:var(--aqt-border)] px-5 py-4">
+        {phase === "live" ? (
+          canWrite ? (
+            <PickupResultControls
+              teamCount={2}
+              teamNames={teamNames}
+              saving={actions.recording}
+              pointsPerWin={game.settings.points_per_win ?? null}
+              onRecord={actions.onRecord}
+            />
+          ) : (
+            <p className={CAPTION_CLASS}>{t("liveViewer")}</p>
+          )
+        ) : (
+          <div className="flex flex-wrap items-center gap-2">
+            {canWrite ? (
+              <>
+                <StartMatchButton
+                  awayNames={awayNames}
+                  opener={lobby.opener_index != null ? { names: teamNames, index: lobby.opener_index } : null}
+                  starting={actions.starting}
+                  onStart={actions.onStartMatch}
+                />
+                {formButtons}
+              </>
+            ) : (
+              <p className={CAPTION_CLASS}>{t("readyViewer")}</p>
+            )}
+            {opener != null ? (
+              <p className={cn(CAPTION_CLASS, "ml-auto")}>{tRoom("opener", { team: opener })}</p>
+            ) : null}
+          </div>
+        )}
+      </div>
     </Card>
+  );
+}
+
+/**
+ * The map as the scoreboard's backdrop: on a wide screen its still fills whatever height the rosters beside it leave
+ * (a phone gets a fixed strip), with the name on top. Without a still, or without a map, a neutral tile keeps the place.
+ */
+function MapBanner({
+  map,
+  label,
+  emptyName,
+  children
+}: Readonly<{ map: CatalogEntityRead | null; label: string; emptyName: string; children?: ReactNode }>) {
+  const src = map?.image_path || null;
+  return (
+    <div className="relative flex min-h-32 flex-col justify-end bg-[color:var(--aqt-card-2)] sm:min-h-40 lg:flex-1">
+      {src != null ? (
+        <>
+          <Image src={src} alt="" fill sizes="(min-width: 1024px) 720px, 100vw" className="object-cover object-center" />
+          {/* The same two scrims as the tournament pregame's map banner: the base lifted for the caption, and the left
+              so a bright skybox never sits under the name. */}
+          <span
+            aria-hidden
+            className="absolute inset-0"
+            style={{
+              background:
+                "linear-gradient(to top, var(--aqt-card) 0%, color-mix(in srgb, var(--aqt-card) 82%, transparent) 34%, color-mix(in srgb, var(--aqt-card) 20%, transparent) 72%, transparent 100%)"
+            }}
+          />
+          <span
+            aria-hidden
+            className="absolute inset-0"
+            style={{
+              background:
+                "linear-gradient(to right, color-mix(in srgb, var(--aqt-card) 78%, transparent) 0%, transparent 55%)"
+            }}
+          />
+        </>
+      ) : null}
+      <div className="relative flex flex-wrap items-end gap-x-3 gap-y-2 p-4">
+        {map == null ? <Dices aria-hidden className="mb-1 size-6 shrink-0 text-[color:var(--aqt-fg-faint)]" /> : null}
+        <div className="min-w-0 flex-1 basis-48">
+          <Eyebrow tone="muted">{map?.parent != null ? `${label} · ${map.parent.name}` : label}</Eyebrow>
+          <h2
+            className={cn(
+              "truncate font-display text-2xl font-bold leading-tight",
+              map != null ? "text-[color:var(--aqt-fg)]" : "text-[color:var(--aqt-fg-dim)]"
+            )}
+          >
+            {map?.name ?? emptyName}
+          </h2>
+        </div>
+        {children}
+      </div>
+    </div>
   );
 }

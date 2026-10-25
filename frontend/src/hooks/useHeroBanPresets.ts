@@ -27,6 +27,17 @@ export function presetClocks(preset: PickBanPreset | undefined): MixPresetClocks
   return clocks;
 }
 
+/**
+ * Whether a preset has anything for the host's pickers to apply to: a turn-by-turn player pick (the free order), any
+ * player pick at all (captains only). An assignment is a captain's already.
+ */
+export type MixPresetPickers = { turns: boolean; players: boolean };
+
+export function presetPickers(preset: PickBanPreset | undefined): MixPresetPickers {
+  const members = preset?.ruleset.phases.flatMap((phase) => phase.steps).map((step) => step.member) ?? [];
+  return { turns: members.includes("next"), players: members.some((member) => member != null) };
+}
+
 function useRulesCatalog(discipline: string | null | undefined): PickBanRulesCatalog | undefined {
   return useQuery({
     queryKey: tournamentQueryKeys.pickBanRulesCatalog(discipline),
@@ -44,4 +55,9 @@ export function useHeroBanPresets(discipline: string | null | undefined): string
 /** The clocks a host may set over one of the game's presets; empty for no preset, or while the catalog loads. */
 export function useMixPresetClocks(discipline: string | null | undefined, code: string | null): MixPresetClocks {
   return presetClocks(useRulesCatalog(discipline)?.presets.find((preset) => preset.id === code));
+}
+
+/** What the pickers apply to over one of the game's presets; nothing for no preset, or while the catalog loads. */
+export function useMixPresetPickers(discipline: string | null | undefined, code: string | null): MixPresetPickers {
+  return presetPickers(useRulesCatalog(discipline)?.presets.find((preset) => preset.id === code));
 }

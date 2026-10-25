@@ -380,8 +380,11 @@ export type PickBanAction = "ban" | "pick" | "protect" | "side_pick";
 export type PickBanStepAction = PickBanAction | "decider" | "assign";
 /** What a viewer may answer the current step with: an act's, or a mix captain's assignment (answered by submit). */
 export type PickBanAllowedAction = PickBanAction | "assign";
-/** Who answers a mix's member pick: the team's next player in pick order, or every player at once. */
-export type PickBanMemberMode = "next" | "each";
+/**
+ * Who answers a mix's member pick: the team's next player in pick order, every player at once, or (`any`) whichever
+ * teammate still without a hero the picker names -- bound to the first of them until then.
+ */
+export type PickBanMemberMode = "next" | "each" | "any";
 
 /** One seated player of a mix match (`encounter.team_member`), in pick order. */
 export interface PickBanMember {
@@ -476,6 +479,8 @@ export interface PickBanRulesetStep {
   constraints: PickBanConstraint[];
   /** A mix room's member pick; absent/null = the team picks. */
   member?: PickBanMemberMode | null;
+  /** Only the team's captain (or a host) answers this member pick, for any teammate. Sent only when set. */
+  captains_only?: boolean;
 }
 
 export interface PickBanRulesetPhase {
@@ -520,6 +525,8 @@ export interface PickBanResolvedStep {
   member?: PickBanMemberMode | null;
   /** `[participation, member seat]` per player a member step owes an answer from, in pick order. */
   member_seats?: [number, number][];
+  /** Only the team's captain (or a host) answers this member pick, for any teammate. Sent only when set. */
+  captains_only?: boolean;
 }
 
 export interface PickBanSubmissionItem {

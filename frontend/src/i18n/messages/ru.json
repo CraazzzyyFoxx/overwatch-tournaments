@@ -4096,7 +4096,15 @@
       "pickSeconds": "Время на пик, секунд",
       "clocksHint": "На один ход; при пике всех сразу — на весь пик. Пусто — как в пресете.",
       "banClock": "бан {seconds} с",
-      "pickClock": "пик {seconds} с"
+      "pickClock": "пик {seconds} с",
+      "pickOrder": "Порядок пиков",
+      "pickOrderLineup": "По составу",
+      "pickOrderFree": "Свободный",
+      "pickers": "Кто пикает героев",
+      "pickersPlayers": "Игроки и капитан",
+      "pickersCaptains": "Только капитаны",
+      "freeOrder": "свободный порядок пиков",
+      "captainsOnly": "пикают капитаны"
     },
     "room": {
       "playerHeroes": {
@@ -8150,7 +8158,13 @@
       "nextMapLabel": "Следующая карта",
       "notRolled": "Ещё не разыграна",
       "rollMode": "Разыграть в пределах режима",
-      "roll": "Разыграть"
+      "roll": "Разыграть",
+      "lobbyCodeLabel": "Код лобби",
+      "lobbyCodePlaceholder": "Вставьте код из игры",
+      "lobbyCodeSave": "Сохранить",
+      "lobbyCodeCopy": "Скопировать код лобби",
+      "lobbyCodeCopied": "Код лобби скопирован",
+      "lobbyCodeCopyFailed": "Нет доступа к буферу обмена"
     },
     "draft": {
       "captainOf": "Капитан {team}",
@@ -8219,7 +8233,9 @@
           "decider": "Решающий",
           "assign": "Распределение"
         },
-        "everyone": "все"
+        "everyone": "все",
+        "choosePlayer": "Нажмите на игрока, затем выберите ему героя",
+        "captainsPick": "Героев выбирают капитаны"
       },
       "match": {
         "idleTitle": "Команд пока нет",
@@ -8227,11 +8243,9 @@
         "idleViewer": "Хост ещё не собрал команды.",
         "draftAgain": "Новый драфт",
         "balanceAgain": "Пересобрать",
-        "readyTitle": "Команды собраны",
-        "readyHost": "Начните матч, когда все на месте.",
         "readyViewer": "Ждём, когда хост начнёт матч.",
-        "liveTitle": "Матч идёт",
-        "liveNoMap": "Карта для этого матча не выбрана.",
+        "map": "Карта",
+        "noMap": "Карта не выбрана",
         "liveViewer": "Результат запишет хост."
       },
       "host": {

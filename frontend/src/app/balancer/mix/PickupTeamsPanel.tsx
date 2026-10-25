@@ -40,6 +40,7 @@ import { Spinner } from "@/components/ui/spinner";
 
 import { MatchHistoryList } from "./_components/MatchHistoryList";
 import { NextMapStrip } from "./_components/NextMapStrip";
+import { LobbyCodeStrip } from "./_components/LobbyCodeStrip";
 import { StartMatchButton } from "./_components/StartMatchButton";
 import { VariantView } from "./_components/VariantView";
 import { slotCodeOrder } from "@/lib/roster/ontology";
@@ -110,6 +111,9 @@ type PickupTeamsPanelProps = {
   settingNextMap: boolean;
   /** Rolled or hand-picked; `null` clears. Persisted per lobby server-side. */
   onNextMapChange: (mapId: number | null) => void;
+  settingLobbyCode: boolean;
+  /** Trimmed; `null` clears. Persisted per lobby server-side, writable while the match is live. */
+  onLobbyCodeChange: (lobbyCode: string | null) => void;
   closingMix: boolean;
   onCloseMix: () => void;
   /** Takes the GLOBAL team index (`lobbyIndex * 2 + team`). Omitted -- team headers render read-only. */
@@ -178,6 +182,8 @@ export function PickupTeamsPanel({
   maps,
   settingNextMap,
   onNextMapChange,
+  settingLobbyCode,
+  onLobbyCodeChange,
   closingMix,
   onCloseMix,
   onRenameTeam,
@@ -384,15 +390,24 @@ export function PickupTeamsPanel({
               noise -- and the fill keeps the copied image opaque. */}
           <div ref={captureRef} data-testid="teams-capture" className="bg-[color:var(--aqt-card)]">
             {game ? (
-              <NextMapStrip
-                nextMapId={lobby?.next_map_id ?? null}
-                maps={maps}
-                matches={mixMatches}
-                canWrite={reshape}
-                saving={settingNextMap}
-                capturing={capturing}
-                onNextMapChange={onNextMapChange}
-              />
+              <>
+                <NextMapStrip
+                  nextMapId={lobby?.next_map_id ?? null}
+                  maps={maps}
+                  matches={mixMatches}
+                  canWrite={reshape}
+                  saving={settingNextMap}
+                  capturing={capturing}
+                  onNextMapChange={onNextMapChange}
+                />
+                <LobbyCodeStrip
+                  lobbyCode={lobby?.lobby_code ?? null}
+                  canWrite={canWrite}
+                  saving={settingLobbyCode}
+                  capturing={capturing}
+                  onLobbyCodeChange={onLobbyCodeChange}
+                />
+              </>
             ) : null}
             {variant == null ? (
               (checklist ?? (
