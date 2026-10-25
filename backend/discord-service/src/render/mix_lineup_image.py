@@ -6,7 +6,7 @@ team columns around a VS seam, a tile per seat with role, rank badge, name,
 the captain's crown and rating) over the next map's art.
 
 Pictures come by URL: the map's art as the database holds it (``image_path``)
-and the OW2 ladder's rank badge, served by the site (:mod:`src.render.mix`). The
+and the game ladder's rank emblem, served by the site (:mod:`src.render.mix`). The
 caller fetches them (``LineupPicture.image_urls``) and hands the bytes to
 :func:`render_png`; one missing from them is simply left out of the picture,
 the post still goes. Fonts (Onest for headings, Inter for the rest -- the

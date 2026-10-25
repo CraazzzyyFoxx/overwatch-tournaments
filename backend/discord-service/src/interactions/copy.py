@@ -474,13 +474,14 @@ def _role_emoji(code: Any) -> str:
     return f"{emoji(name)} " if name else ""
 
 
-def _rank_text(locale: Locale, seat: Mapping[str, Any], role: str, overwatch: bool) -> str:
-    """``:owt_div_gold_3: Gold 3 · 3200`` -- the division badge, its name and the SR.
+def _rank_text(locale: Locale, seat: Mapping[str, Any], role: str, discipline: str) -> str:
+    """``:owt_div_gold_3: Gold 3 · 3200`` -- the division badge, its name and the number.
 
-    Only an Overwatch seat names a division (spec §12.1 R3-5): another game's
-    rank is its number. ``divisions`` may be missing entirely (an older
-    balancer, or a workspace with no grid); then the SR alone is the rank,
-    and a role with neither is simply unranked.
+    The badge is the emblem of the tier the number lands in on the game's own
+    ladder, and only a seat that wears one names its division: a game without
+    a ladder ranks on the organiser's grid, whose tiers are bare numbers.
+    ``divisions`` may be missing entirely (an older balancer); then the number
+    alone is the rank, and a role with neither is simply unranked.
     """
     ranks = seat.get("ranks")
     rank = ranks.get(role) if isinstance(ranks, Mapping) else None
@@ -488,9 +489,9 @@ def _rank_text(locale: Locale, seat: Mapping[str, Any], role: str, overwatch: bo
     division = divisions.get(role) if isinstance(divisions, Mapping) else None
 
     parts: list[str] = []
-    if overwatch and isinstance(division, Mapping) and division.get("name"):
-        badge = division_emoji(division.get("slug"))
-        parts.append(f"{badge} {escape_markdown(str(division['name']))}".strip())
+    badge = division_emoji(discipline, rank)
+    if badge and isinstance(division, Mapping) and division.get("name"):
+        parts.append(f"{badge} {escape_markdown(str(division['name']))}")
     if rank is not None:
         parts.append(escape_markdown(str(rank)))
     return " · ".join(parts) or _MIX[locale]["no_rank"]
@@ -505,11 +506,12 @@ def _has_rank(seat: Mapping[str, Any], role: str) -> bool:
 
 
 def _roles_block(
-    locale: Locale, seat: Mapping[str, Any], roles: Sequence[tuple[str, str]], overwatch: bool
+    locale: Locale, seat: Mapping[str, Any], roles: Sequence[tuple[str, str]], discipline: str
 ) -> list[str]:
     """The seat's roles, one line each: the picked ones in order, the rest of the game's greyed out."""
     words = _MIX[locale]
     labels = dict(roles)
+    overwatch = art_drawn_for(discipline)
 
     def line(prefix: str, role: str, tail: str) -> str:
         mark = _role_emoji(role) if overwatch else ""
@@ -522,12 +524,12 @@ def _roles_block(
         ranked = [code for code, _label in roles if _has_rank(seat, code)]
         return [
             f"{emoji('ok')} {words['all_ranked']}",
-            *(line("", role, _rank_text(locale, seat, role, overwatch)) for role in ranked),
+            *(line("", role, _rank_text(locale, seat, role, discipline)) for role in ranked),
         ]
 
     picked = [role["role"] for role in chosen]
     lines = [
-        line(f"{_SLOT_NUMBERS[index]} ", role, _rank_text(locale, seat, role, overwatch))
+        line(f"{_SLOT_NUMBERS[index]} ", role, _rank_text(locale, seat, role, discipline))
         for index, role in enumerate(picked[: len(_SLOT_NUMBERS)])
     ]
     # Three indent spaces, not a number: these are the roles the host must not
@@ -556,7 +558,7 @@ def mix_text(locale: Locale, state: Mapping[str, Any]) -> tuple[str, str]:
     words = _MIX[locale]
     roles = discipline_roles(state)
     labels = dict(roles)
-    overwatch = art_drawn_for(str(state.get("discipline") or ""))
+    discipline = str(state.get("discipline") or "")
     head = [f"### {words['heading'].format(name=escape_markdown(str(state.get('name') or '')))}"]
     raw_seat = state.get("seat")
     seat: Mapping[str, Any] | None = raw_seat if isinstance(raw_seat, Mapping) else None
@@ -582,13 +584,13 @@ def mix_text(locale: Locale, state: Mapping[str, Any]) -> tuple[str, str]:
             )
         head.append(" · ".join(status))
         if len(roles) > 1:
-            details += _roles_block(locale, seat, roles, overwatch)
+            details += _roles_block(locale, seat, roles, discipline)
             if state.get("discipline_flex"):
                 details.append(
                     f"{emoji('flex')} {words['flex']}: {words['flex_on'] if seat.get('is_flex') else words['flex_off']}"
                 )
         elif roles:
-            details.append(f"{words['rank']}: {_rank_text(locale, seat, roles[0][0], overwatch)}")
+            details.append(f"{words['rank']}: {_rank_text(locale, seat, roles[0][0], discipline)}")
         if seat.get("away"):
             details.append(f"{emoji('clock')} {words['away']}")
 

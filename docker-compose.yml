@@ -521,7 +521,7 @@ services:
     volumes:
       - ./backend/discord-service:/app/discord-service
       - ./backend/shared:/app/shared
-      - ./static/divisions:/static/divisions:ro
+      - ./frontend/public:/frontend/public:ro
     networks:
       - app-network
     healthcheck:

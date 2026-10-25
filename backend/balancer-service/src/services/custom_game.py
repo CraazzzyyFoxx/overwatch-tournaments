@@ -1225,7 +1225,7 @@ class CustomGameService:
 
         ``ranks`` carries every rated role, ``None`` included: the Discord role
         select labels every option with a number or "no rank". ``divisions``
-        uses the discipline's native ladder when it has one (the OW badges),
+        uses the discipline's native ladder when it has one (the bot's badges),
         otherwise the organiser's effective grid, never another game's ladder.
         ``unranked_roles`` is the narrower list the warning is built from -- the
         roles this player actually plays.

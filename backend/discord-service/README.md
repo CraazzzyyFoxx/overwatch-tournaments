@@ -136,7 +136,7 @@ renderers (`src/render/`) write an emoji as a shortcode (`:owt_tank:`) in card t
 (`emoji="tank"`) on a button; `src/interactions/emoji.py` swaps them for the
 **application emoji** uploaded as `owt_<name>` (Developer Portal → the app → Emojis; they work in
 every guild and in DMs), loaded once in `setup_hook`. An emoji not uploaded shows its Unicode
-fallback; a division badge (`div_<tier slug>`) has none and simply disappears. The dev and prod
+fallback; a rank badge (`div_*`) has none and simply disappears. The dev and prod
 bots are different applications with different emoji ids, which is why no id ever leaves this
 service — see *Operator tools* for the uploader.
 
@@ -194,7 +194,7 @@ renders one **live** card into the workspace's channel from `rpc.balancer.custom
 hosts, how many lobbies, where a new player lands, each lobby's stage (`signup.lobbies`, with a running
 match's or live draft's clock), the roster by first role in the mix's own game (`discipline_roles`:
 Overwatch roles and Full flex by emoji, other games' roles by name, none in a one-role game; a rank
-badge only for Overwatch), away players marked and out of the role counters, a footer naming the
+badge from the game's own ladder), away players marked and out of the role counters, a footer naming the
 game's identity provider (`DISCIPLINES[d].identity_provider`: Battle.net, Riot ID, Steam), and
 «Join» / «My seat» / «Leave» / «Away» / «Back». Any mutation that changes what the card shows — a click here, an edit
 on the site, a host closing signup — emits `pickup_mix.changed`, and the bot's projector re-renders
@@ -206,8 +206,8 @@ loses its buttons when the mix ends. A host removing a post (or the whole mix) q
 its row, which is how the card leaves the channel.
 
 Every `mix.*` action answers with the same self-state, rendered into the **seat panel**, an
-ephemeral card: participation and lobby, the role order with rank (and, for Overwatch, the division
-badge), the roles not played, flex, an «away» line, and notes (unranked roles, role edits locked by
+ephemeral card: participation and lobby, the role order with rank (and the division badge of the
+game's own ladder), the roles not played, flex, an «away» line, and notes (unranked roles, role edits locked by
 the host). The panel names the game's roles from the self state's `discipline_roles`; a one-role game
 shows its rank alone. Its «Edit roles» (`mix.setup`, never offered for a one-role game such as
 Deadlock) opens a form — `min(3, role count)` radio groups over the mix game's rated roles («1st/2nd/3rd
@@ -260,17 +260,20 @@ Run from `backend/discord-service` with the service env (REST only, safe beside 
 - `python -m src.tools.emoji_sync [--dry-run] [--dir PATH]` — uploads every missing
   `owt_<name>` application emoji: the set in `assets/emoji/<name>.png|gif|webp` (rendered by
   `node frontend/scripts/gen-discord-emoji.mjs`: the site's role icons tinted with the role colours,
-  everything else lucide icons in the `--aqt-*` palette), plus the Overwatch rank badges from the
-  repo's `static/divisions/<slug>.png` as `div_<slug>` (names from `src/ui.py`;
-  ≤ 256 KiB). The seat panel badges a rank with the Overwatch ladder (`DEFAULT_GRID`: Bronze 5 ..
-  Champion 1), never with a workspace's own grid, whose tiers are bare numbers — so these 45 are the
-  only badges it needs. An existing name is never replaced — delete it in the portal first, which
-  blanks it in messages already posted. Once per application. Exits non-zero when Discord refused an
-  upload; the Discord calls go through the egress proxy, like the bot's.
+  everything else lucide icons in the `--aqt-*` palette), plus every game's rank emblems: each
+  native ladder tier's `icon_url` under the checkout's `frontend/public`, named by `badge_name` in
+  `src/ui.py` — Overwatch's `/divisions/<slug>.png` as `div_<slug>`, another game's picture as
+  `div_<game>_<file>` (Deadlock's Mystic 1..6 all `div_deadlock_mystic`); ≤ 256 KiB. Signup rows,
+  the seat panel and the lineup picture badge a rank with its game's own ladder (`ladder_grid`),
+  never with a workspace's own grid, whose tiers are bare numbers — so these 91 (45 Overwatch,
+  10 LoL, 11 Deadlock, 25 Valorant) are the only badges it needs. An existing name is never
+  replaced — delete it in the portal first, which blanks it in messages already posted. Once per
+  application. Exits non-zero when Discord refused an upload; the Discord calls go through the
+  egress proxy, like the bot's.
   **Normally it runs as the one-shot `discord-emoji` compose service** (profile `tools`, so `up`
   never starts it): `ops/deploy/remote-deploy.sh` runs it on every release right after the
   migrations — non-fatal, a missing emoji only falls back to Unicode — and `make prod-discord-emoji`
-  / `make discord-emoji` run it by hand. It mounts the checkout's `static/divisions`, which the bot
+  / `make discord-emoji` run it by hand. It mounts the checkout's `frontend/public`, which the bot
   image does not carry.
 - `python -m src.tools.sync_commands [--guild ID]` — syncs `/mix` with its English translations;
   `--guild` for an instant dev sync.
