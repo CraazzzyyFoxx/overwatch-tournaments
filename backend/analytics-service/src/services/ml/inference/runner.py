@@ -57,7 +57,10 @@ def _shap_by_player(
         return {}
 
     out: dict[int, tuple[float, list[dict[str, typing.Any]]]] = {}
-    agg = feature_frame.groupby(["player_id", "role"], dropna=False).mean(numeric_only=True).reset_index()
+    # A row without a rated role (a flex tournament has none at all) has no role model to explain it. Grouping it in
+    # would make an all-None role level float NaN, which the ``.str`` accessor below rejects.
+    ranked = feature_frame[feature_frame["role"].notna()]
+    agg = ranked.groupby(["player_id", "role"]).mean(numeric_only=True).reset_index()
 
     for role, model in models_by_role.items():
         role_rows = agg[agg["role"].str.lower() == role.lower()]
