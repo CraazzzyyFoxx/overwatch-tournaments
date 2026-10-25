@@ -269,8 +269,8 @@ class CustomGameSelfServicePatch(_Request):
 
 
 class CustomGameBanPresetPatch(_Request):
-    """The mix's hero room: its ban preset (``null`` turns bans off) and, when sent, Fearless (spec §11.4) and the
-    clocks. The clocks tell "omitted" (unchanged) from ``null`` (the preset's own) by ``model_fields_set``."""
+    """The mix's hero room: its ban preset (``null`` turns bans off) and, when sent, Fearless (spec §11.4), the clocks
+    and who picks. The clocks tell "omitted" (unchanged) from ``null`` (the preset's own) by ``model_fields_set``."""
 
     hero_ban_preset: str | None = Field(max_length=64)
     #: Omitted = unchanged. On: a player cannot pick a hero they were recorded on earlier in this mix.
@@ -278,6 +278,10 @@ class CustomGameBanPresetPatch(_Request):
     #: Seconds per ban (and protect) step / per pick step of the next room; an all-at-once pick is one step.
     hero_ban_seconds: int | None = Field(default=None, ge=10, le=600)
     hero_pick_seconds: int | None = Field(default=None, ge=10, le=600)
+    #: Omitted = unchanged. On: a turn-by-turn pick is for whichever teammate still without a hero the picker taps.
+    hero_free_order: StrictBool | None = None
+    #: Omitted = unchanged. On: only a team's captain (or a host) picks its heroes, for any teammate.
+    hero_captains_only: StrictBool | None = None
 
 
 class CustomGameDraftSettingsPatch(_Request):

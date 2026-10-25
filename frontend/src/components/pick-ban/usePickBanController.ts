@@ -311,10 +311,9 @@ export function usePickBanController({
   const draftItemIds = new Set(
     (adminDrafting ? adminDraft : draftItems).map((item) => item.item_id)
   );
+  // A member step with nobody chosen yet (a free-order pick waits for the tap) offers no hero to anyone.
   const eligibleIds = memberStep
-    ? actingMemberId != null
-      ? new Set(state.member_eligible?.[String(actingMemberId)] ?? [])
-      : null
+    ? new Set(actingMemberId != null ? (state.member_eligible?.[String(actingMemberId)] ?? []) : [])
     : eligibleItemIds(state.eligible, selectedTargetId);
   const assignedByPlayer: Record<number, number | undefined> = {};
   for (const item of draftItems) {

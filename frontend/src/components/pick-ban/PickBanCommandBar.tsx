@@ -39,6 +39,8 @@ interface PickBanCommandBarProps {
   pending: boolean;
   /** The player a member pick is made for; null on a team step. */
   forMember?: string | null;
+  /** Why the viewer has nothing to confirm yet (tap a player first; the captains pick), where the confirm goes. */
+  hint?: string | null;
   onConfirm: (itemId: number) => void;
   onCancel: () => void;
 }
@@ -66,6 +68,7 @@ export function PickBanCommandBar({
   selectedItem,
   pending,
   forMember = null,
+  hint = null,
   onConfirm,
   onCancel
 }: Readonly<PickBanCommandBarProps>) {
@@ -77,9 +80,12 @@ export function PickBanCommandBar({
   const paused = state.session?.paused_at != null;
   const yourTurn = !paused && (captainAction != null || draftOpen);
 
-  // A member step is a list of players, not one team: say who still picks.
+  // A member step is a list of players, not one team: say who still picks. A free-order pick is the team's turn, for
+  // whichever of them it names.
   const pickers =
-    step?.member != null ? state.acting_member_ids.map((id) => memberName(state.members, id)) : [];
+    step?.member != null && step.member !== "any"
+      ? state.acting_member_ids.map((id) => memberName(state.members, id))
+      : [];
   // The pause outranks whose turn it is: nobody may act until an organizer
   // lifts it, and the bar is the one surface every viewer of the room sees.
   const turnBanner = paused
@@ -179,6 +185,8 @@ export function PickBanCommandBar({
           </div>
         ) : draft != null ? (
           <div className="sm:ml-auto sm:shrink-0">{draft}</div>
+        ) : hint != null ? (
+          <p className="text-caption text-[color:var(--aqt-fg-muted)] sm:ml-auto sm:shrink-0">{hint}</p>
         ) : null}
       </div>
     </OverlayBar>

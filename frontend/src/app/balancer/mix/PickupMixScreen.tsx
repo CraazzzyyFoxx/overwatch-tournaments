@@ -511,6 +511,9 @@ function PickupMixDetail({ initialGame }: Readonly<{ initialGame: CustomGame }>)
               onSetHeroClocks={(clocks) => {
                 if (game != null) setBanPreset.mutate({ hero_ban_preset: game.hero_ban_preset, ...clocks });
               }}
+              onSetHeroPickers={(pickers) => {
+                if (game != null) setBanPreset.mutate({ hero_ban_preset: game.hero_ban_preset, ...pickers });
+              }}
               savingBanPreset={setBanPreset.isPending}
               onSetDraftSettings={(settings) => setDraftSettings.mutate(settings)}
               savingDraftSettings={setDraftSettings.isPending}

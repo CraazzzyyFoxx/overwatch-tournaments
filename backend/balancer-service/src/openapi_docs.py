@@ -312,8 +312,10 @@ DOCS: dict[str, dict] = {
             "Resolves ownership from the mix id; an optional workspace_id restricts the read "
             "and returns 404 if the mix belongs to another workspace."
             " It carries the mix's hero_ban_preset (null = no bans)."
-            " It carries hero_fearless (spec §11.4), and hero_ban_seconds / hero_pick_seconds (the hero room's clock"
-            " per ban / per pick step in seconds; null = the preset's own)."
+            " It carries hero_fearless (spec §11.4), hero_ban_seconds / hero_pick_seconds (the hero room's clock"
+            " per ban / per pick step in seconds; null = the preset's own), hero_free_order (a turn-by-turn pick is"
+            " for whichever teammate still without a hero the picker taps) and hero_captains_only (only a team's"
+            " captain or a host picks its heroes)."
             " Each lobby carries state (idle | ready | pregame | live), live_seats (the live match's participations"
             " {id, slot, name}) and opener_index (the lineup team that bans first in the next match, null without"
             " bans)."
@@ -426,6 +428,11 @@ DOCS: dict[str, dict] = {
             " hero_ban_seconds / hero_pick_seconds, when sent, set the next room's clock in seconds (10..600; null ="
             " the preset's own) for every ban and protect step / every pick step -- an all-at-once pick is one step,"
             " so its clock is the whole pick's; a side pick or an assignment keeps the preset's clock."
+            " hero_free_order, when sent, frees the next room's turn-by-turn picks (lol_draft, deadlock_bans_pick_turns,"
+            " deadlock_two_phase_draft): the team's turn is for whichever teammate still without a hero its picker"
+            " names, and one the clock runs out on goes to the first of them in lineup order."
+            " hero_captains_only, when sent, leaves every player pick of the next room to the team's captain (or a"
+            " host), for any teammate; a team whose lineup has no captain still picks for itself."
         ),
     },
     "rpc.balancer.custom.set_draft_settings": {

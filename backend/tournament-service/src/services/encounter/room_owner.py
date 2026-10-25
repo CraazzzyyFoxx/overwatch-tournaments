@@ -84,7 +84,9 @@ async def mix_ban_config(session: AsyncSession, encounter: Encounter, kind: Pick
 
     The mix's clocks, when set, replace the timer of every step they cover: ``hero_ban_seconds`` a ban's and a
     protect's, ``hero_pick_seconds`` a pick's; a side pick or an assignment keeps the preset's own. Read as the room
-    opens, like Fearless (:func:`mix_fearless_exclusions`).
+    opens, like Fearless (:func:`mix_fearless_exclusions`). So are the pickers: ``hero_free_order`` turns every
+    turn-by-turn pick (member ``next``) into a free-order one (``any``), ``hero_captains_only`` marks every member pick
+    ``captains_only``.
     """
     if kind != PickBanKind.HERO:
         return None
@@ -94,6 +96,8 @@ async def mix_ban_config(session: AsyncSession, encounter: Encounter, kind: Pick
                 models.CustomGameLobby.live_ban_preset,
                 models.CustomGame.hero_ban_seconds,
                 models.CustomGame.hero_pick_seconds,
+                models.CustomGame.hero_free_order,
+                models.CustomGame.hero_captains_only,
             )
             .join(models.CustomGame, models.CustomGame.id == models.CustomGameLobby.custom_game_id)
             .where(models.CustomGameLobby.live_encounter_id == encounter.id)
@@ -110,6 +114,10 @@ async def mix_ban_config(session: AsyncSession, encounter: Encounter, kind: Pick
         for step in phase["steps"]:
             if clocks.get(step["action"]) is not None:
                 step["timer_seconds"] = clocks[step["action"]]
+            if row.hero_free_order and step.get("member") == "next":
+                step["member"] = "any"
+            if row.hero_captains_only and step.get("member") is not None:
+                step["captains_only"] = True
     heroes = (
         await session.scalars(
             sa.select(models.CatalogEntity.id)

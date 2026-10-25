@@ -4096,7 +4096,15 @@
       "pickSeconds": "Время на пик, секунд",
       "clocksHint": "На один ход; при пике всех сразу — на весь пик. Пусто — как в пресете.",
       "banClock": "бан {seconds} с",
-      "pickClock": "пик {seconds} с"
+      "pickClock": "пик {seconds} с",
+      "pickOrder": "Порядок пиков",
+      "pickOrderLineup": "По составу",
+      "pickOrderFree": "Свободный",
+      "pickers": "Кто пикает героев",
+      "pickersPlayers": "Игроки и капитан",
+      "pickersCaptains": "Только капитаны",
+      "freeOrder": "свободный порядок пиков",
+      "captainsOnly": "пикают капитаны"
     },
     "room": {
       "playerHeroes": {
@@ -8225,7 +8233,9 @@
           "decider": "Решающий",
           "assign": "Распределение"
         },
-        "everyone": "все"
+        "everyone": "все",
+        "choosePlayer": "Нажмите на игрока, затем выберите ему героя",
+        "captainsPick": "Героев выбирают капитаны"
       },
       "match": {
         "idleTitle": "Команд пока нет",

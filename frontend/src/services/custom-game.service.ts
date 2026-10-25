@@ -197,6 +197,8 @@ export type HeroRoomPatch = {
   hero_fearless?: boolean;
   hero_ban_seconds?: number | null;
   hero_pick_seconds?: number | null;
+  hero_free_order?: boolean;
+  hero_captains_only?: boolean;
 };
 
 export type CustomGame = {
@@ -239,6 +241,10 @@ export type CustomGame = {
   /** The hero room's clock per ban (and protect) / per pick step in seconds (10..600); null = the preset's own. */
   hero_ban_seconds: number | null;
   hero_pick_seconds: number | null;
+  /** A turn-by-turn pick is for whichever teammate still without a hero the picker taps; off, lineup order. */
+  hero_free_order: boolean;
+  /** Only a team's captain (or a host) picks its heroes, for any teammate; off, each player also picks their own. */
+  hero_captains_only: boolean;
   /** How the lobbies form teams by default: the balancer, or a captain draft (spec §4.3). */
   team_formation: MixTeamFormation;
   /** A mix draft's pick clock in seconds (10..600). */
@@ -1065,9 +1071,9 @@ export const customGameService = {
   },
 
   /**
-   * The mix's hero room: its ban preset (one of its own game's, or null) and, when given, Fearless and the clocks
-   * (null = the preset's own; an omitted one stays as it is); all apply from the next Start. 422 for another preset
-   * code.
+   * The mix's hero room: its ban preset (one of its own game's, or null) and, when given, Fearless, the clocks (null =
+   * the preset's own) and who picks; an omitted one stays as it is, and all apply from the next Start. 422 for another
+   * preset code.
    */
   setBanPreset(
     workspaceId: number,

@@ -823,9 +823,9 @@ class CustomGameRoundStoreTests(EncounterWriterCase):
             await s.commit()
         self.assertIsNone(await stored())
 
-    async def test_the_header_keeps_the_rooms_clocks_until_it_sends_them(self) -> None:
-        """The preset select and the Fearless switch send no clocks and leave them; ``null`` hands one back to the
-        preset."""
+    async def test_the_header_keeps_the_rooms_clocks_and_pickers_until_it_sends_them(self) -> None:
+        """The preset select and the Fearless switch send no clocks or pickers and leave them; ``null`` hands a clock
+        back to the preset."""
         broker = _Broker()
         custom.register(broker, logging.getLogger(__name__))
         identity = {
@@ -840,7 +840,7 @@ class CustomGameRoundStoreTests(EncounterWriterCase):
         async def unannounced(*_args, **_kwargs) -> None:
             """The realtime and outbox signal is not what this test is about."""
 
-        async def put(payload: dict[str, object]) -> tuple[object, object]:
+        async def put(payload: dict[str, object]) -> tuple[object, ...]:
             with (
                 patch.object(custom, "_SF", self.Session),
                 patch.object(custom, "emit_pickup_mix_changed", unannounced),
@@ -855,14 +855,29 @@ class CustomGameRoundStoreTests(EncounterWriterCase):
                     None,
                 )
             self.assertTrue(result["ok"], result)
-            return result["data"]["hero_ban_seconds"], result["data"]["hero_pick_seconds"]
+            data = result["data"]
+            return tuple(
+                data[key] for key in ("hero_ban_seconds", "hero_pick_seconds", "hero_free_order", "hero_captains_only")
+            )
 
         self.assertEqual(
-            (20, 45), await put({"hero_ban_preset": "hero_classic", "hero_ban_seconds": 20, "hero_pick_seconds": 45})
+            (20, 45, True, True),
+            await put(
+                {
+                    "hero_ban_preset": "hero_classic",
+                    "hero_ban_seconds": 20,
+                    "hero_pick_seconds": 45,
+                    "hero_free_order": True,
+                    "hero_captains_only": True,
+                }
+            ),
         )
-        self.assertEqual((20, 45), await put({"hero_ban_preset": None}))
-        self.assertEqual((20, 45), await put({"hero_ban_preset": "hero_classic", "hero_fearless": True}))
-        self.assertEqual((20, None), await put({"hero_ban_preset": "hero_classic", "hero_pick_seconds": None}))
+        self.assertEqual((20, 45, True, True), await put({"hero_ban_preset": None}))
+        self.assertEqual((20, 45, True, True), await put({"hero_ban_preset": "hero_classic", "hero_fearless": True}))
+        self.assertEqual(
+            (20, None, False, True),
+            await put({"hero_ban_preset": "hero_classic", "hero_pick_seconds": None, "hero_free_order": False}),
+        )
 
     async def _rated_lobby(self, first: int, second: int, *, preset: str | None = "hero_classic") -> None:
         """Lobby A: m0 (rated ``first``) against m1 (rated ``second``), on a mix playing ``preset``."""

@@ -303,6 +303,7 @@ def resolve_round(
                 eligible=step.eligible,
                 constraints=list(step.constraints),
                 member=step.member,
+                captains_only=step.captains_only,
             )
         )
     return bind_members(resolved, members or {})
@@ -311,27 +312,83 @@ def resolve_round(
 def bind_members(steps: Sequence[ResolvedStep], members: Mapping[int, Sequence[int]]) -> list[ResolvedStep]:
     """Give every member step whose actors are bound its members (spec §11.6 R4-1, R4-2).
 
-    ``members`` is each participation's seats in pick order. ``each``: every member of every acting team. ``next``:
-    the acting team's k-th member, k counting that team's earlier ``next`` steps of the round; a team out of members
-    owes the step nothing, and the cursor passes it. Idempotent: a step already holding its members, or still
+    ``members`` is each participation's seats in pick order. ``each``: every member of every acting team. ``next`` and
+    ``any``: the first of the acting team's members no earlier ``next``/``any`` step of the round names; a team out of
+    members owes the step nothing, and the cursor passes it. Idempotent: a step already holding its members, or still
     waiting on its side, is left as it is.
     """
-    taken: dict[tuple[int | None, int], int] = {}
+    named: dict[tuple[int | None, int], set[int]] = {}
     bound: list[ResolvedStep] = []
     for step in steps:
         if step.member is None:
             bound.append(step)
             continue
+        if step.member_seats or step.is_unbound:
+            if step.member != "each":
+                for actor, member in step.member_seats:
+                    named.setdefault((step.round, actor), set()).add(member)
+            bound.append(step)
+            continue
         seats: list[tuple[int, int]] = []
         for actor in step.acting_actors:
-            roster = list(members.get(actor, ()))
+            roster = members.get(actor, ())
             if step.member == "each":
                 seats.extend((actor, member) for member in roster)
                 continue
-            position = taken.get((step.round, actor), 0)
-            taken[(step.round, actor)] = position + 1
-            if position < len(roster):
-                seats.append((actor, roster[position]))
-        keep = step.member_seats or step.is_unbound
-        bound.append(step if keep else step.model_copy(update={"member_seats": seats}))
+            taken = named.setdefault((step.round, actor), set())
+            first = next((member for member in roster if member not in taken), None)
+            if first is not None:
+                taken.add(first)
+                seats.append((actor, first))
+        bound.append(step.model_copy(update={"member_seats": seats}))
     return bound
+
+
+def free_pick_choices(
+    steps: Sequence[ResolvedStep], step: ResolvedStep, actor: int, members: Mapping[int, Sequence[int]]
+) -> list[int]:
+    """Whom ``actor``'s free-order pick ``step`` (member ``any``) may be for, in pick order: the team's members no
+    earlier ``next``/``any`` step of the round names. Empty when the team owes the step nothing."""
+    if step.member != "any" or all(seat_actor != actor for seat_actor, _member in step.member_seats):
+        return []
+    named = {
+        member
+        for other in steps
+        if other.round == step.round and other.index < step.index and other.member in ("next", "any")
+        for seat_actor, member in other.member_seats
+        if seat_actor == actor
+    }
+    return [member for member in members.get(actor, ()) if member not in named]
+
+
+def rebind_free_pick(
+    steps: Sequence[ResolvedStep],
+    step: ResolvedStep,
+    actor: int,
+    member: int,
+    members: Mapping[int, Sequence[int]],
+) -> list[ResolvedStep]:
+    """``actor``'s free-order pick ``step`` made for ``member`` (one of :func:`free_pick_choices`): the step names
+    them, and the team's later ``any`` steps of the round name the rest in pick order -- so a clock's stand-in is
+    always the first member left. ``ValueError`` for a member who is not a choice."""
+    choices = free_pick_choices(steps, step, actor, members)
+    if member not in choices:
+        raise ValueError(f"member {member} is not a choice of step {step.index}")
+    rest = iter([other for other in choices if other != member])
+    rebound: list[ResolvedStep] = []
+    for other in steps:
+        if (
+            other.round != step.round
+            or other.member != "any"
+            or other.index < step.index
+            or actor not in other.acting_actors
+        ):
+            rebound.append(other)
+            continue
+        mine = member if other.index == step.index else next(rest, None)
+        seats = [seat for seat in other.member_seats if seat[0] != actor]
+        if mine is not None:
+            seats.append((actor, mine))
+        seats.sort(key=lambda seat: other.acting_actors.index(seat[0]))
+        rebound.append(other.model_copy(update={"member_seats": seats}))
+    return rebound

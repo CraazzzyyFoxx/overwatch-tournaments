@@ -428,6 +428,9 @@ def _dump_game(
         # The room's clock per ban / per pick in seconds; null = the preset's own.
         "hero_ban_seconds": game.hero_ban_seconds,
         "hero_pick_seconds": game.hero_pick_seconds,
+        # Who a turn-by-turn pick is for (any teammate still without a hero), and whether only captains pick.
+        "hero_free_order": game.hero_free_order,
+        "hero_captains_only": game.hero_captains_only,
         # How a lobby forms its teams by default, and the draft's pick clock (spec §4.3).
         "team_formation": game.team_formation,
         "draft_pick_seconds": game.draft_pick_seconds,
@@ -1033,6 +1036,8 @@ def register(broker: Any, logger: Any) -> None:
                 hero_fearless=body.hero_fearless,
                 # exclude_unset keeps "leave the clock alone" apart from "null" (= the preset's own clock).
                 clocks=body.model_dump(include={"hero_ban_seconds", "hero_pick_seconds"}, exclude_unset=True),
+                hero_free_order=body.hero_free_order,
+                hero_captains_only=body.hero_captains_only,
                 actor_user_id=user.id,
                 actor_is_superuser=user.is_superuser,
             )

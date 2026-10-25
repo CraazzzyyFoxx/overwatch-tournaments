@@ -321,6 +321,8 @@ def _validate_picks(step: Step, path: str, issues: list[Issue], *, kind: str, sp
             issues.append(_error(f"{path}.count", "member_count", "a member picks exactly one hero"))
         if step.actors == "system":
             issues.append(_error(f"{path}.member", "member_system", "the engine has no members"))
+    elif step.captains_only:
+        issues.append(_error(f"{path}.captains_only", "captains_only_member", "only a member pick is a captain's"))
     if step.action == "assign":
         if kind != "hero":
             issues.append(_error(f"{path}.action", "assign_hero_only", "only heroes are assigned to members"))

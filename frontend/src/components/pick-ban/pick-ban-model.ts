@@ -67,7 +67,8 @@ export function memberName(members: readonly PickBanMember[], memberId: number):
 /**
  * A member step's player choice (spec §11.6 R4-3, R4-9): whom the viewer may pick for -- themselves, as captain their
  * teammates still owing, as a host anyone still owing -- and whom the pick is for: `chosen` while they still owe, else
- * the first of them. Nothing to choose off a member step.
+ * the first of them. A free-order pick (`any`) offering more than one player waits for the choice instead: a default
+ * there is a hero given to the wrong player. Nothing to choose off a member step.
  */
 export function memberChoice(
   state: PickBanState,
@@ -85,7 +86,9 @@ export function memberChoice(
         : state.viewer_can_act
           ? state.viewer_member_ids
           : [];
-  return { choosable, acting: chosen != null && choosable.includes(chosen) ? chosen : (choosable[0] ?? null) };
+  if (chosen != null && choosable.includes(chosen)) return { choosable, acting: chosen };
+  const waits = state.current_step?.member === "any" && choosable.length > 1;
+  return { choosable, acting: waits ? null : (choosable[0] ?? null) };
 }
 
 /**

@@ -92,8 +92,12 @@ export function PickBanStepTimeline({
     // one: "Both teams ban" / "{team} bans" / "Random ban".
     const shape = summary.system ? "system" : summary.actors.length > 1 ? "both" : "side";
     const headlineKey = `step.${shape}.${summary.action}` as const;
-    // A `next` step is one player's pick: name them, not their team.
-    const pickFor = resolved.member === "next" ? resolved.member_seats?.[0]?.[1] : undefined;
+    // A `next` step is one player's pick: name them, not their team. A free-order one names its player only once made:
+    // until then it is the team's, for whichever player it is given to.
+    const pickFor =
+      resolved.member === "next" || (resolved.member === "any" && done)
+        ? resolved.member_seats?.[0]?.[1]
+        : undefined;
 
     const Icon = done
       ? Check

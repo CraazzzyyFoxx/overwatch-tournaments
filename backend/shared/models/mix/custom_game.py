@@ -122,6 +122,11 @@ class CustomGame(db.TimeStampIntegerMixin):
     #: step of the next room runs on it -- an all-at-once pick is one step, so its clock is the whole pick's.
     hero_ban_seconds: Mapped[int | None] = mapped_column(Integer(), nullable=True)
     hero_pick_seconds: Mapped[int | None] = mapped_column(Integer(), nullable=True)
+    #: Free pick order: a turn-by-turn pick (member ``next``) is for whichever teammate still without a hero the picker
+    #: taps; one nobody takes falls to the first of them in lineup order.
+    hero_free_order: Mapped[bool] = mapped_column(Boolean(), nullable=False, default=False, server_default="false")
+    #: Only a team's captain (or a host) picks its heroes, for any teammate; off, each player also picks their own.
+    hero_captains_only: Mapped[bool] = mapped_column(Boolean(), nullable=False, default=False, server_default="false")
 
 
 class CustomGameCoHost(db.Base):
