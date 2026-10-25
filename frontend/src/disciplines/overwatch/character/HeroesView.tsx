@@ -151,12 +151,14 @@ const HeroesView = ({ characters, filterSlot, maps, retryMaps, metadata }: SlotP
             )}
           </CardSurface>
 
-          <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-2 lg:items-start">
+          {/* Stretched rows: the records set the height and the maps scroll in it, so both cards end on one line. */}
+          <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-2">
             {records.length > 0 ? <HeroBestGames rows={records} /> : null}
             <MapsForHero
               heroName={selected.hero.character.name}
               rows={maps === undefined ? undefined : heroMapRows(maps, heroId)}
               onRetry={retryMaps}
+              fill={records.length > 0}
               className={records.length > 0 ? undefined : "lg:col-span-2"}
             />
           </div>

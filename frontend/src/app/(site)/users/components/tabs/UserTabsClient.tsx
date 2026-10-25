@@ -52,7 +52,9 @@ const UserTabsClient = ({ activeTab, children, badges }: UserTabsClientProps) =>
       <div className="sticky top-[var(--aqt-header-h)] z-40 -mx-4 -mt-3 bg-background px-4 pt-3 md:-mx-6 md:-mt-7 md:px-6 xl:-mx-10 xl:px-10">
         <UserProfileTabList badges={badges} />
       </div>
-      <div className="pt-6">{children}</div>
+      {/* A tab's sticky rails stop under this bar, not under the site header alone: the bar ends 3rem (`pt-3` and the
+          36px tab row) below the header, and the rails keep the cards' 14px gap from it. */}
+      <div className="pt-6 [--aqt-sticky-top:calc(var(--aqt-header-h)_+_3.875rem)]">{children}</div>
     </Tabs>
   );
 };
