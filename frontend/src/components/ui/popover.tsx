@@ -13,6 +13,16 @@ const PopoverAnchor = PopoverPrimitive.Anchor;
 
 const PopoverClose = PopoverPrimitive.Close;
 
+/**
+ * The floating panel every overlay shares: select and combobox lists, menus,
+ * popovers and (at a smaller radius) tooltips. Raised off whatever it opens
+ * over, like an `outline` button: the `--aqt-card-2` fill is lighter than a
+ * page, a card or a dialog, with the control border and the 1px light along
+ * its top edge. No drop shadow (DESIGN §5).
+ */
+export const floatingPanelClass =
+  "rounded-[10px] border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-card-2)] text-[color:var(--aqt-fg)] shadow-[inset_0_1px_0_var(--aqt-overlay-3)]";
+
 const PopoverContent = React.forwardRef<
   React.ElementRef<typeof PopoverPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof PopoverPrimitive.Content> & { animate?: boolean }
@@ -56,9 +66,10 @@ const PopoverContent = React.forwardRef<
           event.stopPropagation();
         }}
         className={cn(
-          "z-50 w-72 rounded-md border bg-popover p-4 text-popover-foreground shadow-md outline-none origin-[--radix-popover-content-transform-origin]",
+          "z-50 w-72 p-4 outline-none",
+          floatingPanelClass,
           animate &&
-            "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
+            "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0",
           className
         )}
         {...props}

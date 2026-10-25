@@ -331,7 +331,7 @@ export function PlayerEditModal({
                   {t("registrationStatus")}
                 </Label>
                 <Select value={form.registrationStatus} onValueChange={form.setRegistrationStatus}>
-                  <SelectTrigger size="sm" className="border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] text-[color:var(--aqt-fg)]">
+                  <SelectTrigger size="sm">
                     <SelectValue placeholder={t("selectRegistrationStatus")} />
                   </SelectTrigger>
                   <SelectContent>
@@ -356,7 +356,7 @@ export function PlayerEditModal({
                   value={form.registrationBalancerStatus}
                   onValueChange={form.setRegistrationBalancerStatus}
                 >
-                  <SelectTrigger size="sm" className="border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] text-[color:var(--aqt-fg)]">
+                  <SelectTrigger size="sm">
                     <SelectValue placeholder={t("selectBalancerStatus")} />
                   </SelectTrigger>
                   <SelectContent>

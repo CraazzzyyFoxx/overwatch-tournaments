@@ -94,7 +94,7 @@ export default function ActiveEvents() {
         sideOffset={8}
         collisionPadding={12}
         aria-label={t("nav.activeEvents.title")}
-        className="w-[340px] max-w-[calc(100vw-24px)] rounded-xl border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-card-2)] p-1.5 shadow-[0_18px_50px_rgb(0_0_0/0.5)]"
+        className="w-[340px] max-w-[calc(100vw-24px)] p-1.5"
       >
         <div className="border-b border-[color:var(--aqt-border)] px-2.5 pb-2.5 pt-2">
           <p className="font-semibold">{t("nav.activeEvents.title")}</p>

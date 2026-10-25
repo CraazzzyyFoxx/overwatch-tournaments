@@ -7,7 +7,7 @@ import {
   useSearchComboboxQuery,
   type SearchComboboxMessages
 } from "@/components/kit/useSearchComboboxQuery";
-import { Combobox, ComboboxCheck, type ComboboxVariant } from "@/components/ui/combobox";
+import { Combobox, ComboboxCheck } from "@/components/ui/combobox";
 import { CommandGroup, CommandItem } from "@/components/ui/command";
 import { Skeleton } from "@/components/ui/skeleton";
 import { rbacService } from "@/services/rbac.service";
@@ -28,7 +28,6 @@ interface ServerSearchChrome {
   /** Accessible name when no `<Label htmlFor>` points at the trigger. */
   triggerAriaLabel?: string;
   disabled?: boolean;
-  variant?: ComboboxVariant;
   size?: "sm" | "default";
 }
 
@@ -61,7 +60,6 @@ export function ServerSearchCombobox<TItem>({
   labelLoading = false,
   triggerAriaLabel,
   disabled = false,
-  variant,
   size,
   onSelect,
   queryKey,
@@ -94,7 +92,6 @@ export function ServerSearchCombobox<TItem>({
       label={labelLoading ? <Skeleton className="h-4 w-32" /> : text}
       labelTitle={text}
       triggerAriaLabel={triggerAriaLabel}
-      variant={variant}
       size={size}
       disabled={disabled}
       searchValue={searchValue}

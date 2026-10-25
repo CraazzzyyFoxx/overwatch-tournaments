@@ -203,7 +203,7 @@ export function RoomDraftStage({
             disabled={adding}
             onValueChange={(value) => value !== NONE && onAddPlayer(Number(value))}
           >
-            <SelectTrigger aria-label={tDraft("addPlayer")} size="sm" className="w-48 bg-background/50">
+            <SelectTrigger aria-label={tDraft("addPlayer")} size="sm" className="w-48">
               <SelectValue placeholder={tDraft("addPlayer")} />
             </SelectTrigger>
             <SelectContent>

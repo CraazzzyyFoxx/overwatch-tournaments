@@ -40,7 +40,7 @@ export function BanPresetSelect({
   const options = value != null && !presets.includes(value) ? [...presets, value] : presets;
   return (
     <Select value={value ?? NONE} disabled={disabled} onValueChange={(next) => onChange(next === NONE ? null : next)}>
-      <SelectTrigger id={id} aria-label={label} size="sm" className="w-64 bg-background/50">
+      <SelectTrigger id={id} aria-label={label} size="sm" className="w-64">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>

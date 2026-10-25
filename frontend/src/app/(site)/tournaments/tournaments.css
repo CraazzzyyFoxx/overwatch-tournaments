@@ -171,25 +171,13 @@
   }
 }
 
-.aqt-tn .filter-sort {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  background: var(--aqt-overlay-2);
-  border: 1px solid var(--tn-border);
-  color: var(--fg-muted);
-  padding: 7px 12px;
-  border-radius: 8px;
-  cursor: pointer;
-}
-
 /* Phone toolbar: the chips scroll on their own line, search and Columns share
    the next. Every control is 40px; the 32px desktop row is under the touch
    minimum. `> button` is the Columns popover trigger. */
 @media (max-width: 639px) {
   .aqt-tn .filters .aqt-filter-chip,
   .aqt-tn .filters input[type="search"],
-  .aqt-tn .filters .filter-sort,
+  .aqt-tn .filters [role="combobox"],
   .aqt-tn .filters > button {
     height: 40px;
   }

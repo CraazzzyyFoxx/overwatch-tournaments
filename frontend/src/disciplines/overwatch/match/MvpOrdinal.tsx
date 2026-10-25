@@ -45,7 +45,7 @@ export function MvpTooltip({
       <TooltipTrigger asChild>{children}</TooltipTrigger>
       <TooltipContent
         align="start"
-        className="w-60 overflow-hidden border bg-popover p-0 text-popover-foreground shadow-md"
+        className="w-60 overflow-hidden p-0"
       >
         {header ? (
           <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">

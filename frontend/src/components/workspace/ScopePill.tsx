@@ -203,7 +203,7 @@ export function ScopePill() {
           collisionPadding={12}
           aria-label={t("nav.viewingScope")}
           className={cn(
-            "w-[280px] max-w-[calc(100vw-24px)] rounded-xl border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-card-2)] p-1.5 shadow-[0_18px_50px_rgb(0_0_0/0.5)]",
+            "w-[280px] max-w-[calc(100vw-24px)] p-1.5",
             !tenant && showsGame && "sm:w-[540px]"
           )}
         >

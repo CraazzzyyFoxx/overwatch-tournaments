@@ -66,11 +66,11 @@ Arbitrary Tailwind colours need the `color:` hint:
 | `--aqt-bg`             | `hsl(220 21% 5%)`        | page background                                  |
 | `--aqt-bg-2`           | `hsl(220 22% 7%)`        | hero frame, raised page band                     |
 | `--aqt-card`           | `hsl(220 22% 8%)`        | section card                                     |
-| `--aqt-card-2`         | `hsl(222 24% 11%)`       | nested surface, bar track on a card              |
+| `--aqt-card-2`         | `hsl(222 24% 11%)`       | nested surface, bar track on a card, floating panel fill |
 | `--aqt-overlay-1`      | `hsl(0 0% 100% / 0.015)` | group card fill (`.team-card`)                   |
 | `--aqt-overlay-2`      | `hsl(0 0% 100% / 0.025)` | **row hover**, bar track                         |
 | `--aqt-overlay-3`      | `hsl(0 0% 100% / 0.05)`  | pressed / neutral tint, a tonal button at rest   |
-| `--aqt-overlay-4`      | `hsl(0 0% 100% / 0.08)`  | a tonal button under the pointer                 |
+| `--aqt-overlay-4`      | `hsl(0 0% 100% / 0.08)`  | a tonal button under the pointer, the cursor row of a floating panel |
 | `--aqt-overlay-border` | `hsl(0 0% 100% / 0.06)`  | group card border, in-card dividers              |
 | `--aqt-sheen`          | `hsl(0 0% 100% / 0.22)`  | the 1px light along a filled button's top edge   |
 | `--aqt-border`         | `hsl(219 19% 15%)`       | hairline, section card border                    |
@@ -221,6 +221,8 @@ plain fact. That ends here.
 | Page hero (`HeroFrame`)        | 14px (`--aqt-radius`)   | `--aqt-bg-2`, one teal hairline, one corner glow      |
 | Controls, filter chip          | 8px (`--aqt-radius-sm`) | `--aqt-overlay-2`, `--aqt-border-2`                   |
 | Button (`ui/button.tsx`)       | 8px (`rounded-lg`)      | filled: its tone + `--aqt-sheen` top line; `outline`: `--aqt-overlay-3` + `--aqt-border-2` + an `--aqt-overlay-3` top line |
+| Select / combobox trigger      | 8px (`rounded-lg`)      | the `outline` button's surface (`outlineSurfaceClass`); `--aqt-border-3` while its panel is open; public forms take `variant="surface"` |
+| Floating panel (`floatingPanelClass`) | 10px, rows 6px   | `--aqt-card-2` fill, `--aqt-border-2` rim, an `--aqt-overlay-3` top line; every select and combobox list, menu, popover and (at 6px) tooltip |
 | Status pill, `Badge`           | `rounded-md`            | tone tint (`TONE_CLASS`)                              |
 | Bars                           | `rounded-full`          | `--aqt-overlay-2` / `--aqt-card-2` track              |
 
@@ -235,8 +237,13 @@ plain fact. That ends here.
   its own frame (`DataTable framed={false}`, `RankHistory framed={false}`, a
   `LoadErrorNote` for a failed read, never a `PageStateCard`).
 - No shadows on dark surfaces; elevation is fill + border. The one exception
-  is a button's inset 1px top line (`--aqt-sheen` on a filled button,
-  `--aqt-overlay-3` on a tonal one): a lit edge, not a drop shadow.
+  is the inset 1px top line of a button and a floating panel (`--aqt-sheen`
+  on a filled button, `--aqt-overlay-3` on a tonal one and on a panel): a lit
+  edge, not a drop shadow.
+- A floating panel is lighter than whatever it opens over (page, card,
+  dialog). Its rows: the cursor (pointer or arrow keys) is `--aqt-overlay-4`;
+  the chosen value is a teal check (right in a select or combobox, left in a
+  menu's checkbox or radio item), never a fill; a group label is an eyebrow.
 - A button sits above its surface, never below it: its fill is lighter than
   the page, card or dialog it is on. A fill darker than the surface reads as
   a hole, not as something to press.
@@ -283,8 +290,9 @@ the last-resort `global-error`) are listed in the script with their reason.
 | Checkbox / switch / radio   | `ui/checkbox.tsx`, `ui/switch.tsx` (`size="sm"`), `ui/radio-group.tsx` (`RadioGroupItem variant="card"` for option cards) |
 | Colour                      | `ui/color-swatch.tsx` — the one native `<input type="color">`; a blank value paints its fallback, dashed                |
 | File                        | `FileButton` / `useFilePicker` (`ui/file-button.tsx`) — the one hidden `<input type="file">`                            |
-| Select                      | `ui/select.tsx` — never a native `<select>`                                                                             |
+| Select                      | `ui/select.tsx` — never a native `<select>`; its trigger, the `Combobox` trigger and the date picker share the outline surface and a chevron that turns while open (`triggerChevronClass` under a `group/trigger`) |
 | Searchable picker           | `ui/combobox.tsx`; with images or multi-select `ui/searchable-image-select.tsx`; server search `kit/ServerSearchCombobox` |
+| Floating panel              | `floatingPanelClass` (`ui/popover.tsx`), already on `PopoverContent`, `SelectContent`, `DropdownMenuContent`, `ContextMenuContent`, `TooltipContent`; a call site sets width and padding only |
 | Panels of different content | `ui/tabs.tsx` (Radix), `TabsTrigger badge` for a count; `variant="rail"` for a vertical section list beside its panels (the account settings dialog: overlay fill + teal bar on the active row, 44px rows below `md`) |
 | Tabs that are addresses     | `kit/LinkTabs.tsx` (`aria-current="page"`, `level={2}` for sub-tabs, `variant="pill"` for a segmented look)             |
 | View/mode of the same data  | `ui/toggle-group.tsx` pill (`accent` per item; `variant="card"` for option cards); on tournament sections `ViewSegment` (`?view=` / `?tab=`, default never written to the URL) |
@@ -308,7 +316,7 @@ the last-resort `global-error`) are listed in the script with their reason.
 | Eyebrow / uppercase label | `Eyebrow` / `eyebrowClass(tone)` (`ui/eyebrow.tsx`), tone `faint` (default) · `dim` · `muted` |
 | W/L/D square       | `ResTag` (`components/match/cells.tsx`)                                    |
 | MVP placement      | `MvpOrdinal` (`disciplines/overwatch/match/MvpOrdinal.tsx`): gold for 1st only |
-| Platform totals    | `LeadersContent` (`components/site/leaders.tsx`) on `/` and the community page; `HeroStat` figures in the `/statistics` hero (`statistics/_components/OverallFigures.tsx`) |
+| Platform totals    | `LeadersContent` (`components/site/leaders.tsx`) on `/` and the community page; `KpiFigure` from the same file for totals that sit beside another block (the `/get-workspace` community row); `HeroStat` figures in the `/statistics` hero (`statistics/_components/OverallFigures.tsx`) |
 | Markdown           | `components/Markdown.tsx`; editing `components/admin/MarkdownEditor.tsx`   |
 | Spinner (rare)     | `ui/spinner.tsx` — prefer a skeleton                                       |
 
@@ -395,6 +403,7 @@ system.
 ## 10. Motion
 
 - Transitions: colour, border, opacity, `transform` for a chevron. ~150ms.
+- A floating panel fades in and out (~150ms): no zoom, no slide.
 - No entrance animations, no staggered reveals, no perpetual loops — except
   the live pulse (`StatusDot pulse`, `.livePulse`) on something that is live,
   and the settings page change through `kit/SettingsContinuation` (the old
@@ -464,22 +473,42 @@ system.
 
 ## 13. Public marketing pages
 
-`/` and `/get-workspace` keep the dark theme, teal accent, content and section
-order. `SectionStack` is contained at `max-w-7xl` with responsive 56–96px
-section gaps. `HeroFrame variant="plain"` uses `--aqt-bg-2` without the accent
-hairline or corner glow; the home hero adds a near-black `135deg` gradient
-from `--aqt-bg-2` to `--aqt-bg` inside the same 1px frame.
+`/` and `/get-workspace` keep the dark theme and teal accent. `SectionStack` is
+contained at `max-w-7xl` with responsive 56–96px section gaps. `HeroFrame
+variant="plain"` uses `--aqt-bg-2` without the accent hairline or corner glow;
+the home hero adds a near-black `135deg` gradient from `--aqt-bg-2` to
+`--aqt-bg` inside the same 1px frame.
 
-`Showcase` stacks its caption above the real screenshot, caps body copy at
-65ch and fades the bottom from 75%. The community form keeps its name/slug
-contract: the host and `/workspace/` prefix sit in a wrapping URL preview
-below the full-width slug input. Inputs use 16px text, 48px shells, visible
-focus/invalid states. Repeated section eyebrows are omitted.
+`/` is the platform's portal, in this order: hero, the "now" block, the
+community directory, platform totals, the organizer banner. It shows no product
+screenshots: those sell to organizers on `/get-workspace`. With nothing active
+(an announcement or an open registration counts as active) the "now" block is
+titled "Recent tournaments" and its cards drop the status pill, which would say
+"finished" on every one.
 
-`DirectoryRail` uses borderless ghost controls with 20px icons, 1.5px strokes
-and 44px hit targets; desktop arrows sit in reserved gutters, pause/play next
-to pagination; below `md` pagination takes a full row and the controls sit
-under it.
+The directory is a static grid of every public community: four across from
+1100px, two from 640px, below that one row per community with its totals at
+the row's end. It closes with a dashed "Your community here" cell linking to
+`/get-workspace`. `#directory` is its anchor, the footer's "Communities" link.
+
+`/get-workspace`, in order: the hero with the community form, the community row
+(verified communities beside two platform totals; absent when its reads fail),
+the feature tour (one screenshot window under `ui/tabs.tsx` tabs, then a grid of
+what the tabs do not show), the custom-domain walk-through, the facts strip,
+the FAQ, the closing CTA. Screenshots are real production captures under
+`public/showcase/`, one window ratio on every tab so switching never moves the
+page, the bottom fading from 75%. `OrganizerQuotes` is built and not mounted:
+it goes under the community row once there are real quotes with names.
+
+The community form keeps its name/slug contract: the host and `/workspace/`
+prefix sit in a wrapping URL preview below the slug input. What was typed
+before "sign in and create" survives the OAuth round trip in `sessionStorage`.
+Inputs use 16px text, 48px shells, visible focus/invalid states. Repeated
+section eyebrows are omitted.
+
+Share cards: `lib/og/landing.tsx` draws both. `/` names its `og` route from the
+apex metadata only, since an `opengraph-image` file would also cover every
+community host's `/`; `/get-workspace` names its own `og` route.
 
 ## 14. Admin kit
 
@@ -599,6 +628,8 @@ Rules on every admin screen:
 - Raw hex, Tailwind neutrals, `text-[Npx]`, a font size below 12px, a
   tracking other than `tracking-label` on uppercase text.
 - A `text-*`, `font-*` or height override on a control (§3, Control text).
+- A fill, border, radius or shadow on a select trigger or a floating panel at
+  the call site; the primitive owns the surface.
 - Uppercase user content; `font-mono` on UI labels.
 - A "finished/completed" status pill on a list of mostly finished items.
 - Colour as decoration: gradient text, decorative glows, the role spectrum as

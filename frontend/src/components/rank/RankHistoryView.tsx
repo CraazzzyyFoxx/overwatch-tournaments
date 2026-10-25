@@ -24,7 +24,6 @@ import { useLocalStorageState } from "@/hooks/useLocalStorageState";
 import { useUserRankHistory } from "@/hooks/useRankHistory";
 import { useFormatter } from "@/lib/datetime/client";
 import { userQueryKeys } from "@/lib/users/query-keys";
-import { cn } from "@/lib/utils";
 import rankService from "@/services/rank.service";
 import type { NativeTier } from "@/types/discipline.types";
 import type { CurrentRank, RankSeries } from "@/types/rank.types";
@@ -53,8 +52,6 @@ const PALETTE = [
   "hsl(var(--chart-5))",
   "var(--aqt-blue)"
 ];
-
-const TRIGGER_CLASS = "border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-1)]";
 
 /** The queues a collector reports (League's Solo/Duo and Flex); roles name themselves through the game's metadata. */
 const QUEUES = ["solo", "flex"] as const;
@@ -260,7 +257,7 @@ function RankHistoryBody({
       <div className="flex flex-wrap items-center gap-3">
         {canRegroup ? (
           <Select value={groupBy} onValueChange={(value) => setGroupBy(value as GroupBy)}>
-            <SelectTrigger aria-label={t("groupByLabel")} size="sm" className={cn(TRIGGER_CLASS, "w-[130px]")}>
+            <SelectTrigger aria-label={t("groupByLabel")} size="sm" className="w-[130px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -272,7 +269,7 @@ function RankHistoryBody({
 
         {groupBy === "dimension" && accounts.length > 1 ? (
           <Select value={accountId != null ? String(accountId) : undefined} onValueChange={(value) => setAccount(Number(value))}>
-            <SelectTrigger aria-label={t("accountLabel")} size="sm" className={cn(TRIGGER_CLASS, "w-[170px]")}>
+            <SelectTrigger aria-label={t("accountLabel")} size="sm" className="w-[170px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -290,7 +287,7 @@ function RankHistoryBody({
             <SelectTrigger
               aria-label={byRole ? t("roleLabel") : t("queueLabel")}
               size="sm"
-              className={cn(TRIGGER_CLASS, "w-[130px]")}
+              className="w-[130px]"
             >
               <SelectValue />
             </SelectTrigger>
@@ -305,7 +302,7 @@ function RankHistoryBody({
         ) : null}
 
         <Select value={period} onValueChange={(value) => onPeriodChange(value as Period)}>
-          <SelectTrigger aria-label={t("periodLabel")} size="sm" className={cn(TRIGGER_CLASS, "w-[120px]")}>
+          <SelectTrigger aria-label={t("periodLabel")} size="sm" className="w-[120px]">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -319,7 +316,7 @@ function RankHistoryBody({
 
         {platforms.length > 1 && platform ? (
           <Select value={platform} onValueChange={setPlatform}>
-            <SelectTrigger aria-label={t("platformLabel")} size="sm" className={cn(TRIGGER_CLASS, "w-[110px] uppercase")}>
+            <SelectTrigger aria-label={t("platformLabel")} size="sm" className="w-[110px] uppercase">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

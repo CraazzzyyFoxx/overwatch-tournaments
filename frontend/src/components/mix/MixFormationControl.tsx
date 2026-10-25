@@ -45,7 +45,7 @@ export function MixFormationControl({
         disabled={disabled}
         onValueChange={(next) => onChange({ ...value, team_formation: next as MixTeamFormation })}
       >
-        <SelectTrigger id={`${idPrefix}-formation`} aria-label={t("formation")} size="sm" className="w-44 bg-background/50">
+        <SelectTrigger id={`${idPrefix}-formation`} aria-label={t("formation")} size="sm" className="w-44">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>

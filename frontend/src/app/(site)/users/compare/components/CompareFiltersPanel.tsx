@@ -129,7 +129,6 @@ const CompareFiltersPanel = ({
             placeholder={t("users.compare.selectSubjectUser")}
             triggerAriaLabel={t("users.compare.selectedUser")}
             clearLabel={null}
-            variant="toolbar"
             size="sm"
             onSelect={(user) => {
               if (user) updateParams({ user_id: user.id });
@@ -152,7 +151,6 @@ const CompareFiltersPanel = ({
             placeholder={t("users.compare.allPlayersAverage")}
             triggerAriaLabel={t("users.compare.compareAgainst")}
             clearLabel={t("users.compare.compareWithAllAvg")}
-            variant="toolbar"
             size="sm"
             onSelect={(user) =>
               updateParams(

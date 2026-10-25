@@ -70,7 +70,7 @@ export function AccountMenuPanel({
       collisionPadding={12}
       aria-labelledby={nameId}
       className={cn(
-        "max-h-[var(--radix-popover-content-available-height)] w-[340px] max-w-[calc(100vw-24px)] overflow-y-auto rounded-xl border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-card-2)] p-1.5 shadow-[0_18px_50px_rgb(0_0_0/0.5)]",
+        "max-h-[var(--radix-popover-content-available-height)] w-[340px] max-w-[calc(100vw-24px)] overflow-y-auto p-1.5",
         className
       )}
       {...props}

@@ -69,7 +69,7 @@ export default function StatGameLink({
       </PopoverAnchor>
       <PopoverContent
         side="top"
-        className="w-64 overflow-hidden rounded-xl p-0"
+        className="w-64 overflow-hidden p-0"
         animate={false}
         // Focus stays on the link, which goes to the match on Enter; the card only shows where the game was.
         onOpenAutoFocus={(event) => event.preventDefault()}

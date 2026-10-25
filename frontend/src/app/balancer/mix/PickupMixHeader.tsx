@@ -32,7 +32,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
-import { Eyebrow, eyebrowClass } from "@/components/ui/eyebrow";
+import { Eyebrow } from "@/components/ui/eyebrow";
 import { NumberInput } from "@/components/ui/number-input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Slider } from "@/components/ui/slider";
@@ -272,9 +272,7 @@ export function PickupMixHeader({
             <DropdownMenuContent align="end" className="w-56">
               {canWrite && onLobbyCountChange ? (
                 <>
-                  <DropdownMenuLabel className={eyebrowClass()}>
-                    {tl("countLabel")}
-                  </DropdownMenuLabel>
+                  <DropdownMenuLabel>{tl("countLabel")}</DropdownMenuLabel>
                   {/* The slider lives inside a menu that owns the arrow keys
                       and closes on a click: both stay with the control. */}
                   <div

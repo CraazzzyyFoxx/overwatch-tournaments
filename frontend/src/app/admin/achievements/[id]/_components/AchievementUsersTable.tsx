@@ -119,7 +119,6 @@ export function AchievementUsersTable({
                 value={tournamentId}
                 onValueChange={setTournamentId}
                 placeholder={t("detail.allTournaments")}
-                variant="default"
               />
             </div>
           ) : undefined

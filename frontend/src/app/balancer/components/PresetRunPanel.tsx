@@ -128,7 +128,7 @@ export function PresetRunPanel({
       ) : null}
       <div className="min-w-[140px] sm:w-[170px]">
         <Select value={selectedPreset} onValueChange={onSelectPreset}>
-          <SelectTrigger size="sm" className="rounded-lg border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] text-[color:var(--aqt-fg)]">
+          <SelectTrigger size="sm">
             <SelectValue placeholder={t("run.presetPlaceholder")} />
           </SelectTrigger>
           <SelectContent>

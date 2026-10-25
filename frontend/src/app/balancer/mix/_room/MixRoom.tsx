@@ -430,7 +430,7 @@ function CaptainPicker({
       disabled={disabled}
       onValueChange={(value) => value !== NONE && onChange(Number(value))}
     >
-      <SelectTrigger aria-label={label} title={label} size="sm" className="w-full bg-background/50">
+      <SelectTrigger aria-label={label} title={label} size="sm" className="w-full">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>

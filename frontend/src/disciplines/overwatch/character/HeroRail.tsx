@@ -129,7 +129,7 @@ const HeroRail = ({ rows, selectedId, onSelect, metadata }: Props) => {
             <SelectTrigger
               aria-label={t("users.heroes.sortHeroes")}
               size="sm"
-              className="aqt-tnum w-[116px] shrink-0 border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.025)] text-[color:var(--aqt-fg)] shadow-none"
+              className="aqt-tnum w-[116px] shrink-0"
             >
               <SelectValue />
             </SelectTrigger>
