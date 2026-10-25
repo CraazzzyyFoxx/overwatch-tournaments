@@ -294,6 +294,25 @@ def test_unknown_identities_become_virtual_players_without_access_and_concurrent
     run(ingest_database, scenario)
 
 
+def test_one_statement_takes_every_identity_lock_for_the_transaction(ingest_database):
+    async def scenario(env):
+        from src.services.ingest.identity import _lock_identities
+
+        identities = {("battlenet", "zed#3"), ("battlenet", "amy#1"), ("discord", "kim")}
+        async with db(env) as holder, db(env) as probe:
+            await _lock_identities(holder, identities)
+            for provider, normalized in identities:
+                free = await probe.scalar(
+                    sa.text("SELECT pg_try_advisory_xact_lock(hashtext(:key))"),
+                    {"key": f"stats.identity:{provider}:{normalized}"},
+                )
+                assert free is False, (provider, normalized)
+            await holder.rollback()
+            await probe.rollback()
+
+    run(ingest_database, scenario)
+
+
 async def _auth_linked_player(session, handle, tag):
     auth = models.AuthUser(email=f"{tag}@example.com", username=tag, hashed_password=None)
     session.add(auth)

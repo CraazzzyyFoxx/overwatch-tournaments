@@ -125,11 +125,19 @@ async def lookup_identities(
 
 
 async def _lock_identities(session: AsyncSession, identities: Iterable[tuple[str, str]]) -> None:
-    # Sorted, so two documents naming overlapping identities queue instead of deadlocking.
-    for provider, normalized in sorted(identities):
-        await session.execute(
-            sa.text("SELECT pg_advisory_xact_lock(hashtext(:key))"), {"key": f"stats.identity:{provider}:{normalized}"}
-        )
+    # One round trip for the whole roster. Sorted, so two documents naming overlapping identities queue instead of
+    # deadlocking: ``unnest ... WITH ORDINALITY`` scans the array in order and each row takes its lock before the
+    # next, so the acquisition order is the sorted one.
+    keys = [f"stats.identity:{provider}:{normalized}" for provider, normalized in sorted(identities)]
+    if not keys:
+        return
+    await session.execute(
+        sa.text(
+            "SELECT pg_advisory_xact_lock(hashtext(k)) FROM unnest(CAST(:keys AS text[])) WITH ORDINALITY AS t(k, n)"
+            " ORDER BY n"
+        ),
+        {"keys": keys},
+    )
 
 
 async def _user_name(session: AsyncSession, provider: str, display: str, normalized: str) -> str:
