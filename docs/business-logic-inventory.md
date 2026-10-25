@@ -463,7 +463,7 @@ Time-weighted rate rankings reduce the observed rate × playtime products and pl
 
 Effective set = evaluation ∪ grants − revokes (global / tournament / match precedence). Anchored on `workspace_member_id`.
 
-Runner: `parse_complete` inline; `manual` / `rule_version_bump` on an unverified workspace is deferred. Each rule in a savepoint; a lost DB connection aborts the whole run. Empty/disabled tree wipes results. Incomplete division-grid mapping → 409.
+Runner: `parse_complete` inline; `manual` / `rule_version_bump` on an unverified workspace is deferred. Each rule in a savepoint, and each rule's diff committed before the next rule is evaluated (the rule-row lock its write takes never outlives that rule); a lost DB connection aborts the rest of the run and marks it failed, keeping the rules already committed. Empty/disabled tree wipes results. Incomplete division-grid mapping → 409.
 
 ---
 

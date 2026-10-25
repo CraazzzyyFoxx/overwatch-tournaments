@@ -265,6 +265,12 @@ class AchievementEvaluationRunnerService:
             existing_results = await load_existing_results(session, persist_slices)
 
             for rule in rules:
+                # Commit the previous rule's diff before evaluating this one. ``diff_and_apply`` locks the rule
+                # row (``lock_achievement_rules``) until commit: a single commit at the end of the run kept every
+                # rule it had written locked through all the rules after it, so a concurrent run of the same
+                # workspace queued behind those locks past ``lock_timeout``. Each rule's diff stands alone (its
+                # savepoint already discards a failed rule), and the run's final status lands in the last commit.
+                await session.commit()
                 persist_slice = persist_slices[rule.id]
                 rule_existing = existing_results.get(rule.id, {})
                 # The trigger tournament narrows tournament/match-grain rules only.
@@ -452,7 +458,9 @@ async def _mark_run_failed(session: AsyncSession, run: EvaluationRun, exc: BaseE
         session.add(run)
         await session.commit()
     except Exception as bookkeeping_exc:
-        logger.warning(f"Could not persist failed status for evaluation run {run.id}: {bookkeeping_exc!r}")
+        # No ``run.id`` here: a run committed by an earlier rule is expired by the rollback above, and reading it
+        # back would need the very connection that just failed. Both callers log the run id next.
+        logger.warning(f"Could not persist the failed evaluation run status: {bookkeeping_exc!r}")
 
 
 async def _select_rules(

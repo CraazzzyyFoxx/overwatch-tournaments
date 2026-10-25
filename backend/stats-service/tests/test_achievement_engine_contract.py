@@ -319,3 +319,49 @@ class RunnerSliceAndStatusTests(_EngineTestCase):
             self.assertEqual(EvaluationRunStatus.done, run.status)
             evaluated[label] = [slug for slug, _results, _slice in capture.calls]
         self.assertEqual({"none": ["captain"], "empty": [], "explicit": ["off"]}, evaluated)
+
+    async def test_each_rule_is_committed_before_the_next_is_evaluated(self) -> None:
+        # ``diff_and_apply`` locks the rule row until commit. One commit for the whole run kept every rule it wrote
+        # locked through all the rules after it, and a concurrent run of the workspace hit ``lock_timeout``.
+        self.db.rule(1, "played-once", TOURNAMENT_COUNT_RULE, [], grain="user", scope="global", category="overall")
+        self.db.rule(2, "captain", IS_CAPTAIN_RULE, [])
+        self.db.session.commit()
+        events: list[str] = []
+        capture = _CaptureDiffer()
+        commit = self.db.shim.commit
+
+        async def diff(session, rule, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003
+            events.append("diff")
+            return await capture(session, rule, *args, **kwargs)
+
+        async def spy_evaluate(session, tree, context):  # noqa: ANN001
+            events.append("evaluate")
+            return await evaluator.evaluate(session, tree, context)
+
+        async def spy_commit() -> None:
+            events.append("commit")
+            await commit()
+
+        with (
+            patch.object(runner, "diff_and_apply", diff),
+            patch.object(runner, "evaluate", spy_evaluate),
+            patch.object(self.db.shim, "commit", spy_commit),
+        ):
+            run = await runner.run_evaluation(
+                self.db.shim,
+                WORKSPACE_ID,
+                EvaluationRunTrigger.parse_complete,
+                tournament_id=REAL_TOURNAMENT_ID,
+            )
+
+        self.assertEqual(EvaluationRunStatus.done, run.status, run.error_message)
+        self.assertEqual(["played-once", "captain"], [slug for slug, _results, _slice in capture.calls])
+        uncommitted = False
+        for event in events:
+            if event == "evaluate":
+                self.assertFalse(uncommitted, events)
+            elif event == "diff":
+                uncommitted = True
+            else:
+                uncommitted = False
+        self.assertFalse(uncommitted, events)
