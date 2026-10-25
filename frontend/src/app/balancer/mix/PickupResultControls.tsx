@@ -81,7 +81,7 @@ export function PickupResultControls({
     // The middle track matches `VariantView`'s VS divider (`lg:w-16`) so Draw
     // lands on the seam; below `lg` the teams stack but this row stays on one
     // line -- three buttons fit where two rosters do not.
-    <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+    <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3">
       {teams[0] ? teamButton(teams[0]) : <span />}
       {/* Draw: the neutral `subtle` fill, as solid as the two win buttons, so the row reads as one control. */}
       <Button

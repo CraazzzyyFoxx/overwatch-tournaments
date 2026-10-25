@@ -358,7 +358,11 @@ export function MixRoom({ initialGame, lobbyIndex }: Readonly<{ initialGame: Cus
         <section
           aria-label={t(`stage.${shown.phase}`)}
           style={{ viewTransitionName: `mix-stage-${shown.phase}` }}
-          className="col-span-2 row-start-2 min-w-0 lg:col-span-1 lg:col-start-2 lg:row-start-1"
+          className={cn(
+            "col-span-2 row-start-2 flex min-w-0 flex-col gap-3 lg:col-span-1 lg:col-start-2 lg:row-start-1",
+            // The scoreboard reaches the rosters' foot; the other stages keep their own height.
+            (shown.phase === "ready" || shown.phase === "live") && "lg:self-stretch"
+          )}
         >
           {center}
         </section>

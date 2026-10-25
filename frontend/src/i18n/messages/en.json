@@ -8227,11 +8227,9 @@
         "idleViewer": "A host has not formed the teams yet.",
         "draftAgain": "New draft",
         "balanceAgain": "Balance again",
-        "readyTitle": "Teams are set",
-        "readyHost": "Start the match when everyone is in.",
         "readyViewer": "Waiting for a host to start the match.",
-        "liveTitle": "Match in progress",
-        "liveNoMap": "No map was rolled for this match.",
+        "map": "Map",
+        "noMap": "No map picked",
         "liveViewer": "A host records the result."
       },
       "host": {
