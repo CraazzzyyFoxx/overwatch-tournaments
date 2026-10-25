@@ -81,17 +81,35 @@ async def mix_ban_config(session: AsyncSession, encounter: Encounter, kind: Pick
     The frozen copy, not the mix's ``hero_ban_preset``: a header edit after Start -- or a room reset -- keeps the
     preset the match started on. Transient -- never added to the session: the room snapshots the ruleset and the
     pool when it opens, and nothing reads this object again. ``None`` when the match plays without bans.
+
+    The mix's clocks, when set, replace the timer of every step they cover: ``hero_ban_seconds`` a ban's and a
+    protect's, ``hero_pick_seconds`` a pick's; a side pick or an assignment keeps the preset's own. Read as the room
+    opens, like Fearless (:func:`mix_fearless_exclusions`).
     """
     if kind != PickBanKind.HERO:
         return None
-    code = await session.scalar(
-        sa.select(models.CustomGameLobby.live_ban_preset).where(
-            models.CustomGameLobby.live_encounter_id == encounter.id
+    row = (
+        await session.execute(
+            sa.select(
+                models.CustomGameLobby.live_ban_preset,
+                models.CustomGame.hero_ban_seconds,
+                models.CustomGame.hero_pick_seconds,
+            )
+            .join(models.CustomGame, models.CustomGame.id == models.CustomGameLobby.custom_game_id)
+            .where(models.CustomGameLobby.live_encounter_id == encounter.id)
         )
-    )
-    preset = mix_ban_preset(encounter.discipline, code) if code is not None else None
+    ).one_or_none()
+    if row is None or row.live_ban_preset is None:
+        return None
+    preset = mix_ban_preset(encounter.discipline, row.live_ban_preset)
     if preset is None:
         return None
+    clocks = {"ban": row.hero_ban_seconds, "protect": row.hero_ban_seconds, "pick": row.hero_pick_seconds}
+    ruleset = preset.ruleset.to_json()
+    for phase in ruleset["phases"]:
+        for step in phase["steps"]:
+            if clocks.get(step["action"]) is not None:
+                step["timer_seconds"] = clocks[step["action"]]
     heroes = (
         await session.scalars(
             sa.select(models.CatalogEntity.id)
@@ -107,7 +125,7 @@ async def mix_ban_config(session: AsyncSession, encounter: Encounter, kind: Pick
         kind=PickBanKind.HERO,
         mode=MapVetoMode.POOL,
         first_ban_rotation=FirstBanRotation(preset.first_ban_rotation or FirstBanRotation.FIXED.value),
-        ruleset_json=preset.ruleset.to_json(),
+        ruleset_json=ruleset,
         items=[PickBanConfigItem(item_id=hero_id, sort_order=index) for index, hero_id in enumerate(heroes)],
         slots=[],
     )

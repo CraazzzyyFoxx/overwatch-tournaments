@@ -44,10 +44,13 @@ and reads back an `{ok, data, error}` envelope.
 - Running the **Twitch live-status poll tick** and announcing the result to spectators.
 - Owning the **POV VOD chronology**: recording each live participant POV broadcast (never an
   official cast), resolving it to its Twitch VOD, and serving per-VOD chapters — "0:45:10 —
-  Team A vs Team B · Map 2 · King's Row" — cut from the logged map times (or the series
-  start when no map has a trustworthy log time), shifted by the tournament's
-  `pov_stream_delay_s`. Consent is re-applied on every read, with the same rules the poller
-  polls by.
+  Team A vs Team B · Map 2 · King's Row" — shifted by the tournament's `pov_stream_delay_s`.
+  A map starts at its log's own time, else at the time in the log's file name (the host PC's
+  clock; its UTC offset is the one the server-side events agree with: the end of the round's
+  bans in the pre-game room, the map's reported result, the series confirmation, the upload),
+  else at the end of its round's bans. An encounter with no map timed gets one series chapter
+  from the pre-game room's opening (or the last readiness), else the organizer's start. Consent
+  is re-applied on every read, with the same rules the poller polls by.
 
 ## Interface
 
@@ -123,8 +126,9 @@ Postgres writes are `stream.session` and one more: `public.audit_log`, via
 `tournament.tournament` (including `pov_stream_delay_s`), `tournament.tournament_link`,
 `tournament.team`, `tournament.player`, `registration.registration`, `players.user`,
 `players.social_account`, `players.social_account_visibility`, `public.workspace_member`,
-`encounter.encounter`, `encounter.team`, `encounter.game`, `stats.match`,
-`stats.ingest_job`, `catalog.entity`, and `public.settings` for the `stream.collection`
+`encounter.encounter`, `encounter.team`, `encounter.game`, `encounter.room_event`,
+`encounter.pick_ban_session`, `encounter.readiness`, `stats.match`, `stats.ingest_job`,
+`catalog.entity`, and `public.settings` for the `stream.collection`
 config. The boundary rule — read freely through `shared`, write only what your service
 owns — is in [`../shared/README.md`](../shared/README.md); those tables are documented in
 [`../../docs/database_erd.md`](../../docs/database_erd.md) under **stream**, **tournament**,

@@ -189,6 +189,14 @@ export type CustomGameDiscordPost = {
 /** How a mix's lobbies form their teams by default (spec §4.3). */
 export type MixTeamFormation = "balance" | "draft";
 
+/** A header write of the mix's hero room: the preset always, the rest only when sent (an omitted one is unchanged). */
+export type HeroRoomPatch = {
+  hero_ban_preset: string | null;
+  hero_fearless?: boolean;
+  hero_ban_seconds?: number | null;
+  hero_pick_seconds?: number | null;
+};
+
 export type CustomGame = {
   id: number;
   workspace_id: number;
@@ -226,6 +234,9 @@ export type CustomGame = {
   hero_ban_preset: string | null;
   /** Fearless (spec §11.4): a player never picks a hero they played earlier in this mix. */
   hero_fearless: boolean;
+  /** The hero room's clock per ban (and protect) / per pick step in seconds (10..600); null = the preset's own. */
+  hero_ban_seconds: number | null;
+  hero_pick_seconds: number | null;
   /** How the lobbies form teams by default: the balancer, or a captain draft (spec §4.3). */
   team_formation: MixTeamFormation;
   /** A mix draft's pick clock in seconds (10..600). */
@@ -1038,13 +1049,14 @@ export const customGameService = {
   },
 
   /**
-   * The mix's hero room: its ban preset (one of its own game's, or null) and, when given, Fearless; both apply from
-   * the next Start. 422 for another preset code.
+   * The mix's hero room: its ban preset (one of its own game's, or null) and, when given, Fearless and the clocks
+   * (null = the preset's own; an omitted one stays as it is); all apply from the next Start. 422 for another preset
+   * code.
    */
   setBanPreset(
     workspaceId: number,
     gameId: number,
-    patch: { hero_ban_preset: string | null; hero_fearless?: boolean },
+    patch: HeroRoomPatch,
   ): Promise<CustomGame> {
     return apiFetch(`/api/v1/balancer/workspaces/${workspaceId}/custom-games/${gameId}/ban-preset`, {
       skipWorkspace: true,

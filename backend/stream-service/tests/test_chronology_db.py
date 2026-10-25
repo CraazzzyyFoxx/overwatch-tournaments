@@ -20,7 +20,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from shared import models
 from shared.core import enums
 from shared.models.stats.ingest import IngestJobStatus
-from shared.repository import StreamSessionObservation, StreamSessionRepository
+from shared.repository import StreamChronologyRepository, StreamSessionObservation, StreamSessionRepository
+from shared.repository.stream_session import ChronologyPregameRow
 from shared.testing import create_test_async_engine, ensure_test_postgres
 from src.rpc import reads
 from src.services.chronology import stream_chronology_reader
@@ -58,7 +59,6 @@ class ChronologyDbTest(IsolatedAsyncioTestCase):
         await self.session.flush()
 
     async def _seed(self) -> None:
-        s = self.session
         self.ws = models.Workspace(slug=f"chr-{self.tag}", name=f"chr-{self.tag}", disciplines_enabled=[DISCIPLINE])
         await self._add(self.ws)
         self.tournament = models.Tournament(
@@ -110,23 +110,24 @@ class ChronologyDbTest(IsolatedAsyncioTestCase):
                 ended_at=ended,
             )
 
-        # Logged: one valid map, one whose time is the job's creation time, one with none -> map chapters only.
+        # Logged: King's Row has a real log time; Ilios's time is the job's creation (the decoder's fallback) and
+        # its log has no clock in the name, so it falls to the end of round 2's bans; Busan has no log time but a
+        # UTC+3 host's clock in its file name, decided by round 3's bans.
         self.logged = encounter("Alpha vs Bravo", _at(10), _at(70))
-        # No logs: one open series chapter.
+        # No logs: one open series chapter, from the pre-game room's opening rather than the organizer's start.
         self.series = encounter("Bravo vs Alpha", _at(120), None)
         await self._add(self.logged, self.series)
+        seats: dict[tuple[int, int], models.EncounterTeam] = {}
         for enc in (self.logged, self.series):
             for slot, team in enumerate((self.alpha, self.bravo), 1):
-                s.add(
-                    models.EncounterTeam(
-                        encounter_id=enc.id,
-                        tournament_id=self.tournament.id,
-                        slot=slot,
-                        team_id=team.id,
-                        name=team.name,
-                    )
+                seats[enc.id, slot] = models.EncounterTeam(
+                    encounter_id=enc.id,
+                    tournament_id=self.tournament.id,
+                    slot=slot,
+                    team_id=team.id,
+                    name=team.name,
                 )
-        await s.flush()
+        await self._add(*seats.values())
 
         maps = [
             models.CatalogEntity(
@@ -144,8 +145,25 @@ class ChronologyDbTest(IsolatedAsyncioTestCase):
             status=IngestJobStatus.DONE,
             created_at=_at(40),
         )
+        named_job = models.IngestJob(
+            workspace_id=self.ws.id,
+            discipline=DISCIPLINE,
+            source_kind="test",
+            external_id=f"chr-named-{self.tag}",
+            content_hash="1" * 64,
+            raw_ref="test",
+            filename="Log-2026-10-25-21-00-00.txt",
+            status=IngestJobStatus.DONE,
+            created_at=_at(80),
+        )
+        await self._add(*maps, job, named_job)
         games = [models.EncounterGame(encounter_id=self.logged.id, position=position) for position in (1, 2, 3)]
-        await self._add(*maps, job, *games)
+        games[1].map_id = maps[1].id
+        # A cancelled position is history: its round's bans below must not make it a chapter.
+        cancelled = models.EncounterGame(
+            encounter_id=self.logged.id, position=4, state=enums.EncounterGameState.CANCELLED
+        )
+        await self._add(*games, cancelled)
         await self._add(
             *(
                 models.StatsMatch(
@@ -153,13 +171,46 @@ class ChronologyDbTest(IsolatedAsyncioTestCase):
                     discipline=DISCIPLINE,
                     encounter_id=self.logged.id,
                     encounter_game_id=game.id,
-                    ingest_job_id=job.id,
+                    ingest_job_id=ingest.id,
                     map_entity_id=entity.id,
                     played_at=played_at,
                     duration_s=600.0,
                 )
-                for game, entity, played_at in zip(games, maps, (_at(10), _at(40), None), strict=True)
+                for game, entity, ingest, played_at in zip(
+                    games, maps, (job, job, named_job), (_at(10), _at(40), None), strict=True
+                )
             )
+        )
+
+        def event(enc: models.Encounter, action: str, minutes: float, **data: object) -> models.EncounterRoomEvent:
+            return models.EncounterRoomEvent(
+                encounter_id=enc.id, action=action, source="system", kind="map", data=data, created_at=_at(minutes)
+            )
+
+        await self._add(
+            event(self.logged, "step_revealed", 45, step_index=3, round=2),
+            event(self.logged, "step_auto_resolved", 44, step_index=2, round=2),
+            event(self.logged, "step_revealed", 59, step_index=5, round=3),
+            event(self.logged, "step_revealed", 100, step_index=7, round=4),
+            event(self.logged, "acted", 150, step_index=3, round=2),  # not a reveal
+            event(self.logged, "step_revealed", 200, step_index=0, round=None),  # a flat session: no round
+        )
+        await self._add(
+            models.EncounterReadiness(
+                encounter_id=self.series.id, encounter_team_id=seats[self.series.id, 1].id, created_at=_at(110)
+            ),
+            models.EncounterReadiness(
+                encounter_id=self.series.id, encounter_team_id=seats[self.series.id, 2].id, created_at=_at(112)
+            ),
+            models.PickBanSession(
+                encounter_id=self.series.id,
+                kind=enums.PickBanKind.MAP,
+                pool_json={},
+                seed_source=enums.VetoSeedSource.BRACKET_SLOT,
+                resolved_sequence_json=[],
+                ruleset_json={},
+                started_at=_at(115),
+            ),
         )
 
     async def _record(self, key: str, stream_id: str, started: datetime, seen: datetime) -> None:
@@ -214,6 +265,17 @@ class ChronologyDbTest(IsolatedAsyncioTestCase):
         )
         self.assertFalse({ids["s-ann"], ids["s-open"]} & {row.id for row in pending})
 
+        chronology = StreamChronologyRepository()
+        # The room journal's rounds: the last reveal per round, a round-less (flat) reveal and a non-reveal ignored.
+        self.assertEqual(
+            sorted(await chronology.round_ends(self.session, [self.logged.id])),
+            [(self.logged.id, 2, _at(45)), (self.logged.id, 3, _at(59)), (self.logged.id, 4, _at(100))],
+        )
+        self.assertEqual(
+            await chronology.pregame_starts(self.session, [self.series.id]),
+            [ChronologyPregameRow(self.series.id, _at(115), _at(112))],
+        )
+
         consenting = AsyncMock(
             return_value={
                 self.tournament.id: [
@@ -234,18 +296,24 @@ class ChronologyDbTest(IsolatedAsyncioTestCase):
         def player(user: models.User, team: models.Team) -> dict:
             return {"id": user.id, "name": user.name, "avatar_url": None, "team": {"id": team.id, "name": team.name}}
 
-        def chapter(enc: models.Encounter, offset_s: int, *, position: int | None = None) -> dict:
+        def chapter(enc: models.Encounter, offset_s: int, *, position: int | None = None, name: str = "") -> dict:
             return {
                 "encounter_id": enc.id,
                 "encounter_name": enc.name,
                 "kind": "series" if position is None else "map",
                 "map_position": position,
-                "map_name": None if position is None else f"kings {self.tag}",
+                "map_name": None if position is None else f"{name} {self.tag}",
                 "offset_s": offset_s,
             }
 
-        # Delay 60 s. Ann's window opens at T0 - 1 min: King's Row (T0 + 10 min) at 660 s, the open series
-        # (T0 + 2 h) at 7260 s; Ilios's time is the job's creation time and Busan has none, so neither is a chapter.
+        # Delay 60 s, so Ann's window opens at T0 - 1 min. King's Row by its log time (T0 + 10 min); Ilios at round
+        # 2's last reveal (T0 + 45), named by its game; Busan's 21:00 on a UTC+3 host is T0 + 60, a minute after
+        # round 3's bans; the series at the room's opening (T0 + 115), not the organizer's T0 + 120.
+        logged = [
+            chapter(self.logged, 660, position=1, name="kings"),
+            chapter(self.logged, 2760, position=2, name="ilios"),
+            chapter(self.logged, 3660, position=3, name="busan"),
+        ]
         ann_vod = {
             "vod_id": "900",
             "url": "https://www.twitch.tv/videos/900",
@@ -253,9 +321,13 @@ class ChronologyDbTest(IsolatedAsyncioTestCase):
             "started_at": T0,
             "ended_at": _at(180),
             "player": player(ann, self.alpha),
-            "chapters": [chapter(self.logged, 660, position=1), chapter(self.series, 7260)],
+            "chapters": [*logged, chapter(self.series, 6960)],
         }
-        # Bob's window opens at T0 + 29 min, after King's Row ended: only the series, at 5460 s.
+        # Bob's window opens at T0 + 29 min, after King's Row ended.
+        bob_logged = [
+            chapter(self.logged, 960, position=2, name="ilios"),
+            chapter(self.logged, 1860, position=3, name="busan"),
+        ]
         bob_vod = {
             "vod_id": "901",
             "url": "https://www.twitch.tv/videos/901",
@@ -263,15 +335,22 @@ class ChronologyDbTest(IsolatedAsyncioTestCase):
             "started_at": _at(30),
             "ended_at": _at(180),
             "player": player(bob, self.bravo),
-            "chapters": [chapter(self.series, 5460)],
+            "chapters": [*bob_logged, chapter(self.series, 5160)],
         }
-        # Vic is vetoed, the gone VOD is hidden, the unresolved broadcast has no VOD. Newest first.
+        # Vic is vetoed, the gone VOD is hidden, the unresolved broadcast has no VOD; the cancelled position 4 is
+        # no chapter despite its round. Newest first.
         self.assertEqual(tournament.model_dump(), {"vods": [bob_vod, ann_vod]})
-        self.assertEqual(
-            first.model_dump(), {"vods": [{**ann_vod, "chapters": [chapter(self.logged, 660, position=1)]}]}
-        )
         # By team name: Alpha before Bravo.
         self.assertEqual(
+            first.model_dump(),
+            {"vods": [{**ann_vod, "chapters": logged}, {**bob_vod, "chapters": bob_logged}]},
+        )
+        self.assertEqual(
             second.model_dump(),
-            {"vods": [{**ann_vod, "chapters": [chapter(self.series, 7260)]}, bob_vod]},
+            {
+                "vods": [
+                    {**ann_vod, "chapters": [chapter(self.series, 6960)]},
+                    {**bob_vod, "chapters": [chapter(self.series, 5160)]},
+                ]
+            },
         )

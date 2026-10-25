@@ -9,6 +9,7 @@ import { PerformanceBadge } from "@/components/PerformanceBadge";
 import { CatalogEntityStrip } from "@/components/catalog/CatalogEntityImage";
 import { TeamLogo } from "@/components/TeamName";
 import { tint } from "@/lib/colors";
+import { MvpTooltip } from "./MvpOrdinal";
 import {
   STAT_META,
   GROUP_COLOR,
@@ -61,7 +62,6 @@ const StatCell = ({ name, value, max }: { name: LogStatsName; value: number; max
  */
 const TeamTable = ({ team, isHome, matchRound, columns, columnMax }: TeamTableProps) => {
   const t = useTranslations<never>();
-  const format = useFormatter();
   const teamAccent = isHome ? "var(--aqt-teal)" : "var(--aqt-rose)";
 
   const players = activePlayers(team, matchRound);
@@ -107,13 +107,15 @@ const TeamTable = ({ team, isHome, matchRound, columns, columnMax }: TeamTablePr
       </TableRow>
       {players.map((player) => {
         const heroes = player.heroes[matchRound] ?? [];
+        const placement = resolveMatchMvpPlacement(player, matchRound);
+        const mvp = <PerformanceBadge performance={placement} />;
         return (
           <TableRow
             key={player.workspace_member_id}
             className="hover:bg-[color:var(--aqt-overlay-1)]"
           >
             <TableCell
-              className="flex flex-row items-center gap-2 min-w-[220px] sticky left-0 z-10"
+              className="min-w-[220px] sticky left-0 z-10"
               style={{
                 background: `linear-gradient(to right, color-mix(in srgb, ${teamAccent} 22%, var(--aqt-card)), var(--aqt-card) 60%)`
               }}
@@ -130,16 +132,13 @@ const TeamTable = ({ team, isHome, matchRound, columns, columnMax }: TeamTablePr
               </div>
             </TableCell>
             <TableCell className="text-center">
-              <div className="flex flex-col items-center gap-1">
-                <span className="aqt-tnum text-ui font-bold leading-none text-[color:var(--aqt-teal)]">
-                  {formatStat(
-                    LogStatsName.ImpactPoints,
-                    player.stats[matchRound]?.impact_points,
-                    format
-                  )}
-                </span>
-                <PerformanceBadge performance={resolveMatchMvpPlacement(player, matchRound)} />
-              </div>
+              {placement == null ? (
+                mvp
+              ) : (
+                <MvpTooltip facts={player.stats[matchRound]}>
+                  <span className="inline-flex cursor-default">{mvp}</span>
+                </MvpTooltip>
+              )}
             </TableCell>
             {columns.map((name) => (
               <TableCell key={name} className="text-center">

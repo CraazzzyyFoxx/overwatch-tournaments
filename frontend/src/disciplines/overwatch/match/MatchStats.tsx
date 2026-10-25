@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/card";
 import { Eyebrow } from "@/components/ui/eyebrow";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import {
   Select,
   SelectContent,
@@ -94,22 +95,25 @@ const MatchStatsView = ({ match, home, away }: MatchStatsViewProps) => {
   const tables = (
     <Card variant="flat" className="overflow-hidden">
       <div className="relative w-full overflow-auto">
-        <table className="w-full caption-bottom text-sm">
-          <TeamTable
-            team={home}
-            isHome={true}
-            matchRound={activeRound}
-            columns={columns}
-            columnMax={columnMax}
-          />
-          <TeamTable
-            team={away}
-            isHome={false}
-            matchRound={activeRound}
-            columns={columns}
-            columnMax={columnMax}
-          />
-        </table>
+        {/* The rating column's MVP cards: one provider, so moving between badges skips the open delay. */}
+        <TooltipProvider delayDuration={150}>
+          <table className="w-full caption-bottom text-sm">
+            <TeamTable
+              team={home}
+              isHome={true}
+              matchRound={activeRound}
+              columns={columns}
+              columnMax={columnMax}
+            />
+            <TeamTable
+              team={away}
+              isHome={false}
+              matchRound={activeRound}
+              columns={columns}
+              columnMax={columnMax}
+            />
+          </table>
+        </TooltipProvider>
       </div>
     </Card>
   );

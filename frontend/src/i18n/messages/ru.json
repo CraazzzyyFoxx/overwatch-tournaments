@@ -4091,7 +4091,12 @@
     "mixBans": {
       "none": "Без банов",
       "label": "Баны героев",
-      "fearless": "Fearless"
+      "fearless": "Fearless",
+      "banSeconds": "Время на бан, секунд",
+      "pickSeconds": "Время на пик, секунд",
+      "clocksHint": "На один ход; при пике всех сразу — на весь пик. Пусто — как в пресете.",
+      "banClock": "бан {seconds} с",
+      "pickClock": "пик {seconds} с"
     },
     "room": {
       "playerHeroes": {
@@ -4964,7 +4969,9 @@
         "valorant_vct_bo1": "VCT Bo1: шесть банов, сторона, десайдер",
         "lol_draft": "Драфт: баны и пики по позициям",
         "lol_captains": "Драфт: капитаны выбирают, затем раздают",
-        "deadlock_bans_pick": "По два бана, затем пик каждого"
+        "deadlock_bans_pick": "По два бана, затем все пикают сразу",
+        "deadlock_bans_pick_turns": "По два бана, затем пики по очереди",
+        "deadlock_two_phase_draft": "Бан, три пика, бан, три пика"
       },
       "preview": {
         "title": "По всей серии",

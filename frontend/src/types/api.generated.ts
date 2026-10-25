@@ -3396,6 +3396,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/streams/encounter/{encounter_id}/vods": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get encounter POV VODs
+         * @description Permission: public; no authentication required (identity is optional and only used for visibility). The tournament POV VOD list narrowed to one encounter: only VODs that show it, each with only that encounter's chapters, ordered by team name, player name and broadcast start, so both teams' perspectives of the match sit side by side. An unknown encounter answers 404, as does one whose tournament is hidden from the viewer; a mix encounter, which belongs to no tournament, answers an empty list.
+         *
+         *     RPC subject: `rpc.stream.encounter_vods`
+         */
+        get: operations["get__api_v1_streams_encounter__encounter_id__vods"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/streams/tournament/{tournament_id}": {
         parameters: {
             query?: never;
@@ -3412,6 +3434,28 @@ export interface paths {
          *     RPC subject: `rpc.stream.tournament_streams`
          */
         get: operations["get__api_v1_streams_tournament__tournament_id_"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/streams/tournament/{tournament_id}/vods": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get tournament POV VODs
+         * @description Permission: public; no authentication required (identity is optional and only used for visibility). Returns the past Twitch broadcasts (VODs) of the tournament's participants' own POV streams, newest first, each with its chapters: the matches of the streamer's team that the broadcast shows and how many seconds into the VOD each starts, the tournament's stream delay already applied. A map chapter starts at the match log's own time, else at the time in the log's file name (the host PC's clock, its UTC offset chosen from the pre-game room and the reported results), else at the moment the pre-game room finished that map's bans. An encounter with no map timed gets one series chapter, from the pre-game room's opening or the organizer's start; a VOD with no chapter is not listed. Only broadcasts the poller saw live are known, a VOD Twitch no longer has is omitted, and a player who no longer consents to being broadcast disappears from past broadcasts too. Official casts are not included. A hidden tournament answers 404 for an ineligible viewer.
+         *
+         *     RPC subject: `rpc.stream.tournament_vods`
+         */
+        get: operations["get__api_v1_streams_tournament__tournament_id__vods"];
         put?: never;
         post?: never;
         delete?: never;
@@ -9821,7 +9865,7 @@ export interface paths {
         };
         /**
          * Get custom game
-         * @description Permission: public; no authentication required. Returns one mix with its full lineup: each seat's participation state, role order, the ranks the balancer would use and which layer each came from. Resolves ownership from the mix id; an optional workspace_id restricts the read and returns 404 if the mix belongs to another workspace. It carries the mix's hero_ban_preset (null = no bans). It carries hero_fearless (spec §11.4). Each lobby carries state (idle | ready | pregame | live), live_seats (the live match's participations {id, slot, name}) and opener_index (the lineup team that bans first in the next match, null without bans). A lobby's `state` reads `draft_setup` / `draft_live` while its draft runs, with `draft_session_id`; a drafted lineup's document carries `source: "draft"`. A player in a drafting lobby's pool reads that lobby as `current_lobby`; an unpicked player who stepped away leaves the pool.
+         * @description Permission: public; no authentication required. Returns one mix with its full lineup: each seat's participation state, role order, the ranks the balancer would use and which layer each came from. Resolves ownership from the mix id; an optional workspace_id restricts the read and returns 404 if the mix belongs to another workspace. It carries the mix's hero_ban_preset (null = no bans). It carries hero_fearless (spec §11.4), and hero_ban_seconds / hero_pick_seconds (the hero room's clock per ban / per pick step in seconds; null = the preset's own). Each lobby carries state (idle | ready | pregame | live), live_seats (the live match's participations {id, slot, name}) and opener_index (the lineup team that bans first in the next match, null without bans). A lobby's `state` reads `draft_setup` / `draft_live` while its draft runs, with `draft_session_id`; a drafted lineup's document carries `source: "draft"`. A player in a drafting lobby's pool reads that lobby as `current_lobby`; an unpicked player who stepped away leaves the pool.
          *
          *     RPC subject: `rpc.balancer.custom.get`
          */
@@ -10088,7 +10132,7 @@ export interface paths {
         get?: never;
         /**
          * Set custom game ban preset
-         * @description Permission: workspace membership plus being the mix's host or co-host (or a superuser). Sets the hero ban preset the lobbies' next Start opens a room on -- a hero preset of the mix's own game that bans no player on map 1 (deadlock_hero_bans, deadlock_bans_pick, lol_side_selection, lol_draft, lol_captains, the Overwatch hero presets) -- or null for no bans, and returns the refreshed mix. A live match keeps the room it started with. 422 unknown_ban_preset for any other code. hero_fearless, when sent, turns Fearless on or off for the next room: a player cannot pick a hero they were recorded on earlier in the mix.
+         * @description Permission: workspace membership plus being the mix's host or co-host (or a superuser). Sets the hero ban preset the lobbies' next Start opens a room on -- a hero preset of the mix's own game that bans no player on map 1 (deadlock_hero_bans, deadlock_bans_pick, deadlock_bans_pick_turns, deadlock_two_phase_draft, lol_side_selection, lol_draft, lol_captains, the Overwatch hero presets) -- or null for no bans, and returns the refreshed mix. A live match keeps the room it started with. 422 unknown_ban_preset for any other code. hero_fearless, when sent, turns Fearless on or off for the next room: a player cannot pick a hero they were recorded on earlier in the mix. hero_ban_seconds / hero_pick_seconds, when sent, set the next room's clock in seconds (10..600; null = the preset's own) for every ban and protect step / every pick step -- an all-at-once pick is one step, so its clock is the whole pick's; a side pick or an assignment keeps the preset's clock.
          *
          *     RPC subject: `rpc.balancer.custom.set_ban_preset`
          */
@@ -18125,6 +18169,33 @@ export interface components {
             workspace_id: number;
         };
         /**
+         * StreamChapterRead
+         * @description One match inside a POV VOD, and where it starts.
+         */
+        "stream.StreamChapterRead": {
+            /** Encounter Id */
+            encounter_id: number;
+            /** Encounter Name */
+            encounter_name: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: StreamStreamChapterReadKind;
+            /**
+             * Map Name
+             * @default null
+             */
+            map_name: string | null;
+            /**
+             * Map Position
+             * @default null
+             */
+            map_position: number | null;
+            /** Offset S */
+            offset_s: number;
+        };
+        /**
          * StreamEntryRead
          * @description One channel in the tournament's stream block.
          */
@@ -18194,6 +18265,39 @@ export interface components {
             id: number;
             /** Name */
             name: string;
+        };
+        /**
+         * StreamVodRead
+         * @description One participant's past (or still running) POV broadcast with its chapters.
+         */
+        "stream.StreamVodRead": {
+            /** Channel */
+            channel: string;
+            /** Chapters */
+            chapters: components["schemas"]["stream.StreamChapterRead"][];
+            /**
+             * Ended At
+             * Format: date-time
+             */
+            ended_at: string;
+            player: components["schemas"]["stream.StreamPlayerRead"];
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /** Url */
+            url: string;
+            /** Vod Id */
+            vod_id: string;
+        };
+        /**
+         * StreamVodsRead
+         * @description Body of both chronology reads. Only VODs with at least one chapter are listed.
+         */
+        "stream.StreamVodsRead": {
+            /** Vods */
+            vods: components["schemas"]["stream.StreamVodRead"][];
         };
         /**
          * TournamentStreamsRead
@@ -21402,6 +21506,11 @@ export interface components {
              */
             phase_schedule: components["schemas"]["tournament.TournamentPhaseScheduleRead"][];
             /**
+             * Pov Stream Delay S
+             * @default 0
+             */
+            pov_stream_delay_s: number;
+            /**
              * Registrations Count
              * @default null
              */
@@ -23229,16 +23338,27 @@ export interface components {
         };
         /**
          * CustomGameBanPresetPatch
-         * @description The mix's hero room: its ban preset (``null`` turns bans off) and, when sent, Fearless (spec §11.4).
+         * @description The mix's hero room: its ban preset (``null`` turns bans off) and, when sent, Fearless (spec §11.4) and the
+         *     clocks. The clocks tell "omitted" (unchanged) from ``null`` (the preset's own) by ``model_fields_set``.
          */
         "balancer.CustomGameBanPresetPatch": {
             /** Hero Ban Preset */
             hero_ban_preset: string | null;
             /**
+             * Hero Ban Seconds
+             * @default null
+             */
+            hero_ban_seconds: number | null;
+            /**
              * Hero Fearless
              * @default null
              */
             hero_fearless: boolean | null;
+            /**
+             * Hero Pick Seconds
+             * @default null
+             */
+            hero_pick_seconds: number | null;
         };
         /**
          * CustomGameCaptainPatch
@@ -31128,6 +31248,11 @@ export interface components {
              * @default null
              */
             name: string | null;
+            /**
+             * Pov Stream Delay S
+             * @default null
+             */
+            pov_stream_delay_s: number | null;
             /**
              * Rules
              * @default null
@@ -44032,6 +44157,66 @@ export interface operations {
             };
         };
     };
+    get__api_v1_streams_encounter__encounter_id__vods: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                encounter_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["stream.StreamVodsRead"];
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     get__api_v1_streams_tournament__tournament_id_: {
         parameters: {
             query?: never;
@@ -44050,6 +44235,66 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["stream.TournamentStreamsRead"];
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get__api_v1_streams_tournament__tournament_id__vods: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["stream.StreamVodsRead"];
                 };
             };
             /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
@@ -81146,6 +81391,10 @@ export enum StatsUserCompareMetricBetter_worseAnyOf0 {
     better = "better",
     worse = "worse",
     equal = "equal"
+}
+export enum StreamStreamChapterReadKind {
+    map = "map",
+    series = "series"
 }
 export enum StreamStreamEntryReadPlatform {
     twitch = "twitch",

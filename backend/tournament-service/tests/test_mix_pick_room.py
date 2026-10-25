@@ -149,6 +149,58 @@ class MixPickRoomTests(MixPickRoomCase):
         self.assertEqual(enums.MapVetoSessionStatus.COMPLETED, (await self.hero_session()).status)
 
 
+class MixTurnPickTests(MixPickRoomCase):
+    """``deadlock_bans_pick_turns`` on the host's clocks: the four bans, then one player at a time in snake order."""
+
+    ban_preset = "deadlock_bans_pick_turns"
+
+    async def asyncSetUp(self) -> None:
+        await super().asyncSetUp()
+        async with self.Session() as s:
+            mix = await s.get_one(models.CustomGame, self.mix_id)
+            mix.hero_ban_seconds, mix.hero_pick_seconds = 20, 45
+            await s.commit()
+
+    async def test_the_players_pick_one_at_a_time_in_snake_order_on_the_hosts_clocks(self) -> None:
+        await self.ban_through()
+        seat = await self.member_seats()
+
+        self.assertEqual([20] * 4 + [45] * 12, [step["timer_seconds"] for step in (await self.state())["sequence"]])
+        # Two a side: A-BB-A seats everyone, and a team out of players owes its later turns nothing.
+        turns = ("m0", "m2", "m3", "m1")
+        for hero, who in zip(self.picks, turns, strict=False):
+            self.assertEqual([seat[who]], (await self.state())["acting_member_ids"])
+            await self.pick(who, seat[who], hero)
+
+        self.assertEqual(
+            {hero: seat[who] for hero, who in zip(self.picks, turns, strict=False)}, await self.picked_for()
+        )
+        self.assertEqual(enums.MapVetoSessionStatus.COMPLETED, (await self.hero_session()).status)
+
+
+class MixTwoPhaseDraftTests(MixPickRoomCase):
+    """``deadlock_two_phase_draft``: a ban each, the first picks in turn, a ban each, the rest."""
+
+    ban_preset = "deadlock_two_phase_draft"
+
+    async def test_the_second_bans_wait_for_the_first_picks_and_open_on_the_team_that_picked_second(self) -> None:
+        await self.open_room()
+        for who, hero in zip(("p0", "p2"), self.heroes, strict=False):
+            self.assertTrue((await self.captain_ban(who, hero))["ok"])
+        seat = await self.member_seats()
+        # Two a side: the first half's A-BB-A seats everyone, and its last two turns are owed by nobody.
+        for hero, who in zip(self.picks, ("m0", "m2", "m3", "m1"), strict=False):
+            self.assertEqual([seat[who]], (await self.state())["acting_member_ids"])
+            await self.pick(who, seat[who], hero)
+
+        state = await self.state()
+        self.assertEqual(("ban", [self.seats[1]]), (state["expected_action"], state["acting_team_ids"]))
+        self.assertTrue((await self.captain_ban("p2", self.heroes[2]))["ok"])
+        self.assertTrue((await self.captain_ban("p0", self.heroes[3]))["ok"])
+
+        self.assertEqual(enums.MapVetoSessionStatus.COMPLETED, (await self.hero_session()).status)
+
+
 class MixFearlessTests(MixPickRoomCase):
     async def asyncSetUp(self) -> None:
         await super().asyncSetUp()

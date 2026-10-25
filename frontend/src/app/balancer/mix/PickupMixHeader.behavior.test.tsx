@@ -57,12 +57,13 @@ vi.mock("next-intl", () => ({
 }));
 // The server's catalog for the mix's game, with the `mix_eligible` flag it computes.
 vi.mock("@/services/pickBan.service", () => {
-  const preset = (id: string, kind: "hero" | "map", mix_eligible: boolean) => ({
+  const step = (action: string, timer_seconds: number | null = null) => ({ action, timer_seconds });
+  const preset = (id: string, kind: "hero" | "map", mix_eligible: boolean, steps: unknown[] = []) => ({
     id,
     kind,
     modes: ["pool"],
     first_ban_rotation: null,
-    ruleset: { version: 2, timer_seconds: null, on_timeout: "random_fill", phases: [] },
+    ruleset: { version: 2, timer_seconds: null, on_timeout: "random_fill", phases: steps.length ? [{ steps }] : [] },
     mix_eligible
   });
   return {
@@ -72,9 +73,11 @@ vi.mock("@/services/pickBan.service", () => {
         constraints: [],
         groups: { hero: [], map: [] },
         presets: [
-          preset("hero_classic", "hero", true),
+          preset("hero_classic", "hero", true, [step("ban")]),
           preset("hero_targeted", "hero", false),
           preset("hero_anti_one_trick", "hero", true),
+          // Bans on the ruleset's clock (none), then a pick on its own minute.
+          preset("bans_pick", "hero", true, [step("ban"), step("pick", 60)]),
           preset("map_bracket", "map", false)
         ]
       })
@@ -152,6 +155,7 @@ type MountProps = {
   canDelete?: boolean;
   showsRoles?: boolean;
   onSetFearless?: (fearless: boolean) => void;
+  onSetHeroClocks?: (clocks: { hero_ban_seconds?: number | null; hero_pick_seconds?: number | null }) => void;
 };
 
 function header(currentGame: CustomGame | undefined, props: MountProps, client: QueryClient) {
@@ -170,6 +174,7 @@ function header(currentGame: CustomGame | undefined, props: MountProps, client: 
         onSetSelfService={onSetSelfService}
         onSetBanPreset={onSetBanPreset}
         onSetFearless={props.onSetFearless}
+        onSetHeroClocks={props.onSetHeroClocks}
         onPostSignup={onPostSignup}
         settingLobbyCount={false}
         onLobbyCountChange={onLobbyCountChange}
@@ -404,6 +409,20 @@ async function openRules(scope: ParentNode) {
   return document;
 }
 
+/** Types into one of the hero room's clocks and leaves the field, the way a host commits one. */
+async function leaveClock(field: HTMLInputElement | null, value: string) {
+  if (!field) throw new Error("Expected a clock field");
+  await act(async () => {
+    field.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(field, value);
+    field.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await act(async () => {
+    field.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
+    await tick();
+  });
+}
+
 describe("PickupMixHeader hero bans", () => {
   it("names the mix's ban preset to a viewer, with no control to change it", async () => {
     const scope = await mount(game({ hero_ban_preset: "hero_classic" }), { canWrite: false });
@@ -436,7 +455,8 @@ describe("PickupMixHeader hero bans", () => {
     expect([...document.querySelectorAll('[role="option"]')].map((node) => node.textContent?.trim())).toEqual([
       "none",
       "hero_classic",
-      "hero_anti_one_trick"
+      "hero_anti_one_trick",
+      "bans_pick"
     ]);
   });
 
@@ -463,6 +483,35 @@ describe("PickupMixHeader hero bans", () => {
 
     expect(scope.textContent).toContain("fearless");
     expect(scope.querySelector('[role="switch"][aria-label="fearless"]')).toBeNull();
+  });
+
+  it("gives a host the clocks of the steps the preset takes, each written once when its field is left", async () => {
+    const onSetHeroClocks = vi.fn();
+    const scope = await mount(game({ hero_ban_preset: "bans_pick", hero_ban_seconds: 20, hero_pick_seconds: null }), {
+      onSetHeroClocks
+    });
+    // Only the host's own clock reads in the rules; the pick runs on the preset's.
+    expect(scope.querySelector('[aria-label^="rulesTrigger"]')?.textContent).toContain(
+      "bans_pick · formationBalance · banClock(20)"
+    );
+    const popover = await openRules(scope);
+    const ban = popover.querySelector<HTMLInputElement>("#mix-header-ban-seconds");
+    const pick = popover.querySelector<HTMLInputElement>("#mix-header-pick-seconds");
+    expect([ban?.value, pick?.value, pick?.placeholder]).toEqual(["20", "", "60"]);
+
+    await leaveClock(ban, "20");
+    await leaveClock(pick, "45");
+    await leaveClock(ban, "");
+
+    // An untouched field writes nothing; an emptied one hands its clock back to the preset.
+    expect(onSetHeroClocks.mock.calls).toEqual([[{ hero_pick_seconds: 45 }], [{ hero_ban_seconds: null }]]);
+  });
+
+  it("offers no pick clock over a preset that only bans", async () => {
+    const popover = await openRules(await mount(game({ hero_ban_preset: "hero_classic" }), { onSetHeroClocks: vi.fn() }));
+
+    expect(popover.querySelector("#mix-header-ban-seconds")).not.toBeNull();
+    expect(popover.querySelector("#mix-header-pick-seconds")).toBeNull();
   });
 });
 
