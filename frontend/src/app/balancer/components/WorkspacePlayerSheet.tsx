@@ -139,7 +139,7 @@ export function WorkspacePlayerSheet({
                   {t("liveRank", { game: nativeRankName })}
                 </Label>
                 <div className="rounded-lg border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-2)] p-2.5">
-                  <RankHistory battleTag={member.identity.handle} discipline={discipline} />
+                  <RankHistory userId={member.player_id} discipline={discipline} />
                 </div>
               </section>
             ) : null}

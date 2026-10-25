@@ -19,7 +19,9 @@ import userService from "@/services/user.service";
 /**
  * The player is identified by exactly one of these. `userId` is the cheap path;
  * `battleTag` costs a lookup, so callers that already hold the id pass that
- * instead. Either may be nullish — that renders the "no linked profile" state.
+ * instead. The lookup is the profile-slug read: it finds canonical names and
+ * `#` handles, never a Steam account id (Deadlock). Either may be nullish — that
+ * renders the "no linked profile" state.
  */
 type RankHistoryTarget =
   | { userId: number | null | undefined; battleTag?: never }
