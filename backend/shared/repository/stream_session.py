@@ -19,10 +19,14 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
+from shared.core import enums
 
 __all__ = (
     "ChronologyEncounterRow",
+    "ChronologyGameRow",
     "ChronologyMapRow",
+    "ChronologyPregameRow",
+    "ChronologyRoundEndRow",
     "EncounterOwnerRow",
     "PendingVodRow",
     "ResolvedVodRow",
@@ -80,16 +84,45 @@ class ChronologyEncounterRow(NamedTuple):
     name: str
     started_at: datetime | None
     ended_at: datetime | None
+    confirmed_at: datetime | None
 
 
 class ChronologyMapRow(NamedTuple):
-    """One logged map with a trustworthy start time."""
+    """One logged map, as observed: whether its times are trustworthy is the reader's call."""
 
     encounter_id: int
-    played_at: datetime
-    duration_s: float | None
     map_position: int | None
     map_name: str
+    played_at: datetime | None
+    duration_s: float | None
+    #: The ingest job's creation — what the decoder writes as ``played_at`` when the log had no usable timestamp.
+    uploaded_at: datetime | None
+    filename: str | None
+
+
+class ChronologyGameRow(NamedTuple):
+    """One live (not cancelled) series position: its decided map and when its result was accepted."""
+
+    encounter_id: int
+    position: int
+    map_name: str | None
+    confirmed_at: datetime | None
+
+
+class ChronologyRoundEndRow(NamedTuple):
+    """When the pre-game room revealed the last ban of a round (any pick-ban kind)."""
+
+    encounter_id: int
+    round: int
+    ended_at: datetime
+
+
+class ChronologyPregameRow(NamedTuple):
+    """The pre-game room's opening (earliest pick-ban session) and the last readiness confirmation."""
+
+    encounter_id: int
+    room_opened_at: datetime | None
+    last_ready_at: datetime | None
 
 
 class StreamSessionRepository:
@@ -222,7 +255,14 @@ class StreamChronologyRepository:
             return []
         encounter, seat = models.Encounter, models.EncounterTeam
         stmt = (
-            sa.select(seat.team_id, encounter.id, encounter.name, encounter.started_at, encounter.ended_at)
+            sa.select(
+                seat.team_id,
+                encounter.id,
+                encounter.name,
+                encounter.started_at,
+                encounter.ended_at,
+                encounter.confirmed_at,
+            )
             .select_from(seat)
             .join(encounter, encounter.id == seat.encounter_id)
             .where(
@@ -236,25 +276,95 @@ class StreamChronologyRepository:
         return [ChronologyEncounterRow(*values) for values in (await session.execute(stmt)).all()]
 
     async def logged_maps(self, session: AsyncSession, encounter_ids: Collection[int]) -> Sequence[ChronologyMapRow]:
-        """Logged maps of ``encounter_ids`` whose ``played_at`` is a real start time.
+        """Every logged map of ``encounter_ids``, with its log's upload time and file name.
 
-        A log time is not one when it is NULL, or when it equals its ingest job's ``created_at``: the Overwatch
-        decoder falls back to the job's creation time when the log carries no tz-aware timestamp
-        (``shared/disciplines/overwatch/ingest.py``). ``IS DISTINCT FROM`` keeps a match whose job was deleted.
+        Unfiltered on purpose: a ``played_at`` equal to the upload time is the Overwatch decoder's fallback for a
+        log with no tz-aware timestamp (``shared/disciplines/overwatch/ingest.py``), and the file name may still
+        carry the start — which source wins is ``stream-service/src/domain/chronology.py``'s rule.
         """
         if not encounter_ids:
             return []
         match, game, entity, job = models.StatsMatch, models.EncounterGame, models.CatalogEntity, models.IngestJob
         stmt = (
-            sa.select(match.encounter_id, match.played_at, match.duration_s, game.position, entity.name)
+            sa.select(
+                match.encounter_id,
+                game.position,
+                entity.name,
+                match.played_at,
+                match.duration_s,
+                job.created_at,
+                job.filename,
+            )
             .select_from(match)
             .join(entity, entity.id == match.map_entity_id)
             .outerjoin(game, game.id == match.encounter_game_id)
             .outerjoin(job, job.id == match.ingest_job_id)
-            .where(
-                match.encounter_id.in_(list(encounter_ids)),
-                match.played_at.isnot(None),
-                match.played_at.is_distinct_from(job.created_at),
-            )
+            .where(match.encounter_id.in_(list(encounter_ids)))
         )
         return [ChronologyMapRow(*values) for values in (await session.execute(stmt)).all()]
+
+    async def games(self, session: AsyncSession, encounter_ids: Collection[int]) -> Sequence[ChronologyGameRow]:
+        """The live positions of ``encounter_ids``: a cancelled game is history, not a map anybody played."""
+        if not encounter_ids:
+            return []
+        game, entity = models.EncounterGame, models.CatalogEntity
+        stmt = (
+            sa.select(game.encounter_id, game.position, entity.name, game.confirmed_at)
+            .select_from(game)
+            .outerjoin(entity, entity.id == game.map_id)
+            .where(game.encounter_id.in_(list(encounter_ids)), game.state != enums.EncounterGameState.CANCELLED)
+        )
+        return [ChronologyGameRow(*values) for values in (await session.execute(stmt)).all()]
+
+    async def round_ends(
+        self, session: AsyncSession, encounter_ids: Collection[int]
+    ) -> Sequence[ChronologyRoundEndRow]:
+        """Per encounter and round, the room journal's last reveal of a pick-ban step of that round — map and hero
+        bans alike, so it is the moment the room let the map start. A flat (round-less) session has no rounds."""
+        if not encounter_ids:
+            return []
+        event = models.EncounterRoomEvent
+        # The key inlined, not bound: the same expression is selected and grouped by, and two bind parameters
+        # would make PostgreSQL see two different expressions.
+        round_ = sa.cast(event.data.op("->>")(sa.literal_column("'round'")), sa.Integer)
+        stmt = (
+            sa.select(event.encounter_id, round_, sa.func.max(event.created_at))
+            .where(
+                event.encounter_id.in_(list(encounter_ids)),
+                event.action.in_(("step_revealed", "step_auto_resolved")),
+                round_.isnot(None),
+            )
+            .group_by(event.encounter_id, round_)
+        )
+        return [ChronologyRoundEndRow(*values) for values in (await session.execute(stmt)).all()]
+
+    async def pregame_starts(
+        self, session: AsyncSession, encounter_ids: Collection[int]
+    ) -> Sequence[ChronologyPregameRow]:
+        """Per encounter, the earliest pick-ban session start and the last readiness confirmation."""
+        if not encounter_ids:
+            return []
+        ids = list(encounter_ids)
+        room, ready = models.PickBanSession, models.EncounterReadiness
+        opened = dict(
+            (
+                await session.execute(
+                    sa.select(room.encounter_id, sa.func.min(room.started_at))
+                    .where(room.encounter_id.in_(ids), room.started_at.isnot(None))
+                    .group_by(room.encounter_id)
+                )
+            ).all()
+        )
+        readied = dict(
+            (
+                await session.execute(
+                    sa.select(ready.encounter_id, sa.func.max(ready.created_at))
+                    .where(ready.encounter_id.in_(ids))
+                    .group_by(ready.encounter_id)
+                )
+            ).all()
+        )
+        return [
+            ChronologyPregameRow(encounter_id, opened.get(encounter_id), readied.get(encounter_id))
+            for encounter_id in sorted(opened.keys() | readied.keys())
+        ]

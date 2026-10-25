@@ -74,7 +74,7 @@ It shows **Last tick**, **Tournaments**, **Channels polled**, **Live now** and *
 | A player's rank never arrives | Open their card in **Admin → People** and look at the account status; if collection is switched off, re-enable the accounts in **Collectors → Rank**. |
 | The subscription check blocks nobody | The provider is most likely half-configured — see [Subscriptions and admission](/docs/organizers/subscriptions). |
 | Streams do not show on a tournament page | Look at **Collectors → Streams**: if the poll is paused or failing, the tournament is not the problem. |
-| A participant's recording has no match timestamps | A map's timestamp comes from its match log's start time; without a log, from the match start set in the admin. The streamer must also keep past broadcasts on Twitch. If the timestamps are off, check the POV stream delay in the tournament's **Links** settings. |
+| A participant's recording has no match timestamps | A map's timestamp comes from its match log (from the time in the log's file name when the log itself has no time zone) or from the pre-game room, where the bans before the map end. Without them, from the start of the pre-game phase, and without a room, from the match start set in the admin. The streamer must also keep past broadcasts on Twitch. If the timestamps are off, check the POV stream delay in the tournament's **Links** settings. |
 
 ## See also
 

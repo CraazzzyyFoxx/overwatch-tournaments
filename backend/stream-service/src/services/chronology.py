@@ -9,7 +9,9 @@ Sources, all batched (a fixed number of statements per read, never one per VOD o
 * players and teams — ``StreamTargetRepository.list_roster``, ranked by ``publishable_players`` exactly as the
   live block ranks them; every team the player is rostered on counts for chapters (a substitute on two teams
   gets both);
-* timings — ``StreamChronologyRepository``; the chapter rules themselves are ``src.domain.chronology``.
+* timings — ``StreamChronologyRepository``: the logs (start, file name, upload), the series positions and their
+  results, the pre-game room's round ends and opening, the organizer's times. Which of them a chapter is cut from
+  is ``src.domain.chronology``'s rule.
 
 READ-ONLY: the only writer of ``stream.session`` is the poll tick.
 """
@@ -18,13 +20,14 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import asdict
+from datetime import datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.core import http_status as status
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.repository import StreamChronologyRepository, StreamSessionRepository, StreamTargetRepository
-from src.domain.chronology import EncounterTiming, LoggedMap, chapters
+from src.domain.chronology import EncounterTiming, LoggedMap, PlayedGame, chapters
 from src.schemas.stream import StreamChapterRead, StreamVodRead, StreamVodsRead
 from src.services.targets import StreamTargetsService
 from src.services.tournament_streams import publishable_players
@@ -86,26 +89,45 @@ class StreamChronologyReader:
         seats = await self._chronology.team_encounters(
             session, tournament_id, {team for teams in teams_of.values() for team in teams}, encounter_id=encounter_id
         )
+        encounter_ids = {seat.encounter_id for seat in seats}
         maps: dict[int, list[LoggedMap]] = defaultdict(list)
-        for logged in await self._chronology.logged_maps(session, {seat.encounter_id for seat in seats}):
+        for logged in await self._chronology.logged_maps(session, encounter_ids):
             maps[logged.encounter_id].append(
                 LoggedMap(
-                    played_at=logged.played_at,
-                    duration_s=logged.duration_s,
                     position=logged.map_position,
                     map_name=logged.map_name,
+                    played_at=logged.played_at,
+                    duration_s=logged.duration_s,
+                    uploaded_at=logged.uploaded_at,
+                    filename=logged.filename,
                 )
             )
+        games: dict[int, list[PlayedGame]] = defaultdict(list)
+        for game in await self._chronology.games(session, encounter_ids):
+            games[game.encounter_id].append(
+                PlayedGame(position=game.position, map_name=game.map_name, confirmed_at=game.confirmed_at)
+            )
+        round_ends: dict[int, dict[int, datetime]] = defaultdict(dict)
+        for row in await self._chronology.round_ends(session, encounter_ids):
+            round_ends[row.encounter_id][row.round] = row.ended_at
+        pregame = {row.encounter_id: row for row in await self._chronology.pregame_starts(session, encounter_ids)}
+
         timings: dict[int, EncounterTiming] = {}
         encounters_of_team: dict[int, set[int]] = defaultdict(set)
         for seat in seats:
             encounters_of_team[seat.team_id].add(seat.encounter_id)
+            room = pregame.get(seat.encounter_id)
             timings[seat.encounter_id] = EncounterTiming(
                 encounter_id=seat.encounter_id,
                 name=seat.name,
                 started_at=seat.started_at,
                 ended_at=seat.ended_at,
+                confirmed_at=seat.confirmed_at,
+                room_opened_at=room.room_opened_at if room else None,
+                last_ready_at=room.last_ready_at if room else None,
                 maps=tuple(maps[seat.encounter_id]),
+                games=tuple(games[seat.encounter_id]),
+                round_ends=round_ends[seat.encounter_id],
             )
         delay_s = await self._chronology.pov_stream_delay_s(session, tournament_id)
 

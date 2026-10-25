@@ -106,11 +106,12 @@ class StreamChapterRead(BaseModel):
     encounter_id: int
     #: ``encounter.encounter.name``, e.g. "Team A vs Team B".
     encounter_name: str
-    #: ``map`` — one logged map; ``series`` — the whole encounter, when no map of it has a trustworthy log time.
+    #: ``map`` — one series position (timed from its log, its log's file name or its round's bans); ``series`` — the
+    #: whole encounter, when no map of it could be timed.
     kind: Literal["map", "series"]
-    #: The game's position in the encounter when the log is bound to a game.
+    #: The game's position in the encounter; null for a log bound to no game.
     map_position: int | None = None
-    #: Catalog name of the logged map; null for a series chapter.
+    #: Catalog name of the map (the log's, else the game's decided map); null for a series chapter or an undecided map.
     map_name: str | None = None
     #: Seconds into the VOD, the tournament's stream delay already applied. 0 when the match was already running
     #: as the broadcast began.
