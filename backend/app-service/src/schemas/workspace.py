@@ -5,7 +5,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 
-from shared.schemas.quota import QuotaLimitsPayload, QuotaScope
+from shared.schemas.quota import QuotaLimitsWrite, QuotaScope
 from shared.services.ontology import normalize_disciplines_enabled
 from shared.tenancy.hostnames import validate_subdomain_label
 from src.schemas.base import BaseRead
@@ -299,7 +299,7 @@ class WorkspaceQuotaSet(BaseModel):
     """
 
     scope: QuotaScope
-    limits: QuotaLimitsPayload = Field(default_factory=QuotaLimitsPayload)
+    limits: QuotaLimitsWrite = Field(default_factory=QuotaLimitsWrite)
 
 
 class WorkspaceOwnerRead(BaseModel):

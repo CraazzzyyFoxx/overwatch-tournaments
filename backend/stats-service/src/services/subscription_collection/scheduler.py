@@ -95,6 +95,7 @@ async def run_subscription_collection_tick(
                 count = await subscription_collection_service.collect_subscriptions_for_active_tournaments(
                     session,
                     twitch_client_id=settings.twitch_client_id,
+                    token_key=settings.oauth_token_encryption_key,
                     broker=active_broker,
                     proxy=settings.proxy_url,
                     batch_size=cfg.batch_size,

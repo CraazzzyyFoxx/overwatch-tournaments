@@ -89,6 +89,10 @@ class BaseServiceSettings(BaseSettings):
     logs_root_path: str = "/logs" if Path("/logs").exists() else str(Path.cwd() / "logs")
     json_logging: bool = True
 
+    # Seals the Discord/Twitch OAuth tokens kept in ``auth.oauth_connections`` (``shared.core.secretbox``):
+    # base64url of 32 random bytes, the same value in every service reading them. Env: OAUTH_TOKEN_ENCRYPTION_KEY.
+    oauth_token_encryption_key: str | None = None
+
     # S3 / MinIO (optional – only needed by services that use storage)
     s3_access_key: str | None = None
     s3_secret_key: str | None = None

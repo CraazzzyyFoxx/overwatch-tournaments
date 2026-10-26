@@ -666,9 +666,10 @@ services:
       dockerfile: Dockerfile
     ports:
       - "${GATEWAY_HOST_PORT:-8080}:8080"
+    # No auth.env: the gateway verifies access tokens with JWT_PUBLIC_KEY
+    # (gateway.env, `make jwt-public-key`) and never sees JWT_SECRET_KEY.
     env_file:
       - ./backend/env/common.env
-      - ./backend/env/auth.env
       - ./backend/env/gateway.env
     environment:
       # OpenTelemetry tracing into the shared otel-collector (same block as the

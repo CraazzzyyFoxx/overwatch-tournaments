@@ -24,8 +24,10 @@ from shared.core.errors import BaseAPIException as HTTPException
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from shared.core import secretbox  # noqa: E402
 from shared.services.social_identity import social_identity_service  # noqa: E402
 from src import schemas  # noqa: E402
+from src.core.config import settings  # noqa: E402
 from src.services.oauth_accounts import OAuthAccountService, oauth_accounts  # noqa: E402
 from tests._fakes import make_oauth_info  # noqa: E402
 
@@ -115,7 +117,11 @@ def test_relinking_the_same_provider_account_is_idempotent() -> None:
     )
 
     assert result is existing
-    assert existing.access_token == "provider-access"
+    # Discord's token is kept, sealed at rest: never the clear value.
+    assert existing.access_token.startswith(secretbox.PREFIX)
+    key = secretbox.load_key(settings.oauth_token_encryption_key)
+    assert secretbox.decrypt(existing.access_token, key) == "provider-access"
+    assert secretbox.decrypt(existing.refresh_token, key) == "provider-refresh"
     assert session.commit_called is True
 
 

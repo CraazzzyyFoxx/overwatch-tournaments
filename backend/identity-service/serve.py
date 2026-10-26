@@ -35,7 +35,10 @@ from src.core.config import settings
 from src.core.redis import close_redis, init_redis
 from src.core.s3 import s3_client
 from src.rpc import api_keys, auth, avatars, oauth, players, rbac, steam_names, tokens, workspace_member_events
+from src.services.oauth_accounts import oauth_accounts
 from src.services.oauth_providers import close_http_client, oauth_providers
+from src.services.security import token_codec
+from src.services.session_cache import session_cache
 from src.services.sessions import refresh_tokens
 from src.services.steam_profiles import refresh_display_names
 
@@ -78,7 +81,18 @@ configure_quota(
     edge_workspace_metering=settings.quota_edge_workspace_metering,
 )
 
-for _module in (tokens, auth, oauth, api_keys, rbac, players, avatars, workspace_member_events, steam_names):
+# IDENTITY_RPC_ROLE splits the one image into processes: production runs "credentials" (password and OAuth RPCs:
+# bcrypt and provider round trips) apart from "core" (validate_token's hot path and the rest), so a login burst cannot
+# queue the gateway's token checks. Dev runs "all".
+_ROLE_MODULES = {
+    "credentials": (auth, oauth),
+    "core": (tokens, api_keys, rbac, players, avatars, workspace_member_events, steam_names),
+}
+_ROLE_MODULES["all"] = _ROLE_MODULES["credentials"] + _ROLE_MODULES["core"]
+# Schedulers and startup jobs run in "core" / "all" only.
+_RUNS_JOBS = settings.IDENTITY_RPC_ROLE != "credentials"
+
+for _module in _ROLE_MODULES[settings.IDENTITY_RPC_ROLE]:
     _module.register(broker, logger)
 
 _purge_scheduler = IntervalScheduler(job_id="refresh_token_purge", label="Refresh-token purge", logger=logger)
@@ -89,8 +103,8 @@ _steam_names_scheduler = IntervalScheduler(
 
 async def purge_expired_refresh_tokens() -> None:
     async with observe_scheduled_job("refresh_token_purge"), db.async_session_maker() as session:
+        # Commits per batch of PURGE_BATCH_SIZE rows.
         deleted = await refresh_tokens.purge_expired(session, retention=REFRESH_TOKEN_RETENTION)
-        await session.commit()
     if deleted:
         logger.info("Refresh-token purge: dropped {} rows expired before {}", deleted, REFRESH_TOKEN_RETENTION)
 
@@ -135,11 +149,22 @@ async def setup_worker() -> None:
         start_worker_metrics_server(settings.worker_metrics_port)
     await init_redis()
     await s3_client.start()
-    _purge_scheduler.start(purge_expired_refresh_tokens, seconds=24 * 60 * 60)
-    # ponytail: unlocked, every replica refreshes (idempotent writes, ~1 request per 100 accounts each); add a leader
-    # lock if identity scales out far.
-    _steam_names_scheduler.start(refresh_steam_display_names, seconds=24 * 60 * 60, run_now=True)
-    logger.info("identity-svc started")
+    if _RUNS_JOBS:
+        # Membership-change events expire in the queue after minutes; entries cached before a restart may have
+        # missed their drop, so none of them is trusted.
+        flushed = await session_cache.flush_rbac_cache()
+        logger.info("RBAC cache flushed at startup: {} entries", flushed)
+        # Seals Discord/Twitch tokens still stored in clear and drops the rest; refuses to start without the key.
+        async with db.async_session_maker() as session:
+            await oauth_accounts.seal_stored_tokens(session)
+        _purge_scheduler.start(purge_expired_refresh_tokens, seconds=24 * 60 * 60)
+        # ponytail: unlocked, every replica refreshes (idempotent writes, ~1 request per 100 accounts each); add a
+        # leader lock if identity scales out far.
+        _steam_names_scheduler.start(refresh_steam_display_names, seconds=24 * 60 * 60, run_now=True)
+    # The gateway's JWT_PUBLIC_KEY must equal this (also `make jwt-public-key`).
+    logger.info(
+        "identity-svc started (role={}, JWT public key {})", settings.IDENTITY_RPC_ROLE, token_codec.public_key_b64
+    )
 
 
 @app.on_shutdown

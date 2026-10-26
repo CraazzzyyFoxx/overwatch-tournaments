@@ -1,6 +1,7 @@
 """Configuration module for auth service."""
 
 import json
+from typing import Literal
 
 from pydantic import field_validator
 from pydantic_settings import SettingsConfigDict
@@ -15,9 +16,13 @@ class Settings(BaseServiceSettings):
         case_sensitive=False,
         extra="ignore",
     )
-    # JWT Authentication
+    # Which RPC modules this process serves (serve.py): "credentials" = auth + oauth (bcrypt and provider round
+    # trips), "core" = everything else plus the schedulers and startup jobs, "all" = both (dev).
+    IDENTITY_RPC_ROLE: Literal["all", "core", "credentials"] = "all"
+
+    # JWT Authentication. Tokens are Ed25519-signed with a key derived from JWT_SECRET_KEY
+    # (``key_derivation.jwt_signing_seed``); the gateway holds only its public half.
     JWT_SECRET_KEY: str
-    JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 30
     # Grace period during which the immediately-previous refresh token of a still

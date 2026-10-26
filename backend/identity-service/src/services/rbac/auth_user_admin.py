@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,6 +19,11 @@ from src.services.rbac_policy import RbacPolicy, rbac_policy
 from src.services.security import token_codec
 from src.services.session_cache import SessionCache, session_cache
 from src.services.token_payload import TokenPayloadBuilder
+
+# A workspace-scoped search reaches every account on the platform, so it takes a few characters and returns a
+# capped page of identity-only rows.
+_LOOKUP_MIN_SEARCH = 3
+_LOOKUP_MAX_RESULTS = 20
 
 
 def _auth_user_list_payload(user: models.AuthUser) -> dict:
@@ -52,12 +59,49 @@ class AuthUserAdminService:
         current_user: models.AuthUser,
         params: schemas.AuthUserListParams,
     ) -> dict:
-        """List auth users with assigned roles (paginated, server-side filters)."""
+        """List auth users (paginated, server-side filters).
+
+        - No ``workspace_id``: every account; global ``auth_user.read``.
+        - ``workspace_id``, no ``search``: that workspace's active members only, full rows; ``auth_user.read``
+          there.
+        - ``workspace_id`` + ``search`` (trimmed; under 3 characters is an empty page): a global reader gets
+          the global search; a workspace reader gets at most 20 ``AuthUserLookupRead`` (id, username, avatar)
+          whose username contains it or whose email is exactly it.
+        """
         self._policy.require_scoped_permission(current_user, params.workspace_id, "auth_user", "read")
 
-        users, total = await self._accounts.list_with_rbac(session, params, include_player=True)
+        member_of = None
+        if params.workspace_id is not None:
+            search = (params.search or "").strip()
+            if not search:
+                member_of = params.workspace_id
+            elif len(search) < _LOOKUP_MIN_SEARCH:
+                return pagination.paginated_dict([], 0, params)
+            elif not self._policy.has_global(current_user, "auth_user", "read"):
+                return await self._lookup(session, params, search)
+
+        users, total = await self._users.list_with_rbac(
+            session,
+            params,
+            search=params.search,
+            role_id=params.role_id,
+            exclude_role_id=params.exclude_role_id or None,
+            is_active=params.is_active,
+            is_superuser=params.is_superuser,
+            include_player=True,
+            member_of_workspace_id=member_of,
+        )
         return pagination.paginated_dict(
             [schemas.AuthUserListRead.model_validate(_auth_user_list_payload(user)) for user in users], total, params
+        )
+
+    async def _lookup(self, session: AsyncSession, params: schemas.AuthUserListParams, search: str) -> dict:
+        """Identity-only global search; every other filter and sorting by email are ignored (they would leak)."""
+        per_page = _LOOKUP_MAX_RESULTS if params.per_page == -1 else min(params.per_page, _LOOKUP_MAX_RESULTS)
+        page = replace(params, per_page=per_page, sort="username")
+        users, total = await self._users.lookup(session, page, search=search)
+        return pagination.paginated_dict(
+            [schemas.AuthUserLookupRead.model_validate(user, from_attributes=True) for user in users], total, page
         )
 
     async def get(
@@ -257,6 +301,8 @@ class AuthUserAdminService:
 
         linked_user = connection.auth_user
         if linked_user and not linked_user.hashed_password:
+            # Locked before counting, so concurrent deletes of the last two connections serialize (as ``oauth.unlink``).
+            await self._users.lock(session, connection.auth_user_id)
             if await self._connections.count_for_user(session, connection.auth_user_id) <= 1:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,

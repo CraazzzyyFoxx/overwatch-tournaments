@@ -2,13 +2,15 @@
 
 This is the hottest read path in the service: every authenticated request the
 gateway forwards lands here. The Redis RBAC entry is therefore treated as a
-complete answer — roles, permissions, workspace memberships, workspace-scoped
-RBAC and the deny overlay all live in it — so a hit costs zero database work.
-An outage only means every component falls back to its query.
+complete answer — identity fields, roles, permissions, workspace memberships,
+workspace-scoped RBAC and the deny overlay all live in it — so a hit costs zero
+database work. A miss (or an outage) loads the whole entry in three statements:
+memberships, one role query, denies.
 """
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,10 +18,52 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from shared import models
 from shared.repository import RoleRepository, UserPermissionDenyRepository, WorkspaceMemberRepository
 from src import schemas
+from src.core.metrics import RBAC_CACHE_TOTAL
 from src.services.players import describe_link
 from src.services.session_cache import SessionCache, session_cache
 
-__all__ = ["TokenPayloadBuilder", "token_payloads"]
+__all__ = ["TokenPayloadBuilder", "UserLoader", "token_payloads", "user_fields"]
+
+#: Loads the account row by id (identity-only); ``None`` when it does not exist.
+UserLoader = Callable[[AsyncSession, int], Awaitable["models.AuthUser | None"]]
+
+# Every key ``set_rbac`` writes. An entry missing any of them is a miss: a
+# partial entry is never trusted, and never patched up component by component.
+_COMPONENTS = ("user", "roles", "permissions", "workspaces", "workspace_roles", "denies")
+
+
+def user_fields(user: models.AuthUser) -> dict[str, Any]:
+    """The account columns the entry carries, so a hit needs no account row."""
+    return {
+        "email": user.email,
+        "username": user.username,
+        "is_active": user.is_active,
+        "is_superuser": user.is_superuser,
+    }
+
+
+def _payload(user_id: int, entry: dict[str, Any]) -> schemas.TokenPayload:
+    """The wire payload for a complete entry (cached or just loaded: one shape)."""
+    workspace_roles: dict[str, dict] = entry["workspace_roles"]  # JSON object keys, hence strings
+    no_roles: dict[str, list] = {"roles": [], "permissions": []}
+    return schemas.TokenPayload(
+        sub=user_id,
+        email=entry["user"]["email"],
+        username=entry["user"]["username"],
+        is_superuser=entry["user"]["is_superuser"],
+        roles=entry["roles"],
+        permissions=entry["permissions"],
+        workspaces=[
+            schemas.WorkspaceMembership(
+                workspace_id=int(workspace_id),
+                slug=slug,
+                rbac_roles=workspace_roles.get(str(workspace_id), no_roles)["roles"],
+                rbac_permissions=workspace_roles.get(str(workspace_id), no_roles)["permissions"],
+            )
+            for workspace_id, slug in entry["workspaces"]
+        ],
+        denies=entry["denies"],
+    )
 
 
 class TokenPayloadBuilder:
@@ -38,103 +82,93 @@ class TokenPayloadBuilder:
         self.members = members
         self.denies = denies
 
+    def from_cache(self, user_id: int, entry: dict[str, Any] | None) -> schemas.TokenPayload | None:
+        """The payload a complete cache entry answers on its own (zero database work), else None."""
+        if not entry or any(component not in entry for component in _COMPONENTS):
+            return None
+        RBAC_CACHE_TOTAL.labels(result="hit").inc()
+        return _payload(user_id, entry)
+
+    async def resolve(
+        self,
+        session: AsyncSession,
+        user_id: int,
+        load_user: UserLoader,
+        *,
+        cached: dict[str, Any] | None = None,
+        generation: str | None = None,
+    ) -> tuple[schemas.TokenPayload, bool] | None:
+        """``(payload, is_active)`` for ``user_id``, loading the account only on a miss.
+
+        ``cached``/``generation`` are the caller's own ``token_state`` read
+        (``{}`` for a miss); without them ``rbac_state`` is read here. Either way
+        they are read BEFORE ``load_user``: a fill stores the row's account
+        fields, and only a generation read before the row fences out a drop
+        (deactivation, deletion, profile edit) that commits after it.
+        ``None`` when the account does not exist.
+        """
+        if cached is None:
+            cached, generation = await self.cache.rbac_state(user_id)
+        payload = self.from_cache(user_id, cached)
+        if payload is not None:
+            return payload, bool(cached["user"]["is_active"])
+        user = await load_user(session, user_id)
+        if user is None:
+            return None
+        return await self.build(session, user, cached=cached or {}, generation=generation), user.is_active
+
     async def build(
         self,
         session: AsyncSession,
         user: models.AuthUser,
         *,
         cached: dict[str, Any] | None = None,
+        generation: str | None = None,
     ) -> schemas.TokenPayload:
         """Build the payload for ``user``, preferring the RBAC cache.
 
-        ``cached`` lets a caller that already read the entry (to decide whether
-        the user needed RBAC hydration at all) hand it over instead of paying
-        for a second Redis round trip on the same request.
+        ``cached``/``generation``: the entry (``{}`` for a miss) and generation
+        the caller read BEFORE loading ``user``. Without them the entry is read
+        here, after the row, so a miss is answered but never cached: the row's
+        account fields could predate a drop that generation would not fence out.
         """
         if cached is None:
-            cached = await self.cache.get_rbac(user.id)
-        entry: dict[str, Any] = cached or {}
+            cached, generation = await self.cache.get_rbac(user.id), None
+        payload = self.from_cache(user.id, cached)
+        if payload is not None:
+            # Nothing changed on a hit, so rewriting the entry would only extend
+            # its TTL, at the cost of a round trip on every gateway request.
+            return payload
+        RBAC_CACHE_TOTAL.labels(result="miss").inc()
+        return _payload(user.id, await self._fill(session, user, generation))
 
-        roles: list[str] | None = entry.get("roles")
-        permissions: list[dict[str, str]] | None = entry.get("permissions")
-        workspace_roles_cached: dict[str, dict] | None = entry.get("workspace_roles")
-        # ``None`` means "not in the cache" and must trigger a load; an empty
-        # list is a real answer ("this user has no denies") and must not.
-        denies: list[dict[str, Any]] | None = entry.get("denies")
-        # Same distinction for memberships: a missing key loads them, an empty
-        # list means "member of nothing".
-        memberships_cached: list[list[Any]] | None = entry.get("workspaces")
+    async def _fill(self, session: AsyncSession, user: models.AuthUser, generation: str | None) -> dict[str, Any]:
+        """Load the whole entry from the database and cache it under ``generation``.
 
-        # Any missing component makes this a fill. Its generation is read before
-        # the first query, so set_rbac refuses the entry if the user's RBAC was
-        # dropped meanwhile -- these reads may then predate that change. (A hit
-        # is never partial: set_rbac writes every component.)
-        fill = roles is None or denies is None or memberships_cached is None or workspace_roles_cached is None
-        generation = await self.cache.rbac_generation(user.id) if fill else None
-
-        if roles is None:
-            roles, permissions = await self.roles.global_rbac_for_user(session, user.id)
-        if permissions is None:
-            permissions = []
-
-        if denies is None:
-            # Loaded on the DB path too, so the deny overlay still applies when
-            # Redis is unavailable — a negative grant must never fail open.
-            denies = await self.load_denies(session, user.id)
-
-        if memberships_cached is None:
-            memberships = await self.members.list_memberships_for_auth_user(session, user.id)
-        else:
-            memberships = [(int(workspace_id), slug) for workspace_id, slug in memberships_cached]
-
+        ``generation`` was read before ``user`` and before these queries, so
+        ``set_rbac`` refuses the entry if the user's RBAC or account was dropped
+        meanwhile -- these reads may then predate that change. ``None`` (an
+        outage, or no read before the row) answers without caching.
+        """
+        memberships = await self.members.list_memberships_for_auth_user(session, user.id)
         workspace_ids = [workspace_id for workspace_id, _ in memberships]
-
-        if workspace_roles_cached is not None:
-            # Cached keys are JSON object keys, hence strings.
-            ws_rbac = {int(k): (v["roles"], v["permissions"]) for k, v in workspace_roles_cached.items()}
-        else:
-            ws_rbac = await self.roles.workspace_rbac_for_user(session, user.id, workspace_ids)
-
-        if fill:
-            # Nothing changed on a full hit, so rewriting the entry would only
-            # extend its TTL — which is exactly what the 60s window is meant to
-            # bound — at the cost of a round trip on every gateway request.
-            await self.cache.set_rbac(
-                user.id,
-                generation=generation,
-                roles=roles,
-                permissions=permissions,
-                workspaces=[[workspace_id, slug] for workspace_id, slug in memberships],
-                workspace_roles={
-                    str(workspace_id): {
-                        "roles": ws_rbac.get(workspace_id, ([], []))[0],
-                        "permissions": ws_rbac.get(workspace_id, ([], []))[1],
-                    }
-                    for workspace_id in workspace_ids
-                },
-                denies=denies,
-            )
-
-        workspaces = [
-            schemas.WorkspaceMembership(
-                workspace_id=workspace_id,
-                slug=slug,
-                rbac_roles=ws_rbac.get(workspace_id, ([], []))[0],
-                rbac_permissions=ws_rbac.get(workspace_id, ([], []))[1],
-            )
-            for workspace_id, slug in memberships
-        ]
-
-        return schemas.TokenPayload(
-            sub=user.id,
-            email=user.email,
-            username=user.username,
-            is_superuser=user.is_superuser,
-            roles=roles,
-            permissions=permissions,
-            workspaces=workspaces,
-            denies=denies,
-        )
+        (roles, permissions), ws_rbac = await self.roles.rbac_for_user(session, user.id, workspace_ids)
+        # Loaded on the DB path too, so the deny overlay still applies when
+        # Redis is unavailable — a negative grant must never fail open.
+        denies = await self.load_denies(session, user.id)
+        entry: dict[str, Any] = {
+            "user": user_fields(user),
+            "roles": roles,
+            "permissions": permissions,
+            "workspaces": [[workspace_id, slug] for workspace_id, slug in memberships],
+            "workspace_roles": {
+                str(workspace_id): {"roles": ws_roles, "permissions": ws_permissions}
+                for workspace_id, (ws_roles, ws_permissions) in ws_rbac.items()
+            },
+            "denies": denies,
+        }
+        await self.cache.set_rbac(user.id, generation=generation, **entry)
+        return entry
 
     async def load_denies(self, session: AsyncSession, user_id: int) -> list[dict[str, Any]]:
         """Per-user denied ``(resource, action, workspace_id)`` triples.

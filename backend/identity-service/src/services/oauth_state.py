@@ -54,6 +54,7 @@ class OAuthStateCodec:
         # so changing the derivation needs no migration: an in-flight state just
         # fails verification and the user retries the redirect.
         self._key = key_derivation.oauth_state_key(config.JWT_SECRET_KEY)
+        self._pkce_key = key_derivation.oauth_pkce_key(config.JWT_SECRET_KEY)
 
     @property
     def ttl_seconds(self) -> int:
@@ -72,6 +73,14 @@ class OAuthStateCodec:
     def _signature(self, payload_json: bytes) -> str:
         digest = bytes.fromhex(key_derivation.hmac_sha256_hex(self._key, payload_json.decode("utf-8")))
         return self._encode_part(digest)
+
+    def code_verifier(self, payload: StatePayload) -> str:
+        """The PKCE ``code_verifier`` of the flow ``payload`` signs: ``base64url(HMAC(pkce_key, nonce))``.
+
+        Derived on both legs (authorize, code exchange) from the single-use nonce,
+        so it is never stored, and never travels in the state or the URL.
+        """
+        return self._encode_part(bytes.fromhex(key_derivation.hmac_sha256_hex(self._pkce_key, payload.nonce)))
 
     def encode(
         self,

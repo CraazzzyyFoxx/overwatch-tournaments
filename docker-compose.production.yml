@@ -95,7 +95,7 @@ services:
       # userlist.txt, which pgBouncer needs to log in to the SCRAM-only server.
       AUTH_TYPE: scram-sha-256
       # Must cover replicas x (DB_POOL_SIZE + DB_MAX_OVERFLOW) + GATEWAY_DB_MAX_CONNS:
-      # 14 processes x 30 + 16 = 436 at PROD_SIZE=large with the defaults.
+      # 16 processes x 30 + 16 = 496 at PROD_SIZE=large with the defaults.
       MAX_CLIENT_CONN: "500"
       DEFAULT_POOL_SIZE: "20"
       RESERVE_POOL_SIZE: "5"
@@ -490,9 +490,9 @@ services:
     logging: *log-rotate
     # Sized when it served the public statistics and /users/* reads, which moved
     # to stats-svc on 2026-10-23 (it still serves /users/{name}, the catalog and the
-    # workspace directory). Single event loop per process, so raise the CPU
-    # ceiling AND scale replicas (`make prod-scale`) for real throughput — the
-    # two are complementary.
+    # workspace directory, all gateway-cached). One replica in every PROD_SIZE: what
+    # is left is admin writes and cache misses. Scale it back (`make prod-up
+    # PROD_SCALE='app-svc=2 ...'`) only if its RPC queues start backing up.
     deploy:
       resources:
         limits:
@@ -824,6 +824,9 @@ services:
     logging: *log-rotate
     # Auth hot path: every authenticated request validates its token via
     # gateway -> identity-svc. Under-provisioning this throttles all traffic.
+    # IDENTITY_RPC_ROLE=core: everything but the credential RPCs (sign-in,
+    # sessions, account, OAuth), which identity-auth-svc serves so a login burst
+    # cannot queue validate_token. Schedulers and startup jobs run here.
     deploy:
       resources:
         limits:
@@ -847,6 +850,7 @@ services:
       - OTEL_TRACES_SAMPLER=parentbased_traceidratio
       - OTEL_TRACES_SAMPLER_ARG=0.1
       - WORKER_METRICS_PORT=9107
+      - IDENTITY_RPC_ROLE=core
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -858,6 +862,56 @@ services:
         condition: service_healthy
     volumes:
       - ./logs/identity-svc:/logs
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: always
+
+  # Same image as identity-svc, credential RPCs only (auth + oauth: register,
+  # login, refresh, sessions, account, OAuth). No schedulers or startup jobs.
+  identity-auth-svc:
+    image: ghcr.io/craazzzyyfoxx/owt-identity:${IMAGE_TAG:-latest}
+    logging: *log-rotate
+    deploy:
+      resources:
+        limits:
+          cpus: '1.00'
+          memory: 512M
+        reservations:
+          cpus: '0.50'
+          memory: 256M
+    build:
+      context: ./backend
+      args:
+        APP_PATH: identity
+    command: faststream run serve:app
+    env_file:
+      - ./backend/env/common.env
+      - ./backend/env/auth.env
+      - ./backend/env/identity.env
+    environment:
+      - TRACING_ENABLED=${TRACING_ENABLED:-true}
+      - OTLP_ENDPOINT=http://alloy:4317
+      - OTEL_TRACES_SAMPLER=parentbased_traceidratio
+      - OTEL_TRACES_SAMPLER_ARG=0.1
+      - WORKER_METRICS_PORT=9112
+      - IDENTITY_RPC_ROLE=credentials
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      proxy:
+        condition: service_healthy
+    volumes:
+      - ./logs/identity-auth-svc:/logs
     networks:
       - app-network
     healthcheck:
@@ -886,9 +940,10 @@ services:
     build:
       context: ./gateway
       dockerfile: Dockerfile
+    # No auth.env: the gateway verifies access tokens with JWT_PUBLIC_KEY
+    # (gateway.env) and never sees JWT_SECRET_KEY.
     env_file:
       - ./backend/env/common.env
-      - ./backend/env/auth.env
       - ./backend/env/gateway.env
     environment:
       # Tag Sentry events as production (the DSN lives in backend/env/gateway.env).
@@ -919,6 +974,8 @@ services:
       rabbitmq:
         condition: service_healthy
       identity-svc:
+        condition: service_healthy
+      identity-auth-svc:
         condition: service_healthy
     networks:
       - app-network

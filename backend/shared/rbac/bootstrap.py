@@ -1,14 +1,52 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
+from typing import Any
+
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from shared.core.errors import BaseAPIException
+from shared.messaging.config import WORKSPACE_MEMBER_CHANGED_QUEUE
+from shared.messaging.outbox import enqueue_outbox_event
 from shared.models.identity.rbac import Permission, Role, user_roles
 from shared.models.tenancy.workspace import Workspace
+from shared.schemas.events import WorkspaceMemberChangedEvent
 
 from .catalog import PERMISSION_CATALOG, WORKSPACE_SYSTEM_ROLE_NAMES, permission_names_for_workspace_role
+
+# Q2: the ``owner`` role is the one grant a role or member permission alone does not cover.
+OWNER_ROLE_CHANGE_FORBIDDEN = "Only a workspace owner can grant or revoke the owner role"
+
+
+async def stage_rbac_change(
+    session: AsyncSession,
+    auth_user_ids: Iterable[int],
+    *,
+    change: str,
+    workspace_id: int | None = None,
+) -> None:
+    """Stage the event that makes identity drop these users' cached RBAC payload.
+
+    Transactional outbox: the row commits or rolls back with the write that
+    called this, and any service's outbox drain relays it to
+    ``WORKSPACE_MEMBER_CHANGED_QUEUE``. Every writer of memberships or
+    workspace role grants outside identity-service calls it (or, in
+    app-service's ``WorkspaceService``, stages the same event itself), because
+    identity caches the payload for minutes. No users, no event. A redundant
+    copy is harmless: dropping a key is idempotent.
+    """
+    ids = sorted(set(auth_user_ids))
+    if not ids:
+        return
+    await enqueue_outbox_event(
+        session,
+        WorkspaceMemberChangedEvent(workspace_id=workspace_id, auth_user_ids=ids, change=change),
+        exchange="",
+        routing_key=WORKSPACE_MEMBER_CHANGED_QUEUE.name,
+    )
 
 
 async def _catalog_permissions(session: AsyncSession) -> dict[str, Permission]:
@@ -93,14 +131,22 @@ async def ensure_workspace_system_roles(session: AsyncSession, workspace_id: int
         )
         roles = await _workspace_system_roles(session, workspace_id)
 
+    changed: list[int] = []
     for role_name in WORKSPACE_SYSTEM_ROLE_NAMES:
         role = roles[role_name]
         role.is_system = True
         if not role.description:
             role.description = f"Workspace {role_name} system role"
-        role.permissions = [permissions[name] for name in permission_names_for_workspace_role(role_name)]
+        granted = [permissions[name] for name in permission_names_for_workspace_role(role_name)]
+        if {p.id for p in role.permissions} != {p.id for p in granted}:
+            role.permissions = granted
+            changed.append(role.id)
 
     await session.flush()
+    if changed:
+        # A reconciled permission set (a catalog release, or a drifted row) changes the RBAC payload of every holder.
+        holders = await session.scalars(sa.select(user_roles.c.user_id).where(user_roles.c.role_id.in_(changed)))
+        await stage_rbac_change(session, holders, change="role_permissions_changed", workspace_id=workspace_id)
     return roles
 
 
@@ -113,8 +159,9 @@ async def assign_workspace_system_role(
 ) -> Role:
     roles = await ensure_workspace_system_roles(session, workspace_id)
     role = roles[role_name]
-    await session.execute(
-        sa.insert(user_roles).from_select(
+    granted = await session.scalar(
+        sa.insert(user_roles)
+        .from_select(
             ["user_id", "role_id"],
             sa.select(sa.literal(user_id), sa.literal(role.id)).where(
                 ~sa.exists().where(
@@ -123,8 +170,11 @@ async def assign_workspace_system_role(
                 )
             ),
         )
+        .returning(user_roles.c.user_id)
     )
     await session.flush()
+    if granted is not None:
+        await stage_rbac_change(session, [user_id], change="roles_changed", workspace_id=workspace_id)
     return role
 
 
@@ -164,6 +214,10 @@ async def assign_default_member_role_if_roleless(
     resolves the existing ``player`` role directly and only falls back to the
     full ``ensure_workspace_system_roles`` upsert when the workspace has no
     system roles yet, rather than upserting the whole catalog on every call.
+
+    Stages no RBAC-change event itself: every caller already tells identity
+    (``get_or_create_workspace_member`` stages ``added``, ``WorkspaceService``
+    its own event, identity's player link drops the cache after its commit).
     """
     if await user_has_any_workspace_role(session, user_id=user_id, workspace_id=workspace_id):
         return False
@@ -253,6 +307,29 @@ async def user_has_only_workspace_owner_role(
         sa.select(sa.func.count(sa.distinct(user_roles.c.user_id))).where(user_roles.c.role_id == owner_role.id)
     )
     return int(owner_count or 0) <= 1
+
+
+async def ensure_can_change_owner_role(session: AsyncSession, *, actor: Any, workspace_id: int) -> None:
+    """403 unless ``actor`` may grant or revoke ``workspace_id``'s ``owner`` role: a superuser, or an owner there.
+
+    The one rule every path that hands out or takes away ``owner`` applies (app-service member writes, identity's
+    role assign/remove), on top of whatever permission that path already requires. Read from the database, not the
+    actor's cached RBAC. Ownership transfer keeps its own gate.
+    """
+    if actor.is_superuser:
+        return
+    holds_owner = await session.scalar(
+        sa.select(
+            sa.exists().where(
+                user_roles.c.user_id == actor.id,
+                user_roles.c.role_id == Role.id,
+                Role.workspace_id == workspace_id,
+                Role.name == "owner",
+            )
+        )
+    )
+    if not holds_owner:
+        raise BaseAPIException(status_code=403, detail=OWNER_ROLE_CHANGE_FORBIDDEN)
 
 
 async def workspace_names_blocking_player_unlink(

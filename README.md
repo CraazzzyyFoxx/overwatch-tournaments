@@ -149,7 +149,12 @@ POSTGRES_PASSWORD=your_secure_password_here
 POSTGRES_DB=aqt_db
 ```
 
-The RabbitMQ and PostgreSQL values must match `backend/env/common.env`. Replace `JWT_SECRET_KEY` in `backend/env/auth.env` with at least 32 random characters. OAuth, Challonge, Twitch, Discord, Battle.net, S3, analytics, and observability credentials are feature-specific; their templates explain when they are required.
+The RabbitMQ and PostgreSQL values must match `backend/env/common.env`. Two more keys must be filled in before the stack boots:
+
+- `JWT_SECRET_KEY` in `backend/env/auth.env`: at least 32 random characters. identity derives its token-signing key from it; the gateway holds only the matching public key. Run `make jwt-public-key` (it runs in the identity image, building it on first use) and put its output into `JWT_PUBLIC_KEY` in `backend/env/gateway.env`. Redo it whenever `JWT_SECRET_KEY` changes.
+- `OAUTH_TOKEN_ENCRYPTION_KEY`: identity refuses to start without it while Discord or Twitch OAuth is enabled, which the template's placeholder credentials count as. Generate one with `python -c "import base64,secrets;print(base64.urlsafe_b64encode(secrets.token_bytes(32)).decode().rstrip('='))"` and put the same value into `auth.env`, `stats.env` and `tournament.env`.
+
+OAuth, Challonge, Twitch, Discord, Battle.net, S3, analytics, and observability credentials are feature-specific; their templates explain when they are required.
 
 ### 3. Start the stack and migrate the database
 

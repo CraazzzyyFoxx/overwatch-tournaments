@@ -593,7 +593,7 @@ export interface paths {
         put?: never;
         /**
          * Login
-         * @description Permission: public; no authentication required — the email/password pair is the credential. Authenticates email + password and returns an access+refresh token, recording the session with the forwarded user-agent and IP.
+         * @description Permission: public; no authentication required — the email/password pair is the credential. Authenticates email + password and returns an access+refresh token, recording the session with the forwarded user-agent and IP. After 10 failed attempts for one email within 15 minutes, that email is locked for 15 minutes: 429 `Too many failed login attempts. Try again later.`, checked before the password; a successful login clears the count.
          *
          *     RPC subject: `rpc.identity.login`
          */
@@ -657,7 +657,7 @@ export interface paths {
         };
         /**
          * Get current user
-         * @description Permission: authenticated (active) user, session bearer or API key; self-service. Returns the profile of the bearer-authenticated user.
+         * @description Permission: authenticated (active) user, session bearer or API key; self-service. Returns the profile of the bearer-authenticated user; `has_password` tells whether the account has a password (else it signs in through OAuth only).
          *
          *     RPC subject: `rpc.identity.get_me`
          */
@@ -666,7 +666,7 @@ export interface paths {
         post?: never;
         /**
          * Delete current account
-         * @description Permission: authenticated (active) user; self-service — the caller's own account only. Permanently deletes the active user's own account (sessions, OAuth connections, API keys, role grants) and returns 204. Historical data is preserved: the linked player identity survives with its account link nulled, so tournaments, matches, statistics and registrations are untouched. 400 for a superuser account.
+         * @description Permission: authenticated (active) user; self-service — the caller's own account only. Permanently deletes the active user's own account (sessions, OAuth connections, API keys, role grants) and returns 204. Historical data is preserved: the linked player identity survives with its account link nulled, so tournaments, matches, statistics and registrations are untouched. 400 for a superuser account. Re-authentication: an account with a password sends `{"current_password": ...}` (400 when missing, 401 when wrong); a passwordless account needs a session that signed in within the last 10 minutes, else 403 `reauth_required`.
          *
          *     RPC subject: `rpc.identity.delete_me`
          */
@@ -1029,7 +1029,7 @@ export interface paths {
         put?: never;
         /**
          * Set password
-         * @description Permission: authenticated (active) user; self-service — the current password must be supplied when one is already set. Sets or changes the active user's password; returns 204 No Content.
+         * @description Permission: authenticated (active) user; self-service — the current password must be supplied when one is already set (400 when missing, 401 when wrong); setting the first password needs a session that signed in within the last 10 minutes, else 403 `reauth_required`. Sets or changes the active user's password and signs out every other session; returns 204 No Content.
          *
          *     RPC subject: `rpc.identity.set_password`
          */
@@ -9545,7 +9545,7 @@ export interface paths {
         };
         /**
          * List auth users
-         * @description Permission: `auth_user.read` — checked in the workspace when workspace_id is given, globally otherwise. Returns auth users filtered by search/role_id/exclude_role_id/is_active/is_superuser/workspace_id. `exclude_role_id` drops users holding any listed role.
+         * @description Permission: `auth_user.read` — checked in the workspace when workspace_id is given, globally otherwise. Without workspace_id: every account, filtered by search/role_id/exclude_role_id/is_active/is_superuser (`exclude_role_id` drops users holding any listed role). With workspace_id and no search: only that workspace's active members, same filters. With workspace_id and search (trimmed; under 3 characters returns an empty page): a caller holding global `auth_user.read` gets the global search; any other caller gets at most 20 `AuthUserLookupRead` items (`id`, `username`, `avatar_url`) whose username contains the search or whose email equals it, other filters ignored.
          *
          *     RPC subject: `rpc.identity.rbac.list_auth_users`
          */
@@ -9757,7 +9757,7 @@ export interface paths {
         put?: never;
         /**
          * Invalidate cached permissions for a user
-         * @description Permission: a valid service token (any scope); no user credential and no per-scope check. Drops the cached RBAC entry for the given user_id, so their next request re-resolves roles and permissions from the database instead of waiting out the cache TTL; returns 204 No Content. Despite the endpoint name it does NOT revoke tokens or end sessions — an issued access token stays valid until it expires. Use the session endpoints for revocation.
+         * @description Permission: a valid service token carrying the `identity:invalidate` scope (403 without it); no user credential. Drops the cached RBAC entry for the given user_id, so their next request re-resolves roles and permissions from the database instead of waiting out the cache TTL; returns 204 No Content. Despite the endpoint name it does NOT revoke tokens or end sessions — an issued access token stays valid until it expires. Use the session endpoints for revocation.
          *
          *     RPC subject: `rpc.identity.invalidate_session`
          */
@@ -14338,11 +14338,6 @@ export interface components {
             picks: components["schemas"]["balancer.DraftPickRead"][];
             /** Players */
             players: components["schemas"]["balancer.DraftPlayerRead"][];
-            /**
-             * Server Time
-             * Format: date-time
-             */
-            server_time: string;
             session: components["schemas"]["balancer.DraftSessionRead"];
             /** Teams */
             teams: components["schemas"]["balancer.DraftTeamRead"][];
@@ -15403,6 +15398,17 @@ export interface components {
              */
             config_overrides: components["schemas"]["balancer.ConfigOverrides"] | null;
         };
+        /**
+         * AccountDeleteRequest
+         * @description Optional body of ``DELETE /auth/me``: the current password, for an account that has one.
+         */
+        "identity.AccountDeleteRequest": {
+            /**
+             * Current Password
+             * @default null
+             */
+            current_password: string | null;
+        };
         /** ApiKeyCreate */
         "identity.ApiKeyCreate": {
             /**
@@ -15457,7 +15463,7 @@ export interface components {
          *     putting the key back on whatever its workspace and plan hand down.
          */
         "identity.ApiKeyQuotaWrite": {
-            limits: components["schemas"]["identity.QuotaLimitsPayload"];
+            limits: components["schemas"]["identity.QuotaLimitsWrite"];
         };
         /** ApiKeyRead */
         "identity.ApiKeyRead": {
@@ -15563,6 +15569,11 @@ export interface components {
              * @default null
              */
             first_name: string | null;
+            /**
+             * Has Password
+             * @default false
+             */
+            has_password: boolean;
             /** Id */
             id: number;
             /** Is Active */
@@ -15704,8 +15715,43 @@ export interface components {
             message: string;
             player: components["schemas"]["identity.LinkedPlayer"];
         };
-        /** QuotaLimitsPayload */
+        /**
+         * QuotaLimitsPayload
+         * @description Limits as stored: every read of a plan/override row parses through this, so it stays permissive.
+         */
         "identity.QuotaLimitsPayload": {
+            /**
+             * Concurrent Heavy
+             * @default null
+             */
+            concurrent_heavy: number | null;
+            /**
+             * Heavy Per Day
+             * @default null
+             */
+            heavy_per_day: number | null;
+            /**
+             * Max Items Per Request
+             * @default null
+             */
+            max_items_per_request: number | null;
+            /**
+             * Max Upload Bytes
+             * @default null
+             */
+            max_upload_bytes: number | null;
+            /**
+             * Requests Per Minute
+             * @default null
+             */
+            requests_per_minute: number | null;
+        };
+        /**
+         * QuotaLimitsWrite
+         * @description Limits an admin or API caller may store. Stricter than reads, so a row
+         *     stored before the rule (a 0 rpm) still reads back and enforces as before.
+         */
+        "identity.QuotaLimitsWrite": {
             /**
              * Concurrent Heavy
              * @default null
@@ -22338,8 +22384,43 @@ export interface components {
             /** Total */
             total: number;
         };
-        /** QuotaLimitsPayload */
+        /**
+         * QuotaLimitsPayload
+         * @description Limits as stored: every read of a plan/override row parses through this, so it stays permissive.
+         */
         "app.QuotaLimitsPayload": {
+            /**
+             * Concurrent Heavy
+             * @default null
+             */
+            concurrent_heavy: number | null;
+            /**
+             * Heavy Per Day
+             * @default null
+             */
+            heavy_per_day: number | null;
+            /**
+             * Max Items Per Request
+             * @default null
+             */
+            max_items_per_request: number | null;
+            /**
+             * Max Upload Bytes
+             * @default null
+             */
+            max_upload_bytes: number | null;
+            /**
+             * Requests Per Minute
+             * @default null
+             */
+            requests_per_minute: number | null;
+        };
+        /**
+         * QuotaLimitsWrite
+         * @description Limits an admin or API caller may store. Stricter than reads, so a row
+         *     stored before the rule (a 0 rpm) still reads back and enforces as before.
+         */
+        "app.QuotaLimitsWrite": {
             /**
              * Concurrent Heavy
              * @default null
@@ -22435,6 +22516,39 @@ export interface components {
              */
             scope: AppQuotaPlanLimitReadScope;
         };
+        /** QuotaPlanLimitWrite */
+        "app.QuotaPlanLimitWrite": {
+            /**
+             * Concurrent Heavy
+             * @default null
+             */
+            concurrent_heavy: number | null;
+            /**
+             * Heavy Per Day
+             * @default null
+             */
+            heavy_per_day: number | null;
+            /**
+             * Max Items Per Request
+             * @default null
+             */
+            max_items_per_request: number | null;
+            /**
+             * Max Upload Bytes
+             * @default null
+             */
+            max_upload_bytes: number | null;
+            /**
+             * Requests Per Minute
+             * @default null
+             */
+            requests_per_minute: number | null;
+            /**
+             * Scope
+             * @enum {string}
+             */
+            scope: AppQuotaPlanLimitWriteScope;
+        };
         /** QuotaPlanRead */
         "app.QuotaPlanRead": {
             /**
@@ -22469,7 +22583,7 @@ export interface components {
              */
             description: string | null;
             /** Limits */
-            limits?: components["schemas"]["app.QuotaPlanLimitRead"][];
+            limits?: components["schemas"]["app.QuotaPlanLimitWrite"][];
             /** Slug */
             slug: string;
             /** Title */
@@ -23081,7 +23195,7 @@ export interface components {
          *     its plan.
          */
         "app.WorkspaceQuotaSet": {
-            limits?: components["schemas"]["app.QuotaLimitsPayload"];
+            limits?: components["schemas"]["app.QuotaLimitsWrite"];
             /**
              * Scope
              * @enum {string}
@@ -24520,6 +24634,24 @@ export interface components {
             username: string;
         };
         /**
+         * AuthUserLookupRead
+         * @description An account found by a workspace-scoped operator's global search: who it is, nothing about it.
+         *
+         *     No email, roles, players or flags: the operator may only read their own
+         *     workspace's members, and this exists so they can find someone to add.
+         */
+        "identity.AuthUserLookupRead": {
+            /**
+             * Avatar Url
+             * @default null
+             */
+            avatar_url: string | null;
+            /** Id */
+            id: number;
+            /** Username */
+            username: string;
+        };
+        /**
          * AuthUserPlayerLinkAssign
          * @description Schema for assigning a player account to an auth user from admin tools.
          */
@@ -24593,17 +24725,6 @@ export interface components {
             /** Total */
             total: number;
         };
-        /** Paginated[AuthUserListRead] */
-        "identity.Paginated_AuthUserListRead_": {
-            /** Page */
-            page: number;
-            /** Per Page */
-            per_page: number;
-            /** Results */
-            results: components["schemas"]["identity.AuthUserListRead"][];
-            /** Total */
-            total: number;
-        };
         /** Paginated[OAuthConnectionAdminRead] */
         "identity.Paginated_OAuthConnectionAdminRead_": {
             /** Page */
@@ -24634,6 +24755,17 @@ export interface components {
             per_page: number;
             /** Results */
             results: components["schemas"]["identity.RoleRead"][];
+            /** Total */
+            total: number;
+        };
+        /** Paginated[Union[AuthUserListRead, AuthUserLookupRead]] */
+        "identity.Paginated_Union_AuthUserListRead__AuthUserLookupRead__": {
+            /** Page */
+            page: number;
+            /** Per Page */
+            per_page: number;
+            /** Results */
+            results: (components["schemas"]["identity.AuthUserListRead"] | components["schemas"]["identity.AuthUserLookupRead"])[];
             /** Total */
             total: number;
         };
@@ -33699,16 +33831,18 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
         responses: {
             /** @description Success */
-            200: {
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": Record<string, never>;
-                };
+                content?: never;
             };
             /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
             401: {
@@ -33778,13 +33912,11 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Success */
-            200: {
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": Record<string, never>;
-                };
+                content?: never;
             };
             /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
             401: {
@@ -33927,7 +34059,11 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["identity.AccountDeleteRequest"];
+            };
+        };
         responses: {
             /** @description Success */
             204: {
@@ -34081,7 +34217,14 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
         responses: {
             /** @description Success */
             200: {
@@ -34638,7 +34781,7 @@ export interface operations {
         };
         responses: {
             /** @description Success */
-            200: {
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -35204,13 +35347,11 @@ export interface operations {
         };
         responses: {
             /** @description Success */
-            200: {
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": Record<string, never>;
-                };
+                content?: never;
             };
             /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
             401: {
@@ -38112,7 +38253,16 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    config_overrides?: string;
+                    /** Format: binary */
+                    player_data_file: string;
+                    tournament_id?: string;
+                };
+            };
+        };
         responses: {
             /** @description Success */
             202: {
@@ -42343,7 +42493,14 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
         responses: {
             /** @description Success */
             200: {
@@ -56148,7 +56305,15 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    encounter_id?: string;
+                    "files[]": string[];
+                    tournament_id?: string;
+                };
+            };
+        };
         responses: {
             /** @description Success */
             200: {
@@ -61328,7 +61493,14 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
         responses: {
             /** @description Success */
             200: {
@@ -62826,7 +62998,14 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
         responses: {
             /** @description Success */
             200: {
@@ -64580,7 +64759,14 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
         responses: {
             /** @description Success */
             200: {
@@ -68451,7 +68637,14 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
         responses: {
             /** @description Success */
             200: {
@@ -69517,7 +69710,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["identity.Paginated_AuthUserListRead_"];
+                    "application/json": components["schemas"]["identity.Paginated_Union_AuthUserListRead__AuthUserLookupRead__"];
                 };
             };
             /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
@@ -69592,13 +69785,11 @@ export interface operations {
         };
         responses: {
             /** @description Success */
-            200: {
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": Record<string, never>;
-                };
+                content?: never;
             };
             /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
             401: {
@@ -69672,13 +69863,11 @@ export interface operations {
         };
         responses: {
             /** @description Success */
-            200: {
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": Record<string, never>;
-                };
+                content?: never;
             };
             /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
             401: {
@@ -70149,13 +70338,11 @@ export interface operations {
         };
         responses: {
             /** @description Success */
-            200: {
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": Record<string, never>;
-                };
+                content?: never;
             };
             /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
             401: {
@@ -70382,13 +70569,11 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Success */
-            200: {
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": Record<string, never>;
-                };
+                content?: never;
             };
             /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
             401: {
@@ -71275,7 +71460,15 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    data: string;
+                    payload_format?: string;
+                };
+            };
+        };
         responses: {
             /** @description Success */
             200: {
@@ -77875,7 +78068,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/octet-stream": string;
                 };
             };
             /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
@@ -79043,7 +79236,14 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
         responses: {
             /** @description Success */
             200: {
@@ -81753,6 +81953,11 @@ export enum AppNotificationWorkspaceConfigUpdateLocale {
     en = "en"
 }
 export enum AppQuotaPlanLimitReadScope {
+    workspace = "workspace",
+    key = "key",
+    session = "session"
+}
+export enum AppQuotaPlanLimitWriteScope {
     workspace = "workspace",
     key = "key",
     session = "session"

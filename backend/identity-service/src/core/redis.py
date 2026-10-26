@@ -11,9 +11,15 @@ _redis: aioredis.Redis | None = None
 
 async def init_redis() -> None:
     global _redis
+    # Redis sits on the gateway's per-request path: a stalled server must cost
+    # 0.5 s and a fallback, never a hung request.
     _redis = aioredis.from_url(
         settings.REDIS_URL,
         decode_responses=True,
+        socket_timeout=0.5,
+        socket_connect_timeout=0.5,
+        health_check_interval=30,
+        max_connections=128,
     )
     try:
         await _redis.ping()

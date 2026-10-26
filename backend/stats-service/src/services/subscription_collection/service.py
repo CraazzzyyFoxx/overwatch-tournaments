@@ -127,6 +127,7 @@ class SubscriptionCollectionService:
         *,
         workspace_id: int | None = None,
         twitch_client_id: str | None = None,
+        token_key: str | None = None,
         broker: Any | None = None,
         proxy: str | None = None,
         batch_size: int = 50,
@@ -157,6 +158,7 @@ class SubscriptionCollectionService:
         resolver = build_resolver(
             session,
             twitch_client_id=twitch_client_id,
+            token_key=token_key,
             broker=active_broker,
             proxy=proxy,
         )

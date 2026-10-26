@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import importlib.util
 import json
 import os
 import re
@@ -45,6 +46,7 @@ from typing import TYPE_CHECKING, Any
 
 import psycopg
 import pytest
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from psycopg import sql
 
 from shared.clients.s3 import S3Client
@@ -77,6 +79,18 @@ SECRET_PATTERNS = (
     re.compile(r"(?i)bearer\s+\S+"),
     re.compile(r"(?i)(amqps?|redis|postgres(?:ql)?(?:\+\w+)?)://[^\s/@]*:[^\s/@]*@"),
 )
+
+
+def jwt_public_key(secret: str) -> str:
+    """The gateway's ``JWT_PUBLIC_KEY`` for identity's ``JWT_SECRET_KEY``: the raw Ed25519 public key, base64url
+    without padding. Uses identity's own ``key_derivation`` (stdlib-only), loaded by path: ``src`` here is stats'."""
+    path = BACKEND / "identity-service" / "src" / "core" / "key_derivation.py"
+    spec = importlib.util.spec_from_file_location("_identity_key_derivation", path)
+    assert spec is not None and spec.loader is not None
+    key_derivation = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(key_derivation)
+    raw = Ed25519PrivateKey.from_private_bytes(key_derivation.jwt_signing_seed(secret)).public_key().public_bytes_raw()
+    return base64.urlsafe_b64encode(raw).rstrip(b"=").decode()
 
 
 def require_loopback(url: str, what: str) -> None:
@@ -654,6 +668,7 @@ class LiveStack:
             GATEWAY_ENV="development",
             LOG_FILE=str(self.directory / "logs" / "gateway.log"),
             GATEWAY_API_KEY_RATE_LIMIT="10000",
+            JWT_PUBLIC_KEY=jwt_public_key(JWT_SECRET),
             GATEWAY_AUTH_RATE_LIMIT="10000",
             GATEWAY_ANON_RATE_LIMIT="0",
         )

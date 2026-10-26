@@ -112,6 +112,9 @@ type SessionListParams = ListParams & {
 };
 
 export const rbacService = {
+  /** With `workspace_id` and no `search`: only that workspace's active members.
+   *  With both, a caller whose `auth_user.read` is scoped to the workspace gets
+   *  `AuthUserLookup` hits (no email, ≤ 20); type such results as that. */
   listUsers(params?: UserListParams): Promise<PaginatedResponse<AuthAdminUser>> {
     return rbacFetch<PaginatedResponse<AuthAdminUser>>(`/rbac/users${listQuery(params)}`).then(
       (page) => ({ ...page, results: page.results.map(normalizeAuthAdminUser) })

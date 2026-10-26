@@ -35,6 +35,9 @@ dependencies = [
     # transitively provided by uvicorn[standard]/fastapi[standard]. Regular dep so
     # it lands in the `--no-dev` image used for the dev stack's hot-reload.
     "watchfiles>=0.24.0",
+    # AES-GCM for OAuth provider tokens at rest (shared/core/secretbox.py, read by
+    # identity and the services that check Twitch subscriptions).
+    "cryptography>=44.0.0",
 ]
 
 [build-system]

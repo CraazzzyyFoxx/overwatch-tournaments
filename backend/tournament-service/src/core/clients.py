@@ -29,6 +29,7 @@ def subscription_resolver(session: AsyncSession) -> SubscriptionResolver:
     return build_resolver(
         session,
         twitch_client_id=settings.twitch_client_id,
+        token_key=settings.oauth_token_encryption_key,
         broker=optional_broker(),
         proxy=settings.proxy_url,
     )

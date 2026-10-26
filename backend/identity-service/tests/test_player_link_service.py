@@ -34,9 +34,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from shared.core.social import SocialProvider  # noqa: E402
 from shared.models.identity.auth_user import AuthUser  # noqa: E402
 from shared.models.identity.user import User  # noqa: E402
+from shared.repository import UserRepository  # noqa: E402
 from src.services import players as players_module  # noqa: E402
 from src.services.players import PlayerLinkService, players  # noqa: E402
 from tests._fakes import FakeOAuthConnections as _StubConnections  # noqa: E402
+from tests._fakes import FakeSessionCache  # noqa: E402
 from tests._fakes import FakeSocialAccounts as _StubSocials  # noqa: E402
 
 # ---------------------------------------------------------------------------
@@ -62,6 +64,9 @@ class _StubPlayers:
         if self._player is not None and self._player.auth_user_id == auth_user_id:
             return self._player
         return None
+
+    # The real write: it only sets the column and flushes.
+    link_auth_user = UserRepository.link_auth_user
 
 
 class _StubMembers:
@@ -103,12 +108,13 @@ def _conn(provider: str, **kwargs):
     )
 
 
-def _service(*, connections=(), handles=None, player=None, workspace_ids=()) -> PlayerLinkService:
+def _service(*, connections=(), handles=None, player=None, workspace_ids=(), cache=None) -> PlayerLinkService:
     return PlayerLinkService(
         connections=_StubConnections(connections),
         socials=_StubSocials(handles=handles),
         players=_StubPlayers(player),
         members=_StubMembers(workspace_ids),
+        cache=cache if cache is not None else FakeSessionCache(),
     )
 
 
@@ -148,9 +154,9 @@ def test_link_player_requires_oauth_ownership_gate() -> None:
             id="discord-username",
         ),
         pytest.param(
-            _conn("discord", provider_data={"global_name": "AnaMain"}),
+            _conn("discord", username="Someone", provider_data={"username": "AnaMain"}),
             {SocialProvider.DISCORD: ["anamain"]},
-            id="discord-provider-data-global-name",
+            id="discord-provider-data-username",
         ),
         pytest.param(
             _conn("battlenet", username="Hero#2100"),
@@ -201,6 +207,48 @@ def test_link_rejects_when_no_identity_matches() -> None:
     assert exc_info.value.detail == NO_MATCH_DETAIL
     assert player.auth_user_id is None
     assert session.committed is False
+
+
+@pytest.mark.parametrize(
+    "connection",
+    [
+        pytest.param(_conn("discord", username="someone", display_name="AnaMain"), id="discord-display-name"),
+        pytest.param(_conn("discord", username="someone", provider_data={"global_name": "AnaMain"}), id="global-name"),
+        pytest.param(_conn("discord", username="someone", email="anamain"), id="discord-email"),
+        pytest.param(_conn("steam", username="1", display_name="76561197960287930"), id="steam-persona-name"),
+    ],
+)
+def test_link_rejects_display_names_and_emails_as_proof(connection) -> None:
+    """Q3: only unique handles prove ownership; a display name or email is free text."""
+    player = _player()
+    service = _service(
+        connections=[connection],
+        # 22202 is the account id the persona name (a SteamID64) would read as.
+        handles={SocialProvider.DISCORD: ["anamain"], SocialProvider.STEAM: ["22202"]},
+        player=player,
+    )
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(service.link(_FakeSession(), CURRENT_USER, player_id=99))
+    assert (exc_info.value.status_code, exc_info.value.detail) == (403, NO_MATCH_DETAIL)
+    assert player.auth_user_id is None
+
+
+def test_link_and_unlink_drop_the_accounts_rbac_cache_after_commit() -> None:
+    """The player carries workspace memberships, so the account's cached RBAC is stale on both."""
+    cache = FakeSessionCache()
+    player = _player()
+    service = _service(
+        connections=[_conn("discord", username="Mercy")],
+        handles={SocialProvider.DISCORD: ["mercy"]},
+        player=player,
+        cache=cache,
+    )
+    asyncio.run(service.link(_FakeSession(), CURRENT_USER, player_id=99))
+    assert cache.invalidated == [CURRENT_USER.id]
+
+    with patch.object(players_module, "workspace_names_blocking_player_unlink", AsyncMock(return_value=[])):
+        asyncio.run(service.unlink(_FakeSession(), CURRENT_USER, player_id=99))
+    assert cache.invalidated == [CURRENT_USER.id, CURRENT_USER.id]
 
 
 def test_link_rejects_a_riot_id_that_names_another_player() -> None:

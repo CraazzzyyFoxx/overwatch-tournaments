@@ -5,15 +5,15 @@ Live updates travel over a single WebSocket: the client subscribes to topics, th
 The canonical address is `/api/v1/realtime/ws`. The historical spellings `/api/realtime/ws` and `/ws` are registered on the same handler and still work, but new code should use the canonical one. The socket lives on the same host as the HTTP API: on the platform domain, on a community subdomain and on a verified custom domain it is the same relative path.
 
 ```bash
-wscat -c "wss://owt.craazzzyyfoxx.me/api/v1/realtime/ws?token=<JWT>"
+wscat -c "wss://owt.craazzzyyfoxx.me/api/v1/realtime/ws" -H "Authorization: Bearer <JWT>"
 ```
 
-The credential is read from three places, in this order: the `token` query parameter, the `Authorization: Bearer` header, and the `owt_access_token` cookie (with the legacy `aqt_access_token` as a fallback). A browser cannot set headers on a WebSocket handshake, so there you use the cookie or `token`; a server-side client can use the header.
+The credential is read from two places, in this order: the `Authorization: Bearer` header and the `owt_access_token` cookie (with the legacy `aqt_access_token` as a fallback). A browser cannot set headers on a WebSocket handshake, so there the cookie does the job — the site's own pages send it automatically; scripts and server-side clients use the header. A `?token=` query parameter is not read: it used to be accepted, but a token in a URL ends up in proxy logs and browser history, so it was removed.
 
 Both credentials described in [Authentication and API keys](/docs/dev/identity) work:
 
-- **Session JWT.** The gateway verifies the signature locally and takes `sub` and `is_superuser` from the token. The connection lives no longer than the token's `exp`: when it passes, the socket closes and the client reconnects with the current session.
-- **API key.** It authenticates the socket only if the key holds at least one grant in its workspace; a key with no scopes connects anonymously. The owner's superuser flag is never carried onto the socket, and a key has no `exp`, so revoking one does not tear down an already open connection — only the next handshake is refused.
+- **Session JWT.** The gateway verifies the EdDSA signature locally with identity's public key, takes the account from `sub` and resolves its current permissions (the superuser flag included) through identity — the token itself carries no roles. A token that fails verification is treated as no credential. The connection lives no longer than the token's `exp`: when it passes, the socket closes and the client reconnects with the current session. Revoking the session (sign-out, sign-out everywhere, a password change for the other sessions) re-checks the account's open sockets too: the ones whose credential is no longer valid are closed with a policy-violation code and the reason `credential revoked`.
+- **API key.** It authenticates the socket only if the key holds at least one grant in its workspace; a key with no scopes connects anonymously. Such a socket may subscribe only to topics of the key's own workspace; personal `user:{id}:...` topics are refused, and the owner's superuser flag never applies. A key has no `exp`, so revoking one does not tear down an already open connection — only the next handshake is refused.
 - **No credential.** Anonymous connections are allowed: the handshake needs no token, and access is decided separately on every subscription.
 
 For browser clients the `Origin` header is checked. By default the platform apex and its subdomains are allowed; a workspace's own domain is accepted only once it is verified. An Origin equal to the request's own `Host` is always allowed, so a community site on its own domain connects with no extra configuration.

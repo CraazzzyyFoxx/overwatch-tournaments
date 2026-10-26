@@ -12,7 +12,7 @@ import { CommandGroup, CommandItem } from "@/components/ui/command";
 import { Skeleton } from "@/components/ui/skeleton";
 import { rbacService } from "@/services/rbac.service";
 import userService from "@/services/user.service";
-import type { AuthAdminUser } from "@/types/rbac.types";
+import type { AuthUserLookup } from "@/types/rbac.types";
 import type { MinimizedUser } from "@/types/user.types";
 
 /** Trigger props every server-searched picker forwards unchanged. */
@@ -46,6 +46,8 @@ export interface ServerSearchComboboxProps<TItem> extends ServerSearchChrome {
   searchPlaceholder: string;
   /** Label of the row that clears the pick; omit for no such row. */
   clearLabel?: string;
+  /** Trimmed characters before the first request; the hook's default (2) when omitted. */
+  minQueryLength?: number;
 }
 
 /**
@@ -70,14 +72,16 @@ export function ServerSearchCombobox<TItem>({
   messages,
   placeholder,
   searchPlaceholder,
-  clearLabel
+  clearLabel,
+  minQueryLength
 }: Readonly<ServerSearchComboboxProps<TItem>>) {
   const { open, setOpen, searchValue, setSearchValue, results, handleSelect, emptyMessage } =
     useSearchComboboxQuery<TItem, TItem>({
       queryKeyPrefix: queryKey,
       fetchResults: fetch,
       onSelect,
-      messages
+      messages,
+      minQueryLength
     });
 
   const picked = value ? results.find((item) => itemId(item) === value) : undefined;
@@ -182,7 +186,8 @@ export interface AuthUserOption {
 
 /**
  * Auth (login) accounts, searched by email or username — for linking a player
- * to one, or adding a workspace member. `workspaceId` scopes the read grant.
+ * to one, or adding a workspace member. `workspaceId` scopes the read grant; a
+ * caller holding it only there gets lookup hits without an email.
  */
 export function AuthUserSearchCombobox({
   workspaceId,
@@ -194,7 +199,7 @@ export function AuthUserSearchCombobox({
 }: Readonly<UserPickerProps<AuthUserOption> & { workspaceId?: number }>) {
   const t = useTranslations("kit.authUser");
   return (
-    <ServerSearchCombobox<AuthAdminUser>
+    <ServerSearchCombobox<AuthUserLookup>
       {...chrome}
       selectedLabel={
         chrome.selectedLabel || (chrome.value ? t("userId", { id: chrome.value }) : undefined)
@@ -207,11 +212,15 @@ export function AuthUserSearchCombobox({
           .then((page) => page.results)
       }
       itemId={(user) => user.id}
+      // The workspace-scoped account search answers an empty page below 3 characters.
+      minQueryLength={3}
       label={(user) => user.username}
       renderItem={(user) => (
         <span className="flex flex-col">
           <span className="truncate">{user.username}</span>
-          <span className="truncate text-xs text-muted-foreground">{user.email}</span>
+          {user.email ? (
+            <span className="truncate text-xs text-muted-foreground">{user.email}</span>
+          ) : null}
         </span>
       )}
       messages={{

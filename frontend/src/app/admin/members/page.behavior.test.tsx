@@ -281,10 +281,12 @@ describe("admin Members", () => {
     await click(button("Add member"));
     const dialog = document.querySelector('[role="dialog"]')!;
     await click(button("Select user…", dialog));
-    // The picker searches the server: nothing is listed until two characters are typed.
+    // The picker searches the server: nothing is listed until three characters are typed.
     expect(commandItem("nova")).toBeUndefined();
     await search("no");
-    expect(listUsers).toHaveBeenLastCalledWith(expect.objectContaining({ search: "no", workspace_id: 1 }));
+    expect(listUsers).not.toHaveBeenCalled();
+    await search("nov");
+    expect(listUsers).toHaveBeenLastCalledWith(expect.objectContaining({ search: "nov", workspace_id: 1 }));
     await click(commandItem("nova"));
     const roleLabel = Array.from(dialog.querySelectorAll("label")).find(
       (label) => label.textContent === "Role"

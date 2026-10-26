@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 import { Api } from "../support/api";
-import { BASE_URL } from "../support/env";
+import { BASE_URL, COOKIE_PREFIX } from "../support/env";
 import { expect, test } from "../support/fixtures";
 import { seedBracket } from "../support/flows";
 import { type Auth, ROUTES, type Route } from "../support/route-table";
@@ -293,10 +293,15 @@ type Frame = { op: string; topic?: string; code?: string; message?: string };
 /**
  * Opens /ws from the browser (a real Origin, like the product) and returns the
  * server's verdict on one subscribe. Node's own WebSocket left the Windows
- * worker dying on a libuv assertion at exit.
+ * worker dying on a libuv assertion at exit. The socket authenticates the way
+ * the site does: the access-token cookie rides the handshake (the gateway
+ * ignores `?token=`); no token means no cookie, i.e. anonymous.
  */
 async function subscribe(page: Page, topic: string, token?: string): Promise<Frame> {
-  const url = `${BASE_URL.replace(/^http/, "ws")}/ws${token ? `?token=${token}` : ""}`;
+  const url = `${BASE_URL.replace(/^http/, "ws")}/ws`;
+  const cookie = `${COOKIE_PREFIX}_access_token`;
+  await page.context().clearCookies({ name: cookie });
+  if (token) await page.context().addCookies([{ name: cookie, value: token, url: BASE_URL }]);
   return page.evaluate(
     async ({ url, topic }) => {
       const ws = new WebSocket(url);

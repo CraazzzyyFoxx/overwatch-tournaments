@@ -38,6 +38,14 @@ export interface AuthAdminUser {
   updated_at?: string | null;
 }
 
+/**
+ * A `GET /rbac/users` search hit. Scoped to a workspace, a caller without the
+ * global `auth_user.read` grant gets only `id`, `username` and `avatar_url`
+ * (at most 20, search ≥ 3 characters); every other field may be absent.
+ */
+export type AuthUserLookup = Pick<AuthAdminUser, "id" | "username" | "avatar_url"> &
+  Partial<AuthAdminUser>;
+
 interface AuthAdminLinkedPlayer {
   player_id: number;
   player_name: string;

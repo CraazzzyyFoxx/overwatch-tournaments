@@ -61,7 +61,7 @@ def _accounts_and_userinfo(userinfo_status: int = 200, account: dict = ACCOUNT, 
 
 
 def test_the_authorize_url_asks_for_openid_and_cpid() -> None:
-    url = urlparse(RiotOAuthProvider(_Http(lambda r: httpx.Response(500))).get_authorization_url("st-1"))
+    url = urlparse(RiotOAuthProvider(_Http(lambda r: httpx.Response(500))).get_authorization_url("st-1", "verifier"))
     query = parse_qs(url.query)
     assert (url.scheme, url.netloc, url.path) == ("https", "auth.riotgames.com", "/authorize")
     assert query == {
@@ -75,7 +75,7 @@ def test_the_authorize_url_asks_for_openid_and_cpid() -> None:
 
 def test_the_code_is_exchanged_with_basic_auth() -> None:
     http = _Http(lambda r: httpx.Response(200, json={"access_token": "at", "token_type": "Bearer"}))
-    token = asyncio.run(RiotOAuthProvider(http).exchange_code("code-1"))
+    token = asyncio.run(RiotOAuthProvider(http).exchange_code("code-1", state="st-1", code_verifier="verifier"))
     request = http.requests[0]
     assert token["access_token"] == "at"
     assert (request.method, str(request.url)) == ("POST", "https://auth.riotgames.com/token")

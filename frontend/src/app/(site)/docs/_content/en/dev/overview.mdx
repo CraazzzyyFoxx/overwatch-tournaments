@@ -5,8 +5,8 @@ This section is for people who write code next to OWT: integrators building bots
 - **One entry point.** The Go gateway is the only process that speaks HTTP and WebSocket to the outside world. The Python services expose no HTTP at all.
 - **Version in the path.** Every route looks like `/api/v{n}/<domain>/...`: the version is always the second segment, with nothing beside it. `/api/v1/...` returns plain JSON; `/api/v2/...` serves the same paths, handlers and statuses with the body wrapped in an envelope.
 - **Endpoint reference.** Scalar at [`/api/docs`](/api/docs) with a v1/v2 switch in its header; the specs themselves are at `/api/openapi.json` (v1) and `/api/openapi.v2.json` (v2).
-- **Two credentials, one header.** `Authorization: Bearer` accepts either a session JWT or an API key. A key is pinned to exactly one workspace and can never be wider than its owner's rights there.
-- **Realtime.** A WebSocket at `/api/v1/realtime/ws`: subscribe to topics and replay the events you missed while disconnected.
+- **Two credentials, one header.** `Authorization: Bearer` accepts either a session JWT (EdDSA-signed, carrying only the account and session ids) or an API key. A key is pinned to exactly one workspace and can never be wider than its owner's rights there.
+- **Realtime.** A WebSocket at `/api/v1/realtime/ws`: subscribe to topics and replay the events you missed while disconnected. The handshake authenticates with the same header or, in a browser, the session cookie — never a `?token=` parameter.
 
 ```http
 GET /api/v1/tournaments?workspace_id=1 HTTP/1.1

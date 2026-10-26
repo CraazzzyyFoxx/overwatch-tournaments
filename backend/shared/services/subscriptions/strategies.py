@@ -21,6 +21,7 @@ from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
+from shared.core import secretbox
 from shared.core.social import SocialProvider
 from shared.services.discord_client import DiscordClient
 from shared.services.discord_errors import DiscordError
@@ -218,9 +219,12 @@ class BoostyDiscordStrategy:
 class TwitchSubscriptionStrategy:
     """Twitch tiers via Helix ``GET /subscriptions/user``.
 
-    Uses each patron's own stored user access token. A 401 means either an expired
-    token or a token predating the ``user:read:subscriptions`` scope; both surface
-    as ``HelixMissingScope`` so the UI offers a reconnect instead of refusing the
+    Uses each patron's own stored user access token, sealed at rest by identity
+    (``shared.core.secretbox``) and opened here with ``token_key``
+    (``OAUTH_TOKEN_ENCRYPTION_KEY``); one that cannot be opened -- no or a wrong key --
+    is logged and treated as absent. A 401 means either an expired token or a token
+    predating the ``user:read:subscriptions`` scope; both surface as
+    ``HelixMissingScope`` so the UI offers a reconnect instead of refusing the
     patron. Refreshing the token is identity-service's job, not this module's.
     """
 
@@ -229,11 +233,13 @@ class TwitchSubscriptionStrategy:
         session: AsyncSession,
         *,
         client_id: str | None,
+        token_key: str | None = None,
         proxy: str | None = None,
         api_base: str = TWITCH_HELIX_BASE,
     ) -> None:
         self._session = session
         self._client_id = client_id
+        self._token_key = token_key
         self._proxy = proxy
         self._api_base = api_base
 
@@ -290,8 +296,17 @@ class TwitchSubscriptionStrategy:
                 continue
             connections = out.setdefault(auth_user_id, [])
             if all(existing != provider_user_id for existing, _ in connections):
-                connections.append((provider_user_id, access_token))
+                connections.append((provider_user_id, self._open(access_token)))
         return out
+
+    def _open(self, stored: str | None) -> str | None:
+        if not stored:
+            return None
+        try:
+            return secretbox.decrypt(stored, secretbox.load_key(self._token_key))
+        except ValueError as exc:
+            logger.error(f"stored twitch token is unusable (OAUTH_TOKEN_ENCRYPTION_KEY): {exc}")
+            return None
 
     def _checker(self, client: httpx.AsyncClient, token: str | None) -> Callable[..., Awaitable[dict[str, Any]]]:
         async def check(*, broadcaster_id: str, user_id: str) -> dict[str, Any]:

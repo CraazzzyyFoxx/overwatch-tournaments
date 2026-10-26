@@ -47,6 +47,10 @@ class NewRowsTests(IsolatedAsyncioTestCase):
         p = patch.object(workspaces_rpc.workspace_service, "resolve_member_role_ids", AsyncMock(return_value=[5]))
         p.start()
         self.addCleanup(p.stop)
+        # The owner-role gate reads the database; its behavior is covered in test_workspace_rbac_changes.py.
+        p = patch.object(workspaces_rpc.workspace_service, "ensure_owner_role_change_allowed", AsyncMock())
+        p.start()
+        self.addCleanup(p.stop)
 
     def _assert(self, session, action, after, *, events=("add", "commit")):
         rows = session.audit_rows

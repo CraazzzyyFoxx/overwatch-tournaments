@@ -86,6 +86,7 @@ prometheus.scrape "services" {
 		{__address__ = "discord-worker:9100", job = "discord-worker", instance = "discord-worker"},
 		{__address__ = "app-svc:9109", job = "app-svc", instance = "app-svc"},
 		{__address__ = "identity-svc:9107", job = "identity-svc", instance = "identity-svc"},
+		{__address__ = "identity-auth-svc:9112", job = "identity-auth-svc", instance = "identity-auth-svc"},
 		{__address__ = "analytics-svc:9108", job = "analytics-svc", instance = "analytics-svc"},
 		{__address__ = "analytics-worker:9106", job = "analytics-worker", instance = "analytics-worker"},
 		{__address__ = "stream-svc:9111", job = "stream-svc", instance = "stream-svc"},

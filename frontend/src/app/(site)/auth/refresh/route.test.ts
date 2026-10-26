@@ -58,13 +58,18 @@ describe("POST /auth/refresh", () => {
     refreshOutcome = null;
   });
 
-  it("rotates the cookies on success", async () => {
+  it("rotates the cookies on success and keeps the refresh token out of the body", async () => {
     refreshOutcome = async () => ({ access_token: "access-2", refresh_token: "refresh-2" });
 
     const res = await POST(req());
 
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ access_token: "access-2", refresh_token: "refresh-2" });
+    expect(await res.json()).toEqual({ access_token: "access-2" });
+    const setCookies = res.headers.getSetCookie();
+    expect(setCookies.some((c) => c.startsWith("owt_access_token=access-2;"))).toBe(true);
+    expect(
+      setCookies.some((c) => c.startsWith("owt_refresh_token=refresh-2;") && /HttpOnly/i.test(c))
+    ).toBe(true);
     expect(clearedCookieNames(res)).toEqual([]);
   });
 

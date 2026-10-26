@@ -29,7 +29,7 @@ for file in backend/env/*.env.example; do cp "$file" "${file%.example}"; done
 cp frontend/.env.example frontend/.env.local
 ```
 
-The RabbitMQ and PostgreSQL values in the root `.env` must match `backend/env/common.env`, and `JWT_SECRET_KEY` in `backend/env/auth.env` must be replaced with at least 32 random characters — the gateway and the workers share it.
+The RabbitMQ and PostgreSQL values in the root `.env` must match `backend/env/common.env`, and `JWT_SECRET_KEY` in `backend/env/auth.env` must be replaced with at least 32 random characters — identity derives its token-signing key from it. The gateway holds only the matching public key: run `make jwt-public-key` (it runs in the identity image, building it on first use) and put its output into `JWT_PUBLIC_KEY` in `backend/env/gateway.env`; redo it whenever `JWT_SECRET_KEY` changes. identity also refuses to start without `OAUTH_TOKEN_ENCRYPTION_KEY` while Discord or Twitch OAuth is enabled (the template's placeholder credentials count): generate one with `python -c "import base64,secrets;print(base64.urlsafe_b64encode(secrets.token_bytes(32)).decode().rstrip('='))"` and put the same value into `auth.env`, `stats.env` and `tournament.env`.
 
 ```bash
 make dev-up      # start the core stack

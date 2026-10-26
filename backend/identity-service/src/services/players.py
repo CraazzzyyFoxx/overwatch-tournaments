@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from shared import models
 from shared.core import http_status as status
 from shared.core.errors import BaseAPIException as HTTPException
-from shared.core.social import SocialProvider, normalize_social_handle, oauth_handle_candidates
+from shared.core.social import SocialProvider, normalize_social_handle
 from shared.models.identity.oauth import OAuthConnection
 from shared.rbac import assign_default_member_role_if_roleless, workspace_names_blocking_player_unlink
 from shared.repository import (
@@ -26,6 +26,7 @@ from shared.repository import (
     WorkspaceMemberRepository,
 )
 from src import schemas
+from src.services.session_cache import SessionCache, session_cache
 
 __all__ = ("PlayerLinkService", "players")
 
@@ -57,11 +58,13 @@ class PlayerLinkService:
         connections: OAuthConnectionRepository = OAuthConnectionRepository(),
         socials: SocialAccountRepository = SocialAccountRepository(),
         members: WorkspaceMemberRepository = WorkspaceMemberRepository(),
+        cache: SessionCache = session_cache,
     ) -> None:
         self.players = players
         self.connections = connections
         self.socials = socials
         self.members = members
+        self.cache = cache
 
     # -- lookups -----------------------------------------------------------
 
@@ -99,21 +102,18 @@ class PlayerLinkService:
     # -- ownership ---------------------------------------------------------
 
     async def _verify_ownership(self, session: AsyncSession, auth_user_id: int, player_id: int) -> None:
+        """Proof by unique handles only: Discord ``username``, BattleTag, Riot ID, Steam account id.
+
+        A display name (Discord ``global_name``, a persona name) or an email is
+        free text anyone can set to someone else's, so it proves nothing.
+        """
         discord_conn, battlenet_conn, game_conns = await self._get_oauth_connections(session, auth_user_id)
 
         discord_match = False
         battlenet_match = False
 
         if discord_conn is not None:
-            oauth_names = _normalized(
-                (
-                    discord_conn.username,
-                    discord_conn.display_name,
-                    discord_conn.email,
-                    (discord_conn.provider_data or {}).get("username"),
-                    (discord_conn.provider_data or {}).get("global_name"),
-                )
-            )
+            oauth_names = _normalized((discord_conn.username, (discord_conn.provider_data or {}).get("username")))
             player_discord_names = _normalized(
                 await self.socials.list_handles(session, user_id=player_id, provider=SocialProvider.DISCORD)
             )
@@ -138,7 +138,7 @@ class PlayerLinkService:
 
         game_match = False
         for conn in game_conns:
-            oauth_ids = oauth_handle_candidates(conn.provider, username=conn.username, display_name=conn.display_name)
+            oauth_ids = {normalize_social_handle(conn.provider, conn.username)} if conn.username else set()
             player_ids = {
                 normalize_social_handle(conn.provider, handle)
                 for handle in await self.socials.list_handles(session, user_id=player_id, provider=conn.provider)
@@ -173,8 +173,7 @@ class PlayerLinkService:
                 detail="Player is already linked to another account",
             )
 
-        player.auth_user_id = auth_user_id
-        await session.flush()
+        await self.players.link_auth_user(session, player, auth_user_id)
         # Autofill the baseline ``member`` role for every workspace this player is
         # already anchored to (tournament participation created the member rows
         # before the account existed). Now that the row is auth-linked it becomes
@@ -182,7 +181,8 @@ class PlayerLinkService:
         await self._autofill_member_roles(session, auth_user_id=auth_user_id, player_id=player_id)
         await session.commit()
         await session.refresh(player)
-
+        # The account now holds the player's workspace memberships.
+        await self.cache.invalidate_rbac(auth_user_id)
         logger.info(f"Linked player {player_id} to auth user {auth_user_id}")
         return player
 
@@ -223,8 +223,9 @@ class PlayerLinkService:
                     f"following workspace(s): {listed}. Leave those workspaces first."
                 ),
             )
-        player.auth_user_id = None
+        await self.players.link_auth_user(session, player, None)
         await session.commit()
+        await self.cache.invalidate_rbac(auth_user_id)
         logger.info(f"Unlinked player {player_id} from auth user {auth_user_id}")
 
     # -- self-service ------------------------------------------------------

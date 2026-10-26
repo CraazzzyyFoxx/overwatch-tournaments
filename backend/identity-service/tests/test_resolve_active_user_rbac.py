@@ -56,7 +56,11 @@ class _IdentityOnlyUsers:
         raise AssertionError("a warm cache must take the identity-only path")
 
 
+_OWNER = {"email": "owner@example.com", "username": "owner", "is_active": True, "is_superuser": False}
+
+
 def _resolve(entry: dict) -> models.AuthUser:
+    entry = {"user": _OWNER, **entry}
     user = models.AuthUser(
         id=7,
         email="owner@example.com",

@@ -56,6 +56,7 @@ def build_strategies(
     session: AsyncSession,
     *,
     twitch_client_id: str | None = None,
+    token_key: str | None = None,
     broker: Any | None = None,
     proxy: str | None = None,
 ) -> dict[str, ProviderStrategy]:
@@ -65,7 +66,8 @@ def build_strategies(
     (``boosty``/``twitch``), not the mechanism that answers: Boosty's tier comes
     from Discord roles, which is an implementation detail recorded in the
     verdict's ``source``. Discord is asked through ``broker`` (discord-service
-    holds the only bot token); ``proxy`` is Twitch's egress.
+    holds the only bot token); ``proxy`` is Twitch's egress and ``token_key``
+    (``OAUTH_TOKEN_ENCRYPTION_KEY``) opens the patrons' stored Twitch tokens.
 
     A provider with no credentials is still registered: its strategy resolves to
     ``unknown`` with a reason, which is strictly better than the resolver
@@ -73,7 +75,9 @@ def build_strategies(
     """
     return {
         SocialProvider.BOOSTY: BoostyDiscordStrategy(session, broker=broker),
-        SocialProvider.TWITCH: TwitchSubscriptionStrategy(session, client_id=twitch_client_id, proxy=proxy),
+        SocialProvider.TWITCH: TwitchSubscriptionStrategy(
+            session, client_id=twitch_client_id, token_key=token_key, proxy=proxy
+        ),
     }
 
 
@@ -81,12 +85,15 @@ def build_resolver(
     session: AsyncSession,
     *,
     twitch_client_id: str | None = None,
+    token_key: str | None = None,
     broker: Any | None = None,
     proxy: str | None = None,
 ) -> SubscriptionResolver:
     return SubscriptionResolver(
         store=build_store(session),
-        strategies=build_strategies(session, twitch_client_id=twitch_client_id, broker=broker, proxy=proxy),
+        strategies=build_strategies(
+            session, twitch_client_id=twitch_client_id, token_key=token_key, broker=broker, proxy=proxy
+        ),
         # Every real resolver records history: the collector needs it for the admin
         # tab, and the registration/check-in gates are exactly the checks an
         # organizer later asks "why was this player refused?" about.

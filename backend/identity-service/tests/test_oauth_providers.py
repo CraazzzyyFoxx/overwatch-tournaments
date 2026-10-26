@@ -102,7 +102,7 @@ def test_twitch_authorize_url_requests_the_subscriptions_scope() -> None:
     Reads the registry directly (as ``PROVIDER_SETTINGS`` is read above) so the
     assertion is independent of the enable flags other tests monkeypatch.
     """
-    url = oauth_providers.providers["twitch"].get_authorization_url("state-123")
+    url = oauth_providers.providers["twitch"].get_authorization_url("state-123", "verifier")
 
     assert "user%3Aread%3Asubscriptions" in url
 
@@ -110,7 +110,7 @@ def test_twitch_authorize_url_requests_the_subscriptions_scope() -> None:
 def test_twitch_authorize_url_keeps_the_email_scope() -> None:
     """``user:read:email`` predates this feature and the callback still reads
     ``email`` off the profile; adding a scope must not drop it."""
-    url = oauth_providers.providers["twitch"].get_authorization_url("state-123")
+    url = oauth_providers.providers["twitch"].get_authorization_url("state-123", "verifier")
 
     assert "user%3Aread%3Aemail" in url
 
@@ -120,7 +120,7 @@ def test_discord_authorize_url_requests_guilds_scope() -> None:
     needs to know which guilds the user administers, which requires the
     ``guilds`` OAuth scope. Dropping it makes ``/users/@me/guilds`` return 401.
     """
-    url = oauth_providers.providers["discord"].get_authorization_url("state-123")
+    url = oauth_providers.providers["discord"].get_authorization_url("state-123", "verifier")
     scope = parse_qs(urlparse(url).query)["scope"][0]
 
     assert scope.split() == ["identify", "email", "guilds"]

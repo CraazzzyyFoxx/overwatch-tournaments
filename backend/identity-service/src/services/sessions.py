@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 from uuid import UUID
@@ -11,6 +10,7 @@ from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
+from shared.core.pagination import PaginationSortParams
 from shared.repository import RefreshTokenRepository
 from src.core import config
 from src.services.security import TokenCodec, token_codec
@@ -29,10 +29,16 @@ settings = config.settings
 
 SessionStatus = Literal["active", "revoked", "expired"]
 DEFAULT_USER_SESSION_HISTORY_LIMIT = 20
+PURGE_BATCH_SIZE = 5000
 
 
 class RefreshTokenService:
-    """Issues, looks up and revokes refresh tokens; owns session blacklisting."""
+    """Issues, looks up and revokes refresh tokens; owns session blacklisting.
+
+    Every revocation that blacklists a ``sid`` also drops the owner's RBAC
+    entry (``invalidate_rbac``): that announces ``user:{id}:rbac``, on which the
+    gateway re-validates the user's open WebSockets and closes the revoked ones.
+    """
 
     def __init__(
         self,
@@ -120,15 +126,19 @@ class RefreshTokenService:
         )
 
     async def revoke_token(self, session: AsyncSession, token: str, *, commit: bool = True) -> bool:
-        """Revoke one refresh token. False only when the token is unknown."""
-        existed = await self._tokens.revoke_by_hashes(
+        """Revoke one refresh token. True only when THIS call revoked it.
+
+        False for an unknown token and for one already revoked, including by a
+        concurrent rotation: a rotation consumes its token only on True.
+        """
+        revoked = await self._tokens.revoke_by_hashes(
             session,
             self._codec.refresh_token_hashes(token),
             now=datetime.now(UTC),
         )
         if commit:
             await session.commit()
-        return existed
+        return revoked
 
     async def revoke_session(
         self,
@@ -157,6 +167,7 @@ class RefreshTokenService:
         if blacklist:
             # Block any still-valid access token carrying this sid until it expires.
             await self._cache.blacklist_session(str(session_id), self._codec.access_token_ttl_seconds)
+            await self._cache.invalidate_rbac(user_id)
         return count
 
     async def revoke_client_family(
@@ -184,29 +195,42 @@ class RefreshTokenService:
         if commit:
             await session.commit()
         await self._cache.blacklist_sessions(session_ids, self._codec.access_token_ttl_seconds)
+        if session_ids:
+            await self._cache.invalidate_rbac(user_id)
         return count
 
-    async def revoke_all(self, session: AsyncSession, user_id: int, *, commit: bool = True) -> int:
-        """Revoke every refresh token of a user."""
+    async def revoke_all(
+        self,
+        session: AsyncSession,
+        user_id: int,
+        *,
+        commit: bool = True,
+        keep_session_id: UUID | None = None,
+    ) -> int:
+        """Revoke every refresh token of a user, except the ``keep_session_id`` session's."""
         count, session_ids = await self._tokens.revoke_all_for_user(
             session,
             user_id=user_id,
             now=datetime.now(UTC),
+            keep_session_id=keep_session_id,
         )
         if commit:
             await session.commit()
         await self._cache.blacklist_sessions(session_ids, self._codec.access_token_ttl_seconds)
+        if session_ids:
+            await self._cache.invalidate_rbac(user_id)
         return count
 
-    async def handle_reuse(self, session: AsyncSession, token: str) -> None:
+    async def handle_reuse(self, session: AsyncSession, token: str) -> bool:
         """Contain a replayed refresh token that is not live (revoked or expired).
 
         Revocation is scoped as narrowly as the stored record allows so one
-        stale tab does not log the user out everywhere.
+        stale tab does not log the user out everywhere. False when the token
+        was never issued (nothing to contain).
         """
         reused = await self._tokens.get_by_hashes(session, self._codec.refresh_token_hashes(token))
         if reused is None:
-            return
+            return False
 
         # WARNING, not ERROR: reuse is an expected consequence of ordinary
         # client behaviour (a stale tab replaying a rotated token, a mobile
@@ -227,36 +251,35 @@ class RefreshTokenService:
             await self.revoke_client_family(session, reused.user_id, user_agent, ip_address)
         else:
             await self.revoke_all(session, reused.user_id)
+        return True
 
     async def purge_expired(self, session: AsyncSession, *, retention: timedelta) -> int:
-        """Delete tokens that expired more than ``retention`` ago; returns the count.
+        """Delete tokens that expired more than ``retention`` ago, committing every
+        ``PURGE_BATCH_SIZE`` rows; returns the count.
 
         Well past the rotation grace and the token lifetime, so no live or
         replayed token can match a deleted row. The session lists keep their
         history for ``retention`` after a session's last token expired.
         """
-        return await self._tokens.delete_expired_before(session, datetime.now(UTC) - retention)
+        cutoff = datetime.now(UTC) - retention
+        purged = 0
+        while True:
+            deleted = await self._tokens.delete_expired_before(session, cutoff, limit=PURGE_BATCH_SIZE)
+            await session.commit()
+            purged += deleted
+            if deleted < PURGE_BATCH_SIZE:
+                return purged
 
 
 class SessionService:
-    """Aggregates refresh tokens into the logical sessions the UI shows."""
+    """Aggregates refresh tokens into the logical sessions the UI shows.
+
+    The newest token of a session stands for it; the repository collapses,
+    orders and pages in SQL, so only the rows shown are ever loaded.
+    """
 
     def __init__(self, *, tokens: RefreshTokenRepository | None = None) -> None:
         self._tokens = tokens or RefreshTokenRepository()
-
-    @staticmethod
-    def _limit_user_session_history(
-        summaries: Sequence[dict],
-        *,
-        history_limit: int = DEFAULT_USER_SESSION_HISTORY_LIMIT,
-    ) -> list[dict]:
-        if history_limit < 0:
-            history_limit = 0
-
-        active_sessions = [summary for summary in summaries if summary["status"] == "active"]
-        historical_sessions = [summary for summary in summaries if summary["status"] != "active"]
-
-        return [*active_sessions, *historical_sessions[:history_limit]]
 
     @staticmethod
     def _session_status(token: models.RefreshToken, now: datetime) -> SessionStatus:
@@ -267,56 +290,35 @@ class SessionService:
         return "active"
 
     @staticmethod
-    def _summaries_from_tokens(
-        tokens: Sequence[models.RefreshToken],
+    def _summary(
+        latest_token: models.RefreshToken,
+        now: datetime,
         *,
         current_session_id: str | None = None,
         include_user: bool = False,
-    ) -> list[dict]:
-        now = datetime.now(UTC)
-        latest_by_session: dict[str, models.RefreshToken] = {}
-
-        for token in tokens:
-            session_id = str(token.session_id)
-            current = latest_by_session.get(session_id)
-            if current is None or token.created_at > current.created_at:
-                latest_by_session[session_id] = token
-
-        summaries: list[dict] = []
-        for session_id, latest_token in latest_by_session.items():
-            summary = {
-                "session_id": session_id,
-                "status": SessionService._session_status(latest_token, now),
-                "login_at": latest_token.session_started_at,
-                "last_seen_at": latest_token.created_at,
-                "expires_at": latest_token.expires_at,
-                "revoked_at": latest_token.revoked_at if latest_token.is_revoked else None,
-                "user_agent": latest_token.user_agent,
-                "ip_address": latest_token.ip_address,
-                "is_current": current_session_id is not None and current_session_id == session_id,
-            }
-
-            if include_user:
-                user = latest_token.user
-                summary.update(
-                    {
-                        "user_id": latest_token.user_id,
-                        "email": user.email if user is not None else None,
-                        "username": user.username if user is not None else None,
-                    }
-                )
-
-            summaries.append(summary)
-
-        summaries.sort(
-            key=lambda item: (
-                item["status"] == "active",
-                item["login_at"] or datetime.min.replace(tzinfo=UTC),
-                item["last_seen_at"] or datetime.min.replace(tzinfo=UTC),
-            ),
-            reverse=True,
-        )
-        return summaries
+    ) -> dict:
+        session_id = str(latest_token.session_id)
+        summary = {
+            "session_id": session_id,
+            "status": SessionService._session_status(latest_token, now),
+            "login_at": latest_token.session_started_at,
+            "last_seen_at": latest_token.created_at,
+            "expires_at": latest_token.expires_at,
+            "revoked_at": latest_token.revoked_at if latest_token.is_revoked else None,
+            "user_agent": latest_token.user_agent,
+            "ip_address": latest_token.ip_address,
+            "is_current": current_session_id is not None and current_session_id == session_id,
+        }
+        if include_user:
+            user = latest_token.user
+            summary.update(
+                {
+                    "user_id": latest_token.user_id,
+                    "email": user.email if user is not None else None,
+                    "username": user.username if user is not None else None,
+                }
+            )
+        return summary
 
     async def list_user_sessions(
         self,
@@ -326,9 +328,11 @@ class SessionService:
         current_session_id: str | None = None,
         history_limit: int = DEFAULT_USER_SESSION_HISTORY_LIMIT,
     ) -> list[dict]:
-        tokens = await self._tokens.list_by_user(session, user_id)
-        summaries = self._summaries_from_tokens(tokens, current_session_id=current_session_id)
-        return self._limit_user_session_history(summaries, history_limit=history_limit)
+        """Every active session plus the ``history_limit`` most recent ended ones,
+        active first, then newest sign-in first."""
+        now = datetime.now(UTC)
+        tokens = await self._tokens.latest_for_user(session, user_id, now=now, history_limit=max(history_limit, 0))
+        return [self._summary(token, now, current_session_id=current_session_id) for token in tokens]
 
     async def get_user_session(
         self,
@@ -338,27 +342,26 @@ class SessionService:
         *,
         current_session_id: str | None = None,
     ) -> dict | None:
-        tokens = await self._tokens.list_by_user_session(session, user_id=user_id, session_id=session_id)
-        if not tokens:
+        token = await self._tokens.latest_in_session(session, user_id=user_id, session_id=session_id)
+        if token is None:
             return None
-        summaries = self._summaries_from_tokens(tokens, current_session_id=current_session_id)
-        return summaries[0] if summaries else None
+        return self._summary(token, datetime.now(UTC), current_session_id=current_session_id)
 
     async def list_all_sessions(
         self,
         session: AsyncSession,
+        params: PaginationSortParams,
         *,
         user_id: int | None = None,
         search: str | None = None,
         status: SessionStatus | None = None,
-    ) -> list[dict]:
-        # One row per logical session, collapsed in SQL: rotation makes the
-        # token count dwarf the session count.
-        tokens = await self._tokens.latest_per_session(session, user_id=user_id, search=search)
-        summaries = self._summaries_from_tokens(tokens, include_user=True)
-        if status is not None:
-            summaries = [summary for summary in summaries if summary["status"] == status]
-        return summaries
+    ) -> tuple[list[dict], int]:
+        """One page of every account's sessions, and the total matching the filters."""
+        now = datetime.now(UTC)
+        tokens, total = await self._tokens.latest_per_session(
+            session, params, now=now, user_id=user_id, search=search, status=status
+        )
+        return [self._summary(token, now, include_user=True) for token in tokens], total
 
 
 refresh_tokens = RefreshTokenService()

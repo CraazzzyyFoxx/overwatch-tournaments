@@ -99,8 +99,9 @@ process as its Discord gateway session.
    enforced (`limit_req_dry_run off`, `limit_conn_dry_run off`).
    nginx speaks only HTTP/1.1.
 2. The **gateway** (`gateway/cmd/gateway/main.go`):
-   - validates JWTs locally with the shared HS256 secret; for RBAC-gated routes it
-     revalidates and enriches the principal via `rpc.identity.validate_token`;
+   - verifies access JWTs locally (EdDSA, with identity's public key `JWT_PUBLIC_KEY`; it holds
+     no signing secret); for RBAC-gated routes it revalidates and enriches the principal via
+     `rpc.identity.validate_token`;
    - dispatches typed REST routes to workers as **RabbitMQ request/reply RPC**
      (`rpc.app.*`, `rpc.identity.*`, `rpc.tournament.*`, `rpc.stats.*`, `rpc.balancer.*`,
      `rpc.analytics.*`, `rpc.discord.*`), carrying an `x-deadline-ms` budget;

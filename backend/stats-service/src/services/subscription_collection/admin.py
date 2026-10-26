@@ -315,6 +315,7 @@ class SubscriptionAdminService:
         providers: Sequence[str] | None = None,
         workspace_id: int | None = None,
         twitch_client_id: str | None = None,
+        token_key: str | None = None,
         broker: Any | None = None,
         proxy: str | None = None,
     ) -> int:
@@ -339,6 +340,7 @@ class SubscriptionAdminService:
                 session,
                 workspace_id=workspace_id,
                 twitch_client_id=twitch_client_id,
+                token_key=token_key,
                 broker=active_broker,
                 proxy=proxy,
                 batch_size=cfg.batch_size,
@@ -361,6 +363,7 @@ class SubscriptionAdminService:
         resolver = build_resolver(
             session,
             twitch_client_id=twitch_client_id,
+            token_key=token_key,
             broker=active_broker,
             proxy=proxy,
         )

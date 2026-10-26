@@ -50,13 +50,13 @@ from shared import models
 from shared.core import http_status as status
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.core.social import social_provider_for_oauth
-from shared.repository import OAuthConnectionRepository, SocialAccountRepository, UserRepository
+from shared.repository import AuthUserRepository, OAuthConnectionRepository, SocialAccountRepository, UserRepository
 from shared.tenancy.hostnames import is_platform_host, normalize_custom_domain
 from src import schemas
-from src.core.cache import RedisStore
+from src.core.cache import _UNAVAILABLE, RedisStore
 from src.core.config import Settings, settings
 from src.services.auth import AuthenticationService, auth
-from src.services.oauth_accounts import OAuthAccountService, oauth_accounts
+from src.services.oauth_accounts import OAuthAccountService, oauth_accounts, open_token
 from src.services.oauth_providers import OAuthProviderRegistry, OAuthTokenRejected, has_manage_guild, oauth_providers
 from src.services.oauth_state import OAuthStateCodec, StatePayload, oauth_state
 from src.services.tickets import LINK_TICKETS, SSO_TICKETS, TicketStore, guard_digest
@@ -97,6 +97,7 @@ class OAuthFlowService:
         connections: OAuthConnectionRepository = OAuthConnectionRepository(),
         socials: SocialAccountRepository = SocialAccountRepository(),
         players: UserRepository = UserRepository(),
+        users: AuthUserRepository = AuthUserRepository(),
         sso_tickets: TicketStore = SSO_TICKETS,
         link_tickets: TicketStore = LINK_TICKETS,
         config: Settings = settings,
@@ -108,6 +109,7 @@ class OAuthFlowService:
         self.connections = connections
         self.socials = socials
         self.players = players
+        self.users = users
         self.sso_tickets = sso_tickets
         self.link_tickets = link_tickets
         self.config = config
@@ -139,7 +141,8 @@ class OAuthFlowService:
             state = self.state.encode(
                 origin=origin, redirect=redirect, action=action, provider=provider, csrf=csrf, guard_hash=guard_hash
             )
-            url = self.providers.get(provider).get_authorization_url(state)
+            code_verifier = self.state.code_verifier(self.state.verify(state))
+            url = self.providers.get(provider).get_authorization_url(state, code_verifier)
             return schemas.OAuthURL(provider=schemas.OAuthProvider(provider), url=url, state=state)
         except HTTPException:
             raise
@@ -162,7 +165,9 @@ class OAuthFlowService:
         self._verify_csrf_binding(payload, csrf)
         await self._consume_state_nonce(payload)
 
-        auth_user, _ = await self.accounts.handle_callback(session, provider, code)
+        auth_user, _ = await self.accounts.handle_callback(
+            session, provider, code, state=state, code_verifier=self.state.code_verifier(payload)
+        )
 
         if not auth_user.is_active:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User account is inactive")
@@ -239,7 +244,9 @@ class OAuthFlowService:
         await self._consume_state_nonce(payload)
 
         provider_impl = self.providers.get(provider)
-        token_data = await provider_impl.exchange_code(code)
+        token_data = await provider_impl.exchange_code(
+            code, state=state, code_verifier=self.state.code_verifier(payload)
+        )
         oauth_user_info = await provider_impl.get_user_info(token_data["access_token"])
 
         if self._is_custom_domain(payload):
@@ -355,11 +362,12 @@ class OAuthFlowService:
             (c for c in conns if c.access_token and (c.token_expires_at is None or c.token_expires_at > now)),
             None,
         )
-        if conn is None:
+        access_token = open_token(conn.access_token) if conn is not None else None
+        if access_token is None:
             return {"guilds": [], "relink_required": True}
 
         try:
-            raw_guilds = await self.providers.get("discord").get_user_guilds(conn.access_token)
+            raw_guilds = await self.providers.get("discord").get_user_guilds(access_token)
         except OAuthTokenRejected:
             return {"guilds": [], "relink_required": True}
         guilds = [
@@ -395,7 +403,12 @@ class OAuthFlowService:
         its connections while the player survives. Unlinking such a provider
         clears the now-unprovable mark and never trips the last-provider guard:
         nothing you can sign in with is being removed.
+
+        The account row is locked before its connections are counted, so two
+        concurrent unlinks of a passwordless account's last two providers
+        serialize: the second sees the first's delete and is refused.
         """
+        await self.users.lock(session, user.id)
         conns = await self.connections.list_by_user(session, user.id)
         targeted = [
             conn
@@ -525,12 +538,17 @@ class OAuthFlowService:
 
         State verification is pure and infra-free on purpose (HMAC + exp only,
         so it stays unit-testable); this is the Redis-backed half that rejects a
-        second redemption. ``claim`` fails OPEN on an outage — logging and
-        letting the flow continue beats locking out every OAuth login — and the
-        exp-bounded state format still caps the replay window at
-        ``OAUTH_STATE_EXPIRE_MINUTES``.
+        second redemption. It fails CLOSED: with Redis down a state cannot be
+        proven unused, so the flow answers 503 ``unavailable`` (retry) before
+        any code is exchanged, rather than accept a replay.
         """
-        if not await self.state_nonces.claim(f"{payload.provider}:{payload.nonce}"):
+        try:
+            claimed = await self.state_nonces.claim(f"{payload.provider}:{payload.nonce}")
+        except _UNAVAILABLE as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="OAuth sign-in is temporarily unavailable"
+            ) from exc
+        if not claimed:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OAuth state has already been used")
 
 

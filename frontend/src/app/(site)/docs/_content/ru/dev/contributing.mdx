@@ -29,7 +29,7 @@ for file in backend/env/*.env.example; do cp "$file" "${file%.example}"; done
 cp frontend/.env.example frontend/.env.local
 ```
 
-Значения RabbitMQ и PostgreSQL в корневом `.env` должны совпадать с `backend/env/common.env`, а `JWT_SECRET_KEY` в `backend/env/auth.env` нужно заменить на случайную строку не короче 32 символов — он общий у шлюза и воркеров.
+Значения RabbitMQ и PostgreSQL в корневом `.env` должны совпадать с `backend/env/common.env`, а `JWT_SECRET_KEY` в `backend/env/auth.env` нужно заменить на случайную строку не короче 32 символов — из него identity выводит ключ подписи токенов. У шлюза есть только соответствующий открытый ключ: выполните `make jwt-public-key` (команда работает в образе identity и при первом запуске собирает его) и запишите вывод в `JWT_PUBLIC_KEY` в `backend/env/gateway.env`; повторяйте это при каждой смене `JWT_SECRET_KEY`. Кроме того, identity не запустится без `OAUTH_TOKEN_ENCRYPTION_KEY`, пока включён OAuth Discord или Twitch (заглушки из шаблона тоже считаются): сгенерируйте ключ командой `python -c "import base64,secrets;print(base64.urlsafe_b64encode(secrets.token_bytes(32)).decode().rstrip('='))"` и запишите одно и то же значение в `auth.env`, `stats.env` и `tournament.env`.
 
 ```bash
 make dev-up      # поднять основной стек

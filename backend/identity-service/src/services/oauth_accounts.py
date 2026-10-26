@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
 from shared.core import http_status as status
+from shared.core import secretbox
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.core.social import SocialProvider, normalize_social_handle, social_provider_for_oauth
 from shared.repository import (
@@ -30,9 +31,16 @@ from shared.repository import (
 from shared.services.social_identity import SocialHandleConflict
 from shared.services.social_identity import social_identity_service as socials_writer
 from src import schemas
+from src.core.config import settings
 from src.schemas.auth import suggest_username
 from src.services.auth_users import AuthUserService, auth_users
 from src.services.oauth_providers import OAuthProviderRegistry, oauth_providers
+from src.services.session_cache import SessionCache, session_cache
+
+#: The only providers whose tokens are kept, sealed at rest (``shared.core.secretbox``): Discord's lists the user's
+#: guilds (``oauth.discord_guilds``), Twitch's checks their subscriptions (``shared.services.subscriptions``). Every
+#: other provider's token is used once, at sign-in, and never stored.
+SEALED_TOKEN_PROVIDERS = frozenset({"discord", "twitch"})
 
 
 def _token_expires_at(token_data: dict[str, Any]) -> datetime | None:
@@ -41,10 +49,39 @@ def _token_expires_at(token_data: dict[str, Any]) -> datetime | None:
     return datetime.now(UTC) + timedelta(seconds=token_data["expires_in"])
 
 
+def _stored_token(provider: str, token: str | None) -> str | None:
+    """What ``auth.oauth_connections`` keeps of ``token``: sealed for a kept provider, nothing otherwise."""
+    if token is None or provider not in SEALED_TOKEN_PROVIDERS:
+        return None
+    return secretbox.encrypt(token, secretbox.load_key(settings.oauth_token_encryption_key))
+
+
+def _store_tokens(conn: models.OAuthConnection, provider: str, token_data: dict[str, Any]) -> None:
+    conn.access_token = _stored_token(provider, token_data["access_token"])
+    conn.refresh_token = _stored_token(provider, token_data.get("refresh_token"))
+    if (expires_at := _token_expires_at(token_data)) is not None:
+        conn.token_expires_at = expires_at
+
+
+def _seal_if_clear(value: str | None, key: bytes) -> str | None:
+    return value if value is None or value.startswith(secretbox.PREFIX) else secretbox.encrypt(value, key)
+
+
+def open_token(stored: str | None) -> str | None:
+    """A stored provider token in clear; None when absent or it no longer opens (key changed: only a re-link helps)."""
+    if not stored:
+        return None
+    try:
+        return secretbox.decrypt(stored, secretbox.load_key(settings.oauth_token_encryption_key))
+    except ValueError as exc:
+        logger.error(f"Stored OAuth token is unusable: {exc}")
+        return None
+
+
 def _new_connection(
     auth_user: models.AuthUser, oauth_info: schemas.OAuthUserInfo, token_data: dict[str, Any]
 ) -> models.OAuthConnection:
-    return models.OAuthConnection(
+    conn = models.OAuthConnection(
         auth_user_id=auth_user.id,
         provider=oauth_info.provider.value,
         provider_user_id=oauth_info.provider_user_id,
@@ -52,11 +89,10 @@ def _new_connection(
         username=oauth_info.username,
         display_name=oauth_info.display_name,
         avatar_url=oauth_info.avatar_url,
-        access_token=token_data["access_token"],
-        refresh_token=token_data.get("refresh_token"),
         provider_data=oauth_info.raw_data,
-        token_expires_at=_token_expires_at(token_data),
     )
+    _store_tokens(conn, oauth_info.provider.value, token_data)
+    return conn
 
 
 class OAuthAccountService:
@@ -71,6 +107,7 @@ class OAuthAccountService:
         connections: OAuthConnectionRepository = OAuthConnectionRepository(),
         socials: SocialAccountRepository = SocialAccountRepository(),
         players: UserRepository = UserRepository(),
+        cache: SessionCache = session_cache,
     ) -> None:
         self.providers = providers
         self.accounts = accounts
@@ -78,13 +115,55 @@ class OAuthAccountService:
         self.connections = connections
         self.socials = socials
         self.players = players
+        self.cache = cache
+
+    def token_key(self) -> bytes | None:
+        """``OAUTH_TOKEN_ENCRYPTION_KEY``, or None when it is unset and no kept provider is offered.
+
+        Raises ``RuntimeError`` when Discord or Twitch is offered without a valid key: identity refuses to start
+        rather than fail every such sign-in.
+        """
+        try:
+            return secretbox.load_key(settings.oauth_token_encryption_key)
+        except ValueError as exc:
+            if any(self.providers.is_enabled(provider) for provider in SEALED_TOKEN_PROVIDERS):
+                raise RuntimeError(
+                    f"OAUTH_TOKEN_ENCRYPTION_KEY is required while Discord or Twitch OAuth is enabled: {exc}"
+                ) from exc
+            return None
+
+    async def seal_stored_tokens(self, session: AsyncSession, *, batch_size: int = 500) -> int:
+        """Startup job: seal the Discord/Twitch tokens still stored in clear, drop every other provider's.
+
+        Idempotent and safe on several replicas at once: each batch row-locks what it rewrites (skipping rows
+        another transaction holds) and commits, and a rewritten row never matches again. Returns the rows changed.
+        """
+        key = self.token_key()
+        if key is None:
+            logger.warning("OAUTH_TOKEN_ENCRYPTION_KEY is unset: stored OAuth tokens left as they are")
+            return 0
+        changed = 0
+        while rows := await self.connections.lock_unsealed_tokens(
+            session, kept_providers=SEALED_TOKEN_PROVIDERS, limit=batch_size
+        ):
+            for conn in rows:
+                if conn.provider in SEALED_TOKEN_PROVIDERS:
+                    conn.access_token = _seal_if_clear(conn.access_token, key)
+                    conn.refresh_token = _seal_if_clear(conn.refresh_token, key)
+                else:
+                    conn.access_token = conn.refresh_token = None
+            await session.commit()
+            changed += len(rows)
+        if changed:
+            logger.info(f"Stored OAuth tokens sealed or dropped: {changed} connections")
+        return changed
 
     async def handle_callback(
-        self, session: AsyncSession, provider_name: str, code: str
+        self, session: AsyncSession, provider_name: str, code: str, *, state: str, code_verifier: str
     ) -> tuple[models.AuthUser, dict[str, Any]]:
         """Exchange ``code`` with the provider and resolve the account: ``(auth_user, token_data)``."""
         provider = self.providers.get(provider_name)
-        token_data = await provider.exchange_code(code)
+        token_data = await provider.exchange_code(code, state=state, code_verifier=code_verifier)
         oauth_user_info = await provider.get_user_info(token_data["access_token"])
         auth_user = await self.find_or_create_user(session, oauth_user_info, token_data)
 
@@ -180,16 +259,18 @@ class OAuthAccountService:
             )
         return None
 
-    @staticmethod
-    def _link_player_if_unowned(player: models.User, auth_user: models.AuthUser) -> bool:
-        """Set ``player.auth_user_id = auth_user.id`` iff the player has no owner yet.
+    async def _link_player_if_unowned(
+        self, session: AsyncSession, player: models.User, auth_user: models.AuthUser
+    ) -> bool:
+        """Link ``player`` to ``auth_user`` iff the player has no owner yet.
 
         A player already linked to a *different* auth user is left untouched —
         that is a conflict for the admin user-merge tool to resolve, never
         something to silently overwrite here. Returns True if the link was set.
+        The link is flushed, so a concurrent claim surfaces here as ``IntegrityError``.
         """
         if player.auth_user_id is None:
-            player.auth_user_id = auth_user.id
+            await self.players.link_auth_user(session, player, auth_user.id)
             return True
         if player.auth_user_id != auth_user.id:
             logger.warning(
@@ -200,6 +281,22 @@ class OAuthAccountService:
                 existing_auth_user_id=player.auth_user_id,
             )
         return False
+
+    async def _fill_player_avatar(
+        self, session: AsyncSession, auth_user_id: int, avatar_url: str | None, *, replaces: str | None = None
+    ) -> bool:
+        """Show the provider's avatar on the account's player unless the user chose their own.
+
+        Only an empty avatar, or the one this provider itself set before (``replaces``), is filled: a custom upload
+        is never overwritten. Returns True when the avatar changed; committing is the caller's.
+        """
+        if not avatar_url:
+            return False
+        player = await self.players.get_by_auth_user_id(session, auth_user_id)
+        if player is None or player.avatar_url == avatar_url or player.avatar_url not in (None, replaces):
+            return False
+        await self.players.set_avatar(session, auth_user_id=auth_user_id, avatar_url=avatar_url)
+        return True
 
     async def _attach_verified_social_account(
         self,
@@ -403,14 +500,12 @@ class OAuthAccountService:
         )
 
         if oauth_conn:
+            previous_avatar_url = oauth_conn.avatar_url
             oauth_conn.username = oauth_info.username
             oauth_conn.display_name = oauth_info.display_name
             oauth_conn.avatar_url = oauth_info.avatar_url
             oauth_conn.email = oauth_info.email
-            oauth_conn.access_token = token_data["access_token"]
-            oauth_conn.refresh_token = token_data.get("refresh_token")
-            if (expires_at := _token_expires_at(token_data)) is not None:
-                oauth_conn.token_expires_at = expires_at
+            _store_tokens(oauth_conn, oauth_info.provider.value, token_data)
             oauth_conn.provider_data = oauth_info.raw_data
 
             await session.commit()
@@ -418,11 +513,10 @@ class OAuthAccountService:
 
             auth_user = await self.users.get(session, oauth_conn.auth_user_id)
 
-            # Keep primary avatar in sync (used by /me)
-            if oauth_info.avatar_url and auth_user.avatar_url != oauth_info.avatar_url:
-                auth_user.avatar_url = oauth_info.avatar_url
+            if await self._fill_player_avatar(
+                session, auth_user.id, oauth_info.avatar_url, replaces=previous_avatar_url
+            ):
                 await session.commit()
-                await session.refresh(auth_user)
 
             await self._attach_verified_social_account(session, auth_user, oauth_info)
             logger.info(f"Existing {oauth_info.provider} user logged in: {oauth_info.username}")
@@ -433,22 +527,22 @@ class OAuthAccountService:
         # If an existing auth user was found via OAuth-connection fallback,
         # backfill the missing players.user.auth_user_id link so future lookups
         # use the fast path and don't need the fallback scan again.
+        backfilled = False
         if auth_user is not None and matched_player is not None:
-            if self._link_player_if_unowned(matched_player, auth_user):
-                try:
-                    await session.flush()
+            try:
+                if backfilled := await self._link_player_if_unowned(session, matched_player, auth_user):
                     logger.info(
                         "Backfilled players.user.auth_user_id link for existing auth user",
                         auth_user_id=auth_user.id,
                         player_id=matched_player.id,
                     )
-                except IntegrityError:
-                    await session.rollback()
-                    logger.warning(
-                        "Race condition backfilling player auth_user_id link; ignoring",
-                        auth_user_id=auth_user.id,
-                        player_id=matched_player.id,
-                    )
+            except IntegrityError:
+                await session.rollback()
+                logger.warning(
+                    "Race condition backfilling player auth_user_id link; ignoring",
+                    auth_user_id=auth_user.id,
+                    player_id=matched_player.id,
+                )
 
         if not auth_user:
             # One rule for every provider: the name people see there (Discord
@@ -464,7 +558,6 @@ class OAuthAccountService:
                 username=username,
                 hashed_password=None,
                 first_name=oauth_info.display_name,
-                avatar_url=oauth_info.avatar_url,
                 is_verified=bool(oauth_info.raw_data.get("verified")),
             )
             try:
@@ -477,7 +570,7 @@ class OAuthAccountService:
                 # can find this AuthUser through the same player.
                 linked = False
                 if matched_player is not None:
-                    linked = self._link_player_if_unowned(matched_player, auth_user)
+                    linked = await self._link_player_if_unowned(session, matched_player, auth_user)
                     if linked:
                         logger.info(
                             "Linked new auth user to existing player",
@@ -502,6 +595,7 @@ class OAuthAccountService:
                         "Sign in first and link this OAuth provider from account settings."
                     ),
                 ) from exc
+            await self._fill_player_avatar(session, auth_user.id, oauth_info.avatar_url)
 
             logger.info(f"New user created via {oauth_info.provider}: {username}")
 
@@ -515,6 +609,9 @@ class OAuthAccountService:
                 detail="This OAuth account is already linked",
             ) from exc
         await session.refresh(auth_user)
+        if backfilled:
+            # The account just gained the player's workspace memberships.
+            await self.cache.invalidate_rbac(auth_user.id)
 
         logger.success(f"{oauth_info.provider.value.title()} account linked to user: {auth_user.username}")
 
@@ -547,10 +644,7 @@ class OAuthAccountService:
         # the *same* external account to a *different* user is blocked (below).
         if existing_conn:
             if existing_conn.auth_user_id == auth_user.id:
-                existing_conn.access_token = token_data["access_token"]
-                existing_conn.refresh_token = token_data.get("refresh_token")
-                if (expires_at := _token_expires_at(token_data)) is not None:
-                    existing_conn.token_expires_at = expires_at
+                _store_tokens(existing_conn, oauth_info.provider.value, token_data)
                 await session.commit()
                 await session.refresh(existing_conn)
                 return existing_conn
