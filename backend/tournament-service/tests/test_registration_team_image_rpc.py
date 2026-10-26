@@ -9,13 +9,12 @@ things can go wrong here and none is visible to a type checker:
 2. a *rejected* upload (bad magic bytes, oversized file) must 400 and write
    nothing — a team whose ``image_url`` came from a failed ``UploadResult``
    would point at an object that never existed;
-3. delete must remove the S3 objects **before** clearing the column, so a failed
+3. delete must clear the column **before** removing the S3 objects, so a failed
    DB write can only ever leave a URL pointing at bytes that still exist;
 4. a non-captain must be refused. Unlike the admin pair this is *not* a
-   workspace permission, and the refusal must land before any S3 call:
-   ``upload_avatar`` deletes the previous object before storing the new one, so
-   a stranger who reached S3 would destroy the captain's crest whatever the
-   database then said.
+   workspace permission, and the refusal must land before any S3 call, so a
+   stranger's upload never writes an object and a stranger's delete never
+   touches the crest.
 
 Both subscribers are driven end to end through their real ``_run`` envelope with
 the service layer and the S3 client stubbed out.
@@ -62,15 +61,15 @@ IDENTITY = make_identity()
 
 
 class _FakeS3:
-    """Records ``delete_prefix`` calls into a shared ordered trace."""
+    """Records ``delete_prefix`` calls (and what they spare) into a shared ordered trace."""
 
     def __init__(self, trace: list[str]) -> None:
         self._trace = trace
         self.deleted_prefixes: list[str] = []
 
-    async def delete_prefix(self, prefix: str) -> int:
+    async def delete_prefix(self, prefix: str, *, keep: str | None = None) -> int:
         self.deleted_prefixes.append(prefix)
-        self._trace.append(f"s3.delete_prefix:{prefix}")
+        self._trace.append(f"s3.delete_prefix:{prefix}" + (f" keep={keep}" if keep else ""))
         return 1
 
 
@@ -109,6 +108,9 @@ class RegistrationTeamImageSubjects(IsolatedAsyncioTestCase):
         #: Whatever the handler staged on the session -- the audit row.
         self.staged: list = []
 
+    async def _commit(self) -> None:
+        self.trace.append("commit")
+
     async def _invoke(self, subject: str, data: dict, *, upload_result: object | None = None) -> dict:
         broker = CapturingBroker()
         regteam_binary.register(broker, SimpleNamespace(exception=lambda *a, **k: None))
@@ -143,7 +145,11 @@ class RegistrationTeamImageSubjects(IsolatedAsyncioTestCase):
             return _team_read(team.image_url)
 
         with (
-            patch.object(helpers.db, "async_session_maker", FakeSessionMaker(SimpleNamespace(add=self.staged.append))),
+            patch.object(
+                helpers.db,
+                "async_session_maker",
+                FakeSessionMaker(SimpleNamespace(add=self.staged.append, commit=self._commit)),
+            ),
             patch.object(regteam_binary, "get_s3", fake_get_s3),
             patch.object(regteam_binary, "upload_avatar", fake_upload_avatar),
             patch.object(regteam_binary.team_service.teams_service, "assert_may_edit_team", fake_gate),
@@ -214,7 +220,7 @@ class RegistrationTeamImageSubjects(IsolatedAsyncioTestCase):
         self.assertEqual("File type not allowed", envelope["error"]["message"])
         self.assertEqual([], self.set_image_calls, "a failed upload must not touch the team")
 
-    async def test_delete_removes_objects_before_clearing_the_column(self):
+    async def test_delete_clears_the_column_before_removing_objects(self):
         envelope = await self._invoke(
             "rpc.tournament.regteam_image_delete",
             {"team_id": TEAM_ID, "identity": IDENTITY},
@@ -225,14 +231,48 @@ class RegistrationTeamImageSubjects(IsolatedAsyncioTestCase):
         self.assertIsNone(envelope["data"]["image_url"])
         self.assertEqual([f"avatars/registration_teams/{TEAM_ID}/"], self.s3.deleted_prefixes)
         self.assertEqual([(TEAM_ID, None)], self.set_image_calls)
-        # Order is the whole point: the gate runs before any S3 call, then bytes
-        # go before the column, so a failed DB write cannot leave image_url
-        # pointing at objects that no longer exist.
+        # Order is the whole point: the gate runs (and its read transaction ends)
+        # first, and the bytes go only after the cleared row commits, so a failed
+        # DB write can never leave image_url pointing at objects that no longer exist.
         self.assertEqual(
             [
                 f"assert_may_edit_team:{TEAM_ID}",
-                f"s3.delete_prefix:avatars/registration_teams/{TEAM_ID}/",
+                "commit",
                 "set_team_image:None",
+                "commit",
+                f"s3.delete_prefix:avatars/registration_teams/{TEAM_ID}/",
+            ],
+            self.trace,
+        )
+
+    async def test_under_lock_refusal_of_a_delete_keeps_the_crest(self):
+        self.set_image_error = team_service._fail(
+            409, "team_already_exported", "This team has already been exported to the tournament"
+        )
+
+        envelope = await self._invoke("rpc.tournament.regteam_image_delete", {"team_id": TEAM_ID, "identity": IDENTITY})
+
+        self.assertFalse(envelope["ok"], envelope)
+        self.assertEqual("conflict", envelope["error"]["code"])
+        self.assertEqual([], self.s3.deleted_prefixes)
+
+    async def test_upload_removes_previous_files_only_after_the_row_commits(self):
+        key = f"avatars/registration_teams/{TEAM_ID}/abc123def456.webp"
+        envelope = await self._invoke(
+            "rpc.tournament.regteam_image_upload",
+            {"team_id": TEAM_ID, "identity": IDENTITY, "content_b64": CONTENT_B64, "content_type": "image/png"},
+            upload_result=UploadResult(success=True, key=key, public_url=PUBLIC_URL),
+        )
+
+        self.assertTrue(envelope.get("ok"), envelope)
+        self.assertEqual(
+            [
+                f"assert_may_edit_team:{TEAM_ID}",
+                "commit",
+                "upload_avatar",
+                f"set_team_image:{PUBLIC_URL}",
+                "commit",
+                f"s3.delete_prefix:avatars/registration_teams/{TEAM_ID}/ keep={key}",
             ],
             self.trace,
         )
@@ -253,8 +293,7 @@ class RegistrationTeamImageSubjects(IsolatedAsyncioTestCase):
         # translates rides ``details["fields"]``, which the gateway relays.
         self.assertEqual("not_captain", envelope["error"]["details"]["fields"][0]["code"])
         self.assertEqual([], self.set_image_calls)
-        # upload_avatar deletes the previous object before writing the new one,
-        # so reaching S3 at all would let a stranger destroy the crest.
+        # Nothing may reach S3: no orphan object, and no crest a stranger could clear.
         self.assertEqual([f"assert_may_edit_team:{TEAM_ID}"], self.trace)
 
     async def test_non_captain_delete_is_refused_before_s3(self):
@@ -286,6 +325,8 @@ class RegistrationTeamImageSubjects(IsolatedAsyncioTestCase):
         self.assertFalse(envelope["ok"], envelope)
         self.assertEqual("conflict", envelope["error"]["code"])
         self.assertEqual("team_already_exported", envelope["error"]["details"]["fields"][0]["code"])
+        # The refused write leaves the crest it would have replaced in place.
+        self.assertEqual([], self.s3.deleted_prefixes)
 
 
 class GateSignature(TestCase):

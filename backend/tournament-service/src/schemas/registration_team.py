@@ -23,6 +23,7 @@ from src.schemas.registration import RegistrationSubmit
 __all__ = (
     "RegistrationTeamAcceptRequest",
     "RegistrationTeamCreateRequest",
+    "RegistrationTeamDeclineRequest",
     "RegistrationTeamInviteCreateRequest",
     "RegistrationTeamInviteRead",
     "RegistrationTeamListResponse",
@@ -79,12 +80,27 @@ class RegistrationTeamInviteCreateRequest(BaseModel):
     ttl_days: int | None = Field(default=None, ge=1, le=90)
 
 
-class RegistrationTeamAcceptRequest(BaseModel):
-    """Redeem an invite by token or by id.
+class RegistrationTeamDeclineRequest(BaseModel):
+    """Refuse an invite by token or by id.
 
     Exactly one reference must be given. Accepting both would leave which one
-    authorizes the acceptance ambiguous — and since a link invite is bearer while a
+    authorizes the answer ambiguous — and since a link invite is bearer while a
     targeted one is not, the ambiguity is a privilege question, not a cosmetic one.
+    """
+
+    token: str | None = None
+    invite_id: int | None = None
+
+    @model_validator(mode="after")
+    def _exactly_one_reference(self) -> RegistrationTeamDeclineRequest:
+        provided = [value for value in (self.token, self.invite_id) if value is not None]
+        if len(provided) != 1:
+            raise ValueError("Exactly one of token or invite_id is required")
+        return self
+
+
+class RegistrationTeamAcceptRequest(RegistrationTeamDeclineRequest):
+    """Redeem an invite by token or by id (exactly one, as on decline).
 
     ``registration`` is OPTIONAL because an invitee who already has a live
     registration is a free agent *attaching*: the service reuses their existing row
@@ -97,16 +113,7 @@ class RegistrationTeamAcceptRequest(BaseModel):
     value to invent for someone who answered nothing.
     """
 
-    token: str | None = None
-    invite_id: int | None = None
     registration: RegistrationSubmit | None = None
-
-    @model_validator(mode="after")
-    def _exactly_one_reference(self) -> RegistrationTeamAcceptRequest:
-        provided = [value for value in (self.token, self.invite_id) if value is not None]
-        if len(provided) != 1:
-            raise ValueError("Exactly one of token or invite_id is required")
-        return self
 
 
 class RegistrationTeamRenameRequest(BaseModel):

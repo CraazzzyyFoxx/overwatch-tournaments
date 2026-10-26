@@ -298,26 +298,6 @@ class TeamRouteShapeTests(TestCase):
             with self.subTest(writer=writer):
                 self.assertNotIn(writer, body)
 
-    def test_the_public_team_read_only_shows_a_captain_their_own_invites(self) -> None:
-        """The one AuthOptional team route. Its safety is server-side, so this pins
-        the handler, not the route.
-
-        The handler used to call ``describe_team`` with no ``include_invites`` at
-        all; it now passes the captaincy check as the flag, so a captain sees the
-        offers on their own team and nobody else sees any. What must never appear
-        is an unconditional ``include_invites=True`` — that single edit would turn
-        a public roster into a list of everyone who was asked and declined.
-        """
-        source = (REPO_ROOT / "backend" / "tournament-service" / "src" / "rpc" / "public_rpc.py").read_text(
-            encoding="utf-8"
-        )
-        handler = source[source.index("_regteam_list_public") :]
-        handler = handler[: handler.index("# ── public team registration")]
-        self.assertIn("include_invites=user is not None", handler)
-        self.assertIn("is_team_staff(", handler)
-        self.assertNotIn("is_team_captain(", handler)
-        self.assertNotIn("include_invites=True", handler)
-
     def test_the_invite_token_never_travels_in_a_url(self) -> None:
         """A raw token in the path or query string lands in access logs, browser
         history and `Referer` headers — which is why every route that takes one

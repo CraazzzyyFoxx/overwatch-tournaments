@@ -7,6 +7,10 @@ check-in.
 Collaborators are constructor-injected attributes of ``lifecycle_service``
 (``registration_repo``, ``common``, ``registrations``): tests patch those, not
 module globals.
+
+Every single-row method takes ``registration=`` when the caller already holds the
+row loaded by ``get_registration_by_id`` (the admin handlers read it for the audit
+row first), so one request loads the registration graph once.
 """
 
 from __future__ import annotations
@@ -17,7 +21,7 @@ from typing import Any
 
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import noload, selectinload
 
 from shared import models
 from shared.core import http_status as status
@@ -32,6 +36,7 @@ from shared.registration_statuses import (
     get_status_metas_map,
 )
 from shared.repository import (
+    AuthUserRepository,
     CatalogRoleRepository,
     RegistrationRepository,
     RegistrationStatusRepository,
@@ -59,6 +64,7 @@ from src.services.registration.serializers import serialize_registration
 from src.services.registration.service import RegistrationService, registration_service
 from src.services.tournament.events import (
     enqueue_registration_approved,
+    enqueue_registrations_approved,
     notify_registration_rejected,
 )
 
@@ -80,18 +86,26 @@ def _reject_auto_managed_status(balancer_status: str) -> None:
         )
 
 
+# Reviewer / checked-in-by accounts are read for their username only: their
+# ``selectin`` roles and OAuth connections (sealed tokens included) would be two
+# statements of nothing.
+_USERNAME_ONLY = (noload(models.AuthUser.roles), noload(models.AuthUser.oauth_connections))
+
+
 def _registration_read_options() -> list[Any]:
-    """Eager loads every admin serializer of a single registration needs."""
+    """Eager loads every admin serializer of a registration needs: the shared
+    read loaders plus the admin-only relationships."""
     return [
-        selectinload(models.Registration.roles)
-        .selectinload(models.RegistrationRole.hero_entries)
-        .selectinload(models.RegistrationRoleEntity.entity),
-        selectinload(models.Registration.reviewer),
-        selectinload(models.Registration.checked_in_by_user),
-        selectinload(models.Registration.google_sheet_binding),
-        selectinload(models.Registration.tournament),
         *registration_read_loaders(),
+        selectinload(models.Registration.reviewer).options(*_USERNAME_ONLY),
+        selectinload(models.Registration.checked_in_by_user).options(*_USERNAME_ONLY),
+        selectinload(models.Registration.google_sheet_binding),
     ]
+
+
+async def _username_user(session: AsyncSession, user_id: int | None) -> models.AuthUser | None:
+    """The account a reviewer / checked-in-by FK names, loaded for its username only."""
+    return None if user_id is None else await AuthUserRepository().get(session, user_id, options=_USERNAME_ONLY)
 
 
 async def _workspace_id_for(session: AsyncSession, registration: Any) -> int | None:
@@ -143,23 +157,7 @@ class RegistrationLifecycleService:
         query = (
             self.registration_repo.select()
             .where(models.Registration.tournament_id == tournament_id)
-            .options(
-                selectinload(models.Registration.roles)
-                .selectinload(models.RegistrationRole.hero_entries)
-                .selectinload(models.RegistrationRoleEntity.entity),
-                selectinload(models.Registration.reviewer),
-                selectinload(models.Registration.deleted_by_user),
-                selectinload(models.Registration.checked_in_by_user),
-                selectinload(models.Registration.google_sheet_binding).selectinload(
-                    models.RegistrationGoogleSheetBinding.feed
-                ),
-                # One row for every registration: its phase schedule is what
-                # ``submitted_late`` is measured against.
-                selectinload(models.Registration.tournament),
-                # serialize_registration derives user_id from workspace_member.player_id
-                # and the team brief from registration_team; both must be eager.
-                *registration_read_loaders(),
-            )
+            .options(*_registration_read_options())
             .order_by(models.Registration.submitted_at.desc(), models.Registration.id.desc())
         )
         if not include_deleted:
@@ -241,9 +239,10 @@ class RegistrationLifecycleService:
         return reads
 
     async def get_registration_by_id(self, session: AsyncSession, registration_id: int) -> models.Registration:
-        # ``populate_existing``: the post-write refetches go through here, and a row
-        # already in the identity map otherwise keeps the ``reviewer`` /
-        # ``checked_in_by_user`` it was first loaded with (None) after the FK moved.
+        # ``populate_existing``: the post-write refetches (a created row, an edit of
+        # roles or account) go through here, and a row already in the identity map
+        # otherwise keeps the relationships it was first loaded with, not the ones
+        # just written.
         registration = await self.registration_repo.get(
             session, registration_id, options=_registration_read_options(), populate_existing=True
         )
@@ -426,6 +425,7 @@ class RegistrationLifecycleService:
         exclude_reason: str | None = None,
         pin: bool | None = None,
         clear_pin: bool = False,
+        registration: models.Registration | None = None,
     ) -> models.Registration:
         """An organizer's edit of one registration.
 
@@ -435,7 +435,7 @@ class RegistrationLifecycleService:
         (admin rows, with ranks) wins over ``answers["roles"]``.
         """
         answers = answers or {}
-        registration = await self.get_registration_by_id(session, registration_id)
+        registration = registration or await self.get_registration_by_id(session, registration_id)
         catalog_roles = await CatalogRoleRepository().rated_rows(
             session, discipline=registration.tournament.discipline, workspace_id=registration.tournament.workspace_id
         )
@@ -548,19 +548,21 @@ class RegistrationLifecycleService:
         registration_id: int,
         *,
         reviewed_by: int | None,
+        registration: models.Registration | None = None,
     ) -> models.Registration:
-        registration = await self.get_registration_by_id(session, registration_id)
+        registration = registration or await self.get_registration_by_id(session, registration_id)
         registration.status = "approved"
         registration.reviewed_at = datetime.now(UTC)
         registration.reviewed_by = reviewed_by
+        # The FK moved, so the serializer's .reviewer must too; one account read, not a refetch.
+        registration.reviewer = await _username_user(session, reviewed_by)
         # A pending registration's balancer_status is always not_in_balancer with
         # no exclude_reason -- every write path that could set anything else
         # requires status == "approved" already (see set_balancer_status /
         # update_registration_profile). Nothing to reset here.
         await enqueue_registration_approved(session, registration)
         await session.commit()
-        # Refetch: reviewed_by changed, the serializer needs a loaded .reviewer.
-        return await self.get_registration_by_id(session, registration.id)
+        return registration
 
     async def reject_registration(
         self,
@@ -568,15 +570,17 @@ class RegistrationLifecycleService:
         registration_id: int,
         *,
         reviewed_by: int | None,
+        registration: models.Registration | None = None,
     ) -> models.Registration:
-        registration = await self.get_registration_by_id(session, registration_id)
+        registration = registration or await self.get_registration_by_id(session, registration_id)
         registration.status = "rejected"
         registration.reviewed_at = datetime.now(UTC)
         registration.reviewed_by = reviewed_by
+        # The FK moved, so the serializer's .reviewer must too; one account read, not a refetch.
+        registration.reviewer = await _username_user(session, reviewed_by)
         await notify_registration_rejected(session, registration)
         await session.commit()
-        # Refetch: reviewed_by changed, the serializer needs a loaded .reviewer.
-        return await self.get_registration_by_id(session, registration.id)
+        return registration
 
     async def bulk_approve_registrations(
         self,
@@ -594,7 +598,7 @@ class RegistrationLifecycleService:
                 models.Registration.id.in_(registration_ids),
                 models.Registration.status == "pending",
             )
-            # enqueue_registration_approved reads primary_handle() -> identities;
+            # enqueue_registrations_approved reads primary_game_identity() -> identities;
             # an unloaded collection raises MissingGreenlet on an async session.
             .options(selectinload(models.Registration.identities))
         )
@@ -604,7 +608,7 @@ class RegistrationLifecycleService:
             registration.status = "approved"
             registration.reviewed_at = now
             registration.reviewed_by = reviewed_by
-            await enqueue_registration_approved(session, registration)
+        await enqueue_registrations_approved(session, registrations)
         await session.commit()
         return len(registrations), len(registration_ids) - len(registrations)
 
@@ -612,11 +616,13 @@ class RegistrationLifecycleService:
         self,
         session: AsyncSession,
         registration_id: int,
+        *,
+        registration: models.Registration | None = None,
     ) -> models.Registration:
         """Put an approved registration into the pool, rating it from its resolved
         roster (`ready` if every declared role carries a rank, else `incomplete`).
         """
-        registration = await self.get_registration_by_id(session, registration_id)
+        registration = registration or await self.get_registration_by_id(session, registration_id)
         if registration.status != "approved":
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
@@ -634,8 +640,10 @@ class RegistrationLifecycleService:
         self,
         session: AsyncSession,
         registration_id: int,
+        *,
+        registration: models.Registration | None = None,
     ) -> models.Registration:
-        registration = await self.get_registration_by_id(session, registration_id)
+        registration = registration or await self.get_registration_by_id(session, registration_id)
         registration.status = "withdrawn"
         await self.common._register_registration_changed(session, registration)
         await session.commit()
@@ -646,8 +654,10 @@ class RegistrationLifecycleService:
         self,
         session: AsyncSession,
         registration_id: int,
+        *,
+        registration: models.Registration | None = None,
     ) -> models.Registration:
-        registration = await self.get_registration_by_id(session, registration_id)
+        registration = registration or await self.get_registration_by_id(session, registration_id)
         registration.status = "approved"
         await self.common._register_registration_changed(session, registration)
         await session.commit()
@@ -675,6 +685,7 @@ class RegistrationLifecycleService:
         *,
         balancer_status: str,
         exclude_reason: str | None = None,
+        registration: models.Registration | None = None,
     ) -> models.Registration:
         """Explicitly pin a registration to a balancer status: `not_in_balancer`,
         `excluded` (with an optional `exclude_reason`), or a workspace custom
@@ -682,7 +693,7 @@ class RegistrationLifecycleService:
         derived from role ranks; use `add_to_balancer` to (re)compute one of them.
         """
         _reject_auto_managed_status(balancer_status)
-        registration = await self.get_registration_by_id(session, registration_id)
+        registration = registration or await self.get_registration_by_id(session, registration_id)
         await self.validate_registration_status_value(
             session,
             workspace_id=registration.tournament.workspace_id,
@@ -707,6 +718,7 @@ class RegistrationLifecycleService:
         registration_id: int,
         *,
         checked_in_by: int | None,
+        registration: models.Registration | None = None,
     ) -> models.Registration:
         """Admin check-in. Deliberately ungated by the CHECK_IN phase window --
         organizers check people in before the phase opens, after it closes, and
@@ -714,22 +726,24 @@ class RegistrationLifecycleService:
         self-service path only (``registration_service.check_in_registration``);
         undo (``uncheck_in_registration``) is ungated too.
         """
-        registration = await self.get_registration_by_id(session, registration_id)
+        registration = registration or await self.get_registration_by_id(session, registration_id)
         registration.checked_in = True
         registration.checked_in_at = datetime.now(UTC)
         registration.checked_in_by = checked_in_by
+        # The FK moved, so the serializer's .checked_in_by_user must too; one account read, not a refetch.
+        registration.checked_in_by_user = await _username_user(session, checked_in_by)
         await self.common._register_registration_changed(session, registration)
         await session.commit()
-        # Refetch: checked_in_by changed, the serializer needs a loaded
-        # .checked_in_by_user.
-        return await self.get_registration_by_id(session, registration.id)
+        return registration
 
     async def uncheck_in_registration(
         self,
         session: AsyncSession,
         registration_id: int,
+        *,
+        registration: models.Registration | None = None,
     ) -> models.Registration:
-        registration = await self.get_registration_by_id(session, registration_id)
+        registration = registration or await self.get_registration_by_id(session, registration_id)
         registration.checked_in = False
         registration.checked_in_at = None
         registration.checked_in_by = None

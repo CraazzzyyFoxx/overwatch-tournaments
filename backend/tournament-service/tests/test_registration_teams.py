@@ -403,57 +403,6 @@ class TeamNameConstraintTests(IsolatedAsyncioTestCase):
                 )
 
 
-class FreeAgentAttachTests(TestCase):
-    """A solo registrant accepting an invite ATTACHES, never re-registers.
-
-    There is one registration row per player per tournament, so "registered solo"
-    and "on a team" are two states of the same row. Before this, `accept_invite`
-    always called the creating writer, which answered `already_registered` — and
-    since withdrawal is final, a solo registrant could never join any team.
-    """
-
-    def _source(self) -> str:
-        import inspect
-
-        return inspect.getsource(teams.teams_service.accept_invite)
-
-    def test_an_existing_registration_is_attached_not_recreated(self) -> None:
-        source = self._source()
-        # The existing row is looked up and its three team columns are set...
-        self.assertIn("get_registration(session, team.tournament_id, auth_user.id)", source)
-        self.assertIn("existing.registration_team_id = team.id", source)
-        self.assertIn("existing.team_slot_code = invite.slot_code", source)
-        # ...and the creating writer is reached only in the `else`. Matched on the
-        # CALL, not the bare name: the docstring mentions it first.
-        attach_index = source.index("existing.registration_team_id")
-        create_index = source.index("await self.registrations.submit_public_registration(")
-        self.assertLess(attach_index, create_index, "attach must precede the create branch")
-
-    def test_the_submitted_body_is_ignored_on_the_attach_path(self) -> None:
-        """The player already answered the form; the invite only decides the slot.
-        Passing `body` here would let an invite silently rewrite their roles."""
-        source = self._source()
-        attach = source[source.index("if existing is not None:") : source.index("else:")]
-        self.assertNotIn("body", attach)
-
-    def test_a_terminal_registration_is_refused_with_its_own_code(self) -> None:
-        """Reviving a withdrawn row would smuggle a re-entry past the rule that
-        withdrawal is final — which exists because withdrawing after check-in
-        invalidates a composed roster."""
-        source = self._source()
-        self.assertIn("_SLOT_RELEASING_STATUSES", source)
-        self.assertIn("registration_terminal", source)
-
-    def test_the_slot_check_still_runs_before_the_attach(self) -> None:
-        """Attaching must not bypass the occupancy check: two free agents accepting
-        the same slot would otherwise both land on the roster."""
-        source = self._source()
-        self.assertLess(
-            source.index("_check_slot"),
-            source.index("existing.registration_team_id"),
-        )
-
-
 class FreeAgentPredicateTests(TestCase):
     """The one definition of "free agent", shared by the count and the picker.
 

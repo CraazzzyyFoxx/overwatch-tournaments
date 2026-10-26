@@ -44,7 +44,7 @@ from faststream.rabbit.annotations import RabbitMessage
 
 from shared import models
 from shared.core.errors import BaseAPIException as HTTPException
-from shared.disciplines import DISCIPLINES, identity_provider
+from shared.disciplines import DISCIPLINES, identity_provider, rated_role_codes
 from shared.registration_statuses import get_status_metas_map
 from shared.rpc.identity import ensure_workspace_permission
 from shared.rpc.query import build_query_model
@@ -181,16 +181,38 @@ def _touches_roles(body: schemas.BalancerRegistrationUpdateRequest) -> bool:
     return body.roles is not None or "roles" in body.answers or body.pin is not None or body.clear_pin
 
 
-async def _owner_provider(session: Any, registration: Any) -> str:
-    """The owning tournament's identity provider, the one game this registration's identity is read for.
+#: The statuses that admit or refuse a player. Setting one through a profile edit
+#: or a manual create takes the action the dedicated ``reg_approve`` /
+#: ``reg_reject`` subjects take; ``banned`` is a refusal too. Every other status
+#: (pending, withdrawn, insufficient_data, workspace custom ones) stays with
+#: ``update`` / ``create``, as ``reg_withdraw`` does.
+_STATUS_ACTIONS = {"approved": "approve", "rejected": "reject", "banned": "reject"}
 
-    Read off the loaded ``tournament`` when the row carries it; an async session cannot
-    lazy-load it, so a row loaded without it costs one lookup.
+
+def _ensure_status_permission(ctx: _Ctx, status: str | None, *, current: str) -> None:
+    """403 unless the caller may move a registration from ``current`` to ``status``.
+
+    Only a change is gated: the editor round-trips its whole form, so a resent
+    status that is already the row's decides nothing.
+    """
+    if status is not None and status != current and (action := _STATUS_ACTIONS.get(status)) is not None:
+        ensure_workspace_permission(ctx.user, ctx.ws_id, "registration", action)
+
+
+async def _owner_tournament(session: Any, registration: Any) -> Any:
+    """The owning tournament, read off the loaded ``tournament`` when the row carries it.
+
+    An async session cannot lazy-load it, so a row loaded without it costs one lookup.
     """
     tournament = registration.__dict__.get("tournament")
     if tournament is None:
         tournament = await reg_common._common_service.ensure_tournament_exists(session, registration.tournament_id)
-    return identity_provider(tournament.discipline)
+    return tournament
+
+
+async def _owner_provider(session: Any, registration: Any) -> str:
+    """The owning tournament's identity provider, the one game this registration's identity is read for."""
+    return identity_provider((await _owner_tournament(session, registration)).discipline)
 
 
 async def _registration_response(session: Any, ctx: _Ctx, registration: Any) -> Any:
@@ -210,12 +232,20 @@ async def _registration_response(session: Any, ctx: _Ctx, registration: Any) -> 
     # by now: the commit here is what releases the staged event (the rail stages
     # on before_commit precisely so a clean session still publishes).
     await session.commit()
-    rosters = await roster_engine.resolve(session, [registration], workspace_id=ctx.ws_id)
+    # The game comes off the row's tournament, so the engine does not read it again.
+    discipline = (await _owner_tournament(session, registration)).discipline
+    rosters = await roster_engine.resolve(
+        session,
+        [registration],
+        workspace_id=ctx.ws_id,
+        discipline=discipline,
+        role_codes=rated_role_codes(discipline),
+    )
     return _dump(
         serialize_registration(
             registration,
             workspace_id=ctx.ws_id,
-            provider=await _owner_provider(session, registration),
+            provider=identity_provider(discipline),
             status_meta_map=status_meta_map,
             roster=rosters.get(registration.id),
         )
@@ -229,7 +259,7 @@ async def _stage_transition(
     *,
     action: str,
     after: dict[str, Any],
-) -> None:
+) -> models.Registration:
     """Stage the audit row for a lifecycle transition on one registration.
 
     Reads the row first, so ``before`` is the state actually being left and the
@@ -237,8 +267,17 @@ async def _stage_transition(
     narrowed to the same keys ``after`` names: the journal records a transition,
     not a snapshot of the row. Staged before the service runs -- see
     ``services/registration/audit.py`` on call order.
+
+    Returns the row it read, which the caller hands the service as
+    ``registration=``: the transition then loads the registration graph once.
+
+    A transition that names a ``status`` passes the same status rule as
+    ``reg_update`` before anything is staged: ``reg_restore`` lands ``approved``,
+    so it needs ``registration.approve`` unless the row already is approved.
     """
     current = await lifecycle.lifecycle_service.get_registration_by_id(session, ctx.id)
+    if "status" in after:
+        _ensure_status_permission(ctx, after["status"], current=current.status)
     await reg_audit.audit_service.stage(
         session,
         action=action,
@@ -250,6 +289,7 @@ async def _stage_transition(
         before={field: getattr(current, field) for field in after},
         after=after,
     )
+    return current
 
 
 async def _stage_bulk(session: Any, data: dict[str, Any], ctx: _Ctx, *, action: str, after: dict[str, Any]) -> None:
@@ -466,15 +506,14 @@ def register(broker: Any, logger: Any) -> None:
             # `_q1`, not `data.get`: `AllQuery` nests the query string, so a direct
             # lookup would silently read `False` for every request.
             include_terminal = _q1(data, "include_terminal", _bool, default=False)
-            pairs = await team_service.teams_service.list_teams(
+            teams = await team_service.teams_service.list_teams(
                 session,
                 tournament_id=ctx.id,
                 include_terminal=include_terminal,
             )
-            items = [
-                await team_service.teams_service.describe_team(session, team, include_invites=True, include_staff=True)
-                for team, _occupancy in pairs
-            ]
+            items = await team_service.teams_service.describe_teams(
+                session, teams, private_team_ids={team.id for team in teams}, include_staff=True
+            )
             # The number the organizer must see before pressing export: these
             # players are on no team, so the export cannot place them.
             return _dump(
@@ -810,12 +849,15 @@ def register(broker: Any, logger: Any) -> None:
 
         return await _run(logger, op)
 
-    # require_tournament_permission("registration", "create")
+    # require_tournament_permission("registration", "create"), plus the
+    #   _STATUS_ACTIONS action when the body sets a status other than the default
     @broker.subscriber("rpc.tournament.reg_create_manual")
     async def _reg_create_manual(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
             ctx = await _tournament_ctx(session, data, "create", resource="registration")
             body = schemas.BalancerRegistrationCreateRequest.model_validate(_payload(data))
+            # A manual row lands approved unless told otherwise: that default is what creating it means.
+            _ensure_status_permission(ctx, body.status, current="approved")
 
             await reg_common._common_service.ensure_tournament_exists(session, ctx.id)
             registration = await lifecycle.lifecycle_service.create_manual_registration(
@@ -859,7 +901,8 @@ def register(broker: Any, logger: Any) -> None:
         return await _run(logger, op)
 
     # require_registration_permission("registration", "update"), plus
-    #   "registration"/"roles" when the body writes roles, ranks or the pin
+    #   "registration"/"roles" when the body writes roles, ranks or the pin, and
+    #   the _STATUS_ACTIONS action when it changes the status
     @broker.subscriber("rpc.tournament.reg_update")
     async def _reg_update(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
@@ -872,6 +915,7 @@ def register(broker: Any, logger: Any) -> None:
             # round-trips its whole form, and a journal of no-ops is a journal
             # nobody reads.
             current = await lifecycle.lifecycle_service.get_registration_by_id(session, ctx.id)
+            _ensure_status_permission(ctx, body.status, current=current.status)
             before, after = reg_audit.profile_changes(current, body.model_dump())
             if before or after:
                 await reg_audit.audit_service.stage(
@@ -899,6 +943,7 @@ def register(broker: Any, logger: Any) -> None:
                 exclude_reason=body.exclude_reason,
                 pin=body.pin,
                 clear_pin=body.clear_pin,
+                registration=current,
             )
             return await _registration_response(session, ctx, registration)
 
@@ -909,11 +954,14 @@ def register(broker: Any, logger: Any) -> None:
     async def _reg_approve(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
             ctx = await _registration_ctx(session, data, "approve")
-            await _stage_transition(session, data, ctx, action="registration.approve", after={"status": "approved"})
+            current = await _stage_transition(
+                session, data, ctx, action="registration.approve", after={"status": "approved"}
+            )
             registration = await lifecycle.lifecycle_service.approve_registration(
                 session,
                 ctx.id,
                 reviewed_by=ctx.user.id,
+                registration=current,
             )
             return await _registration_response(session, ctx, registration)
 
@@ -924,11 +972,14 @@ def register(broker: Any, logger: Any) -> None:
     async def _reg_reject(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
             ctx = await _registration_ctx(session, data, "reject")
-            await _stage_transition(session, data, ctx, action="registration.reject", after={"status": "rejected"})
+            current = await _stage_transition(
+                session, data, ctx, action="registration.reject", after={"status": "rejected"}
+            )
             registration = await lifecycle.lifecycle_service.reject_registration(
                 session,
                 ctx.id,
                 reviewed_by=ctx.user.id,
+                registration=current,
             )
             return await _registration_response(session, ctx, registration)
 
@@ -963,7 +1014,7 @@ def register(broker: Any, logger: Any) -> None:
                     "exclude_reason": None,
                 },
             )
-            registration = await lifecycle.lifecycle_service.add_to_balancer(session, ctx.id)
+            registration = await lifecycle.lifecycle_service.add_to_balancer(session, ctx.id, registration=current)
             return await _registration_response(session, ctx, registration)
 
         return await _run(logger, op)
@@ -973,19 +1024,26 @@ def register(broker: Any, logger: Any) -> None:
     async def _reg_withdraw(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
             ctx = await _registration_ctx(session, data, "update")
-            await _stage_transition(session, data, ctx, action="registration.withdraw", after={"status": "withdrawn"})
-            registration = await lifecycle.lifecycle_service.withdraw_registration(session, ctx.id)
+            current = await _stage_transition(
+                session, data, ctx, action="registration.withdraw", after={"status": "withdrawn"}
+            )
+            registration = await lifecycle.lifecycle_service.withdraw_registration(
+                session, ctx.id, registration=current
+            )
             return await _registration_response(session, ctx, registration)
 
         return await _run(logger, op)
 
-    # require_registration_permission("registration", "update")
+    # require_registration_permission("registration", "update"), plus "approve":
+    #   a restore lands ``approved`` (enforced in _stage_transition)
     @broker.subscriber("rpc.tournament.reg_restore")
     async def _reg_restore(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
             ctx = await _registration_ctx(session, data, "update")
-            await _stage_transition(session, data, ctx, action="registration.restore", after={"status": "approved"})
-            registration = await lifecycle.lifecycle_service.restore_registration(session, ctx.id)
+            current = await _stage_transition(
+                session, data, ctx, action="registration.restore", after={"status": "approved"}
+            )
+            registration = await lifecycle.lifecycle_service.restore_registration(session, ctx.id, registration=current)
             return await _registration_response(session, ctx, registration)
 
         return await _run(logger, op)
@@ -1053,7 +1111,7 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             ctx = await _registration_ctx(session, data, "update")
             body = schemas.SetBalancerStatusRequest.model_validate(_payload(data))
-            await _stage_transition(
+            current = await _stage_transition(
                 session,
                 data,
                 ctx,
@@ -1068,6 +1126,7 @@ def register(broker: Any, logger: Any) -> None:
                 ctx.id,
                 balancer_status=body.balancer_status,
                 exclude_reason=body.exclude_reason,
+                registration=current,
             )
             return await _registration_response(session, ctx, registration)
 
@@ -1201,6 +1260,7 @@ def register(broker: Any, logger: Any) -> None:
             workspace_id = _q1(data, "workspace_id", int)
             if workspace_id is None:
                 raise HTTPException(status_code=422, detail="workspace_id is required")
+            ensure_workspace_permission(user, workspace_id, "registration", "read")
             # A history is one game's: another game's rank under the same role code is not this one's, so the game
             # is named by the caller (never implied) and must be installed (a disabled game's history still reads).
             discipline_code = _q1(data, "discipline")
@@ -1208,7 +1268,6 @@ def register(broker: Any, logger: Any) -> None:
                 raise HTTPException(status_code=422, detail="discipline is required")
             if discipline_code not in DISCIPLINES:
                 raise HTTPException(status_code=422, detail=f"discipline_not_installed: {discipline_code!r}")
-            ensure_workspace_permission(user, workspace_id, "registration", "read")
             entries = await rank_sources.rank_sources_service.load_user_balancer_rank_history(
                 session,
                 user_id=user_id,
@@ -1225,7 +1284,7 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             ctx = await _registration_ctx(session, data, "check_in")
             body = schemas.CheckInRequest.model_validate(_payload(data))
-            await _stage_transition(
+            current = await _stage_transition(
                 session,
                 data,
                 ctx,
@@ -1237,9 +1296,12 @@ def register(broker: Any, logger: Any) -> None:
                     session,
                     ctx.id,
                     checked_in_by=ctx.user.id,
+                    registration=current,
                 )
             else:
-                registration = await lifecycle.lifecycle_service.uncheck_in_registration(session, ctx.id)
+                registration = await lifecycle.lifecycle_service.uncheck_in_registration(
+                    session, ctx.id, registration=current
+                )
             return await _registration_response(session, ctx, registration)
 
         return await _run(logger, op)

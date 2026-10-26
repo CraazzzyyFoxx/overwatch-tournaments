@@ -142,6 +142,9 @@ class _Session:
         self.statements += 1
         return _Rows([(tag, status) for tag, status in self._tag_statuses.items()])
 
+    async def commit(self) -> None:
+        """The gate commits its resolver's writes before deciding; nothing to do here."""
+
 
 class _Resolver:
     """Real composition, faked I/O, and a log of both questions the gate can ask."""

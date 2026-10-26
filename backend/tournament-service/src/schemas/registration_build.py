@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from shared import models
-from shared.disciplines import discipline
+from shared.disciplines import discipline, rated_role_codes
 from shared.division_grid import DivisionGrid
 from shared.domain.forms import RolesParams, schema_from_form, schema_from_version
 from shared.domain.roster import PlayerRoster
@@ -115,16 +115,6 @@ def registration_read_loaders() -> tuple[Any, ...]:
 # full list is capped here and the true total is surfaced via ``tournament_history_count``.
 HISTORY_LIMIT = 10
 
-# The RPC envelope maps a ``BaseAPIException``'s ``status_code`` to the error code.
-_HTTP_404_NOT_FOUND = 404
-
-
-def _http_exception(status_code: int, detail: str) -> Exception:
-    """Build the ``BaseAPIException`` the RPC envelope maps to an error code by ``status_code``."""
-    from shared.core.errors import BaseAPIException as HTTPException
-
-    return HTTPException(status_code=status_code, detail=detail)
-
 
 def _registration_player_id(reg: models.Registration) -> int | None:
     """The registration's domain player id via its workspace_member anchor.
@@ -135,15 +125,6 @@ def _registration_player_id(reg: models.Registration) -> int | None:
     """
     member = reg.workspace_member
     return member.player_id if member is not None else None
-
-
-async def _resolve_tournament_workspace(session: AsyncSession, tournament_id: int) -> int:
-    workspace_id = await session.scalar(
-        sa.select(models.Tournament.workspace_id).where(models.Tournament.id == tournament_id)
-    )
-    if workspace_id is None:
-        raise _http_exception(_HTTP_404_NOT_FOUND, "Tournament not found")
-    return workspace_id
 
 
 async def _resolve_top_heroes_config(
@@ -374,23 +355,36 @@ def _reg_to_read(
     )
 
 
-async def _public_rosters(session: AsyncSession, registrations: Sequence[Any]) -> dict[int, PlayerRoster]:
-    """Resolved rosters for the public participants list.
+async def _public_rosters(
+    session: AsyncSession,
+    registrations: Sequence[Any],
+    *,
+    form: models.RegistrationForm | None = None,
+) -> dict[int, PlayerRoster]:
+    """Resolved rosters for the public participants list and the registrant's own card.
 
     Always resolved, rank publication or not: the ROLE list itself comes from the
     roster (``all_roles``/``forced`` synthesize roles no DB row names), and
     ``show_ranks`` only decides whether ``_reg_to_read`` prints the number.
 
-    The workspace is resolved here rather than by every call site:
-    every caller already has the registrations, and one tournament's worth of
-    them shares a tenancy. Rows must carry ``registration_read_loaders()``, which
-    folds in everything the engine reads.
+    Rows must carry ``registration_read_loaders()``, which folds in everything the
+    engine reads and the tournament: its workspace and discipline come off the
+    first row (one tournament's worth of rows shares them), so the engine reads
+    neither again. ``form`` is the caller's (with ``current_version`` loaded);
+    without it the engine reads the form itself.
     """
     if not registrations:
         return {}
-    tournament_id = registrations[0].tournament_id
-    workspace_id = await _resolve_tournament_workspace(session, tournament_id)
-    return await roster_engine.resolve(session, registrations, workspace_id=workspace_id, tournament_id=tournament_id)
+    tournament = registrations[0].tournament
+    return await roster_engine.resolve(
+        session,
+        registrations,
+        workspace_id=tournament.workspace_id,
+        tournament_id=tournament.id,
+        form=form,
+        discipline=tournament.discipline,
+        role_codes=rated_role_codes(tournament.discipline),
+    )
 
 
 async def _build_tournament_history(

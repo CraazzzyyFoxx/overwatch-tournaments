@@ -8,6 +8,7 @@ pick.
 
 from __future__ import annotations
 
+import asyncio
 import sys
 from pathlib import Path
 from typing import Any
@@ -20,6 +21,8 @@ for path in (str(SERVICE_ROOT), str(BACKEND_ROOT)):
         sys.path.insert(0, path)
 
 
+from fakeredis import FakeServer  # noqa: E402
+from fakeredis.aioredis import FakeRedis  # noqa: E402
 from redis.exceptions import RedisError  # noqa: E402
 
 from shared.core.errors import ApiHTTPException  # noqa: E402
@@ -31,26 +34,15 @@ def _code(exc: ApiHTTPException) -> str:
     return detail[0]["code"]
 
 
-class _Redis:
-    """Counts INCRs per key, like the real one."""
+class _Redis(FakeRedis):
+    """A real Redis command interpreter (MULTI, SET NX EX, TTLs) with its own keyspace."""
 
     def __init__(self) -> None:
-        self.counts: dict[str, int] = {}
-        self.expires: dict[str, int] = {}
-
-    async def incr(self, key: str) -> int:
-        self.counts[key] = self.counts.get(key, 0) + 1
-        return self.counts[key]
-
-    async def expire(self, key: str, seconds: int) -> None:
-        self.expires[key] = seconds
+        super().__init__(server=FakeServer(), decode_responses=True)
 
 
 class _BrokenRedis:
-    async def incr(self, key: str) -> int:
-        raise RedisError("connection lost")
-
-    async def expire(self, key: str, seconds: int) -> None:  # pragma: no cover
+    def pipeline(self, transaction: bool = True) -> Any:
         raise RedisError("connection lost")
 
 
@@ -73,9 +65,10 @@ class InviteLimitTests(IsolatedAsyncioTestCase):
         """Re-expiring on each hit would make the window slide forever and the
         limiter unreachable for a steady attacker."""
         redis = _Redis()
-        for _ in range(3):
-            await limits.assert_invite_attempt_allowed(tournament_id=1, auth_user_id=2, redis=redis)  # type: ignore[arg-type]
-        self.assertEqual({"regteam:invite:1:2": limits.INVITE_WINDOW_SECONDS}, redis.expires)
+        await limits.assert_invite_attempt_allowed(tournament_id=1, auth_user_id=2, redis=redis)  # type: ignore[arg-type]
+        await redis.expire("regteam:invite:1:2", 5)  # the window is nearly over
+        await limits.assert_invite_attempt_allowed(tournament_id=1, auth_user_id=2, redis=redis)  # type: ignore[arg-type]
+        self.assertLessEqual(await redis.ttl("regteam:invite:1:2"), 5)
 
     async def test_actors_are_metered_separately(self) -> None:
         redis = _Redis()
@@ -131,7 +124,38 @@ class AcceptLimitTests(IsolatedAsyncioTestCase):
         is the tighter bound anyway."""
         redis = _Redis()
         await limits.assert_accept_attempt_allowed(auth_user_id=2, redis=redis)  # type: ignore[arg-type]
-        self.assertEqual(["regteam:accept:2"], list(redis.counts))
+        self.assertEqual(["regteam:accept:2"], await redis.keys())
+
+
+class _ExpireFails(_Redis):
+    """The connection drops on the client's own EXPIRE, after INCR already counted."""
+
+    async def expire(self, *args: Any, **kwargs: Any) -> Any:
+        raise RedisError("connection lost")
+
+
+class AtomicCounterTests(IsolatedAsyncioTestCase):
+    async def test_a_failure_after_the_count_cannot_leave_a_key_without_expiry(self) -> None:
+        """INCR and a separate EXPIRE left the key forever when the second call was
+        lost: a permanent 429 for that actor. The window rides in the same MULTI."""
+        redis = _ExpireFails()
+        await limits.assert_accept_attempt_allowed(auth_user_id=2, redis=redis)
+        self.assertGreater(await redis.ttl("regteam:accept:2"), 0)
+
+    async def test_concurrent_attempts_each_count_once_inside_one_window(self) -> None:
+        redis = _Redis()
+        await asyncio.gather(*(limits.assert_accept_attempt_allowed(auth_user_id=2, redis=redis) for _ in range(10)))
+        self.assertEqual("10", await redis.get("regteam:accept:2"))
+        self.assertTrue(0 < await redis.ttl("regteam:accept:2") <= limits.ACCEPT_WINDOW_SECONDS)
+
+    async def test_a_counter_left_without_expiry_gets_its_window_back(self) -> None:
+        """A key the old INCR-then-EXPIRE code stranded without a TTL (a permanent
+        429) heals on the next attempt instead of staying forever."""
+        redis = _Redis()
+        await redis.set("regteam:accept:2", limits.ACCEPT_ATTEMPT_LIMIT + 5)
+        with self.assertRaises(ApiHTTPException):
+            await limits.assert_accept_attempt_allowed(auth_user_id=2, redis=redis)  # type: ignore[arg-type]
+        self.assertTrue(0 < await redis.ttl("regteam:accept:2") <= limits.ACCEPT_WINDOW_SECONDS)
 
 
 class FailDirectionContractTests(IsolatedAsyncioTestCase):

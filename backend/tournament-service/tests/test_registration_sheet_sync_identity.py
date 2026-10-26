@@ -529,7 +529,7 @@ _LOL_MAPPING = {
 def test_a_lol_sheet_row_is_keyed_named_and_anchored_by_the_riot_id(db_session, monkeypatch) -> None:
     """A League tournament's sheet row carrying BOTH handles: the Riot ID is the row's
     identity (key, registration match, player name, serialized handle); the BattleTag is
-    an extra profile handle, never the identity. A re-sync matches the same registration."""
+    an extra profile handle, never the identity. A re-sync of the unchanged row creates nothing and skips it."""
 
     async def _run() -> None:
         seeded = await _seed_feed(db_session, discipline="lol", schema=_LOL_SCHEMA, mapping=_LOL_MAPPING)
@@ -543,7 +543,7 @@ def test_a_lol_sheet_row_is_keyed_named_and_anchored_by_the_riot_id(db_session, 
         again = await reg_admin.sheet_sync_service.sync_google_sheet_feed(db_session, seeded["tournament_id"])
 
         assert (first.created, first.updated) == (1, 0)
-        assert (again.created, again.updated) == (0, 1)
+        assert (again.created, again.updated) == (0, 0)
 
         registration = (
             (
@@ -631,7 +631,8 @@ def test_the_suggested_lol_mapping_keeps_riot_ids_that_differ_only_by_a_space_ap
     """No saved mapping: the sync uses the suggested one. ``Foo Bar#123`` and ``FooBar#123`` are two
     people, so the automatically inferred keys must keep the internal space (Riot normalization),
     not collapse into one dictionary slot; a shared optional BattleTag column must not become the
-    key either (the generic alias loop would suggest it). A re-sync updates both, creating nothing."""
+    key either (the generic alias loop would suggest it). A re-sync of the unchanged sheet creates nothing and
+    skips both rows."""
 
     async def _run() -> None:
         seeded = await _seed_feed(db_session, discipline="lol", schema=_LOL_SCHEMA, mapping=None)
@@ -645,7 +646,7 @@ def test_the_suggested_lol_mapping_keeps_riot_ids_that_differ_only_by_a_space_ap
         again = await reg_admin.sheet_sync_service.sync_google_sheet_feed(db_session, seeded["tournament_id"])
 
         assert (first.created, first.updated) == (2, 0)
-        assert (again.created, again.updated) == (0, 2)
+        assert (again.created, again.updated) == (0, 0)
         keys = (
             await db_session.scalars(
                 sa.select(models.RegistrationGoogleSheetBinding.source_record_key)

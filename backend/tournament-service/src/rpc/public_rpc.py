@@ -12,8 +12,10 @@ Commit semantics: every write service called here commits internally
 (captain.submit_team_report,
 pick_ban_action.perform_pick_ban_action, reg_service.create/update/withdraw/check_in,
 encounter service.create_saved_view/delete_saved_view), so the handlers add no
-extra commit. The pick-ban state read commits nothing at all: it is a pure
-read, and the room's healing belongs to ``encounter.room_reconcile``.
+extra commit. The admission gate (``assert_admitted_at``) commits too, before
+any write: its provider calls never run inside an open transaction. The
+pick-ban state read commits nothing at all: it is a pure read, and the room's
+healing belongs to ``encounter.room_reconcile``.
 
 The gateway passes path params as ``data["<name>"]`` (and the primary id as
 ``data["id"]`` when the RouteSpec sets IDParam), query params as
@@ -32,8 +34,6 @@ from shared import models
 from shared.core.enums import PickBanKind, SubscriptionCollectionSource
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.disciplines import identity_provider
-from shared.domain.forms import schema_from_form
-from shared.registration_statuses import get_status_metas_map
 from shared.rpc.identity import rehydrate_user
 from shared.services.chat import (
     HISTORY_DEFAULT,
@@ -75,18 +75,13 @@ from src.schemas.registration import (
     RegistrationUpdate,
     SubscriptionRedeemRequest,
 )
-from src.schemas.registration_build import (
-    AdmissionChips,
-    _public_rosters,
-    _reg_to_read,
-    _resolve_top_heroes_config,
-    _resolve_tournament_workspace,
-)
+from src.schemas.registration_build import AdmissionChips, _resolve_top_heroes_config
 from src.schemas.registration_team import (
     RegistrationFreeAgentListResponse,
     RegistrationTeamAcceptRequest,
     RegistrationTeamCheckInRequest,
     RegistrationTeamCreateRequest,
+    RegistrationTeamDeclineRequest,
     RegistrationTeamExtendInviteRequest,
     RegistrationTeamInviteCreateRequest,
     RegistrationTeamInviteOfferListResponse,
@@ -119,40 +114,11 @@ from src.services.registration import teams as team_service
 from src.services.registration.admission import assert_admitted_at
 from src.services.registration.answers import answer_service
 from src.services.registration.recheck import assert_recheck_allowed, recheck_registration
-from src.services.registration.self_edit import SelfEditPolicy, self_edit_policy, submitted_late
 from src.services.registration.subscription_codes import redeem_challenge_code
 from src.services.registration.subscription_status import (
     assert_redeem_attempt_allowed,
     subscription_status_for_user,
 )
-
-
-async def _require_tournament(session: Any, tournament_id: int) -> models.Tournament:
-    """The tournament row (schedule eager-loaded by the mapper), or 404."""
-    tournament = await reg_service.registration_service.tournament_repo.get(session, tournament_id)
-    if tournament is None:
-        raise HTTPException(status_code=404, detail="Tournament not found")
-    return tournament
-
-
-async def _me_read_context(
-    session: Any,
-    registration: models.Registration,
-    tournament_id: int,
-    form: models.RegistrationForm | None,
-) -> tuple[SelfEditPolicy | None, bool]:
-    """``(edit rights, signed up late)`` for the caller's own registration read.
-
-    Both answers need the tournament's phase schedule, so they share ONE read of
-    it. The policy is ``None`` when there is no form or no schema to consult: the
-    read then reports ``can_edit=False``, which is the truth -- there are no
-    questions to rewrite.
-    """
-    tournament = await _require_tournament(session, tournament_id)
-    schema = schema_from_form(form)
-    policy = self_edit_policy(registration, tournament, schema) if schema is not None else None
-    return policy, submitted_late(registration, tournament)
-
 
 # --- helpers -----------------------------------------------------------------
 
@@ -298,6 +264,7 @@ def register(broker: Any, logger: Any) -> None:
                 member_id=body.member_id,
                 viewer_member=own,
                 actor_auth_user_id=user.id,
+                locked_encounter=encounter,
             )
             if is_captain:
                 return state
@@ -326,6 +293,7 @@ def register(broker: Any, logger: Any) -> None:
                 lock=body.lock,
                 viewer_member=own,
                 actor_auth_user_id=user.id,
+                locked_encounter=encounter,
             )
 
         return await _run(logger, op)
@@ -339,7 +307,7 @@ def register(broker: Any, logger: Any) -> None:
             encounter = await load_room_encounter(session, encounter_id, for_update=True)
             participation, _player_id = await captain_service.captain_seat(session, user, encounter)
             return await pick_ban_action.pick_ban_action_service.dispute_step(
-                session, encounter_id, kind, participation.id, actor_auth_user_id=user.id
+                session, encounter_id, kind, participation.id, actor_auth_user_id=user.id, locked_encounter=encounter
             )
 
         return await _run(logger, op)
@@ -561,12 +529,14 @@ def register(broker: Any, logger: Any) -> None:
             tournament_id = _path_int(data, "tournament_id")
             await ensure_tournament_viewable(session, user, tournament_id)
             body = RegistrationSubmit.model_validate(_payload(data))
+            form = await reg_common._common_service.get_registration_form(session, tournament_id)
 
             # Admission gate, sign-up stage. Every requirement the tournament armed
             # at `registration` is asked here, in one call; a requirement staged at
             # check-in stays silent by construction rather than by this handler
             # omitting a call. There is no row yet, hence `registration=None` and the
-            # acting user as the subject.
+            # acting user as the subject. It commits: no provider call runs inside
+            # this request's transaction, and a refusal keeps its fresh verdict.
             #
             # Only `blockers` refuses (see `assert_admitted_at`): a rowless subject
             # is never `ready`, so its `decision` is `not_admitted` and means nothing
@@ -579,13 +549,14 @@ def register(broker: Any, logger: Any) -> None:
                 tournament_id=tournament_id,
                 auth_user_id=user.id,
                 stage=AdmissionStage.registration,
+                form=form,
             )
 
             # Full use-case (validation, duplicate check, create, serialize)
             # lives in the service layer; commits internally.
             return _dump(
                 await reg_service.registration_service.submit_public_registration(
-                    session, tournament_id=tournament_id, auth_user=user, body=body
+                    session, tournament_id=tournament_id, auth_user=user, body=body, form=form
                 )
             )
 
@@ -601,35 +572,13 @@ def register(broker: Any, logger: Any) -> None:
             if reg is None:
                 return None
             form = await reg_common._common_service.get_registration_form(session, tournament_id)
-            show_ranks = form.show_ranks if form is not None else False
             # The registrant's own card goes through the SAME resolver as the
             # participants list and the admin table -- one batch of one row -- so
             # "why am I not admitted" answers identically on every surface.
             admissions = await reg_service.registration_service.resolve_admission_list(session, [reg], form=form)
-            chips = AdmissionChips.of(admissions.get(reg.id))
-            workspace_id = (
-                form.workspace_id if form is not None else await _resolve_tournament_workspace(session, tournament_id)
-            )
-            status_meta_map = await get_status_metas_map(session, workspace_id=workspace_id)
-            policy, late = await _me_read_context(session, reg, tournament_id, form)
             return _dump(
-                _reg_to_read(
-                    reg,
-                    workspace_id=workspace_id,
-                    provider=identity_provider(reg.tournament.discipline),
-                    status_meta_map=status_meta_map,
-                    show_ranks=show_ranks,
-                    admission=chips.admission,
-                    profiles_open=chips.profiles_open,
-                    subscription_outcome=chips.subscription_outcome,
-                    subscription_verdicts=chips.subscription_verdicts,
-                    roster=(await _public_rosters(session, [reg])).get(reg.id),
-                    queue=await reg_service.registration_service.queue_position(session, reg),
-                    # The registrant's OWN card: no public-key filter (they wrote
-                    # every answer), but it must say when the questions moved on.
-                    current_version_id=form.current_version_id if form is not None else None,
-                    self_edit=policy,
-                    submitted_late=late,
+                await reg_service.registration_service.build_own_read(
+                    session, reg, form=form, chips=AdmissionChips.of(admissions.get(reg.id))
                 )
             )
 
@@ -690,28 +639,13 @@ def register(broker: Any, logger: Any) -> None:
             updated = await reg_service.registration_service.update_registration(
                 session,
                 reg,
-                tournament=await _require_tournament(session, tournament_id),
+                tournament=reg.tournament,
                 values=values,
                 schema=schema,
                 hero_catalog=hero_catalog,
                 form_version_id=form.current_version_id,
             )
-            status_meta_map = await get_status_metas_map(session, workspace_id=form.workspace_id)
-            policy, late = await _me_read_context(session, updated, tournament_id, form)
-            return _dump(
-                _reg_to_read(
-                    updated,
-                    workspace_id=form.workspace_id,
-                    provider=provider,
-                    status_meta_map=status_meta_map,
-                    show_ranks=form.show_ranks,
-                    roster=(await _public_rosters(session, [updated])).get(updated.id),
-                    queue=await reg_service.registration_service.queue_position(session, updated),
-                    current_version_id=form.current_version_id,
-                    self_edit=policy,
-                    submitted_late=late,
-                )
-            )
+            return _dump(await reg_service.registration_service.build_own_read(session, updated, form=form))
 
         return await _run(logger, op)
 
@@ -739,11 +673,12 @@ def register(broker: Any, logger: Any) -> None:
             reg = await reg_service.registration_service.get_registration(session, tournament_id, user.id)
             if reg is None:
                 raise HTTPException(status_code=404, detail="No registration found")
+            form = await reg_common._common_service.get_registration_form(session, tournament_id)
 
             # Admission gate, check-in stage: ONE call, every requirement armed at
             # check-in. Only a CONFIRMED refusal blocks, so a provider outage or a
             # BattleTag nobody has polled yet can never lock somebody out of a live
-            # check-in.
+            # check-in. It commits (see `assert_admitted_at`).
             #
             # The admin path (`registration_admin.py::_reg_check_in`) has NO gate: it
             # IS the organizer's override, and `AdmissionEvaluation.overridden` is what
@@ -755,36 +690,18 @@ def register(broker: Any, logger: Any) -> None:
                 tournament_id=tournament_id,
                 auth_user_id=user.id,
                 stage=AdmissionStage.check_in,
+                form=form,
             )
 
-            form = await reg_common._common_service.get_registration_form(session, tournament_id)
-            provider = identity_provider(reg.tournament.discipline)
-
-            # check_in_registration commits internally.
+            # check_in_registration commits internally. The card it answers with is
+            # now ``checked_in``, so its Edit affordance turns off with a reason
+            # instead of silently vanishing on the next refetch.
             checked_in = await reg_service.registration_service.check_in_registration(
                 session,
                 reg,
                 checked_in_by=user.id,
             )
-            workspace_id = await _resolve_tournament_workspace(session, tournament_id)
-            status_meta_map = await get_status_metas_map(session, workspace_id=workspace_id)
-            policy, late = await _me_read_context(session, checked_in, tournament_id, form)
-            return _dump(
-                _reg_to_read(
-                    checked_in,
-                    workspace_id=workspace_id,
-                    provider=provider,
-                    status_meta_map=status_meta_map,
-                    show_ranks=form.show_ranks if form else False,
-                    roster=(await _public_rosters(session, [checked_in])).get(checked_in.id),
-                    queue=await reg_service.registration_service.queue_position(session, checked_in),
-                    current_version_id=form.current_version_id if form is not None else None,
-                    # Now ``checked_in``, so the card's Edit affordance turns off with
-                    # a reason instead of silently vanishing on the next refetch.
-                    self_edit=policy,
-                    submitted_late=late,
-                )
-            )
+            return _dump(await reg_service.registration_service.build_own_read(session, checked_in, form=form))
 
         return await _run(logger, op)
 
@@ -880,17 +797,20 @@ def register(broker: Any, logger: Any) -> None:
 
     # Isolated QoS: the participants list is the heaviest public read and fans
     # out to every connected viewer after each registration mutation (the
-    # realtime invalidation herd). On its own channel a burst of list rebuilds
-    # cannot occupy the default channel's RPC_PREFETCH_COUNT slots and starve the
-    # write RPCs (check-in/register) queued behind it.
+    # realtime invalidation herd). Prefetch 8 keeps a burst of list rebuilds to 8
+    # of the process's RPC_PREFETCH_COUNT handler permits, so check-in/register
+    # writes still get the rest.
     @broker.subscriber("rpc.tournament.reg_pub_list", channel=Channel(prefetch_count=8))
     async def _reg_pub_list(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
             # Public route — no identity required. The visibility check is
             # viewer-dependent and runs on this call's own session; the expensive,
-            # viewer-agnostic build is coalesced across concurrent callers.
+            # viewer-agnostic build is coalesced across concurrent callers on
+            # sessions of their own, so this one's read-only transaction ends
+            # before the wait instead of idling in it.
             tournament_id = _path_int(data, "tournament_id")
             await ensure_tournament_viewable(session, _optional_identity(data), tournament_id)
+            await session.commit()
             return _dump(await public_list.coalesced_registration_list(db.async_session_maker, tournament_id))
 
         return await _run(logger, op)
@@ -911,21 +831,18 @@ def register(broker: Any, logger: Any) -> None:
             tournament_id = _path_int(data, "tournament_id")
             user = _optional_identity(data)
             await ensure_tournament_viewable(session, user, tournament_id)
-            pairs = await team_service.teams_service.list_teams(
+            teams = await team_service.teams_service.list_teams(
                 session,
                 tournament_id=tournament_id,
                 include_terminal=False,
                 include_terminal_for_auth_user_id=user.id if user is not None else None,
             )
-            items = [
-                await team_service.teams_service.describe_team(
-                    session,
-                    team,
-                    include_invites=user is not None
-                    and await team_service.teams_service.is_team_staff(session, team, user.id),
-                )
-                for team, _occupancy in pairs
-            ]
+            staffed = (
+                await team_service.teams_service.staffed_team_ids(session, teams, user.id)
+                if user is not None
+                else set()
+            )
+            items = await team_service.teams_service.describe_teams(session, teams, private_team_ids=staffed)
             # Free agents ride along: a captain reading this list is exactly the
             # person who can recruit them.
             return _dump(
@@ -987,7 +904,7 @@ def register(broker: Any, logger: Any) -> None:
                 stage=AdmissionStage.registration,
             )
 
-            team, _registration = await team_service.teams_service.create_team(
+            team, _registration, issues = await team_service.teams_service.create_team(
                 session,
                 tournament_id=tournament_id,
                 auth_user=user,
@@ -996,7 +913,9 @@ def register(broker: Any, logger: Any) -> None:
                 body=body.registration,
             )
             # The captain sees their own outstanding offers; a public roster does not.
-            return _dump(await team_service.teams_service.describe_team(session, team, include_invites=True))
+            return _dump(
+                await team_service.teams_service.describe_team(session, team, include_invites=True, eligibility=issues)
+            )
 
         return await _run(logger, op)
 
@@ -1104,7 +1023,8 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             user = _identity(data)
             body = RegistrationTeamAcceptRequest.model_validate(_payload(data))
-            team, _registration = await team_service.teams_service.accept_invite(
+            # A newcomer passes the sign-up admission gate inside, before the team lock.
+            team, _registration_id, issues = await team_service.teams_service.accept_invite(
                 session,
                 auth_user=user,
                 body=body.registration,
@@ -1112,7 +1032,9 @@ def register(broker: Any, logger: Any) -> None:
                 invite_id=body.invite_id,
             )
             # An invitee is now a member, so their own offers view is theirs to see.
-            return _dump(await team_service.teams_service.describe_team(session, team, include_invites=True))
+            return _dump(
+                await team_service.teams_service.describe_team(session, team, include_invites=True, eligibility=issues)
+            )
 
         return await _run(logger, op)
 
@@ -1120,12 +1042,12 @@ def register(broker: Any, logger: Any) -> None:
     async def _regteam_decline(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
             user = _identity(data)
-            payload = _payload(data) or {}
+            body = RegistrationTeamDeclineRequest.model_validate(_payload(data) or {})
             await team_service.teams_service.decline_invite(
                 session,
                 auth_user=user,
-                token=payload.get("token"),
-                invite_id=payload.get("invite_id"),
+                token=body.token,
+                invite_id=body.invite_id,
             )
             return None
 

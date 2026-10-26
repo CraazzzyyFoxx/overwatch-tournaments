@@ -157,8 +157,16 @@ async def assign_workspace_system_role(
     workspace_id: int,
     role_name: str,
 ) -> Role:
-    roles = await ensure_workspace_system_roles(session, workspace_id)
-    role = roles[role_name]
+    """Grant ``role_name`` to ``user_id`` in ``workspace_id``; idempotent, stages ``roles_changed`` only on a grant.
+
+    Hot on every self-registration, so a workspace that already has the role is
+    granted straight away; only one without it pays the full catalog and system-role
+    seeding (which also reconciles drifted permissions — the admin role list and
+    member writes run that reconcile, not this path).
+    """
+    role = await get_workspace_system_role(session, workspace_id, role_name)
+    if role is None:
+        role = (await ensure_workspace_system_roles(session, workspace_id))[role_name]
     granted = await session.scalar(
         sa.insert(user_roles)
         .from_select(

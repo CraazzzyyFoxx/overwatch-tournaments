@@ -226,7 +226,7 @@ class RegistrationIdentityTests(IsolatedAsyncioTestCase):
                 result = await sheet_sync_service.sync_google_sheet_feed(s, self.tournament_id)
                 assert result.created == 4 and result.skipped == 0 and result.errors == []
                 repeated = await sheet_sync_service.sync_google_sheet_feed(s, self.tournament_id)
-                assert repeated.created == 0 and repeated.updated == 4 and repeated.errors == []
+                assert repeated.created == 0 and repeated.updated == 0 and repeated.errors == []
                 keys = set(await sheet_sync_service.binding_repo.list_source_record_keys(s, feed.id))
                 expected_keys = (
                     {f"row{index}" for index in range(4)}

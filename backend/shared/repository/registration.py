@@ -15,6 +15,31 @@ class RegistrationRepository(BaseRepository[models.Registration]):
     def __init__(self) -> None:
         super().__init__(models.Registration)
 
+    async def attach_to_team_if_free(
+        self,
+        session: AsyncSession,
+        registration_id: int,
+        *,
+        team_id: int,
+        slot_code: str,
+        is_substitute: bool,
+    ) -> bool:
+        """Seat a registration on a team only if it sits on none. ``True`` only when it was seated.
+
+        "On no team" is checked *inside* the UPDATE, so a member of another team is
+        never silently moved and two accepts into two different teams (two different
+        team locks) cannot both seat the row. ORM-enabled, so a loaded instance sees
+        the new seat.
+        """
+        registration = models.Registration
+        seated = await session.scalar(
+            sa.update(registration)
+            .where(registration.id == registration_id, registration.registration_team_id.is_(None))
+            .values(registration_team_id=team_id, team_slot_code=slot_code, is_substitute=is_substitute)
+            .returning(registration.id)
+        )
+        return seated is not None
+
 
 class RegistrationFormRepository(BaseRepository[models.RegistrationForm]):
     def __init__(self) -> None:
@@ -171,10 +196,16 @@ class RegistrationTeamRepository(BaseRepository[models.RegistrationTeam]):
         Named ``get_active_for_update`` rather than ``get_for_update`` because
         ``deleted_at IS NULL`` is part of the lock's meaning — a disbanded team must
         not be lockable at all.
+
+        ``populate_existing``: the values this returns must be the locked row's, not a
+        copy the session read before it took the lock.
         """
         team = models.RegistrationTeam
         return await session.scalar(
-            self.select().where(team.id == team_id, team.deleted_at.is_(None)).with_for_update()
+            self.select()
+            .where(team.id == team_id, team.deleted_at.is_(None))
+            .with_for_update()
+            .execution_options(populate_existing=True)
         )
 
 
@@ -227,6 +258,22 @@ class RegistrationTeamInviteRepository(BaseRepository[models.RegistrationTeamInv
         result = await session.scalars(
             self.select().where(
                 invite.team_id == team_id,
+                invite.state == pending_state,
+                self._live_clause(),
+            )
+        )
+        return result.all()
+
+    async def list_pending_for_teams(
+        self, session: AsyncSession, team_ids: Sequence[int], *, pending_state: str
+    ) -> Sequence[models.RegistrationTeamInvite]:
+        """:meth:`list_pending` for a page of teams, in one ``IN (…)`` read."""
+        if not team_ids:
+            return []
+        invite = models.RegistrationTeamInvite
+        result = await session.scalars(
+            self.select().where(
+                invite.team_id.in_(list(team_ids)),
                 invite.state == pending_state,
                 self._live_clause(),
             )

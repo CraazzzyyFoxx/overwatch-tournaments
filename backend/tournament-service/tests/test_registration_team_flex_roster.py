@@ -163,7 +163,7 @@ def test_a_three_flex_roster_is_founded_and_filled_by_two_invites(db_session) ->
     async def _run() -> tuple[str, list[str], str, list[str]]:
         seeded = await _seed(db_session)
         try:
-            team, _ = await teams_service.create_team(
+            team, _registration, _issues = await teams_service.create_team(
                 db_session,
                 tournament_id=seeded.tournament_id,
                 auth_user=seeded.captain,

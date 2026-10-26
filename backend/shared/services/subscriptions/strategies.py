@@ -6,7 +6,8 @@ purely about config and caching.
 
 Credentials are constructor arguments, never read from a global settings object:
 ``shared`` is imported by every service and must not depend on any one service's
-configuration.
+configuration. The optional ``release`` hook runs after a strategy's database read
+and before its first network call, so a caller can end its transaction first.
 """
 
 import asyncio
@@ -159,9 +160,16 @@ class BoostyDiscordStrategy:
     no bot token; without a broker the verdict is ``bot_not_configured``.
     """
 
-    def __init__(self, session: AsyncSession, *, broker: Any | None = None) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        *,
+        broker: Any | None = None,
+        release: Callable[[], Awaitable[None]] | None = None,
+    ) -> None:
         self._session = session
         self._broker = broker
+        self._release = release
 
     async def resolve_many(
         self, *, config: dict[str, Any], auth_user_ids: Sequence[int]
@@ -169,6 +177,8 @@ class BoostyDiscordStrategy:
         discord_ids = await load_provider_user_ids(
             self._session, auth_user_ids=auth_user_ids, oauth_provider=SocialProvider.DISCORD
         )
+        if self._release is not None:
+            await self._release()
 
         # One client per batch: its member/role memo must not outlive this call.
         discord = DiscordClient(broker=self._broker)
@@ -177,8 +187,9 @@ class BoostyDiscordStrategy:
             try:
                 await discord.prefetch(guild_id, [uid for ids in discord_ids.values() for uid in ids])
             except DiscordError:
-                # Per-user resolution below asks again and files the outcome
-                # (``bot_not_configured`` / ``provider_unavailable``) per verdict.
+                # Not asked again per account: the client memoizes the failed batch,
+                # so each account files its outcome (``bot_not_configured`` /
+                # ``guild_not_accessible`` / ``provider_unavailable``) at once.
                 pass
 
         resolver = DiscordRoleResolver(
@@ -236,17 +247,21 @@ class TwitchSubscriptionStrategy:
         token_key: str | None = None,
         proxy: str | None = None,
         api_base: str = TWITCH_HELIX_BASE,
+        release: Callable[[], Awaitable[None]] | None = None,
     ) -> None:
         self._session = session
         self._client_id = client_id
         self._token_key = token_key
         self._proxy = proxy
         self._api_base = api_base
+        self._release = release
 
     async def resolve_many(
         self, *, config: dict[str, Any], auth_user_ids: Sequence[int]
     ) -> dict[int, SubscriptionVerdict]:
         connections = await self._load_connections(auth_user_ids)
+        if self._release is not None:
+            await self._release()
 
         async with httpx.AsyncClient(proxy=self._proxy, timeout=_TIMEOUT) as client:
             semaphore = asyncio.Semaphore(15)

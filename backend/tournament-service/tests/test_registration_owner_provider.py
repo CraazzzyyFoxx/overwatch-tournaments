@@ -182,7 +182,7 @@ def test_every_receiver_names_the_owning_games_handle(db_session, discipline: st
         try:
             captain_handles = _handles(seeded, "Cap")
             agent_handles = _handles(seeded, "Agent")
-            team, captain_read = await teams_service.create_team(
+            team, captain, _issues = await teams_service.create_team(
                 db_session,
                 tournament_id=seeded.tournament_id,
                 auth_user=seeded.captain,
@@ -209,7 +209,7 @@ def test_every_receiver_names_the_owning_games_handle(db_session, discipline: st
             registration = (
                 await db_session.execute(
                     sa.select(models.Registration)
-                    .where(models.Registration.id == captain_read.id)
+                    .where(models.Registration.id == captain.id)
                     .options(
                         selectinload(models.Registration.workspace_member).selectinload(models.WorkspaceMember.player)
                     )
@@ -224,7 +224,7 @@ def test_every_receiver_names_the_owning_games_handle(db_session, discipline: st
                 "captain": captain_handles,
                 "agent": agent_handles,
                 "submit": agent_read.primary_handle,
-                "create": captain_read.primary_handle,
+                "create": captain.primary_game_identity(provider=provider).handle,
                 "free_agents": [row.primary_handle for row in free_agents],
                 "roster": [member.primary_handle for member in described.members],
                 "invite": [entry.target_handle for entry in history.items],

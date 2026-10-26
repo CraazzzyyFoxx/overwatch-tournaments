@@ -28,6 +28,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from shared.schemas.events import CacheInvalidatedEvent  # noqa: E402
 from shared.services.realtime.consumer import invalidate_from_event  # noqa: E402
 from shared.testing.cache import configure_test_cache  # noqa: E402
+from src.core import caching  # noqa: E402
 from src.services.registration import public_list  # noqa: E402
 
 
@@ -50,7 +51,7 @@ def _build(fake_build: object) -> Any:
 class TestCoalescing(IsolatedAsyncioTestCase):
     def setUp(self) -> None:
         configure_test_cache()
-        public_list._inflight.clear()
+        caching._inflight.clear()
         # The cashews layer under the coalescer is pinned by the cache-namespace
         # tests; here it would serve a sequential call from cache and mask
         # whether the in-flight share was released.
@@ -74,7 +75,7 @@ class TestCoalescing(IsolatedAsyncioTestCase):
 
         assert calls == 1, f"expected one real build for the whole burst, got {calls}"
         assert len(set(results)) == 1, "every concurrent caller must see the same live snapshot"
-        assert not public_list._inflight, "in-flight entry must be cleaned up after completion"
+        assert not caching._inflight, "in-flight entry must be cleaned up after completion"
 
     async def test_distinct_tournaments_never_share_a_build(self) -> None:
         seen_ids: list[int] = []

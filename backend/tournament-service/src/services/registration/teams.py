@@ -7,7 +7,7 @@ ordinary :class:`Registration` row with three extra columns set, so every
 existing gate (self-register capability, subscription, open profile, verified
 identity), every count and every reader keeps working untouched. That is why the
 captain and invitee flows delegate to
-:meth:`~src.services.registration.service.RegistrationService.submit_public_registration`
+:meth:`~src.services.registration.service.RegistrationService.write_public_registration`
 rather than writing rows themselves.
 
 **The slot check and the slot write are one transaction.** Every mutating flow
@@ -28,6 +28,7 @@ the race.
 
 from __future__ import annotations
 
+from collections.abc import Collection, Mapping, Sequence
 from datetime import UTC, datetime, timedelta
 
 import sqlalchemy as sa
@@ -40,6 +41,7 @@ from shared.core.errors import ApiExc, ApiHTTPException
 from shared.disciplines import identity_provider
 from shared.domain.invite_token import generate_invite_token, hash_invite_token
 from shared.domain.roster_shape import RosterShape, RosterShapeError
+from shared.domain.team_eligibility import EligibilityIssue
 from shared.domain.team_roster import RosterMember, RosterOccupancy
 from shared.repository import (
     RegistrationRepository,
@@ -50,23 +52,25 @@ from shared.repository import (
 from shared.services.notifications import notify
 from shared.services.realtime import Resource, Scope, emit
 from shared.services.team_format import tournament_slot_shape
-from src.schemas.registration import RegistrationRead, RegistrationSubmit
+from src.schemas.registration import RegistrationSubmit
 from src.schemas.registration_team import (
     RegistrationFreeAgentRead,
     RegistrationTeamInviteHistoryEntry,
     RegistrationTeamInviteHistoryResponse,
     RegistrationTeamInviteOffer,
     RegistrationTeamInvitePreview,
-    RegistrationTeamInviteRead,
     RegistrationTeamMemberRead,
     RegistrationTeamRead,
     RegistrationTeamRejectRequest,
     serialize_invite,
     serialize_registration_team,
 )
+from src.services.admission import AdmissionStage
+from src.services.registration.admission import assert_admitted_at
 from src.services.registration.service import (
     RegistrationService,
     TeamPlacement,
+    _owned_by,
     registration_service,
 )
 from src.services.registration.team_rate_limits import (
@@ -138,6 +142,30 @@ def _apply_occupancy_status(team: models.RegistrationTeam, occupancy: RosterOccu
         team.status = _status_for(occupancy)
 
 
+def _occupancy_of(
+    shape: RosterShape,
+    members: Sequence[models.Registration],
+    invites: Sequence[models.RegistrationTeamInvite],
+    *,
+    max_substitutes: int,
+    extra: RosterMember | None = None,
+) -> RosterOccupancy:
+    """Slot occupancy from already-read members and live invites."""
+    accepted = [
+        RosterMember(slot_code=m.team_slot_code or "", is_substitute=bool(m.is_substitute))
+        for m in members
+        if m.team_slot_code
+    ]
+    if extra is not None:
+        accepted.append(extra)
+    return RosterOccupancy(
+        shape=shape,
+        accepted=tuple(accepted),
+        pending=tuple(RosterMember(slot_code=i.slot_code, is_substitute=bool(i.is_substitute)) for i in invites),
+        max_substitutes=max_substitutes,
+    )
+
+
 def _check_slot(occupancy: RosterOccupancy, slot_code: str, *, is_substitute: bool, offering: bool) -> None:
     """Raise the right machine code for a slot that cannot take one more body."""
     try:
@@ -159,19 +187,6 @@ def _check_slot(occupancy: RosterOccupancy, slot_code: str, *, is_substitute: bo
         409,
         "slot_taken" if not offering else "slot_already_offered",
         f"The {slot_code} slot is not available on this team",
-    )
-
-
-def _owned_by(auth_user_id: int) -> sa.ColumnElement[bool]:
-    """Is this registration owned by that account?
-
-    ``workspace_member`` carries no ``auth_user_id`` — identity runs through
-    ``player_id``, so the chain is member -> player -> auth user. Same predicate
-    ``get_registration`` uses; spelled once here so the team flows cannot drift
-    from it.
-    """
-    return models.Registration.workspace_member.has(
-        models.WorkspaceMember.player.has(models.User.auth_user_id == auth_user_id)
     )
 
 
@@ -305,7 +320,15 @@ class RegistrationTeamService:
             or 0
         )
 
-    async def _roster_members(self, session: AsyncSession, team_id: int) -> list[models.Registration]:
+    async def _roster_members(
+        self, session: AsyncSession, team_id: int, *, fresh: bool = False
+    ) -> list[models.Registration]:
+        """The team's live members.
+
+        ``fresh`` re-reads rows this session already holds (``populate_existing``):
+        for a flow that read the roster before taking the team lock, what another
+        transaction committed in between must win over the identity map.
+        """
         result = await session.scalars(
             self.registration_repo.select()
             .where(
@@ -316,8 +339,43 @@ class RegistrationTeamService:
             # The team eligibility rules read each member's Discord handle off
             # the identity rows, never lazy-loadable in async code.
             .options(selectinload(models.Registration.identities))
+            .execution_options(populate_existing=fresh)
         )
         return list(result)
+
+    async def _has_registration(self, session: AsyncSession, tournament_id: int, auth_user_id: int) -> bool:
+        """Does the account hold a live registration here? One indexed id probe."""
+        return (
+            await session.scalar(
+                sa.select(models.Registration.id)
+                .where(
+                    models.Registration.tournament_id == tournament_id,
+                    models.Registration.deleted_at.is_(None),
+                    _owned_by(auth_user_id),
+                )
+                .limit(1)
+            )
+            is not None
+        )
+
+    async def _own_registration(
+        self, session: AsyncSession, tournament_id: int, auth_user_id: int
+    ) -> models.Registration | None:
+        """The account's live registration with only what an accept reads.
+
+        ``populate_existing``: read under the team lock, so a status another
+        transaction just wrote must win over a copy already in the identity map.
+        """
+        return await session.scalar(
+            self.registration_repo.select()
+            .where(
+                models.Registration.tournament_id == tournament_id,
+                models.Registration.deleted_at.is_(None),
+                _owned_by(auth_user_id),
+            )
+            .options(selectinload(models.Registration.identities))
+            .execution_options(populate_existing=True)
+        )
 
     async def _pending_invites(self, session: AsyncSession, team_id: int) -> list[models.RegistrationTeamInvite]:
         """Live invites only: an expired one reserves nothing, so its slot is
@@ -339,20 +397,12 @@ class RegistrationTeamService:
         make, so the team's denormalized ``status`` can be set under the same lock
         rather than in a follow-up transaction where it could drift.
         """
-        members = await self._roster_members(session, team.id)
-        accepted = [
-            RosterMember(slot_code=m.team_slot_code or "", is_substitute=bool(m.is_substitute))
-            for m in members
-            if m.team_slot_code
-        ]
-        if extra is not None:
-            accepted.append(extra)
-        invites = await self._pending_invites(session, team.id)
-        return RosterOccupancy(
-            shape=shape,
-            accepted=tuple(accepted),
-            pending=tuple(RosterMember(slot_code=i.slot_code, is_substitute=bool(i.is_substitute)) for i in invites),
+        return _occupancy_of(
+            shape,
+            await self._roster_members(session, team.id),
+            await self._pending_invites(session, team.id),
             max_substitutes=max_substitutes,
+            extra=extra,
         )
 
     # ── captain flows ────────────────────────────────────────────────────────
@@ -366,12 +416,15 @@ class RegistrationTeamService:
         name: str,
         slot_code: str,
         body: RegistrationSubmit,
-    ) -> tuple[models.RegistrationTeam, RegistrationRead]:
+    ) -> tuple[models.RegistrationTeam, models.Registration, list[EligibilityIssue]]:
         """Register a new team, with the caller as captain occupying one slot.
 
         The captain is a member like any other: they take a real slot and
         their own registration goes through the same validation as a solo entrant. One
         transaction, so a team can never exist without its captain's registration.
+
+        Returns the team, the captain's registration row and the roster's
+        eligibility issues (reused by the caller's team read, see ``accept_invite``).
         """
         cleaned_name = name.strip()
         if not cleaned_name:
@@ -407,7 +460,7 @@ class RegistrationTeamService:
         occupancy = await self._occupancy(session, team, shape, max_substitutes=max_substitutes)
         _check_slot(occupancy, slot_code, is_substitute=False, offering=False)
 
-        read = await self.registrations.submit_public_registration(
+        registration = await self.registrations.write_public_registration(
             session,
             tournament_id=tournament_id,
             auth_user=auth_user,
@@ -415,7 +468,7 @@ class RegistrationTeamService:
             team_placement=TeamPlacement(registration_team_id=team.id, slot_code=slot_code),
             commit=False,
         )
-        team.captain_registration_id = read.id
+        team.captain_registration_id = registration.id
         _apply_occupancy_status(
             team,
             await self._occupancy(
@@ -425,7 +478,7 @@ class RegistrationTeamService:
                 max_substitutes=max_substitutes,
             ),
         )
-        await self._raise_if_ineligible(session, team, await self._roster_members(session, team.id), shape)
+        issues = await self._raise_if_ineligible(session, team, await self._roster_members(session, team.id), shape)
         await self._maybe_cover_from_personal(session, team, auth_user)
         await emit(
             session,
@@ -438,7 +491,7 @@ class RegistrationTeamService:
             # With ``commit=False`` the duplicate-registration and duplicate-name races
             # fire here, outside the submit helper's own ``try``.
             raise _fail(409, "already_registered", "You are already registered for this tournament") from exc
-        return team, read
+        return team, registration, issues
 
     async def is_team_captain(
         self,
@@ -519,11 +572,12 @@ class RegistrationTeamService:
         """The captain gate without the row lock, for callers that must refuse
         *before* doing slow external work.
 
-        The crest upload deletes the previously stored S3 object before writing the
-        new one, so a stranger who reached S3 could destroy a captain's image
-        regardless of what the database later refuses. Taking :meth:`_lock_team`'s
-        row lock across that network round-trip would instead pin a backend slot for
-        its whole duration, so this reads without ``FOR UPDATE``.
+        A crest upload writes its S3 object before the row write, so a stranger who
+        reached S3 would leave an orphan object behind regardless of what the database
+        later refuses (the delete touches S3 only after the row commits).
+        Taking :meth:`_lock_team`'s row lock across that network round-trip would
+        instead pin a backend slot for its whole duration, so this reads without
+        ``FOR UPDATE``.
 
         Advisory only: :meth:`set_team_image` re-runs both checks under the lock, and
         that is the authoritative decision.
@@ -853,6 +907,10 @@ class RegistrationTeamService:
 
         Token lookup is by *hash*, which the partial unique index serves as a single
         indexed read — the raw value is never compared against anything stored.
+
+        By id only a TARGETED invite resolves, and only for its addressee. A link
+        invite's credential is its token; its id is a sequential key anybody can
+        guess, so a link invite asked for by id is ``invite_not_found``.
         """
         if token is not None:
             invite = await self.invite_repo.get_by_token_hash(
@@ -860,6 +918,8 @@ class RegistrationTeamService:
             )
         elif invite_id is not None:
             invite = await self.invite_repo.get(session, invite_id)
+            if invite is not None and invite.target_auth_user_id is None:
+                invite = None
         else:
             raise _fail(400, "invite_reference_required", "An invite id or token is required")
         if invite is None:
@@ -980,15 +1040,20 @@ class RegistrationTeamService:
         body: RegistrationSubmit | None,
         token: str | None = None,
         invite_id: int | None = None,
-    ) -> tuple[models.RegistrationTeam, int]:
+    ) -> tuple[models.RegistrationTeam, int, list[EligibilityIssue]]:
         """Redeem an invite: take the offered slot, registering if necessary.
 
-        Returns the team and the id of the registration now holding the slot.
+        Returns the team, the id of the registration now holding the slot, and the
+        roster's eligibility issues as evaluated under the lock (the caller's team
+        read reuses them instead of asking Discord a second time).
 
-        Everything below happens in one transaction while holding the team's row lock,
-        which is what makes the slot check binding. Ordering matters: every rejection
-        that can be known up front is raised *before* the invite is consumed, so a
-        failed acceptance never burns the invite.
+        Everything below the team lock happens in one transaction, which is what
+        makes the slot check binding. Ordering matters: every rejection that can be
+        known up front is raised *before* the invite is consumed, so a failed
+        acceptance never burns the invite.
+
+        A redeemer with no registration yet is signing up, so the registration-stage
+        admission gate runs first, outside the lock: it asks providers and commits.
 
         ``body`` is used ONLY when the redeemer has no registration yet. An existing
         one is attached to the team instead — see the comment at the write below.
@@ -999,6 +1064,28 @@ class RegistrationTeamService:
         await assert_accept_attempt_allowed(auth_user_id=auth_user.id)
 
         invite = await self._resolve_invite(session, auth_user=auth_user, token=token, invite_id=invite_id)
+        # Advisory, before the admission gate's provider call: a dead link answers with
+        # its real reason, for free. ``consume_if_pending`` under the lock stays the
+        # authoritative guard against a concurrent redemption.
+        if invite.state != INVITE_PENDING or (invite.expires_at is not None and invite.expires_at <= datetime.now(UTC)):
+            raise _diagnose_dead_invite(invite)
+        tournament_id = await session.scalar(
+            sa.select(models.RegistrationTeam.tournament_id).where(
+                models.RegistrationTeam.id == invite.team_id,
+                models.RegistrationTeam.deleted_at.is_(None),
+            )
+        )
+        gated = False
+        if tournament_id is not None and not await self._has_registration(session, tournament_id, auth_user.id):
+            await assert_admitted_at(
+                session,
+                None,
+                tournament_id=tournament_id,
+                auth_user_id=auth_user.id,
+                stage=AdmissionStage.registration,
+            )
+            gated = True
+
         team = await self._lock_team(session, invite.team_id)
         _assert_mutable(team)
         self._assert_unlocked(team)
@@ -1009,6 +1096,42 @@ class RegistrationTeamService:
         occupancy = await self._occupancy(session, team, shape, max_substitutes=max_substitutes)
         # ``offering=False``: this invite must not block its own acceptance.
         _check_slot(occupancy, invite.slot_code, is_substitute=bool(invite.is_substitute), offering=False)
+
+        # A player who already registered solo is a FREE AGENT, not a duplicate: the
+        # partial unique index allows one registration row per player per tournament,
+        # so accepting *attaches* the existing row to the team. A second row would be
+        # an `already_registered` 409 and, since withdrawal is final, would lock a solo
+        # registrant out of every team.
+        #
+        # The submitted ``body`` is deliberately IGNORED on this path: the player
+        # already answered the form, and the invite only decides which slot they
+        # occupy. Their recorded roles and ranks stand.
+        existing = await self._own_registration(session, team.tournament_id, auth_user.id)
+        if existing is not None:
+            if existing.status in _SLOT_RELEASING_STATUSES:
+                # Withdrawn or rejected. Reviving it here would smuggle a re-entry past
+                # the rule that withdrawal is final, which exists because a withdrawal
+                # after check-in invalidates a composed roster.
+                raise _fail(
+                    409,
+                    "registration_terminal",
+                    "Your registration for this tournament is no longer active",
+                )
+            # Attach only a row on NO team, decided inside the UPDATE (see
+            # ``attach_to_team_if_free``). Before the invite is consumed, so a refusal keeps it.
+            if not await self.registration_repo.attach_to_team_if_free(
+                session,
+                existing.id,
+                team_id=team.id,
+                slot_code=invite.slot_code,
+                is_substitute=bool(invite.is_substitute),
+            ):
+                raise _fail(409, "already_on_team", "You are already on a team in this tournament")
+        elif not gated:
+            # The registration seen before the lock is gone, so this accept would sign
+            # up without having passed the gate. Rare (a concurrent delete); retrying
+            # takes the gated path.
+            raise _fail(409, "registration_changed", "Your registration changed; try again")
 
         # The guard: state and expiry are checked *in the UPDATE*, so two
         # simultaneous redemptions of one link cannot both win. ``consume_if_pending``
@@ -1025,56 +1148,27 @@ class RegistrationTeamService:
             await session.refresh(invite)
             raise _diagnose_dead_invite(invite)
 
-        # A player who already registered solo is a FREE AGENT, not a duplicate: the
-        # partial unique index allows one registration row per player per tournament,
-        # so accepting *attaches* the existing row to the team. A second row would be
-        # an `already_registered` 409 and, since withdrawal is final, would lock a solo
-        # registrant out of every team.
-        #
-        # The submitted ``body`` is deliberately IGNORED on this path: the player
-        # already answered the form, and the invite only decides which slot they
-        # occupy. Their recorded roles and ranks stand.
-        existing = await self.registrations.get_registration(session, team.tournament_id, auth_user.id)
-        if existing is not None:
-            if existing.status in _SLOT_RELEASING_STATUSES:
-                # Withdrawn or rejected. Reviving it here would smuggle a re-entry past
-                # the rule that withdrawal is final, which exists because a withdrawal
-                # after check-in invalidates a composed roster.
-                raise _fail(
-                    409,
-                    "registration_terminal",
-                    "Your registration for this tournament is no longer active",
-                )
-            existing.registration_team_id = team.id
-            existing.team_slot_code = invite.slot_code
-            existing.is_substitute = bool(invite.is_substitute)
-            await session.flush()
-            registration_id = existing.id
-            existing_identity = existing.primary_game_identity(provider=identity_provider(tournament.discipline))
-            responder_name = (existing_identity.handle if existing_identity else None) or auth_user.username
-        else:
-            read = await self.registrations.submit_public_registration(
-                session,
-                tournament_id=team.tournament_id,
-                auth_user=auth_user,
-                body=body,
-                team_placement=TeamPlacement(
-                    registration_team_id=team.id,
-                    slot_code=invite.slot_code,
-                    is_substitute=bool(invite.is_substitute),
-                ),
-                commit=False,
-            )
-            registration_id = read.id
-            responder_name = read.primary_handle or auth_user.username
-        invite.accepted_registration_id = registration_id
+        registration = existing or await self.registrations.write_public_registration(
+            session,
+            tournament_id=team.tournament_id,
+            auth_user=auth_user,
+            body=body,
+            team_placement=TeamPlacement(
+                registration_team_id=team.id,
+                slot_code=invite.slot_code,
+                is_substitute=bool(invite.is_substitute),
+            ),
+            commit=False,
+        )
+        identity = registration.primary_game_identity(provider=identity_provider(tournament.discipline))
+        invite.accepted_registration_id = registration.id
         # Projected, not re-read: the new member's row is already flushed, but
         # computing the post-write status here keeps it inside the lock.
         _apply_occupancy_status(
             team,
             await self._occupancy(session, team, shape, max_substitutes=max_substitutes),
         )
-        await self._raise_if_ineligible(session, team, await self._roster_members(session, team.id), shape)
+        issues = await self._raise_if_ineligible(session, team, await self._roster_members(session, team.id), shape)
         await emit(
             session,
             scope=Scope.tournament(team.tournament_id),
@@ -1090,13 +1184,13 @@ class RegistrationTeamService:
             invite_id=invite.id,
             answer="accepted",
             responder=auth_user,
-            responder_name=responder_name,
+            responder_name=(identity.handle if identity else None) or auth_user.username,
         )
         try:
             await session.commit()
         except IntegrityError as exc:
             raise _fail(409, "already_registered", "You are already registered for this tournament") from exc
-        return team, registration_id
+        return team, registration.id, issues
 
     async def decline_invite(
         self,
@@ -1400,20 +1494,10 @@ class RegistrationTeamService:
         tournament_id: int,
         include_terminal: bool = False,
         include_terminal_for_auth_user_id: int | None = None,
-    ) -> list[tuple[models.RegistrationTeam, RosterOccupancy]]:
-        """Every registered team with its live occupancy — the organizer's answer to
-        "who is incomplete, and what are they missing?".
-
-        Occupancy is recomputed rather than read off ``status``: the denormalized
-        column answers "complete?" for indexed filtering, but the organizer needs the
-        per-slot shortfall, which only the shape comparison produces.
-        """
-        tournament = await self.tournament_repo.get(session, tournament_id)
-        if tournament is None:
-            raise _fail(404, "tournament_not_found", "Tournament not found")
-        shape = await self._resolve_shape(session, tournament)
-        max_substitutes = await self._max_substitutes(session, tournament_id)
-
+    ) -> list[models.RegistrationTeam]:
+        """Every registered team, by name — the page :meth:`describe_teams` serializes
+        with its live occupancy (the organizer's "who is incomplete, and what are they
+        missing?")."""
         conditions = [models.RegistrationTeam.tournament_id == tournament_id]
         if not include_terminal:
             visible = sa.and_(
@@ -1432,13 +1516,11 @@ class RegistrationTeamService:
                     ),
                 )
             conditions.append(visible)
-        result = await session.scalars(
-            self.team_repo.select().where(*conditions).order_by(models.RegistrationTeam.name_normalized)
+        return list(
+            await session.scalars(
+                self.team_repo.select().where(*conditions).order_by(models.RegistrationTeam.name_normalized)
+            )
         )
-        return [
-            (team, await self._occupancy(session, team, shape, max_substitutes=max_substitutes))
-            for team in list(result)
-        ]
 
     async def reject_team(
         self,
@@ -1524,89 +1606,183 @@ class RegistrationTeamService:
         *,
         include_invites: bool = False,
         include_staff: bool = False,
+        eligibility: list[EligibilityIssue] | None = None,
     ) -> RegistrationTeamRead:
         """Serialize a team with its live occupancy.
 
         ``include_invites`` is off by default because a public roster must not leak who
         has been asked and declined; only the captain's own view and the organizer's
-        pass True.
+        pass True. ``eligibility`` is the roster's issues when the calling flow just
+        evaluated them under its lock, so they are not evaluated (and Discord asked)
+        twice.
         """
-        tournament = await self.tournament_repo.get(session, team.tournament_id)
+        (read,) = await self.describe_teams(
+            session,
+            [team],
+            private_team_ids={team.id} if include_invites else (),
+            include_staff=include_staff,
+            eligibility={team.id: eligibility} if eligibility is not None else None,
+        )
+        return read
+
+    async def describe_teams(
+        self,
+        session: AsyncSession,
+        teams: Sequence[models.RegistrationTeam],
+        *,
+        private_team_ids: Collection[int],
+        include_staff: bool = False,
+        eligibility: Mapping[int, list[EligibilityIssue]] | None = None,
+    ) -> list[RegistrationTeamRead]:
+        """:meth:`describe_team` for a page of ONE tournament's teams.
+
+        The tournament, shape and bench size are read once, members and live invites
+        with one ``IN (…)`` each, and eligibility (with its one Discord batch) once for
+        every team that needs it — not a dozen statements and a Discord call per team.
+        ``private_team_ids`` are the teams whose invites and eligibility this reader
+        may see (``include_invites``).
+        """
+        from shared.domain.team_subscription import team_subscription_is_current
+        from src.core.clients import discord_client
+        from src.schemas.registration_team import TeamEligibilityIssueRead
+        from src.services.registration.team_eligibility import team_eligibility
+
+        if not teams:
+            return []
+        tournament = await self.tournament_repo.get(session, teams[0].tournament_id)
         if tournament is None:
             raise _fail(404, "tournament_not_found", "Tournament not found")
         provider = identity_provider(tournament.discipline)
         shape = await self._resolve_shape(session, tournament)
-        max_substitutes = await self._max_substitutes(session, team.tournament_id)
-        occupancy = await self._occupancy(session, team, shape, max_substitutes=max_substitutes)
+        max_substitutes = await self._max_substitutes(session, tournament.id)
+        team_ids = [team.id for team in teams]
 
-        roster = await self._roster_members(session, team.id)
-        members = [
-            RegistrationTeamMemberRead(
-                registration_id=registration.id,
-                display_name=registration.display_name,
-                primary_handle=(
-                    identity.handle if (identity := registration.primary_game_identity(provider=provider)) else None
-                ),
-                slot_code=registration.team_slot_code,
-                is_substitute=bool(registration.is_substitute),
-                is_captain=registration.id == team.captain_registration_id,
-                is_manager=bool(registration.is_team_manager),
-                checked_in=bool(registration.checked_in),
-                status=registration.status,
+        rosters: dict[int, list[models.Registration]] = {team_id: [] for team_id in team_ids}
+        for registration in await session.scalars(
+            self.registration_repo.select()
+            .where(
+                models.Registration.registration_team_id.in_(team_ids),
+                models.Registration.deleted_at.is_(None),
+                models.Registration.status.notin_(_SLOT_RELEASING_STATUSES),
             )
-            for registration in roster
-        ]
-        invites: list[RegistrationTeamInviteRead] = []
-        if include_invites:
-            pending = await self._pending_invites(session, team.id)
-            tags = await self._handles_by_account(
-                session,
-                tournament_id=team.tournament_id,
-                provider=provider,
-                auth_user_ids={i.target_auth_user_id for i in pending if i.target_auth_user_id is not None},
-            )
-            invites = [
-                serialize_invite(invite, target_handle=tags.get(invite.target_auth_user_id)) for invite in pending
-            ]
-        eligibility_issues = []
-        if include_invites:
+            .options(selectinload(models.Registration.identities))
+        ):
+            rosters[registration.registration_team_id].append(registration)
+        pending: dict[int, list[models.RegistrationTeamInvite]] = {team_id: [] for team_id in team_ids}
+        for invite in await self.invite_repo.list_pending_for_teams(session, team_ids, pending_state=INVITE_PENDING):
+            pending[invite.team_id].append(invite)
+
+        private = [team for team in teams if team.id in private_team_ids]
+        tags = await self._handles_by_account(
+            session,
+            tournament_id=tournament.id,
+            provider=provider,
+            auth_user_ids={
+                invite.target_auth_user_id
+                for team in private
+                for invite in pending[team.id]
+                if invite.target_auth_user_id is not None
+            },
+        )
+        issues = dict(eligibility or {})
+        unevaluated = [team for team in private if team.id not in issues]
+        if unevaluated:
             form = await session.scalar(
-                sa.select(models.RegistrationForm).where(models.RegistrationForm.tournament_id == team.tournament_id)
+                sa.select(models.RegistrationForm).where(models.RegistrationForm.tournament_id == tournament.id)
             )
             workspace = await session.scalar(
-                sa.select(models.Workspace).where(models.Workspace.id == team.workspace_id)
+                sa.select(models.Workspace).where(models.Workspace.id == tournament.workspace_id)
             )
-            from src.core.clients import discord_client
-            from src.schemas.registration_team import TeamEligibilityIssueRead
-            from src.services.registration.team_eligibility import team_eligibility
-
-            raw_issues = await team_eligibility.evaluate(
-                session,
-                team,
-                roster,
-                form=form,
-                shape=shape,
-                workspace=workspace,
-                discord=discord_client(),
-            )
-            eligibility_issues = [
-                TeamEligibilityIssueRead(
-                    code=issue.code, registration_id=issue.registration_id, blocking=issue.blocking
+            issues.update(
+                await team_eligibility.evaluate_many(
+                    session,
+                    [(team, rosters[team.id]) for team in unevaluated],
+                    form=form,
+                    shape=shape,
+                    workspace=workspace,
+                    discord=discord_client(),
                 )
-                for issue in raw_issues
-            ]
-        from shared.domain.team_subscription import team_subscription_is_current
+            )
 
-        return serialize_registration_team(
-            team,
-            occupancy,
-            members=members,
-            invites=invites,
-            include_staff=include_staff,
-            include_private=include_invites,
-            eligibility_issues=eligibility_issues,
-            subscription_covered=team_subscription_is_current(team),
-        )
+        reads = []
+        for team in teams:
+            roster = rosters[team.id]
+            is_private = team.id in private_team_ids
+            reads.append(
+                serialize_registration_team(
+                    team,
+                    _occupancy_of(shape, roster, pending[team.id], max_substitutes=max_substitutes),
+                    members=[
+                        RegistrationTeamMemberRead(
+                            registration_id=registration.id,
+                            display_name=registration.display_name,
+                            primary_handle=(
+                                identity.handle
+                                if (identity := registration.primary_game_identity(provider=provider))
+                                else None
+                            ),
+                            slot_code=registration.team_slot_code,
+                            is_substitute=bool(registration.is_substitute),
+                            is_captain=registration.id == team.captain_registration_id,
+                            is_manager=bool(registration.is_team_manager),
+                            checked_in=bool(registration.checked_in),
+                            status=registration.status,
+                        )
+                        for registration in roster
+                    ],
+                    invites=[
+                        serialize_invite(invite, target_handle=tags.get(invite.target_auth_user_id))
+                        for invite in pending[team.id]
+                    ]
+                    if is_private
+                    else [],
+                    include_staff=include_staff,
+                    include_private=is_private,
+                    eligibility_issues=[
+                        TeamEligibilityIssueRead(
+                            code=issue.code, registration_id=issue.registration_id, blocking=issue.blocking
+                        )
+                        for issue in issues.get(team.id, [])
+                    ]
+                    if is_private
+                    else [],
+                    subscription_covered=team_subscription_is_current(team),
+                )
+            )
+        return reads
+
+    async def staffed_team_ids(
+        self, session: AsyncSession, teams: Sequence[models.RegistrationTeam], auth_user_id: int
+    ) -> set[int]:
+        """Which of one tournament's ``teams`` this account captains or manages.
+
+        :meth:`is_team_staff` for a whole page, in one query: the account's
+        registrations in the tournament decide both (captaincy by id, management by
+        the live, flagged member row).
+        """
+        if not teams:
+            return set()
+        rows = (
+            await session.execute(
+                sa.select(
+                    models.Registration.id,
+                    models.Registration.registration_team_id,
+                    models.Registration.is_team_manager,
+                    models.Registration.deleted_at,
+                    models.Registration.status,
+                ).where(
+                    models.Registration.tournament_id == teams[0].tournament_id,
+                    _owned_by(auth_user_id),
+                )
+            )
+        ).all()
+        own = {row.id for row in rows}
+        managed = {
+            row.registration_team_id
+            for row in rows
+            if row.is_team_manager and row.deleted_at is None and row.status not in _SLOT_RELEASING_STATUSES
+        }
+        return {team.id for team in teams if team.captain_registration_id in own or team.id in managed}
 
     async def _owner_provider(self, session: AsyncSession, tournament_id: int) -> str:
         """The tournament's identity provider: the one game whose handle names its players."""

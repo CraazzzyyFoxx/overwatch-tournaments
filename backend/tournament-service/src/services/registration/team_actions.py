@@ -41,20 +41,14 @@ def install_team_actions(cls: type) -> None:
         TEAM_COMPLETE,
         TEAM_DISBANDED,
         TEAM_REJECTED,
+        _apply_occupancy_status,
         _assert_mutable,
         _check_slot,
         _fail,
         _owned_by,
-        _status_for,
     )
 
     TEAM_ADMISSIONS = frozenset({"pending", "accepted", "waitlisted"})
-
-    def _apply_occupancy_status(team: models.RegistrationTeam, occupancy: Any) -> None:
-        from src.services.registration.teams import _MUTABLE_TEAM_STATUSES
-
-        if team.status in _MUTABLE_TEAM_STATUSES:
-            team.status = _status_for(occupancy)
 
     def _cleaned_name(name: str) -> str:
         cleaned = name.strip()
@@ -121,7 +115,12 @@ def install_team_actions(cls: type) -> None:
         team: models.RegistrationTeam,
         members: list[models.Registration],
         shape: Any,
-    ) -> None:
+    ) -> list[Any]:
+        """Refuse a roster that breaks a blocking team rule; otherwise return every issue found.
+
+        The issues come back so the flow's own team read can reuse them instead of
+        evaluating (and asking Discord) a second time.
+        """
         form = await _form(self, session, team.tournament_id)
         workspace = await _workspace(self, session, team.workspace_id)
         issues = await team_eligibility.evaluate(
@@ -135,7 +134,7 @@ def install_team_actions(cls: type) -> None:
         )
         blocking = [issue for issue in issues if issue.blocking]
         if not blocking:
-            return
+            return issues
         issue = blocking[0]
         raise _fail(409, issue.code, f"This roster is not eligible ({issue.code})")
 
@@ -412,35 +411,52 @@ def install_team_actions(cls: type) -> None:
         auth_user: models.AuthUser,
         exclude_registration_ids: list[int] | None = None,
     ) -> models.RegistrationTeam:
-        from src.services.admission import AdmissionStage
-        from src.services.registration.admission import assert_admitted_at
+        from src.services.admission.resolve import load_auth_user_ids
+        from src.services.registration.admission import assert_roster_admitted
 
-        team = await self._lock_team(session, team_id)
+        excluded = set(exclude_registration_ids or [])
+
+        def _awaiting(members: list[models.Registration]) -> list[models.Registration]:
+            awaiting = [r for r in members if r.id not in excluded and not r.checked_in]
+            if any(r.status != "approved" for r in awaiting):
+                raise _fail(409, "member_not_approved", "Every member must be approved before team check-in")
+            return awaiting
+
+        # Admission first, for the whole roster in ONE provider batch and outside the
+        # team lock: the gate asks providers and commits, and a lock held across that
+        # would queue every roster edit behind Discord/Twitch. Under the lock below the
+        # roster is re-read; a member the gate did not see is refused, never checked
+        # in ungated.
+        team = await session.scalar(
+            self.team_repo.select().where(
+                models.RegistrationTeam.id == team_id,
+                models.RegistrationTeam.deleted_at.is_(None),
+            )
+        )
+        if team is None:
+            raise _fail(404, "team_not_found", "Team not found")
         await _assert_staff(self, session, team, auth_user)
         tournament = await self.tournament_repo.get(session, team.tournament_id)
         if tournament is None:
             raise _fail(404, "tournament_not_found", "Tournament not found")
         if not is_check_in_window_active(tournament):
             raise _fail(409, "check_in_closed", "Check-in is not active for this tournament")
-        excluded = set(exclude_registration_ids or [])
-        now = datetime.now(UTC)
-        for registration in await self._roster_members(session, team.id):
-            if registration.id in excluded or registration.checked_in:
-                continue
-            if registration.status != "approved":
-                raise _fail(409, "member_not_approved", "Every member must be approved before team check-in")
+        awaiting = _awaiting(await self._roster_members(session, team.id))
+        accounts = await load_auth_user_ids(session, awaiting)
+        if any(accounts[registration.id] is None for registration in awaiting):
+            raise _fail(409, "player_has_no_account", "This player has no account to check in")
+        for registration in awaiting:
             registration.tournament = tournament
             registration.registration_team = team
-            member_auth_user_id = await _member_auth_user_id(self, session, registration.id)
-            if member_auth_user_id is None:
-                raise _fail(409, "player_has_no_account", "This player has no account to check in")
-            await assert_admitted_at(
-                session,
-                registration,
-                tournament_id=team.tournament_id,
-                auth_user_id=member_auth_user_id,
-                stage=AdmissionStage.check_in,
-            )
+        await assert_roster_admitted(session, awaiting, tournament_id=team.tournament_id)
+        admitted = {registration.id for registration in awaiting}
+
+        team = await self._lock_team(session, team_id)
+        await _assert_staff(self, session, team, auth_user)
+        now = datetime.now(UTC)
+        for registration in _awaiting(await self._roster_members(session, team.id, fresh=True)):
+            if registration.id not in admitted:
+                raise _fail(409, "roster_changed", "The roster changed during check-in; try again")
             registration.checked_in = True
             registration.checked_in_at = now
             registration.checked_in_by = auth_user.id
