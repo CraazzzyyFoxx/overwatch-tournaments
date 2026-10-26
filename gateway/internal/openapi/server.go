@@ -32,27 +32,31 @@ type Server struct {
 	adminPage    []byte
 }
 
-// New builds the public/admin specs and their Scalar pages. The public spec is
-// built from publicGroups, the admin spec from adminGroups (admin-only).
+// New builds the specs and Scalar pages the config actually serves: nothing
+// when docs are disabled, the admin ones (from adminGroups) only when
+// AdminEnabled — a spec that is never served is never built or held.
 func New(cfg config.Docs, info Info, publicGroups, adminGroups []Group) *Server {
-	adminInfo := info
-	adminInfo.Title = info.Title + " — Admin"
-
-	return &Server{
-		cfg:          cfg,
-		publicSpec:   Build(info, publicGroups),
-		adminSpec:    Build(adminInfo, adminGroups),
-		publicV2Spec: BuildV2(info, publicGroups),
-		adminV2Spec:  BuildV2(adminInfo, adminGroups),
-		publicPage: page(info.Title, cfg.CDN, []source{
-			{Title: "v1", Slug: "v1", URL: publicSpecPath},
-			{Title: "v2", Slug: "v2", URL: publicV2SpecPath},
-		}),
-		adminPage: page(adminInfo.Title, cfg.CDN, []source{
+	s := &Server{cfg: cfg}
+	if !cfg.Enabled {
+		return s
+	}
+	s.publicSpec = Build(info, publicGroups)
+	s.publicV2Spec = BuildV2(info, publicGroups)
+	s.publicPage = page(info.Title, cfg.CDN, []source{
+		{Title: "v1", Slug: "v1", URL: publicSpecPath},
+		{Title: "v2", Slug: "v2", URL: publicV2SpecPath},
+	})
+	if cfg.AdminEnabled {
+		adminInfo := info
+		adminInfo.Title = info.Title + " — Admin"
+		s.adminSpec = Build(adminInfo, adminGroups)
+		s.adminV2Spec = BuildV2(adminInfo, adminGroups)
+		s.adminPage = page(adminInfo.Title, cfg.CDN, []source{
 			{Title: "v1", Slug: "v1", URL: adminSpecPath},
 			{Title: "v2", Slug: "v2", URL: adminV2SpecPath},
-		}),
+		})
 	}
+	return s
 }
 
 // Register mounts the docs routes on the REST mux. No-op when docs are disabled.

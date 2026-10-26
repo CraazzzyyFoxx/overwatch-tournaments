@@ -6,7 +6,12 @@ import (
 	"testing"
 
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/app"
+	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/balancer"
+	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/edge"
+	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/identity"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/openapi"
+	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/stats"
+	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/tournament"
 )
 
 // TestGroups_RealSpecsValid builds both specs from the real gateway route
@@ -120,4 +125,62 @@ func opSet(groups []openapi.Group) map[string]bool {
 		}
 	}
 	return out
+}
+
+// TestGroups_BinaryRoutesDocumentTheirWireFormat: every bespoke multipart upload
+// was documented with no request body at all and the match-log download as
+// JSON, so neither a generated SDK nor Scalar could call them correctly.
+func TestGroups_BinaryRoutesDocumentTheirWireFormat(t *testing.T) {
+	public, admin := Groups()
+	ops := map[string]struct {
+		RequestBody struct {
+			Content map[string]json.RawMessage `json:"content"`
+		} `json:"requestBody"`
+		Responses map[string]struct {
+			Content map[string]json.RawMessage `json:"content"`
+		} `json:"responses"`
+	}{}
+	for _, groups := range [][]openapi.Group{public, admin} {
+		var doc struct {
+			Paths map[string]map[string]json.RawMessage `json:"paths"`
+		}
+		_ = json.Unmarshal(openapi.Build(openapi.Info{Title: "t"}, groups), &doc)
+		for path, methods := range doc.Paths {
+			for method, raw := range methods {
+				op := ops[method+" "+path]
+				_ = json.Unmarshal(raw, &op)
+				ops[method+" "+path] = op
+			}
+		}
+	}
+
+	var avatar []edge.RouteSpec
+	for _, r := range identity.PublicDocRoutes {
+		if r.Queue == "rpc.identity.me.avatar_set" {
+			avatar = append(avatar, r)
+		}
+	}
+	binary := concat(app.BinaryDocRoutes, balancer.BinaryPublicDocRoutes, balancer.BinaryAdminDocRoutes,
+		stats.BinaryDocRoutes, tournament.BinaryDocRoutes, avatar)
+	uploads := 0
+	for _, r := range binary {
+		op, ok := ops[strings.ToLower(r.Method)+" "+r.Pattern]
+		if !ok {
+			t.Errorf("%s %s is not documented", r.Method, r.Pattern)
+			continue
+		}
+		if r.Method == "POST" {
+			uploads++
+			if _, ok := op.RequestBody.Content["multipart/form-data"]; !ok {
+				t.Errorf("upload %s does not document a multipart/form-data body", r.Pattern)
+			}
+		}
+	}
+	if uploads != 10 {
+		t.Errorf("checked %d uploads, want the 10 bespoke multipart routes", uploads)
+	}
+	log := ops["get /api/v1/matches/{match_id}/log"].Responses["200"].Content
+	if _, ok := log["application/octet-stream"]; !ok || len(log) != 1 {
+		t.Errorf("match-log download documents %v, want raw application/octet-stream", log)
+	}
 }

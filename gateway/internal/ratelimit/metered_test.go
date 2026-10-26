@@ -25,7 +25,7 @@ func ceilings(limits map[int64]int) WorkspaceLimitFunc {
 }
 
 func callerIs(c Caller) CallerFunc {
-	return func(*http.Request) (Caller, bool) { return c, true }
+	return func(*http.Request) (Caller, bool, error) { return c, true, nil }
 }
 
 // meteredReq is one request to a tenant-addressed route. token "" makes it
@@ -224,13 +224,13 @@ func TestWrapMetered_UnknownWorkspaceWritesNothing(t *testing.T) {
 	}
 }
 
-// TestWrapMetered_UnjudgeableIdentityPassesThrough: the route behind this layer
-// answers 401/503 for a token that could not be validated; metering it would
-// turn that honest answer into a 429.
-func TestWrapMetered_UnjudgeableIdentityPassesThrough(t *testing.T) {
+// TestWrapMetered_RejectedSessionPassesThrough: the route behind this layer
+// answers 401 for a session token identity-svc rejected (or serves it as
+// anonymous); metering it would turn that honest answer into a 429.
+func TestWrapMetered_RejectedSessionPassesThrough(t *testing.T) {
 	srv, l, _ := sharedLimiter(t, 60)
 	calls := 0
-	who := func(*http.Request) (Caller, bool) { return Caller{}, false }
+	who := func(*http.Request) (Caller, bool, error) { return Caller{}, false, nil }
 	h := l.WrapMetered(okHandler(&calls), who, ceilings(map[int64]int{5: 100}))
 
 	rec := httptest.NewRecorder()
@@ -239,7 +239,7 @@ func TestWrapMetered_UnjudgeableIdentityPassesThrough(t *testing.T) {
 		t.Fatalf("want an unmetered pass-through, got %d / %d calls", rec.Code, calls)
 	}
 	if keys := srv.Keys(); len(keys) != 0 {
-		t.Fatalf("nothing may be charged for an unjudged identity, got %v", keys)
+		t.Fatalf("nothing may be charged for a rejected identity, got %v", keys)
 	}
 }
 

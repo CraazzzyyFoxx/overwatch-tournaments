@@ -18,6 +18,8 @@
 package ratelimit
 
 import (
+	"container/list"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -26,9 +28,11 @@ import (
 
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/apierr"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/clientip"
+	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/httplog"
 )
 
-// maxKeys bounds memory: past this many tracked buckets, stale ones are purged.
+// maxKeys bounds memory: at most this many buckets are tracked per limiter
+// (see slot for what a new key gets past it).
 const maxKeys = 8192
 
 // Layer names reported to the reject hook, one per wrapper. They are what lets
@@ -43,6 +47,7 @@ const (
 )
 
 type bucket struct {
+	key    string
 	tokens float64
 	last   time.Time
 }
@@ -57,7 +62,11 @@ type Limiter struct {
 	reject func(layer string)
 
 	mu      sync.Mutex
-	buckets map[string]*bucket
+	buckets map[string]*list.Element // key -> element in lru (holds *bucket)
+	lru     *list.List               // most recently touched at the front
+	// overflow is the one bucket every NEW key shares while the table is full
+	// of buckets still mid-window (see slot).
+	overflow bucket
 }
 
 // New builds a limiter allowing `limit` requests per `window` (burst = limit). A
@@ -71,7 +80,8 @@ func New(limit int, window time.Duration) *Limiter {
 		burst:   float64(limit),
 		window:  window,
 		now:     time.Now,
-		buckets: make(map[string]*bucket),
+		buckets: make(map[string]*list.Element),
+		lru:     list.New(),
 	}
 }
 
@@ -126,20 +136,8 @@ func (l *Limiter) allowQuota(key string, limit float64) (bool, int) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	now := l.now()
-	rate := limit / l.window.Seconds()
-	b, ok := l.buckets[key]
-	if !ok {
-		if len(l.buckets) >= maxKeys {
-			l.purge(now)
-		}
-		b = &bucket{tokens: limit, last: now}
-		l.buckets[key] = b
-	}
-	b.tokens += now.Sub(b.last).Seconds() * rate
-	if b.tokens > limit {
-		b.tokens = limit
-	}
-	b.last = now
+	b := l.slot(key, limit, now)
+	l.refill(b, limit, now)
 	if b.tokens < 1 {
 		return false, 0
 	}
@@ -147,16 +145,44 @@ func (l *Limiter) allowQuota(key string, limit float64) (bool, int) {
 	return true, int(b.tokens)
 }
 
-// purge drops buckets idle longer than the window (fully refilled). Caller holds l.mu.
-func (l *Limiter) purge(now time.Time) {
-	for k, b := range l.buckets {
-		if now.Sub(b.last) >= l.window {
-			delete(l.buckets, k)
-		}
+// slot returns key's bucket, tracking a new full one when there is room.
+// Caller holds l.mu.
+//
+// A full table makes room by dropping its least-recently-touched bucket, but
+// only once that bucket has sat idle a whole window: by then it has refilled
+// to the brim, so forgetting it changes nobody's budget. Otherwise every
+// tracked client is mid-window and the newcomer shares the overflow bucket —
+// evicting an active bucket (or, as this once did, the whole table) would hand
+// an exhausted client a fresh burst for flooding new keys. O(1) either way.
+func (l *Limiter) slot(key string, limit float64, now time.Time) *bucket {
+	if el, ok := l.buckets[key]; ok {
+		l.lru.MoveToFront(el)
+		return el.Value.(*bucket)
+	}
+	if l.saturated(now) {
+		return &l.overflow
 	}
 	if len(l.buckets) >= maxKeys {
-		l.buckets = make(map[string]*bucket) // last resort: bound memory
+		oldest := l.lru.Back()
+		delete(l.buckets, oldest.Value.(*bucket).key)
+		l.lru.Remove(oldest)
 	}
+	b := &bucket{key: key, tokens: limit, last: now}
+	l.buckets[key] = l.lru.PushFront(b)
+	return b
+}
+
+// saturated reports whether the table is full and even its least-recently
+// touched bucket — hence every bucket — is still mid-window. Caller holds l.mu.
+func (l *Limiter) saturated(now time.Time) bool {
+	return len(l.buckets) >= maxKeys && now.Sub(l.lru.Back().Value.(*bucket).last) < l.window
+}
+
+// refill credits b for the time since it was last touched, at limit tokens per
+// window, capped at limit. Caller holds l.mu.
+func (l *Limiter) refill(b *bucket, limit float64, now time.Time) {
+	b.tokens = min(limit, b.tokens+now.Sub(b.last).Seconds()*limit/l.window.Seconds())
+	b.last = now
 }
 
 // Wrap returns next guarded by the limiter, keyed on client IP + request path.
@@ -206,21 +232,24 @@ func (l *Limiter) WrapFailures(next http.HandlerFunc) http.HandlerFunc {
 }
 
 // hasTokens reports whether key's bucket still has a token to spend, refilling it
-// but NOT consuming. An untracked key (nothing failed yet) always passes and,
-// unlike allow, allocates no bucket — so well-behaved clients cost no memory.
+// but NOT consuming. An untracked key (nothing failed yet) passes and, unlike
+// allow, allocates no bucket — so well-behaved clients cost no memory. The one
+// exception is a saturated table: a failure from that key would be charged to
+// the overflow bucket, so that is the budget it must still have.
 func (l *Limiter) hasTokens(key string) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	b, ok := l.buckets[key]
-	if !ok {
+	now := l.now()
+	var b *bucket
+	if el, ok := l.buckets[key]; ok {
+		l.lru.MoveToFront(el)
+		b = el.Value.(*bucket)
+	} else if l.saturated(now) {
+		b = &l.overflow
+	} else {
 		return true
 	}
-	now := l.now()
-	b.tokens += now.Sub(b.last).Seconds() * l.rate
-	if b.tokens > l.burst {
-		b.tokens = l.burst
-	}
-	b.last = now
+	l.refill(b, l.burst, now)
 	return b.tokens >= 1
 }
 
@@ -244,18 +273,19 @@ func (s *statusRecorder) WriteHeader(status int) {
 // Unwrap exposes the wrapped writer to http.ResponseController (flush/deadlines).
 func (s *statusRecorder) Unwrap() http.ResponseWriter { return s.ResponseWriter }
 
-// WrapAnon returns next guarded by the limiter for anonymous requests only —
-// those that carry no bearer token — keyed on client IP alone (a global
-// per-IP anonymous budget across all paths). Authenticated requests
-// (Authorization: Bearer …) pass through untouched, as do all requests when
-// the limiter is disabled. Unlike Wrap it takes/returns http.Handler so it can
-// wrap the whole API mux as outer middleware.
-func (l *Limiter) WrapAnon(next http.Handler) http.Handler {
+// WrapAnon returns next guarded by the limiter for requests authenticated(r)
+// does not vouch for, keyed on client IP alone (a global per-IP anonymous
+// budget across all paths). Merely carrying an Authorization header is not
+// enough to be exempt — that let `Bearer junk` switch the limiter off for
+// anyone who sent it. All requests pass through untouched when the limiter is
+// disabled. Unlike Wrap it takes/returns http.Handler so it can wrap the whole
+// API mux as outer middleware.
+func (l *Limiter) WrapAnon(next http.Handler, authenticated func(*http.Request) bool) http.Handler {
 	if !l.Enabled() {
 		return next
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if isAnonymous(r) && !l.allow(clientip.From(r)) {
+		if !authenticated(r) && !l.allow(clientip.From(r)) {
 			l.rejected(layerAnon)
 			tooManyRequests(w, l.window)
 			return
@@ -264,12 +294,17 @@ func (l *Limiter) WrapAnon(next http.Handler) http.Handler {
 	})
 }
 
+// ErrKeyRejected is what a KeyQuota or CallerFunc reports when identity-svc
+// judged the request's API key and refused it (unknown, revoked, expired).
+var ErrKeyRejected = errors.New("api key rejected")
+
 // KeyQuota identifies the API key behind a request and the per-minute request
-// budget that key itself carries. ok=false means the request is not API-key
-// traffic — or its identity could not be judged — and must not be metered here.
-// Implemented by principal.Resolver.APIKeyQuota, which answers without any
-// identity lookup for session/anonymous traffic.
-type KeyQuota func(r *http.Request) (key string, perMinute int, ok bool)
+// budget that key itself carries. An empty key with a nil error means the
+// request is not API-key traffic and is not metered here; ErrKeyRejected means
+// identity-svc refused the key; any other error means its identity could not
+// be judged. Implemented by principal.Resolver.APIKeyQuota, which answers
+// without any identity lookup for session/anonymous traffic.
+type KeyQuota func(r *http.Request) (key string, perMinute int, err error)
 
 // WrapAPIKey returns next guarded by a PER-KEY budget: an API-key request is
 // metered against its own key id — a global budget across all paths, like
@@ -285,7 +320,8 @@ type KeyQuota func(r *http.Request) (key string, perMinute int, ok bool)
 // Rejection uses the shared 429 body + Retry-After, so an API client sees the
 // same contract here as it does from the balancer worker's Redis-backed quota,
 // and every metered response carries the RateLimit-* triple a client needs to
-// pace itself instead of discovering the wall.
+// pace itself instead of discovering the wall. A key the quota lookup refuses
+// or cannot judge never reaches next (see refuseIdentity).
 //
 // This is the per-replica variant; RedisLimiter.WrapAPIKey (redis.go) is the
 // shared-bucket one main prefers when Redis is configured.
@@ -294,7 +330,12 @@ func (l *Limiter) WrapAPIKey(next http.Handler, quota KeyQuota) http.Handler {
 		return next
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if key, perMinute, ok := quota(r); ok {
+		key, perMinute, err := quota(r)
+		if err != nil {
+			refuseIdentity(w, r, err)
+			return
+		}
+		if key != "" {
 			limit := float64(perMinute)
 			if limit <= 0 {
 				limit = l.burst
@@ -309,6 +350,22 @@ func (l *Limiter) WrapAPIKey(next http.Handler, quota KeyQuota) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// refuseIdentity answers a request whose credential the identity lookup did
+// not accept. A key identity-svc rejected is a 401 here, not a pass-through:
+// otherwise any `owt_sk_` string is unmetered traffic that skips the anonymous
+// limiter and reaches the workers on every public route. An identity backend
+// that could not judge it is a 503 at once — passing it on only made the route
+// resolve the same token again and wait out a second validate_token timeout.
+func refuseIdentity(w http.ResponseWriter, r *http.Request, err error) {
+	if errors.Is(err, ErrKeyRejected) {
+		apierr.WriteError(w, http.StatusUnauthorized, "Invalid API key", "unauthorized", nil)
+		return
+	}
+	httplog.From(r.Context()).Error("identity resolution unavailable", "err", err)
+	w.Header().Set("Retry-After", "1")
+	apierr.WriteError(w, http.StatusServiceUnavailable, "service unavailable", "unavailable", nil)
 }
 
 // writeRateLimitHeaders reports the budget, what is left of it and when it

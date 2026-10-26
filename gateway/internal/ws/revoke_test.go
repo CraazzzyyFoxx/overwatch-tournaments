@@ -2,18 +2,23 @@ package ws
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/coder/websocket"
 
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/auth"
+	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/auth/authtest"
+	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/events"
+	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/principal"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/protocol"
 )
 
@@ -63,6 +68,8 @@ func (f *fakeACLCache) EvictUser(userID int64) {
 	f.evicted = append(f.evicted, userID)
 }
 
+func (f *fakeACLCache) Reset() {}
+
 func (f *fakeACLCache) seen() []roomCall {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -78,14 +85,186 @@ func (f *fakeACLCache) evictedUsers() []int64 {
 // newServerWithHub is newServer with the hub supplied by the caller, so a test
 // can inspect and fan out to the same registry the handler uses.
 func newServerWithHub(t *testing.T, hub *Hub, authz Authorizer) string {
+	return newServerWithPrincipals(t, hub, testPrincipals, authz)
+}
+
+func newServerWithPrincipals(t *testing.T, hub *Hub, principals PrincipalFunc, authz Authorizer) string {
 	t.Helper()
-	h := NewHandler(hub, auth.New(wsSecret), authz, fakeReplayer{}, 30*time.Second,
+	h := NewHandler(hub, principals, authz, fakeReplayer{}, 30*time.Second,
 		slog.New(slog.NewTextHandler(io.Discard, nil)), nil, nil, nil, nil, Limits{})
 	mux := http.NewServeMux()
 	mux.Handle("/ws", h)
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 	return srv.URL
+}
+
+// fakeIdentity is an identity-svc whose verdicts change under the test: a
+// session can be revoked (logout) and the superuser bit can flip.
+type fakeIdentity struct {
+	mu        sync.Mutex
+	revoked   map[string]bool
+	superuser bool
+}
+
+func (f *fakeIdentity) resolve(_ context.Context, token string) (principal.Info, bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return principal.Info{IsSuperuser: f.superuser}, !f.revoked[token], nil
+}
+
+func (f *fakeIdentity) set(fn func(*fakeIdentity)) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	fn(f)
+}
+
+type superuserAuthorizer struct{}
+
+func (superuserAuthorizer) Allow(_ context.Context, user *auth.User, _ string) (bool, error) {
+	return user != nil && user.IsSuperuser, nil
+}
+
+func rbacFrame(userTopic string) []byte {
+	return protocol.EventFrame(userTopic, protocol.Envelope{EventType: "rbac.changed"})
+}
+
+// identity-svc publishes user:{id}:rbac after every session revocation: the
+// revoked session's socket is closed (policy violation, "credential revoked"),
+// while the same user's other session keeps streaming.
+func TestTopicRevoker_RevokedSessionClosesItsSocket(t *testing.T) {
+	const topic = "tournament:5:bracket"
+	ctx := context.Background()
+	hub := NewHub()
+	identity := &fakeIdentity{revoked: map[string]bool{}}
+	principals := Principals(auth.New(authtest.PublicKey), identity.resolve)
+	url := newServerWithPrincipals(t, hub, principals, allowAuthorizer{allow: true})
+
+	loggedOut, kept := mintToken(t, "2"), mintToken(t, "2")
+	gone, stays := dial(t, ctx, url, loggedOut), dial(t, ctx, url, kept)
+	for _, c := range []*websocket.Conn{gone, stays} {
+		writeJSON(t, ctx, c, map[string]any{"op": "subscribe", "topic": topic})
+		if m := readJSON(t, ctx, c); m["op"] != "subscribed" {
+			t.Fatalf("expected subscribed, got %v", m)
+		}
+	}
+
+	identity.set(func(f *fakeIdentity) { f.revoked[loggedOut] = true })
+	NewTopicRevoker(hub, allowAuthorizer{allow: true}, &fakeACLCache{}, principals, discardLogger()).
+		Broadcast("user:2:rbac", rbacFrame("user:2:rbac"))
+
+	expectRevokedClose(t, gone)
+	hub.Broadcast(topic, protocol.EventFrame(topic, protocol.Envelope{EventType: "bracket.changed"}))
+	if m := readJSON(t, ctx, stays); m["op"] != "event" || m["topic"] != topic {
+		t.Fatalf("the still-valid session should keep streaming, got %v", m)
+	}
+}
+
+// A still-valid socket takes its re-judged principal before its topics are
+// re-checked: a revoked superuser bit loses what only it granted.
+func TestTopicRevoker_RBACChangeRefreshesThePrincipal(t *testing.T) {
+	const topic = "workspace:9:invalidation"
+	ctx := context.Background()
+	hub := NewHub()
+	identity := &fakeIdentity{revoked: map[string]bool{}, superuser: true}
+	principals := Principals(auth.New(authtest.PublicKey), identity.resolve)
+	url := newServerWithPrincipals(t, hub, principals, superuserAuthorizer{})
+
+	c := dial(t, ctx, url, mintToken(t, "3"))
+	writeJSON(t, ctx, c, map[string]any{"op": "subscribe", "topic": topic})
+	if m := readJSON(t, ctx, c); m["op"] != "subscribed" {
+		t.Fatalf("a superuser expected subscribed, got %v", m)
+	}
+
+	identity.set(func(f *fakeIdentity) { f.superuser = false })
+	NewTopicRevoker(hub, superuserAuthorizer{}, &fakeACLCache{}, principals, discardLogger()).
+		Broadcast("user:3:rbac", rbacFrame("user:3:rbac"))
+
+	if m := readJSON(t, ctx, c); m["op"] != "error" || m["code"] != "forbidden" || m["topic"] != topic {
+		t.Fatalf("expected the superuser-only topic revoked, got %v", m)
+	}
+}
+
+// identityStub is identity-svc's validate_token behind the real
+// principal.Resolver: every call gets the current reply.
+type identityStub struct {
+	mu    sync.Mutex
+	reply string
+	calls int
+}
+
+func (s *identityStub) Call(context.Context, string, []byte) ([]byte, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.calls++
+	return []byte(s.reply), nil
+}
+
+func (s *identityStub) set(reply string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.reply = reply
+}
+
+func (s *identityStub) callCount() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.calls
+}
+
+// The production fan-out (main.go): the resolver leg evicts the user's cached
+// verdict before the revoker re-judges the socket, so a logout only
+// identity-svc knows about closes the open socket even though its verdict sat
+// in the resolver cache.
+func TestFanout_RBACFrameClosesARevokedSessionThroughTheResolver(t *testing.T) {
+	ctx := context.Background()
+	hub := NewHub()
+	identity := &identityStub{reply: `{"ok":true,"data":{"user_id":4}}`}
+	authn := auth.New(authtest.PublicKey)
+	resolver := principal.New(identity, authn)
+	principals := Principals(authn, resolver.PrincipalToken)
+	url := newServerWithPrincipals(t, hub, principals, allowAuthorizer{allow: true})
+
+	c := dial(t, ctx, url, mintToken(t, "4"))
+	writeJSON(t, ctx, c, map[string]any{"op": "subscribe", "topic": "tournament:5:bracket"})
+	if m := readJSON(t, ctx, c); m["op"] != "subscribed" {
+		t.Fatalf("expected subscribed, got %v", m)
+	}
+	if n := identity.callCount(); n != 1 {
+		t.Fatalf("handshake and its re-check must share one cached verdict, got %d calls", n)
+	}
+
+	identity.set(`{"ok":false,"error":{"code":"unauthorized","message":"Session revoked"}}`)
+	revoker := NewTopicRevoker(hub, allowAuthorizer{allow: true}, &fakeACLCache{}, principals, discardLogger())
+	events.Fanout(resolver, revoker, hub).Broadcast("user:4:rbac", rbacFrame("user:4:rbac"))
+
+	expectRevokedClose(t, c)
+}
+
+// A revocation landing between authenticate and hub registration finds no
+// socket to close (the revoker snapshots the hub); the re-check right after
+// registering closes it instead.
+func TestWS_HandshakeRecheckClosesASessionRevokedMidHandshake(t *testing.T) {
+	var calls atomic.Int32
+	revokedAfterFirst := func(_ context.Context, token string) (*auth.User, error) {
+		if calls.Add(1) == 1 {
+			return &auth.User{ID: 4, Token: token}, nil
+		}
+		return nil, nil
+	}
+	url := newServerWithPrincipals(t, NewHub(), revokedAfterFirst, allowAuthorizer{allow: true})
+	expectRevokedClose(t, dial(t, context.Background(), url, mintToken(t, "4")))
+}
+
+func expectRevokedClose(t *testing.T, c *websocket.Conn) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	_, _, err := c.Read(ctx)
+	var closed websocket.CloseError
+	if !errors.As(err, &closed) || closed.Code != websocket.StatusPolicyViolation || closed.Reason != "credential revoked" {
+		t.Fatalf("expected close 1008 \"credential revoked\", got %v", err)
+	}
 }
 
 func discardLogger() *slog.Logger {
@@ -122,7 +301,7 @@ func TestTopicRevoker_DropsSubscribersNowDenied(t *testing.T) {
 	}
 
 	rooms := &fakeACLCache{}
-	revoker := NewTopicRevoker(hub, authz, rooms, discardLogger())
+	revoker := NewTopicRevoker(hub, authz, rooms, testPrincipals, discardLogger())
 
 	authz.deny(2)
 	revoker.Broadcast(topic, visibilityFrame(topic, false))
@@ -167,7 +346,7 @@ func TestTopicRevoker_DraftCaptainChangeDropsTheFormerCaptain(t *testing.T) {
 	}
 
 	rooms := &fakeACLCache{}
-	revoker := NewTopicRevoker(hub, authz, rooms, discardLogger())
+	revoker := NewTopicRevoker(hub, authz, rooms, testPrincipals, discardLogger())
 
 	authz.deny(3)
 	revoker.Broadcast(topic, visibilityFrame(topic, false))
@@ -186,7 +365,7 @@ func TestTopicRevoker_DraftCaptainChangeDropsTheFormerCaptain(t *testing.T) {
 func TestTopicRevoker_IgnoresOtherEvents(t *testing.T) {
 	hub := NewHub()
 	rooms := &fakeACLCache{}
-	revoker := NewTopicRevoker(hub, &perUserAuthorizer{denied: map[int64]bool{}}, rooms, discardLogger())
+	revoker := NewTopicRevoker(hub, &perUserAuthorizer{denied: map[int64]bool{}}, rooms, testPrincipals, discardLogger())
 
 	revoker.Broadcast("encounter:1:chat", protocol.EventFrame("encounter:1:chat", protocol.Envelope{EventType: "chat.message"}))
 	revoker.Broadcast("tournament:1:bracket", visibilityFrame("tournament:1:bracket", false))
@@ -250,7 +429,7 @@ func TestTopicRevoker_RBACChangeDropsTopicsTheUserLost(t *testing.T) {
 	subscribe(removed, publicTopic)
 
 	cache := &fakeACLCache{}
-	revoker := NewTopicRevoker(hub, authz, cache, discardLogger())
+	revoker := NewTopicRevoker(hub, authz, cache, testPrincipals, discardLogger())
 
 	authz.remove(2)
 	revoker.Broadcast("user:2:rbac", protocol.EventFrame("user:2:rbac", protocol.Envelope{EventType: "rbac.changed"}))

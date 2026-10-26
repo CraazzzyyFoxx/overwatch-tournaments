@@ -4,7 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
+	"net"
 	"os"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -218,11 +221,96 @@ func TestClosedChannelPublishIsUnavailable(t *testing.T) {
 		connected:  true,
 		pubChs:     []*amqp.Channel{ch},
 		disconnect: make(chan struct{}),
+		blocked:    new(atomic.Bool),
 		pending:    make(map[string]chan amqp.Delivery),
 		limiter:    newLimiter(0),
 	}
 	_, err = c.Call(context.Background(), "q", []byte(`{}`))
 	if !IsUnavailable(err) || !errors.Is(err, amqp.ErrClosed) {
 		t.Fatalf("Call on a closed channel = %v, want ErrDisconnected wrapping amqp.ErrClosed", err)
+	}
+}
+
+// A request to a queue nobody has declared yet (a worker still starting during
+// a deploy) used to be dropped by the default exchange while the caller waited
+// out the whole route deadline — 120 s by default — before a 504. Published
+// mandatory, the broker returns it and the call fails at once with a 503.
+func TestUnroutableCallFailsFast(t *testing.T) {
+	url := spikeBroker(t)
+	c, err := Dial(url)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer c.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	start := time.Now()
+	_, err = c.Call(ctx, "gateway-test-no-such-queue", []byte(`{}`))
+	if !errors.Is(err, ErrUnroutable) || !IsUnavailable(err) {
+		t.Fatalf("Call to a missing queue = %v, want ErrUnroutable (503)", err)
+	}
+	if elapsed := time.Since(start); elapsed > time.Second {
+		t.Fatalf("Call to a missing queue took %v, want an immediate failure", elapsed)
+	}
+}
+
+// The broker-free half of the same contract: a basic.return completes exactly
+// the call it names (Call maps the closed waiter to ErrUnroutable), and a
+// return for a call that already finished is a no-op.
+func TestReturnedRequestCompletesItsCall(t *testing.T) {
+	bounced, other := make(chan amqp.Delivery, 1), make(chan amqp.Delivery, 1)
+	c := &Client{pending: map[string]chan amqp.Delivery{"bounced": bounced, "other": other}}
+	returns := make(chan amqp.Return, 2)
+	returns <- amqp.Return{CorrelationId: "bounced"}
+	returns <- amqp.Return{CorrelationId: "finished"}
+	close(returns)
+
+	c.failReturned(returns)
+
+	if _, ok := <-bounced; ok {
+		t.Fatal("the returned call's waiter received a reply instead of being closed")
+	}
+	if _, waiting := c.pending["other"]; !waiting || len(c.pending) != 1 {
+		t.Fatalf("pending = %v, want only the unrelated call left waiting", c.pending)
+	}
+}
+
+// While the broker reports the connection blocked (memory/disk alarm) it stops
+// reading the socket: a publish would sit in the TCP buffers until its
+// deadline. Call must shed at once with the 503 the in-flight cap uses.
+func TestBlockedConnectionShedsCall(t *testing.T) {
+	blocked := new(atomic.Bool)
+	blocked.Store(true)
+	c := &Client{
+		connected:  true,
+		pubChs:     make([]*amqp.Channel, 1), // never reached: shed before publish
+		disconnect: make(chan struct{}),
+		blocked:    blocked,
+		pending:    make(map[string]chan amqp.Delivery),
+		limiter:    newLimiter(0),
+	}
+	_, err := c.Call(context.Background(), "q", []byte(`{}`))
+	if !errors.Is(err, ErrOverloaded) || !IsUnavailable(err) {
+		t.Fatalf("Call on a blocked connection = %v, want ErrOverloaded (503)", err)
+	}
+}
+
+// A write the broker never drains (TCP backpressure from a stalled broker)
+// must fail within the bound and close the socket — the close is what fails
+// the connection's reader into the reconnect — instead of blocking the publish
+// past its request deadline.
+func TestStalledWriteFailsAndClosesSocket(t *testing.T) {
+	client, broker := net.Pipe()
+	defer broker.Close()
+	conn := writeBoundedConn{Conn: client, timeout: 20 * time.Millisecond}
+
+	_, err := conn.Write([]byte("frame"))
+	var netErr net.Error
+	if !errors.As(err, &netErr) || !netErr.Timeout() {
+		t.Fatalf("stalled write = %v, want a timeout", err)
+	}
+	if _, err := broker.Read(make([]byte, 1)); err != io.EOF {
+		t.Fatalf("peer read = %v, want io.EOF (socket closed)", err)
 	}
 }

@@ -146,6 +146,34 @@ func TestDispatch_GenericCrudUpdate(t *testing.T) {
 	}
 }
 
+// NewRaw injects the identity bytes it is handed verbatim — the resolver's
+// cached reply — with no decode/re-marshal: an id past 2^53 survives, and the
+// sole workspace still fills the query.
+func TestDispatch_RawIdentityInjectedVerbatim(t *testing.T) {
+	const payload = `{"user_id":12345678901234567890,"workspaces":[{"workspace_id":7}]}`
+	m := &mockCaller{reply: []byte(`{"ok":true,"data":{}}`)}
+	d := NewRaw(m, slog.New(slog.NewTextHandler(io.Discard, nil)), func(*http.Request) (Identity, bool, error) {
+		return Identity{Payload: json.RawMessage(payload), SoleWorkspaceID: 7}, true, nil
+	})
+	spec := RouteSpec{Method: "GET", Pattern: "/x", Queue: "q", Query: []string{"workspace_id"}, Auth: AuthRequired}
+	if w := serve(d, spec, "GET", "/x", ""); w.Code != 200 {
+		t.Fatalf("code=%d", w.Code)
+	}
+	var sent struct {
+		Identity json.RawMessage     `json:"identity"`
+		Query    map[string][]string `json:"query"`
+	}
+	if err := json.Unmarshal(m.lastBody, &sent); err != nil {
+		t.Fatal(err)
+	}
+	if string(sent.Identity) != payload {
+		t.Fatalf("identity = %s, want the cached bytes %s", sent.Identity, payload)
+	}
+	if got := sent.Query["workspace_id"]; len(got) != 1 || got[0] != "7" {
+		t.Fatalf("workspace_id = %v, want [7]", got)
+	}
+}
+
 func TestDispatch_AuthRequiredNoIdentity(t *testing.T) {
 	m := &mockCaller{}
 	d := newTestDispatcher(m, func(*http.Request) (map[string]any, bool, error) { return nil, false, nil })
@@ -504,6 +532,7 @@ func TestDispatch_ForwardsTrustedClientMeta(t *testing.T) {
 	mux := http.NewServeMux()
 	d.Register(mux, []RouteSpec{spec})
 	r := httptest.NewRequest("GET", "/api/v1/things", nil)
+	r.RemoteAddr = "127.0.0.1:1234" // a trusted proxy: forwarding headers from other peers are ignored
 	r.Header.Set("X-Real-IP", "203.0.113.7")
 	r.Header.Set("User-Agent", "UA/1")
 	mux.ServeHTTP(httptest.NewRecorder(), r)
@@ -535,6 +564,7 @@ func TestDispatch_ClientCannotForgeClientMeta(t *testing.T) {
 	d.Register(mux, []RouteSpec{spec})
 	r := httptest.NewRequest("POST", "/api/v1/things",
 		strings.NewReader(`{"ip_address":"6.6.6.6","user_agent":"forged"}`))
+	r.RemoteAddr = "127.0.0.1:1234" // a trusted proxy: forwarding headers from other peers are ignored
 	r.Header.Set("X-Real-IP", "203.0.113.7")
 	r.Header.Set("X-Forwarded-For", "6.6.6.6, 203.0.113.7")
 	r.Header.Set("User-Agent", "UA/1")
@@ -555,5 +585,62 @@ func TestDispatch_ClientCannotForgeClientMeta(t *testing.T) {
 	payload, _ := sent["payload"].(map[string]any)
 	if payload["ip_address"] != "6.6.6.6" {
 		t.Fatalf("payload lost the caller's own body: %v", sent["payload"])
+	}
+}
+
+// The body rides under data["payload"] byte for byte. A lone Decode used to
+// accept trailing data (`{"name":"X"} garbage` still ran the mutation), and the
+// map[string]any round trip rounded integers past 2^53 through float64.
+func TestDispatch_BodyRelayedVerbatim(t *testing.T) {
+	spec := RouteSpec{Method: "POST", Pattern: "/x", Queue: "q", Body: true, Auth: AuthNone}
+	for _, tc := range []struct {
+		name, body string
+		code       int
+		payload    string // exact payload bytes on the RPC message; "" = no call
+	}{
+		{"object", ` {"name":"X"} `, 200, `{"name":"X"}`},
+		{"big int byte-exact", `{"id":12345678901234567891}`, 200, `{"id":12345678901234567891}`},
+		{"empty body", "", 200, `{}`},
+		{"null", `null`, 200, `null`},
+		{"trailing garbage", `{"name":"X"} garbage`, 400, ""},
+		{"second value", `{"a":1}{"b":2}`, 400, ""},
+		{"stray closer", `{"a":1}}`, 400, ""},
+		{"array", `[1]`, 400, ""},
+		{"malformed", `{"a":`, 400, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := &mockCaller{reply: []byte(`{"ok":true,"data":{}}`)}
+			w := serve(newTestDispatcher(m, nil), spec, "POST", "/x", tc.body)
+			if w.Code != tc.code {
+				t.Fatalf("code=%d want %d (%s)", w.Code, tc.code, w.Body.String())
+			}
+			if tc.payload == "" {
+				if m.calls != 0 {
+					t.Fatal("a rejected body still reached the RPC")
+				}
+				return
+			}
+			var sent struct {
+				Payload json.RawMessage `json:"payload"`
+			}
+			if err := json.Unmarshal(m.lastBody, &sent); err != nil {
+				t.Fatal(err)
+			}
+			if string(sent.Payload) != tc.payload {
+				t.Fatalf("payload=%s want %s", sent.Payload, tc.payload)
+			}
+		})
+	}
+}
+
+// Over the cap is a 413. The old LimitReader truncated silently, so an
+// oversized object surfaced as a malformed-JSON 400.
+func TestDispatch_OversizedBody413(t *testing.T) {
+	m := &mockCaller{}
+	spec := RouteSpec{Method: "POST", Pattern: "/x", Queue: "q", Body: true, Auth: AuthNone}
+	body := `{"a":"` + strings.Repeat("x", maxBody) + `"}`
+	w := serve(newTestDispatcher(m, nil), spec, "POST", "/x", body)
+	if w.Code != http.StatusRequestEntityTooLarge || m.calls != 0 {
+		t.Fatalf("code=%d calls=%d, want 413 and no RPC", w.Code, m.calls)
 	}
 }

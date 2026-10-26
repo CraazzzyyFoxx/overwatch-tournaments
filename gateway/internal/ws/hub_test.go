@@ -110,12 +110,57 @@ func awaitSignal(t *testing.T, ch <-chan struct{}, what string) {
 	}
 }
 
+// subscribeLive registers topic with nothing to catch up on, like an empty
+// replay, but without queuing the acknowledgement frame.
+func subscribeLive(c *Conn, topic string) {
+	c.subscribe(topic)
+	c.sendMu.Lock()
+	c.goLive(topic)
+	c.sendMu.Unlock()
+}
+
+func pendingBytes(c *Conn) int {
+	c.sendMu.Lock()
+	defer c.sendMu.Unlock()
+	return c.pendingBytes
+}
+
+// Fan-out goes through the topic index: a frame reaches only that topic's
+// subscribers, and unsubscribe/close leave no index entries behind.
+func TestHubTopicIndex(t *testing.T) {
+	hub := NewHub()
+	a, _, _ := writerSocket(t, hub, true)
+	b, _, _ := writerSocket(t, hub, true)
+	subscribeLive(a, "room-a")
+	subscribeLive(b, "room-b")
+	payload := protocol.PongFrame()
+	hub.Broadcast("room-a", payload)
+	if got := pendingBytes(a); got != len(payload) {
+		t.Fatalf("subscriber has %d bytes queued, want %d", got, len(payload))
+	}
+	if got := pendingBytes(b); got != 0 {
+		t.Fatalf("non-subscriber was routed %d bytes", got)
+	}
+	// Both sockets belong to user 42: the gauge counts connections.
+	if n := hub.AuthenticatedCount(); n != 2 {
+		t.Fatalf("AuthenticatedCount = %d, want 2", n)
+	}
+	a.unsubscribe("room-a")
+	b.close()
+	hub.mu.RLock()
+	left := len(hub.topics)
+	hub.mu.RUnlock()
+	if left != 0 {
+		t.Fatalf("topic index keeps %d topics after unsubscribe and close", left)
+	}
+}
+
 func TestHubSlowSocketIsolation(t *testing.T) {
 	hub := NewHub()
 	slow, _, gate := writerSocket(t, hub, true)
 	fast, client, _ := writerSocket(t, hub, false)
-	slow.subscribe("slow-room")
-	fast.subscribe("fast-room")
+	subscribeLive(slow, "slow-room")
+	subscribeLive(fast, "fast-room")
 	mr := miniredis.RunT(t)
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 	t.Cleanup(func() { _ = rdb.Close() })
@@ -165,7 +210,7 @@ func TestHubSlowSocketIsolation(t *testing.T) {
 func TestConnWriterFIFOAndRevokedBacklog(t *testing.T) {
 	hub := NewHub()
 	c, client, gate := writerSocket(t, hub, true)
-	c.subscribe("chat")
+	subscribeLive(c, "chat")
 	if err := c.send(protocol.PongFrame()); err != nil {
 		t.Fatal(err)
 	}
@@ -192,7 +237,7 @@ func TestConnWriterFIFOAndRevokedBacklog(t *testing.T) {
 func TestConnOverflowClosesAndRemoves(t *testing.T) {
 	hub := NewHub()
 	c, _, gate := writerSocket(t, hub, true)
-	c.subscribe("room")
+	subscribeLive(c, "room")
 	hub.Broadcast("room", protocol.PongFrame())
 	awaitSignal(t, gate.started, "stalled frame")
 	for range sendQueueSize + 1 {
@@ -200,7 +245,7 @@ func TestConnOverflowClosesAndRemoves(t *testing.T) {
 	}
 	awaitSignal(t, c.done, "overflow disconnect")
 	awaitSignal(t, c.writerDone, "writer shutdown")
-	if hub.Count() != 0 || hub.DistinctUsers() != 0 {
+	if hub.Count() != 0 || hub.AuthenticatedCount() != 0 {
 		t.Fatal("disconnected socket is still accounted")
 	}
 	if err := c.send(protocol.PongFrame()); err == nil {
@@ -291,6 +336,87 @@ func TestConnSubscriptionReplayBeforeLiveFrames(t *testing.T) {
 	}
 	if m := readJSON(t, context.Background(), client); m["op"] != "pong" {
 		t.Fatalf("last reply = %v", m)
+	}
+}
+
+// hookReplayer runs during inside EventsSince: after the subscription's cursor
+// snapshot, before its replay is queued.
+type hookReplayer struct {
+	fakeReplayer
+	during func()
+}
+
+func (r hookReplayer) EventsSince(ctx context.Context, topic string, after *int64, upTo int64) ([]protocol.Envelope, error) {
+	r.during()
+	return r.fakeReplayer.EventsSince(ctx, topic, after, upTo)
+}
+
+func frameSummary(m map[string]any) string {
+	if m["op"] == "subscribed" {
+		return fmt.Sprintf("subscribed:%v", m["cursor"])
+	}
+	ev, _ := m["event"].(map[string]any)
+	return fmt.Sprintf("%v:%v", ev["event_type"], ev["event_id"])
+}
+
+// An event published after the cursor snapshot but before the subscription
+// went live used to reach neither the replay nor the socket. It must arrive
+// exactly once, right after the acknowledgement — and a late live copy of an
+// event the replay already carries must not arrive twice.
+func TestConnSubscriptionCatchUpHasNoGap(t *testing.T) {
+	const topic = "tournament:1:bracket"
+	hub := NewHub()
+	c, client, _ := writerSocket(t, hub, false)
+	live := func(id int64) []byte {
+		return protocol.EventFrame(topic, protocol.Envelope{EventID: id, EventType: "live"})
+	}
+	rep := hookReplayer{
+		fakeReplayer: fakeReplayer{cursor: 5, events: []protocol.Envelope{
+			{EventID: 4, EventType: "replayed"}, {EventID: 5, EventType: "replayed"},
+		}},
+		during: func() {
+			hub.Broadcast(topic, live(5)) // persisted before the snapshot, published late
+			hub.Broadcast(topic, live(6)) // persisted after the snapshot
+			hub.Broadcast(topic, live(0)) // ephemeral
+		},
+	}
+	h := &Handler{hub: hub, authz: allowAuthorizer{allow: true}, replay: rep}
+	after := int64(3)
+	h.handleSubscribe(context.Background(), c, &protocol.ClientOp{Op: "subscribe", Topic: topic, AfterEventID: &after})
+	hub.Broadcast(topic, live(7))
+	for _, want := range []string{"replayed:4", "replayed:5", "subscribed:5", "live:6", "live:0", "live:7"} {
+		if got := frameSummary(readJSON(t, context.Background(), client)); got != want {
+			t.Fatalf("frame = %s, want %s", got, want)
+		}
+	}
+}
+
+// A subscription still catching up is already visible to revocation, and once
+// revoked it never goes live: no acknowledgement, none of its held frames.
+func TestConnCatchingUpSubscriptionCanBeRevoked(t *testing.T) {
+	const topic = "workspace:1:invalidation"
+	hub := NewHub()
+	c, client, _ := writerSocket(t, hub, false)
+	rep := hookReplayer{during: func() {
+		hub.Broadcast(topic, protocol.EventFrame(topic, protocol.Envelope{EventID: 9, EventType: "held"}))
+		subs := hub.SubscribersOf(topic)
+		if len(subs) != 1 {
+			t.Errorf("revocation sees %d subscribers of a catching-up subscription, want 1", len(subs))
+		}
+		for _, s := range subs {
+			s.unsubscribe(topic) // what TopicRevoker does on a denial
+		}
+	}}
+	h := &Handler{hub: hub, authz: allowAuthorizer{allow: true}, replay: rep}
+	h.handleSubscribe(context.Background(), c, &protocol.ClientOp{Op: "subscribe", Topic: topic})
+	if err := c.send(protocol.PongFrame()); err != nil {
+		t.Fatal(err)
+	}
+	if m := readJSON(t, context.Background(), client); m["op"] != "pong" {
+		t.Fatalf("a revoked catching-up subscription delivered %v", m)
+	}
+	if subs := hub.SubscribersOf(topic); len(subs) != 0 {
+		t.Fatalf("revoked subscription still indexed: %d", len(subs))
 	}
 }
 

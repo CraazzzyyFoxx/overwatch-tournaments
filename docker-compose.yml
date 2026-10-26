@@ -690,6 +690,9 @@ services:
         condition: service_healthy
     networks:
       - app-network
+    # SIGTERM drains in-flight requests for GATEWAY_SHUTDOWN_TIMEOUT (30s
+    # default) before the rest are cut; Docker's default 10s would SIGKILL first.
+    stop_grace_period: 40s
     deploy:
       resources:
         limits:

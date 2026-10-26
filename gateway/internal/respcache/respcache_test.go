@@ -1,7 +1,9 @@
 package respcache
 
 import (
+	"compress/gzip"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -311,7 +313,7 @@ func TestAuthedMissFallsBackOnNon200(t *testing.T) {
 }
 
 // A request whose extractor resolves no tournament id would be unreachable by
-// Invalidate — it must never be cached.
+// any invalidation — it must never be cached.
 func TestMissingTournamentIDPassesThrough(t *testing.T) {
 	var calls atomic.Int64
 	c := testCache(t)
@@ -369,7 +371,7 @@ func TestQueryOrderSharesOneEntry(t *testing.T) {
 	}
 }
 
-// Invalidate must drop every entry for the tournament and leave others alone.
+// invalidate must drop every entry for the tournament and leave others alone.
 func TestInvalidateDropsOnlyThatTournament(t *testing.T) {
 	var calls atomic.Int64
 	c := testCache(t)
@@ -379,8 +381,8 @@ func TestInvalidateDropsOnlyThatTournament(t *testing.T) {
 	doGet(h, "/api/v1/encounters?tournament_id=72&page=2", "")
 	doGet(h, "/api/v1/encounters?tournament_id=73", "")
 
-	if n := c.Invalidate(72, nil); n != 2 {
-		t.Fatalf("Invalidate(72, nil) = %d, want 2", n)
+	if n := c.invalidate(scopeKey{id: 72}, nil); n != 2 {
+		t.Fatalf("invalidate(72, nil) = %d, want 2", n)
 	}
 
 	// 73 still cached, 72 refetches.
@@ -393,10 +395,11 @@ func TestInvalidateDropsOnlyThatTournament(t *testing.T) {
 	}
 }
 
-// Broadcast consumes ONLY `<scope>:invalidation`. Domain topics carry data for
-// the UI: a draft pick or a balancer presence heartbeat must not touch the
-// cache, which is exactly the mistake the previous rail made (a reason-less
-// draft frame dropped every entry for the tournament, twice per pick).
+// A tournament entry drops ONLY on its `tournament:{id}:invalidation`. Domain
+// topics carry data for the UI: a draft pick or a balancer presence heartbeat
+// must not touch it, which is exactly the mistake the previous rail made (a
+// reason-less draft frame dropped every entry for the tournament, twice per
+// pick). A draft session's own topics reach only that session's entries.
 func TestBroadcastTopicRouting(t *testing.T) {
 	var calls atomic.Int64
 	c := testCache(t)
@@ -413,6 +416,8 @@ func TestBroadcastTopicRouting(t *testing.T) {
 	ignored := []string{
 		"tournament:72:bracket",
 		"tournament:72:draft",
+		"draft:72:board",
+		"draft:72:chat",
 		"tournament:72:balancer",
 		"tournament:72:streams",
 		"encounter:72:map-veto",
@@ -909,9 +914,7 @@ func TestNilCacheIsInert(t *testing.T) {
 		t.Fatal("nil cache must pass through untouched")
 	}
 	c.Broadcast("tournament:72:invalidation", nil) // must not panic
-	if c.Invalidate(72, nil) != 0 {
-		t.Fatal("nil Invalidate must return 0")
-	}
+	c.Reset()                                      // nor this
 	if New(0, slog.Default()) != nil {
 		t.Fatal("New with ttl<=0 must return nil (disabled)")
 	}
@@ -940,12 +943,15 @@ func TestOversizedBodyNotStored(t *testing.T) {
 // The byte budget: entries are evicted oldest-first once their combined size
 // would exceed maxBytes, even when the entry count is still under max. This
 // is what makes raising maxBodyBytes safe — a cache full of large bodies
-// cannot grow past a bounded memory footprint.
+// cannot grow past a bounded memory footprint. The client-chosen key counts
+// too: with bodies alone, all four entries fit this budget.
 func TestByteBudgetEvictsOldestOnOverflow(t *testing.T) {
 	var calls atomic.Int64
-	const entrySize = 100
+	const bodySize = 100
+	// Every key here has the same length (single-digit page).
+	entrySize := int64(bodySize + len("/api/v1/encounters?page=1&tournament_id=72"))
 	c := newCache(time.Minute, maxEntries, 3*entrySize, slog.Default())
-	body := make([]byte, entrySize)
+	body := make([]byte, bodySize)
 	h := c.Wrap(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		calls.Add(1)
 		_, _ = w.Write(body)
@@ -1016,10 +1022,10 @@ func TestSlugPathFallsBackToBodyExtractedID(t *testing.T) {
 	if first.Body.String() != second.Body.String() {
 		t.Fatalf("cached body diverged: %q vs %q", first.Body.String(), second.Body.String())
 	}
-	// Invalidate(72, ...) must reach it too: the entry was indexed under the
+	// invalidate(72, ...) must reach it too: the entry was indexed under the
 	// numeric id extracted from the body, not the unparseable path segment.
-	if n := c.Invalidate(72, nil); n != 1 {
-		t.Fatalf("Invalidate(72, nil) = %d, want 1 (slug entry unreachable)", n)
+	if n := c.invalidate(scopeKey{id: 72}, nil); n != 1 {
+		t.Fatalf("invalidate(72, nil) = %d, want 1 (slug entry unreachable)", n)
 	}
 	doGetWithID(h, "/api/v1/tournaments/overwatch-season-5", "overwatch-season-5", "")
 	if calls.Load() != 2 {
@@ -1095,5 +1101,432 @@ func TestBareTournamentDetailPatternDoesNotOverreachOntoSlugSubroutes(t *testing
 	stagesHandler.ServeHTTP(rec, stagesReq2)
 	if rec.Header().Get("X-Cache") != "HIT" {
 		t.Fatal("registration_changed must not evict the slug-keyed /stages entry")
+	}
+}
+
+// Draft entries live under their session: a board frame drops that session's
+// board entries only — not its chat, not another session's board, and never a
+// tournament sharing the numeric id — and a chat frame likewise. A draft frame
+// needs no payload: any frame on the topic means the session moved.
+func TestDraftTopicsDropOnlyTheirOwnSessionScope(t *testing.T) {
+	var calls atomic.Int64
+	c := testCache(t)
+	board := c.Wrap(upstream(&calls), Rule{Extract: FromPathValue("id"), Scope: ScopeDraftBoard})
+	chat := c.Wrap(upstream(&calls), Rule{Extract: FromPathValue("id"), Scope: ScopeDraftChat})
+	tournament := c.Wrap(upstream(&calls), Rule{Extract: FromPathValue("id")})
+	routes := []struct {
+		name, target, id string
+		h                http.Handler
+	}{
+		{"board 5", "/api/v1/balancer/draft/sessions/5/board", "5", board},
+		{"board 6", "/api/v1/balancer/draft/sessions/6/board", "6", board},
+		{"chat 5", "/api/v1/balancer/draft/sessions/5/chat?limit=50", "5", chat},
+		{"chat 6", "/api/v1/balancer/draft/sessions/6/chat?limit=50", "6", chat},
+		{"tournament 5", "/api/v1/tournaments/5", "5", tournament},
+	}
+	for _, r := range routes {
+		doGetWithID(r.h, r.target, r.id, "")
+	}
+
+	for _, tc := range []struct {
+		topic   string
+		dropped string
+	}{
+		{"draft:5:board", "board 5"},
+		{"draft:5:chat", "chat 5"},
+		{"draft:6:board", "board 6"},
+		{"draft:6:chat", "chat 6"},
+		{"tournament:5:invalidation", "tournament 5"},
+	} {
+		c.Broadcast(tc.topic, nil)
+		// Every route is re-checked (a dropped one refills on this read), so
+		// each case starts from a fully cached set.
+		for _, r := range routes {
+			if hit := doGetWithID(r.h, r.target, r.id, "").Header().Get("X-Cache") == "HIT"; hit == (r.name == tc.dropped) {
+				t.Errorf("%s: %s HIT=%v", tc.topic, r.name, hit)
+			}
+		}
+	}
+}
+
+// The tournament draft lookup is addressed by tournament but holds the active
+// session's board: it is cached under the session its body names and dropped
+// by that session's board frame alone. No active draft answers null (or
+// nothing), which no frame could ever reach, so it stays uncached.
+func TestDraftLookupCachedUnderBodySession(t *testing.T) {
+	var calls atomic.Int64
+	body := `{"session":{"id":5,"status":"live"},"picks":[]}`
+	c := testCache(t)
+	h := c.Wrap(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls.Add(1)
+		_, _ = fmt.Fprint(w, body)
+	}), Rule{Scope: ScopeDraftBoard, ExtractFromBody: ExtractSessionIDFromJSONBody()})
+	const target = "/api/v1/balancer/draft/tournaments/72/draft"
+
+	doGet(h, target, "")
+	if rec := doGet(h, target, ""); rec.Header().Get("X-Cache") != "HIT" {
+		t.Fatal("the lookup must be cached under its body's session")
+	}
+	c.Broadcast("tournament:72:invalidation", nil)
+	c.Broadcast("draft:6:board", nil)
+	c.Broadcast("draft:5:chat", nil)
+	if rec := doGet(h, target, ""); rec.Header().Get("X-Cache") != "HIT" {
+		t.Fatal("only the session's own board frame may drop the lookup")
+	}
+	c.Broadcast("draft:5:board", nil)
+	if rec := doGet(h, target, ""); rec.Header().Get("X-Cache") == "HIT" {
+		t.Fatal("the session's board frame must drop the lookup")
+	}
+
+	for _, empty := range []string{"null", ""} {
+		body = empty
+		before := calls.Load()
+		doGet(h, "/api/v1/balancer/draft/tournaments/73/draft", "")
+		doGet(h, "/api/v1/balancer/draft/tournaments/73/draft", "")
+		if calls.Load()-before != 2 {
+			t.Fatalf("body %q was stored", empty)
+		}
+	}
+}
+
+// The generation guard holds per session: a board read that went upstream
+// before the session's frame is neither joined by a request arriving after
+// the frame nor stored over the fresh entry that request fills.
+func TestFlightStartedBeforeDraftFrameIsNotStored(t *testing.T) {
+	var calls atomic.Int64
+	release := make(chan struct{})
+	releaseOnce := sync.OnceFunc(func() { close(release) })
+	defer releaseOnce()
+	c := testCache(t)
+	h := c.Wrap(gatedUpstream(&calls, release), Rule{Extract: FromPathValue("id"), Scope: ScopeDraftBoard})
+	const target = "/api/v1/balancer/draft/sessions/72/board"
+
+	early := make(chan struct{})
+	go func() { defer close(early); doGet(h, target, "") }()
+	waitForCalls(t, &calls, 1)
+	c.Broadcast("draft:72:board", nil)
+
+	late := make(chan *httptest.ResponseRecorder, 1)
+	go func() { late <- doGet(h, target, "") }()
+	select {
+	case rec := <-late:
+		if rec.Body.String() != `{"n":2}` {
+			t.Fatalf("late request got %s, want a fresh upstream read", rec.Body.String())
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("request after the board frame joined the flight that went upstream before it")
+	}
+	releaseOnce()
+	<-early
+
+	if rec := doGet(h, target, ""); rec.Header().Get("X-Cache") != "HIT" || rec.Body.String() != `{"n":2}` {
+		t.Fatalf("got %s (X-Cache %q), want the post-frame entry", rec.Body.String(), rec.Header().Get("X-Cache"))
+	}
+}
+
+// A rule's own TTL (the live draft reads) expires its entry while a
+// default-TTL entry stored at the same moment survives.
+func TestRuleTTLOverridesCacheDefault(t *testing.T) {
+	var draftCalls, tournamentCalls atomic.Int64
+	c := testCache(t)
+	fake := time.Now()
+	c.now = func() time.Time { return fake }
+	draft := c.Wrap(upstream(&draftCalls), Rule{Extract: FromPathValue("id"), Scope: ScopeDraftBoard, TTL: 5 * time.Second})
+	tournament := c.Wrap(upstream(&tournamentCalls), Rule{Extract: FromPathValue("id")})
+	const draftTarget, tournamentTarget = "/api/v1/balancer/draft/sessions/72/board", "/api/v1/tournaments/72"
+
+	doGet(draft, draftTarget, "")
+	doGet(tournament, tournamentTarget, "")
+	fake = fake.Add(4 * time.Second)
+	if rec := doGet(draft, draftTarget, ""); rec.Header().Get("X-Cache") != "HIT" {
+		t.Fatal("draft entry expired before its own TTL")
+	}
+	fake = fake.Add(2 * time.Second)
+	if rec := doGet(draft, draftTarget, ""); rec.Header().Get("X-Cache") == "HIT" {
+		t.Fatal("draft entry outlived its own TTL")
+	}
+	if rec := doGet(tournament, tournamentTarget, ""); rec.Header().Get("X-Cache") != "HIT" {
+		t.Fatal("default-TTL entry expired with the draft rule's TTL")
+	}
+}
+
+// tournament.structure also carries a visibility flip (is_hidden): no
+// anonymous entry of the tournament may survive it. The shell-only pattern
+// set left the participants list and a player's page for that tournament
+// serving a now-hidden tournament for a whole TTL. Another tournament's
+// entries stay.
+func TestBroadcastStructureDropsTheWholeTournament(t *testing.T) {
+	var calls atomic.Int64
+	c := testCache(t)
+	h := c.Wrap(upstream(&calls), Rule{Extract: FromPathValue("id")})
+	targets := []string{
+		"/api/v1/tournaments/72/registration/list",
+		"/api/v1/users/5/tournaments/72/leaderboard",
+		"/api/v1/tournaments/72",
+	}
+	for _, target := range targets {
+		doGet(h, target, "")
+	}
+	const other = "/api/v1/tournaments/73/registration/list"
+	doGetWithID(h, other, "73", "")
+
+	c.Broadcast("tournament:72:invalidation", invalidationFrame("tournament.structure"))
+
+	for _, target := range targets {
+		if rec := doGet(h, target, ""); rec.Header().Get("X-Cache") == "HIT" {
+			t.Fatalf("%s survived tournament.structure", target)
+		}
+	}
+	if rec := doGetWithID(h, other, "73", ""); rec.Header().Get("X-Cache") != "HIT" {
+		t.Fatal("tournament 73 must survive 72's structure frame")
+	}
+}
+
+// Parsed logs emit only tournament.encounters / tournament.standings, and a
+// player's pages for that tournament (stats.PublicCacheableReads) render
+// both, so either must drop them — while the player's TTL-only profile
+// (scope id 0) stays.
+func TestResultEventsEvictPlayerTournamentPages(t *testing.T) {
+	for _, resource := range []string{"tournament.encounters", "tournament.standings"} {
+		t.Run(resource, func(t *testing.T) {
+			var calls atomic.Int64
+			c := testCache(t)
+			perTournament := c.Wrap(upstream(&calls), Rule{Extract: FromPathValue("id")})
+			profile := c.Wrap(upstream(&calls), Rule{Extract: TTLOnly()})
+			targets := []string{
+				"/api/v1/users/5/tournaments/72",
+				"/api/v1/users/5/tournaments/72/encounters",
+				"/api/v1/users/5/tournaments/72/leaderboard",
+			}
+			for _, target := range targets {
+				doGet(perTournament, target, "")
+			}
+			doGet(profile, "/api/v1/users/5/profile", "")
+
+			c.Broadcast("tournament:72:invalidation", invalidationFrame(resource))
+
+			for _, target := range targets {
+				if rec := doGet(perTournament, target, ""); rec.Header().Get("X-Cache") == "HIT" {
+					t.Fatalf("%s survived %s", target, resource)
+				}
+			}
+			if rec := doGet(profile, "/api/v1/users/5/profile", ""); rec.Header().Get("X-Cache") != "HIT" {
+				t.Fatalf("%s must not reach the TTL-only profile", resource)
+			}
+		})
+	}
+}
+
+// Invalidation records are bookkeeping for fills, not history: past the
+// settle window with no older fill in flight, the next invalidation drops
+// them. They used to accumulate one per scope ever invalidated.
+func TestInvalidationRecordsPrunedAfterSettle(t *testing.T) {
+	c := testCache(t)
+	fake := time.Now()
+	c.now = func() time.Time { return fake }
+
+	c.Broadcast("tournament:72:invalidation", nil)
+	fake = fake.Add(upstreamSettle)
+	c.Broadcast("tournament:73:invalidation", nil)
+	if _, ok := c.invalidated[scopeKey{id: 72}]; ok || len(c.invalidated) != 1 {
+		t.Fatalf("records = %v, want only tournament 73's", c.invalidated)
+	}
+}
+
+// Pruning must not reopen the stale-fill race: a fill that went upstream
+// before an invalidation keeps that record, however long it runs, and is
+// still refused when it lands; only then may the record go.
+func TestPruneKeepsRecordAnOlderFillNeeds(t *testing.T) {
+	var calls atomic.Int64
+	release := make(chan struct{})
+	c := testCache(t)
+	fake := time.Now()
+	c.now = func() time.Time { return fake }
+	h := c.Wrap(gatedUpstream(&calls, release), Rule{Extract: FromQuery("tournament_id")})
+	const target = "/api/v1/teams?tournament_id=72"
+	pending := scopeKey{id: 72}
+
+	done := make(chan struct{})
+	go func() { defer close(done); doGet(h, target, "") }()
+	waitForCalls(t, &calls, 1)
+	c.Broadcast("tournament:72:invalidation", invalidationFrame("tournament.teams"))
+	fake = fake.Add(2 * upstreamSettle)
+	c.Broadcast("tournament:73:invalidation", nil)
+	if _, ok := c.invalidated[pending]; !ok {
+		t.Fatal("record pruned while a fill that predates it is still in flight")
+	}
+	close(release)
+	<-done
+	if rec := doGet(h, target, ""); rec.Header().Get("X-Cache") == "HIT" {
+		t.Fatalf("pre-invalidation body %s was stored and served as a HIT", rec.Body.String())
+	}
+
+	c.Broadcast("tournament:74:invalidation", nil)
+	if _, ok := c.invalidated[pending]; ok {
+		t.Fatal("record outlived the fill it was kept for")
+	}
+}
+
+// Reset (the subscriber re-subscribed after a lost connection, so frames may
+// be missing) drops every entry — TTL-only ones included — refuses a fill
+// that went upstream before it, and keeps requests after it off that fill.
+func TestResetDropsEntriesAndFencesInflightFills(t *testing.T) {
+	var seeded, calls atomic.Int64
+	release := make(chan struct{})
+	releaseOnce := sync.OnceFunc(func() { close(release) })
+	defer releaseOnce()
+	c := testCache(t)
+	stored := c.Wrap(upstream(&seeded), Rule{Extract: TTLOnly()})
+	gated := c.Wrap(gatedUpstream(&calls, release), Rule{Extract: FromQuery("tournament_id")})
+	const target = "/api/v1/teams?tournament_id=72"
+
+	doGet(stored, "/api/v1/statistics/champion", "")
+	early := make(chan struct{})
+	go func() { defer close(early); doGet(gated, target, "") }()
+	waitForCalls(t, &calls, 1)
+
+	c.Reset()
+
+	if rec := doGet(stored, "/api/v1/statistics/champion", ""); rec.Header().Get("X-Cache") == "HIT" {
+		t.Fatal("Reset left an entry in place")
+	}
+	late := make(chan *httptest.ResponseRecorder, 1)
+	go func() { late <- doGet(gated, target, "") }()
+	select {
+	case rec := <-late:
+		if rec.Body.String() != `{"n":2}` {
+			t.Fatalf("late request got %s, want a fresh upstream read", rec.Body.String())
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("request after Reset joined the flight that went upstream before it")
+	}
+	releaseOnce()
+	<-early
+
+	if rec := doGet(gated, target, ""); rec.Header().Get("X-Cache") != "HIT" || rec.Body.String() != `{"n":2}` {
+		t.Fatalf("got %s (X-Cache %q), want the post-Reset entry", rec.Body.String(), rec.Header().Get("X-Cache"))
+	}
+}
+
+// A key past maxKeyBytes (a client-chosen query string) bypasses the cache
+// instead of being retained at whatever length the client picked.
+func TestOversizedKeyBypassesCache(t *testing.T) {
+	var calls atomic.Int64
+	c := testCache(t)
+	h := c.Wrap(upstream(&calls), Rule{Extract: FromPathValue("id")})
+	target := "/api/v1/tournaments/72?q=" + strings.Repeat("a", maxKeyBytes)
+
+	doGet(h, target, "")
+	if rec := doGet(h, target, ""); rec.Header().Get("X-Cache") != "" || calls.Load() != 2 || len(c.keys) != 0 {
+		t.Fatalf("oversized key cached: X-Cache %q, calls %d, entries %d", rec.Header().Get("X-Cache"), calls.Load(), len(c.keys))
+	}
+}
+
+// bigJSON is a compressible body past gzipMinBytes.
+var bigJSON = "[" + strings.Repeat(`{"team":"Blue","score":3},`, 100) + `{}]`
+
+func doGetAccepting(h http.Handler, target, acceptEncoding string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(http.MethodGet, target, nil)
+	req.SetPathValue("id", "72")
+	if acceptEncoding != "" {
+		req.Header.Set("Accept-Encoding", acceptEncoding)
+	}
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	return rec
+}
+
+// A stored body is gzipped once: a hit whose client accepts gzip gets that
+// copy, any other gets identity, the leader's own miss stays as upstream
+// wrote it, and a body under gzipMinBytes is never compressed. Every answer
+// varies on Accept-Encoding, so nothing downstream mixes the two up.
+func TestHitServesStoredGzipCopy(t *testing.T) {
+	var calls, smallCalls atomic.Int64
+	c := testCache(t)
+	h := c.Wrap(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, bigJSON)
+	}), Rule{Extract: FromPathValue("id")})
+	small := c.Wrap(upstream(&smallCalls), Rule{Extract: FromPathValue("id")})
+	const target = "/api/v1/tournaments/72"
+
+	check := func(rec *httptest.ResponseRecorder, wantGzip bool) {
+		t.Helper()
+		if got := rec.Header().Values("Vary"); len(got) != 1 || got[0] != "Accept-Encoding" {
+			t.Fatalf("Vary = %q, want [Accept-Encoding]", got)
+		}
+		body := rec.Body.String()
+		if rec.Header().Get("Content-Encoding") == "gzip" {
+			if !wantGzip {
+				t.Fatal("gzip served to a client that did not accept it")
+			}
+			zr, err := gzip.NewReader(rec.Body)
+			if err != nil {
+				t.Fatalf("gzip reader: %v", err)
+			}
+			raw, err := io.ReadAll(zr)
+			if err != nil {
+				t.Fatalf("gunzip: %v", err)
+			}
+			body = string(raw)
+		} else if wantGzip {
+			t.Fatal("identity served to a client that accepts gzip")
+		}
+		if body != bigJSON {
+			t.Fatalf("body did not round-trip: %d bytes", len(body))
+		}
+	}
+
+	leader := doGetAccepting(h, target, "gzip")
+	check(leader, false)
+	if got := leader.Header().Get("X-Cache"); got != "MISS" {
+		t.Fatalf("X-Cache = %q, want MISS", got)
+	}
+	for _, ae := range []string{"gzip", "deflate, gzip;q=0.5", "*"} {
+		rec := doGetAccepting(h, target, ae)
+		if rec.Header().Get("X-Cache") != "HIT" {
+			t.Fatalf("Accept-Encoding %q: not a HIT", ae)
+		}
+		check(rec, true)
+	}
+	for _, ae := range []string{"", "gzip;q=0", "br", "*;q=0"} {
+		check(doGetAccepting(h, target, ae), false)
+	}
+	if calls.Load() != 1 {
+		t.Fatalf("upstream calls = %d, want 1", calls.Load())
+	}
+
+	doGetAccepting(small, "/api/v1/tournaments/72/stages", "gzip")
+	if rec := doGetAccepting(small, "/api/v1/tournaments/72/stages", "gzip"); rec.Header().Get("Content-Encoding") != "" {
+		t.Fatal("a body under gzipMinBytes was compressed")
+	}
+}
+
+func TestAcceptsGzip(t *testing.T) {
+	cases := []struct {
+		values []string
+		want   bool
+	}{
+		{nil, false},
+		{[]string{"gzip"}, true},
+		{[]string{"GZip"}, true},
+		{[]string{"x-gzip"}, true},
+		{[]string{"gzip, deflate, br, zstd"}, true},
+		{[]string{"gzip;q=0"}, false},
+		{[]string{"gzip; q=0.000"}, false},
+		{[]string{"gzip;q=0.001"}, true},
+		{[]string{"gzip;q=bogus"}, false},
+		{[]string{"deflate, br"}, false},
+		{[]string{"*"}, true},
+		{[]string{"*;q=0"}, false},
+		{[]string{"br, *;q=0, gzip"}, true},
+		{[]string{"*, gzip;q=0"}, false},
+		{[]string{"br", "gzip"}, true},
+	}
+	for _, tc := range cases {
+		if got := acceptsGzip(tc.values); got != tc.want {
+			t.Errorf("acceptsGzip(%q) = %v, want %v", tc.values, got, tc.want)
+		}
 	}
 }

@@ -2,9 +2,7 @@ package tournament
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
-	"io"
 	"log/slog"
 	"net/http"
 	"time"
@@ -12,6 +10,7 @@ import (
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/apierr"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/edge"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/rpc"
+	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/upload"
 )
 
 const (
@@ -46,10 +45,12 @@ func (b *Binary) TeamImageUpload(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if !b.attachFile(w, r, data) {
+	body, release, ok := b.fileBody(w, r, data)
+	if !ok {
 		return
 	}
-	b.relayJSON(w, r, "rpc.tournament.teams.image_upload", data, http.StatusOK)
+	defer release()
+	b.relayJSON(w, r, "rpc.tournament.teams.image_upload", body, http.StatusOK)
 }
 
 // RegistrationTeamImageUpload: POST /api/v1/registration-teams/{team_id}/image
@@ -60,10 +61,12 @@ func (b *Binary) RegistrationTeamImageUpload(w http.ResponseWriter, r *http.Requ
 	if !ok {
 		return
 	}
-	if !b.attachFile(w, r, data) {
+	body, release, ok := b.fileBody(w, r, data)
+	if !ok {
 		return
 	}
-	b.relayJSON(w, r, "rpc.tournament.regteam_image_upload", data, http.StatusOK)
+	defer release()
+	b.relayJSON(w, r, "rpc.tournament.regteam_image_upload", body, http.StatusOK)
 }
 
 // TournamentImageUpload: POST /api/v1/admin/tournaments/{tournament_id}/images/{slot}
@@ -76,10 +79,12 @@ func (b *Binary) TournamentImageUpload(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if !b.attachFile(w, r, data) {
+	body, release, ok := b.fileBody(w, r, data)
+	if !ok {
 		return
 	}
-	b.relayJSON(w, r, "rpc.tournament.tournaments.image_upload", data, http.StatusOK)
+	defer release()
+	b.relayJSON(w, r, "rpc.tournament.tournaments.image_upload", body, http.StatusOK)
 }
 
 // identityInto resolves the bearer identity (required) and injects it into data.
@@ -104,32 +109,44 @@ func (b *Binary) identityInto(w http.ResponseWriter, r *http.Request, data map[s
 	return data, true
 }
 
-// attachFile parses the multipart "file" part and base64-encodes it into data.
-func (b *Binary) attachFile(w http.ResponseWriter, r *http.Request, data map[string]any) bool {
+// fileBody admits the upload against the gateway's memory budget, parses the
+// multipart "file" part and returns the RPC message: data plus content_type and
+// content_b64, the file base64'd straight into the message. On success the
+// caller must defer release, which frees the reservation once the RPC is done.
+func (b *Binary) fileBody(w http.ResponseWriter, r *http.Request, data map[string]any) (body []byte, release func(), ok bool) {
+	rel, admitted := upload.Admit(w, r, maxUpload)
+	if !admitted {
+		return nil, nil, false
+	}
+	defer func() {
+		if !ok {
+			rel()
+		}
+	}()
 	r.Body = http.MaxBytesReader(w, r.Body, maxUpload)
 	if err := r.ParseMultipartForm(maxUpload); err != nil {
 		writeDetail(w, http.StatusBadRequest, "invalid multipart form")
-		return false
+		return nil, nil, false
 	}
 	f, hdr, err := r.FormFile("file")
 	if err != nil {
 		writeDetail(w, http.StatusBadRequest, "file is required")
-		return false
+		return nil, nil, false
 	}
 	defer func() { _ = f.Close() }()
-	raw, err := io.ReadAll(io.LimitReader(f, maxUpload))
+	data["content_type"] = hdr.Header.Get("Content-Type")
+	body, err = upload.Body(data, "content_b64", upload.Base64Len(hdr.Size), func(out []byte) ([]byte, error) {
+		return upload.AppendBase64(out, f)
+	})
 	if err != nil {
 		writeDetail(w, http.StatusBadRequest, "failed to read file")
-		return false
+		return nil, nil, false
 	}
-	data["content_b64"] = base64.StdEncoding.EncodeToString(raw)
-	data["content_type"] = hdr.Header.Get("Content-Type")
-	return true
+	return body, rel, true
 }
 
 // relayJSON calls the RPC and relays the success envelope data as a JSON response.
-func (b *Binary) relayJSON(w http.ResponseWriter, r *http.Request, queue string, data map[string]any, success int) {
-	body, _ := json.Marshal(data)
+func (b *Binary) relayJSON(w http.ResponseWriter, r *http.Request, queue string, body []byte, success int) {
 	ctx, cancel := context.WithTimeout(r.Context(), binaryRPCTimeout)
 	defer cancel()
 

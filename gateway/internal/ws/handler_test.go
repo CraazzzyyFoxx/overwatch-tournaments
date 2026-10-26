@@ -3,6 +3,7 @@ package ws
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -12,14 +13,19 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
-	"github.com/golang-jwt/jwt/v5"
 
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/auth"
+	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/auth/authtest"
+	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/principal"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/protocol"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/replay"
 )
 
-const wsSecret = "ws-test-secret"
+// testPrincipals admits the way production does — the local EdDSA check, then
+// identity-svc — over an identity-svc that accepts every token as a plain user.
+var testPrincipals = Principals(auth.New(authtest.PublicKey), func(context.Context, string) (principal.Info, bool, error) {
+	return principal.Info{}, true, nil
+})
 
 type allowAuthorizer struct {
 	allow bool
@@ -50,7 +56,7 @@ func newServer(t *testing.T, authz Authorizer, rep Replayer) string {
 
 func newServerLimits(t *testing.T, authz Authorizer, rep Replayer, limits Limits) string {
 	t.Helper()
-	h := NewHandler(NewHub(), auth.New(wsSecret), authz, rep, 30*time.Second,
+	h := NewHandler(NewHub(), testPrincipals, authz, rep, 30*time.Second,
 		slog.New(slog.NewTextHandler(io.Discard, nil)), nil, nil, nil, nil, limits)
 	mux := http.NewServeMux()
 	mux.Handle("/ws", h)
@@ -59,25 +65,24 @@ func newServerLimits(t *testing.T, authz Authorizer, rep Replayer, limits Limits
 	return srv.URL
 }
 
-func mintToken(t *testing.T, sub string) string {
-	t.Helper()
-	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"sub": sub, "type": "access", "exp": time.Now().Add(time.Hour).Unix(),
-	})
-	s, err := tok.SignedString([]byte(wsSecret))
-	if err != nil {
-		t.Fatal(err)
-	}
-	return s
+func mintToken(_ *testing.T, sub string) string {
+	return authtest.Token(sub)
 }
 
+// dial connects with token in the Authorization header — the credential a
+// script sends; browsers send the session cookie. "" is anonymous.
 func dial(t *testing.T, ctx context.Context, serverURL, token string) *websocket.Conn {
 	t.Helper()
-	u := "ws" + strings.TrimPrefix(serverURL, "http") + "/ws"
+	var opts *websocket.DialOptions
 	if token != "" {
-		u += "?token=" + token
+		opts = &websocket.DialOptions{HTTPHeader: http.Header{"Authorization": {"Bearer " + token}}}
 	}
-	c, _, err := websocket.Dial(ctx, u, nil)
+	return dialWith(t, ctx, "ws"+strings.TrimPrefix(serverURL, "http")+"/ws", opts)
+}
+
+func dialWith(t *testing.T, ctx context.Context, u string, opts *websocket.DialOptions) *websocket.Conn {
+	t.Helper()
+	c, _, err := websocket.Dial(ctx, u, opts)
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
@@ -285,6 +290,80 @@ func TestWS_DraftPresenceIncludesAuthenticatedUsersAndAnonymousViewerCount(t *te
 	}
 }
 
+// newPresenceServer is newServer with the handler exposed and its presence
+// window set before any connection can read it.
+func newPresenceServer(t *testing.T, window time.Duration) (*Handler, string) {
+	t.Helper()
+	h := NewHandler(NewHub(), testPrincipals, allowAuthorizer{allow: true}, fakeReplayer{}, 30*time.Second,
+		slog.New(slog.NewTextHandler(io.Discard, nil)), nil, nil, nil, nil, Limits{})
+	h.presenceWindow = window
+	srv := httptest.NewServer(h)
+	t.Cleanup(srv.Close)
+	return h, srv.URL
+}
+
+// A room filling up must not cost N(N+1)/2 presence frames: a burst of joins
+// inside one window reaches each subscriber as at most two presence frames
+// (the leading one and the folded trailing one), the last carrying the final
+// count. Once the topic goes quiet it keeps no throttle state, and the next
+// isolated join is broadcast at once rather than a window later.
+func TestWS_PresenceBurstIsThrottled(t *testing.T) {
+	const window = 500 * time.Millisecond
+	const n = 10
+	const topic = "draft:1:board"
+	h, url := newPresenceServer(t, window)
+	ctx := context.Background()
+
+	conns := make([]*websocket.Conn, n)
+	for i := range conns {
+		conns[i] = dial(t, ctx, url, "")
+	}
+	for _, c := range conns {
+		writeJSON(t, ctx, c, map[string]any{"op": "subscribe", "topic": topic})
+	}
+	for i, c := range conns {
+		frames := 0
+		for {
+			m := readJSON(t, ctx, c)
+			if m["op"] == "subscribed" {
+				continue
+			}
+			frames++
+			if presenceAnonymousCount(t, m) == n {
+				break
+			}
+		}
+		if frames > 2 {
+			t.Fatalf("subscriber %d got %d presence frames for one burst, want at most 2", i, frames)
+		}
+	}
+
+	deadline := time.Now().Add(4 * window)
+	for {
+		h.presenceMu.Lock()
+		_, open := h.presence[topic]
+		h.presenceMu.Unlock()
+		if !open {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("a quiet topic kept its presence window open")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	late := dial(t, ctx, url, "")
+	start := time.Now()
+	writeJSON(t, ctx, late, map[string]any{"op": "subscribe", "topic": topic})
+	readJSON(t, ctx, late) // subscribed
+	if got := presenceAnonymousCount(t, readJSON(t, ctx, late)); got != n+1 {
+		t.Fatalf("isolated join presence count = %d, want %d", got, n+1)
+	}
+	if elapsed := time.Since(start); elapsed >= window {
+		t.Fatalf("isolated join was broadcast after %v, want immediately", elapsed)
+	}
+}
+
 func presenceIDs(t *testing.T, m map[string]any) []int {
 	return presenceIDsFor(t, m, "balancer.presence")
 }
@@ -324,16 +403,10 @@ func equalInts(a, b []int) bool {
 	return true
 }
 
-func mintTokenWithExp(t *testing.T, sub string, exp time.Time) string {
-	t.Helper()
-	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"sub": sub, "type": "access", "exp": exp.Unix(),
-	})
-	s, err := tok.SignedString([]byte(wsSecret))
-	if err != nil {
-		t.Fatal(err)
-	}
-	return s
+func mintTokenWithExp(_ *testing.T, sub string, exp time.Time) string {
+	claims := authtest.Claims(sub)
+	claims["exp"] = exp.Unix()
+	return authtest.Sign(claims)
 }
 
 // TestWS_ClosesAtTokenExpiry asserts an authenticated connection is torn down
@@ -390,5 +463,145 @@ func TestWS_AnonConnectionCapPerIP(t *testing.T) {
 	}
 	if resp == nil || resp.StatusCode != http.StatusTooManyRequests {
 		t.Fatalf("expected 429, got resp=%v err=%v", resp, err)
+	}
+}
+
+func newHubServer(t *testing.T, hub *Hub) string {
+	t.Helper()
+	h := NewHandler(hub, testPrincipals, allowAuthorizer{allow: true}, fakeReplayer{cursor: 1}, 30*time.Second,
+		slog.New(slog.NewTextHandler(io.Discard, nil)), nil, nil, nil, nil, Limits{})
+	srv := httptest.NewServer(h)
+	t.Cleanup(srv.Close)
+	return srv.URL
+}
+
+// An unsubscribe for a topic the socket never joined must cost nothing: it
+// used to open a presence throttle window (and timer) per unique topic.
+func TestWS_UnsubscribeOfUnjoinedTopicIsANoop(t *testing.T) {
+	h, url := newPresenceServer(t, time.Minute)
+	ctx := context.Background()
+	c := dial(t, ctx, url, "")
+	writeJSON(t, ctx, c, map[string]any{"op": "unsubscribe", "topic": "draft:9:board"})
+	writeJSON(t, ctx, c, map[string]any{"op": "ping"})
+	if m := readJSON(t, ctx, c); m["op"] != "pong" {
+		t.Fatalf("expected pong, got %v", m)
+	}
+	h.presenceMu.Lock()
+	open := len(h.presence)
+	h.presenceMu.Unlock()
+	if open != 0 {
+		t.Fatalf("unsubscribing a never-joined topic opened %d presence windows", open)
+	}
+}
+
+// A socket accepted after CloseAll's snapshot used to register anyway and
+// outlive shutdown. It is turned away with 1001 instead.
+func TestWS_RefusedAfterCloseAll(t *testing.T) {
+	hub := NewHub()
+	url := newHubServer(t, hub)
+	hub.CloseAll()
+	c := dial(t, context.Background(), url, "")
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if _, _, err := c.Read(ctx); websocket.CloseStatus(err) != websocket.StatusGoingAway {
+		t.Fatalf("expected close 1001 after CloseAll, got %v", err)
+	}
+	if n := hub.Count(); n != 0 {
+		t.Fatalf("CloseAll'd hub registered %d connections", n)
+	}
+}
+
+// Reset (after a lost Redis subscription) closes live sockets with 1012 so
+// clients reconnect and replay, and keeps accepting new ones.
+func TestWS_HubResetClosesWithServiceRestart(t *testing.T) {
+	hub := NewHub()
+	url := newHubServer(t, hub)
+	ctx := context.Background()
+	subscribe := func(c *websocket.Conn) {
+		t.Helper()
+		writeJSON(t, ctx, c, map[string]any{"op": "subscribe", "topic": "tournament:1:bracket"})
+		if m := readJSON(t, ctx, c); m["op"] != "subscribed" {
+			t.Fatalf("expected subscribed, got %v", m)
+		}
+	}
+	c := dial(t, ctx, url, "")
+	subscribe(c)
+	hub.Reset()
+	rctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	if _, _, err := c.Read(rctx); websocket.CloseStatus(err) != websocket.StatusServiceRestart {
+		t.Fatalf("expected close 1012 on Reset, got %v", err)
+	}
+	subscribe(dial(t, ctx, url, ""))
+}
+
+// The handshake reads the Authorization header or the session cookie; a
+// ?token= is never read (a credential in a URL lands in every proxy log), so
+// that socket is anonymous: auth_required, not forbidden.
+func TestWS_CredentialSources(t *testing.T) {
+	url := newServer(t, allowAuthorizer{allow: false}, fakeReplayer{})
+	ctx := context.Background()
+	base := "ws" + strings.TrimPrefix(url, "http") + "/ws"
+	token := mintToken(t, "7")
+	for name, tc := range map[string]struct {
+		url  string
+		opts *websocket.DialOptions
+		want string
+	}{
+		"query":  {base + "?token=" + token, nil, "auth_required"},
+		"cookie": {base, &websocket.DialOptions{HTTPHeader: http.Header{"Cookie": {auth.CookieName + "=" + token}}}, "forbidden"},
+		"header": {base, &websocket.DialOptions{HTTPHeader: http.Header{"Authorization": {"Bearer " + token}}}, "forbidden"},
+	} {
+		c := dialWith(t, ctx, tc.url, tc.opts)
+		writeJSON(t, ctx, c, map[string]any{"op": "subscribe", "topic": "tournament:1:balancer"})
+		if m := readJSON(t, ctx, c); m["code"] != tc.want {
+			t.Errorf("%s: want %s, got %v", name, tc.want, m)
+		}
+	}
+}
+
+func TestPrincipals(t *testing.T) {
+	ctx := context.Background()
+	session := mintToken(t, "7")
+	key := "owt_sk_" + strings.Repeat("ab", 8) + "_" + strings.Repeat("cd", 32)
+	down := errors.New("identity unavailable")
+	cases := []struct {
+		name  string
+		token string
+		info  principal.Info
+		ok    bool
+		err   error
+		want  *auth.User
+	}{
+		{"session: superuser from identity", session, principal.Info{UserID: 7, IsSuperuser: true}, true, nil, &auth.User{ID: 7, IsSuperuser: true}},
+		{"session: revoked", session, principal.Info{}, false, nil, nil},
+		{"session: identity down degrades to the claims", session, principal.Info{}, false, down, &auth.User{ID: 7}},
+		{"session: forged never reaches identity", "not.a.jwt", principal.Info{UserID: 7}, true, nil, nil},
+		{"key: pinned, never superuser", key, principal.Info{UserID: 7, WorkspaceGrants: 1, APIKeyWorkspaceID: 3, IsSuperuser: true}, true, nil, &auth.User{ID: 7, APIKeyWorkspaceID: 3}},
+		{"key: no workspace", key, principal.Info{UserID: 7, WorkspaceGrants: 1}, true, nil, nil},
+		{"key: no grant", key, principal.Info{UserID: 7, APIKeyWorkspaceID: 3}, true, nil, nil},
+		{"key: identity down", key, principal.Info{}, false, down, nil},
+	}
+	for _, tc := range cases {
+		called := false
+		got, err := Principals(auth.New(authtest.PublicKey), func(context.Context, string) (principal.Info, bool, error) {
+			called = true
+			return tc.info, tc.ok, tc.err
+		})(ctx, tc.token)
+		if !errors.Is(err, tc.err) {
+			t.Errorf("%s: err = %v, want %v", tc.name, err, tc.err)
+		}
+		switch {
+		case tc.want == nil && got != nil:
+			t.Errorf("%s: want anonymous, got %+v", tc.name, got)
+		case tc.want != nil && (got == nil || got.ID != tc.want.ID || got.IsSuperuser != tc.want.IsSuperuser ||
+			got.APIKeyWorkspaceID != tc.want.APIKeyWorkspaceID || got.Token != tc.token):
+			t.Errorf("%s: want %+v carrying its token, got %+v", tc.name, tc.want, got)
+		case tc.token == session && tc.want != nil && got.ExpiresAt.IsZero():
+			t.Errorf("%s: a session principal must carry its exp", tc.name)
+		}
+		if tc.token == "not.a.jwt" && called {
+			t.Errorf("%s: an invalid token must not cost an identity call", tc.name)
+		}
 	}
 }

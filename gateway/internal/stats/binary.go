@@ -2,16 +2,16 @@ package stats
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
-	"io"
 	"log/slog"
+	"mime/multipart"
 	"net/http"
 	"time"
 
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/apierr"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/edge"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/rpc"
+	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/upload"
 )
 
 const (
@@ -56,48 +56,71 @@ func (b *Binary) AdminLogsUpload(w http.ResponseWriter, r *http.Request) {
 		writeDetail(w, http.StatusUnauthorized, "Not authenticated")
 		return
 	}
+	release, ok := upload.Admit(w, r, maxUpload)
+	if !ok {
+		return
+	}
+	defer release()
 	r.Body = http.MaxBytesReader(w, r.Body, maxUpload)
 	if err := r.ParseMultipartForm(maxUpload); err != nil {
 		writeDetail(w, http.StatusBadRequest, "invalid multipart form")
 		return
 	}
 
-	body := map[string]any{"identity": id}
+	fields := map[string]any{"identity": id}
 	if v := r.FormValue("tournament_id"); v != "" {
-		body["tournament_id"] = v
+		fields["tournament_id"] = v
 	}
 	if v := r.FormValue("encounter_id"); v != "" {
-		body["encounter_id"] = v
+		fields["encounter_id"] = v
 	}
 
-	encoded := []map[string]string{}
+	// "files" is [{"content_b64","filename"}, ...] (keys in json.Marshal order),
+	// each file base64'd straight into the message.
+	var files []*multipart.FileHeader
 	if r.MultipartForm != nil {
-		for _, fh := range r.MultipartForm.File["files[]"] {
+		files = r.MultipartForm.File["files[]"]
+	}
+	size := 2
+	for _, fh := range files {
+		size += upload.Base64Len(fh.Size) + len(fh.Filename) + len(`{"content_b64":,"filename":""},`)
+	}
+	body, err := upload.Body(fields, "files", size, func(out []byte) ([]byte, error) {
+		out = append(out, '[')
+		for i, fh := range files {
+			if i > 0 {
+				out = append(out, ',')
+			}
 			f, err := fh.Open()
 			if err != nil {
-				writeDetail(w, http.StatusBadRequest, "failed to read file")
-				return
+				return nil, err
 			}
-			raw, err := io.ReadAll(io.LimitReader(f, maxUpload))
+			out = append(out, `{"content_b64":`...)
+			out, err = upload.AppendBase64(out, f)
 			_ = f.Close()
 			if err != nil {
-				writeDetail(w, http.StatusBadRequest, "failed to read file")
-				return
+				return nil, err
 			}
-			encoded = append(encoded, map[string]string{
-				"filename":    fh.Filename,
-				"content_b64": base64.StdEncoding.EncodeToString(raw),
-			})
+			name, err := json.Marshal(fh.Filename)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, `,"filename":`...)
+			out = append(out, name...)
+			out = append(out, '}')
 		}
+		return append(out, ']'), nil
+	})
+	if err != nil {
+		writeDetail(w, http.StatusBadRequest, "failed to read file")
+		return
 	}
-	body["files"] = encoded
 
 	b.relayJSON(w, r, "rpc.stats.logs.upload", body, http.StatusOK)
 }
 
 // relayJSON calls the RPC and relays the success envelope data as a JSON response.
-func (b *Binary) relayJSON(w http.ResponseWriter, r *http.Request, queue string, data map[string]any, success int) {
-	body, _ := json.Marshal(data)
+func (b *Binary) relayJSON(w http.ResponseWriter, r *http.Request, queue string, body []byte, success int) {
 	ctx, cancel := context.WithTimeout(r.Context(), binaryRPCTimeout)
 	defer cancel()
 

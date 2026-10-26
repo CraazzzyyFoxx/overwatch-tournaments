@@ -3419,11 +3419,15 @@
       "summary": "Create API key"
     },
     "rpc.identity.delete_me": {
-      "description": "Permission: authenticated (active) user; self-service \u2014 the caller's own account only. Permanently deletes the active user's own account (sessions, OAuth connections, API keys, role grants) and returns 204. Historical data is preserved: the linked player identity survives with its account link nulled, so tournaments, matches, statistics and registrations are untouched. 400 for a superuser account.",
+      "description": "Permission: authenticated (active) user; self-service \u2014 the caller's own account only. Permanently deletes the active user's own account (sessions, OAuth connections, API keys, role grants) and returns 204. Historical data is preserved: the linked player identity survives with its account link nulled, so tournaments, matches, statistics and registrations are untouched. 400 for a superuser account. Re-authentication: an account with a password sends `{\"current_password\": ...}` (400 when missing, 401 when wrong); a passwordless account needs a session that signed in within the last 10 minutes, else 403 `reauth_required`.",
+      "request": {
+        "array": false,
+        "ref": "identity.AccountDeleteRequest"
+      },
       "summary": "Delete current account"
     },
     "rpc.identity.get_me": {
-      "description": "Permission: authenticated (active) user, session bearer or API key; self-service. Returns the profile of the bearer-authenticated user.",
+      "description": "Permission: authenticated (active) user, session bearer or API key; self-service. Returns the profile of the bearer-authenticated user; `has_password` tells whether the account has a password (else it signs in through OAuth only).",
       "response": {
         "array": false,
         "ref": "identity.AuthUser"
@@ -3431,7 +3435,7 @@
       "summary": "Get current user"
     },
     "rpc.identity.invalidate_session": {
-      "description": "Permission: a valid service token (any scope); no user credential and no per-scope check. Drops the cached RBAC entry for the given user_id, so their next request re-resolves roles and permissions from the database instead of waiting out the cache TTL; returns 204 No Content. Despite the endpoint name it does NOT revoke tokens or end sessions \u2014 an issued access token stays valid until it expires. Use the session endpoints for revocation.",
+      "description": "Permission: a valid service token carrying the `identity:invalidate` scope (403 without it); no user credential. Drops the cached RBAC entry for the given user_id, so their next request re-resolves roles and permissions from the database instead of waiting out the cache TTL; returns 204 No Content. Despite the endpoint name it does NOT revoke tokens or end sessions \u2014 an issued access token stays valid until it expires. Use the session endpoints for revocation.",
       "summary": "Invalidate cached permissions for a user"
     },
     "rpc.identity.link_complete": {
@@ -3553,7 +3557,7 @@
       "summary": "List sessions"
     },
     "rpc.identity.login": {
-      "description": "Permission: public; no authentication required \u2014 the email/password pair is the credential. Authenticates email + password and returns an access+refresh token, recording the session with the forwarded user-agent and IP.",
+      "description": "Permission: public; no authentication required \u2014 the email/password pair is the credential. Authenticates email + password and returns an access+refresh token, recording the session with the forwarded user-agent and IP. After 10 failed attempts for one email within 15 minutes, that email is locked for 15 minutes: 429 `Too many failed login attempts. Try again later.`, checked before the password; a successful login clears the count.",
       "request": {
         "array": false,
         "ref": "identity.UserLogin"
@@ -3737,7 +3741,7 @@
       "summary": "Get user roles"
     },
     "rpc.identity.rbac.list_auth_users": {
-      "description": "Permission: `auth_user.read` \u2014 checked in the workspace when workspace_id is given, globally otherwise. Returns auth users filtered by search/role_id/exclude_role_id/is_active/is_superuser/workspace_id. `exclude_role_id` drops users holding any listed role.",
+      "description": "Permission: `auth_user.read` \u2014 checked in the workspace when workspace_id is given, globally otherwise. Without workspace_id: every account, filtered by search/role_id/exclude_role_id/is_active/is_superuser (`exclude_role_id` drops users holding any listed role). With workspace_id and no search: only that workspace's active members, same filters. With workspace_id and search (trimmed; under 3 characters returns an empty page): a caller holding global `auth_user.read` gets the global search; any other caller gets at most 20 `AuthUserLookupRead` items (`id`, `username`, `avatar_url`) whose username contains the search or whose email equals it, other filters ignored.",
       "query_params": [
         {
           "name": "page",
@@ -3898,7 +3902,7 @@
       ],
       "response": {
         "array": false,
-        "ref": "identity.Paginated_AuthUserListRead_"
+        "ref": "identity.Paginated_Union_AuthUserListRead__AuthUserLookupRead__"
       },
       "summary": "List auth users"
     },
@@ -4449,7 +4453,7 @@
       "summary": "Issue service token"
     },
     "rpc.identity.set_password": {
-      "description": "Permission: authenticated (active) user; self-service \u2014 the current password must be supplied when one is already set. Sets or changes the active user's password; returns 204 No Content.",
+      "description": "Permission: authenticated (active) user; self-service \u2014 the current password must be supplied when one is already set (400 when missing, 401 when wrong); setting the first password needs a session that signed in within the last 10 minutes, else 403 `reauth_required`. Sets or changes the active user's password and signs out every other session; returns 204 No Content.",
       "request": {
         "array": false,
         "ref": "identity.PasswordSetRequest"
@@ -16583,6 +16587,7 @@
     },
     "app.QuotaLimitsPayload": {
       "additionalProperties": false,
+      "description": "Limits as stored: every read of a plan/override row parses through this, so it stays permissive.",
       "properties": {
         "concurrent_heavy": {
           "anyOf": [
@@ -16651,6 +16656,79 @@
         }
       },
       "title": "QuotaLimitsPayload",
+      "type": "object"
+    },
+    "app.QuotaLimitsWrite": {
+      "additionalProperties": false,
+      "description": "Limits an admin or API caller may store. Stricter than reads, so a row\nstored before the rule (a 0 rpm) still reads back and enforces as before.",
+      "properties": {
+        "concurrent_heavy": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Concurrent Heavy"
+        },
+        "heavy_per_day": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Heavy Per Day"
+        },
+        "max_items_per_request": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Items Per Request"
+        },
+        "max_upload_bytes": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Upload Bytes"
+        },
+        "requests_per_minute": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Requests Per Minute"
+        }
+      },
+      "title": "QuotaLimitsWrite",
       "type": "object"
     },
     "app.QuotaOperationRead": {
@@ -16817,6 +16895,90 @@
       "title": "QuotaPlanLimitRead",
       "type": "object"
     },
+    "app.QuotaPlanLimitWrite": {
+      "additionalProperties": false,
+      "properties": {
+        "concurrent_heavy": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Concurrent Heavy"
+        },
+        "heavy_per_day": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Heavy Per Day"
+        },
+        "max_items_per_request": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Items Per Request"
+        },
+        "max_upload_bytes": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Upload Bytes"
+        },
+        "requests_per_minute": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Requests Per Minute"
+        },
+        "scope": {
+          "enum": [
+            "workspace",
+            "key",
+            "session"
+          ],
+          "title": "Scope",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scope"
+      ],
+      "title": "QuotaPlanLimitWrite",
+      "type": "object"
+    },
     "app.QuotaPlanRead": {
       "properties": {
         "created_at": {
@@ -16902,7 +17064,7 @@
         },
         "limits": {
           "items": {
-            "$ref": "#/components/schemas/app.QuotaPlanLimitRead"
+            "$ref": "#/components/schemas/app.QuotaPlanLimitWrite"
           },
           "title": "Limits",
           "type": "array"
@@ -19033,7 +19195,7 @@
       "description": "Body for ``quota_set``: one scope's override, or its removal.\n\n``limits`` is the shared wire payload every quota writer speaks, so the\nfive dimensions are declared once; an all-null payload deletes the override\nrow rather than pinning five nulls, which is how a tenant gets back onto\nits plan.",
       "properties": {
         "limits": {
-          "$ref": "#/components/schemas/app.QuotaLimitsPayload"
+          "$ref": "#/components/schemas/app.QuotaLimitsWrite"
         },
         "scope": {
           "enum": [
@@ -22020,11 +22182,6 @@
           "title": "Players",
           "type": "array"
         },
-        "server_time": {
-          "format": "date-time",
-          "title": "Server Time",
-          "type": "string"
-        },
         "session": {
           "$ref": "#/components/schemas/balancer.DraftSessionRead"
         },
@@ -22041,8 +22198,7 @@
         "teams",
         "picks",
         "players",
-        "current_pick",
-        "server_time"
+        "current_pick"
       ],
       "title": "DraftBoardSnapshot",
       "type": "object"
@@ -25829,6 +25985,26 @@
       "title": "DiscordChannelUpsert",
       "type": "object"
     },
+    "identity.AccountDeleteRequest": {
+      "description": "Optional body of ``DELETE /auth/me``: the current password, for an account that has one.",
+      "properties": {
+        "current_password": {
+          "anyOf": [
+            {
+              "maxLength": 100,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Current Password"
+        }
+      },
+      "title": "AccountDeleteRequest",
+      "type": "object"
+    },
     "identity.AdminSessionRead": {
       "description": "Schema for superuser session inventory across all auth users.",
       "properties": {
@@ -26113,7 +26289,7 @@
       "description": "Per-key limit override. The key id travels beside this body, not in it.\n\nAn all-null ``limits`` is not five explicit nulls but \"drop the override\",\nputting the key back on whatever its workspace and plan hand down.",
       "properties": {
         "limits": {
-          "$ref": "#/components/schemas/identity.QuotaLimitsPayload"
+          "$ref": "#/components/schemas/identity.QuotaLimitsWrite"
         }
       },
       "required": [
@@ -26345,6 +26521,11 @@
           ],
           "default": null,
           "title": "First Name"
+        },
+        "has_password": {
+          "default": false,
+          "title": "Has Password",
+          "type": "boolean"
         },
         "id": {
           "title": "Id",
@@ -26799,6 +26980,37 @@
       "title": "AuthUserListRead",
       "type": "object"
     },
+    "identity.AuthUserLookupRead": {
+      "description": "An account found by a workspace-scoped operator's global search: who it is, nothing about it.\n\nNo email, roles, players or flags: the operator may only read their own\nworkspace's members, and this exists so they can find someone to add.",
+      "properties": {
+        "avatar_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Avatar Url"
+        },
+        "id": {
+          "title": "Id",
+          "type": "integer"
+        },
+        "username": {
+          "title": "Username",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "username"
+      ],
+      "title": "AuthUserLookupRead",
+      "type": "object"
+    },
     "identity.AuthUserPlayerLinkAssign": {
       "description": "Schema for assigning a player account to an auth user from admin tools.",
       "properties": {
@@ -27231,37 +27443,6 @@
       "title": "Paginated[AdminSessionRead]",
       "type": "object"
     },
-    "identity.Paginated_AuthUserListRead_": {
-      "properties": {
-        "page": {
-          "title": "Page",
-          "type": "integer"
-        },
-        "per_page": {
-          "title": "Per Page",
-          "type": "integer"
-        },
-        "results": {
-          "items": {
-            "$ref": "#/components/schemas/identity.AuthUserListRead"
-          },
-          "title": "Results",
-          "type": "array"
-        },
-        "total": {
-          "title": "Total",
-          "type": "integer"
-        }
-      },
-      "required": [
-        "page",
-        "per_page",
-        "total",
-        "results"
-      ],
-      "title": "Paginated[AuthUserListRead]",
-      "type": "object"
-    },
     "identity.Paginated_OAuthConnectionAdminRead_": {
       "properties": {
         "page": {
@@ -27353,6 +27534,44 @@
         "results"
       ],
       "title": "Paginated[RoleRead]",
+      "type": "object"
+    },
+    "identity.Paginated_Union_AuthUserListRead__AuthUserLookupRead__": {
+      "properties": {
+        "page": {
+          "title": "Page",
+          "type": "integer"
+        },
+        "per_page": {
+          "title": "Per Page",
+          "type": "integer"
+        },
+        "results": {
+          "items": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/identity.AuthUserListRead"
+              },
+              {
+                "$ref": "#/components/schemas/identity.AuthUserLookupRead"
+              }
+            ]
+          },
+          "title": "Results",
+          "type": "array"
+        },
+        "total": {
+          "title": "Total",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "page",
+        "per_page",
+        "total",
+        "results"
+      ],
+      "title": "Paginated[Union[AuthUserListRead, AuthUserLookupRead]]",
       "type": "object"
     },
     "identity.PasswordSetRequest": {
@@ -27599,6 +27818,7 @@
     },
     "identity.QuotaLimitsPayload": {
       "additionalProperties": false,
+      "description": "Limits as stored: every read of a plan/override row parses through this, so it stays permissive.",
       "properties": {
         "concurrent_heavy": {
           "anyOf": [
@@ -27667,6 +27887,79 @@
         }
       },
       "title": "QuotaLimitsPayload",
+      "type": "object"
+    },
+    "identity.QuotaLimitsWrite": {
+      "additionalProperties": false,
+      "description": "Limits an admin or API caller may store. Stricter than reads, so a row\nstored before the rule (a 0 rpm) still reads back and enforces as before.",
+      "properties": {
+        "concurrent_heavy": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Concurrent Heavy"
+        },
+        "heavy_per_day": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Heavy Per Day"
+        },
+        "max_items_per_request": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Items Per Request"
+        },
+        "max_upload_bytes": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Upload Bytes"
+        },
+        "requests_per_minute": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Requests Per Minute"
+        }
+      },
+      "title": "QuotaLimitsWrite",
       "type": "object"
     },
     "identity.QuotaScopePolicy": {

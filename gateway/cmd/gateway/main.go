@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -31,6 +32,7 @@ import (
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/auth"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/balancer"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/cachecontrol"
+	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/clientip"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/config"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/db"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/discord"
@@ -51,6 +53,7 @@ import (
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/stream"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/tournament"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/tracing"
+	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/upload"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/workspace"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/ws"
 )
@@ -79,6 +82,12 @@ func run() error {
 	// recovery (safego) and any ctx-less log calls route to Loki + Sentry too.
 	slog.SetDefault(logger)
 
+	// Process-wide settings read unsynchronized on the request path: set once,
+	// before anything serves. Forwarding headers are believed only from these
+	// peers (nginx); one memory budget bounds every in-flight upload.
+	clientip.SetTrustedProxies(cfg.TrustedProxies)
+	upload.SetMemoryBudget(cfg.UploadMemoryBudget)
+
 	rootCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -103,11 +112,15 @@ func run() error {
 	}
 	defer pool.Close()
 
-	// Redis client for the realtime fan-in bus.
+	// Redis client for the realtime fan-in bus. ContextTimeoutEnabled makes
+	// go-redis honor each call's context deadline at the socket: without it the
+	// rate limiter's 250ms fail-open budget is ignored and a connected but
+	// unresponsive Redis stalls every metered request for the 3s ReadTimeout.
 	redisOpts, err := redis.ParseURL(cfg.RedisURL)
 	if err != nil {
 		return fmt.Errorf("parse redis url: %w", err)
 	}
+	redisOpts.ContextTimeoutEnabled = true
 	rdb := redis.NewClient(redisOpts)
 	defer func() { _ = rdb.Close() }()
 
@@ -127,19 +140,21 @@ func run() error {
 	)
 	defer func() { _ = rpcClient.Close() }()
 	identityHandler := identity.NewHandler(rpcClient, logger)
+	// Local EdDSA check of identity-svc's access tokens (public key only). Every
+	// credential passes it before it may cost a validate_token RPC, and httplog
+	// and metrics use it alone: resolving there would put the identity backend
+	// on the access-log path.
+	authn := auth.New(cfg.JWTPublicKey)
 	// Tournament-service routes served via typed RPC through the shared edge
-	// dispatcher. The resolver validates JWTs via identity-svc and injects the
-	// RBAC identity for auth'd routes.
-	resolver := principal.New(rpcClient)
-	tournamentEdge := edge.New(rpcClient, logger, resolver.Resolve)
+	// dispatcher. The resolver validates credentials via identity-svc and injects
+	// the RBAC identity for auth'd routes as the cached reply bytes.
+	resolver := principal.New(rpcClient, authn)
+	tournamentEdge := edge.NewRaw(rpcClient, logger, resolver.Identity)
 
-	authn := auth.New(cfg.JWTSecret)
-	// WebSocket authenticator: the same local JWT fast path, PLUS opaque
-	// owt_sk_ API keys resolved through identity-svc (ws.APIKeyAuth). Kept as a
-	// separate value from authn because httplog and metrics call
-	// UserFromRequest after the response is already written — resolving a key
-	// there would put the identity backend on the access-log path.
-	wsAuthn := authn.WithAPIKeys(ws.APIKeyAuth(resolver.PrincipalToken))
+	// WebSocket principals: the local check, then identity-svc for sessions
+	// (revocation, superuser) and API keys alike. The TopicRevoker re-judges
+	// live sockets with the same function.
+	wsPrincipals := ws.Principals(authn, resolver.PrincipalToken)
 	// Anti-brute-force throttle for the auth endpoints (per client IP + path).
 	// Disabled (pass-through) when GATEWAY_AUTH_RATE_LIMIT <= 0.
 	authLimiter := ratelimit.New(cfg.AuthRateLimit, cfg.AuthRateWindow).OnReject(mtr.RateLimited)
@@ -159,7 +174,7 @@ func run() error {
 	authz := acl.New(wsStore, wsStore, wsStore)
 	wsHandler := ws.NewHandler(
 		hub,
-		wsAuthn,
+		wsPrincipals,
 		authz,
 		replay.New(pool, cfg.WSReplayLimit),
 		cfg.WSIdleTimeout,
@@ -298,13 +313,13 @@ func run() error {
 	mux.HandleFunc("POST /api/v1/registration-teams/{team_id}/image", tournamentBinary.RegistrationTeamImageUpload)
 	mux.HandleFunc("POST /api/v1/admin/tournaments/{tournament_id}/images/{slot}", tournamentBinary.TournamentImageUpload)
 	// analytics-service: typed RPC reads + job-control.
-	analyticsEdge := edge.New(rpcClient, logger, resolver.Resolve)
+	analyticsEdge := edge.NewRaw(rpcClient, logger, resolver.Identity)
 	analyticsEdge.Register(mux, analytics.ReadRoutes)
 	analyticsEdge.Register(mux, analytics.WriteRoutes)
 	// stats-service domains folded into /api/v1 (match-log, OverFast rank,
 	// achievement engine + rules admin, metadata sync, settings, bootstrap
 	// importers), served as typed RPC.
-	statsEdge := edge.New(rpcClient, logger, resolver.Resolve)
+	statsEdge := edge.NewRaw(rpcClient, logger, resolver.Identity)
 	statsEdge.Register(mux, stats.Routes)
 	// Public player statistics, /users/[slug] profile and achievement reads.
 	// Home-page aggregates and profile reads go through the same anonymous
@@ -329,12 +344,12 @@ func run() error {
 	// discord-service (the bot): the workspace Discord pickers and the
 	// per-tournament match-log channel binding. It is the only process holding
 	// the bot token, so guild reads land on it directly.
-	discordEdge := edge.New(rpcClient, logger, resolver.Resolve)
+	discordEdge := edge.NewRaw(rpcClient, logger, resolver.Identity)
 	discordEdge.Register(mux, discord.Routes)
 	// app-service: typed RPC public reads (catalog, disciplines, workspaces, the
 	// users directory). The workspace directory/staff and /users/{name} slug
 	// resolution ride the anonymous response cache (see app.PublicCacheableReads).
-	appEdge := edge.New(rpcClient, logger, resolver.Resolve)
+	appEdge := edge.NewRaw(rpcClient, logger, resolver.Identity)
 	respcache.RegisterCached(mux, appEdge, app.ReadRoutes, app.PublicCacheableReads, respCache)
 	appEdge.Register(mux, app.WorkspaceWriteRoutes)
 	appEdge.Register(mux, app.MetadataAdminRoutes)
@@ -361,13 +376,14 @@ func run() error {
 	// jobs. The HTTP balancer-service is decommissioned and no longer proxied; the
 	// only un-migrated endpoint (SSE job stream) was dead code. Unmatched
 	// /api/v1/balancer/* is guarded with 404 below.
-	balancerEdge := edge.New(rpcClient, logger, resolver.Resolve)
+	balancerEdge := edge.NewRaw(rpcClient, logger, resolver.Identity)
 	balancerEdge.Register(mux, balancer.PublicRoutes)
 	balancerEdge.Register(mux, balancer.AdminRoutes)
 	balancerEdge.Register(mux, balancer.RosterRoutes)
-
-	balancerEdge.Register(mux, balancer.DraftReadRoutes)
-	balancerEdge.Register(mux, balancer.DraftRoutes)
+	// The draft room's board, tournament lookup and anonymous chat history ride
+	// the response cache, scoped to the draft session (balancer.DraftCacheableReads).
+	respcache.RegisterCached(mux, balancerEdge, balancer.DraftReadRoutes, balancer.DraftCacheableReads, respCache)
+	respcache.RegisterCached(mux, balancerEdge, balancer.DraftRoutes, balancer.DraftCacheableReads, respCache)
 	balancerEdge.Register(mux, balancer.JobRoutes)
 	// Multipart uploads (multipart -> base64 RPC): teams-import + job-create.
 	balancerBinary := balancer.NewBinary(rpcClient, resolver.Resolve, logger)
@@ -377,7 +393,7 @@ func run() error {
 	// public and rides the anonymous response cache (TTL-only — see
 	// stream.PublicCacheableReads); the repoll trigger is an operator action
 	// behind stream.update.
-	streamEdge := edge.New(rpcClient, logger, resolver.Resolve)
+	streamEdge := edge.NewRaw(rpcClient, logger, resolver.Identity)
 	respcache.RegisterCached(mux, streamEdge, stream.PublicRoutes, stream.PublicCacheableReads, respCache)
 	streamEdge.Register(mux, stream.AdminRoutes)
 	// Catch-all: anything no typed route above claims is a JSON 404. The
@@ -412,7 +428,8 @@ func run() error {
 	// the response cache's invalidator: the worker's tournament_changed
 	// consumer publishes realtime:tournament:{id}:bracket after every
 	// committed tournament write (via the transactional outbox), so cached
-	// public reads drop the moment the backend's own cache does. The revoker
+	// public reads drop the moment the backend's own cache does; a draft's
+	// board/chat frames drop that session's cached reads the same way. The revoker
 	// leg re-runs the topic ACL for live subscribers, because the ACL is
 	// otherwise only evaluated at subscribe time: a chat.visibility_changed
 	// frame re-checks that room (an organizer hiding a chat must cut off the
@@ -421,15 +438,21 @@ func run() error {
 	// must stop receiving the workspace). safego recovers a panic here
 	// (unexpected Redis message format, etc.) instead of crashing the whole
 	// process. The resolver leg drops a user's cached principals on the same
-	// realtime:user:{id}:rbac frame.
+	// realtime:user:{id}:rbac frame — and runs FIRST, so the revoker's
+	// re-validation of that user's sockets (a revoked session closes its
+	// socket) reaches identity-svc instead of the cached verdict.
 	// Invalidate before enqueueing notifications: clients may refetch as soon
 	// as their writer pump delivers the event.
+	// Every leg is also an events.Resetter: when the subscription to Redis is
+	// re-established (frames may have been lost meanwhile) the principal,
+	// response and ACL caches drop everything and the hub closes each socket
+	// with 1012, so clients reconnect and replay from their cursor.
 	legs := make([]events.Broadcaster, 0, 4)
 	legs = append(legs, resolver)
 	if respCache != nil {
 		legs = append(legs, respCache)
 	}
-	legs = append(legs, ws.NewTopicRevoker(hub, authz, wsStore, logger), hub)
+	legs = append(legs, ws.NewTopicRevoker(hub, authz, wsStore, wsPrincipals, logger), hub)
 	bus := events.Fanout(legs...)
 	subscriber := events.New(rdb, bus, logger)
 	safego.Go(func() {
@@ -470,22 +493,34 @@ func run() error {
 	// request logger picks up the OTel trace_id and rpc.Call sees the span
 	// context. Sentry stays outermost for per-request hub + panic recovery
 	// (Repanic lets net/http's own recovery run after capture).
-	// Anonymous (no-bearer) per-IP throttle across the whole API mux, layered
-	// under the coarse nginx limit_req. Innermost (wrapping mux) so a throttled
+	// Anonymous per-IP throttle across the whole API mux, layered under the
+	// coarse nginx limit_req. Inside the observability middleware so a throttled
 	// 429 is still metered + access-logged. Disabled (pass-through) when
-	// GATEWAY_ANON_RATE_LIMIT <= 0.
+	// GATEWAY_ANON_RATE_LIMIT <= 0. Only a credential that actually checks out
+	// is exempt: a valid session JWT (already parsed by httplog, see
+	// auth.UserFromContext) or an API key identity-svc accepted (a cache hit on
+	// the entry the per-key limiter and the route use anyway). Any other
+	// bearer string is charged like no bearer at all.
 	// cachecontrol sits just outside the limiter so every /api/* response —
 	// including the limiter's own 429s — leaves with an explicit Cache-Control
 	// when no upstream set one (an absent header invites heuristic caching of
 	// viewer-dependent payloads by intermediaries).
 	anonLimiter := ratelimit.New(cfg.AnonRateLimit, cfg.AnonRateWindow).OnReject(mtr.RateLimited)
+	authenticated := func(r *http.Request) bool {
+		if u, _ := auth.UserFromContext(r.Context()); u != nil {
+			return true
+		}
+		key, _, err := resolver.APIKeyQuota(r)
+		return key != "" && err == nil
+	}
 	// Per-key throttle for workspace-scoped API keys, wrapping the same mux one
-	// layer further in. It sits INSIDE WrapAnon because the two are mutually
-	// exclusive (anonymous means no bearer at all) and both 429s must still be
-	// metered, access-logged and given a Cache-Control. The window is fixed at a
-	// minute: the budget it spends is the key's own requests_per_minute (resolved
-	// by identity-svc from the quota tables and carried as api_key.limits), and
-	// only cfg.APIKeyRateLimit's default applies to a key that carries none.
+	// layer further in, so its 429/401/503 are still metered, access-logged and
+	// given a Cache-Control. The window is fixed at a minute: the budget it
+	// spends is the key's own requests_per_minute (resolved by identity-svc from
+	// the quota tables and carried as api_key.limits), and only
+	// cfg.APIKeyRateLimit's default applies to a key that carries none. A key
+	// identity-svc rejects is answered 401 here, and an identity outage 503,
+	// so neither reaches a worker nor waits on a second validation.
 	// resolver.APIKeyQuota short-circuits on the API-key prefix, so session and
 	// anonymous traffic reach the mux without any added identity lookup.
 	//
@@ -506,27 +541,14 @@ func run() error {
 	// replica — so without a client the per-key-only wrapper stands. With the
 	// flag off the wiring is unchanged.
 	//
-	// The caller adapter below is why sessions get metered at all: unlike
+	// resolver.MeterCaller is why sessions get metered at all: unlike
 	// APIKeyQuota it resolves EVERY bearer token, which costs one cache hit on
 	// the entry the route itself is about to resolve anyway.
 	metered := apiKeyShared.WrapAPIKey(mux, resolver.APIKeyQuota)
 	if cfg.EdgeWorkspaceMetering && rdb != nil {
-		metered = apiKeyShared.WrapMetered(mux, func(r *http.Request) (ratelimit.Caller, bool) {
-			info, ok, err := resolver.Principal(r)
-			if err != nil || !ok {
-				return ratelimit.Caller{}, false
-			}
-			return ratelimit.Caller{
-				APIKey:            info.IsAPIKey(),
-				APIKeyID:          info.APIKeyID,
-				RequestsPerMinute: info.RequestsPerMinute,
-				WorkspaceID:       info.APIKeyWorkspaceID,
-				WorkspaceIDs:      info.WorkspaceIDs,
-				Superuser:         info.IsSuperuser,
-			}, true
-		}, wsStore.WorkspaceRequestsPerMinute)
+		metered = apiKeyShared.WrapMetered(mux, resolver.MeterCaller, wsStore.WorkspaceRequestsPerMinute)
 	}
-	apiSurface := apiver.Middleware(cachecontrol.Middleware(anonLimiter.WrapAnon(metered)))
+	apiSurface := apiver.Middleware(cachecontrol.Middleware(anonLimiter.WrapAnon(metered, authenticated)))
 	instrumented := httplog.Middleware(mtr.Middleware(apiSurface, authn, activeUsers), logger, authn)
 	traced := tracing.Middleware(instrumented)
 	tracedMux := sentryhttp.New(sentryhttp.Options{Repanic: true}).Handle(traced)
@@ -543,19 +565,33 @@ func run() error {
 	root.Handle("/api/realtime/ws", wsWithRecover)    // legacy, sunset with LegacyPrefixes
 	root.Handle("/ws", wsWithRecover)                 // legacy, the original spelling
 	root.HandleFunc("GET /health", health)
+	// Readiness, unlike /health: 503 while the RabbitMQ transport every REST
+	// route rides on is down, and from the moment shutdown starts draining.
+	// Liveness must not depend on the broker (a restart loop fixes nothing).
+	var draining atomic.Bool
+	root.HandleFunc("GET /ready", func(w http.ResponseWriter, _ *http.Request) {
+		if draining.Load() || !rpcClient.Ready() {
+			apierr.WriteError(w, http.StatusServiceUnavailable, "Not ready", "unavailable", nil)
+			return
+		}
+		health(w, nil)
+	})
 	root.Handle("/", tracedMux)
 
 	srv := &http.Server{
 		Addr:    ":" + cfg.Port,
 		Handler: root,
 		// Bound header + body reads to blunt slowloris (a client dribbling the
-		// request byte-by-byte). ReadTimeout only limits reading the REQUEST; it is
-		// reset once a WebSocket is hijacked (the ws library manages its own
-		// per-read deadlines) and does not cap long RPC processing or the response
-		// write, so long-lived WS and long balancer requests are unaffected.
-		// No write/idle timeout for that same reason.
+		// request byte-by-byte). ReadTimeout only limits reading the REQUEST and
+		// does not cap long RPC processing. WriteTimeout bounds the whole
+		// response (body read + RPC + write) against a peer that stops reading;
+		// the default 180s matches nginx's proxy_read_timeout, above the 120s RPC
+		// ceiling. Hijacking clears both deadlines (net/http resets them), so
+		// long-lived WebSockets are unaffected. IdleTimeout falls back to
+		// ReadTimeout.
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       60 * time.Second,
+		WriteTimeout:      cfg.WriteTimeout,
 	}
 
 	serveErr := make(chan error, 1)
@@ -573,13 +609,22 @@ func run() error {
 		return err
 	}
 
-	// Close WebSocket connections explicitly: Shutdown does not wait for
-	// hijacked connections, so without this they would be cut at process exit.
+	// Readiness goes 503 first, then WebSocket connections are closed
+	// explicitly: Shutdown does not wait for hijacked connections, so without
+	// this they would be cut at process exit.
+	draining.Store(true)
 	hub.CloseAll()
 
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	// Drain in-flight REST requests for GATEWAY_SHUTDOWN_TIMEOUT (keep the
+	// container's stop_grace_period above it). Whatever is still running then is
+	// cut explicitly rather than by the process exit.
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
 	defer cancel()
-	return srv.Shutdown(shutdownCtx)
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		logger.Warn("shutdown drain timed out; closing remaining connections", "err", err)
+		return srv.Close()
+	}
+	return nil
 }
 
 func health(w http.ResponseWriter, _ *http.Request) {

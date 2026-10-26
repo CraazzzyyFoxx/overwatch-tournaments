@@ -22,6 +22,7 @@ package apiver
 import (
 	"context"
 	"net/http"
+	"net/url"
 	"strings"
 )
 
@@ -85,23 +86,44 @@ func WantWriter(w http.ResponseWriter) bool {
 func Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		orig := r
-		if np, ok := rewriteVersion(r.URL.Path); ok {
+		if u, ok := rewriteURL(r.URL, rewriteVersion); ok {
 			r = r.WithContext(context.WithValue(r.Context(), ctxKey{}, true))
-			r.URL.Path = np
+			r.URL = u
 			w = &flagWriter{w}
 		}
-		if np, ok := rewriteLegacy(r.URL.Path); ok {
+		if u, ok := rewriteURL(r.URL, rewriteLegacy); ok {
 			// Headers are set before delegating: the handler populates the map
 			// but never clears it, so these survive whatever status it writes.
 			w.Header().Set("Deprecation", "true")
 			w.Header().Set("Sunset", SunsetDate)
-			w.Header().Set("Link", "<"+np+">; rel=\"successor-version\"")
+			w.Header().Set("Link", "<"+u.EscapedPath()+">; rel=\"successor-version\"")
 			r = r.Clone(r.Context())
-			r.URL.Path = np
+			r.URL = u
 		}
 		next.ServeHTTP(w, r)
 		orig.Pattern = r.Pattern
 	})
+}
+
+// rewriteURL returns a copy of u with rewrite applied to Path and — being the
+// same prefix swap — to RawPath, which keeps the client's encoding of the
+// untouched suffix (RawPath is only set when that differs from the default
+// encoding). Rewriting Path alone left a stale RawPath that EscapedPath
+// discards: /api/v2/x/a%2Fb was re-escaped as /api/v1/x/a/b and routed as two
+// segments where the v1 spelling routes one. A copy because WithContext shares
+// the URL with the caller's request.
+func rewriteURL(u *url.URL, rewrite func(string) (string, bool)) (*url.URL, bool) {
+	np, ok := rewrite(u.Path)
+	if !ok {
+		return u, false
+	}
+	c := *u
+	c.Path = np
+	c.RawPath = ""
+	if rp, ok := rewrite(u.RawPath); ok {
+		c.RawPath = rp
+	}
+	return &c, true
 }
 
 func rewriteVersion(p string) (string, bool) {

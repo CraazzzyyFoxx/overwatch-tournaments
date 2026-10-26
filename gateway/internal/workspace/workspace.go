@@ -160,14 +160,13 @@ const (
 	// verification revoked stops being accepted for new WebSocket handshakes
 	// within roughly this window, mirroring membershipCacheTTL above.
 	customDomainCacheTTL = 60 * time.Second
-	// customDomainCacheMaxEntries bounds the customDomains cache. Unlike the
-	// tournament/membership caches, this one is keyed by an Origin host that
-	// is fully attacker-controlled and reachable pre-handshake from a single
-	// unauthenticated HTTP GET (see ws.Handler.acceptOptionsFor), so it must
-	// never be allowed to grow without bound. 4096 comfortably covers any
-	// realistic number of concurrently-verified white-label custom domains
-	// plus headroom, while still capping worst-case memory from a
-	// distinct-host flood; see ttlCache's FIFO eviction.
+	// customDomainCacheMaxEntries bounds the customDomains cache, tighter than
+	// aclCacheMaxEntries: this one is keyed by an Origin host that is fully
+	// attacker-controlled and reachable pre-handshake from a single
+	// unauthenticated HTTP GET (see ws.Handler.acceptOptionsFor). 4096
+	// comfortably covers any realistic number of concurrently-verified
+	// white-label custom domains plus headroom, while still capping worst-case
+	// memory from a distinct-host flood; see ttlCache's FIFO eviction.
 	customDomainCacheMaxEntries = 4096
 	// The shortest TTL here, deliberately: spectators_can_read gates a single
 	// observable organizer action ("hide the chat"), and ws.TopicRevoker re-runs
@@ -184,9 +183,17 @@ const (
 	// from an anonymous request's query string.
 	workspaceRPMCacheTTL        = 60 * time.Second
 	workspaceRPMCacheMaxEntries = 4096
+	// aclCacheMaxEntries bounds every other cache. None of their key spaces is
+	// operator-controlled: a client picks the workspace, tournament, encounter
+	// or session id of every subscribe, and negative answers are cached too, so
+	// cycling made-up ids would otherwise grow these maps for the life of the
+	// process. 50 000 live answers per cache sits well above one gateway's
+	// working set within a TTL; past it, FIFO eviction only costs a re-query.
+	aclCacheMaxEntries = 50_000
 )
 
-// Store answers ACL lookups against the database, with small TTL caches.
+// Store answers ACL lookups against the database, with small bounded TTL
+// caches. Concurrent misses for one key share a single query (ttlCache.fill).
 type Store struct {
 	pool          *pgxpool.Pool
 	tournament    *ttlCache[int64, int64]
@@ -243,19 +250,19 @@ type encounterOwner struct {
 func New(pool *pgxpool.Pool) *Store {
 	return &Store{
 		pool:          pool,
-		tournament:    newTTLCache[int64, int64](tournamentCacheTTL),
-		members:       newTTLCache[memberKey, bool](membershipCacheTTL),
-		organizers:    newTTLCache[memberKey, bool](membershipCacheTTL),
+		tournament:    newBoundedTTLCache[int64, int64](tournamentCacheTTL, aclCacheMaxEntries),
+		members:       newBoundedTTLCache[memberKey, bool](membershipCacheTTL, aclCacheMaxEntries),
+		organizers:    newBoundedTTLCache[memberKey, bool](membershipCacheTTL, aclCacheMaxEntries),
 		customDomains: newBoundedTTLCache[string, bool](customDomainCacheTTL, customDomainCacheMaxEntries),
-		hidden:        newTTLCache[int64, bool](hiddenCacheTTL),
-		preview:       newTTLCache[previewKey, bool](previewCacheTTL),
-		encOwner:      newTTLCache[int64, encounterOwner](tournamentCacheTTL),
-		mixMembers:    newTTLCache[captainKey, bool](membershipCacheTTL),
-		captains:      newTTLCache[captainKey, bool](membershipCacheTTL),
-		draftCaptains: newTTLCache[draftCaptainKey, bool](membershipCacheTTL),
-		draftHosts:    newTTLCache[draftCaptainKey, bool](membershipCacheTTL),
-		draftOwner:    newTTLCache[int64, encounterOwner](tournamentCacheTTL),
-		roomSettings:  newTTLCache[roomKey, bool](roomSettingsCacheTTL),
+		hidden:        newBoundedTTLCache[int64, bool](hiddenCacheTTL, aclCacheMaxEntries),
+		preview:       newBoundedTTLCache[previewKey, bool](previewCacheTTL, aclCacheMaxEntries),
+		encOwner:      newBoundedTTLCache[int64, encounterOwner](tournamentCacheTTL, aclCacheMaxEntries),
+		mixMembers:    newBoundedTTLCache[captainKey, bool](membershipCacheTTL, aclCacheMaxEntries),
+		captains:      newBoundedTTLCache[captainKey, bool](membershipCacheTTL, aclCacheMaxEntries),
+		draftCaptains: newBoundedTTLCache[draftCaptainKey, bool](membershipCacheTTL, aclCacheMaxEntries),
+		draftHosts:    newBoundedTTLCache[draftCaptainKey, bool](membershipCacheTTL, aclCacheMaxEntries),
+		draftOwner:    newBoundedTTLCache[int64, encounterOwner](tournamentCacheTTL, aclCacheMaxEntries),
+		roomSettings:  newBoundedTTLCache[roomKey, bool](roomSettingsCacheTTL, aclCacheMaxEntries),
 		wsRPM:         newBoundedTTLCache[int64, wsRPM](workspaceRPMCacheTTL, workspaceRPMCacheMaxEntries),
 	}
 }
@@ -266,18 +273,18 @@ func (s *Store) TournamentWorkspaceID(ctx context.Context, tournamentID int64) (
 	if v, ok := s.tournament.get(tournamentID); ok {
 		return v, true, nil
 	}
-
-	var workspaceID int64
-	err := s.pool.QueryRow(ctx, tournamentWorkspaceSQL, tournamentID).Scan(&workspaceID)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return 0, false, nil
-	}
+	workspaceID, found, err := s.tournament.fill(ctx, tournamentID, func(ctx context.Context) (int64, bool, error) {
+		var workspaceID int64
+		err := s.pool.QueryRow(ctx, tournamentWorkspaceSQL, tournamentID).Scan(&workspaceID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return 0, false, nil
+		}
+		return workspaceID, true, err
+	})
 	if err != nil {
 		return 0, false, fmt.Errorf("tournament workspace lookup: %w", err)
 	}
-
-	s.tournament.set(tournamentID, workspaceID)
-	return workspaceID, true, nil
+	return workspaceID, found, nil
 }
 
 // IsWorkspaceMember reports whether the user belongs to the workspace.
@@ -286,14 +293,14 @@ func (s *Store) IsWorkspaceMember(ctx context.Context, userID, workspaceID int64
 	if v, ok := s.members.get(key); ok {
 		return v, nil
 	}
-	gen := s.members.generation()
-
-	var member bool
-	if err := s.pool.QueryRow(ctx, isMemberSQL, userID, workspaceID).Scan(&member); err != nil {
+	member, _, err := s.members.fill(ctx, key, func(ctx context.Context) (bool, bool, error) {
+		var member bool
+		err := s.pool.QueryRow(ctx, isMemberSQL, userID, workspaceID).Scan(&member)
+		return member, true, err
+	})
+	if err != nil {
 		return false, fmt.Errorf("membership lookup: %w", err)
 	}
-
-	s.members.setIfCurrent(key, member, gen)
 	return member, nil
 }
 
@@ -322,29 +329,29 @@ func (s *Store) EvictUser(userID int64) {
 //
 // Both outcomes are cached, including "no such workspace": the id reaching
 // here can come from an ANONYMOUS request's ?workspace_id= query string, so a
-// flood of made-up ids must cost at most one query each per TTL and must not
-// grow the cache past its bound (hence newBoundedTTLCache). A query error
-// caches nothing — the next request retries.
+// flood of made-up ids must cost at most one query each per TTL (concurrent
+// misses share one, see ttlCache.fill) and must not grow the cache past its
+// bound (hence workspaceRPMCacheMaxEntries). A query error caches nothing —
+// the next request retries.
 func (s *Store) WorkspaceRequestsPerMinute(ctx context.Context, workspaceID int64) (int, bool, bool, error) {
 	if v, ok := s.wsRPM.get(workspaceID); ok {
 		return v.limit, v.limited, v.exists, nil
 	}
-
-	var limit *int32
-	err := s.pool.QueryRow(ctx, workspaceRPMSQL, workspaceID).Scan(&limit)
-	if errors.Is(err, pgx.ErrNoRows) {
-		s.wsRPM.set(workspaceID, wsRPM{})
-		return 0, false, false, nil
-	}
+	v, _, err := s.wsRPM.fill(ctx, workspaceID, func(ctx context.Context) (wsRPM, bool, error) {
+		var limit *int32
+		err := s.pool.QueryRow(ctx, workspaceRPMSQL, workspaceID).Scan(&limit)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return wsRPM{}, true, nil
+		}
+		v := wsRPM{exists: true}
+		if limit != nil {
+			v.limit, v.limited = int(*limit), true
+		}
+		return v, true, err
+	})
 	if err != nil {
 		return 0, false, false, fmt.Errorf("workspace rpm lookup: %w", err)
 	}
-
-	v := wsRPM{exists: true}
-	if limit != nil {
-		v.limit, v.limited = int(*limit), true
-	}
-	s.wsRPM.set(workspaceID, v)
 	return v.limit, v.limited, v.exists, nil
 }
 
@@ -357,14 +364,14 @@ func (s *Store) IsWorkspaceOrganizer(ctx context.Context, userID, workspaceID in
 	if v, ok := s.organizers.get(key); ok {
 		return v, nil
 	}
-	gen := s.organizers.generation()
-
-	var organizer bool
-	if err := s.pool.QueryRow(ctx, isOrganizerSQL, userID, workspaceID).Scan(&organizer); err != nil {
+	organizer, _, err := s.organizers.fill(ctx, key, func(ctx context.Context) (bool, bool, error) {
+		var organizer bool
+		err := s.pool.QueryRow(ctx, isOrganizerSQL, userID, workspaceID).Scan(&organizer)
+		return organizer, true, err
+	})
+	if err != nil {
 		return false, fmt.Errorf("organizer lookup: %w", err)
 	}
-
-	s.organizers.setIfCurrent(key, organizer, gen)
 	return organizer, nil
 }
 
@@ -378,13 +385,14 @@ func (s *Store) IsEncounterCaptain(ctx context.Context, authUserID, encounterID 
 	if v, ok := s.captains.get(key); ok {
 		return v, nil
 	}
-
-	var captain bool
-	if err := s.pool.QueryRow(ctx, isEncounterCaptainSQL, encounterID, authUserID).Scan(&captain); err != nil {
+	captain, _, err := s.captains.fill(ctx, key, func(ctx context.Context) (bool, bool, error) {
+		var captain bool
+		err := s.pool.QueryRow(ctx, isEncounterCaptainSQL, encounterID, authUserID).Scan(&captain)
+		return captain, true, err
+	})
+	if err != nil {
 		return false, fmt.Errorf("encounter captain lookup: %w", err)
 	}
-
-	s.captains.set(key, captain)
 	return captain, nil
 }
 
@@ -399,29 +407,30 @@ func (s *Store) IsEncounterCaptain(ctx context.Context, authUserID, encounterID 
 //
 // Both outcomes are cached, not just the positive one: a host that is NOT a
 // verified custom domain (verified=false) is cached exactly like a verified
-// one, via the unconditional s.customDomains.set below, so a flood of
-// lookups for the SAME host — verified or not — costs at most one query per
-// customDomainCacheTTL. The cache itself is size-bounded (see
-// customDomainCacheMaxEntries) so a flood of DISTINCT hosts still can't grow
-// it past a fixed ceiling.
+// one, and concurrent misses for a host share one query (ttlCache.fill), so a
+// flood of lookups for the SAME host — verified or not — costs at most one
+// query per customDomainCacheTTL while its entry stays cached. The cache
+// itself is size-bounded (see customDomainCacheMaxEntries) so a flood of
+// DISTINCT hosts still can't grow it past a fixed ceiling.
 //
 // Fail-closed: on a query error, the error is returned, verified is always
-// false, and — critically — the result is NOT cached (the set call below is
-// only reached after a successful Scan), so a transient DB failure can never
-// be memoized as either "allowed" or "denied"; the next lookup for that host
-// gets a fresh query. Callers (ws.Handler) must treat an error as "not
-// allowed", never as "allowed".
+// false, and — critically — the result is NOT cached (fill never stores an
+// error), so a transient DB failure can never be memoized as either
+// "allowed" or "denied"; the next lookup for that host gets a fresh query.
+// Callers (ws.Handler) must treat an error as "not allowed", never as
+// "allowed".
 func (s *Store) IsVerifiedCustomDomain(ctx context.Context, host string) (bool, error) {
 	if v, ok := s.customDomains.get(host); ok {
 		return v, nil
 	}
-
-	var verified bool
-	if err := s.pool.QueryRow(ctx, customDomainVerifiedSQL, host).Scan(&verified); err != nil {
+	verified, _, err := s.customDomains.fill(ctx, host, func(ctx context.Context) (bool, bool, error) {
+		var verified bool
+		err := s.pool.QueryRow(ctx, customDomainVerifiedSQL, host).Scan(&verified)
+		return verified, true, err
+	})
+	if err != nil {
 		return false, fmt.Errorf("custom domain lookup: %w", err)
 	}
-
-	s.customDomains.set(host, verified)
 	return verified, nil
 }
 
@@ -431,18 +440,18 @@ func (s *Store) TournamentIsHidden(ctx context.Context, tournamentID int64) (boo
 	if v, ok := s.hidden.get(tournamentID); ok {
 		return v, true, nil
 	}
-
-	var hidden bool
-	err := s.pool.QueryRow(ctx, tournamentHiddenSQL, tournamentID).Scan(&hidden)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return false, false, nil
-	}
+	hidden, found, err := s.hidden.fill(ctx, tournamentID, func(ctx context.Context) (bool, bool, error) {
+		var hidden bool
+		err := s.pool.QueryRow(ctx, tournamentHiddenSQL, tournamentID).Scan(&hidden)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, false, nil
+		}
+		return hidden, true, err
+	})
 	if err != nil {
 		return false, false, fmt.Errorf("tournament hidden lookup: %w", err)
 	}
-
-	s.hidden.set(tournamentID, hidden)
-	return hidden, true, nil
+	return hidden, found, nil
 }
 
 // IsPreviewAllowed reports whether the user is on a tournament's preview
@@ -452,13 +461,14 @@ func (s *Store) IsPreviewAllowed(ctx context.Context, userID, tournamentID int64
 	if v, ok := s.preview.get(key); ok {
 		return v, nil
 	}
-
-	var allowed bool
-	if err := s.pool.QueryRow(ctx, previewAllowedSQL, tournamentID, userID).Scan(&allowed); err != nil {
+	allowed, _, err := s.preview.fill(ctx, key, func(ctx context.Context) (bool, bool, error) {
+		var allowed bool
+		err := s.pool.QueryRow(ctx, previewAllowedSQL, tournamentID, userID).Scan(&allowed)
+		return allowed, true, err
+	})
+	if err != nil {
 		return false, fmt.Errorf("preview access lookup: %w", err)
 	}
-
-	s.preview.set(key, allowed)
 	return allowed, nil
 }
 
@@ -468,16 +478,18 @@ func (s *Store) EncounterOwner(ctx context.Context, encounterID int64) (int64, b
 	if v, ok := s.encOwner.get(encounterID); ok {
 		return v.tournamentID, v.mix, true, nil
 	}
-	var owner encounterOwner
-	err := s.pool.QueryRow(ctx, encounterOwnerSQL, encounterID).Scan(&owner.tournamentID, &owner.mix)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return 0, false, false, nil
-	}
+	owner, found, err := s.encOwner.fill(ctx, encounterID, func(ctx context.Context) (encounterOwner, bool, error) {
+		var owner encounterOwner
+		err := s.pool.QueryRow(ctx, encounterOwnerSQL, encounterID).Scan(&owner.tournamentID, &owner.mix)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return encounterOwner{}, false, nil
+		}
+		return owner, true, err
+	})
 	if err != nil {
 		return 0, false, false, fmt.Errorf("encounter owner lookup: %w", err)
 	}
-	s.encOwner.set(encounterID, owner)
-	return owner.tournamentID, owner.mix, true, nil
+	return owner.tournamentID, owner.mix, found, nil
 }
 
 // IsMixRoomMember reports whether the auth user sits in the mix encounter or hosts its mix. Cached like
@@ -487,11 +499,14 @@ func (s *Store) IsMixRoomMember(ctx context.Context, authUserID, encounterID int
 	if v, ok := s.mixMembers.get(key); ok {
 		return v, nil
 	}
-	var inside bool
-	if err := s.pool.QueryRow(ctx, isMixRoomMemberSQL, encounterID, authUserID).Scan(&inside); err != nil {
+	inside, _, err := s.mixMembers.fill(ctx, key, func(ctx context.Context) (bool, bool, error) {
+		var inside bool
+		err := s.pool.QueryRow(ctx, isMixRoomMemberSQL, encounterID, authUserID).Scan(&inside)
+		return inside, true, err
+	})
+	if err != nil {
 		return false, fmt.Errorf("mix room member lookup: %w", err)
 	}
-	s.mixMembers.set(key, inside)
 	return inside, nil
 }
 
@@ -504,14 +519,14 @@ func (s *Store) IsDraftSessionCaptain(ctx context.Context, authUserID, sessionID
 	if v, ok := s.draftCaptains.get(key); ok {
 		return v, nil
 	}
-	gen := s.draftCaptains.generation()
-
-	var captain bool
-	if err := s.pool.QueryRow(ctx, isDraftSessionCaptainSQL, sessionID, authUserID).Scan(&captain); err != nil {
+	captain, _, err := s.draftCaptains.fill(ctx, key, func(ctx context.Context) (bool, bool, error) {
+		var captain bool
+		err := s.pool.QueryRow(ctx, isDraftSessionCaptainSQL, sessionID, authUserID).Scan(&captain)
+		return captain, true, err
+	})
+	if err != nil {
 		return false, fmt.Errorf("draft session captain lookup: %w", err)
 	}
-
-	s.draftCaptains.setIfCurrent(key, captain, gen)
 	return captain, nil
 }
 
@@ -522,11 +537,14 @@ func (s *Store) IsDraftSessionMixHost(ctx context.Context, authUserID, sessionID
 	if v, ok := s.draftHosts.get(key); ok {
 		return v, nil
 	}
-	var host bool
-	if err := s.pool.QueryRow(ctx, isDraftSessionMixHostSQL, sessionID, authUserID).Scan(&host); err != nil {
+	host, _, err := s.draftHosts.fill(ctx, key, func(ctx context.Context) (bool, bool, error) {
+		var host bool
+		err := s.pool.QueryRow(ctx, isDraftSessionMixHostSQL, sessionID, authUserID).Scan(&host)
+		return host, true, err
+	})
+	if err != nil {
 		return false, fmt.Errorf("draft session mix host lookup: %w", err)
 	}
-	s.draftHosts.set(key, host)
 	return host, nil
 }
 
@@ -536,49 +554,79 @@ func (s *Store) DraftSessionOwner(ctx context.Context, sessionID int64) (int64, 
 	if v, ok := s.draftOwner.get(sessionID); ok {
 		return v.tournamentID, v.mix, true, nil
 	}
-	var owner encounterOwner
-	err := s.pool.QueryRow(ctx, draftSessionOwnerSQL, sessionID).Scan(&owner.tournamentID, &owner.mix)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return 0, false, false, nil
-	}
+	owner, found, err := s.draftOwner.fill(ctx, sessionID, func(ctx context.Context) (encounterOwner, bool, error) {
+		var owner encounterOwner
+		err := s.pool.QueryRow(ctx, draftSessionOwnerSQL, sessionID).Scan(&owner.tournamentID, &owner.mix)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return encounterOwner{}, false, nil
+		}
+		return owner, true, err
+	})
 	if err != nil {
 		return 0, false, false, fmt.Errorf("draft session owner lookup: %w", err)
 	}
-	s.draftOwner.set(sessionID, owner)
-	return owner.tournamentID, owner.mix, true, nil
+	return owner.tournamentID, owner.mix, found, nil
 }
 
 // RoomSpectatorRead reports whether spectators may read a chat room. A missing
 // chat_room_settings row is not an error: the row is lazily materialized, so
-// its absence means the room still runs on its kind's default.
+// its absence means the room still runs on its kind's default. Nothing is
+// cached from a lookup that started before InvalidateRoomAccess dropped the
+// room's setting.
 func (s *Store) RoomSpectatorRead(ctx context.Context, roomKind string, refID int64) (bool, error) {
 	key := roomKey{kind: roomKind, refID: refID}
 	if v, ok := s.roomSettings.get(key); ok {
 		return v, nil
 	}
-
-	var canRead bool
-	err := s.pool.QueryRow(ctx, roomSpectatorReadSQL, roomKind, refID).Scan(&canRead)
-	if errors.Is(err, pgx.ErrNoRows) {
-		canRead = roomSpectatorReadDefault(roomKind)
-	} else if err != nil {
+	canRead, _, err := s.roomSettings.fill(ctx, key, func(ctx context.Context) (bool, bool, error) {
+		var canRead bool
+		err := s.pool.QueryRow(ctx, roomSpectatorReadSQL, roomKind, refID).Scan(&canRead)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return roomSpectatorReadDefault(roomKind), true, nil
+		}
+		return canRead, true, err
+	})
+	if err != nil {
 		return false, fmt.Errorf("room spectator read lookup: %w", err)
 	}
-
-	s.roomSettings.set(key, canRead)
 	return canRead, nil
 }
 
 // InvalidateRoomAccess drops the cached answers a room's re-authorization must
 // not reuse: its spectator setting and, for a draft room, who captains the
-// session (a replaced captain is announced on the same event). ws.TopicRevoker
-// calls this before re-authorizing a room's live subscribers: the whole point
-// of that pass is to act on what was just written.
+// session (a replaced captain is announced on the same event), and fences the
+// lookups of them already in flight — a settings read that started before the
+// toggle must not store its pre-toggle answer after it. ws.TopicRevoker calls
+// this before re-authorizing a room's live subscribers: the whole point of
+// that pass is to act on what was just written.
 func (s *Store) InvalidateRoomAccess(roomKind string, refID int64) {
-	s.roomSettings.del(roomKey{kind: roomKind, refID: refID})
+	key := roomKey{kind: roomKind, refID: refID}
+	s.roomSettings.evictWhere(func(k roomKey) bool { return k == key })
 	if roomKind == "draft" {
 		s.draftCaptains.evictWhere(func(k draftCaptainKey) bool { return k.sessionID == refID })
 	}
+}
+
+// Reset drops every cached answer and fences every lookup in flight. The
+// realtime bus calls it (through ws.TopicRevoker, an events.Fanout leg) once
+// its Redis subscription is re-established after a loss: the RBAC and chat
+// visibility frames published in the gap never arrived, so no cached answer is
+// known to be current.
+func (s *Store) Reset() {
+	s.tournament.reset()
+	s.members.reset()
+	s.organizers.reset()
+	s.customDomains.reset()
+	s.hidden.reset()
+	s.preview.reset()
+	s.encOwner.reset()
+	s.mixMembers.reset()
+	s.captains.reset()
+	s.draftCaptains.reset()
+	s.draftHosts.reset()
+	s.draftOwner.reset()
+	s.roomSettings.reset()
+	s.wsRPM.reset()
 }
 
 // roomSpectatorReadDefault mirrors _SPECTATORS_CAN_READ_DEFAULT in

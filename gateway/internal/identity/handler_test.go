@@ -116,6 +116,7 @@ func TestValidate_BadEnvelope(t *testing.T) {
 func TestLogin_ForwardsBodyAndMeta(t *testing.T) {
 	caller := &fakeCaller{resp: []byte(`{"ok":true,"data":{"access_token":"a","refresh_token":"r","token_type":"bearer"}}`)}
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"email":"e@x.com","password":"p"}`))
+	r.RemoteAddr = "127.0.0.1:1234" // a trusted proxy: forwarding headers from other peers are ignored
 	r.Header.Set("X-Forwarded-For", "1.2.3.4")
 	r.Header.Set("User-Agent", "UA/1")
 	w := httptest.NewRecorder()
@@ -420,15 +421,17 @@ func TestClientMeta(t *testing.T) {
 	// real peer via $proxy_add_x_forwarded_for); the left-most "9.9.9.9" is
 	// client-supplied and must NOT be trusted.
 	r := httptest.NewRequest(http.MethodGet, "/", nil)
-	r.Header.Set("X-Forwarded-For", "9.9.9.9, 10.0.0.1")
+	r.RemoteAddr = "127.0.0.1:1234" // a trusted proxy: forwarding headers from other peers are ignored
+	r.Header.Set("X-Forwarded-For", "9.9.9.9, 203.0.113.9")
 	r.Header.Set("User-Agent", "Mozilla")
 	ua, ip := clientMeta(r)
-	if ua != "Mozilla" || ip != "10.0.0.1" {
-		t.Fatalf("clientMeta = %q, %q, want \"Mozilla\", \"10.0.0.1\"", ua, ip)
+	if ua != "Mozilla" || ip != "203.0.113.9" {
+		t.Fatalf("clientMeta = %q, %q, want \"Mozilla\", \"203.0.113.9\"", ua, ip)
 	}
 
 	// X-Real-IP (set by nginx to $remote_addr) wins over X-Forwarded-For.
 	r = httptest.NewRequest(http.MethodGet, "/", nil)
+	r.RemoteAddr = "127.0.0.1:1234"
 	r.Header.Set("X-Real-IP", "203.0.113.7")
 	r.Header.Set("X-Forwarded-For", "9.9.9.9, 10.0.0.1")
 	if _, ip = clientMeta(r); ip != "203.0.113.7" {
@@ -467,6 +470,7 @@ func TestAuthedFields_StampsClientMeta(t *testing.T) {
 	r := httptest.NewRequest(http.MethodDelete, "/api/v1/auth/player/unlink/7", nil)
 	r.SetPathValue("player_id", "7")
 	r.Header.Set("Authorization", "Bearer acc")
+	r.RemoteAddr = "127.0.0.1:1234" // a trusted proxy: forwarding headers from other peers are ignored
 	r.Header.Set("X-Real-IP", "203.0.113.7")
 	r.Header.Set("User-Agent", "UA/1")
 	w := httptest.NewRecorder()
@@ -492,6 +496,7 @@ func TestAuthedAllQuery_StampsClientMetaOutsideQuery(t *testing.T) {
 	caller := &fakeCaller{resp: []byte(`{"ok":true,"data":{"results":[],"total":0,"page":1,"per_page":25}}`)}
 	r := httptest.NewRequest(http.MethodGet, "/api/v1/auth/rbac/sessions?page=1", nil)
 	r.Header.Set("Authorization", "Bearer acc")
+	r.RemoteAddr = "127.0.0.1:1234" // a trusted proxy: forwarding headers from other peers are ignored
 	r.Header.Set("X-Real-IP", "203.0.113.7")
 	r.Header.Set("User-Agent", "UA/1")
 	w := httptest.NewRecorder()
@@ -525,6 +530,7 @@ func TestAuthedMerge_ServerClientMetaOverridesBody(t *testing.T) {
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/player/link",
 		strings.NewReader(`{"battle_tag":"x#1","ip_address":"6.6.6.6","user_agent":"forged"}`))
 	r.Header.Set("Authorization", "Bearer acc")
+	r.RemoteAddr = "127.0.0.1:1234" // a trusted proxy: forwarding headers from other peers are ignored
 	r.Header.Set("X-Real-IP", "203.0.113.7")
 	r.Header.Set("User-Agent", "UA/1")
 	w := httptest.NewRecorder()
@@ -547,10 +553,43 @@ func TestAuthedMerge_ServerClientMetaOverridesBody(t *testing.T) {
 	}
 }
 
+// DELETE /me carries the re-auth proof in an optional body: it reaches
+// identity-svc next to the bearer's access token and the server-stamped client
+// meta (neither forgeable from the body), and an empty body stays valid.
+func TestDeleteMe_ForwardsOptionalBody(t *testing.T) {
+	for name, body := range map[string]string{
+		"password": `{"current_password":"hunter2","access_token":"forged","ip_address":"6.6.6.6"}`,
+		"empty":    "",
+	} {
+		caller := &fakeCaller{resp: []byte(`{"ok":true,"data":null}`)}
+		r := httptest.NewRequest(http.MethodDelete, "/api/v1/auth/me", strings.NewReader(body))
+		r.Header.Set("Authorization", "Bearer acc")
+		r.RemoteAddr = "127.0.0.1:1234"
+		r.Header.Set("X-Real-IP", "203.0.113.7")
+		w := httptest.NewRecorder()
+		newHandler(caller).DeleteMe(w, r)
+
+		if w.Code != http.StatusNoContent || caller.gotQueue != queueDeleteMe {
+			t.Fatalf("%s: status=%d queue=%q, want 204 to %s", name, w.Code, caller.gotQueue, queueDeleteMe)
+		}
+		var req map[string]any
+		if err := json.Unmarshal(caller.gotBody, &req); err != nil {
+			t.Fatal(err)
+		}
+		if req["access_token"] != "acc" || req["ip_address"] != "203.0.113.7" {
+			t.Fatalf("%s: bearer/meta must win over the body, got %v", name, req)
+		}
+		if got, sent := req["current_password"]; (name == "password") != sent || (sent && got != "hunter2") {
+			t.Fatalf("%s: current_password = %v (sent=%v)", name, got, sent)
+		}
+	}
+}
+
 func TestAuthedNoBody_StampsClientMeta(t *testing.T) {
 	caller := &fakeCaller{resp: []byte(`{"ok":true,"data":[]}`)}
 	r := httptest.NewRequest(http.MethodGet, "/api/v1/auth/player/linked", nil)
 	r.Header.Set("Authorization", "Bearer acc")
+	r.RemoteAddr = "127.0.0.1:1234" // a trusted proxy: forwarding headers from other peers are ignored
 	r.Header.Set("X-Real-IP", "203.0.113.7")
 	r.Header.Set("User-Agent", "UA/1")
 	w := httptest.NewRecorder()
@@ -614,6 +653,7 @@ func TestAuthedHelpers_LeftmostForwardedHopNeverWins(t *testing.T) {
 			caller := &fakeCaller{resp: tc.resp}
 			r := tc.newReq()
 			r.Header.Set("Authorization", "Bearer acc")
+			r.RemoteAddr = "127.0.0.1:1234" // a trusted proxy: forwarding headers from other peers are ignored
 			r.Header.Set("X-Real-IP", "203.0.113.7")
 			r.Header.Set("X-Forwarded-For", "9.9.9.9, 10.0.0.1")
 			r.Header.Set("User-Agent", "UA/1")
@@ -641,12 +681,39 @@ func TestAuthedFields_TrustsRightmostForwardedHop(t *testing.T) {
 	r := httptest.NewRequest(http.MethodDelete, "/api/v1/auth/player/unlink/7", nil)
 	r.SetPathValue("player_id", "7")
 	r.Header.Set("Authorization", "Bearer acc")
-	r.Header.Set("X-Forwarded-For", "9.9.9.9, 10.0.0.1")
+	r.RemoteAddr = "127.0.0.1:1234" // a trusted proxy: forwarding headers from other peers are ignored
+	r.Header.Set("X-Forwarded-For", "9.9.9.9, 203.0.113.9")
 	r.Header.Set("User-Agent", "UA/1")
 	w := httptest.NewRecorder()
 	newHandler(caller).PlayerUnlink(w, r)
 
-	if _, ip := rpcClientMeta(t, caller); ip != "10.0.0.1" {
-		t.Fatalf("ip_address = %q, want \"10.0.0.1\"", ip)
+	if _, ip := rpcClientMeta(t, caller); ip != "203.0.113.9" {
+		t.Fatalf("ip_address = %q, want \"203.0.113.9\"", ip)
+	}
+}
+
+// A JSON `null` body decodes to a nil map: the merging helpers then panicked
+// writing into it (bodyWithMeta: login/refresh/OAuth; mergeBody: the bearer
+// routes), and decodeRawBody relayed a null RPC body. All are a plain 400.
+func TestNullBody_Rejected(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		target string
+		invoke func(*Handler, http.ResponseWriter, *http.Request)
+	}{
+		{"bodyWithMeta", "/api/v1/auth/login", (*Handler).Login},
+		{"mergeBody", "/api/v1/auth/player/link", (*Handler).PlayerLink},
+		{"decodeRawBody", "/api/v1/auth/register", (*Handler).Register},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			caller := &fakeCaller{}
+			r := httptest.NewRequest(http.MethodPost, tc.target, strings.NewReader("null"))
+			r.Header.Set("Authorization", "Bearer acc")
+			w := httptest.NewRecorder()
+			tc.invoke(newHandler(caller), w, r)
+			if w.Code != http.StatusBadRequest || caller.called {
+				t.Fatalf("code=%d called=%v, want 400 and no RPC", w.Code, caller.called)
+			}
+		})
 	}
 }

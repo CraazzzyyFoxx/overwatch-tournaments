@@ -233,9 +233,11 @@ func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 
 // DeleteMe mirrors DELETE /me -> 204: the user deletes their OWN account.
 // Historical data survives the deletion (see identity-svc auth_flows.delete_me);
-// only auth-owned rows cascade away.
+// only auth-owned rows cascade away. The optional JSON body carries the
+// re-auth proof ({"current_password": ...} for a password account); an empty
+// body stays valid — identity-svc decides what the account needs.
 func (h *Handler) DeleteMe(w http.ResponseWriter, r *http.Request) {
-	h.authedNoBody(w, r, queueDeleteMe, http.StatusNoContent)
+	h.authedMerge(w, r, queueDeleteMe, http.StatusNoContent, nil)
 }
 
 // RevokeSession mirrors DELETE /sessions/{id} -> 204.
@@ -777,11 +779,12 @@ func (h *Handler) callIdentity(w http.ResponseWriter, r *http.Request, queue str
 	apierr.WriteOK(w, successStatus, env)
 }
 
-// decodeRawBody returns the request body bytes, rejecting invalid JSON.
+// decodeRawBody returns the request body bytes, rejecting invalid JSON and a
+// JSON null (it decodes to a nil map and reached the worker as a null body).
 func decodeRawBody(w http.ResponseWriter, r *http.Request) ([]byte, bool) {
 	var probe map[string]any
 	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxJSONBody))
-	if err := dec.Decode(&probe); err != nil {
+	if err := dec.Decode(&probe); err != nil || probe == nil {
 		writeDetail(w, http.StatusBadRequest, "Invalid request body")
 		return nil, false
 	}
@@ -790,10 +793,11 @@ func decodeRawBody(w http.ResponseWriter, r *http.Request) ([]byte, bool) {
 }
 
 // bodyWithMeta decodes the JSON body, merges client UA/IP (and any extra
-// fields), and re-marshals it for the RPC request.
+// fields), and re-marshals it for the RPC request. A JSON null body is a 400:
+// it decodes to a nil map, and the merge below panicked on it.
 func bodyWithMeta(w http.ResponseWriter, r *http.Request, extra map[string]any) ([]byte, bool) {
 	body := map[string]any{}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxJSONBody)).Decode(&body); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxJSONBody)).Decode(&body); err != nil || body == nil {
 		writeDetail(w, http.StatusBadRequest, "Invalid request body")
 		return nil, false
 	}
@@ -807,11 +811,12 @@ func bodyWithMeta(w http.ResponseWriter, r *http.Request, extra map[string]any) 
 	return b, true
 }
 
-// mergeBody decodes the JSON body (tolerating an empty body) and merges extra
+// mergeBody decodes the JSON body (tolerating an empty body, but not a JSON
+// null: it decodes to a nil map, and the merge panicked on it) and merges extra
 // fields, for authenticated endpoints that don't need client metadata.
 func mergeBody(w http.ResponseWriter, r *http.Request, extra map[string]any) ([]byte, bool) {
 	body := map[string]any{}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxJSONBody)).Decode(&body); err != nil && !errors.Is(err, io.EOF) {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxJSONBody)).Decode(&body); (err != nil && !errors.Is(err, io.EOF)) || body == nil {
 		writeDetail(w, http.StatusBadRequest, "Invalid request body")
 		return nil, false
 	}

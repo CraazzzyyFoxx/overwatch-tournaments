@@ -21,7 +21,7 @@ func TestExtractTokenPrefersOwtThenAqtCookie(t *testing.T) {
 			for _, ck := range c.cookies {
 				r.AddCookie(ck)
 			}
-			if got := extractToken(r); got != c.want {
+			if got := TokenFromRequest(r); got != c.want {
 				t.Fatalf("got %q want %q", got, c.want)
 			}
 		})

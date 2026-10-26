@@ -8,6 +8,8 @@ import (
 	"container/list"
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -17,6 +19,8 @@ import (
 	"golang.org/x/sync/singleflight"
 
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/auth"
+	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/edge"
+	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/ratelimit"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/rpc"
 )
 
@@ -46,6 +50,13 @@ const (
 	rbacTopicPrefix = "user:"
 	rbacTopicSuffix = ":rbac"
 )
+
+// verdictCodes are the envelope error codes identity-svc's validate path
+// raises about the credential itself — unauthorized (invalid, expired or
+// revoked: token_validation.py's 401), forbidden, bad_request — and so the
+// only failures cached as ok=false. Any other code says nothing about the
+// token (see validate).
+var verdictCodes = map[string]bool{"unauthorized": true, "forbidden": true, "bad_request": true}
 
 // RPCCaller is the subset of rpc.Client the resolver needs.
 type RPCCaller interface {
@@ -96,6 +107,9 @@ type Info struct {
 func (i Info) IsAPIKey() bool { return i.CredentialType == credentialAPIKey }
 
 type entry struct {
+	// raw is validate_token's data exactly as identity-svc serialized it, which
+	// the dispatcher injects downstream as-is (see Identity).
+	raw     json.RawMessage
 	payload map[string]any
 	info    Info
 	ok      bool
@@ -122,6 +136,7 @@ type cacheItem struct {
 // user's entries, so a grant or a revocation applies on the next request.
 type Resolver struct {
 	rpc    RPCCaller
+	auth   *auth.Authenticator
 	now    func() time.Time
 	flight singleflight.Group
 	mu     sync.Mutex
@@ -134,23 +149,40 @@ type Resolver struct {
 	epoch uint64
 }
 
-// New builds a resolver over the shared RPC client.
-func New(caller RPCCaller) *Resolver {
-	return &Resolver{rpc: caller, now: time.Now, cache: make(map[string]*list.Element), order: list.New()}
+// New builds a resolver over the shared RPC client. authn is the local token
+// check every credential passes before it may cost an RPC.
+func New(caller RPCCaller, authn *auth.Authenticator) *Resolver {
+	return &Resolver{rpc: caller, auth: authn, now: time.Now, cache: make(map[string]*list.Element), order: list.New()}
 }
 
 // Resolve implements edge.IdentityResolver: bearer token -> RBAC payload.
 //
-// A non-nil error means the identity backend was unavailable (the RPC
-// bulkhead shed the call, the client was disconnected, or the call timed
-// out) — the caller should respond 503, not 401. Anonymous requests (no
-// bearer token) never produce an error.
+// A non-nil error means the identity backend could not judge the token (the
+// RPC bulkhead shed the call, the client was disconnected, the call timed out,
+// or identity-svc answered with an operational error instead of a verdict) —
+// the caller should respond 503, not 401. Anonymous requests (no bearer token)
+// never produce an error.
 func (r *Resolver) Resolve(req *http.Request) (map[string]any, bool, error) {
 	e, err := r.resolveToken(req.Context(), bearer(req))
 	if err != nil {
 		return nil, false, err
 	}
 	return e.payload, e.ok, nil
+}
+
+// Identity implements edge.IdentitySource: Resolve's verdict, with the payload
+// as the bytes identity-svc replied with so the dispatcher forwards them
+// without re-marshaling a decoded map on every request.
+func (r *Resolver) Identity(req *http.Request) (edge.Identity, bool, error) {
+	e, err := r.resolveToken(req.Context(), bearer(req))
+	if err != nil || !e.ok {
+		return edge.Identity{}, false, err
+	}
+	id := edge.Identity{Payload: e.raw}
+	if len(e.info.WorkspaceIDs) == 1 {
+		id.SoleWorkspaceID = e.info.WorkspaceIDs[0]
+	}
+	return id, true, nil
 }
 
 // ResolveWithSessionCookie is Resolve for the one class of route a browser
@@ -187,11 +219,11 @@ func (r *Resolver) Principal(req *http.Request) (Info, bool, error) {
 }
 
 // PrincipalToken resolves an explicitly supplied credential, for the one
-// surface where it does not arrive in an Authorization header: the WebSocket
-// handshake also accepts ?token= (see auth.extractToken). bearer deliberately
-// does NOT read the query string — accepting REST credentials there would put
-// them in every proxy access log — so the WS path passes the token it already
-// extracted rather than widening the header rule for everyone.
+// surface where it may not arrive in an Authorization header: the WebSocket
+// handshake also accepts the session cookie (see auth.TokenFromRequest).
+// bearer deliberately reads the header only — a cookie credential behind
+// every mutating REST route would be a CSRF surface — so the WS path passes
+// the token it already extracted rather than widening the header rule.
 func (r *Resolver) PrincipalToken(ctx context.Context, token string) (Info, bool, error) {
 	e, err := r.resolveToken(ctx, token)
 	if err != nil {
@@ -200,10 +232,10 @@ func (r *Resolver) PrincipalToken(ctx context.Context, token string) (Info, bool
 	return e.info, e.ok, nil
 }
 
-// resolveToken is the single cache + singleflight path behind all three public
-// views: exactly one validate_token per token per flight, one cache entry
-// feeding both the raw payload and its typed form. An empty token is anonymous
-// (zero entry, no error, no RPC).
+// resolveToken is the single cache + singleflight path behind every public
+// view: exactly one validate_token per token per flight, one cache entry
+// feeding the raw payload, its decoded map and its typed form. An empty token
+// is anonymous (zero entry, no error, no RPC).
 func (r *Resolver) resolveToken(ctx context.Context, token string) (entry, error) {
 	if token == "" {
 		return entry{}, nil
@@ -214,6 +246,26 @@ func (r *Resolver) resolveToken(ctx context.Context, token string) (entry, error
 		return e, nil
 	}
 
+	// Local precheck before any RPC: a credential that cannot possibly
+	// validate — a JWT failing the EdDSA check (forged, expired, malformed,
+	// not an access token) or a key-prefixed token of the wrong shape — is
+	// refused here at no cost to identity-svc and with no cache entry, so a
+	// flood of junk neither reaches the backend nor evicts live sessions. Only
+	// a miss pays it: every cached entry passed it when stored, and a session
+	// entry expires no later than its token.
+	var tokenExp time.Time
+	if auth.IsAPIKey(token) {
+		if !auth.IsWellFormedAPIKey(token) {
+			return entry{}, nil
+		}
+	} else {
+		u := r.auth.Verify(token)
+		if u == nil {
+			return entry{}, nil
+		}
+		tokenExp = u.ExpiresAt
+	}
+
 	// Collapse concurrent misses for the same token into one RPC: a burst of
 	// requests from one session (page load fans out N API calls) used to fire
 	// N identical validate_token calls until the first reply landed in the
@@ -222,7 +274,7 @@ func (r *Resolver) resolveToken(ctx context.Context, token string) (entry, error
 	// part of the key so a request arriving after an eviction never joins a
 	// flight that started before it.
 	ch := r.flight.DoChan(strconv.FormatUint(epoch, 10)+":"+token, func() (any, error) {
-		return r.validate(ctx, token, epoch)
+		return r.validate(ctx, token, tokenExp, epoch)
 	})
 	select {
 	case res := <-ch:
@@ -241,7 +293,7 @@ func (r *Resolver) resolveToken(ctx context.Context, token string) (entry, error
 // (one impatient client must not fail validation for the others) while keeping
 // its context values (trace/correlation) and the validateTimeout deadline —
 // which still drives the AMQP TTL via rpc/deadline.go.
-func (r *Resolver) validate(ctx context.Context, token string, epoch uint64) (entry, error) {
+func (r *Resolver) validate(ctx context.Context, token string, tokenExp time.Time, epoch uint64) (entry, error) {
 	body, _ := json.Marshal(map[string]any{"token": token})
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), validateTimeout)
 	defer cancel()
@@ -254,24 +306,42 @@ func (r *Resolver) validate(ctx context.Context, token string, epoch uint64) (en
 		return entry{}, err
 	}
 
-	var payload map[string]any
-	ok := false
+	// Only a payload or a verdictCodes error is a verdict on the token.
+	// Anything else ("internal" from a DB hiccup, "unavailable", a reply that
+	// does not parse) says nothing about it, and caching it as ok=false would
+	// log a valid session out for the whole TTL. It is an error — a 503 — and
+	// nothing is stored, same as transport.
 	var env rpc.Envelope
-	if json.Unmarshal(raw, &env) == nil && env.OK && len(env.Data) > 0 {
-		if json.Unmarshal(env.Data, &payload) == nil {
-			ok = true
+	if err := json.Unmarshal(raw, &env); err != nil {
+		return entry{}, fmt.Errorf("validate_token: malformed reply: %w", err)
+	}
+	var payload map[string]any
+	if env.OK {
+		if json.Unmarshal(env.Data, &payload) != nil || payload == nil {
+			return entry{}, errors.New("validate_token: malformed payload")
 		}
+	} else if env.Error == nil || !verdictCodes[env.Error.Code] {
+		return entry{}, fmt.Errorf("validate_token: no verdict: %+v", env.Error)
 	}
 
 	// An API key gets a shorter cache life than a session (see apiKeyCacheTTL).
 	// The discriminator is the TOKEN's own prefix rather than the payload's
 	// credential_type, so a REJECTED key — where there is no payload to read a
 	// type from — is not pinned for the full session TTL either.
-	ttl := cacheTTL
+	now := r.now()
+	exp := now.Add(cacheTTL)
 	if auth.IsAPIKey(token) {
-		ttl = apiKeyCacheTTL
+		// ponytail: the key's own expires_at is not read; overshoot past it is
+		// bounded by apiKeyCacheTTL.
+		exp = now.Add(apiKeyCacheTTL)
+	} else if env.OK && tokenExp.Before(exp) {
+		// A session verdict must not outlive the token: a cache hit is never
+		// re-checked and the workers' rehydrate path does not look at exp, so a
+		// token validated a second before it expired would otherwise stay
+		// authorized for most of cacheTTL. tokenExp is the verified claim.
+		exp = tokenExp
 	}
-	e := entry{payload: payload, info: parseInfo(payload), ok: ok, exp: r.now().Add(ttl)}
+	e := entry{raw: env.Data, payload: payload, info: parseInfo(payload), ok: env.OK, exp: exp}
 	r.store(token, e, epoch)
 	return e, nil
 }
@@ -344,7 +414,9 @@ func asSlice(v any) []any {
 }
 
 // APIKeyQuota implements ratelimit.KeyQuota: the bucket key and per-minute
-// request budget of the API key behind req, or ok=false when there is none.
+// request budget of the API key behind req, an empty key when there is none,
+// ratelimit.ErrKeyRejected when identity-svc refused the key, and the
+// resolver's own error when it could not judge it.
 //
 // The local prefix test comes FIRST, and that is what keeps the per-key limiter
 // free for everything else: session and anonymous traffic never reach the
@@ -353,18 +425,49 @@ func asSlice(v any) []any {
 // shared with the route's own Resolve through the same cache entry, so it costs
 // nothing extra there either.
 //
-// A resolver error (identity backend unavailable) reports ok=false rather than
-// rejecting: the route behind the limiter resolves the same token and turns
-// that into a 503, which is the honest answer — a 429 would not be.
-func (r *Resolver) APIKeyQuota(req *http.Request) (string, int, bool) {
+// The error goes back to the limiter rather than becoming "not a key": it
+// answers 503 at once, where passing through made the route resolve the same
+// token again and wait out a second validate_token timeout (errors are not
+// cached) before reaching that same 503.
+func (r *Resolver) APIKeyQuota(req *http.Request) (string, int, error) {
 	if !auth.IsAPIKey(bearer(req)) {
-		return "", 0, false
+		return "", 0, nil
 	}
 	info, ok, err := r.Principal(req)
-	if err != nil || !ok || info.APIKeyID == 0 {
-		return "", 0, false
+	switch {
+	case err != nil:
+		return "", 0, err
+	case !ok:
+		return "", 0, ratelimit.ErrKeyRejected
+	case info.APIKeyID == 0:
+		return "", 0, nil
 	}
-	return strconv.FormatInt(info.APIKeyID, 10), info.RequestsPerMinute, true
+	return strconv.FormatInt(info.APIKeyID, 10), info.RequestsPerMinute, nil
+}
+
+// MeterCaller implements ratelimit.CallerFunc for edge workspace metering. It
+// resolves EVERY bearer token (one cache hit on the entry the route resolves
+// anyway) and follows APIKeyQuota's rules: an error the resolver could not
+// judge through, ErrKeyRejected for a refused API key, and ok=false — counted
+// like a visitor — for no credential or a rejected session token.
+func (r *Resolver) MeterCaller(req *http.Request) (ratelimit.Caller, bool, error) {
+	info, ok, err := r.Principal(req)
+	switch {
+	case err != nil:
+		return ratelimit.Caller{}, false, err
+	case !ok && auth.IsAPIKey(bearer(req)):
+		return ratelimit.Caller{}, false, ratelimit.ErrKeyRejected
+	case !ok:
+		return ratelimit.Caller{}, false, nil
+	}
+	return ratelimit.Caller{
+		APIKey:            info.IsAPIKey(),
+		APIKeyID:          info.APIKeyID,
+		RequestsPerMinute: info.RequestsPerMinute,
+		WorkspaceID:       info.APIKeyWorkspaceID,
+		WorkspaceIDs:      info.WorkspaceIDs,
+		Superuser:         info.IsSuperuser,
+	}, true, nil
 }
 
 // lookup returns the cached entry for token if present and unexpired,
@@ -456,6 +559,17 @@ func (r *Resolver) EvictUser(userID int64) {
 		}
 		el = next
 	}
+}
+
+// Reset implements events.Resetter: the realtime bus lost its connection, so
+// any RBAC eviction published meanwhile is gone for good. Drop every cached
+// verdict and fence the validations in flight — EvictUser for all users.
+func (r *Resolver) Reset() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.epoch++
+	clear(r.cache)
+	r.order.Init()
 }
 
 func bearer(r *http.Request) string {

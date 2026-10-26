@@ -24,19 +24,30 @@ const (
 
 // RouteSpec declares one HTTP route and how to translate it into an RPC call.
 type RouteSpec struct {
-	Method   string        // "GET" | "POST" | "PATCH" | "PUT" | "DELETE"
-	Pattern  string        // ServeMux pattern, e.g. "/api/v1/tournaments/{id}"
-	Queue    string        // RPC queue, e.g. "rpc.tournament.get_tournament" or "rpc.tournament.admin.update"
-	Entity   string        // generic-CRUD entity -> data["entity"] ("" for a typed method)
-	Action   string        // generic-CRUD action -> data["action"] ("" for a typed method)
-	IDParam  string        // path param copied to data["id"]
-	Path     []string      // path params copied verbatim into the body (by name)
-	Query    []string      // query params copied into data["query"]
-	AllQuery bool          // forward ALL query params into data["query"] (for pagination/filter routes)
-	Body     bool          // merge the JSON request body into data["payload"]
-	Auth     AuthMode      // identity requirement
-	Success  int           // success HTTP status (0 -> 200)
-	Timeout  time.Duration // per-route RPC timeout (0 -> the 120s edge default)
+	Method       string        // "GET" | "POST" | "PATCH" | "PUT" | "DELETE"
+	Pattern      string        // ServeMux pattern, e.g. "/api/v1/tournaments/{id}"
+	Queue        string        // RPC queue, e.g. "rpc.tournament.get_tournament" or "rpc.tournament.admin.update"
+	Entity       string        // generic-CRUD entity -> data["entity"] ("" for a typed method)
+	Action       string        // generic-CRUD action -> data["action"] ("" for a typed method)
+	IDParam      string        // path param copied to data["id"]
+	Path         []string      // path params copied verbatim into the body (by name)
+	Query        []string      // query params copied into data["query"]
+	AllQuery     bool          // forward ALL query params into data["query"] (for pagination/filter routes)
+	Body         bool          // merge the JSON request body into data["payload"]
+	BodyOptional bool          // documentation only: the JSON body may be omitted (OpenAPI requestBody not required)
+	Auth         AuthMode      // identity requirement
+	Success      int           // success HTTP status (0 -> 200)
+	Timeout      time.Duration // per-route RPC timeout (0 -> the 120s edge default)
+	Media        Media         // documentation only: the non-JSON wire format of a bespoke handler
+}
+
+// Media describes, for the OpenAPI generator, a route whose wire format is not
+// JSON — the multipart uploads and the raw-bytes download served by bespoke
+// handlers. The dispatcher ignores it. The zero value means JSON.
+type Media struct {
+	Files    []string // multipart/form-data file parts; a name ending in "[]" may repeat
+	Fields   []string // multipart/form-data text parts
+	Response string   // success media type when the body is raw bytes, e.g. "application/octet-stream"
 }
 
 func (s RouteSpec) successStatus() int {

@@ -198,7 +198,7 @@ func (r *Registry) allowEncounterChat(ctx context.Context, user *auth.User, grou
 	if err != nil {
 		return false, nil
 	}
-	if user != nil && user.IsSuperuser {
+	if isSuperuser(user) {
 		return true, nil
 	}
 	tournamentID, mix, found, err := r.vis.EncounterOwner(ctx, encounterID)
@@ -206,10 +206,15 @@ func (r *Registry) allowEncounterChat(ctx context.Context, user *auth.User, grou
 		return false, err
 	}
 	if mix {
-		if user == nil {
+		// A mix belongs to no workspace, so a workspace-scoped key holds no
+		// seat in its room.
+		if user == nil || user.APIKeyWorkspaceID != 0 {
 			return false, nil
 		}
 		return r.members.IsMixRoomMember(ctx, user.ID, encounterID)
+	}
+	if user, err = r.scopeToTournament(ctx, user, tournamentID); err != nil {
+		return false, err
 	}
 	if user != nil {
 		captain, err := r.members.IsEncounterCaptain(ctx, user.ID, encounterID)
@@ -238,17 +243,8 @@ func (r *Registry) allowDraftChat(ctx context.Context, user *auth.User, groups [
 	if err != nil {
 		return false, nil
 	}
-	if user != nil {
-		if user.IsSuperuser {
-			return true, nil
-		}
-		captain, err := r.members.IsDraftSessionCaptain(ctx, user.ID, sessionID)
-		if err != nil {
-			return false, err
-		}
-		if captain {
-			return true, nil
-		}
+	if isSuperuser(user) {
+		return true, nil
 	}
 	tournamentID, mix, found, err := r.vis.DraftSessionOwner(ctx, sessionID)
 	if err != nil {
@@ -256,6 +252,24 @@ func (r *Registry) allowDraftChat(ctx context.Context, user *auth.User, groups [
 	}
 	if !found {
 		return false, nil
+	}
+	// Every participant grant below belongs to the draft's workspace; a key
+	// from elsewhere, or in a mix (which belongs to none), only spectates.
+	if mix {
+		if user != nil && user.APIKeyWorkspaceID != 0 {
+			user = nil
+		}
+	} else if user, err = r.scopeToTournament(ctx, user, tournamentID); err != nil {
+		return false, err
+	}
+	if user != nil {
+		captain, err := r.members.IsDraftSessionCaptain(ctx, user.ID, sessionID)
+		if err != nil {
+			return false, err
+		}
+		if captain {
+			return true, nil
+		}
 	}
 	if mix {
 		if user != nil {
@@ -320,11 +334,12 @@ func (r *Registry) allowRoomChat(ctx context.Context, user *auth.User, roomKind 
 // topics. A visible tournament is public. A hidden one requires a logged-in
 // insider: superuser OR workspace member OR preview-allowlisted.
 //
-// NOTE: the edge User carries only ID+IsSuperuser (no RBAC), so we use workspace
-// MEMBER — not strictly ADMIN as the REST guard does — as the closest available
-// insider signal, consistent with allowBalancer above. Outsiders (anon,
-// non-member, non-allowlisted) are always denied, so this never leaks to the
-// public; it is at most marginally more permissive to workspace insiders.
+// NOTE: the edge User carries only ID+IsSuperuser (+ an API key's workspace; no
+// RBAC), so we use workspace MEMBER — not strictly ADMIN as the REST guard does
+// — as the closest available insider signal, consistent with allowBalancer
+// above. Outsiders (anon, non-member, non-allowlisted, a key from another
+// workspace) are always denied, so this never leaks to the public; it is at
+// most marginally more permissive to workspace insiders.
 func (r *Registry) allowSpectate(ctx context.Context, user *auth.User, tournamentID int64) (bool, error) {
 	hidden, found, err := r.vis.TournamentIsHidden(ctx, tournamentID)
 	if err != nil {
@@ -339,12 +354,15 @@ func (r *Registry) allowSpectate(ctx context.Context, user *auth.User, tournamen
 	if user == nil {
 		return false, nil
 	}
-	if user.IsSuperuser {
+	if isSuperuser(user) {
 		return true, nil
 	}
 	workspaceID, wsFound, err := r.resolver.TournamentWorkspaceID(ctx, tournamentID)
 	if err != nil {
 		return false, err
+	}
+	if !keyInScope(user, workspaceID, wsFound) {
+		return false, nil
 	}
 	if wsFound {
 		member, err := r.members.IsWorkspaceMember(ctx, user.ID, workspaceID)
@@ -367,7 +385,7 @@ func (r *Registry) allowBalancer(ctx context.Context, user *auth.User, groups []
 	if user == nil || len(groups) == 0 {
 		return false, nil
 	}
-	if user.IsSuperuser {
+	if isSuperuser(user) {
 		return true, nil
 	}
 	tournamentID, err := strconv.ParseInt(groups[0], 10, 64)
@@ -378,7 +396,7 @@ func (r *Registry) allowBalancer(ctx context.Context, user *auth.User, groups []
 	if err != nil {
 		return false, err
 	}
-	if !found {
+	if !found || !keyInScope(user, workspaceID, true) {
 		return false, nil
 	}
 	return r.members.IsWorkspaceMember(ctx, user.ID, workspaceID)
@@ -388,23 +406,58 @@ func (r *Registry) allowWorkspaceMember(ctx context.Context, user *auth.User, gr
 	if user == nil || len(groups) == 0 {
 		return false, nil
 	}
-	if user.IsSuperuser {
+	if isSuperuser(user) {
 		return true, nil
 	}
 	workspaceID, err := strconv.ParseInt(groups[0], 10, 64)
-	if err != nil {
+	if err != nil || !keyInScope(user, workspaceID, true) {
 		return false, nil
 	}
 	return r.members.IsWorkspaceMember(ctx, user.ID, workspaceID)
+}
+
+// isSuperuser is the superuser bypass every workspace-scoped rule shares, and
+// never an API key's: a key acts as itself inside one workspace, not as its
+// owner — whose superuser bit would otherwise open every workspace's feed.
+func isSuperuser(user *auth.User) bool {
+	return user != nil && user.IsSuperuser && user.APIKeyWorkspaceID == 0
+}
+
+// keyInScope reports whether user may use workspace-scoped grants in
+// workspaceID: a session always, a workspace-scoped API key only in its own
+// workspace (found=false: the workspace is unknown, so never). The membership
+// lookups are keyed by the key OWNER's user id, so without this a key pinned to
+// one workspace would inherit every workspace its owner belongs to.
+func keyInScope(user *auth.User, workspaceID int64, found bool) bool {
+	return user.APIKeyWorkspaceID == 0 || (found && workspaceID == user.APIKeyWorkspaceID)
+}
+
+// scopeToTournament returns user unchanged, or nil (anonymous) for an API key
+// outside the tournament's workspace, for the chat rules whose participant
+// grants (captain, staff) all hang off that workspace. Sessions skip the lookup.
+func (r *Registry) scopeToTournament(ctx context.Context, user *auth.User, tournamentID int64) (*auth.User, error) {
+	if user == nil || user.APIKeyWorkspaceID == 0 {
+		return user, nil
+	}
+	workspaceID, found, err := r.resolver.TournamentWorkspaceID(ctx, tournamentID)
+	if err != nil {
+		return nil, err
+	}
+	if !keyInScope(user, workspaceID, found) {
+		return nil, nil
+	}
+	return user, nil
 }
 
 // allowOwnNotifications gates user:<id>:notifications, the personal inbox
 // signal. Only that user; deliberately no superuser bypass, unlike every rule
 // above — nobody needs to read someone else's inbox, and a rule with no
 // exception cannot be widened by accident. It needs no external lookup: the
-// topic's own id segment is the whole authorization question.
+// topic's own id segment is the whole authorization question. An API key is
+// never its owner here: these topics are the person's, outside any workspace a
+// key can be scoped to.
 func (r *Registry) allowOwnNotifications(_ context.Context, user *auth.User, groups []string) (bool, error) {
-	if user == nil || len(groups) == 0 {
+	if user == nil || user.APIKeyWorkspaceID != 0 || len(groups) == 0 {
 		return false, nil
 	}
 	userID, err := strconv.ParseInt(groups[0], 10, 64)

@@ -1,129 +1,70 @@
 package auth
 
 import (
-	"context"
+	"crypto/ed25519"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+
+	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/auth/authtest"
 )
 
-const testSecret = "test-secret-key"
+func TestVerify_Valid(t *testing.T) {
+	a := New(authtest.PublicKey)
+	exp := time.Now().Add(30 * time.Minute).Truncate(time.Second)
+	c := authtest.Claims("42")
+	c["exp"] = exp.Unix()
+	c["is_superuser"] = true // a stray claim identity-svc no longer sends grants nothing
+	token := authtest.Sign(c)
 
-func signHS256(t *testing.T, claims jwt.MapClaims) string {
-	t.Helper()
-	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	s, err := tok.SignedString([]byte(testSecret))
-	if err != nil {
-		t.Fatal(err)
-	}
-	return s
-}
-
-func accessClaims(sub string) jwt.MapClaims {
-	return jwt.MapClaims{
-		"sub":  sub,
-		"type": "access",
-		"exp":  time.Now().Add(time.Hour).Unix(),
-	}
-}
-
-func TestParseToken_Valid(t *testing.T) {
-	a := New(testSecret)
-	u := a.parseToken(signHS256(t, accessClaims("42")))
-	if u == nil || u.ID != 42 {
-		t.Fatalf("expected user 42, got %+v", u)
+	u := a.Verify(token)
+	if u == nil || u.ID != 42 || !u.ExpiresAt.Equal(exp) || u.Token != token {
+		t.Fatalf("expected user 42 expiring %v carrying its token, got %+v", exp, u)
 	}
 	if u.IsSuperuser {
-		t.Fatal("is_superuser must default to false when the claim is absent")
+		t.Fatal("superuser comes from identity-svc, never from a token claim")
 	}
 }
 
-func TestParseToken_Superuser(t *testing.T) {
-	a := New(testSecret)
-	c := accessClaims("42")
-	c["is_superuser"] = true
-	u := a.parseToken(signHS256(t, c))
-	if u == nil || u.ID != 42 || !u.IsSuperuser {
-		t.Fatalf("expected superuser 42, got %+v", u)
+func TestVerify_Rejected(t *testing.T) {
+	a := New(authtest.PublicKey)
+	mutated := func(f func(jwt.MapClaims)) string {
+		c := authtest.Claims("42")
+		f(c)
+		return authtest.Sign(c)
 	}
-}
+	_, otherKey, _ := ed25519.GenerateKey(nil)
+	forged, _ := jwt.NewWithClaims(jwt.SigningMethodEdDSA, authtest.Claims("42")).SignedString(otherKey)
+	hs256, _ := jwt.NewWithClaims(jwt.SigningMethodHS256, authtest.Claims("42")).SignedString([]byte(authtest.PublicKey))
+	none, _ := jwt.NewWithClaims(jwt.SigningMethodNone, authtest.Claims("42")).SignedString(jwt.UnsafeAllowNoneSignatureType)
 
-func TestParseToken_PopulatesExpiry(t *testing.T) {
-	a := New(testSecret)
-	exp := time.Now().Add(30 * time.Minute).Truncate(time.Second)
-	c := accessClaims("42")
-	c["exp"] = exp.Unix()
-	u := a.parseToken(signHS256(t, c))
-	if u == nil {
-		t.Fatal("expected a user")
+	for name, token := range map[string]string{
+		"expired":            mutated(func(c jwt.MapClaims) { c["exp"] = time.Now().Add(-time.Hour).Unix() }),
+		"no exp":             mutated(func(c jwt.MapClaims) { delete(c, "exp") }),
+		"wrong issuer":       mutated(func(c jwt.MapClaims) { c["iss"] = "someone-else" }),
+		"no issuer":          mutated(func(c jwt.MapClaims) { delete(c, "iss") }),
+		"wrong audience":     mutated(func(c jwt.MapClaims) { c["aud"] = "other" }),
+		"no audience":        mutated(func(c jwt.MapClaims) { delete(c, "aud") }),
+		"service token":      mutated(func(c jwt.MapClaims) { c["type"] = "service" }),
+		"non-numeric sub":    mutated(func(c jwt.MapClaims) { c["sub"] = "abc" }),
+		"forged signature":   forged,
+		"hs256 with pub key": hs256,
+		"alg none":           none,
+		"garbage":            "not.a.jwt",
+	} {
+		if u := a.Verify(token); u != nil {
+			t.Errorf("%s: must be rejected, got %+v", name, u)
+		}
 	}
-	if !u.ExpiresAt.Equal(exp) {
-		t.Fatalf("ExpiresAt = %v, want %v", u.ExpiresAt, exp)
-	}
-}
-
-func TestParseToken_Rejected(t *testing.T) {
-	a := New(testSecret)
-
-	t.Run("expired", func(t *testing.T) {
-		c := accessClaims("42")
-		c["exp"] = time.Now().Add(-time.Hour).Unix()
-		if u := a.parseToken(signHS256(t, c)); u != nil {
-			t.Fatal("expired token must be rejected")
-		}
-	})
-
-	t.Run("bad signature", func(t *testing.T) {
-		tok := jwt.NewWithClaims(jwt.SigningMethodHS256, accessClaims("42"))
-		s, _ := tok.SignedString([]byte("wrong-secret"))
-		if u := a.parseToken(s); u != nil {
-			t.Fatal("bad signature must be rejected")
-		}
-	})
-
-	t.Run("alg none", func(t *testing.T) {
-		tok := jwt.NewWithClaims(jwt.SigningMethodNone, accessClaims("42"))
-		s, _ := tok.SignedString(jwt.UnsafeAllowNoneSignatureType)
-		if u := a.parseToken(s); u != nil {
-			t.Fatal("alg=none must be rejected")
-		}
-	})
-
-	t.Run("wrong type", func(t *testing.T) {
-		c := accessClaims("42")
-		c["type"] = "service"
-		if u := a.parseToken(signHS256(t, c)); u != nil {
-			t.Fatal("non-access token must be rejected")
-		}
-	})
-
-	t.Run("non-numeric sub", func(t *testing.T) {
-		c := accessClaims("abc")
-		if u := a.parseToken(signHS256(t, c)); u != nil {
-			t.Fatal("non-numeric sub must be rejected")
-		}
-	})
-
-	t.Run("garbage", func(t *testing.T) {
-		if u := a.parseToken("not.a.jwt"); u != nil {
-			t.Fatal("garbage token must be rejected")
-		}
-	})
 }
 
 func TestUserFromRequest_Sources(t *testing.T) {
-	a := New(testSecret)
-	token := signHS256(t, accessClaims("7"))
-
-	t.Run("query param", func(t *testing.T) {
-		r := httptest.NewRequest(http.MethodGet, "/ws?token="+token, nil)
-		if u := a.UserFromRequest(r); u == nil || u.ID != 7 {
-			t.Fatalf("query token: got %+v", u)
-		}
-	})
+	a := New(authtest.PublicKey)
+	token := authtest.Token("7")
 
 	t.Run("authorization header", func(t *testing.T) {
 		r := httptest.NewRequest(http.MethodGet, "/ws", nil)
@@ -141,6 +82,15 @@ func TestUserFromRequest_Sources(t *testing.T) {
 		}
 	})
 
+	// A credential in a URL lands in every proxy log: the query string is
+	// never read, not even as a last resort.
+	t.Run("query param ignored", func(t *testing.T) {
+		r := httptest.NewRequest(http.MethodGet, "/ws?token="+token, nil)
+		if u := a.UserFromRequest(r); u != nil {
+			t.Fatalf("a ?token= credential must be ignored, got %+v", u)
+		}
+	})
+
 	t.Run("anonymous when no token", func(t *testing.T) {
 		r := httptest.NewRequest(http.MethodGet, "/ws", nil)
 		if u := a.UserFromRequest(r); u != nil {
@@ -149,17 +99,30 @@ func TestUserFromRequest_Sources(t *testing.T) {
 	})
 
 	t.Run("anonymous when invalid token", func(t *testing.T) {
-		r := httptest.NewRequest(http.MethodGet, "/ws?token=garbage", nil)
+		r := httptest.NewRequest(http.MethodGet, "/ws", nil)
+		r.Header.Set("Authorization", "Bearer garbage")
 		if u := a.UserFromRequest(r); u != nil {
 			t.Fatalf("expected anonymous on invalid token, got %+v", u)
 		}
 	})
+
+	// httplog and metrics must never pay an identity RPC, so a key — which
+	// only identity-svc can judge — stays anonymous here.
+	t.Run("api key stays anonymous", func(t *testing.T) {
+		r := httptest.NewRequest(http.MethodGet, "/ws", nil)
+		r.Header.Set("Authorization", "Bearer "+wellFormedKey)
+		if u := a.UserFromRequest(r); u != nil {
+			t.Fatalf("expected anonymous for an api key, got %+v", u)
+		}
+	})
 }
+
+var wellFormedKey = "owt_sk_" + strings.Repeat("a1", 8) + "_" + strings.Repeat("0f", 32)
 
 func TestIsAPIKey(t *testing.T) {
 	cases := map[string]bool{
 		"owt_sk_pub_secret":        true,
-		"owt_sk_":                  true, // malformed, but identity-svc's problem to reject
+		"owt_sk_":                  true, // malformed, but still a key, never a JWT
 		"aqt_sk_pub_secret":        true, // minted before the rebrand, still validated
 		"eyJhbGciOiJIUzI1NiJ9.a.b": false,
 		"":                         false,
@@ -174,68 +137,22 @@ func TestIsAPIKey(t *testing.T) {
 	}
 }
 
-// TestUserFromRequest_APIKeyWithoutResolverIsAnonymous pins the default: a
-// plain Authenticator (httplog's and metrics') never resolves an API key, so it
-// costs no identity RPC there and a key stays unauthenticated — exactly the
-// pre-change behaviour.
-func TestUserFromRequest_APIKeyWithoutResolverIsAnonymous(t *testing.T) {
-	a := New(testSecret)
-	r := httptest.NewRequest(http.MethodGet, "/ws?token=owt_sk_pub_secret", nil)
-	if u := a.UserFromRequest(r); u != nil {
-		t.Fatalf("expected anonymous without an api-key resolver, got %+v", u)
+func TestIsWellFormedAPIKey(t *testing.T) {
+	pub, secret := strings.Repeat("a1", 8), strings.Repeat("0f", 32)
+	cases := map[string]bool{
+		wellFormedKey:                                   true,
+		"aqt_sk_" + pub + "_" + secret:                  true,
+		"owt_sk_pub_secret":                             false,
+		"owt_sk_" + pub + secret:                        false, // no separator
+		"owt_sk_" + pub + "_" + secret + "0":            false, // too long
+		"owt_sk_" + pub[:15] + "__" + secret:            false, // separator in the wrong place
+		"owt_sk_" + strings.ToUpper(pub) + "_" + secret: false, // token_hex is lowercase
+		"owt_sk_" + pub + "_" + secret[:63] + "g":       false,
+		"xyz_sk_" + pub + "_" + secret:                  false,
 	}
-}
-
-// TestUserFromRequest_APIKeyResolved covers the opted-in surface: the key is
-// handed to the resolver verbatim and its principal is returned.
-func TestUserFromRequest_APIKeyResolved(t *testing.T) {
-	base := New(testSecret)
-	var seen string
-	a := base.WithAPIKeys(func(_ context.Context, token string) *User {
-		seen = token
-		return &User{ID: 42}
-	})
-
-	r := httptest.NewRequest(http.MethodGet, "/ws?token=owt_sk_pub_secret", nil)
-	u := a.UserFromRequest(r)
-	if u == nil || u.ID != 42 {
-		t.Fatalf("expected the resolved principal, got %+v", u)
-	}
-	if seen != "owt_sk_pub_secret" {
-		t.Errorf("resolver got %q, want the raw key", seen)
-	}
-	// WithAPIKeys returns a copy: the original must stay JWT-only, or httplog
-	// and metrics would start resolving keys over RPC too.
-	if u := base.UserFromRequest(r); u != nil {
-		t.Fatalf("WithAPIKeys must not mutate the receiver, got %+v", u)
-	}
-}
-
-// TestUserFromRequest_JWTPathUnchangedWithAPIKeys proves opting in costs the
-// session path nothing: a JWT never reaches the resolver.
-func TestUserFromRequest_JWTPathUnchangedWithAPIKeys(t *testing.T) {
-	called := false
-	a := New(testSecret).WithAPIKeys(func(context.Context, string) *User {
-		called = true
-		return &User{ID: 99}
-	})
-
-	r := httptest.NewRequest(http.MethodGet, "/ws?token="+signHS256(t, accessClaims("7")), nil)
-	if u := a.UserFromRequest(r); u == nil || u.ID != 7 {
-		t.Fatalf("session token must still decode locally, got %+v", u)
-	}
-	if called {
-		t.Fatal("a JWT must never be sent to the api-key resolver")
-	}
-}
-
-// TestUserFromRequest_APIKeyRejectedStaysAnonymous: an invalid or
-// insufficiently-scoped key resolves to nil, which must degrade to anonymous
-// rather than a zero-valued principal (user id 0 would pass nil checks).
-func TestUserFromRequest_APIKeyRejectedStaysAnonymous(t *testing.T) {
-	a := New(testSecret).WithAPIKeys(func(context.Context, string) *User { return nil })
-	r := httptest.NewRequest(http.MethodGet, "/ws?token=owt_sk_pub_secret", nil)
-	if u := a.UserFromRequest(r); u != nil {
-		t.Fatalf("a rejected key must be anonymous, got %+v", u)
+	for token, want := range cases {
+		if got := IsWellFormedAPIKey(token); got != want {
+			t.Errorf("IsWellFormedAPIKey(%q) = %v, want %v", token, got, want)
+		}
 	}
 }

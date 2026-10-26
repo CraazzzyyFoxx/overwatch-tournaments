@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"path"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/coder/websocket"
@@ -44,6 +45,21 @@ const maxOriginHostLen = 253
 // than the REST rpcTimeout siblings (5s) since this is a single cached
 // point-lookup, not an RPC round-trip to another service.
 const customDomainLookupTimeout = 2 * time.Second
+
+// presenceWindow throttles each presence topic's broadcasts. Every broadcast
+// is a full frame to every subscriber, so unthrottled, a room filling up (N
+// joins) costs N(N+1)/2 frames and can overflow a slow client's 64-frame send
+// queue. The first change in a quiet period goes out at once; every change
+// inside the following window folds into one trailing broadcast at its end.
+const presenceWindow = time.Second
+
+// subscribeTimeout bounds one subscribe's ACL, cursor and replay queries
+// together. The read loop waits on them outside its idle timeout, and the
+// pool's statement timeout covers neither pool acquisition nor queries through
+// PgBouncer, so without it a wedged database parks the socket — and the live
+// frames its catching-up subscription holds — indefinitely. Generous next to a
+// few cached lookups plus one indexed replay scan.
+const subscribeTimeout = 10 * time.Second
 
 // Authorizer decides whether a principal may subscribe to a topic.
 type Authorizer interface {
@@ -85,7 +101,7 @@ type Limits struct {
 // registers it with the hub, and runs the per-connection read loop.
 type Handler struct {
 	hub                 *Hub
-	auth                *auth.Authenticator
+	principals          PrincipalFunc
 	authz               Authorizer
 	replay              Replayer
 	idleTimeout         time.Duration
@@ -96,12 +112,19 @@ type Handler struct {
 	recordActive        func(userID int64)
 	limits              Limits
 	anonConns           *ipCounter
+
+	// presence holds each presence topic's open throttle window: topic ->
+	// whether a change arrived inside it (one trailing broadcast is owed).
+	presenceMu     sync.Mutex
+	presence       map[string]bool
+	presenceWindow time.Duration // presenceWindow; tests shorten it
 }
 
-// NewHandler wires the WebSocket handler. recordActive may be nil; when set it
-// is called with the user ID of each authenticated connection so WS users count
-// toward the active-user metrics. allowedOrigins enforces the browser Origin
-// against that allowlist (CSWSH protection); InsecureSkipVerify is never set.
+// NewHandler wires the WebSocket handler. principals judges the handshake
+// credential (see Principals). recordActive may be nil; when set it is called
+// with the user ID of each authenticated connection so WS users count toward
+// the active-user metrics. allowedOrigins enforces the browser Origin against
+// that allowlist (CSWSH protection); InsecureSkipVerify is never set.
 //
 // config.Load defaults GATEWAY_WS_ALLOWED_ORIGINS to the platform apex plus
 // the "*.owt.craazzzyyfoxx.me" wildcard (coder/websocket's OriginPatterns
@@ -133,7 +156,7 @@ type Handler struct {
 // built from a non-positive limit, behaves the same way) to disable the
 // throttle — acceptOptionsFor never dereferences a nil limiter directly, it
 // only ever calls its nil-safe Allow method.
-func NewHandler(hub *Hub, a *auth.Authenticator, authz Authorizer, rep Replayer, idleTimeout time.Duration, log *slog.Logger, allowedOrigins []string, customDomains CustomDomainResolver, customDomainLimiter *ratelimit.Limiter, recordActive func(userID int64), limits Limits) *Handler {
+func NewHandler(hub *Hub, principals PrincipalFunc, authz Authorizer, rep Replayer, idleTimeout time.Duration, log *slog.Logger, allowedOrigins []string, customDomains CustomDomainResolver, customDomainLimiter *ratelimit.Limiter, recordActive func(userID int64), limits Limits) *Handler {
 	if len(allowedOrigins) == 0 {
 		log.Warn("GATEWAY_WS_ALLOWED_ORIGINS is empty; WebSocket origin checking is degraded to same-origin-only")
 	}
@@ -146,7 +169,7 @@ func NewHandler(hub *Hub, a *auth.Authenticator, authz Authorizer, rep Replayer,
 	}
 	return &Handler{
 		hub:                 hub,
-		auth:                a,
+		principals:          principals,
 		authz:               authz,
 		replay:              rep,
 		idleTimeout:         idleTimeout,
@@ -157,49 +180,94 @@ func NewHandler(hub *Hub, a *auth.Authenticator, authz Authorizer, rep Replayer,
 		customDomainLimiter: customDomainLimiter,
 		limits:              limits,
 		anonConns:           newIPCounter(),
+		presence:            make(map[string]bool),
+		presenceWindow:      presenceWindow,
 	}
 }
 
-// PrincipalResolver judges an opaque credential against identity-svc and
-// returns its typed identity — principal.Resolver.PrincipalToken. Taken as a
-// function so this package does not own the RPC wiring.
+// PrincipalResolver judges a credential against identity-svc and returns its
+// typed identity — principal.Resolver.PrincipalToken. Taken as a function so
+// this package does not own the RPC wiring.
 type PrincipalResolver func(ctx context.Context, token string) (principal.Info, bool, error)
 
-// APIKeyAuth adapts resolve into an auth.APIKeyResolver, so an `owt_sk_` API
-// key can authenticate a WebSocket connection that the local JWT parser could
-// never decode (a key carries no claims). Wire it into the authenticator handed
-// to NewHandler — and ONLY that one: resolve performs an identity RPC on a
-// cache miss, which must not happen on the access-log/metrics path.
+// PrincipalFunc turns a socket credential into its principal: nil for an
+// invalid one. A non-nil error means identity-svc could not judge it, and the
+// principal returned with it is what the local check alone supports — the
+// session's user, never a superuser; nil for an API key.
+type PrincipalFunc func(ctx context.Context, token string) (*auth.User, error)
+
+// Principals builds the PrincipalFunc the handshake and TopicRevoker share, so
+// a live socket is re-judged by the rules it was admitted under.
 //
-// The principal it builds is deliberately narrower than the payload permits:
+// A session JWT passes the local check first (signature and exp, which
+// ServeHTTP binds the socket to), then identity-svc through resolve, which
+// knows what the token does not carry: whether its session was revoked, and
+// the superuser bit. An API key is identity-svc's alone, and the principal it
+// gets is deliberately narrower than the payload permits:
 //
 //   - IsSuperuser is always false. A key must never inherit its owner's
 //     superuser bit, which the topic ACL treats as a blanket membership bypass
 //     (acl.allowWorkspaceMember) — that would hand every workspace's feed to a
 //     credential scoped to exactly one.
-//   - a key holding NO workspace grant stays anonymous. The workspace topic
-//     gate is membership-based (IsWorkspaceMember, keyed by the OWNER's user
-//     id), so it cannot tell an empty-scope key from a fully-scoped one: once
-//     authenticated, either would receive the owner's whole workspace feed.
-//     Requiring at least one grant keeps "empty scopes = zero permissions" true
-//     on this surface too. It is coarse on purpose — the socket has no
-//     per-topic permission model to be more precise with.
+//   - a key holding NO workspace grant stays anonymous. Inside its workspace
+//     the topic gate is still membership-based (IsWorkspaceMember, keyed by
+//     the OWNER's user id), so it cannot tell an empty-scope key from a
+//     fully-scoped one: once authenticated, either would receive that
+//     workspace's whole feed. Requiring at least one grant keeps "empty scopes
+//     = zero permissions" true on this surface too. It is coarse on purpose —
+//     the socket has no per-topic permission model to be more precise with.
+//   - APIKeyWorkspaceID carries the key's workspace, and the topic ACL confines
+//     every workspace-scoped grant to it and refuses the owner's personal
+//     topics: without it the owner's memberships in OTHER workspaces, and
+//     their inbox, would all be readable with a key scoped to one. A payload
+//     naming no key workspace stays anonymous — it could not be confined.
 //   - ExpiresAt stays zero, so ServeHTTP binds no deadline: unlike an access
-//     token, a key has no exp to bind to. A revoked key is therefore refused
-//     every new handshake (and every REST call) within apiKeyCacheTTL, but an
-//     ALREADY OPEN socket keeps its subscriptions until it drops.
-func APIKeyAuth(resolve PrincipalResolver) auth.APIKeyResolver {
-	return func(ctx context.Context, token string) *auth.User {
-		info, ok, err := resolve(ctx, token)
-		if err != nil || !ok || info.UserID == 0 || info.WorkspaceGrants == 0 {
-			return nil
+//     token, a key has no exp to bind to. A revoked key is refused every new
+//     handshake (and every REST call) within apiKeyCacheTTL; an ALREADY OPEN
+//     socket is closed the next time its owner's RBAC changes (TopicRevoker)
+//     and otherwise keeps its subscriptions until it drops.
+func Principals(a *auth.Authenticator, resolve PrincipalResolver) PrincipalFunc {
+	return func(ctx context.Context, token string) (*auth.User, error) {
+		if auth.IsAPIKey(token) {
+			info, ok, err := resolve(ctx, token)
+			if err != nil || !ok || info.UserID == 0 || info.WorkspaceGrants == 0 || info.APIKeyWorkspaceID == 0 {
+				return nil, err
+			}
+			return &auth.User{ID: info.UserID, APIKeyWorkspaceID: info.APIKeyWorkspaceID, Token: token}, nil
 		}
-		return &auth.User{ID: info.UserID}
+		user := a.Verify(token)
+		if user == nil {
+			return nil, nil
+		}
+		info, ok, err := resolve(ctx, token)
+		switch {
+		case err != nil:
+			return user, err
+		case !ok:
+			return nil, nil
+		}
+		user.IsSuperuser = info.IsSuperuser
+		return user, nil
 	}
 }
 
+// authenticate resolves the handshake credential — the Authorization header,
+// else the session cookie, never the query string — to the socket's principal.
+// A non-nil error means identity-svc could not judge it (see PrincipalFunc).
+func (h *Handler) authenticate(r *http.Request) (*auth.User, error) {
+	token := auth.TokenFromRequest(r)
+	if token == "" {
+		return nil, nil
+	}
+	user, err := h.principals(r.Context(), token)
+	if err != nil {
+		h.log.Warn("identity-svc could not judge the websocket credential; socket degraded to the local token check", "err", err)
+	}
+	return user, err
+}
+
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	user := h.auth.UserFromRequest(r)
+	user, authErr := h.authenticate(r)
 	if user != nil && h.recordActive != nil {
 		h.recordActive(user.ID)
 	}
@@ -246,8 +314,32 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	conn := newConn(ctx, c, user, connLog)
-	h.hub.add(conn)
+	if !h.hub.add(conn) {
+		// Shutdown has begun (Hub.CloseAll): a socket registered now would miss
+		// its snapshot, so turn the client away with 1001 instead.
+		conn.closeWith(websocket.StatusGoingAway, "")
+		return
+	}
 	defer h.cleanup(conn)
+
+	// Register first, then judge again (as handleSubscribe registers before
+	// its ACL check): TopicRevoker snapshots the hub when a user's rbac frame
+	// lands, so a revocation that arrived between authenticate and add found
+	// no socket to close. This re-check is a cache hit unless that eviction
+	// happened. An identity outage keeps the socket, as the revoker does; a
+	// handshake that already degraded on one skips the second wait.
+	if user != nil && authErr == nil {
+		fresh, err := h.principals(ctx, user.Token)
+		switch {
+		case err != nil:
+			connLog.Warn("websocket credential re-check failed; keeping its principal", "err", err)
+		case fresh == nil:
+			conn.closeWith(websocket.StatusPolicyViolation, "credential revoked")
+			return
+		default:
+			conn.user.Store(fresh)
+		}
+	}
 
 	h.readLoop(ctx, conn)
 }
@@ -504,7 +596,7 @@ func (h *Handler) handleSubscribe(ctx context.Context, conn *Conn, op *protocol.
 	// Checked before the ACL/replay queries so an over-subscribing client cannot
 	// drive DB work past its budget.
 	maxTopics := h.limits.MaxTopicsAuth
-	if conn.user == nil {
+	if conn.principal() == nil {
 		maxTopics = h.limits.MaxTopicsAnon
 	}
 	if maxTopics > 0 && conn.topicCount() >= maxTopics {
@@ -512,7 +604,23 @@ func (h *Handler) handleSubscribe(ctx context.Context, conn *Conn, op *protocol.
 		return
 	}
 
-	allowed, err := h.authz.Allow(ctx, conn.user, op.Topic)
+	// Register first, catching up (see Conn.subscribe): before the ACL so a
+	// revocation arriving mid-subscribe already finds it, and before the cursor
+	// so no event falls between the replay and live delivery. Every exit that
+	// does not go live drops it again.
+	if !conn.subscribe(op.Topic) {
+		return
+	}
+	live := false
+	defer func() {
+		if !live {
+			conn.unsubscribe(op.Topic)
+		}
+	}()
+	ctx, cancel := context.WithTimeout(ctx, subscribeTimeout)
+	defer cancel()
+
+	allowed, err := h.authz.Allow(ctx, conn.principal(), op.Topic)
 	if err != nil {
 		conn.log.Error("acl check failed", "topic", op.Topic, "err", err)
 		_ = conn.send(protocol.ErrorFrame("internal_error", "Could not authorize the subscription", topicPtr))
@@ -525,7 +633,7 @@ func (h *Handler) handleSubscribe(ctx context.Context, conn *Conn, op *protocol.
 		// be prompted to re-auth (forbidden). Denials of a public spectating
 		// topic to anonymous users (hidden tournament) are also auth_required —
 		// logging in as an insider may grant access.
-		if conn.user == nil {
+		if conn.principal() == nil {
 			_ = conn.send(protocol.ErrorFrame("auth_required", "Log in to subscribe to this topic", topicPtr))
 		} else {
 			_ = conn.send(protocol.ErrorFrame("forbidden", "You are not allowed to subscribe to this topic", topicPtr))
@@ -558,16 +666,23 @@ func (h *Handler) handleSubscribe(ctx context.Context, conn *Conn, op *protocol.
 	if err := conn.sendSubscription(op.Topic, events, cursor); err != nil {
 		return
 	}
+	live = true
 
 	if IsPresenceTopic(op.Topic) {
-		h.broadcastPresence(op.Topic)
+		h.presenceChanged(op.Topic)
 	}
 }
 
 func (h *Handler) handleUnsubscribe(conn *Conn, topic string) {
+	// A topic this socket never joined changes nothing. Without this, unique
+	// unsubscribes for presence-shaped topics — no ACL or topic budget applies
+	// to them — would each cost a presence broadcast and a throttle timer.
+	if !conn.hasTopic(topic) {
+		return
+	}
 	conn.unsubscribe(topic)
 	if IsPresenceTopic(topic) {
-		h.broadcastPresence(topic)
+		h.presenceChanged(topic)
 	}
 }
 
@@ -578,7 +693,8 @@ func (h *Handler) handleUnsubscribe(conn *Conn, topic string) {
 func (h *Handler) handlePublish(conn *Conn, op *protocol.ClientOp) {
 	topicPtr := &op.Topic
 
-	if conn.user == nil {
+	user := conn.principal()
+	if user == nil {
 		_ = conn.send(protocol.ErrorFrame("forbidden", "Authentication required to publish", topicPtr))
 		return
 	}
@@ -594,7 +710,7 @@ func (h *Handler) handlePublish(conn *Conn, op *protocol.ClientOp) {
 		return // silently drop abusive bursts
 	}
 
-	actor := conn.user.ID
+	actor := user.ID
 	env := protocol.Envelope{
 		EventID:       0,
 		EventType:     op.EventType,
@@ -604,6 +720,43 @@ func (h *Handler) handlePublish(conn *Conn, op *protocol.ClientOp) {
 		Data:          op.Data,
 	}
 	h.hub.Route(op.Topic, protocol.EventFrame(op.Topic, env), conn)
+}
+
+// presenceChanged broadcasts topic's presence now when no window is open for
+// it; inside an open window it only marks one trailing broadcast as owed.
+func (h *Handler) presenceChanged(topic string) {
+	h.presenceMu.Lock()
+	if _, open := h.presence[topic]; open {
+		h.presence[topic] = true
+		h.presenceMu.Unlock()
+		return
+	}
+	h.presence[topic] = false
+	h.presenceMu.Unlock()
+	h.flushPresence(topic)
+}
+
+// flushPresence broadcasts the hub's current presence for topic and holds its
+// window open. At the window's end an owed change gets one trailing broadcast,
+// which opens the next window; otherwise the topic goes quiet and its entry is
+// deleted. The timer is scheduled after the broadcast, so a trailing frame
+// never overtakes the one before it. After shutdown a pending timer finds no
+// subscribers and routes nothing.
+func (h *Handler) flushPresence(topic string) {
+	h.broadcastPresence(topic)
+	time.AfterFunc(h.presenceWindow, func() {
+		h.presenceMu.Lock()
+		owed := h.presence[topic]
+		if owed {
+			h.presence[topic] = false
+		} else {
+			delete(h.presence, topic)
+		}
+		h.presenceMu.Unlock()
+		if owed {
+			h.flushPresence(topic)
+		}
+	})
 }
 
 func (h *Handler) broadcastPresence(topic string) {
@@ -632,6 +785,6 @@ func (h *Handler) cleanup(conn *Conn) {
 	h.hub.remove(conn)
 	conn.close()
 	for _, t := range presenceTopics {
-		h.broadcastPresence(t)
+		h.presenceChanged(t)
 	}
 }

@@ -157,3 +157,35 @@ func TestMiddleware_LegacyUnderV2(t *testing.T) {
 		t.Error("/api/v2/auth/me is canonical under v2 and must not be deprecated")
 	}
 }
+
+// A %2F inside one segment must route the same under every spelling. The
+// rewrite used to set Path only; EscapedPath then discarded the stale RawPath,
+// so /api/v2/admin/settings/a%2Fb re-escaped as .../settings/a/b — two
+// segments — and missed the handler its v1 spelling reaches.
+func TestMiddleware_EncodedSlashParity(t *testing.T) {
+	var key string
+	record := func(w http.ResponseWriter, r *http.Request) { key = r.PathValue("key") }
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v1/admin/settings/{key}", record)
+	mux.HandleFunc("GET /api/v1/auth/x/{key}", record)
+	h := Middleware(mux)
+
+	for _, p := range []string{
+		"/api/v1/admin/settings/a%2Fb",
+		"/api/v2/admin/settings/a%2Fb",
+		"/api/auth/x/a%2Fb",
+		"/api/v2/auth/x/a%2Fb",
+	} {
+		key = ""
+		r := httptest.NewRequest(http.MethodGet, p, nil)
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		if w.Code != http.StatusOK || key != "a/b" {
+			t.Errorf("%s: code=%d key=%q, want 200 with key \"a/b\"", p, w.Code, key)
+		}
+		// The rewrite works on a copy: the caller's request keeps its URL.
+		if got := r.URL.EscapedPath(); got != p {
+			t.Errorf("%s: the caller's URL now reads %q", p, got)
+		}
+	}
+}

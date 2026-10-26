@@ -980,8 +980,12 @@ services:
     networks:
       - app-network
     # No healthcheck: the distroless image has no shell/wget. nginx depends on
-    # it with condition: service_started.
+    # it with condition: service_started. Liveness is /health; readiness (RPC
+    # transport up, not draining) is /ready.
     restart: always
+    # SIGTERM drains in-flight requests for GATEWAY_SHUTDOWN_TIMEOUT (30s
+    # default) before the rest are cut; Docker's default 10s would SIGKILL first.
+    stop_grace_period: 40s
 
   nginx:
     image: nginx:1.31-alpine

@@ -1,6 +1,7 @@
 package ratelimit
 
 import (
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -247,5 +248,43 @@ func TestRedisLimiter_RejectionsAreCounted(t *testing.T) {
 	}
 	if len(layers) != 1 || layers[0] != layerAPIKey {
 		t.Fatalf("want exactly one %q rejection, got %v", layerAPIKey, layers)
+	}
+}
+
+// TestWrapAPIKey_IdentityFailuresStopAtTheLimiter: a key identity-svc refused
+// is a 401 — passing it through let any owt_sk_ string skip metering and the
+// anonymous limiter and reach the workers — and one it could not judge is an
+// immediate 503 + Retry-After, where passing it through made the route wait
+// out a second validate_token timeout. Every wrapper that resolves keys agrees.
+func TestWrapAPIKey_IdentityFailuresStopAtTheLimiter(t *testing.T) {
+	_, shared, _ := sharedLimiter(t, 1000)
+	calls := 0
+	for _, tc := range []struct {
+		err    error
+		status int
+		code   string
+	}{
+		{ErrKeyRejected, http.StatusUnauthorized, `"code":"unauthorized"`},
+		{errors.New("identity down"), http.StatusServiceUnavailable, `"code":"unavailable"`},
+	} {
+		quota := func(*http.Request) (string, int, error) { return "", 0, tc.err }
+		caller := func(*http.Request) (Caller, bool, error) { return Caller{}, false, tc.err }
+		for name, h := range map[string]http.Handler{
+			"local":   New(1000, time.Minute).WrapAPIKey(okHandler(&calls), quota),
+			"redis":   shared.WrapAPIKey(okHandler(&calls), quota),
+			"metered": shared.WrapMetered(okHandler(&calls), caller, ceilings(nil)),
+		} {
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, meteredReq("owt_sk_x", ""))
+			if rec.Code != tc.status || !strings.Contains(rec.Body.String(), tc.code) {
+				t.Errorf("%s, %v: want %d %s, got %d %s", name, tc.err, tc.status, tc.code, rec.Code, rec.Body)
+			}
+			if tc.status == http.StatusServiceUnavailable && rec.Header().Get("Retry-After") == "" {
+				t.Errorf("%s: a 503 must carry Retry-After", name)
+			}
+		}
+	}
+	if calls != 0 {
+		t.Fatalf("no refused request may reach the route, %d did", calls)
 	}
 }
