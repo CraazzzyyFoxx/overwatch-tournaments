@@ -545,6 +545,37 @@ def test_awaiting_link_is_not_success_and_explicit_game_retry_resolves_ambiguity
     asyncio.run(run())
 
 
+def test_an_encounter_with_no_live_game_takes_the_log_on_its_cancelled_position(stats_parity_database, monkeypatch):
+    """A series entered whole leaves its encounter only the cancelled position its room retired (MoonRise Mix Vol.5,
+    encounter 6845). A log the operator attaches to that encounter is observed there; a search never looks at a
+    cancelled position, and one live game anywhere in the encounter keeps the cancelled ones out."""
+
+    async def run():
+        async with environment(stats_parity_database, monkeypatch, with_game=False) as env:
+            async with env.sf() as session:
+                env.game = await _game(session, env, cancelled=True)
+                await session.commit()
+            job = await upload(env)
+            assert await process(env, job.id) == STATUS.AWAITING_LINK
+            async with env.sf() as session:
+                await log_records_service.retry(session, job.id, workspace_id=env.workspace, encounter_id=env.encounter)
+            assert await process(env, job.id) == STATUS.DONE
+            assert (await match_for_game(env)).ingest_job_id == job.id
+
+            async with env.sf() as session:
+                await _game(session, env, position=2, map_id=env.fixture_ids["map_other"])
+                await session.commit()
+            later = await upload(env, workshop(extra="later"), filename="later.log")
+            async with env.sf() as session:
+                await log_records_service.retry(
+                    session, later.id, workspace_id=env.workspace, encounter_id=env.encounter
+                )
+            assert await process(env, later.id) == STATUS.AWAITING_LINK
+            assert (await match_for_game(env)).ingest_job_id == job.id
+
+    asyncio.run(run())
+
+
 @pytest.mark.parametrize("refusal", ["missing", "conflict", "unverified", "unbound", "shared"])
 def test_historical_retry_and_worker_preserve_observations(stats_parity_database, monkeypatch, refusal):
     async def run():
