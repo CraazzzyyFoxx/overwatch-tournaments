@@ -33,6 +33,10 @@ from shared.tests.encounter_writer_case import EncounterWriterCase
 from src.rpc import _helpers as rpc_helpers
 from src.rpc import integrations
 from src.services.challonge import sync as challonge_sync
+from src.services.challonge.sync import importer as sync_importer
+from src.services.challonge.sync import locking as sync_locking
+from src.services.challonge.sync import sync_log as sync_log_module
+from src.services.challonge.sync import upsert as sync_upsert
 from src.services.encounter import challonge_push_events
 from tests._rpc_fakes import CapturingBroker, FakeSessionMaker, make_identity
 
@@ -116,13 +120,13 @@ class ChallongeImportTests(EncounterWriterCase):
             return await lock_encounter(session, encounter_id)
 
         with (
-            patch.object(challonge_sync, "_get_redis", AsyncMock(return_value=self.redis)),
+            patch.object(sync_locking, "_get_redis", AsyncMock(return_value=self.redis)),
             patch.object(challonge_sync.challonge_client, "fetch_matches", AsyncMock(return_value=list(matches))),
             patch.object(challonge_sync.challonge_client, "fetch_participants", AsyncMock(return_value=[])),
-            patch.object(challonge_sync, "enqueue_tournament_recalculation", AsyncMock()) as recompute,
-            patch.object(challonge_sync, "publish_tournament_invalidation", AsyncMock()) as invalidate,
+            patch.object(sync_importer, "enqueue_tournament_recalculation", AsyncMock()) as recompute,
+            patch.object(sync_importer, "publish_tournament_invalidation", AsyncMock()) as invalidate,
             patch.object(
-                challonge_sync,
+                sync_upsert,
                 "lock_encounter",
                 AsyncMock(side_effect=lock) if before_lock is not None else AsyncMock(wraps=lock_encounter),
             ) as lock_mock,
@@ -279,7 +283,7 @@ class SyncLogPurgeTests(EncounterWriterCase):
                 .where(ChallongeSyncLog.created_at < now - timedelta(days=30))
             )
 
-        with patch.object(challonge_sync, "SYNC_LOG_PURGE_BATCH", 1):
+        with patch.object(sync_log_module, "SYNC_LOG_PURGE_BATCH", 1):
             deleted = await challonge_sync.purge_sync_log(self.Session)
 
         async with self.Session() as s:
@@ -356,7 +360,7 @@ class ChallongeRpcErrorTests(IsolatedAsyncioTestCase):
             patch.object(integrations.auth, "require_tournament_id_permission", AsyncMock()),
             patch.object(integrations.auth, "get_tournament_workspace_id", AsyncMock(return_value=4)),
             patch.object(integrations, "quota", SimpleNamespace(charge=AsyncMock())),
-            patch.object(challonge_sync, "_get_redis", AsyncMock(return_value=redis)),
+            patch.object(sync_locking, "_get_redis", AsyncMock(return_value=redis)),
             patch.object(challonge_sync, "ADMIN_LOCK_WAIT_SECONDS", 0.05),
         ):
             envelope = await self.handler("rpc.tournament.challonge_import")(

@@ -1070,7 +1070,7 @@ class PickBanSessionService:
     async def sync_all_pick_ban_sessions_after_team_change(self, session: AsyncSession, encounter: Encounter) -> None:
         """``sync_pick_ban_session_after_team_change`` for every kind, in the
         two-arg shape (``session``, ``encounter``) that ``admin/encounter.py``,
-        ``challonge/sync.py`` and the bracket advancement callback all call.
+        ``challonge/sync/upsert.py`` and the bracket advancement callback all call.
         Also clears ``EncounterReadiness`` -- a confirmation made against one
         opponent must not carry over once a slot changes hands."""
         await self.reset_readiness(session, encounter.id)
