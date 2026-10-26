@@ -49,8 +49,8 @@ const nextConfig = {
   // Only use standalone output in production builds
   ...(process.env.NODE_ENV === "production" && { output: "standalone" }),
   // `src/app/fonts/onest-*.ttf` is read at runtime by the OpenGraph renderer
-  // (`src/lib/og/encounter.tsx`), not imported, so nothing traces it on its
-  // own and the standalone image would ship without it.
+  // (`src/lib/og/base.ts`), not imported, so nothing traces it on its own and
+  // the standalone image would ship without it.
   outputFileTracingIncludes: {
     "/**": ["./src/app/fonts/onest-400.ttf", "./src/app/fonts/onest-700.ttf"]
   },

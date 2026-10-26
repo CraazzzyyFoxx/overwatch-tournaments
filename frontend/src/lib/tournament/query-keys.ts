@@ -162,6 +162,8 @@ export const tournamentQueryKeys = {
   /** The picker feed: every tournament of the workspace (or of all, `"all"`), no paging. */
   selectOptions: (workspaceId: KeyPart) => ["tournaments-select-options", workspaceId] as const,
   overview: (tournamentId: KeyPart) => ["tournament-overview", tournamentId] as const,
+  /** The latest series with parsed logs: its last map is a card's picture when there is no cover. */
+  latestPlayed: (tournamentId: number) => ["tournament-latest-played", tournamentId] as const,
   /** The bare `detail` prefix: every tournament's overview at once. */
   detailRoot: () => ["tournament"] as const,
   teamsAll: () => ["teams"] as const,

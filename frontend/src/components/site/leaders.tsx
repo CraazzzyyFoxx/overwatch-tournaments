@@ -4,6 +4,7 @@ import { getTranslations } from "next-intl/server";
 
 import { PlaceBadge } from "@/components/ui/place-badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import type { Formatter } from "@/lib/datetime";
 import { getFormatter } from "@/lib/datetime/server";
 import { getPlayerSlug } from "@/lib/player";
 import { cn } from "@/lib/utils";
@@ -34,6 +35,95 @@ const PLAYER_LINK_CLASS =
 const WINNER_LINK_CLASS =
   "mb-2 min-h-24 grid-cols-[auto_minmax(0,1fr)] gap-y-3 rounded-[var(--aqt-radius)] border border-[color:var(--aqt-border)] bg-[color:var(--aqt-card)] py-4 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:px-5";
 
+/** One headline total: the figure over its name from `md`, beside it below. Inside a `<dl>`. */
+export function KpiFigure({ label, value }: Readonly<{ label: ReactNode; value: ReactNode }>) {
+  return (
+    <div className="flex items-baseline justify-between gap-4 md:flex-col md:items-start md:gap-2">
+      <dt className="order-2 text-body text-[color:var(--aqt-fg-muted)]">{label}</dt>
+      <dd className="font-display text-display font-semibold tabular-nums text-[color:var(--aqt-fg)]">
+        {value}
+      </dd>
+    </div>
+  );
+}
+
+/** One player leaderboard: its head, the leader's card, then the rest as rows. */
+export interface PlayerBoardSpec {
+  title: ReactNode;
+  sub?: ReactNode;
+  hint?: string;
+  rows: PlayerStatistics[] | null;
+  value: "wins" | "winrate";
+  empty?: ReactNode;
+}
+
+/**
+ * A board column. Synchronous, with the caller's formatter: it renders inside
+ * the boards' own async readers, and in tests through `renderToStaticMarkup`.
+ */
+export function PlayerBoard({ board, format }: Readonly<{ board: PlayerBoardSpec; format: Formatter }>) {
+  return (
+    <div className="min-w-0">
+      <div className="mb-4">
+        <h3 className="font-display text-heading font-semibold text-[color:var(--aqt-fg)]">
+          {board.title}
+        </h3>
+        {board.sub ? (
+          <p title={board.hint} className="mt-1 text-caption text-[color:var(--aqt-fg-muted)]">
+            {board.sub}
+          </p>
+        ) : null}
+      </div>
+      {board.rows === null ? (
+        <OpenLoadError />
+      ) : board.rows.length === 0 ? (
+        <OpenEmptyRow>{board.empty}</OpenEmptyRow>
+      ) : (
+        <ol>
+          {board.rows.map((player, index) => (
+            <li key={player.id}>
+              <Link
+                href={`/users/${getPlayerSlug(player.name)}`}
+                prefetch={false}
+                title={player.name}
+                className={cn(PLAYER_LINK_CLASS, index === 0 && WINNER_LINK_CLASS)}
+              >
+                {index === 0 ? (
+                  <PlaceBadge place={1} className="size-8 min-w-8 px-0" />
+                ) : (
+                  <span className="inline-flex size-8 items-center justify-center text-caption tabular-nums text-[color:var(--aqt-fg-muted)]">
+                    {index + 1}
+                  </span>
+                )}
+                <span
+                  className={cn("min-w-0 truncate font-semibold", index === 0 && "font-display text-heading")}
+                >
+                  {player.name}
+                </span>
+                <span
+                  className={cn(
+                    "whitespace-nowrap text-right font-semibold tabular-nums text-[color:var(--aqt-teal)]",
+                    index === 0 &&
+                      "col-start-2 text-left font-display text-headline sm:col-start-3 sm:row-start-1 sm:text-right"
+                  )}
+                >
+                  {board.value === "wins"
+                    ? `${format.number(player.value)}×`
+                    : format.number(player.value, {
+                        style: "percent",
+                        minimumFractionDigits: 1,
+                        maximumFractionDigits: 1
+                      })}
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ol>
+      )}
+    </div>
+  );
+}
+
 /** Shared presentation; each caller owns its platform or community data scope. */
 export async function LeadersContent({
   totals,
@@ -43,14 +133,7 @@ export async function LeadersContent({
 }: MetricKeys &
   Readonly<{
     totals: Partial<Record<KpiKey, number | null | undefined>> | null;
-    boards: readonly {
-      title: ReactNode;
-      sub?: ReactNode;
-      hint?: string;
-      rows: PlayerStatistics[] | null;
-      value: "wins" | "winrate";
-      empty?: ReactNode;
-    }[];
+    boards: readonly PlayerBoardSpec[];
   }>) {
   const [kpi, format] = await Promise.all([getTranslations("site.kpi"), getFormatter()]);
 
@@ -65,17 +148,7 @@ export async function LeadersContent({
               {primaryKeys.map((key) => {
                 const value = totals[key];
                 return typeof value === "number" ? (
-                  <div
-                    key={key}
-                    className="flex items-baseline justify-between gap-4 md:flex-col md:items-start md:gap-2"
-                  >
-                    <dt className="order-2 text-body text-[color:var(--aqt-fg-muted)]">
-                      {kpi(key)}
-                    </dt>
-                    <dd className="font-display text-display font-semibold tabular-nums text-[color:var(--aqt-fg)]">
-                      {format.number(value)}
-                    </dd>
-                  </div>
+                  <KpiFigure key={key} label={kpi(key)} value={format.number(value)} />
                 ) : null;
               })}
             </dl>
@@ -97,70 +170,7 @@ export async function LeadersContent({
       </div>
       <div className={LEADERS_CLASS}>
         {boards.map((board) => (
-          <div key={board.value} className="min-w-0">
-            <div className="mb-4">
-              <h3 className="font-display text-heading font-semibold text-[color:var(--aqt-fg)]">
-                {board.title}
-              </h3>
-              {board.sub ? (
-                <p
-                  title={board.hint}
-                  className="mt-1 text-caption text-[color:var(--aqt-fg-muted)]"
-                >
-                  {board.sub}
-                </p>
-              ) : null}
-            </div>
-            {board.rows === null ? (
-              <OpenLoadError />
-            ) : board.rows.length === 0 ? (
-              <OpenEmptyRow>{board.empty}</OpenEmptyRow>
-            ) : (
-              <ol>
-                {board.rows.map((player, index) => (
-                  <li key={player.id}>
-                    <Link
-                      href={`/users/${getPlayerSlug(player.name)}`}
-                      prefetch={false}
-                      title={player.name}
-                      className={cn(PLAYER_LINK_CLASS, index === 0 && WINNER_LINK_CLASS)}
-                    >
-                      {index === 0 ? (
-                        <PlaceBadge place={1} className="size-8 min-w-8 px-0" />
-                      ) : (
-                        <span className="inline-flex size-8 items-center justify-center text-caption tabular-nums text-[color:var(--aqt-fg-muted)]">
-                          {index + 1}
-                        </span>
-                      )}
-                      <span
-                        className={cn(
-                          "min-w-0 truncate font-semibold",
-                          index === 0 && "font-display text-heading"
-                        )}
-                      >
-                        {player.name}
-                      </span>
-                      <span
-                        className={cn(
-                          "whitespace-nowrap text-right font-semibold tabular-nums text-[color:var(--aqt-teal)]",
-                          index === 0 &&
-                            "col-start-2 text-left font-display text-headline sm:col-start-3 sm:row-start-1 sm:text-right"
-                        )}
-                      >
-                        {board.value === "wins"
-                          ? `${format.number(player.value)}×`
-                          : format.number(player.value, {
-                              style: "percent",
-                              minimumFractionDigits: 1,
-                              maximumFractionDigits: 1
-                            })}
-                      </span>
-                    </Link>
-                  </li>
-                ))}
-              </ol>
-            )}
-          </div>
+          <PlayerBoard key={board.value} board={board} format={format} />
         ))}
       </div>
     </>
@@ -190,27 +200,30 @@ export function LeadersSkeleton({ primaryKeys, secondaryKeys }: MetricKeys) {
         </div>
       </div>
       <div aria-hidden className={LEADERS_CLASS}>
-        {["wins", "winrate"].map((board) => (
-          <div key={board} className="min-w-0">
-            <div className="mb-4">
-              <Skeleton className="h-6 w-44" />
-              <Skeleton className="mt-1 h-5 w-32" />
-            </div>
-            {Array.from({ length: 5 }).map((_, index) => (
-              <div key={index} className={cn(PLAYER_LINK_CLASS, index === 0 && WINNER_LINK_CLASS)}>
-                <Skeleton className="size-8" />
-                <Skeleton className="h-5 w-full max-w-44" />
-                <Skeleton
-                  className={cn(
-                    "h-5 w-14",
-                    index === 0 && "col-start-2 h-8 w-20 sm:col-start-3 sm:row-start-1"
-                  )}
-                />
-              </div>
-            ))}
-          </div>
-        ))}
+        <PlayerBoardSkeleton />
+        <PlayerBoardSkeleton />
       </div>
     </>
+  );
+}
+
+/** One board column while it loads: the head, the leader's card and four rows. */
+export function PlayerBoardSkeleton() {
+  return (
+    <div className="min-w-0">
+      <div className="mb-4">
+        <Skeleton className="h-6 w-44" />
+        <Skeleton className="mt-1 h-5 w-32" />
+      </div>
+      {Array.from({ length: 5 }).map((_, index) => (
+        <div key={index} className={cn(PLAYER_LINK_CLASS, index === 0 && WINNER_LINK_CLASS)}>
+          <Skeleton className="size-8" />
+          <Skeleton className="h-5 w-full max-w-44" />
+          <Skeleton
+            className={cn("h-5 w-14", index === 0 && "col-start-2 h-8 w-20 sm:col-start-3 sm:row-start-1")}
+          />
+        </div>
+      ))}
+    </div>
   );
 }

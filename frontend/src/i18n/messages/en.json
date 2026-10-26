@@ -1175,7 +1175,11 @@
       "delete": "Delete account",
       "confirmTitle": "Delete your account?",
       "confirmBody": "Your account, sessions, linked OAuth connections and API keys will be deleted permanently. Your tournament history and player profile are kept, without an owner. You will be signed out right away.",
-      "confirmDelete": "Delete permanently"
+      "confirmDelete": "Delete permanently",
+      "currentPassword": "Current password",
+      "wrongPassword": "That password is not correct.",
+      "reauthRequired": "Deleting an account needs a recent sign-in. Sign in again, then delete the account within 10 minutes.",
+      "signInAgain": "Sign in again"
     },
     "sessions": {
       "activeTitle": "Active sessions",
@@ -3187,38 +3191,65 @@
     "hero": {
       "eyebrow": "OWT · Community tournaments",
       "title": "Community tournaments and player <accent>statistics</accent>",
-      "lede": "Schedules, brackets and matches from every community - and a player's whole history in one profile.",
+      "lede": "Schedules, brackets and matches from every community. A player's whole history in one profile.",
       "browseTournaments": "Browse tournaments",
       "myProfile": "My profile and statistics",
       "hostTournament": "Run a tournament on OWT"
     },
     "now": {
       "title": "On the platform now",
+      "titleRecent": "Recent tournaments",
       "more": "All tournaments",
       "error": "active tournaments",
-      "emptyBody": "Tournaments show up here as soon as a community opens registration.",
-      "live": "Live now",
-      "stage": "stage",
-      "teamsLabel": "{count, plural, one {team} other {teams}}",
-      "participantsLabel": "{count, plural, one {participant} other {participants}}",
-      "registrationsLabel": "{count, plural, one {entry} other {entries}}",
-      "bracket": "Bracket",
-      "matches": "Matches",
-      "regOpen": "Registration open",
-      "until": "until {date}",
-      "regEnds": "entries close",
-      "start": "start",
-      "apply": "Sign up",
-      "about": "About the tournament",
-      "none": "No tournaments right now",
-      "lastTournament": "Last tournament",
-      "winnerTeam": "Won by <b>{team}</b>",
-      "archive": "Tournament archive",
-      "lineFinishedWinner": "<d>{date}</d> · won by <b>{team}</b>",
-      "applicationsUntil": "Entries until {date}",
-      "registrationsCount": "{count, plural, one {# entry} other {# entries}}",
-      "teamsCount": "{count, plural, one {# team} other {# teams}}",
-      "participantsCount": "{count, plural, one {# participant} other {# participants}}"
+      "emptyBody": "Tournaments show up here as soon as a community opens registration."
+    },
+    "numbers": {
+      "title": "The platform in numbers"
+    },
+    "features": {
+      "title": "What the platform does",
+      "sub": "For players, organizers and everyone who follows the tournaments.",
+      "audience": {
+        "players": "For players",
+        "organizers": "For organizers",
+        "everyone": "For everyone"
+      },
+      "profile": {
+        "title": "A player's whole history in one profile",
+        "text": "Tournaments, roles and divisions, map win rate, recent form and achievements. The profile builds itself from every tournament on the platform.",
+        "link": "Find a player",
+        "alt": "A player's profile: the summary, the latest tournament's results, the role split and achievements"
+      },
+      "heroes": {
+        "title": "A ranking for every hero",
+        "text": "Damage, healing and kills per 10 minutes, the top 10 on each hero and a table of everyone who played them.",
+        "link": "Open the statistics",
+        "alt": "The Ana board: a hero card, the top 10 by healing and a table that highlights the best values"
+      },
+      "registration": {
+        "title": "Registration and entries",
+        "text": "Your own form, player roles and ranks, entry review, check-in and export to CSV or Google Sheets.",
+        "link": "Set up registration",
+        "alt": "A tournament's entries in the admin: player roles and ranks, review statuses and check-in"
+      },
+      "balancer": {
+        "title": "Balancer and mixes",
+        "text": "The balancer builds even teams by rank and role, and mixes run in lobbies with a draft, captains and a match history.",
+        "link": "Form teams",
+        "alt": "Lobby A's room: two teams of five with ranks and captain crowns, the match history below"
+      },
+      "brackets": {
+        "title": "Brackets of any format",
+        "text": "Groups, playoffs, double elimination and Swiss. Captains report results themselves; the bracket and tables update at once.",
+        "link": "How brackets work",
+        "alt": "A double elimination bracket: the upper and lower brackets with every match's score"
+      },
+      "matches": {
+        "title": "Every match parsed from its logs",
+        "text": "Maps, series score and time, damage, healing and the match leaders on every map.",
+        "link": "Browse matches",
+        "alt": "A match page: a 3:1 series score, the maps played and team statistics"
+      }
     },
     "directory": {
       "title": "Communities on OWT",
@@ -3230,43 +3261,25 @@
       "play": "Start autoplay",
       "prev": "Previous communities",
       "next": "Next communities",
-      "dotRange": "Communities {from}-{to} of {total}",
+      "dotRange": "Communities {from}–{to} of {total}",
       "dotOne": "Community {index} of {total}",
       "live": "Tournament running",
       "tournamentsLabel": "{count, plural, one {tournament} other {tournaments}}",
-      "playersLabel": "{count, plural, one {player} other {players}}"
+      "playersLabel": "{count, plural, one {player} other {players}}",
+      "cta": {
+        "title": "Your community here",
+        "text": "Create a community page and run your tournaments on OWT."
+      }
     },
     "leaders": {
+      "title": "Platform leaders",
       "sub": "Across every community, all time.",
       "more": "All statistics",
-      "totals": "The platform in numbers",
       "mostWins": "Most wins",
       "winsSub": "tournaments won",
-      "bestWinrate": "Best win rate",
-      "winrateSub": "4+ tournaments",
-      "winrateTitle": "Only players with more than 3 tournaments are counted"
-    },
-    "showcase": {
-      "title": "What it looks like",
-      "sub": "Screenshots of the live platform: real players, tournaments and matches.",
-      "profile": {
-        "title": "Player profile",
-        "text": "Tournaments, win rate, form over the last ten, roles and favourite heroes - in one profile.",
-        "more": "Find a player",
-        "alt": "CraazzzyyFox's player profile: 38 tournaments, 50.9% win rate, form over the last 10 tournaments, role split and stats from «Турнир Сабов Anakq #42»"
-      },
-      "tournament": {
-        "title": "Tournament page",
-        "text": "The result, the playoff bracket, the most-played heroes and the format - on one page.",
-        "more": "All tournaments",
-        "alt": "The «Турнир Сабов Anakq #42» tournament page: champion Tref, the bracket final, the most-played heroes"
-      },
-      "match": {
-        "title": "Match",
-        "text": "The series score, the maps with time played, series stats and match leaders.",
-        "more": "All matches",
-        "alt": "67-41=наше место against Омский газмяс: 3:1 on the series, four maps played, series stats"
-      }
+      "mostPlayed": "Most played",
+      "mostPlayedSub": "{game} · share of the time in parsed matches",
+      "mostPlayedEmpty": "No parsed matches yet."
     },
     "organizer": {
       "eyebrow": "For organizers",
@@ -3281,12 +3294,12 @@
     "hero": {
       "eyebrow": "For organizers",
       "title": "Run your community's tournaments on <accent>OWT</accent>",
-      "lede": "Registration, the balancer, the draft, brackets and match stats - on your community's own page. It opens the moment you create it.",
+      "lede": "Registration, the balancer, the draft, brackets and match stats on your community's own page. It opens the moment you create it.",
       "stepsLabel": "How to launch a community",
       "steps": {
         "create": {
           "title": "Create the community",
-          "text": "A name and an address - the page opens right away and can be linked to directly."
+          "text": "A name and an address. The page opens right away and can be linked to directly."
         },
         "discord": {
           "title": "Connect your Discord server",
@@ -3300,7 +3313,7 @@
     },
     "create": {
       "name": "Name",
-      "namePlaceholder": "For example, Funny Cup",
+      "namePlaceholder": "For example, Night Owls",
       "address": "Page address",
       "slug": {
         "hint": "Latin a-z, digits, hyphen and underscore.",
@@ -3313,29 +3326,33 @@
       },
       "submit": "Create community",
       "submitSignedOut": "Sign in and create",
-      "note": "You become the owner. Next comes a short setup: the profile, colours and Discord. A subdomain is in the settings.",
+      "note": "One community per account, and you become its owner. Next comes a short setup: the profile, colours and Discord. A subdomain is set up in the settings.",
       "revoked": {
         "title": "Community creation is turned off for your account",
         "hint": "If that is a mistake, message the platform team on Discord."
       },
       "error": {
-        "limit": "You already own a community. One per account - message the platform team if you need another.",
+        "limit": "You already own a community, and an account can own only one. Message the platform team if you need another.",
         "generic": "Could not create the community."
       }
     },
+    "proof": {
+      "title": "Already running tournaments on OWT"
+    },
     "features": {
-      "title": "Everything a tournament needs - from entry to archive",
+      "title": "Everything a tournament needs: from entry to archive",
       "docs": "Documentation",
+      "howTo": "How to set it up",
       "shots": {
         "form": {
           "title": "Registration form",
-          "text": "A questionnaire of steps and questions with required fields and a preview. Save it as a template - every tournament of the community starts from it.",
-          "alt": "The “Form with ranks” registration form builder in the admin panel: the Accounts, Roles, Ranks, Scrims and Extra info steps and the Accounts questions - Battle.net, Discord, Twitch, Boosty"
+          "text": "A questionnaire of steps and questions with required fields and a preview. Save it as a template, and every tournament of the community starts from it.",
+          "alt": "The “Form with ranks” registration form builder in the admin panel: the Accounts, Roles, Ranks, Scrims and Extra info steps and the Accounts questions (Battle.net, Discord, Twitch, Boosty)"
         },
         "registration": {
           "title": "Registration",
           "text": "The public entry list: roles, top heroes, entry history, status, balancer readiness and check-in. Status filters and search.",
-          "alt": "The participants of “Турнир Тхао #5”: 148 entries - 142 approved, 3 pending, 3 withdrawn; roles, top heroes, statuses and check-in"
+          "alt": "The participants of “Турнир Тхао #5”: 148 entries, of which 142 approved, 3 pending, 3 withdrawn; roles, top heroes, statuses and check-in"
         },
         "entries": {
           "title": "Entries",
@@ -3344,7 +3361,7 @@
         },
         "stages": {
           "title": "Brackets and stages",
-          "text": "A tournament is built from stages - Swiss groups, a double-elimination playoff. Each stage has its own seeding, series format and round schedule, and the bracket is visible at once.",
+          "text": "A tournament is built from stages: Swiss groups, a double-elimination playoff. Each stage has its own seeding, series format and round schedule, and the bracket is visible at once.",
           "alt": "The stage builder of “Турнир Тхао #5” in the admin panel: the Groups and Playoffs stages, double-elimination playoff settings and a bracket preview"
         },
         "bracket": {
@@ -3359,10 +3376,6 @@
         }
       },
       "grid": {
-        "registration": {
-          "title": "Registration",
-          "text": "Your own entry form, roles and ranks, check-in, entry approval."
-        },
         "balancer": {
           "title": "Balancer",
           "text": "Even teams picked by role and division in minutes."
@@ -3371,21 +3384,13 @@
           "title": "Captain draft",
           "text": "A live room: captains pick in turn while viewers watch."
         },
-        "brackets": {
-          "title": "Brackets and stages",
-          "text": "Groups, Swiss, single and double elimination, map pick-ban."
-        },
         "mixes": {
           "title": "Mixes",
           "text": "Quick games for an evening: lobby, rosters, score and rating."
         },
-        "matchStats": {
-          "title": "Match stats",
-          "text": "Discord logs are parsed on their own: maps, heroes, MVP."
-        },
         "roles": {
           "title": "Roles and access",
-          "text": "Owner, administrators, referees and mix hosts - each with their own rights."
+          "text": "Owner, administrators, referees and mix hosts, each with their own rights."
         },
         "api": {
           "title": "API and keys",
@@ -3394,7 +3399,7 @@
       }
     },
     "domains": {
-      "title": "The community site - at your own address",
+      "title": "The community site at your own address",
       "sub": "Player links and tournament history do not change when the address does.",
       "steps": {
         "platform": {
@@ -3438,6 +3443,24 @@
       "auth": "<b>One sign-in across every domain.</b> A player signs in with their OWT account at any address of the community.",
       "profile": "<b>One shared player profile.</b> Tournaments from every community are collected in one profile.",
       "api": "<b>The API does not depend on the domain.</b> Integrations work the same at any address."
+    },
+    "faq": {
+      "title": "Common questions",
+      "price": {
+        "q": "How much does it cost?",
+        "a": "Free for communities."
+      },
+      "verification": {
+        "q": "What does verification give?",
+        "a": "The platform team reviews communities by hand. Besides a place in the directory and the trusted badge, verification unlocks tournament analytics, and achievements are recalculated at once instead of in a queue."
+      },
+      "discord": {
+        "q": "Is Discord required?",
+        "a": "Not for tournaments. Without a linked server and the bot, match logs are not read, announcements are not posted, subscriber roles are not checked and mix players are not moved between voice channels."
+      }
+    },
+    "quotes": {
+      "title": "What organizers say"
     },
     "cta": {
       "title": "Start with a page on the platform",
@@ -11741,7 +11764,7 @@
       },
       "basics": {
         "name": "Name",
-        "namePlaceholder": "For example, Funny Cup",
+        "namePlaceholder": "For example, Night Owls",
         "address": "Page address",
         "addressHelp": "Latin a-z, digits, hyphen and underscore. Filled in from the name until you edit it yourself.",
         "addressLocked": "The address is fixed at creation. A subdomain and your own domain are set up in the settings.",
@@ -13205,7 +13228,7 @@
       "searchPlaceholder": "Search by email or username…",
       "loading": "Loading accounts…",
       "error": "Could not load accounts. Try again.",
-      "minChars": "Type at least 2 characters to search.",
+      "minChars": "Type at least 3 characters to search.",
       "empty": "No accounts match that email or username.",
       "clearSelection": "Clear selection",
       "userId": "User #{id}"

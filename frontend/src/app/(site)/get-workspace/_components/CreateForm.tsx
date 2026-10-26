@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Check, CircleAlert, Lock, LogIn } from "lucide-react";
@@ -23,16 +23,75 @@ import { useWorkspaceStore } from "@/stores/workspace.store";
 type HelpKind = "neutral" | "ok" | "err";
 
 /**
+ * What the form held when "sign in and create" sent the visitor away. Sign-in
+ * is a full-page OAuth round trip, so React state does not survive it; this
+ * tab's storage does. Kept until the community is created.
+ */
+const DRAFT_KEY = "owt-get-workspace-draft";
+
+interface Draft {
+  name: string;
+  slug: string;
+  slugTouched: boolean;
+}
+
+function readStoredDraft(): string | null {
+  try {
+    return window.sessionStorage.getItem(DRAFT_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredDraft(draft: Draft | null) {
+  try {
+    if (draft) window.sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+    else window.sessionStorage.removeItem(DRAFT_KEY);
+  } catch {
+    // Storage refused (private mode, quota): the visitor types it again.
+  }
+}
+
+function parseDraft(raw: string | null): Draft | null {
+  if (!raw) return null;
+  try {
+    const value: unknown = JSON.parse(raw);
+    if (typeof value !== "object" || value === null || !("name" in value) || !("slug" in value)) {
+      return null;
+    }
+    const { name, slug } = value;
+    return typeof name === "string" && typeof slug === "string"
+      ? { name, slug, slugTouched: "slugTouched" in value && value.slugTouched === true }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+const noSubscription = () => () => {};
+
+/**
  * The create form of the organizer page (mock `.create`), and step 1 of the
  * admin's workspace wizard: on success it continues at step 2 of
  * `/admin/workspaces/new`.
  *
+ * The server and the hydrating render know no draft; the first client render
+ * after them reads it, and the new key remounts the form already filled. No
+ * effect copies it into state, and the server HTML never disagrees with the
+ * client's.
+ */
+export function CreateForm() {
+  const stored = useSyncExternalStore(noSubscription, readStoredDraft, () => null);
+  return <CreateFormBody key={stored ?? ""} draft={parseDraft(stored)} />;
+}
+
+/**
  * It mirrors what `POST /api/v1/workspaces` takes: a name and the PLATFORM
  * address `<zone>/workspace/<slug>`. There is no availability endpoint, so the
  * client can only answer "is this a legal address" (`validateSlug`); "is it
  * free" arrives as the create call's refusal.
  */
-export function CreateForm() {
+function CreateFormBody({ draft }: Readonly<{ draft: Draft | null }>) {
   const t = useTranslations("getWorkspace.create");
   const router = useRouter();
   const { user } = useAuthProfile();
@@ -40,12 +99,18 @@ export function CreateForm() {
   const openAuthModal = useAuthModalStore((state) => state.open);
   const fetchWorkspaces = useWorkspaceStore((state) => state.fetchWorkspaces);
 
-  const [name, setName] = useState("");
-  const [slug, setSlug] = useState("");
+  const [name, setName] = useState(draft?.name ?? "");
+  const [slug, setSlug] = useState(draft?.slug ?? "");
   // Set once the slug is typed by hand; until then it follows the name.
-  const [slugTouched, setSlugTouched] = useState(false);
+  const [slugTouched, setSlugTouched] = useState(draft?.slugTouched ?? false);
   const [pending, setPending] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  // Back from sign-in with the form filled: the next step is the button.
+  const [restored] = useState(draft !== null);
+  const submitRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (restored) submitRef.current?.focus();
+  }, [restored]);
   // What the server said about one specific slug — dropped as soon as the
   // field changes, because the verdict was about the old value.
   const [serverSlug, setServerSlug] = useState<{ slug: string; kind: "taken" | "reserved" } | null>(
@@ -68,6 +133,7 @@ export function CreateForm() {
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!user) {
+      writeStoredDraft({ name, slug, slugTouched });
       openAuthModal(getCurrentPathForAuthRedirect(window.location));
       return;
     }
@@ -77,6 +143,7 @@ export function CreateForm() {
     setFormError(null);
     try {
       const workspace = await workspaceService.create({ name: name.trim(), slug });
+      writeStoredDraft(null);
       // The switcher list and the workspace cookie are stale the moment a
       // workspace exists that was not in them.
       void fetchWorkspaces();
@@ -157,7 +224,7 @@ export function CreateForm() {
               setSlug(next);
               setSlugTouched(next !== "");
             }}
-            placeholder="funny-cup"
+            placeholder="night-owls"
             spellCheck={false}
             autoComplete="off"
             required
@@ -194,6 +261,7 @@ export function CreateForm() {
       <div className="flex flex-col items-start gap-3">
         {/* owtButton carries the whole marketing look; Button only supplies the element. */}
         <Button
+          ref={submitRef}
           type="submit"
           variant={null}
           size={null}

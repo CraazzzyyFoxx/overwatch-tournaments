@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
+import { Plus } from "lucide-react";
 
 import { TournamentStatusPill } from "@/components/tournaments/StatusPill";
 import { TrustedBadge } from "@/components/workspace/TrustedBadge";
@@ -7,15 +8,23 @@ import { WorkspaceAvatar } from "@/components/workspace/WorkspaceAvatar";
 import { Fact, OpenLoadError, Section, SectionHead } from "@/components/site/open-layout";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getFormatter } from "@/lib/datetime/server";
+import { getActiveTournaments, getPublicWorkspaces } from "@/lib/site/public-data";
 import { getTournamentStatusMeta, isTournamentStatusActive } from "@/lib/tournament/status";
+import { cn } from "@/lib/utils";
 import statisticsService from "@/services/statistics.service";
 import type { Tournament } from "@/types/tournament.types";
 import type { WorkspaceListItem } from "@/types/workspace.types";
 
 import { DirectoryRail } from "./DirectoryRail";
-import { getActiveTournaments, getPublicWorkspaces } from "./home-data";
 
 const TITLE_ID = "home-directory-title";
+
+/** A slide: the card's top rule turns teal on hover (DESIGN §5, a whole-card link). */
+const CARD_CLASS =
+  "flex min-h-full flex-col gap-3 border-t border-[color:var(--aqt-border-3)] pt-5 transition-colors duration-150 hover:border-t-[color:var(--aqt-teal)] focus-visible:outline-offset-[-2px]";
+
+/** Every slide snaps to the rail's start and a swipe stops on each one. */
+const SLIDE_CLASS = "min-w-0 snap-start [scroll-snap-stop:always]";
 
 interface DirectoryEntry {
   workspace: WorkspaceListItem;
@@ -37,8 +46,9 @@ async function loadDirectory(): Promise<DirectoryEntry[]> {
   const entries = await Promise.all(
     workspaces.map(async (workspace): Promise<DirectoryEntry> => {
       const mine = active.filter((tournament) => tournament.workspace_id === workspace.id);
-      // A community's own totals: there is no per-workspace column on the
-      // directory read, so each card asks for its numbers (edge-cached, 60s).
+      // ponytail: one statistics read per community (edge-cached, 60s) because
+      // the directory read has no per-community totals. Fine for a few dozen
+      // communities; past that, put the totals on the directory read.
       const totals = await statisticsService
         .getOverallStatistics({ workspaceId: workspace.id })
         .catch(() => null);
@@ -64,7 +74,11 @@ async function loadDirectory(): Promise<DirectoryEntry[]> {
   );
 }
 
-/** Every public community, newest activity first — the platform's catalogue. */
+/**
+ * Every public community, newest activity first — the platform's catalogue as
+ * a carousel (`DirectoryRail`), closing with the slot a new community fills.
+ * `#directory` is the footer's "Communities" link.
+ */
 export async function Directory() {
   const t = await getTranslations("home.directory");
 
@@ -78,7 +92,7 @@ export async function Directory() {
   if (entries === null) {
     return (
       <Section id="directory" labelledBy={TITLE_ID}>
-        <DirectoryHead />
+        <SectionHead title={t("title")} titleId={TITLE_ID} sub={t("sub")} />
         <OpenLoadError what={t("error")} dashed />
       </Section>
     );
@@ -88,19 +102,16 @@ export async function Directory() {
     <Section id="directory" labelledBy={TITLE_ID}>
       <DirectoryRail titleId={TITLE_ID}>
         {entries.map((entry) => (
-          <li key={entry.workspace.id} className="min-w-0 snap-start [scroll-snap-stop:always]">
+          <li key={entry.workspace.id} className={SLIDE_CLASS}>
             <CommunityCard entry={entry} />
           </li>
         ))}
+        <li className={SLIDE_CLASS}>
+          <JoinCard />
+        </li>
       </DirectoryRail>
     </Section>
   );
-}
-
-/** The head without the rail controls — the error state has nothing to steer. */
-async function DirectoryHead() {
-  const t = await getTranslations("home.directory");
-  return <SectionHead title={t("title")} titleId={TITLE_ID} sub={t("sub")} />;
 }
 
 async function CommunityCard({ entry }: Readonly<{ entry: DirectoryEntry }>) {
@@ -116,11 +127,7 @@ async function CommunityCard({ entry }: Readonly<{ entry: DirectoryEntry }>) {
   const variant = active ? getTournamentStatusMeta(active.status).variant : null;
 
   return (
-    <Link
-      href={`/workspace/${workspace.slug}`}
-      prefetch={false}
-      className="flex min-h-full flex-col gap-3 border-t border-[color:var(--aqt-border-3)] pt-5 transition-colors duration-150 hover:border-t-[color:var(--aqt-teal)] focus-visible:outline-offset-[-2px]"
-    >
+    <Link href={`/workspace/${workspace.slug}`} prefetch={false} className={CARD_CLASS}>
       <div className="flex min-w-0 items-center gap-3">
         <WorkspaceAvatar workspace={workspace} size={44} />
         <div className="min-w-0 flex-1">
@@ -129,9 +136,7 @@ async function CommunityCard({ entry }: Readonly<{ entry: DirectoryEntry }>) {
             <TrustedBadge status={workspace.verification_status} />
           </div>
           {host ? (
-            <div className="mt-0.5 truncate text-caption text-[color:var(--aqt-fg-dim)]">
-              {host}
-            </div>
+            <div className="mt-0.5 truncate text-caption text-[color:var(--aqt-fg-dim)]">{host}</div>
           ) : null}
         </div>
       </div>
@@ -168,7 +173,29 @@ async function CommunityCard({ entry }: Readonly<{ entry: DirectoryEntry }>) {
   );
 }
 
-/** Three card shapes on the rail's grid, same rules, same hairlines. */
+/** The rail's last slide: the organizer page, drawn as the place a new community takes. */
+async function JoinCard() {
+  const t = await getTranslations("home.directory.cta");
+
+  return (
+    <Link href="/get-workspace" prefetch={false} className={cn(CARD_CLASS, "border-dashed")}>
+      <div className="flex min-w-0 items-center gap-3">
+        <span
+          aria-hidden
+          className="grid size-11 shrink-0 place-items-center rounded-[11px] border border-dashed border-[color:var(--aqt-border-3)] text-[color:var(--aqt-teal)] [&_svg]:size-5"
+        >
+          <Plus />
+        </span>
+        <b className="min-w-0 font-display text-heading font-semibold leading-[1.2] text-[color:var(--aqt-fg)]">
+          {t("title")}
+        </b>
+      </div>
+      <p className="text-body leading-relaxed text-[color:var(--aqt-fg-muted)]">{t("text")}</p>
+    </Link>
+  );
+}
+
+/** Three slides of the rail's grid, same rules, same hairlines. */
 export function DirectorySkeleton() {
   return (
     <Section id="directory" labelledBy={TITLE_ID}>

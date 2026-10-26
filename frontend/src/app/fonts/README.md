@@ -34,10 +34,11 @@ pyftsubset "<Family>[wght].ttf" \
 `fonttools[woff]` provides `pyftsubset`; the `[woff]` extra is what pulls in
 brotli for the woff2 flavour. Both families take the same ranges.
 
-The two `onest-*.ttf` are for Satori (`src/lib/og/encounter.tsx`), which
-rasterizes OpenGraph cards outside the browser: it cannot read `woff2` and
-cannot interpolate a variable axis, and the font `next/og` ships with has no
-Cyrillic. Same ranges, one static instance per weight the card uses:
+The two `onest-*.ttf` are for Satori (`src/lib/og/base.ts`, behind the
+encounter and landing cards), which rasterizes OpenGraph cards outside the
+browser: it cannot read `woff2` and cannot interpolate a variable axis, and the
+font `next/og` ships with has no Cyrillic. Same ranges, one static instance per
+weight the cards use:
 
 ```sh
 python -m fontTools.varLib.instancer "Onest[wght].ttf" wght=400 -o inst-400.ttf

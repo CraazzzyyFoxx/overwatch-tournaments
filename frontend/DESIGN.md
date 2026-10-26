@@ -265,6 +265,7 @@ plain fact. That ends here.
 | Skeletons                  | `ui/skeleton.tsx` (`variant="text"` for one line of text; stops pulsing under reduced motion); tournament sections `_components/TournamentSkeletons.tsx`; open sections draw their own skeleton beside the section (`LeadersSkeleton`, `statistics/_components/*Skeleton`)            |
 | Link with hover prefetch   | `HoverPrefetchLink`; "← Back to …" text link `BackLink` (`components/site/BackLink.tsx`)                                                                                                                                                                                                              |
 | Team identity              | `TeamName` / `TeamLogo` (`components/TeamName.tsx`) — no fallback glyph when a team has no image                                                                                                                                                                                                       |
+| Tournament picture         | `tournamentPicture` (`lib/tournament/art.ts`): the organizer's cover, else the map last played in the tournament, else a still of one of the game's maps fixed by the tournament's id (§13); the home's cards and the tournament list draw the same picture. `TournamentCover` (`components/tournaments/TournamentCover.tsx`) frames it at 16:9 for the list's cards, the name drawn on a teal wash when there is no picture, the logo in its corner; the caller styles the frame |
 | Player identity            | `PlayerName` (profile link); a bare handle `HandleLabel` (`components/HandleLabel.tsx`: name + faint `#tag`, the tag truncates first) over `splitHandle` (`lib/player.ts`) — never `split("#")`; avatar `PlayerAvatar`; roster rows `RosterPlayer` / `RosterRole` / `RosterRank` (`TournamentTeamCard.tsx`) |
 | Role / division marker     | `PlayerRoleIcon`; `DivisionIcon` (`tooltip` names the division); a crest from a rank or a division `RankCrest` (`components/RankCrest.tsx`)                                                                                                                                                          |
 | Hero / map images          | `CatalogEntityImage` (`components/catalog/CatalogEntityImage.tsx`): hero faces square, map stills `shape="wide"` (4:3); initials when there is no image                                                                                                                                             |
@@ -411,6 +412,7 @@ system.
   320ms; reversed going back), which says which way the reader went. A pick
   in `kit/SectionNav` plays the same 320ms entrance on the content column,
   from below for a section under the open one, from above for one over it.
+  The home's community carousel advances on its own (§13), with a pause.
 - The mix match room (`app/balancer/mix/_room`) moves what the server moved,
   through view transitions: a drafted player flies from the pool into their
   slot, a banned or picked hero from the grid into its team's ban row or
@@ -479,26 +481,71 @@ variant="plain"` uses `--aqt-bg-2` without the accent hairline or corner glow;
 the home hero adds a near-black `135deg` gradient from `--aqt-bg-2` to
 `--aqt-bg` inside the same 1px frame.
 
-`/` is the platform's portal, in this order: hero, the "now" block, the
-community directory, platform totals, the organizer banner. It shows no product
-screenshots: those sell to organizers on `/get-workspace`. With nothing active
-(an announcement or an open registration counts as active) the "now" block is
-titled "Recent tournaments" and its cards drop the status pill, which would say
-"finished" on every one.
+`/` is the product's landing, for players, organizers and partners alike, in
+this order:
 
-The directory is a static grid of every public community: four across from
-1100px, two from 640px, below that one row per community with its totals at
-the row's end. It closes with a dashed "Your community here" cell linking to
-`/get-workspace`. `#directory` is its anchor, the footer's "Communities" link.
+1. **The hero**, text only: what the platform is, the player search, the
+   tournament list and the organizer page.
+2. **The tournaments**, one row of four (`NowOnPlatform`): what runs first
+   (live, then open), then the newest finished ones. With nothing active the
+   row is titled "Recent tournaments". A card is its picture on top (16:9 from
+   640px, a 4:3 thumbnail beside the text on a phone), the name, the community
+   and the dates; a running or open one has its status pill on the picture,
+   on an opaque backing, a finished one none. Hovered, the frame turns teal
+   and the picture's opacity goes from 85% to full: colour and opacity only,
+   never a zoom.
+3. **The platform in six figures** (`PlatformNumbers`): players, tournaments,
+   communities, matches, maps, hours, over every community and all time, the
+   audience a partner reaches. Zero is shown; a figure the read does not carry
+   is left out; when the totals cannot be read the strip is absent.
+4. **The communities**, a carousel (`DirectoryRail`) right under the figures
+   that count them: whole cards, three across from 1100px, two from 640px, one
+   on a phone; arrows and dots, swipe and drag. It advances one card every 6 s
+   while nobody is pointing at it, focused in it or scrolled away, and stops
+   for good once the visitor steers it; the pause button restarts it. Under
+   `prefers-reduced-motion` it starts paused. The last card is a dashed "Your
+   community here" linking to `/get-workspace`. `#directory` is its anchor,
+   the footer's "Communities" link.
+5. **What the platform does** (`PlatformFeatures`): six rows, each a real
+   screenshot beside its audience, a title, two lines and a link: the player
+   profile and the hero ratings (players), registration, the balancer and
+   mixes, brackets (organizers), matches parsed from logs (everyone). Rows
+   alternate sides from 1024px; on a phone the screenshot comes first. The
+   window is the organizer tour's: 16:10 from the top-left, fading out at the
+   bottom. Captures come from `public/showcase/` and the 2.0.0 release notes
+   (`public/changelog/2.0.0/`, one per interface language).
+6. **Platform leaders** (`PlatformLeaders`): the top five by titles (every
+   game under "all games", the game's own under one) beside the five
+   characters played most, by their share of the parsed playtime, with a bar
+   scaled to the leader. Characters are always one game's: the page's, or
+   under all games the first one installed, named in the board's line.
+7. **The organizer banner.**
+
+Every tournament card, on the home page and in the tournament list, has a
+picture (`tournamentPicture`, `lib/tournament/art.ts`). The organizer's cover
+comes first, and for it nothing else is read. Without one, the map last played
+in the tournament: the last map, by series position, of its latest series with
+parsed logs by play date (`encounterService.getLatestPlayed`, one read per
+card), so a finished tournament shows where it ended and a running one what
+was just played. Before anything is played, a still of one of the game's maps
+from the catalog, fixed by the tournament's id: Fibonacci hashing over the
+maps in id order, whatever order the read returned them in, so the
+server-drawn home and the browser-drawn list land a tournament on the same
+map, and neighbouring ids scatter. The Workshop, Practice Range and Payload
+Race stills are left out there: an empty room, a test range, and a map's name
+printed across the art. The list's card keeps its frame empty while its reads
+are out, rather than flash a picture it would swap; a failed read falls
+through to the next source, and only when none has a picture is the name
+drawn. Pictures are always `alt=""`.
 
 `/get-workspace`, in order: the hero with the community form, the community row
 (verified communities beside two platform totals; absent when its reads fail),
 the feature tour (one screenshot window under `ui/tabs.tsx` tabs, then a grid of
 what the tabs do not show), the custom-domain walk-through, the facts strip,
 the FAQ, the closing CTA. Screenshots are real production captures under
-`public/showcase/`, one window ratio on every tab so switching never moves the
-page, the bottom fading from 75%. `OrganizerQuotes` is built and not mounted:
-it goes under the community row once there are real quotes with names.
+`public/showcase/`; the tour's panels share one subgrid, so the window holds
+the same place on every tab. `OrganizerQuotes` is built and not mounted: it
+goes under the community row once there are real quotes with names.
 
 The community form keeps its name/slug contract: the host and `/workspace/`
 prefix sit in a wrapping URL preview below the slug input. What was typed

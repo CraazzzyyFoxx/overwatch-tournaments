@@ -2,19 +2,7 @@ import { Suspense, type ReactNode } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
-import {
-  ChartColumn,
-  ClipboardList,
-  CodeXml,
-  KeyRound,
-  Network,
-  Scale,
-  ShieldCheck,
-  Shuffle,
-  User,
-  Users,
-  type LucideIcon
-} from "lucide-react";
+import { CodeXml, KeyRound, Scale, ShieldCheck, Shuffle, User, Users, type LucideIcon } from "lucide-react";
 
 import { HeroFrame } from "@/components/site/PageHero";
 import {
@@ -24,35 +12,67 @@ import {
   Section,
   SectionHead,
   SectionStack,
-  SECTION_TITLE_CLASS,
-  Showcase
+  SECTION_TITLE_CLASS
 } from "@/components/site/open-layout";
 import { owtButton } from "@/components/site/owt-button";
 import { Eyebrow } from "@/components/ui/eyebrow";
 import { buildSiteRouteMetadata } from "@/lib/site/route-metadata";
 import { cn } from "@/lib/utils";
+import { CommunityProof, CommunityProofSkeleton } from "./_components/CommunityProof";
 import { CreateForm } from "./_components/CreateForm";
 import { DomainsSection, DomainsSkeleton } from "./_components/DomainsSection";
+import { FeatureTabs, type FeatureShot } from "./_components/FeatureTabs";
+import { HeroSteps } from "./_components/HeroSteps";
 
 export function generateMetadata(): Promise<Metadata> {
   return buildSiteRouteMetadata({
     titleKey: "getWorkspace.metaTitle",
-    descriptionKey: "getWorkspace.metaDescription"
+    descriptionKey: "getWorkspace.metaDescription",
+    image: "/get-workspace/og"
   });
 }
 
 const HERO_PADDING = "px-[clamp(20px,3.2vw,40px)] py-[clamp(24px,3.2vw,40px)]";
 
+/** The tour's tabs, in the order a tournament happens; `docs` sets each one up. */
+const SHOTS = [
+  { key: "form", img: "admin-form.webp", docs: "/docs/organizers/registration" },
+  { key: "registration", img: "registration.webp", docs: "/docs/organizers/registration" },
+  { key: "entries", img: "admin-registrations.webp", docs: "/docs/organizers/registration" },
+  { key: "stages", img: "admin-bracket.webp", docs: "/docs/organizers/brackets" },
+  { key: "bracket", img: "bracket.webp", docs: "/docs/organizers/brackets" },
+  { key: "mapStats", img: "map-stats.webp", docs: "/docs/organizers/logs" }
+] as const;
+
+/** What the tour does not show, each with its docs article. */
+const MORE_FEATURES = [
+  ["balancer", Scale, "/docs/organizers/team-formation"],
+  ["draft", Users, "/docs/organizers/draft"],
+  ["mixes", Shuffle, "/docs/organizers/mixes"],
+  ["roles", ShieldCheck, "/docs/organizers/roles"],
+  ["api", CodeXml, "/docs/dev/api"]
+] as const;
+
+const FAQ = ["price", "verification", "discord"] as const;
+
 /**
  * The organizer page: what the platform gives a community and the form that
  * creates one (mock `OWT Get Workspace.html`).
  *
- * Only the domains section reads the API — it walks a real community's path
- * from platform page to custom domain — so it is the only one behind a
- * Suspense boundary.
+ * The community row and the domains section read the API, so each sits behind
+ * its own Suspense boundary; everything else is static copy.
  */
 export default async function GetWorkspacePage() {
   const t = await getTranslations("getWorkspace");
+
+  const shots: FeatureShot[] = SHOTS.map(({ key, img, docs }) => ({
+    key,
+    img,
+    docs,
+    title: t(`features.shots.${key}.title` as const),
+    text: t(`features.shots.${key}.text` as const),
+    alt: t(`features.shots.${key}.alt` as const)
+  }));
 
   return (
     <SectionStack className="mx-auto w-full max-w-7xl gap-[clamp(56px,7vw,96px)] pt-5">
@@ -85,35 +105,21 @@ export default async function GetWorkspacePage() {
             <p className={cn(LEDE_CLASS, "mt-3 max-w-[38rem]")}>{t("hero.lede")}</p>
             <CreateForm />
           </div>
-          <ol
-            aria-label={t("hero.stepsLabel")}
-            className={cn(
-              "grid content-start border-[color:var(--aqt-border)]",
-              "min-[1024px]:border-l min-[1024px]:pl-7",
-              "max-[1023px]:border-t max-[1023px]:pt-6"
-            )}
-          >
-            {[
-              { n: "01", title: t("hero.steps.create.title"), text: t("hero.steps.create.text") },
-              { n: "02", title: t("hero.steps.discord.title"), text: t("hero.steps.discord.text") },
-              { n: "03", title: t("hero.steps.verify.title"), text: t("hero.steps.verify.text") }
-            ].map((step) => (
-              <li
-                key={step.n}
-                className="grid grid-cols-[24px_minmax(0,1fr)] gap-x-3 gap-y-1.5 border-b border-[color:var(--aqt-border)] py-5 first:pt-0 last:border-b-0 last:pb-0"
-              >
-                <span aria-hidden className="row-span-2 text-caption font-medium leading-relaxed tabular-nums text-[color:var(--aqt-fg-dim)]">
-                  {step.n}
-                </span>
-                <b className="font-display text-ui font-semibold leading-[1.4] text-[color:var(--aqt-fg)]">
-                  {step.title}
-                </b>
-                <p className="text-body leading-relaxed text-[color:var(--aqt-fg-muted)]">{step.text}</p>
-              </li>
-            ))}
-          </ol>
+          <HeroSteps
+            label={t("hero.stepsLabel")}
+            steps={[
+              { title: t("hero.steps.create.title"), text: t("hero.steps.create.text") },
+              { title: t("hero.steps.discord.title"), text: t("hero.steps.discord.text") },
+              { title: t("hero.steps.verify.title"), text: t("hero.steps.verify.text") }
+            ]}
+            className="max-[1023px]:border-t max-[1023px]:border-[color:var(--aqt-border)] max-[1023px]:pt-6"
+          />
         </div>
       </HeroFrame>
+
+      <Suspense fallback={<CommunityProofSkeleton />}>
+        <CommunityProof />
+      </Suspense>
 
       <Section labelledBy="gw-feat-title">
         <SectionHead
@@ -121,69 +127,21 @@ export default async function GetWorkspacePage() {
           titleId="gw-feat-title"
           aside={<MoreLink href="/docs">{t("features.docs")}</MoreLink>}
         />
-        <Showcase
-          title={t("features.shots.form.title")}
-          text={t("features.shots.form.text")}
-          img="admin-form.webp"
-          ratio="16 / 9"
-          alt={t("features.shots.form.alt")}
-        />
-        <Showcase
-          title={t("features.shots.registration.title")}
-          text={t("features.shots.registration.text")}
-          img="registration.webp"
-          alt={t("features.shots.registration.alt")}
-        />
-        <Showcase
-          title={t("features.shots.entries.title")}
-          text={t("features.shots.entries.text")}
-          img="admin-registrations.webp"
-          alt={t("features.shots.entries.alt")}
-        />
-        <Showcase
-          title={t("features.shots.stages.title")}
-          text={t("features.shots.stages.text")}
-          img="admin-bracket.webp"
-          ratio="4 / 3"
-          alt={t("features.shots.stages.alt")}
-        />
-        <Showcase
-          title={t("features.shots.bracket.title")}
-          text={t("features.shots.bracket.text")}
-          img="bracket.webp"
-          alt={t("features.shots.bracket.alt")}
-        />
-        <Showcase
-          title={t("features.shots.mapStats.title")}
-          text={t("features.shots.mapStats.text")}
-          img="map-stats.webp"
-          alt={t("features.shots.mapStats.alt")}
-        />
-        <ul className="mt-[clamp(56px,7vw,96px)] grid grid-cols-1 gap-x-8 gap-y-7 sm:grid-cols-2 min-[1280px]:grid-cols-4">
-          {(
-            [
-              ["registration", ClipboardList, "/docs/organizers/registration"],
-              ["balancer", Scale, "/docs/organizers/team-formation"],
-              ["draft", Users, "/docs/organizers/draft"],
-              ["brackets", Network, "/docs/organizers/brackets"],
-              ["mixes", Shuffle, "/docs/organizers/mixes"],
-              ["matchStats", ChartColumn, "/docs/organizers/logs"],
-              ["roles", ShieldCheck, "/docs/organizers/roles"],
-              ["api", CodeXml, "/docs/dev/api"]
-            ] as const
-          ).map(([key, Icon, href]) => (
+        <FeatureTabs shots={shots} labelledBy="gw-feat-title" docsLabel={t("features.howTo")} />
+        <ul className="mt-[clamp(56px,7vw,96px)] grid grid-cols-1 gap-x-8 gap-y-7 sm:grid-cols-2 lg:grid-cols-3 min-[1280px]:grid-cols-5">
+          {MORE_FEATURES.map(([key, Icon, href]) => (
             <li key={key} className="min-w-0">
               <Link
                 href={href}
                 prefetch={false}
-                className="flex h-full flex-col gap-2.5 border-t border-[color:var(--aqt-border)] pt-5 transition-colors duration-150 hover:border-t-[color:var(--aqt-teal)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[color:var(--aqt-teal)]"
+                className="flex h-full flex-col gap-2.5 border-t border-[color:var(--aqt-border)] pt-5 transition-colors duration-150 hover:border-[color:var(--aqt-teal)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[color:var(--aqt-teal)]"
               >
                 <Icon className="size-5 text-[color:var(--aqt-teal)]" aria-hidden />
                 <b className="font-display text-heading font-semibold leading-[1.3] text-[color:var(--aqt-fg)]">
-                  {t(`features.grid.${key}.title` as "features.grid.registration.title")}
+                  {t(`features.grid.${key}.title` as const)}
                 </b>
                 <p className="text-body leading-relaxed text-[color:var(--aqt-fg-muted)]">
-                  {t(`features.grid.${key}.text` as "features.grid.registration.text")}
+                  {t(`features.grid.${key}.text` as const)}
                 </p>
               </Link>
             </li>
@@ -200,6 +158,22 @@ export default async function GetWorkspacePage() {
         <PlatformFact icon={User}>{t.rich("facts.profile", { b: bold })}</PlatformFact>
         <PlatformFact icon={CodeXml}>{t.rich("facts.api", { b: bold })}</PlatformFact>
       </div>
+
+      <Section labelledBy="gw-faq-title">
+        <SectionHead title={t("faq.title")} titleId="gw-faq-title" />
+        <dl className="max-w-[65ch] divide-y divide-[color:var(--aqt-border)]">
+          {FAQ.map((key) => (
+            <div key={key} className="py-5 first:pt-1">
+              <dt className="font-display text-heading font-semibold leading-[1.3] text-[color:var(--aqt-fg)]">
+                {t(`faq.${key}.q` as const)}
+              </dt>
+              <dd className="mt-2 text-body leading-relaxed text-[color:var(--aqt-fg-muted)]">
+                {t(`faq.${key}.a` as const)}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </Section>
 
       <HeroFrame variant="plain">
         <div

@@ -4,7 +4,6 @@ import { useTranslations } from "next-intl";
 import { ArrowRight, CircleAlert, Info } from "lucide-react";
 
 import { Eyebrow } from "@/components/ui/eyebrow";
-import Image from "@/components/ui/image";
 import { cn } from "@/lib/utils";
 import { RetryButton } from "./RetryButton";
 
@@ -279,60 +278,5 @@ export function OpenEmptyRow({ children }: Readonly<{ children?: ReactNode }>) {
     >
       {children}
     </StateRow>
-  );
-}
-
-/**
- * A product showcase: a focused caption above a real production screenshot.
- * `ratio` overrides the 2:1 window when the interesting part sits lower.
- */
-export function Showcase({
-  title,
-  text,
-  more,
-  img,
-  alt,
-  ratio
-}: Readonly<{
-  title: ReactNode;
-  text: ReactNode;
-  more?: { label: ReactNode; href: string };
-  img: string;
-  alt: string;
-  ratio?: string;
-}>) {
-  return (
-    <div className="mt-8 [&+&]:mt-[clamp(56px,7vw,96px)]">
-      <div className="mb-7 flex flex-col items-start gap-3">
-        <h3 className="text-balance font-display text-[length:clamp(22px,2.2vw,28px)] font-semibold leading-[1.1] tracking-[-0.02em] text-[color:var(--aqt-fg)]">
-          {title}
-        </h3>
-        <div className="max-w-[65ch] text-pretty text-ui leading-[1.6] text-[color:var(--aqt-fg-muted)]">
-          <p>{text}</p>
-          {more ? (
-            <MoreLink href={more.href} className="mt-3">
-              {more.label}
-            </MoreLink>
-          ) : null}
-        </div>
-      </div>
-      {/* An explicit ratio wins at every width, as the mock's inline style does. */}
-      <div
-        className={cn(
-          "overflow-hidden rounded-[var(--aqt-radius-card)] bg-[color:var(--aqt-card)] [mask-image:linear-gradient(to_bottom,black_75%,transparent)]",
-          ratio ? "aspect-[var(--shot-ratio)]" : "aspect-[4/3] md:aspect-[2/1]"
-        )}
-        style={ratio ? ({ "--shot-ratio": ratio } as CSSProperties) : undefined}
-      >
-        <Image
-          src={`/showcase/${img}`}
-          width={1800}
-          height={1250}
-          sizes="100vw"
-          alt={alt}
-          className="size-full object-cover object-left-top"
-        />
-      </div>
-    </div>
   );
 }

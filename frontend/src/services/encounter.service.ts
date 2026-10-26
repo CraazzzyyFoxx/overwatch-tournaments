@@ -9,6 +9,7 @@ import {
 } from "@/types/encounter.types";
 import { MatchEvents } from "@/types/killfeed.types";
 import { PaginatedResponse } from "@/types/pagination.types";
+import type { Tournament } from "@/types/tournament.types";
 import { apiFetch } from "@/lib/api/fetch";
 
 export default class encounterService {
@@ -87,6 +88,32 @@ export default class encounterService {
         ...restFilters
       }
     }).then((res) => res.json());
+  }
+
+  /**
+   * A tournament's latest series with parsed logs, by play date, with its
+   * maps: the map last played in it is the tournament's picture when it has no
+   * cover (`lib/tournament/art.ts`). `null` before anything is played.
+   */
+  static async getLatestPlayed(
+    tournament: Pick<Tournament, "id" | "workspace_id">,
+    opts: { signal?: AbortSignal; next?: { revalidate: number } } = {}
+  ): Promise<Encounter | null> {
+    const page: PaginatedResponse<Encounter> = await apiFetch(`/api/v1/encounters`, {
+      signal: opts.signal,
+      next: opts.next,
+      query: {
+        workspace_id: tournament.workspace_id,
+        tournament_id: tournament.id,
+        has_logs: true,
+        sort: "played_at",
+        order: "desc",
+        page: 1,
+        per_page: 1,
+        entities: ["matches", "matches.map"]
+      }
+    }).then((res) => res.json());
+    return page.results[0] ?? null;
   }
 
   /** The aggregate reads (overview, insights) take the list's filter params; paging and order mean nothing there. */

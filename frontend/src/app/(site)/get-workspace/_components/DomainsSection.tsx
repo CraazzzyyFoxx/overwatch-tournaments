@@ -3,10 +3,10 @@ import { getTranslations } from "next-intl/server";
 import { Section, SectionHead } from "@/components/site/open-layout";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PLATFORM_ZONE } from "@/lib/site/host";
+import { getPublicWorkspaces } from "@/lib/site/public-data";
 import { deriveWorkspacePalette } from "@/lib/workspace/theme";
 import statisticsService from "@/services/statistics.service";
 import tournamentService from "@/services/tournament.service";
-import workspaceService from "@/services/workspace.service";
 import type { WorkspaceListItem } from "@/types/workspace.types";
 import { DomainSteps, type DomainExample } from "./DomainSteps";
 
@@ -30,7 +30,7 @@ function isExample(
  * just lose the addresses and the previews.
  */
 async function loadExample(): Promise<DomainExample | null> {
-  const directory = await workspaceService.getAll("public").catch(() => [] as WorkspaceListItem[]);
+  const directory = await getPublicWorkspaces().catch(() => [] as WorkspaceListItem[]);
   const candidates = directory.filter(isExample);
   const workspace = candidates.find((item) => item.slug === PREFERRED_SLUG) ?? candidates[0];
   if (!workspace) return null;

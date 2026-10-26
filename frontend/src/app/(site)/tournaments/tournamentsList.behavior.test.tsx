@@ -52,8 +52,16 @@ vi.mock("@/services/tournament.service", () => ({
     getFacets: (...args: unknown[]) => getFacets(...args)
   }
 }));
+// A card without a cover reads its latest played series and its game's maps:
+// nothing played and no map stills, so those cards draw their names.
 vi.mock("@/services/encounter.service", () => ({
-  default: { getOverview: (...args: unknown[]) => getOverview(...args) }
+  default: {
+    getOverview: (...args: unknown[]) => getOverview(...args),
+    getLatestPlayed: async () => null
+  }
+}));
+vi.mock("@/services/catalog.service", () => ({
+  default: { list: async () => ({ page: 1, per_page: -1, total: 0, results: [] }) }
 }));
 vi.mock("@/services/statistics.service", () => ({
   default: { getOverallStatistics: (...args: unknown[]) => getOverallStatistics(...args) }

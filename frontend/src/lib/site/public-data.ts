@@ -3,9 +3,10 @@ import { cache } from "react";
 import tournamentService from "@/services/tournament.service";
 import workspaceService from "@/services/workspace.service";
 
-// Both the "now on the platform" block and the catalogue need these two lists,
-// and each section fetches on its own behind its own Suspense boundary.
-// `cache()` collapses them to one request per render instead of two.
+// The platform landings read these lists from several sections, each behind
+// its own Suspense boundary: on `/` the "now on the platform" block, the
+// catalogue and the totals; on `/get-workspace` the community row and the
+// domains walk-through. `cache()` collapses them to one request per render.
 export const getPublicWorkspaces = cache(() => workspaceService.getAll("public"));
 export const getActiveTournaments = cache(() =>
   tournamentService.getActive({ skipWorkspace: true })

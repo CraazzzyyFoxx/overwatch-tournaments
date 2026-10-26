@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { getLocale, getTranslations } from "next-intl/server";
 
+import { OG_SIZE } from "@/lib/og/base";
 import { resolveSiteMetadata } from "@/lib/site/metadata";
 
 /**
@@ -15,18 +16,21 @@ import { resolveSiteMetadata } from "@/lib/site/metadata";
  * `descriptionValues` covers the sections whose description string
  * interpolates `{siteName}`. `noIndex` is for routes reached only through a
  * private link (a team invite, a scrim room) — they carry a credential in the
- * URL and have nothing to rank for.
+ * URL and have nothing to rank for. `image` is the path of the route's share
+ * card, rendered at `OG_SIZE`.
  */
 export async function buildSiteRouteMetadata({
   titleKey,
   descriptionKey,
   descriptionValues,
-  noIndex
+  noIndex,
+  image
 }: {
   titleKey: string;
   descriptionKey: string;
   descriptionValues?: Record<string, string | number>;
   noIndex?: boolean;
+  image?: string;
 }): Promise<Metadata> {
   const [{ name, origin }, t, locale] = await Promise.all([
     resolveSiteMetadata(),
@@ -54,7 +58,8 @@ export async function buildSiteRouteMetadata({
       type: "website",
       siteName: name,
       // Follow the request locale instead of pinning every share card to en_US.
-      locale: locale === "ru" ? "ru_RU" : "en_US"
+      locale: locale === "ru" ? "ru_RU" : "en_US",
+      ...(image && { images: [{ url: image, ...OG_SIZE, alt: title }] })
     }
   };
 }
