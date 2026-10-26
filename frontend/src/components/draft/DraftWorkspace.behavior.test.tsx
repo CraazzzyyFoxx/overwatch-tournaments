@@ -116,7 +116,6 @@ function board(overrides: Partial<DraftBoard> = {}, session: Partial<DraftBoard[
     picks: [onClockPick, { ...onClockPick, id: 2, overall_no: 2, pick_in_round: 2, draft_team_id: 11, status: "upcoming" }],
     players: [player(50), player(51)],
     current_pick: onClockPick,
-    server_time: "2026-06-05T00:00:00Z",
     last_event_id: 0,
     ...overrides
   };

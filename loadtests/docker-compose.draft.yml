@@ -1,0 +1,12 @@
+# Overlay for the draft-room scenario (draft_locustfile.py) on the isolated e2e
+# stack: its own tmpfs database, nothing shared with the dev env files.
+#
+#   docker compose -p owt-e2e -f docker-compose.yml -f docker-compose.e2e.yml \
+#     -f loadtests/docker-compose.draft.yml up -d --wait
+#
+# Every simulated viewer connects from the generator's one IP, so the gateway's
+# anonymous per-IP socket cap (64) would refuse most of a 160-viewer room.
+services:
+  gateway:
+    environment:
+      GATEWAY_WS_MAX_ANON_CONNS_PER_IP: "0"

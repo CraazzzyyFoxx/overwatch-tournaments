@@ -167,7 +167,6 @@ export interface DraftBoard {
   picks: DraftPick[];
   players: DraftPlayer[]; // all pool players; derive availability + rosters client-side
   current_pick: DraftPick | null;
-  server_time: string;
   last_event_id: number | null;
 }
 

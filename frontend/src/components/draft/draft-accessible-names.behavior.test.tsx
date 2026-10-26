@@ -124,7 +124,6 @@ function board(shape: RosterShape, players: DraftPlayer[]): DraftBoard {
     picks: [onClock],
     players,
     current_pick: onClock,
-    server_time: "2026-09-23T00:00:00Z",
     last_event_id: null
   };
 }

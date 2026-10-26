@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import random
 import sys
 from pathlib import Path
 from time import perf_counter
@@ -384,6 +385,48 @@ def test_options_for_supported_scale_complete_under_latency_budget() -> None:
 
     assert options
     assert sorted(durations)[-2] < 0.300
+
+
+def test_pick_options_agree_with_a_forced_matching_on_random_drafts() -> None:
+    # Pick options settle "safe" by Hall's condition over slot codes instead of
+    # one forced matching per option; the matching stays the oracle. Random small
+    # drafts (shortages, flex spill, overfilled rosters) must agree per option.
+    _, feasibility = _load_feature_modules()
+    rng = random.Random(1307)
+    roles = ("tank", "damage", "support")
+    verdicts: set[bool] = set()
+    for _ in range(400):
+        slot_targets = {code: rng.randint(0, 2) for code in (*roles, "flex")}
+        team_ids = tuple(range(1, rng.randint(2, 5)))
+        players = [
+            _player(feasibility, player_id, *rng.sample(roles, rng.randint(1, len(roles))))
+            for player_id in range(1, rng.randint(2, 14))
+        ]
+        picked = rng.sample(players, rng.randint(0, len(players) // 2))
+        assignments = tuple(
+            _assignment(feasibility, player.player_id, rng.choice(team_ids), rng.choice(sorted(player.playable_roles)))
+            for player in picked
+        )
+        available = [player for player in players if player not in picked]
+        team_id = rng.choice(team_ids)
+        options = feasibility.evaluate_pick_options(
+            team_id=team_id, team_ids=team_ids, slot_targets=slot_targets, players=available, assignments=assignments
+        )
+        for option in options:
+            if option.reason_code == "slot_filled":
+                continue
+            report = feasibility.analyze_draft_feasibility(
+                team_ids=team_ids,
+                slot_targets=slot_targets,
+                players=available,
+                assignments=assignments,
+                hypothetical=_assignment(feasibility, option.player_id, team_id, option.role),
+            )
+            assert (option.is_safe, option.reason_code) == (report.is_feasible, report.reason_code)
+            if option.is_safe:
+                assert (option.unmatched_slots, option.blocking_player_ids) == ((), ())
+            verdicts.add(option.is_safe)
+    assert verdicts == {True, False}
 
 
 def test_flex_slot_accepts_a_player_who_cannot_play_the_role_slot() -> None:

@@ -107,13 +107,19 @@ registerRealtimeResource<DraftBoard, DraftEventData>(DRAFT_BOARD_RESOURCE, (boar
   applyDraftEvents(board, [event]),
 );
 
-export function useDraftBoardQuery(sessionId: number | null) {
+/**
+ * `seed`: a snapshot of this very session already in hand. The draft page's tournament lookup reads the same
+ * board, so the room starts from it instead of reading the board a second time.
+ */
+export function useDraftBoardQuery(sessionId: number | null, seed?: { board: DraftBoard; updatedAt: number }) {
   const connected = useRealtimeStore((s) => s.connectionState === "connected");
   const pollMs = connected ? BOARD_POLL_CONNECTED_MS : BOARD_POLL_DISCONNECTED_MS;
   return useQuery({
     queryKey: tournamentQueryKeys.draftSessionBoard(sessionId ?? 0),
     queryFn: () => draftService.getSessionBoard(sessionId!),
     enabled: sessionId != null && sessionId > 0,
+    initialData: seed != null && seed.board.session.id === sessionId ? seed.board : undefined,
+    initialDataUpdatedAt: seed?.updatedAt,
     refetchInterval: (query) => (query.state.data?.session.status === "live" ? pollMs : false),
   });
 }

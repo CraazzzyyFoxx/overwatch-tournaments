@@ -85,12 +85,13 @@ from shared.models.registration.registration import (  # noqa: E402
 from shared.models.tenancy.workspace import Workspace, WorkspaceMember  # noqa: E402
 from shared.models.tournament import Tournament  # noqa: E402
 from shared.repository import CatalogRoleRepository  # noqa: E402
+from shared.schemas.role import RoleRef  # noqa: E402
 from shared.services.team_format import copy_for_tournament  # noqa: E402
 from shared.testing import configure_test_cache, create_test_async_engine  # noqa: E402
 from src import schemas  # noqa: E402
 from src.domain.draft.entities import PoolSeat  # noqa: E402
 from src.services.draft import feasibility as feasibility_mod  # noqa: E402
-from src.services.draft import lifecycle, queue, selection  # noqa: E402
+from src.services.draft import lifecycle, loaders, queue, selection  # noqa: E402
 from src.services.draft.board import board_service  # noqa: E402
 from src.services.draft.feasibility import feasibility_service  # noqa: E402
 
@@ -165,6 +166,7 @@ async def measure(
 async def reset_caches() -> None:
     """Every measurement here is a COLD one: nothing may be served from a cache."""
     feasibility_mod._read_snapshots.clear()
+    feasibility_mod._read_contexts.clear()
     await cache.clear()
 
 
@@ -479,11 +481,18 @@ async def load_snapshot(s: AsyncSession, draft: DraftSession) -> Any:
 
 
 async def team_fit(s: AsyncSession, draft: DraftSession, team_id: int) -> schemas.DraftTeamFitResponse:
+    """The ``rpc.balancer.draft.team_fit`` compute: the scores, with roles named in the session's rated dimension."""
     scores = await feasibility_service.team_fit_scores(s, draft, team_id=team_id)
+    dimension = await loaders.rated_dimension(s, draft)
     return schemas.DraftTeamFitResponse(
         session_id=draft.id,
         team_id=team_id,
-        scores=[schemas.DraftTeamFitScore.model_validate(score) for score in scores],
+        scores=[
+            schemas.DraftTeamFitScore(
+                player_id=score.player_id, role=RoleRef.of(dimension, score.role), score=score.score
+            )
+            for score in scores
+        ],
     )
 
 

@@ -42,8 +42,12 @@ export default function PublicDraftRoomPage() {
   });
   const sessionId = lookup.data?.session.id ?? null;
   // The room's own board (the same cache the room patches): once its draft is
-  // over or erased, the tournament's next draft is the one to follow.
-  const followed = useDraftBoardQuery(sessionId);
+  // over or erased, the tournament's next draft is the one to follow. It starts
+  // from the lookup's snapshot, so opening the room reads the board once.
+  const followed = useDraftBoardQuery(
+    sessionId,
+    lookup.data ? { board: lookup.data, updatedAt: lookup.dataUpdatedAt } : undefined
+  );
   const followedStatus = followed.data?.session.status;
   const followedEnded = followed.isError || followedStatus === "completed" || followedStatus === "cancelled";
   const { refetch: refetchLookup } = lookup;

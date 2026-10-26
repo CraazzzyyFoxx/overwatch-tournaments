@@ -239,6 +239,48 @@ def analyze_draft_feasibility(
     )
 
 
+class _SlotDemand:
+    """Hall's condition over slot codes: can every open slot still get a distinct player who fits it?
+
+    A slot fits a player by its code alone (``_slot_fits``), never by its team, so the slots-to-players matching
+    saturates every slot exactly when each set of codes is fitted by at least as many players as it has open slots.
+    A roster has a handful of codes, so all 2^codes sets cost microseconds where one forced matching per pick option
+    cost milliseconds. It only answers "still fillable"; a pick it rejects still runs the matching, whose unmatched
+    slots and blocking players explain the rejection.
+    """
+
+    def __init__(
+        self,
+        slot_targets: Mapping[str, int],
+        remaining: Mapping[tuple[int, str], int],
+        players: Collection[EligiblePlayer],
+        assignments: Collection[DraftAssignment],
+    ) -> None:
+        self._codes = _ordered_slot_codes(slot_targets)
+        self._demand = Counter[str]()
+        for (_team_id, code), count in remaining.items():
+            self._demand[code] += count
+        assigned = {assignment.player_id for assignment in assignments}
+        # Keyed by id, as the matcher keys its candidates.
+        self._masks = {player.player_id: self._mask(player) for player in players if player.player_id not in assigned}
+        self._supply = Counter(self._masks.values())
+
+    def _mask(self, player: EligiblePlayer) -> int:
+        return sum(1 << bit for bit, code in enumerate(self._codes) if _slot_fits(player, code))
+
+    def fillable_after(self, player_id: int, slot_code: str) -> bool:
+        """Whether every open slot stays fillable once ``player_id`` takes one ``slot_code`` slot."""
+        demand = [self._demand[code] - (1 if code == slot_code else 0) for code in self._codes]
+        supply = self._supply.copy()
+        if (mask := self._masks.get(player_id)) is not None:
+            supply[mask] -= 1
+        for codes in range(1, 1 << len(self._codes)):
+            need = sum(count for bit, count in enumerate(demand) if codes >> bit & 1)
+            if need > sum(count for mask, count in supply.items() if mask & codes):
+                return False
+        return True
+
+
 def evaluate_pick_options(
     *,
     team_id: int,
@@ -249,16 +291,18 @@ def evaluate_pick_options(
 ) -> tuple[DraftPickOption, ...]:
     """Return safe/blocked role choices for every available player."""
 
-    remaining, _ = _remaining_capacity(
+    remaining, overfilled = _remaining_capacity(
         team_ids=team_ids,
         slot_targets=slot_targets,
         assignments=assignments,
     )
+    # An overfilled roster fails every pick; the matching below reports that.
+    demand = None if overfilled else _SlotDemand(slot_targets, remaining, players, assignments)
     options: list[DraftPickOption] = []
     # Players with the same declared role set are interchangeable for the
-    # feasibility question. Cache one forced-pick matching per role-set/role
-    # pair, rather than rerunning matching for every equivalent player.
-    report_cache: dict[tuple[frozenset[str], str], tuple[int, DraftFeasibilityReport]] = {}
+    # feasibility question: one verdict per role-set/role pair. ``None`` is
+    # "safe"; an unsafe pick carries its forced-pick matching's report.
+    report_cache: dict[tuple[frozenset[str], str], tuple[int, DraftFeasibilityReport | None]] = {}
     for player in players:
         for role in sorted(player.playable_roles):
             # A role a team can still take: its own role slot, or any free flex
@@ -276,17 +320,27 @@ def evaluate_pick_options(
             cache_key = (player.playable_roles, role)
             cached = report_cache.get(cache_key)
             if cached is None:
-                report = analyze_draft_feasibility(
-                    team_ids=team_ids,
-                    slot_targets=slot_targets,
-                    players=players,
-                    assignments=assignments,
-                    hypothetical=DraftAssignment(player_id=player.player_id, team_id=team_id, slot_code=role),
+                # The slot the pick takes, as ``_remaining_capacity`` resolves it:
+                # its own role slot while one is free, else flex.
+                slot_code = role if remaining.get((team_id, role), 0) > 0 else FLEX_SLOT_CODE
+                report = (
+                    None
+                    if demand is not None and demand.fillable_after(player.player_id, slot_code)
+                    else analyze_draft_feasibility(
+                        team_ids=team_ids,
+                        slot_targets=slot_targets,
+                        players=players,
+                        assignments=assignments,
+                        hypothetical=DraftAssignment(player_id=player.player_id, team_id=team_id, slot_code=role),
+                    )
                 )
                 representative_id = player.player_id
                 report_cache[cache_key] = (representative_id, report)
             else:
                 representative_id, report = cached
+            if report is None:
+                options.append(DraftPickOption(player_id=player.player_id, role=role, is_safe=True, reason_code=None))
+                continue
             blocking_player_ids = report.blocking_player_ids
             if representative_id != player.player_id:
                 blocking_player_ids = tuple(

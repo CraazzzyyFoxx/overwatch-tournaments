@@ -439,7 +439,6 @@ class DraftBoardSnapshot(BaseModel):
     picks: list[DraftPickRead]
     players: list[DraftPlayerRead]  # all pool players; client derives availability + rosters
     current_pick: DraftPickRead | None
-    server_time: datetime
     last_event_id: int | None = None
 
 

@@ -2,3 +2,6 @@
 results*.csv
 results*.csv.gz
 report.html
+.draft-room*.json
+draft*.csv
+draft*.html

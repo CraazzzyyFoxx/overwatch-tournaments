@@ -30,7 +30,7 @@ from shared.repository.draft import DraftPickRepository, DraftPlayerRepository, 
 from shared.repository.workspace import get_or_create_workspace_member
 from src.domain.draft import ranks as domain_ranks
 from src.domain.draft import rules
-from src.domain.draft.entities import AutopickChoice, DraftAssignment, DraftResult, DraftSnapshot
+from src.domain.draft.entities import AutopickChoice, DraftAssignment, DraftPickOption, DraftResult, DraftSnapshot
 from src.domain.draft.errors import err as _err
 from src.domain.draft.fit import best_fit, fit_players
 from src.services.custom_game import custom_game_service
@@ -391,6 +391,7 @@ class DraftSelectionService:
         pick: DraftPick,
         *,
         snapshot: DraftSnapshot | None = None,
+        options: tuple[DraftPickOption, ...] | None = None,
     ) -> AutopickChoice | None:
         """WHO autopick takes and WHY -- without taking them.
 
@@ -407,12 +408,13 @@ class DraftSelectionService:
         counts = rules.team_slot_counts(snapshot.players, snapshot.picks, pick.draft_team_id, shape, snapshot.rosters)
         impact = await self.feasibility.resolve_role_impact(session, draft_session)
         capacity = rules.role_openings(shape, counts, impact)
-        options = await self.feasibility.evaluate_session_pick_options(
-            session,
-            draft_session,
-            team_id=pick.draft_team_id,
-            state=await self.feasibility.state_from_snapshot(session, draft_session, snapshot),
-        )
+        if options is None:
+            options = await self.feasibility.evaluate_session_pick_options(
+                session,
+                draft_session,
+                team_id=pick.draft_team_id,
+                state=await self.feasibility.state_from_snapshot(session, draft_session, snapshot),
+            )
         safe_by_player: dict[int, set[str]] = {}
         for option in options:
             if option.is_safe:

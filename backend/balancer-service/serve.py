@@ -38,6 +38,7 @@ from src.rpc import players as rpc_players
 from src.rpc import prefs as rpc_prefs
 from src.rpc import ranks as rpc_ranks
 from src.services.balancer.jobs import execute_balance_job
+from src.services.draft.board import configure_prewarm as configure_draft_prewarm
 from src.services.draft.clock import draft_clock_service
 
 logger = setup_logging(
@@ -67,6 +68,8 @@ configure_quota(
     enabled=config.quota_enabled,
     edge_workspace_metering=config.quota_edge_workspace_metering,
 )
+# Every committed draft board state is built at once, before the room's re-reads ask for it.
+configure_draft_prewarm(db.async_session_maker)
 
 rpc_config.register(broker, logger)
 rpc_admin.register(broker, logger)
