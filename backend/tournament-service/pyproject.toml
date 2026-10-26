@@ -31,10 +31,6 @@ dependencies = [
     "httpx[socks]>=0.28.1",
 ]
 
-[tool.mypy]
-strict = true
-exclude = ["venv", ".venv", "alembic"]
-
 [tool.ty.environment]
 python = "../.venv"
 python-version = "3.14"

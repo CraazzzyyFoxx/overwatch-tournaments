@@ -17,7 +17,13 @@ import sys
 import psycopg
 import pytest
 
-from shared.testing.db import BEFORE_LEGACY_DROP, ensure_test_postgres, is_ephemeral_test_dsn, postgres_env
+from shared.testing.db import (
+    BEFORE_LEGACY_DROP,
+    MIGRATION_PROOF_SKIP,
+    ensure_test_postgres,
+    migration_proofs_enabled,
+    postgres_env,
+)
 
 BACKEND = pathlib.Path(__file__).resolve().parents[1]
 TEMPLATE_DB = "legacy01_tpl"
@@ -112,8 +118,8 @@ def _with_a_hero(dbname: str) -> None:
 @pytest.fixture(scope="module")
 def template():
     ensure_test_postgres()
-    if not is_ephemeral_test_dsn():
-        pytest.skip("creates scratch databases: only on the ephemeral test Postgres")
+    if not migration_proofs_enabled():
+        pytest.skip(MIGRATION_PROOF_SKIP)
     try:
         _recreate(TEMPLATE_DB)
         done = _alembic(TEMPLATE_DB, "upgrade", BEFORE_LEGACY_DROP)

@@ -13,6 +13,7 @@ the returned ``{"ok":bool, "data":..}`` / error envelope. ``rpc`` is the package
 fixture exposing that registry.
 """
 
+import os
 from collections.abc import Awaitable, Callable, Generator
 from typing import Any
 
@@ -31,8 +32,6 @@ from shared.testing import configure_test_cache, db_session, ensure_test_postgre
 from shared.testing.db import CONNECT_TIMEOUT  # noqa: E402
 from shared.testing.stats_parity import (  # noqa: E402,F401
     stats_parity_database,
-    stats_parity_receipt_database,
-    stats_parity_receipt_template,
     stats_parity_template,
 )
 from src.core.config import settings  # noqa: E402
@@ -47,9 +46,16 @@ configure_test_cache()
 
 
 def pytest_configure(config: pytest.Config) -> None:
-    # Same markers app-service's pytest.ini declares; the moved /users/* read tests carry them.
+    # Same marker app-service's pytest.ini declares; the moved /users/* read tests carry it.
     config.addinivalue_line("markers", "validation: validates request payload/query constraints without DB data")
-    config.addinivalue_line("markers", "db: relies on seeded database data")
+
+
+#: A smoke read of a populated developer database: it names real players, tournaments and achievements (user 599,
+#: tournament 36, achievement 1, ...) that a freshly migrated ``anak_test`` -- CI's -- does not have.
+seeded_db = pytest.mark.skipif(
+    os.environ.get("OWT_SEEDED_DB") != "1",
+    reason="smoke read of a populated developer database (real player/tournament ids); set OWT_SEEDED_DB=1",
+)
 
 
 @pytest.fixture(scope="session")

@@ -18,6 +18,7 @@ from alembic.operations import Operations
 
 from scripts import stats01_reconcile as reconcile
 from shared.services.stats_evidence import EvidenceError
+from shared.testing.db import MIGRATION_PROOF_SKIP, migration_proofs_enabled
 from shared.testing.stats_parity import legacy_database, seed_legacy, upgrade_database
 
 BACKEND = Path(__file__).resolve().parents[1]
@@ -29,6 +30,9 @@ _spec.loader.exec_module(revision)
 
 @pytest.fixture(scope="module")
 def stats01_legacy_template():
+    # Every stats01 fixture (and the lifecycle receipt / preflight SQL modules) builds on this template.
+    if not migration_proofs_enabled():
+        pytest.skip(MIGRATION_PROOF_SKIP)
     with legacy_database() as url:
         engine = sa.create_engine(url)
         try:

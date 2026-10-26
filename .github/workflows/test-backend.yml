@@ -14,10 +14,30 @@ on:
 jobs:
   test-backend:
     runs-on: ubuntu-26.04
-    # Safety net: DB-integration tests skip when the database is unreachable
-    # (connection refused is instant on Linux). If that ever regresses into a
-    # hang, fail fast instead of burning a full-length runner slot.
-    timeout-minutes: 20
+    # The DB-integration suites really run now (Postgres below): ~45 min on
+    # Windows Docker Desktop locally, expect a third to a half of that here.
+    timeout-minutes: 60
+    services:
+      # docker-compose.test.yml's container on the DSN shared/testing/test.env
+      # commits (127.0.0.1:55432/anak_test). shared.testing.db probes it and
+      # runs `alembic upgrade head` itself. No Redis or RabbitMQ: the suites use
+      # fakeredis and in-memory brokers, and the live smoke tests that need the
+      # real ones only run when P5_SMOKE_* is set.
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: anak_test
+        ports:
+          - 55432:5432
+        options: >-
+          --tmpfs /var/lib/postgresql/data
+          --health-cmd "pg_isready -U postgres -d anak_test"
+          --health-interval 1s
+          --health-timeout 5s
+          --health-retries 30
+          --health-start-period 5s
     env:
       # Optional PAT (gist scope) used only to publish the coverage badge on
       # pushes to master. Absent on forks/PRs — the badge step is skipped then.
@@ -33,12 +53,18 @@ jobs:
         uses: astral-sh/setup-uv@v10.2.0
         with:
           enable-cache: true
+      # shared.testing.db turns an unreachable database or a failed migration
+      # into a skip -- exactly how every DB test here used to vanish without a
+      # failure. Migrating once up front makes either one a red step instead.
+      # Same environment as its own upgrade: test.env plus the legacy drop.
+      - name: Migrate the test database
+        working-directory: backend
+        env:
+          OWT_APPLY_LEGACY_DROP: "1"
+        run: uv run --env-file shared/testing/test.env alembic upgrade head
       # Each service is its own uv-workspace package with its own `src`, so the
       # suites run one package at a time (a single pytest over all of them would
-      # collide on the duplicate top-level `src`). Integration tests that need a
-      # seeded database probe the connection and skip when it is unreachable, so
-      # no Postgres/Redis/RabbitMQ services are required here — unit and
-      # validation tests run, DB-integration tests skip cleanly.
+      # collide on the duplicate top-level `src`).
       - name: Run backend test suites (with coverage)
         working-directory: backend
         run: |

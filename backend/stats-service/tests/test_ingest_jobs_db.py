@@ -132,6 +132,8 @@ def test_changed_bytes_under_one_external_id_conflict_and_touch_nothing(ingest_d
 def test_storage_failures_and_commit_failure_never_fake_acceptance(ingest_database):
     async def scenario(env):
         doc = make_doc("flaky")
+        # The seeded identity world already queued its own outbox events; only this test's requests count.
+        seeded = await counts(env)
         env.s3.put_ok = False
         for _ in range(2):
             with pytest.raises(jobs.IngestRejected) as caught:
@@ -144,7 +146,7 @@ def test_storage_failures_and_commit_failure_never_fake_acceptance(ingest_databa
         assert caught.value.status_code == 503
         env.s3.fail_prefix = None
         state = await counts(env)
-        assert (state["jobs"], state["outbox"]) == (0, 0)
+        assert (state["jobs"], state["outbox"]) == (seeded["jobs"], seeded["outbox"])
 
         # COMMIT fails after both objects exist: nothing committed, the retry reuses the very same keys.
         async with env.sf() as session:
@@ -157,7 +159,7 @@ def test_storage_failures_and_commit_failure_never_fake_acceptance(ingest_databa
                 await jobs.submit_document(session, raw=body(doc), user=user_of(env, "ok"), s3=env.s3)
             assert caught.value.status_code == 503
         failed = await counts(env)
-        assert (failed["jobs"], failed["outbox"]) == (0, 0) and len(failed["objects"]) == 2
+        assert (failed["jobs"], failed["outbox"]) == (seeded["jobs"], seeded["outbox"]) and len(failed["objects"]) == 2
         job = await submit(env, doc)
         assert job.status == PENDING
         assert (await counts(env))["objects"] == failed["objects"]

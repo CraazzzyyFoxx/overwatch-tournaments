@@ -29,6 +29,13 @@ jobs:
       - name: Ruff lint + format check
         run: uv run bash scripts/lint.sh
         working-directory: backend
+      # ty, once per package (every service has its own top-level `src`).
+      # backend/ty-gate.toml makes every rule that was clean when this gate
+      # landed an error; the rules that already had hits are listed there with
+      # their counts. ~5s.
+      - name: Type check (ty)
+        run: uv run bash scripts/typecheck.sh
+        working-directory: backend
       # The OpenAPI manifest the gateway embeds is hand-committed, exported from
       # the services' Pydantic models. Nothing forced the two to agree, and the
       # manifest has silently drifted before (+724/-175), leaving the public docs

@@ -10,6 +10,7 @@ from __future__ import annotations
 import pytest
 import sqlalchemy as sa
 
+from shared.testing.db import MIGRATION_PROOF_SKIP, migration_proofs_enabled
 from shared.testing.stats_parity import legacy_database, seed_legacy, upgrade_database
 
 _RULE_STATE = (
@@ -28,6 +29,8 @@ _CONSTRAINTS = (
 @pytest.fixture(scope="module")
 def populated_ingest01():
     """One populated database at ``ingest01``, shared read-only by the cases below."""
+    if not migration_proofs_enabled():
+        pytest.skip(MIGRATION_PROOF_SKIP)
     with legacy_database() as url:
         engine = sa.create_engine(url)
         try:

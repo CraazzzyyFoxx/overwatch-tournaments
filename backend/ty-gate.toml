@@ -1,0 +1,121 @@
+# The CI type-check gate (`uv run bash scripts/typecheck.sh`, from backend/).
+#
+# Not the editor configs (../ty.toml, [tool.ty] in pyproject.toml): those list
+# every service as a root at once, and since every service has its own
+# top-level `src`, all of them resolve to the first one listed. The script runs
+# ty once per package with only that package's roots instead.
+#
+# Calibrated on the whole tree with ty 0.0.92 (2026-10-26): every rule is an
+# error except the ones that already had hits, listed below with their count.
+# Noisy rules are ignored rather than warned: thousands of warning lines would
+# bury the one new error. Fix a rule's hits, then delete its line.
+[environment]
+python = ".venv"
+python-version = "3.14"
+
+[rules]
+all = "error"
+invalid-argument-type = "ignore"              # 3210 (2571 in tests: fakes stand in for sessions/models)
+missing-type-argument = "ignore"              # 2670
+unsound-assignment = "ignore"                 # 1560
+unresolved-attribute = "ignore"               # 1147
+dynamic-function-decorator-return = "ignore"  # 633
+truthiness-test-of-none-union = "ignore"      # 521
+unsound-return-statement = "ignore"           # 471
+missing-override-decorator = "ignore"         # 410
+not-subscriptable = "ignore"                  # 185
+invalid-assignment = "ignore"                 # 169
+no-matching-overload = "ignore"               # 140
+possibly-missing-submodule = "ignore"         # 109
+invalid-return-type = "ignore"                # 80
+redundant-condition-strict = "ignore"         # 70
+unsupported-operator = "ignore"               # 65
+invalid-type-form = "ignore"                  # 52
+call-non-callable = "ignore"                  # 44
+deprecated = "ignore"                         # 36
+not-iterable = "ignore"                       # 34
+invalid-mutable-override = "ignore"           # 27 (Literal discriminator fields on pydantic events)
+too-many-positional-arguments = "ignore"      # 21 (mostly pytest<8's `pytest.skip(reason)` signature)
+possibly-missing-attribute = "ignore"         # 15 (lightgbm/xgboost lazy module attributes)
+possibly-unresolved-reference = "ignore"      # 9
+invalid-method-override = "ignore"            # 6
+possibly-missing-import = "ignore"            # 4 (sqlalchemy.util.concurrency)
+unsound-yield = "ignore"                      # 1
+# A suppression aimed at a rule ignored above looks unused here, but not to the
+# editor configs or pyright, which still report that rule.
+unused-type-ignore-comment = "ignore"
+unused-ignore-comment = "ignore"
+
+# Errors in production code, not in tests: tests import sibling modules and
+# other services' `src` through sys.path, and validation tests omit required
+# fields on purpose.
+[[overrides]]
+include = ["**/tests/**"]
+
+[overrides.rules]
+unresolved-import = "ignore"                   # 31, all in tests
+missing-argument = "ignore"                    # 7 of 9
+
+# Near-zero rules stay errors everywhere else; these are their only hits today.
+[[overrides]]
+# Series/AcceptedGame are built with their pre-refactor fields (a real bug).
+include = ["migrations/versions/objmap01_objectiveless_map_scores.py"]
+
+[overrides.rules]
+missing-argument = "ignore"
+unknown-argument = "ignore"
+
+[[overrides]]
+# redis-py annotates its commands `Awaitable[T] | T`.
+include = ["identity-service/src/services/session_cache.py", "stream-service/src/services/state.py"]
+
+[overrides.rules]
+invalid-await = "ignore"
+
+[[overrides]]
+include = ["stats-service/src/schemas/user.py", "tournament-service/src/schemas/tournament.py"]
+
+[overrides.rules]
+invalid-base = "ignore"
+
+[[overrides]]
+include = ["identity-service/src/schemas/oauth.py", "tournament-service/src/schemas/analytics.py"]
+
+[overrides.rules]
+invalid-attribute-override = "ignore"
+
+[[overrides]]
+include = ["shared/disciplines/overwatch/achievements/catalog.py"]
+
+[overrides.rules]
+redundant-condition = "ignore"
+
+[[overrides]]
+include = ["shared/tests/test_audit_record.py"]
+
+[overrides.rules]
+unused-awaitable = "ignore"
+
+[[overrides]]
+include = ["shared/tests/test_sentry_noise_filters.py"]
+
+[overrides.rules]
+missing-typed-dict-key = "ignore"
+
+[[overrides]]
+include = ["tests/test_stats01_preflight_sql.py"]
+
+[overrides.rules]
+invalid-context-manager = "ignore"
+
+[[overrides]]
+include = ["balancer-service/tests/test_draft_schemas.py"]
+
+[overrides.rules]
+pydantic-discarded-extra-argument = "ignore"
+
+[[overrides]]
+include = ["discord-service/tests/test_render_mix.py"]
+
+[overrides.rules]
+invalid-parameter-default = "ignore"

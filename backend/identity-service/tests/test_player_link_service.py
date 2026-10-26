@@ -426,6 +426,8 @@ def test_link_sets_auth_user_id(db_session) -> None:
         player = await _make_player(db_session, suffix)
 
         linked = await players._link_to_auth_user(db_session, auth_user_id=auth_user.id, player_id=player.id)
+        # Release the transaction before asyncio.run closes its owning loop.
+        await db_session.close()
         return auth_user.id, player.id, linked
 
     auth_user_id, player_id, linked = asyncio.run(_run())
@@ -448,6 +450,7 @@ def test_double_link_to_other_account_raises_409(db_session) -> None:
 
         with pytest.raises(HTTPException) as exc_info:
             await players._link_to_auth_user(db_session, auth_user_id=other.id, player_id=player.id)
+        await db_session.close()
         return exc_info.value
 
     exc = asyncio.run(_run())
@@ -465,6 +468,7 @@ def test_relink_same_account_is_idempotent(db_session) -> None:
 
         await players._link_to_auth_user(db_session, auth_user_id=owner.id, player_id=player.id)
         again = await players._link_to_auth_user(db_session, auth_user_id=owner.id, player_id=player.id)
+        await db_session.close()
         return owner.id, again
 
     owner_id, again = asyncio.run(_run())
@@ -504,7 +508,7 @@ def test_get_linked_players_returns_list_then_empty(db_session) -> None:
 
         await players._unlink_from_auth_user(db_session, player_id=player.id)
         after = await players.linked_players(db_session, current_user)
-
+        await db_session.close()
         return player.id, before, after
 
     player_id, before, after = asyncio.run(_run())

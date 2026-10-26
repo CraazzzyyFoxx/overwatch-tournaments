@@ -648,9 +648,9 @@ def assert_tournament_golden(actual: dict) -> None:
     def without_post_capture_fields(value):
         """Fields added after the frozen P4 capture are not reader output: ``TournamentRead.logs_official`` (P5) and
         ``pov_stream_delay_s``, the owner context (``workspace_id``/``discipline``) P7 added to ``EncounterRead`` and
-        ``MatchRead``, and the browse's ``played_at``/``is_live``/``is_final`` on ``EncounterRead`` (a match's own
-        ``played_at`` was captured and stays). The golden's nested ``tournament`` objects already carried theirs and
-        keep them."""
+        ``MatchRead``, the catalog ``mode_id``/``mode`` a match and an encounter game gained with matchmode01, and the
+        browse's ``played_at``/``is_live``/``is_final`` on ``EncounterRead`` (a match's own ``played_at`` was captured
+        and stays). The golden's nested ``tournament`` objects already carried theirs and keep them."""
         if isinstance(value, dict):
             encounter = value.keys() >= {"scoring_preset", "tournament_id"}
             owner = encounter or value.keys() >= {"encounter_id", "map_id"}
@@ -658,6 +658,7 @@ def assert_tournament_golden(actual: dict) -> None:
                 "logs_official",
                 "pov_stream_delay_s",
                 *(("workspace_id", "discipline") if owner else ()),
+                *(("mode_id", "mode") if "map_id" in value else ()),
                 *(("played_at", "is_live", "is_final") if encounter else ()),
             }
             return {key: without_post_capture_fields(item) for key, item in value.items() if key not in dropped}

@@ -98,7 +98,7 @@ class IntegrationsAuditTests(IsolatedAsyncioTestCase):
         async def fake_ws_id(_session, _tournament_id):
             return WORKSPACE_ID
 
-        async def fake_import(_session, _tournament_id, *, dry_run):
+        async def fake_import(_session, _tournament_id, *, dry_run, lock_wait_seconds):
             trace.append("service")
             return {"encounters": 0}
 

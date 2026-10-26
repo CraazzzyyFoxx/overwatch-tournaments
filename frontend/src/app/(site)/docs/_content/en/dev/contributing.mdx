@@ -67,8 +67,8 @@ A change goes through five independent workflows. Run the ones covering the area
 
 | Check | What runs |
 | --- | --- |
-| lint-backend | `uv run bash scripts/lint.sh` (ruff check + format), the generated-artifact gates `scripts/export_openapi_schemas.sh --check`, `scripts/export_ow_ladder.py --check`, `scripts/export_erd.py --check`, and `scripts/check_rpc_docs.py` — every routed RPC subject must be documented |
-| test-backend | pytest per package with coverage; integration tests skip themselves when the database is unreachable |
+| lint-backend | `uv run bash scripts/lint.sh` (ruff check + format), the type check `uv run bash scripts/typecheck.sh` (ty, one run per package, against `backend/ty-gate.toml`), the generated-artifact gates `scripts/export_openapi_schemas.sh --check`, `scripts/export_ow_ladder.py --check`, `scripts/export_erd.py --check`, and `scripts/check_rpc_docs.py` — every routed RPC subject must be documented |
+| test-backend | pytest per package with coverage, against a Postgres service container (the `docker-compose.test.yml` one, migrated to head first), so integration tests run rather than skip; the historical migration cutover proofs in `backend/tests` skip unless `OWT_MIGRATION_PROOFS=1` |
 | ci-frontend | `bun run typecheck`, `bun run lint`, `bun run lint:zones`, `bun run test:vitest`; the production build `bun run build` runs only on pushes to `master`, not on pull requests |
 | ci-gateway | `go mod tidy -diff`, `gofmt -l .`, `go vet ./...`, `go build ./...`, `go test -race ./...` |
 | ci-docs | `python3 scripts/check_doc_links.py` — relative documentation links must resolve |

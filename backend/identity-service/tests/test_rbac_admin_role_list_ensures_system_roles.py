@@ -37,6 +37,8 @@ def test_listing_workspace_roles_creates_missing_system_roles(db_session) -> Non
         superuser = SimpleNamespace(is_superuser=True)
         params = schemas.RoleListParams(page=1, per_page=-1, workspace_id=workspace.id)
         result = await RoleAdminService().list(db_session, superuser, params)
+        # Release the read transaction before asyncio.run closes its owning loop.
+        await db_session.close()
         return result
 
     result = asyncio.run(_run())
