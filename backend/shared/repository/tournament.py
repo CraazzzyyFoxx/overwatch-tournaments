@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import re
 from collections.abc import Sequence
+from datetime import datetime
 from typing import Any
 
 import sqlalchemy as sa
@@ -13,6 +15,9 @@ from shared.core.utils import join_entity, prepare_entities, selectin_entity
 from shared.repository.base import BaseRepository
 from shared.repository.identity import UserRepository
 
+#: A public ref that is a legacy numeric id rather than a slug.
+_NUMERIC_REF = re.compile(r"[1-9]\d*")
+
 
 class TournamentRepository(BaseRepository[models.Tournament]):
     def __init__(self) -> None:
@@ -24,21 +29,25 @@ class TournamentRepository(BaseRepository[models.Tournament]):
     async def get_by_slug(self, session: AsyncSession, slug: str) -> models.Tournament | None:
         return await self.get_by(session, slug=slug)
 
-    async def resolve_public_ref(self, session: AsyncSession, ref: int | str) -> models.Tournament | None:
-        """Resolve a public URL ref to a tournament: a legacy numeric id, the
+    async def resolve_public_id(self, session: AsyncSession, ref: str) -> int | None:
+        """Resolve a public URL ref to a tournament id: a legacy numeric id, the
         current slug, or an old slug an explicit rename retired (see
         ``models.TournamentSlugRedirect``). Old links keep resolving even after
         a rename -- only newly generated links ever use the current slug.
+
+        A numeric ref is the id itself and costs no query: the caller's
+        visibility gate 404s an id that does not exist. A slug costs one
+        column-only statement, the current slug winning over a retired one.
         """
-        if isinstance(ref, int):
-            return await self.get(session, ref)
-        tournament = await self.get_by_slug(session, ref)
-        if tournament is not None:
-            return tournament
-        redirected_id = await session.scalar(
-            sa.select(models.TournamentSlugRedirect.tournament_id).where(models.TournamentSlugRedirect.old_slug == ref)
+        if _NUMERIC_REF.fullmatch(ref):
+            return int(ref)
+        current = sa.select(models.Tournament.id).where(models.Tournament.slug == ref).scalar_subquery()
+        retired = (
+            sa.select(models.TournamentSlugRedirect.tournament_id)
+            .where(models.TournamentSlugRedirect.old_slug == ref)
+            .scalar_subquery()
         )
-        return await self.get(session, redirected_id) if redirected_id is not None else None
+        return await session.scalar(sa.select(sa.func.coalesce(current, retired)))
 
     async def get_workspace_id(self, session: AsyncSession, tournament_id: int) -> int | None:
         """The owning workspace, without loading the rest of the row.
@@ -126,6 +135,16 @@ class TournamentRepository(BaseRepository[models.Tournament]):
         return (
             await session.execute(
                 sa.select(models.Tournament.id, models.Tournament.name, models.Tournament.status).where(
+                    models.Tournament.id == tournament_id
+                )
+            )
+        ).one_or_none()
+
+    async def get_format_scope_row(self, session: AsyncSession, tournament_id: int) -> sa.Row | None:
+        """``(id, workspace_id, discipline)``: what a team-format read needs, without loading the tournament."""
+        return (
+            await session.execute(
+                sa.select(models.Tournament.id, models.Tournament.workspace_id, models.Tournament.discipline).where(
                     models.Tournament.id == tournament_id
                 )
             )
@@ -609,6 +628,23 @@ class StandingRepository(BaseRepository[models.Standing]):
     async def delete_for_team(self, session: AsyncSession, team_id: int) -> None:
         await session.execute(sa.delete(models.Standing).where(models.Standing.team_id == team_id))
 
+    async def write_diff(
+        self,
+        session: AsyncSession,
+        *,
+        delete_ids: Sequence[int],
+        updates: Sequence[dict[str, Any]],
+        inserts: Sequence[dict[str, Any]],
+    ) -> None:
+        """Apply a recalculated table's difference: one DELETE by id, one bulk UPDATE by primary key (each dict
+        carries ``id``), one bulk INSERT -- each only when it has rows."""
+        if delete_ids:
+            await session.execute(sa.delete(models.Standing).where(models.Standing.id.in_(list(delete_ids))))
+        if updates:
+            await session.execute(sa.update(models.Standing), list(updates))
+        if inserts:
+            await session.execute(sa.insert(models.Standing), list(inserts))
+
 
 class StandingPinRepository(BaseRepository[models.StandingPin]):
     def __init__(self) -> None:
@@ -898,6 +934,17 @@ class TournamentComputationJobRepository(BaseRepository[models.TournamentComputa
             query = query.where(models.TournamentComputationJob.status.in_(tuple(statuses)))
         result = await session.scalars(query.order_by(models.TournamentComputationJob.id.desc()).limit(limit))
         return result.all()
+
+    async def delete_finished_before(
+        self, session: AsyncSession, *, statuses: Sequence[str], cutoff: datetime, limit: int
+    ) -> int:
+        """Delete up to ``limit`` jobs in ``statuses`` created before ``cutoff``; returns how many went."""
+        job = models.TournamentComputationJob
+        batch = sa.select(job.id).where(job.status.in_(tuple(statuses)), job.created_at < cutoff).limit(limit)
+        result = await session.execute(
+            sa.delete(job).where(job.id.in_(batch)).execution_options(synchronize_session=False)
+        )
+        return result.rowcount or 0
 
 
 class TournamentRecalculationStateRepository(BaseRepository[models.TournamentRecalculationState]):

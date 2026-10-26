@@ -4,10 +4,6 @@ Rows in ``tournament.swiss_bye`` and ``tournament.swiss_stopped_scope``, never
 the organizer's regulation -- nothing an admin edits can reach them. A scope is
 one stage item, or the whole stage when it has none (``stage_item_id`` NULL).
 
-:func:`played_pairs` lives here too: "who has already met" is the other half of
-what the generator needs from the database, and it is read off the live
-participations rather than two columns on the encounter.
-
 Writes go through the caller's session; nothing here commits.
 """
 
@@ -15,12 +11,10 @@ from __future__ import annotations
 
 from collections import Counter, defaultdict
 from collections.abc import Collection
-from itertools import combinations
 
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from shared.models.encounter.team import EncounterTeam
 from shared.models.tournament.stage import SwissBye, SwissStoppedScope
 from shared.repository import SwissByeRepository, SwissStoppedScopeRepository
 
@@ -30,7 +24,6 @@ __all__ = (
     "clear_swiss_byes",
     "clear_swiss_scope_stopped",
     "mark_swiss_scope_stopped",
-    "played_pairs",
     "record_swiss_bye",
     "remove_swiss_bye_round",
     "stopped_scopes",
@@ -41,29 +34,6 @@ Scope = tuple[int, int | None]
 
 _byes = SwissByeRepository()
 _stopped = SwissStoppedScopeRepository()
-
-
-async def played_pairs(session: AsyncSession, encounter_ids: Collection[int]) -> set[frozenset[int]]:
-    """Every pair of source teams the given encounters have put together.
-
-    Read off the ACTIVE participations: a seat that changed hands was replaced
-    because the pairing was wrong, so the retired occupant never met anyone.
-    An encounter seating more than two takes every pair in it, which keeps the
-    rematch rule honest if a Swiss scope ever holds a lobby.
-    """
-    if not encounter_ids:
-        return set()
-    rows = await session.execute(
-        sa.select(EncounterTeam.encounter_id, EncounterTeam.team_id).where(
-            EncounterTeam.encounter_id.in_(tuple(encounter_ids)),
-            EncounterTeam.active.is_(True),
-            EncounterTeam.team_id.is_not(None),
-        )
-    )
-    seated: defaultdict[int, list[int]] = defaultdict(list)
-    for encounter_id, team_id in rows.all():
-        seated[encounter_id].append(team_id)
-    return {frozenset(pair) for team_ids in seated.values() for pair in combinations(team_ids, 2)}
 
 
 async def swiss_bye_team_ids(session: AsyncSession, stage_id: int, stage_item_id: int | None) -> list[int]:
@@ -119,7 +89,7 @@ async def clear_swiss_byes(session: AsyncSession, stage_id: int, stage_item_id: 
 
 
 async def stopped_scopes(session: AsyncSession, stage_ids: Collection[int]) -> set[Scope]:
-    """Every scope of the given stages that ran out of rematch-free pairings."""
+    """Every scope of the given stages that ran out of pairings."""
     if not stage_ids:
         return set()
     result = await session.execute(

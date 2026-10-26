@@ -552,7 +552,7 @@ class StandingsTests(StageLayerCase):
             )
             await s.commit()
         async with self.Session() as s:
-            standings = await standings_service.recalculate_for_tournament(s, self.tournament_id)
+            standings = (await standings_service.recalculate_for_tournament(s, self.tournament_id)).standings
         by_team = {standing.team_id: standing for standing in standings}
         self.assertEqual(1, by_team[seats[0].team_id].position)
         self.assertEqual(1, by_team[seats[0].team_id].win)
@@ -696,7 +696,7 @@ class SwissThresholdTests(StageLayerCase):
         )
 
         async with self.Session() as s:
-            table = await standings_service.recalculate_for_tournament(s, self.tournament_id)
+            table = (await standings_service.recalculate_for_tournament(s, self.tournament_id)).standings
         self.assertEqual(
             {t0: "qualified", t1: "qualified", t2: "eliminated", t3: "eliminated"},
             {row.team_id: row.swiss_status for row in table},

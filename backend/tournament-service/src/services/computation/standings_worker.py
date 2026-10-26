@@ -32,25 +32,38 @@ _tournaments = TournamentRepository()
 _STANDINGS_CHANGED_TABLES = ["tournament.standing", "tournament.player", "tournament.team", "tournament.stage"]
 
 
-async def _enqueue_achievement_evaluation(session, tournament_id: int) -> None:
-    if await is_scrim_container(session, tournament_id):
-        return
-    workspace_id = await session.scalar(
-        sa.select(models.Tournament.workspace_id).where(models.Tournament.id == tournament_id)
-    )
-    if workspace_id is None:
+async def _enqueue_achievement_evaluation(session, tournament: models.Tournament) -> None:
+    if await is_scrim_container(session, tournament.id):
         return
     await enqueue_outbox_event(
         session,
         AchievementEvaluateEvent(
-            workspace_id=workspace_id,
-            tournament_id=tournament_id,
+            workspace_id=tournament.workspace_id,
+            tournament_id=tournament.id,
             changed_tables=_STANDINGS_CHANGED_TABLES,
         ),
         # Default exchange: the routing key IS the queue name.
         exchange=None,
         routing_key=ACHIEVEMENT_EVALUATE_QUEUE.name,
     )
+
+
+async def _isolated(session, what: str, tournament_id: int, step):
+    """Run ``step`` in a savepoint; ``None`` when it failed.
+
+    Requalification and Swiss round generation ride on the standings but must not decide them: a refusal there (a
+    seat already taken, an unknown role) would otherwise roll the standings back and fail the job, and the next
+    result would hit the same refusal -- the table frozen for good. Logged instead, the standings commit.
+    """
+    try:
+        async with session.begin_nested():
+            return await step()
+    except Exception as exc:
+        if is_refusal(exc):
+            logger.warning("{} refused: {}", what, failure_message(exc), tournament_id=tournament_id)
+        else:
+            logger.exception("{} failed", what, tournament_id=tournament_id)
+        return None
 
 
 async def _requeue_contended_job(session, job: models.TournamentComputationJob) -> None:
@@ -99,33 +112,66 @@ async def process_standings_job(job_id: int) -> None:
                 if still_exists is not None:
                     await _requeue_contended_job(session, current)
                     return
-            generation = int((current.payload_json or {}).get("generation", 0))
-            standings = await standings_service.recalculate_for_tournament(
-                session,
-                current.tournament_id,
-                commit=False,
+            tournament_id = current.tournament_id
+            # Read before ranking, not taken from the payload: every request counted here committed together with
+            # its data, so the ranking below sees all of them -- ten results queued behind one job are one recompute.
+            generation = int(
+                await session.scalar(
+                    sa.select(models.TournamentRecalculationState.requested_generation).where(
+                        models.TournamentRecalculationState.tournament_id == tournament_id
+                    )
+                )
+                or 0
             )
-            state = await jobs_service.complete_standings_generation(session, current.tournament_id, generation)
-            # The standings that just moved are what a frozen playoff seed was
-            # resolved FROM: re-resolve the ones an untouched downstream stage
-            # item still holds, in this transaction, before anything publishes.
-            await admin_stage_service.requalify_downstream_inputs(session, current.tournament_id)
-            generated = await swiss_rounds_service.generate_ready_rounds(session, current.tournament_id)
-            # A generated round is a new bracket section, not just new numbers.
-            resources = STRUCTURE_RESOURCES if generated else RESULT_RESOURCES
-            await publish_tournament_invalidation(session, current.tournament_id, resources)
-            await _enqueue_achievement_evaluation(session, current.tournament_id)
+            run = await standings_service.recalculate_for_tournament(session, tournament_id, commit=False)
+            requalified = generated = None
+            if run.tournament is not None:
+                stages = run.tournament.stages
+                # The standings that just moved are what a frozen playoff seed was
+                # resolved FROM: re-resolve the ones an untouched downstream stage
+                # item still holds, in this transaction, before anything publishes.
+                requalified = await _isolated(
+                    session,
+                    "Requalification",
+                    tournament_id,
+                    lambda: admin_stage_service.requalify_downstream_inputs(session, tournament_id, stages=stages),
+                )
+                # What was loaded for the ranking is reused unless requalification moved seats or rolled back (a
+                # rolled-back savepoint expires what it touched): then the Swiss pass reads its own.
+                reuse = requalified == 0
+                generated = await _isolated(
+                    session,
+                    "Swiss round generation",
+                    tournament_id,
+                    lambda: swiss_rounds_service.generate_ready_rounds(
+                        session,
+                        tournament_id,
+                        stages=stages if reuse else None,
+                        encounters=run.encounters if reuse else None,
+                    ),
+                )
+            # Nothing moved, nothing to announce: no refetch storm and no achievement run for an identical table.
+            if generated:
+                # A generated round is a new bracket section, not just new numbers.
+                await publish_tournament_invalidation(session, tournament_id, STRUCTURE_RESOURCES)
+            elif run.changed or requalified:
+                await publish_tournament_invalidation(session, tournament_id, RESULT_RESOURCES)
+            if run.changed:
+                await _enqueue_achievement_evaluation(session, run.tournament)
             await jobs_service.mark_job_succeeded(
                 session,
                 current,
                 {
                     "generation": generation,
-                    "standing_count": len(standings),
+                    "standing_count": len(run.standings),
                 },
             )
             await session.flush()
+            # Last, right before the commit: every result write upserts this row, so locking it any earlier made
+            # those writes wait out the requalification, the Swiss round and its notifications.
+            state = await jobs_service.complete_standings_generation(session, tournament_id, generation)
             if state.requested_generation > state.completed_generation:
-                await jobs_service.request_followup_standings_job(session, current.tournament_id)
+                await jobs_service.request_followup_standings_job(session, tournament_id)
             await session.commit()
     except Exception as exc:
         if is_refusal(exc):

@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from shared.core import enums, http_status
 from shared.core.errors import BaseAPIException
 from shared.domain.roles import UnknownRole
+from shared.models.catalog.role import CatalogRole
 from shared.models.encounter.encounter import Encounter
 from shared.models.encounter.team import EncounterTeam, EncounterTeamMember, EncounterTeamMemberRole
 from shared.repository import (
@@ -113,8 +114,7 @@ async def place_team(
             active=True,
         ),
     )
-    for member in members:
-        await _snapshot_member(session, participation, member, encounter)
+    await _snapshot_members(session, participation, members, encounter)
     return participation
 
 
@@ -156,30 +156,21 @@ async def add_substitute(
     the line-up was taken IS the substitute, whatever the caller filled in.
     """
     encounter = await EncounterRepository().get(session, participation.encounter_id)
-    return await _snapshot_member(session, participation, replace(member, is_substitute=True), encounter)
+    (row,) = await _snapshot_members(session, participation, [replace(member, is_substitute=True)], encounter)
+    return row
 
 
-async def _snapshot_member(
-    session: AsyncSession, participation: EncounterTeam, member: MemberSnapshot, encounter: Encounter
-) -> EncounterTeamMember:
-    row = await _members.create(
-        session,
-        EncounterTeamMember(
-            encounter_id=participation.encounter_id,
-            encounter_team_id=participation.id,
-            # Copied, not derived: the composite FK carries it forward from here.
-            active=participation.active,
-            workspace_member_id=member.workspace_member_id,
-            display_name_snapshot=member.display_name,
-            rank=member.rank,
-            is_substitute=member.is_substitute,
-            is_captain=member.is_captain,
-        ),
-    )
-    roles = []
-    for dimension, code in member.roles:
+async def _resolve_role(session: AsyncSession, encounter: Encounter, dimension: str, code: str) -> CatalogRole:
+    """``CatalogRoleRepository.resolve`` memoized for the current transaction (catalog rows don't change mid-write)."""
+    transaction = session.sync_session.get_transaction()
+    owner, cache = session.info.get("role_resolve_cache", (None, None))
+    if cache is None or owner is not transaction:
+        cache = {}
+        session.info["role_resolve_cache"] = (transaction, cache)
+    key = (encounter.discipline, encounter.workspace_id, dimension, code)
+    if key not in cache:
         try:
-            leaf = await _role_rows.resolve(
+            cache[key] = await _role_rows.resolve(
                 session,
                 discipline=encounter.discipline,
                 workspace_id=encounter.workspace_id,
@@ -190,11 +181,38 @@ async def _snapshot_member(
             raise BaseAPIException(
                 status_code=http_status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"unknown_role: {exc}"
             ) from None
-        roles.append(
-            EncounterTeamMemberRole(
-                team_member_id=row.id, dimension_id=leaf.dimension_id, role_id=leaf.id, catalog_role=leaf
-            )
+    return cache[key]
+
+
+async def _snapshot_members(
+    session: AsyncSession, participation: EncounterTeam, members: Sequence[MemberSnapshot], encounter: Encounter
+) -> list[EncounterTeamMember]:
+    """One INSERT for the members, one for their roles; roles resolve before anything is written."""
+    leaves = [[await _resolve_role(session, encounter, *role) for role in member.roles] for member in members]
+    rows = [
+        EncounterTeamMember(
+            encounter_id=participation.encounter_id,
+            encounter_team_id=participation.id,
+            # Copied, not derived: the composite FK carries it forward from here.
+            active=participation.active,
+            workspace_member_id=member.workspace_member_id,
+            display_name_snapshot=member.display_name,
+            rank=member.rank,
+            is_substitute=member.is_substitute,
+            is_captain=member.is_captain,
         )
+        for member in members
+    ]
+    if not rows:
+        return rows
+    await _members.create_many(session, rows)
+    roles = [
+        EncounterTeamMemberRole(
+            team_member_id=row.id, dimension_id=leaf.dimension_id, role_id=leaf.id, catalog_role=leaf
+        )
+        for row, member_leaves in zip(rows, leaves, strict=True)
+        for leaf in member_leaves
+    ]
     if roles:
         await _roles.create_many(session, roles)
-    return row
+    return rows

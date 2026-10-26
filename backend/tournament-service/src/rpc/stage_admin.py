@@ -29,6 +29,7 @@ from typing import Any
 
 from faststream.rabbit.annotations import RabbitMessage
 
+from shared.rpc.common import q1
 from shared.rpc.identity import ensure_workspace_permission
 from shared.services.audit import record_admin_audit
 from shared.services.tournament.computation import request_bracket_job
@@ -337,13 +338,8 @@ def register(broker: Any, logger: Any) -> None:
             ensure_workspace_permission(user, ws_id, "stage", "update")
             # The optional ``source_stage_id`` query param names which group stage
             # feeds this bracket, when the earlier phase runs several divisions and
-            # no single one is "the" preceding stage.
-            source_vals = (data.get("query") or {}).get("source_stage_id")
-            if isinstance(source_vals, list):
-                source_raw = source_vals[0] if source_vals else None
-            else:
-                source_raw = source_vals
-            source_stage_id = int(source_raw) if source_raw not in (None, "") else None
+            # no single one is "the" preceding stage. Not an integer: 422.
+            source_stage_id = q1(data, "source_stage_id", int)
             await record_admin_audit(
                 session,
                 action="stage.auto_wire",

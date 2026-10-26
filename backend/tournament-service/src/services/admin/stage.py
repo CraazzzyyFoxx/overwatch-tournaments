@@ -104,8 +104,8 @@ from src.services.bracket.swiss_state import (
 )
 from src.services.encounter.ffa import ffa_encounter_service
 from src.services.encounter.room_reconcile import request_stage_reconcile
-from src.services.notifications.lifecycle import after_encounter_teams_changed, lifecycle_notifier
-from src.services.standings.service import rank_group, standings_service
+from src.services.notifications.lifecycle import lifecycle_notifier
+from src.services.standings.service import StageEncounter, rank_group, standings_service
 from src.services.tournament.events import (
     STRUCTURE_RESOURCES,
     enqueue_tournament_recalculation,
@@ -1161,6 +1161,28 @@ class AdminStageService:
             .limit(1)
         )
 
+    async def _assert_source_in_tournament(
+        self, session: AsyncSession, source_stage_item_id: int | None, tournament_id: int
+    ) -> None:
+        """A TENTATIVE seed qualifies from a group of THIS tournament.
+
+        Activation copies the team the source's standings name, so a foreign
+        item would seat another tournament's -- or workspace's -- team here.
+        The foreign key only proves the item exists.
+        """
+        if source_stage_item_id is None:
+            return
+        source_tournament_id = await session.scalar(
+            select(models.Stage.tournament_id)
+            .join(models.StageItem, models.StageItem.stage_id == models.Stage.id)
+            .where(models.StageItem.id == source_stage_item_id)
+        )
+        if source_tournament_id != tournament_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Source stage item does not belong to this tournament",
+            )
+
     async def create_stage_item_input(
         self,
         session: AsyncSession,
@@ -1173,6 +1195,7 @@ class AdminStageService:
         if not stage_item:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Stage item not found")
         tournament_id = stage_item.stage.tournament_id
+        await self._assert_source_in_tournament(session, data.source_stage_item_id, tournament_id)
         duplicate = await self._assert_input_assignable(
             session,
             stage_id=stage_item.stage_id,
@@ -1270,6 +1293,7 @@ class AdminStageService:
             next_source_stage_item_id = None
             next_source_position = None
 
+        await self._assert_source_in_tournament(session, next_source_stage_item_id, tournament_id)
         inp.input_type = next_input_type
         inp.team_id = next_team_id
         inp.source_stage_item_id = next_source_stage_item_id
@@ -1475,8 +1499,8 @@ class AdminStageService:
             .join(models.BracketEncounter, models.BracketEncounter.encounter_id == models.Encounter.id)
             .where(models.BracketEncounter.stage_id == stage.id, seated >= models.Encounter.slot_count)
         )
-        for encounter in result.scalars():
-            await lifecycle_notifier.on_encounter_changed(session, encounter, channel=False)
+        # No channel post: a bracket going live readies a dozen encounters at once.
+        await lifecycle_notifier.on_encounters_changed(session, list(result.scalars()), channel=False)
 
     async def deactivate_stage(
         self,
@@ -1585,31 +1609,27 @@ class AdminStageService:
         session: AsyncSession,
         stage: models.Stage,
         stage_item_id: int | None,
+        encounters: list[StageEncounter] | None = None,
     ) -> tuple[list[SwissStanding] | None, set[frozenset[int]] | None, int]:
+        """``encounters``: the scope's encounters when the caller already loaded them (the standings job)."""
         stage_id = stage.id
-        rounds = (
-            await session.execute(
-                select(models.BracketEncounter.encounter_id, models.BracketEncounter.round).where(
-                    models.BracketEncounter.stage_id == stage_id,
-                    (
-                        models.BracketEncounter.stage_item_id.is_(None)
-                        if stage_item_id is None
-                        else models.BracketEncounter.stage_item_id == stage_item_id
-                    ),
-                )
-            )
-        ).all()
-        if not rounds:
+        if encounters is None:
+            encounters = [
+                encounter
+                for encounter in await standings_service.load_stage_encounters(session, stage_id)
+                if encounter.stage_item_id == stage_item_id
+            ]
+        if not encounters:
             return None, None, 1
 
-        swiss_round = max(round_number for _encounter_id, round_number in rounds) + 1
+        swiss_round = max(encounter.round for encounter in encounters) + 1
         # The pairs this scope already played, off the participations: a Swiss
         # pairing refuses a rematch, and who met whom is the seats of each card.
         # A seat that was taken over still counts as a meeting.
         seats = (
             await session.execute(
                 select(models.EncounterTeam.encounter_id, models.EncounterTeam.team_id).where(
-                    models.EncounterTeam.encounter_id.in_([encounter_id for encounter_id, _ in rounds]),
+                    models.EncounterTeam.encounter_id.in_([encounter.id for encounter in encounters]),
                     models.EncounterTeam.team_id.is_not(None),
                 )
             )
@@ -1621,17 +1641,11 @@ class AdminStageService:
             frozenset(team_ids) for team_ids in by_encounter.values() if len(team_ids) > 1
         }
 
-        # Ranked here, off the results as they stand now -- not read from the
-        # stored table. The standings job that closes a round recalculates from a
-        # snapshot and then looks for closed rounds again: a last result that
-        # committed in between closes the round on a table that never counted
-        # it, and the round would be paired on records a round old.
+        # Ranked here off the encounters, not read from the stored table: the
+        # standings job hands in the very encounters it ranked and closed the
+        # round on, so pairing and gate see one snapshot. A result committing
+        # after it bumps the generation and gets a job of its own.
         tournament = await session.get_one(models.Tournament, stage.tournament_id)
-        encounters = [
-            encounter
-            for encounter in await standings_service.load_stage_encounters(session, stage_id)
-            if encounter.stage_item_id == stage_item_id
-        ]
         stage_item = next((item for item in stage.items if item.id == stage_item_id), None)
         byes = Counter(await swiss_bye_team_ids(session, stage_id, stage_item_id))
         swiss_standings = [
@@ -1655,6 +1669,7 @@ class AdminStageService:
         stage_item_id: int | None,
         *,
         lower_bracket_team_ids: list[int] | None = None,
+        encounters: list[StageEncounter] | None = None,
     ) -> BracketSkeleton:
         if stage.stage_type in BRACKET_STAGE_TYPES:
             return self._bracket_skeleton(stage, team_ids, lower_bracket_team_ids or [])
@@ -1665,7 +1680,7 @@ class AdminStageService:
         thresholds = SwissThresholds()
         if stage.stage_type == enums.StageType.SWISS:
             swiss_standings, swiss_played_pairs, swiss_round = await self._get_swiss_generation_context(
-                session, stage, stage_item_id
+                session, stage, stage_item_id, encounters
             )
             if swiss_standings is None:
                 await clear_swiss_byes(session, stage.id, stage_item_id)
@@ -1724,7 +1739,7 @@ class AdminStageService:
         except SwissPairingImpossibleError:
             await mark_swiss_scope_stopped(session, stage.id, stage_item_id)
             logger.info(
-                "Swiss scope ended because no complete non-rematch pairing exists",
+                "Swiss scope ended because no complete pairing exists",
                 stage_id=stage.id,
                 stage_item_id=stage_item_id,
                 round=swiss_round,
@@ -1957,11 +1972,16 @@ class AdminStageService:
         are preserved (they point to upstream stage outputs, not team assignments).
 
         Raises HTTPException if:
+        - the stage already has generated encounters (409, like the bracket template writers)
         - stage has no stage_items
         - team count is zero
         - teams don't all belong to the same tournament as the stage
         """
-        stage = await self.get_stage(session, stage_id)
+        # Under the stage lock every other input writer and the bracket job take: a generation must not build on
+        # seeds this is rewriting. Loaded after the lock so the inputs wiped below are the current ones.
+        await self._lock_stage(session, stage_id)
+        await self._assert_no_encounters(session, stage_id)
+        stage = await self.get_stage(session, stage_id, populate_existing=True)
         if not stage.items:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -2357,7 +2377,9 @@ class AdminStageService:
         started = [position for item_id, position in seeds if item_id not in untouched]
         return max(started) if started else None
 
-    async def requalify_downstream_inputs(self, session: AsyncSession, tournament_id: int) -> int:
+    async def requalify_downstream_inputs(
+        self, session: AsyncSession, tournament_id: int, *, stages: Sequence[models.Stage] | None = None
+    ) -> int:
         """Re-resolve frozen qualification seeds that recomputed standings moved.
 
         Activation turns a TENTATIVE input into a FINAL one, which is what makes
@@ -2370,8 +2392,12 @@ class AdminStageService:
         Only while the downstream item is untouched: past that point the seed is
         genuinely frozen and ``assert_source_correction_allowed`` refuses the
         correction instead. Returns how many seeds moved.
+
+        ``stages`` -- the tournament's stages with items and inputs loaded -- spares the reload when the caller
+        already holds them (the standings job does).
         """
-        stages = await self.get_stages_by_tournament(session, tournament_id)
+        if stages is None:
+            stages = await self.get_stages_by_tournament(session, tournament_id)
         candidates = [
             inp
             for stage in stages
@@ -2414,7 +2440,21 @@ class AdminStageService:
         if not moved:
             return 0
 
-        untouched = await self._untouched_stage_items(session, sorted({inp.stage_item_id for inp, _, _ in moved}))
+        # Asked once without a lock, so a started item (live rooms) is never locked; then the untouched candidates'
+        # encounter rows are locked and asked again. A result write or a report locks the encounter row (FOR UPDATE,
+        # or the KEY SHARE of its foreign key), so neither can land between the re-check and the reseat below.
+        candidate_item_ids = sorted(
+            await self._untouched_stage_items(session, sorted({inp.stage_item_id for inp, _, _ in moved}))
+        )
+        if not candidate_item_ids:
+            return 0
+        await session.execute(
+            select(models.Encounter.id)
+            .join(models.BracketEncounter, models.BracketEncounter.encounter_id == models.Encounter.id)
+            .where(models.BracketEncounter.stage_item_id.in_(candidate_item_ids))
+            .with_for_update(of=models.Encounter)
+        )
+        untouched = await self._untouched_stage_items(session, candidate_item_ids)
         # One mapping per item, applied in a single pass: two seeds that swapped
         # places (A->B, B->A) would otherwise chase each other slot by slot.
         replacements: dict[int, dict[int, int]] = {}
@@ -2442,8 +2482,11 @@ class AdminStageService:
 
         A seat changes hands the only way it can: the occupant is retired
         and the replacement is seated in the same slot. The item is untouched --
-        nothing was played in it -- so the retired rows carry no result with them.
+        nothing was played in it -- so the retired rows carry no result with them;
+        :meth:`requalify_downstream_inputs` holds the encounter rows locked since it checked that.
         """
+        from src.services.encounter.pick_ban_session import pick_ban_session_service
+
         seat = aliased(models.EncounterTeam)
         result = await session.execute(
             self.encounter_repo.select()
@@ -2499,8 +2542,10 @@ class AdminStageService:
                 [by_slot.get(slot) for slot in range(1, encounter.slot_count + 1)],
                 names,
             )
-            # No channel post: requalification rewrites a whole stage item.
-            await after_encounter_teams_changed(session, encounter, channel=False)
+            # The pick-ban rooms follow the new pairing.
+            await pick_ban_session_service.sync_all_pick_ban_sessions_after_team_change(session, encounter)
+        # No channel post: requalification rewrites a whole stage item.
+        await lifecycle_notifier.on_encounters_changed(session, encounters, channel=False)
 
     async def _preceding_phase_group_stages(self, session: AsyncSession, stage: models.Stage) -> list[models.Stage]:
         result = await session.execute(
@@ -2897,17 +2942,54 @@ class AdminStageService:
         rows = result.tuples().all()
         max_round = max((round_number for _encounter, round_number in rows), default=0)
 
-        changed = 0
+        targets: dict[int, int] = {}
         for encounter, round_number in rows:
             at_stake = stakes.get(encounter.id)
-            target = (
+            targets[encounter.id] = (
                 resolve_swiss_best_of(cfg, round_number, qualification=at_stake[0], elimination=at_stake[1])
                 if at_stake is not None
                 else resolve_best_of(cfg, round_number, is_final=is_elimination and round_number == max_round)
             )
-            if encounter.best_of == target:
+        moving = sorted(encounter.id for encounter, _round in rows if encounter.best_of != targets[encounter.id])
+        if not moving:
+            await session.commit()
+            return 0
+
+        # Lock order of every result writer: the encounters first (all of them, in id order, re-read under the
+        # lock), the recalculation state last. A lobby's settle requests the standings itself, and with the
+        # encounters locked one by one that request would come between two of them. A lobby that settles or
+        # reopens also advances into -- or resets -- every encounter its links reach (``reset_downstream``
+        # recurses), so that closure is locked up front with it.
+        lobby_ids = [
+            encounter.id
+            for encounter, _round in rows
+            if encounter.id in moving and encounter.scoring_preset == "points"
+        ]
+        downstream: list[int] = []
+        if lobby_ids:
+            link = models.EncounterLink
+            reached = (
+                select(link.target_encounter_id.label("id"))
+                .where(link.source_encounter_id.in_(lobby_ids))
+                .cte("reached", recursive=True)
+            )
+            reached = reached.union(
+                select(link.target_encounter_id).join(reached, link.source_encounter_id == reached.c.id)
+            )
+            downstream = list((await session.execute(select(reached.c.id))).scalars().all())
+        locked = await session.scalars(
+            self.encounter_repo.select()
+            .where(models.Encounter.id.in_(sorted({*moving, *downstream})))
+            .order_by(models.Encounter.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        changed = 0
+        for encounter in locked.all():
+            # A downstream encounter is locked, not rewritten, unless it is one of this stage's own.
+            if encounter.id not in targets or encounter.best_of == targets[encounter.id]:
                 continue
-            encounter.best_of = target
+            encounter.best_of = targets[encounter.id]
             changed += 1
             # A lobby's completion is derived from "confirmed games >= best_of",
             # so moving the bar here settles or reopens it. A duel's
@@ -2916,6 +2998,8 @@ class AdminStageService:
                 await ffa_encounter_service.refresh_completion(session, encounter, actor_user_id=None)
 
         if changed:
+            # Last, after every encounter above: a series length is a standings input.
+            await enqueue_tournament_recalculation(session, stage.tournament_id)
             await self._publish_structure_changed(session, stage.tournament_id)
         await session.commit()
         return changed

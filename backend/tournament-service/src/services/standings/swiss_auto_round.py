@@ -12,6 +12,7 @@ completion is not used as a candidate filter here.
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Mapping, Sequence
 
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -76,24 +77,39 @@ class SwissRoundsService:
         self,
         session: AsyncSession,
         tournament_id: int,
+        *,
+        stages: Sequence[models.Stage] | None = None,
+        encounters: Mapping[int, list[StageEncounter]] | None = None,
     ) -> list[models.Encounter]:
-        """Generate the next Swiss round for every closed active scope."""
-        result = await session.execute(
-            self.stage_repo.select()
-            .where(
-                models.Stage.tournament_id == tournament_id,
-                models.Stage.stage_type == enums.StageType.SWISS,
-                models.Stage.is_active == True,  # noqa: E712
+        """Generate the next Swiss round for every closed active scope.
+
+        The standings job passes what its ranking already loaded: the tournament's ``stages`` (items and inputs
+        loaded) and each stage's ``encounters`` by stage id. Without them both are read here, fresh.
+        """
+        if stages is None:
+            result = await session.execute(
+                self.stage_repo.select()
+                .where(
+                    models.Stage.tournament_id == tournament_id,
+                    models.Stage.stage_type == enums.StageType.SWISS,
+                    models.Stage.is_active == True,  # noqa: E712
+                )
+                .options(selectinload(models.Stage.items).selectinload(models.StageItem.inputs))
+                # Fresh even when the identity map holds these rows: a rolled-back savepoint left them expired.
+                .execution_options(populate_existing=True)
             )
-            .options(selectinload(models.Stage.items).selectinload(models.StageItem.inputs))
-        )
-        swiss_stages = result.scalars().all()
+            swiss_stages = result.scalars().all()
+        else:
+            swiss_stages = [stage for stage in stages if stage.stage_type == enums.StageType.SWISS and stage.is_active]
         if not swiss_stages:
             return []
 
         encounters_by_key: dict[tuple[int, int | None], list[StageEncounter]] = defaultdict(list)
         for stage in swiss_stages:
-            for encounter in await standings_service.load_stage_encounters(session, stage.id):
+            stage_encounters = encounters.get(stage.id) if encounters is not None else None
+            if stage_encounters is None:
+                stage_encounters = await standings_service.load_stage_encounters(session, stage.id)
+            for encounter in stage_encounters:
                 encounters_by_key[(stage.id, encounter.stage_item_id)].append(encounter)
 
         generated: list[models.Encounter] = []
@@ -106,7 +122,7 @@ class SwissRoundsService:
             )
             for stage_item_id, item_encounters in scopes:
                 # No stopped-scope shortcut: a scope that once had no
-                # rematch-free pairing may have one again after a round is
+                # complete pairing may have one again after a round is
                 # re-generated, and generation re-marks it when it truly does
                 # not. Skipping on the flag would make the stop permanent.
                 if not stage_item_ready_for_next_round(item_encounters):
@@ -129,6 +145,7 @@ class SwissRoundsService:
                         stage_item_id=stage_item_id,
                         expected_next_round=next_round,
                         stage=stage,
+                        encounters=item_encounters,
                     )
                 )
         return generated
@@ -142,8 +159,12 @@ class SwissRoundsService:
         stage_item_id: int | None,
         expected_next_round: int | None,
         stage: models.Stage | None = None,
+        encounters: list[StageEncounter] | None = None,
     ) -> list[models.Encounter]:
-        """Generate one Swiss round without committing or recalculating standings."""
+        """Generate one Swiss round without committing or recalculating standings.
+
+        ``encounters``: the scope's encounters when the caller already loaded them; read here otherwise.
+        """
         stage = stage or await stage_service.get_stage(session, stage_id)
 
         if not stage.is_active:
@@ -177,10 +198,10 @@ class SwissRoundsService:
             )
             return []
 
-        current_encounters = await self._get_stage_item_encounters(
-            session,
-            stage_id,
-            stage_item_id,
+        current_encounters = (
+            encounters
+            if encounters is not None
+            else await self._get_stage_item_encounters(session, stage_id, stage_item_id)
         )
         actual_next_round = next_round_number(current_encounters)
         if expected_next_round is not None:
@@ -212,7 +233,9 @@ class SwissRoundsService:
             )
             return []
 
-        skeleton = await stage_service._generate_stage_skeleton(session, stage, team_ids, stage_item_id)
+        skeleton = await stage_service._generate_stage_skeleton(
+            session, stage, team_ids, stage_item_id, encounters=current_encounters
+        )
         if not skeleton.pairings:
             await session.flush()
             logger.info(
@@ -222,7 +245,7 @@ class SwissRoundsService:
             )
             return []
 
-        encounters = await stage_service._create_encounters_from_skeleton(
+        created = await stage_service._create_encounters_from_skeleton(
             session,
             stage,
             skeleton,
@@ -233,19 +256,18 @@ class SwissRoundsService:
 
         # DMs only: a Swiss round pairs the whole scope at once, and a channel
         # post per pairing is spam.
-        for encounter in encounters:
-            await lifecycle_notifier.on_encounter_changed(session, encounter, channel=False)
+        await lifecycle_notifier.on_encounters_changed(session, created, channel=False)
 
         logger.info(
             "Swiss auto-round: generated {} encounters for round {}",
-            len(encounters),
+            len(created),
             skeleton.pairings[0].round_number if skeleton.pairings else "?",
             stage_id=stage_id,
             stage_item_id=stage_item_id,
             tournament_id=tournament_id,
         )
 
-        return encounters
+        return created
 
     async def _get_stage_item_encounters(
         self,

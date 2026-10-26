@@ -115,6 +115,28 @@ class ComputationJobTests(IsolatedAsyncioTestCase):
         keys = [call.kwargs["idempotency_key"] for call in create.await_args_list]
         self.assertEqual(["bracket:2:all", "bracket:2:all"], keys)
 
+    async def test_a_job_whose_every_attempt_died_is_failed_not_reclaimed(self) -> None:
+        """A worker killed mid-job (OOM) redelivers it; the queue has no delivery limit, so claim_job is the stop."""
+        job = SimpleNamespace(
+            kind="standings",
+            status="running",
+            started_at=None,
+            finished_at=None,
+            error=None,
+            attempts=jobs.MAX_ATTEMPTS,
+        )
+        session = SimpleNamespace(commit=AsyncMock())
+
+        with patch.object(jobs.jobs_service, "get_job", AsyncMock(return_value=job)):
+            claimed = await jobs.jobs_service.claim_job(session, 7, kind="standings")
+
+        self.assertIsNone(claimed)
+        self.assertEqual("failed", job.status)
+        self.assertEqual(jobs.MAX_ATTEMPTS, job.attempts)
+        self.assertIsNotNone(job.finished_at)
+        self.assertIn("attempts", job.error)
+        session.commit.assert_awaited_once()
+
     async def test_late_failure_does_not_overwrite_terminal_success(self) -> None:
         job = SimpleNamespace(status="succeeded")
         session = SimpleNamespace(commit=AsyncMock())

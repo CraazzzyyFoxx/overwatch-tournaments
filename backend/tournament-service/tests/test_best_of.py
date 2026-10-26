@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import TestCase
+from unittest.mock import patch
 
 backend_root = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(backend_root))
@@ -82,20 +83,36 @@ class _FakeScalarResult:
 
 
 class _FakeSession:
-    def __init__(self, rows: list) -> None:
+    def __init__(self, rows: list, *, downstream: tuple = ()) -> None:
         self._rows = rows
+        #: Encounters the stage's lobbies' advancement links reach (other stages included).
+        self._downstream = list(downstream)
         self.committed = False
+        #: Every statement in order: the scan, the downstream closure, the lock, then what the loop calls.
+        self.calls: list[str] = []
 
     async def execute(self, _query) -> _FakeScalarResult:
-        return _FakeScalarResult(self._rows)
+        if not self.calls:
+            self.calls.append("scan")
+            return _FakeScalarResult(self._rows)
+        self.calls.append("downstream")
+        return _FakeScalarResult([encounter.id for encounter in self._downstream])
+
+    async def scalars(self, query) -> _FakeScalarResult:
+        # The one ``IN`` list the lock statement binds: the ids it locks.
+        ids = sorted(next(value for value in query.compile().params.values() if isinstance(value, list)))
+        self.calls.append(f"lock {ids}")
+        everyone = {encounter.id: encounter for encounter, _round in self._rows}
+        everyone.update({encounter.id: encounter for encounter in self._downstream})
+        return _FakeScalarResult([everyone[encounter_id] for encounter_id in ids])
 
     async def commit(self) -> None:
         self.committed = True
 
 
 class ApplyBestOfToExistingTests(TestCase):
-    def _run_backfill(self, stage, encounters):
-        session = _FakeSession(encounters)
+    def _run_backfill(self, stage, encounters, *, downstream: tuple = ()):
+        session = _FakeSession(encounters, downstream=downstream)
 
         async def _fake_get_stage(_session, _stage_id):
             return stage
@@ -105,16 +122,50 @@ class ApplyBestOfToExistingTests(TestCase):
         async def _fake_publish(_session, tournament_id):
             published.append(tournament_id)
 
+        async def _fake_recalculation(_session, tournament_id):
+            session.calls.append(f"recalculate {tournament_id}")
+
+        async def _fake_refresh(_session, encounter, *, actor_user_id):
+            # A settling lobby advances into its targets and requests the standings itself.
+            session.calls.append(f"refresh {encounter.id}")
+
         orig_get_stage = stage_service.stage_service.get_stage
         orig_publish = stage_service.stage_service._publish_structure_changed
         stage_service.stage_service.get_stage = _fake_get_stage
         stage_service.stage_service._publish_structure_changed = _fake_publish
         try:
-            changed = asyncio.run(stage_service.stage_service.apply_best_of_to_existing(session, stage.id))
+            with (
+                patch.object(stage_service, "enqueue_tournament_recalculation", _fake_recalculation),
+                patch.object(stage_service.ffa_encounter_service, "refresh_completion", _fake_refresh),
+            ):
+                changed = asyncio.run(stage_service.stage_service.apply_best_of_to_existing(session, stage.id))
         finally:
             stage_service.stage_service.get_stage = orig_get_stage
             stage_service.stage_service._publish_structure_changed = orig_publish
         return changed, session, published
+
+    def test_a_points_lobby_locks_every_encounter_its_links_reach_first(self) -> None:
+        """A lobby the new best_of settles advances into a playoff (a custom template), and the next lobby's settle
+        must not lock its target after the first one's standings request took the recalculation state."""
+        stage = _stage(id=13, tournament_id=4, stage_type=enums.StageType.ROUND_ROBIN, best_of_default=2)
+        encounters = [
+            (SimpleNamespace(id=5, best_of=3, slot_count=4, scoring_preset="points"), 1),
+            (SimpleNamespace(id=6, best_of=3, slot_count=4, scoring_preset="points"), 1),
+        ]
+        # The playoff encounters the lobbies feed, and the final behind them: another stage, best_of untouched.
+        playoff = (
+            SimpleNamespace(id=30, best_of=3, slot_count=2, scoring_preset="wins"),
+            SimpleNamespace(id=31, best_of=3, slot_count=2, scoring_preset="wins"),
+            SimpleNamespace(id=40, best_of=5, slot_count=2, scoring_preset="wins"),
+        )
+        changed, session, _ = self._run_backfill(stage, encounters, downstream=playoff)
+
+        self.assertEqual(2, changed)
+        self.assertEqual(
+            ["scan", "downstream", "lock [5, 6, 30, 31, 40]", "refresh 5", "refresh 6", "recalculate 4"],
+            session.calls,
+        )
+        self.assertEqual([3, 3, 5], [encounter.best_of for encounter in playoff])
 
     def test_rewrites_per_round_and_final_for_elimination(self) -> None:
         stage = _stage(
@@ -136,6 +187,9 @@ class ApplyBestOfToExistingTests(TestCase):
         self.assertEqual(changed, 2)  # rounds 1 and 3 changed; round 2 unchanged
         self.assertTrue(session.committed)
         self.assertEqual(published, [1])
+        # The encounters are locked before the standings are requested, once, after the loop; duels feed no lobby
+        # closure, so nothing else is read.
+        self.assertEqual(["scan", "lock [1, 3]", "recalculate 1"], session.calls)
 
     def test_no_final_override_for_group_stage(self) -> None:
         stage = _stage(
@@ -164,3 +218,4 @@ class ApplyBestOfToExistingTests(TestCase):
         self.assertEqual(changed, 0)
         self.assertTrue(session.committed)
         self.assertEqual(published, [])
+        self.assertEqual(["scan"], session.calls)

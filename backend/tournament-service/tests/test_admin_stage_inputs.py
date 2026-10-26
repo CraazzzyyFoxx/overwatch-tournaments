@@ -181,6 +181,8 @@ class SeedTeamsSlotTests(IsolatedAsyncioTestCase):
             delete=AsyncMock(),
             flush=AsyncMock(),
             commit=AsyncMock(),
+            execute=AsyncMock(),  # the stage lock
+            scalar=AsyncMock(return_value=0),  # no encounters generated yet
         )
 
         with (
