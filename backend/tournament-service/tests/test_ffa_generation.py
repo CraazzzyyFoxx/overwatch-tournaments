@@ -24,6 +24,8 @@ sys.path.insert(0, str(backend_root / "tournament-service"))
 enums = importlib.import_module("shared.core.enums")
 errors = importlib.import_module("shared.core.errors")
 stage_service = importlib.import_module("src.services.admin.stage")
+stage_base = importlib.import_module("src.services.admin.stage.base")
+stage_generation = importlib.import_module("src.services.admin.stage.generation")
 ffa_module = importlib.import_module("src.services.encounter.ffa")
 
 from shared import models  # noqa: E402
@@ -82,8 +84,10 @@ class FfaLobbyGenerationTests(IsolatedAsyncioTestCase):
 
         with (
             patch.object(stage_service.stage_service, "get_stage", AsyncMock(return_value=stage)),
-            patch.object(stage_service.ffa_encounter_service, "create_lobby", AsyncMock(return_value=lobby)) as create,
-            patch.object(stage_service, "enqueue_tournament_recalculation", AsyncMock()),
+            patch.object(
+                stage_generation.ffa_encounter_service, "create_lobby", AsyncMock(return_value=lobby)
+            ) as create,
+            patch.object(stage_base, "enqueue_tournament_recalculation", AsyncMock()),
             patch.object(stage_service.stage_service, "_publish_structure_changed", AsyncMock()),
         ):
             result = await stage_service.stage_service.generate_encounters(session, 77, commit=False)
@@ -100,7 +104,7 @@ class FfaLobbyGenerationTests(IsolatedAsyncioTestCase):
 
         with (
             patch.object(stage_service.stage_service, "get_stage", AsyncMock(return_value=stage)),
-            patch.object(stage_service.ffa_encounter_service, "create_lobby", AsyncMock()) as create,
+            patch.object(stage_generation.ffa_encounter_service, "create_lobby", AsyncMock()) as create,
         ):
             with self.assertRaises(HTTPException) as ctx:
                 await stage_service.stage_service.generate_encounters(session, 77, commit=False)

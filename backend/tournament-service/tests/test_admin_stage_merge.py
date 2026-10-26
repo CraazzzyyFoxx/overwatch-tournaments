@@ -14,6 +14,8 @@ sys.path.insert(0, str(backend_root / "tournament-service"))
 
 
 stage_service = importlib.import_module("src.services.admin.stage")
+stage_crud = importlib.import_module("src.services.admin.stage.crud")
+stage_merge = importlib.import_module("src.services.admin.stage.merge")
 enums = importlib.import_module("shared.core.enums")
 eager_loading = importlib.import_module("shared.tests.eager_loading")
 pick_ban_models = importlib.import_module("shared.models.tournament.pick_ban")
@@ -131,7 +133,7 @@ class AdminStageMergeTests(IsolatedAsyncioTestCase):
                 AsyncMock(side_effect=[target_stage, "merged-stage"]),
             ),
             patch.object(
-                stage_service,
+                stage_merge,
                 "enqueue_tournament_recalculation",
                 AsyncMock(side_effect=fake_enqueue),
             ) as enqueue_recalc,
@@ -191,7 +193,7 @@ class AdminStageDeleteOrderTests(IsolatedAsyncioTestCase):
 
         with (
             patch.object(stage_service.stage_service, "get_stage", AsyncMock(return_value=deleted_stage)),
-            patch.object(stage_service, "capture_owner_delete", AsyncMock(return_value=[])),
+            patch.object(stage_crud, "capture_owner_delete", AsyncMock(return_value=[])),
             patch.object(stage_service.stage_service.encounter_repo, "delete_for_stage", AsyncMock()),
             patch.object(stage_service.stage_service.standing_repo, "delete_for_stage", AsyncMock()),
             patch.object(stage_service.stage_service, "_publish_structure_changed", AsyncMock()),
@@ -298,7 +300,7 @@ class PickBanConfigSignatureTests(TestCase):
             pool=(7, 3, 11),
         )
         self.assertEqual(
-            stage_service._pick_ban_config_signature(config),
+            stage_merge._pick_ban_config_signature(config),
             (json.dumps(RULES_PICK, sort_keys=True, separators=(",", ":")), (7, 3, 11), POOL_MODE, None, ()),
         )
 
@@ -313,16 +315,16 @@ class PickBanConfigSignatureTests(TestCase):
             "version": 2,
         }
         self.assertEqual(
-            stage_service._pick_ban_config_signature(_pick_ban_config(mode=POOL_MODE, ruleset=RULES_PICK)),
-            stage_service._pick_ban_config_signature(_pick_ban_config(mode=POOL_MODE, ruleset=reordered)),
+            stage_merge._pick_ban_config_signature(_pick_ban_config(mode=POOL_MODE, ruleset=RULES_PICK)),
+            stage_merge._pick_ban_config_signature(_pick_ban_config(mode=POOL_MODE, ruleset=reordered)),
         )
 
     def test_a_changed_rule_is_significant(self) -> None:
         # The whole reason the ruleset is in the signature at all: merging two
         # stages that ban differently would silently pick one rulebook.
         self.assertNotEqual(
-            stage_service._pick_ban_config_signature(_pick_ban_config(mode=POOL_MODE, ruleset=RULES_BAN)),
-            stage_service._pick_ban_config_signature(_pick_ban_config(mode=POOL_MODE, ruleset=RULES_PICK)),
+            stage_merge._pick_ban_config_signature(_pick_ban_config(mode=POOL_MODE, ruleset=RULES_BAN)),
+            stage_merge._pick_ban_config_signature(_pick_ban_config(mode=POOL_MODE, ruleset=RULES_PICK)),
         )
 
     def test_flat_pairs_keep_their_pre_slot_merge_verdicts(self) -> None:
@@ -338,19 +340,18 @@ class PickBanConfigSignatureTests(TestCase):
         ]
         for index, config in enumerate(flats):
             with self.subTest(prefix=index):
-                self.assertEqual(stage_service._pick_ban_config_signature(config)[:2], _rules_and_pool(config))
+                self.assertEqual(stage_merge._pick_ban_config_signature(config)[:2], _rules_and_pool(config))
         for left_index, left in enumerate(flats):
             for right_index, right in enumerate(flats):
                 with self.subTest(left=left_index, right=right_index):
                     self.assertEqual(
-                        stage_service._pick_ban_config_signature(left)
-                        == stage_service._pick_ban_config_signature(right),
+                        stage_merge._pick_ban_config_signature(left) == stage_merge._pick_ban_config_signature(right),
                         _rules_and_pool(left) == _rules_and_pool(right),
                     )
 
     def test_signature_handles_an_empty_pool_and_no_ruleset(self) -> None:
         config = _pick_ban_config(mode=POOL_MODE)
-        self.assertEqual(stage_service._pick_ban_config_signature(config), ("{}", (), POOL_MODE, None, ()))
+        self.assertEqual(stage_merge._pick_ban_config_signature(config), ("{}", (), POOL_MODE, None, ()))
 
     def test_slot_partition_is_significant_where_the_union_is_not(self) -> None:
         left = _pick_ban_config(
@@ -365,15 +366,15 @@ class PickBanConfigSignatureTests(TestCase):
         )
         self.assertEqual(_slot_union(left), _slot_union(right))
         self.assertNotEqual(
-            stage_service._pick_ban_config_signature(left),
-            stage_service._pick_ban_config_signature(right),
+            stage_merge._pick_ban_config_signature(left),
+            stage_merge._pick_ban_config_signature(right),
         )
 
     def test_slot_row_arrival_order_is_not_significant(self) -> None:
         rows = [_slot_row(1, [(0, 4), (1, 9)], reserve_item_id=13), _slot_row(2, [(0, 6), (1, 2)])]
         self.assertEqual(
-            stage_service._pick_ban_config_signature(_pick_ban_config(mode=SLOTS_MODE, ruleset=RULES_BAN, slots=rows)),
-            stage_service._pick_ban_config_signature(
+            stage_merge._pick_ban_config_signature(_pick_ban_config(mode=SLOTS_MODE, ruleset=RULES_BAN, slots=rows)),
+            stage_merge._pick_ban_config_signature(
                 _pick_ban_config(mode=SLOTS_MODE, ruleset=RULES_BAN, slots=list(reversed(rows)))
             ),
         )
@@ -394,8 +395,8 @@ class PickBanConfigSignatureTests(TestCase):
             slots=[_slot_row(1, candidates[0]), _slot_row(3, candidates[1])],
         )
         self.assertNotEqual(
-            stage_service._pick_ban_config_signature(adjacent),
-            stage_service._pick_ban_config_signature(gapped),
+            stage_merge._pick_ban_config_signature(adjacent),
+            stage_merge._pick_ban_config_signature(gapped),
         )
 
     def test_candidates_are_read_in_sort_order_not_arrival_order(self) -> None:
@@ -403,12 +404,12 @@ class PickBanConfigSignatureTests(TestCase):
             return _pick_ban_config(mode=SLOTS_MODE, ruleset=RULES_BAN, slots=[_slot_row(2, candidates)])
 
         self.assertEqual(
-            stage_service._pick_ban_config_signature(config([(0, 4), (1, 9)])),
-            stage_service._pick_ban_config_signature(config([(1, 9), (0, 4)])),
+            stage_merge._pick_ban_config_signature(config([(0, 4), (1, 9)])),
+            stage_merge._pick_ban_config_signature(config([(1, 9), (0, 4)])),
         )
         self.assertNotEqual(
-            stage_service._pick_ban_config_signature(config([(0, 4), (1, 9)])),
-            stage_service._pick_ban_config_signature(config([(0, 9), (1, 4)])),
+            stage_merge._pick_ban_config_signature(config([(0, 4), (1, 9)])),
+            stage_merge._pick_ban_config_signature(config([(0, 9), (1, 4)])),
         )
 
     def test_tied_candidate_sort_orders_do_not_leave_the_order_to_the_query(self) -> None:
@@ -419,8 +420,8 @@ class PickBanConfigSignatureTests(TestCase):
             return _pick_ban_config(mode=SLOTS_MODE, ruleset=RULES_BAN, slots=[_slot_row(1, candidates)])
 
         self.assertEqual(
-            stage_service._pick_ban_config_signature(config([(0, 4), (0, 9)])),
-            stage_service._pick_ban_config_signature(config([(0, 9), (0, 4)])),
+            stage_merge._pick_ban_config_signature(config([(0, 4), (0, 9)])),
+            stage_merge._pick_ban_config_signature(config([(0, 9), (0, 4)])),
         )
 
     def test_slot_reserves_are_significant(self) -> None:
@@ -434,7 +435,7 @@ class PickBanConfigSignatureTests(TestCase):
                 ],
             )
 
-        signatures = [stage_service._pick_ban_config_signature(config(reserve)) for reserve in (None, 13, 21)]
+        signatures = [stage_merge._pick_ban_config_signature(config(reserve)) for reserve in (None, 13, 21)]
         self.assertEqual(len(set(signatures)), 3, signatures)
 
     def test_mode_is_carried_and_separates_otherwise_identical_configs(self) -> None:
@@ -443,10 +444,10 @@ class PickBanConfigSignatureTests(TestCase):
         # PRESENT as well as that the two differ: with the rotation gated on mode,
         # inequality alone would still hold if mode itself were dropped.
         slots = [_slot_row(1, [(0, 4), (1, 9)]), _slot_row(2, [(0, 6), (1, 2)])]
-        flat = stage_service._pick_ban_config_signature(
+        flat = stage_merge._pick_ban_config_signature(
             _pick_ban_config(mode=POOL_MODE, ruleset=RULES_BAN, pool=(7, 3), slots=slots)
         )
-        slotted = stage_service._pick_ban_config_signature(
+        slotted = stage_merge._pick_ban_config_signature(
             _pick_ban_config(mode=SLOTS_MODE, ruleset=RULES_BAN, pool=(7, 3), slots=slots)
         )
         self.assertIn(POOL_MODE, flat)
@@ -465,7 +466,7 @@ class PickBanConfigSignatureTests(TestCase):
             rotation=ALTERNATE,
         )
         self.assertEqual(
-            stage_service._pick_ban_config_signature(config),
+            stage_merge._pick_ban_config_signature(config),
             (
                 json.dumps(RULES_PICK, sort_keys=True, separators=(",", ":")),
                 (),
@@ -480,10 +481,10 @@ class PickBanConfigSignatureTests(TestCase):
         # (build_slot_sequence), so these two run different vetos.
         slots = [_slot_row(1, [(0, 4), (1, 9)]), _slot_row(2, [(0, 6), (1, 2)])]
         self.assertNotEqual(
-            stage_service._pick_ban_config_signature(
+            stage_merge._pick_ban_config_signature(
                 _pick_ban_config(mode=SLOTS_MODE, ruleset=RULES_BAN, slots=slots, rotation=FIXED)
             ),
-            stage_service._pick_ban_config_signature(
+            stage_merge._pick_ban_config_signature(
                 _pick_ban_config(mode=SLOTS_MODE, ruleset=RULES_BAN, slots=slots, rotation=ALTERNATE)
             ),
         )
@@ -492,10 +493,10 @@ class PickBanConfigSignatureTests(TestCase):
         # The field is slot-mode-only, so signing it unconditionally would refuse
         # two flat configs over something that changes nothing for them.
         self.assertEqual(
-            stage_service._pick_ban_config_signature(
+            stage_merge._pick_ban_config_signature(
                 _pick_ban_config(mode=POOL_MODE, ruleset=RULES_BAN, pool=(7, 3), rotation=FIXED)
             ),
-            stage_service._pick_ban_config_signature(
+            stage_merge._pick_ban_config_signature(
                 _pick_ban_config(mode=POOL_MODE, ruleset=RULES_BAN, pool=(7, 3), rotation=ALTERNATE)
             ),
         )
@@ -534,9 +535,9 @@ class PickBanConfigMergeDedupTests(IsolatedAsyncioTestCase):
             stage_id=12,
         )
         session = self._session([left, right])
-        with self.assertRaises(stage_service.HTTPException) as caught:
+        with self.assertRaises(stage_merge.HTTPException) as caught:
             await self._merge(session)
-        self.assertEqual(caught.exception.status_code, stage_service.status.HTTP_409_CONFLICT)
+        self.assertEqual(caught.exception.status_code, stage_merge.status.HTTP_409_CONFLICT)
         self.assertEqual([left.stage_id, right.stage_id], [11, 12])
         session.delete.assert_not_awaited()
 
@@ -565,9 +566,9 @@ class PickBanConfigMergeDedupTests(IsolatedAsyncioTestCase):
         left = _pick_ban_config(mode=SLOTS_MODE, ruleset=RULES_BAN, slots=slots, rotation=FIXED, stage_id=11)
         right = _pick_ban_config(mode=SLOTS_MODE, ruleset=RULES_BAN, slots=slots, rotation=ALTERNATE, stage_id=12)
         session = self._session([left, right])
-        with self.assertRaises(stage_service.HTTPException) as caught:
+        with self.assertRaises(stage_merge.HTTPException) as caught:
             await self._merge(session)
-        self.assertEqual(caught.exception.status_code, stage_service.status.HTTP_409_CONFLICT)
+        self.assertEqual(caught.exception.status_code, stage_merge.status.HTTP_409_CONFLICT)
         self.assertEqual([left.stage_id, right.stage_id], [11, 12])
         session.delete.assert_not_awaited()
 

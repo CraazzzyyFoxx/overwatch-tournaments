@@ -17,6 +17,7 @@ sys.path.insert(0, str(backend_root / "tournament-service"))
 
 best_of = importlib.import_module("src.domain.admin.best_of")
 stage_service = importlib.import_module("src.services.admin.stage")
+stage_best_of = importlib.import_module("src.services.admin.stage.best_of")
 enums = importlib.import_module("shared.core.enums")
 
 from tests._stage_regulation import stage_regulation  # noqa: E402
@@ -135,8 +136,8 @@ class ApplyBestOfToExistingTests(TestCase):
         stage_service.stage_service._publish_structure_changed = _fake_publish
         try:
             with (
-                patch.object(stage_service, "enqueue_tournament_recalculation", _fake_recalculation),
-                patch.object(stage_service.ffa_encounter_service, "refresh_completion", _fake_refresh),
+                patch.object(stage_best_of, "enqueue_tournament_recalculation", _fake_recalculation),
+                patch.object(stage_best_of.ffa_encounter_service, "refresh_completion", _fake_refresh),
             ):
                 changed = asyncio.run(stage_service.stage_service.apply_best_of_to_existing(session, stage.id))
         finally:

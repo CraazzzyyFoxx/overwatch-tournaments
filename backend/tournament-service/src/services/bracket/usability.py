@@ -1,6 +1,6 @@
 """Whether a bracket-engine-generated encounter is live or still a preview.
 
-``admin/stage.py::generate_encounters`` can populate a stage's encounters
+``admin/stage/generation.py::generate_encounters`` can populate a stage's encounters
 while the stage is still Draft (``Stage.is_active=False``, ``Stage.
 is_published=False``) -- e.g. an organizer previewing an upcoming playoff
 bracket's shape before the current stage finishes. Nothing else distinguishes

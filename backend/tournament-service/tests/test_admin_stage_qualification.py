@@ -27,6 +27,7 @@ sys.path.insert(0, str(backend_root / "tournament-service"))
 
 
 stage_service = importlib.import_module("src.services.admin.stage")
+stage_qualification = importlib.import_module("src.services.admin.stage.qualification")
 pick_ban_session = importlib.import_module("src.services.encounter.pick_ban_session")
 enums = importlib.import_module("shared.core.enums")
 
@@ -204,10 +205,10 @@ class DownstreamRequalificationTests(IsolatedAsyncioTestCase):
             patch.object(
                 pick_ban_session.pick_ban_session_service, "sync_all_pick_ban_sessions_after_team_change", sync
             ),
-            patch.object(stage_service.lifecycle_notifier, "on_encounters_changed", AsyncMock()) as notify,
-            patch.object(stage_service, "vacate_slot", AsyncMock()) as vacate,
-            patch.object(stage_service, "place_team", AsyncMock()) as seat,
-            patch.object(stage_service, "active_teams", AsyncMock(return_value=[_seat(1, 3), _seat(2, 2)])),
+            patch.object(stage_qualification.lifecycle_notifier, "on_encounters_changed", AsyncMock()) as notify,
+            patch.object(stage_qualification, "vacate_slot", AsyncMock()) as vacate,
+            patch.object(stage_qualification, "place_team", AsyncMock()) as seat,
+            patch.object(stage_qualification, "active_teams", AsyncMock(return_value=[_seat(1, 3), _seat(2, 2)])),
         ):
             applied = await service.requalify_downstream_inputs(session, 99)
 
@@ -252,10 +253,10 @@ class DownstreamRequalificationTests(IsolatedAsyncioTestCase):
                 "sync_all_pick_ban_sessions_after_team_change",
                 AsyncMock(),
             ),
-            patch.object(stage_service.lifecycle_notifier, "on_encounters_changed", AsyncMock()),
-            patch.object(stage_service, "vacate_slot", AsyncMock()),
-            patch.object(stage_service, "place_team", AsyncMock()) as seat,
-            patch.object(stage_service, "active_teams", AsyncMock(return_value=[_seat(1, 2), _seat(2, 1)])),
+            patch.object(stage_qualification.lifecycle_notifier, "on_encounters_changed", AsyncMock()),
+            patch.object(stage_qualification, "vacate_slot", AsyncMock()),
+            patch.object(stage_qualification, "place_team", AsyncMock()) as seat,
+            patch.object(stage_qualification, "active_teams", AsyncMock(return_value=[_seat(1, 2), _seat(2, 1)])),
         ):
             applied = await service.requalify_downstream_inputs(session, 99)
 
