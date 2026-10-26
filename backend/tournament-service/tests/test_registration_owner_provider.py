@@ -50,7 +50,8 @@ from shared.services.social_identity import social_identity_service  # noqa: E40
 from shared.services.team_format import save_tournament_format  # noqa: E402
 from src.schemas.registration import RegistrationSubmit  # noqa: E402
 from src.services.registration import service as reg_service  # noqa: E402
-from src.services.registration import teams as teams_module  # noqa: E402
+from src.services.registration.teams import invitee as invitee_module  # noqa: E402
+from src.services.registration.teams import invites as invites_module  # noqa: E402
 from src.services.registration.teams import teams_service  # noqa: E402
 from tests._lol_grid import seed_lol_grid  # noqa: E402
 
@@ -235,8 +236,8 @@ def test_every_receiver_names_the_owning_games_handle(db_session, discipline: st
             await _drop(db_session, seeded)
 
     with (
-        patch.object(teams_module, "assert_invite_attempt_allowed", AsyncMock()),
-        patch.object(teams_module, "assert_accept_attempt_allowed", AsyncMock()),
+        patch.object(invites_module, "assert_invite_attempt_allowed", AsyncMock()),
+        patch.object(invitee_module, "assert_accept_attempt_allowed", AsyncMock()),
     ):
         got = asyncio.run(_run())
 

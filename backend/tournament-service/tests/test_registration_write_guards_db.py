@@ -63,9 +63,10 @@ from src.rpc import public_rpc  # noqa: E402
 from src.schemas.registration import RegistrationSubmit  # noqa: E402
 from src.services.admission import AdmissionStage  # noqa: E402
 from src.services.registration import admission as admission_module  # noqa: E402
-from src.services.registration import teams as teams_module  # noqa: E402
 from src.services.registration.service import registration_service  # noqa: E402
 from src.services.registration.teams import INVITE_PENDING, teams_service  # noqa: E402
+from src.services.registration.teams import invitee as invitee_module  # noqa: E402
+from src.services.registration.teams import invites as invites_module  # noqa: E402
 from tests._rpc_fakes import CapturingBroker, make_identity  # noqa: E402
 
 SCHEMA = FormSchema(
@@ -236,8 +237,8 @@ def _run(body: Any, *, require_subscription: bool = False) -> Any:
                     await _drop(session, seeded)
 
     with (
-        patch.object(teams_module, "assert_invite_attempt_allowed", AsyncMock()),
-        patch.object(teams_module, "assert_accept_attempt_allowed", AsyncMock()),
+        patch.object(invites_module, "assert_invite_attempt_allowed", AsyncMock()),
+        patch.object(invitee_module, "assert_accept_attempt_allowed", AsyncMock()),
     ):
         return asyncio.run(_main())
 

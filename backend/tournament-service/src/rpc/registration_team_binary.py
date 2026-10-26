@@ -28,7 +28,7 @@ so the UI needs no follow-up read.
 Transactions: ``_gate`` commits its read-only check before any S3 call, so no
 pooled connection sits idle in a transaction across the round trip;
 ``set_team_image`` then writes and commits the row in its own transaction, like
-every other write in ``services/registration/teams.py``. Both subjects delete
+every other write in ``services/registration/teams/``. Both subjects delete
 objects only after that commit and outside any transaction: a refused or failed
 row write leaves the crest intact, and a failed S3 delete leaves only an orphan
 object, never an ``image_url`` pointing at deleted bytes.

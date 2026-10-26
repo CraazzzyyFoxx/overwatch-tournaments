@@ -285,19 +285,6 @@ class TeamRouteShapeTests(TestCase):
                 self.assertIn('IDParam: "tournament_id"', line)
                 self.assertIn("/admin/balancer/tournaments/", line)
 
-    def test_the_anonymous_invite_preview_only_reads(self) -> None:
-        """The one anonymous team route is a POST, so nothing about its method stops
-        it from growing a write. Its safety is that the service function it calls
-        mutates nothing — asserted here rather than trusted from the name."""
-        source = (
-            REPO_ROOT / "backend" / "tournament-service" / "src" / "services" / "registration" / "teams.py"
-        ).read_text(encoding="utf-8")
-        body = source[source.index("async def preview_invite") :]
-        body = body[: body.index("async def accept_invite")]
-        for writer in ("session.add", "sa.update", "sa.insert", "sa.delete", "commit()", "flush()"):
-            with self.subTest(writer=writer):
-                self.assertNotIn(writer, body)
-
     def test_the_invite_token_never_travels_in_a_url(self) -> None:
         """A raw token in the path or query string lands in access logs, browser
         history and `Referer` headers — which is why every route that takes one

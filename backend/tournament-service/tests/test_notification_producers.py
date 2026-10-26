@@ -73,6 +73,8 @@ from shared.testing import (
 from src.services.encounter import dispute_review  # noqa: E402
 from src.services.registration import lifecycle as lifecycle_module  # noqa: E402
 from src.services.registration import teams as teams_module  # noqa: E402
+from src.services.registration.teams import invitee as invitee_module  # noqa: E402
+from src.services.registration.teams import invites as invites_module  # noqa: E402
 from src.services.tournament import events as events_module  # noqa: E402
 
 install_postgres_type_shims()
@@ -374,7 +376,7 @@ class _ProducerTestCase(IsolatedAsyncioTestCase):
 
 
 class TeamInviteReceivedTests(_ProducerTestCase):
-    """``teams.py:invite_member`` -- only a targeted invite has an addressee."""
+    """``teams/invites.py:invite_member`` -- only a targeted invite has an addressee."""
 
     def setUp(self) -> None:
         super().setUp()
@@ -388,7 +390,7 @@ class TeamInviteReceivedTests(_ProducerTestCase):
         self.invitee_registration = self.fx.registration(invitee_member, battle_tag="Rook#2222")
         self.fx.session.flush()
 
-        limiter = patch.object(teams_module, "assert_invite_attempt_allowed", AsyncMock())
+        limiter = patch.object(invites_module, "assert_invite_attempt_allowed", AsyncMock())
         limiter.start()
         self.addCleanup(limiter.stop)
         window = patch.object(
@@ -461,7 +463,7 @@ class TeamInviteAnsweredTests(_ProducerTestCase):
         self.invite = self.fx.invite(self.team, slot_code="damage", target_auth_user_id=INVITEE_AUTH)
         self.fx.session.flush()
 
-        limiter = patch.object(teams_module, "assert_accept_attempt_allowed", AsyncMock())
+        limiter = patch.object(invitee_module, "assert_accept_attempt_allowed", AsyncMock())
         limiter.start()
         self.addCleanup(limiter.stop)
         window = patch.object(

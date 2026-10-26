@@ -39,6 +39,7 @@ sys.path.insert(0, str(backend_root / "tournament-service"))
 regteam_binary = importlib.import_module("src.rpc.registration_team_binary")
 helpers = importlib.import_module("src.rpc._helpers")
 team_service = importlib.import_module("src.services.registration.teams")
+team_shared = importlib.import_module("src.services.registration.teams._shared")
 regteam_schemas = importlib.import_module("src.schemas.registration_team")
 s3_types = importlib.import_module("shared.clients.s3.types")
 
@@ -246,7 +247,7 @@ class RegistrationTeamImageSubjects(IsolatedAsyncioTestCase):
         )
 
     async def test_under_lock_refusal_of_a_delete_keeps_the_crest(self):
-        self.set_image_error = team_service._fail(
+        self.set_image_error = team_shared._fail(
             409, "team_already_exported", "This team has already been exported to the tournament"
         )
 
@@ -278,7 +279,7 @@ class RegistrationTeamImageSubjects(IsolatedAsyncioTestCase):
         )
 
     async def test_non_captain_upload_is_refused_before_s3(self):
-        self.gate_error = team_service._fail(403, "not_captain", "Only the team captain can do this")
+        self.gate_error = team_shared._fail(403, "not_captain", "Only the team captain can do this")
 
         envelope = await self._invoke(
             "rpc.tournament.regteam_image_upload",
@@ -297,7 +298,7 @@ class RegistrationTeamImageSubjects(IsolatedAsyncioTestCase):
         self.assertEqual([f"assert_may_edit_team:{TEAM_ID}"], self.trace)
 
     async def test_non_captain_delete_is_refused_before_s3(self):
-        self.gate_error = team_service._fail(403, "not_captain", "Only the team captain can do this")
+        self.gate_error = team_shared._fail(403, "not_captain", "Only the team captain can do this")
 
         envelope = await self._invoke(
             "rpc.tournament.regteam_image_delete",
@@ -312,7 +313,7 @@ class RegistrationTeamImageSubjects(IsolatedAsyncioTestCase):
     async def test_under_lock_refusal_surfaces_in_the_envelope(self):
         """The lock-free pre-gate is advisory; ``set_team_image`` re-checks under
         the row lock and its refusal must reach the caller with its code intact."""
-        self.set_image_error = team_service._fail(
+        self.set_image_error = team_shared._fail(
             409, "team_already_exported", "This team has already been exported to the tournament"
         )
 
