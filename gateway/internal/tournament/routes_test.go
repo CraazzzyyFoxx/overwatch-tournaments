@@ -116,6 +116,17 @@ func TestTournamentFacetsRouteContract(t *testing.T) {
 	}
 }
 
+// TestPublicReadsHaveTimeout asserts every public tournament read opted into
+// publicReadTimeout: at the 120s edge default an abandoned read's deadline sat
+// two minutes out, so the worker could neither drop nor cancel it.
+func TestPublicReadsHaveTimeout(t *testing.T) {
+	for _, r := range PublicReadRoutes {
+		if r.Method != "GET" || r.Timeout != publicReadTimeout {
+			t.Errorf("%s %s (%s): public reads must be GETs with publicReadTimeout, got %v", r.Method, r.Pattern, r.Queue, r.Timeout)
+		}
+	}
+}
+
 // TestTournamentFacetsRouting pins that the literal "facets" segment is not
 // swallowed by the /{id} read next to it — a facets request reaching
 // get_tournament would 404 on a non-numeric id instead of returning counters.

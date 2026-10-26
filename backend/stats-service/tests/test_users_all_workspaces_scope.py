@@ -61,9 +61,18 @@ class WorkspaceScopeParsingTests(TestCase):
     def test_integer_is_a_scoped_read(self) -> None:
         self.assertEqual(7, rpc_common.q_workspace_scope(_query(workspace_id="7")))
 
-    def test_missing_or_malformed_scope_is_not_an_opt_in(self) -> None:
+    def test_missing_scope_is_not_an_opt_in(self) -> None:
         self.assertIsNone(rpc_common.q_workspace_scope({}))
-        self.assertIsNone(rpc_common.q_workspace_scope(_query(workspace_id="everything")))
+
+    def test_malformed_scope_is_a_422_not_a_dropped_filter(self) -> None:
+        for parse in (rpc_common.q_workspace_scope, rpc_common.q_workspace_id):
+            with pytest.raises(BaseAPIException) as excinfo:
+                parse(_query(workspace_id="everything"))
+            self.assertEqual(422, excinfo.value.status_code)
+
+    def test_global_reads_accept_the_all_sentinel(self) -> None:
+        self.assertIsNone(rpc_common.q_workspace_id(_query(workspace_id="all")))
+        self.assertEqual(7, rpc_common.q_workspace_id(_query(workspace_id="7")))
 
     def test_users_read_fails_closed_without_a_scope(self) -> None:
         with pytest.raises(BaseAPIException) as excinfo:

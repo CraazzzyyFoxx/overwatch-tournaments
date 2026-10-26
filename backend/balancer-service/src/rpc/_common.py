@@ -19,6 +19,7 @@ from shared.rpc.common import (
     actor,
     dump,
     http_error,
+    integrity_error,
     payload,
     q,
     q1,
@@ -82,6 +83,10 @@ def _map_error(logger: Any, label: str, exc: Exception) -> dict[str, Any]:
     if isinstance(exc, ValidationError):
         message, details = validation_error(exc)
         return rpc_error("unprocessable", message, details)
+    if (mapped := integrity_error(exc)) is not None:
+        code, message, details = mapped
+        logger.warning("balancer rpc {}: {} ({})", label, message, details.get("constraint"))
+        return rpc_error(code, message, details)
     logger.exception("balancer rpc failed: {}", label)
     return rpc_error("internal", "internal error")
 

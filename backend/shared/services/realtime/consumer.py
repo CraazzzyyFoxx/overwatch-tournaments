@@ -2,8 +2,10 @@
 
 ``emit`` bumps the shared cache generations at the writer's commit; a service
 registers this once to re-bump them from the durable outbox row, so a bump lost
-there is retried instead of leaving cached reads stale until their TTL. WHICH
-cached reads a resource moves is said where each read is cached
+there is retried instead of leaving cached reads stale until their TTL. A
+generation already bumped after the event is left alone (every consuming
+service gets the event; re-bumping would only orphan entries cached since).
+WHICH cached reads a resource moves is said where each read is cached
 (``shared.services.cache_generations.versioned``), not here.
 """
 
@@ -15,7 +17,7 @@ from typing import Any
 from faststream.rabbit import RabbitMessage
 
 from shared.schemas.events import CacheInvalidatedEvent
-from shared.services.cache_generations import bump
+from shared.services.cache_generations import bump_unless_bumped_since
 from shared.services.realtime.resources import Resource, resource_generation
 
 __all__ = ("invalidate_from_event", "register_invalidation_consumer")
@@ -28,7 +30,9 @@ async def invalidate_from_event(
     *,
     unknown_resources: Callable[[Iterable[str]], None] | None = None,
 ) -> int:
-    """Bump the generations of every resource the event names, as ``emit`` did. Returns how many resources.
+    """Re-bump the generations of every resource the event names whose commit-time bump was lost.
+
+    Returns how many resources the event named in this build's vocabulary.
 
     A resource outside this build's vocabulary (a newer publisher) is skipped: nothing here can be keyed by it.
     """
@@ -41,7 +45,7 @@ async def invalidate_from_event(
             unknown.append(name)
             continue
         generations += (resource_generation(resource, event.scope_id), resource_generation(resource))
-    await bump(*generations)
+    await bump_unless_bumped_since(int(event.timestamp * 1000), *generations)
     if unknown and unknown_resources is not None:
         unknown_resources(unknown)
     return len(generations) // 2

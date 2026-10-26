@@ -37,7 +37,7 @@ from shared.core.errors import BaseAPIException as HTTPException
 from shared.core.pagination import PaginationQueryParams
 from shared.models.identity.auth_user import AuthUser
 from shared.repository.base import BaseRepository
-from shared.rpc.common import http_error, q1, validation_error
+from shared.rpc.common import http_error, integrity_error, q1, validation_error
 from shared.rpc.identity import MissingIdentityError, ensure_workspace_permission, rehydrate_user
 from shared.schemas.rpc import rpc_error, rpc_ok, status_to_code
 from shared.services.audit import json_safe, record_audit
@@ -432,6 +432,11 @@ class CrudDispatcher:
         except HTTPException as exc:
             message, details = http_error(exc)
             return rpc_error(status_to_code(exc.status_code), message, details)
-        except Exception:  # pragma: no cover - defensive worker guard
+        except Exception as exc:
+            if (mapped := integrity_error(exc)) is not None:
+                code, message, details = mapped
+                logger.warning("crud rpc: {} ({})", message, details.get("constraint"))
+                return rpc_error(code, message, details)
+            # Defensive worker guard.
             logger.exception("crud rpc failed")
             return rpc_error("internal", "internal error")

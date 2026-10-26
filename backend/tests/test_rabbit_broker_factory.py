@@ -39,8 +39,11 @@ def test_prefetch_passes_default_channel(monkeypatch: pytest.MonkeyPatch) -> Non
             captured.update(kwargs)
 
     import shared.observability.broker as broker_mod
+    import shared.rpc.deadline as deadline_mod
 
     monkeypatch.setattr(broker_mod, "RabbitBroker", FakeBroker)
+    # prefetch_count also sizes the process-wide RPC permits; keep that global out of other tests.
+    monkeypatch.setattr(deadline_mod, "_permits", None)
     broker_mod.make_rabbit_broker("amqp://x", logger=logger, prefetch_count=16)
     assert captured["default_channel"].prefetch_count == 16
 

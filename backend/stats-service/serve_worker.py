@@ -30,14 +30,14 @@ from shared.messaging.config import (
 )
 from shared.messaging.outbox import drain_outbox
 from shared.messaging.topology import declare_dead_letter_queue
-from shared.observability import observe_message_processing
+from shared.observability import Readiness, observe_message_processing
 from shared.schemas.events import CacheInvalidatedEvent
 from shared.services.realtime import Resource
 from shared.services.realtime.consumer import register_invalidation_consumer
 from shared.services.scheduler import IntervalScheduler
 from src.core import config, db
 from src.core.clients import realtime_redis, s3_client
-from src.core.lifecycle import Readiness, close_clients, create_process, start_clients, start_observability
+from src.core.lifecycle import close_clients, create_process, start_clients, start_observability
 from src.services import hero_stats_refresh
 from src.services.achievement.engine.consumer import (
     handle_achievement_evaluate,

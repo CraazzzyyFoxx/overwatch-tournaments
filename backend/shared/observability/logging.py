@@ -71,6 +71,11 @@ def setup_logging(
     # Remove default handler
     logger.remove()
 
+    level = log_level.upper()
+    level_no = logger.level(level).no
+    # ``diagnose`` renders local variable values (identity payloads, tokens, URLs) into tracebacks: debug only.
+    diagnose = level_no <= logging.DEBUG
+
     # Create logs directory if needed
     logs_dir = Path(logs_root_path)
     logs_dir.mkdir(parents=True, exist_ok=True)
@@ -87,11 +92,11 @@ def setup_logging(
     # Add stderr handler (always human-readable for console)
     logger.add(
         sys.stderr,
-        level=log_level.upper(),
+        level=level,
         format=dev_format,
         colorize=True,
         backtrace=True,
-        diagnose=True,
+        diagnose=diagnose,
     )
 
     # Add file handler
@@ -99,24 +104,24 @@ def setup_logging(
     if json_output:
         logger.add(
             log_file,
-            level=log_level.upper(),
+            level=level,
             serialize=True,  # Built-in Loguru JSON serialization writes record["extra"] fields
             rotation=rotation,
             retention=retention,
             compression=compression,
             backtrace=True,
-            diagnose=True,
+            diagnose=diagnose,
         )
     else:
         logger.add(
             log_file,
-            level=log_level.upper(),
+            level=level,
             format=dev_format,
             rotation=rotation,
             retention=retention,
             compression=compression,
             backtrace=True,
-            diagnose=True,
+            diagnose=diagnose,
         )
 
     # Bind service name to all logs and inject correlation_id on every record via patcher.
@@ -127,14 +132,17 @@ def setup_logging(
         patcher=_inject_observability_context,
     )
 
-    # Intercept standard library logging
-    logging.basicConfig(handlers=[InterceptHandler()], level=0, force=True)
+    # Intercept standard library logging at the configured level: level 0 made every library (aiormq per
+    # AMQP frame) build and format DEBUG records only for the sinks to discard them.
+    logging.basicConfig(handlers=[InterceptHandler()], level=level_no, force=True)
+    # APScheduler logs "Running job"/"executed successfully" at INFO for every tick; its skips are WARNINGs.
+    logging.getLogger("apscheduler").setLevel(logging.WARNING)
 
     # Intercept common libraries
     for logger_name in ["uvicorn", "uvicorn.access", "uvicorn.error", "fastapi", "sqlalchemy"]:
         logging.getLogger(logger_name).handlers = [InterceptHandler()]
 
-    logger.info(f"✅ Logging initialized for {service_name} (level={log_level.upper()}, json={json_output})")
+    logger.info(f"✅ Logging initialized for {service_name} (level={level}, json={json_output})")
 
     return logger
 

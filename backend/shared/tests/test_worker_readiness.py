@@ -1,22 +1,14 @@
-"""``GET /health`` of both stats processes reflects the broker connection and the consumers, not that Python is up."""
+"""A worker's ``GET /health`` reflects the broker connection and the consumers, not that Python is up."""
 
 from __future__ import annotations
 
 import asyncio
 import socket
-import sys
 import urllib.error
 import urllib.request
-from pathlib import Path
 from types import SimpleNamespace
 
-backend_root = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(backend_root))
-sys.path.insert(0, str(backend_root / "stats-service"))
-
-
-from shared.observability.worker import start_worker_metrics_server
-from src.core.lifecycle import Readiness
+from shared.observability import Readiness, start_worker_metrics_server
 
 
 class _Broker:
