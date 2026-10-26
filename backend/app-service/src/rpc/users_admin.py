@@ -1,4 +1,4 @@
-"""Admin CRUD for users + identities + profile merge + avatar + CSV import.
+"""Admin CRUD for users + identities + profile merge + avatar.
 
 Pure transport: every handler decodes params, applies its permission gate, and
 makes one service call. No SQL and no transaction lives here — the services own
@@ -20,8 +20,8 @@ per-workspace switch against that workspace, the global one globally
 manually marks an OAuth-eligible account verified when the automatic sync
 missed a real OAuth connection that proves it (see
 ``shared.services.social_identity.verify_social_account``); it never
-fabricates verification. CSV import requires the global ``admin`` role.
-Avatar + CSV are binary/multipart (base64 via the gateway binary handler).
+fabricates verification. The avatar upload is binary (base64 via the gateway
+binary handler).
 
 Self-service (``me_social_*``, capability ``account.social``) lets users manage
 their own player's identities, but is **hide-only**: they can set-primary

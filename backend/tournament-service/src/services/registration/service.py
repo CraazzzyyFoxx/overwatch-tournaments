@@ -455,7 +455,8 @@ class RegistrationService:
         3. Else, the first player owning any owner-provider handle of this
            registration (primary first, then the extras).
         4. Else, create a new bare player named after the primary owner handle
-           (linked to the auth account when present).
+           (linked to the auth account when present; a taken name is suffixed,
+           ``UserRepository.create_player``).
 
         ``known_handles`` is an optional bulk-prefetched cache of
         ``(player_id, provider, normalized_handle)`` triples used by the sheet-sync
@@ -534,7 +535,12 @@ class RegistrationService:
             user = found[0] if found is not None else None
 
         if user is None:
-            user = await self.user_repo.create(session, models.User(name=owner_handles[0], auth_user_id=auth_user_id))
+            user = await self.user_repo.create_player(
+                session,
+                name=owner_handles[0],
+                auth_user_id=auth_user_id,
+                identity=(provider, normalize_social_handle(provider, owner_handles[0])),
+            )
 
         await self._ensure_social_accounts(session, user.id, handles, known_handles=known_handles)
 

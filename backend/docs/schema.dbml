@@ -595,7 +595,6 @@ Table auth.user {
   is_verified boolean [not null]
   first_name VARCHAR(100)
   last_name VARCHAR(100)
-  avatar_url VARCHAR(500)
   indexes {
     (email) [unique, name: "ix_auth_user_email"]
     (username) [unique, name: "ix_auth_user_username"]

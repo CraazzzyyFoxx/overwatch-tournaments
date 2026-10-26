@@ -56,7 +56,6 @@ class AuthUser(db.TimeStampIntegerMixin):
 
     first_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
     last_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     refresh_tokens: Mapped[list[RefreshToken]] = relationship(back_populates="user", cascade="all, delete-orphan")
     player: Mapped[User | None] = relationship(
@@ -313,7 +312,8 @@ class RefreshToken(db.TimeStampIntegerMixin):
     user_id: Mapped[int] = mapped_column(ForeignKey("auth.user.id", ondelete="CASCADE"), index=True, nullable=False)
     session_id: Mapped[UUID] = mapped_column(Uuid(), index=True, nullable=False)
     session_started_at: Mapped[datetime] = mapped_column(db.DateTime(timezone=True), nullable=False)
-    expires_at: Mapped[datetime] = mapped_column(db.DateTime(timezone=True), nullable=False)
+    # Indexed for the daily purge's ``expires_at < cutoff`` batches.
+    expires_at: Mapped[datetime] = mapped_column(db.DateTime(timezone=True), index=True, nullable=False)
     is_revoked: Mapped[bool] = mapped_column(Boolean(), default=False, nullable=False)
     revoked_at: Mapped[datetime | None] = mapped_column(db.DateTime(timezone=True), nullable=True)
 

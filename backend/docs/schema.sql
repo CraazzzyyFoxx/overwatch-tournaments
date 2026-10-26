@@ -558,7 +558,6 @@ CREATE TABLE auth."user" (
 	is_verified BOOLEAN NOT NULL,
 	first_name VARCHAR(100),
 	last_name VARCHAR(100),
-	avatar_url VARCHAR(500),
 	PRIMARY KEY (id)
 );
 

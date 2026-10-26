@@ -334,10 +334,22 @@ keeps them in step with the gateway.
 
 All services share one Postgres and one `MetaData`, so nothing *stops* a service from selecting
 another's tables. The rule is: **read freely through `shared/repository` and `shared/services`;
-write only what your service owns.** A write to a table another service owns goes through that
-service — `request_dict` for a command that needs an answer, an outbox event when it doesn't.
-Direct cross-service writes are the failure mode this convention exists to prevent, because the
-DB will not catch them and neither will a test.
+write a table only through the module that owns its rules.** Most tables have one writing service
+as well. The identity tables are the deliberate exception: registration, the mix roster, match-log
+ingest and OAuth all have to create players, attach handles and grant workspace roles inside their
+own transaction, so each of those tables has one shared **writer module** that every service calls:
+
+| Table | Writer module |
+|---|---|
+| `players.user` (row creation, `auth_user_id` link) | `UserRepository.create_player` / `ensure_for_auth_user` / `link_auth_user` (`shared/repository/identity.py`) |
+| `players.social_account`, `players.social_account_visibility` | `SocialIdentityService` (`shared/services/social_identity.py`) |
+| `auth.*` rows (accounts, OAuth connections, API keys, tokens, roles, denies) | identity-service, through `shared/repository/identity.py` |
+| `auth.user_roles` workspace grants | `shared/rbac/bootstrap.py` (plus the RBAC admin in `shared/repository/identity.py`) |
+| all of the above, during a profile merge | `shared/repository/auth_merge.py` |
+
+`backend/tests/test_identity_write_ownership.py` fails on a construction or link write outside
+these modules. Any other table another service owns is written through that service:
+`request_dict` for a command that needs an answer, an outbox event when it doesn't.
 
 ## Class + singleton, not a bag of functions, not a DI container
 

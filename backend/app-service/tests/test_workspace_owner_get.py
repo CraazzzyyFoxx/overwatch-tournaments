@@ -52,7 +52,7 @@ def _auth_user(**over) -> SimpleNamespace:
         email=over.get("email", "ada@example.com"),
         first_name=over.get("first_name", "Ada"),
         last_name=over.get("last_name", "Lovelace"),
-        avatar_url=over.get("avatar_url", "https://cdn.example.com/ada.webp"),
+        player=SimpleNamespace(avatar_url=over.get("avatar_url", "https://cdn.example.com/ada.webp")),
     )
 
 
@@ -63,7 +63,7 @@ class OwnerGetRPCTests(IsolatedAsyncioTestCase):
         lookup = AsyncMock(return_value=auth_user)
         with (
             patch("src.rpc.workspaces.workspace_service.get_by_id", AsyncMock(return_value=ws)),
-            patch.object(module._auth_user_repo, "get", lookup),
+            patch.object(module._auth_user_repo, "get_identity", lookup),
             patch("src.rpc.workspaces.ensure_workspace_permission", gate or MagicMock()),
         ):
             return await handler(data, MagicMock()), lookup
@@ -258,6 +258,7 @@ class OwnerSetRPCTests(IsolatedAsyncioTestCase):
             patch("src.rpc.workspaces.workspace_service.get_by_id", AsyncMock(return_value=ws)),
             patch("src.rpc.workspaces.workspace_service.set_owner", setter),
             patch.object(module._auth_user_repo, "get", AsyncMock(return_value=auth_user)),
+            patch.object(module._auth_user_repo, "get_identity", AsyncMock(return_value=auth_user)),
         ):
             return await handler(data, MagicMock()), setter
 
@@ -329,6 +330,7 @@ class OwnerTransferRPCTests(IsolatedAsyncioTestCase):
                 limit or AsyncMock(),
             ) as cap,
             patch.object(module._auth_user_repo, "get", AsyncMock(return_value=recipient)),
+            patch.object(module._auth_user_repo, "get_identity", AsyncMock(return_value=recipient)),
         ):
             return await handler(data, MagicMock()), transfer, cap
 

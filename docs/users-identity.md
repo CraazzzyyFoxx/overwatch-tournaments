@@ -105,13 +105,15 @@ flowchart TB
 
 **Ownership boundaries**
 
+Every service below writes identity tables, but only through one writer module per table (`backend/ARCHITECTURE.md`, "Cross-service data access", guarded by `backend/tests/test_identity_write_ownership.py`): a player row is born in `UserRepository.create_player` / `ensure_for_auth_user` and linked in `UserRepository.link_auth_user`, social accounts go through `SocialIdentityService`, workspace role grants through `shared/rbac/bootstrap.py`.
+
 | Service | What it writes |
 |---|---|
-| `identity-service` | `auth.user`, OAuth, RBAC, self-service / admin player link, signup provisioning of `players.user` |
-| `app-service` | CRUD for `players.user` and social accounts, CSV import, user merge, `workspace.add_member` |
-| `tournament-service` | `ensure_player_identity`, `get_or_create_workspace_member` on registration, tournament rank resolution |
+| `identity-service` | `auth.user`, OAuth, RBAC, self-service / admin player link, signup provisioning of `players.user`, the account's avatar (on its player) |
+| `app-service` | CRUD for `players.user` and social accounts, user merge (including its `auth.*` half, `shared/repository/auth_merge.py`), `workspace.add_member` |
+| `tournament-service` | `ensure_player_identity`, `get_or_create_workspace_member` on registration, scrim captains' players, tournament rank resolution |
 | `stats-service` | Creating / reusing `players.user` from match logs, anchoring the roster through `workspace_member` |
-| `balancer-service` | Workspace roster, `member_rank`, custom games |
+| `balancer-service` | Workspace roster (including new virtual players), `member_rank`, custom games |
 
 One PostgreSQL, one SQLAlchemy metadata. Schemas: `auth`, `players`, `public` (`workspace` / `workspace_member`), `balancer`.
 
@@ -128,7 +130,7 @@ Model: `backend/shared/models/identity/user.py`. Table `players.user`.
 ```
 id              BigInteger PK
 name            UNIQUE          — display name; at signup = username/email
-avatar_url
+avatar_url                      — the only avatar: the public profile's and the account's (/me, header, chat)
 stream_visible  bool default true
 auth_user_id    UNIQUE NULL FK auth.user(id) ON DELETE SET NULL
 ```
@@ -145,7 +147,8 @@ Invariants:
 1. One `auth.user` owns **at most one** `players.user` (`UNIQUE(auth_user_id)`).
 2. One `players.user` belongs to **at most one** account.
 3. Deleting an account does **not** delete the player: `ON DELETE SET NULL` turns the player virtual and the history survives.
-4. `name` is globally unique. On collision `UserRepository.ensure_for_auth_user` suffixes the hint with the auth id instead of failing.
+4. `name` is globally unique. `UserRepository.create_player` is the only place a row is born; on collision it suffixes the name with the auth id (born linked) or with `provider:hash` of the handle it is named after, instead of failing.
+5. The avatar lives here only. The ORM no longer maps `auth.user.avatar_url` (`authavatar01` copied it onto the players; the column is dropped one release later, because migrations run while the old identity-service still selects it); identity-service reads and writes the linked player's.
 
 ### 3.2. `auth.user` — the login
 
@@ -155,7 +158,7 @@ Model: `backend/shared/models/identity/auth_user.py`. Table `auth.user`.
 id, email UNIQUE, username UNIQUE
 hashed_password     NULL for pure OAuth accounts
 is_active, is_superuser, is_verified
-first_name, last_name, avatar_url
+first_name, last_name
 ```
 
 Relationships:
@@ -895,3 +898,5 @@ In code comments and logs a virtual player is often called a `shadow` player. Sa
 4. **Do not replace identity collapse with a full merge** on the hot registration path. A silent stats transfer is irreversible and breaks other people's tournament pages.
 5. **Do not anchor a registration directly on `players.user.id`.** The only identity column on a registration is `workspace_member_id`.
 6. **No rank row means inherit.** Do not write 0 "to clear it". `clear` deletes the layer. Do not hardcode `override > host > canon > ow`.
+7. **One writer module per identity table.** Do not build `models.User(...)`, assign `player.auth_user_id`, or construct a social account outside `UserRepository` / `SocialIdentityService`: three services once had three name-collision rules, and two more had none, so a taken name hit the unique index.
+8. **One avatar.** Do not re-add an avatar to `auth.user`; mirroring two columns is how the header and the public profile drifted apart.

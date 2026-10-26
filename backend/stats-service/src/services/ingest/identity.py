@@ -16,7 +16,6 @@ names, so the name before ``#`` also matches (never across providers).
 
 from __future__ import annotations
 
-import hashlib
 from collections.abc import Iterable
 from typing import Literal
 
@@ -33,7 +32,6 @@ from shared.services.social_identity import social_identity_service
 __all__ = ("IdentityConflict", "lookup_identities", "resolve_identities")
 
 Producer = Literal["canonical", "decoded"]
-_MAX_USER_NAME = 255
 _users = UserRepository()
 
 
@@ -140,15 +138,6 @@ async def _lock_identities(session: AsyncSession, identities: Iterable[tuple[str
     )
 
 
-async def _user_name(session: AsyncSession, provider: str, display: str, normalized: str) -> str:
-    """``players.user.name`` is unique: a taken display name gets a suffix derived from the identity, deterministically."""
-    name = display[:_MAX_USER_NAME]
-    if await session.scalar(sa.select(models.User.id).where(models.User.name == name)) is None:
-        return name
-    suffix = f" ({provider}:{hashlib.sha1(normalized.encode()).hexdigest()[:8]})"  # noqa: S324 - a label, not a secret
-    return display[: _MAX_USER_NAME - len(suffix)] + suffix
-
-
 async def resolve_identities(
     session: AsyncSession,
     *,
@@ -171,9 +160,7 @@ async def resolve_identities(
             continue
         person = person_of[keys[0]]
         display = display_social_handle(person.identity.provider, person.identity.id)
-        user = await _users.create(
-            session, models.User(name=await _user_name(session, identity[0], display, identity[1]))
-        )
+        user = await _users.create_player(session, name=display, identity=identity)
         # Virtual players are not shown on any profile: no global visibility row.
         await social_identity_service.upsert(
             session, user_id=user.id, provider=identity[0], username=display, ensure_global_visibility=False

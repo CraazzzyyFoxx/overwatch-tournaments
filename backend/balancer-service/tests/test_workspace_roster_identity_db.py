@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -20,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession  # noqa: E402
 
 from shared import models  # noqa: E402
 from shared.core.errors import ApiHTTPException  # noqa: E402
-from shared.core.social import SocialProvider  # noqa: E402
+from shared.core.social import SocialProvider, normalize_social_handle  # noqa: E402
 from shared.models.identity.rbac import Role, user_roles  # noqa: E402
 from shared.services.ontology import project_disciplines  # noqa: E402
 from shared.services.social_identity import social_identity_service  # noqa: E402
@@ -314,7 +315,8 @@ class RosterIdentityTests(IsolatedAsyncioTestCase):
         )
         assert member.player_id != unrelated.id
         player = await self.session.get(models.User, member.player_id)
-        assert player.name == f"{handle} (2)"
+        tag = hashlib.sha1(normalize_social_handle("riot", handle).encode()).hexdigest()[:8]  # noqa: S324 - a label
+        assert player.name == f"{handle} (riot:{tag})"
         resolved = await find_users_by_handles(self.session, [handle, unrelated.name.split("#")[0]], provider="riot")
         assert resolved[handle].id == member.player_id
         assert unrelated.name.split("#")[0] not in resolved
