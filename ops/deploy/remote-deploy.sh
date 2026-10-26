@@ -84,6 +84,12 @@ docker run --rm -v "${REPO_DIR}/nginx/nginx.conf:/etc/nginx/nginx.conf:ro" "${NG
 # the rest of it.
 docker compose -f "${COMPOSE_FILE}" run --rm --no-deps -T app-svc alembic upgrade head </dev/null
 
+# Statements prepared before the migration would fail on a retyped column until
+# their pgBouncer backend is recycled: RECONNECT the bundled pooler (`db`
+# profile only; never fatal, see the Makefile target). Only a successful
+# migration gets here (`set -e`).
+make prod-pgbouncer-reconnect </dev/null
+
 # The bot's Discord emoji, from the NEW image: uploads whatever names this
 # release added, skips the rest. Not fatal -- a missing emoji only falls back to
 # Unicode, and Discord being unreachable must not stop a deploy. The running bot

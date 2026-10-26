@@ -1,5 +1,5 @@
 .PHONY: help dev-build dev-up dev-up-full dev-down dev-restart dev-logs dev-ps dev-health dev-rebuild \
-	prod-build prod-pull prod-migrate prod-discord-emoji prod-up prod-down prod-logs prod-scale prod-small prod-medium prod-large migrate discord-emoji test clean \
+	prod-build prod-pull prod-migrate prod-pgbouncer-reconnect prod-discord-emoji prod-up prod-down prod-logs prod-scale prod-small prod-medium prod-large migrate discord-emoji test clean \
 	maint-on maint-eta maint-off jwt-public-key prod-jwt-public-key \
 	build up down restart logs ps health build-prod up-prod down-prod logs-prod \
 	app-logs identity-logs stats-logs frontend-logs discord-logs balancer-logs stream-logs \
@@ -74,7 +74,8 @@ help:
 	@echo ""
 	@echo "  make prod-build     - Build production images locally (CI normally builds them)"
 	@echo "  make prod-pull      - Pull the images CI built (IMAGE_TAG=<release> to pin)"
-	@echo "  make prod-migrate   - alembic upgrade head from the pulled image"
+	@echo "  make prod-migrate   - alembic upgrade head from the pulled image, then prod-pgbouncer-reconnect"
+	@echo "  make prod-pgbouncer-reconnect - RECONNECT the bundled pgBouncer (re-prepares statements after a column retype)"
 	@echo "  make prod-discord-emoji - Upload the bot's missing Discord emoji (one-shot)"
 	@echo "  make prod-up        - Start production stack (PROD_SIZE=small|medium|large)"
 	@echo "  make prod-down      - Stop production stack"
@@ -217,6 +218,21 @@ migrate:
 
 prod-migrate:
 	$(PROD_COMPOSE) run --rm --no-deps app-svc alembic upgrade head
+	@$(MAKE) --no-print-directory prod-pgbouncer-reconnect
+
+# The services keep prepared statements behind pgBouncer, and so do the backends
+# it shares between clients: after a migration that retypes a column a statement
+# selects, each fails with "cached plan must not change result type" until its
+# backend is recycled. RECONNECT on the admin console (ADMIN_USERS in the compose
+# file) closes every server connection as its transaction ends. Bundled pgBouncer
+# only (profile `db`, running); an external pooler is a manual step
+# (docs/production-host.md#pgbouncer). Never fatal: the migration has landed, and
+# a deploy must not stop between it and `prod-up`.
+prod-pgbouncer-reconnect:
+	@if $(PROD_COMPOSE) ps --status running --services | grep -qx pgbouncer; then \
+		$(PROD_COMPOSE) exec -T pgbouncer sh -c 'PGPASSWORD="$$POSTGRES_PASSWORD" psql -h 127.0.0.1 -p 6432 -U "$$POSTGRES_USER" -d pgbouncer -c RECONNECT' </dev/null \
+			|| echo "warning: pgBouncer RECONNECT failed; restart pgbouncer if this release retyped a column (docs/production-host.md#pgbouncer)"; \
+	fi
 
 # The gateway's JWT_PUBLIC_KEY (backend/env/gateway.env): the Ed25519 public key
 # identity signs tokens with, derived from auth.env's JWT_SECRET_KEY. Computed in

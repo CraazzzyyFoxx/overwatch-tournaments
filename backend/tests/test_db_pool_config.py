@@ -143,7 +143,7 @@ def _pgbouncer_database(monkeypatch, **kwargs):
     return captured, engine, events
 
 
-def test_create_database_pgbouncer_mode_disables_prepared_statements(monkeypatch):
+def test_create_database_pgbouncer_mode_keeps_prepared_statement_cache(monkeypatch):
     kwargs, engine, events = _pgbouncer_database(monkeypatch, statement_timeout=5000)
 
     # pgBouncer caps server backends; the client-side pool stays bounded and
@@ -154,8 +154,11 @@ def test_create_database_pgbouncer_mode_disables_prepared_statements(monkeypatch
     assert kwargs["pool_pre_ping"] is True
 
     connect_args = kwargs["connect_args"]
-    assert connect_args["prepared_statement_cache_size"] == 0
-    assert callable(connect_args["prepared_statement_name_func"])
+    # pgBouncer >= 1.21 (max_prepared_statements > 0) re-prepares statements on
+    # whichever backend serves the transaction, so the driver keeps its cache:
+    # a repeated statement is one round trip, not prepare + execute + close.
+    assert "prepared_statement_cache_size" not in connect_args
+    assert connect_args["prepared_statement_name_func"] is db_module._unique_prepared_statement_name
     # statement_timeout must NOT ride along as an asyncpg startup parameter,
     # since pgBouncer transaction pooling ignores/rejects it.
     assert "server_settings" not in connect_args
@@ -163,6 +166,35 @@ def test_create_database_pgbouncer_mode_disables_prepared_statements(monkeypatch
 
     # statement_timeout is instead applied per-transaction.
     assert [(target, identifier) for target, identifier, _ in events.listeners] == [(engine.sync_engine, "begin")]
+
+
+def test_create_database_pgbouncer_without_prepared_statements_disables_cache(monkeypatch):
+    kwargs, _, _ = _pgbouncer_database(monkeypatch, pgbouncer_prepared_statements=False)
+
+    connect_args = kwargs["connect_args"]
+    assert connect_args["prepared_statement_cache_size"] == 0
+    assert connect_args["prepared_statement_name_func"] is db_module._unique_prepared_statement_name
+    assert "server_settings" not in connect_args
+
+
+def test_create_database_prepared_statements_flag_ignored_without_pgbouncer(monkeypatch):
+    captured: dict[str, object] = {}
+
+    def fake_create_async_engine(*, url, **kwargs):
+        captured.update(kwargs)
+        return object()
+
+    monkeypatch.setattr(db_module, "create_async_engine", fake_create_async_engine)
+    monkeypatch.setattr(db_module, "async_sessionmaker", lambda *args, **kw: object())
+
+    db_module.create_database(
+        async_url="postgresql+asyncpg://user:pass@localhost:5432/testdb",
+        statement_timeout=0,
+        pgbouncer_prepared_statements=False,
+    )
+
+    # A direct connection keeps the driver defaults (cache on, asyncpg's own names).
+    assert captured["connect_args"] == {"timeout": 10.0}
 
 
 def test_create_database_pgbouncer_skips_timeout_registration_when_disabled(monkeypatch):

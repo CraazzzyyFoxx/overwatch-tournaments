@@ -35,6 +35,10 @@ services:
     # release checkout must stay clean (ops/deploy/remote-deploy.sh). Keep
     # shared_buffers ~25% and effective_cache_size ~75% of POSTGRES_MEMORY.
     # random_page_cost / effective_io_concurrency assume SSD storage.
+    # max_connections: 60 backends through pgBouncer (its MAX_DB_CONNECTIONS)
+    # + direct sessions (migrations, the metrics exporter, the nightly dump,
+    # psql) + 3 superuser_reserved_connections leaves ~30 spare at 100. Raise
+    # POSTGRES_MAX_CONNECTIONS together with MAX_DB_CONNECTIONS, never below it.
     command: [
       "postgres",
       "-c", "shared_buffers=${POSTGRES_SHARED_BUFFERS:-512MB}",
@@ -44,6 +48,7 @@ services:
       "-c", "max_wal_size=2GB",
       "-c", "random_page_cost=1.1",
       "-c", "effective_io_concurrency=200",
+      "-c", "max_connections=${POSTGRES_MAX_CONNECTIONS:-100}",
     ]
     # Docker's 64 MB /dev/shm is too small for parallel query workers
     # ("could not resize shared memory segment").
@@ -76,7 +81,7 @@ services:
       - app-network
 
   # Transaction pooling: every replica's DB_POOL_SIZE + DB_MAX_OVERFLOW client
-  # slots fan into DEFAULT_POOL_SIZE server backends, which is what lets
+  # slots fan into at most MAX_DB_CONNECTIONS server backends, which is what lets
   # `make prod-up` replicate workers. Services connect as POSTGRES_HOST=pgbouncer
   # POSTGRES_PORT=6432 DB_PGBOUNCER=true. The upstream is DATABASE_URL (direct
   # postgres:5432) — the same variable alembic prefers, so migrations bypass
@@ -94,22 +99,50 @@ services:
       # With scram-sha-256 the entrypoint writes the plain password to
       # userlist.txt, which pgBouncer needs to log in to the SCRAM-only server.
       AUTH_TYPE: scram-sha-256
-      # Must cover replicas x (DB_POOL_SIZE + DB_MAX_OVERFLOW) + GATEWAY_DB_MAX_CONNS:
-      # 16 processes x 30 + 16 = 496 at PROD_SIZE=large with the defaults.
-      MAX_CLIENT_CONN: "500"
-      DEFAULT_POOL_SIZE: "20"
-      RESERVE_POOL_SIZE: "5"
+      # Clients: replicas x (DB_POOL_SIZE + DB_MAX_OVERFLOW) + GATEWAY_DB_MAX_CONNS
+      # is 16 processes x 30 + 16 = 496 at PROD_SIZE=large with the default
+      # pools; 2000 leaves room for bigger pools and replicas. A client slot
+      # costs memory only (sized below), never a Postgres backend.
+      MAX_CLIENT_CONN: "2000"
+      # Servers: one pool (one user/database) of 50 backends, plus 10 reserve
+      # ones handed out once a client has waited 3 s; MAX_DB_CONNECTIONS caps
+      # the database at 60 whatever the user (postgres max_connections above).
+      DEFAULT_POOL_SIZE: "50"
+      RESERVE_POOL_SIZE: "10"
+      RESERVE_POOL_TIMEOUT: "3"
+      MAX_DB_CONNECTIONS: "60"
+      # Protocol-level prepared statements in transaction pooling (>= 1.21): up
+      # to 200 per backend in an LRU, re-prepared on whichever backend serves a
+      # client's transaction. The services keep asyncpg's statement cache unless
+      # DB_PGBOUNCER_PREPARED_STATEMENTS=false (backend/env/common.env).
+      MAX_PREPARED_STATEMENTS: "200"
+      # A client queued 30 s for a backend is disconnected instead of waiting
+      # the default 120 s; one idle inside a transaction for 60 s is
+      # disconnected so it cannot pin a backend.
+      QUERY_WAIT_TIMEOUT: "30"
+      IDLE_TRANSACTION_TIMEOUT: "60"
+      ADMIN_USERS: ${POSTGRES_USER:-postgres}
     depends_on:
       postgres:
         condition: service_healthy
+    # Memory, per https://www.pgbouncer.org/config.html (max_prepared_statements,
+    # pkt_buf = 4 kB default) and https://www.pgbouncer.org/features.html:
+    #   connections      (2000 clients + 60 servers) x 2 kB         ~  4 MB
+    #   rewrite buffers  2000 clients x 4 x pkt_buf (4 kB)          ~ 32 MB  worst case
+    #   query cache      ~5,500 distinct statements x 5 kB          ~ 28 MB  estimate
+    #                    (11 DB services x SQLAlchemy's 500-entry compiled
+    #                    cache; 5 kB is the docs' example query size)
+    #   total ~64 MB; 128M doubles it for per-client statement maps and
+    #   allocator slack. One thread, so 1 CPU is its ceiling: statement
+    #   tracking parses and rewrites every Parse/Bind it forwards.
     deploy:
       resources:
         limits:
-          cpus: '0.50'
-          memory: 64M
+          cpus: '1.00'
+          memory: 128M
         reservations:
           cpus: '0.05'
-          memory: 16M
+          memory: 32M
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 6432 -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 10s
@@ -389,6 +422,8 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    # SIGTERM drains in-flight handlers for the broker's 20 s graceful_timeout; Docker's default 10 s would SIGKILL first.
+    stop_grace_period: 30s
     restart: always
 
   stats-worker:
@@ -440,6 +475,8 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    # SIGTERM drains in-flight handlers for the broker's 20 s graceful_timeout; Docker's default 10 s would SIGKILL first.
+    stop_grace_period: 30s
     restart: always
 
   tournament-svc:
@@ -476,12 +513,17 @@ services:
       - ./logs/tournament-svc:/logs
     networks:
       - app-network
+    # /health answers 200 only once the broker connection is up and the process serves (consumers and scheduler
+    # running); 503 while starting or shutting down.
     healthcheck:
-      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9103/health', timeout=5)"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
+    # SIGTERM lets in-flight handlers finish within the broker's 20 s graceful_timeout; Docker's default 10 s would
+    # SIGKILL them mid-transaction (a committed but unacked RPC is then redelivered).
+    stop_grace_period: 30s
     restart: always
 
   # Headless RPC worker replacing the HTTP `backend` behind the gateway.
@@ -537,6 +579,8 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    # SIGTERM drains in-flight handlers for the broker's 20 s graceful_timeout; Docker's default 10 s would SIGKILL first.
+    stop_grace_period: 30s
     restart: always
 
   balancer-svc:
@@ -584,6 +628,8 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    # SIGTERM drains in-flight handlers for the broker's 20 s graceful_timeout; Docker's default 10 s would SIGKILL first.
+    stop_grace_period: 30s
     restart: always
 
   analytics-worker:
@@ -635,6 +681,8 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    # SIGTERM drains in-flight handlers for the broker's 20 s graceful_timeout; Docker's default 10 s would SIGKILL first.
+    stop_grace_period: 30s
     restart: always
 
   # Headless RPC face for analytics reads/mutations/job-control (rpc.analytics.*),
@@ -682,6 +730,8 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    # SIGTERM drains in-flight handlers for the broker's 20 s graceful_timeout; Docker's default 10 s would SIGKILL first.
+    stop_grace_period: 30s
     restart: always
 
   # Tournament stream live-status: hosts rpc.stream.* for the gateway and runs
@@ -731,6 +781,8 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    # SIGTERM drains in-flight handlers for the broker's 20 s graceful_timeout; Docker's default 10 s would SIGKILL first.
+    stop_grace_period: 30s
     restart: always
 
   # Next standalone runs `node server.js`: ONE process, so one JS thread no
@@ -870,6 +922,8 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    # SIGTERM drains in-flight handlers for the broker's 20 s graceful_timeout; Docker's default 10 s would SIGKILL first.
+    stop_grace_period: 30s
     restart: always
 
   # Same image as identity-svc, credential RPCs only (auth + oauth: register,
@@ -920,6 +974,8 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    # SIGTERM drains in-flight handlers for the broker's 20 s graceful_timeout; Docker's default 10 s would SIGKILL first.
+    stop_grace_period: 30s
     restart: always
 
   gateway:

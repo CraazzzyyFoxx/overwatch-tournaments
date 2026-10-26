@@ -51,10 +51,12 @@ class BaseServiceSettings(BaseSettings):
     postgres_host: str
     postgres_port: str | int
 
-    # RabbitMQ consumer QoS: max unacked messages per default channel. Bounds
-    # per-process concurrency so overload backlog stays in the queue (where the
-    # gateway's per-message TTL can drop stale requests) instead of the
-    # consumer buffer. Env: RPC_PREFETCH_COUNT.
+    # RabbitMQ consumer QoS: max unacked messages per consumer on the default
+    # channel -- per subscriber, so a process with K subscribers can hold K x
+    # this. The process-wide cap is the RPC concurrency gate:
+    # ``make_rabbit_broker(prefetch_count=...)`` hands the same value to
+    # ``shared.rpc.deadline.configure_rpc_concurrency``, bounding how many
+    # deadline-carrying RPC handlers run at once. Env: RPC_PREFETCH_COUNT.
     rpc_prefetch_count: int = 16
 
     # Emergency off switch for the shared quota gate (``shared.quota``). Every
@@ -79,10 +81,15 @@ class BaseServiceSettings(BaseSettings):
     db_pool_use_lifo: bool = True
     db_connect_timeout: float = 10.0
     db_statement_timeout: int = 30000  # milliseconds
-    # Connect through pgBouncer (transaction pooling): disables asyncpg
-    # prepared-statement caching and applies statement_timeout per-transaction
-    # via SET LOCAL. The client-side pool tuning above still applies.
+    # Connect through pgBouncer (transaction pooling): unique prepared-statement
+    # names, statement_timeout applied per-transaction via SET LOCAL. The
+    # client-side pool tuning above still applies.
     db_pgbouncer: bool = False
+    # With db_pgbouncer, keep asyncpg's prepared-statement cache. Needs
+    # pgBouncer >= 1.21 with max_prepared_statements > 0 (1.24+ defaults to
+    # 200); false disables the cache for an older pooler or
+    # max_prepared_statements = 0. Env: DB_PGBOUNCER_PREPARED_STATEMENTS.
+    db_pgbouncer_prepared_statements: bool = True
 
     # Logging
     log_level: str = "info"
