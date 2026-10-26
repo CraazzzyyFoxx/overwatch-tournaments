@@ -703,9 +703,8 @@ class UserCompareQueries(DisciplineQueries):
         ``user_ids=None`` means "the whole baseline population", resolved HERE as a
         subquery; the list form is for callers that genuinely hold a few ids. The
         population must not travel through Python as an ``IN`` list: the planner
-        cannot estimate selectivity through a list that long, and under pgBouncer
-        (``prepared_statement_cache_size = 0``) the plan is rebuilt on every call, on
-        a statement whose text changes whenever the population size does.
+        cannot estimate selectivity through a list that long, and a statement whose
+        text changes whenever the population size does never reuses a prepared plan.
 
         The predicate is ``_compare_user_scope_exists``. It is NOT the same as
         ``scoped_players`` below, which deliberately drops the finished/non-league

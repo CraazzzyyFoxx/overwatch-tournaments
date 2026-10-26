@@ -113,6 +113,25 @@ down, nothing alerts.
 `HostIOPressureHigh` (`infrastructure.yml`) is the early warning: tasks fully stalled on I/O
 more than 30% of the time.
 
+`services.yml` also covers the workers' gateway RPC handling (`rpc_duration_seconds`, recorded
+as `rpc:duration_p95_5m` and `rpc:requests:rate5m`), the outbox, and each worker process's
+event loop, DB pool and scheduler, all at `warning`:
+
+| Alert | Fires when |
+|---|---|
+| `RpcSubjectSlow` | a subject's p95 (permit wait included) stays above 5 s for 10 minutes at more than 0.05 requests/s |
+| `RpcDeadlineCancellations` | `rpc_deadline_cancelled_total` grew over 10 minutes, for 5 minutes: handlers still running at their gateway deadline were cancelled and rolled back |
+| `RpcStaleDrops` | `rpc_stale_dropped_total` grew over 10 minutes, for 5 minutes: requests expired before one of the process's `RPC_PREFETCH_COUNT` handler permits was free |
+| `OutboxBacklogOld` | `outbox_oldest_pending_age_seconds` peaks above 5 minutes, for 5 minutes |
+| `OutboxDeadEvents` | `outbox_dead_total` grew in the last hour: an `event_outbox` row failed 20 publishes and was parked as `dead` (kept, never retried) |
+| `SchedulerJobsSkipped` | a job skipped more than 10 runs in 10 minutes (`scheduler_job_skipped_total{job_id,reason}`), for 10 minutes |
+| `EventLoopLagHigh` | `event_loop_lag_seconds` peaks above 0.5 s over 2 minutes, for 5 minutes |
+| `DbPoolNearMax` | `db_pool_checked_out` is above 90% of `db_pool_size + db_pool_max_overflow` for 5 minutes |
+
+The last three see a service only once it calls `start_loop_lag_monitor`,
+`register_db_pool_metrics` and `instrument_scheduler` (`shared.observability`) at startup; so far
+only tournament-svc does.
+
 ## Dashboards
 
 Provisioned into the `OWT` folder (deleting a JSON file under

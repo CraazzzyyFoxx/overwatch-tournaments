@@ -208,7 +208,9 @@ No outbound calls to third-party APIs, so no `proxy` egress. (The compose block 
 
 Behaviour-changing settings:
 
-- `RABBITMQ_URL` — required, no default. `RPC_PREFETCH_COUNT` caps unacked RPC messages per channel.
+- `RABBITMQ_URL` — required, no default. `RPC_PREFETCH_COUNT` (default 16) caps how many gateway RPC
+  handlers run at once in the process (a permit pool, `shared.rpc.deadline.configure_rpc_concurrency`);
+  it is also each RPC consumer's AMQP prefetch, which RabbitMQ applies per consumer, not per channel.
 - `REDIS_URL` — the base URL; the service derives `/3` and `/4` from it.
 - `POSTGRES_*` and the `DB_POOL_*` knobs. Set `DB_PGBOUNCER=true` **before** scaling replicas — each
   process opens up to `DB_POOL_SIZE + DB_MAX_OVERFLOW` server connections.

@@ -188,8 +188,8 @@ Riot ID from account-v1 on `RIOT_ACCOUNT_CLUSTER` (default `europe`); Steam need
 OpenID realm is the scheme and host of `OAUTH_REDIRECT`). `STEAM_WEB_API_KEY` (optional) switches Steam persona names
 and avatars from deadlock-api's keyless copy to the Steam Web API. `SERVICE_CLIENTS` defines which
 machine callers may mint service tokens; `SERVICE_SCOPES` grants them scopes, of which
-`invalidate_session` requires `identity:invalidate` (403 without it). `RPC_PREFETCH_COUNT` bounds
-in-flight requests per process.
+`invalidate_session` requires `identity:invalidate` (403 without it). `RPC_PREFETCH_COUNT` caps how
+many gateway RPC handlers run at once in the process (see Backpressure).
 
 ## Running
 
@@ -276,6 +276,11 @@ process. Every role logs `JWT public key …` at startup — it must equal the g
   memberships, one role query for global + member-workspace RBAC, denies. An API key resolves its
   owner the same way, cache first (the key row no longer joins the owner), and narrows the owner's
   RBAC to its scopes.
-- **Backpressure.** `RPC_PREFETCH_COUNT` (default 16) caps concurrent processing per process so
-  the backlog stays in the queue, where the gateway's deadline can expire it, rather than in
-  the consumer buffer.
+- **Backpressure.** `RPC_PREFETCH_COUNT` (default 16) caps concurrent gateway RPC handlers per
+  process with one permit pool (`shared.rpc.deadline.configure_rpc_concurrency`). AMQP prefetch
+  cannot do it: QoS is per consumer (FastStream `global_qos=False`) and every subject is its own
+  consumer. A request whose deadline passes while it waits for a permit is dropped unanswered
+  (`rpc_stale_dropped_total`), and one still running past its deadline is cancelled.
+  `rpc.identity.validate_token` skips the pool (`shared.rpc.deadline.UNCAPPED_SUBJECTS`): the
+  gateway awaits it with a 5 s deadline ahead of every authenticated request, so it must not queue
+  behind 16 slow handlers (avatar uploads, OAuth provider calls); its own consumer prefetch bounds it.

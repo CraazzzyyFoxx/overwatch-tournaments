@@ -364,7 +364,9 @@ No external APIs, no S3, no outbound `proxy` egress.
   ttl_seconds=...)` in `services/balancer/jobs.py`), so it must stay well above the longest
   possible job: a lease that expires early hands the concurrency slot to someone else while the
   job is still solving.
-- `RPC_PREFETCH_COUNT` (default 16) — QoS on the RPC channel. The job channel is fixed at 2.
+- `RPC_PREFETCH_COUNT` (default 16) — how many gateway RPC handlers run at once in the process (a
+  permit pool, `shared.rpc.deadline.configure_rpc_concurrency`), and each RPC consumer's AMQP prefetch
+  (QoS is per consumer, not per channel). The job consumer's prefetch is fixed at 2.
 - `WORKER_METRICS_PORT` — Prometheus scrape port.
 - `REDIS_URL`, `RABBITMQ_URL`, `POSTGRES_*` — inherited from `common.env`.
 

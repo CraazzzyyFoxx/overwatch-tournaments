@@ -252,8 +252,12 @@ or roll back together. **Every service that writes outbox rows also drains them*
 `serve.py` schedules `shared.messaging.outbox.drain_outbox(session_factory, broker)` every
 second (tournament, stats-worker, app, balancer, analytics-svc). The drain takes its batch
 `FOR UPDATE SKIP LOCKED` and holds the locks until the one commit that ends the pass, so any
-number of drains across services and replicas never publish a row twice; failures retry with
-exponential backoff capped at 300 s. One relay per service means no service's events stop
+number of drains across services and replicas never publish a row twice; each publish gets 10 s, a batch starts
+none after 20 s and ends at its first timeout (so it commits inside pgBouncer's 60 s idle-in-transaction limit),
+failures retry with exponential backoff capped at 300 s, and the 20th failure parks the row as
+`dead` (kept for inspection, never drained again; `outbox_dead_total`). Published rows are
+deleted after 7 days by `purge_outbox`, a daily job tournament-svc alone schedules (the purge is
+table-wide). One relay per service means no service's events stop
 flowing because another service is down (they all did, when tournament-service ran the only
 drain).
 
@@ -317,7 +321,9 @@ names: `resource_generation(resource, "{tournament_id}")` for a tournament-scope
 name (`user_cache`, `division_grid/cache.py`). `emit`'s commit bumps the generations of every
 resource it staled — one `SET` each, in the Redis all services share (`configure_realtime`) —
 so another service's cached copy misses before the writer's `commit()` returns; the
-`cache.invalidated` outbox consumer re-bumps them durably. A new cached read names its
+`cache.invalidated` outbox consumer durably re-bumps only the generations not bumped since the
+event (a lost commit bump): a value is `<hex>.<bump_ms>`, and re-bumping one the commit already
+moved would only orphan entries cached since. A new cached read names its
 generations; a new write only has to `emit` what it staled.
 
 ## Errors

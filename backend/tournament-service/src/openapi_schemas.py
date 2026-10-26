@@ -42,6 +42,12 @@ from src.services.encounter import room_journal
 _ENTITIES = QueryParam("entities", array=True)
 _WS = QueryParam("workspace_id", "integer")
 _WS_REQUIRED = QueryParam("workspace_id", "integer", required=True)
+# The reads that parse it with ``q_workspace_id``.
+_WS_ANY = QueryParam(
+    "workspace_id",
+    "integer",
+    description="Workspace id; `all` is the same as absent. Any other non-integer is 422 `invalid_query_param`.",
+)
 # A list read's optional game (spec §8.1): absent or "all" is every game.
 _OPTIONAL_DISCIPLINE = QueryParam("discipline", description='Installed discipline code; absent or "all": every game')
 
@@ -50,21 +56,21 @@ OPERATIONS: dict[str, Op] = {
     "rpc.tournament.get_tournament": Op(response=schemas.TournamentRead, query_params=(_ENTITIES,)),
     "rpc.tournament.get_team": Op(response=schemas.TeamRead, query_params=(_ENTITIES,)),
     "rpc.tournament.get_encounter": Op(response=schemas.EncounterRead, query_params=(_ENTITIES,)),
-    "rpc.tournament.get_match": Op(response=schemas.MatchReadWithStats, query_params=(_ENTITIES, _WS)),
-    "rpc.tournament.get_match_kill_feed": Op(response=MatchEventsRead, query_params=(_WS,)),
+    "rpc.tournament.get_match": Op(response=schemas.MatchReadWithStats, query_params=(_ENTITIES, _WS_ANY)),
+    "rpc.tournament.get_match_kill_feed": Op(response=MatchEventsRead, query_params=(_WS_ANY,)),
     "rpc.tournament.encounters_overview": Op(
         response=schemas.EncounterOverviewRead, query=schemas.EncounterSearchQueryParams
     ),
     "rpc.tournament.encounters_insights": Op(
         response=schemas.EncounterInsightsRead, query=schemas.EncounterSearchQueryParams
     ),
-    "rpc.tournament.statistics_overall": Op(response=schemas.OverallStatistics, query_params=(_WS,)),
+    "rpc.tournament.statistics_overall": Op(response=schemas.OverallStatistics, query_params=(_WS_ANY,)),
     # ── public reads (arrays) ──────────────────────────────────────────────
     "rpc.tournament.lookup_tournaments": Op(
         response=schemas.LookupItem,
         response_array=True,
         query_params=(
-            _WS,
+            _WS_ANY,
             QueryParam("is_league", "boolean"),
             QueryParam("discipline", description="Installed discipline code; absent lists every game."),
         ),
@@ -75,14 +81,16 @@ OPERATIONS: dict[str, Op] = {
     "rpc.tournament.ffa_stage": Op(response=ffa_schemas.FfaLobbyRead, response_array=True),
     "rpc.tournament.ffa_lobby": Op(response=ffa_schemas.FfaLobbyRead),
     "rpc.tournament.statistics_history": Op(
-        response=schemas.TournamentStatistics, response_array=True, query_params=(_WS,)
+        response=schemas.TournamentStatistics, response_array=True, query_params=(_WS_ANY,)
     ),
     "rpc.tournament.statistics_division": Op(
         response=schemas.DivisionStatistics,
         response_array=True,
-        query_params=(_WS, QueryParam("discipline", required=True, description="Explicit discipline code.")),
+        query_params=(_WS_ANY, QueryParam("discipline", required=True, description="Explicit discipline code.")),
     ),
-    "rpc.tournament.saved_views": Op(response=schemas.EncounterSavedViewRead, response_array=True, query_params=(_WS,)),
+    "rpc.tournament.saved_views": Op(
+        response=schemas.EncounterSavedViewRead, response_array=True, query_params=(_WS_ANY,)
+    ),
     # ── public reads (paginated) ───────────────────────────────────────────
     "rpc.tournament.list_tournaments": Op(
         response=Paginated[schemas.TournamentRead], query=schemas.TournamentPaginationSortSearchQueryParams
@@ -179,7 +187,10 @@ OPERATIONS: dict[str, Op] = {
     "rpc.tournament.stage_deactivate": Op(response=schemas.StageRead),
     "rpc.tournament.stage_generate": Op(response=schemas.TournamentComputationJobRead),
     "rpc.tournament.stage_activate_and_generate": Op(response=schemas.TournamentComputationJobRead),
-    "rpc.tournament.stage_auto_wire": Op(response=schemas.StageRead),
+    "rpc.tournament.stage_auto_wire": Op(
+        response=schemas.StageRead,
+        query_params=(QueryParam("source_stage_id", "integer", description="The group stage to wire from."),),
+    ),
     "rpc.tournament.stage_wire": Op(request=schemas.WireFromGroupsRequest, response=schemas.StageRead),
     "rpc.tournament.stage_seed": Op(request=schemas.SeedTeamsRequest, response=schemas.StageRead),
     "rpc.tournament.stage_bracket_template_get": Op(response=schemas.BracketTemplateRead),
@@ -224,6 +235,9 @@ OPERATIONS: dict[str, Op] = {
     "rpc.tournament.challonge_fetch_tournament": Op(response=schemas.ChallongeTournament),
     "rpc.tournament.challonge_fetch_participants": Op(response=schemas.ChallongeParticipant, response_array=True),
     "rpc.tournament.challonge_fetch_matches": Op(response=schemas.ChallongeMatch, response_array=True),
+    "rpc.tournament.challonge_sync_log": Op(
+        query_params=(QueryParam("limit", "integer", description="Entries to return, clamped to 1..200, default 50."),)
+    ),
     # ── bootstrap importers ────────────────────────────────────────────────
     "rpc.tournament.challonge_create_tournament": Op(
         response=schemas.TournamentRead,
@@ -383,6 +397,7 @@ OPERATIONS: dict[str, Op] = {
         request=reg_team_schemas.RegistrationTeamAcceptRequest,
         response=reg_team_schemas.RegistrationTeamRead,
     ),
+    "rpc.tournament.regteam_decline": Op(request=reg_team_schemas.RegistrationTeamDeclineRequest),
     "rpc.tournament.regteam_free_agents": Op(response=reg_team_schemas.RegistrationFreeAgentListResponse),
     "rpc.tournament.regteam_my_invites": Op(response=reg_team_schemas.RegistrationTeamInviteOfferListResponse),
     "rpc.tournament.regteam_invite_history_public": Op(response=reg_team_schemas.RegistrationTeamInviteHistoryResponse),
@@ -448,7 +463,7 @@ OPERATIONS: dict[str, Op] = {
     # return whole typed models, so they carry request/response maps rather than
     # falling back to a generic object.
     "rpc.tournament.scrim_create": Op(request=schemas.ScrimCreateRequest, response=schemas.ScrimRoomRead),
-    "rpc.tournament.scrim_list_mine": Op(response=schemas.ScrimRoomListRead, query_params=(_WS,)),
+    "rpc.tournament.scrim_list_mine": Op(response=schemas.ScrimRoomListRead, query_params=(_WS_REQUIRED,)),
     "rpc.tournament.scrim_get": Op(response=schemas.ScrimRoomRead),
     "rpc.tournament.scrim_claim": Op(response=schemas.ScrimRoomRead),
     "rpc.tournament.scrim_close": Op(response=schemas.ScrimRoomRead),
@@ -477,6 +492,9 @@ OPERATIONS: dict[str, Op] = {
     "rpc.tournament.ffa_stage_admin": Op(response=ffa_schemas.FfaLobbyRead, response_array=True),
     # ── per-map match edit (admin) ─────────────────────────────────────────
     "rpc.tournament.encounter_update_match": Op(request=schemas.MatchUpdate, response=schemas.MatchRead),
+    "rpc.tournament.encounter_swap_slot": Op(
+        request=schemas.EncounterSwapSlotInput, response=schemas.EncounterSlotSwapRead
+    ),
     # ── captain pick/ban + map reporting (request bodies only) ─────────────
     # Each of these answers the room's ad-hoc state dict -- the pick-ban state,
     # one serialized entry, the undo block, the reconciliation verdict -- not a
@@ -500,8 +518,8 @@ OPERATIONS: dict[str, Op] = {
     # ── organizer pick-ban: config CRUD, the constructor, live overrides ───
     # Same rationale: the config upsert answers a serialized config dict and the
     # live-session ops answer the room state, so only the bodies are mapped.
-    # captain_pick_ban_dispute and admin_pick_ban_reopen take no body worth a
-    # model (`{}` / `{kind}`), so they live in DOCS only.
+    # captain_pick_ban_dispute takes no body worth a model (`{}`), so it lives
+    # in DOCS only.
     "rpc.tournament.admin_pick_ban_config_upsert": Op(request=pick_ban_admin.PickBanConfigUpsert),
     "rpc.tournament.admin_pick_ban_rules_validate": Op(request=pick_ban_admin.PickBanRulesValidateInput),
     "rpc.tournament.admin_pick_ban_rules_preview": Op(request=pick_ban_admin.PickBanRulesPreviewInput),
@@ -516,6 +534,10 @@ OPERATIONS: dict[str, Op] = {
     "rpc.tournament.admin_pick_ban_pause": Op(request=pick_ban_admin.PickBanAdminPause),
     "rpc.tournament.admin_pick_ban_extend": Op(request=pick_ban_admin.PickBanAdminExtend),
     "rpc.tournament.admin_pick_ban_cancel": Op(request=pick_ban_admin.PickBanAdminCancel),
+    # Session reset / step reopen (`{kind}`) and the organizer's opener election.
+    "rpc.tournament.admin_pick_ban_session_reset": Op(request=pick_ban_admin.PickBanAdminReset),
+    "rpc.tournament.admin_pick_ban_reopen": Op(request=pick_ban_admin.PickBanAdminReopen),
+    "rpc.tournament.admin_pick_ban_elect_opener": Op(request=pick_ban_admin.PickBanAdminElectOpener),
     "rpc.tournament.admin_encounter_technical_loss": Op(
         request=pick_ban_admin.AdminTechnicalLossInput, response=schemas.EncounterResultRead
     ),

@@ -134,8 +134,9 @@ difference against the legacy executor can move a displayed total by 0.01 at a r
 policy proves these changes bit-for-bit from the frozen operands.
 
 **Channel.** `serve_rpc.py` registers the three read modules on `_PUBLIC_READS_CHANNEL`, a channel of their own with
-`RPC_PREFETCH_COUNT`, so a burst of cold 20–30 s compare reads and the admin/ingest RPC handlers never share one QoS
-window.
+`RPC_PREFETCH_COUNT`. That prefetch applies per consumer (FastStream `global_qos=False`), not to the channel, so it does
+not ration a burst of cold 20–30 s compare reads against the admin/ingest RPC handlers: all of them draw on the
+process's one pool of `RPC_PREFETCH_COUNT` handler permits (`shared.rpc.deadline.configure_rpc_concurrency`).
 
 **Read caches.** The `/users/*`, map and achievement-rarity reads are cashews caches declared with
 `shared.services.cache_generations.versioned` on Redis `/4` (prefix `backend:`; `lock:`, `LOCK` and `PING` are
