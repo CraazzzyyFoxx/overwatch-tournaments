@@ -15,6 +15,7 @@ import sqlalchemy as sa
 from sqlalchemy.exc import DBAPIError
 
 from shared.core import enums
+from shared.core.errors import BaseAPIException
 from shared.models.encounter import (
     Encounter,
     EncounterGame,
@@ -250,14 +251,15 @@ class ApplyResultTests(ResultWriterCase):
     async def test_an_id_that_is_not_a_live_seat_is_refused(self) -> None:
         """``team_id`` and ``encounter_team_id`` are two ints both called
         "team". Reading the mapping by seat and ignoring the rest would zero
-        every seat and confirm that."""
+        every seat and confirm that. The ids come from an admin's request body,
+        so the refusal is a 422, not a 500."""
         async with self.Session() as s:
             encounter = await result.lock_encounter(s, self.ids["e"])
             for totals, placements in (
                 ({self.ids["team0"]: 2.0}, {self.ids["team0"]: 1}),
                 ({self.seats[0]: 2.0}, {self.seats[0]: 1, self.ids["team1"]: 2}),
             ):
-                with self.assertRaises(ValueError):
+                with self.assertRaises(BaseAPIException) as caught:
                     await result.apply_result(
                         s,
                         encounter,
@@ -269,6 +271,7 @@ class ApplyResultTests(ResultWriterCase):
                         actor_user_id=None,
                         reason=None,
                     )
+                self.assertEqual(422, caught.exception.status_code)
             await s.rollback()
         self.assertEqual(0, (await self.reload()).result_version)
         self.assertEqual([(self.seats[0], 0.0, None), (self.seats[1], 0.0, None)], await self.standing())

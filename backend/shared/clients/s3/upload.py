@@ -65,9 +65,10 @@ def avatar_prefix(entity_type: AvatarEntityType, entity_id: int, variant: str | 
 
     ``variant`` carves out a sub-prefix for entities that carry MORE THAN ONE
     image (a tournament's cover and its logo). Without it both would share
-    ``avatars/tournaments/{id}/``, and since an upload clears the whole prefix
-    first, uploading one would delete the other. ``None`` keeps the historical
-    single-image layout byte-for-byte, so existing keys are untouched.
+    ``avatars/tournaments/{id}/``, and since the post-commit cleanup clears the
+    whole prefix but the new key, uploading one would delete the other. ``None``
+    keeps the historical single-image layout byte-for-byte, so existing keys are
+    untouched.
     """
     base = f"avatars/{entity_type}/{entity_id}/"
     return f"{base}{variant}/" if variant else base
@@ -85,15 +86,15 @@ async def upload_avatar(
 ) -> UploadResult:
     """Upload an avatar image, returning the UploadResult with the public URL.
 
-    Deletes any existing avatar for the same entity (and ``variant``,
-    when given) before uploading.
+    Leaves the entity's previous files in place: once the row pointing at the new
+    URL has committed, the caller removes them with
+    ``delete_old_avatar(..., keep=result.key)``. Deleting first would leave the row
+    pointing at a deleted object whenever the upload or the commit failed.
     Key format: avatars/{entity_type}/{entity_id}/[{variant}/]{content_hash}.{ext}
     """
     error = _validate_image(file_data, content_type, max_size)
     if error:
         return UploadResult(success=False, key="", error=error)
-
-    await delete_old_avatar(s3, entity_type=entity_type, entity_id=entity_id, variant=variant)
 
     ext = _detect_extension(content_type)
     file_hash = _content_hash(file_data)
@@ -148,9 +149,19 @@ async def delete_old_avatar(
     entity_type: AvatarEntityType,
     entity_id: int,
     variant: str | None = None,
+    keep: str | None,
 ) -> None:
-    """Delete existing avatar files for an entity (optionally one ``variant`` only)."""
+    """Delete an entity's avatar files (optionally one ``variant`` only) except ``keep``.
+
+    Call it once the row pointing at ``keep`` (``None``: the cleared row) has
+    committed. Best effort: a failure only leaves stale objects behind, so it is
+    logged instead of failing a write that already succeeded.
+    """
     prefix = avatar_prefix(entity_type, entity_id, variant)
-    deleted = await s3.delete_prefix(prefix)
+    try:
+        deleted = await s3.delete_prefix(prefix, keep=keep)
+    except Exception:
+        logger.exception(f"Failed to delete old avatar(s) under {prefix}")
+        return
     if deleted > 0:
         logger.info(f"Deleted {deleted} old avatar(s) under {prefix}")

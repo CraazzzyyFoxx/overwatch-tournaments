@@ -44,7 +44,7 @@ from typing import Any
 
 from faststream.rabbit import RabbitMessage
 
-from shared.clients.s3 import upload_avatar
+from shared.clients.s3 import delete_old_avatar, upload_avatar
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.core.pagination import paginated_dump
 from shared.core.social import PROVIDERS, SOCIAL_PROVIDERS, matches_handle_pattern
@@ -577,6 +577,8 @@ def register(broker: Any, logger: Any) -> None:
                 after={"avatar_url": result.public_url},
             )
             player_user = await admin_users.set_avatar(session, user_id=user_id, avatar_url=result.public_url)
+            # Only once the row points at the new key may the previous files go.
+            await delete_old_avatar(clients.s3_client, entity_type="players", entity_id=user_id, keep=result.key)
             return user_service.to_read(player_user, _ENTITIES)
 
         return await _envelope_and_invalidate(logger, "users.avatar_upload", op, data)

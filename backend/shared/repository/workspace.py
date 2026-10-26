@@ -91,14 +91,15 @@ class WorkspaceRepository(BaseRepository[models.Workspace]):
         return workspace
 
     async def lock_by_id(self, session: AsyncSession, workspace_id: int) -> int | None:
-        """``SELECT id ... FOR UPDATE`` — serialize concurrent writers on one workspace.
+        """``SELECT id ... FOR NO KEY UPDATE`` — serialize concurrent writers on one workspace.
 
         Used by the division-grid import paths, where two imports into the same
-        workspace must not interleave. The projection is deliberate: the caller wants
-        the lock, not the row.
+        workspace must not interleave. NO KEY: the FK inserts of rows referencing the
+        workspace (tournaments, grids) take FOR KEY SHARE and go on meanwhile. The
+        projection is deliberate: the caller wants the lock, not the row.
         """
         return await session.scalar(
-            sa.select(models.Workspace.id).where(models.Workspace.id == workspace_id).with_for_update()
+            sa.select(models.Workspace.id).where(models.Workspace.id == workspace_id).with_for_update(key_share=True)
         )
 
     async def set_default_grid_version(

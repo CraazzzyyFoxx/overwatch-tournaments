@@ -64,17 +64,18 @@ class NotificationRecipientRepository:
         result = await session.scalars(query)
         return [int(value) for value in result.all()]
 
-    async def team_roster_auth_user_ids(self, session: AsyncSession, team_ids: Sequence[int]) -> list[int]:
-        """Accounts on any of these tournament team rosters.
+    async def team_roster_auth_user_ids(self, session: AsyncSession, team_ids: Sequence[int]) -> dict[int, list[int]]:
+        """Accounts on each of these tournament team rosters, keyed by team id.
 
-        Takes a sequence so both sides of an encounter cost one query rather
-        than one per team; substitutes are included, since a match time is news
-        to whoever might play it.
+        Takes a sequence so every team of a batch of encounters costs one query
+        rather than one per team; substitutes are included, since a match time
+        is news to whoever might play it. A team with no account behind any
+        roster row is absent.
         """
         if not team_ids:
-            return []
+            return {}
         query = (
-            sa.select(models.User.auth_user_id)
+            sa.select(models.Player.team_id, models.User.auth_user_id)
             .select_from(models.Player)
             .join(models.WorkspaceMember, models.WorkspaceMember.id == models.Player.workspace_member_id)
             .join(models.User, models.User.id == models.WorkspaceMember.player_id)
@@ -84,8 +85,10 @@ class NotificationRecipientRepository:
             )
             .distinct()
         )
-        result = await session.scalars(query)
-        return [int(value) for value in result.all()]
+        by_team: dict[int, list[int]] = {}
+        for team_id, auth_user_id in (await session.execute(query)).all():
+            by_team.setdefault(int(team_id), []).append(int(auth_user_id))
+        return by_team
 
     async def workspace_staff_auth_user_ids(
         self,

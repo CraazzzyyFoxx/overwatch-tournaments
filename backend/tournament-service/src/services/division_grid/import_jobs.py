@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
 from shared.clients.s3 import S3Client
+from shared.core.errors import BaseAPIException as HTTPException
 from shared.messaging.config import TOURNAMENT_COMPUTE_EXCHANGE
 from shared.messaging.outbox import enqueue_outbox_event
 from shared.observability import observe_scheduled_job
@@ -26,7 +27,8 @@ __all__ = (
 )
 
 _ROUTING_KEY = "tournament.compute.division-grid-import"
-_STALE_RUNNING_AFTER = timedelta(hours=1)
+# One grid version per job, its S3 copies bounded: a job still "running" after this long lost its worker (a restart).
+_STALE_RUNNING_AFTER = timedelta(minutes=15)
 _ACTIVE_STATUSES = ("pending", "running")
 
 
@@ -236,7 +238,7 @@ class ImportJobsService:
             target_workspace = await self.workspace_repo.get(session, job.workspace_id)
             source_workspace = await self.workspace_repo.get(session, job.source_workspace_id)
             if target_workspace is None or source_workspace is None:
-                raise RuntimeError("Source or target workspace no longer exists")
+                raise HTTPException(status_code=404, detail="Source or target workspace no longer exists")
 
             source_grids = await self.marketplace.get_marketplace_grids_by_ids(
                 session,

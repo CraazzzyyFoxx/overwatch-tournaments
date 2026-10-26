@@ -131,8 +131,8 @@ class _AsyncSessionShim:
         self._session = session
         # The shim's OWN scratch space, deliberately not the ``Session.info`` the
         # global ``before_flush``/``after_commit`` listeners drain. Producer code
-        # that stages per-transaction state (the notification-signal recipients,
-        # the tournament-name memo) works normally against it, while the
+        # that stages per-transaction state (the notification-signal recipients)
+        # works normally against it, while the
         # realtime-staging factories write their builders into a dict nothing
         # reads -- so no ``workspace_event`` row and no Redis publish is dragged
         # into these tests.
@@ -744,8 +744,8 @@ class RegistrationDecisionQueryBudgetTests(_ProducerTestCase):
     The admin review paths reach the producer with a registration loaded by
     ``get_registration_by_id``, whose options already eager-load ``tournament``
     and ``workspace_member.player``: re-reading either is pure waste.
-    ``bulk_approve_registrations`` reaches it with a bare registration, N times
-    for ONE tournament: re-reading the name there is an N+1 that grows with the
+    ``bulk_approve_registrations`` reaches it with bare registrations, one batch
+    for ONE tournament: a per-row name read there would be an N+1 that grows with the
     batch. Five registrations rather than two, so a per-row read is unmistakable
     -- this reads 1 where the N+1 reads 5.
 
@@ -927,7 +927,7 @@ class TeamRosterOutcomeTests(_ProducerTestCase):
                 tournament_id=TOURNAMENT_ID,
                 include_terminal_for_auth_user_id=account,
             )
-            self.assertEqual(expected, [team.id for team, _occupancy in visible])
+            self.assertEqual(expected, [team.id for team in visible])
         self.assertTrue(await teams_module.teams_service.is_team_staff(self.fx.shim, rejected, CAPTAIN_AUTH))
 
     async def test_explicit_withdrawal_retains_the_rejected_team_link_and_revokes_offers(self) -> None:

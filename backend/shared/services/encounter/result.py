@@ -36,7 +36,7 @@ from shared.core.enums import (
     EncounterResultStatus,
     EncounterStatus,
 )
-from shared.core.errors import BaseAPIException
+from shared.core.errors import ApiExc, BaseAPIException
 from shared.domain.encounter_scoring import EncounterOutcome, GameLine, compile_rules, evaluate_encounter
 from shared.models.encounter.audit import EncounterResultAudit
 from shared.models.encounter.encounter import Encounter
@@ -90,8 +90,8 @@ async def apply_result(
 
     ``totals``/``placements`` state the WHOLE standing, keyed by
     ``encounter_team_id``: a live seat the caller left out scored nothing and
-    holds no place, and an id that is not a live seat is refused rather than
-    ignored. Passing a ``tournament.team`` id here -- two ints, both called
+    holds no place, and an id that is not a live seat is refused (a 422) rather
+    than ignored. Passing a ``tournament.team`` id here -- two ints, both called
     "team" -- would otherwise zero every seat and confirm that.
 
     The caller must hold the row's lock (:func:`lock_encounter`):
@@ -139,9 +139,19 @@ async def _write(
     live = {seat.id for seat in seats}
     unknown = sorted((set(totals) | set(placements)) - live)
     if unknown:
-        raise ValueError(
-            f"Encounter {encounter.id}: {unknown} are not live participations of it "
-            f"(its seats are {sorted(live)}); a standing is keyed by encounter_team_id"
+        # 422, not ValueError: the ids arrive in an admin's request body (``encounter_set_result``),
+        # so naming a participation of another encounter is a client error, never a 500.
+        raise BaseAPIException(
+            status_code=http_status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=[
+                ApiExc(
+                    code="not_a_participation",
+                    msg=(
+                        f"Encounter {encounter.id}: {unknown} are not live participations of it "
+                        f"(its seats are {sorted(live)}); a standing is keyed by encounter_team_id"
+                    ),
+                )
+            ],
         )
     before = snapshot(seats)
     from_result_status = encounter.result_status

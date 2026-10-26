@@ -11,8 +11,8 @@ Three things here refuse to be computed in Python:
   would make ``mismatch_only`` return the wrong rows and the chips count only
   the current page. "They agree" is one distinct standing across the reports,
   where a standing is the whole set of ``team_report_result`` lines.
-* ``last_resolution`` is the newest audit row per encounter, fetched with one
-  window function rather than a query per row.
+* ``last_resolution`` is the newest audit row per encounter, fetched for the
+  page's encounters with one ``DISTINCT ON`` statement rather than a query per row.
 * the stats counters deliberately ignore the chip filters themselves, so each
   chip reports how many rows it *would* select rather than how many are
   currently shown.
@@ -24,7 +24,6 @@ from collections.abc import Sequence
 
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import aliased
 
 from shared import models
 from shared.core import pagination
@@ -38,14 +37,22 @@ from src.services.encounter.replay_codes import replay_codes_by_encounter
 __all__ = ("encounter_reports_service",)
 
 
-def _standing_per_report() -> sa.Subquery:
+def _standing_per_report(workspace_id: int) -> sa.Subquery:
     """Per report: a stable text of its whole standing, lines sorted.
 
     ``string_agg`` over the ordered lines rather than a row comparison: a report
     is N lines, so "two reports agree" is "their aggregated standings are the
     same string" — one grouping the planner can hash, at any participant count.
+    Only the workspace's reports, picked by ``report_id`` (the lines' indexed
+    key): the outer workspace filter cannot reach through a GROUP BY.
     """
     line = EncounterTeamReportResult
+    report = EncounterTeamReport
+    workspace_reports = (
+        sa.select(report.id)
+        .join(models.Encounter, models.Encounter.id == report.encounter_id)
+        .where(models.Encounter.workspace_id == workspace_id)
+    )
     return (
         sa.select(
             line.report_id.label("report_id"),
@@ -61,15 +68,16 @@ def _standing_per_report() -> sa.Subquery:
                 sa.text("'|' ORDER BY encounter_team_id"),
             ).label("standing"),
         )
+        .where(line.report_id.in_(workspace_reports))
         .group_by(line.report_id, line.encounter_id)
         .subquery("report_standing")
     )
 
 
-def _report_aggregate() -> sa.Subquery:
-    """Per encounter: how many participations reported, and how many distinct
-    standings they named. "They agree" is ``distinct_standings = 1``."""
-    standing = _standing_per_report()
+def _report_aggregate(workspace_id: int) -> sa.Subquery:
+    """Per encounter of the workspace: how many participations reported, and how
+    many distinct standings they named. "They agree" is ``distinct_standings = 1``."""
+    standing = _standing_per_report(workspace_id)
     report = EncounterTeamReport
     return (
         sa.select(
@@ -78,25 +86,12 @@ def _report_aggregate() -> sa.Subquery:
             sa.func.count(sa.distinct(standing.c.standing)).label("distinct_standings"),
         )
         .select_from(report)
+        .join(models.Encounter, models.Encounter.id == report.encounter_id)
         .outerjoin(standing, standing.c.report_id == report.id)
+        .where(models.Encounter.workspace_id == workspace_id)
         .group_by(report.encounter_id)
         .subquery("report_agg")
     )
-
-
-def _last_audit() -> sa.Subquery:
-    """The newest audit row per encounter — one window pass, not N+1."""
-    audit = models.EncounterResultAudit
-    ranked = sa.select(
-        audit.encounter_id.label("encounter_id"),
-        audit.action.label("action"),
-        audit.actor_user_id.label("actor_user_id"),
-        audit.created_at.label("created_at"),
-        sa.func.row_number()
-        .over(partition_by=audit.encounter_id, order_by=(audit.created_at.desc(), audit.id.desc()))
-        .label("rn"),
-    ).subquery("audit_ranked")
-    return sa.select(ranked).where(ranked.c.rn == 1).subquery("last_audit")
 
 
 class _Query:
@@ -109,8 +104,7 @@ class _Query:
 
     def __init__(self, workspace_id: int, params: schemas.EncounterReportsSearchParams) -> None:
         self.params = params
-        self.agg = _report_aggregate()
-        self.audit = _last_audit()
+        self.agg = _report_aggregate(workspace_id)
         self.workspace_id = workspace_id
 
     def join(self, query: sa.Select) -> sa.Select:
@@ -170,9 +164,9 @@ def _series_valid(encounter: models.Encounter, reports: Sequence[EncounterTeamRe
 class AdminEncounterReportsService:
     """Read-only admin views over participation reports.
 
-    Both methods are analytical, not CRUD — a window-function join for the newest
-    audit row per encounter, aggregate chip counters, and pagination — so the
-    statements stay here rather than behind repository methods.
+    Both methods are analytical, not CRUD — aggregate subqueries, chip counters
+    and pagination — so the statements stay here rather than behind repository
+    methods.
     """
 
     def _row(
@@ -238,7 +232,6 @@ class AdminEncounterReportsService:
         builder = _Query(workspace_id, params)
         where = builder.scope_predicates() + builder.chip_predicates()
 
-        actor = aliased(models.User, name="audit_actor")
         query = (
             builder.join(
                 sa.select(
@@ -249,14 +242,8 @@ class AdminEncounterReportsService:
                     BracketEncounter.stage_item_id.label("bracket_stage_item_id"),
                     builder.agg.c.reported_count,
                     builder.agg.c.distinct_standings,
-                    builder.audit.c.action,
-                    builder.audit.c.actor_user_id,
-                    builder.audit.c.created_at.label("resolved_at"),
-                    actor.name.label("actor_name"),
                 )
             )
-            .outerjoin(builder.audit, builder.audit.c.encounter_id == models.Encounter.id)
-            .outerjoin(actor, actor.id == builder.audit.c.actor_user_id)
             .where(*where)
             .order_by(models.Encounter.updated_at.desc().nullslast(), models.Encounter.id.desc())
         )
@@ -270,7 +257,7 @@ class AdminEncounterReportsService:
         total = (await session.execute(total_query)).scalar_one()
         encounters = [row[0] for row in rows]
 
-        seats, reports, lines, names, stages, items = await self._page_context(session, encounters, rows)
+        seats, reports, lines, names, stages, items, resolutions = await self._page_context(session, encounters, rows)
         codes = await replay_codes_by_encounter(session, [encounter.id for encounter in encounters])
         return pagination.Paginated(
             page=params.page,
@@ -291,14 +278,7 @@ class AdminEncounterReportsService:
                     tournament_name=row.tournament_name,
                     reported_count=row.reported_count,
                     distinct_standings=row.distinct_standings,
-                    resolution=schemas.LastResolutionRead(
-                        action=row.action,
-                        actor_user_id=row.actor_user_id,
-                        actor_name=row.actor_name,
-                        created_at=row.resolved_at,
-                    )
-                    if row.action is not None
-                    else None,
+                    resolution=resolutions.get(row[0].id),
                 )
                 for row in rows
             ],
@@ -316,10 +296,12 @@ class AdminEncounterReportsService:
         dict[int, str],
         dict[int, tuple[str | None, object | None]],
         dict[int, str],
+        dict[int, schemas.LastResolutionRead],
     ]:
-        """Seats, reports, lines, reporter names, stage name/type and stage-item names for ONE page.
+        """Seats, reports, lines, reporter names, stage name/type, stage-item names and
+        the newest audit row for ONE page.
 
-        Five statements for the whole page, not five per row: the list is the
+        A statement each for the whole page, not one per row: the list is the
         admin's inbox and it is read at 50 rows at a time.
         """
         seats: dict[int, list[EncounterTeam]] = {}
@@ -330,8 +312,9 @@ class AdminEncounterReportsService:
         # Its own map: stage and stage-item ids are separate sequences, so one dict let an item
         # overwrite the stage that shares its number and blanked that stage's type.
         items: dict[int, str] = {}
+        resolutions: dict[int, schemas.LastResolutionRead] = {}
         if not encounters:
-            return seats, reports, lines, names, stages, items
+            return seats, reports, lines, names, stages, items, resolutions
 
         ids = [encounter.id for encounter in encounters]
         for seat in (
@@ -392,7 +375,29 @@ class AdminEncounterReportsService:
                     )
                 ).all()
             )
-        return seats, reports, lines, names, stages, items
+        audit = models.EncounterResultAudit
+        for resolution in (
+            await session.execute(
+                sa.select(
+                    audit.encounter_id,
+                    audit.action,
+                    audit.actor_user_id,
+                    models.User.name.label("actor_name"),
+                    audit.created_at,
+                )
+                .outerjoin(models.User, models.User.id == audit.actor_user_id)
+                .where(audit.encounter_id.in_(ids))
+                .distinct(audit.encounter_id)
+                .order_by(audit.encounter_id, audit.created_at.desc(), audit.id.desc())
+            )
+        ).all():
+            resolutions[resolution.encounter_id] = schemas.LastResolutionRead(
+                action=resolution.action,
+                actor_user_id=resolution.actor_user_id,
+                actor_name=resolution.actor_name,
+                created_at=resolution.created_at,
+            )
+        return seats, reports, lines, names, stages, items, resolutions
 
     async def get_reports_stats(
         self,

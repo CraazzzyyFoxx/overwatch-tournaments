@@ -9,14 +9,17 @@ handlers return their dicts verbatim.
 
 Commit semantics:
   * Challonge: ``import_tournament`` / ``export_tournament`` / ``auto_push_on_confirm``
-    commit internally; ``get_sync_log`` + the fetch_* reads are read-only.
+    commit internally; ``get_sync_log`` + the fetch_* reads are read-only. A sync
+    already running for the tournament is a 409, Challonge unreachable a 503.
   * Sheets: ``upsert_google_sheet_feed`` and ``sync_google_sheet_feed`` commit
     internally; the get/catalog/suggest/preview/export functions are read-only.
   * Division grid: the WRITE service functions (create_grid, create_version,
     update_version, delete_version, publish_version, clone_version,
     upsert_mapping, import_division_grids) do NOT commit internally, so the
-    matching handlers ``await session.commit()`` themselves. The reads do not
-    commit.
+    matching handlers ``await session.commit()`` themselves; the grid-cache
+    invalidations those writes stage run once that commit lands
+    (``shared.services.division_grid.cache.invalidate_after_commit``). The reads
+    do not commit.
 
 S3 (division grid marketplace import): the client comes from
 ``src.rpc._s3.get_s3`` — one lazily-started, process-wide ``S3Client`` shared
@@ -49,7 +52,7 @@ from src.services.challonge import sync as challonge_sync
 from src.services.division_grid import import_jobs as division_grid_import_jobs
 from src.services.division_grid import marketplace as division_grid_marketplace
 from src.services.division_grid import portable as division_grid_portable
-from src.services.division_grid.service import division_grid_service
+from src.services.division_grid.service import division_grid_service, require_writable
 from src.services.registration import sheet_sync
 from src.services.registration.player_export import (
     PLAYER_EXPORT_DEFAULT_FORMAT,
@@ -79,6 +82,9 @@ async def require_workspace_permission(
     user: models.AuthUser,
     action: str,
 ) -> models.Workspace:
+    # ``None`` only comes from a system grid's row (a route naming the grid or version): no workspace may write it.
+    if action != "read":
+        require_writable(workspace_id)
     if not user.has_workspace_permission(workspace_id, "division_grid", action):
         raise HTTPException(status_code=403, detail=f"Permission denied: division_grid.{action} required")
     return await _get_workspace_or_404(session, workspace_id)
@@ -95,6 +101,10 @@ def _version_read(version: Any, discipline: str | None = None) -> schemas.Divisi
 
 def _require_version_read_access(user: models.AuthUser, version: Any) -> None:
     require_grid_version_read_access(user, version.grid.workspace_id)
+
+
+def _require_grid_read_access(user: models.AuthUser, grid: Any) -> None:
+    require_grid_version_read_access(user, grid.workspace_id, "Division grid not found")
 
 
 async def _get_source_workspace_or_404(
@@ -187,7 +197,10 @@ def register(broker: Any, logger: Any) -> None:
                 after={"dry_run": dry_run},
                 source="challonge",
             )
-            return await challonge_sync.sync_service.import_tournament(session, tournament_id, dry_run=dry_run)
+            # An admin waits a few seconds for a running import (the auto-sync's, say), then gets a 409.
+            return await challonge_sync.sync_service.import_tournament(
+                session, tournament_id, dry_run=dry_run, lock_wait_seconds=challonge_sync.ADMIN_LOCK_WAIT_SECONDS
+            )
 
         return await _run(logger, op)
 
@@ -249,7 +262,7 @@ def register(broker: Any, logger: Any) -> None:
             await auth.require_tournament_id_permission(
                 session, user, tournament_id=tournament_id, resource="challonge", action="read"
             )
-            limit = _q1(data, "limit", int, default=50)
+            limit = min(max(_q1(data, "limit", int, default=50), 1), 200)
             logs = await challonge_sync.sync_service.get_sync_log(session, tournament_id, limit)
             return [
                 {
@@ -446,6 +459,10 @@ def register(broker: Any, logger: Any) -> None:
                 entity_id=tournament_id,
             )
             result = await sheet_sync.sheet_sync_service.sync_google_sheet_feed(session, tournament_id)
+            if result.locked:
+                # The scheduler (or another "Sync now") holds this feed: nothing was applied, so an
+                # empty success would read as an empty sheet.
+                raise HTTPException(status_code=409, detail="A sync of this sheet is already running")
             return _dump(
                 schemas.BalancerGoogleSheetFeedSyncResponse(
                     created=result.created,
@@ -555,6 +572,24 @@ def register(broker: Any, logger: Any) -> None:
     # The two "open" reads (get_version, get_mapping) need no workspace
     # permission; the rest enforce division_grid.<action> via
     # require_workspace_permission.
+    #
+    # 403 vs 404, one rule for every handler: a route naming a workspace checks
+    # division_grid.<action> there first (403). Any id the caller cannot see —
+    # missing, another workspace's private grid/version/job, or a row outside the
+    # path's workspace — is 404, so ids cannot be probed across workspaces. A
+    # route naming only a grid/version checks it is visible (404) before the
+    # permission on its workspace (403). A system grid (no workspace) is read
+    # by anyone through the two open reads (grid_version_get, grid_mapping_get)
+    # and copied with grid_workspace_create(from_version_id); the workspace-
+    # scoped reads (grid_versions_list, grid_portable_export) need a permission
+    # on the grid's workspace, which a system grid has none of: they refuse it
+    # (403; a superuser or global grant passes the check and finds no workspace, 404).
+    # It is writable by none: every write to it, its versions or tiers, and a
+    # mapping FROM one of its versions, is 403 ``division_grid_read_only``
+    # (``require_writable``). A workspace's own rows that point at it stay
+    # allowed: activating a system version as the workspace default, and a
+    # mapping from the workspace's own version onto a system version (a mapping
+    # belongs to its source version's workspace).
 
     @broker.subscriber("rpc.tournament.grid_workspace_list")
     async def _grid_workspace_list(data: dict, msg: RabbitMessage) -> dict:
@@ -605,6 +640,7 @@ def register(broker: Any, logger: Any) -> None:
             user = _identity(data)
             grid_id = _require_id(data)
             grid = await division_grid_service.get_grid_by_id(session, grid_id)
+            _require_grid_read_access(user, grid)
             body = schemas.DivisionGridUpdate.model_validate(_payload(data))
             action = "delete" if body.archived is True else "update"
             await require_workspace_permission(grid.workspace_id, session=session, user=user, action=action)
@@ -633,6 +669,7 @@ def register(broker: Any, logger: Any) -> None:
             user = _identity(data)
             grid_id = _require_id(data)
             grid = await division_grid_service.get_grid_by_id(session, grid_id)
+            _require_grid_read_access(user, grid)
             await require_workspace_permission(grid.workspace_id, session=session, user=user, action="delete")
             force = _q1(data, "force", _bool, default=False)
             ws_id, grid_name = grid.workspace_id, grid.name
@@ -660,6 +697,7 @@ def register(broker: Any, logger: Any) -> None:
             user = _identity(data)
             grid_id = _require_id(data)
             grid = await division_grid_service.get_grid_by_id(session, grid_id)
+            _require_grid_read_access(user, grid)
             await require_workspace_permission(grid.workspace_id, session=session, user=user, action="read")
             return _dump(
                 await division_grid_portable.portable_service.export_portable_document(session, grid_id=grid_id)
@@ -870,6 +908,7 @@ def register(broker: Any, logger: Any) -> None:
             user = _identity(data)
             grid_id = _require_id(data)
             grid = await division_grid_service.get_grid_by_id(session, grid_id)
+            _require_grid_read_access(user, grid)
             await require_workspace_permission(grid.workspace_id, session=session, user=user, action="read")
             versions = await division_grid_service.get_versions(session, grid.workspace_id, grid_id)
             return [_dump(_version_read(version, grid.discipline)) for version in versions]
@@ -882,6 +921,7 @@ def register(broker: Any, logger: Any) -> None:
             user = _identity(data)
             grid_id = _require_id(data)
             grid = await division_grid_service.get_grid_by_id(session, grid_id)
+            _require_grid_read_access(user, grid)
             await require_workspace_permission(grid.workspace_id, session=session, user=user, action="create")
             body = schemas.DivisionGridVersionCreate.model_validate(_payload(data))
             version = await division_grid_service.create_version(session, grid.workspace_id, grid_id, body)
@@ -923,6 +963,7 @@ def register(broker: Any, logger: Any) -> None:
             user = _identity(data)
             version_id = _require_id(data)
             version = await division_grid_service.get_version(session, version_id)
+            _require_version_read_access(user, version)
             await require_workspace_permission(version.grid.workspace_id, session=session, user=user, action="update")
             body = schemas.DivisionGridVersionUpdate.model_validate(_payload(data))
             before = {"label": version.label, "status": version.status}
@@ -955,6 +996,7 @@ def register(broker: Any, logger: Any) -> None:
             user = _identity(data)
             version_id = _require_id(data)
             version = await division_grid_service.get_version(session, version_id)
+            _require_version_read_access(user, version)
             await require_workspace_permission(version.grid.workspace_id, session=session, user=user, action="delete")
             ws_id, label, status = version.grid.workspace_id, version.label, version.status
             await division_grid_service.delete_version(session, version_id)
@@ -980,6 +1022,7 @@ def register(broker: Any, logger: Any) -> None:
             user = _identity(data)
             version_id = _require_id(data)
             version = await division_grid_service.get_version(session, version_id)
+            _require_version_read_access(user, version)
             await require_workspace_permission(version.grid.workspace_id, session=session, user=user, action="update")
             ws_id = version.grid.workspace_id
             version = await division_grid_service.publish_version(session, version_id)
@@ -1092,6 +1135,7 @@ def register(broker: Any, logger: Any) -> None:
             user = _identity(data)
             version_id = _require_id(data)
             version = await division_grid_service.get_version(session, version_id)
+            _require_version_read_access(user, version)
             await require_workspace_permission(version.grid.workspace_id, session=session, user=user, action="create")
             ws_id = version.grid.workspace_id
             cloned = await division_grid_service.clone_version(session, version_id)
@@ -1135,12 +1179,13 @@ def register(broker: Any, logger: Any) -> None:
             source_version_id = _path_int(data, "source_version_id")
             target_version_id = _path_int(data, "target_version_id")
             source_version = await division_grid_service.get_version(session, source_version_id)
+            _require_version_read_access(user, source_version)
             await require_workspace_permission(
                 source_version.grid.workspace_id, session=session, user=user, action="update"
             )
             # The mapping references the target's tier structure — the caller
             # must be able to read the target version (member or system grid),
-            # otherwise mapping rows can point into foreign private grids.
+            # otherwise mapping rows can point into foreign private grids (404).
             target_version = await division_grid_service.get_version(session, target_version_id)
             _require_version_read_access(user, target_version)
             body = schemas.DivisionGridMappingWrite.model_validate(_payload(data))

@@ -4,11 +4,12 @@ Every path that leaves a Challonge-linked encounter confirmed stages the request
 result (``settle.enqueue_challonge_push``); this handler makes the external call, so a failure gets the queue's
 retry rather than being swallowed inside the result write. A request whose ``result_version`` is not the
 encounter's current one was superseded (a reopen or a re-confirmation, which queued its own) and is acked without a
-call, as is one for an encounter not linked to a Challonge match. A transient failure -- transport error or timeout,
-Challonge rate-limiting or failing (the client's 503), a retryable database error -- is requeued; anything else (a
-missing participant mapping, Challonge refusing the request) propagates and lands in
+call, as is one for an encounter not linked to a Challonge match. A transient failure -- Challonge unreachable,
+timing out, rate-limiting or failing (all the client's 503), a retryable database error -- is requeued; anything
+else (a missing participant mapping, Challonge refusing the request) propagates and lands in
 ``tournament_challonge_push.dlq``. Every failed attempt is also journaled in the Challonge sync log by
-``auto_push_on_confirm``.
+``auto_push_on_confirm``. No transaction is open during the HTTP call: ``push_single_result`` commits its reads
+first and journals the outcome in a new one.
 
 ``ponytail:`` the requeue waits a fixed few seconds in the handler; add a delayed retry queue if Challonge outages
 outlast it.
@@ -19,7 +20,6 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-import httpx
 import sqlalchemy as sa
 from faststream.rabbit import Channel, RabbitRouter
 from faststream.rabbit.annotations import RabbitMessage
@@ -40,8 +40,9 @@ __all__ = ("PUSHED", "STALE", "UNLINKED", "process_challonge_push", "task_router
 
 task_router = RabbitRouter()
 
-# Isolated channel: a slow or rate-limited Challonge must not occupy the RPC default-channel QoS slots.
-_PUSH_CHANNEL = Channel(prefetch_count=2)
+# Isolated channel, one delivery at a time: a slow or rate-limited Challonge must not occupy the RPC default-channel
+# QoS slots, nor be hit by this process with several pushes at once.
+_PUSH_CHANNEL = Channel(prefetch_count=1)
 
 #: Seconds a transiently failed delivery is held before its requeue, so a rate-limited Challonge is not hammered.
 _REQUEUE_DELAY_SECONDS = 5
@@ -65,10 +66,10 @@ async def process_challonge_push(data: dict[str, Any]) -> str | None:
                 return UNLINKED
             await sync_service.auto_push_on_confirm(session, event.encounter_id)
             return PUSHED
-    except (DBAPIError, BaseAPIException, httpx.TransportError) as exc:
+    except (DBAPIError, BaseAPIException) as exc:
         if isinstance(exc, DBAPIError) and not is_transient(exc):
             raise
-        # 503 is the client's "Challonge rate-limited or failing"; any other refusal is this request's own.
+        # 503 is the client's "Challonge unreachable, rate-limited or failing"; any other refusal is this request's own.
         if isinstance(exc, BaseAPIException) and exc.status_code != 503:
             raise
         logger.warning(f"Challonge push {event.event_id}: {type(exc).__name__}, requeueing")

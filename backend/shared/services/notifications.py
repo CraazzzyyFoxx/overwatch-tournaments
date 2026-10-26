@@ -1,4 +1,5 @@
-"""The single way to append to a user's notification inbox.
+"""The single way to append to a user's notification inbox: ``notify()``, and
+``notify_users()`` for a fan-out of personal rows of one kind in one go.
 
 Two invariants follow from ``notify()`` never committing:
 
@@ -33,9 +34,9 @@ DM), and ``broadcast()`` enqueues a channel post without writing any row.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from datetime import datetime
-from typing import Any, Literal, get_args
+from typing import Any, Literal, NamedTuple, get_args
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator, model_validator
 from sqlalchemy import select
@@ -69,6 +70,7 @@ __all__ = (
     "EncounterScheduledPayload",
     "MixRoomOpenedPayload",
     "NotificationGroup",
+    "PersonalNotification",
     "RegistrationDecisionPayload",
     "TeamInviteAnsweredPayload",
     "TeamInviteReceivedPayload",
@@ -78,6 +80,7 @@ __all__ = (
     "broadcast",
     "effective_discord_dm",
     "notify",
+    "notify_users",
     "validate_notification_payload",
     "wants_discord_dm",
     "wants_staff_workspace",
@@ -490,6 +493,85 @@ async def notify(
         # Only a personal row has an inbox to signal. A workspace or global
         # announcement is read from the banner query, which has no user-scoped
         # topic and no per-recipient staleness to announce.
+        await _deliver_personal(session, [row], actor_auth_user_id)
+    return row
+
+
+class PersonalNotification(NamedTuple):
+    """One recipient's row for :func:`notify_users`; each field means what ``notify()``'s does."""
+
+    recipient_auth_user_id: int
+    payload: dict[str, Any]
+    dedupe_key: str | None = None
+    source_workspace_id: int | None = None
+
+
+async def notify_users(
+    session: AsyncSession,
+    *,
+    kind: str,
+    notifications: Iterable[PersonalNotification],
+    actor_auth_user_id: int | None = None,
+) -> list[Notification]:
+    """``notify()`` for many personal rows of one kind, in a constant number of statements.
+
+    Same contract per row -- payload validated against the kind, a repeat of
+    (kind, ``dedupe_key``, recipient) writes nothing, never commits -- but one
+    SELECT finds every existing duplicate (repeats inside the batch included),
+    and the rows and their delivery events are written with one flush each,
+    instead of a lookup and two flushes per recipient. Returns the rows written.
+    """
+    items = list(notifications)
+    validated = [validate_notification_payload(kind, item.payload, audience="user") for item in items]
+    keys = sorted({item.dedupe_key for item in items if item.dedupe_key is not None})
+    seen: set[tuple[int, str]] = set()
+    if keys:
+        # Keyed on (kind, dedupe_key) alone -- the index there -- so the lookup is
+        # one pass over the rows these events already wrote, and a fan-out to
+        # thousands of recipients never becomes thousands of bind parameters.
+        existing = await session.execute(
+            select(Notification.recipient_auth_user_id, Notification.dedupe_key).where(
+                Notification.kind == kind,
+                Notification.audience == "user",
+                Notification.dedupe_key.in_(keys),
+            )
+        )
+        seen = {(int(recipient), key) for recipient, key in existing.all()}
+
+    rows: list[Notification] = []
+    for item, snapshot in zip(items, validated, strict=True):
+        if item.dedupe_key is not None:
+            if (item.recipient_auth_user_id, item.dedupe_key) in seen:
+                continue
+            seen.add((item.recipient_auth_user_id, item.dedupe_key))
+        rows.append(
+            Notification(
+                audience="user",
+                recipient_auth_user_id=item.recipient_auth_user_id,
+                source_workspace_id=item.source_workspace_id,
+                kind=kind,
+                dedupe_key=item.dedupe_key,
+                payload_json=snapshot.model_dump(mode="json", exclude_none=True),
+                actor_auth_user_id=actor_auth_user_id,
+            )
+        )
+    if rows:
+        session.add_all(rows)
+        await _deliver_personal(session, rows, actor_auth_user_id)
+    return rows
+
+
+async def _deliver_personal(
+    session: AsyncSession,
+    rows: Sequence[Notification],
+    actor_auth_user_id: int | None,
+) -> None:
+    """Signal each recipient's inbox once, then enqueue one delivery event per row.
+
+    One flush gives the rows their ids (the delivery event carries it), a
+    second writes every outbox row.
+    """
+    for recipient_auth_user_id in dict.fromkeys(row.recipient_auth_user_id for row in rows):
         await emit(
             session,
             scope=Scope.user(recipient_auth_user_id),
@@ -504,14 +586,16 @@ async def notify(
             ),
             actor_user_id=actor_auth_user_id,
         )
-        await session.flush()
+    await session.flush()
+    for row in rows:
         await enqueue_outbox_event(
             session,
             NotificationCreatedEvent(notification_id=row.id),
             exchange=NOTIFICATIONS_EXCHANGE,
             routing_key=NOTIFICATION_CREATED_ROUTING_KEY,
+            flush=False,
         )
-    return row
+    await session.flush()
 
 
 async def _find_duplicate(

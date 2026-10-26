@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import PurePosixPath
 from urllib.parse import urlparse
+from uuid import uuid4
 
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,7 +26,6 @@ from shared.repository import (
     DivisionGridVersionRepository,
     WorkspaceRepository,
 )
-from shared.services.division_grid import cache as division_grid_cache
 from shared.services.ontology import assert_discipline_enabled
 from src import schemas
 from src.services.division_grid.service import DivisionGridService, division_grid_service
@@ -350,7 +350,7 @@ def _selected_source_versions(
         if source_version_id is None or version.id == source_version_id
     ]
     if source_version_id is not None and (len(source_grids) != 1 or len(versions) != 1):
-        raise HTTPException(status_code=400, detail="Selected version does not belong to the selected grid")
+        raise HTTPException(status_code=404, detail="Division grid version not found in the selected grid")
     return versions
 
 
@@ -636,7 +636,6 @@ class MarketplaceService:
         tier_id_map: dict[int, int] = {}
         imported_grids: list[schemas.DivisionGridMarketplaceImportedGrid] = []
         warnings: list[schemas.DivisionGridMarketplaceImportWarning] = []
-        copied_images = 0
         copied_mappings = 0
         created_grids = 0
         created_versions = 0
@@ -676,21 +675,23 @@ class MarketplaceService:
                 status_code=409,
                 detail="Source division grids changed after preflight; review the import again",
             )
-        # Serializes concurrent imports into the same workspace.
-        await self.workspace_repo.lock_by_id(session, target_workspace.id)
         source_grid_ids = [grid.id for grid in source_grids]
-        current_imports = await self._load_current_imported_grids(
-            session,
-            target_workspace_id=target_workspace.id,
-            source_workspace_id=source_workspace.id,
-            source_grid_ids=source_grid_ids,
+        current_imports = (
+            await self._load_current_imported_grids(
+                session,
+                target_workspace_id=target_workspace.id,
+                source_workspace_id=source_workspace.id,
+                source_grid_ids=source_grid_ids,
+            )
+            if mode != "copy"
+            else {}
         )
         unchanged_imports = {
             source_id: grid
             for source_id, grid in current_imports.items()
             if grid.source_fingerprint == source_fingerprints[source_id]
         }
-        if mode != "copy" and len(unchanged_imports) == len(source_grids):
+        if len(unchanged_imports) == len(source_grids):
             return schemas.DivisionGridMarketplaceImportResult(
                 created_grids=0,
                 created_versions=0,
@@ -716,16 +717,70 @@ class MarketplaceService:
                     for source_grid in source_grids
                 ],
             )
-        if mode == "sync":
-            archived_at = datetime.now(UTC)
-            for source_grid in source_grids:
-                previous = current_imports.get(source_grid.id)
-                if previous is not None and previous.source_fingerprint != source_fingerprints[source_grid.id]:
-                    previous.archived_at = archived_at
 
         try:
+            # The icon copies are S3 round trips: all of them run before the workspace lock, none while holding it.
+            # Their keys carry this import's own token, so a failed import never deletes objects another one uses.
+            key_token = uuid4().hex[:8]
+            icons: dict[int, list[DivisionImageCopy]] = {}
             for source_grid in source_grids:
-                if mode != "copy" and source_grid.id in unchanged_imports:
+                if source_grid.id in unchanged_imports:
+                    continue
+                for source_version in source_grid.versions:
+                    if source_version_id is not None and source_version.id != source_version_id:
+                        continue
+                    source_tiers = sorted(source_version.tiers, key=lambda tier: tier.sort_order)
+                    if not include_icons:
+                        icons[source_version.id] = [
+                            DivisionImageCopy(public_url=tier.icon_url, key=None) for tier in source_tiers
+                        ]
+                        continue
+                    copied_icons = await copy_division_icon_assets(
+                        s3,
+                        source_workspace=source_workspace,
+                        target_workspace=target_workspace,
+                        source_tiers=source_tiers,
+                        target_grid_slug=f"{source_grid.slug}-{key_token}",
+                        target_version=source_version.version,
+                    )
+                    copied_keys.extend(
+                        copied.key
+                        for copied in copied_icons
+                        if isinstance(copied, DivisionImageCopy) and copied.key is not None
+                    )
+                    copy_error = next((copied for copied in copied_icons if isinstance(copied, Exception)), None)
+                    if copy_error is not None:
+                        raise copy_error
+                    icons[source_version.id] = [
+                        copied for copied in copied_icons if isinstance(copied, DivisionImageCopy)
+                    ]
+
+            # Serializes concurrent imports into the same workspace. FOR NO KEY UPDATE: rows referencing the
+            # workspace (tournaments, grids) still insert meanwhile.
+            await self.workspace_repo.lock_by_id(session, target_workspace.id)
+            if mode != "copy":
+                locked_imports = await self._load_current_imported_grids(
+                    session,
+                    target_workspace_id=target_workspace.id,
+                    source_workspace_id=source_workspace.id,
+                    source_grid_ids=source_grid_ids,
+                )
+                if {source_id: grid.id for source_id, grid in locked_imports.items()} != {
+                    source_id: grid.id for source_id, grid in current_imports.items()
+                }:
+                    raise HTTPException(
+                        status_code=409,
+                        detail="Another import changed this workspace's imported grids; review the import again",
+                    )
+            if mode == "sync":
+                archived_at = datetime.now(UTC)
+                for source_grid in source_grids:
+                    previous = current_imports.get(source_grid.id)
+                    if previous is not None and previous.source_fingerprint != source_fingerprints[source_grid.id]:
+                        previous.archived_at = archived_at
+
+            for source_grid in source_grids:
+                if source_grid.id in unchanged_imports:
                     reused = unchanged_imports[source_grid.id]
                     reused_versions = {version.version: version for version in reused.versions}
                     for source_version in source_grid.versions:
@@ -733,14 +788,20 @@ class MarketplaceService:
                             continue
                         target_version = reused_versions.get(source_version.version)
                         if target_version is None:
-                            raise RuntimeError("Imported grid provenance does not match its source versions")
+                            raise HTTPException(
+                                status_code=409,
+                                detail="Imported grid provenance does not match its source versions",
+                            )
                         version_id_map[source_version.id] = target_version.id
                         reused_source_version_ids.add(source_version.id)
                         target_tiers = {tier.slug: tier for tier in target_version.tiers}
                         for source_tier in source_version.tiers:
                             target_tier = target_tiers.get(source_tier.slug)
                             if target_tier is None:
-                                raise RuntimeError("Imported grid provenance does not match its source tiers")
+                                raise HTTPException(
+                                    status_code=409,
+                                    detail="Imported grid provenance does not match its source tiers",
+                                )
                             tier_id_map[source_tier.id] = target_tier.id
                     imported_grids.append(
                         schemas.DivisionGridMarketplaceImportedGrid(
@@ -815,35 +876,8 @@ class MarketplaceService:
                     created_versions += 1
 
                     source_tiers = sorted(source_version.tiers, key=lambda tier: tier.sort_order)
-                    copied_icons = (
-                        await copy_division_icon_assets(
-                            s3,
-                            source_workspace=source_workspace,
-                            target_workspace=target_workspace,
-                            source_tiers=source_tiers,
-                            target_grid_slug=target_slug,
-                            target_version=source_version.version,
-                        )
-                        if include_icons
-                        else [
-                            DivisionImageCopy(public_url=source_tier.icon_url, key=None) for source_tier in source_tiers
-                        ]
-                    )
-                    for copied in copied_icons:
-                        if isinstance(copied, DivisionImageCopy) and copied.key is not None:
-                            copied_keys.append(copied.key)
-                            copied_images += 1
-                    copy_error = next(
-                        (copied for copied in copied_icons if isinstance(copied, Exception)),
-                        None,
-                    )
-                    if copy_error is not None:
-                        raise copy_error
-
                     pending_tiers: list[tuple[models.DivisionGridTier, int]] = []
-                    for source_tier, copied in zip(source_tiers, copied_icons, strict=True):
-                        if not isinstance(copied, DivisionImageCopy):
-                            raise RuntimeError("Division icon copy returned an invalid result")
+                    for source_tier, copied in zip(source_tiers, icons[source_version.id], strict=True):
                         if copied.warning is not None:
                             warnings.append(
                                 schemas.DivisionGridMarketplaceImportWarning(
@@ -942,14 +976,6 @@ class MarketplaceService:
                 copied_mappings += 1
             await session.flush()
 
-            for version_id in version_id_map.values():
-                await division_grid_cache.invalidate_grid_version(version_id)
-            for source_mapping in mappings:
-                mapped_source_id = version_id_map.get(source_mapping.source_version_id)
-                mapped_target_id = version_id_map.get(source_mapping.target_version_id)
-                if mapped_source_id is not None and mapped_target_id is not None:
-                    await division_grid_cache.invalidate_mapping(mapped_source_id, mapped_target_id)
-
         except Exception:
             await _cleanup_uploaded_keys(s3, copied_keys)
             raise
@@ -958,7 +984,7 @@ class MarketplaceService:
             created_grids=created_grids,
             created_versions=created_versions,
             created_tiers=created_tiers,
-            copied_images=copied_images,
+            copied_images=len(copied_keys),
             copied_mappings=copied_mappings,
             imported_grids=imported_grids,
             warnings=warnings,

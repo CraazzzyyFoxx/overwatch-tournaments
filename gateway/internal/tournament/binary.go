@@ -16,7 +16,13 @@ import (
 const (
 	// Matches the edge dispatcher's RPC ceiling (old Kong edge allowance).
 	binaryRPCTimeout = 120 * time.Second
-	maxUpload        = 12 << 20 // 12 MiB upload cap before base64 into the RPC body
+	// maxImage is the worker's image cap (MAX_AVATAR_SIZE in
+	// backend/shared/clients/s3/upload.py): it refuses a larger file, so the
+	// gateway never buffers and base64s one.
+	maxImage = 5 << 20
+	// maxUpload bounds the multipart request: one image plus its part headers
+	// and boundaries (the only form field is "file").
+	maxUpload = maxImage + 64<<10
 )
 
 // Binary serves the tournament-service endpoints the generic JSON edge.Dispatcher

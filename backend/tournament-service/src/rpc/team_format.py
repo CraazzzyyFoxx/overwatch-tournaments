@@ -28,7 +28,8 @@ def register(broker: Any, logger: Any) -> None:
             ensure_workspace_permission(
                 user, await auth.get_tournament_workspace_id(session, tournament_id), "tournament", "read"
             )
-            return await _read(session, await tournament_service.get_tournament(session, tournament_id))
+            tournament = await tournament_service.get_team_format_scope(session, tournament_id)
+            return await _read(session, tournament)
 
         return await _run(logger, op)
 

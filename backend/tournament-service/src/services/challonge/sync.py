@@ -16,10 +16,10 @@ probes) stays module-level.
 
 import asyncio
 import re
-import traceback
 from collections.abc import AsyncIterator, Mapping, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 
 import sqlalchemy as sa
 from loguru import logger
@@ -49,14 +49,14 @@ from shared.repository import (
     TournamentRepository,
 )
 from shared.services.challonge_refs import resolve_encounter_challonge
-from shared.services.distributed_lock import distributed_lock
+from shared.services.distributed_lock import DistributedLockUnavailable, distributed_lock
 from shared.services.encounter.events import enqueue_encounter_completed
 from shared.services.encounter.participants import active_teams, place_team, vacate_slot
 from shared.services.encounter.result import apply_result, lock_encounter
 from shared.services.realtime import Resource
 from src import schemas
 from src.clients.challonge import challonge_client
-from src.core import config
+from src.core import config, db
 from src.services.challonge.stage_refs import StageRefs, resolve_stage_refs_from_group
 from src.services.notifications.lifecycle import advance_and_announce, after_encounter_teams_changed
 from src.services.team.service import team_service
@@ -162,6 +162,22 @@ class _UpsertResult:
 
 
 @dataclass(frozen=True)
+class _UpsertPlan:
+    """What ``_plan_upsert`` derived from Challonge for a match that will write. ``encounter`` None means the match
+    creates one; ``after`` is the existing encounter's target state. The local state the write is judged on (seats,
+    position, result) is re-read by ``_apply_upsert`` under the encounter's row lock, never taken from the plan."""
+
+    encounter: models.Encounter | None
+    team_ids: tuple[int | None, int | None]
+    scores: tuple[int, int]
+    status: enums.EncounterStatus
+    refs: StageRefs
+    names: dict[int, str]
+    teams_mapped: bool
+    after: dict | None = None
+
+
+@dataclass(frozen=True)
 class _ChallongeLinkSpec:
     """One Challonge prereq edge, in the encounter layer's terms.
 
@@ -178,6 +194,11 @@ class _ChallongeLinkSpec:
 
 
 SYNC_LOCK_TTL_SECONDS = 5 * 60
+#: How long an admin's import or export waits for a run already holding the lock before answering 409.
+ADMIN_LOCK_WAIT_SECONDS = 3
+#: ``challonge_sync_log`` rows older than this go in the daily purge.
+SYNC_LOG_RETENTION = timedelta(days=30)
+SYNC_LOG_PURGE_BATCH = 5000
 
 # "Active" = matches are in play.
 ACTIVE_TOURNAMENT_STATUSES = (
@@ -208,11 +229,19 @@ async def close_redis() -> None:
 
 
 @asynccontextmanager
-async def _sync_job_lock(tournament_id: int, direction: str) -> AsyncIterator[str]:
+async def _sync_job_lock(tournament_id: int, direction: str, *, wait_seconds: float) -> AsyncIterator[str]:
+    """The per-tournament, per-direction sync lock, renewed while held; contention is a 409."""
     redis = await _get_redis()
     key = f"challonge:sync:{tournament_id}:{direction}"
-    async with distributed_lock(redis, key, ttl_seconds=SYNC_LOCK_TTL_SECONDS) as token:
-        yield token.value
+    try:
+        async with distributed_lock(
+            redis, key, ttl_seconds=SYNC_LOCK_TTL_SECONDS, acquire_timeout_seconds=wait_seconds
+        ) as token:
+            yield token.value
+    except DistributedLockUnavailable as exc:
+        raise HTTPException(
+            status_code=409, detail=f"A Challonge {direction} of this tournament is already running"
+        ) from exc
 
 
 def _encounter_status_from_challonge(state: str) -> enums.EncounterStatus:
@@ -580,7 +609,10 @@ async def _write_import_result(
 
 
 class ChallongeSyncLogService:
-    """The ``challonge_sync_log`` audit trail: every import/export attempt.
+    """The ``challonge_sync_log`` audit trail: every import/export write, conflict and failure.
+
+    An imported match Challonge left unchanged writes no row. Rows older than
+    ``SYNC_LOG_RETENTION`` go in ``purge_sync_log``.
 
     Its own collaborator rather than a method on ``ChallongeSyncService`` because
     ``ChallongeMappingService`` writes to the same trail when it auto-maps
@@ -630,6 +662,26 @@ class ChallongeSyncLogService:
         self, session: AsyncSession, tournament_id: int, limit: int = 50
     ) -> list[models.ChallongeSyncLog]:
         return list(await self.sync_log_repo.list_by_tournament(session, tournament_id, limit=limit))
+
+
+async def purge_sync_log(session_factory: async_sessionmaker[AsyncSession] = db.async_session_maker) -> int:
+    """Delete sync-log rows older than ``SYNC_LOG_RETENTION``; returns how many went.
+
+    Daily scheduler job. ``SYNC_LOG_PURGE_BATCH`` rows per transaction so no single delete holds locks or bloats WAL
+    for long.
+    """
+    cutoff = datetime.now(UTC) - SYNC_LOG_RETENTION
+    deleted = 0
+    while True:
+        async with session_factory() as session:
+            count = await sync_log_service.sync_log_repo.delete_older_than(session, cutoff, limit=SYNC_LOG_PURGE_BATCH)
+            await session.commit()
+        deleted += count
+        if count < SYNC_LOG_PURGE_BATCH:
+            break
+    if deleted:
+        logger.info("Purged {} Challonge sync-log rows", deleted)
+    return deleted
 
 
 sync_log_service = ChallongeSyncLogService()
@@ -1568,6 +1620,26 @@ class ChallongeSyncService:
         match_lookup: _MatchLookup,
         team_lookup: _TeamLookup,
     ) -> _UpsertResult:
+        """One match, read then written. ``import_tournament`` runs the two halves itself, so a match that changed
+        nothing never opens a savepoint."""
+        plan = await self._plan_upsert(
+            session, tournament, source, match, match_lookup=match_lookup, team_lookup=team_lookup
+        )
+        if isinstance(plan, _UpsertResult):
+            return plan
+        return await self._apply_upsert(session, tournament, source, match, plan, match_lookup=match_lookup)
+
+    async def _plan_upsert(
+        self,
+        session: AsyncSession,
+        tournament: models.Tournament,
+        source: _ImportSource,
+        match: schemas.ChallongeMatch,
+        *,
+        match_lookup: _MatchLookup,
+        team_lookup: _TeamLookup,
+    ) -> _UpsertResult | _UpsertPlan:
+        """Reads only: an ``error`` or ``skipped`` result, or the plan of a match that will write."""
         encounter = match_lookup.get(source, match.id)
         stage = _resolve_group_for_match(tournament, source, match)
         home_team_id = team_lookup.resolve(source, None, match.player1_id)
@@ -1619,6 +1691,75 @@ class ChallongeSyncService:
             for team_id, team in ((home_team_id, home_team), (away_team_id, away_team))
             if team_id is not None and team is not None
         }
+        teams_mapped = not missing_team_mapping and not missing_local_team
+        if encounter is None:
+            return _UpsertPlan(
+                encounter=None,
+                team_ids=(home_team_id, away_team_id),
+                scores=(home_score, away_score),
+                status=status,
+                refs=refs,
+                names=names,
+                teams_mapped=teams_mapped,
+            )
+
+        position = await self.bracket_encounter_repo.get_position(session, encounter.id)
+        seats = await active_teams(session, encounter.id)
+        after = {
+            "id": encounter.id,
+            "team_ids": [home_team_id, away_team_id],
+            "scores": [float(home_score), float(away_score)],
+            "round": match.round,
+            "status": status.value,
+            "stage_id": refs.stage_id,
+            "stage_item_id": refs.stage_item_id,
+        }
+        name = build_encounter_name([names.get(home_team_id), names.get(away_team_id)])
+        seat_teams = {seat.slot: seat.team_id for seat in seats}
+        # Everything the update would write is already here -- seats, running
+        # scores, status, bracket slot, match mapping: no savepoint, no row lock,
+        # no flush, no log row, no recompute. A held result still goes on to
+        # report its conflict.
+        if (
+            encounter.result_status not in _HELD_RESULT_STATUSES
+            and encounter.status == status
+            and position is not None
+            and (position.round, position.stage_id, position.stage_item_id)
+            == (match.round, refs.stage_id, refs.stage_item_id)
+            and [seat.score for seat in seats] == after["scores"][: len(seats)]
+            and (
+                not teams_mapped
+                or ([seat_teams.get(1), seat_teams.get(2)] == after["team_ids"] and encounter.name == name)
+            )
+            and (source.source_id is None or (source.source_id, match.id) in match_lookup.mapped_keys)
+        ):
+            return _UpsertResult(action="skipped", encounter=encounter)
+        return _UpsertPlan(
+            encounter=encounter,
+            team_ids=(home_team_id, away_team_id),
+            scores=(home_score, away_score),
+            status=status,
+            refs=refs,
+            names=names,
+            teams_mapped=teams_mapped,
+            after=after,
+        )
+
+    async def _apply_upsert(
+        self,
+        session: AsyncSession,
+        tournament: models.Tournament,
+        source: _ImportSource,
+        match: schemas.ChallongeMatch,
+        plan: _UpsertPlan,
+        *,
+        match_lookup: _MatchLookup,
+    ) -> _UpsertResult:
+        """The writes of one planned match: create its encounter, or update the existing one under its row lock."""
+        encounter = plan.encounter
+        home_team_id, away_team_id = plan.team_ids
+        home_score, away_score = plan.scores
+        status, refs, names = plan.status, plan.refs, plan.names
         if encounter is None:
             initial_status = enums.EncounterStatus.OPEN if status == enums.EncounterStatus.COMPLETED else status
             encounter = models.Encounter(
@@ -1656,23 +1797,35 @@ class ChallongeSyncService:
                 await _write_import_result(session, encounter, [home_score, away_score])
             return _UpsertResult(action="created", encounter=encounter, newly_completed=newly_completed)
 
+        after, teams_mapped = plan.after, plan.teams_mapped
+        name = build_encounter_name([names.get(home_team_id), names.get(away_team_id)])
+
         # The background sync races captain submits: the row is ours before any
-        # decision is read off it or any seat or standing is written.
+        # decision is read off it or any seat or standing is written. The plan's
+        # reads only decided that something changed; a result a captain committed
+        # since then is judged here, on the encounter (``lock_encounter`` re-reads
+        # it), seats and position read again under the lock -- never on the plan's.
         await lock_encounter(session, encounter.id)
-        position = await self.bracket_encounter_repo.get_position(session, encounter.id)
-        seats = await active_teams(session, encounter.id)
+        position = (
+            await session.execute(
+                sa.select(models.BracketEncounter)
+                .where(models.BracketEncounter.encounter_id == encounter.id)
+                .execution_options(populate_existing=True)
+            )
+        ).scalar_one_or_none()
+        seats = list(
+            (
+                await session.execute(
+                    sa.select(models.EncounterTeam)
+                    .where(models.EncounterTeam.encounter_id == encounter.id, models.EncounterTeam.active.is_(True))
+                    .order_by(models.EncounterTeam.slot, models.EncounterTeam.id)
+                    .execution_options(populate_existing=True)
+                )
+            ).scalars()
+        )
         was_completed = encounter.status == enums.EncounterStatus.COMPLETED
         has_local_decision = _has_local_decision(encounter)
         before = _encounter_sync_snapshot(encounter, seats, position)
-        after = {
-            "id": encounter.id,
-            "team_ids": [home_team_id, away_team_id],
-            "scores": [float(home_score), float(away_score)],
-            "round": match.round,
-            "status": status.value,
-            "stage_id": refs.stage_id,
-            "stage_item_id": refs.stage_item_id,
-        }
         if has_local_decision:
             local_score = tuple(seat.score for seat in seats)
             remote_score = (float(home_score), float(away_score))
@@ -1703,9 +1856,9 @@ class ChallongeSyncService:
                 )
 
         teams_changed = False
-        if not missing_team_mapping and not missing_local_team:
+        if teams_mapped:
             teams_changed = await _reseat(session, encounter, [home_team_id, away_team_id], names)
-            encounter.name = build_encounter_name([names.get(home_team_id), names.get(away_team_id)])
+            encounter.name = name
         if position is None:
             await self.bracket_encounter_repo.create(
                 session,
@@ -1848,9 +2001,15 @@ class ChallongeSyncService:
                     await _write_import_result(session, encounter, [seat.score for seat in seats])
                 await advance_and_announce(session, encounter, channel=False)
 
-    async def import_tournament(self, session: AsyncSession, tournament_id: int, *, dry_run: bool = False) -> dict:
-        """Full import from Challonge: upsert encounters with scores and status."""
-        async with _sync_job_lock(tournament_id, "import") as job_id:
+    async def import_tournament(
+        self, session: AsyncSession, tournament_id: int, *, dry_run: bool = False, lock_wait_seconds: float = 30.0
+    ) -> dict:
+        """Full import from Challonge: upsert encounters with scores and status.
+
+        ``lock_wait_seconds`` is how long to wait for an import of this tournament already running before the 409;
+        an admin's request passes ``ADMIN_LOCK_WAIT_SECONDS``, the auto-sync keeps the default.
+        """
+        async with _sync_job_lock(tournament_id, "import", wait_seconds=lock_wait_seconds) as job_id:
             tournament = await self.tournament_repo.get(
                 session,
                 tournament_id,
@@ -1861,11 +2020,11 @@ class ChallongeSyncService:
                 ],
             )
             if not tournament:
-                return {"job_id": job_id, "error": "Tournament not found"}
+                raise HTTPException(status_code=404, detail="Tournament not found")
 
             sources = await self.mapping.discover_sources(session, tournament)
             if not sources:
-                return {"job_id": job_id, "error": "Tournament has no Challonge source"}
+                raise HTTPException(status_code=422, detail="Tournament has no Challonge source")
 
             stats = {
                 "job_id": job_id,
@@ -1911,7 +2070,7 @@ class ChallongeSyncService:
                             "failed",
                             source_id=source.source_id,
                             operation="fetch_snapshot",
-                            error_message=str(fetch_result),
+                            error_message=f"{type(fetch_result).__name__}: {fetch_result}",
                         )
                     continue
                 try:
@@ -1925,9 +2084,8 @@ class ChallongeSyncService:
                         stats["groups_created"] += structure_stats["groups_created"]
                         stats["stages_created"] += structure_stats["stages_created"]
                     fetches.append((source, fetch_result))
-                except Exception:
+                except Exception as exc:
                     stats["errors"] += 1
-                    tb = traceback.format_exc()
                     logger.exception(
                         "Stage structure failed for challonge_id={} tournament={}",
                         source.challonge_id,
@@ -1944,7 +2102,7 @@ class ChallongeSyncService:
                             "failed",
                             source_id=source.source_id,
                             operation="apply_structure",
-                            error_message=tb,
+                            error_message=f"{type(exc).__name__}: {exc}",
                         )
 
             source_ids = [source.source_id for source in sources if source.source_id is not None]
@@ -1978,16 +2136,17 @@ class ChallongeSyncService:
                         continue
 
                     try:
-                        upsert_result = await self._upsert_encounter_from_challonge(
-                            session,
-                            tournament,
-                            source,
-                            cm,
-                            match_lookup=match_lookup,
-                            team_lookup=team_lookup,
+                        # Reads first, outside any savepoint: an unchanged match (every match of a quiet tick)
+                        # costs no SAVEPOINT/RELEASE round trips, and a match that cannot be mapped writes only
+                        # its failure row.
+                        plan = await self._plan_upsert(
+                            session, tournament, source, cm, match_lookup=match_lookup, team_lookup=team_lookup
                         )
-                        if upsert_result.action == "error":
-                            stats["errors"] += 1
+                        if isinstance(plan, _UpsertResult) and plan.action == "skipped":
+                            stats["skipped"] += 1
+                            stats["matches_skipped"] += 1
+                            continue
+                        if isinstance(plan, _UpsertResult):
                             await self.sync_log._log_sync(
                                 session,
                                 tournament_id,
@@ -1999,85 +2158,85 @@ class ChallongeSyncService:
                                 source_id=source.source_id,
                                 operation="apply_import",
                                 payload=(
-                                    {"missing_participant_ids": list(upsert_result.missing_participant_ids)}
-                                    if upsert_result.missing_participant_ids
+                                    {"missing_participant_ids": list(plan.missing_participant_ids)}
+                                    if plan.missing_participant_ids
                                     else None
                                 ),
-                                error_message=upsert_result.error,
+                                error_message=plan.error,
                             )
+                            stats["errors"] += 1
                             continue
-                        if upsert_result.action == "conflict":
-                            stats["stage_inputs_created"] += await self.structure._ensure_encounter_stage_inputs(
+                        # One savepoint per match that writes: a row that fails takes back its own writes, never
+                        # the matches around it.
+                        async with session.begin_nested():
+                            upsert_result = await self._apply_upsert(
+                                session, tournament, source, cm, plan, match_lookup=match_lookup
+                            )
+                            stage_inputs_created = await self.structure._ensure_encounter_stage_inputs(
                                 session,
                                 tournament,
                                 upsert_result.encounter,
                             )
-                            stats["conflicts"] += 1
-                            stats["matches_skipped"] += 1
-                            await self.sync_log._log_sync(
-                                session,
-                                tournament_id,
-                                "import",
-                                "match",
-                                upsert_result.encounter.id if upsert_result.encounter else None,
-                                cm.id,
-                                "conflict",
-                                source_id=source.source_id,
-                                operation="apply_import",
-                                conflict_type=upsert_result.conflict_type,
-                                before=upsert_result.before,
-                                after=upsert_result.after,
-                            )
-                            continue
-                        if upsert_result.action == "skipped":
-                            stats["skipped"] += 1
-                            stats["matches_skipped"] += 1
-                            continue
-
-                        stats["matches_synced"] += 1
-                        stats["stage_inputs_created"] += await self.structure._ensure_encounter_stage_inputs(
-                            session,
-                            tournament,
-                            upsert_result.encounter,
-                        )
-                        if upsert_result.action == "created":
-                            stats["created"] += 1
-                            stats["matches_created"] += 1
-                        else:
-                            stats["updated"] += 1
-                            stats["matches_updated"] += 1
-                        if upsert_result.newly_completed and upsert_result.encounter is not None:
-                            await enqueue_encounter_completed(
-                                session, upsert_result.encounter, source_service="tournament-service"
-                            )
-
-                        await self.sync_log._log_sync(
-                            session,
-                            tournament_id,
-                            "import",
-                            "match",
-                            upsert_result.encounter.id if upsert_result.encounter else None,
-                            cm.id,
-                            "success",
-                            source_id=source.source_id,
-                            operation="apply_import",
-                            payload={
-                                "action": upsert_result.action,
-                                "scores_csv": cm.scores_csv,
-                                "state": cm.state,
-                                "challonge_tournament_id": source.challonge_id,
-                            },
-                            before=upsert_result.before,
-                            after=upsert_result.after,
-                        )
-                    except Exception:
+                            if upsert_result.action == "conflict":
+                                await self.sync_log._log_sync(
+                                    session,
+                                    tournament_id,
+                                    "import",
+                                    "match",
+                                    upsert_result.encounter.id if upsert_result.encounter else None,
+                                    cm.id,
+                                    "conflict",
+                                    source_id=source.source_id,
+                                    operation="apply_import",
+                                    conflict_type=upsert_result.conflict_type,
+                                    before=upsert_result.before,
+                                    after=upsert_result.after,
+                                )
+                                stats["conflicts"] += 1
+                                stats["matches_skipped"] += 1
+                            else:
+                                if upsert_result.newly_completed and upsert_result.encounter is not None:
+                                    await enqueue_encounter_completed(
+                                        session, upsert_result.encounter, source_service="tournament-service"
+                                    )
+                                await self.sync_log._log_sync(
+                                    session,
+                                    tournament_id,
+                                    "import",
+                                    "match",
+                                    upsert_result.encounter.id if upsert_result.encounter else None,
+                                    cm.id,
+                                    "success",
+                                    source_id=source.source_id,
+                                    operation="apply_import",
+                                    payload={
+                                        "action": upsert_result.action,
+                                        "scores_csv": cm.scores_csv,
+                                        "state": cm.state,
+                                        "challonge_tournament_id": source.challonge_id,
+                                    },
+                                    before=upsert_result.before,
+                                    after=upsert_result.after,
+                                )
+                                # Only a real write: it is what requests the recompute and the invalidation below.
+                                stats["matches_synced"] += 1
+                                stats[upsert_result.action] += 1
+                                stats[f"matches_{upsert_result.action}"] += 1
+                            stats["stage_inputs_created"] += stage_inputs_created
+                    except Exception as exc:
                         stats["errors"] += 1
-                        tb = traceback.format_exc()
                         logger.exception(
                             "Match upsert failed challonge_match_id={} tournament={}",
                             cm.id,
                             tournament_id,
                         )
+                        # The savepoint took this match's writes back: its encounter is gone or expired, so
+                        # the link pass below must not reach it, and whatever else the match had touched
+                        # (a stage item's inputs) reloads before the next match reads it.
+                        match_lookup.by_source_key.pop((_source_lookup_key(source), cm.id), None)
+                        match_lookup.by_challonge_id.pop(cm.id, None)
+                        for expired in [obj for obj in session.identity_map.values() if sa_inspect(obj).expired]:
+                            await session.refresh(expired)
                         await self.sync_log._log_sync(
                             session,
                             tournament_id,
@@ -2088,7 +2247,7 @@ class ChallongeSyncService:
                             "failed",
                             source_id=source.source_id,
                             operation="apply_import",
-                            error_message=tb,
+                            error_message=f"{type(exc).__name__}: {exc}",
                         )
 
             if not dry_run:
@@ -2201,8 +2360,8 @@ class ChallongeSyncService:
         return None
 
     async def export_tournament(self, session: AsyncSession, tournament_id: int) -> dict:
-        """Full export: push all completed encounter results to Challonge."""
-        async with _sync_job_lock(tournament_id, "export") as job_id:
+        """Full export: push all completed encounter results to Challonge. Admin-only, so the short lock wait."""
+        async with _sync_job_lock(tournament_id, "export", wait_seconds=ADMIN_LOCK_WAIT_SECONDS) as job_id:
             tournament = await self.tournament_repo.get(
                 session,
                 tournament_id,
@@ -2211,11 +2370,11 @@ class ChallongeSyncService:
                 ],
             )
             if not tournament:
-                return {"job_id": job_id, "error": "Tournament not found"}
+                raise HTTPException(status_code=404, detail="Tournament not found")
 
             sources = await self.mapping.discover_sources(session, tournament)
             if not sources:
-                return {"job_id": job_id, "error": "Tournament has no Challonge source"}
+                raise HTTPException(status_code=422, detail="Tournament has no Challonge source")
 
             stats = {"job_id": job_id, "matches_pushed": 0, "errors": 0, "skipped": 0}
             source_ids = [source.source_id for source in sources if source.source_id is not None]
@@ -2287,7 +2446,7 @@ class ChallongeSyncService:
                         failed_mapping.challonge_match_id if failed_mapping is not None else None,
                         "failed",
                         operation="push_result",
-                        error_message=str(e),
+                        error_message=f"{type(e).__name__}: {e}",
                     )
 
             await session.commit()
@@ -2413,7 +2572,7 @@ class ChallongeSyncService:
                 encounter.id,
                 challonge_match_id,
                 "failed",
-                error_message=str(e),
+                error_message=f"{type(e).__name__}: {e}",
             )
             await session.commit()
             raise
@@ -2484,6 +2643,7 @@ sync_service = ChallongeSyncService()
 
 __all__ = (
     "ACTIVE_TOURNAMENT_STATUSES",
+    "ADMIN_LOCK_WAIT_SECONDS",
     "SYNC_LOCK_TTL_SECONDS",
     "ChallongeMappingService",
     "ChallongeStructureService",
@@ -2491,6 +2651,7 @@ __all__ = (
     "ChallongeSyncService",
     "close_redis",
     "mapping_service",
+    "purge_sync_log",
     "structure_service",
     "sync_log_service",
     "sync_service",

@@ -3,9 +3,11 @@ from __future__ import annotations
 import asyncio
 import uuid
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass
 from typing import Any
+
+from loguru import logger
 
 
 class DistributedLockUnavailable(RuntimeError):
@@ -70,6 +72,26 @@ async def renew_distributed_lock(redis: Any, token: DistributedLockToken, *, ttl
     return bool(renewed)
 
 
+async def _renew_while_held(redis: Any, token: DistributedLockToken, *, ttl_seconds: int) -> None:
+    """Extend the lock every third of its TTL until cancelled, or until it was lost to an expiry.
+
+    A failed renewal (Redis unreachable for a moment) is logged and retried on the next tick, a third of the TTL
+    later -- still before the key expires, so one failure in a row is survived. Two in a row let it lapse; the next
+    renewal then finds the key gone, logs the loss and stops. Ending at the first failure instead would let the lock
+    lapse under a body that is still running.
+    """
+    while True:
+        await asyncio.sleep(ttl_seconds / 3)
+        try:
+            renewed = await renew_distributed_lock(redis, token, ttl_seconds=ttl_seconds)
+        except Exception as exc:  # noqa: BLE001 - any client error; the next tick retries
+            logger.warning("Renewing distributed lock {} failed, retrying next tick: {!r}", token.key, exc)
+            continue
+        if not renewed:
+            logger.warning("Distributed lock {} was lost (expired or taken) while held", token.key)
+            return
+
+
 @asynccontextmanager
 async def distributed_lock(
     redis: Any,
@@ -79,6 +101,10 @@ async def distributed_lock(
     acquire_timeout_seconds: float = 30.0,
     retry_interval_seconds: float = 0.1,
 ) -> AsyncIterator[DistributedLockToken]:
+    """Hold ``key`` for the body, renewed in the background so a body longer than ``ttl_seconds`` keeps it.
+
+    The TTL only bounds how long a crashed holder blocks the next one.
+    """
     token = await acquire_distributed_lock(
         redis,
         key,
@@ -86,7 +112,15 @@ async def distributed_lock(
         acquire_timeout_seconds=acquire_timeout_seconds,
         retry_interval_seconds=retry_interval_seconds,
     )
+    renewer = asyncio.create_task(_renew_while_held(redis, token, ttl_seconds=ttl_seconds))
     try:
         yield token
     finally:
-        await release_distributed_lock(redis, token)
+        renewer.cancel()
+        try:
+            # Awaited so a renewer that died of anything unexpected surfaces here instead of as an unretrieved task
+            # exception at garbage collection.
+            with suppress(asyncio.CancelledError):
+                await renewer
+        finally:
+            await release_distributed_lock(redis, token)

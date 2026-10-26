@@ -126,7 +126,8 @@ class UpdateEncounterGuards(IsolatedAsyncioTestCase):
             await enc_service.encounter_service.update_encounter(session, 10, schemas.EncounterUpdate(name="renamed"))
 
         self.assertEqual("renamed", encounter.name)
-        recalc.assert_awaited_once()
+        # A rename moves nothing standings are computed from.
+        recalc.assert_not_awaited()
 
     async def test_rejects_reopening_through_the_field_editor(self) -> None:
         """Flipping a completed encounter back to ``open`` here wrote ``status``

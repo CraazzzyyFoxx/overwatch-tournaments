@@ -77,3 +77,22 @@ func TestTournamentImageUploadIsShedWhenTheMemoryBudgetIsSpent(t *testing.T) {
 		t.Fatalf("code=%d retry-after=%q relayed=%v", w.Code, w.Header().Get("Retry-After"), c.body != nil)
 	}
 }
+
+// The gateway cap is the worker's (MAX_AVATAR_SIZE, 5 MiB): a file at the cap is
+// relayed, a body past it is refused before anything is base64'd into an RPC.
+// It used to admit 12 MiB, which the worker then decoded only to reject.
+func TestImageUploadCapIsTheWorkerCap(t *testing.T) {
+	c := &capturingCaller{}
+	w := httptest.NewRecorder()
+	imageBinary(c).TournamentImageUpload(w, imageUploadRequest(t, strings.Repeat("i", 5<<20)))
+	if w.Code != http.StatusOK || c.body == nil {
+		t.Fatalf("a file at the worker cap was not relayed: code=%d body=%.200s", w.Code, w.Body)
+	}
+
+	c = &capturingCaller{}
+	w = httptest.NewRecorder()
+	imageBinary(c).TournamentImageUpload(w, imageUploadRequest(t, strings.Repeat("i", maxUpload)))
+	if w.Code != http.StatusBadRequest || c.body != nil {
+		t.Fatalf("an over-cap upload was not refused: code=%d relayed=%v", w.Code, c.body != nil)
+	}
+}

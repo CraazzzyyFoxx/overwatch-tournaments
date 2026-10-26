@@ -199,10 +199,10 @@ class AdminTournamentService:
         ``tournament.detail`` rather than ``tournament.structure``: an image swap
         changes nothing a bracket or standings recompute would read and adds no
         page section, so neither the cross-service outbox row nor a client route
-        refresh is warranted — but the cashews key behind ``flows.get_read``
-        (``tournaments/{id}:{entities}``) still has to go, or the public page
-        keeps serving the previous banner for the whole TTL and the organizer
-        sees the upload "not work".
+        refresh is warranted — but the ``DETAIL`` generation behind
+        ``flows.get_read`` still has to move, or the public page keeps serving
+        the previous banner for the whole TTL and the organizer sees the upload
+        "not work".
         """
         tournament = await self.tournament_repo.get(session, tournament_id)
 
@@ -275,9 +275,7 @@ class AdminTournamentService:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Slug already in use")
             payload["slug"] = requested_slug
         else:
-            payload["slug"] = await generate_unique_tournament_slug(
-                session, data.name, tournament_repo=self.tournament_repo
-            )
+            payload["slug"] = await generate_unique_tournament_slug(session, data.name)
 
         payload["division_grid_version_id"] = await self._resolve_division_grid_version_id(
             session,
@@ -293,6 +291,14 @@ class AdminTournamentService:
         await division_grid_cache.invalidate_tournament(tournament.id)
         await division_grid_cache.invalidate_workspace(tournament.workspace_id)
         return await self.get_tournament(session, tournament.id)
+
+    async def get_team_format_scope(self, session: AsyncSession, tournament_id: int) -> sa.Row:
+        """The three columns a team-format read uses, not the admin tournament load
+        (its stage tree and grid are five more statements this never reads)."""
+        tournament = await self.tournament_repo.get_format_scope_row(session, tournament_id)
+        if tournament is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tournament not found")
+        return tournament
 
     async def replace_team_format(
         self, session: AsyncSession, tournament_id: int, body: TeamFormatWrite
@@ -311,6 +317,25 @@ class AdminTournamentService:
     async def update_tournament(
         self, session: AsyncSession, tournament_id: int, data: schemas.TournamentUpdate
     ) -> models.Tournament:
+        """Apply an admin edit.
+
+        Linking a Challonge bracket asks Challonge first (up to 15 s), and that
+        wait must not hold a pooled server connection idle in a transaction. So
+        the caller's read-only transaction (its permission lookup) ends before
+        the call: nothing has been flushed yet, so a rollback loses nothing but
+        the pending rows it staged -- the CRUD engine's audit row -- which are
+        put back afterwards. A caller must not have flushed writes before this.
+        """
+        update_data = data.model_dump(exclude_unset=True)
+        challonge_tournament = None
+        if update_data.get("challonge_slug"):
+            pending = list(session.new)
+            await session.rollback()
+            challonge_tournament = await challonge_client.fetch_tournament(
+                _normalize_challonge_slug(update_data["challonge_slug"])
+            )
+            session.add_all(pending)
+
         tournament = await self.tournament_repo.get(
             session,
             tournament_id,
@@ -324,7 +349,6 @@ class AdminTournamentService:
         if not tournament:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tournament not found")
 
-        update_data = data.model_dump(exclude_unset=True)
         if "team_formation" in update_data and update_data["team_formation"] != tournament.team_formation:
             await assert_no_active_draft_session(session, tournament_id)
 
@@ -336,10 +360,8 @@ class AdminTournamentService:
             await assert_no_active_draft_session(session, tournament_id, change="the draft format")
 
         if "challonge_slug" in update_data:
-            raw_slug = update_data.pop("challonge_slug")
-            if raw_slug:
-                challonge_slug = _normalize_challonge_slug(raw_slug)
-                challonge_tournament = await challonge_client.fetch_tournament(challonge_slug)
+            update_data.pop("challonge_slug")
+            if challonge_tournament is not None:
                 await self._link_tournament_challonge_source(
                     session,
                     tournament,

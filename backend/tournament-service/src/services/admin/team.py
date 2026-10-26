@@ -1,5 +1,6 @@
 """Admin service layer for team and player CRUD operations"""
 
+import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -11,7 +12,6 @@ from shared.repository import (
     PlayerRepository,
     StandingRepository,
     TeamRepository,
-    TournamentRepository,
     UserRepository,
     resolve_workspace_member_id,
 )
@@ -19,6 +19,19 @@ from shared.services.ontology import resolve_role_ref
 from shared.services.stats_owner_delete import capture_owner_delete, stage_owner_delete
 from src import schemas
 from src.services.tournament.events import STRUCTURE_RESOURCES, publish_tournament_invalidation
+
+
+async def _tournament_scope(session: AsyncSession, tournament_id: int) -> sa.Row | None:
+    """The tournament's ``(workspace_id, discipline)``, or ``None`` when it does not exist.
+
+    Two columns, not ``tournament_repo.get``: a tournament row loads its grid
+    version (and that its tiers) and phase schedule eagerly, four statements
+    for what these roster writes read two columns of.
+    """
+    query = sa.select(models.Tournament.workspace_id, models.Tournament.discipline).where(
+        models.Tournament.id == tournament_id
+    )
+    return (await session.execute(query)).first()
 
 
 def _prepare_player_create_data(data: schemas.PlayerCreate) -> dict:
@@ -94,13 +107,11 @@ class AdminTeamService:
         *,
         team_repo: TeamRepository = TeamRepository(),
         player_repo: PlayerRepository = PlayerRepository(),
-        tournament_repo: TournamentRepository = TournamentRepository(),
         user_repo: UserRepository = UserRepository(),
         standing_repo: StandingRepository = StandingRepository(),
     ) -> None:
         self.team_repo = team_repo
         self.player_repo = player_repo
-        self.tournament_repo = tournament_repo
         self.user_repo = user_repo
         self.standing_repo = standing_repo
 
@@ -200,7 +211,7 @@ class AdminTeamService:
         return player
 
     async def create_team(self, session: AsyncSession, data: schemas.TeamCreate) -> models.Team:
-        tournament = await self.tournament_repo.get(session, data.tournament_id)
+        tournament = await _tournament_scope(session, data.tournament_id)
 
         if not tournament:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tournament not found")
@@ -274,7 +285,7 @@ class AdminTeamService:
 
         tournament_id = team.tournament_id
         evidence = await capture_owner_delete(session, team_id=team_id)
-        tournament = await self.tournament_repo.get(session, tournament_id)
+        tournament = await _tournament_scope(session, tournament_id)
         await self.standing_repo.delete_for_team(session, team_id)
         await self.team_repo.delete(session, team)
         await self._publish_structure_changed(session, tournament_id)
@@ -325,7 +336,7 @@ class AdminTeamService:
             tournament_id=team.tournament_id,
             player_id=player_data.pop("user_id"),
         )
-        tournament = await self.tournament_repo.get(session, team.tournament_id)
+        tournament = await _tournament_scope(session, team.tournament_id)
         leaf = await resolve_role_ref(
             session, discipline=tournament.discipline, workspace_id=tournament.workspace_id, ref=data.role
         )
@@ -357,7 +368,7 @@ class AdminTeamService:
 
         update_data = _prepare_player_update_data(player, data)
         if "role" in data.model_fields_set:
-            tournament = await self.tournament_repo.get(session, player.tournament_id)
+            tournament = await _tournament_scope(session, player.tournament_id)
             leaf = await resolve_role_ref(
                 session, discipline=tournament.discipline, workspace_id=tournament.workspace_id, ref=data.role
             )

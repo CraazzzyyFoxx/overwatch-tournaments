@@ -233,6 +233,7 @@ class GridOwnerServiceTests(IsolatedAsyncioTestCase):
         ow = await self.grid("overwatch")
         lol = await self.grid("lol")
         await self.grids.activate_version(self.session, workspace=self.workspace, version_id=ow.versions[0].id)
+        await self.session.commit()  # the activation request's commit runs its cache invalidation
         tournament = models.Tournament(
             workspace_id=self.workspace.id, name="Historical LoL", slug=self.tag, discipline="lol"
         )
@@ -242,6 +243,7 @@ class GridOwnerServiceTests(IsolatedAsyncioTestCase):
         runtime = await RegistrationCommonService().get_tournament_grid(self.session, tournament.id)
         self.assertEqual(runtime.tiers[0].slug, "challenger")
         await self.grids.activate_version(self.session, workspace=self.workspace, version_id=lol.versions[0].id)
+        await self.session.commit()
         runtime = await RegistrationCommonService().get_tournament_grid(self.session, tournament.id)
         self.assertEqual(runtime.resolve_division_from_native_rank(456).number, 9)
 
@@ -361,9 +363,11 @@ class GridOwnerServiceTests(IsolatedAsyncioTestCase):
         for code in ("overwatch", "lol"):
             await get_workspace_division_grid_version_id(self.session, self.workspace.id, code)
         await self.grids.activate_version(self.session, workspace=self.workspace, version_id=ow_version.id)
+        await self.session.commit()  # the activation request's commit runs its cache invalidation
         for code in ("overwatch", "lol"):
             await get_workspace_division_grid_version_id(self.session, self.workspace.id, code)
         await self.grids.activate_version(self.session, workspace=self.workspace, version_id=lol_version.id)
+        await self.session.commit()
         new_ow = await self.grids.clone_version(self.session, ow_version.id)
         await self.grids.publish_version(self.session, new_ow.id)
         await self.grids.upsert_mapping(
@@ -385,6 +389,7 @@ class GridOwnerServiceTests(IsolatedAsyncioTestCase):
         for expected_ow in (ow_version, new_ow):
             if expected_ow is new_ow:
                 await self.grids.activate_version(self.session, workspace=self.workspace, version_id=new_ow.id)
+                await self.session.commit()
             expected = {events[0].id: expected_ow.id, events[1].id: lol_version.id, pin.id: ow_version.id}
             for _ in range(2):
                 self.assertEqual(await get_effective_division_grid_version_ids(self.session, expected), expected)
@@ -494,7 +499,7 @@ class GridOwnerServiceTests(IsolatedAsyncioTestCase):
         for version_id, discipline, status in (
             (ow.versions[0].id, "lol", 422),
             (draft.id, "overwatch", 409),
-            (foreign.versions[0].id, "overwatch", 400),
+            (foreign.versions[0].id, "overwatch", 404),
         ):
             with self.subTest(status=status), self.assertRaises(BaseAPIException) as caught:
                 await self.grids.create_grid(

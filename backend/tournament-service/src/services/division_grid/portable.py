@@ -19,7 +19,7 @@ from shared.repository import (
 from shared.services.ontology import assert_discipline_enabled
 from src import schemas
 from src.services.division_grid.marketplace import MarketplaceService, marketplace_service
-from src.services.division_grid.service import DivisionGridService, division_grid_service
+from src.services.division_grid.service import DivisionGridService, _validate_version_payload, division_grid_service
 
 __all__ = ("PortableService", "build_portable_document", "portable_service")
 
@@ -142,6 +142,8 @@ class PortableService:
         version_numbers = [version.version for version in document.versions]
         if len(version_numbers) != len(set(version_numbers)):
             raise HTTPException(status_code=400, detail="Portable grid contains duplicate version numbers")
+        for version in document.versions:
+            _validate_version_payload(version.tiers)
 
         fingerprint = _document_fingerprint(document)
         source_key = f"portable:{document.slug}"
