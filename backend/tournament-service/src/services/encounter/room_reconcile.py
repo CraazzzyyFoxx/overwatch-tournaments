@@ -13,9 +13,9 @@ room by being looked at. Three things heal it instead:
   :func:`request_tournament_reconcile`;
 * a one-second DUE-ROOM tick, for the only change nothing writes: a step's
   timer running out;
-* a one-minute BACKSTOP sweep, for writes that happen in another service
-  entirely (stats-service finalizing a map, app-service CRUD) and so never
-  reach this process's commit hooks.
+* a five-minute BACKSTOP sweep, for a room nothing else healed: a trigger
+  lost with its process between the commit and the reconcile task, or a
+  room-moving write that stages nothing (an admin encounter edit).
 
 The trigger stages onto the session exactly the way ``shared.services.realtime.
 emit`` stages its events -- same ``session.info`` dict, same both-rollback-hooks
@@ -34,9 +34,9 @@ import asyncio
 from typing import Any
 
 from loguru import logger
-from sqlalchemy import event, func, or_, select
+from sqlalchemy import and_, event, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, load_only
 
 from shared.core.enums import (
     EncounterStatus,
@@ -45,12 +45,17 @@ from shared.core.enums import (
 )
 from shared.domain import pick_ban_rules as pbr
 from shared.models.encounter.encounter import Encounter
+from shared.models.encounter.game import EncounterGame
 from shared.models.encounter.pick_ban import PickBanSession, PickBanSubmission
+from shared.models.encounter.readiness import EncounterReadiness
 from shared.models.encounter.team import EncounterTeam
 from shared.models.tournament.bracket_encounter import BracketEncounter
+from shared.models.tournament.pick_ban import PickBanConfig
+from shared.models.tournament.scrim import ScrimRoom
 from shared.models.tournament.stage import Stage
 from shared.models.tournament.tournament import Tournament
 from src.core import db
+from src.services.encounter.games import OPEN_STATES
 from src.services.encounter.veto_session import ROOM_SLOT_COUNT
 
 __all__ = (
@@ -195,8 +200,7 @@ async def _reconcile_in_new_session(scope: tuple[str, int]) -> None:
     kind, scope_id = scope
     try:
         async with db.async_session_maker() as session:
-            for encounter_id in await _encounters_of(session, kind, scope_id):
-                await reconcile_encounter(session, encounter_id)
+            await _sweep(session, await _encounters_of(session, kind, scope_id), skip_locked=False)
     except Exception:
         logger.exception("Pick-ban room reconcile failed", scope=kind, scope_id=scope_id)
 
@@ -216,6 +220,20 @@ def _fully_seated() -> Any:
     ) == Encounter.slot_count
 
 
+def _all_seats_ready() -> Any:
+    """ "Every slot's live participation confirmed readiness" (``all_ready``) as
+    one predicate, beside :func:`_fully_seated`: ``uq_readiness_team`` keeps one
+    row per seat, so the count is exact."""
+    return (
+        select(func.count())
+        .select_from(EncounterReadiness)
+        .join(EncounterTeam, EncounterTeam.id == EncounterReadiness.encounter_team_id)
+        .where(EncounterReadiness.encounter_id == Encounter.id, EncounterTeam.active.is_(True))
+        .correlate(Encounter)
+        .scalar_subquery()
+    ) == Encounter.slot_count
+
+
 async def _encounters_of(session: AsyncSession, kind: str, scope_id: int) -> list[int]:
     """The rooms one staged scope covers."""
     if kind == "encounter":
@@ -226,7 +244,10 @@ async def _encounters_of(session: AsyncSession, kind: str, scope_id: int) -> lis
         _fully_seated(),
     )
     if kind == "tournament":
-        query = query.where(Encounter.tournament_id == scope_id)
+        # A config edit changes whether a room may OPEN, and opening waits for
+        # every seat's readiness; a running room plays its own snapshot and
+        # freeplay reads no config. So only all-ready rooms re-answer.
+        query = query.where(Encounter.tournament_id == scope_id, _all_seats_ready())
     else:
         query = query.join(BracketEncounter, BracketEncounter.encounter_id == Encounter.id).where(
             BracketEncounter.stage_id == scope_id
@@ -240,19 +261,21 @@ async def reconcile_encounter(session: AsyncSession, encounter_id: int, *, skip_
     return bool(await _service().reconcile_room(session, encounter_id, skip_locked=skip_locked))
 
 
-async def _sweep(session: AsyncSession, encounter_ids: list[int]) -> None:
-    """Heal each room, isolated from the others.
+async def _sweep(session: AsyncSession, encounter_ids: list[int], *, skip_locked: bool) -> None:
+    """Heal each room, isolated from the others, one transaction per room.
 
     A room whose config the organizer broke answers with a 422 rather than a
-    heal; letting that escape would take the whole tick down and freeze every
-    OTHER room's clock with it.
+    heal; letting that escape would end the whole pass and freeze every OTHER
+    room with it. And a steady room's unlocked precheck returns with its read
+    transaction still open: ending it here keeps a pass over hundreds of rooms
+    from holding one connection -- and the vacuum horizon -- for all of them.
     """
     for encounter_id in encounter_ids:
         try:
-            await reconcile_encounter(session, encounter_id, skip_locked=True)
+            await reconcile_encounter(session, encounter_id, skip_locked=skip_locked)
         except Exception:
             logger.exception("Pick-ban room reconcile failed", encounter_id=encounter_id)
-            await session.rollback()
+        await session.rollback()
 
 
 async def reconcile_due_rooms() -> None:
@@ -260,9 +283,13 @@ async def reconcile_due_rooms() -> None:
 
     A step's timer expiring is the one thing that moves a room with nobody
     writing anything, so it is the one thing a post-commit trigger cannot catch.
-    The due set is computed from two batched queries and a pure Python check
-    (``session_pending``) -- never one query per room -- and only genuinely due
-    rooms are then locked.
+    The due set is computed from three batched queries -- only the columns
+    ``session_pending`` reads -- and a pure Python check, never one query per
+    room, and only genuinely due rooms are then locked.
+
+    A row whose steps no longer build (an old-format sequence naming a seat
+    that has since been vacated) counts as due: ``_sweep`` then logs that room
+    alone, and every other room's clock keeps running.
     """
     async with db.async_session_maker() as session:
         sessions = list(
@@ -279,6 +306,15 @@ async def reconcile_due_rooms() -> None:
                         # forever; ``reconcile_room`` refuses them anyway.
                         Encounter.status != EncounterStatus.COMPLETED,
                     )
+                    .options(
+                        load_only(
+                            PickBanSession.encounter_id,
+                            PickBanSession.status,
+                            PickBanSession.paused_at,
+                            PickBanSession.current_step_started_at,
+                            PickBanSession.resolved_sequence_json,
+                        )
+                    )
                 )
             )
             .scalars()
@@ -288,7 +324,18 @@ async def reconcile_due_rooms() -> None:
             return
         submissions: dict[int, list[PickBanSubmission]] = {}
         rows = await session.execute(
-            select(PickBanSubmission).where(PickBanSubmission.session_id.in_([row.id for row in sessions]))
+            select(PickBanSubmission)
+            .where(PickBanSubmission.session_id.in_([row.id for row in sessions]))
+            .options(
+                load_only(
+                    PickBanSubmission.session_id,
+                    PickBanSubmission.step_index,
+                    PickBanSubmission.encounter_team_id,
+                    PickBanSubmission.team_member_id,
+                    PickBanSubmission.attempt,
+                    PickBanSubmission.state,
+                )
+            )
         )
         for row in rows.scalars().all():
             submissions.setdefault(row.session_id, []).append(row)
@@ -296,41 +343,63 @@ async def reconcile_due_rooms() -> None:
         # rather than participations, and translating it needs the seats.
         slots: dict[int, dict[int, int]] = {}
         seats = await session.execute(
-            select(EncounterTeam).where(
+            select(EncounterTeam.encounter_id, EncounterTeam.slot, EncounterTeam.id).where(
                 EncounterTeam.encounter_id.in_({row.encounter_id for row in sessions}),
                 EncounterTeam.active.is_(True),
             )
         )
-        for seat in seats.scalars().all():
-            slots.setdefault(seat.encounter_id, {})[seat.slot] = seat.id
+        for encounter_id, slot, seat_id in seats.all():
+            slots.setdefault(encounter_id, {})[slot] = seat_id
 
         actions = _service()
-        due = sorted(
-            {
-                row.encounter_id
-                for row in sessions
-                if actions.session_pending(
-                    row,
-                    pbr.resolved_steps_from_json(
-                        list(row.resolved_sequence_json or []),
-                        actors_by_slot=slots.get(row.encounter_id, {}),
-                    ),
-                    submissions.get(row.id, []),
+        due: set[int] = set()
+        for row in sessions:
+            try:
+                steps = pbr.resolved_steps_from_json(
+                    list(row.resolved_sequence_json or []), actors_by_slot=slots.get(row.encounter_id, {})
                 )
-            }
-        )
-        await _sweep(session, due)
+                pending = actions.session_pending(row, steps, submissions.get(row.id, []))
+            except Exception:
+                pending = True
+            if pending:
+                due.add(row.encounter_id)
+        await _sweep(session, sorted(due), skip_locked=True)
 
 
 async def reconcile_stalled_rooms() -> None:
-    """Every minute: catch up rooms whose last mover was another service.
+    """Every 5 minutes: the backstop for a room nothing else healed.
 
-    stats-service finalizing a map and app-service's encounter CRUD commit in
-    their own processes, so no commit hook here ever sees them. The sweep is
-    bounded to encounters that can still be played -- every slot seated, a live
-    tournament, a non-terminal status, a published stage (or none) -- and every
-    one of them is prechecked unlocked before anything is locked.
+    Every room write stages its own reconcile and the due tick runs the clocks,
+    so this catches only a trigger lost with its process and a room-moving
+    write that stages nothing (an admin encounter edit).
+
+    Bounded to encounters that can still be played -- every slot seated, a
+    live tournament, a non-terminal status, a published stage (or none) -- and
+    not a closed scrim room (history; its veto is not cancelled, the backstop
+    just stops visiting it). Of those, SQL drops every room
+    ``room_owes_write`` is certain to answer False for, one branch at a time:
+
+    * pending step, owed round, map picks out of step with the games -- each
+      needs a non-cancelled session, so: no such session of either kind;
+    * a room owed its opening -- ``creation_plan`` needs a config the cascade
+      can resolve, so: no config at the tournament's level or its stage's;
+    * freeplay's next position -- never while one is open, so: an open game.
+
+    The rest are prechecked unlocked, one transaction per room.
     """
+    steady = and_(
+        ~exists().where(
+            PickBanSession.encounter_id == Encounter.id,
+            PickBanSession.status != MapVetoSessionStatus.CANCELLED,
+        ),
+        # ``resolve_config_at_level``'s own filter: the round level lives under
+        # its stage, and a room with no stage asks the tournament level alone.
+        ~exists().where(
+            PickBanConfig.tournament_id == Encounter.tournament_id,
+            or_(PickBanConfig.stage_id.is_(None), PickBanConfig.stage_id == BracketEncounter.stage_id),
+        ),
+        exists().where(EncounterGame.encounter_id == Encounter.id, EncounterGame.state.in_(OPEN_STATES)),
+    )
     async with db.async_session_maker() as session:
         result = await session.execute(
             select(Encounter.id)
@@ -343,6 +412,8 @@ async def reconcile_stalled_rooms() -> None:
                 _fully_seated(),
                 Tournament.status.notin_((TournamentStatus.COMPLETED, TournamentStatus.ARCHIVED)),
                 or_(BracketEncounter.stage_id.is_(None), Stage.is_published.is_(True)),
+                ~exists().where(ScrimRoom.encounter_id == Encounter.id, ScrimRoom.closed_at.is_not(None)),
+                ~steady,
             )
         )
-        await _sweep(session, sorted(result.scalars().all()))
+        await _sweep(session, sorted(result.scalars().all()), skip_locked=True)

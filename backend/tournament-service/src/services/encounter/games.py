@@ -47,9 +47,11 @@ from shared.domain.encounter_scoring import (
     normalize_game_lines as _normalize_game_lines,
 )
 from shared.models.catalog.entity import CatalogEntity
+from shared.models.encounter.claim import EncounterGameClaim
 from shared.models.encounter.encounter import Encounter
 from shared.models.encounter.game import EncounterGame, EncounterGameTeam
 from shared.models.encounter.pick_ban import PickBanEntry
+from shared.models.encounter.team import EncounterTeam
 from shared.repository import (
     EncounterGameClaimRepository,
     EncounterGameRepository,
@@ -181,10 +183,17 @@ class EncounterGameService:
         return grouped
 
     async def claims_by_game(self, session: AsyncSession, games: Sequence[EncounterGame]) -> dict[int, list[Any]]:
-        """``game_id -> the claims filed against it``; every game gets a key."""
+        """``game_id -> the claims filed against it``; every game gets a key. One query for all of them."""
         grouped: dict[int, list[Any]] = {game.id: [] for game in games}
-        for game in games:
-            grouped[game.id] = list(await self.claim_repo.list_for_game(session, game.id))
+        if not grouped:
+            return grouped
+        rows = await session.execute(
+            self.claim_repo.select()
+            .where(EncounterGameClaim.game_id.in_(tuple(grouped)))
+            .order_by(EncounterGameClaim.game_id, EncounterGameClaim.claimant_team_id)
+        )
+        for claim in rows.scalars().all():
+            grouped[claim.game_id].append(claim)
         return grouped
 
     async def rules(self, session: AsyncSession, encounter: Encounter) -> ScoringRules:
@@ -198,15 +207,18 @@ class EncounterGameService:
             )
         return compile_rules(rule)
 
-    async def confirmed_game_lines(self, session: AsyncSession, encounter: Encounter) -> list[list[GameLine]]:
+    async def confirmed_game_lines(
+        self, session: AsyncSession, encounter: Encounter, *, seats: Sequence[EncounterTeam] | None = None
+    ) -> list[list[GameLine]]:
         """The confirmed games the LIVE seats cover, oldest position first.
 
         A game whose line-up includes a participation that has since been taken
         over counts for nobody -- the same rule :func:`refresh_from_games`
         scores by, so a claim is validated against exactly what the writer
-        would compute.
+        would compute. ``seats`` are the live seats when the caller already
+        loaded them.
         """
-        live = {seat.id for seat in await active_teams(session, encounter.id)}
+        live = {seat.id for seat in (seats if seats is not None else await active_teams(session, encounter.id))}
         return [
             [
                 GameLine(
@@ -221,24 +233,30 @@ class EncounterGameService:
             if live.issuperset(row.encounter_team_id for row in lines)
         ]
 
-    async def standing(self, session: AsyncSession, encounter: Encounter) -> EncounterOutcome:
+    async def standing(
+        self, session: AsyncSession, encounter: Encounter, *, seats: Sequence[EncounterTeam] | None = None
+    ) -> EncounterOutcome:
         """What the confirmed games add up to right now, without writing it.
 
         The same engine :func:`refresh_from_games` settles the official result
         by, so a reader asking "is another map due?" and the writer confirming
-        the series can never answer it differently.
+        the series can never answer it differently. ``seats`` are the live
+        seats when the caller already loaded them.
         """
-        seats = await active_teams(session, encounter.id)
+        if seats is None:
+            seats = await active_teams(session, encounter.id)
         return evaluate_encounter(
             await self.rules(session, encounter),
             best_of=encounter.best_of,
             team_ids=[seat.id for seat in seats],
-            games=await self.confirmed_game_lines(session, encounter),
+            games=await self.confirmed_game_lines(session, encounter, seats=seats),
         )
 
-    async def series_settled(self, session: AsyncSession, encounter: Encounter) -> bool:
+    async def series_settled(
+        self, session: AsyncSession, encounter: Encounter, *, seats: Sequence[EncounterTeam] | None = None
+    ) -> bool:
         """Is the encounter over on the games already confirmed?"""
-        return (await self.standing(session, encounter)).ended
+        return (await self.standing(session, encounter, seats=seats)).ended
 
     async def played_positions(self, session: AsyncSession, encounter_id: int) -> frozenset[int]:
         """Positions whose game is CONFIRMED or already carries a claim: the ones
@@ -260,13 +278,36 @@ class EncounterGameService:
         map_id: int | None = None,
         state: EncounterGameState = EncounterGameState.PLANNED,
     ) -> EncounterGame:
-        """Open one position and seat every live participation in it.
+        """Open one position and seat every live participation in it -- or, when
+        the position already has a live game, hand that game back.
 
         The ``game_team`` rows are written WITH the game: they are "who is in
         this game", and a position without them could collect a claim naming a
         participation the composite FK would then refuse. A named map brings its
         catalog mode (:func:`map_mode`).
+
+        The room's lock order -- encounter, then game -- is taken here, by the
+        one writer of games, rather than trusted to every caller. A caller that
+        inserts without the encounter lock while the post-commit healer holds it
+        and opens the same position deadlocks: its insert holds the position's
+        index entry while its foreign-key check waits on the healer's lock, and
+        the healer's insert waits on that entry. Locked first, it waits for the
+        healer instead and takes the game the healer opened. ``FOR NO KEY
+        UPDATE`` is the weakest mode that queues behind the room lock; every room
+        writer already holds the lock, so for them it never waits.
         """
+        await session.execute(select(Encounter.id).where(Encounter.id == encounter.id).with_for_update(key_share=True))
+        # A statement of its own, after the lock: its snapshot sees what the
+        # writer the lock waited for committed.
+        live = await session.scalar(
+            self.game_repo.select().where(
+                EncounterGame.encounter_id == encounter.id,
+                EncounterGame.position == position,
+                EncounterGame.state != EncounterGameState.CANCELLED,
+            )
+        )
+        if live is not None:
+            return live
         game = await self.game_repo.create(
             session,
             EncounterGame(
@@ -576,14 +617,19 @@ class EncounterGameService:
 
     # -- serialization -----------------------------------------------------
     async def claim_payloads(
-        self, session: AsyncSession, games: Sequence[EncounterGame]
+        self,
+        session: AsyncSession,
+        games: Sequence[EncounterGame],
+        *,
+        claims: Mapping[int, Sequence[Any]] | None = None,
     ) -> dict[int, list[dict[str, Any]]]:
         """``game_id -> the claims filed against it``, wire-shaped, every game keyed.
 
         Both participations' numbers go out as filed: the room decides what to
-        show a viewer before everyone has claimed.
+        show a viewer before everyone has claimed. ``claims`` is
+        :meth:`claims_by_game` of the same games when the caller already read it.
         """
-        grouped = await self.claims_by_game(session, games)
+        grouped = claims if claims is not None else await self.claims_by_game(session, games)
         by_claim = await self.claim_repo.results_for_claims(
             session, [claim.id for claims in grouped.values() for claim in claims]
         )

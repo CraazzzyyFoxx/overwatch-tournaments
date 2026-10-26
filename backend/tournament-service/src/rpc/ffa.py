@@ -39,12 +39,13 @@ from src.rpc._helpers import _actor_player_id, _dump, _identity, _path_int, _pay
 from src.schemas.ffa import FfaGameCancelInput, FfaGameResultsInput, FfaGamesCountInput
 from src.services import visibility_resolvers
 from src.services.admin.stage import stage_service as admin_stage_service
-from src.services.encounter.ffa import ffa_encounter_service, public_view
+from src.services.encounter.ffa import ffa_encounter_service, public_view, require_lobby
 from src.services.encounter.games import GameResultIn
 
 
 async def _assert_source_correction_allowed(session: Any, encounter_id: int) -> None:
-    """Refuse a change whose qualification fallout can no longer be applied.
+    """Refuse a write on a duel (409, :func:`require_lobby`), then a change
+    whose qualification fallout can no longer be applied.
 
     All three writes can move a group's final table -- a corrected game, a
     voided one, a games count that reopens a completed lobby -- so all three
@@ -53,6 +54,7 @@ async def _assert_source_correction_allowed(session: Any, encounter_id: int) -> 
     """
     lobby = await ffa_encounter_service.encounter_repo.get(session, encounter_id)
     if lobby is not None:
+        require_lobby(lobby)
         await admin_stage_service.assert_source_correction_allowed(session, lobby)
 
 

@@ -129,7 +129,7 @@ class _Access:
     def __init__(self, membership: ChatMembership | None) -> None:
         self.membership = membership
 
-    async def resolve(self, _session: Any, _auth_user: Any, _room: ChatRoom) -> ChatMembership:
+    async def resolve(self, _session: Any, _auth_user: Any, _room: ChatRoom, *, for_update: bool) -> ChatMembership:
         if self.membership is None:
             raise HTTPException(status_code=403, detail="nope")
         return self.membership

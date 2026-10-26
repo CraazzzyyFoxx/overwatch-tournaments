@@ -115,13 +115,15 @@ class ChatService:
         auth_user: Any | None,
         room: ChatRoom,
     ) -> tuple[ChatMembership, bool]:
-        """Membership + the room's spectator setting, or 403.
+        """Membership + the room's spectator setting, or 403 -- for a WRITE.
 
         The resolver already refused anyone who may not see the ROOM; this adds
         the only rule the resolver deliberately does not know — whether merely
-        watching includes reading the chat.
+        watching includes reading the chat. Every caller writes, so the resolver
+        locks (``for_update=True``): one account's posts queue, which is what the
+        count-then-insert rate limit relies on.
         """
-        membership = await self.access.resolve(session, auth_user, room)
+        membership = await self.access.resolve(session, auth_user, room, for_update=True)
         visible = await self.spectators_can_read(session, room)
         if membership.is_spectator and not visible:
             raise HTTPException(
@@ -179,7 +181,8 @@ class ChatService:
         after_id: int | None = None,
         limit: int = HISTORY_DEFAULT,
     ) -> ChatEnvelope:
-        membership = await self.access.resolve(session, auth_user, room)
+        # The history read: every spectator polls it, so it never takes the resolver's lock.
+        membership = await self.access.resolve(session, auth_user, room, for_update=False)
         visible = await self.spectators_can_read(session, room)
         if membership.is_spectator and not visible:
             # Watching a closed room is a normal visit, not a failed read: the room answers that it is closed and

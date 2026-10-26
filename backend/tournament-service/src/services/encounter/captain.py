@@ -531,7 +531,7 @@ class CaptainService:
             await self.games.rules(session, encounter),
             best_of=encounter.best_of,
             team_ids=[seat.id for seat in seats],
-            confirmed_games=await self.games.confirmed_game_lines(session, encounter),
+            confirmed_games=await self.games.confirmed_game_lines(session, encounter, seats=seats),
             claim=SeriesClaim(
                 games_played=games_played,
                 totals={item.encounter_team_id: float(item.score) for item in results},
@@ -672,12 +672,12 @@ class CaptainService:
         return True
 
     @staticmethod
-    def _places_from_scores(lines: Sequence[EncounterTeamReportResult]) -> dict[int, int]:
-        """Competition ranking over the reported totals, best first.
+    def _places_from_scores(lines: Sequence[EncounterTeamReportResult | ReportResultIn]) -> dict[int, int]:
+        """Competition ranking over the reported (or stated) totals, best first.
 
-        Used only when the form does not ask for places: a standing without one
-        would leave every seat unplaced, and the bracket resolves its links by
-        place.
+        Used only when the form -- or the organizer -- gives no places: a
+        standing without one would leave every seat unplaced, and the bracket
+        resolves its links by place.
         """
         ordered = sorted(lines, key=lambda row: -float(row.score))
         places: dict[int, int] = {}
@@ -797,7 +797,7 @@ class CaptainService:
             encounter,
             source=EncounterResultSource.ADMIN,
             totals={item.encounter_team_id: float(item.score) for item in results},
-            placements=placements or self._places_from_claims(results),
+            placements=placements or self._places_from_scores(results),
             action=EncounterResultAuditAction.CONFIRM,
             audit_source="admin",
             actor_user_id=actor_user_id,
@@ -818,19 +818,6 @@ class CaptainService:
         await enqueue_challonge_push(session, encounter)
         await session.commit()
         return encounter
-
-    @staticmethod
-    def _places_from_claims(results: Sequence[ReportResultIn]) -> dict[int, int]:
-        ordered = sorted(results, key=lambda item: -float(item.score))
-        places: dict[int, int] = {}
-        for index, item in enumerate(ordered):
-            previous = ordered[index - 1] if index else None
-            places[item.encounter_team_id] = (
-                places[previous.encounter_team_id]
-                if previous is not None and float(previous.score) == float(item.score)
-                else index + 1
-            )
-        return places
 
     async def reopen_encounter_result(
         self,

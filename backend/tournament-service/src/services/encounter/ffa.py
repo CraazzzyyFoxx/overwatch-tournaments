@@ -38,6 +38,7 @@ from shared.models.encounter.game import EncounterGame, EncounterGameTeam
 from shared.models.encounter.team import EncounterTeam
 from shared.models.tournament.bracket_encounter import BracketEncounter
 from shared.repository import BracketEncounterRepository, EncounterRepository, StageRepository
+from shared.services.encounter.events import enqueue_encounter_completed
 from shared.services.encounter.participants import MemberSnapshot, place_team
 from shared.services.encounter.result import lock_encounter
 from src.schemas.ffa import (
@@ -47,15 +48,27 @@ from src.schemas.ffa import (
     FfaLobbyRowRead,
     FfaRulesRead,
 )
+from src.services.bracket import advancement
 from src.services.encounter.games import (
     EncounterGameService,
     GameResultIn,
     encounter_game_service,
 )
-from src.services.encounter.settle import enqueue_challonge_push
+from src.services.encounter.settle import enqueue_challonge_push, settle_confirmed
 from src.services.tournament.events import enqueue_tournament_recalculation
 
-__all__ = ("FfaEncounterService", "FfaStageResults", "ffa_encounter_service", "public_view")
+__all__ = ("FfaEncounterService", "FfaStageResults", "ffa_encounter_service", "public_view", "require_lobby")
+
+
+def require_lobby(encounter: Encounter) -> None:
+    """409 unless ``encounter`` is a lobby. How it is SCORED says lobby from duel (``Encounter.scoring_preset``), not
+    how many seats it has: a two-seat lobby is still a lobby, and a duel has no lobby table, games count or per-game
+    placements to write."""
+    if encounter.scoring_preset != "points":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=[ApiExc(code="ffa_not_a_lobby", msg=f"Encounter {encounter.id} is a duel, not an FFA lobby")],
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -222,7 +235,12 @@ class FfaEncounterService:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=[ApiExc(code="ffa_game_not_found", msg=f"This lobby has no live game {position}")],
             )
+        was_confirmed = lobby.result_status == EncounterResultStatus.CONFIRMED
         await self.games.cancel_games(session, lobby, [game], actor_user_id=actor_user_id, reason=reason)
+        # Voiding a played game can take a finished lobby back below its card.
+        await self._settle_transition(session, lobby, was_confirmed=was_confirmed, actor_user_id=actor_user_id)
+        # Last, like every result writer: the recalculation state row is locked
+        # only after every downstream encounter the transition locked.
         await enqueue_tournament_recalculation(session, lobby.tournament_id)
         await session.commit()
         return lobby
@@ -265,6 +283,7 @@ class FfaEncounterService:
         # that was complete, lowering it can finish one, and the single result
         # writer settles both without a second copy of the rule here.
         await self.refresh_completion(session, lobby, actor_user_id=actor_user_id)
+        # Last, as in ``cancel_game``: encounters before the recalculation state.
         await enqueue_tournament_recalculation(session, lobby.tournament_id)
         await session.commit()
         return lobby
@@ -272,10 +291,12 @@ class FfaEncounterService:
     async def refresh_completion(
         self, session: AsyncSession, encounter: Encounter, *, actor_user_id: int | None
     ) -> None:
-        """Settle "is this lobby finished?" from its live games. No commit."""
+        """Settle "is this lobby finished?" from its live games, and run what
+        that move owes (:meth:`_settle_transition`). No commit."""
         from shared.core.enums import EncounterResultAuditAction  # noqa: PLC0415 - local to this one call
         from shared.services.encounter.result import refresh_from_games  # noqa: PLC0415 - avoids a cycle
 
+        was_confirmed = encounter.result_status == EncounterResultStatus.CONFIRMED
         await refresh_from_games(
             session,
             encounter,
@@ -283,6 +304,31 @@ class FfaEncounterService:
             audit_source="admin" if actor_user_id is not None else "system",
             actor_user_id=actor_user_id,
         )
+        await self._settle_transition(session, encounter, was_confirmed=was_confirmed, actor_user_id=actor_user_id)
+
+    @staticmethod
+    async def _settle_transition(
+        session: AsyncSession, encounter: Encounter, *, was_confirmed: bool, actor_user_id: int | None
+    ) -> None:
+        """What a lobby's result crossing CONFIRMED owes, once the single result
+        writer moved it -- for every lobby write that is not a game's own result
+        (a games count, a voided game). No commit.
+
+        Turned CONFIRMED: what the game that finishes one owes
+        (``EncounterGameService.record_result``, :meth:`record_lobby_game`) --
+        the completed event, the bracket and standings, the Challonge push, last
+        since it carries the result version. Turned back: what
+        ``reopen_encounter_result`` owes -- every seat its old result filled
+        downstream is unwound, and the standings follow.
+        """
+        confirmed = encounter.result_status == EncounterResultStatus.CONFIRMED
+        if not was_confirmed and confirmed:
+            await enqueue_encounter_completed(session, encounter, source_service="tournament-service")
+            await settle_confirmed(session, encounter)
+            await enqueue_challonge_push(session, encounter)
+        elif was_confirmed and not confirmed:
+            await advancement.reset_downstream(session, encounter, actor_user_id=actor_user_id)
+            await enqueue_tournament_recalculation(session, encounter.tournament_id)
 
     # -- reads -------------------------------------------------------------
     async def load_stage_results(self, session: AsyncSession, stage_id: int) -> FfaStageResults:
@@ -357,13 +403,14 @@ class FfaEncounterService:
         )
 
     async def load_lobby(self, session: AsyncSession, encounter_id: int) -> FfaLobbyRead:
-        """One lobby as the table it is: rules, seats, game cells, standing."""
+        """One lobby as the table it is: rules, seats, game cells, standing. 409 for a duel (:func:`require_lobby`)."""
         lobby = await self.encounter_repo.get(session, encounter_id)
         if lobby is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=[ApiExc(code="encounter_not_found", msg=f"Encounter {encounter_id} not found")],
             )
+        require_lobby(lobby)
         return (await self._read_lobbies(session, [lobby]))[0]
 
     async def load_stage_lobbies(
@@ -539,10 +586,11 @@ class FfaEncounterService:
         # Normally 1..best_of, but a lowered games count must never hide a
         # result that was already recorded past the new end.
         last = max([lobby.best_of, *by_position], default=lobby.best_of)
-        # One placing and one payout for the whole read: a game with no entered
-        # places is placed once, here, by the current formula.
-        placements = {game_id: resolve_placements(rules, list(by_team.values())) for game_id, by_team in lines.items()}
-        points = {game_id: game_points(rules, list(by_team.values())) for game_id, by_team in lines.items()}
+        # One placing and one payout per game of THIS lobby (``lines`` holds the
+        # whole stage's): a game with no entered places is placed once, here,
+        # by the current formula.
+        placements = {game.id: resolve_placements(rules, list(lines[game.id].values())) for game in games}
+        points = {game.id: game_points(rules, list(lines[game.id].values())) for game in games}
         totals = team_totals(
             [seat.id for seat in seats],
             [

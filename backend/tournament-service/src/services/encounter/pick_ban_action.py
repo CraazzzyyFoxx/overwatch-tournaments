@@ -34,7 +34,6 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.core import http_status as status
@@ -258,16 +257,24 @@ class PickBanActionService:
 
     # -- loading -----------------------------------------------------------
     async def _load(
-        self, session: AsyncSession, pick_ban: PickBanSession, encounter: Encounter, *, refresh: bool = False
+        self,
+        session: AsyncSession,
+        pick_ban: PickBanSession,
+        encounter: Encounter,
+        *,
+        refresh: bool = False,
+        teams: list[EncounterTeam] | None = None,
     ) -> _Runtime:
         """``refresh`` re-reads rows already in the identity map, which every
         load taken AFTER locking the session must do -- the pre-lock snapshot is
-        exactly what the lock exists to discard."""
+        exactly what the lock exists to discard. ``teams`` are the live seats a
+        pure read already loaded; a locked load reads its own."""
         entries = list(
             await self.entry_repo.list_by_session(session, pick_ban.id, ordered=True, populate_existing=refresh)
         )
         submissions = list(await self.submission_repo.list_by_session(session, pick_ban.id, populate_existing=refresh))
-        teams = await self.sessions.teams_of(session, encounter.id)
+        if teams is None:
+            teams = await self.sessions.teams_of(session, encounter.id)
         steps = resolved_steps(pick_ban, teams)
         groups = await load_item_groups(
             session, PickBanKind(pick_ban.kind), [entry.item_id for entry in entries], encounter.discipline
@@ -834,7 +841,13 @@ class PickBanActionService:
 
     # -- locking -----------------------------------------------------------
     async def _lock(
-        self, session: AsyncSession, encounter_id: int, kind: PickBanKind, *, captain: bool = True
+        self,
+        session: AsyncSession,
+        encounter_id: int,
+        kind: PickBanKind,
+        *,
+        captain: bool = True,
+        encounter: Encounter | None = None,
     ) -> tuple[Encounter, PickBanSession]:
         """The lock comes FIRST, before anything a decision reads: the cursor is
         derived from the submission log and written back to it, so two
@@ -844,10 +857,15 @@ class PickBanActionService:
         ``captain=False`` is the organizer override: a pause stops the CAPTAINS,
         and the staff member who paused the room is exactly who still has to be
         able to fix what they paused it for.
+
+        ``encounter`` is the row the captain RPC's loader already locked (and
+        refreshed) in this transaction; locking it a second time would be one
+        more statement for a lock already held.
         """
         # Admin actions bypass the captain RPC loader. Keep every mutation in
         # encounter -> session order, including the room journal's FK writes.
-        encounter = await self.sessions._lock_encounter(session, encounter_id)
+        if encounter is None:
+            encounter = await self.sessions._lock_encounter(session, encounter_id)
         pick_ban = await self.sessions.get_pick_ban_session(session, encounter_id, kind, for_update=True)
         if pick_ban is None:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Pick-ban session is not initialized")
@@ -955,15 +973,19 @@ class PickBanActionService:
         viewer: int | None = ACTING_VIEWER,
         viewer_member: int | None = None,
         actor_auth_user_id: int | None = None,
+        locked_encounter: Encounter | None = None,
     ) -> dict[str, Any]:
         """One item onto an OPEN step's submission. A blind step is answered
         with :meth:`submit_items` instead -- appending one item at a time to a
         draft nobody may see would leak its size through the progress counter.
         On a mix's member step ``member_id`` names whom the hero is for (spec §11.6 R4-1); ``viewer_member`` is the
-        acting account's own mix seat, which the answer reads the room as (see :meth:`get_pick_ban_state`)."""
+        acting account's own mix seat, which the answer reads the room as (see :meth:`get_pick_ban_state`).
+        ``locked_encounter`` is the encounter the caller already locked in this transaction (see :meth:`_lock`)."""
         # ``viewer`` is the admin discriminator this module already runs on
         # (see ACTING_VIEWER): an organizer acting FOR a seat passes it as None.
-        encounter, pick_ban = await self._lock(session, encounter_id, kind, captain=viewer == ACTING_VIEWER)
+        encounter, pick_ban = await self._lock(
+            session, encounter_id, kind, captain=viewer == ACTING_VIEWER, encounter=locked_encounter
+        )
         self._require_mix_members(encounter, [member_id])
         rt = await self._load(session, pick_ban, encounter, refresh=True)
         await self._settle(session, rt)
@@ -1066,12 +1088,15 @@ class PickBanActionService:
         viewer: int | None = ACTING_VIEWER,
         viewer_member: int | None = None,
         actor_auth_user_id: int | None = None,
+        locked_encounter: Encounter | None = None,
     ) -> dict[str, Any]:
         """Replace a BLIND step's draft, optionally locking it. A locked draft
         is final: the step reveals the moment every acting participation has one.
         A mix's assignment step (open, spec §11.6 R4-1) is answered here too, each item naming its ``member_id``;
-        ``viewer_member`` is as for :meth:`perform_pick_ban_action`."""
-        encounter, pick_ban = await self._lock(session, encounter_id, kind, captain=viewer == ACTING_VIEWER)
+        ``viewer_member`` and ``locked_encounter`` are as for :meth:`perform_pick_ban_action`."""
+        encounter, pick_ban = await self._lock(
+            session, encounter_id, kind, captain=viewer == ACTING_VIEWER, encounter=locked_encounter
+        )
         self._require_mix_members(encounter, [item.get("member_id") for item in items])
         rt = await self._load(session, pick_ban, encounter, refresh=True)
         await self._settle(session, rt)
@@ -1122,11 +1147,13 @@ class PickBanActionService:
         encounter_team_id: int,
         *,
         actor_auth_user_id: int | None = None,
+        locked_encounter: Encounter | None = None,
     ) -> dict[str, Any]:
         """A captain unilaterally reopens the blind step that just revealed --
         the answer to "they banned for the wrong player" that does not need the
-        opponent's agreement, because the step is replayed by EVERY actor."""
-        encounter, pick_ban = await self._lock(session, encounter_id, kind)
+        opponent's agreement, because the step is replayed by EVERY actor.
+        ``locked_encounter`` is as for :meth:`perform_pick_ban_action`."""
+        encounter, pick_ban = await self._lock(session, encounter_id, kind, encounter=locked_encounter)
         rt = await self._load(session, pick_ban, encounter, refresh=True)
         await self._settle(session, rt)
         state = pbr.dispute_target(
@@ -1209,22 +1236,28 @@ class PickBanActionService:
             games = await self.games.list_games(session, encounter.id)
         return games, await self.games.claims_by_game(session, games)
 
-    async def freeplay_owed(self, session: AsyncSession, encounter: Encounter) -> bool:
+    async def freeplay_owed(
+        self,
+        session: AsyncSession,
+        encounter: Encounter,
+        map_session: PickBanSession | None,
+        teams: list[EncounterTeam],
+    ) -> bool:
         """Whether the series owes freeplay its next position.
 
         Freeplay offers ONE position at a time, only for a playable room, and
-        only while no map session owns the positions instead.
+        only while no map session owns the positions instead. ``map_session`` and
+        ``teams`` (the live seats) are what the caller already read.
         """
-        map_session = await self.sessions.get_pick_ban_session(session, encounter.id, PickBanKind.MAP)
         if map_session is not None and str(map_session.status) != MapVetoSessionStatus.CANCELLED:
             return False
+        if len(teams) != encounter.slot_count:
+            return False
         games = await self.games.list_games(session, encounter.id)
-        teams = await self.sessions.teams_of(session, encounter.id)
         return (
-            len(teams) == encounter.slot_count
-            and len(games) < encounter.best_of
-            and not await self.games.series_settled(session, encounter)
+            len(games) < encounter.best_of
             and not any(game.state in OPEN_STATES for game in games)
+            and not await self.games.series_settled(session, encounter, seats=teams)
             and await is_encounter_live(session, encounter)
         )
 
@@ -1237,21 +1270,39 @@ class PickBanActionService:
         without ever reaching for a row lock. Every branch mirrors exactly what
         :meth:`reconcile_room` would then do; one that did not would make the
         healer take the encounter lock on every tick and change nothing.
+
+        The seats and each kind's session are read once here and handed to every
+        check below. ``room_reconcile.reconcile_stalled_rooms`` skips in SQL the
+        rooms none of these branches can answer for (no live session, no config,
+        an open game already); a new branch must keep that prefilter exact.
         """
         teams = await self.sessions.teams_of(session, encounter.id)
+        # MAP first: the HERO checks read its session (``map_round_settled``,
+        # ``round_target``), and get it from here instead of a second read.
+        map_session: PickBanSession | None = None
         for kind in (PickBanKind.MAP, PickBanKind.HERO):
             pick_ban = await self.sessions.get_pick_ban_session(session, encounter.id, kind)
+            if kind == PickBanKind.MAP:
+                map_session = pick_ban
             if pick_ban is None:
-                if await self.sessions.creation_plan(session, encounter, kind) is not None:
+                plan = await self.sessions.creation_plan(session, encounter, kind, teams=teams, map_session=map_session)
+                if plan is not None:
                     return True
                 continue
             if str(pick_ban.status) == MapVetoSessionStatus.CANCELLED:
                 continue
-            rt_steps = resolved_steps(pick_ban, teams)
             submissions = list(await self.submission_repo.list_by_session(session, pick_ban.id))
-            if self.session_pending(pick_ban, rt_steps, submissions):
+            if self.session_pending(pick_ban, resolved_steps(pick_ban, teams), submissions):
                 return True
-            if await self.sessions.round_owed(session, encounter, kind):
+            if await self.sessions.round_owed(
+                session,
+                encounter,
+                kind,
+                pick_ban=pick_ban,
+                teams=teams,
+                submissions=submissions,
+                map_session=map_session,
+            ):
                 return True
             if kind == PickBanKind.MAP:
                 entries = list(await self.entry_repo.list_by_session(session, pick_ban.id, ordered=True))
@@ -1259,7 +1310,7 @@ class PickBanActionService:
                 changes, stale = self.games._pick_game_changes(entries, games, claims)
                 if changes or stale:
                     return True
-        return await self.freeplay_owed(session, encounter)
+        return await self.freeplay_owed(session, encounter, map_session, teams)
 
     async def reconcile_room(self, session: AsyncSession, encounter_id: int, *, skip_locked: bool) -> bool:
         """Apply every heal this room owes, under the encounter lock, and publish
@@ -1275,6 +1326,10 @@ class PickBanActionService:
 
         ``skip_locked`` is for those sweeps: both tournament-service replicas run
         them, and a room another writer already holds needs no second healer.
+
+        A room that owes nothing returns with the precheck's read transaction
+        still open: ending it is the caller's (``room_reconcile._sweep`` ends one
+        per room).
 
         Lock order is the room's everywhere: encounter, then session.
         """
@@ -1299,15 +1354,13 @@ class PickBanActionService:
         if map_session is None or str(map_session.status) == MapVetoSessionStatus.CANCELLED:
             # Only once the map room is known not to own the positions: a
             # concurrent bootstrap may have opened it while this healer waited.
-            if await self.freeplay_owed(session, encounter):
-                try:
-                    async with session.begin_nested():
-                        await self.games.ensure_next_game(session, encounter)
-                    changed.add(PickBanKind.MAP.value)
-                except IntegrityError:
-                    # Another writer opened the same position first; its row is
-                    # the one the room reports against.
-                    pass
+            current = await self.sessions.get_pick_ban_session(session, encounter.id, PickBanKind.MAP)
+            teams = await self.sessions.teams_of(session, encounter.id)
+            if await self.freeplay_owed(session, encounter, current, teams):
+                # ``open_game`` takes the room lock (held here) and hands back a
+                # position another writer opened first, so this cannot collide.
+                await self.games.ensure_next_game(session, encounter)
+                changed.add(PickBanKind.MAP.value)
         await self._reconcile_hero(session, encounter, changed)
         if not changed:
             # Nothing to keep -- and nothing to go on holding the encounter for.
@@ -1400,33 +1453,36 @@ class PickBanActionService:
         if encounter is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Encounter not found")
 
-        readiness = await self.sessions.get_readiness(session, encounter_id)
+        # The live seats once, for readiness, the unavailable reason, the runtime
+        # and the series alike.
+        teams = await self.sessions.teams_of(session, encounter_id)
+        readiness = await self.sessions.get_readiness(session, encounter_id, teams=teams)
         pick_ban = await self.sessions.get_pick_ban_session(session, encounter_id, kind)
         if pick_ban is None:
             # Names WHY rather than 400-ing the room: see
             # pick_ban_session.unavailable_reason. A room whose gates have all
             # opened but whose session the reconciler has not created yet reads
             # as `not_ready` for that moment -- the screen the captains are on.
-            reason = await self.sessions.unavailable_reason(session, encounter, kind)
+            reason = await self.sessions.unavailable_reason(session, encounter, kind, teams=teams)
             state = build_unavailable_state(reason, readiness=readiness)
             if kind == PickBanKind.MAP:
-                games, _claims = await self._game_snapshot(session, encounter)
+                games, claims = await self._game_snapshot(session, encounter)
                 lines = await self.games.lines_by_game(session, games)
-                payloads = await self.games.claim_payloads(session, games)
+                payloads = await self.games.claim_payloads(session, games, claims=claims)
                 state["games"] = [
                     self.games.serialize(game, lines.get(game.id, []), payloads[game.id]) for game in games
                 ]
-                state["series"] = await self._series(session, encounter)
+                state["series"] = await self._series(session, encounter, teams)
             return state
 
-        rt = await self._load(session, pick_ban, encounter)
+        rt = await self._load(session, pick_ban, encounter, teams=teams)
         return await self._build_state(
             session, rt, kind, readiness=readiness, viewer=viewer, viewer_member=viewer_member
         )
 
-    async def _series(self, session: AsyncSession, encounter: Encounter) -> dict[str, Any]:
-        """What the confirmed games add up to, per participation."""
-        standing = await self.games.standing(session, encounter)
+    async def _series(self, session: AsyncSession, encounter: Encounter, teams: list[EncounterTeam]) -> dict[str, Any]:
+        """What the confirmed games add up to, per participation (``teams``: the live seats)."""
+        standing = await self.games.standing(session, encounter, seats=teams)
         return {
             "ended": standing.ended,
             "games": standing.games,
@@ -1586,9 +1642,9 @@ class PickBanActionService:
             "starting_sides": self._sides_state(rt, games, lines),
         }
         if kind == PickBanKind.MAP:
-            payloads = await self.games.claim_payloads(session, games)
+            payloads = await self.games.claim_payloads(session, games, claims=claims)
             state["games"] = [self.games.serialize(game, lines.get(game.id, []), payloads[game.id]) for game in games]
-            state["series"] = await self._series(session, rt.encounter)
+            state["series"] = await self._series(session, rt.encounter, rt.teams)
         return state
 
 
