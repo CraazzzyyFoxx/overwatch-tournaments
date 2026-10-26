@@ -262,9 +262,10 @@ Under the header, on every page and for anonymous visitors too, the floating sta
 `GET /api/v1/announcements/active` (read server-side in the layouts, so it is in the first paint)
 and, for a signed-in viewer, the one pending action — an open check-in before a team invite, scoped
 to the community on a community page or host. Below 640px they are cards at the bottom of the
-screen, above that slim bars sticky under the header. Closing the announcement writes a read mark
-for a signed-in viewer and a dismissed id for everyone else; hiding the action card lasts for the
-visit, the item stays in the bell. Operators publish announcements at `/admin/announcements`.
+screen, above that a card pinned under the header; either way they float over the page rather
+than push it down. Closing the announcement writes a read mark for a signed-in viewer and a
+dismissed id for everyone else; hiding the action card lasts for the visit, the item stays in the
+bell. Operators publish announcements at `/admin/announcements`.
 
 `/admin/notifications` is the other side of the same table: the system notifications *this*
 workspace produced (`notification.source_workspace_id`), filtered by kind through the URL, with a

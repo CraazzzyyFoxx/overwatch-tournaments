@@ -41,8 +41,8 @@ async function resolveCurrentWorkspace(): Promise<Workspace | null> {
 }
 
 // Active announcements, server-side, so the banner is in the first paint rather
-// than dropping in after hydration and pushing the page down. The read is
-// `AuthOptional`, so it works for an anonymous visitor too.
+// than popping in after hydration. The read is `AuthOptional`, so it works for
+// an anonymous visitor too.
 //
 // `undefined` on failure, never `[]`: an empty array is a legitimate answer
 // ("nothing to announce") that the banner would trust for a full staleTime,
