@@ -99,6 +99,8 @@ CREATE TABLE achievements.evaluation_run (
 
 CREATE INDEX ix_achievements_evaluation_run_id ON achievements.evaluation_run (id);
 
+CREATE INDEX ix_achievements_evaluation_run_tournament_created ON achievements.evaluation_run (tournament_id, created_at DESC);
+
 CREATE INDEX ix_achievements_evaluation_run_workspace_id ON achievements.evaluation_run (workspace_id);
 
 CREATE TABLE achievements.override (
@@ -1244,6 +1246,8 @@ CREATE TABLE encounter.pick_ban_session (
 	FOREIGN KEY(encounter_id) REFERENCES encounter.encounter (id) ON DELETE CASCADE
 );
 
+CREATE INDEX ix_pick_ban_session_active_unpaused ON encounter.pick_ban_session (encounter_id) WHERE status = 'active' AND paused_at IS NULL;
+
 CREATE INDEX ix_pick_ban_session_encounter_id ON encounter.pick_ban_session (encounter_id);
 
 CREATE TABLE encounter.pick_ban_submission (
@@ -1938,7 +1942,7 @@ CREATE TABLE event_outbox (
 	UNIQUE (event_id)
 );
 
-CREATE INDEX ix_event_outbox_status_next_attempt ON event_outbox (status, next_attempt_at);
+CREATE INDEX ix_event_outbox_pending_created ON event_outbox (created_at, id) WHERE status IN ('pending', 'failed');
 
 CREATE TABLE notification (
 	id BIGSERIAL NOT NULL,
@@ -3152,10 +3156,6 @@ CREATE INDEX ix_tournament_computation_job_requested_by_user_id ON tournament.co
 CREATE INDEX ix_tournament_computation_job_stage_id ON tournament.computation_job (stage_id);
 
 CREATE INDEX ix_tournament_computation_job_stage_item_id ON tournament.computation_job (stage_item_id);
-
-CREATE INDEX ix_tournament_computation_job_status ON tournament.computation_job (status);
-
-CREATE INDEX ix_tournament_computation_job_tournament_id ON tournament.computation_job (tournament_id);
 
 CREATE INDEX ix_tournament_computation_job_tournament_kind ON tournament.computation_job (tournament_id, kind);
 

@@ -23,6 +23,7 @@ from sqlalchemy import (
     Integer,
     String,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -91,6 +92,12 @@ class PickBanSession(db.TimeStampIntegerMixin):
     __tablename__ = "pick_ban_session"
     __table_args__ = (
         Index("ix_pick_ban_session_encounter_id", "encounter_id"),
+        #: The room reconcile tick's per-second scan of the live, timed rooms.
+        Index(
+            "ix_pick_ban_session_active_unpaused",
+            "encounter_id",
+            postgresql_where=text("status = 'active' AND paused_at IS NULL"),
+        ),
         UniqueConstraint("encounter_id", "kind", name="uq_pick_ban_session_encounter_kind"),
         #: Target of the board's and the log's composite FKs.
         UniqueConstraint("id", "encounter_id", name="uq_pick_ban_session_id_encounter"),

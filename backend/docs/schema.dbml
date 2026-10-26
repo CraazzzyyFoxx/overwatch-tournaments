@@ -193,6 +193,7 @@ Table achievements.evaluation_run {
   id uuid [pk, increment, default: `gen_random_uuid()`]
   indexes {
     (id) [name: "ix_achievements_evaluation_run_id"]
+    (tournament_id) [name: "ix_achievements_evaluation_run_tournament_created"]
     (workspace_id) [name: "ix_achievements_evaluation_run_workspace_id"]
   }
 }
@@ -1177,6 +1178,7 @@ Table encounter.pick_ban_session {
   indexes {
     (id, encounter_id) [unique, name: "uq_pick_ban_session_id_encounter"]
     (encounter_id, kind) [unique, name: "uq_pick_ban_session_encounter_kind"]
+    (encounter_id) [name: "ix_pick_ban_session_active_unpaused"]
     (encounter_id) [name: "ix_pick_ban_session_encounter_id"]
   }
 }
@@ -1785,7 +1787,7 @@ Table event_outbox {
   published_at timestamptz
   last_error text
   indexes {
-    (status, next_attempt_at) [name: "ix_event_outbox_status_next_attempt"]
+    (created_at, id) [name: "ix_event_outbox_pending_created"]
   }
 }
 
@@ -2870,8 +2872,6 @@ Table tournament.computation_job {
     (requested_by_user_id) [name: "ix_tournament_computation_job_requested_by_user_id"]
     (stage_id) [name: "ix_tournament_computation_job_stage_id"]
     (stage_item_id) [name: "ix_tournament_computation_job_stage_item_id"]
-    (status) [name: "ix_tournament_computation_job_status"]
-    (tournament_id) [name: "ix_tournament_computation_job_tournament_id"]
     (tournament_id, kind) [name: "ix_tournament_computation_job_tournament_kind"]
     (idempotency_key) [unique, name: "uq_tournament_computation_job_active_key"]
   }

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import JSON, BigInteger, DateTime, Index, Integer, String, Text, func
+from sqlalchemy import JSON, BigInteger, DateTime, Index, Integer, String, Text, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from shared.core import db
@@ -12,7 +12,16 @@ __all__ = ("EventOutbox",)
 
 class EventOutbox(db.Base):
     __tablename__ = "event_outbox"
-    __table_args__ = (Index("ix_event_outbox_status_next_attempt", "status", "next_attempt_at"),)
+    __table_args__ = (
+        # Created CONCURRENTLY by tidx01: the drain's ``WHERE status IN ('pending', 'failed') ...
+        # ORDER BY created_at, id LIMIT n FOR UPDATE SKIP LOCKED`` walks it in order.
+        Index(
+            "ix_event_outbox_pending_created",
+            "created_at",
+            "id",
+            postgresql_where=text("status IN ('pending', 'failed')"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger(), primary_key=True, autoincrement=True)
     event_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)

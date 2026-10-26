@@ -247,7 +247,11 @@ class EvaluationRun(db.TimeStampUUIDMixin):
     """Audit log of achievement evaluation runs."""
 
     __tablename__ = "evaluation_run"
-    __table_args__ = ({"schema": "achievements"},)
+    __table_args__ = (
+        # The organizer dashboard's newest run per tournament (``latest_evaluation_run_status``).
+        Index("ix_achievements_evaluation_run_tournament_created", "tournament_id", text("created_at DESC")),
+        {"schema": "achievements"},
+    )
 
     workspace_id: Mapped[int] = mapped_column(ForeignKey("workspace.id", ondelete="CASCADE"), index=True)
     trigger: Mapped[EvaluationRunTrigger] = mapped_column(String())
