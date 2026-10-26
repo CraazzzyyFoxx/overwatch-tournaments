@@ -1,16 +1,20 @@
 [importlinter]
+# ``shared`` is a root package (not an external one) so a contract can name
+# ``shared.repository``; import-linter rejects subpackages of external packages.
 root_packages =
     src
+    shared
 include_external_packages = True
 
 [importlinter:contract:rpc-no-sql]
-name = RPC transport owns no SQLAlchemy
+name = RPC transport owns no SQLAlchemy and no repositories
 type = forbidden
 allow_indirect_imports = True
 source_modules =
     src.rpc
 forbidden_modules =
     sqlalchemy
+    shared.repository
 
 [importlinter:contract:domain-is-pure]
 name = domain/ stays free of sessions and transport
@@ -22,6 +26,10 @@ forbidden_modules =
     src.rpc
     src.core.db
     sqlalchemy
+ignore_imports =
+    # Known debt in shared: shared.division_grid keeps its SQL CASE builders
+    # beside the pure DivisionGrid sheet parsing uses.
+    src.domain.registration.sheet_parsing -> shared.division_grid
 
 [importlinter:contract:services-dont-import-rpc]
 name = services never import rpc
@@ -30,3 +38,20 @@ source_modules =
     src.services
 forbidden_modules =
     src.rpc
+
+[importlinter:contract:schemas-are-wire]
+name = schemas/ are wire shapes: no SQL, no repositories, no services
+type = forbidden
+# Direct imports only: wire shapes legitimately name shared.models enums,
+# which sit beside the ORM.
+allow_indirect_imports = True
+source_modules =
+    src.schemas
+forbidden_modules =
+    sqlalchemy
+    shared.repository
+    src.services
+ignore_imports =
+    # AdmissionRead.of projects the admission vocabulary: enums and frozen
+    # dataclasses, stdlib only.
+    src.schemas.admission -> src.services.admission.types

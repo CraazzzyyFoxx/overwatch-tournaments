@@ -50,6 +50,10 @@ class TournamentService:
     def __init__(self, *, tournament_repo: TournamentRepository = TournamentRepository()) -> None:
         self.tournament_repo = tournament_repo
 
+    async def resolve_public_id(self, session: AsyncSession, ref: str) -> int | None:
+        """A public ``{id}`` segment (numeric id, current or retired slug) as the canonical id, ``None`` if unknown."""
+        return await self.tournament_repo.resolve_public_id(session, ref)
+
     async def get(self, session: AsyncSession, id: int, entities: list[str]) -> models.Tournament | None:
         """Return the tournament by id with ``entities`` loaded, or None."""
         return await self.tournament_repo.get(session, id, options=tournament_entities(entities))

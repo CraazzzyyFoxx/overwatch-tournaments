@@ -39,7 +39,7 @@ async def _target(session: Any, data: dict[str, Any]) -> tuple[Any, Any]:
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=[ApiExc(code="match_import_tournament_only", msg="Matches are imported for tournament games only")],
         )
-    game = await encounter_game_service.game_repo.get(session, _path_int(data, "game_id"))
+    game = await encounter_game_service.get_game(session, _path_int(data, "game_id"))
     if game is None or game.encounter_id != encounter.id or game.state == EncounterGameState.CANCELLED:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Game not found")
     return encounter, game

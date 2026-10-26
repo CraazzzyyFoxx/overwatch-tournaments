@@ -22,7 +22,7 @@ sys.path.insert(0, str(backend_root))
 sys.path.insert(0, str(backend_root / "tournament-service"))
 
 
-registration = importlib.import_module("src.schemas.registration_build")
+registration = importlib.import_module("src.services.registration.read_model")
 
 
 def _registration(reg_id: int, user_id: int) -> SimpleNamespace:

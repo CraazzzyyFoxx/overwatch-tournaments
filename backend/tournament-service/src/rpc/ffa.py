@@ -52,7 +52,7 @@ async def _assert_source_correction_allowed(session: Any, encounter_id: int) -> 
     answer to the rule the stage service owns. A missing lobby is left to the
     service below to 404 on.
     """
-    lobby = await ffa_encounter_service.encounter_repo.get(session, encounter_id)
+    lobby = await ffa_encounter_service.get_encounter(session, encounter_id)
     if lobby is not None:
         require_lobby(lobby)
         await admin_stage_service.assert_source_correction_allowed(session, lobby)

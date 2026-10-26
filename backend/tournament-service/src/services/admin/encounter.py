@@ -171,6 +171,17 @@ class AdminEncounterService:
         self.stage_item_repo = stage_item_repo
         self.team_repo = team_repo
 
+    async def get_encounter(
+        self, session: AsyncSession, encounter_id: int, *, for_update: bool = False
+    ) -> models.Encounter | None:
+        """The bare encounter row, ``None`` when missing. ``for_update`` takes its row lock."""
+        if for_update:
+            return await self.encounter_repo.get_for_update(session, encounter_id)
+        return await self.encounter_repo.get(session, encounter_id)
+
+    async def get_match_encounter_id(self, session: AsyncSession, match_id: int) -> int | None:
+        return await self.match_repo.get_encounter_id(session, match_id)
+
     async def _resolve_stage_refs(
         self,
         session: AsyncSession,

@@ -1,8 +1,9 @@
 """Registration read-model builders and tournament-history aggregation.
 
 The typed-RPC handlers build every ``RegistrationRead`` / ``RegistrationFormRead``
-payload and the participant tournament-history envelope through here. This module
-must NOT import fastapi.
+payload and the participant tournament-history envelope through here. Lives in
+services, not ``src.schemas``: it loads rosters, hero catalogs and history, and
+the schemas package stays wire shapes only. This module must NOT import fastapi.
 """
 
 from __future__ import annotations

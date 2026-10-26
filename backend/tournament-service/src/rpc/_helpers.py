@@ -17,12 +17,10 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from shared import models
 from shared.core import http_status as status
 from shared.core.errors import ApiExc, ApiHTTPException
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.disciplines import DISCIPLINES
-from shared.repository import UserRepository
 from shared.rpc.common import (
     actor as _identity,
 )
@@ -53,6 +51,7 @@ from shared.rpc.common import (
 from shared.rpc.identity import MissingIdentityError
 from shared.schemas.rpc import rpc_error, rpc_ok, status_to_code
 from src.core import db
+from src.services.user.flows import actor_player_id as _actor_player_id
 
 __all__ = (
     "_actor_player_id",
@@ -93,23 +92,6 @@ def _optional_discipline(data: dict[str, Any]) -> str | None:
             detail=[ApiExc(code="discipline_not_installed", msg=f"Discipline {raw!r} is not installed")],
         )
     return raw
-
-
-_user_repo = UserRepository()
-
-
-async def _actor_player_id(session: Any, user: models.AuthUser) -> int | None:
-    """Translate the caller's auth id into the ``players.user`` id a result audit stores.
-
-    ``EncounterResultAudit.actor_user_id`` is a FK to ``players.user``, not to
-    ``auth.user``: an auth id passed straight through would name whichever
-    unrelated player holds that number. The captain paths store the linked player
-    id (``_resolve_captain_identity``); this is the same translation at the admin
-    boundary.
-
-    ``None`` -- an account with no linked player -- reads as a machine actor.
-    """
-    return await _user_repo.get_id_by_auth_user_id(session, user.id)
 
 
 def _dump(obj: Any, *, exclude_none: bool = False) -> Any:

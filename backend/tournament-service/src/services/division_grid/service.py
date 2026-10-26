@@ -203,6 +203,11 @@ class DivisionGridService:
         self.workspace_repo = workspace_repo
         self.tournament_repo = tournament_repo
 
+    async def get_workspace_with_default_grid(
+        self, session: AsyncSession, workspace_id: int
+    ) -> models.Workspace | None:
+        return await self.workspace_repo.get_with_default_grid(session, workspace_id)
+
     async def get_workspace_grids(self, session: AsyncSession, workspace_id: int) -> list[models.DivisionGrid]:
         # DivisionGridRead needs the tiers under each version, hence _GRID_OPTIONS.
         result = await session.execute(

@@ -72,7 +72,7 @@ from src.services.encounter.room_journal import record_room_event
 from src.services.encounter.settle import enqueue_challonge_push, settle_confirmed
 from src.services.tournament.events import enqueue_tournament_recalculation
 
-__all__ = ("CaptainService", "ReportResultIn", "captain_service", "serialize_team_report")
+__all__ = ("CaptainService", "ReportResultIn", "captain_service", "resolve_optional_viewer", "serialize_team_report")
 
 # One per-position replay/match code: (position 1-based, code string). Defined
 # by the report-form service, which validates them.
@@ -849,3 +849,30 @@ class CaptainService:
 
 
 captain_service = CaptainService()
+
+# ``captain_service.resolve_participant`` raises a ``BaseAPIException``; its
+# ``status_code`` is inspected by attribute.
+_HTTP_403_FORBIDDEN = 403
+
+
+async def resolve_optional_viewer(
+    session: AsyncSession,
+    auth_user: models.AuthUser | None,
+    encounter: models.Encounter,
+) -> tuple[int | None, int | None]:
+    """``(participation the viewer captains, the viewer's own mix seat)`` for read-only annotation.
+
+    The participation is ``viewer_team_id`` -- presentation, plus the one privacy rule (a blind step's draft is
+    private to its own seat). The seat is a mix member's ``encounter.team_member`` id, which a member step's turn
+    reads (spec §11.6 R4-11); a tournament viewer has none. Anonymous viewers and anyone not seated here (a 403)
+    get ``(None, None)``.
+    """
+    if auth_user is None:
+        return None, None
+    try:
+        seat, _player_id, is_captain, member = await captain_service.resolve_participant(session, auth_user, encounter)
+    except Exception as exc:  # noqa: BLE001 - re-raised below unless it's a 403
+        if getattr(exc, "status_code", None) == _HTTP_403_FORBIDDEN:
+            return None, None
+        raise
+    return (seat.id if is_captain else None), member

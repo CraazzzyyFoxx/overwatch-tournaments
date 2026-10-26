@@ -67,7 +67,6 @@ from src.schemas.captain import (
     PickBanSubmitInput,
     PickBanUndoInput,
     TeamReportIn,
-    resolve_optional_viewer,
 )
 from src.schemas.registration import (
     RegistrationStatusResponse,
@@ -75,7 +74,6 @@ from src.schemas.registration import (
     RegistrationUpdate,
     SubscriptionRedeemRequest,
 )
-from src.schemas.registration_build import AdmissionChips, _resolve_top_heroes_config
 from src.schemas.registration_team import (
     RegistrationFreeAgentListResponse,
     RegistrationTeamAcceptRequest,
@@ -97,7 +95,7 @@ from src.services.admission import AdmissionStage
 from src.services.bracket.usability import assert_encounter_live
 from src.services.encounter import flows as encounter_flows
 from src.services.encounter import pick_ban_action as pick_ban_action
-from src.services.encounter.captain import ReportResultIn, captain_service
+from src.services.encounter.captain import ReportResultIn, captain_service, resolve_optional_viewer
 from src.services.encounter.chat_access import encounter_chat_service
 from src.services.encounter.games import encounter_game_service
 from src.services.encounter.map_report import ClaimResultIn, map_report_service
@@ -113,6 +111,7 @@ from src.services.registration import service as reg_service
 from src.services.registration import teams as team_service
 from src.services.registration.admission import assert_admitted_at
 from src.services.registration.answers import answer_service
+from src.services.registration.read_model import AdmissionChips, _resolve_top_heroes_config
 from src.services.registration.recheck import assert_recheck_allowed, recheck_registration
 from src.services.registration.subscription_codes import redeem_challenge_code
 from src.services.registration.subscription_status import (
@@ -399,7 +398,7 @@ def register(broker: Any, logger: Any) -> None:
             await captain_service.captain_seat(session, user, encounter)
             # Locked for the same reason a claim locks it: two captains naming a
             # map at once must not both win.
-            game = await encounter_game_service.game_repo.get_for_update(session, game_id)
+            game = await encounter_game_service.get_game(session, game_id, for_update=True)
             if game is None or game.encounter_id != encounter.id:
                 raise HTTPException(status_code=404, detail="Game not found")
             await encounter_game_service.select_map(session, encounter, game, map_id=body.map_id)

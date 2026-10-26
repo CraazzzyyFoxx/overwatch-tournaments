@@ -14,7 +14,6 @@ from faststream.rabbit.annotations import RabbitMessage
 from shared.core.enums import PickBanKind
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.domain import pick_ban_rules as pbr
-from shared.repository import TournamentRepository
 from shared.rpc.common import q_workspace_id
 from shared.rpc.identity import rehydrate_user_optional
 from shared.rpc.query import build_query_model
@@ -34,6 +33,7 @@ from src.services.encounter import pick_ban_config
 from src.services.standings import flows as standings_flows
 from src.services.team import flows as team_flows
 from src.services.tournament import flows as tournament_flows
+from src.services.tournament.service import tournament_service
 
 
 async def _resolve_tournament_id(session: Any, data: dict[str, Any]) -> int:
@@ -45,7 +45,7 @@ async def _resolve_tournament_id(session: Any, data: dict[str, Any]) -> int:
     raw = str(data.get("id") or "").strip()
     if not raw:
         raise HTTPException(status_code=422, detail="id is required")
-    tournament_id = await TournamentRepository().resolve_public_id(session, raw)
+    tournament_id = await tournament_service.resolve_public_id(session, raw)
     if tournament_id is None:
         raise HTTPException(status_code=404, detail="Tournament not found")
     return tournament_id

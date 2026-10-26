@@ -50,9 +50,9 @@ from shared.services.ontology import project_disciplines  # noqa: E402
 from shared.testing.roles import rated_catalog, registration_role  # noqa: E402
 from src.schemas import BalancerRegistrationUpdateRequest  # noqa: E402
 from src.schemas.registration import RegistrationSubmit  # noqa: E402
-from src.schemas.registration_build import _public_rosters, _reg_to_read  # noqa: E402
 from src.services.registration.answers import answer_service  # noqa: E402
 from src.services.registration.lifecycle import lifecycle_service  # noqa: E402
+from src.services.registration.read_model import _public_rosters, _reg_to_read  # noqa: E402
 from src.services.registration.service import registration_service  # noqa: E402
 
 

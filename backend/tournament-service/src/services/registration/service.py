@@ -48,7 +48,14 @@ from src.schemas.registration import (
     RegistrationRead,
     RegistrationSubmit,
 )
-from src.schemas.registration_build import (
+from src.schemas.registration_form import RegistrationFormRead
+from src.services.admission import AdmissionConfig, AdmissionEvaluation
+from src.services.admission.resolve import resolve_admission
+from src.services.registration._common import (
+    _common_service,
+)
+from src.services.registration.answers import answer_service
+from src.services.registration.read_model import (
     AdmissionChips,
     QueuePlace,
     _build_tournament_history,
@@ -58,13 +65,6 @@ from src.schemas.registration_build import (
     registration_public_keys,
     registration_read_loaders,
 )
-from src.schemas.registration_form import RegistrationFormRead
-from src.services.admission import AdmissionConfig, AdmissionEvaluation
-from src.services.admission.resolve import resolve_admission
-from src.services.registration._common import (
-    _common_service,
-)
-from src.services.registration.answers import answer_service
 from src.services.registration.self_edit import self_edit_policy, submitted_late
 from src.services.registration.serializers import serialize_registration_form
 from src.services.registration.subscription_config import subscription_config_service

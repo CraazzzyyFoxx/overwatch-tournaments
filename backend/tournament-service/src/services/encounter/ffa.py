@@ -106,6 +106,10 @@ class FfaEncounterService:
         self.stage_repo = stage_repo
         self.games = games
 
+    async def get_encounter(self, session: AsyncSession, encounter_id: int) -> Encounter | None:
+        """The bare encounter row, lobby or duel alike; ``None`` when missing."""
+        return await self.encounter_repo.get(session, encounter_id)
+
     async def create_lobby(
         self,
         session: AsyncSession,

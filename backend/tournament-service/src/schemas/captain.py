@@ -1,7 +1,7 @@
-"""Captain result-submission and pick-ban request schemas + viewer-seat helper.
+"""Captain result-submission and pick-ban request schemas.
 
-The typed-RPC handlers validate captain bodies and resolve the viewer's
-participation through here. This module must NOT import fastapi.
+The typed-RPC handlers validate captain bodies through here. This module must
+NOT import fastapi.
 """
 
 from __future__ import annotations
@@ -10,10 +10,6 @@ from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from shared import models
-from src.services.encounter import captain as captain_mod
 
 # ── Schemas ──────────────────────────────────────────────────────────────
 
@@ -162,33 +158,3 @@ class TeamReportIn(BaseModel):
     map_codes: list[CaptainMapCodeInput] = Field(default_factory=list)
     comment: str | None = None
     custom_fields: dict[str, str] = Field(default_factory=dict)
-
-
-# ``captain_service.resolve_participant`` raises a ``BaseAPIException``; its
-# ``status_code`` is inspected by attribute.
-_HTTP_403_FORBIDDEN = 403
-
-
-async def resolve_optional_viewer(
-    session: AsyncSession,
-    auth_user: models.AuthUser | None,
-    encounter: models.Encounter,
-) -> tuple[int | None, int | None]:
-    """``(participation the viewer captains, the viewer's own mix seat)`` for read-only annotation.
-
-    The participation is ``viewer_team_id`` -- presentation, plus the one privacy rule (a blind step's draft is
-    private to its own seat). The seat is a mix member's ``encounter.team_member`` id, which a member step's turn
-    reads (spec §11.6 R4-11); a tournament viewer has none. Anonymous viewers and anyone not seated here (a 403)
-    get ``(None, None)``.
-    """
-    if auth_user is None:
-        return None, None
-    try:
-        seat, _player_id, is_captain, member = await captain_mod.captain_service.resolve_participant(
-            session, auth_user, encounter
-        )
-    except Exception as exc:  # noqa: BLE001 - re-raised below unless it's a 403
-        if getattr(exc, "status_code", None) == _HTTP_403_FORBIDDEN:
-            return None, None
-        raise
-    return (seat.id if is_captain else None), member

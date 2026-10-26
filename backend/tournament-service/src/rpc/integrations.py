@@ -35,7 +35,6 @@ from faststream.rabbit.annotations import RabbitMessage
 
 from shared import models, quota
 from shared.core.errors import BaseAPIException as HTTPException
-from shared.repository import WorkspaceRepository
 from shared.rpc.identity import ensure_workspace_permission
 from shared.services.audit import record_admin_audit
 from shared.services.division_grid.access import (
@@ -62,14 +61,11 @@ from src.services.registration.player_export import (
 from src.services.registration.serializers import serialize_feed
 from src.services.tournament import flows as tournament_flows
 
-_workspace_repo = WorkspaceRepository()
-
-
 # --- division-grid helpers ---------------------------------------------------
 
 
 async def _get_workspace_or_404(session: Any, workspace_id: int) -> models.Workspace:
-    workspace = await _workspace_repo.get_with_default_grid(session, workspace_id)
+    workspace = await division_grid_service.get_workspace_with_default_grid(session, workspace_id)
     if workspace is None:
         raise HTTPException(status_code=404, detail="Workspace not found")
     return workspace

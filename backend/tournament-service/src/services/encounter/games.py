@@ -166,6 +166,12 @@ class EncounterGameService:
         self.rule_repo = rule_repo
 
     # -- reads ------------------------------------------------------------
+    async def get_game(self, session: AsyncSession, game_id: int, *, for_update: bool = False) -> EncounterGame | None:
+        """One game row, ``None`` when missing. ``for_update`` takes its row lock."""
+        if for_update:
+            return await self.game_repo.get_for_update(session, game_id)
+        return await self.game_repo.get(session, game_id)
+
     async def list_games(
         self, session: AsyncSession, encounter_id: int, *, include_cancelled: bool = False
     ) -> list[EncounterGame]:

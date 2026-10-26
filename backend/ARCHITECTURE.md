@@ -460,7 +460,11 @@ layers, checked by `uv run --project .. lint-imports` from the service directory
 `app-service` adds a `services-independence` contract (`services.user` and `services.workspace` never
 import each other), and `stats-service` a `read-services-layers` contract for its public
 read surface (`services.achievement_reads` → `services.user` → `services.{hero,map,statistics}`),
-which grandfathers three pre-existing `map.service` imports by name so they cannot grow silently. A
+which grandfathers three pre-existing `map.service` imports by name so they cannot grow silently.
+`tournament-service` roots `shared` as well, so its `rpc-no-sql` also forbids `shared.repository`
+(a handler reaches a row, lock included, through a service method), and it adds `schemas-are-wire`:
+`src.schemas` imports no `sqlalchemy`, `shared.repository` or `src.services` (builders that load
+data, such as `services/registration/read_model.py`, live in services). A
 flat service needs nothing beyond the three above. `backend/.importlinter` covers the `shared` kernel
 (`shared.*` never imports a discipline module directly). A new service copies the first three
 contracts of `stats-service/.importlinter`.
