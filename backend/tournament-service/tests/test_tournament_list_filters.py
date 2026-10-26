@@ -5,18 +5,19 @@ probed once per test, any connection failure skips cleanly, the suite refuses to
 run against production, and the uuid-suffixed workspace is cascade-deleted at the
 end.
 
-Four properties that only exist at the SQL level:
+Five properties that only exist at the SQL level:
 
-1. ``status`` must reach the **count** query as well as the page query — a filter
-   missing from the total makes ``total`` describe a different set than
-   ``results``, and "load more" is decided by comparing exactly those two;
+1. ``status`` (any of a list) must reach the **count** query as well as the page
+   query — a filter missing from the total makes ``total`` describe a different
+   set than ``results``, and "load more" is decided by comparing exactly those two;
 2. the client's ``fields`` must be ignored, because ``apply_search`` splices each
    entry into ``depth_get_column`` and ILIKEs it (arbitrary column read, 500 on a
    typo) — and because an empty list 400s any search at all;
 3. ``participants_count`` is an aggregate, not a column, so it needs its own
    ORDER BY, and the outer join's NULLs must not float to the top of a ``desc``;
 4. every sort needs the ``id`` tie-breaker: OFFSET/LIMIT over a non-unique key
-   may repeat a row across pages and silently drop another.
+   may repeat a row across pages and silently drop another;
+5. ``per_page=-1`` ("every row") stops at 500 rows, not at the shared 10,000.
 """
 
 from __future__ import annotations
@@ -192,10 +193,22 @@ async def _compiled(**overrides) -> tuple[str, str]:
 
 
 def test_sql_puts_the_status_filter_in_both_queries() -> None:
-    page_sql, count_sql = asyncio.run(_compiled(status=enums.TournamentStatus.LIVE, per_page=10))
+    page_sql, count_sql = asyncio.run(
+        _compiled(status=[enums.TournamentStatus.LIVE, enums.TournamentStatus.PLAYOFFS], per_page=10)
+    )
 
-    assert "tournament.status = " in page_sql
-    assert "tournament.status = " in count_sql
+    assert "tournament.status IN " in page_sql
+    assert "tournament.status IN " in count_sql
+
+
+def test_sql_caps_every_row_at_500() -> None:
+    from sqlalchemy.dialects import postgresql
+
+    session = _RecordingSession()
+    asyncio.run(tournament_service.get_all(session, _params(per_page=-1)))
+    (page,) = session.page_statements
+
+    assert "LIMIT 500" in str(page.compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}))
 
 
 def test_sql_searches_name_even_when_the_client_names_another_column() -> None:
@@ -264,7 +277,15 @@ def test_status_filter_applies_to_page_and_count() -> None:
                     )
                     filtered, filtered_total = await tournament_service.get_all(
                         session,
-                        _params(workspace_id=workspace_id, per_page=50, status=enums.TournamentStatus.LIVE),
+                        _params(workspace_id=workspace_id, per_page=50, status=[enums.TournamentStatus.LIVE]),
+                    )
+                    either, either_total = await tournament_service.get_all(
+                        session,
+                        _params(
+                            workspace_id=workspace_id,
+                            per_page=50,
+                            status=[enums.TournamentStatus.LIVE, enums.TournamentStatus.REGISTRATION],
+                        ),
                     )
                 return (
                     live_ids,
@@ -272,17 +293,20 @@ def test_status_filter_applies_to_page_and_count() -> None:
                     unfiltered_total,
                     {row.id for row in filtered},
                     filtered_total,
+                    (len(either), either_total),
                     workspace_id,
                 )
             finally:
                 await _cleanup(session_maker, workspace_id=workspace_id, user_ids=[])
 
-    live_ids, all_rows, all_total, filtered_ids, filtered_total, _ = asyncio.run(_run())
+    live_ids, all_rows, all_total, filtered_ids, filtered_total, either, _ = asyncio.run(_run())
     assert all_rows == 3
     assert all_total == 3
     assert filtered_ids == live_ids
     # The count query must see the same filter, or `hasNextPage` lies.
     assert filtered_total == 2
+    # Any of several statuses: the header's "running" list in one read.
+    assert either == (3, 3)
 
 
 def test_search_ignores_client_fields_and_matches_name_only() -> None:

@@ -26,6 +26,20 @@ from src.services.team.service import team_service
 from .cache_resources import DETAIL, tournament_generations
 from .service import TournamentService, tournament_service
 
+#: The entities ``to_pydantic`` honours: all a cached read's key keeps of the client's list (``canonical_entities``).
+READ_ENTITIES = frozenset(
+    {
+        "stages",
+        "participants_count",
+        "registrations_count",
+        "teams_count",
+        "division_grid_version",
+        "roster_shape",
+        "links",
+        "rules",
+    }
+)
+
 
 def _entity_requested(entities: list[str], entity: str) -> bool:
     return entity in entities or any(item.startswith(f"{entity}.") for item in entities)
@@ -217,27 +231,33 @@ class TournamentFlowsService:
             )
         return tournament
 
+    # Values are the dumped wire dict (``v2``), not a pickled ``TournamentRead``: a hit is then a plain unpickle,
+    # and since cashews hands a value back unvalidated, a wire change bumps the version.
     @versioned(
         generations=tournament_generations("{id}", DETAIL),
         ttl=config.settings.tournaments_cache_ttl,
-        key="tournaments/{id}:{entities}",
+        key="tournaments:v2/{id}:{entities}",
         prefix="fastapi:",
     )
-    async def get_read(self, session: AsyncSession, id: int, entities: list[str]) -> schemas.TournamentRead:
-        """Return the tournament by id as ``TournamentRead``; 404 when missing."""
+    async def get_read(self, session: AsyncSession, id: int, entities: list[str]) -> dict[str, typing.Any]:
+        """The tournament by id as ``TournamentRead``'s wire dict (``exclude_none``); 404 when missing.
+
+        ``entities`` is the key's too: pass them through ``canonical_entities(..., READ_ENTITIES)``.
+        """
         tournament = await self.get(session, id, entities)
         challonge_ref = (await resolve_tournament_challonge(session, [tournament.id])).get(tournament.id)
         stage_challonge_refs: typing.Mapping[int, ChallongeRef] | None = None
         if "stages" in entities:
             stage_models = _loaded_relationship(tournament, "stages") or []
             stage_challonge_refs = await resolve_stage_challonge(session, [stage.id for stage in stage_models])
-        return await self.to_pydantic(
+        read = await self.to_pydantic(
             session,
             tournament,
             entities,
             challonge_ref=challonge_ref,
             stage_challonge_refs=stage_challonge_refs,
         )
+        return read.model_dump(mode="json", exclude_none=True)
 
     async def tournament_read(
         self, session: AsyncSession, tournament: models.Tournament, entities: list[str]
@@ -284,8 +304,8 @@ class TournamentFlowsService:
         """Lightweight id/name lookup for pickers (rpc.tournament.lookup_tournaments), optionally of one game."""
         query = (
             sa.select(models.Tournament.id, models.Tournament.name)
-            # Hidden tournaments never appear in public pickers/lookups.
-            .where(models.Tournament.is_hidden.is_(False))
+            # Hidden tournaments, and every tournament of a hidden workspace, never appear in public pickers.
+            .where(visible_tournaments_predicate(None))
             .order_by(models.Tournament.id.desc())
             .limit(limit)
         )

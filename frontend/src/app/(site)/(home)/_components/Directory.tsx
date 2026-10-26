@@ -9,7 +9,7 @@ import { Fact, OpenLoadError, Section, SectionHead } from "@/components/site/ope
 import { Skeleton } from "@/components/ui/skeleton";
 import { getFormatter } from "@/lib/datetime/server";
 import { getActiveTournaments, getPublicWorkspaces } from "@/lib/site/public-data";
-import { getTournamentStatusMeta, isTournamentStatusActive } from "@/lib/tournament/status";
+import { getTournamentStatusMeta } from "@/lib/tournament/status";
 import { cn } from "@/lib/utils";
 import statisticsService from "@/services/statistics.service";
 import type { Tournament } from "@/types/tournament.types";
@@ -35,13 +35,11 @@ interface DirectoryEntry {
 }
 
 async function loadDirectory(): Promise<DirectoryEntry[]> {
-  const [workspaces, activePage] = await Promise.all([
+  // Running tournaments only: the read filters by status server-side.
+  const [workspaces, { results: active }] = await Promise.all([
     getPublicWorkspaces(),
     getActiveTournaments()
   ]);
-  const active = activePage.results.filter((tournament) =>
-    isTournamentStatusActive(tournament.status)
-  );
 
   const entries = await Promise.all(
     workspaces.map(async (workspace): Promise<DirectoryEntry> => {

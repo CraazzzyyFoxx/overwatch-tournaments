@@ -2,7 +2,7 @@ import typing
 
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import raiseload, selectinload
 from sqlalchemy.orm.strategy_options import _AbstractLoad
 
 from shared import models
@@ -25,13 +25,24 @@ def _is_desc(order: typing.Any) -> bool:
 
 
 def tournament_entities(in_entities: list[str], child: typing.Any | None = None) -> list[_AbstractLoad]:
-    """Loader options for a tournament's requested relations; ``child`` chains them under a parent load."""
+    """Loader options for a tournament's requested relations; ``child`` chains them under a parent load.
+
+    The grid version is ``lazy="selectin"`` on the model (two statements, tiers included, per load), so a read
+    that did not ask for it (``division_grid_version`` or a nested ``division_grid_version.*``, as ``to_pydantic``
+    reads it) raises on access instead of paying for it.
+    """
     entities = []
     if "stages" in in_entities:
         stage_entity = child.selectinload(models.Tournament.stages) if child else selectinload(models.Tournament.stages)
         entities.append(stage_entity)
-    if "division_grid_version" in in_entities:
+    if any(entity.partition(".")[0] == "division_grid_version" for entity in in_entities):
         entities.append(utils.join_entity(child, models.Tournament.division_grid_version))
+    else:
+        entities.append(
+            child.raiseload(models.Tournament.division_grid_version)
+            if child
+            else raiseload(models.Tournament.division_grid_version)
+        )
     return entities
 
 
@@ -89,13 +100,13 @@ class TournamentService:
             query = query.where(models.Tournament.discipline == params.discipline)
             total_query = total_query.where(models.Tournament.discipline == params.discipline)
 
-        if params.status is not None:
+        if params.status:
             # Applied to the count query too, like every other filter here: a
             # filter missing from the total makes `total` describe a different set
             # than `results`, and the client's "load more" decision is derived
             # from exactly that comparison.
-            query = query.where(models.Tournament.status == params.status)
-            total_query = total_query.where(models.Tournament.status == params.status)
+            query = query.where(models.Tournament.status.in_(params.status))
+            total_query = total_query.where(models.Tournament.status.in_(params.status))
 
         # Hidden-tournament visibility filter: applied to BOTH the page and count
         # query so hidden tournaments never leak into results OR totals.
@@ -163,7 +174,7 @@ class TournamentService:
             .join(players_sq, players_sq.c.tournament_id == models.Tournament.id, isouter=True)
             .join(teams_sq, teams_sq.c.tournament_id == models.Tournament.id, isouter=True)
             .join(encounters_sq, encounters_sq.c.tournament_id == models.Tournament.id, isouter=True)
-            .where(models.Tournament.is_league.is_(False), models.Tournament.is_hidden.is_(False))
+            .where(models.Tournament.is_league.is_(False), visible_tournaments_predicate(None))
             .order_by(models.Tournament.start_date.nulls_last(), models.Tournament.id)
         )
         if workspace_id is not None:
@@ -206,7 +217,7 @@ class TournamentService:
                 # An unranked player has no division to average.
                 models.Player.rank.is_not(None),
                 models.Tournament.is_league.is_(False),
-                models.Tournament.is_hidden.is_(False),
+                visible_tournaments_predicate(None),
                 models.Tournament.discipline == discipline,
             )
             # Grouping by the Tournament PK lets Postgres project the whole

@@ -1,5 +1,5 @@
 import typing
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 
 from pydantic import BaseModel, BeforeValidator, computed_field
@@ -121,7 +121,8 @@ class TournamentPaginationSortSearchQueryParams(
 ):
     is_league: bool | None = None
     workspace_id: WorkspaceFilter = None
-    status: enums.TournamentStatus | None = None
+    #: Any of these statuses (``?status=live&status=playoffs``); absent or empty is every status.
+    status: list[enums.TournamentStatus] = []
     discipline: InstalledDisciplineFilter = None
 
 
@@ -129,8 +130,13 @@ class TournamentPaginationSortSearchQueryParams(
 class TournamentPaginationSortSearchParams(pagination.PaginationSortSearchParams):
     is_league: bool | None = None
     workspace_id: int | None = None
-    status: enums.TournamentStatus | None = None
+    status: list[enums.TournamentStatus] = field(default_factory=list)
     discipline: str | None = None
+
+    # ``per_page=-1`` ("every row") stops here, not at the shared 10,000: each row is ~100 us of serialization on
+    # the only event loop, and the readers that ask for every row (the header's active list, the admin pickers) want
+    # far fewer.
+    MAX_UNLIMITED_RESULTS: typing.ClassVar[int] = 500
 
     @classmethod
     def from_query_params(cls, query_params: pagination.PaginationQueryParams):

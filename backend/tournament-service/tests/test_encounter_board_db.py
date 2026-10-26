@@ -171,6 +171,16 @@ class BoardTests(EncounterLayerCase):
         self.assertEqual(2, (await self.overview(viewer=self.auth_user_id))["counts"]["my_team"])
         self.assertEqual(0, (await self.overview())["counts"]["my_team"])
 
+    async def test_the_viewers_count_alone_is_the_overviews_my_team(self) -> None:
+        # The cached overview leaves the viewer out and adds this count per request: the two must agree.
+        for values in ({}, {"status": "completed"}, {"is_upset": False}, {"scope": "my_team"}):
+            async with self.Session() as s:
+                alone = await encounter_service.get_my_team_count(
+                    s, self.params(**values), viewer_auth_user_id=self.auth_user_id
+                )
+            with self.subTest(values=values):
+                self.assertEqual((await self.overview(viewer=self.auth_user_id, **values))["counts"]["my_team"], alone)
+
     async def test_the_counts_compose_the_status_and_the_toggles(self) -> None:
         await self.set(self.final, started_at=datetime.now(UTC) - timedelta(minutes=5))
         plain = await self.overview()

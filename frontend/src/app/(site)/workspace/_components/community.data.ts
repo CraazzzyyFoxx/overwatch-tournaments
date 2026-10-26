@@ -1,6 +1,6 @@
 import { cache } from "react";
 
-import { getTournamentStatusMeta, isTournamentStatusActive } from "@/lib/tournament/status";
+import { getTournamentStatusMeta } from "@/lib/tournament/status";
 import tournamentService from "@/services/tournament.service";
 import type { Tournament } from "@/types/tournament.types";
 
@@ -17,16 +17,14 @@ import type { Tournament } from "@/types/tournament.types";
  * tournament instead.
  *
  * `getActive` is cross-workspace on purpose — on the platform host the ambient
- * workspace is whichever community the viewer last looked at, not this one.
+ * workspace is whichever community the viewer last looked at, not this one —
+ * and already holds running tournaments only.
  */
 export const getCommunityTournament = cache(
   async (workspaceId: number): Promise<Tournament | null> => {
     const page = await tournamentService.getActive();
     const mine = page.results.filter(
-      (tournament) =>
-        tournament.workspace_id === workspaceId &&
-        !tournament.is_hidden &&
-        isTournamentStatusActive(tournament.status)
+      (tournament) => tournament.workspace_id === workspaceId && !tournament.is_hidden
     );
     return (
       mine.find((tournament) => getTournamentStatusMeta(tournament.status).variant === "live") ??

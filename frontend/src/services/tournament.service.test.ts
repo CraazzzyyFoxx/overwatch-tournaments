@@ -43,6 +43,36 @@ describe("tournamentService.getActive", () => {
     await tournamentService.getActive({ skipWorkspace: false });
     expect(calls[0].options?.skipWorkspace).toBe(false);
   });
+
+  // The header refetches this on every page: the server returns the running
+  // tournaments only, instead of every tournament for the client to filter.
+  it("asks the server for the active statuses only", async () => {
+    await tournamentService.getActive();
+    expect(calls[0].options?.query?.status).toEqual([
+      "live",
+      "playoffs",
+      "registration",
+      "check_in",
+      "announcement",
+      "draft",
+    ]);
+  });
+});
+
+describe("tournamentService.getAll", () => {
+  beforeEach(() => {
+    calls.length = 0;
+  });
+
+  // Every row at per_page -1: the stages of each would be most of the payload,
+  // and a picker draws none of them.
+  it("loads no stages unless the caller asks for them", async () => {
+    await tournamentService.getAll(null, 7);
+    expect(calls[0].options?.query?.entities).toEqual(["participants_count"]);
+
+    await tournamentService.getAll(null, 7, null, ["stages", "participants_count"]);
+    expect(calls[1].options?.query?.entities).toEqual(["stages", "participants_count"]);
+  });
 });
 
 describe("tournamentService.getPublicOverview", () => {

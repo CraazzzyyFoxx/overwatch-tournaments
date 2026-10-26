@@ -16,7 +16,7 @@ import { WorkspaceAvatar } from "@/components/workspace/WorkspaceAvatar";
 import { getFormatter } from "@/lib/datetime/server";
 import { getActiveTournaments, getPublicWorkspaces } from "@/lib/site/public-data";
 import { tournamentPicture } from "@/lib/tournament/art";
-import { getTournamentStatusMeta, isTournamentStatusActive } from "@/lib/tournament/status";
+import { getTournamentStatusMeta } from "@/lib/tournament/status";
 import { tournamentHref } from "@/lib/tournament/url";
 import catalogService from "@/services/catalog.service";
 import encounterService from "@/services/encounter.service";
@@ -87,13 +87,12 @@ async function loadNow(): Promise<NowData> {
     })
   ]);
 
-  const active = activePage.results
-    .filter((tournament) => isTournamentStatusActive(tournament.status))
-    .sort(
-      (left, right) =>
-        Number(getTournamentStatusMeta(right.status).variant === "live") -
-        Number(getTournamentStatusMeta(left.status).variant === "live")
-    );
+  // Running tournaments only (the read filters by status server-side), live ones first.
+  const active = [...activePage.results].sort(
+    (left, right) =>
+      Number(getTournamentStatusMeta(right.status).variant === "live") -
+      Number(getTournamentStatusMeta(left.status).variant === "live")
+  );
   // The archive read and the active list can name the same tournament the
   // moment one finishes: never list it twice.
   const done = finished.results.filter(

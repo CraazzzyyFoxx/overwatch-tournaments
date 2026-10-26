@@ -88,6 +88,8 @@ async function click(element: Element | null | undefined) {
   await act(async () => element?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
 }
 const commandItems = () => [...document.querySelectorAll('[cmdk-item=""]')];
+// The table draws each tournament's stages, so this list (unlike the pickers) asks for them.
+const ENTITIES = ["stages", "participants_count"];
 
 beforeEach(() => {
   viewport.mobile = false;
@@ -120,7 +122,7 @@ describe("admin tournaments list across games", () => {
     useWorkspaceStore.setState({ gameScope: "lol", lastGame: "lol" });
     await mount("/admin/tournaments");
 
-    expect(getAll).toHaveBeenCalledWith(null, 1, null);
+    expect(getAll).toHaveBeenCalledWith(null, 1, null, ENTITIES);
     expect(headers().some((text) => text.includes(en.common.discipline.column))).toBe(true);
     expect(rowText("Rift Cup")).toContain("League of Legends");
     expect(rowText("Spring Cup")).toContain("Overwatch");
@@ -129,7 +131,7 @@ describe("admin tournaments list across games", () => {
   it("asks the server for one game's tournaments under a game, without the column", async () => {
     await mount("/admin/tournaments?discipline=lol");
 
-    expect(getAll).toHaveBeenLastCalledWith(null, 1, "lol");
+    expect(getAll).toHaveBeenLastCalledWith(null, 1, "lol", ENTITIES);
     expect(headers().some((text) => text.includes(en.common.discipline.column))).toBe(false);
     expect(rowText("Rift Cup")).toBeDefined();
     expect(rowText("Spring Cup")).toBeUndefined();
@@ -146,7 +148,7 @@ describe("admin tournaments list across games", () => {
     await settle();
 
     expect(navigation.current()).toBe("/admin/tournaments?status=registration&discipline=lol");
-    expect(getAll).toHaveBeenLastCalledWith(null, 1, "lol");
+    expect(getAll).toHaveBeenLastCalledWith(null, 1, "lol", ENTITIES);
     expect(rowText("Spring Cup")).toBeUndefined();
   });
 
@@ -157,7 +159,7 @@ describe("admin tournaments list across games", () => {
     await settle();
 
     expect(navigation.current()).toBe("/admin/tournaments");
-    expect(getAll).toHaveBeenLastCalledWith(null, 1, null);
+    expect(getAll).toHaveBeenLastCalledWith(null, 1, null, ENTITIES);
     expect(rowText("Spring Cup")).toBeDefined();
   });
 
@@ -174,7 +176,7 @@ describe("admin tournaments list across games", () => {
     await settle();
 
     expect(navigation.current()).toBe("/admin/tournaments");
-    expect(getAll).toHaveBeenCalledWith(null, 1, null);
+    expect(getAll).toHaveBeenCalledWith(null, 1, null, ENTITIES);
     expect(rowText("Rift Cup")).toContain("League of Legends");
   });
 
@@ -208,7 +210,7 @@ describe("admin tournaments list across games", () => {
     await act(async () => useWorkspaceStore.setState({ currentWorkspaceId: 1 }));
     await settle();
 
-    expect(getAll.mock.calls).toEqual([[null, 1, null]]);
+    expect(getAll.mock.calls).toEqual([[null, 1, null, ENTITIES]]);
     expect(rowText("Spring Cup")).toBeDefined();
     expect(rowText("Other Community Cup")).toBeUndefined();
   });

@@ -82,8 +82,9 @@ export function TournamentsBrowser() {
   const creationGame = defaultCreationGame(discipline, creationGames);
 
   const tournamentsQuery = useQuery({
-    queryKey: tournamentQueryKeys.adminList(currentWorkspaceId, discipline ?? ALL_DISCIPLINES),
-    queryFn: () => tournamentService.getAll(null, currentWorkspaceId, discipline),
+    // Its own entry: the pickers sharing `adminList` load no stages, and this table draws them.
+    queryKey: [...tournamentQueryKeys.adminList(currentWorkspaceId, discipline ?? ALL_DISCIPLINES), "stages"],
+    queryFn: () => tournamentService.getAll(null, currentWorkspaceId, discipline, ["stages", "participants_count"]),
     enabled: ready
   });
   const tournaments = useMemo(() => tournamentsQuery.data?.results ?? [], [tournamentsQuery.data]);

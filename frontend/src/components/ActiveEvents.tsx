@@ -11,7 +11,6 @@ import { WorkspaceAvatar } from "@/components/workspace/WorkspaceAvatar";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 import { useFormatter } from "@/lib/datetime/client";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
-import { isTournamentStatusActive } from "@/lib/tournament/status";
 import { tournamentHref } from "@/lib/tournament/url";
 import tournamentService from "@/services/tournament.service";
 import type { Tournament } from "@/types/tournament.types";
@@ -38,7 +37,6 @@ export default function ActiveEvents() {
 
     const byWorkspace = new Map<number, Tournament[]>();
     for (const tournament of allTournaments.results) {
-      if (!isTournamentStatusActive(tournament.status)) continue;
       const list = byWorkspace.get(tournament.workspace_id) ?? [];
       list.push(tournament);
       byWorkspace.set(tournament.workspace_id, list);

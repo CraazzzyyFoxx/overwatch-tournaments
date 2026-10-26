@@ -9,6 +9,13 @@ import {
 } from "@/types/tournament.types";
 import { apiFetch } from "@/lib/api/fetch";
 import { normalizePaginatedResponse } from "@/lib/api/normalize-paginated-response";
+import { isTournamentStatusActive, TOURNAMENT_STATUS_ORDER } from "@/lib/tournament/status";
+
+/** What the header and the home blocks call running: the list asks the server for these only. */
+const ACTIVE_STATUSES = TOURNAMENT_STATUS_ORDER.filter(isTournamentStatusActive);
+
+/** What a tournament list row can carry besides its columns; each costs the read a query. */
+type TournamentListEntity = "stages" | "participants_count" | "registrations_count" | "teams_count";
 
 type GetStandingsOptions = {
   workspaceId?: number | null;
@@ -54,11 +61,15 @@ export default class tournamentService {
     }).then((res) => res.json());
   }
 
-  /** Every row at `per_page: -1`; `discipline` narrows to one installed game, absent lists every game's. */
+  /**
+   * Every row at `per_page: -1` (the server stops at 500); `discipline` narrows to one installed game, absent
+   * lists every game's. Pickers need no stages: only a caller that draws them asks for them.
+   */
   static async getAll(
     isLeague: boolean | null = null,
     workspaceId?: number | "all" | null,
-    discipline?: string | null
+    discipline?: string | null,
+    entities: TournamentListEntity[] = ["participants_count"]
   ): Promise<PaginatedResponse<Tournament>> {
     return apiFetch(`/api/v1/tournaments`, {
       query: {
@@ -69,7 +80,7 @@ export default class tournamentService {
         per_page: -1,
         sort: "id",
         order: "desc",
-        entities: ["stages", "participants_count"]
+        entities
       }
     })
       .then((response) => response.json())
@@ -124,6 +135,7 @@ export default class tournamentService {
       }
     }).then((response) => response.json());
   }
+  /** The running tournaments (`isTournamentStatusActive`), platform-wide unless the caller opts into scope. */
   static async getActive(opts?: { skipWorkspace?: boolean }): Promise<PaginatedResponse<Tournament>> {
     return apiFetch(`/api/v1/tournaments`, {
       skipWorkspace: opts?.skipWorkspace ?? true,
@@ -132,6 +144,7 @@ export default class tournamentService {
         per_page: -1,
         sort: "id",
         order: "desc",
+        status: ACTIVE_STATUSES,
         // The home "now on the platform" block reads all three off one list:
         // a running tournament shows teams + participants, an open one its
         // registrations.
@@ -152,7 +165,7 @@ export default class tournamentService {
 
   // `ref` is the raw `/tournaments/{ref}` URL segment: the current slug, a
   // legacy numeric id, or an old slug an admin rename retired -- the backend
-  // resolves all three to the same tournament (see resolve_public_ref).
+  // resolves all three to the same tournament (see resolve_public_id).
   static async getPublicOverview(ref: string | number): Promise<Tournament> {
     return apiFetch(`/api/v1/tournaments/${ref}`, {
       skipWorkspace: true,

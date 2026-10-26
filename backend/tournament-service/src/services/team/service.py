@@ -118,30 +118,38 @@ class TeamService:
             query = query.where(name_match)
             total_query = total_query.where(name_match)
 
-        if params.sort == "group":
-            query = (
-                query.join(models.Team.standings)
-                .join(models.Standing.stage_item)
-                .where(models.StageItem.type == enums.StageItemType.GROUP)
-                .order_by(params.apply_sort_field(models.StageItem.name))
+        if params.sort in ("group", "placement"):
+            # One value per team from its standings, OUTER-joined: a team with no group or no placement yet still
+            # lists (last, whichever way the order runs), so the page agrees with `total`. Grouped first, so a team
+            # with several standings is still one row, and LIMIT/OFFSET count teams.
+            if params.sort == "group":
+                standings = (
+                    sa.select(models.Standing.team_id, sa.func.min(models.StageItem.name).label("value"))
+                    .join(models.StageItem, models.StageItem.id == models.Standing.stage_item_id)
+                    .where(models.StageItem.type == enums.StageItemType.GROUP)
+                )
+            else:
+                # The best final place, the one `resolve_team_placement` reports.
+                standings = sa.select(
+                    models.Standing.team_id, sa.func.min(models.Standing.overall_position).label("value")
+                ).where(models.Standing.overall_position > 0)
+            if params.tournament_id:
+                standings = standings.where(models.Standing.tournament_id == params.tournament_id)
+            per_team = standings.group_by(models.Standing.team_id).subquery()
+            query = query.outerjoin(per_team, per_team.c.team_id == models.Team.id).order_by(
+                params.apply_sort_field(per_team.c.value).nulls_last(), models.Team.id
             )
-        elif params.sort == "placement":
-            query = query.join(models.Team.standings).order_by(
-                params.apply_sort_field(models.Standing.overall_position)
-            )
+            query = params.apply_pagination(query)
         else:
             query = params.apply_pagination_sort(query, models.Team)
-            return await execute_page_with_total(
-                session,
-                query,
-                total_query,
-                pk=models.Team.id,
-                page=params.page,
-                only_count=params.only_count,
-            )
-        result = await session.execute(query)
-        total_result = await session.execute(total_query)
-        return result.unique().scalars().all(), total_result.scalar_one()
+        return await execute_page_with_total(
+            session,
+            query,
+            total_query,
+            pk=models.Team.id,
+            page=params.page,
+            only_count=params.only_count,
+        )
 
     async def get_player(self, session: AsyncSession, player_id: int, entities: list[str]) -> models.Player | None:
         """Return the player by id with ``entities`` loaded, or None."""
