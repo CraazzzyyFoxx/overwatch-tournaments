@@ -177,6 +177,20 @@ def test_a_participant_without_a_declared_team_or_on_both_teams_is_a_hard_error(
     assert caught.value.code == "match_log_corrupt"
 
 
+def test_a_resurrection_without_a_reviver_is_skipped_not_a_corrupt_log():
+    """Workshop logs a revive no Mercy cast (Anran's, in the 2026-10-24 tournament logs) as ``mercy_rez`` with an
+    empty reviver: one such row used to refuse the whole map as ``match_log_corrupt``."""
+    doc = ingest.decode(
+        log(
+            row("mercy_rez", 50, "Home", "", "Mercy", "Home", "A", "Anran"),
+            row("mercy_rez", 60, "Home", "A", "Mercy", "Home", "C", "Ana"),
+        ),
+        CTX,
+    )
+    assert {p.key for p in doc.participants} == {"A", "B", "C"}
+    assert [(e.type, e.actor, e.target) for e in doc.events] == [("mercy_rez", "A", "C")]
+
+
 def test_a_map_is_only_that_map_inside_its_mode_and_a_miss_carries_both_names():
     assert ingest.decode(log(start=("Ilios", "Control", "Home", "Away")), CTX).map == "ilios"
     assert ingest.decode(log(start=("Илиос", "Control", "Home", "Away")), CTX).map == "ilios"
