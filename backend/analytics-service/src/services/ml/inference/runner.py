@@ -379,6 +379,8 @@ async def run_standings_for_tournament(
     if matchups.empty:
         return 0
     teams = sorted({int(t) for t in matchups["home_team_id"].tolist() + matchups["away_team_id"].tolist()})
+    # CPU, quadratic in teams (about 26 s for 64 at n_iter=5000): no read transaction idles across it (pgBouncer, 60 s).
+    await session.commit()
     distribution = exports.simulate_standings(matchups, teams, n_iter=n_iter, prob_sharpening=prob_sharpening)
     if distribution.empty:
         return 0

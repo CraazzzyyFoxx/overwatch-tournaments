@@ -359,8 +359,8 @@ class CascadeRecalculationTests(IsolatedAsyncioTestCase):
             {(tid, algorithm, pid) for tid, pids in players_of.items() for algorithm in (1, 2, 3) for pid in pids},
             {(row.tournament_id, row.algorithm_id, row.player_id) for row in shifts},
         )
-        self.assertEqual(1, calls.count("commit"))
-        self.assertEqual("commit", calls[-1])
+        # The read transaction ends before the CPU pass and any write; every write then commits at once, last.
+        self.assertEqual([0, len(calls) - 1], [i for i, c in enumerate(calls) if c == "commit"])
 
         # Every row carries its algorithm's sd: the frame's for Points/Linear, the replay's for OpenSkill.
         by_key = {(row.tournament_id, row.algorithm_id, row.player_id): row for row in shifts}
@@ -476,7 +476,7 @@ async def _recalculate_on_postgres(url: str, ids: dict[str, int]) -> None:
     finally:
         await engine.dispose()
 
-    assert commit.await_count == 1
+    assert commit.await_count == 2  # the read transaction's end before the CPU pass, then every write at once
     # The later computed tournament was rewritten; the never-computed one between them was left alone.
     assert computed == {first, last}
     assert set(after) == {(tid, name) for tid in (first, last) for name in algorithms}

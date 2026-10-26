@@ -156,7 +156,9 @@ async def train_performance_v2_for_cutoff(
 
     - inserts one ``MLModelArtifact`` row per role with ``is_active=True``
       and deactivates older versions of the same role,
-    - writes the booster pickles to ``ANALYTICS_MODELS_DIR``.
+    - writes the booster pickles to ``ANALYTICS_MODELS_DIR``,
+    - commits the session before each role's fit, so every earlier registration is committed by then (the pickle is
+      overwritten in place as soon as it is saved, so a rollback after it never restored the old model anyway).
     """
     discipline, exports = await _scope(session, cutoff_tournament_id)
     declaration = exports.MODELS["performance"]
@@ -217,6 +219,9 @@ async def train_performance_v2_for_cutoff(
 
     outcomes: list[PerformanceTrainingOutcome] = []
     for code, role_row in roles.items():
+        # A fit can run for minutes: end the transaction (the frame reads, or the previous role's registration) first,
+        # or pgBouncer's idle-in-transaction timeout kills the connection under it.
+        await session.commit()
         try:
             result: PerformanceTrainingResult = exports.train_performance_v2(
                 train_df,
@@ -268,7 +273,8 @@ async def train_all_models(
 
     The cutoff's discipline chooses the module; one that declares none raises ``UnsupportedAnalytics`` before any
     read or write. ``model_kinds`` defaults to every kind.
-    Returns a summary dict ``{kind: <outcomes>}`` for the CLI to render.
+    Returns a summary dict ``{kind: <outcomes>}`` for the CLI to render. The session is committed before every fit, so
+    the artifacts registered before a failure stay committed.
     """
     await _scope(session, cutoff_tournament_id)
     # Train every available kind by default; the UI / CLI can still narrow via
@@ -353,6 +359,7 @@ async def train_standings_v2_for_cutoff(
         logger.warning("Empty standings training frame")
         return None
 
+    await session.commit()  # no transaction held across the fit (see train_performance_v2_for_cutoff)
     try:
         result: StandingsTrainingResult = exports.train_standings_v2(
             train_df,
@@ -438,6 +445,7 @@ async def train_shift_v2_for_cutoff(
         logger.warning("Empty shift training frame")
         return None
 
+    await session.commit()  # no transaction held across the fit (see train_performance_v2_for_cutoff)
     try:
         result: ShiftTrainingResult = exports.train_shift_v2(
             train_df,

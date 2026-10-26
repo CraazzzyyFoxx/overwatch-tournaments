@@ -70,10 +70,13 @@ async def refresh_display_names(
 ) -> int:
     """Write every Steam account's (or only the given ones') current persona name into ``display_name``.
 
-    Returns how many names changed. Flushes; the caller commits.
+    Returns how many names changed. Commits the account read before the HTTP calls (one per 100-1000 accounts, each up
+    to 30 s per phase, so a transaction held across them outlives pgBouncer's 60 s idle limit); flushes the writes, the
+    caller commits.
     """
     accounts = await _accounts.list_by_provider(session, SocialProvider.STEAM, ids=account_ids)
     steam_ids = {account.id: steam_account_id(account.username) for account in accounts}
+    await session.commit()
     profiles = await fetch_profiles(http, [steam_id for steam_id in steam_ids.values() if steam_id])
     changed = 0
     for account in accounts:

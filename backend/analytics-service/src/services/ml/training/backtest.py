@@ -321,7 +321,8 @@ class BacktestService:
         MAE / sign accuracy per shift predictor and Spearman across folds.
         """
         # ponytail: the one transaction keeps the fold writes' row locks for the whole run, so production writers of
-        # those rows wait for it. Fine for an offline CLI; point it at a replica if that ever bites.
+        # those rows wait for it. Fine for an offline CLI; point it at a replica if that ever bites. It also idles across
+        # the fold fits, past pgBouncer's 60 s idle-in-transaction limit: the CLI needs a direct connection (README).
         with (
             tempfile.TemporaryDirectory(prefix="backtest-artifacts-") as artifacts_dir,
             models_dir_override(artifacts_dir),

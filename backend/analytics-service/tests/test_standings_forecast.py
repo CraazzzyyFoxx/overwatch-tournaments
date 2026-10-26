@@ -237,7 +237,8 @@ class StandingsRunnerTests(IsolatedAsyncioTestCase):
         self.assertEqual(3, forecast_call.await_args.kwargs["workspace_id"])
         self.assertEqual("overwatch", forecast_call.await_args.kwargs["discipline"])
         self.assertEqual(2, written)
-        session.commit.assert_awaited_once()
+        # The read transaction ends before the simulation; the rows commit after it.
+        self.assertEqual(2, session.commit.await_count)
 
     def test_encounter_frame_is_out_of_reach_of_stage_b(self) -> None:
         # The leak guard, pinned at the bluntest level there is: the inference
