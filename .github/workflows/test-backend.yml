@@ -45,6 +45,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          # The analytics artifact-conversion tests `git archive` a pre-move
+          # revision (OLD_REVISION), which a depth-1 clone does not have.
+          fetch-depth: 0
       - name: Set up Python
         uses: actions/setup-python@v7
         with:

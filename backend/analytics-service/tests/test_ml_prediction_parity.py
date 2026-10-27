@@ -17,6 +17,7 @@ import asyncio
 import contextlib
 import functools
 import json
+import math
 import typing
 from pathlib import Path
 from types import SimpleNamespace
@@ -583,6 +584,9 @@ def _assert_equal(actual: typing.Any, expected: typing.Any, path: tuple = ()) ->
         assert len(actual) == len(expected), path
         for index, (value, old_value) in enumerate(zip(actual, expected, strict=True)):
             _assert_equal(value, old_value, (*path, index))
+    elif isinstance(expected, float):
+        # The frozen receipts were captured on one platform; BLAS/libm summation order differs by an ulp elsewhere.
+        assert math.isclose(actual, expected, rel_tol=1e-12, abs_tol=1e-15), (path, actual, expected)
     else:
         assert actual == expected, path
 
