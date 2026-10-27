@@ -4,7 +4,9 @@ lifecycle and the lineup it leaves behind."""
 from __future__ import annotations
 
 import asyncio
+import importlib.util
 import sys
+import unittest
 from pathlib import Path
 
 REPO_BACKEND_ROOT = Path(__file__).resolve().parents[2]
@@ -1069,6 +1071,7 @@ class MixDraftTests(EncounterWriterCase):
         self.assertEqual(("draft_setup", None), (setup["state"], setup["live_started_at"]))
         self.assertEqual(("draft_live", started.isoformat()), (live["state"], live["live_started_at"]))
 
+    @unittest.skipUnless(importlib.util.find_spec("balancer_native"), "balancer_native is not installed")
     async def test_a_tied_overflow_pool_seats_the_same_players_in_a_draft_as_in_a_balance(self) -> None:
         """R-S3: nobody has a rotation history, so the overflow tie falls to the balancer's own input order. m4 heads
         the roster's order -- a draft that read the roster would seat them and leave m3 waiting."""
