@@ -3320,6 +3320,16 @@
       "reason": "not a game assumption: a changelog entry records the games its release shipped (release-notes content)",
       "owner": "P9",
       "remove_when": "the release entry leaves the changelog"
+    },
+    {
+      "path": "frontend/src/app/(site)/(home)/_components/home-records.ts",
+      "rule": "stat-code",
+      "token": "eliminations",
+      "context": "export const LEADER_RECORDS = [\"win_streak\", \"biggest_upset\", \"eliminations\", \"longest_map\"]",
+      "count": 1,
+      "reason": "wire identifier: a stats.StatRecord code (the platform records feed), not a stat definition",
+      "owner": "P9",
+      "remove_when": "the home leaders block reads its featured records from the API"
     }
   ]
 }

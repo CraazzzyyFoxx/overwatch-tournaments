@@ -3250,7 +3250,7 @@
         "link": "Find a player",
         "alt": "A player's profile: the summary, the latest tournament's results, the role split and achievements"
       },
-      "heroes": {
+      "characters": {
         "title": "A ranking for every hero",
         "text": "Damage, healing and kills per 10 minutes, the top 10 on each hero and a table of everyone who played them.",
         "link": "Open the statistics",

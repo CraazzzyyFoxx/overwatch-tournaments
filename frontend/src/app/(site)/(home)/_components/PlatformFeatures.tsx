@@ -10,7 +10,7 @@ const TITLE_ID = "home-features-title";
 type Audience = "players" | "organizers" | "everyone";
 
 interface Feature {
-  key: "profile" | "heroes" | "registration" | "balancer" | "brackets" | "matches";
+  key: "profile" | "characters" | "registration" | "balancer" | "brackets" | "matches";
   audience: Audience;
   /** A real production capture; the changelog's are drawn per interface language. */
   src: (language: "ru" | "en") => string;
@@ -32,7 +32,7 @@ export const FEATURES: readonly Feature[] = [
     href: "/users"
   },
   {
-    key: "heroes",
+    key: "characters",
     audience: "players",
     src: (language) => `/changelog/2.0.0/heroes.${language}.webp`,
     width: 2728,
