@@ -56,13 +56,15 @@ class DashboardRpc:
 def rpc() -> Generator[DashboardRpc]:
     """The dashboard handlers against the real test DB (they open their own async session).
 
-    Each ``asyncio.run`` gets a fresh loop, so the handlers' pooled asyncpg connections are dropped after the test
-    (``close=False``: never touch the dead loop) or the next test breaks on "Event loop is closed".
+    Each ``asyncio.run`` gets a fresh loop, so the handlers' pooled asyncpg connections are dropped before and after
+    the test (``close=False``: never touch a dead loop). A connection left by an earlier test belongs to that test's
+    closed loop: reused here, it fails with "Future attached to a different loop" or "Event loop is closed".
     """
     ensure_test_postgres()
-    yield DashboardRpc()
     from src.core import db as async_db
 
+    async_db.async_engine.sync_engine.dispose(close=False)
+    yield DashboardRpc()
     async_db.async_engine.sync_engine.dispose(close=False)
 
 
