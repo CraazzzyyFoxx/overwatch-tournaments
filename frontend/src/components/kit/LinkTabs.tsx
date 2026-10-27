@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useRef, type KeyboardEvent } from "react";
+import type { KeyboardEvent } from "react";
 import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 
 import type { Tone } from "@/components/ui/tone";
-import { TabBadge, TabDot, revealTab, tabsListVariants, tabsTriggerVariants } from "@/components/ui/tabs";
+import { TabBadge, TabDot, tabIndicatorClass, tabRowRef, tabsListVariants, tabsTriggerVariants } from "@/components/ui/tabs";
 import { toggleVariants } from "@/components/ui/toggle";
 import { cn } from "@/lib/utils";
 
@@ -61,9 +61,9 @@ export interface LinkTabsProps {
  * tabindex. Arrow-key movement is added by hand below so the keyboard
  * affordance survives.
  *
- * Narrow viewports scroll the row horizontally rather than wrapping it (F18),
- * and the active tab is scrolled into view so a deep link does not land on an
- * off-screen tab.
+ * Narrow viewports scroll the row horizontally rather than wrapping it (F18);
+ * `tabRowRef` centres the active tab, so a deep link does not land on an
+ * off-screen one, and slides the underline to it.
  */
 export function LinkTabs({
   items,
@@ -73,21 +73,13 @@ export function LinkTabs({
   ariaLabel,
   scroll
 }: Readonly<LinkTabsProps>) {
-  const listRef = useRef<HTMLUListElement>(null);
-  const activeRef = useRef<HTMLAnchorElement | null>(null);
   const visible = items.filter((item) => !item.hidden);
   // One tab is not a choice: the screen is the only view there is.
   const single = visible.length < 2;
 
-  useEffect(() => {
-    if (listRef.current && activeRef.current) revealTab(listRef.current, activeRef.current);
-  }, [activeKey]);
-
   const handleKeyDown = (event: KeyboardEvent<HTMLUListElement>) => {
     if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
-    const links = Array.from(
-      listRef.current?.querySelectorAll<HTMLAnchorElement>("a[data-link-tab]") ?? []
-    );
+    const links = Array.from(event.currentTarget.querySelectorAll<HTMLAnchorElement>("a[data-link-tab]"));
     const index = links.indexOf(document.activeElement as HTMLAnchorElement);
     if (index === -1) return;
     event.preventDefault();
@@ -105,7 +97,7 @@ export function LinkTabs({
   return (
     <nav aria-label={ariaLabel}>
       <ul
-        ref={listRef}
+        ref={tabRowRef}
         onKeyDown={handleKeyDown}
         className={
           pill
@@ -134,7 +126,6 @@ export function LinkTabs({
                   scroll={scroll}
                   data-link-tab={item.key}
                   data-state={pill ? (isActive ? "on" : "off") : undefined}
-                  ref={isActive ? activeRef : undefined}
                   aria-current={isActive ? "page" : undefined}
                   className={itemClass}
                 >
@@ -144,6 +135,7 @@ export function LinkTabs({
             </li>
           );
         })}
+        {pill ? null : <li aria-hidden className={tabIndicatorClass} />}
       </ul>
     </nav>
   );

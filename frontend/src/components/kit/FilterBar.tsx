@@ -246,8 +246,14 @@ export function FilterBar({
         trigger={
           // A menu trigger, not a toggle: drop the chip's `aria-pressed`.
           narrow ? (
-            // The chips sit on a row of their own here; the count says they are there.
-            <FilterChip aria-label={t("addFilter")} aria-pressed={undefined} count={chips.length > 0 ? chips.length : undefined}>
+            // The chips sit on a row of their own here; the count says they are there. 40px below `sm`,
+            // the search field's height there.
+            <FilterChip
+              aria-label={t("addFilter")}
+              aria-pressed={undefined}
+              count={chips.length > 0 ? chips.length : undefined}
+              className="max-sm:h-10"
+            >
               <ListFilter aria-hidden className="size-3.5" />
             </FilterChip>
           ) : (

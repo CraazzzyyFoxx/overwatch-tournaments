@@ -227,7 +227,8 @@ function CommandButton({ command, narrow }: Readonly<{ command: TableCommand; na
   const props = {
     variant: command.primary ? ("default" as const) : ("outline" as const),
     size: "sm" as const,
-    className: iconOnly ? "w-8 px-0" : undefined,
+    // Below `sm` the row is 40px, the height of the search field there.
+    className: cn(narrow && "max-sm:h-10", iconOnly && "w-8 px-0 max-sm:w-10"),
     "aria-label": iconOnly ? command.label : undefined,
     title: iconOnly ? command.label : undefined,
     "aria-describedby": command.disabledReason ? reasonId : undefined
@@ -340,7 +341,7 @@ function ViewMenu({
             type="button"
             variant="outline"
             size="sm"
-            className={narrow ? "ml-auto w-8 px-0" : undefined}
+            className={narrow ? "ml-auto w-8 px-0 max-sm:size-10" : undefined}
             aria-label={narrow ? t("view") : undefined}
             title={narrow ? t("view") : undefined}
           >
@@ -368,7 +369,6 @@ function ViewMenu({
                   {t("compactRows")}
                 </DropdownMenuCheckboxItem>
               ) : null}
-              {groupBy ? (
               {sort?.columns.length ? (
                 <DropdownMenuItem onSelect={enter("sort")}>
                   <ArrowUpDown aria-hidden />
@@ -386,6 +386,7 @@ function ViewMenu({
                   <ChevronRight aria-hidden />
                 </DropdownMenuItem>
               ) : null}
+              {groupBy ? (
                 <DropdownMenuItem onSelect={enter("group")}>
                   <Layers aria-hidden />
                   <span className="min-w-0 flex-1 truncate">{groupBy.label}</span>
@@ -415,7 +416,6 @@ function ViewMenu({
                 {levelTitle}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              {level === "group" && groupBy ? (
               {level === "sort" && sort ? (
                 <>
                   <DropdownMenuRadioGroup
@@ -449,6 +449,7 @@ function ViewMenu({
                   </DropdownMenuRadioGroup>
                 </>
               ) : null}
+              {level === "group" && groupBy ? (
                 <DropdownMenuRadioGroup value={groupBy.value} onValueChange={groupBy.onChange}>
                   {groupBy.options.map((option) => (
                     <DropdownMenuRadioItem key={option.value} value={option.value}>
