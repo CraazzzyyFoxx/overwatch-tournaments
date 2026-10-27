@@ -250,7 +250,7 @@ function Stepper({
         </MoreLink>
       </div>
 
-      <TabsContent value={STEPS[index]} className="mt-0" {...holdProps}>
+      <TabsContent value={STEPS[index]} {...holdProps}>
         {/* The browser is an illustration: each step's text carries the facts, the DNS table below reads out. */}
         <div aria-hidden style={{ "--glow": own ? brandAccent : "var(--aqt-teal)" } as CSSProperties}>
           <div className={WINDOW_CLASS}>

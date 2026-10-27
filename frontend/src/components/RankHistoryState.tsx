@@ -69,7 +69,7 @@ export function RankHistorySkeleton({
         <Skeleton className="w-[120px] h-8 bg-[color:var(--aqt-overlay-2)]" />
       </div>
       {framed ? (
-        <Card variant="flat" className="p-4 shadow-inner">
+        <Card className="p-4">
           {chart}
         </Card>
       ) : (

@@ -28,7 +28,7 @@ export default function TopChart({
   const best = top[0] ? def.getValue(top[0].entry) : 0;
 
   return (
-    <Card variant="flat" asChild><section className="flex flex-col p-5">
+    <Card asChild><section className="flex flex-col p-5">
       <header className="mb-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
         <h3 className="font-onest text-lg font-semibold text-[color:var(--aqt-fg)]">
           {t("users.heroesCompare.top.title", { stat: t(def.labelKey) })}

@@ -7,7 +7,7 @@ import { useTranslations } from "next-intl";
 import { encounterScopeLabel } from "@/components/admin/encounters/EncounterCells";
 import { EntityFormDialog } from "@/components/kit/EntityFormDialog";
 import { Button } from "@/components/ui/button";
-import SearchableImageSelect from "@/components/ui/searchable-image-select";
+import { SearchableImageSelect } from "@/components/ui/searchable-image-select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useBracketRoundLabel, type BracketRoundLabelFormatter } from "@/hooks/useBracketRoundLabel";
 import { UNKNOWN_ROUND_SHAPE } from "@/lib/bracket/round-name";
@@ -174,7 +174,6 @@ export function AttachLogDialog({
           }))}
           placeholder={tx("pickTournament")}
           searchPlaceholder={tx("searchTournament")}
-          size="default"
         />
       ) : null}
       <SearchableImageSelect
@@ -192,7 +191,6 @@ export function AttachLogDialog({
         }))}
         placeholder={t("pickEncounter")}
         searchPlaceholder={t("searchEncounter")}
-        size="default"
       />
       <SearchableImageSelect
         value={selectedGame ? String(selectedGame.id) : undefined}
@@ -212,7 +210,6 @@ export function AttachLogDialog({
         ariaLabel={t("pickGame")}
         searchPlaceholder={t("searchGame")}
         disabled={encounterId === undefined || gamesQuery.isFetching || gamesQuery.isError || isPending}
-        size="default"
       />
       {encounterId !== undefined && loading ? (
         <div role="status">
@@ -275,7 +272,6 @@ export function AttachLogDialog({
                   placeholder={tx("pickSeat")}
                   ariaLabel={tx("seatFor", { team: team.key })}
                   searchPlaceholder={tx("searchSeat")}
-                  size="default"
                 />
               </div>
             ))

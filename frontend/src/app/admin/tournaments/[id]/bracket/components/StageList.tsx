@@ -140,7 +140,7 @@ export function StageList({
     grandFinalType !== "no_reset";
 
   return (
-    <Card variant="flat">
+    <Card>
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
         <p className="text-sm font-semibold text-foreground">{t("flow")}</p>
         <Button size="sm" onClick={() => setCreateOpen(true)}>
@@ -327,7 +327,8 @@ function StageCard({
           <div className="mt-2 flex items-center gap-2">
             <Progress
               value={getProgressPercent(progress.completed, progress.total)}
-              className="h-1.5 flex-1"
+              size="sm"
+              className="flex-1"
               aria-label={t("progress", { completed: progress.completed, total: progress.total })}
             />
             <span aria-hidden className="shrink-0 text-xs tabular-nums text-muted-foreground">

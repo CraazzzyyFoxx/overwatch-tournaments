@@ -374,7 +374,7 @@ export function PickBanGrid({
       <CardHeader className="flex flex-col gap-4 pb-3">
         {header}
         <div className="flex flex-row items-center justify-between gap-2 border-t border-[color:var(--aqt-border)] pt-4">
-          <CardTitle className="text-base">{t(`${kind}.title`)}</CardTitle>
+          <CardTitle>{t(`${kind}.title`)}</CardTitle>
           {roundGroups ? (
             <span className="text-sm text-[color:var(--aqt-fg-muted)]">
               {t("round.inPlayCount", { count: roundGroups.length })}

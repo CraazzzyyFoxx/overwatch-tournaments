@@ -202,7 +202,7 @@ export function SettingsOutlineList() {
               onClick={(event) => onClick(event, entry)}
               className={cn(
                 "-ml-px block truncate border-l py-1 pl-3 pr-2 text-caption transition-colors",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+                "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
                 isActive
                   ? "border-primary text-foreground"
                   : "border-transparent text-muted-foreground hover:text-foreground"

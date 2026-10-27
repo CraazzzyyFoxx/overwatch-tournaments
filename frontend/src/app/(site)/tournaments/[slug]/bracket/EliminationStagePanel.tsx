@@ -115,7 +115,7 @@ export function EliminationStagePanel({
   const isPreview = isStagePreview(stage);
 
   return (
-    <Card asChild variant="flat">
+    <Card asChild>
       <Tabs
         defaultValue={defaultView === "standings" && hasStandings ? "standings" : "bracket"}
         className="overflow-hidden"

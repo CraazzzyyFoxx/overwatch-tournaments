@@ -105,7 +105,6 @@ export function RuleOverrideDialog({
           {t("overrideDialog.action")}
         </span>
         <ToggleGroup
-          type="single"
           variant="pill"
           size="sm"
           aria-labelledby="override-action"
@@ -124,7 +123,6 @@ export function RuleOverrideDialog({
           value={draft.tournamentId}
           onValueChange={(tournamentId) => onDraftChange({ ...draft, tournamentId })}
           placeholder={t("overrideDialog.none")}
-          size="default"
         />
       </div>
       <div className="space-y-2">

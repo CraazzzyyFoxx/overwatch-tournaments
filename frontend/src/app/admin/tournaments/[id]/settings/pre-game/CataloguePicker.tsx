@@ -310,19 +310,20 @@ export function CataloguePicker(props: Readonly<CataloguePickerProps>) {
       filter.setOpen(false);
     };
 
-    const selectedName = selected ? selected.name : t("slotReserveNone");
-
     return (
       <Combobox
         open={filter.open}
         onOpenChange={filter.onOpenChange}
         label={
-          <>
-            <span className="text-muted-foreground">{props.triggerPrefix} </span>
-            {selectedName}
-          </>
+          selected && (
+            <>
+              <span className="text-muted-foreground">{props.triggerPrefix} </span>
+              {selected.name}
+            </>
+          )
         }
-        labelTitle={`${props.triggerPrefix} ${selectedName}`}
+        placeholder={`${props.triggerPrefix} ${t("slotReserveNone")}`}
+        labelTitle={selected ? `${props.triggerPrefix} ${selected.name}` : undefined}
         triggerAriaLabel={props.triggerLabel}
         size="sm"
         triggerClassName="w-56 gap-2"
@@ -335,12 +336,14 @@ export function CataloguePicker(props: Readonly<CataloguePickerProps>) {
         searchPlaceholder={searchPlaceholder}
         emptyMessage={t("catalogueEmpty")}
         shouldFilter={false}
+        clear={{
+          label: t("slotReserveNone"),
+          value: t("slotReserveNone"),
+          onSelect: () => choose(null),
+          selected: props.value == null
+        }}
       >
         <CommandGroup>
-          <CommandItem value={t("slotReserveNone")} onSelect={() => choose(null)}>
-            <span className="min-w-0 flex-1">{t("slotReserveNone")}</span>
-            <ComboboxCheck selected={props.value == null} />
-          </CommandItem>
           {filter.visibleOptions.map((option) => (
             <CommandItem key={option.id} value={option.name} onSelect={() => choose(option.id)}>
               {option.imageSrc ? (
@@ -355,7 +358,7 @@ export function CataloguePicker(props: Readonly<CataloguePickerProps>) {
                 <span aria-hidden className="size-6 shrink-0 rounded-sm bg-muted" />
               )}
               <span className="truncate">{option.name}</span>
-              <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{option.group}</span>
+              <span className="min-w-0 flex-1 truncate text-caption text-[color:var(--aqt-fg-dim)]">{option.group}</span>
               <ComboboxCheck selected={props.value === option.id} />
             </CommandItem>
           ))}

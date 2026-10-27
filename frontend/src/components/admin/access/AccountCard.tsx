@@ -130,7 +130,7 @@ export function AccountDisclosure({
     <Collapsible open={open} onOpenChange={onOpenChange} asChild>
       <section className="space-y-2.5">
         <h3>
-          <CollapsibleTrigger className="group flex min-h-7 w-full items-center gap-1.5 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          <CollapsibleTrigger className="group flex min-h-7 w-full items-center gap-1.5 rounded-md text-left focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">
             <ChevronRight
               aria-hidden
               className="size-3.5 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-90 motion-reduce:transition-none"

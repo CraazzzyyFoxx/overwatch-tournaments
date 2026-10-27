@@ -61,7 +61,6 @@ function PeriodToggle({
   const t = useTranslations("mixes.leaderboard");
   return (
     <ToggleGroup
-      type="single"
       variant="pill"
       size="sm"
       value={period}
@@ -244,7 +243,7 @@ export function PickupLeaderboard({
   const ready = !loading && !error;
 
   return (
-    <Card variant="flat" asChild>
+    <Card asChild>
       <section aria-labelledby={`${id}-title`} className="w-full min-w-0">
       <div className="flex flex-col gap-3 border-b border-[color:var(--aqt-border)] px-4 py-3.5">
         <div className="min-w-0">
@@ -484,7 +483,7 @@ export function PickupRatingTable({
   }
 
   return (
-    <Card variant="flat" asChild>
+    <Card asChild>
       <section aria-labelledby={`${id}-title`} className="w-full min-w-0">
       <div className="flex flex-col gap-3 border-b border-[color:var(--aqt-border)] px-4 py-3.5 md:flex-row md:items-center md:justify-between">
         <div className="min-w-0">

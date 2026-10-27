@@ -33,7 +33,7 @@ const FIGURE_CLASS =
 
 /** A group card per community (DESIGN §5), glowing teal under the pointer like the home's cards. */
 const CHIP_CLASS = cn(
-  "flex min-h-14 items-center gap-3 rounded-xl border border-[color:var(--aqt-overlay-border)] bg-[color:var(--aqt-overlay-1)] py-2 pl-2 pr-3 transition-[border-color,box-shadow,background-color] duration-300 hover:bg-[color:var(--aqt-overlay-2)] focus-visible:outline-none",
+  "flex min-h-14 items-center gap-3 rounded-xl border border-[color:var(--aqt-overlay-border)] bg-[color:var(--aqt-overlay-1)] py-2 pl-2 pr-3 transition-[border-color,box-shadow,background-color] duration-300 hover:bg-[color:var(--aqt-overlay-2)] focus-visible:outline-hidden",
   FEATURED_GLOW
 );
 

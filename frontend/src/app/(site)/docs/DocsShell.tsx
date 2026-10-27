@@ -21,7 +21,7 @@ import type { DocLink, DocSection } from "./nav";
 
 const itemClass = cn(
   "block rounded-md px-2 py-1.5 text-sm transition-colors",
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+  "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring",
 );
 const activeClass = "bg-accent/40 font-medium text-foreground";
 const idleClass = "text-muted-foreground hover:text-foreground";

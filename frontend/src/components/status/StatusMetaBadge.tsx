@@ -5,7 +5,6 @@ import { createElement } from "react";
 import { getStatusIcon } from "@/lib/registration/status-icons";
 import { Badge } from "@/components/ui/badge";
 import type { Tone } from "@/components/ui/tone";
-import { hexToRgba } from "@/lib/utils";
 import type { StatusMeta } from "@/types/registration.types";
 
 /** Built-in status value → tone, used when the status carries no `icon_color`. */
@@ -51,23 +50,14 @@ export default function StatusMetaBadge({
   const iconElement = createElement(getStatusIcon(resolvedMeta.icon_slug), {
     className: "size-3",
     "aria-hidden": true,
-    style: resolvedMeta.icon_color ? { color: resolvedMeta.icon_color } : undefined,
   });
-  const tintedStyle = resolvedMeta.icon_color
-    ? {
-        color: resolvedMeta.icon_color,
-        borderColor: hexToRgba(resolvedMeta.icon_color, 0.35) ?? resolvedMeta.icon_color,
-        backgroundColor: hexToRgba(resolvedMeta.icon_color, 0.12) ?? "transparent",
-      }
-    : undefined;
 
   return (
     <Badge
-      palette="aqt"
       size="sm"
+      hue={resolvedMeta.icon_color ?? undefined}
       tone={getFallbackTone(resolvedMeta.scope, resolvedMeta.value)}
       title={resolvedMeta.description ?? resolvedMeta.name}
-      style={tintedStyle}
       className={className}
     >
       <span className="inline-flex shrink-0 items-center justify-center">{iconElement}</span>

@@ -20,7 +20,6 @@ import type { Encounter } from "@/types/encounter.types";
 import type { Tournament } from "@/types/tournament.types";
 import type { CharacterPlaytime } from "@/types/user.types";
 
-import styles from "../TournamentDetail.module.css";
 import { TournamentPageState } from "../_components/TournamentPageState";
 import {
   TournamentHeroesSkeleton,
@@ -371,7 +370,7 @@ function MapsTab({ tournament, slug }: Readonly<{ tournament: Tournament; slug: 
                               data-map-name
                               href={tournamentHref({ slug }, `/matches?map=${map.id}`)}
                               title={t("common.matches")}
-                              className="truncate font-semibold after:absolute after:inset-0 hover:text-[color:var(--aqt-teal)] focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-[color:var(--aqt-teal)]"
+                              className="truncate font-semibold after:absolute after:inset-0 hover:text-[color:var(--aqt-teal)] focus-visible:outline-hidden focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-[color:var(--aqt-teal)]"
                             >
                               {map.name}
                             </Link>
@@ -469,10 +468,10 @@ const TournamentStatsPage = ({ slug }: Readonly<{ slug: string }>) => {
   }
 
   return (
-    <section className={styles.publicDataPage} aria-label={t("tournamentDetail.stats.title")}>
+    <section className="grid w-full min-w-0 max-w-full gap-4 *:min-w-0" aria-label={t("tournamentDetail.stats.title")}>
       {/* Sub-tabs, not a view density switch: hiding them below `sm` would make
           the map table unreachable on a phone, so `hideOnMobile` stays off. */}
-      <div className={styles.controlRail}>
+      <div className="flex min-w-0 max-w-full gap-1.75 overflow-x-auto overflow-y-hidden overscroll-x-contain py-0.5 [scrollbar-width:thin] *:flex-none">
         <ViewSegment
           param="tab"
           options={[

@@ -7,7 +7,7 @@ import {
   useSearchComboboxQuery,
   type SearchComboboxMessages
 } from "@/components/kit/useSearchComboboxQuery";
-import { Combobox, ComboboxCheck } from "@/components/ui/combobox";
+import { Combobox, ComboboxCheck, ComboboxMeta } from "@/components/ui/combobox";
 import { CommandGroup, CommandItem } from "@/components/ui/command";
 import { Skeleton } from "@/components/ui/skeleton";
 import { rbacService } from "@/services/rbac.service";
@@ -29,6 +29,9 @@ interface ServerSearchChrome {
   triggerAriaLabel?: string;
   disabled?: boolean;
   size?: "sm" | "default";
+  variant?: "default" | "surface";
+  /** Merged over the trigger's classes (width). */
+  triggerClassName?: string;
 }
 
 export interface ServerSearchComboboxProps<TItem> extends ServerSearchChrome {
@@ -44,7 +47,7 @@ export interface ServerSearchComboboxProps<TItem> extends ServerSearchChrome {
   messages: SearchComboboxMessages;
   placeholder: string;
   searchPlaceholder: string;
-  /** Label of the row that clears the pick; omit for no such row. */
+  /** Label of the first row, "nothing picked"; omit for no such row. */
   clearLabel?: string;
   /** Trimmed characters before the first request; the hook's default (2) when omitted. */
   minQueryLength?: number;
@@ -63,6 +66,8 @@ export function ServerSearchCombobox<TItem>({
   triggerAriaLabel,
   disabled = false,
   size,
+  variant,
+  triggerClassName,
   onSelect,
   queryKey,
   fetch,
@@ -85,8 +90,7 @@ export function ServerSearchCombobox<TItem>({
     });
 
   const picked = value ? results.find((item) => itemId(item) === value) : undefined;
-  // `||`, not `??`: a form's cleared name field is "", and "" is no label.
-  const text = picked ? label(picked) : selectedLabel || placeholder;
+  const text = picked ? label(picked) : selectedLabel;
 
   return (
     <Combobox
@@ -94,9 +98,13 @@ export function ServerSearchCombobox<TItem>({
       open={open}
       onOpenChange={setOpen}
       label={labelLoading ? <Skeleton className="h-4 w-32" /> : text}
-      labelTitle={text}
+      placeholder={placeholder}
+      // A Skeleton cannot title the trigger; the text it stands in for can.
+      labelTitle={labelLoading ? text : undefined}
       triggerAriaLabel={triggerAriaLabel}
       size={size}
+      variant={variant}
+      triggerClassName={triggerClassName}
       disabled={disabled}
       searchValue={searchValue}
       onSearchValueChange={setSearchValue}
@@ -105,7 +113,7 @@ export function ServerSearchCombobox<TItem>({
       // Results are already server-filtered; don't let cmdk re-filter them out.
       shouldFilter={false}
       clear={
-        clearLabel && value
+        clearLabel
           ? { label: clearLabel, value: "__clear__", onSelect: () => handleSelect(undefined) }
           : undefined
       }
@@ -136,7 +144,7 @@ interface UserPickerProps<TPicked> extends ServerSearchChrome {
   onSelect: (item: TPicked | undefined) => void;
   placeholder?: string;
   searchPlaceholder?: string;
-  /** Label of the row that clears the pick; `null` drops the row. */
+  /** Label of the first row, "nothing picked"; `null` drops the row. */
   clearLabel?: string | null;
 }
 
@@ -163,7 +171,7 @@ export function UserSearchCombobox({
       renderItem={(user) => (
         <span className="flex items-center justify-between gap-3">
           <span className="truncate">{user.name}</span>
-          <span className="shrink-0 text-xs tabular-nums text-muted-foreground">#{user.id}</span>
+          <ComboboxMeta>#{user.id}</ComboboxMeta>
         </span>
       )}
       messages={{
@@ -174,7 +182,7 @@ export function UserSearchCombobox({
       }}
       placeholder={placeholder ?? t("placeholder")}
       searchPlaceholder={searchPlaceholder ?? t("searchPlaceholder")}
-      clearLabel={clearLabel === null ? undefined : (clearLabel ?? t("clearSelection"))}
+      clearLabel={clearLabel === null ? undefined : (clearLabel ?? t("none"))}
     />
   );
 }
@@ -206,9 +214,9 @@ export function AuthUserSearchCombobox({
       }
       onSelect={(user) => onSelect(user && { id: user.id, label: user.username })}
       queryKey={["auth-users-search", workspaceId ?? null]}
-      fetch={({ query }) =>
+      fetch={({ query, signal }) =>
         rbacService
-          .listUsers({ search: query, per_page: 20, workspace_id: workspaceId })
+          .listUsers({ search: query, per_page: 20, workspace_id: workspaceId }, signal)
           .then((page) => page.results)
       }
       itemId={(user) => user.id}
@@ -218,9 +226,7 @@ export function AuthUserSearchCombobox({
       renderItem={(user) => (
         <span className="flex flex-col">
           <span className="truncate">{user.username}</span>
-          {user.email ? (
-            <span className="truncate text-xs text-muted-foreground">{user.email}</span>
-          ) : null}
+          {user.email ? <ComboboxMeta className="truncate">{user.email}</ComboboxMeta> : null}
         </span>
       )}
       messages={{
@@ -231,7 +237,7 @@ export function AuthUserSearchCombobox({
       }}
       placeholder={placeholder ?? t("placeholder")}
       searchPlaceholder={searchPlaceholder ?? t("searchPlaceholder")}
-      clearLabel={clearLabel === null ? undefined : (clearLabel ?? t("clearSelection"))}
+      clearLabel={clearLabel === null ? undefined : (clearLabel ?? t("none"))}
     />
   );
 }

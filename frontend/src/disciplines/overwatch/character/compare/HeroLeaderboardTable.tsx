@@ -107,7 +107,7 @@ const HeroLeaderboardTable = ({
         : t("users.heroesCompare.table.noData");
 
   return (
-    <Card variant="flat" asChild><section aria-labelledby={TITLE_ID} className="overflow-hidden">
+    <Card asChild><section aria-labelledby={TITLE_ID} className="overflow-hidden">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-[color:var(--aqt-border)] px-4 py-3">
         <h2 id={TITLE_ID} className="font-onest text-lg font-semibold text-[color:var(--aqt-fg)]">
           {t("users.heroesCompare.table.allPlayers")}

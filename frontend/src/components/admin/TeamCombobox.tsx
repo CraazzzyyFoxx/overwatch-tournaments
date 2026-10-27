@@ -4,7 +4,7 @@ import { useCallback, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 
 import type { Team } from "@/types/team.types";
-import { Combobox, ComboboxCheck } from "@/components/ui/combobox";
+import { Combobox, ComboboxCheck, ComboboxMeta } from "@/components/ui/combobox";
 import TeamName from "@/components/TeamName";
 import { CommandGroup, CommandItem } from "@/components/ui/command";
 
@@ -46,7 +46,6 @@ export function TeamCombobox({
   const [searchValue, setSearchValue] = useState("");
 
   const selected = useMemo(() => teams.find((team) => team.id === value), [teams, value]);
-  const selectedLabel = selected?.name ?? resolvedPlaceholder;
 
   const handleSelect = useCallback(
     (team: Team | undefined) => {
@@ -62,7 +61,8 @@ export function TeamCombobox({
       id={id}
       open={open}
       onOpenChange={setOpen}
-      label={selectedLabel}
+      label={selected?.name}
+      placeholder={resolvedPlaceholder}
       triggerAriaLabel={triggerAriaLabel}
       triggerClassName={triggerClassName}
       size={size}
@@ -91,7 +91,7 @@ export function TeamCombobox({
           >
             <div className="flex min-w-0 flex-1 items-center justify-between gap-3">
               <TeamName team={team} size="xs" />
-              <span className="shrink-0 text-xs tabular-nums text-muted-foreground">#{team.id}</span>
+              <ComboboxMeta>#{team.id}</ComboboxMeta>
             </div>
             <ComboboxCheck selected={value === team.id} />
           </CommandItem>

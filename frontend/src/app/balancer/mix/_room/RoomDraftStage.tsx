@@ -277,7 +277,7 @@ export function RoomDraftStage({
       </ul>
 
       {status === "live" || paused ? (
-        <OverlayBar tone={myPick ? "active" : "neutral"} ariaLabel={t("bar")} className="lg:w-[min(720px,52vw)]">
+        <OverlayBar tone={myPick ? "accent" : "neutral"} ariaLabel={t("bar")} className="lg:w-[min(720px,52vw)]">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <div className="min-w-0 flex-1">
               <p className="truncate text-body font-semibold text-[color:var(--aqt-fg)]">{headline}</p>

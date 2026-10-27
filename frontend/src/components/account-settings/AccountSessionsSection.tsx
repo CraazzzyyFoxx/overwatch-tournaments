@@ -198,7 +198,7 @@ export default function AccountSessionsSection() {
           {/* Ended sessions only matter when auditing, so they start collapsed. */}
           {ended.length > 0 ? (
             <details className="group py-3 first:pt-0 last:pb-0">
-              <summary className="flex min-h-9 cursor-pointer list-none items-center gap-2 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+              <summary className="flex min-h-9 cursor-pointer list-none items-center gap-2 rounded-md outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
                 <span className="text-body font-medium text-[color:var(--aqt-fg)]">{t("historyTitle")}</span>
                 <span className="aqt-tnum text-caption text-[color:var(--aqt-fg-dim)]">{ended.length}</span>
                 <ChevronDown

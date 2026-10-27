@@ -57,7 +57,6 @@ export function RankSettingsPanel({ discipline }: Readonly<{ discipline: string 
           <SettingGroup id="collection" title={t("collection.title")}>
             <SettingRow label={t("collection.scope")} hint={t("collection.scopeHint")}>
               <ToggleGroup
-                type="single"
                 variant="pill"
                 size="sm"
                 value={form.scope}

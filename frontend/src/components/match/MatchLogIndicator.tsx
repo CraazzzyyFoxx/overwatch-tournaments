@@ -30,7 +30,7 @@ const matchLogDownloadUrl = (matchId: number) => `/api/v1/matches/${matchId}/log
 
 const BASE =
   "inline-flex h-7 w-7 items-center justify-center rounded-[7px] border transition-colors " +
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+  "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring";
 const HAS =
   "border-[color:color-mix(in_srgb,var(--aqt-emerald)_30%,transparent)] " +
   "bg-[color:color-mix(in_srgb,var(--aqt-emerald)_10%,transparent)] text-[color:var(--aqt-emerald)]";
@@ -142,7 +142,7 @@ const MatchLogIndicator = ({ hasLogs, logs, size = 15, className }: MatchLogIndi
               href={matchLogDownloadUrl(log.matchId)}
               download
               onClick={stop}
-              className="flex items-center gap-2 rounded-md px-2 py-1.5 text-caption transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="flex items-center gap-2 rounded-md px-2 py-1.5 text-caption transition-colors hover:bg-muted focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
             >
               <FileDown size={13} strokeWidth={1.9} className="text-[color:var(--aqt-emerald)]" aria-hidden />
               <span className="truncate">

@@ -2,14 +2,20 @@
 
 import * as React from "react";
 import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu";
-import { Check, ChevronRight, Circle } from "lucide-react";
+import { Check, ChevronRight } from "lucide-react";
 
 import { eyebrowClass } from "@/components/ui/eyebrow";
-import { floatingPanelClass } from "@/components/ui/popover";
+import {
+  floatingPanelClass,
+  floatingPanelFadeClass,
+  floatingRowClass
+} from "@/components/ui/popover";
+import { TONE_TEXT } from "@/components/ui/tone";
 import { cn } from "@/lib/utils";
 
-const PANEL_FADE =
-  "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0";
+/** A menu row under the pointer or the arrow keys; a disabled one keeps its title reachable. */
+const ITEM_CLASS =
+  "focus:bg-[color:var(--aqt-overlay-4)] focus:text-[color:var(--aqt-fg)] data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50";
 
 const DropdownMenu = DropdownMenuPrimitive.Root;
 
@@ -32,7 +38,9 @@ const DropdownMenuSubTrigger = React.forwardRef<
   <DropdownMenuPrimitive.SubTrigger
     ref={ref}
     className={cn(
-      "flex cursor-default select-none items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-none focus:bg-[color:var(--aqt-overlay-4)] data-[state=open]:bg-[color:var(--aqt-overlay-4)] [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+      floatingRowClass,
+      ITEM_CLASS,
+      "data-[state=open]:bg-[color:var(--aqt-overlay-4)] data-[state=open]:text-[color:var(--aqt-fg)] [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
       inset && "pl-8",
       className
     )}
@@ -50,7 +58,12 @@ const DropdownMenuSubContent = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DropdownMenuPrimitive.SubContent
     ref={ref}
-    className={cn("z-50 min-w-[8rem] overflow-hidden p-1", floatingPanelClass, PANEL_FADE, className)}
+    className={cn(
+      "z-50 max-h-[var(--radix-dropdown-menu-content-available-height)] min-w-[8rem] overflow-y-auto overflow-x-hidden p-1",
+      floatingPanelClass,
+      floatingPanelFadeClass,
+      className
+    )}
     {...props}
   />
 ));
@@ -67,7 +80,7 @@ const DropdownMenuContent = React.forwardRef<
       className={cn(
         "z-50 max-h-[var(--radix-dropdown-menu-content-available-height)] min-w-[8rem] overflow-y-auto overflow-x-hidden p-1",
         floatingPanelClass,
-        PANEL_FADE,
+        floatingPanelFadeClass,
         className
       )}
       {...props}
@@ -80,12 +93,17 @@ const DropdownMenuItem = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.Item>,
   React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Item> & {
     inset?: boolean;
+    /** `destructive`: the danger tone, at rest and under the cursor (delete, cancel, unlink). */
+    variant?: "default" | "destructive";
   }
->(({ className, inset, ...props }, ref) => (
+>(({ className, inset, variant = "default", ...props }, ref) => (
   <DropdownMenuPrimitive.Item
     ref={ref}
     className={cn(
-      "relative flex cursor-default select-none items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-none transition-colors focus:bg-[color:var(--aqt-overlay-4)] focus:text-[color:var(--aqt-fg)] data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&>svg]:size-4 [&>svg]:shrink-0",
+      floatingRowClass,
+      ITEM_CLASS,
+      "[&>svg]:size-4 [&>svg]:shrink-0",
+      variant === "destructive" && cn(TONE_TEXT.danger, "focus:text-[color:var(--aqt-rose)]"),
       inset && "pl-8",
       className
     )}
@@ -94,24 +112,25 @@ const DropdownMenuItem = React.forwardRef<
 ));
 DropdownMenuItem.displayName = DropdownMenuPrimitive.Item.displayName;
 
+/** The chosen mark of a checkbox or radio item: a teal check on the left, nothing when unchosen (DESIGN §5). */
+const itemCheck = (
+  <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
+    <DropdownMenuPrimitive.ItemIndicator>
+      <Check className="h-4 w-4 text-[color:var(--aqt-teal)]" />
+    </DropdownMenuPrimitive.ItemIndicator>
+  </span>
+);
+
 const DropdownMenuCheckboxItem = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.CheckboxItem>,
   React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.CheckboxItem>
->(({ className, children, checked, ...props }, ref) => (
+>(({ className, children, ...props }, ref) => (
   <DropdownMenuPrimitive.CheckboxItem
     ref={ref}
-    className={cn(
-      "relative flex cursor-default select-none items-center rounded-md py-1.5 pl-8 pr-2 text-sm outline-none transition-colors focus:bg-[color:var(--aqt-overlay-4)] focus:text-[color:var(--aqt-fg)] data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
-      className
-    )}
-    checked={checked}
+    className={cn(floatingRowClass, ITEM_CLASS, "pl-8", className)}
     {...props}
   >
-    <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
-      <DropdownMenuPrimitive.ItemIndicator>
-        <Check className="h-4 w-4 text-[color:var(--aqt-teal)]" />
-      </DropdownMenuPrimitive.ItemIndicator>
-    </span>
+    {itemCheck}
     {children}
   </DropdownMenuPrimitive.CheckboxItem>
 ));
@@ -124,17 +143,10 @@ const DropdownMenuRadioItem = React.forwardRef<
 >(({ className, children, ...props }, ref) => (
   <DropdownMenuPrimitive.RadioItem
     ref={ref}
-    className={cn(
-      "relative flex cursor-default select-none items-center rounded-md py-1.5 pl-8 pr-2 text-sm outline-none transition-colors focus:bg-[color:var(--aqt-overlay-4)] focus:text-[color:var(--aqt-fg)] data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
-      className
-    )}
+    className={cn(floatingRowClass, ITEM_CLASS, "pl-8", className)}
     {...props}
   >
-    <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
-      <DropdownMenuPrimitive.ItemIndicator>
-        <Circle className="h-2 w-2 fill-current text-[color:var(--aqt-teal)]" />
-      </DropdownMenuPrimitive.ItemIndicator>
-    </span>
+    {itemCheck}
     {children}
   </DropdownMenuPrimitive.RadioItem>
 ));

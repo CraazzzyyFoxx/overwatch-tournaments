@@ -149,7 +149,7 @@ export function SectionNav({ groups, activeKey }: Readonly<SectionNavProps>) {
                       }}
                       className={cn(
                         "block rounded-md px-2 py-1.5 text-sm transition-colors",
-                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                        "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring",
                         isActive
                           ? "bg-accent/40 font-medium text-foreground"
                           : "text-muted-foreground hover:text-foreground",

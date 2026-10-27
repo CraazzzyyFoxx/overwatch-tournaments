@@ -30,7 +30,7 @@ export function PersonInspectorPanel({
       <div className="flex items-center gap-3">
         <Avatar className="size-12">
           <AvatarImage src={person.avatar_url ?? undefined} alt="" />
-          <AvatarFallback className="bg-muted/60 text-muted-foreground">
+          <AvatarFallback>
             {initials(person.name)}
           </AvatarFallback>
         </Avatar>

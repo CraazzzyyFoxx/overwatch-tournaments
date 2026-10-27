@@ -294,19 +294,17 @@ function EncounterEditDialogBody({
 
   return (
     <DialogContent className="max-w-lg">
-      <DialogHeader className="space-y-1">
-        <DialogTitle className="flex items-center gap-2 text-[color:var(--aqt-fg)] text-lg font-bold tracking-tight">
+      <DialogHeader>
+        <DialogTitle className="flex items-center gap-2">
           {t("matchEdit.title")}
           {encounter.result_status === "pending_confirmation" && (
-            <Badge className="border-0 bg-warning text-warning-foreground">
-              {t("matchEdit.pendingConfirmation")}
-            </Badge>
+            <Badge tone="warning">{t("matchEdit.pendingConfirmation")}</Badge>
           )}
           {encounter.result_status === "disputed" && (
-            <Badge className="border-0 bg-destructive text-destructive-foreground">{t("matchEdit.disputed")}</Badge>
+            <Badge tone="danger">{t("matchEdit.disputed")}</Badge>
           )}
         </DialogTitle>
-        <DialogDescription className="text-[color:var(--aqt-fg-muted)] text-sm font-semibold mt-1">
+        <DialogDescription>
           {seats.map((seat) => seat.name).join(" vs ")}
         </DialogDescription>
       </DialogHeader>
@@ -496,11 +494,7 @@ function EncounterEditDialogBody({
                   </SelectTrigger>
                   <SelectContent>
                     {BEST_OF_OPTIONS.map((n) => (
-                      <SelectItem
-                        key={n}
-                        value={String(n)}
-                        className="cursor-pointer"
-                      >
+                      <SelectItem key={n} value={String(n)}>
                         {`BO${n}`}
                       </SelectItem>
                     ))}
@@ -518,6 +512,7 @@ function EncounterEditDialogBody({
                   placeholder={t("matchEdit.scheduledAtPlaceholder")}
                   value={scheduledAt}
                   onChange={setScheduledAt}
+                  variant="surface"
                 />
                 <p className="mt-1 text-label font-medium leading-normal text-[color:var(--aqt-fg-dim)]">
                   {t("matchEdit.scheduledAtHint")}
@@ -534,11 +529,7 @@ function EncounterEditDialogBody({
               </SelectTrigger>
               <SelectContent>
                 {statusOptions.map((item) => (
-                  <SelectItem
-                    key={item}
-                    value={item}
-                    className="cursor-pointer"
-                  >
+                  <SelectItem key={item} value={item}>
                     {t(`matchEdit.statuses.${item}`)}
                   </SelectItem>
                 ))}

@@ -1,6 +1,5 @@
 "use client";
 
-import type { CSSProperties } from "react";
 import { ChevronLeft } from "lucide-react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
@@ -61,13 +60,7 @@ export function RoomHeader({ owner, board, gating, presence, connectionState }: 
       </Link>
       <span aria-hidden className="hidden h-5 w-px bg-[color:var(--aqt-border-2)] sm:block" />
       <h1 className="font-onest text-heading font-semibold">{t("shell.title")}</h1>
-      <Badge
-        palette="aqt"
-        voice="label"
-        shape="pill"
-        className="shrink-0"
-        style={{ "--badge-hue": STATUS_COLOR[status] } as CSSProperties}
-      >
+      <Badge hue={STATUS_COLOR[status]} voice="label" shape="pill" className="shrink-0">
         <StatusDot />
         {t(`shell.status.${status}`)}
       </Badge>
@@ -89,7 +82,7 @@ export function RoomHeader({ owner, board, gating, presence, connectionState }: 
         <span className="whitespace-nowrap text-caption tabular-nums text-[color:var(--aqt-fg-dim)]">
           {t("shell.viewers", { count: viewerCount(presence) })}
         </span>
-        <Badge palette="aqt" tone="neutral" shape="pill" className="max-w-full">
+        <Badge tone="neutral" shape="pill" className="max-w-full">
           <span className="truncate">
             {seat === "captain" || seat === "captain_admin"
               ? t(`shell.seat.${seat}`, { team: myTeam?.name ?? "" })

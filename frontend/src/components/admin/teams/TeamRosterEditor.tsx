@@ -7,7 +7,7 @@ import { ArrowLeftRight, Check, Sparkles, Trash2, UserPlus, X } from "lucide-rea
 
 import {
   AdminDetailTableShell,
-  getAdminDetailTableStyles
+  adminDetailTableStyles as tableStyles
 } from "@/components/admin/AdminDetailTable";
 import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import { EmptyNote } from "@/components/kit/EmptyNote";
@@ -75,7 +75,6 @@ export function TeamRosterEditor({
   const roleT = useTranslations("common.roleOntology");
   const subRoleErrorId = useId();
   const queryClient = useQueryClient();
-  const tableStyles = getAdminDetailTableStyles("compact");
   const [draft, setDraft] = useState<RosterDraft | null>(null);
   const [pendingRemoval, setPendingRemoval] = useState<Player | null>(null);
 
@@ -244,8 +243,7 @@ export function TeamRosterEditor({
           <Button
             type="button"
             variant="ghost"
-            size="icon"
-            className="size-8"
+            size="icon-toolbar"
             aria-label={t("cancel")}
             onClick={() => setDraft(null)}
           >
@@ -291,7 +289,7 @@ export function TeamRosterEditor({
       <AdminDetailTableShell className="rounded-none border-0 [&_tr>*:first-child]:pl-5 [&_tr>*:last-child]:pr-5">
         <Table>
           <TableHeader>
-            <TableRow className={tableStyles.headerRow}>
+            <TableRow>
               <TableHead className={tableStyles.head}>{t("player")}</TableHead>
               <TableHead className={tableStyles.head}>{t("role")}</TableHead>
               <TableHead className={tableStyles.head}>{t("rank")}</TableHead>

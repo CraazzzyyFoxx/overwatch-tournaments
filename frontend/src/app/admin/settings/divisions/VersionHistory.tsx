@@ -62,7 +62,7 @@ export function VersionHistory({
   return (
     // A container: the list sits in a half-width column beside the divisions table, and the row only has room for a
     // third column of actions when the LIST is wide, not the viewport.
-    <Card asChild variant="flat">
+    <Card asChild>
       <ol className="@container divide-y divide-border">
         {ordered.map((version) => {
           const state = versionState(version, activeVersionId);

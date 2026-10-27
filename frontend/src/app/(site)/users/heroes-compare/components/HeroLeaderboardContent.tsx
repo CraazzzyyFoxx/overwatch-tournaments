@@ -151,7 +151,7 @@ const HeroLeaderboardContent = ({ scope, initial }: Readonly<{ scope: StatsScope
           onSelect={(id) => updateParams({ hero_id: id })}
         />
       ) : heroesQuery.isLoading ? (
-        <Skeleton className="h-[152px] w-full rounded-[var(--aqt-radius)]" />
+        <Skeleton className="h-[152px] w-full rounded-xl" />
       ) : null}
 
       {heroSelection.status === "error" ? (
@@ -172,7 +172,7 @@ const HeroLeaderboardContent = ({ scope, initial }: Readonly<{ scope: StatsScope
           <Spinner />
         </div>
       ) : heroId === undefined ? (
-        <Card variant="flat" className="flex flex-col items-center justify-center gap-3.5 rounded-[var(--aqt-radius)] py-[90px] text-center">
+        <Card className="flex flex-col items-center justify-center gap-3.5 py-[90px] text-center">
           <Sword aria-hidden className="h-10 w-10 text-[color:var(--aqt-fg-faint)] opacity-50" />
           <p className="max-w-sm text-sm leading-relaxed text-[color:var(--aqt-fg-dim)]">
             {t("users.heroesCompare.selectHeroPrompt")}

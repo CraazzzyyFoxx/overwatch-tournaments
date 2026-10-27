@@ -14,8 +14,6 @@ import { seatAt, seatTeam, type DuelSlot } from "@/lib/encounter/seats";
 import { cn } from "@/lib/utils";
 import type { Encounter, Match } from "@/types/encounter.types";
 
-import styles from "../TournamentDetail.module.css";
-
 export type MatchRowProps = {
   encounter: Encounter;
   /** Leading cell: "21:00", "M10", a group chip. */
@@ -29,6 +27,26 @@ export type MatchRowProps = {
 };
 
 const ROW_HOVER = "transition-colors hover:bg-[color:var(--aqt-overlay-2)]";
+
+/** A score: the display face, heavier and larger than the team names beside it. */
+const SCORE = "font-display text-title leading-none font-bold tabular-nums";
+
+/**
+ * Each cell's place in the row, by grid line so the DOM stays one. Under 640px
+ * the row is the bracket node — lead and actions on top, each team on its own
+ * line with its score on the right, so neither name is cut to fit the other.
+ * From 640px it is the scoreboard line: lead · slot 1 · score – score · slot 2
+ * · actions, the names leaning on the score.
+ */
+const CELL = {
+  lead: "col-span-2 col-start-1 row-start-1 sm:col-span-1 sm:col-start-1",
+  t1: "col-start-1 row-start-2 sm:col-start-2 sm:row-start-1 sm:justify-self-end",
+  s1: "col-span-2 col-start-2 row-start-2 justify-self-end sm:col-span-1 sm:col-start-3 sm:row-start-1",
+  dash: "hidden sm:col-start-4 sm:row-start-1 sm:block",
+  s2: "col-span-2 col-start-2 row-start-3 justify-self-end sm:col-span-1 sm:col-start-5 sm:row-start-1 sm:justify-self-start",
+  t2: "col-start-1 row-start-3 sm:col-start-6 sm:row-start-1",
+  act: "col-start-3 row-start-1 sm:col-start-7"
+} as const;
 
 /**
  * One settled (or scheduled) match as a row. The maps of the series unfold
@@ -65,6 +83,7 @@ export function MatchRow({
         data-cell={`t${slot}`}
         className={cn(
           "flex min-w-0",
+          CELL[`t${slot}`],
           won && "font-semibold text-[color:var(--aqt-fg)]",
           lost && "text-[color:var(--aqt-fg-dim)]"
         )}
@@ -85,7 +104,8 @@ export function MatchRow({
     <span
       data-cell={`s${slot}`}
       className={cn(
-        styles.score,
+        SCORE,
+        CELL[`s${slot}`],
         winner === slot ? "text-[color:var(--aqt-teal)]" : "text-[color:var(--aqt-fg-muted)]",
         !hasScore && "text-[color:var(--aqt-fg-faint)] sm:invisible"
       )}
@@ -95,27 +115,33 @@ export function MatchRow({
   );
 
   const summary = (
-    <div data-match-row className={cn(styles.matchRow, "relative px-3.5 py-2.5 text-ui")}>
+    <div
+      data-match-row
+      className="relative grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-3 gap-y-1 px-3.5 py-2.5 text-ui sm:grid-cols-[minmax(4.5rem,auto)_minmax(0,1fr)_1.5rem_auto_1.5rem_minmax(0,1fr)_auto] sm:gap-y-0"
+    >
       {/* The stretched link sits under the cells; the bracket link is lifted
           above it, so the two never nest. */}
       {expandable ? null : (
         <HoverPrefetchLink
           href={`/encounters/${encounter.id}`}
-          className="absolute inset-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[color:var(--aqt-teal)]"
+          className="absolute inset-0 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[color:var(--aqt-teal)]"
           aria-label={t("bracket.viewMatch")}
         />
       )}
-      <span data-cell="lead" className="min-w-0 text-label text-[color:var(--aqt-fg-faint)]">
+      <span data-cell="lead" className={cn("min-w-0 text-label text-[color:var(--aqt-fg-faint)]", CELL.lead)}>
         {leading}
       </span>
       {side(1)}
       {score(1)}
-      <span data-cell="dash" className={cn(styles.score, "text-center font-normal text-[color:var(--aqt-fg-faint)]")}>
+      <span data-cell="dash" className={cn(SCORE, CELL.dash, "text-center font-normal text-[color:var(--aqt-fg-faint)]")}>
         {hasScore ? "–" : <span className="text-label uppercase">vs</span>}
       </span>
       {score(2)}
       {side(2)}
-      <span data-cell="act" className="flex items-center justify-end gap-2 text-label text-[color:var(--aqt-fg-faint)]">
+      <span
+        data-cell="act"
+        className={cn("flex items-center justify-end gap-2 text-label text-[color:var(--aqt-fg-faint)]", CELL.act)}
+      >
         {trailing ? <span className="hidden whitespace-nowrap sm:inline">{trailing}</span> : null}
         {bracketHref ? (
           <HoverPrefetchLink
@@ -148,7 +174,7 @@ export function MatchRow({
     <details className={cn("group", rowBorder)}>
       <summary
         className={cn(
-          "cursor-pointer list-none [&::-webkit-details-marker]:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[color:var(--aqt-teal)]",
+          "cursor-pointer list-none [&::-webkit-details-marker]:hidden focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[color:var(--aqt-teal)]",
           ROW_HOVER
         )}
       >

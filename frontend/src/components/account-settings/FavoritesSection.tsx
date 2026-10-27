@@ -20,7 +20,7 @@ export default function FavoritesSection() {
 
   if (isLoading) {
     return (
-      <Card variant="flat" aria-hidden className="divide-y divide-border/60">
+      <Card aria-hidden className="divide-y divide-border/60">
         {["a", "b", "c"].map((key) => (
           <div key={key} className={ROW_CLASS}>
             <Skeleton className="h-4 w-40" />
@@ -43,14 +43,14 @@ export default function FavoritesSection() {
   }
 
   return (
-    <Card variant="flat" asChild className="divide-y divide-border/60">
+    <Card asChild className="divide-y divide-border/60">
       <ul>
         {favoritePlayers.map((player) => (
           <li key={player.id} className={ROW_CLASS}>
             <Link
               href={`/users/${getPlayerSlug(player.name)}`}
               title={player.name}
-              className="min-w-0 flex-1 rounded-sm py-1.5 text-body text-[color:var(--aqt-fg)] underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+              className="min-w-0 flex-1 rounded-sm py-1.5 text-body text-[color:var(--aqt-fg)] underline-offset-4 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
             >
               <HandleLabel handle={player.name} className="block" />
             </Link>

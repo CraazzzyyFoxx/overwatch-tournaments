@@ -123,7 +123,7 @@ export default function ActiveEvents() {
                   <Link
                     key={tournament.id}
                     href={tournamentHref(tournament)}
-                    className="flex min-h-10 items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-body outline-none transition-colors hover:bg-[color:var(--aqt-overlay-3)] focus-visible:bg-[color:var(--aqt-overlay-3)] focus-visible:shadow-[inset_0_0_0_2px_var(--aqt-teal)]"
+                    className="flex min-h-10 items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-body outline-hidden transition-colors hover:bg-[color:var(--aqt-overlay-3)] focus-visible:bg-[color:var(--aqt-overlay-3)] focus-visible:shadow-[inset_0_0_0_2px_var(--aqt-teal)]"
                   >
                     <span className="min-w-0 flex-1">
                       <span className="block truncate font-semibold">{tournament.name}</span>

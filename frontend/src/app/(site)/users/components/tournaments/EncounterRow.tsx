@@ -67,7 +67,7 @@ const EncounterRow = ({
 
       {/* MVP pills (per map) — hover shows the map it was earned on */}
       <div className="hidden items-center gap-1 md:flex">
-        <TooltipProvider delayDuration={150}>
+        <TooltipProvider>
           {(enc.matches ?? []).map((m) => (
             <MatchRowBadge key={m.id} match={m} />
           ))}

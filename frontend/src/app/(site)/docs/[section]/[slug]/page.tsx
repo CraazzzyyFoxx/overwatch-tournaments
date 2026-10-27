@@ -3,9 +3,8 @@ import type { MDXContent } from "mdx/types";
 import { notFound } from "next/navigation";
 import { getLocale } from "next-intl/server";
 
-import { mdxComponents } from "../../mdx";
+import { DOC_TITLE, mdxComponents } from "../../mdx";
 import { findGuideArticle, isGuideId, toDocLocale } from "../../nav";
-import styles from "../../docs.module.css";
 
 type Params = Promise<{ section: string; slug: string }>;
 
@@ -32,8 +31,8 @@ export default async function GuideArticlePage({ params }: Readonly<{ params: Pa
   ).default;
 
   return (
-    <article className={styles.prose}>
-      <h1>{article.title[locale]}</h1>
+    <article className="max-w-2xl">
+      <h1 className={DOC_TITLE}>{article.title[locale]}</h1>
       <Content components={mdxComponents} />
     </article>
   );

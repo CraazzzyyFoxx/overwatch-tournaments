@@ -326,7 +326,7 @@ export default function DivisionGridImportPage() {
                 onAction={() => void preflightQuery.refetch()}
               />
             ) : preflightQuery.data ? (
-              <Card variant="flat" className="p-3 text-sm">
+              <Card className="p-3 text-sm">
                 <p className={eyebrowClass("muted")}>{t("preview")}</p>
                 <p className="mt-1">
                   {t("previewSummary", { divisions: preflightQuery.data.tiers_count, mappings: preflightQuery.data.mappings_count, crests: preflightQuery.data.assets_to_copy })}
@@ -363,7 +363,7 @@ export default function DivisionGridImportPage() {
                 }
               />
             ) : job.status === "completed" ? (
-              <Card variant="flat" className="p-3 text-sm">
+              <Card className="p-3 text-sm">
                 <p className="font-medium">{t("draftCreated")}</p>
                 <p className="mt-1 text-muted-foreground">
                   {t("createdSummary", { versions: job.result?.created_versions ?? 0, divisions: job.result?.created_tiers ?? 0, mappings: job.result?.copied_mappings ?? 0 })}
@@ -372,7 +372,7 @@ export default function DivisionGridImportPage() {
             ) : (
               <div className="flex flex-col gap-2">
                 <p className="text-sm">{t("copying")}</p>
-                <Progress value={job.progress} />
+                <Progress value={job.progress} aria-label={t("copying")} />
               </div>
             )}
           </div>

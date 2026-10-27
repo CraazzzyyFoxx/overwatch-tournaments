@@ -234,18 +234,14 @@ export function PlayerEditHistoryPanel({
           {t("loadFrom")}
         </Label>
         <Select value={history.workspaceValue} onValueChange={history.changeWorkspace}>
-          <SelectTrigger size="sm" className="h-6 w-[180px] px-2">
+          <SelectTrigger size="sm" className="w-[180px]">
             <SelectValue placeholder={t("selectWorkspace")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="current" className="text-label">
-              {t("currentWorkspace")}
-            </SelectItem>
-            <SelectItem value="all" className="text-label">
-              {t("allWorkspaces")}
-            </SelectItem>
+            <SelectItem value="current">{t("currentWorkspace")}</SelectItem>
+            <SelectItem value="all">{t("allWorkspaces")}</SelectItem>
             {workspaces.map((ws) => (
-              <SelectItem key={ws.id} value={String(ws.id)} className="text-label">
+              <SelectItem key={ws.id} value={String(ws.id)}>
                 {ws.name}
               </SelectItem>
             ))}

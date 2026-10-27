@@ -116,7 +116,7 @@ export function MappingsView({
               })}
             </p>
 
-            <Card variant="flat" className="min-w-0 overflow-x-auto">
+            <Card className="min-w-0 overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border text-left">

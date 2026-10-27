@@ -31,7 +31,7 @@ export function StatusDot({ tone, pulse = false, className, style }: Readonly<St
       aria-hidden
       style={style}
       className={cn(
-        "size-1.5 shrink-0 rounded-full bg-current",
+        "inline-block size-1.5 shrink-0 rounded-full bg-current",
         tone ? TONE_TEXT[tone] : undefined,
         pulse && "animate-pulse motion-reduce:animate-none",
         className

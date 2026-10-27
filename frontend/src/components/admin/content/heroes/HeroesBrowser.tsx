@@ -161,7 +161,7 @@ export function HeroesBrowser({ descriptor, discipline, kind, kindLabel }: Reado
               value={formData.color}
               fallback={DEFAULT_COLOR}
               label={t("catalog.character.pickColor")}
-              onChange={(color) => setFormData({ ...formData, color })}
+              onValueChange={(color) => setFormData({ ...formData, color })}
             />
             <Input
               id={colorFieldId}

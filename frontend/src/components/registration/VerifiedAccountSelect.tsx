@@ -73,7 +73,7 @@ export default function VerifiedAccountSelect({
           </p>
           <a
             href={connectHref}
-            className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-3)] px-2.5 py-1.5 text-xs font-medium text-[color:var(--aqt-fg)] transition-colors hover:bg-[color:var(--aqt-overlay-3)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-3)] px-2.5 py-1.5 text-xs font-medium text-[color:var(--aqt-fg)] transition-colors hover:bg-[color:var(--aqt-overlay-3)] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
             // `color-mix`, not a JS hex parse: `config.color` is an `--aqt-brand-*` token.
             style={{ borderColor: `color-mix(in srgb, ${config.color} 33%, transparent)` }}
           >

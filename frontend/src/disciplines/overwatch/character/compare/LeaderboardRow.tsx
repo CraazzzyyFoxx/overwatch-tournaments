@@ -90,7 +90,7 @@ const LeaderboardRow = ({
             title={entry.team ? `${entry.username} · ${entry.team}` : entry.username}
             onFocus={() => onHoverUser(entry.user_id)}
             onBlur={() => onHoverUser(null)}
-            className="min-w-0 truncate rounded-sm text-caption font-semibold text-[color:var(--aqt-fg)] outline-none hover:text-[color:var(--aqt-teal)] focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]"
+            className="min-w-0 truncate rounded-sm text-caption font-semibold text-[color:var(--aqt-fg)] outline-hidden hover:text-[color:var(--aqt-teal)] focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]"
           >
             <HandleLabel handle={entry.username} />
           </Link>

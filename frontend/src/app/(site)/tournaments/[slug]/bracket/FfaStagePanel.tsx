@@ -47,7 +47,7 @@ export function FfaStagePanel({
   const lobbies = lobbiesQuery.data ?? [];
 
   return (
-    <Card variant="flat" className="overflow-hidden">
+    <Card className="overflow-hidden">
       <div className="flex flex-col gap-3 border-b border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-1)] px-4 py-4">
         {bracketTabs && bracketTabs.items.length > 1 ? (
           <div className="flex min-w-0 flex-col items-start gap-2">

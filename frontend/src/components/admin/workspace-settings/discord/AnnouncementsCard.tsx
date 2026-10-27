@@ -197,7 +197,6 @@ export function AnnouncementsCard({
 
           <SettingRow label={t("language")} hint={t("languageHint")}>
             <ToggleGroup
-              type="single"
               variant="pill"
               size="sm"
               value={values.locale}

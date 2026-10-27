@@ -448,7 +448,6 @@ export function MatchReportForm({
                       onValueChange={(next) =>
                         setDraft((prev) => ({ ...prev, scores: { ...scores, [seat.id]: next ?? 0 } }))
                       }
-                      variant="surface"
                     />
                   </div>
                 ))}
@@ -470,7 +469,6 @@ export function MatchReportForm({
                 value={gamesPlayed}
                 onValueChange={(next) => setDraft((prev) => ({ ...prev, gamesPlayed: next ?? 0 }))}
                 aria-invalid={validation.score != null}
-                variant="surface"
               />
             </div>
           </>
@@ -493,7 +491,6 @@ export function MatchReportForm({
             </div>
 
             <ToggleGroup
-              type="single"
               variant="card"
               // A mandatory rating has no "not set" radio, so unset selects nothing.
               value={closeness == null ? (closenessConfig.required ? "" : "none") : String(closeness)}
@@ -607,7 +604,6 @@ export function MatchReportForm({
                           codes: { ...codes, [slot.mapIndex]: e.target.value }
                         }))
                       }
-                      variant="surface"
                     />
                   </div>
                 );
@@ -639,7 +635,6 @@ export function MatchReportForm({
                 validation.comment ? `${commentCounterId} ${commentErrorId}` : commentCounterId
               }
               onChange={(e) => setDraft((prev) => ({ ...prev, comment: e.target.value }))}
-              variant="surface"
             />
             <p
               id={commentCounterId}
@@ -686,7 +681,6 @@ export function MatchReportForm({
                         customFields: { ...customValues, [definition.key]: e.target.value }
                       }))
                     }
-                    variant="surface"
                   />
                   {error ? (
                     <p id={errorId} className="text-xs font-semibold text-danger">

@@ -209,7 +209,7 @@ export function PickBanPanel({
               <CardHeader className="flex flex-col gap-4 pb-3">
                 {header}
                 <div className="border-t border-[color:var(--aqt-border)] pt-4">
-                  <CardTitle id={sideHintId} className="text-base">
+                  <CardTitle id={sideHintId}>
                     {t("captain.chooseSideHint")}
                   </CardTitle>
                 </div>

@@ -194,7 +194,7 @@ export function ResolveResultDialog({
                 <CollapsibleTrigger
                   className={cn(
                     eyebrowClass("muted"),
-                    "group flex w-full items-center gap-1.5 rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    "group flex w-full items-center gap-1.5 rounded-sm text-left focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                   )}
                 >
                   <ChevronRight aria-hidden className="size-3.5 group-data-[state=open]:rotate-90" />

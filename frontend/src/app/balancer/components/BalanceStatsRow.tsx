@@ -25,8 +25,6 @@ export type VariantStats = {
   feasibility?: FeasibilityReport | null;
 } | null;
 
-const CHIP_CLASS = "rounded-full whitespace-nowrap tabular-nums";
-
 /**
  * The bar carries up to ten stats. Past ~1536px of viewport the row wrapped and doubled the
  * toolbar's height, so only the stats you act on stay inline: how good the balance is, and
@@ -49,11 +47,13 @@ export function BalanceStatsRow({ stats }: Readonly<{ stats: VariantStats }>) {
     <div className="flex flex-wrap items-center gap-2">
       {stats.composite_score != null ? (
         <Badge
+          shape="pill"
+          tone="success"
           title={t("objectives", {
             balance: stats.balance_objective_norm?.toFixed(3) ?? stats.balance_objective?.toFixed(3) ?? "—",
             comfort: stats.comfort_objective_norm?.toFixed(3) ?? stats.comfort_objective?.toFixed(3) ?? "—"
           })}
-          className={cn(CHIP_CLASS, "border-emerald-400/20 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/10")}
+          className="tabular-nums"
         >
           <Sparkles className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
           {t("quality", { score: stats.composite_score.toFixed(2) })}
@@ -61,10 +61,7 @@ export function BalanceStatsRow({ stats }: Readonly<{ stats: VariantStats }>) {
       ) : null}
 
       {stats.mmr_std_dev != null ? (
-        <Badge
-          title={t("stdDevHint")}
-          className={cn(CHIP_CLASS, "border-blue-400/20 bg-blue-500/10 text-blue-200 hover:bg-blue-500/10")}
-        >
+        <Badge shape="pill" tone="info" title={t("stdDevHint")} className="tabular-nums">
           <BarChart2 className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
           {t("stdDev", { value: stats.mmr_std_dev.toFixed(1) })}
         </Badge>
@@ -73,20 +70,14 @@ export function BalanceStatsRow({ stats }: Readonly<{ stats: VariantStats }>) {
       <OffRoleChip stats={stats} />
 
       {benched != null && benched > 0 ? (
-        <Badge
-          title={t("benchedHint", { count: benched })}
-          className={cn(CHIP_CLASS, "border-rose-400/20 bg-rose-500/10 text-rose-200 hover:bg-rose-500/10")}
-        >
+        <Badge shape="pill" tone="danger" title={t("benchedHint", { count: benched })} className="tabular-nums">
           <UserX className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
           {t("benched", { count: benched })}
         </Badge>
       ) : null}
 
       {collisions != null && collisions > 0 ? (
-        <Badge
-          title={t("collisionsHint", { count: collisions })}
-          className={cn(CHIP_CLASS, "border-primary/30 bg-primary/10 text-primary hover:bg-primary/10")}
-        >
+        <Badge shape="pill" tone="accent" title={t("collisionsHint", { count: collisions })} className="tabular-nums">
           <Shuffle className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
           {t("collisions", { count: collisions })}
         </Badge>
@@ -97,14 +88,12 @@ export function BalanceStatsRow({ stats }: Readonly<{ stats: VariantStats }>) {
           <PopoverTrigger asChild>
             <Button
               type="button"
-              variant="outline"
+              variant={shortfall > 0 ? "destructive" : "outline"}
               size="xs"
               aria-label={t("poolAria")}
               className={cn(
                 "rounded-full tabular-nums",
-                shortfall > 0
-                  ? "border-rose-400/25 bg-rose-500/10 text-rose-200 hover:bg-rose-500/15"
-                  : "text-[color:var(--aqt-fg-muted)] hover:text-[color:var(--aqt-fg)]",
+                shortfall === 0 && "text-[color:var(--aqt-fg-muted)] hover:text-[color:var(--aqt-fg)]",
               )}
             >
               {t("pool")}
@@ -149,15 +138,7 @@ function OffRoleChip({ stats }: Readonly<{ stats: NonNullable<VariantStats> }>) 
   const Icon = isPerfect || isOptimal ? CheckCircle2 : AlertCircle;
 
   return (
-    <Badge
-      title={title}
-      className={cn(
-        CHIP_CLASS,
-        isPerfect || isOptimal
-          ? "border-emerald-400/25 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/10"
-          : "border-orange-400/20 bg-orange-500/10 text-orange-200 hover:bg-orange-500/10",
-      )}
-    >
+    <Badge shape="pill" tone={isPerfect || isOptimal ? "success" : "warning"} title={title} className="tabular-nums">
       <Icon className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
       {t("offRole", { count })}
       {ratePart}

@@ -7,7 +7,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowRight } from "lucide-react";
 
 import type { TableCommand } from "@/components/data-table";
-import { getAdminDetailTableStyles } from "@/components/admin/AdminDetailTable";
+import { adminDetailTableStyles as tableStyles } from "@/components/admin/AdminDetailTable";
 import { WizardShell } from "@/components/kit/WizardShell";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -48,7 +48,6 @@ export function useChallongeTeamSync({
   const t = useTranslations("adminTournament.teams");
   const tx = useTranslations("adminTournament.teamsExtra");
   const queryClient = useQueryClient();
-  const tableStyles = getAdminDetailTableStyles("compact");
 
   const router = useRouter();
   const pathname = usePathname();
@@ -319,7 +318,7 @@ export function useChallongeTeamSync({
               <div className="max-h-[52vh] overflow-auto rounded-md border border-border/60">
                 <Table>
                   <TableHeader>
-                    <TableRow className={tableStyles.headerRow}>
+                    <TableRow>
                       <TableHead className={tableStyles.head}>{tx("participant")}</TableHead>
                       <TableHead className={tableStyles.head}>{t("group")}</TableHead>
                       <TableHead className={tableStyles.head}>{t("current")}</TableHead>

@@ -45,7 +45,7 @@ const MENU_ROW_CLASS =
   "disabled:cursor-not-allowed disabled:hover:bg-transparent";
 const MENU_LINK_CLASS = cn(
   MENU_ROW_CLASS,
-  "w-full outline-none transition-colors focus-visible:bg-[color:var(--aqt-overlay-3)] focus-visible:shadow-[inset_0_0_0_2px_var(--aqt-teal)]"
+  "w-full outline-hidden transition-colors focus-visible:bg-[color:var(--aqt-overlay-3)] focus-visible:shadow-[inset_0_0_0_2px_var(--aqt-teal)]"
 );
 const NOTE_CLASS = "px-2.5 py-1.5 text-caption text-[color:var(--aqt-fg-dim)]";
 

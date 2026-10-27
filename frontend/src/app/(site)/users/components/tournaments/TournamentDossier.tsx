@@ -12,6 +12,7 @@ import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";
 import DivisionIcon from "@/components/DivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
 import { Eyebrow } from "@/components/ui/eyebrow";
 import { PlaceBadge } from "@/components/ui/place-badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -221,7 +222,7 @@ const SingleDossier = ({
   });
 
   return (
-    <div className="aqt-card-surface">
+    <Card className="overflow-hidden">
       <div className="p-4">
         <div className="flex items-start gap-3.5">
           <PlaceBadge place={t.placement ?? null} size="lg" />
@@ -234,7 +235,7 @@ const SingleDossier = ({
                 {t.name}
               </HoverPrefetchLink>
               {t.is_league ? (
-                <Badge palette="aqt" tone="neutral" voice="label">
+                <Badge tone="neutral" voice="label">
                   {tr("users.tournaments.leagueBadge")}
                 </Badge>
               ) : null}
@@ -258,7 +259,7 @@ const SingleDossier = ({
       <div className="p-4">
         <EventBody t={t} selfUserId={selfUserId} loadingEncounters={loadingEncounters} />
       </div>
-    </div>
+    </Card>
   );
 };
 
@@ -327,7 +328,7 @@ const LeagueDossier = ({
   });
 
   return (
-    <div className="aqt-card-surface">
+    <Card className="overflow-hidden">
       <div className="p-4">
         <div className="flex items-start gap-3.5">
           <PlaceBadge place={best} size="lg" />
@@ -336,7 +337,7 @@ const LeagueDossier = ({
               <span className="aqt-display text-title font-bold leading-tight text-[color:var(--aqt-fg)]">
                 {groupDisplayName(entries)}
               </span>
-              <Badge palette="aqt" tone="neutral" voice="label">
+              <Badge tone="neutral" voice="label">
                 {tr("users.tournaments.leagueBadge")}
               </Badge>
             </div>
@@ -358,7 +359,7 @@ const LeagueDossier = ({
           ))}
         </div>
       </div>
-    </div>
+    </Card>
   );
 };
 
@@ -366,12 +367,12 @@ const TournamentDossier = ({ group, selfUserId, loadingEncounters }: Props) => {
   const t = useTranslations();
   if (!group) {
     return (
-      <div className="aqt-card-surface flex flex-col items-center justify-center gap-3 px-4 py-16 text-center">
+      <Card className="flex flex-col items-center justify-center gap-3 overflow-hidden px-4 py-16 text-center">
         <Trophy size={26} className="text-[color:var(--aqt-fg-faint)]" aria-hidden="true" />
         <span className="text-caption text-[color:var(--aqt-fg-muted)]">
           {t("users.tournaments.dossier.empty")}
         </span>
-      </div>
+      </Card>
     );
   }
   if (isLeagueGroup(group)) {

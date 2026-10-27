@@ -6,7 +6,7 @@ import { History, Search, User, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Eyebrow } from "@/components/ui/eyebrow";
-import { Input } from "@/components/ui/input";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 import { Spinner } from "@/components/ui/spinner";
 import { usePlayerSearch } from "@/hooks/usePlayerSearch";
@@ -14,9 +14,9 @@ import { cn } from "@/lib/utils";
 import type { MinimizedUser } from "@/types/user.types";
 
 const MENU_ITEM_CLASS =
-  "flex min-h-10 w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-body " +
-  "text-[color:var(--aqt-fg)] outline-none hover:bg-[color:var(--aqt-overlay-3)] " +
-  "focus-visible:bg-[color:var(--aqt-overlay-3)] focus-visible:shadow-[inset_0_0_0_2px_var(--aqt-teal)]";
+  "flex min-h-10 w-full cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-body " +
+  "text-[color:var(--aqt-fg)] outline-hidden hover:bg-[color:var(--aqt-overlay-4)] " +
+  "focus-visible:bg-[color:var(--aqt-overlay-4)] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring";
 
 /**
  * The one player search surface: the header's inline combobox (`md`) and the
@@ -63,21 +63,13 @@ export function PlayerSearchCombobox({
     <div className={cn("relative", className)}>
       <Popover open={isOpen} onOpenChange={setIsOpen}>
         <PopoverAnchor asChild>
-          <label
-            className={cn(
-              "flex min-w-0 items-center border border-[color:var(--aqt-border-2)]",
-              "text-[color:var(--aqt-fg-faint)] transition-colors duration-150",
-              "focus-within:border-[color:var(--aqt-teal)] focus-within:bg-[color:var(--aqt-overlay-3)]",
-              size === "lg"
-                ? "h-11 gap-2.5 rounded-[var(--aqt-radius-sm)] bg-[color:var(--aqt-overlay-2)] px-3.5"
-                : "h-9 gap-2 rounded-[9px] bg-[color:var(--aqt-overlay-1)] px-2.5"
-            )}
-          >
-            <span className="sr-only">{placeholder}</span>
-            <Search className="size-4 shrink-0" aria-hidden />
-            {/* Bare inside the framed label: the label draws the border and the
-                focus state, the field keeps the combobox ARIA and its text size. */}
-            <Input
+          {/* The frame wears the control surface and the focus ring; `lg` is the
+              landing hero's taller field. */}
+          <InputGroup className={cn(size === "lg" && "h-11")}>
+            <InputGroupAddon>
+              <Search aria-hidden />
+            </InputGroupAddon>
+            <InputGroupInput
               type="search"
               role="combobox"
               value={searchValue}
@@ -98,31 +90,32 @@ export function PlayerSearchCombobox({
               }
               aria-label={placeholder}
               placeholder={placeholder}
-              className={cn(
-                "h-full min-w-0 flex-1 rounded-none border-0 bg-transparent px-0 py-0 shadow-none focus-visible:ring-0",
-                "text-[color:var(--aqt-fg)] placeholder:text-[color:var(--aqt-fg-faint)]",
-                // The native clear glyph ignores the theme; the button below replaces it.
-                "[&::-webkit-search-cancel-button]:appearance-none"
-              )}
+              // The native clear glyph ignores the theme; the button below replaces it.
+              className="[&::-webkit-search-cancel-button]:appearance-none"
             />
-            {isSearching ? <Spinner className="shrink-0" /> : null}
-            {searchValue && !isSearching ? (
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label={t("nav.search.clear")}
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={clearSearch}
-                className="-mr-1 shrink-0 text-[color:var(--aqt-fg-faint)]"
-              >
-                <X aria-hidden />
-              </Button>
+            {isSearching || searchValue ? (
+              <InputGroupAddon align="inline-end">
+                {isSearching ? (
+                  <Spinner className="shrink-0" />
+                ) : (
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={t("nav.search.clear")}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={clearSearch}
+                    className="-mr-1 shrink-0 text-[color:var(--aqt-fg-faint)]"
+                  >
+                    <X aria-hidden />
+                  </Button>
+                )}
+              </InputGroupAddon>
             ) : null}
-          </label>
+          </InputGroup>
         </PopoverAnchor>
         <PopoverContent
           align="end"
-          sideOffset={8}
+          sideOffset={4}
           collisionPadding={12}
           // The field keeps the caret; the list is pointer/arrow driven.
           onOpenAutoFocus={(event) => event.preventDefault()}
@@ -135,7 +128,7 @@ export function PlayerSearchCombobox({
               </Eyebrow>
             ) : null}
             {rows.length === 0 ? (
-              <p className="px-2.5 py-3 text-body text-[color:var(--aqt-fg-muted)]">
+              <p className="py-6 text-center text-sm text-[color:var(--aqt-fg-muted)]">
                 {emptyMessage}
               </p>
             ) : (
@@ -156,7 +149,7 @@ export function PlayerSearchCombobox({
                     MENU_ITEM_CLASS,
                     !showHistory &&
                       activeIndex === index &&
-                      "bg-[color:var(--aqt-overlay-3)]"
+                      "bg-[color:var(--aqt-overlay-4)]"
                   )}
                 >
                   <RowIcon className="size-4 shrink-0" aria-hidden />

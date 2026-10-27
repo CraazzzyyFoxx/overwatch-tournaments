@@ -44,7 +44,7 @@ const NAV_ITEM_CLASS =
 /** Mock `.menu-item`: one row of a popover, dropdown or the mobile sheet. */
 const MENU_ITEM_CLASS =
   "flex min-h-10 w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-body " +
-  "text-[color:var(--aqt-fg)] outline-none transition-colors hover:bg-[color:var(--aqt-overlay-3)] " +
+  "text-[color:var(--aqt-fg)] outline-hidden transition-colors hover:bg-[color:var(--aqt-overlay-3)] " +
   "focus-visible:bg-[color:var(--aqt-overlay-3)] focus-visible:shadow-[inset_0_0_0_2px_var(--aqt-teal)]";
 
 /** Mock `.pop`: the size and inset of every header dropdown; its surface is the shared floating panel. */
@@ -110,7 +110,7 @@ const Header = ({ tenantMode, tenantWorkspace }: HeaderProps) => {
               side="left"
               closeButton={false}
               aria-describedby={undefined}
-              className="w-[min(320px,86vw)] border-r-[color:var(--aqt-border-2)] bg-[color:var(--aqt-card)] p-[18px_16px_24px] sm:max-w-none"
+              className="w-[min(320px,86vw)] p-[18px_16px_24px] sm:max-w-none"
             >
               <SheetTitle className="sr-only">{t("nav.label")}</SheetTitle>
               <div className="flex items-center justify-between gap-3">
@@ -225,7 +225,7 @@ const Header = ({ tenantMode, tenantWorkspace }: HeaderProps) => {
               prefetch={false}
               href="/"
               aria-label={`${tenant.name} — ${t("common.homeLink")}`}
-              className="flex min-h-10 min-w-0 shrink-0 items-center gap-2.5 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="flex min-h-10 min-w-0 shrink-0 items-center gap-2.5 rounded-lg outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
             >
               <WorkspaceAvatar workspace={tenant} size={30} />
               <span className="hidden max-w-48 truncate font-display text-base font-extrabold tracking-[0.02em] sm:inline">
@@ -249,7 +249,7 @@ const Header = ({ tenantMode, tenantWorkspace }: HeaderProps) => {
                 prefetch={false}
                 href="/"
                 aria-label={t("common.homeLink")}
-                className="hidden min-h-10 shrink-0 items-center gap-2.5 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring sm:flex"
+                className="hidden min-h-10 shrink-0 items-center gap-2.5 rounded-lg outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:flex"
               >
                 <Image src="/brand-mark.svg" alt="" width={28} height={28} className="size-7 rounded-[7px]" />
                 {/* 1024–1279 the nav joins the row; the mark carries the brand alone. */}

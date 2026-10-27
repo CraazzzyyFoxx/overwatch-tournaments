@@ -82,7 +82,7 @@ export function Backlog({
       <Card asChild className={className}>
         <section aria-label={title}>
           <h2>
-            <CollapsibleTrigger className="flex w-full items-baseline gap-3 rounded-xl p-6 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
+            <CollapsibleTrigger className="flex w-full items-baseline gap-3 rounded-xl p-6 text-left focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
               <span className={BLOCK_TITLE}>{title}</span>
               {backlog.tournaments_total > 0 ? (
                 <span className="text-sm text-muted-foreground">

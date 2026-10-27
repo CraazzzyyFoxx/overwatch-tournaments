@@ -77,12 +77,7 @@ export function CommitField({
       onBlur={commit}
       onKeyDown={handleKeyDown}
       size="sm"
-      className={cn(
-        // Quiet but present: a field the operator can see is a field, without
-        // 40 hard-bordered boxes fighting each other down the table.
-        "border-border/50 bg-background/40 px-2 hover:border-input",
-        className
-      )}
+      className={className}
     />
   );
 }

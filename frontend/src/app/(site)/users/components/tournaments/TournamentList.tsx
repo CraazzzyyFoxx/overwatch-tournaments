@@ -12,6 +12,7 @@ import { WdlText, WdlBar } from "@/app/(site)/users/components/tournaments/tourn
 import { EmptyNote } from "@/components/kit/EmptyNote";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardTitle } from "@/components/ui/card";
 import { FilterChip, FilterChipGroup } from "@/components/ui/filter-chip";
 import { PlaceBadge } from "@/components/ui/place-badge";
 import { RowButton } from "@/components/ui/row-button";
@@ -84,7 +85,7 @@ const TournamentRow = ({
           {showGames ? <GameIcon slug={lead.discipline} /> : null}
           <span className="truncate text-body font-semibold text-[color:var(--aqt-fg)]">{groupDisplayName(group)}</span>
           {league ? (
-            <Badge palette="aqt" tone="neutral" voice="label">
+            <Badge tone="neutral" voice="label">
               {t("users.tournaments.leagueBadge")}
             </Badge>
           ) : null}
@@ -142,9 +143,11 @@ const TournamentList = ({ groups, selectedKey, onSelect, showGames = false }: Pr
   };
 
   return (
-    <div className="aqt-card-surface flex flex-col min-[1081px]:absolute min-[1081px]:inset-0">
+    <Card className="flex flex-col overflow-hidden min-[1081px]:absolute min-[1081px]:inset-0">
       <div className="flex items-center justify-between gap-2 border-b border-[color:var(--aqt-border)] px-4 py-3">
-        <h2 className="aqt-pf-title truncate">{t("users.tournaments.list.title")}</h2>
+        <CardTitle asChild className="truncate font-display text-[color:var(--aqt-fg)]">
+          <h2>{t("users.tournaments.list.title")}</h2>
+        </CardTitle>
         <span className="aqt-tnum text-label text-[color:var(--aqt-fg-dim)]">
           {t("users.tournaments.list.eventsCount", { count: String(groups.length) })}
         </span>
@@ -201,7 +204,7 @@ const TournamentList = ({ groups, selectedKey, onSelect, showGames = false }: Pr
           {t("users.tournaments.list.empty")}
         </EmptyNote>
       )}
-    </div>
+    </Card>
   );
 };
 

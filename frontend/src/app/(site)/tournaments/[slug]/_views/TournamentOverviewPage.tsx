@@ -8,7 +8,6 @@ import { visibleTournamentLinks } from "../_components/TournamentLinkChips";
 import { TournamentPageState } from "../_components/TournamentPageState";
 import { TournamentOverviewSkeleton } from "../_components/TournamentSkeletons";
 import { UpdatingBadge } from "../_components/UpdatingBadge";
-import styles from "../TournamentDetail.module.css";
 import { OverviewCompletedView } from "./_components/OverviewCompletedView";
 import { OverviewLiveView } from "./_components/OverviewLiveView";
 import { OverviewMatchBlock } from "./_components/OverviewMatchBlock";
@@ -185,7 +184,7 @@ export default function TournamentOverviewPage({
     );
 
   const content = (
-    <section className={styles.publicDataPage} aria-label={t("common.overview")}>
+    <section className="grid w-full min-w-0 max-w-full gap-4 *:min-w-0" aria-label={t("common.overview")}>
       {presentation.showUpdating ? <UpdatingBadge /> : null}
       {branch}
     </section>

@@ -358,7 +358,7 @@ export default function WorkspaceRegistrationFormsSettingsPage() {
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem
-                        className="text-danger focus:text-danger"
+                        variant="destructive"
                         onSelect={() =>
                           setPending({ kind: "delete", id: selected.id, name: selected.name })
                         }

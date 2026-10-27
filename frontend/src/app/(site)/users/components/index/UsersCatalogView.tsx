@@ -50,7 +50,7 @@ export function PlayerCard({
   const selected = compare.isSelected(user.id);
 
   return (
-    <Card asChild variant="flat">
+    <Card asChild>
       <article className="flex flex-col gap-3 p-3">
         <div className="flex items-start gap-2.5">
           <PlayerAvatar user={user} size={40} />
@@ -126,7 +126,7 @@ export function UsersCatalogView({
 
   return (
     <section className="space-y-4">
-      <Card asChild variant="flat">
+      <Card asChild>
         <nav aria-label={t("users.list.catalog.jumpTo")} className="flex flex-wrap items-center gap-1 p-2">
           <Eyebrow className="mr-1">{t("users.list.catalog.jumpTo")}</Eyebrow>
           <LetterButton active={!letter} onClick={() => controls.setLetter(null)}>

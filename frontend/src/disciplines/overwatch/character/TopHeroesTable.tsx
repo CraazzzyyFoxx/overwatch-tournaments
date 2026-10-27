@@ -7,7 +7,7 @@ import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import type { SlotProps } from "@/disciplines/types";
 import { LogStatsName } from "../stat-names";
 import { characterClass } from "@/lib/catalog/attrs";
-import { CardSurface } from "@/components/profile/atoms";
+import { CARD_HEAD_LINK, CardSurface } from "@/components/profile/atoms";
 import { formatSeconds } from "@/lib/format";
 import { formatStatValue, getOverall, heroWinrate, statAvg10 } from "./utils";
 import { LOW_SAMPLE_GAMES, winrateColor } from "@/lib/colors";
@@ -93,7 +93,7 @@ const TopHeroesTable = ({ characters, userSlug, metadata }: SlotProps["topCharac
       title={t("users.overview.topHeroes.title")}
       subtitle={t("users.overview.topHeroes.playedByTime", { count: characters.length })}
       action={
-        <HoverPrefetchLink href={`/users/${userSlug}?tab=heroes`} className="aqt-pf-link">
+        <HoverPrefetchLink href={`/users/${userSlug}?tab=heroes`} className={CARD_HEAD_LINK}>
           {t("common.all")} {characters.length}
           <ArrowRight aria-hidden className="size-3" />
         </HoverPrefetchLink>

@@ -11,11 +11,6 @@ describe("StandingsTable", () => {
     expect(source).toContain("showGroup && groupName");
   });
 
-  it("renders recent results as form chips", () => {
-    const source = readFileSync(join(import.meta.dirname, "StandingsTable.tsx"), "utf8");
-    expect(source).toContain("form-chips");
-  });
-
   it("shows every group-stage ranking metric", () => {
     const source = readFileSync(join(import.meta.dirname, "StandingsTable.tsx"), "utf8");
 

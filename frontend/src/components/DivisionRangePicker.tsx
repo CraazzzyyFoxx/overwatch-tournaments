@@ -42,9 +42,6 @@ const ARROWS: Record<string, [row: number, col: number]> = {
 };
 const clamp = (value: number, max: number) => Math.min(Math.max(value, 0), max);
 
-const TEAL_FILL =
-  "bg-[color:color-mix(in_srgb,var(--aqt-teal)_14%,transparent)] text-[color:var(--aqt-teal)] hover:bg-[color:color-mix(in_srgb,var(--aqt-teal)_24%,transparent)] hover:text-[color:var(--aqt-teal)]";
-
 interface DivisionRangePickerProps {
   grid: DivisionGridLike;
   /** Division numbers, `min <= max`; either may be absent (an open end reaches the grid's edge). */
@@ -204,26 +201,31 @@ export function DivisionRangePicker({ grid, min, max, onChange, ariaLabel, disab
                 aria-label={row.name}
                 className="contents"
               >
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="label"
                   tabIndex={-1}
                   aria-label={t("divisionRange.wholeRow", { name: row.name })}
                   onClick={() => pickRow(row)}
                   className={cn(
-                    "flex h-7 items-center gap-1.5 justify-self-start rounded-[7px] px-1.5 text-left text-label font-semibold uppercase tracking-label transition-colors hover:bg-[color:var(--aqt-overlay-2)] hover:text-[color:var(--aqt-fg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)] sm:h-9",
+                    "h-7 justify-self-start rounded-md px-1.5 sm:h-9",
                     rowOn ? "text-[color:var(--aqt-fg)]" : "text-[color:var(--aqt-fg-dim)]"
                   )}
                 >
                   {sharedEmblem ? icon(row.cells[0].tier) : null}
                   {row.name}
-                </button>
+                </Button>
                 <div className="flex flex-wrap gap-1">
                   {row.cells.map(({ tier, step }) => {
                     const on = inShown(tier.number);
                     return (
-                      <button
+                      <Button
                         key={tier.number}
                         type="button"
+                        // The chosen span wears the teal tint of a chosen option; its two ends a firmer rim.
+                        variant={on ? "accent" : "ghost"}
+                        size="icon"
                         data-tier=""
                         tabIndex={tier.number === focusNumber ? 0 : -1}
                         aria-pressed={on}
@@ -233,13 +235,13 @@ export function DivisionRangePicker({ grid, min, max, onChange, ariaLabel, disab
                         onMouseEnter={() => setPreview(tier.number)}
                         onFocus={() => setPreview(tier.number)}
                         className={cn(
-                          "flex h-9 min-w-9 items-center justify-center gap-1 rounded-[7px] px-1.5 text-label font-semibold tabular-nums text-[color:var(--aqt-fg-muted)] transition-colors hover:bg-[color:var(--aqt-overlay-2)] hover:text-[color:var(--aqt-fg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)] motion-reduce:transition-none",
-                          on && TEAL_FILL,
-                          isEnd(tier.number) && "shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--aqt-teal)_55%,transparent)]"
+                          "w-auto min-w-9 gap-1 px-1.5 text-label font-semibold tabular-nums",
+                          !on && "text-[color:var(--aqt-fg-muted)]",
+                          isEnd(tier.number) && "border-[color:color-mix(in_srgb,var(--aqt-teal)_55%,transparent)]"
                         )}
                       >
                         {sharedEmblem ? <span>{step}</span> : icon(tier)}
-                      </button>
+                      </Button>
                     );
                   })}
                 </div>

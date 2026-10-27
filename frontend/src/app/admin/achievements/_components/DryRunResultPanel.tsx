@@ -29,13 +29,13 @@ export function DryRunResultPanel({
   }, [result]);
 
   return (
-    <Card asChild variant="flat">
+    <Card asChild>
       <section
         ref={ref}
         tabIndex={-1}
         aria-labelledby="dry-run-title"
         aria-busy={result === null}
-        className="space-y-3 p-4 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="space-y-3 p-4 outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
       >
         {result === null ? (
           <h2 id="dry-run-title" className="flex items-center gap-2 text-sm font-semibold">

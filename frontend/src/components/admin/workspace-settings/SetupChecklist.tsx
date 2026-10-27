@@ -5,16 +5,6 @@ import { useTranslations } from "next-intl";
 import { CircleCheck, CircleDashed } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import {
-  Item,
-  ItemActions,
-  ItemContent,
-  ItemDescription,
-  ItemGroup,
-  ItemMedia,
-  ItemSeparator,
-  ItemTitle
-} from "@/components/ui/item";
 import { TONE_TEXT } from "@/components/ui/tone";
 import { PLATFORM_ZONE } from "@/lib/site/host";
 import { cn } from "@/lib/utils";
@@ -43,39 +33,32 @@ export function SetupChecklist({
   const items = workspaceSetupChecklist(workspace);
 
   return (
-    <ItemGroup aria-label={t("title")}>
-      {items.map((item, index) => {
+    <ul aria-label={t("title")} className="divide-y divide-[color:var(--aqt-border)]">
+      {items.map((item) => {
         const Glyph = item.done ? CircleCheck : CircleDashed;
         return (
-          <div key={item.key} role="listitem">
-            {index > 0 ? <ItemSeparator /> : null}
-            <Item
-              size="sm"
-              className={cn("px-0", index === 0 && "pt-0", index === items.length - 1 && "pb-0")}
-            >
-              <ItemMedia>
-                <Glyph aria-hidden className={item.done ? TONE_TEXT.success : TONE_TEXT.neutral} />
-                <span className="sr-only">{item.done ? t("done") : t("todo")}</span>
-              </ItemMedia>
-              <ItemContent>
-                <ItemTitle>{t(`items.${item.key}`)}</ItemTitle>
-                {item.done ? null : (
-                  <ItemDescription>{t(`hints.${item.key}`, { zone: PLATFORM_ZONE })}</ItemDescription>
-                )}
-              </ItemContent>
-              {!item.done && item.section ? (
-                <ItemActions>
-                  <Button asChild variant="outline" size="sm">
-                    <Link href={`${basePath}/${item.section}${item.group ? `#${item.group}` : ""}`}>
-                      {t("setUp")}
-                    </Link>
-                  </Button>
-                </ItemActions>
-              ) : null}
-            </Item>
-          </div>
+          <li key={item.key} className="flex items-center gap-2.5 py-3 first:pt-0 last:pb-0">
+            <Glyph
+              aria-hidden
+              className={cn("mt-0.5 size-4 shrink-0 self-start", item.done ? TONE_TEXT.success : TONE_TEXT.neutral)}
+            />
+            <span className="sr-only">{item.done ? t("done") : t("todo")}</span>
+            <div className="flex min-w-0 flex-1 flex-col gap-1">
+              <p className="text-sm font-medium">{t(`items.${item.key}`)}</p>
+              {item.done ? null : (
+                <p className="text-caption text-[color:var(--aqt-fg-muted)]">
+                  {t(`hints.${item.key}`, { zone: PLATFORM_ZONE })}
+                </p>
+              )}
+            </div>
+            {!item.done && item.section ? (
+              <Button asChild variant="outline" size="sm">
+                <Link href={`${basePath}/${item.section}${item.group ? `#${item.group}` : ""}`}>{t("setUp")}</Link>
+              </Button>
+            ) : null}
+          </li>
         );
       })}
-    </ItemGroup>
+    </ul>
   );
 }

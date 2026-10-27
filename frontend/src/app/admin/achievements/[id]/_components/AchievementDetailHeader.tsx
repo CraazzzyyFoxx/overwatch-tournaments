@@ -81,7 +81,7 @@ export function AchievementDetailHeader({
                 )}
                 {canUpdate && canDelete && <DropdownMenuSeparator />}
                 {canDelete && (
-                  <DropdownMenuItem onSelect={onDelete} className="text-danger focus:text-danger">
+                  <DropdownMenuItem onSelect={onDelete} variant="destructive">
                     {t("detail.deleteAchievement")}
                   </DropdownMenuItem>
                 )}

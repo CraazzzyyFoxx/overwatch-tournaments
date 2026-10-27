@@ -52,11 +52,11 @@ const OverviewTeammatesSynergy = ({ teammates, totalCount, totalMaps }: Props) =
               <ArrowRight aria-hidden />
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl border-[color:var(--aqt-border)] bg-[color:var(--aqt-bg)] p-0">
+          <DialogContent variant="panel" className="max-w-2xl">
             <div className="aqt-player flex max-h-[80vh] flex-col">
-              <DialogHeader className="border-b border-[color:var(--aqt-border)] px-5 py-4 text-left">
-                <DialogTitle className="text-[color:var(--aqt-fg)]">{t("users.overview.teammates.title")}</DialogTitle>
-                <DialogDescription className="text-[color:var(--aqt-fg-dim)]">
+              <DialogHeader variant="panel">
+                <DialogTitle>{t("users.overview.teammates.title")}</DialogTitle>
+                <DialogDescription>
                   {t("users.overview.teammates.dialogSubtitle", { count: totalCount, maps: totalMaps })}
                 </DialogDescription>
               </DialogHeader>

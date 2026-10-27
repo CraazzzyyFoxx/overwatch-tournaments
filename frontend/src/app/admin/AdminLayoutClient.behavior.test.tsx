@@ -9,6 +9,7 @@ import { NextIntlClientProvider } from "next-intl";
 import { describe, expect, it, vi } from "vitest";
 
 import en from "@/i18n/messages/en.json";
+import { SIDEBAR_COOKIE_NAMES } from "@/lib/site/sidebar-cookies";
 
 import { AdminLayoutClient } from "./AdminLayoutClient";
 
@@ -33,22 +34,34 @@ vi.mock("@/components/HoverPrefetchLink", () => ({
 }));
 vi.mock("@/components/admin/AdminSidebar", () => ({ AdminSidebar: () => <nav aria-label="Admin" /> }));
 
+async function mount() {
+  const container = document.createElement("div");
+  document.body.appendChild(container);
+  const root = createRoot(container);
+  await act(async () => {
+    root.render(
+      <NextIntlClientProvider locale="en" messages={en}>
+        <QueryClientProvider client={new QueryClient()}>
+          <AdminLayoutClient defaultSidebarOpen>
+            <p data-testid="page">page</p>
+            <input data-testid="field" />
+          </AdminLayoutClient>
+        </QueryClientProvider>
+      </NextIntlClientProvider>
+    );
+  });
+  return {
+    container,
+    unmount: () => {
+      act(() => root.unmount());
+      container.remove();
+    }
+  };
+}
+
 describe("AdminLayoutClient", () => {
   it("makes the content column the one main landmark, the header outside it", async () => {
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-    const root = createRoot(container);
-    await act(async () => {
-      root.render(
-        <NextIntlClientProvider locale="en" messages={en}>
-          <QueryClientProvider client={new QueryClient()}>
-            <AdminLayoutClient defaultSidebarOpen>
-              <p data-testid="page">page</p>
-            </AdminLayoutClient>
-          </QueryClientProvider>
-        </NextIntlClientProvider>
-      );
-    });
+    const { container, unmount } = await mount();
 
     const mains = container.querySelectorAll("main");
     expect(mains).toHaveLength(1);
@@ -56,8 +69,25 @@ describe("AdminLayoutClient", () => {
     expect(mains[0].querySelector('[data-testid="page"]')).not.toBeNull();
     expect(mains[0].querySelector("header")).toBeNull();
     expect(container.querySelector('a[href="#admin-content"]')).not.toBeNull();
+    expect(container.querySelector(`nav[aria-label="${en.kit.ui.breadcrumb}"]`)).not.toBeNull();
 
-    act(() => root.unmount());
-    container.remove();
+    unmount();
+  });
+
+  it("leaves Ctrl+B to a focused field and toggles the sidebar everywhere else", async () => {
+    const { container, unmount } = await mount();
+    const cookie = `${SIDEBAR_COOKIE_NAMES.admin}=false`;
+    const press = (target: EventTarget) =>
+      act(() => {
+        target.dispatchEvent(new KeyboardEvent("keydown", { key: "b", ctrlKey: true, bubbles: true }));
+      });
+
+    press(container.querySelector('[data-testid="field"]')!);
+    expect(document.cookie).not.toContain(cookie);
+
+    press(document.body);
+    expect(document.cookie).toContain(cookie);
+
+    unmount();
   });
 });

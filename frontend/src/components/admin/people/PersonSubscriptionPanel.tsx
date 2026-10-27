@@ -118,7 +118,7 @@ function CheckRunRow({ run }: Readonly<{ run: SubscriptionCheckLogRow[] }>) {
         <summary
           className={cn(
             ROW_CLASS,
-            "cursor-pointer list-none rounded-md transition-colors hover:bg-[color:var(--aqt-overlay-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring motion-reduce:transition-none [&::-webkit-details-marker]:hidden"
+            "cursor-pointer list-none rounded-md transition-colors hover:bg-[color:var(--aqt-overlay-2)] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring motion-reduce:transition-none [&::-webkit-details-marker]:hidden"
           )}
         >
           {line}

@@ -27,7 +27,7 @@ import type { CurrentRank } from "@/types/rank.types";
 import type { UserTournament } from "@/types/user.types";
 
 const MUTED = "text-body text-muted-foreground";
-const LINK = "rounded-sm hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+const LINK = "rounded-sm hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring";
 
 /** A collector's lowercase division, cased for display: "Diamond 2". */
 function divisionLabel(rank: CurrentRank): string | null {

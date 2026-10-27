@@ -65,12 +65,13 @@ function listQuery(params?: Record<string, unknown>): string {
 
 async function rbacFetch<T>(
   path: string,
-  init?: { method?: string; body?: unknown; query?: Record<string, unknown> }
+  init?: { method?: string; body?: unknown; query?: Record<string, unknown>; signal?: AbortSignal }
 ): Promise<T> {
   const response = await apiFetch(`/api/v1/auth${path}`, {
     method: init?.method,
     body: init?.body,
     query: init?.query,
+    signal: init?.signal,
   });
 
   if (response.status === 204) {
@@ -115,8 +116,8 @@ export const rbacService = {
   /** With `workspace_id` and no `search`: only that workspace's active members.
    *  With both, a caller whose `auth_user.read` is scoped to the workspace gets
    *  `AuthUserLookup` hits (no email, ≤ 20); type such results as that. */
-  listUsers(params?: UserListParams): Promise<PaginatedResponse<AuthAdminUser>> {
-    return rbacFetch<PaginatedResponse<AuthAdminUser>>(`/rbac/users${listQuery(params)}`).then(
+  listUsers(params?: UserListParams, signal?: AbortSignal): Promise<PaginatedResponse<AuthAdminUser>> {
+    return rbacFetch<PaginatedResponse<AuthAdminUser>>(`/rbac/users${listQuery(params)}`, { signal }).then(
       (page) => ({ ...page, results: page.results.map(normalizeAuthAdminUser) })
     );
   },

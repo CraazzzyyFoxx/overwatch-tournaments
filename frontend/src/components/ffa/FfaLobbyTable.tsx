@@ -115,8 +115,7 @@ function GameCell({ cell, columns }: Readonly<{ cell: FfaGameCell; columns: FfaC
  * Zone-neutral on purpose (docs/frontend-zones.md): the public bracket, the
  * public lobby page and the organizer's lobby editor all render the same
  * table, so it reaches into neither `src/components/admin` nor `src/app`, and
- * it styles itself from the shared `ui/table` primitive rather than from the
- * `.aqt-tn`-scoped rules that only exist under the tournament shell.
+ * it styles itself from the shared `ui/table` primitive.
  */
 export default function FfaLobbyTable({ lobby }: Readonly<{ lobby: FfaLobby }>) {
   const t = useTranslations();
@@ -177,7 +176,7 @@ export default function FfaLobbyTable({ lobby }: Readonly<{ lobby: FfaLobby }>) 
         className="[&_td]:px-5 [&_th]:px-5"
       >
         <TableHeader>
-          <TableRow className="hover:bg-transparent">
+          <TableRow>
             <TableHead scope="col" className="whitespace-nowrap">
               <span className="sr-only">{t("ffa.colPlace")}</span>
               <span aria-hidden>#</span>

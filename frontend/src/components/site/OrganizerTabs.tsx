@@ -178,7 +178,7 @@ export function OrganizerTabs({
           {cta ? <div className="mt-6">{cta}</div> : null}
         </div>
         {/* One panel for every tab: its screenshots stay mounted, so a switch crossfades instead of loading. */}
-        <TabsContent value={active.key} className={cn("mt-0", styles.stage)} {...holdProps}>
+        <TabsContent value={active.key} className={styles.stage} {...holdProps}>
           <div ref={tiltRef} className={styles.tilt}>
             <div className={styles.screen}>
               <div

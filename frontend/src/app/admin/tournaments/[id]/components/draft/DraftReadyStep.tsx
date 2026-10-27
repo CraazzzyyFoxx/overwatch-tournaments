@@ -67,7 +67,7 @@ export function DraftReadyStep({
           </div>
         </div>
       ) : (
-        <Alert id={reasonId} variant="destructive" className="rounded-xl">
+        <Alert id={reasonId} tone="warning">
           <ShieldAlert className="size-4" aria-hidden />
           <AlertTitle>{t("notReadyToStart")}</AlertTitle>
           <AlertDescription>{t("notReadyToStartHint")}</AlertDescription>

@@ -30,7 +30,7 @@ function useSignOut() {
 
 export const ACCOUNT_MENU_ITEM_CLASS =
   "flex min-h-10 w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-body " +
-  "text-[color:var(--aqt-fg)] outline-none transition-colors hover:bg-[color:var(--aqt-overlay-3)] " +
+  "text-[color:var(--aqt-fg)] outline-hidden transition-colors hover:bg-[color:var(--aqt-overlay-3)] " +
   "focus-visible:bg-[color:var(--aqt-overlay-3)] focus-visible:shadow-[inset_0_0_0_2px_var(--aqt-teal)]";
 
 export function AccountMenuSeparator() {

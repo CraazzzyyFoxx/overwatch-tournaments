@@ -76,9 +76,10 @@ const TournamentsFilters = ({
     /* Phone first: one horizontally scrollable chip row (wrapping chips used to
        strand the group divider on its own line), the search on its own full
        width line, and sort beside the view toggle. From `md` it is the single
-       toolbar row again. */
-    <Card variant="flat" className="flex flex-col gap-2.5 p-2.5 md:flex-row md:flex-wrap md:items-center md:gap-2">
-      <div className="tn-filter-chips -mx-2.5 flex items-center gap-x-5 gap-y-2 overflow-x-auto px-2.5 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:mx-0 md:flex-wrap md:overflow-visible md:px-0 md:pb-0">
+       toolbar row again. Below `md` every control is 40px: the 32px toolbar
+       row is under the touch minimum. */
+    <Card className="flex flex-col gap-2.5 p-2.5 md:flex-row md:flex-wrap md:items-center md:gap-2">
+      <div className="-mx-2.5 flex items-center gap-x-5 gap-y-2 overflow-x-auto px-2.5 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:mx-0 md:flex-wrap md:overflow-visible md:px-0 md:pb-0">
         {/* Two groups, not one run of chips split by a hairline: status and
             format answer different questions, and a divider between them
             disappeared (or stranded itself) the moment the row wrapped. */}
@@ -91,6 +92,7 @@ const TournamentsFilters = ({
             active={statusFilter === "all"}
             count={total}
             onClick={() => onStatusChange("all")}
+            className="max-md:h-10"
           >
             {t("common.all")}
           </FilterChip>
@@ -110,6 +112,7 @@ const TournamentsFilters = ({
                 count={count}
                 dotColor={VARIANT_DOT[getTournamentStatusMeta(status).variant]}
                 onClick={() => onStatusChange(status)}
+                className="max-md:h-10"
               >
                 {t(`common.statusBadge.${status}`)}
               </FilterChip>
@@ -126,6 +129,7 @@ const TournamentsFilters = ({
             active={typeFilter === "standard"}
             count={standardCount}
             onClick={() => toggleType("standard")}
+            className="max-md:h-10"
           >
             {t("tournamentsList.filters.standard")}
           </FilterChip>
@@ -133,6 +137,7 @@ const TournamentsFilters = ({
             active={typeFilter === "league"}
             count={leagueCount}
             onClick={() => toggleType("league")}
+            className="max-md:h-10"
           >
             {t("common.league")}
           </FilterChip>
@@ -171,7 +176,6 @@ const TournamentsFilters = ({
             text, not `aria-label`: the icons alone give the radios no accessible
             name, and `ToggleGroupItem` forwards no ARIA props of its own. */}
         <ToggleGroup
-          type="single"
           value={view}
           onValueChange={(value) => onViewChange(value as ViewMode)}
           aria-label={t("tournamentsList.view.label")}

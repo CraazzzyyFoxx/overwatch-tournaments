@@ -69,7 +69,7 @@ const ContributionChart = ({ home, away, round }: ContributionChartProps) => {
   const chartHeight = Math.max(220, data.length * 30 + 24);
 
   return (
-    <Card variant="flat" className="p-4">
+    <Card className="p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <Eyebrow className="aqt-tnum">{t("matches.contribution.title")}</Eyebrow>
         <FilterChipGroup label={t("matches.contribution.title")}>

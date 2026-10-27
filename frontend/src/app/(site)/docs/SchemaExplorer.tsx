@@ -5,13 +5,15 @@ import { useState } from "react";
 
 import { EmptyNote } from "@/components/kit/EmptyNote";
 import { Button } from "@/components/ui/button";
+import { Card, CardTitle } from "@/components/ui/card";
 import { SearchField } from "@/components/ui/search-field";
 import { cn } from "@/lib/utils";
 
 import { MermaidDiagram } from "./MermaidDiagram";
 import { PACKAGE_NOTES } from "./schema-notes";
 import schema from "./schema.generated.json";
-import styles from "./docs.module.css";
+
+const NOTE = "text-body leading-relaxed text-[color:var(--aqt-fg-muted)]";
 
 // Reading order is the notes' order (identity and tenancy first, infrastructure
 // last); a package the notes do not know yet goes to the end.
@@ -43,63 +45,66 @@ export function SchemaExplorer() {
     });
 
   return (
-    <div className={styles.schema}>
+    <div className="mt-6 flex flex-col gap-3">
       <SearchField
         value={query}
         onValueChange={setQuery}
         label={t("searchLabel")}
         placeholder={t("searchPlaceholder")}
-        containerClassName={styles.search}
+        containerClassName="max-w-sm"
       />
       {packages.length === 0 ? <EmptyNote>{t("empty", { query })}</EmptyNote> : null}
       {packages.map((pkg) => {
         const note = PACKAGE_NOTES[pkg.key];
         const isOpen = open.has(pkg.key);
         return (
-          <section key={pkg.key} className={styles.pkg} aria-labelledby={`schema-${pkg.key}`}>
-            <div className={styles.pkgHead}>
-              <h2 id={`schema-${pkg.key}`} className={styles.pkgTitle}>
-                {note?.title[locale] ?? pkg.key}
-              </h2>
-              <span className={styles.pkgMeta}>
-                {pkg.schemas.join(", ")} · {t("tables", { count: pkg.tables.length })}
-              </span>
-            </div>
-            {note ? <p className={styles.pkgDesc}>{note.description[locale]}</p> : null}
-            <ul className={styles.chips}>
-              {pkg.tables.map((name) => (
-                <li key={name} className={cn(styles.chip, q && name.includes(q) && styles.chipMatch)}>
-                  {name}
-                </li>
-              ))}
-            </ul>
-            <Button
-              variant="outline"
-              size="sm"
-              className="mt-3"
-              aria-expanded={isOpen}
-              onClick={() => toggle(pkg.key)}
-            >
-              {isOpen ? t("hideDiagram") : t("showDiagram")}
-            </Button>
-            {isOpen ? (
-              <>
-                <MermaidDiagram code={pkg.mermaid} diagramKey={pkg.key} />
-                {pkg.unique_keys.length > 0 ? (
-                  <>
-                    <p className={styles.pkgDesc}>{t("uniques")}</p>
-                    <ul className={styles.uniques}>
-                      {pkg.unique_keys.map((key) => (
-                        <li key={`${key.table}:${key.columns.join(",")}`}>
-                          <code>{key.table}</code> ({key.columns.join(", ")})
-                        </li>
-                      ))}
-                    </ul>
-                  </>
-                ) : null}
-              </>
-            ) : null}
-          </section>
+          <Card key={pkg.key} asChild className="p-4">
+            <section aria-labelledby={`schema-${pkg.key}`}>
+              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1.5">
+                <CardTitle asChild className="text-ui">
+                  <h2 id={`schema-${pkg.key}`}>{note?.title[locale] ?? pkg.key}</h2>
+                </CardTitle>
+                <span className="text-caption text-[color:var(--aqt-fg-faint)]">
+                  {pkg.schemas.join(", ")} · {t("tables", { count: pkg.tables.length })}
+                </span>
+              </div>
+              {note ? <p className={cn("mt-1.5 max-w-3xl", NOTE)}>{note.description[locale]}</p> : null}
+              {/* Table names are facts, not chips; a name the search matched turns teal. */}
+              <ul className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-caption text-[color:var(--aqt-fg-muted)]">
+                {pkg.tables.map((name) => (
+                  <li key={name} className={cn(q && name.includes(q) && "text-[color:var(--aqt-teal)]")}>
+                    {name}
+                  </li>
+                ))}
+              </ul>
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-3"
+                aria-expanded={isOpen}
+                onClick={() => toggle(pkg.key)}
+              >
+                {isOpen ? t("hideDiagram") : t("showDiagram")}
+              </Button>
+              {isOpen ? (
+                <>
+                  <MermaidDiagram code={pkg.mermaid} diagramKey={pkg.key} />
+                  {pkg.unique_keys.length > 0 ? (
+                    <>
+                      <p className={cn("mt-1.5 max-w-3xl", NOTE)}>{t("uniques")}</p>
+                      <ul className="mt-3 list-disc pl-5 text-caption text-[color:var(--aqt-fg-muted)]">
+                        {pkg.unique_keys.map((key) => (
+                          <li key={`${key.table}:${key.columns.join(",")}`}>
+                            <code className="text-[color:var(--aqt-fg)]">{key.table}</code> ({key.columns.join(", ")})
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  ) : null}
+                </>
+              ) : null}
+            </section>
+          </Card>
         );
       })}
     </div>

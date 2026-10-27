@@ -8,7 +8,6 @@ import { FilterChip } from "@/components/ui/filter-chip";
 import { useQueryParams } from "@/hooks/useQueryParams";
 import type { CatalogEntityRead } from "@/types/catalog.types";
 
-import styles from "../TournamentDetail.module.css";
 import { MapCard } from "../_components/MapCard";
 import { TournamentTeamCardFrame } from "@/components/TournamentTeamCard";
 import { SectionToolbar } from "../_components/SectionToolbar";
@@ -96,7 +95,7 @@ export default function TournamentMapsPage({
   const stages: MapPoolStageView[] = selected ? [selected] : mapPool.stages;
 
   const content = (
-    <section className={styles.publicDataPage} aria-label={t("common.maps")}>
+    <section className="grid w-full min-w-0 max-w-full gap-4 *:min-w-0" aria-label={t("common.maps")}>
       {presentation.showUpdating ? <UpdatingBadge /> : null}
 
       {presentation.contentState === "empty" ? (

@@ -60,7 +60,7 @@ export function GroupStagePanel({
   const isPreview = isStagePreview(stage);
 
   return (
-    <Card asChild variant="flat">
+    <Card asChild>
       <Tabs
         defaultValue={
           hasStandings && (defaultView === "standings" || encounters.length === 0)

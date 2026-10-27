@@ -11,7 +11,7 @@ export function GuildMark({
   return (
     <Avatar className={cn("rounded-lg border", size === "lg" ? "size-12" : "size-9")}>
       {src ? <AvatarImage src={src} alt="" /> : null}
-      <AvatarFallback className="rounded-lg bg-muted text-xs font-medium">
+      <AvatarFallback className="rounded-lg">
         {initials(name)}
       </AvatarFallback>
     </Avatar>

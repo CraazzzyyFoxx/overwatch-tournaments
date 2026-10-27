@@ -3,10 +3,12 @@
 import * as React from "react";
 import { Search } from "lucide-react";
 
+import { eyebrowClass } from "@/components/ui/eyebrow";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 type SearchFieldBaseProps = Omit<
-  React.InputHTMLAttributes<HTMLInputElement>,
+  React.ComponentPropsWithoutRef<typeof Input>,
   "type" | "onChange" | "value" | "defaultValue"
 > & {
   /**
@@ -21,7 +23,12 @@ type SearchFieldBaseProps = Omit<
 
 export type SearchFieldProps = SearchFieldBaseProps &
   (
-    | { value: string; onValueChange: (value: string) => void; defaultValue?: never; onChange?: never }
+    | {
+        value: string;
+        onValueChange: (value: string) => void;
+        defaultValue?: never;
+        onChange?: never;
+      }
     /** Uncontrolled: the caller owns the DOM value through `ref` (e.g. a debounced, URL-backed search). */
     | {
         defaultValue?: string;
@@ -32,19 +39,10 @@ export type SearchFieldProps = SearchFieldBaseProps &
   );
 
 /**
- * The single search input for the public site.
- *
- * Replaces seven hand-rolled inputs that each shipped `outline-none` with no
- * replacement ring, no accessible name, a hand-inlined magnifier SVG, and a
- * 13px font size that makes iOS Safari zoom the page on focus.
- *
- * - `text-base sm:text-caption` keeps mobile at 16px (no iOS zoom); from `sm`
- *   up it is the 13px every 32px control in the row uses.
- * - `focus-visible:` gives keyboard users a real indicator.
- * - `h-8` pins the toolbar row height shared with `SelectTrigger` and the
- *   segmented `ToggleGroup`; padding-derived height drifted to 34/38px.
- * - The icon is `lucide-react`'s `Search` at `currentColor`, matching the icon
- *   set used everywhere else.
+ * The single search input for the public site: an `Input` (its surface, focus,
+ * disabled and error states, the iOS 16px rule) with a magnifier inside it and
+ * a required accessible name. `size` defaults to `sm`, the 32px toolbar row
+ * shared with `SelectTrigger` and the segmented `ToggleGroup`.
  */
 export const SearchField = React.forwardRef<HTMLInputElement, SearchFieldProps>(
   (
@@ -54,6 +52,7 @@ export const SearchField = React.forwardRef<HTMLInputElement, SearchFieldProps>(
       onChange,
       label,
       showLabel = false,
+      size = "sm",
       className,
       containerClassName,
       id,
@@ -68,11 +67,7 @@ export const SearchField = React.forwardRef<HTMLInputElement, SearchFieldProps>(
       <div className={cn("relative", containerClassName)}>
         <label
           htmlFor={inputId}
-          className={cn(
-            showLabel
-              ? "mb-1.5 block text-label font-medium uppercase tracking-wide text-[color:var(--aqt-fg-dim)]"
-              : "sr-only"
-          )}
+          className={showLabel ? cn(eyebrowClass("dim"), "mb-1.5 block") : "sr-only"}
         >
           {label}
         </label>
@@ -81,19 +76,14 @@ export const SearchField = React.forwardRef<HTMLInputElement, SearchFieldProps>(
             aria-hidden
             className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-[color:var(--aqt-fg-faint)]"
           />
-          <input
+          <Input
             ref={ref}
             id={inputId}
             type="search"
+            size={size}
             value={value}
             onChange={onValueChange ? (event) => onValueChange(event.target.value) : onChange}
-            className={cn(
-              "h-8 w-full rounded-lg border border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.02)] pl-8 pr-3",
-              "text-base text-[color:var(--aqt-fg)] placeholder:text-[color:var(--aqt-fg-faint)] sm:text-caption",
-              "outline-none transition-colors",
-              "focus-visible:border-[color:var(--aqt-teal)] focus-visible:ring-2 focus-visible:ring-[color:color-mix(in_srgb,var(--aqt-teal)_25%,transparent)]",
-              className
-            )}
+            className={cn("pl-8", className)}
             {...props}
           />
         </div>

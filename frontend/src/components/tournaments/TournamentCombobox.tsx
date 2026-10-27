@@ -1,10 +1,9 @@
 "use client";
 
+import { type ReactElement } from "react";
 import { useTranslations } from "next-intl";
 
-import SearchableImageSelect, {
-  type SearchableImageOption
-} from "@/components/ui/searchable-image-select";
+import { SearchableImageSelect, type SearchableImageOption } from "@/components/ui/searchable-image-select";
 
 interface TournamentComboboxProps<E extends string = never> {
   /** Forwarded to the trigger so a `<Label htmlFor>` can name it. */
@@ -24,7 +23,10 @@ interface TournamentComboboxProps<E extends string = never> {
   isLoading?: boolean;
   disabled?: boolean;
   size?: "sm" | "default";
+  variant?: "default" | "surface";
   triggerClassName?: string;
+  /** Replaces the input-like trigger, e.g. a card title that switches the tournament it shows. */
+  trigger?: ReactElement;
 }
 
 /**
@@ -44,7 +46,9 @@ export function TournamentCombobox<E extends string = never>({
   isLoading,
   disabled,
   size,
-  triggerClassName
+  variant,
+  triggerClassName,
+  trigger
 }: Readonly<TournamentComboboxProps<E>>) {
   const t = useTranslations();
 
@@ -76,7 +80,9 @@ export function TournamentCombobox<E extends string = never>({
       isLoading={isLoading}
       disabled={disabled}
       size={size}
+      variant={variant}
       triggerClassName={triggerClassName}
+      trigger={trigger}
     />
   );
 }

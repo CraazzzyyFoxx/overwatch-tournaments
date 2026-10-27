@@ -6,7 +6,7 @@ import type { Row, Table } from "@tanstack/react-table";
 import { Copy, Rows3 } from "lucide-react";
 
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
-import { cn, Link } from "@/components/data-table/host";
+import { Link } from "@/components/data-table/host";
 import { ADMIN_ACTION_COLUMN_ID } from "@/components/data-table/columns";
 import type { KebabAction } from "@/components/data-table/kebab-column";
 
@@ -112,7 +112,7 @@ function RowMenuItems<TData>({
             key={action.label}
             asChild={action.href !== undefined}
             onSelect={action.onSelect}
-            className={cn("gap-2", action.destructive && "text-danger focus:text-danger")}
+            variant={action.destructive ? "destructive" : "default"}
           >
             {action.href !== undefined ? <Link href={action.href}>{content}</Link> : content}
           </ContextMenuItem>

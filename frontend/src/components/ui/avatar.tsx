@@ -37,7 +37,7 @@ const AvatarFallback = React.forwardRef<
   <AvatarPrimitive.Fallback
     ref={ref}
     className={cn(
-      "flex h-full w-full items-center justify-center rounded-full bg-muted",
+      "flex h-full w-full items-center justify-center rounded-full bg-[color:var(--aqt-overlay-3)] text-label font-medium text-[color:var(--aqt-fg-muted)]",
       className
     )}
     {...props}
@@ -94,19 +94,11 @@ const AvatarStack = ({
         </div>
       ))}
       {extra > 0 ? (
+        // The `+N` collapse carries a real count, so it keeps the 12px label
+        // size rather than shrinking with the stack.
         <div
-          className="relative flex items-center justify-center rounded-full font-bold"
-          style={{
-            marginLeft: -ov,
-            width: size,
-            height: size,
-            // The `+N` collapse carries a real count, so it obeys the 11px
-            // readability floor rather than shrinking with the stack.
-            fontSize: Math.max(11, Math.round(size * 0.38)),
-            background: "hsl(0 0% 100% / 0.08)",
-            color: "var(--aqt-fg-muted, #9aa4b2)",
-            boxShadow: ring
-          }}
+          className="relative flex items-center justify-center rounded-full bg-[color:var(--aqt-overlay-4)] text-label font-semibold tabular-nums text-[color:var(--aqt-fg-muted)]"
+          style={{ marginLeft: -ov, width: size, height: size, boxShadow: ring }}
           title={t("extraMore", { count: extra })}
         >
           +{extra}

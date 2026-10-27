@@ -344,7 +344,7 @@ export function PickupTeamsPanel({
     // became a head turn.
     <div data-mix-lobby={lobbyIndex} className="flex w-full min-w-0 flex-col gap-3.5">
       {drafts ? (
-        <Card variant="flat" className="flex flex-col items-start gap-3 px-4 py-3.5">
+        <Card className="flex flex-col items-start gap-3 px-4 py-3.5">
           <h2 className={CARD_TITLE_CLASS}>{tRoom("draftInRoom")}</h2>
           <p className={CAPTION_CLASS}>{tRoom("draftInRoomHint")}</p>
           <Button asChild variant="accent" size="sm">
@@ -355,7 +355,7 @@ export function PickupTeamsPanel({
           </Button>
         </Card>
       ) : gamesError ? (
-        <Card variant="flat" asChild>
+        <Card asChild>
           <PageStateCard
             state="error"
             title={tMixes("list.errorTitle")}
@@ -368,7 +368,7 @@ export function PickupTeamsPanel({
       ) : gamesLoading || gameLoading ? (
         <Skeleton className="h-64 w-full rounded-xl" />
       ) : !hasMix ? (
-        <Card variant="flat" asChild>
+        <Card asChild>
           <PageStateCard
             state="empty"
             title={tMixes("history.emptyTitle")}
@@ -382,7 +382,7 @@ export function PickupTeamsPanel({
         // the result row first, aligned under the two team columns, then the
         // tools (balance and paging on the left, the rare share/close actions
         // demoted to icons on the right) and the history the results write into.
-        <Card variant="flat" className="overflow-hidden">
+        <Card className="overflow-hidden">
           {/* The next map sits inside the captured block on purpose: the shared
               screenshot answers "who is on my team" and "what are we playing"
               together, which is exactly what a lobby asks in one breath. The

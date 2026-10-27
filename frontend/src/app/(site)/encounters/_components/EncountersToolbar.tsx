@@ -88,7 +88,7 @@ export function EncountersToolbar({
 
   return (
     <div className="z-30 -mx-4 bg-[color:var(--aqt-bg)]/95 px-4 py-2 backdrop-blur md:sticky md:top-[var(--aqt-header-h)] md:-mx-6 md:px-6 xl:-mx-10 xl:px-10">
-      <Card asChild variant="flat">
+      <Card asChild>
         <section
           aria-label={t("encounters.toolbar.label")}
           className="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-2 p-2.5 md:flex md:flex-col md:items-stretch"
@@ -97,7 +97,6 @@ export function EncountersToolbar({
             {/* Phone: one horizontally scrollable row rather than segments wrapping under each other. */}
             <div className="-mx-2.5 min-w-0 overflow-x-auto px-2.5 [scrollbar-width:none] max-md:order-1 max-md:col-span-3 [&::-webkit-scrollbar]:hidden md:mx-0 md:overflow-visible md:px-0">
               <ToggleGroup
-                type="single"
                 variant="pill"
                 size="sm"
                 value={filters.status ?? "all"}
@@ -128,7 +127,6 @@ export function EncountersToolbar({
             {/* A phone row of its own with «Подборки»: room for the labels. */}
             <div className="max-md:order-7 max-md:col-span-2">
               <ToggleGroup
-                type="single"
                 variant="pill"
                 size="sm"
                 value={controls.view}

@@ -4,7 +4,7 @@ import { useTranslations } from "next-intl";
 
 import { ThresholdPopover } from "@/app/(site)/users/components/shared/ThresholdPopover";
 import { TournamentCombobox } from "@/components/tournaments/TournamentCombobox";
-import SearchableImageSelect, { type SearchableImageOption } from "@/components/ui/searchable-image-select";
+import { SearchableImageSelect, type SearchableImageOption } from "@/components/ui/searchable-image-select";
 import { GameFilterHint } from "@/components/workspace/GameFilterHint";
 
 /** The sample floor's choices in the popover. */
@@ -81,6 +81,7 @@ const HeroLeaderboardControls = ({
           ariaLabel={t("users.heroesCompare.filters.heroLabel")}
           isLoading={isLoadingHeroes}
           disabled={isLoadingHeroes || isErrorHeroes}
+          size="sm"
           triggerClassName="sm:w-56"
         />
       ) : null}
@@ -92,6 +93,7 @@ const HeroLeaderboardControls = ({
         ariaLabel={t("users.heroesCompare.filters.tournamentScope")}
         isLoading={isLoadingTournaments}
         disabled={isLoadingTournaments || isErrorTournaments}
+        size="sm"
         triggerClassName="sm:w-56"
       />
 

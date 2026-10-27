@@ -268,7 +268,7 @@ export const BalancingPoolSidebar = forwardRef<BalancingPoolSidebarHandle, Balan
 
     if (collapsed) {
       return (
-        <Card variant="flat" className="flex min-h-0 min-w-0 flex-col items-center gap-3 p-2">
+        <Card className="flex min-h-0 min-w-0 flex-col items-center gap-3 p-2">
           <Button
             type="button"
             variant="ghost"
@@ -306,7 +306,7 @@ export const BalancingPoolSidebar = forwardRef<BalancingPoolSidebarHandle, Balan
     }
 
     return (
-      <Card variant="flat" className="flex min-h-0 min-w-0 flex-col p-4">
+      <Card className="flex min-h-0 min-w-0 flex-col p-4">
         <div className="mb-3 flex items-center justify-between gap-2">
           <div>
             <Eyebrow as="div" tone="dim">

@@ -83,11 +83,19 @@ const BodyRow = memo(function BodyRow<TData>({
       tabIndex={tabbable ? 0 : -1}
       onFocus={(event) => { if (event.target === event.currentTarget) handlers.focus(row.id); }}
       className={cn(
-        // Tints (hover / selected / current) live in `data-table.css` under
-        // `.admin-row`: the pinned cells are opaque and must repaint the very
-        // same colour, and two copies of it drifted apart.
-        "admin-row group border-b border-border/30",
-        "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/50 focus-visible:ring-inset",
+        // One tint per state, held in `--admin-row-tint` (registered in
+        // globals.css, so it fades): the row paints it, and every pinned cell
+        // repaints the same value over its opaque base (`STICKY_CELL_CLASS`).
+        // The row's own background states are pointed at it so `TableRow`'s
+        // hover/current fills give way. Selection, set on purpose, outranks the
+        // inspector's current-row mark, which outranks hover.
+        "group bg-[color:var(--admin-row-tint)] hover:bg-[color:var(--admin-row-tint)] aria-[current=true]:bg-[color:var(--admin-row-tint)] transition-[--admin-row-tint] duration-150",
+        selected
+          ? "[--admin-row-tint:var(--aqt-overlay-3)]"
+          : isCurrent
+            ? "[--admin-row-tint:hsl(var(--primary)/0.1)] hover:[--admin-row-tint:hsl(var(--primary)/0.16)]"
+            : "hover:[--admin-row-tint:var(--aqt-overlay-2)]",
+        "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
         shared.hasRowAction && "cursor-pointer",
       )}
       onPointerDown={(event) => handlers.pointerDown(event, row)}

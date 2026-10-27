@@ -53,7 +53,7 @@ const TeamComparison = ({ home, away, round }: TeamComparisonProps) => {
   });
 
   return (
-    <Card variant="flat">
+    <Card>
       <div className="flex items-center justify-between border-b border-[color:var(--aqt-border)] px-4 py-3">
         <TeamName
           team={home}

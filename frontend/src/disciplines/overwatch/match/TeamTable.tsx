@@ -69,9 +69,10 @@ const TeamTable = ({ team, isHome, matchRound, columns, columnMax }: TeamTablePr
   return (
     <TableBody className={isHome ? undefined : "border-t border-[color:var(--aqt-border)]"}>
       <TableRow style={{ backgroundColor: tint(teamAccent, 12) }}>
+        {/* A team's name, not a column label: no uppercase on user content. */}
         <TableHead
           scope="col"
-          className="min-w-[220px] sticky left-0 z-5"
+          className="min-w-[220px] sticky left-0 z-5 text-caption normal-case tracking-normal text-[color:var(--aqt-fg)]"
           style={{
             background: `linear-gradient(to right, color-mix(in srgb, ${teamAccent} 26%, var(--aqt-card)), color-mix(in srgb, ${teamAccent} 12%, var(--aqt-card)) 60%)`
           }}
@@ -110,10 +111,7 @@ const TeamTable = ({ team, isHome, matchRound, columns, columnMax }: TeamTablePr
         const placement = resolveMatchMvpPlacement(player, matchRound);
         const mvp = <PerformanceBadge performance={placement} />;
         return (
-          <TableRow
-            key={player.workspace_member_id}
-            className="hover:bg-[color:var(--aqt-overlay-1)]"
-          >
+          <TableRow key={player.workspace_member_id}>
             <TableCell
               className="min-w-[220px] sticky left-0 z-10"
               style={{

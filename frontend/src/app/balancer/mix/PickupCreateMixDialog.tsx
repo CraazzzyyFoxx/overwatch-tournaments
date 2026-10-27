@@ -105,8 +105,8 @@ export function PickupCreateMixDialog({
   };
 
   return (
-    <DialogContent className="max-h-[calc(100dvh_-_2rem)] w-[calc(100%_-_2rem)] max-w-md overflow-y-auto overscroll-contain bg-card transition-[opacity,transform] [&>button]:size-8 [&>button]:grid [&>button]:place-items-center">
-      <DialogHeader className="pe-6 text-start">
+    <DialogContent className="max-w-md">
+      <DialogHeader>
         <DialogTitle>{t("title")}</DialogTitle>
         <DialogDescription>{t("description")}</DialogDescription>
       </DialogHeader>
@@ -151,7 +151,8 @@ export function PickupCreateMixDialog({
                 id="pickup-workspace"
                 open={workspaceOpen}
                 onOpenChange={setWorkspaceOpen}
-                label={workspace?.name ?? t("workspacePlaceholder")}
+                label={workspace?.name}
+                placeholder={t("workspacePlaceholder")}
                 disabled={creating}
                 aria-invalid={workspaceInvalid || undefined}
                 aria-describedby={workspaceInvalid ? "pickup-workspace-error" : undefined}
@@ -201,7 +202,8 @@ export function PickupCreateMixDialog({
                 id="pickup-discipline"
                 open={disciplineOpen}
                 onOpenChange={setDisciplineOpen}
-                label={enabledHere.find((item) => item.code === discipline)?.name ?? t("gamePlaceholder")}
+                label={enabledHere.find((item) => item.code === discipline)?.name}
+                placeholder={t("gamePlaceholder")}
                 disabled={creating}
                 aria-invalid={disciplineInvalid || undefined}
                 aria-describedby={disciplineInvalid ? "pickup-discipline-error" : undefined}
@@ -300,7 +302,8 @@ export function PickupCreateMixDialog({
                 id="pickup-clone-from"
                 open={sourceOpen}
                 onOpenChange={setSourceOpen}
-                label={source ? sourceLabel(source) : t("source")}
+                label={source && sourceLabel(source)}
+                placeholder={t("source")}
                 disabled={creating}
                 aria-invalid={sourceInvalid || undefined}
                 aria-describedby={sourceInvalid ? "pickup-source-error" : "pickup-lineup-hint"}
@@ -355,7 +358,7 @@ export function PickupCreateMixDialog({
         <p role="status" className="sr-only">
           {creating ? t("pending") : ""}
         </p>
-        <DialogFooter className="gap-2">
+        <DialogFooter>
           <Button type="button" variant="outline" disabled={creating} onClick={onClose}>
             {t("cancel")}
           </Button>

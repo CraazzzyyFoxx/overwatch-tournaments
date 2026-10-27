@@ -174,8 +174,8 @@ function ArrangeCard({
   return (
     <Card>
       <CardHeader className="flex-row items-center justify-between gap-2 space-y-0 pb-3">
-        <CardTitle asChild>
-          <h3 className="min-w-0 truncate text-sm">{table.title}</h3>
+        <CardTitle asChild className="min-w-0 truncate text-sm">
+          <h3>{table.title}</h3>
         </CardTitle>
         {canUpdate ? (
           <div className="flex shrink-0 items-center gap-2">

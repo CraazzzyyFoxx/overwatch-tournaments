@@ -74,14 +74,14 @@ export function EncounterRostersModal({
           </Button>
         </DialogTrigger>
       )}
-      <DialogContent className="flex max-h-[85vh] w-[95vw] max-w-[900px] flex-col gap-0 overflow-hidden p-0">
-        <DialogHeader className="shrink-0 space-y-1 border-b border-[color:var(--aqt-border)] p-4 pr-14 text-left">
+      <DialogContent variant="panel" className="max-h-[85vh] w-[95vw] max-w-[900px]">
+        <DialogHeader variant="panel">
           <DialogTitle>{t("bracket.rosters.title")}</DialogTitle>
           <DialogDescription>
             {t("bracket.rosters.description", { first: teamNames[0], second: teamNames[1] })}
           </DialogDescription>
         </DialogHeader>
-        <div className="flex-1 overflow-y-auto p-4">
+        <div className="flex-1 overflow-y-auto px-5 py-4">
           {encounterQuery.isPending ? (
             <div className="grid gap-4 lg:grid-cols-2">
               <Skeleton className="h-72 w-full rounded-xl" />

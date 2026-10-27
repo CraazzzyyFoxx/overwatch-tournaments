@@ -28,7 +28,6 @@ import { TournamentPageState } from "../_components/TournamentPageState";
 import { TournamentStreamSkeleton } from "../_components/TournamentSkeletons";
 import { UpdatingBadge } from "../_components/UpdatingBadge";
 import { useTournamentStreamsQuery, useTournamentVodsQuery } from "../_hooks/useTournamentStreams";
-import styles from "../TournamentDetail.module.css";
 import { getPublicPageQueryPresentation } from "@/lib/public-page-query-presentation";
 
 /**
@@ -164,7 +163,7 @@ const TournamentStreamPage = ({ tournamentId, slug }: { tournamentId: number; sl
   const liveCount = sorted.filter((entry) => getStreamStatus(entry.live) === "live").length;
 
   const content = (
-    <section className={styles.publicDataPage} aria-label={t("common.stream")}>
+    <section className="grid w-full min-w-0 max-w-full gap-4 *:min-w-0" aria-label={t("common.stream")}>
       {presentation.showUpdating ? <UpdatingBadge /> : null}
 
       {presentation.contentState === "empty" ? (

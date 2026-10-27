@@ -1,17 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 
-import type { Tone } from "@/components/ui/tone";
+import { TONE_TEXT, type Tone } from "@/components/ui/tone";
 import { cn } from "@/lib/utils";
-
-/** tone → foreground token on the `--aqt-*` palette (the icon-only twin of `Badge palette="aqt"`). */
-const STATUS_TONE_FG: Record<Tone, string> = {
-  neutral: "text-[color:var(--aqt-fg-faint)]",
-  accent: "text-[color:var(--aqt-teal)]",
-  success: "text-[color:var(--aqt-emerald)]",
-  warning: "text-[color:var(--aqt-amber)]",
-  info: "text-[color:var(--aqt-blue)]",
-  danger: "text-[color:var(--aqt-rose)]"
-};
 
 interface StatusIconBadgeProps {
   /** The glyph standing in for the status. */
@@ -35,7 +25,7 @@ export function StatusIconBadge({ icon: Icon, label, tone, className }: Readonly
       title={label}
       className={cn(
         "inline-flex size-5 items-center justify-center",
-        STATUS_TONE_FG[tone],
+        TONE_TEXT[tone],
         className
       )}
     >

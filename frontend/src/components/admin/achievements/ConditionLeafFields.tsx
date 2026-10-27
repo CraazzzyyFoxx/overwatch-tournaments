@@ -87,7 +87,7 @@ export function ConditionLeafFields({
       )}
       {conditionType === "match_criteria" && (
         <>
-          <ToggleGroup type="single" variant="pill" aria-label={controlName(t("fields.field"))} value={(params.field as string) ?? ""} onValueChange={(v) => setParam("field", v)}>
+          <ToggleGroup variant="pill" aria-label={controlName(t("fields.field"))} value={(params.field as string) ?? ""} onValueChange={(v) => setParam("field", v)}>
             <ToggleGroupItem value="closeness">{t("fields.closeness")}</ToggleGroupItem>
             <ToggleGroupItem value="match_time">{t("fields.matchTime")}</ToggleGroupItem>
           </ToggleGroup>
@@ -155,7 +155,7 @@ export function ConditionLeafFields({
       {/* ── div_change ── */}
       {conditionType === "div_change" && (
         <div className="flex items-center gap-1">
-          <ToggleGroup type="single" variant="pill" aria-label={controlName(t("fields.direction"))} value={(params.direction as string) ?? "up"} onValueChange={(v) => setParam("direction", v)}>
+          <ToggleGroup variant="pill" aria-label={controlName(t("fields.direction"))} value={(params.direction as string) ?? "up"} onValueChange={(v) => setParam("direction", v)}>
             <ToggleGroupItem value="up">{t("fields.up")}</ToggleGroupItem>
             <ToggleGroupItem value="down">{t("fields.down")}</ToggleGroupItem>
           </ToggleGroup>
@@ -183,7 +183,7 @@ export function ConditionLeafFields({
       {conditionType === "global_winrate" && (
         <>
           <div className="flex items-center gap-1">
-            <ToggleGroup type="single" variant="pill" aria-label={controlName(t("fields.rankingEnd"))} value={(params.order as string) ?? "desc"} onValueChange={(v) => setParam("order", v)}>
+            <ToggleGroup variant="pill" aria-label={controlName(t("fields.rankingEnd"))} value={(params.order as string) ?? "desc"} onValueChange={(v) => setParam("order", v)}>
               <ToggleGroupItem value="desc">{t("fields.top")}</ToggleGroupItem>
               <ToggleGroupItem value="asc">{t("fields.bottom")}</ToggleGroupItem>
             </ToggleGroup>
@@ -205,7 +205,7 @@ export function ConditionLeafFields({
       {conditionType === "consecutive" && (
         <>
           <div className="flex items-center gap-1">
-            <ToggleGroup type="single" variant="pill" aria-label={controlName(t("fields.streakMetric"))} value={(params.metric as string) ?? "win"} onValueChange={(v) => setParam("metric", v)}>
+            <ToggleGroup variant="pill" aria-label={controlName(t("fields.streakMetric"))} value={(params.metric as string) ?? "win"} onValueChange={(v) => setParam("metric", v)}>
               <ToggleGroupItem value="win">{t("fields.win")}</ToggleGroupItem>
               <ToggleGroupItem value="day_two">{t("fields.dayTwo")}</ToggleGroupItem>
             </ToggleGroup>
@@ -227,7 +227,6 @@ export function ConditionLeafFields({
       {conditionType === "is_newcomer" && (
         <div className="flex items-center gap-1">
           <ToggleGroup
-            type="single"
             variant="pill"
             aria-label={controlName(t("fields.newcomerMode"))}
             value={params.op !== undefined ? "count" : "bool"}
@@ -273,11 +272,11 @@ export function ConditionLeafFields({
       {conditionType === "encounter_score" && (
         <>
           <div className="flex flex-wrap gap-1">
-            <ToggleGroup type="single" variant="pill" aria-label={controlName(t("fields.roundType"))} value={(params.round_type as string) ?? "any"} onValueChange={(v) => setParam("round_type", v)}>
+            <ToggleGroup variant="pill" aria-label={controlName(t("fields.roundType"))} value={(params.round_type as string) ?? "any"} onValueChange={(v) => setParam("round_type", v)}>
               <ToggleGroupItem value="any">{t("fields.anyRound")}</ToggleGroupItem>
               <ToggleGroupItem value="final">{t("fields.final")}</ToggleGroupItem>
             </ToggleGroup>
-            <ToggleGroup type="single" variant="pill" aria-label={controlName(t("fields.whichSideCounts"))} value={String(params.winner ?? true)} onValueChange={(v) => setParam("winner", v === "true")}>
+            <ToggleGroup variant="pill" aria-label={controlName(t("fields.whichSideCounts"))} value={String(params.winner ?? true)} onValueChange={(v) => setParam("winner", v === "true")}>
               <ToggleGroupItem value="true">{t("fields.winnerOnly")}</ToggleGroupItem>
               <ToggleGroupItem value="false">{t("fields.bothTeams")}</ToggleGroupItem>
             </ToggleGroup>
@@ -362,7 +361,6 @@ export function ConditionLeafFields({
       {conditionType === "bracket_path" && (
         <>
           <ToggleGroup
-            type="single"
             variant="pill"
             aria-label={controlName(t("fields.bracketPath"))}
             value={params.played_upper_bracket === true ? "upper" : "lower"}
@@ -433,7 +431,7 @@ export function ConditionLeafFields({
             <NumberInput integer className="w-16" aria-label={controlName(t("fields.distinctCount"))} value={(params.value as number) ?? 1} onValueChange={(next) => setParam("value", next ?? 1)} />
           </div>
           <div className="flex items-center gap-1">
-            <ToggleGroup type="single" variant="pill" aria-label={controlName(t("fields.countingScope"))} value={(params.scope as string) ?? "global"} onValueChange={(v) => setParam("scope", v)}>
+            <ToggleGroup variant="pill" aria-label={controlName(t("fields.countingScope"))} value={(params.scope as string) ?? "global"} onValueChange={(v) => setParam("scope", v)}>
               <ToggleGroupItem value="global">{t("fields.global")}</ToggleGroupItem>
               <ToggleGroupItem value="tournament">{t("fields.perTournament")}</ToggleGroupItem>
             </ToggleGroup>

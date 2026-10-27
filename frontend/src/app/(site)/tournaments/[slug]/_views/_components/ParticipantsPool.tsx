@@ -290,7 +290,7 @@ function RoleColumn({
   );
 
   return (
-    <Card asChild variant="flat">
+    <Card asChild>
       <section
         className="relative overflow-hidden p-2 pt-3"
         style={{ "--pool-role": roleColor(ontology, role) ?? NEUTRAL_ROLE_COLOR } as CSSProperties}
@@ -513,7 +513,7 @@ export default function ParticipantsPool({
       ) : null}
 
       {reserves.length > 0 ? (
-        <Card asChild variant="flat">
+        <Card asChild>
           <section
             aria-label={t("tournamentDetail.participantsPool.reserve", {
               count: reserves.length
@@ -539,7 +539,7 @@ export default function ParticipantsPool({
       ) : null}
 
       {withdrawn.length > 0 ? (
-        <Card asChild variant="flat">
+        <Card asChild>
           <details className="group px-3 py-2">
             <summary className="flex cursor-pointer list-none items-center gap-1.5 text-xs text-[color:var(--aqt-fg-muted)] transition-colors hover:text-[color:var(--aqt-fg)]">
               <ChevronDown

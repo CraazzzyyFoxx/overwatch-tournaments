@@ -4,6 +4,7 @@ import React from "react";
 import { useTranslations } from "next-intl";
 import { CardSurface, ProfileStat } from "@/components/profile/atoms";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { UserTournament } from "@/types/user.types";
 
 interface Props {
@@ -16,7 +17,22 @@ interface Props {
   onSelect?: (tournamentId: number) => void;
 }
 
-const colorClass = (placement: number, field: number): "gold" | "silver" | "bronze" | "mid" | "bottom" => {
+// A point's hue, shared by the plot and its legend.
+const DOT_HUE = {
+  gold: "[--dot:var(--aqt-medal-gold)]",
+  silver: "[--dot:var(--aqt-medal-silver)]",
+  bronze: "[--dot:var(--aqt-medal-bronze)]",
+  mid: "[--dot:var(--aqt-teal)]",
+  bottom: "[--dot:var(--aqt-rose)]"
+} as const;
+
+const SWATCH = "inline-block size-2.5 rounded-full bg-[color:var(--dot)]";
+// `hover:bg` keeps the ghost button's own hover fill off the point.
+const DOT =
+  "absolute h-2.75 w-2.75 -translate-x-1/2 -translate-y-1/2 cursor-pointer rounded-full border-2 border-[color:var(--aqt-card)] bg-[color:var(--dot)] hover:z-5 hover:bg-[color:var(--dot)]";
+const AXIS = "font-[family-name:var(--aqt-data)] text-label text-[color:var(--aqt-fg-faint)]";
+
+const colorClass = (placement: number, field: number): keyof typeof DOT_HUE => {
   if (placement === 1) return "gold";
   if (placement <= 3) return "silver";
   if (placement <= 5) return "bronze";
@@ -59,14 +75,14 @@ const TournamentsPlacementTimeline = ({ tournaments, tournamentsWon, selectedIds
         />
         <ProfileStat label={tr("users.tournaments.kpi.best")} value={String(bestPlacement)} />
       </div>
-      <div className="aqt-timeline mt-5">
-        <div className="aqt-y-axis">
+      <div className="relative mt-5 h-50 overflow-hidden rounded-lg border border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-1)]">
+        <div className={cn(AXIS, "absolute top-2 bottom-7.5 left-2 flex w-9 flex-col justify-between pr-1.5 text-right")}>
           <span>{tr("users.tournaments.timeline.axisTop")}</span>
           <span>33%</span>
           <span>66%</span>
           <span>{tr("users.tournaments.timeline.axisLast")}</span>
         </div>
-        <div className="aqt-ln">
+        <div className="absolute top-3.5 right-3.5 bottom-7.5 left-12.5">
           {valid.map((t, i) => {
             const ratio = t.placement / t.count_teams;
             const left = n > 1 ? (i / (n - 1)) * 100 : 50;
@@ -89,7 +105,7 @@ const TournamentsPlacementTimeline = ({ tournaments, tournamentsWon, selectedIds
                   key={t.id}
                   variant="ghost"
                   size="inline"
-                  className={`aqt-dot ${cls}`}
+                  className={cn(DOT, DOT_HUE[cls])}
                   style={style}
                   title={label}
                   aria-label={label}
@@ -98,43 +114,29 @@ const TournamentsPlacementTimeline = ({ tournaments, tournamentsWon, selectedIds
                 />
               );
             }
-            return <div key={t.id} className={`aqt-dot ${cls}`} style={style} title={label} />;
+            return <div key={t.id} className={cn(DOT, DOT_HUE[cls])} style={style} title={label} />;
           })}
         </div>
-        <div className="aqt-x-axis">
+        <div className={cn(AXIS, "absolute right-3.5 bottom-1.5 left-12.5 flex justify-between")}>
           <span>{valid[0].name}</span>
           {n > 1 ? <span>{valid[n - 1].name}</span> : null}
         </div>
       </div>
       <div className="mt-3.5 flex flex-wrap gap-3.5 border-t border-[color:var(--aqt-border)] pt-3.5 text-label text-[color:var(--aqt-fg-muted)]">
         <span className="inline-flex items-center gap-1.5">
-          {/* Must stay identical to `.aqt-timeline .aqt-dot.gold` in user-profile.css. */}
-          <span
-            className="inline-block h-2.5 w-2.5 rounded-full"
-            style={{
-              background:
-                "linear-gradient(135deg, var(--aqt-medal-gold), color-mix(in srgb, var(--aqt-medal-gold) 65%, black))"
-            }}
-          />
+          <span className={cn(SWATCH, DOT_HUE.gold)} />
           {tr("users.tournaments.timeline.legend.first")}
         </span>
         <span className="inline-flex items-center gap-1.5">
-          {/* Must stay identical to `.aqt-timeline .aqt-dot.silver` in user-profile.css. */}
-          <span
-            className="inline-block h-2.5 w-2.5 rounded-full"
-            style={{
-              background:
-                "linear-gradient(135deg, var(--aqt-medal-silver), color-mix(in srgb, var(--aqt-medal-silver) 65%, black))"
-            }}
-          />
+          <span className={cn(SWATCH, DOT_HUE.silver)} />
           {tr("users.tournaments.timeline.legend.podium")}
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: "var(--aqt-teal)" }} />
+          <span className={cn(SWATCH, DOT_HUE.mid)} />
           {tr("users.tournaments.timeline.legend.topHalf")}
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: "var(--aqt-rose)" }} />
+          <span className={cn(SWATCH, DOT_HUE.bottom)} />
           {tr("users.tournaments.timeline.legend.bottomHalf")}
         </span>
       </div>

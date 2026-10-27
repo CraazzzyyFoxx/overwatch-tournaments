@@ -271,7 +271,7 @@ export function WorkspacePlayersSidebar({
 
   if (collapsed) {
     return (
-      <Card variant="flat" className="flex min-h-0 min-w-0 flex-col items-center gap-3 p-2">
+      <Card className="flex min-h-0 min-w-0 flex-col items-center gap-3 p-2">
         <Button
           type="button"
           variant="ghost"
@@ -342,7 +342,7 @@ export function WorkspacePlayersSidebar({
   return (
     // `min-w-0`: as a grid item this panel inherits `min-width: auto`, so below
     // roughly 300px it overflowed its own track instead of truncating rows.
-    <Card variant="flat" className="flex min-h-0 min-w-0 flex-col p-4">
+    <Card className="flex min-h-0 min-w-0 flex-col p-4">
       <div className="mb-3 flex items-center justify-between gap-2">
         <div className="min-w-0">
           {/* Short enough to hold one line at the narrowest sidebar width; the
@@ -404,7 +404,7 @@ export function WorkspacePlayersSidebar({
                       aria-describedby={handleHintId}
                       // `min-w-0`: an `<input>` carries an intrinsic ~170px width that
                       // `min-width: auto` in a flex row turns into a floor.
-                      className="min-w-0 rounded-lg border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)]"
+                      className="min-w-0"
                     />
                     {/* Enabled while empty on purpose: submit validates and points at the field. */}
                     <Button
@@ -462,10 +462,7 @@ export function WorkspacePlayersSidebar({
           placeholder={t("searchPlaceholder")}
           aria-label={t("searchLabel")}
           autoComplete="off"
-          className={cn(
-            "rounded-lg border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] pl-9",
-            search && "pr-9",
-          )}
+          className={cn("pl-9", search && "pr-9")}
         />
         {search ? (
           <Button

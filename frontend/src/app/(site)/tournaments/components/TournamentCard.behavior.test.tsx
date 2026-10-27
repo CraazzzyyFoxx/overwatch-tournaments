@@ -180,12 +180,12 @@ describe("TournamentCard", () => {
     // "COMPLETED" beside a permanently full "Final" bar is on most of the grid
     // and distinguishes nothing. A tournament still running earns both.
     const open = render();
-    expect(open.querySelector(".tn-status")).toBeTruthy();
-    expect(open.querySelector(".tn-stage")).toBeTruthy();
+    expect(open.textContent).toContain(en.common.statusBadge.registration);
+    expect(open.querySelector('[role="progressbar"]')).toBeTruthy();
 
     const done = render({ status: "completed" });
-    expect(done.querySelector(".tn-status")).toBeNull();
-    expect(done.querySelector(".tn-stage")).toBeNull();
+    expect(done.textContent).not.toContain(en.common.statusBadge.completed);
+    expect(done.querySelector('[role="progressbar"]')).toBeNull();
     // The counts are what still tell completed cards apart.
     expect(done.textContent).toContain("30 players");
   });

@@ -1,16 +1,24 @@
-"use client"
+"use client";
 
-import * as React from "react"
-import * as TooltipPrimitive from "@radix-ui/react-tooltip"
+import * as React from "react";
+import * as TooltipPrimitive from "@radix-ui/react-tooltip";
 
-import { floatingPanelClass } from "@/components/ui/popover"
-import { cn } from "@/lib/utils"
+import { floatingPanelClass } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 
-const TooltipProvider = TooltipPrimitive.Provider
+/** How long the pointer rests before a tooltip opens, the same on every page. */
+export const TOOLTIP_DELAY = 150;
 
-const Tooltip = TooltipPrimitive.Root
+const TooltipProvider = ({
+  delayDuration = TOOLTIP_DELAY,
+  ...props
+}: React.ComponentProps<typeof TooltipPrimitive.Provider>) => (
+  <TooltipPrimitive.Provider delayDuration={delayDuration} {...props} />
+);
 
-const TooltipTrigger = TooltipPrimitive.Trigger
+const Tooltip = TooltipPrimitive.Root;
+
+const TooltipTrigger = TooltipPrimitive.Trigger;
 
 const TooltipContent = React.forwardRef<
   React.ElementRef<typeof TooltipPrimitive.Content>,
@@ -21,7 +29,7 @@ const TooltipContent = React.forwardRef<
       ref={ref}
       sideOffset={sideOffset}
       className={cn(
-        "z-50 overflow-hidden px-3 py-1.5 text-xs animate-in fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0",
+        "z-50 max-w-xs overflow-hidden px-3 py-1.5 text-caption text-balance animate-in fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0",
         floatingPanelClass,
         "rounded-md",
         className
@@ -29,7 +37,7 @@ const TooltipContent = React.forwardRef<
       {...props}
     />
   </TooltipPrimitive.Portal>
-))
-TooltipContent.displayName = TooltipPrimitive.Content.displayName
+));
+TooltipContent.displayName = TooltipPrimitive.Content.displayName;
 
-export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider }
+export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider };

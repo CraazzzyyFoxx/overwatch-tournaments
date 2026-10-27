@@ -368,7 +368,7 @@ export function MixRoom({ initialGame, lobbyIndex }: Readonly<{ initialGame: Cus
         >
           {/* Every phase: players join the game's lobby during the draft or the bans as often as before the start. */}
           {canWrite || lobby?.lobby_code != null ? (
-            <Card variant="flat" className="overflow-hidden">
+            <Card className="overflow-hidden">
               <LobbyCodeStrip
                 lobbyCode={lobby?.lobby_code ?? null}
                 canWrite={canWrite}

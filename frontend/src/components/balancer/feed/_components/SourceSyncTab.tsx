@@ -200,7 +200,7 @@ export function SourceSyncTab({
               ))}
             </dl>
             {syncResult.errors.length > 0 ? (
-              <Alert variant="destructive">
+              <Alert tone="danger">
                 <AlertTitle>
                   {t("rowErrors", { count: syncResult.errors.length })}
                 </AlertTitle>

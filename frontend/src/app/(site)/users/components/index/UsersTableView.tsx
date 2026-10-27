@@ -10,10 +10,10 @@ import PlayerName from "@/components/PlayerName";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { DataPagination } from "@/components/ui/data-pagination";
-import { eyebrowClass } from "@/components/ui/eyebrow";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { PlaceBadge } from "@/components/ui/place-badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { formatOptional } from "@/app/(site)/users/components/shared/list-utils";
 import { cn } from "@/lib/utils";
@@ -27,8 +27,6 @@ import { PER_PAGE_OPTIONS, type SortValue } from "./users-index.model";
 import type { CompareSelection } from "./UsersCompareBar";
 import type { UsersIndexData } from "./useUsersIndexData";
 import type { UsersIndexParamControls } from "./useUsersIndexParams";
-
-const headCellClass = cn(eyebrowClass(), "px-2 py-2");
 
 /** A sortable column head: a real button inside a `th` that reports `aria-sort`. */
 function SortHead({
@@ -49,10 +47,10 @@ function SortHead({
   const Arrow = ascending ? ArrowUp : ArrowDown;
 
   return (
-    <th
+    <TableHead
       scope="col"
       aria-sort={active ? (ascending ? "ascending" : "descending") : "none"}
-      className={cn(headCellClass, className)}
+      className={className}
     >
       <Button
         variant="ghost"
@@ -67,7 +65,7 @@ function SortHead({
         {children}
         {active ? <Arrow aria-hidden /> : null}
       </Button>
-    </th>
+    </TableHead>
   );
 }
 
@@ -152,22 +150,22 @@ export function UsersTableView({
         ))}
       </div>
 
-      <Card variant="flat" className="max-md:hidden overflow-hidden">
-        <table className="w-full border-collapse text-caption">
-          <thead>
-            <tr className="border-b border-[color:var(--aqt-border)] text-left">
-              <th scope="col" className={cn(headCellClass, "w-9 pl-3")}>
+      <Card className="max-md:hidden overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead scope="col" className="w-9 pl-3">
                 <span className="sr-only">{t("users.list.compare.column")}</span>
-              </th>
-              <th scope="col" className={cn(headCellClass, "w-10 text-center")}>
+              </TableHead>
+              <TableHead scope="col" className="w-10 text-center">
                 #
-              </th>
-              <SortHead sort="name" controls={controls} align="start" className="text-left">
+              </TableHead>
+              <SortHead sort="name" controls={controls} align="start">
                 {t("users.list.table.player")}
               </SortHead>
-              <th scope="col" className={cn(headCellClass, "text-center")}>
+              <TableHead scope="col" className="text-center">
                 {allGames ? t("common.discipline.column") : t("users.list.table.roles")}
-              </th>
+              </TableHead>
               <SortHead sort="tournaments_count" controls={controls} className="text-center">
                 {t("users.list.table.tournaments")}
               </SortHead>
@@ -184,16 +182,16 @@ export function UsersTableView({
                 {t("users.list.table.achievements")}
               </SortHead>
               {allGames ? null : (
-                <th scope="col" className={cn(headCellClass, "text-center")}>
+                <TableHead scope="col" className="text-center">
                   {t("users.list.table.topHeroes")}
-                </th>
+                </TableHead>
               )}
-              <th scope="col" className={cn(headCellClass, "w-10 pr-3")}>
+              <TableHead scope="col" className="w-10 pr-3">
                 <span className="sr-only">{t("users.list.table.details")}</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {response.results.map((user, index) => (
               <Fragment key={user.id}>
                 <PlayerRow
@@ -209,8 +207,8 @@ export function UsersTableView({
                   onToggle={() => toggleRow(user.id)}
                 />
                 {expanded.has(user.id) && discipline !== null ? (
-                  <tr className="border-b border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-1)]">
-                    <td colSpan={11} className="p-0">
+                  <TableRow className="bg-[color:var(--aqt-overlay-1)] hover:bg-[color:var(--aqt-overlay-1)]">
+                    <TableCell colSpan={11} className="p-0">
                       <UserExpandedRow
                         user={user}
                         workspaceId={workspaceId}
@@ -220,16 +218,16 @@ export function UsersTableView({
                         compareDisabled={compare.isFull}
                         onToggleCompare={() => compare.toggle(user)}
                       />
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ) : null}
               </Fragment>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </Card>
 
-      <Card variant="flat" className="flex flex-wrap items-center gap-3 p-2.5">
+      <Card className="flex flex-wrap items-center gap-3 p-2.5">
         <span className="text-label tabular-nums text-[color:var(--aqt-fg-faint)]">
           {range
             ? t("users.list.pagination.showingPlayers", {
@@ -242,7 +240,6 @@ export function UsersTableView({
         </span>
 
         <ToggleGroup
-          type="single"
           variant="pill"
           size="sm"
           value={String(perPage)}
@@ -295,19 +292,19 @@ function PlayerRow({
   const allGames = game.discipline === null;
 
   return (
-    <tr className="border-b border-[color:var(--aqt-border)] transition-colors last:border-b-0 hover:bg-[color:var(--aqt-overlay-1)]">
-      <td className="pl-3">
+    <TableRow>
+      <TableCell className="pl-3">
         <CompareCheckbox
           user={user}
           selected={selected}
           disabled={compare.isFull && !selected}
           onToggle={() => compare.toggle(user)}
         />
-      </td>
-      <td className="px-2 py-2 text-center text-label tabular-nums text-[color:var(--aqt-fg-faint)]">
+      </TableCell>
+      <TableCell className="text-center text-label tabular-nums text-[color:var(--aqt-fg-faint)]">
         {rank}
-      </td>
-      <td className="px-2 py-2">
+      </TableCell>
+      <TableCell>
         <div className="flex items-center gap-2.5">
           <PlayerAvatar user={user} size={32} />
           <div className="min-w-0">
@@ -315,8 +312,8 @@ function PlayerRow({
             <LastActive at={user.last_active_at} />
           </div>
         </div>
-      </td>
-      <td className="px-2 py-2 text-center">
+      </TableCell>
+      <TableCell className="text-center">
         {allGames ? (
           <GameMarks codes={user.disciplines} onSelect={onSelectGame} />
         ) : (
@@ -328,31 +325,31 @@ function PlayerRow({
             ontology={game.ontology}
           />
         )}
-      </td>
-      <td className="px-2 py-2 text-center tabular-nums">{user.tournaments_count}</td>
-      <td className="px-2 py-2 text-center">
+      </TableCell>
+      <TableCell className="text-center tabular-nums">{user.tournaments_count}</TableCell>
+      <TableCell className="text-center">
         <WinrateCell user={user} minEncounters={minEncounters} record={allGames} />
-      </td>
-      <td className="px-2 py-2 text-center tabular-nums">
+      </TableCell>
+      <TableCell className="text-center tabular-nums">
         {formatOptional(user.averages.avg_placement)}
-      </td>
-      <td className="px-2 py-2 text-center">
+      </TableCell>
+      <TableCell className="text-center">
         {user.best_placement ? (
           <PlaceBadge place={user.best_placement} />
         ) : (
           <span className="text-[color:var(--aqt-fg-faint)]">-</span>
         )}
-      </td>
-      <td className="px-2 py-2 text-center tabular-nums">{user.achievements_count}</td>
+      </TableCell>
+      <TableCell className="text-center tabular-nums">{user.achievements_count}</TableCell>
       {allGames ? null : (
-        <td className="px-2 py-2">
+        <TableCell>
           <div className="flex justify-center">
             <CatalogEntityStrip entities={user.top_characters.slice(0, 3).map((entry) => entry.character)} limit={3} />
           </div>
-        </td>
+        </TableCell>
       )}
       {/* The drawer reads one game's draft card: under "all games" there is nothing to expand. */}
-      <td className="pr-3">
+      <TableCell className="pr-3">
         {allGames ? null : (
           <Button
             variant="outline"
@@ -366,7 +363,7 @@ function PlayerRow({
             {expanded ? <ChevronUp aria-hidden /> : <ChevronDown aria-hidden />}
           </Button>
         )}
-      </td>
-    </tr>
+      </TableCell>
+    </TableRow>
   );
 }

@@ -82,7 +82,7 @@ export function BalancerOperationDialog({
         </DialogHeader>
 
         <div className="space-y-4">
-          <Progress value={progress} className="h-2" />
+          <Progress value={progress} aria-label={title} />
 
           <div className="space-y-2">
             {steps.map((step) => (

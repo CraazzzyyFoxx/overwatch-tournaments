@@ -101,7 +101,7 @@ export function SaveBar({
       <Card
         role="region"
         aria-label={t("unsavedChanges")}
-        className="sticky bottom-4 z-10 mt-4 flex flex-wrap items-center gap-3 bg-card/95 px-4 py-3 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-card/80"
+        className="sticky bottom-4 z-10 mt-4 flex flex-wrap items-center gap-3 bg-card/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-card/80"
       >
         {error ? (
           <p role="alert" className="flex min-w-0 flex-1 items-start gap-1.5 text-sm text-danger">

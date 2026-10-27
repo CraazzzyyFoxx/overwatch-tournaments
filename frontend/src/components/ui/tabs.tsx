@@ -4,6 +4,7 @@ import * as React from "react";
 import * as TabsPrimitive from "@radix-ui/react-tabs";
 import { cva } from "class-variance-authority";
 
+import { Badge } from "@/components/ui/badge";
 import { StatusDot } from "@/components/ui/status-dot";
 import { segmentedFrame, toggleVariants } from "@/components/ui/toggle";
 import type { Tone } from "@/components/ui/tone";
@@ -83,18 +84,20 @@ function revealTab(list: HTMLElement, tab: HTMLElement) {
   else if (end > list.scrollLeft + list.clientWidth) list.scrollLeft = end - list.clientWidth;
 }
 
-/** Count after the label: a queue size, a result total. */
+/**
+ * Count after the label: a queue size, a result total. The neutral tint at
+ * rest; on the active tab the same tint over the accent (`TONE_HUE.accent`).
+ */
 function TabBadge({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <span
-      className={cn(
-        "rounded-full bg-muted/40 px-1.5 py-0.5 text-label font-normal tabular-nums text-muted-foreground",
-        "group-data-[state=active]:bg-primary/15 group-data-[state=active]:text-primary",
-        "group-aria-[current=page]:bg-primary/15 group-aria-[current=page]:text-primary"
-      )}
+    <Badge
+      tone="neutral"
+      shape="pill"
+      size="sm"
+      className="py-0.5 font-normal tabular-nums group-data-[state=active]:[--tone-hue:var(--aqt-teal)] group-aria-[current=page]:[--tone-hue:var(--aqt-teal)]"
     >
       {children}
-    </span>
+    </Badge>
   );
 }
 
@@ -116,7 +119,9 @@ function TabsList({
   className,
   variant = "underline",
   ...props
-}: Readonly<React.ComponentPropsWithoutRef<typeof TabsPrimitive.List> & { variant?: TabsVariant }>) {
+}: Readonly<
+  React.ComponentPropsWithoutRef<typeof TabsPrimitive.List> & { variant?: TabsVariant }
+>) {
   const listRef = React.useRef<HTMLDivElement>(null);
 
   // A deep link (or a URL-driven change) can activate a tab that is scrolled
@@ -152,23 +157,24 @@ interface TabsTriggerProps extends React.ComponentPropsWithoutRef<typeof TabsPri
   dot?: { tone: Tone; label: string };
 }
 
-const TabsTrigger = React.forwardRef<React.ElementRef<typeof TabsPrimitive.Trigger>, TabsTriggerProps>(
-  ({ className, badge, dot, children, ...props }, ref) => {
-    const variant = React.useContext(TabsVariantContext);
-    return (
-      <TabsPrimitive.Trigger
-        ref={ref}
-        data-ui="tabs-trigger"
-        className={cn(tabsTriggerVariants({ variant }), className)}
-        {...props}
-      >
-        {dot ? <TabDot {...dot} /> : null}
-        {children}
-        {badge != null ? <TabBadge>{badge}</TabBadge> : null}
-      </TabsPrimitive.Trigger>
-    );
-  }
-);
+const TabsTrigger = React.forwardRef<
+  React.ElementRef<typeof TabsPrimitive.Trigger>,
+  TabsTriggerProps
+>(({ className, badge, dot, children, ...props }, ref) => {
+  const variant = React.useContext(TabsVariantContext);
+  return (
+    <TabsPrimitive.Trigger
+      ref={ref}
+      data-ui="tabs-trigger"
+      className={cn(tabsTriggerVariants({ variant }), className)}
+      {...props}
+    >
+      {dot ? <TabDot {...dot} /> : null}
+      {children}
+      {badge != null ? <TabBadge>{badge}</TabBadge> : null}
+    </TabsPrimitive.Trigger>
+  );
+});
 TabsTrigger.displayName = TabsPrimitive.Trigger.displayName;
 
 const TabsContent = React.forwardRef<
@@ -178,7 +184,8 @@ const TabsContent = React.forwardRef<
   <TabsPrimitive.Content
     ref={ref}
     className={cn(
-      "mt-4 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+      // The gap under a horizontal list; a vertical (`rail`) list sits beside its panel.
+      "mt-4 data-[orientation=vertical]:mt-0 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
       className
     )}
     {...props}

@@ -41,7 +41,6 @@ const Leaders = ({ home, away, round, gridClassName }: LeadersProps) => {
           return (
             <Card
               key={name}
-              variant="flat"
               className="flex flex-col gap-2 p-3"
               style={{ borderLeft: `3px solid ${accent}` }}
             >

@@ -201,7 +201,7 @@ export function PickupMySeatPanel({
   );
 
   return (
-    <Card variant="flat" className="flex flex-col gap-3 px-4 py-3.5">
+    <Card className="flex flex-col gap-3 px-4 py-3.5">
       {/* Who they are here, then every action they own in one row: the body below only reads. */}
       <div className="flex flex-wrap items-center gap-x-2.5 gap-y-2">
         <h2 className={CARD_TITLE_CLASS}>{t("title")}</h2>

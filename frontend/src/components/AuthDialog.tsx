@@ -74,7 +74,7 @@ const AuthDialog = ({ tenantWorkspace }: AuthModalProps) => {
           <div
             role="img"
             aria-label={brandName}
-            className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl border border-border/70 bg-[color:var(--aqt-overlay-3)] shadow-sm"
+            className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl border border-border/70 bg-[color:var(--aqt-overlay-3)]"
           >
             {tenantWorkspace ? (
               <WorkspaceAvatar workspace={tenantWorkspace} size={22} />
@@ -90,12 +90,8 @@ const AuthDialog = ({ tenantWorkspace }: AuthModalProps) => {
             )}
           </div>
 
-          <DialogTitle className="text-ui font-semibold tracking-[-0.01em] text-[color:var(--aqt-fg)]">
-            {t("auth.signIn")}
-          </DialogTitle>
-          <DialogDescription className="mt-1 text-label font-normal text-[color:var(--aqt-fg-dim)]">
-            {t("auth.continueTo", { siteName: brandName })}
-          </DialogDescription>
+          <DialogTitle>{t("auth.signIn")}</DialogTitle>
+          <DialogDescription className="mt-1">{t("auth.continueTo", { siteName: brandName })}</DialogDescription>
         </div>
 
         {/* Divider */}

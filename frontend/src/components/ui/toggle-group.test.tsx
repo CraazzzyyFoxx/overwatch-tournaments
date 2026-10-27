@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { describe, expect, it, vi } from "vitest";
 
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean;
@@ -27,12 +28,7 @@ function radios(scope: HTMLElement) {
 
 function group(value: string, onValueChange: (next: string) => void) {
   return (
-    <ToggleGroup
-      type="single"
-      value={value}
-      onValueChange={onValueChange}
-      aria-label="Filter by status"
-    >
+    <ToggleGroup value={value} onValueChange={onValueChange} aria-label="Filter by status">
       <ToggleGroupItem value="all">All</ToggleGroupItem>
       <ToggleGroupItem value="failed">Failed</ToggleGroupItem>
       <ToggleGroupItem value="done">Processed</ToggleGroupItem>
@@ -79,5 +75,29 @@ describe("ToggleGroup", () => {
     const scope = await mount(group("", () => {}));
 
     expect(radios(scope).map((item) => item.tabIndex)).toEqual([0, -1, -1]);
+  });
+
+  it("works under a TooltipTrigger asChild: keeps its on state and still selects", async () => {
+    const onValueChange = vi.fn();
+    const scope = await mount(
+      <TooltipProvider>
+        <ToggleGroup value="all" onValueChange={onValueChange} aria-label="View">
+          <ToggleGroupItem value="all">All</ToggleGroupItem>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <ToggleGroupItem value="failed">Failed</ToggleGroupItem>
+            </TooltipTrigger>
+            <TooltipContent>Only the failed ones</TooltipContent>
+          </Tooltip>
+        </ToggleGroup>
+      </TooltipProvider>
+    );
+
+    const [, failed] = radios(scope);
+    expect(failed.getAttribute("data-state")).toBe("off");
+    await act(async () => {
+      failed.click();
+    });
+    expect(onValueChange).toHaveBeenLastCalledWith("failed");
   });
 });

@@ -23,7 +23,7 @@ interface AchievementArtProps {
  * Badge art with a designed fallback. A rule without an uploaded image uses
  * `/achievements/<slug>.webp` only when that file ships (`ACHIEVEMENT_ART_SLUGS`);
  * every other rule -- and any image that fails to load -- gets a monogram panel
- * tinted by the nearest `--rar` (`.aqt-rar-*`), never a request for a file that
+ * tinted by the nearest `--rar` (`rarityVarClass`), never a request for a file that
  * is not there or a broken image with spilled alt text.
  */
 export function AchievementArt({ achievement, sizes, className, imgClassName, alt = "" }: AchievementArtProps) {

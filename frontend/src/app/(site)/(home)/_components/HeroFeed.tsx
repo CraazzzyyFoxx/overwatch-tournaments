@@ -34,9 +34,9 @@ const TOP_CLASS = "flex min-w-0 items-center gap-2 text-label text-[color:var(--
 
 /** Each kind's tag: its icon and hue. */
 const KIND_TAG: Record<FeedKind, { icon: LucideIcon; hue: string }> = {
-  won: { icon: Trophy, hue: "[--badge-hue:var(--aqt-medal-gold)]" },
-  carried: { icon: Flame, hue: "[--badge-hue:var(--aqt-amber)]" },
-  maps: { icon: MapIcon, hue: "[--badge-hue:var(--aqt-blue)]" }
+  won: { icon: Trophy, hue: "var(--aqt-medal-gold)" },
+  carried: { icon: Flame, hue: "var(--aqt-amber)" },
+  maps: { icon: MapIcon, hue: "var(--aqt-blue)" }
 };
 
 /** A record about a title is filed with the finals, a map's length with the maps; the rest are a player's night. */
@@ -137,7 +137,7 @@ export async function HeroFeed() {
 function Tag({ kind, children }: Readonly<{ kind: FeedKind; children: ReactNode }>) {
   const { icon: Icon, hue } = KIND_TAG[kind];
   return (
-    <Badge palette="aqt" voice="label" size="sm" className={cn("flex-none py-[3px] [&_svg]:size-3", hue)}>
+    <Badge hue={hue} voice="label" size="sm" className="flex-none py-[3px] [&_svg]:size-3">
       <Icon aria-hidden />
       {children}
     </Badge>

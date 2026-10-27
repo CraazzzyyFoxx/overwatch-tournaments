@@ -134,7 +134,8 @@ export function PlaceMemberDialog({
           id={fieldId}
           open={open}
           onOpenChange={setOpen}
-          label={selectedAgent?.primary_handle ?? t("admin.placePlayerPick")}
+          label={selectedAgent?.primary_handle}
+          placeholder={t("admin.placePlayerPick")}
           disabled={actions.isPlacing}
           searchValue={search}
           onSearchValueChange={setSearch}
@@ -163,7 +164,6 @@ export function PlaceMemberDialog({
                   setOpen(false);
                 }}
               >
-                <ComboboxCheck selected={agent.registration_id === registrationId} />
                 <span className="truncate">{agent.primary_handle}</span>
                 {/* The roles the player registered for, as glyphs: the
                     organizer is filling one specific slot. */}
@@ -172,6 +172,7 @@ export function PlaceMemberDialog({
                     <RosterSlotGlyph key={`${role.dimension}:${role.role}`} code={roleOf(role)} size={14} />
                   ))}
                 </span>
+                <ComboboxCheck selected={agent.registration_id === registrationId} />
               </CommandItem>
             ))}
           </CommandGroup>

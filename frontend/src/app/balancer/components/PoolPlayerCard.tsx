@@ -153,7 +153,6 @@ export const PoolPlayerCard = forwardRef<HTMLDivElement, PoolPlayerCardProps>(
         <ContextMenuTrigger asChild>
           <Card
             ref={ref}
-            variant="flat"
             style={style}
             title={issueSummary || player.identity}
             className={cn(
@@ -238,18 +237,12 @@ export const PoolPlayerCard = forwardRef<HTMLDivElement, PoolPlayerCardProps>(
                 player.additional_handles.length > 0 ? (
                   <div className="mt-1.5 flex flex-wrap items-center gap-1">
                     {player.is_flex ? (
-                      <Badge
-                        palette="aqt"
-                        shape="pill"
-                        size="sm"
-                        voice="label"
-                        className="[--badge-hue:var(--aqt-violet)]"
-                      >
+                      <Badge hue="var(--aqt-flex)" shape="pill" size="sm" voice="label">
                         {tCommon("roles.flex")}
                       </Badge>
                     ) : null}
                     {isReady ? (
-                      <Badge palette="aqt" tone="success" shape="pill" size="sm" voice="label">
+                      <Badge tone="success" shape="pill" size="sm" voice="label">
                         {t("card.ready")}
                       </Badge>
                     ) : null}

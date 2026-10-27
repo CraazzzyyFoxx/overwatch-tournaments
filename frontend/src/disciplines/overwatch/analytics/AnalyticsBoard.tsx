@@ -60,10 +60,8 @@ function TermBody({ term }: Readonly<{ term: GlossaryTerm }>) {
   return (
     <SheetHeader>
       <Eyebrow>{t("analytics.sheet.glossaryKicker")}</Eyebrow>
-      <SheetTitle className="text-heading font-semibold">{t(`analytics.glossary.${term}.label`)}</SheetTitle>
-      <SheetDescription className="text-body text-[color:var(--aqt-fg-muted)]">
-        {t(`analytics.glossary.${term}.plain`)}
-      </SheetDescription>
+      <SheetTitle>{t(`analytics.glossary.${term}.label`)}</SheetTitle>
+      <SheetDescription>{t(`analytics.glossary.${term}.plain`)}</SheetDescription>
     </SheetHeader>
   );
 }
@@ -75,10 +73,8 @@ function HowBody() {
     <>
       <SheetHeader>
         <Eyebrow>{t("analytics.howItWorks.kicker")}</Eyebrow>
-        <SheetTitle className="text-heading font-semibold">{t("analytics.howItWorks.title")}</SheetTitle>
-        <SheetDescription className="text-body text-[color:var(--aqt-fg-muted)]">
-          {t("analytics.howItWorks.intro")}
-        </SheetDescription>
+        <SheetTitle>{t("analytics.howItWorks.title")}</SheetTitle>
+        <SheetDescription>{t("analytics.howItWorks.intro")}</SheetDescription>
       </SheetHeader>
       <ol className="mt-4 flex flex-col gap-4">
         {steps.map((step) => (
@@ -205,6 +201,7 @@ export default function AnalyticsBoard({
         algorithmsQuery.isError ? t("analytics.briefing.errorAlgorithms") : t("analytics.briefing.selectAlgorithm")
       }
       disabled={algorithmsQuery.isError}
+      size="sm"
       className="min-w-[9rem] flex-[0_1_12rem]"
       onValueChange={pushAlgorithm}
     >

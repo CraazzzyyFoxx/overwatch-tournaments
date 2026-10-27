@@ -12,6 +12,37 @@ const ADMIN_LEADING_COLUMN_WIDTH = 40;
 /** Flexible (unsized, undragged) columns split this share of the table evenly, so they read as a grid instead of shrink-wrapping to content; the filler absorbs the rest. */
 const ADMIN_FLEXIBLE_FILL_PERCENT = 75;
 
+/**
+ * A pinned cell sits ON TOP of the columns scrolling past it, so it is opaque:
+ * `--admin-sticky-bg`, set on the table's root, is the translucent card
+ * flattened over the page (or the solid card when `framed={false}`). The row's
+ * state tint (`--admin-row-tint`, see `body-rows.tsx`) is painted over that
+ * base as an image layer: the same compositing the scrolling cells get from
+ * the row's own background, so the pinned block and the rest land on one colour.
+ */
+export const STICKY_CELL_CLASS =
+  "sticky z-2 bg-[color:var(--admin-sticky-bg)] bg-[linear-gradient(var(--admin-row-tint),var(--admin-row-tint))] transition-colors";
+
+/** Every header cell shares that surface, under a muted wash: the header sticks to the top of the scroll box, so a translucent one would show the rows passing under it. */
+export const HEAD_SURFACE_CLASS = "bg-[color:color-mix(in_srgb,hsl(var(--muted))_20%,var(--admin-sticky-bg))]";
+
+/** A pinned header cell: above the pinned body cells, since it holds both axes at the corner. */
+export const STICKY_HEAD_CLASS = cn(STICKY_CELL_CLASS, "z-3", HEAD_SURFACE_CLASS);
+
+/** The pinned block's inner edge: the only cue that the rest scrolls under it. */
+const STICKY_EDGE_CLASS = {
+  left: "shadow-[inset_-1px_0_0_hsl(var(--border))]",
+  right: "shadow-[inset_1px_0_0_hsl(var(--border))]"
+} as const;
+
+/** What `stickyCell` hands a cell: its classes and offset, plus `data-sticky` (`left`/`right`) and `data-sticky-edge` on the block's inner edge. */
+export interface StickyCellProps {
+  className: string | undefined;
+  style: React.CSSProperties | undefined;
+  "data-sticky"?: "left" | "right";
+  "data-sticky-edge"?: "";
+}
+
 export interface ColumnLayoutOptions<TData> {
   /** `table.getVisibleLeafColumns()`, which TanStack keeps as one array until visibility, order or the columns change. */
   visibleColumns: Column<TData, unknown>[];
@@ -34,7 +65,7 @@ export interface ColumnLayout<TData> {
   stickyLeft: Map<string, number>;
   /** `right` offset per right-pinned column (the actions column included), from the edge inward; empty when nothing pins right. */
   stickyRight: Map<string, number>;
-  stickyCell: (columnId: string, style?: React.CSSProperties) => { className: string | undefined; style: React.CSSProperties | undefined };
+  stickyCell: (columnId: string, style?: React.CSSProperties) => StickyCellProps;
   edgePadding: (columnId: string) => string;
 }
 
@@ -139,20 +170,26 @@ export function buildColumnLayout<TData>({
       (columnId === firstScrollingId || columnId === firstStickyRightId) && "pl-4"
     );
 
-  /** Sticky class + `left`/`right` for a data cell, or nothing when it is not pinned. */
-  const stickyCell = (columnId: string, style?: React.CSSProperties) => {
+  /** Sticky classes, `left`/`right` and the `data-sticky*` marks for a cell, or just its style when it is not pinned. */
+  const stickyCell = (columnId: string, style?: React.CSSProperties): StickyCellProps => {
     const left = stickyLeft.get(columnId);
     if (left !== undefined) {
+      const edge = columnId === lastStickyId;
       return {
-        className: cn("admin-sticky-col", columnId === lastStickyId && "admin-sticky-col-edge"),
-        style: { ...style, left }
+        className: cn(STICKY_CELL_CLASS, edge && STICKY_EDGE_CLASS.left),
+        style: { ...style, left },
+        "data-sticky": "left",
+        "data-sticky-edge": edge ? "" : undefined
       };
     }
     const right = stickyRight.get(columnId);
     if (right === undefined) return { className: undefined, style };
+    const edge = columnId === firstStickyRightId;
     return {
-      className: cn("admin-sticky-col-right", columnId === firstStickyRightId && "admin-sticky-col-right-edge"),
-      style: { ...style, right }
+      className: cn(STICKY_CELL_CLASS, edge && STICKY_EDGE_CLASS.right),
+      style: { ...style, right },
+      "data-sticky": "right",
+      "data-sticky-edge": edge ? "" : undefined
     };
   };
 
@@ -167,7 +204,7 @@ export function buildColumnLayout<TData>({
     <TableHead
       key="filler"
       aria-hidden
-      className={cn("border-b border-border/40 p-0 admin-table-head", !fillerStyle && "w-full", density === "compact" ? "h-8" : "h-9")}
+      className={cn("border-b border-border/40 p-0", HEAD_SURFACE_CLASS, !fillerStyle && "w-full", density === "compact" ? "h-8" : "h-9")}
       style={fillerStyle}
     />
   );

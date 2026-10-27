@@ -90,7 +90,6 @@ export function LobbyCodeStrip({
           >
             <Input
               size="sm"
-              variant="surface"
               className="w-56 font-mono"
               value={draft}
               maxLength={64}

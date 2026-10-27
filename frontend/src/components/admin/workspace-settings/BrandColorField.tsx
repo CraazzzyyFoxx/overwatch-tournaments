@@ -40,7 +40,7 @@ export function BrandColorField({
     <div className="min-w-0">
       <Label htmlFor={id}>{label}</Label>
       <div className="mt-1 flex items-center gap-2">
-        <ColorSwatch value={hex} fallback={fallback} label={label} onChange={onChange} />
+        <ColorSwatch value={hex} fallback={fallback} label={label} onValueChange={onChange} />
         <Input
           id={id}
           value={hex}

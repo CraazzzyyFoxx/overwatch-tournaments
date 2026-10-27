@@ -385,7 +385,7 @@ function NextPageGhost({
               continueTo(next.href, "top");
               onLeave();
             }}
-            className="mt-1 inline-flex items-center gap-1.5 text-heading font-semibold text-foreground transition-colors after:absolute after:inset-0 after:content-[''] hover:text-primary focus-visible:outline-none focus-visible:after:rounded-xl focus-visible:after:ring-2 focus-visible:after:ring-ring"
+            className="mt-1 inline-flex items-center gap-1.5 text-heading font-semibold text-foreground transition-colors after:absolute after:inset-0 after:content-[''] hover:text-primary focus-visible:outline-hidden focus-visible:after:rounded-xl focus-visible:after:ring-2 focus-visible:after:ring-ring"
           >
             {next.title}
             <ArrowDown aria-hidden className="size-4" />

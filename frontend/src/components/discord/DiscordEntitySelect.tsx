@@ -21,24 +21,6 @@ interface DiscordEntitySelectGroup<T> {
  *  size, and the role picker's tighter one for inline tier rows. */
 type DiscordEntitySelectSize = "default" | "sm";
 
-const SIZE_CLASSES: Record<
-  DiscordEntitySelectSize,
-  { input: string; dropdownButton: string; trigger: string; iconButton: string }
-> = {
-  default: {
-    input: "w-full min-w-0 font-mono",
-    dropdownButton: "shrink-0 px-2",
-    trigger: "h-9 min-w-0 border-input bg-transparent hover:bg-transparent",
-    iconButton: "size-9 shrink-0 text-muted-foreground hover:text-foreground"
-  },
-  sm: {
-    input: "w-full min-w-0 font-mono",
-    dropdownButton: "shrink-0 px-2",
-    trigger: "min-w-0 border-input bg-transparent hover:bg-transparent",
-    iconButton: "size-8 shrink-0 text-muted-foreground hover:text-foreground"
-  }
-};
-
 interface DiscordEntitySelectLabels {
   loading: string;
   dropdown: string;
@@ -78,7 +60,7 @@ export interface DiscordEntitySelectProps<T extends { id: string; name: string }
   /** Full trigger label content once an entity is selected. */
   renderSelectedLabel: (entity: T) => ReactNode;
   labels: DiscordEntitySelectLabels;
-  /** When set, the list opens with this option, and picking it clears the value. */
+  /** When set, the list opens with this "nothing picked" row, and picking it clears the value. */
   noneLabel?: string;
 }
 
@@ -114,7 +96,9 @@ export function DiscordEntitySelect<T extends { id: string; name: string }>({
   labels,
   noneLabel
 }: Readonly<DiscordEntitySelectProps<T>>) {
-  const sizeClasses = SIZE_CLASSES[size];
+  // The icon buttons match the trigger's height and carry a 14px glyph.
+  const iconButtonSize = size === "sm" ? "icon-toolbar" : "icon";
+  const iconButtonClass = "shrink-0 text-[color:var(--aqt-fg-muted)] [&_svg]:size-3.5";
 
   // `className` lands on the WRAPPER, not the trigger: this renders a row --
   // control plus one or two buttons -- into the caller's layout, so the
@@ -137,14 +121,14 @@ export function DiscordEntitySelect<T extends { id: string; name: string }>({
           inputMode="numeric"
           autoComplete="off"
           maxLength={19}
-          className={sizeClasses.input}
+          className="w-full min-w-0 font-mono"
         />
         {hasEntities && (
           <Button
             type="button"
             variant="ghost"
-            size="sm"
-            className={sizeClasses.dropdownButton}
+            size={size}
+            className="shrink-0 px-2"
             onClick={() => onManualModeChange(false)}
           >
             {labels.dropdown}
@@ -168,7 +152,7 @@ export function DiscordEntitySelect<T extends { id: string; name: string }>({
           onOpenChange={onOpenChange}
           disabled={disabled || isLoading}
           size={size}
-          triggerClassName={sizeClasses.trigger}
+          triggerClassName="min-w-0"
           // The trigger names itself from its content: the chosen entity once
           // there is one, the purpose while there is not.
           label={
@@ -176,33 +160,30 @@ export function DiscordEntitySelect<T extends { id: string; name: string }>({
               renderSelectedLabel(selected)
             ) : value ? (
               // A stored entity the guild no longer returns: the id is all we know.
-              <span className="font-mono text-xs">{value}</span>
-            ) : (
-              (placeholder ?? labels.placeholder)
-            )
+              <span className="font-mono">{value}</span>
+            ) : undefined
           }
-          labelTitle={selected?.name ?? value ?? undefined}
+          placeholder={placeholder ?? labels.placeholder}
+          labelTitle={selected?.name ?? (value || undefined)}
           searchValue={search}
           onSearchValueChange={onSearchChange}
           searchPlaceholder={labels.searchPlaceholder}
           searchLabel={labels.searchLabel}
           emptyMessage={labels.empty}
+          clear={
+            noneLabel
+              ? {
+                  label: noneLabel,
+                  value: noneLabel,
+                  onSelect: () => {
+                    onChange("");
+                    onOpenChange(false);
+                    onSearchChange("");
+                  }
+                }
+              : undefined
+          }
         >
-          {noneLabel ? (
-            <CommandGroup>
-              <CommandItem
-                value={noneLabel}
-                onSelect={() => {
-                  onChange("");
-                  onOpenChange(false);
-                  onSearchChange("");
-                }}
-              >
-                <span className="flex-1 text-muted-foreground">{noneLabel}</span>
-                <ComboboxCheck selected={value === ""} />
-              </CommandItem>
-            </CommandGroup>
-          ) : null}
           {groups.map((group, index) => (
             <CommandGroup key={group.heading ?? index} heading={group.heading}>
               {group.entities.map((entity) => (
@@ -223,28 +204,25 @@ export function DiscordEntitySelect<T extends { id: string; name: string }>({
       <Button
         type="button"
         variant="ghost"
-        size="icon"
-        className={sizeClasses.iconButton}
+        size={iconButtonSize}
+        className={iconButtonClass}
         onClick={onRefetch}
         disabled={isLoading}
         aria-label={labels.refresh}
         title={labels.refresh}
       >
-        <RefreshCw
-          aria-hidden
-          className={cn("size-3.5", isLoading && "animate-spin motion-reduce:animate-none")}
-        />
+        <RefreshCw aria-hidden className={cn(isLoading && "animate-spin motion-reduce:animate-none")} />
       </Button>
       <Button
         type="button"
         variant="ghost"
-        size="icon"
-        className={sizeClasses.iconButton}
+        size={iconButtonSize}
+        className={iconButtonClass}
         onClick={() => onManualModeChange(true)}
         aria-label={labels.manual}
         title={labels.manual}
       >
-        <Code2 aria-hidden className="size-3.5" />
+        <Code2 aria-hidden />
       </Button>
     </div>
   );

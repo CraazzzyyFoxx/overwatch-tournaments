@@ -115,7 +115,7 @@ function RegistrationTeamCard({
       <header className="flex flex-wrap items-center justify-between gap-2">
         <Avatar className="size-7 shrink-0 rounded-md border border-[color:var(--aqt-border)]">
           {team.image_url ? <AvatarImage src={team.image_url} alt="" /> : null}
-          <AvatarFallback className="rounded-md bg-[color:var(--aqt-overlay-2)] text-label font-semibold">
+          <AvatarFallback className="rounded-md bg-[color:var(--aqt-overlay-2)] font-semibold">
             {team.name.slice(0, 1).toUpperCase()}
           </AvatarFallback>
         </Avatar>

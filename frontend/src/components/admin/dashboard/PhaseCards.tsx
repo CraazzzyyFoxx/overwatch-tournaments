@@ -277,7 +277,7 @@ function ChecklistRow({ item, progress }: Readonly<{ item: ChecklistItem; progre
           ) : null}
         </div>
         {/* The detail prints the count; the bar only shows how far along it is. */}
-        {progress == null ? null : <Progress value={progress} aria-hidden className="mt-2 h-1" />}
+        {progress == null ? null : <Progress value={progress} aria-hidden size="sm" className="mt-2" />}
       </div>
     </>
   );
@@ -289,7 +289,7 @@ function ChecklistRow({ item, progress }: Readonly<{ item: ChecklistItem; progre
       href={item.href}
       className={cn(
         shared,
-        "transition-colors hover:bg-accent/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+        "transition-colors hover:bg-accent/30 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
       )}
     >
       {body}
@@ -312,7 +312,7 @@ function Meter({ label, value, total }: Readonly<{ label: string; value: number;
         value={total > 0 ? Math.min(100, (value / total) * 100) : 0}
         aria-label={label}
         getValueLabel={() => text}
-        className="h-1.5"
+        size="sm"
       />
     </div>
   );

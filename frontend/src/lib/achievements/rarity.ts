@@ -21,11 +21,20 @@ export const classifyRarity = (rarityPercent: number): Rarity => {
   return "common";
 };
 
-// CSS class that sets the `--rar` HSL triplet for a tier (see
-// `app/(site)/achievements/achievements.css`, `.aqt-rar-*`). Every
-// rarity-tinted element (tile, crest, dot, pill) reads
-// `hsl(var(--rar))`, so it only needs this one class on an ancestor.
-export const rarityVarClass = (rarity: Rarity): string => `aqt-rar-${rarity}`;
+// Sets the `--rar` HSL triplet for a tier (a triplet, so `hsl(var(--rar) / a)`
+// alpha tints work; `globals.css` holds the "common" fallback on :root). Every
+// rarity-tinted element (tile, crest, dot, pill) reads `hsl(var(--rar))`, so it
+// only needs this one class on an ancestor. Literal strings: Tailwind reads them.
+const RARITY_VAR_CLASS: Record<Rarity, string> = {
+  mythic: "[--rar:40_96%_62%]",
+  legendary: "[--rar:350_80%_64%]",
+  epic: "[--rar:270_72%_68%]",
+  rare: "[--rar:210_82%_64%]",
+  uncommon: "[--rar:150_57%_55%]",
+  common: "[--rar:215_14%_60%]"
+};
+
+export const rarityVarClass = (rarity: Rarity): string => RARITY_VAR_CLASS[rarity];
 
 // Localized compact ranges (e.g. "< 1% earn"), keyed by rarity.
 export const rarityRanges = (t: Translate): Record<Rarity, string> => ({

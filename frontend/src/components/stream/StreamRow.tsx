@@ -147,7 +147,7 @@ export function StreamRow({ entry, isSelected, onSelect, now }: Readonly<StreamR
         rel="noopener noreferrer"
         className={cn(
           ROW_SHELL,
-          "w-full text-left no-underline outline-none transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--aqt-teal)]"
+          "w-full text-left no-underline transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--aqt-teal)]"
         )}
       >
         {body}

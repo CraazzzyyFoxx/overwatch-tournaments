@@ -4,7 +4,6 @@ import React from "react";
 
 import { Select, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { cn } from "@/lib/utils";
 
 interface TooltipSelectProps {
   /** The control's name: its tooltip and accessible label. */
@@ -13,6 +12,8 @@ interface TooltipSelectProps {
   placeholder: string;
   disabled?: boolean;
   className?: string;
+  size?: "sm" | "default";
+  variant?: "default" | "surface";
   onValueChange: (value: string) => void;
   /** The `SelectContent`. */
   children: React.ReactNode;
@@ -28,15 +29,17 @@ export function TooltipSelect({
   placeholder,
   disabled,
   className,
+  size,
+  variant,
   onValueChange,
   children
 }: Readonly<TooltipSelectProps>) {
   return (
-    <TooltipProvider delayDuration={200}>
+    <TooltipProvider>
       <Select value={value} onValueChange={onValueChange} disabled={disabled}>
         <Tooltip>
           <TooltipTrigger asChild>
-            <SelectTrigger aria-label={tooltip} className={cn("h-8", className)}>
+            <SelectTrigger aria-label={tooltip} size={size} variant={variant} className={className}>
               <SelectValue placeholder={placeholder} />
             </SelectTrigger>
           </TooltipTrigger>

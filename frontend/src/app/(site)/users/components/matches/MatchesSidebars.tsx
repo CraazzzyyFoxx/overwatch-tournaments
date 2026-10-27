@@ -42,13 +42,20 @@ const oppWinrate = (o: OpponentStat) => {
   return total > 0 ? (o.wins / total) * 100 : 0;
 };
 
+const PIP = "h-4.5 w-1.5 rounded-xs";
+
 const OpponentPips = ({ o }: { o: OpponentStat }) => (
-  <span className="aqt-wl" aria-hidden>
-    {Array.from({ length: o.wins }).map((_, idx) => <span key={`w${idx}`} className="b w" />)}
-    {Array.from({ length: o.losses }).map((_, idx) => <span key={`l${idx}`} className="b l" />)}
-    {Array.from({ length: o.draws }).map((_, idx) => <span key={`d${idx}`} className="b d" />)}
+  <span className="inline-flex gap-0.5" aria-hidden>
+    {Array.from({ length: o.wins }).map((_, idx) => <span key={`w${idx}`} className={cn(PIP, "bg-[color:var(--aqt-emerald)]")} />)}
+    {Array.from({ length: o.losses }).map((_, idx) => <span key={`l${idx}`} className={cn(PIP, "bg-[color:var(--aqt-rose)]")} />)}
+    {Array.from({ length: o.draws }).map((_, idx) => <span key={`d${idx}`} className={cn(PIP, "bg-[color:var(--aqt-amber)]")} />)}
   </span>
 );
+
+const ROW =
+  "grid grid-cols-[1fr_auto_auto] items-center gap-2.5 border-b border-[color:var(--aqt-border)] px-3.5 py-2.25 text-caption last:border-b-0";
+const ROW_NAME = "font-semibold text-[color:var(--aqt-fg)]";
+const ROW_RECORD = "aqt-tnum min-w-8.5 text-right text-label font-semibold text-[color:var(--aqt-fg-muted)]";
 
 const OpponentRecord = ({ o }: { o: OpponentStat }) => (
   <>
@@ -88,11 +95,9 @@ const MatchesSidebars = ({ opponentStats, stageStats }: MatchesSidebarsProps) =>
                   <ArrowRight aria-hidden />
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-[560px] border-[color:var(--aqt-border)] bg-[color:var(--aqt-bg)]">
+              <DialogContent className="max-w-[560px]">
                 <DialogHeader>
-                  <DialogTitle className="font-onest text-[color:var(--aqt-fg)]">
-                    {t("users.matches.allOpponents")}
-                  </DialogTitle>
+                  <DialogTitle>{t("users.matches.allOpponents")}</DialogTitle>
                 </DialogHeader>
                 <div className="max-h-[60vh] overflow-y-auto">
                   <table className="w-full border-collapse text-caption">
@@ -134,10 +139,10 @@ const MatchesSidebars = ({ opponentStats, stageStats }: MatchesSidebarsProps) =>
         }
       >
         {shown.map((opp) => (
-          <div key={opp.name} className="aqt-opp-row">
-            <span className="aqt-nm">{opp.name}</span>
+          <div key={opp.name} className={ROW}>
+            <span className={ROW_NAME}>{opp.name}</span>
             <OpponentPips o={opp} />
-            <span className="aqt-pct tabular-nums">
+            <span className={ROW_RECORD}>
               {opp.wins}-{opp.losses}{opp.draws > 0 ? `-${opp.draws}` : ""}
             </span>
           </div>
@@ -153,9 +158,9 @@ const MatchesSidebars = ({ opponentStats, stageStats }: MatchesSidebarsProps) =>
           const total = stats.w + stats.l;
           const winrate = total > 0 ? (stats.w / total) * 100 : 0;
           return (
-            <div key={k} className="aqt-opp-row">
-              <span className="aqt-nm">{stageLabels[k]}</span>
-              <span className="aqt-pct tabular-nums">{stats.w}-{stats.l}</span>
+            <div key={k} className={ROW}>
+              <span className={ROW_NAME}>{stageLabels[k]}</span>
+              <span className={ROW_RECORD}>{stats.w}-{stats.l}</span>
               <span
                 className="aqt-tnum text-label font-bold"
                 style={{ color: total > 0 ? winrateColor(winrate) : "var(--aqt-fg-faint)" }}

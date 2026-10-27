@@ -61,7 +61,7 @@ export function OverviewSection({
         </div>
       ) : null}
       {framed ? (
-        <Card variant="flat" className="min-w-0 p-4">
+        <Card className="min-w-0 p-4">
           {children}
         </Card>
       ) : (

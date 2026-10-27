@@ -228,7 +228,7 @@ export function PickupMixHeader({
           .join(" · ");
 
   return (
-    <Card variant="flat" className="flex flex-col gap-3 px-4 py-3.5">
+    <Card className="flex flex-col gap-3 px-4 py-3.5">
       <div className="flex min-w-0 items-center gap-3">
         <BackLink href="/balancer/mix" className="shrink-0">
           {tm("title")}
@@ -313,7 +313,7 @@ export function PickupMixHeader({
                 <>
                   {canWrite ? <DropdownMenuSeparator /> : null}
                   <DropdownMenuItem
-                    className="text-danger focus:text-danger"
+                    variant="destructive"
                     disabled={deleting}
                     onSelect={() => setDeleteOpen(true)}
                   >
@@ -633,8 +633,7 @@ function HeroClockField({
           if (typed.current !== value) onCommit(typed.current);
         }}
         size="sm"
-        // The host's own seconds in the field's colour, the preset's (the placeholder) muted: the label's is muted too.
-        className="w-16 bg-background/50 px-2 tabular-nums text-[color:var(--aqt-fg)]"
+        className="w-16"
       />
       {label}
     </label>
@@ -661,7 +660,6 @@ function PickerChoice({
     <div className="space-y-1.5">
       <Eyebrow>{label}</Eyebrow>
       <ToggleGroup
-        type="single"
         variant="pill"
         aria-label={label}
         value={value ? "on" : "off"}
@@ -721,7 +719,6 @@ function SignupSettings({
       </PopoverTrigger>
       <PopoverContent align="start" className="w-[22rem] space-y-3 p-3">
         <ToggleGroup
-          type="single"
           variant="pill"
           aria-label={t("signupLabel")}
           value={open ? "open" : "closed"}
@@ -743,7 +740,6 @@ function SignupSettings({
           <div className="space-y-2">
             <Eyebrow>{t("signupWhere")}</Eyebrow>
             <ToggleGroup
-              type="single"
               variant="pill"
               aria-label={t("signupWhere")}
               value={mode}

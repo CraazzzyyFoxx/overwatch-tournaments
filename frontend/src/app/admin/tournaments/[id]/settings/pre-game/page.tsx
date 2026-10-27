@@ -201,7 +201,6 @@ function PreGamePhase({
           and the tree's inherited/overridden markers only mean anything for
           one of them at a time. */}
       <ToggleGroup
-        type="single"
         variant="pill"
         size="sm"
         className="self-start"

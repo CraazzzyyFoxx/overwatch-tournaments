@@ -220,7 +220,7 @@ export function BracketCanvas({
                 onFocus={() => setFocusedId(match.id)}
                 onKeyDown={(event) => onCardKeyDown(event, match.id)}
                 className={cn(
-                  "absolute rounded-[10px] outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-blue)] focus-visible:ring-offset-2 focus-visible:ring-offset-[color:var(--aqt-bg-2)]",
+                  "absolute rounded-[10px] outline-hidden focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-blue)] focus-visible:ring-offset-2 focus-visible:ring-offset-[color:var(--aqt-bg-2)]",
                   highlighted &&
                     "ring-2 ring-[color:var(--aqt-teal)] ring-offset-2 ring-offset-[color:var(--aqt-card)]"
                 )}

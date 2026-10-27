@@ -690,7 +690,7 @@ describe("a roster the organizer hid", () => {
 
     // No rows is not "no registrations": the roster exists, it is just not published.
     expect(container.textContent).not.toContain(en.tournamentDetail.participants.empty.title);
-    expect(container.querySelector(".filters")).toBeNull();
+    expect(container.querySelector(`[role="group"][aria-label="${en.common.filters}"]`)).toBeNull();
   });
 
   it("still renders the viewer's own card, with its place overall and on its role", async () => {

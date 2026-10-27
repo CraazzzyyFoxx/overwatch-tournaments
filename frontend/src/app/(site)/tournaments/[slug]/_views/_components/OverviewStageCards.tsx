@@ -154,7 +154,6 @@ export function OverviewGroupTable({
                       <TeamName team={row.team ?? { name: t("common.tbd") }} size="xs" />
                       {row.swiss_status ? (
                         <Badge
-                          palette="aqt"
                           size="sm"
                           voice="label"
                           tone={row.swiss_status === "qualified" ? "accent" : "neutral"}

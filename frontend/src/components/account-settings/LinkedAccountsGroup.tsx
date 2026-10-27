@@ -203,7 +203,7 @@ export function LinkedAccountsGroup() {
                               ) : null}
                               {account.is_verified ? (
                                 <DropdownMenuItem
-                                  className="text-danger focus:text-danger"
+                                  variant="destructive"
                                   onSelect={() => {
                                     setUnlinkTarget(provider);
                                     setConfirmOpen(true);

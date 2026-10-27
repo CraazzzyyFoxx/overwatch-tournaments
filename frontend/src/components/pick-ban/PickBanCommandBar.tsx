@@ -120,7 +120,7 @@ export function PickBanCommandBar({
   const sidePick = captainAction === "side_pick";
 
   return (
-    <OverlayBar tone={yourTurn ? "active" : "neutral"} ariaLabel={t("commandBar")}>
+    <OverlayBar tone={yourTurn ? "accent" : "neutral"} ariaLabel={t("commandBar")}>
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
         <div className="flex min-w-0 flex-1 items-center gap-3 sm:contents">
           {deadline != null && step?.timer_seconds != null ? (

@@ -138,7 +138,6 @@ export function DraftConfigStep({
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <ToggleGroup
-            type="single"
             variant="pill"
             size="sm"
             aria-labelledby={pickTimeLabelId}
@@ -163,7 +162,7 @@ export function DraftConfigStep({
               disabled={locked}
               value={value.pickTimeSeconds}
               onValueChange={(next) => patch({ pickTimeSeconds: next ?? 45 })}
-              className="w-20 tabular-nums"
+              className="w-20"
             />
           </div>
         </div>
@@ -178,7 +177,6 @@ export function DraftConfigStep({
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <ToggleGroup
-            type="single"
             variant="pill"
             size="sm"
             aria-labelledby={overtimeLabelId}
@@ -203,7 +201,7 @@ export function DraftConfigStep({
               disabled={locked}
               value={value.overtimeSeconds}
               onValueChange={(next) => patch({ overtimeSeconds: next ?? 0 })}
-              className="w-20 tabular-nums"
+              className="w-20"
             />
           </div>
         </div>

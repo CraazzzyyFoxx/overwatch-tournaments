@@ -1,10 +1,12 @@
 "use client";
 
-import { useRef, useState, type DragEvent } from "react";
+import { useState } from "react";
 import { Camera, Pencil, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { cn, initials } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { useFilePicker } from "@/components/ui/file-button";
 import Image from "@/components/ui/image";
 import { Spinner } from "@/components/ui/spinner";
 
@@ -87,10 +89,9 @@ export function EditableAvatar({
   onError,
   disabled = false,
   labels,
-  className,
+  className
 }: Readonly<EditableAvatarProps>) {
   const t = useTranslations("kit.avatar");
-  const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
   // A stored avatar whose file no longer loads draws the initials, not an empty frame.
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
@@ -113,127 +114,133 @@ export function EditableAvatar({
     }
     if (maxSizeBytes && file.size > maxSizeBytes) {
       onError?.(
-        labels?.tooLarge ?? t("tooLarge", { max: Math.round(maxSizeBytes / (1024 * 1024)) }),
+        labels?.tooLarge ?? t("tooLarge", { max: Math.round(maxSizeBytes / (1024 * 1024)) })
       );
       return;
     }
     onSelectFile(file);
   };
+  const picker = useFilePicker({
+    accept,
+    disabled: !interactive,
+    onFiles: ([file]) => handleFile(file)
+  });
 
-  const onDrop = (e: DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    setDragging(false);
-    if (!interactive) return;
-    handleFile(e.dataTransfer.files?.[0]);
-  };
+  const frameClass = cn(
+    "absolute inset-0 block overflow-hidden border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-3)] p-0",
+    radius
+  );
+  // Spans only: this sits inside a `<button>` when editable.
+  const content = (
+    <>
+      {imageSrc ? (
+        <Image
+          src={imageSrc}
+          alt={name ?? t("alt")}
+          width={width ?? size}
+          height={size}
+          className="h-full w-full select-none object-cover"
+          onError={() => setFailedSrc(imageSrc)}
+        />
+      ) : (
+        <span
+          className={cn(
+            "flex h-full w-full items-center justify-center font-medium text-[color:var(--aqt-fg-muted)]",
+            size >= 72 ? "text-title" : size >= 56 ? "text-heading" : "text-label"
+          )}
+        >
+          {initials(name)}
+        </span>
+      )}
+
+      {/* Edit affordance — on hover/focus, or while dragging a file over the frame */}
+      {interactive && (
+        <span
+          className={cn(
+            "absolute inset-0 flex flex-col items-center justify-center gap-1 bg-[color:color-mix(in_srgb,var(--aqt-bg)_70%,transparent)] text-[color:var(--aqt-fg)] transition-opacity",
+            dragging
+              ? "opacity-100"
+              : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
+          )}
+        >
+          {src ? (
+            <Pencil className="size-4" aria-hidden />
+          ) : (
+            <Camera className="size-4" aria-hidden />
+          )}
+          <span className="text-label font-semibold uppercase tracking-label">
+            {dragging
+              ? (labels?.drop ?? t("drop"))
+              : src
+                ? (labels?.edit ?? t("edit"))
+                : (labels?.upload ?? t("upload"))}
+          </span>
+        </span>
+      )}
+
+      {/* Busy overlay */}
+      {busy && (
+        <span className="absolute inset-0 flex items-center justify-center bg-[color:color-mix(in_srgb,var(--aqt-bg)_70%,transparent)] text-[color:var(--aqt-fg)]">
+          <Spinner className="size-5" />
+        </span>
+      )}
+    </>
+  );
 
   return (
     <div
       className={cn("group relative shrink-0", className)}
       style={{ width: width ?? size, height: size }}
+      aria-busy={busy || undefined}
     >
-      {/* Image / fallback + interaction surface */}
-      <div
-        className={cn(
-          "absolute inset-0 overflow-hidden border border-border/60 bg-muted",
-          radius,
-          interactive && "cursor-pointer",
-          dragging && "ring-2 ring-primary ring-offset-2 ring-offset-background",
-        )}
-        role={interactive ? "button" : undefined}
-        tabIndex={interactive ? 0 : undefined}
-        aria-label={interactive ? (labels?.change ?? t("change")) : undefined}
-        onClick={() => interactive && inputRef.current?.click()}
-        onKeyDown={(e) => {
-          if (interactive && (e.key === "Enter" || e.key === " ")) {
-            e.preventDefault();
-            inputRef.current?.click();
-          }
-        }}
-        onDragOver={(e) => {
-          if (!interactive) return;
-          e.preventDefault();
-          setDragging(true);
-        }}
-        onDragLeave={() => setDragging(false)}
-        onDrop={onDrop}
-      >
-        {imageSrc ? (
-          <Image
-            src={imageSrc}
-            alt={name ?? "avatar"}
-            width={width ?? size}
-            height={size}
-            className="h-full w-full select-none object-cover"
-            onError={() => setFailedSrc(imageSrc)}
-          />
-        ) : (
-          <div
-            className="flex h-full w-full items-center justify-center font-medium text-muted-foreground"
-            style={{ fontSize: Math.max(12, Math.round(size * 0.3)) }}
-          >
-            {initials(name)}
-          </div>
-        )}
-
-        {/* Edit affordance — on hover/focus, or while dragging a file over the frame */}
-        {interactive && (
-          <div
+      {editable ? (
+        <>
+          {picker.input}
+          <button
+            type="button"
+            disabled={!interactive}
+            aria-label={labels?.change ?? t("change")}
+            onClick={picker.open}
+            onDragOver={(e) => {
+              if (!interactive) return;
+              e.preventDefault();
+              setDragging(true);
+            }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDragging(false);
+              if (interactive) handleFile(e.dataTransfer.files?.[0]);
+            }}
             className={cn(
-              "absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/50 text-white transition-opacity",
-              dragging ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100",
+              frameClass,
+              "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+              interactive && "cursor-pointer",
+              dragging && "ring-2 ring-ring ring-offset-2 ring-offset-background"
             )}
           >
-            {src ? <Pencil className="h-4 w-4" /> : <Camera className="h-4 w-4" />}
-            <span className="text-label font-medium uppercase tracking-wide">
-              {dragging
-                ? (labels?.drop ?? t("drop"))
-                : src
-                  ? (labels?.edit ?? t("edit"))
-                  : (labels?.upload ?? t("upload"))}
-            </span>
-          </div>
-        )}
-
-        {/* Busy overlay */}
-        {busy && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/50 text-white">
-            <Spinner className="size-5" />
-          </div>
-        )}
-      </div>
+            {content}
+          </button>
+        </>
+      ) : (
+        <div className={frameClass}>{content}</div>
+      )}
 
       {/* Small delete icon inside the frame */}
       {interactive && src && onDelete && (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete();
-          }}
+        <Button
+          variant="ghost-destructive"
+          size="icon-xs"
+          onClick={onDelete}
           className={cn(
-            "absolute z-10 rounded-full border border-border bg-background/90 p-1 text-destructive/80 shadow-sm backdrop-blur-sm transition-colors hover:bg-destructive hover:text-destructive-foreground",
-            shape === "circle" ? "bottom-1 right-1" : "bottom-0.5 right-0.5",
+            "absolute z-10 rounded-full bg-[color:var(--aqt-card-2)]",
+            shape === "circle" ? "bottom-1 right-1" : "bottom-0.5 right-0.5"
           )}
           aria-label={labels?.remove ?? t("remove")}
           title={labels?.remove ?? t("remove")}
         >
-          <Trash2 className="h-3 w-3" />
-        </button>
-      )}
-
-      {editable && (
-        <input
-          ref={inputRef}
-          type="file"
-          accept={accept}
-          className="hidden"
-          disabled={!interactive}
-          onChange={(e) => {
-            handleFile(e.target.files?.[0]);
-            e.target.value = "";
-          }}
-        />
+          <Trash2 aria-hidden />
+        </Button>
       )}
     </div>
   );

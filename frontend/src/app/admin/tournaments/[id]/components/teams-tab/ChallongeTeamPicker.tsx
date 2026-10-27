@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 
-import { Combobox, ComboboxCheck } from "@/components/ui/combobox";
+import { Combobox, ComboboxCheck, ComboboxMeta } from "@/components/ui/combobox";
 import { CommandGroup, CommandItem } from "@/components/ui/command";
 import type {
   ChallongeTeamPreviewParticipant,
@@ -52,7 +52,8 @@ export function ChallongeTeamPicker({
     <Combobox
       open={open}
       onOpenChange={setOpen}
-      label={selected ? selected.name : t("unmapped")}
+      label={selected?.name}
+      placeholder={t("unmapped")}
       // The visible label repeats down the column, so it cannot name the control.
       triggerAriaLabel={t("internalTeamFor", { name: participant.name })}
       searchValue={searchValue}
@@ -60,15 +61,11 @@ export function ChallongeTeamPicker({
       searchPlaceholder={t("search")}
       searchLabel={t("searchInternalTeamFor", { name: participant.name })}
       emptyMessage={t("noMatch")}
-      clear={
-        selected
-          ? {
-              label: t("unmapped"),
-              value: "challonge-unmap-participant",
-              onSelect: () => select(UNMAPPED_TEAM_VALUE)
-            }
-          : undefined
-      }
+      clear={{
+        label: t("unmapped"),
+        value: "challonge-unmap-participant",
+        onSelect: () => select(UNMAPPED_TEAM_VALUE)
+      }}
     >
       <CommandGroup>
         {teams.map((team) => (
@@ -80,10 +77,10 @@ export function ChallongeTeamPicker({
             <div className="flex min-w-0 flex-1 flex-col">
               <span className="truncate">{team.name}</span>
               {team.balancer_name && team.balancer_name !== team.name ? (
-                <span className="truncate text-xs text-muted-foreground">{team.balancer_name}</span>
+                <ComboboxMeta className="truncate">{team.balancer_name}</ComboboxMeta>
               ) : null}
             </div>
-            <span className="shrink-0 text-xs tabular-nums text-muted-foreground">#{team.id}</span>
+            <ComboboxMeta>#{team.id}</ComboboxMeta>
             <ComboboxCheck selected={String(team.id) === value} />
           </CommandItem>
         ))}

@@ -115,16 +115,24 @@ vi.mock("@/services/balancer-admin.service", () => ({
 }));
 
 // The real picker is a popover over a Discord channel fetch; the page only
-// needs a control that emits a channel id, told apart by its accessible name.
+// needs a control that emits an id of the asked-for type (the category "10"
+// for a voice category, a text channel otherwise), told apart by its
+// accessible name.
 vi.mock("@/components/discord/DiscordChannelSelect", () => ({
   DiscordChannelSelect: ({
     onChange,
-    ariaLabel
+    ariaLabel,
+    type
   }: {
     onChange: (id: string) => void;
     ariaLabel: string;
+    type?: "text" | "category";
   }) => (
-    <button type="button" aria-label={ariaLabel} onClick={() => onChange("555555555555555555")}>
+    <button
+      type="button"
+      aria-label={ariaLabel}
+      onClick={() => onChange(type === "category" ? "10" : "555555555555555555")}
+    >
       Pick channel
     </button>
   )
@@ -291,28 +299,6 @@ function buttonIn(scope: ParentNode, label: string) {
 /** The section's one save bar: announcements and mixes are drafts until this. */
 async function saveChanges() {
   await click(buttonIn(container, "Save changes"));
-}
-
-/** Radix Select: the trigger opens on pointerdown and portals its listbox. */
-async function pickCategory(label: string) {
-  const trigger = container.querySelector<HTMLElement>(
-    'button[role="combobox"][aria-label="Mix voice category"]'
-  );
-  if (!trigger) throw new Error("no voice category select rendered");
-  await act(async () => {
-    trigger.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
-    trigger.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-  });
-  await settle();
-  const option = [...document.body.querySelectorAll<HTMLElement>('[role="option"]')].find(
-    (node) => (node.textContent ?? "").trim() === label
-  );
-  if (!option) throw new Error(`no category option matching ${label}`);
-  await act(async () => {
-    option.dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));
-    option.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-  });
-  await settle();
 }
 
 /** A voice's toggle in the general-voices group. */
@@ -615,7 +601,7 @@ describe("Workspace settings › Discord", () => {
     getById.mockResolvedValue(BOUND);
     await render();
 
-    await pickCategory("Mixes");
+    await click(channelPicker("Mix voice category"));
     await saveChanges();
 
     expect(upsertWorkspaceBalancerConfig).toHaveBeenCalledWith(7, {

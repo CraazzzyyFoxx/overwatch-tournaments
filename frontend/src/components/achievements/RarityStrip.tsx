@@ -18,8 +18,7 @@ interface RarityStripProps {
 /**
  * The rarity distribution, doubling as the rarity filter: one pressable cell per
  * tier, tier hue on the leading edge only. Pressing the active tier clears it.
- * Tints come from `.aqt-rar-*` (achievements.css), loaded by every route that
- * renders this strip.
+ * Tints come from `--rar`, set per tier by `rarityVarClass` (`lib/achievements/rarity.ts`).
  */
 export function RarityStrip({ values, active, onToggle, className }: RarityStripProps) {
   const t = useTranslations();

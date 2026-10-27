@@ -214,7 +214,7 @@ function RowActions({
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuItem
-            className="text-danger focus:text-danger"
+            variant="destructive"
             disabled={removeBlockedReason != null}
             onSelect={onRemove}
           >

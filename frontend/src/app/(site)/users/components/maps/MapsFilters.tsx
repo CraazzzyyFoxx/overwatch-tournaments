@@ -54,9 +54,15 @@ const MapsFilters = ({
     name: t("users.maps.sortName")
   };
   return (
-    <Card variant="flat" className="aqt-filters p-2.5">
+    <Card className="flex flex-wrap items-center gap-2 p-2.5">
       <div className="w-48">
-        <TournamentCombobox tournaments={tournaments} value={tournamentId} onValueChange={onTournamentIdChange} />
+        <TournamentCombobox
+          tournaments={tournaments}
+          value={tournamentId}
+          onValueChange={onTournamentIdChange}
+          size="sm"
+          variant="surface"
+        />
       </div>
 
       <Select value={String(minCount)} onValueChange={(v) => onMinCountChange(Number(v))}>

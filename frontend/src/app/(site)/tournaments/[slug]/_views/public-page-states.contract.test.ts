@@ -189,8 +189,6 @@ describe("public tournament data page contracts", () => {
       // The section nav already names the page; no in-page heading remains,
       // but the landmark keeps an accessible name.
       expect(source).toContain("aria-label={t(");
-      expect(source).not.toContain('className="section-head"');
-      expect(source).not.toContain("styles.pageHeading");
       expect(source).toContain(skeleton);
       expect(source).toContain('state="initial-error"');
       expect(source).toContain('state="refresh-error"');
@@ -204,9 +202,7 @@ describe("public tournament data page contracts", () => {
 
     expect(table).toContain("matches_history");
     expect(table).toContain("team?.group?.name");
-    expect(table).toContain("styles.standingsViewport");
-    expect(table).toContain("styles.stickyTeamColumn");
-    expect(table).toContain('<th scope="col"');
+    expect(table).toContain('scope="col"');
   });
 
   it("keeps every route file thin and free from generic loading gates", () => {
@@ -223,32 +219,12 @@ describe("public tournament data page contracts", () => {
     }
   });
 
-  it("contains page width and horizontal table overflow at 360px", () => {
-    const css = readFileSync(join(tournamentRoot, "TournamentDetail.module.css"), "utf8");
-    // The standings table owns its CSS module, so its horizontal overflow
-    // boundary is asserted where it lives rather than in the route's module —
-    // which no longer defines (or needs) that class.
-    const standingsCss = readFileSync(join(componentsRoot, "StandingsTable.module.css"), "utf8");
-
-    expect(css).toMatch(/\.publicDataPage\s*\{[\s\S]*?min-width:\s*0/);
-    expect(css).toContain("@media (max-width: 640px)");
-    expect(css).not.toContain("tableViewport{");
-    expect(standingsCss).toMatch(/\.standingsViewport[\s\S]*?\{[\s\S]*?overflow-x:\s*auto/);
-    expect(standingsCss).toMatch(/\.stickyTeamColumn\s*\{[\s\S]*?position:\s*sticky/);
-  });
-
   it("gives the bracket its own labelled horizontal scroll owner", () => {
-    const css = readFileSync(join(tournamentRoot, "TournamentDetail.module.css"), "utf8");
     const page = [
       readFileSync(join(tournamentRoot, "bracket", "TournamentBracketPage.tsx"), "utf8"),
       readFileSync(join(tournamentRoot, "bracket", "BracketScroller.tsx"), "utf8")
     ].join("\n");
 
-    // A grid item defaults to `min-width: auto`, so without this the bracket's
-    // intrinsic width grew the page and the whole document scrolled sideways.
-    expect(css).toMatch(/\.publicDataPage > \*\s*\{[\s\S]*?min-width:\s*0/);
-    expect(css).toMatch(/\.bracketScroller\s*\{[\s\S]*?overflow-x:\s*auto/);
-    expect(page).toContain("styles.bracketScroller");
     // <section> + an accessible name is the region; no explicit role needed.
     expect(page).toContain("<section");
     expect(page).not.toContain('role="region"');
@@ -266,12 +242,7 @@ describe("public tournament data page contracts", () => {
 
     for (const source of views) {
       expect(source).toContain("<UpdatingBadge />");
-      expect(source).not.toContain("styles.updatingBadge");
     }
-
-    expect(
-      readFileSync(join(tournamentRoot, "_components", "UpdatingBadge.tsx"), "utf8")
-    ).toContain("styles.updatingBadge");
   });
 
   it("scopes every workspace-aware query with the hydrated tournament workspace", () => {

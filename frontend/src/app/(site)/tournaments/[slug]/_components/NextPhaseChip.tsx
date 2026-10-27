@@ -5,7 +5,8 @@ import { useTranslations } from "next-intl";
 import { useFormatter } from "@/lib/datetime/client";
 
 import { useMinuteClock } from "@/hooks/useMinuteClock";
-import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { eyebrowClass } from "@/components/ui/eyebrow";
 import type { Tournament } from "@/types/tournament.types";
 
 import { nextPhaseBoundary } from "../_views/tournamentSchedule.model";
@@ -88,13 +89,11 @@ export function NextPhaseChip({
   if (!next) return null;
 
   return (
-    <Link
-      href={href}
-      title={`${next.label} · ${next.stamp}`}
-      className={cn("meta-pill transition-colors hover:border-[color:var(--aqt-teal)]", className)}
-    >
-      <span className="k">{next.label}</span>
-      <span className="v aqt-tnum">{next.relative}</span>
-    </Link>
+    <Button asChild variant="outline" size="xs" className={className}>
+      <Link href={href} title={`${next.label} · ${next.stamp}`}>
+        <span className={eyebrowClass()}>{next.label}</span>
+        <span className="aqt-tnum font-semibold text-[color:var(--aqt-fg)]">{next.relative}</span>
+      </Link>
+    </Button>
   );
 }

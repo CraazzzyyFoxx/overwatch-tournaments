@@ -83,7 +83,7 @@ export function LadderColumn({
       : t("ladder.hintCustom", { game });
 
   return (
-    <Card variant="flat" className="flex max-h-[calc(100vh-13rem)] flex-col xl:sticky xl:top-4">
+    <Card className="flex max-h-[calc(100vh-13rem)] flex-col xl:sticky xl:top-4">
       <h2 className="border-b border-border px-3 py-2 font-display text-sm font-semibold">
         {t("ladder.title", { game })}
       </h2>

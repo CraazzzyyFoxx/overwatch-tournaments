@@ -66,7 +66,7 @@ export function BlockError({ title, onRetry }: Readonly<{ title: string; onRetry
   const t = useTranslations("adminShell.dashboard");
   const tCommon = useTranslations("common");
   return (
-    <Alert variant="destructive">
+    <Alert tone="danger">
       <AlertTriangle className="size-4" aria-hidden />
       <AlertTitle>{t("loadFailed", { block: title })}</AlertTitle>
       <AlertDescription>

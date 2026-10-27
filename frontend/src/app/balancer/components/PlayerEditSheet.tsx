@@ -25,6 +25,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import StatusMetaBadge from "@/components/status/StatusMetaBadge";
+import { TONE_TINT } from "@/components/ui/tone";
 import { cn } from "@/lib/utils";
 import type {
   AdminRegistration,
@@ -64,7 +65,6 @@ type PlayerEditModalProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSave: (playerId: number, payload: BalancerPlayerUpdateInput) => void;
-  onRemove?: (playerId: number) => void;
   saving?: boolean;
 };
 
@@ -79,7 +79,6 @@ export function PlayerEditModal({
   open,
   onOpenChange,
   onSave,
-  onRemove,
   saving = false
 }: Readonly<PlayerEditModalProps>) {
   const t = useTranslations("balancerTool.playerEdit.sheet");
@@ -114,53 +113,38 @@ export function PlayerEditModal({
       <SheetContent
         side="right"
         variant="panel"
-        className="w-full bg-popover/95 backdrop-blur-xl sm:max-w-[640px] [&>button:last-child]:right-4 [&>button:last-child]:top-4 [&>button:last-child]:z-20 [&>button:last-child]:flex [&>button:last-child]:h-8 [&>button:last-child]:w-8 [&>button:last-child]:items-center [&>button:last-child]:justify-center [&>button:last-child]:rounded-lg [&>button:last-child]:border [&>button:last-child]:border-[color:var(--aqt-border-2)] [&>button:last-child]:bg-[color:var(--aqt-bg-2)] [&>button:last-child]:p-0 [&>button:last-child]:text-[color:var(--aqt-fg-muted)] [&>button:last-child]:backdrop-blur-sm [&>button:last-child]:hover:bg-[color:var(--aqt-overlay-3)] [&>button:last-child]:hover:text-[color:var(--aqt-fg)] [&>button:last-child]:data-[state=open]:bg-[color:var(--aqt-bg-2)] [&>button:last-child]:data-[state=open]:text-[color:var(--aqt-fg-muted)]"
+        className="w-full sm:max-w-[640px]"
       >
-        <SheetHeader
-          variant="panel"
-          className={cn(
-            "px-4 pb-2.5 pt-3 sm:px-5 sm:pb-3 sm:pt-3.5",
-            onRemove ? "pr-20 sm:pr-24" : "pr-14 sm:pr-16"
-          )}
-        >
+        <SheetHeader variant="panel">
           <div className="flex flex-wrap items-center gap-2">
-            <SheetTitle className="text-base font-semibold tracking-tight text-[color:var(--aqt-fg)]">
+            <SheetTitle>
               {primaryHandle}
             </SheetTitle>
             <HandleCopyButton handle={primaryHandle} className="h-6 w-6" />
             {form.isFlex ? (
-              <Badge className="h-5 border-emerald-400/25 bg-emerald-400/10 px-2 text-label text-emerald-200 hover:bg-emerald-400/10">
+              <Badge hue="var(--aqt-flex)">
                 {t("flex")}
               </Badge>
             ) : null}
           </div>
           <AdditionalHandleStrip additionalHandles={player.additional_handles} className="mt-1.5" />
-          <SheetDescription className="text-xs text-[color:var(--aqt-fg-dim)]">
-            {t("description")}
-          </SheetDescription>
+          <SheetDescription>{t("description")}</SheetDescription>
         </SheetHeader>
 
         <div className="flex-1 space-y-3 overflow-y-auto px-4 py-3 sm:px-5">
           <div className="grid gap-2.5 lg:grid-cols-2">
             <div className="rounded-lg border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-2)] px-3 py-2">
               <div className="flex items-center justify-between gap-3">
-                <span className="text-xs font-medium text-[color:var(--aqt-fg)]">
+                <span className="text-sm font-medium">
                   {t("balancerStatus")}
                 </span>
                 {registration ? (
                   <StatusMetaBadge
                     meta={registration.balancer_status_meta}
-                    className="h-5 text-label"
+                    className="h-5"
                   />
                 ) : (
-                  <Badge
-                    className={cn(
-                      "h-5 px-2 text-label",
-                      computedReady
-                        ? "border-emerald-400/25 bg-emerald-400/10 text-emerald-200"
-                        : "border-orange-400/25 bg-orange-400/10 text-orange-200"
-                    )}
-                  >
+                  <Badge size="sm" tone={computedReady ? "success" : "warning"} className="h-5">
                     {computedReady ? t("ready") : t("incomplete")}
                   </Badge>
                 )}
@@ -172,14 +156,14 @@ export function PlayerEditModal({
                 className={cn(
                   "rounded-lg border px-3 py-2",
                   form.isFlex
-                    ? "border-emerald-400/20 bg-emerald-500/[0.08]"
+                    ? cn(TONE_TINT, "[--tone-hue:var(--aqt-flex)]")
                     : "border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-2)]"
                 )}
               >
                 <div className="flex items-center justify-between gap-3">
                   <Label
                     htmlFor="is-flex"
-                    className="cursor-pointer text-xs font-medium text-[color:var(--aqt-fg)]"
+                    className="cursor-pointer"
                   >
                     {t("flexPlayer")}
                   </Label>
@@ -196,7 +180,7 @@ export function PlayerEditModal({
 
           <div className="space-y-2">
             <div className="flex items-center justify-between gap-2">
-              <Label className="text-xs font-medium text-[color:var(--aqt-fg)]">
+              <Label>
                 {showsRoleList ? t("roles") : t("rank")}
               </Label>
               <div className="flex flex-nowrap items-center gap-1.5">
@@ -245,7 +229,7 @@ export function PlayerEditModal({
             <div className="flex items-center justify-between gap-2 rounded-lg border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-2)] px-3 py-2">
               <Label
                 htmlFor="pin-tournament"
-                className="cursor-pointer text-xs font-medium text-[color:var(--aqt-fg)]"
+                className="cursor-pointer"
               >
                 {t("onlyThisTournament")}
               </Label>
@@ -302,7 +286,7 @@ export function PlayerEditModal({
 
           {nativeRankName !== null ? (
             <div className="space-y-2">
-              <Label className="text-xs font-medium text-[color:var(--aqt-fg)]">
+              <Label>
                 {t("liveRank", { game: nativeRankName })}
               </Label>
               <div className="rounded-lg border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-2)] p-2.5">
@@ -316,22 +300,24 @@ export function PlayerEditModal({
           ) : null}
 
           <div className="space-y-1">
-            <Label className="text-xs font-medium text-[color:var(--aqt-fg)]">{t("adminNotes")}</Label>
+            <Label htmlFor="player-notes">{t("adminNotes")}</Label>
             <Textarea
+              id="player-notes"
+              size="sm"
               value={form.notes}
               onChange={(event) => form.setNotes(event.target.value)}
-              className="min-h-14 border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] px-2.5 py-1.5 text-[color:var(--aqt-fg)] placeholder:text-[color:var(--aqt-fg-faint)]"
+              className="min-h-14"
               placeholder={t("notesPlaceholder")}
             />
           </div>
           {registration && statusOptions ? (
             <div className="grid gap-2 md:grid-cols-2">
               <div className="space-y-1">
-                <Label className="text-xs font-medium text-[color:var(--aqt-fg)]">
+                <Label htmlFor="player-registration-status">
                   {t("registrationStatus")}
                 </Label>
                 <Select value={form.registrationStatus} onValueChange={form.setRegistrationStatus}>
-                  <SelectTrigger size="sm">
+                  <SelectTrigger id="player-registration-status" size="sm">
                     <SelectValue placeholder={t("selectRegistrationStatus")} />
                   </SelectTrigger>
                   <SelectContent>
@@ -349,14 +335,14 @@ export function PlayerEditModal({
                 </Select>
               </div>
               <div className="space-y-1">
-                <Label className="text-xs font-medium text-[color:var(--aqt-fg)]">
+                <Label htmlFor="player-balancer-status">
                   {t("balancerStatus")}
                 </Label>
                 <Select
                   value={form.registrationBalancerStatus}
                   onValueChange={form.setRegistrationBalancerStatus}
                 >
-                  <SelectTrigger size="sm">
+                  <SelectTrigger id="player-balancer-status" size="sm">
                     <SelectValue placeholder={t("selectBalancerStatus")} />
                   </SelectTrigger>
                   <SelectContent>
@@ -390,14 +376,14 @@ export function PlayerEditModal({
                   {form.registrationBalancerStatus !== "ready" ? (
                     <Button
                       type="button"
-                      size="sm"
-                      variant="outline"
-                      className="h-6 shrink-0 gap-1 whitespace-nowrap border-emerald-500/30 bg-emerald-500/10 px-2 text-emerald-200 hover:bg-emerald-500/20 hover:text-emerald-100"
+                      size="xs"
+                      variant="accent"
+                      className="shrink-0"
                       disabled={saving}
                       onClick={form.handleMoveToReady}
                       title={t("moveToReadyHint")}
                     >
-                      <CheckCircle2 className="h-3 w-3" />
+                      <CheckCircle2 aria-hidden />
                       {t("moveToReady")}
                     </Button>
                   ) : null}
@@ -407,7 +393,7 @@ export function PlayerEditModal({
           ) : null}
         </div>
 
-        <SheetFooter className="shrink-0 border-t border-[color:var(--aqt-border)] px-4 py-2.5 sm:justify-between sm:space-x-0 sm:px-5">
+        <SheetFooter variant="panel" className="sm:justify-between">
           <div className="text-label text-[color:var(--aqt-fg-dim)]">
             {t("footerHint")}
           </div>
@@ -415,7 +401,6 @@ export function PlayerEditModal({
             <Button
               variant="outline"
               size="sm"
-              className="border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] px-3 text-[color:var(--aqt-fg)] hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-fg)]"
               onClick={() => onOpenChange(false)}
             >
               {tCommon("cancel")}
@@ -424,7 +409,6 @@ export function PlayerEditModal({
               onClick={form.handleSave}
               disabled={saving}
               size="sm"
-              className="bg-primary px-3 text-primary-foreground hover:bg-primary/90"
             >
               <Save className="mr-1 h-3.5 w-3.5" />
               {tCommon("save")}

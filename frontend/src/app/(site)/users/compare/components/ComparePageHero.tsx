@@ -72,7 +72,6 @@ const ComparePageHero = ({ gameHint, scope, onScopeChange }: ComparePageHeroProp
             </GameFilterHint>
           ) : null}
           <ToggleGroup
-            type="single"
             variant="pill"
             size="sm"
             value={scope}

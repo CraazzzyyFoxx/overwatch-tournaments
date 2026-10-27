@@ -65,11 +65,7 @@ export function SidebarWorkspaceLogoItem({ href }: Readonly<{ href: string }>) {
   return (
     <SidebarMenu>
       <SidebarMenuItem>
-        <SidebarMenuButton
-          asChild
-          size="lg"
-          className="h-9 rounded-lg px-2 hover:bg-transparent group-data-[collapsible=icon]:justify-center"
-        >
+        <SidebarMenuButton asChild size="lg">
           <HoverPrefetchLink href={href} aria-label={t("workspaceAdminHome", { workspace: currentWorkspace?.name ?? SITE_NAME })}>
             {currentWorkspace?.icon_url ? (
               <div className="flex size-7 items-center justify-center">
@@ -111,14 +107,9 @@ export function SidebarBackToSite() {
   return (
     <SidebarMenu>
       <SidebarMenuItem>
-        <SidebarMenuButton
-          asChild
-          size="sm"
-          tooltip={t("returnToSite")}
-          className="h-7 rounded-md px-2.5 text-sm text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent/40"
-        >
+        <SidebarMenuButton asChild size="sm" tooltip={t("returnToSite")}>
           <HoverPrefetchLink href="/">
-            <ArrowLeft aria-hidden className="size-4 text-sidebar-foreground/50" />
+            <ArrowLeft aria-hidden />
             <span>{t("returnToSite")}</span>
           </HoverPrefetchLink>
         </SidebarMenuButton>
@@ -161,17 +152,13 @@ export function SidebarUserDropdown() {
         <SidebarMenuItem>
           <Popover>
             <PopoverTrigger asChild>
-              <SidebarMenuButton
-                size="lg"
-                tooltip={user?.username ?? tDashboard("profile")}
-                className="h-12 rounded-lg px-2 hover:bg-sidebar-accent/60 data-[state=open]:bg-sidebar-accent/60"
-              >
+              <SidebarMenuButton size="lg" tooltip={user?.username ?? tDashboard("profile")}>
                 <Avatar className="size-8 rounded-lg ring-1 ring-sidebar-border/60">
                   <AvatarImage
                     src={user?.avatarUrl ?? undefined}
                     alt={user?.username ?? tDashboard("user")}
                   />
-                  <AvatarFallback className="rounded-lg bg-sidebar-accent text-xs font-medium text-sidebar-foreground/60">
+                  <AvatarFallback className="rounded-lg">
                     {initials(user?.username)}
                   </AvatarFallback>
                 </Avatar>
@@ -179,14 +166,14 @@ export function SidebarUserDropdown() {
                   <span className="truncate text-sm font-medium text-sidebar-foreground">
                     {user?.username ?? tDashboard("user")}
                   </span>
-                  <span className="truncate text-xs text-sidebar-foreground/60">
+                  <span className="truncate text-label text-[color:var(--aqt-fg-dim)]">
                     {roleLabel}
                     {currentWorkspace ? ` · ${currentWorkspace.name}` : ""}
                   </span>
                 </div>
                 <ChevronsUpDown
                   aria-hidden
-                  className="ml-auto size-3.5 text-sidebar-foreground/50 group-data-[collapsible=icon]:hidden"
+                  className="ml-auto text-[color:var(--aqt-fg-dim)] group-data-[collapsible=icon]:hidden"
                 />
               </SidebarMenuButton>
             </PopoverTrigger>

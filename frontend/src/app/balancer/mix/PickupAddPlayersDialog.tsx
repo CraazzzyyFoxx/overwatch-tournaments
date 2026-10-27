@@ -3,10 +3,10 @@
 import { useTranslations } from "next-intl";
 import { Search } from "lucide-react";
 
-import { CAPTION_CLASS, CARD_TITLE_CLASS } from "@/app/balancer/mix/pickup-chrome";
+import { CAPTION_CLASS } from "@/app/balancer/mix/pickup-chrome";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { DataPagination } from "@/components/ui/data-pagination";
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Eyebrow, eyebrowClass } from "@/components/ui/eyebrow";
 import { IconTooltip } from "@/components/ui/icon-tooltip";
 import { Input } from "@/components/ui/input";
@@ -98,10 +98,11 @@ export function PickupAddPlayersDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
+        variant="panel"
         // A working surface, not a prompt: the roster needs three rank columns
         // and the lineup beside it, and at `sm:max-w-lg` the pickers wrapped
         // onto a second line for every single row.
-        className="flex h-[min(58rem,calc(100svh-3rem))] w-[min(74rem,calc(100vw-2rem))] max-w-none flex-col gap-0 overflow-hidden p-0 sm:max-w-none"
+        className="h-[min(58rem,calc(100svh-3rem))] w-[min(74rem,calc(100vw-2rem))] max-w-none"
       >
         {/* The tool's hero motif, one hairline of it: this dialog is the only
             full-bleed surface in the mix flow, and without a lit top edge it read
@@ -110,8 +111,8 @@ export function PickupAddPlayersDialog({
           aria-hidden="true"
           className="pointer-events-none absolute inset-x-0 top-0 h-0.5 bg-[color:var(--aqt-teal)]"
         />
-        <header className="flex shrink-0 items-baseline gap-3 border-b border-[color:var(--aqt-border)] bg-[color:var(--aqt-bg-2)] px-5 py-3.5 pr-12">
-          <DialogTitle className={CARD_TITLE_CLASS}>{tMixes("start.addPlayers")}</DialogTitle>
+        <DialogHeader variant="panel" className="flex-row items-baseline gap-3 space-y-0">
+          <DialogTitle>{tMixes("start.addPlayers")}</DialogTitle>
           {/* A div, not the default <p>: the loading skeleton is a block element. */}
           <DialogDescription asChild className={cn(CAPTION_CLASS, "min-w-0 truncate")}>
             <div>
@@ -128,7 +129,7 @@ export function PickupAddPlayersDialog({
               )}
             </div>
           </DialogDescription>
-        </header>
+        </DialogHeader>
 
         <div className="grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)_auto] overflow-hidden lg:grid-cols-[minmax(0,1fr)_21rem] lg:grid-rows-1">
           {/* ── The roster ───────────────────────────────────────────────── */}
@@ -147,7 +148,7 @@ export function PickupAddPlayersDialog({
                   placeholder={t("searchPlaceholder")}
                   aria-label={t("searchLabel")}
                   autoComplete="off"
-                  className="h-11 rounded-xl border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] pl-10 pr-24"
+                  className="h-11 pl-10 pr-24"
                 />
                 <span
                   className={cn(

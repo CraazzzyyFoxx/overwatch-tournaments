@@ -104,7 +104,7 @@ export default function RankHistoryView({
 function ChartFrame({ framed, children }: Readonly<{ framed: boolean; children: ReactNode }>) {
   if (!framed) return children;
   return (
-    <Card variant="flat" className="relative overflow-hidden p-4 shadow-inner backdrop-blur-xs">
+    <Card className="relative overflow-hidden p-4 backdrop-blur-xs">
       <div className="pointer-events-none absolute -left-12 -top-12 -z-10 size-24 rounded-full bg-primary/5 blur-2xl" />
       <div className="pointer-events-none absolute -bottom-12 -right-12 -z-10 size-24 rounded-full bg-primary/5 blur-2xl" />
       {children}
@@ -243,7 +243,7 @@ function RankHistoryBody({
             </>
           );
           return framed ? (
-            <Card key={key ?? "rank"} variant="flat" className="flex items-center gap-2 px-2.5 py-1.5">
+            <Card key={key ?? "rank"} className="flex items-center gap-2 px-2.5 py-1.5">
               {content}
             </Card>
           ) : (
@@ -261,8 +261,8 @@ function RankHistoryBody({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="dimension" className="text-xs">{byRole ? t("byRole") : t("byQueue")}</SelectItem>
-              <SelectItem value="account" className="text-xs">{t("byAccount")}</SelectItem>
+              <SelectItem value="dimension">{byRole ? t("byRole") : t("byQueue")}</SelectItem>
+              <SelectItem value="account">{t("byAccount")}</SelectItem>
             </SelectContent>
           </Select>
         ) : null}
@@ -274,7 +274,7 @@ function RankHistoryBody({
             </SelectTrigger>
             <SelectContent>
               {accounts.map((account) => (
-                <SelectItem key={account.id} value={String(account.id)} className="text-xs">
+                <SelectItem key={account.id} value={String(account.id)}>
                   {account.handle}
                 </SelectItem>
               ))}
@@ -293,7 +293,7 @@ function RankHistoryBody({
             </SelectTrigger>
             <SelectContent>
               {dimensions.map((value) => (
-                <SelectItem key={value} value={value} className="text-xs">
+                <SelectItem key={value} value={value}>
                   {dimensionLabel(value)}
                 </SelectItem>
               ))}
@@ -307,7 +307,7 @@ function RankHistoryBody({
           </SelectTrigger>
           <SelectContent>
             {PERIODS.map((value) => (
-              <SelectItem key={value} value={value} className="text-xs">
+              <SelectItem key={value} value={value}>
                 {t(`period.${value}`)}
               </SelectItem>
             ))}
@@ -321,7 +321,7 @@ function RankHistoryBody({
             </SelectTrigger>
             <SelectContent>
               {platforms.map((value) => (
-                <SelectItem key={value} value={value} className="text-xs uppercase">
+                <SelectItem key={value} value={value} className="uppercase">
                   {value}
                 </SelectItem>
               ))}

@@ -40,12 +40,14 @@ const SORT_VALUES: SortBy[] = ["rarity", "name", "count"];
 const isRarity = (value: string | null): value is Rarity =>
   value != null && (RARITY_ORDER as string[]).includes(value);
 
+const TILE_GRID = "grid grid-cols-2 gap-3 xs1:grid-cols-[repeat(auto-fill,minmax(150px,1fr))]";
+
 const PageSkeleton = () => (
   <div className="aqt-player space-y-6">
     <Skeleton className="h-[220px] w-full rounded-2xl" />
     <Skeleton className="h-[86px] w-full rounded-xl" />
     <Skeleton className="h-[52px] w-full rounded-xl" />
-    <div className="aqt-ach-tiles">
+    <div className={TILE_GRID}>
       {Array.from({ length: 12 }).map((_, i) => (
         <Skeleton key={i} className="aspect-square rounded-xl" />
       ))}
@@ -78,7 +80,7 @@ const TileSection = ({
       </h2>
       <span className="aqt-tnum text-caption text-[color:var(--aqt-fg-muted)]">{count}</span>
     </div>
-    <div className="aqt-ach-tiles">
+    <div className={TILE_GRID}>
       {items.map((ach) => (
         <AchievementTile key={ach.id} achievement={ach} games={games} />
       ))}
@@ -244,7 +246,7 @@ const AchievementsCatalog = ({ initial }: Readonly<{ initial?: GameScopeInit }>)
       />
 
       {/* Same toolbar shape as /tournaments: chips scroll on phones, one row from md. */}
-      <Card variant="flat" className="flex flex-col gap-2.5 p-2.5 md:flex-row md:flex-wrap md:items-center md:gap-2">
+      <Card className="flex flex-col gap-2.5 p-2.5 md:flex-row md:flex-wrap md:items-center md:gap-2">
         {categories.length > 0 ? (
           <div
             role="group"

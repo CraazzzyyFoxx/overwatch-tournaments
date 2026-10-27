@@ -1,11 +1,11 @@
 "use client";
 
-import type { CSSProperties } from "react";
 import { usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { useFormatter } from "@/lib/datetime/client";
 
+import { Badge } from "@/components/ui/badge";
 import { eyebrowClass } from "@/components/ui/eyebrow";
 import { bracketRoundShape } from "@/lib/bracket/view";
 import { useBracketRoundLabel } from "@/hooks/useBracketRoundLabel";
@@ -15,7 +15,6 @@ import { tournamentEncountersQueryOptions } from "@/lib/tournament/encounters-qu
 import { areStreamsVisible } from "@/lib/tournament/status";
 import type { Encounter } from "@/types/encounter.types";
 
-import styles from "../TournamentDetail.module.css";
 import { MatchCard } from "../_components/MatchCard";
 import { MatchRow } from "../_components/MatchRow";
 import { TournamentPageState } from "../_components/TournamentPageState";
@@ -302,7 +301,7 @@ const TournamentEncountersPage = ({ tournamentId, slug, now }: TournamentEncount
 
   const content = (
     <section
-      className={styles.publicDataPage}
+      className="grid w-full min-w-0 max-w-full gap-4 *:min-w-0"
       aria-label={t("tournamentDetail.matches.sectionLabel")}
     >
       {presentation.showUpdating ? <UpdatingBadge /> : null}
@@ -382,12 +381,9 @@ const TournamentEncountersPage = ({ tournamentId, slug, now }: TournamentEncount
                             encounter={row.encounter}
                             leading={
                               row.group ? (
-                                <span
-                                  className="group-chip"
-                                  style={{ "--group-hue": groupHue(row.group) } as CSSProperties}
-                                >
+                                <Badge hue={groupHue(row.group)} voice="label">
                                   {groupDisplayName(row.group, groupWord)}
-                                </span>
+                                </Badge>
                               ) : (
                                 row.leading
                               )

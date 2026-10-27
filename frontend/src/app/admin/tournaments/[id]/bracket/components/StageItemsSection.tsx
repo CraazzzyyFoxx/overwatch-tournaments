@@ -265,7 +265,7 @@ export function StageItemsSection({
                 (entry) => entry.stage_item_id === item.id
               );
               return (
-                <Card key={item.id} variant="flat" className="flex flex-col gap-3 p-3">
+                <Card key={item.id} className="flex flex-col gap-3 p-3">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <InlineEditText
@@ -310,7 +310,7 @@ export function StageItemsSection({
                       </SelectTrigger>
                       <SelectContent>
                         {Object.keys(STAGE_ITEM_TYPE_LABELS).map((value) => (
-                          <SelectItem key={value} value={value} className="text-xs">
+                          <SelectItem key={value} value={value}>
                             {tRoot(`labels.itemTypes.${value}` as never)}
                           </SelectItem>
                         ))}
@@ -480,7 +480,6 @@ export function StageItemsSection({
                         disabled={teams.length === 0}
                         isTeamDisabled={(team) => assignedTeamIds.has(team.id)}
                         triggerAriaLabel={t("teamToAdd", { name: item.name })}
-                        triggerClassName="h-9"
                       />
                     )}
                     <Button

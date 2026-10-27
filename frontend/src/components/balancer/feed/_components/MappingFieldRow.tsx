@@ -107,6 +107,7 @@ export function MappingFieldRow({
           <ModeToggle
             value={state.mode}
             onChange={onModeChange}
+            fieldLabel={target.label}
             availableModes={availableModes}
             disabled={disabled}
           />
@@ -193,7 +194,7 @@ export function MappingFieldRow({
                 </SelectTrigger>
                 <SelectContent>
                   {acceptedParsers.map((def) => (
-                    <SelectItem key={def.parser} value={def.parser} className="text-xs">
+                    <SelectItem key={def.parser} value={def.parser}>
                       {def.label}
                     </SelectItem>
                   ))}

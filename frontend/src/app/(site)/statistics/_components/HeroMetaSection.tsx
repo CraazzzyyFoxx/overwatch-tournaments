@@ -115,7 +115,7 @@ export async function HeroMetaSection({ discipline, axis }: Readonly<{ disciplin
                           href={`/users/heroes-compare?hero_id=${row.entity.id}&discipline=${encodeURIComponent(discipline)}`}
                           prefetch={false}
                           title={t("compare", { name: row.entity.name })}
-                          className="truncate text-caption font-semibold text-[color:var(--aqt-fg)] after:absolute after:inset-0 hover:text-[color:var(--aqt-teal)] focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-[color:var(--aqt-teal)]"
+                          className="truncate text-caption font-semibold text-[color:var(--aqt-fg)] after:absolute after:inset-0 hover:text-[color:var(--aqt-teal)] focus-visible:outline-hidden focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-[color:var(--aqt-teal)]"
                         >
                           {row.entity.name}
                         </Link>

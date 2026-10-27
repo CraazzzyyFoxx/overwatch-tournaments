@@ -115,7 +115,6 @@ export function RoleMatrixRow({
 
       {showPriority && (
         <ToggleGroup
-          type="single"
           variant="pill"
           size="sm"
           aria-label={t("registration.roles.matrix.priorityLabel", { role: roleLabel })}

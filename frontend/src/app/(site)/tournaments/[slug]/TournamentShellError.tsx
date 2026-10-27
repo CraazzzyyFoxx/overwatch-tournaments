@@ -10,7 +10,7 @@ export default function TournamentShellError() {
   const t = useTranslations();
 
   return (
-    <div className="aqt-tn">
+    <div className="text-body">
       <PageStateCard
         state="error"
         headingLevel={1}

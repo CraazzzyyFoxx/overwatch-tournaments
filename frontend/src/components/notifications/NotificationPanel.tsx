@@ -53,7 +53,8 @@ function teamNamesNode(names: unknown, separator: string): ReactNode {
 }
 
 const TOOL_CLASS =
-  "text-[color:var(--aqt-fg-dim)] hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-fg)] aria-disabled:pointer-events-none aria-disabled:opacity-50";
+  "text-[color:var(--aqt-fg-dim)] hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-fg)] " +
+  "aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:hover:bg-transparent aria-disabled:hover:text-[color:var(--aqt-fg-dim)]";
 const FOOT_LINK_CLASS =
   "px-2 text-[color:var(--aqt-fg-muted)] hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-fg)]";
 
@@ -144,7 +145,7 @@ export default function NotificationPanel({
       id={headingId}
       ref={headingRef}
       tabIndex={-1}
-      className="font-display text-ui font-bold leading-[1.3] text-[color:var(--aqt-fg)] outline-none"
+      className="font-display text-ui font-bold leading-[1.3] text-[color:var(--aqt-fg)] outline-hidden"
     >
       {t("notifications.title")}
     </h2>
@@ -159,7 +160,7 @@ export default function NotificationPanel({
             {t("notifications.newCount", { count: unreadCount })}
           </span>
         )}
-        <TooltipProvider delayDuration={200}>
+        <TooltipProvider>
           <div className="ml-auto flex items-center gap-0.5">
             {unreadCount != null && unreadCount > 0 && (
               <Tooltip>

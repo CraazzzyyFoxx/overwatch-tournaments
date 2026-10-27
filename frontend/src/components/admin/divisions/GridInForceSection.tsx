@@ -63,7 +63,7 @@ export function GridInForceSection({
     : [t("noActiveVersion"), ladder ? t("divisionCount", { count: bands.length }) : null, ranks];
 
   return (
-    <Card asChild variant="flat">
+    <Card asChild>
       <section aria-labelledby="divisions-in-force" className="flex flex-col gap-4 p-4 sm:p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">

@@ -147,7 +147,7 @@ export function CreateTournamentDialog({
                 <RadioGroupItem id={id} value={value} aria-labelledby={`${id}-title`} aria-describedby={`${id}-hint`} />
                 <FieldContent>
                   <FieldTitle id={`${id}-title`}>{t(title)}</FieldTitle>
-                  <FieldDescription id={`${id}-hint`} className="text-xs">
+                  <FieldDescription id={`${id}-hint`} size="sm">
                     {t(hint)}
                   </FieldDescription>
                 </FieldContent>

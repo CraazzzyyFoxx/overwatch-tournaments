@@ -14,10 +14,14 @@ export const tint = (color: string, percent: number): string =>
  */
 export const winrateColor = (pct: number, lowSample = false): string => {
   if (lowSample) return "var(--aqt-fg-faint)";
-  if (pct >= 60) return "var(--aqt-emerald)";
-  if (pct >= 50) return "var(--aqt-amber)";
-  return "var(--aqt-rose)";
+  return { success: "var(--aqt-emerald)", warning: "var(--aqt-amber)", danger: "var(--aqt-rose)" }[
+    winrateTone(pct)
+  ];
 };
+
+/** `winrateColor`'s bands as a `Tone`, for a primitive that takes one (`Progress`). */
+export const winrateTone = (pct: number): "success" | "warning" | "danger" =>
+  pct >= 60 ? "success" : pct >= 50 ? "warning" : "danger";
 
 /** 0–100 impact/percentile score → ramp: high up-green, low rose, the middle blue. */
 export const getImpactColor = (value: number) => {

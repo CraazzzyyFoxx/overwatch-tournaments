@@ -33,6 +33,14 @@ const STACK_ID = "dock-stack";
 const STACK_CLASS =
   "fixed bottom-[calc(1rem+var(--dock-lift,0px))] end-4 z-40 flex flex-col-reverse items-end gap-3 supports-[padding:max(0px)]:mb-[max(0px,env(safe-area-inset-bottom))]";
 
+/**
+ * The floating glass every surface over arbitrary page content shares — a dock,
+ * its restore pill, the `OverlayBar`: a near-opaque card fill blurred over what
+ * it covers, the control rim, 12px, no drop shadow (DESIGN §5).
+ */
+export const floatingGlassClass =
+  "rounded-xl border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-card)]/95 backdrop-blur";
+
 export function dockStack(): HTMLElement {
   const existing = document.getElementById(STACK_ID);
   if (existing !== null) return existing;
@@ -61,6 +69,8 @@ export interface DockProps {
   badge?: ReactNode;
   /** Controls in the panel header, before the close button. */
   actions?: ReactNode;
+  /** Level of the panel's title heading, after the page's outline. Defaults to 2. */
+  headingLevel?: 2 | 3 | 4;
   /** Open on mount. A dock that replaced an in-flow panel wants this. Ignored when `open` is given. */
   defaultOpen?: boolean;
   /**
@@ -105,6 +115,7 @@ export function Dock({
   showLabel,
   badge,
   actions,
+  headingLevel = 2,
   defaultOpen = false,
   open,
   onOpenChange,
@@ -128,6 +139,7 @@ export function Dock({
   // dock would steal focus from the page on first render.
   const shouldMoveFocus = useRef(false);
   const panelRef = useRef<HTMLElement>(null);
+  const Heading = `h${headingLevel}` as const;
 
   useEffect(() => {
     if (!shouldMoveFocus.current) {
@@ -165,22 +177,23 @@ export function Dock({
 
   if (!isOpen) {
     return createPortal(
-      // A floating pill over arbitrary page content: the `subtle` border, but an
-      // opaque card fill (also on hover) so the page never shows through it.
-      // Below `md` it is the icon alone, a 44px target: the labelled pill
-      // covered a third of a phone's width over whatever sat in that corner.
-      <Button
+      // A floating pill over arbitrary page content: the dock's own glass, so
+      // the page never shows through it. Below `md` it is the icon alone, a
+      // 44px target: the labelled pill covered a third of a phone's width over
+      // whatever sat in that corner.
+      <button
         ref={restoreRef}
         type="button"
-        variant="outline"
-        size="sm"
         onClick={() => toggle(true)}
-        className="h-10 rounded-full bg-[color:var(--aqt-card)]/95 px-3.5 shadow-xl backdrop-blur hover:border-[color:var(--aqt-teal)] hover:bg-[color:var(--aqt-card)]/95 hover:text-[color:var(--aqt-teal)] max-md:size-11 max-md:px-0"
+        className={cn(
+          floatingGlassClass,
+          "inline-flex h-10 items-center justify-center gap-2 px-3.5 text-sm font-medium text-[color:var(--aqt-fg)] transition-colors duration-150 hover:border-[color:var(--aqt-teal)] hover:text-[color:var(--aqt-teal)] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background max-md:size-11 max-md:px-0 [&_svg]:size-4 [&_svg]:shrink-0"
+        )}
       >
         <span className="text-[color:var(--aqt-teal)]">{icon}</span>
         <span className="max-md:sr-only">{showLabel ?? title}</span>
         {badge}
-      </Button>,
+      </button>,
       stack
     );
   }
@@ -190,32 +203,32 @@ export function Dock({
       ref={panelRef}
       aria-label={title}
       className={cn(
-        "flex w-[min(380px,calc(100vw-2rem))] flex-col overflow-hidden rounded-[12px] border border-[color:var(--aqt-border)] bg-[color:var(--aqt-card)]/95 shadow-2xl backdrop-blur",
+        "flex w-[min(380px,calc(100vw-2rem))] flex-col overflow-hidden",
+        floatingGlassClass,
         className
       )}
     >
-      {/* Not `.aqt-card-head`: its 14/18 padding and single line eat a panel
-          this narrow. Same vocabulary (title font, bottom rule), tighter box.
+      {/* A tight header for a narrow panel: the title font and a bottom rule.
           The close control is pinned to the corner rather than laid out in the
           row, so it stays where a viewer looks for it and cannot be pushed off
           by a long heading; the row reserves its width with `pe-11` and wraps
           under it if it must. */}
       <div className="relative flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 border-b border-[color:var(--aqt-border)] py-2.5 pe-11 ps-3">
-        <h2 className="aqt-card-title min-w-0 flex-1">
-          <span className="aqt-card-title-ic">{icon}</span>
+        <Heading className="flex min-w-0 flex-1 items-center gap-2 font-display text-body font-bold uppercase tracking-label text-[color:var(--aqt-fg)]">
+          <span className="inline-flex size-4.5 shrink-0 items-center justify-center text-[color:var(--aqt-teal)]">
+            {icon}
+          </span>
           <span className="truncate">{title}</span>
-        </h2>
+        </Heading>
         {actions}
         <Button
           ref={closeRef}
           type="button"
           variant="ghost"
-          size="icon"
+          size="icon-sm"
           onClick={() => toggle(false)}
           aria-label={hideLabel}
-          // 32px square: over the WCAG 2.5.8 24px floor without turning the
-          // header into a toolbar.
-          className="absolute end-2 top-2 size-8"
+          className="absolute end-2.5 top-2.5"
         >
           <X aria-hidden />
         </Button>

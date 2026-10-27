@@ -11,6 +11,7 @@ import { RankCrest } from "@/components/RankCrest";
 import { Card } from "@/components/ui/card";
 import { Eyebrow, eyebrowClass } from "@/components/ui/eyebrow";
 import {
+  Table,
   TableBody,
   TableCell,
   TableRow,
@@ -83,9 +84,9 @@ export function BalanceEditorPlayerPreviewRow({
   onSelectPlayer,
 }: Readonly<BalanceEditorPlayerPreviewRowProps>) {
   return (
-    <Card variant="flat" className="w-[24rem] max-w-[calc(100vw-2rem)] overflow-hidden shadow-2xl shadow-black/40">
-      <table className="w-full caption-bottom text-sm">
-        <tbody>
+    <Card className="w-[24rem] max-w-[calc(100vw-2rem)] overflow-hidden">
+      <Table>
+        <TableBody>
           <BalanceEditorPlayerTableRow
             player={player}
             roleKey={roleKey}
@@ -98,8 +99,8 @@ export function BalanceEditorPlayerPreviewRow({
             style={style}
             onSelectPlayer={onSelectPlayer}
           />
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
     </Card>
   );
 }
@@ -132,13 +133,11 @@ function BalanceEditorPlayerTableRow({
     <TableRow
       ref={rowRef}
       style={style}
+      aria-current={isSelected ? "true" : undefined}
       className={cn(
-        "cursor-grab border-[color:var(--aqt-border)] active:cursor-grabbing",
+        "cursor-grab focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring active:cursor-grabbing",
         dragging && "opacity-40",
         dropActive && "bg-[color:var(--aqt-overlay-3)]",
-        isSelected
-          ? "bg-violet-500/8 shadow-[inset_0_0_0_1px_rgba(139,92,246,0.24)] hover:bg-violet-500/[0.1]"
-          : "hover:bg-[color:var(--aqt-overlay-2)]",
       )}
       onClick={() => {
         if (playerId !== null) {
@@ -155,7 +154,7 @@ function BalanceEditorPlayerTableRow({
       <TableCell className="min-w-45 py-2.5 pr-2">
         <div className="flex min-w-0 flex-col gap-0.5">
           <div className="flex min-w-0 items-center gap-2">
-            {player.is_captain ? <Crown className="h-3.5 w-3.5 shrink-0 text-amber-300" /> : null}
+            {player.is_captain ? <Crown aria-hidden className="size-3.5 shrink-0 text-[color:var(--aqt-warm)]" /> : null}
             <span className="truncate text-sm font-semibold text-[color:var(--aqt-fg)]" title={player.name}>
               {player.name}
             </span>
@@ -169,39 +168,31 @@ function BalanceEditorPlayerTableRow({
       </TableCell>
       <TableCell className="w-18 px-2 py-2.5">
         <div className="flex justify-center">
-          {division != null ? (
-            <RankCrest division={division} grid={divisionGrid} size={26} />
-          ) : (
-            <span className="text-xs text-[color:var(--aqt-fg-faint)]">-</span>
-          )}
+          {division != null ? <RankCrest division={division} grid={divisionGrid} size={26} /> : null}
         </div>
       </TableCell>
       <TableCell className="w-22 px-3 py-2.5">
         <div className="flex items-center justify-center gap-1">
-          {preferredRoles.length > 0 ? (
-            preferredRoles.map((preference, index) => {
-              const highlightPreferredRole = assignedOffRole && index === 0;
+          {preferredRoles.map((preference, index) => {
+            const highlightPreferredRole = assignedOffRole && index === 0;
 
-              return (
-                <span
-                  key={`${player.uuid}-${preference}-${index}`}
-                  className="flex items-center justify-center opacity-85"
-                  title={
-                    highlightPreferredRole ? t("offRole", { role: slotLabel(roleKey) }) : undefined
-                  }
-                >
-                  <PlayerRoleIcon
-                    role={preference}
-                    ontology={ontology}
-                    size={14}
-                    color={highlightPreferredRole ? "var(--aqt-amber)" : undefined}
-                  />
-                </span>
-              );
-            })
-          ) : (
-            <span className="text-xs text-[color:var(--aqt-fg-faint)]">-</span>
-          )}
+            return (
+              <span
+                key={`${player.uuid}-${preference}-${index}`}
+                className="flex items-center justify-center opacity-85"
+                title={
+                  highlightPreferredRole ? t("offRole", { role: slotLabel(roleKey) }) : undefined
+                }
+              >
+                <PlayerRoleIcon
+                  role={preference}
+                  ontology={ontology}
+                  size={14}
+                  color={highlightPreferredRole ? "var(--aqt-amber)" : undefined}
+                />
+              </span>
+            );
+          })}
         </div>
       </TableCell>
     </TableRow>
@@ -238,7 +229,7 @@ function BalanceEditorInsertSlotRow({
             className={cn(
               "absolute inset-x-3 top-1/2 -translate-y-1/2 rounded-full transition-all",
               isOver
-                ? "h-1 bg-cyan-300/80 shadow-[0_0_0_1px_rgba(103,232,249,0.22)]"
+                ? "h-1 bg-[color:var(--aqt-teal)]"
                 : "h-px bg-transparent",
             )}
           />
@@ -345,7 +336,7 @@ export function DroppableRoleSection({
       ))}
 
       {players.length === 0 ? (
-        <TableRow className="border-[color:var(--aqt-border)] hover:bg-transparent">
+        <TableRow className="hover:bg-transparent">
           <TableCell
             colSpan={4}
             className={cn(eyebrowClass(), "px-3 py-2.5 text-center")}

@@ -4,9 +4,12 @@ import * as React from "react";
 import { useEffect, useState } from "react";
 
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 
-interface NumberInputProps
-  extends Omit<React.ComponentProps<typeof Input>, "value" | "onChange" | "type" | "inputMode"> {
+interface NumberInputProps extends Omit<
+  React.ComponentProps<typeof Input>,
+  "value" | "onChange" | "type" | "inputMode"
+> {
   /** Current numeric value; null/undefined renders an empty field. */
   value: number | null | undefined;
   /** Fires with a finite number while typing/committing, or null when the field is emptied. */
@@ -43,7 +46,10 @@ function toRawValue(value: number | null | undefined): string {
  * blur. Extracted from the balancer settings sheet.
  */
 const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
-  ({ value, onValueChange, min, max, integer = false, onFocus, onBlur, ...props }, ref) => {
+  (
+    { value, onValueChange, min, max, integer = false, className, onFocus, onBlur, ...props },
+    ref
+  ) => {
     const [rawValue, setRawValue] = useState(() => toRawValue(value));
     const [isFocused, setIsFocused] = useState(false);
 
@@ -56,9 +62,7 @@ const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
     /* eslint-enable react-hooks/set-state-in-effect */
 
     const sign = min === undefined || min < 0 ? "-?" : "";
-    const pattern = integer
-      ? new RegExp(`^${sign}\\d*$`)
-      : new RegExp(`^${sign}\\d*(?:\\.\\d*)?$`);
+    const pattern = integer ? new RegExp(`^${sign}\\d*$`) : new RegExp(`^${sign}\\d*(?:\\.\\d*)?$`);
 
     const handleChange = (nextRawValue: string) => {
       const normalized = nextRawValue.replace(",", ".");
@@ -106,6 +110,7 @@ const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
         {...props}
         ref={ref}
         value={rawValue}
+        className={cn("aqt-tnum", className)}
         type="text"
         inputMode={integer ? "numeric" : "decimal"}
         onFocus={(event) => {

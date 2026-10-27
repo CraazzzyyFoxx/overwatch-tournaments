@@ -242,7 +242,7 @@ export default function SheetsFeedPage({ tournamentId }: Readonly<{ tournamentId
       (catalogQuery.error as Error)?.message ??
       t("errors.reload")
     return (
-      <Alert variant="destructive">
+      <Alert tone="danger">
         <AlertTitle>{t("errors.loadFailed")}</AlertTitle>
         <AlertDescription>{message}</AlertDescription>
       </Alert>
@@ -312,7 +312,7 @@ export default function SheetsFeedPage({ tournamentId }: Readonly<{ tournamentId
   return (
     <div className="flex flex-col gap-4">
       {formError ? (
-        <Alert variant="destructive">
+        <Alert tone="danger">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>{t("errors.mappingSaveFailed")}</AlertTitle>
           <AlertDescription>{formError}</AlertDescription>

@@ -170,7 +170,7 @@ export default function MatchQualityCard({ tournamentId, onExplain, playerNames 
     <Card>
       <CardHeader className="flex-row items-center gap-1 space-y-0 pb-2">
         <CardTitle asChild>
-          <h3 className="text-heading font-semibold">{title}</h3>
+          <h3>{title}</h3>
         </CardTitle>
         <InfoDot term="match_quality" onExplain={onExplain} />
       </CardHeader>

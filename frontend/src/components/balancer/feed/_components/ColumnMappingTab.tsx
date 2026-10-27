@@ -5,8 +5,8 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
-import { ButtonGroup } from "@/components/ui/button-group";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type {
   MappingCatalog,
   MappingTargetGroup,
@@ -99,23 +99,20 @@ export function ColumnMappingTab({
         ) : (
           <>
             <div className="flex flex-wrap items-center gap-3">
-              <ButtonGroup>
+              <ToggleGroup
+                variant="pill"
+                aria-label={t("title")}
+                value={safeActive}
+                onValueChange={(group) => setActiveGroup(group as MappingTargetGroup)}
+              >
                 {visibleGroups.map((group) => (
-                  <Button
-                    key={group}
-                    variant={safeActive === group ? "accent" : "outline"}
-                    size="sm"
-                    onClick={() => setActiveGroup(group)}
-                    className="relative"
-                  >
+                  <ToggleGroupItem key={group} value={group}>
                     {t(`groups.${GROUP_LABELS[group]}` as Parameters<typeof t>[0])}
-                    {hasErrors(group) && (
-                      <StatusDot tone="danger" className="ml-1.5" />
-                    )}
-                  </Button>
+                    {hasErrors(group) && <StatusDot tone="danger" className="ml-1.5" />}
+                  </ToggleGroupItem>
                 ))}
-              </ButtonGroup>
-              <p className="text-xs text-muted-foreground">
+              </ToggleGroup>
+              <p className="text-caption text-muted-foreground">
                 {t(`groupDescriptions.${GROUP_DESCRIPTIONS[safeActive]}` as Parameters<typeof t>[0])}
               </p>
             </div>

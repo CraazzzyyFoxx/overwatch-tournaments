@@ -21,13 +21,13 @@ export function MissingGridNotice({
   const t = useTranslations("common.discipline");
   if (acrossCommunities) {
     return (
-      <Card variant="flat" role="alert" className="p-3 text-sm">
+      <Card role="alert" className="p-3 text-sm">
         <p className="text-muted-foreground">{t("gridMissingAcross", { game: gameName })}</p>
       </Card>
     );
   }
   return (
-    <Card variant="flat" role="alert" className="flex flex-col gap-2 p-3 text-sm">
+    <Card role="alert" className="flex flex-col gap-2 p-3 text-sm">
       <p className="text-muted-foreground">{t("gridMissing")}</p>
       {canManage ? (
         <Button asChild variant="link" size="inline" className="self-start whitespace-normal">

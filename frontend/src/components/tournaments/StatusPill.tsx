@@ -2,7 +2,6 @@ import type { ComponentPropsWithoutRef, ReactNode } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { StatusDot } from "@/components/ui/status-dot";
-import { cn } from "@/lib/utils";
 
 /**
  * Presentation buckets for tournament-domain lifecycle state. `live`,
@@ -11,14 +10,14 @@ import { cn } from "@/lib/utils";
  */
 export type TournamentStatusVariant = "live" | "upcoming" | "finished" | "draft" | "open";
 
-// The hue `Badge palette="aqt"` tints with, off the `--aqt-status-*` tokens
-// (design-book §1). `open` has no status token of its own and borrows the accent.
+// The hue `Badge` tints with, off the `--aqt-status-*` tokens (design-book §1).
+// `open` has no status token of its own and borrows the accent.
 const STATUS_HUE: Record<TournamentStatusVariant, string> = {
-  live: "[--badge-hue:var(--aqt-status-live)]",
-  upcoming: "[--badge-hue:var(--aqt-status-upcoming)]",
-  finished: "[--badge-hue:var(--aqt-status-finished)]",
-  draft: "[--badge-hue:var(--aqt-status-draft)]",
-  open: "[--badge-hue:var(--aqt-teal)]"
+  live: "var(--aqt-status-live)",
+  upcoming: "var(--aqt-status-upcoming)",
+  finished: "var(--aqt-status-finished)",
+  draft: "var(--aqt-status-draft)",
+  open: "var(--aqt-teal)"
 };
 
 export interface TournamentStatusPillProps extends ComponentPropsWithoutRef<"span"> {
@@ -52,7 +51,7 @@ export function TournamentStatusPill({
   ...props
 }: Readonly<TournamentStatusPillProps>) {
   return (
-    <Badge palette="aqt" voice="label" className={cn(STATUS_HUE[status], className)} {...props}>
+    <Badge hue={STATUS_HUE[status]} voice="label" className={className} {...props}>
       {status === "live" ? (
         <StatusDot
           pulse

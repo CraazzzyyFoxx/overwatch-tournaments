@@ -714,6 +714,7 @@
       }
     },
     "admin": {
+      "rowUnit": "команд",
       "reject": "Отклонить команду",
       "rejectConfirm": "Отклонить {team}?",
       "rejectWithdraw": "Также отозвать заявки игроков",
@@ -7443,6 +7444,17 @@
       "searchLabel": "Поиск каналов Discord",
       "empty": "Ни один канал не подходит под запрос. Вставьте ID канала, чтобы найти его по идентификатору."
     },
+    "category": {
+      "placeholder": "Выберите категорию Discord",
+      "loading": "Загрузка категорий…",
+      "refresh": "Обновить категории из Discord",
+      "manual": "Ввести ID категории вручную",
+      "dropdown": "Выбрать из списка",
+      "idAria": "ID категории Discord",
+      "searchPlaceholder": "Поиск категорий…",
+      "searchLabel": "Поиск категорий Discord",
+      "empty": "Ни одна категория не подходит под запрос. Вставьте ID категории, чтобы найти её по идентификатору."
+    },
     "server": {
       "checking": "Проверяем бота Discord…",
       "fallbackName": "Сервер Discord",
@@ -9880,7 +9892,8 @@
         "draft": "Драфт"
       },
       "ariaLabel": "Разделы команд",
-      "participantsSummary": "{participants, plural, one {# участник} few {# участника} many {# участников} other {# участника}} · <warn>не сопоставлено: {unmapped}</warn>"
+      "participantsSummary": "{participants, plural, one {# участник} few {# участника} many {# участников} other {# участника}} · <warn>не сопоставлено: {unmapped}</warn>",
+      "rowUnit": "команд"
     },
     "status": {
       "setTo": "Установить статус «{status}»?",
@@ -11093,6 +11106,7 @@
       "fromWorkspace": "Другой воркспейс",
       "fromFile": "Файл JSON",
       "fileLabel": "Файл экспорта достижений",
+      "chooseFile": "Выберите файл JSON…",
       "importFile": "Импортировать файл",
       "summary": "Создано: {created}, обновлено: {updated}."
     },
@@ -13308,12 +13322,28 @@
   },
   "kit": {
     "ui": {
-      "close": "Закрыть",
+      "breadcrumb": "Навигационная цепочка",
       "commandPalette": "Палитра команд",
       "sidebar": "Боковая панель",
       "mobileSidebar": "Мобильная боковая панель.",
       "toggleSidebar": "Переключить боковую панель",
-      "extraMore": "ещё {count}"
+      "extraMore": "ещё {count}",
+      "place": {
+        "gold": "{place}-е место, золото",
+        "silver": "{place}-е место, серебро",
+        "bronze": "{place}-е место, бронза",
+        "place": "{place}-е место",
+        "none": "Без места"
+      },
+      "infiniteScroll": {
+        "rows": "строк",
+        "progress": "Показано {loaded, number} {unit}",
+        "progressOf": "Показано {loaded, number} из {total, number} {unit}",
+        "loading": "Загружаем ещё…",
+        "loadMore": "Загрузить ещё",
+        "retry": "Повторить загрузку",
+        "error": "Не удалось загрузить ещё. Проверьте соединение и попробуйте снова."
+      }
     },
     "actions": {
       "back": "Назад",
@@ -13359,7 +13389,7 @@
       "error": "Не удалось загрузить аккаунты. Повторите попытку.",
       "minChars": "Введите хотя бы 3 символа для поиска.",
       "empty": "Нет аккаунтов с таким email или именем пользователя.",
-      "clearSelection": "Снять выделение",
+      "none": "Без аккаунта",
       "userId": "Пользователь #{id}"
     },
     "userSearch": {
@@ -13369,7 +13399,7 @@
       "error": "Не удалось загрузить пользователей. Попробуйте ещё раз.",
       "minChars": "Введите хотя бы 2 символа для поиска.",
       "empty": "Пользователи по этому запросу не найдены. Попробуйте короткое имя.",
-      "clearSelection": "Очистить выбор",
+      "none": "Без пользователя",
       "userId": "Пользователь #{id}"
     },
     "entityForm": {
@@ -13384,7 +13414,8 @@
       "drop": "Отпустите",
       "edit": "Изменить",
       "upload": "Загрузить",
-      "remove": "Удалить изображение"
+      "remove": "Удалить изображение",
+      "alt": "Аватар"
     },
     "datePicker": {
       "pickRange": "Выберите период",
@@ -13681,6 +13712,7 @@
       "moveDown": "Переместить вниз",
       "remove": "Удалить",
       "columnsSelected": "{count, plural, one {Выбран # столбец} few {Выбрано # столбца} many {Выбрано # столбцов} other {Выбрано # столбца}}",
+      "modeFor": "{field}: источник значения",
       "modes": {
         "columns": "Сопоставить",
         "constant": "Константа",

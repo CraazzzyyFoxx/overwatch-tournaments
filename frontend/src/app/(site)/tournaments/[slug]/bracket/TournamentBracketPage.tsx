@@ -19,7 +19,6 @@ import { TournamentPageState } from "../_components/TournamentPageState";
 import { TournamentBracketSkeleton } from "../_components/TournamentSkeletons";
 import { UpdatingBadge } from "../_components/UpdatingBadge";
 import { useTournamentStreamsQuery } from "../_hooks/useTournamentStreams";
-import styles from "../TournamentDetail.module.css";
 import { createBracketQueryPlan, deriveBracketLoadState } from "./bracketData";
 import { buildLiveTeamStreams } from "./bracketLiveStreams";
 import { buildBracketTabs, buildGroupStagePanels, selectBracketStages } from "./bracketStages.model";
@@ -184,7 +183,7 @@ function TournamentBracketView({ tournament }: Readonly<{ tournament: Tournament
         connectionState={connectionState}
         className="pointer-events-none fixed bottom-4 start-4 z-30"
       />
-      <div className={styles.publicDataPage} data-page-section="bracket">
+      <div className="grid w-full min-w-0 max-w-full gap-4 *:min-w-0" data-page-section="bracket">
         {loadState.isUpdating && loadState.kind !== "refresh-error" ? <UpdatingBadge /> : null}
         {activeStages.length > 0 ? (
           <div className="space-y-6">

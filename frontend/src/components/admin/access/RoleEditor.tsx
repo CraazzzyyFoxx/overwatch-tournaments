@@ -187,7 +187,7 @@ function RoleForm({
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem
-                  className="gap-2 text-danger focus:text-danger"
+                  variant="destructive"
                   onSelect={onRequestDelete}
                 >
                   <Trash2 aria-hidden className="size-3.5" />

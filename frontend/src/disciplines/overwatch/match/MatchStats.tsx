@@ -93,10 +93,10 @@ const MatchStatsView = ({ match, home, away }: MatchStatsViewProps) => {
   // column on one team desynced it from the other — the exact comparison this
   // panel exists to make.
   const tables = (
-    <Card variant="flat" className="overflow-hidden">
+    <Card className="overflow-hidden">
       <div className="relative w-full overflow-auto">
         {/* The rating column's MVP cards: one provider, so moving between badges skips the open delay. */}
-        <TooltipProvider delayDuration={150}>
+        <TooltipProvider>
           <table className="w-full caption-bottom text-sm">
             <TeamTable
               team={home}
@@ -123,7 +123,6 @@ const MatchStatsView = ({ match, home, away }: MatchStatsViewProps) => {
       {/* Single control bar: view mode + (contextual) round */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <ToggleGroup
-          type="single"
           value={mode}
           onValueChange={(value) => value && setMode(value as ViewMode)}
           variant="pill"

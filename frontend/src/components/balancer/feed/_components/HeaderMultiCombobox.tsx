@@ -38,14 +38,8 @@ export function HeaderMultiCombobox({ options, value, onChange, disabled }: Read
     <div className="space-y-2">
       {/* Uncontrolled: the popover stays open while columns are toggled. */}
       <Combobox
-        label={
-          value.length > 0 ? (
-            t("columnsSelected", { count: value.length })
-          ) : (
-            <span className="text-muted-foreground">{t("selectColumns")}</span>
-          )
-        }
-        labelTitle={value.length > 0 ? t("columnsSelected", { count: value.length }) : t("selectColumns")}
+        label={value.length > 0 ? t("columnsSelected", { count: value.length }) : undefined}
+        placeholder={t("selectColumns")}
         disabled={disabled || options.length === 0}
         searchPlaceholder={t("searchColumns")}
         emptyMessage={t("noColumns")}

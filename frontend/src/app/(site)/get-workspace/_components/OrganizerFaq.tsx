@@ -87,7 +87,7 @@ export async function OrganizerFaq() {
                       open={topicIndex === 0 && index === 0}
                       className="group border-b border-[color:var(--aqt-border)]"
                     >
-                      <summary className="group/q flex cursor-pointer list-none items-center justify-between gap-4 py-3.5 font-display text-ui font-semibold leading-snug text-[color:var(--aqt-fg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[color:var(--aqt-teal)] [&::-webkit-details-marker]:hidden">
+                      <summary className="group/q flex cursor-pointer list-none items-center justify-between gap-4 py-3.5 font-display text-ui font-semibold leading-snug text-[color:var(--aqt-fg)] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[color:var(--aqt-teal)] [&::-webkit-details-marker]:hidden">
                         {t(`items.${key}.q`)}
                         <ChevronDown
                           aria-hidden

@@ -282,15 +282,13 @@ function UserMergeDialogSession({
       }
       onOpenChange(nextOpen);
     }}>
-      <DialogContent className="flex max-h-[min(92dvh,52rem)] max-w-3xl flex-col gap-0 overflow-hidden p-0">
-        <DialogHeader className="space-y-1 px-6 pb-4 pr-12 pt-6">
+      <DialogContent variant="panel" className="max-h-[min(92dvh,52rem)] max-w-3xl">
+        <DialogHeader variant="panel">
           <DialogTitle>{t("title")}</DialogTitle>
-          <DialogDescription className="max-w-[62ch] text-sm leading-relaxed">
-            {t("description")}
-          </DialogDescription>
+          <DialogDescription className="max-w-[62ch]">{t("description")}</DialogDescription>
         </DialogHeader>
 
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pb-6">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4">
           <fieldset disabled={executeMutation.isPending} className="min-w-0 space-y-6">
           <div className="grid items-end gap-3 sm:grid-cols-[1fr_auto_1fr]">
             <div className="space-y-1">
@@ -334,7 +332,7 @@ function UserMergeDialogSession({
           {preview ? (
             <div className="space-y-5">
               {mergeBlocked ? (
-                <Alert variant="destructive">
+                <Alert tone="danger">
                   <AlertTriangle className="h-4 w-4" aria-hidden />
                   <AlertTitle>{t("blocked")}</AlertTitle>
                   <AlertDescription>
@@ -486,7 +484,7 @@ function UserMergeDialogSession({
           </fieldset>
         </div>
 
-        <DialogFooter className="gap-3 border-t bg-card px-6 py-4 sm:items-center">
+        <DialogFooter variant="panel" className="sm:items-center">
           {submitError && <p role="alert" className="text-sm text-danger sm:mr-auto">{submitError}</p>}
           {executeMutation.error instanceof Error && (
             <p role="alert" className="text-sm text-danger sm:mr-auto">

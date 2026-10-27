@@ -140,7 +140,7 @@ export function RoomMatchStage({
 
   if (phase === "idle") {
     return (
-      <Card variant="flat" className="flex flex-col items-start gap-3 px-5 py-6">
+      <Card className="flex flex-col items-start gap-3 px-5 py-6">
         <h2 className={CARD_TITLE_CLASS}>{t("idleTitle")}</h2>
         <p className="text-body text-[color:var(--aqt-fg-muted)]">{canWrite ? t("idleHost") : t("idleViewer")}</p>
         {shortSeats != null ? <p className={CAPTION_CLASS}>{shortSeats}</p> : null}
@@ -153,7 +153,7 @@ export function RoomMatchStage({
   const history = mixMatches.filter((match) => match.lobby_index === lobby.lobby_index).slice(0, 3);
 
   return (
-    <Card variant="flat" className="flex flex-1 flex-col gap-0 overflow-hidden">
+    <Card className="flex flex-1 flex-col gap-0 overflow-hidden">
       <MapBanner map={map} label={phase === "ready" ? tRoom("nextMapLabel") : t("map")} emptyName={t("noMap")}>
         {phase === "live" && voiceUrl != null ? (
           <Button asChild variant="outline" size="sm">

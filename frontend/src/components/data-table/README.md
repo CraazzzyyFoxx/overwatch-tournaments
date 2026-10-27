@@ -131,10 +131,11 @@ the new project's equivalents; nothing else in the folder reaches outside it exc
   `import()` when a pointer first reaches the table, so they are not in the chunk a list
   page loads. Drop that file and the header stays plain (`AdminTableHead`) but keeps
   sorting, resizing and everything else;
-- `data-table.css` next to the component: `.admin-sticky-col*`, `.admin-table-head` and
-  `.admin-row` — the row's hover / selected / current tint, which the pinned cells
-  repaint over their own opaque base. The classes are written by `column-layout.tsx`,
-  `head-cell.tsx`, `body-cells.tsx`, `body-rows.tsx` and `AdminTableHeader.tsx`, so the
-  stylesheet is imported once by `DataTable.tsx`, the entry that renders them all.
+- the pinned-column surface and the row-state tint are Tailwind classes:
+  `STICKY_CELL_CLASS` / `STICKY_HEAD_CLASS` / `HEAD_SURFACE_CLASS` in `column-layout.tsx`
+  (pinned cells mark themselves with `data-sticky="left|right"` and `data-sticky-edge`),
+  the row's `--admin-row-tint` in `body-rows.tsx`, and the pinned surface
+  `--admin-sticky-bg` on `DataTable`'s root. The tint is registered with `@property`
+  in `globals.css` so a state change fades; a port needs that one rule.
 
 Tests are colocated (`*.behavior.test.tsx`, happy-dom) and mock only `next/navigation`.

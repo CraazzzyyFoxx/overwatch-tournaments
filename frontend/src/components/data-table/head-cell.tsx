@@ -6,7 +6,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { cn } from "@/components/data-table/host";
 import { ariaSortValue } from "@/components/data-table/types";
 import { ADMIN_ACTION_COLUMN_ID, ALIGN_CLASS, ALIGN_FLEX_CLASS, RESPONSIVE_CLASS, readColumnMeta } from "@/components/data-table/columns";
-import type { ColumnLayout } from "@/components/data-table/column-layout";
+import { HEAD_SURFACE_CLASS, type ColumnLayout } from "@/components/data-table/column-layout";
 import type { AdminTableDensity } from "@/components/data-table/useTablePreferences";
 import type { ColumnDndModule } from "@/components/data-table/ColumnDnd";
 
@@ -44,10 +44,12 @@ export function renderHeadCell<TData>(
       key={header.id}
       header={header}
       aria-sort={canSort ? ariaSortValue(sorted) : undefined}
+      data-sticky={sticky["data-sticky"]}
+      data-sticky-edge={sticky["data-sticky-edge"]}
       className={cn(
-        "border-b border-border/40 text-xs font-medium text-muted-foreground",
+        "border-b border-border/40",
         density === "compact" ? "h-8" : "h-9",
-        sticky.className ?? "admin-table-head",
+        sticky.className ? cn(sticky.className, "z-3", HEAD_SURFACE_CLASS) : HEAD_SURFACE_CLASS,
         isFirstColumn && "pl-4",
         isLastColumn && "pr-4",
         layout.edgePadding(header.column.id),
@@ -64,13 +66,10 @@ export function renderHeadCell<TData>(
             <Button
               type="button"
               variant="ghost"
-              size="inline"
+              size="label"
               onClick={header.column.getToggleSortingHandler()}
               title={isClientMode ? i18n("sortHint") : undefined}
-              className={cn(
-                "gap-1 hover:bg-transparent hover:text-foreground [&_svg]:size-3",
-                sorted ? "text-foreground" : "text-muted-foreground",
-              )}
+              className={cn("hover:bg-transparent hover:text-foreground", sorted && "text-foreground")}
             >
               {flexRender(header.column.columnDef.header, header.getContext())}
               {sorted === "asc" ? (
@@ -81,7 +80,7 @@ export function renderHeadCell<TData>(
                 <ArrowUpDown aria-hidden className="size-3 shrink-0 opacity-30" />
               )}
               {sortIndex >= 0 ? (
-                <span aria-label={i18n("sortPriority", { index: sortIndex + 1 })} className="text-xs tabular-nums opacity-70">{sortIndex + 1}</span>
+                <span aria-label={i18n("sortPriority", { index: sortIndex + 1 })} className="tabular-nums opacity-70">{sortIndex + 1}</span>
               ) : null}
             </Button>
           ) : (
@@ -90,7 +89,7 @@ export function renderHeadCell<TData>(
           {columnMeta.headerTooltip ? (
             // Beside the sort button, not in it: opening the hint must not sort.
             // Brings its own provider so the table works outside the admin shell's.
-            <TooltipProvider delayDuration={150}>
+            <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <span tabIndex={0} className="inline-flex shrink-0 cursor-help rounded text-muted-foreground hover:text-foreground">

@@ -220,7 +220,7 @@ export default function RankAutofillPage({
         <CardHeader>
           <div className="flex items-start justify-between gap-2">
             <div>
-              <CardTitle className="text-base">{t("rankAutofill.chainTitle")}</CardTitle>
+              <CardTitle>{t("rankAutofill.chainTitle")}</CardTitle>
               <CardDescription>{t("rankAutofill.chainDescription")}</CardDescription>
             </div>
             <Button
@@ -295,7 +295,7 @@ export default function RankAutofillPage({
       <Card className="flex min-h-0 flex-1 flex-col">
         <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
           <div>
-            <CardTitle className="text-base">{t("rankAutofill.previewTitle")}</CardTitle>
+            <CardTitle>{t("rankAutofill.previewTitle")}</CardTitle>
             <CardDescription>{t("rankAutofill.previewDescription")}</CardDescription>
           </div>
           {preview && (
@@ -341,7 +341,7 @@ export default function RankAutofillPage({
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto">
             {previewQuery.isError ? (
-              <Alert variant="destructive">
+              <Alert tone="danger">
                 <AlertTitle>{t("rankAutofill.previewErrorTitle")}</AlertTitle>
                 <AlertDescription>
                   {previewQuery.error instanceof Error

@@ -46,12 +46,12 @@ function PerGameItem({
   game,
   onSelect,
   disabled = false,
-  className,
+  variant,
   children,
-}: Readonly<{ game: string | null; onSelect: () => void; disabled?: boolean; className?: string; children: ReactNode }>) {
+}: Readonly<{ game: string | null; onSelect: () => void; disabled?: boolean; variant?: "default" | "destructive"; children: ReactNode }>) {
   const t = useTranslations("common.discipline");
   return (
-    <DropdownMenuItem onSelect={onSelect} disabled={disabled || game === null} className={className}>
+    <DropdownMenuItem onSelect={onSelect} disabled={disabled || game === null} variant={variant}>
       {game === null ? (
         <span>
           {children}
@@ -222,7 +222,7 @@ export default function AchievementsPage() {
                         game={game}
                         onSelect={() => setConfirmation({ kind: "reset" })}
                         disabled={busy}
-                        className="text-danger focus:text-danger"
+                        variant="destructive"
                       >
                         {t("list.hardReset")}
                       </PerGameItem>

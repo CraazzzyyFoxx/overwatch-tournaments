@@ -214,16 +214,6 @@ export function useBalancerMutations({
     }
   });
 
-  const removePlayerMutation = useMutation({
-    mutationFn: (playerId: number) =>
-      balancerAdminService.setBalancerStatus(playerId, "excluded", "manual_exclusion"),
-    onSuccess: (registration) => {
-      patchRegistrationInCache(registration);
-      setEditingPlayerId(null);
-      notify.success(t("toasts.registrationExcluded"));
-    }
-  });
-
   const setPlayerPoolMembershipMutation = useMutation({
     mutationFn: ({ playerId, isInPool }: { playerId: number; isInPool: boolean }) =>
       isInPool
@@ -506,7 +496,6 @@ export function useBalancerMutations({
 
   return {
     updatePlayerMutation,
-    removePlayerMutation,
     setPlayerPoolMembershipMutation,
     setBalancerStatusMutation,
     bulkPoolMembershipMutation,

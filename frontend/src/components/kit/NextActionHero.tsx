@@ -24,7 +24,7 @@ export interface NextActionHeroProps {
  */
 export function NextActionHero({ eyebrow, title, href, cta }: Readonly<NextActionHeroProps>) {
   return (
-    <Card variant="flat" className="flex flex-wrap items-center gap-3 px-4 py-3">
+    <Card className="flex flex-wrap items-center gap-3 px-4 py-3">
       <div className="min-w-0 flex-1">
         <p className={eyebrowClass("muted")}>{eyebrow}</p>
         <p className="mt-0.5 text-sm font-medium text-foreground">{title}</p>

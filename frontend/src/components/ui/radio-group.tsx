@@ -1,10 +1,11 @@
-"use client"
+"use client";
 
-import * as React from "react"
-import * as RadioGroupPrimitive from "@radix-ui/react-radio-group"
-import { Circle } from "lucide-react"
+import * as React from "react";
+import * as RadioGroupPrimitive from "@radix-ui/react-radio-group";
+import { Circle } from "lucide-react";
 
-import { cn } from "@/lib/utils"
+import { optionCardClass } from "@/components/ui/toggle";
+import { cn } from "@/lib/utils";
 
 const RadioGroup = React.forwardRef<
   React.ElementRef<typeof RadioGroupPrimitive.Root>,
@@ -17,19 +18,16 @@ const RadioGroup = React.forwardRef<
       {...props}
       ref={ref}
     />
-  )
-})
-RadioGroup.displayName = RadioGroupPrimitive.Root.displayName
+  );
+});
+RadioGroup.displayName = RadioGroupPrimitive.Root.displayName;
 
 /**
- * `card`: the whole option is the radio — a bordered card holding the caller's
- * content, tinted teal once checked (the `ToggleGroup` card's on state). No
- * dot; the content names the radio. An inline `style` (a role's own hue)
- * overrides the checked colours.
+ * `card`: the whole option is the radio — {@link optionCardClass}, the same
+ * card as `ToggleGroup variant="card"`, holding the caller's content. No dot;
+ * the content names the radio. An inline `style` (a role's own hue) overrides
+ * the checked colours. The plain item is the `Checkbox` box made round.
  */
-const radioCardClass =
-  "rounded-lg border border-[color:var(--aqt-border)] px-3 py-1.5 text-left text-sm transition-[background-color,border-color,scale] duration-150 ease-out active:enabled:scale-[0.96] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--aqt-teal)] disabled:cursor-not-allowed disabled:opacity-50 data-[state=unchecked]:hover:bg-[color:var(--aqt-overlay-2)] data-[state=checked]:border-[color:var(--aqt-teal)] data-[state=checked]:bg-[color:color-mix(in_srgb,var(--aqt-teal)_10%,transparent)]"
-
 const RadioGroupItem = React.forwardRef<
   React.ElementRef<typeof RadioGroupPrimitive.Item>,
   React.ComponentPropsWithoutRef<typeof RadioGroupPrimitive.Item> & { variant?: "default" | "card" }
@@ -39,19 +37,21 @@ const RadioGroupItem = React.forwardRef<
       <RadioGroupPrimitive.Item
         ref={ref}
         data-slot="radio-group-item"
-        className={cn(radioCardClass, className)}
+        className={cn(optionCardClass, className)}
         {...props}
       >
         {children}
       </RadioGroupPrimitive.Item>
-    )
+    );
   }
   return (
     <RadioGroupPrimitive.Item
       ref={ref}
       data-slot="radio-group-item"
       className={cn(
-        "aspect-square h-4 w-4 rounded-full border border-primary text-primary shadow focus:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
+        "aspect-square size-4 shrink-0 rounded-full border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-2)] text-primary transition-colors",
+        "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+        "disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive data-[state=checked]:border-primary",
         className
       )}
       {...props}
@@ -63,8 +63,8 @@ const RadioGroupItem = React.forwardRef<
         <Circle className="size-2 fill-current" />
       </RadioGroupPrimitive.Indicator>
     </RadioGroupPrimitive.Item>
-  )
-})
-RadioGroupItem.displayName = RadioGroupPrimitive.Item.displayName
+  );
+});
+RadioGroupItem.displayName = RadioGroupPrimitive.Item.displayName;
 
-export { RadioGroup, RadioGroupItem }
+export { RadioGroup, RadioGroupItem };

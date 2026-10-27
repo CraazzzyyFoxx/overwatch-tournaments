@@ -83,8 +83,7 @@ export default function FormField({
           placeholder,
           onKeyDown,
           disabled,
-          className,
-          variant: "surface" as const
+          className
         };
         const control = multiline ? (
           <Textarea {...shared} value={value} onChange={(event) => onChange(event.target.value)} />

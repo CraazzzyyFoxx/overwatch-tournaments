@@ -106,28 +106,30 @@ export default function GenericField({
       const selected = Array.isArray(value) ? (value as unknown[]).map(String) : [];
       return (
         <FieldShell {...shell} layout="group">
-          <div className="grid gap-1.5">
-            {options.map((option) => (
-              <label
-                key={option}
-                className="inline-flex items-center gap-2 text-sm text-[color:var(--aqt-fg-muted)]"
-              >
-                <Checkbox
-                  variant="surface"
-                  checked={selected.includes(option)}
-                  disabled={disabled}
-                  onCheckedChange={(checked) =>
-                    onChange(
-                      checked === true
-                        ? [...selected, option]
-                        : selected.filter((item) => item !== option),
-                    )
-                  }
-                />
-                {option}
-              </label>
-            ))}
-          </div>
+          {(control) => (
+            <div className="grid gap-1.5">
+              {options.map((option) => (
+                <label
+                  key={option}
+                  className="inline-flex items-center gap-2 text-sm text-[color:var(--aqt-fg-muted)]"
+                >
+                  <Checkbox
+                    aria-invalid={control["aria-invalid"]}
+                    checked={selected.includes(option)}
+                    disabled={disabled}
+                    onCheckedChange={(checked) =>
+                      onChange(
+                        checked === true
+                          ? [...selected, option]
+                          : selected.filter((item) => item !== option),
+                      )
+                    }
+                  />
+                  {option}
+                </label>
+              ))}
+            </div>
+          )}
         </FieldShell>
       );
     }
@@ -141,7 +143,6 @@ export default function GenericField({
             <Input
               {...control}
               type="date"
-              variant="surface"
               value={typeof value === "string" ? value : ""}
               onChange={(event) => onChange(event.target.value)}
               disabled={disabled}

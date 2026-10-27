@@ -218,13 +218,11 @@ export function BalanceImageExportDialog({
           <DialogHeader variant="panel">
             <div className="flex flex-col gap-3 pr-8 lg:flex-row lg:items-start lg:justify-between">
               <div>
-                <DialogTitle className="flex items-center gap-2 text-base font-semibold text-[color:var(--aqt-fg)]">
-                  <Images className="h-4 w-4 text-cyan-200" />
+                <DialogTitle className="flex items-center gap-2">
+                  <Images className="h-4 w-4 text-[color:var(--aqt-teal)]" aria-hidden />
                   {t("title")}
                 </DialogTitle>
-                <DialogDescription className="mt-1 text-xs text-[color:var(--aqt-fg-dim)]">
-                  {t("description")}
-                </DialogDescription>
+                <DialogDescription className="mt-1">{t("description")}</DialogDescription>
               </div>
 
               <div className="flex flex-wrap gap-2">
@@ -276,7 +274,7 @@ export function BalanceImageExportDialog({
             {!isGenerating && !error ? (
               <div className="flex flex-col gap-4">
                 {images.map((image, index) => (
-                  <Card key={image.id} variant="flat" className="overflow-hidden">
+                  <Card key={image.id} className="overflow-hidden">
                     <div className="flex items-center justify-between gap-3 border-b border-[color:var(--aqt-border)] px-3 py-2.5">
                       <Eyebrow as="div" tone="muted">
                         {t("image", { index: index + 1 })}

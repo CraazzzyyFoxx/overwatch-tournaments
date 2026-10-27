@@ -398,7 +398,7 @@ export function StageEditor({
                     </DropdownMenuItem>
                   ) : null}
                   <DropdownMenuItem
-                    className="text-danger focus:text-danger"
+                    variant="destructive"
                     onSelect={() => setPendingOp({ kind: "delete-stage" })}
                   >
                     <Trash2 className="size-4" aria-hidden />

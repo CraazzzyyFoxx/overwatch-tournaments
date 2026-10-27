@@ -37,7 +37,7 @@ export function RoleList({
     : roles;
 
   return (
-    <Card variant="flat">
+    <Card>
       <div className="space-y-2 border-b border-border p-3">
         {actions}
         <SearchField

@@ -130,7 +130,7 @@ export function ActivityFeed({ workspaceId, className }: Readonly<{ workspaceId:
                       {href ? (
                         <HoverPrefetchLink
                           href={href}
-                          className={`${shared} transition-colors hover:bg-accent/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring`}
+                          className={`${shared} transition-colors hover:bg-accent/30 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring`}
                         >
                           {body}
                         </HoverPrefetchLink>

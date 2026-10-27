@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useEffectEvent, useRef, type ReactNode } from "react";
+import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -72,15 +73,15 @@ interface InfiniteScrollFooterProps extends InfiniteScrollOptions {
   loaded: number;
   /** Rows the current filter matches server-side, when known. */
   total?: number;
-  /** Plural noun for the rows, e.g. "logs". */
-  unit: string;
+  /** Translated plural noun for the rows ("logs", "турниров"); "rows" by default. */
+  unit?: string;
+  /** `sm` under a dense table; `lg` the public feed's full-width button. */
+  size?: "sm" | "lg";
+  /** Overrides the built-in "Load more …" label. */
   loadMoreLabel?: string;
-  /**
-   * Replaces the built-in "Showing N of M unit" line. The defaults are English
-   * literals; a next-intl page passes its own translated node instead.
-   */
+  /** Overrides the built-in "Showing N of M …" line (a caller with its own plural rules). */
   progressLabel?: ReactNode;
-  /** Replaces the built-in failure sentence. */
+  /** Overrides the built-in failure sentence. */
   errorLabel?: string;
   className?: string;
 }
@@ -98,42 +99,48 @@ export function InfiniteScrollFooter({
   loaded,
   total,
   unit,
+  size = "sm",
   loadMoreLabel,
   progressLabel,
   errorLabel,
   className,
   ...options
 }: Readonly<InfiniteScrollFooterProps>) {
+  const t = useTranslations("kit.ui.infiniteScroll");
   const sentinelRef = useInfiniteScroll(options);
   const { hasNextPage, isFetchingNextPage, fetchNextPage, isError, disabled } = options;
+  const noun = unit ?? t("rows");
 
   const progress =
     progressLabel ??
     (total != null
-      ? `Showing ${loaded.toLocaleString()} of ${total.toLocaleString()} ${unit}`
-      : `Showing ${loaded.toLocaleString()} ${unit}`);
+      ? t("progressOf", { loaded, total, unit: noun })
+      : t("progress", { loaded, unit: noun }));
 
   return (
     <div className={cn("flex flex-col items-center gap-2 pt-1", className)}>
-      <output className={cn("text-xs tabular-nums", isError ? "text-danger" : "sr-only")}>
+      <output className={cn("text-caption tabular-nums", isError ? "text-danger" : "sr-only")}>
         {isError
-          ? (errorLabel ?? `Unable to load more ${unit}. Check your connection and try again.`)
+          ? (errorLabel ?? t("error", { unit: noun }))
           : isFetchingNextPage
-            ? `Loading more ${unit}…`
+            ? t("loading", { unit: noun })
             : progress}
       </output>
       {hasNextPage ? (
         <>
           <div ref={sentinelRef} aria-hidden className="h-px w-full" />
           <Button
+            type="button"
             variant="outline"
-            size="sm"
-            className="h-8"
+            size={size}
+            className={size === "lg" ? "w-full max-w-sm" : undefined}
             disabled={isFetchingNextPage || disabled}
             onClick={() => fetchNextPage()}
           >
             {isFetchingNextPage ? <Spinner /> : null}
-            {isError ? `Try loading ${unit} again` : (loadMoreLabel ?? `Load more ${unit}`)}
+            {isError
+              ? t("retry", { unit: noun })
+              : (loadMoreLabel ?? t("loadMore", { unit: noun }))}
           </Button>
         </>
       ) : null}

@@ -98,7 +98,7 @@ export function MasterList<K extends string | number>({
   onSelect: (key: K) => void;
 }>) {
   return (
-    <Card asChild variant="flat" className="p-2">
+    <Card asChild className="p-2">
       <nav aria-label={label}>
         <ul className="flex flex-col gap-0.5">
           {items.map((item) => {
@@ -127,7 +127,7 @@ export function MasterList<K extends string | number>({
 /** `MasterList` while its rows load: the same frame with placeholder rows. */
 export function MasterListSkeleton() {
   return (
-    <Card aria-hidden variant="flat" className="flex flex-col gap-0.5 p-2">
+    <Card aria-hidden className="flex flex-col gap-0.5 p-2">
       {[0, 1, 2, 3].map((row) => (
         <Skeleton key={row} className="h-8 w-full rounded-md" />
       ))}

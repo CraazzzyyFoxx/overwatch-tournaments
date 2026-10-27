@@ -77,7 +77,7 @@ const MatchRow = ({ enc, selfUserId, showGame = false }: MatchRowProps) => {
       </td>
       <td className="px-3.5 py-3">
         {observedMatches.length > 0 ? (
-          <TooltipProvider delayDuration={150}>
+          <TooltipProvider>
             <span className="inline-flex items-center gap-2">
               {observedMatches.map((m) => (
                 <MatchRowBadge key={m.id} match={m} />

@@ -58,7 +58,7 @@ async function render(discipline: string, games?: Map<string, DisciplineDescript
     );
   });
   // What a reader gets from the tile's numbers line: the decorative mark is hidden, the game's name is not.
-  const meta = container.querySelector(".aqt-ach-tile__meta")?.cloneNode(true) as HTMLElement;
+  const meta = container.querySelector("[data-tile-meta]")?.cloneNode(true) as HTMLElement;
   meta.querySelectorAll('[aria-hidden="true"]').forEach((node) => node.remove());
   return meta.textContent;
 }

@@ -54,7 +54,6 @@ export function DraftFormatFields({
         {t("format")}
       </span>
       <ToggleGroup
-        type="single"
         variant="pill"
         size="sm"
         aria-labelledby={formatLabelId}

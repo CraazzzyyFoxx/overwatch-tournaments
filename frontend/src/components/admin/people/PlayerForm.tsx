@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 
-import { Combobox, ComboboxCheck } from "@/components/ui/combobox";
+import { Combobox, ComboboxCheck, ComboboxMeta } from "@/components/ui/combobox";
 import { TeamCombobox } from "@/components/admin/TeamCombobox";
 import DivisionIcon from "@/components/DivisionIcon";
 import RosterSlotGlyph from "@/components/registration/RosterSlotGlyph";
@@ -167,7 +167,8 @@ function SearchableSelect({
       id={id}
       open={open}
       onOpenChange={setOpen}
-      label={selected?.label ?? placeholder}
+      label={selected?.label}
+      placeholder={placeholder}
       disabled={disabled}
       searchValue={searchValue}
       onSearchValueChange={setSearchValue}
@@ -187,9 +188,7 @@ function SearchableSelect({
           >
             <div className="flex min-w-0 flex-1 items-center justify-between gap-3">
               <span className="truncate">{option.label}</span>
-              {option.meta ? (
-                <span className="shrink-0 text-xs text-muted-foreground">{option.meta}</span>
-              ) : null}
+              {option.meta ? <ComboboxMeta>{option.meta}</ComboboxMeta> : null}
             </div>
             <ComboboxCheck selected={value === option.value} />
           </CommandItem>

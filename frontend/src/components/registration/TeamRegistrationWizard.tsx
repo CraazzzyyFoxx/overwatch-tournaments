@@ -228,11 +228,6 @@ export default function TeamRegistrationWizard({
               aria-describedby="regteam-name-hint"
               onChange={(event) => setName(event.target.value)}
               onBlur={() => setNameTouched(true)}
-              className={
-                showNameError
-                  ? "border-destructive focus-visible:ring-destructive"
-                  : undefined
-              }
             />
             <p
               id="regteam-name-hint"

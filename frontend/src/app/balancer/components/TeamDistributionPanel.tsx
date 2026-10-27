@@ -83,7 +83,7 @@ export function TeamDistributionPanel({ variant, variantSelector }: Readonly<Tea
   }, [distributionPoints]);
 
   return (
-    <Card variant="flat" className="px-3 py-2">
+    <Card className="px-3 py-2">
       {variantSelector ? <div className="mb-2">{variantSelector}</div> : null}
       <div className="flex items-center gap-3">
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1">

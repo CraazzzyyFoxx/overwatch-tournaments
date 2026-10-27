@@ -256,7 +256,7 @@ export function TournamentLogsTab({
       <div className="flex flex-col gap-3">
         {/* N failed -> Show failed (§15): the failures are the work on this tab. */}
         {stats && stats.failed > 0 && statusFilter !== "failed" ? (
-          <Alert role="status">
+          <Alert>
             <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
               <span>{t("failedToProcess", { count: stats.failed })}</span>
               <Button

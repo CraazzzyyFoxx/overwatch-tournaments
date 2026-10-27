@@ -328,9 +328,7 @@ function listRows(): string[] {
 
 /** The cards view's articles, in DOM order. */
 function cardNames(): string[] {
-  return Array.from(container.querySelectorAll("article.team-card .tc-name")).map(
-    (node) => node.textContent ?? ""
-  );
+  return Array.from(container.querySelectorAll("article h3")).map((node) => node.textContent ?? "");
 }
 
 describe("the list is the default view", () => {
@@ -427,7 +425,7 @@ describe("the toolbar orders both views", () => {
     await render();
 
     expect(container.querySelectorAll("button[aria-pressed]")).toHaveLength(0);
-    expect(container.querySelectorAll(".group-chip")).toHaveLength(0);
+    expect(container.textContent).not.toContain(`${en.common.group} A`);
     expect(listRows()).toEqual(["Emerald and a dot", "Ban kota", "Freak deck"]);
   });
 });
@@ -477,7 +475,7 @@ describe("an unranked player", () => {
     getTeams.mockResolvedValue({ results: [{ ...FREAKS, players: [duelist] }] });
     await render("view=cards");
 
-    const row = Array.from(container.querySelectorAll("table.roster tr")).find((tr) =>
+    const row = Array.from(container.querySelectorAll("article table tr")).find((tr) =>
       tr.textContent?.includes("Duelist")
     );
     expect(row?.querySelector("[data-division]")).toBeNull();

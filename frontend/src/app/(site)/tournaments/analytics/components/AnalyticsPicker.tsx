@@ -47,10 +47,11 @@ export default function AnalyticsPicker({
             isErrorTournaments ? t("analytics.briefing.errorTournaments") : t("analytics.briefing.selectTournament")
           }
           disabled={isErrorTournaments}
+          size="sm"
           className="min-w-0 max-w-[27.5rem] flex-[1_1_15rem]"
           onValueChange={onTournamentChange}
         >
-          <SelectContent className="max-h-[min(var(--radix-select-content-available-height),20rem)]">
+          <SelectContent>
             <SelectGroup>
               {tournaments.map((item) => (
                 <SelectItem key={item.id} value={item.id.toString()}>

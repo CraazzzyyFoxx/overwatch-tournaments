@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState, type CSSProperties } from "react";
-import { AlertCircle, AlertTriangle, Search } from "lucide-react";
+import { AlertCircle, AlertTriangle } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import CatalogEntityImage from "@/components/catalog/CatalogEntityImage";
@@ -12,7 +12,7 @@ import { eyebrowClass } from "@/components/ui/eyebrow";
 import { Combobox, ComboboxCheck } from "@/components/ui/combobox";
 import { FilterChip, FilterChipGroup } from "@/components/ui/filter-chip";
 import { CommandGroup, CommandItem } from "@/components/ui/command";
-import { Input } from "@/components/ui/input";
+import { SearchField } from "@/components/ui/search-field";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
@@ -187,20 +187,15 @@ export function PlayerPool({
               <h2 id={headingId} className="font-onest text-heading font-semibold">
                 {t("pool.title")}
               </h2>
-              <label className="relative ml-auto flex min-w-[180px] flex-[0_1_280px] items-center">
-                <span className="sr-only">{t("pool.search")}</span>
-                <Search
-                  className="pointer-events-none absolute left-3 h-4 w-4 text-[color:var(--aqt-fg-faint)]"
-                  aria-hidden="true"
-                />
-                <Input
-                  ref={searchRef}
-                  defaultValue={viewParams.query}
-                  onChange={(event) => onViewParamsChange({ query: event.target.value })}
-                  placeholder={t("pool.search")}
-                  className="h-11 rounded-lg border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] pl-9 sm:h-[34px]"
-                />
-              </label>
+              <SearchField
+                ref={searchRef}
+                label={t("pool.search")}
+                defaultValue={viewParams.query}
+                onChange={(event) => onViewParamsChange({ query: event.target.value })}
+                placeholder={t("pool.search")}
+                containerClassName="ml-auto min-w-[180px] flex-[0_1_280px]"
+                className="max-sm:h-11"
+              />
             </div>
             <TabsList aria-label={t("pool.tabsLabel")}>
               {DRAFT_POOL_TABS.filter((entry) =>
@@ -237,7 +232,6 @@ export function PlayerPool({
                   {t("pool.sortLabel")}
                 </span>
                 <ToggleGroup
-                  type="single"
                   variant="pill"
                   size="sm"
                   value={viewParams.sort}

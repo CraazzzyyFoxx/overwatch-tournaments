@@ -43,6 +43,11 @@ export interface LinkTabsProps {
    */
   variant?: "underline" | "pill";
   ariaLabel: string;
+  /**
+   * `false` keeps the reader where they are: tabs that swap the panel under a
+   * page header (`?tab=` on the encounter page) rather than open a new screen.
+   */
+  scroll?: boolean;
 }
 
 /**
@@ -65,7 +70,8 @@ export function LinkTabs({
   activeKey,
   level = 1,
   variant = "underline",
-  ariaLabel
+  ariaLabel,
+  scroll
 }: Readonly<LinkTabsProps>) {
   const listRef = useRef<HTMLUListElement>(null);
   const activeRef = useRef<HTMLAnchorElement | null>(null);
@@ -125,6 +131,7 @@ export function LinkTabs({
               ) : (
                 <HoverPrefetchLink
                   href={item.href}
+                  scroll={scroll}
                   data-link-tab={item.key}
                   data-state={pill ? (isActive ? "on" : "off") : undefined}
                   ref={isActive ? activeRef : undefined}

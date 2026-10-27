@@ -28,7 +28,7 @@ function MergeSelect({ id, value, options, placeholder, invalid, describedBy, on
 }>) {
   return (
     <Select value={value} onValueChange={onValueChange}>
-      <SelectTrigger id={id} className="h-10" aria-invalid={invalid} aria-describedby={describedBy}>
+      <SelectTrigger id={id} aria-invalid={invalid} aria-describedby={describedBy}>
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>
       <SelectContent>
@@ -297,7 +297,7 @@ export function UserMergeAuthSection({
         </div>
       ))}
       {preview.issues.length ? (
-        <Alert variant="destructive">
+        <Alert tone="danger">
           <AlertTitle>{reviewed ? t("blocked") : t("previousIssues")}</AlertTitle>
           <AlertDescription><ul className="list-inside list-disc">{preview.issues.map((issue, index) => <li key={`${index}:${issue}`}>{issue}</li>)}</ul></AlertDescription>
         </Alert>

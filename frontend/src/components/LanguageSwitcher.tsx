@@ -38,7 +38,6 @@ export default function LanguageSwitcher({ className }: Readonly<{ className?: s
 
   return (
     <ToggleGroup
-      type="single"
       variant="pill"
       value={active}
       onValueChange={(next) => switchTo(next as Locale)}

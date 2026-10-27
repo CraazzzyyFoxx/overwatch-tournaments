@@ -1,9 +1,5 @@
 "use client";
 
-// Sticky-column and row-tint rules, moved out of globals.css and next to their
-// only consumer.
-import "./data-table.css";
-
 import React, { useEffect, useEffectEvent, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import type { Row } from "@tanstack/react-table";
@@ -102,7 +98,7 @@ export function DataTable<TData>({
   groupBy,
   columnsStorageKey,
   paging = "pages",
-  rowUnit = "rows",
+  rowUnit,
   cellAlign = "middle",
   toolbar,
   summary,
@@ -428,10 +424,13 @@ export function DataTable<TData>({
   return (
     <Card
       ref={cardRef}
-      variant="flat"
       className={cn(
         "overflow-hidden",
-        framed ? "border-border/50 bg-card/50" : "admin-table-unframed rounded-none border-0 bg-transparent"
+        // The pinned cells' opaque surface (`STICKY_CELL_CLASS`): this card's
+        // translucent fill flattened over the page, or the solid card it sits in.
+        framed
+          ? "border-border/50 bg-card/50 [--admin-sticky-bg:color-mix(in_srgb,hsl(var(--card))_50%,hsl(var(--background)))]"
+          : "rounded-none border-0 bg-transparent [--admin-sticky-bg:hsl(var(--card))]"
       )}
     >
       <AdminTableToolbar

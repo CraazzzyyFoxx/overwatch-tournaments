@@ -23,7 +23,11 @@ const AchievementDetailHeader = ({ achievement }: { achievement: Achievement }) 
     <HeroFrame>
       <div className="flex flex-col gap-7 px-6 py-8 md:px-10 md:py-9 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex min-w-0 flex-col gap-5 sm:flex-row sm:items-start">
-          <AchievementArt achievement={achievement} sizes="132px" className="aqt-ach-crest" />
+          <AchievementArt
+            achievement={achievement}
+            sizes="132px"
+            className="aspect-square w-[clamp(96px,12vw,132px)] shrink-0 rounded-2xl border border-[hsl(var(--rar)/0.5)] ring-1 ring-[hsl(var(--rar)/0.14)]"
+          />
 
           <div className="flex min-w-0 flex-col gap-3">
             <BackLink href="/achievements" className="self-start">
@@ -67,7 +71,7 @@ const AchievementDetailHeader = ({ achievement }: { achievement: Achievement }) 
           {holders > 0 ? (
             <HeroStat
               label={t("achievements.detail.rarity")}
-              value={<span className="aqt-rar-fg">{(achievement.rarity * 100).toFixed(2)}%</span>}
+              value={<span className="text-[hsl(var(--rar))]">{(achievement.rarity * 100).toFixed(2)}%</span>}
             />
           ) : null}
           <HeroStat label={t("common.playersLabel")} value={format.number(holders)} />

@@ -134,8 +134,7 @@ export function ApiKeysBrowser({
               </Button>
               <Button
                 variant="ghost"
-                size="icon"
-                className="size-8"
+                size="icon-toolbar"
                 aria-label={t("dismissSecret")}
                 title={t("dismissSecret")}
                 onClick={() => {

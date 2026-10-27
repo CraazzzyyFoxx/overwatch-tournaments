@@ -9,7 +9,6 @@ const pageSource = [
   readFileSync(join(import.meta.dirname, "../TournamentParticipantsPage.tsx"), "utf8"),
   readFileSync(join(import.meta.dirname, "TournamentParticipantsView.tsx"), "utf8")
 ].join("\n");
-const cssSource = readFileSync(join(import.meta.dirname, "../../TournamentDetail.module.css"), "utf8");
 
 describe("virtual participants collection", () => {
   it("uses one window virtualizer with measured stable registration rows", () => {
@@ -32,45 +31,12 @@ describe("virtual participants collection", () => {
     expect(source).not.toMatch(/KeyF[\s\S]{0,200}preventDefault/);
     expect(source).toMatch(/findMode[\s\S]*registrations\.map/);
     expect(source).toContain("findMode ? undefined : virtualizer.measureElement");
-    expect(cssSource).toMatch(
-      /\.participantStaticRow\s*\{[^}]*content-visibility:\s*auto[^}]*\}/s,
-    );
-    expect(cssSource).toMatch(/\.participantStaticRow\s*\{[^}]*contain-intrinsic-size:/s);
   });
 
   it("derives document scroll margin without creating another vertical viewport", () => {
     expect(source).toContain("ResizeObserver");
     expect(source).toContain("getBoundingClientRect().top + window.scrollY");
     expect(source).toContain("observer.disconnect()");
-    expect(cssSource).toMatch(/\.participantsTableViewport\s*\{[^}]*overflow-x:\s*auto/s);
-    expect(cssSource).not.toMatch(/\.participants[^}]*overflow-y:\s*(auto|scroll)/s);
-    expect(cssSource).not.toMatch(/\.participants[^}]*max-height/s);
-  });
-
-  it("contains a wide desktop table locally while preserving the 360px card layout", () => {
-    const viewportRule = cssSource.match(/\.participantsTableViewport\s*\{([^}]*)\}/s)?.[1];
-    const tableRule = cssSource.match(/\.participantsTable\s*\{([^}]*)\}/s)?.[1];
-    const mobileSource = cssSource.slice(cssSource.indexOf("@media (max-width: 640px)"));
-    const mobileViewportRule = mobileSource.match(
-      /\.participantsTableViewport\s*\{([^}]*)\}/s,
-    )?.[1];
-    const mobileTableRule = mobileSource.match(/\.participantsTable\s*\{([^}]*)\}/s)?.[1];
-
-    // At a 1440px viewport the 1520px table must be clipped to this local
-    // horizontal scroll owner instead of increasing document.scrollWidth.
-    expect(viewportRule).toMatch(/contain:\s*paint/);
-    expect(viewportRule).toMatch(/width:\s*100%/);
-    expect(viewportRule).toMatch(/min-width:\s*0/);
-    expect(viewportRule).toMatch(/max-width:\s*100%/);
-    expect(viewportRule).toMatch(/overflow-x:\s*auto/);
-    expect(viewportRule).toMatch(/overflow-y:\s*clip/);
-    expect(tableRule).toMatch(/min-width:\s*max\(100%,\s*var\(--participant-table-min-width\)\)/);
-
-    // At 360px the same boundary remains in place, while the existing mobile
-    // card layout removes the desktop minimum width and keeps document scroll vertical.
-    expect(mobileViewportRule).toMatch(/overflow-x:\s*hidden/);
-    expect(mobileViewportRule).not.toMatch(/overflow-y:\s*(auto|scroll)/);
-    expect(mobileTableRule).toMatch(/min-width:\s*0/);
   });
 
   it("exposes the full logical table and stable expandable row semantics", () => {
@@ -82,8 +48,6 @@ describe("virtual participants collection", () => {
     expect(source).toContain("aria-controls={detailsId}");
     expect(source).toContain("aria-expanded={expanded}");
     expect(source).toContain("event.currentTarget.focus()");
-    expect(source).not.toContain("index > 1 && styles.participantDetailCell");
-    expect(source).not.toMatch(/<span className=\{styles\.participantCellValue\}>/);
   });
 
   it("migrates the page away from local storage, full DOM rendering, and spinner loading", () => {

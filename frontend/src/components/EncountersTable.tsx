@@ -34,7 +34,7 @@ const FAINT = "text-[color:var(--aqt-fg-faint)]";
 // The row's one link is stretched over the whole row/card from the matchup
 // cell, so middle-click and "open in new tab" work like any other link.
 const STRETCHED_LINK =
-  "after:absolute after:inset-0 after:content-[''] focus-visible:outline-none " +
+  "after:absolute after:inset-0 after:content-[''] focus-visible:outline-hidden " +
   "focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-[color:var(--aqt-teal)]";
 
 /** One encounter as both the row and the card read it. */
@@ -367,7 +367,6 @@ export function EncountersDataTable({
     return (
       <Card
         asChild
-        variant="flat"
         key={encounter.id}
         className={cn(
           "relative flex flex-col gap-2 p-3 transition-colors hover:bg-[color:var(--aqt-overlay-2)]",
@@ -414,7 +413,7 @@ export function EncountersDataTable({
       <ul aria-label={t("encounters.table.label")} aria-busy={loading || undefined} className="flex flex-col gap-2 md:hidden">
         {loading
           ? skeletonRows.map((index) => (
-              <Card asChild variant="flat" key={index} className="flex flex-col gap-2 p-3">
+              <Card asChild key={index} className="flex flex-col gap-2 p-3">
                 <li>
                   <Skeleton className="h-10 w-full" />
                   <Skeleton className="h-3 w-3/4" />
@@ -425,7 +424,7 @@ export function EncountersDataTable({
           : rows.map(card)}
       </ul>
 
-      <Card variant="flat" className="hidden overflow-hidden md:block">
+      <Card className="hidden overflow-hidden md:block">
         <table
           aria-busy={loading || undefined}
           className="w-full table-fixed border-separate border-spacing-0 [&>tbody>tr:last-child>td]:border-b-0"

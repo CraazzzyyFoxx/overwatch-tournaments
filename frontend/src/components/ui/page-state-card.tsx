@@ -5,6 +5,7 @@ import { AlertCircle, Inbox, SearchX, FileQuestion } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
 type PageStateKind = "error" | "empty" | "filtered-empty" | "not-found";
@@ -84,35 +85,38 @@ export function PageStateCard({
     actionLabel ?? (state === "filtered-empty" ? t("common.clearFilters") : t("common.retry"));
 
   return (
-    <section
-      // `error` is the only state that reports a failure the user did not cause,
-      // so it is the only one announced assertively.
-      role={state === "error" ? "alert" : "status"}
-      className={cn(
-        "flex flex-col items-center gap-3 rounded-[var(--aqt-radius)] border border-[color:var(--aqt-border)] bg-[color:var(--aqt-card)] px-6 py-10 text-center",
-        className
-      )}
+    <Card
+      asChild
+      className={cn("flex flex-col items-center gap-3 px-6 py-10 text-center", className)}
     >
-      <Icon
-        aria-hidden
-        className={cn(
-          "size-6",
-          state === "error" ? "text-[color:var(--aqt-rose)]" : "text-[color:var(--aqt-fg-faint)]"
-        )}
-      />
-      <div className="space-y-1">
-        <Heading className="text-sm font-semibold text-[color:var(--aqt-fg)]">{resolvedTitle}</Heading>
-        {resolvedDescription ? (
-          <p className="mx-auto max-w-prose text-caption leading-relaxed text-[color:var(--aqt-fg-muted)]">
-            {resolvedDescription}
-          </p>
+      <section
+        // `error` is the only state that reports a failure the user did not cause,
+        // so it is the only one announced assertively.
+        role={state === "error" ? "alert" : "status"}
+      >
+        <Icon
+          aria-hidden
+          className={cn(
+            "size-6",
+            state === "error" ? "text-[color:var(--aqt-rose)]" : "text-[color:var(--aqt-fg-faint)]"
+          )}
+        />
+        <div className="space-y-1">
+          <Heading className="text-body font-semibold text-[color:var(--aqt-fg)]">
+            {resolvedTitle}
+          </Heading>
+          {resolvedDescription ? (
+            <p className="mx-auto max-w-prose text-caption text-[color:var(--aqt-fg-muted)]">
+              {resolvedDescription}
+            </p>
+          ) : null}
+        </div>
+        {onAction ? (
+          <Button variant="outline" size="sm" className="mt-1" onClick={onAction}>
+            {resolvedActionLabel}
+          </Button>
         ) : null}
-      </div>
-      {onAction ? (
-        <Button type="button" variant="outline" size="sm" className="mt-1" onClick={onAction}>
-          {resolvedActionLabel}
-        </Button>
-      ) : null}
-    </section>
+      </section>
+    </Card>
   );
 }

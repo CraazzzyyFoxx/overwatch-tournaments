@@ -3,7 +3,7 @@
 import { useSyncExternalStore } from "react";
 import { useTranslations } from "next-intl";
 
-import styles from "../TournamentDetail.module.css";
+import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
 
 const subscribeNoop = () => () => {};
@@ -26,13 +26,15 @@ export function UpdatingBadge() {
   if (!isHydrated) return null;
 
   return (
-    <span
-      className={styles.updatingBadge}
+    <Badge
+      tone="accent"
+      shape="pill"
+      className="pointer-events-none fixed bottom-5 right-5 z-40 size-9 justify-center p-0 backdrop-blur-md"
       role="status"
       aria-live="polite"
       aria-label={t("tournamentDetail.pageState.updating")}
     >
       <Spinner />
-    </span>
+    </Badge>
   );
 }

@@ -4,14 +4,17 @@ import { useTranslations } from "next-intl";
 import dynamic from "next/dynamic";
 
 import { useFormatter } from "@/lib/datetime/client";
+import { cn } from "@/lib/utils";
 import PlayerName from "@/components/PlayerName";
 import { PerformanceBadge } from "@/components/PerformanceBadge";
 import TeamName from "@/components/TeamName";
 import { CatalogEntityStrip } from "@/components/catalog/CatalogEntityImage";
+import { CARD_SUB, CardHead } from "@/components/match/EncounterAtoms";
+import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { SlotProps } from "@/disciplines/types";
 import { LogStatsName } from "../stat-names";
-import styles from "@/components/match/EncounterDetail.module.css";
 import {
   COLUMN_PRESETS,
   STAT_META,
@@ -33,6 +36,11 @@ const ContributionChart = dynamic(() => import("./ContributionChart"), {
   loading: () => <Skeleton className="h-70 w-full rounded-lg" />
 });
 
+/** Figures read right-aligned on one line. */
+const CELL = "whitespace-nowrap px-2.5 py-2 text-right";
+/** The name column stays put while the figures scroll under it. */
+const STICKY = "sticky left-0 z-1 text-left";
+
 /**
  * The Overwatch series statistics of an encounter's duel maps: side comparison and leaders (`overview`), or the
  * per-player totals grouped by participation (`players`). The host renders it only when every loaded match is a
@@ -48,7 +56,7 @@ export default function SeriesStats({ matches, view }: Readonly<SlotProps["serie
   const isDuel = aggregate.participations.length === 2;
 
   return view === "overview" && isDuel ? (
-    <div className={styles.statsGrid}>
+    <div className="grid grid-cols-1 items-start gap-3.5 xl:grid-cols-2">
       <TeamComparison home={home} away={away} round={aggregate.round} />
       <Leaders
         home={home}
@@ -82,60 +90,75 @@ function SeriesPlayerTable({
     aggregate.round,
     columns
   );
+  const head = "h-auto whitespace-nowrap px-2.5 py-2.25 text-right";
 
   return (
-    <div className={styles.card}>
-      <div className={styles.cardHead}>
-        <h3 className={styles.cardTitle}>{t("encounters.detail.seriesTableTitle")}</h3>
-        <span className={styles.cardSub}>{t("encounters.detail.seriesTableSub")}</span>
-      </div>
+    <Card className="overflow-hidden">
+      <CardHead title={t("encounters.detail.seriesTableTitle")}>
+        <span className={CARD_SUB}>{t("encounters.detail.seriesTableSub")}</span>
+      </CardHead>
+      {/* The labelled scroll region (DESIGN §12) is this div: `Table`'s own
+          wrapper takes no label, so it is left unclipped inside it. */}
       <div
-        className={styles.seriesScroll}
+        className="overflow-x-auto overscroll-x-contain [scrollbar-width:thin] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
         tabIndex={0}
         role="group"
         aria-label={t("encounters.detail.seriesTableTitle")}
       >
-        <table className={styles.seriesTable}>
-          <thead>
-            <tr>
-              <th scope="col">{t("encounters.team.colName")}</th>
-              <th scope="col">{t("common.heroes")}</th>
-              <th scope="col" title={t("encounters.detail.colMapsTitle")}>
+        <Table
+          wrapperClassName="overflow-visible"
+          className="aqt-tnum min-w-[52rem] border-collapse text-[color:var(--aqt-fg-muted)]"
+        >
+          <TableHeader>
+            <TableRow className="bg-[color:var(--aqt-overlay-1)]">
+              <TableHead scope="col" className={cn(head, STICKY, "bg-card")}>
+                {t("encounters.team.colName")}
+              </TableHead>
+              <TableHead scope="col" className={head}>
+                {t("common.heroes")}
+              </TableHead>
+              <TableHead scope="col" className={head} title={t("encounters.detail.colMapsTitle")}>
                 {t("encounters.detail.colMaps")}
-              </th>
-              <th scope="col">{t("matches.stats.rating")}</th>
+              </TableHead>
+              <TableHead scope="col" className={head}>
+                {t("matches.stats.rating")}
+              </TableHead>
               {columns.map((name) => {
                 const meta = STAT_META[name];
                 return (
-                  <th
+                  <TableHead
                     key={name}
                     scope="col"
+                    className={head}
                     title={t(meta.labelKey as never)}
                     aria-label={t(meta.labelKey as never)}
                   >
                     {meta.abbr}
-                  </th>
+                  </TableHead>
                 );
               })}
-            </tr>
-          </thead>
+            </TableRow>
+          </TableHeader>
           {aggregate.participations.map((participation) => (
-            <tbody key={participation.id}>
-              <tr className={styles.seriesSideHead}>
-                <td colSpan={4 + columns.length}>
+            <TableBody key={participation.id}>
+              <TableRow className="hover:bg-transparent">
+                <TableCell
+                  colSpan={4 + columns.length}
+                  className="bg-[color:var(--aqt-overlay-3)] px-2.5 py-2 font-display text-label font-bold text-[color:var(--aqt-fg-dim)]"
+                >
                   <TeamName
                     team={{ name: participation.name, image_url: participation.team?.image_url }}
                     size="xs"
                   />
-                  <span className={styles.cardSub}>
+                  <span className={CARD_SUB}>
                     {" · "}
                     {t("encounters.history.participation", { id: participation.id })}
                     {participation.live === false
                       ? ` · ${t("encounters.history.retiredParticipation")}`
                       : null}
                   </span>
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
               {participation.players.map((player) => (
                 <SeriesPlayerRow
                   key={player.workspace_member_id}
@@ -146,11 +169,11 @@ function SeriesPlayerTable({
                   mapsPlayed={participation.meta[player.workspace_member_id]?.mapsPlayed ?? 0}
                 />
               ))}
-            </tbody>
+            </TableBody>
           ))}
-        </table>
+        </Table>
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -171,25 +194,32 @@ function SeriesPlayerRow({
   const placement = player.stats?.[round]?.[LogStatsName.Performance];
 
   return (
-    <tr>
-      <td className={styles.seriesPlayerCell}>
+    <TableRow className="group">
+      {/* Opaque, so the figures scroll under it; the row hover is layered on top. */}
+      <TableCell
+        className={cn(
+          CELL,
+          STICKY,
+          "min-w-56 bg-card group-hover:bg-[image:linear-gradient(var(--aqt-overlay-2),var(--aqt-overlay-2))]"
+        )}
+      >
         <PlayerName
           player={player}
           profileName={player.profile_name}
           includeSpecialization={false}
         />
-      </td>
-      <td>
-        <span className={styles.rosterCell}>
+      </TableCell>
+      <TableCell className={CELL}>
+        <span className="flex items-center justify-center">
           <CatalogEntityStrip entities={heroes} size="sm" limit={6} />
         </span>
-      </td>
-      <td>{mapsPlayed > 0 ? mapsPlayed : "—"}</td>
-      <td className={styles.seriesRatingCell}>
-        <span className={styles.seriesRating}>
+      </TableCell>
+      <TableCell className={CELL}>{mapsPlayed > 0 ? mapsPlayed : "—"}</TableCell>
+      <TableCell className={cn(CELL, "font-semibold text-[color:var(--aqt-teal)]")}>
+        <span className="inline-flex items-center justify-end gap-1.5">
           <PerformanceBadge performance={placement ?? null} />
         </span>
-      </td>
+      </TableCell>
       {columns.map((name) => (
         <SeriesStatCell
           key={name}
@@ -198,7 +228,7 @@ function SeriesPlayerRow({
           max={maxima[name] ?? 0}
         />
       ))}
-    </tr>
+    </TableRow>
   );
 }
 
@@ -213,7 +243,7 @@ function SeriesStatCell({
   const showBar = meta?.bar && max > 0;
 
   return (
-    <td>
+    <TableCell className={CELL}>
       <span className="inline-flex flex-col items-end gap-1">
         <span>{formatStat(name, value, format)}</span>
         {showBar ? (
@@ -231,6 +261,6 @@ function SeriesStatCell({
           </span>
         ) : null}
       </span>
-    </td>
+    </TableCell>
   );
 }

@@ -286,7 +286,10 @@ describe("admin Members", () => {
     await search("no");
     expect(listUsers).not.toHaveBeenCalled();
     await search("nov");
-    expect(listUsers).toHaveBeenLastCalledWith(expect.objectContaining({ search: "nov", workspace_id: 1 }));
+    expect(listUsers).toHaveBeenLastCalledWith(
+      expect.objectContaining({ search: "nov", workspace_id: 1 }),
+      expect.any(AbortSignal)
+    );
     await click(commandItem("nova"));
     const roleLabel = Array.from(dialog.querySelectorAll("label")).find(
       (label) => label.textContent === "Role"

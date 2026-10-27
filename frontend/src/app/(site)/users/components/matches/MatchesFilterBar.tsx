@@ -36,7 +36,7 @@ const MatchesFilterBar = ({
     { key: "has_logs", label: t("users.matches.filters.hasLogs") }
   ];
   return (
-    <Card variant="flat" className="mb-3.5 p-2.5">
+    <Card className="mb-3.5 p-2.5">
       <FilterChipGroup label={t("common.filters")}>
         {filters.map((f) => (
           <FilterChip key={f.key} active={activeFilter === f.key} onClick={() => onApplyFilter(f.key)}>

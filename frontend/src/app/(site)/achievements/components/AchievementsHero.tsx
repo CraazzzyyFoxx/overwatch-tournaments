@@ -33,7 +33,7 @@ const AchievementsHero = ({ workspaceName, total, rarestPct, unlocks }: Achievem
             <HeroStat
               label={t("achievements.stats.rarest")}
               value={
-                <span className={cn(rarityVarClass(classifyRarity(rarestPct)), "aqt-rar-fg")}>
+                <span className={cn(rarityVarClass(classifyRarity(rarestPct)), "text-[hsl(var(--rar))]")}>
                   {rarestPct.toFixed(2)}%
                 </span>
               }

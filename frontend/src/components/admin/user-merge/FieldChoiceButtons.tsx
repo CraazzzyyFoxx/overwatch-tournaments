@@ -41,7 +41,6 @@ export function FieldChoiceButtons({
     <div className="space-y-2">
       <p className="text-sm font-medium" id={groupId}>{label}</p>
       <ToggleGroup
-        type="single"
         variant="card"
         className="grid-cols-2"
         aria-labelledby={groupId}

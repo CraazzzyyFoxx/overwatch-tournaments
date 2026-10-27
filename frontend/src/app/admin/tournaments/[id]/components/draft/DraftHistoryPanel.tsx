@@ -201,7 +201,7 @@ export function DraftHistoryPanel({ tournamentId, onSessionDeleted }: Readonly<D
                     )}
                     <DropdownMenuItem
                       disabled={pending || inFlight}
-                      className="text-danger focus:text-danger"
+                      variant="destructive"
                       onSelect={() => setPendingDelete(session)}
                     >
                       <span>

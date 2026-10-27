@@ -714,6 +714,7 @@
       }
     },
     "admin": {
+      "rowUnit": "teams",
       "reject": "Reject team",
       "rejectConfirm": "Reject {team}?",
       "rejectWithdraw": "Also withdraw the members' registrations",
@@ -7443,6 +7444,17 @@
       "searchLabel": "Search Discord channels",
       "empty": "No channel matches that search. Paste a channel ID to find one by id."
     },
+    "category": {
+      "placeholder": "Select a Discord category",
+      "loading": "Loading categories…",
+      "refresh": "Refresh categories from Discord",
+      "manual": "Enter a category ID instead",
+      "dropdown": "Pick from the list",
+      "idAria": "Discord category ID",
+      "searchPlaceholder": "Search categories…",
+      "searchLabel": "Search Discord categories",
+      "empty": "No category matches that search. Paste a category ID to find one by id."
+    },
     "server": {
       "checking": "Checking the Discord bot…",
       "fallbackName": "Discord server",
@@ -9880,7 +9892,8 @@
         "draft": "Draft"
       },
       "ariaLabel": "Teams sections",
-      "participantsSummary": "{participants, plural, one {# participant} other {# participants}} · <warn>{unmapped} unmapped</warn>"
+      "participantsSummary": "{participants, plural, one {# participant} other {# participants}} · <warn>{unmapped} unmapped</warn>",
+      "rowUnit": "teams"
     },
     "status": {
       "setTo": "Set status to {status}?",
@@ -11093,6 +11106,7 @@
       "fromWorkspace": "Another workspace",
       "fromFile": "JSON file",
       "fileLabel": "Achievement export file",
+      "chooseFile": "Choose a JSON file…",
       "importFile": "Import file",
       "summary": "{created} created, {updated} updated."
     },
@@ -13308,12 +13322,28 @@
   },
   "kit": {
     "ui": {
-      "close": "Close",
+      "breadcrumb": "Breadcrumb",
       "commandPalette": "Command palette",
       "sidebar": "Sidebar",
       "mobileSidebar": "Displays the mobile sidebar.",
       "toggleSidebar": "Toggle sidebar",
-      "extraMore": "+{count} more"
+      "extraMore": "+{count} more",
+      "place": {
+        "gold": "{place, selectordinal, one {#st} two {#nd} few {#rd} other {#th}} place, gold",
+        "silver": "{place, selectordinal, one {#st} two {#nd} few {#rd} other {#th}} place, silver",
+        "bronze": "{place, selectordinal, one {#st} two {#nd} few {#rd} other {#th}} place, bronze",
+        "place": "{place, selectordinal, one {#st} two {#nd} few {#rd} other {#th}} place",
+        "none": "No placement"
+      },
+      "infiniteScroll": {
+        "rows": "rows",
+        "progress": "Showing {loaded, number} {unit}",
+        "progressOf": "Showing {loaded, number} of {total, number} {unit}",
+        "loading": "Loading more {unit}…",
+        "loadMore": "Load more {unit}",
+        "retry": "Try loading {unit} again",
+        "error": "Unable to load more {unit}. Check your connection and try again."
+      }
     },
     "actions": {
       "back": "Back",
@@ -13359,7 +13389,7 @@
       "error": "Could not load accounts. Try again.",
       "minChars": "Type at least 3 characters to search.",
       "empty": "No accounts match that email or username.",
-      "clearSelection": "Clear selection",
+      "none": "No account",
       "userId": "User #{id}"
     },
     "userSearch": {
@@ -13369,7 +13399,7 @@
       "error": "Could not load users. Try again.",
       "minChars": "Type at least 2 characters to search.",
       "empty": "No users match that search. Try a shorter name.",
-      "clearSelection": "Clear selection",
+      "none": "No user",
       "userId": "User #{id}"
     },
     "entityForm": {
@@ -13384,7 +13414,8 @@
       "drop": "Drop",
       "edit": "Edit",
       "upload": "Upload",
-      "remove": "Remove image"
+      "remove": "Remove image",
+      "alt": "Avatar"
     },
     "datePicker": {
       "pickRange": "Pick a date range",
@@ -13681,6 +13712,7 @@
       "moveDown": "Move down",
       "remove": "Remove",
       "columnsSelected": "{count, plural, one {# column selected} other {# columns selected}}",
+      "modeFor": "{field}: value source",
       "modes": {
         "columns": "Map",
         "constant": "Constant",

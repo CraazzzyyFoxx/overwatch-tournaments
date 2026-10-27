@@ -377,7 +377,7 @@ export function SchemaEditor({
               onDelete={deleteSection}
             />
 
-            <Card variant="flat" className="min-w-0 flex-1 p-4">
+            <Card className="min-w-0 flex-1 p-4">
               {section ? (
                 <div className="grid gap-4">
                   <div className="grid gap-3 sm:grid-cols-2">
@@ -488,7 +488,7 @@ export function SchemaEditor({
       </TabsContent>
 
       <TabsContent value="preview" className="m-0">
-        <Card variant="flat" className="grid gap-3 p-4">
+        <Card className="grid gap-3 p-4">
           <p className="text-xs text-muted-foreground">{t("previewNote")}</p>
           <SchemaForm
             readOnly

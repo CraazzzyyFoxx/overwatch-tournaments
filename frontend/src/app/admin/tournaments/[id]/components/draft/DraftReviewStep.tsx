@@ -66,7 +66,7 @@ export function DraftReviewStep({
         </p>
       )}
       {previewError && (
-        <Alert variant="destructive" className="rounded-xl">
+        <Alert tone="danger">
           <AlertTitle>{t("previewFailed")}</AlertTitle>
           <AlertDescription>{t("previewFailedHint")}</AlertDescription>
         </Alert>

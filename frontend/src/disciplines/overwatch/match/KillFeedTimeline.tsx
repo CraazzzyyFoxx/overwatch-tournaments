@@ -321,7 +321,7 @@ const KillFeedTimeline = ({ matchId, members, home, away }: KillFeedTimelineProp
   };
 
   return (
-    <Card variant="flat" className="p-4">
+    <Card className="p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <Eyebrow className="aqt-tnum">{t("matches.timeline.title")}</Eyebrow>
         {status === "ready" && totalKills > 0 ? legend : null}

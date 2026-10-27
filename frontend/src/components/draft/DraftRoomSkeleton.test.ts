@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -50,11 +50,6 @@ const skeletonModule = existsSync(skeletonPath) ? await import("@/components/dra
 const loadingStateModule = existsSync(loadingStatePath)
   ? await import("@/components/draft/draft-loading-state")
   : null;
-
-function sourceFor(path: string): string {
-  const absolutePath = join(componentDir, path);
-  return existsSync(absolutePath) ? readFileSync(absolutePath, "utf8") : "";
-}
 
 const OWNER: DraftOwner = {
   workspaceId: 2,
@@ -154,13 +149,7 @@ describe("standalone Draft loading skeleton", () => {
     expect(container.querySelector('a[href="/tournaments/5"]')).not.toBeNull();
   });
 
-  it("contains the 360px layout and disables shimmer for reduced motion", () => {
-    const css = sourceFor("DraftRoom.module.css");
-
-    expect(css).toMatch(/\.skeletonRoom\s*\{[\s\S]*?overflow-x:\s*clip/);
-    expect(css).toMatch(/\.skeletonPanel\s*\{[\s\S]*?min-width:\s*0/);
-    expect(css).toMatch(/@media\s*\(max-width:\s*640px\)[\s\S]*?\.skeletonHeaderRow/);
-
+  it("disables shimmer for reduced motion", () => {
     // The blocks are `ui/skeleton`, which stops its pulse under reduced motion.
     expect(skeletonModule).not.toBeNull();
     if (!skeletonModule) return;

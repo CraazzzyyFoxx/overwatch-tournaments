@@ -115,7 +115,7 @@ export function EncountersPresets({
                     <DropdownMenuItem
                       aria-label={t("encounters.savedViews.deleteAria", { name: view.name })}
                       disabled={saved.deletePending}
-                      className="text-muted-foreground focus:text-destructive"
+                      variant="destructive"
                       onSelect={() => setViewToDelete(view)}
                     >
                       <Trash2 aria-hidden />

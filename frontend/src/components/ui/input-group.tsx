@@ -1,69 +1,61 @@
 "use client";
 
 import * as React from "react";
-import { cva, type VariantProps } from "class-variance-authority";
 
 import { cn } from "@/lib/utils";
-import { Input } from "@/components/ui/input";
+import { controlSurfaceClass, Input } from "@/components/ui/input";
 
-function InputGroup({ className, ...props }: React.ComponentProps<"div">) {
+type InputGroupSize = "sm" | "default";
+
+const InputGroupSizeContext = React.createContext<InputGroupSize>("default");
+
+/**
+ * An `Input` with a fixed text beside it (a domain, a path prefix). The frame
+ * wears the control surface and draws the input's focus ring and error border,
+ * so the addon and the input read as one field. `size` sets the row for both.
+ */
+function InputGroup({
+  className,
+  size = "default",
+  ...props
+}: React.ComponentProps<"div"> & { size?: InputGroupSize }) {
   return (
-    <div
-      data-slot="input-group"
-      role="group"
-      className={cn(
-        "group/input-group border-input dark:bg-input/30 shadow-xs relative flex w-full items-center rounded-md border outline-none transition-[color,box-shadow]",
-        "h-9 has-[>textarea]:h-auto",
-
-        // Variants based on alignment.
-        "has-[>[data-align=inline-start]]:[&>input]:pl-2",
-        "has-[>[data-align=inline-end]]:[&>input]:pr-2",
-        "has-[>[data-align=block-start]]:h-auto has-[>[data-align=block-start]]:flex-col has-[>[data-align=block-start]]:[&>input]:pb-3",
-        "has-[>[data-align=block-end]]:h-auto has-[>[data-align=block-end]]:flex-col has-[>[data-align=block-end]]:[&>input]:pt-3",
-
-        // Focus state.
-        "has-[[data-slot=input-group-control]:focus-visible]:ring-ring has-[[data-slot=input-group-control]:focus-visible]:ring-1",
-
-        // Error state.
-        "has-[[data-slot][aria-invalid=true]]:ring-destructive/20 has-[[data-slot][aria-invalid=true]]:border-destructive dark:has-[[data-slot][aria-invalid=true]]:ring-destructive/40",
-
-        className
-      )}
-      {...props}
-    />
+    <InputGroupSizeContext.Provider value={size}>
+      <div
+        data-slot="input-group"
+        role="group"
+        className={cn(
+          controlSurfaceClass,
+          "group/input-group relative flex items-center px-0",
+          size === "sm" ? "h-8 text-caption" : "h-9 text-sm",
+          "has-[>[data-align=inline-start]]:[&>input]:pl-2 has-[>[data-align=inline-end]]:[&>input]:pr-2",
+          "has-[[data-slot=input-group-control]:focus-visible]:ring-2 has-[[data-slot=input-group-control]:focus-visible]:ring-ring",
+          "has-[[data-slot=input-group-control]:focus-visible]:ring-offset-2 has-[[data-slot=input-group-control]:focus-visible]:ring-offset-background",
+          "has-[[data-slot=input-group-control][aria-invalid=true]]:border-destructive",
+          "has-[[data-slot=input-group-control]:disabled]:cursor-not-allowed has-[[data-slot=input-group-control]:disabled]:opacity-50",
+          className
+        )}
+        {...props}
+      />
+    </InputGroupSizeContext.Provider>
   );
 }
-
-const inputGroupAddonVariants = cva(
-  "text-muted-foreground flex h-auto cursor-text select-none items-center justify-center gap-2 py-1.5 text-sm font-medium group-data-[disabled=true]/input-group:opacity-50 [&>kbd]:rounded-[calc(var(--radius)-5px)] [&>svg:not([class*='size-'])]:size-4",
-  {
-    variants: {
-      align: {
-        "inline-start": "order-first pl-3 has-[>button]:ml-[-0.45rem] has-[>kbd]:ml-[-0.35rem]",
-        "inline-end": "order-last pr-3 has-[>button]:mr-[-0.4rem] has-[>kbd]:mr-[-0.35rem]",
-        "block-start":
-          "[.border-b]:pb-3 order-first w-full justify-start px-3 pt-3 group-has-[>input]/input-group:pt-2.5",
-        "block-end":
-          "[.border-t]:pt-3 order-last w-full justify-start px-3 pb-3 group-has-[>input]/input-group:pb-2.5"
-      }
-    },
-    defaultVariants: {
-      align: "inline-start"
-    }
-  }
-);
 
 function InputGroupAddon({
   className,
   align = "inline-start",
   ...props
-}: React.ComponentProps<"div"> & VariantProps<typeof inputGroupAddonVariants>) {
+}: React.ComponentProps<"div"> & { align?: "inline-start" | "inline-end" }) {
   return (
     <div
       role="group"
       data-slot="input-group-addon"
       data-align={align}
-      className={cn(inputGroupAddonVariants({ align }), className)}
+      className={cn(
+        "flex h-auto cursor-text select-none items-center justify-center gap-2 py-1.5 font-medium text-[color:var(--aqt-fg-muted)] [&>svg:not([class*='size-'])]:size-4",
+        align === "inline-end" ? "order-last pr-3" : "order-first pl-3",
+        className
+      )}
       onClick={(e) => {
         if ((e.target as HTMLElement).closest("button")) {
           return;
@@ -79,7 +71,7 @@ function InputGroupText({ className, ...props }: React.ComponentProps<"span">) {
   return (
     <span
       className={cn(
-        "text-muted-foreground flex items-center gap-2 text-sm [&_svg:not([class*='size-'])]:size-4 [&_svg]:pointer-events-none",
+        "flex items-center gap-2 [&_svg:not([class*='size-'])]:size-4 [&_svg]:pointer-events-none",
         className
       )}
       {...props}
@@ -87,12 +79,17 @@ function InputGroupText({ className, ...props }: React.ComponentProps<"span">) {
   );
 }
 
-function InputGroupInput({ className, ...props }: React.ComponentProps<typeof Input>) {
+function InputGroupInput({
+  className,
+  ...props
+}: Omit<React.ComponentProps<typeof Input>, "size">) {
+  const size = React.useContext(InputGroupSizeContext);
   return (
     <Input
       data-slot="input-group-control"
+      size={size}
       className={cn(
-        "flex-1 rounded-none border-0 bg-transparent shadow-none focus-visible:ring-0 dark:bg-transparent",
+        "h-full flex-1 rounded-none border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 disabled:opacity-100",
         className
       )}
       {...props}
@@ -100,9 +97,4 @@ function InputGroupInput({ className, ...props }: React.ComponentProps<typeof In
   );
 }
 
-export {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupText,
-  InputGroupInput
-};
+export { InputGroup, InputGroupAddon, InputGroupText, InputGroupInput };

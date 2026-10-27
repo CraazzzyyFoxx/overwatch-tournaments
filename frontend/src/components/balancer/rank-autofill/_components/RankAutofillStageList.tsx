@@ -101,7 +101,7 @@ function SortableStageRow({
             </SelectTrigger>
             <SelectContent>
               {OW_VALUES.map((value) => (
-                <SelectItem key={value} value={value} className="text-xs">
+                <SelectItem key={value} value={value}>
                   {t(`rankAutofill.owValue.${value}.label`)}
                 </SelectItem>
               ))}

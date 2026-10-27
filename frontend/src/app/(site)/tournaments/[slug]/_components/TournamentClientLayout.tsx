@@ -154,7 +154,7 @@ export default function TournamentClientLayout({
   // tournament page a skeleton for crawlers and for the first paint alike.
   if (tournamentQuery.isPending) {
     return (
-      <div className="aqt-tn space-y-4">
+      <div className="space-y-4 text-body">
         <TournamentShellSkeleton />
         <section className="min-w-0">{children}</section>
       </div>
@@ -167,7 +167,7 @@ export default function TournamentClientLayout({
 
   if (!tournament) {
     return (
-      <div className="aqt-tn">
+      <div className="text-body">
         <PageStateCard state="not-found" headingLevel={1} title={t("common.tournamentNotFound")} />
       </div>
     );
@@ -233,7 +233,7 @@ export default function TournamentClientLayout({
     : null;
 
   return (
-    <div className="aqt-tn space-y-4">
+    <div className="space-y-4 text-body">
       {tournament.is_hidden && (
         <div
           role="status"

@@ -147,7 +147,7 @@ export function RegistrationTeamsBrowser({
   // Shown inside the dialog or inspector the refused act came from, which stays
   // open on a refusal; the page itself carries no alert stack.
   const inlineError = actions.actionError ? (
-    <Alert variant="destructive" role="alert"><AlertDescription>{actions.actionError}</AlertDescription></Alert>
+    <Alert tone="danger"><AlertDescription>{actions.actionError}</AlertDescription></Alert>
   ) : null;
 
   // Every one of these only clears the error and names the act; the columns
@@ -207,7 +207,7 @@ export function RegistrationTeamsBrowser({
           {/* The export's report stays until dismissed: a skipped team names the
               fix it needs, which a toast would expire before it was read. */}
           {actions.exportResult && (
-            <Alert role="status">
+            <Alert>
               <AlertDescription className="flex items-start justify-between gap-2">
                 <div className="space-y-2">
                   <p>
@@ -261,7 +261,7 @@ export function RegistrationTeamsBrowser({
               filterKey={filters.filterKey}
               initialPageSize={25}
               paging="infinite"
-              rowUnit="teams"
+              rowUnit={t("admin.rowUnit")}
               cellAlign="top"
               searchPlaceholder={t("admin.search")}
               emptyMessage={t("list.empty")}

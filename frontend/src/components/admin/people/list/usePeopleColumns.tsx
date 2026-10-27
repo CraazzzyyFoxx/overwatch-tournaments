@@ -46,9 +46,9 @@ export function usePeopleColumns({
         }),
         cell: ({ row }) => (
           <div className="flex min-w-0 items-center gap-2.5">
-            <Avatar className="size-7 text-xs">
+            <Avatar className="size-7">
               <AvatarImage src={row.original.avatar_url ?? undefined} alt="" />
-              <AvatarFallback className="bg-muted/60 font-medium text-muted-foreground">
+              <AvatarFallback>
                 {initials(row.original.name)}
               </AvatarFallback>
             </Avatar>

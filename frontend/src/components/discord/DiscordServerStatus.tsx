@@ -39,7 +39,7 @@ export function DiscordServerStatus({
       <div className="flex min-w-0 items-center gap-3">
         <Avatar className="size-8 rounded-full border">
           {data?.icon_url ? <AvatarImage src={data.icon_url} alt="" /> : null}
-          <AvatarFallback className="bg-muted text-xs">DC</AvatarFallback>
+          <AvatarFallback>DC</AvatarFallback>
         </Avatar>
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2 font-medium">

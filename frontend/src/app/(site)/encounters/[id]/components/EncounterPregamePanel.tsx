@@ -9,9 +9,10 @@ import pickBanService from "@/services/pickBan.service";
 import type { EncounterTeam } from "@/types/encounter.types";
 import type { PickBanKind, PickBanState } from "@/types/tournament.types";
 import { duelSeats, seatsBySlot } from "@/lib/encounter/seats";
-import { Fact } from "@/components/match/EncounterAtoms";
+import { CARD_SUB, CardHead, Fact, FactGrid, SectionHead } from "@/components/match/EncounterAtoms";
 import { Badge } from "@/components/ui/badge";
-import styles from "@/components/match/EncounterDetail.module.css";
+import { Card } from "@/components/ui/card";
+import { StatusDot } from "@/components/ui/status-dot";
 import { encounterQueryKeys } from "@/lib/encounters/query-keys";
 
 interface EncounterPregamePanelProps {
@@ -53,21 +54,19 @@ export default function EncounterPregamePanel({
     <section aria-label={t("encounters.detail.pregame")}>
       {/* No section meta: it read "Map veto and hero bans" directly above two
           cards titled "Map veto" and "Hero bans". */}
-      <div className={styles.sectionHead}>
-        <h2 className={styles.sectionTitle}>{t("encounters.detail.pregame")}</h2>
-      </div>
-      <div className={styles.statsStack}>
+      <SectionHead title={t("encounters.detail.pregame")} />
+      <div className="flex flex-col gap-3.5">
         {readiness ? (
-          <div className={styles.card}>
-            <div className={cn(styles.factGrid, styles.factGridFlush)}>
+          <Card className="overflow-hidden">
+            <FactGrid flush>
               {seatsBySlot(teams).map((seat) => (
                 <Fact key={seat.id} label={t("encounters.detail.readiness", { slot: seat.slot })}>
                   <ReadyMark ready={readiness[String(seat.id)] ?? false} />
                   {seat.name}
                 </Fact>
               ))}
-            </div>
-          </div>
+            </FactGrid>
+          </Card>
         ) : null}
 
         {sections.map(({ kind, state, title }) => (
@@ -108,26 +107,25 @@ function PregameSection({
   const seatName = (id: number) => teams.find((seat) => seat.id === id)?.name ?? null;
 
   return (
-    <div className={styles.card}>
-      <div className={styles.cardHead}>
-        <h3 className={styles.cardTitle}>{title}</h3>
+    <Card className="overflow-hidden">
+      <CardHead title={title}>
         {/* Only the running session keeps a chip: it is the one state that moves. */}
         {session && !state.is_complete ? (
-          <Badge palette="aqt" shape="pill" tone="accent">
-            <span aria-hidden className={styles.livePulse} />
+          <Badge shape="pill" tone="accent">
+            <StatusDot pulse className="text-[color:var(--aqt-status-live)]" />
             {t("encounters.veto.room.statusChip.active")}
           </Badge>
         ) : (
-          <span className={cn(styles.cardSub, session && styles.metaGood)}>
+          <span className={cn(CARD_SUB, session && "text-[color:var(--aqt-emerald)]")}>
             {session
               ? t("encounters.veto.room.statusChip.completed")
               : t(`encounters.veto.room.empty.${reasonKey(state)}` as never)}
           </span>
         )}
-      </div>
+      </CardHead>
 
       {session ? (
-        <div className={styles.factGrid}>
+        <FactGrid>
           {/* Not `veto.room.steps.title` ("Veto steps"): this same strip renders
               over the hero-ban session too. */}
           <Fact label={t("encounters.detail.pregameSteps")}>
@@ -146,12 +144,12 @@ function PregameSection({
           ) : null}
           {seatOne?.seed != null || seatTwo?.seed != null ? (
             <Fact label={t("encounters.detail.pregameSeeds")}>
-              <span className={styles.mono}>
+              <span className="aqt-tnum">
                 {seatOne?.seed != null ? `#${seatOne.seed}` : "—"}
                 {" / "}
                 {seatTwo?.seed != null ? `#${seatTwo.seed}` : "—"}
               </span>
-              <span className={styles.cardSub}>
+              <span className={CARD_SUB}>
                 {t(`encounters.veto.room.seedSource.${session.seed_source}` as never)}
               </span>
             </Fact>
@@ -161,9 +159,9 @@ function PregameSection({
               {state.acting_team_ids.map((id) => seatName(id)).join(" · ")}
             </Fact>
           ) : null}
-        </div>
+        </FactGrid>
       ) : null}
-    </div>
+    </Card>
   );
 }
 
@@ -194,7 +192,7 @@ function ReadyMark({ ready }: Readonly<{ ready: boolean }>) {
     <Icon
       width={15}
       height={15}
-      className={ready ? styles.flagGood : styles.flagOff}
+      className={ready ? "text-[color:var(--aqt-emerald)]" : "text-[color:var(--aqt-fg-faint)]"}
       aria-label={ready ? t("common.checkedIn") : t("common.notCheckedIn")}
     />
   );

@@ -247,7 +247,7 @@ export function RoomChat({
                                 variant={isSelf ? "default" : "muted"}
                                 tabIndex={canDelete || canMute ? 0 : undefined}
                                 aria-haspopup={canDelete || canMute ? "menu" : undefined}
-                                className="outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
+                                className="outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
                               >
                                 {/* Plain text, always: chat bodies are never
                                       parsed as markup. The time rides inside
@@ -348,44 +348,40 @@ export function RoomChat({
             <label htmlFor={inputId} className="sr-only">
               {t("inputLabel")}
             </label>
-            {/* One surface, the way shadcn's composer reads: the field has no
-                  chrome of its own and the ring belongs to the group. */}
-            <div className="flex flex-col rounded-xl border bg-background focus-within:ring-1 focus-within:ring-ring">
-              <Textarea
-                id={inputId}
-                value={draft}
-                rows={2}
-                // Guidance, not the gate — the server rejects over-long text anyway.
-                maxLength={MAX_CHAT_LENGTH}
-                placeholder={t("placeholder")}
-                // The key binding is described, not put in a `title`: a
-                // tooltip reaches neither a keyboard nor a touch user.
-                aria-describedby={remaining <= COUNTER_AT ? `${hintId} ${counterId}` : hintId}
-                onChange={(event) => setDraft(event.target.value)}
-                onKeyDown={onKeyDown}
-                className="min-h-[2.75rem] resize-none border-0 bg-transparent shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
-              />
-              <div className="flex items-end justify-between gap-2 px-2 pb-2">
-                <p id={hintId} className="sr-only">
-                  {t("inputHint")}
+            <Textarea
+              id={inputId}
+              value={draft}
+              rows={2}
+              // Guidance, not the gate — the server rejects over-long text anyway.
+              maxLength={MAX_CHAT_LENGTH}
+              placeholder={t("placeholder")}
+              // The key binding is described, not put in a `title`: a
+              // tooltip reaches neither a keyboard nor a touch user.
+              aria-describedby={remaining <= COUNTER_AT ? `${hintId} ${counterId}` : hintId}
+              onChange={(event) => setDraft(event.target.value)}
+              onKeyDown={onKeyDown}
+              className="min-h-[2.75rem] resize-none"
+            />
+            <div className="mt-1.5 flex items-end justify-between gap-2">
+              <p id={hintId} className="sr-only">
+                {t("inputHint")}
+              </p>
+              {remaining <= COUNTER_AT ? (
+                <p id={counterId} className="text-label tabular-nums text-muted-foreground">
+                  {t("remaining", { count: remaining })}
                 </p>
-                {remaining <= COUNTER_AT ? (
-                  <p id={counterId} className="text-label tabular-nums text-muted-foreground">
-                    {t("remaining", { count: remaining })}
-                  </p>
-                ) : (
-                  <span />
-                )}
-                <Button
-                  type="submit"
-                  size="icon"
-                  className="size-8 rounded-full"
-                  disabled={blocked}
-                  aria-label={t("send")}
-                >
-                  <ArrowUp className="size-4" aria-hidden />
-                </Button>
-              </div>
+              ) : (
+                <span />
+              )}
+              <Button
+                type="submit"
+                size="icon"
+                className="size-8 rounded-full"
+                disabled={blocked}
+                aria-label={t("send")}
+              >
+                <ArrowUp className="size-4" aria-hidden />
+              </Button>
             </div>
           </form>
         ) : (

@@ -89,10 +89,10 @@ const LobbyLeaderboardModal = ({ userId, tournamentId, stat, statLabel, onClose 
 
   return (
     <Dialog open={stat != null} onOpenChange={(o) => (!o ? onClose() : undefined)}>
-      <DialogContent className="max-w-[620px] border-[color:var(--aqt-border)] bg-[color:var(--aqt-bg)]">
+      <DialogContent className="max-w-[620px]">
         <DialogHeader>
-          <DialogTitle className="font-onest text-[color:var(--aqt-fg)]">{statLabel}</DialogTitle>
-          <DialogDescription className="aqt-tnum text-[color:var(--aqt-fg-muted)]">
+          <DialogTitle>{statLabel}</DialogTitle>
+          <DialogDescription className="aqt-tnum">
             {data ? t("users.overview.lastTournament.players", { count: data.total_players }) : null}
             {data ? ` · ${t("users.overview.leaderboard.vsLeader")}` : null}
             {isInverse ? ` · ${t("users.overview.leaderboard.lowerIsBetter")}` : null}

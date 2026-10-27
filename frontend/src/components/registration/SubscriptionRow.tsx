@@ -134,7 +134,6 @@ export default function SubscriptionRow({
               disabled={pending}
               aria-invalid={Boolean(error)}
               aria-describedby={error ? errorId : undefined}
-              variant="surface"
             />
             <Button
               type="button"

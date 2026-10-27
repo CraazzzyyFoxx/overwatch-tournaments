@@ -23,7 +23,6 @@ import {
 } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { cn } from "@/lib/utils";
 import {
   type CustomGamePlayer,
   type CustomGamePlayerPatch,
@@ -208,22 +207,17 @@ export function PickupPlayerSheet({
 
   return (
     <Sheet open={row != null} onOpenChange={handleOpenChange}>
-      <SheetContent
-        side="right"
-        className="flex w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-[640px]"
-      >
-        <SheetHeader className="space-y-0 border-b border-[color:var(--aqt-border)] px-5 pb-4 pt-5 text-left">
+      <SheetContent side="right" variant="panel" className="w-full sm:max-w-[640px]">
+        <SheetHeader variant="panel">
           <Eyebrow>{tLineup("advanced")}</Eyebrow>
-          <SheetTitle className="flex items-baseline gap-1.5 pt-1.5 font-display text-xl">
+          <SheetTitle className="flex items-baseline gap-1.5">
             <HandleLabel handle={label} tagClassName="text-caption" />
             {row?.identity?.handle ? (
               <HandleCopyButton handle={row.identity.handle} className="ml-0.5 shrink-0" />
             ) : null}
           </SheetTitle>
-          {mixRecord ? <span className={cn(CAPTION_CLASS, "pt-1")}>{mixRecord}</span> : null}
-          <SheetDescription className="pt-1 text-caption text-[color:var(--aqt-fg-dim)]">
-            {canEdit ? tSheet("draftHint") : tSheet("readOnly")}
-          </SheetDescription>
+          {mixRecord ? <span className={CAPTION_CLASS}>{mixRecord}</span> : null}
+          <SheetDescription>{canEdit ? tSheet("draftHint") : tSheet("readOnly")}</SheetDescription>
         </SheetHeader>
 
         {row == null ? null : (
@@ -231,7 +225,6 @@ export function PickupPlayerSheet({
             <section className="space-y-2.5 border-b border-[color:var(--aqt-border)] px-5 py-4">
               <h3 className="text-caption font-medium text-[color:var(--aqt-fg)]">{tCommon("status")}</h3>
               <ToggleGroup
-                type="single"
                 variant="card"
                 size="sm"
                 aria-label={tSheet("statusFor", { name: label })}
@@ -286,7 +279,6 @@ export function PickupPlayerSheet({
                   {t("pinHeading")}
                 </h3>
                 <ToggleGroup
-                  type="single"
                   variant="card"
                   size="sm"
                   aria-label={t("pinGroup", { name: label })}
@@ -376,17 +368,16 @@ export function PickupPlayerSheet({
         )}
 
         {row != null && canEdit ? (
-          <SheetFooter className="shrink-0 border-t border-[color:var(--aqt-border)] px-5 py-2.5 sm:justify-between sm:space-x-0">
+          <SheetFooter variant="panel" className="sm:justify-between">
             <IconTooltip control label={tLineup("remove")} className="shrink-0">
               <Button
                 type="button"
-                variant="ghost"
-                size="icon"
+                variant="ghost-destructive"
+                size="icon-sm"
                 disabled={saving}
                 onClick={onRemove}
-                className="h-8 w-8 rounded-lg border border-[color:color-mix(in_srgb,var(--aqt-rose)_35%,transparent)] bg-rose-500/10 text-rose-200 hover:bg-rose-500/20 hover:text-rose-100"
               >
-                <UserMinus className="h-3.5 w-3.5" aria-hidden="true" />
+                <UserMinus aria-hidden="true" />
                 <span className="sr-only">{tLineup("removeNamed", { name: label })}</span>
               </Button>
             </IconTooltip>
@@ -394,7 +385,6 @@ export function PickupPlayerSheet({
               <Button
                 variant="outline"
                 size="sm"
-                className="border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] px-3 text-[color:var(--aqt-fg)] hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-fg)]"
                 onClick={() => handleOpenChange(false)}
               >
                 {tCommon("cancel")}
@@ -403,7 +393,6 @@ export function PickupPlayerSheet({
                 onClick={handleSave}
                 disabled={saving || owner.dimension == null}
                 size="sm"
-                className="bg-primary px-3 text-primary-foreground hover:bg-primary/90"
               >
                 <Save className="mr-1 h-3.5 w-3.5" />
                 {tCommon("save")}
