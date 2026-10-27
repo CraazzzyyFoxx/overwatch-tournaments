@@ -20,8 +20,9 @@ interface Feature {
 }
 
 // Captures shared with `/get-workspace` (`public/showcase/`) and with the
-// 2.0.0 release notes (`public/changelog/2.0.0/`, one per language).
-const FEATURES: readonly Feature[] = [
+// 2.0.0 release notes (`public/changelog/2.0.0/`, one per language); the
+// organizer banner's tabs show the organizer ones.
+export const FEATURES: readonly Feature[] = [
   {
     key: "profile",
     audience: "players",

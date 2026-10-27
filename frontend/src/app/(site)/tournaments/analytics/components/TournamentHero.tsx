@@ -3,13 +3,13 @@
 import React from "react";
 import { useTranslations } from "next-intl";
 
-import { stageProgress } from "@/app/(site)/tournaments/components/tournaments-helpers";
 import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { HeroCoord, PageHero } from "@/components/site/PageHero";
 import { TournamentStatusPill } from "@/components/tournaments/StatusPill";
 import type { AnalyticsHeroParts } from "@/disciplines/types";
 import { formatDateRange } from "@/lib/datetime";
 import { useFormatter } from "@/lib/datetime/client";
+import { stageProgress } from "@/lib/tournament/stage-progress";
 import { getTournamentStatusMeta } from "@/lib/tournament/status";
 import type { TeamFormation, Tournament } from "@/types/tournament.types";
 

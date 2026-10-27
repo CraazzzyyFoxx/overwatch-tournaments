@@ -2324,6 +2324,13 @@
       "final": "Final",
       "signups": "Sign-ups",
       "setup": "Setup"
+    },
+    "spotlight": {
+      "label": "Tournament spotlight",
+      "pick": "Choose a tournament",
+      "open": "Open tournament",
+      "pause": "Stop autoplay",
+      "play": "Start autoplay"
     }
   },
   "teams": {
@@ -3194,17 +3201,40 @@
       "lede": "Schedules, brackets and matches from every community. A player's whole history in one profile.",
       "browseTournaments": "Browse tournaments",
       "myProfile": "My profile and statistics",
-      "hostTournament": "Run a tournament on OWT"
+      "hostTournament": "Run a tournament on OWT",
+      "feed": {
+        "title": "Results and records",
+        "pause": "Pause",
+        "play": "Resume",
+        "final": "Final",
+        "record": "Record",
+        "maps": "Maps",
+        "winner": "Winner:",
+        "matchup": "<won>{winner}</won> vs {loser}"
+      }
     },
     "now": {
       "title": "On the platform now",
       "titleRecent": "Recent tournaments",
       "more": "All tournaments",
       "error": "active tournaments",
-      "emptyBody": "Tournaments show up here as soon as a community opens registration."
+      "emptyBody": "Tournaments show up here as soon as a community opens registration.",
+      "open": "Open tournament"
     },
     "numbers": {
-      "title": "The platform in numbers"
+      "title": "The platform in numbers",
+      "champions": "<gold>{count}</gold> {champions, plural, one {champion} other {champions}}{every, plural, =0 {} =1 { — every player has won a tournament} =2 { — one player in two has won a tournament} =3 { — one player in three has won a tournament} =4 { — one player in four has won a tournament} =5 { — one player in five has won a tournament} =6 { — one player in six has won a tournament} =7 { — one player in seven has won a tournament} =8 { — one player in eight has won a tournament} =9 { — one player in nine has won a tournament} =10 { — one player in ten has won a tournament} other { — one player in # has won a tournament}}",
+      "teams": "{count, plural, one {team formed} other {teams formed}}",
+      "days": "{count, plural, one {tournament day} other {tournament days}}",
+      "since": "since {year}",
+      "perYear": "Tournaments per year: {list}",
+      "nonstopDays": "≈ {count, plural, one {# day} other {# days}} non-stop",
+      "nonstopWeeks": "≈ {count, plural, one {# week} other {# weeks}} non-stop",
+      "topMap": "{game}: most played — <b>{map}</b> · {games}",
+      "finals": "{count, plural, one {final} other {finals}}",
+      "upsets": "{count, plural, one {upset} other {upsets}}",
+      "upsetHint": "Upset: a win by the team standing lower than its opponent in its group or bracket",
+      "avgMap": "average map"
     },
     "features": {
       "title": "What the platform does",
@@ -3264,6 +3294,10 @@
       "dotRange": "Communities {from}–{to} of {total}",
       "dotOne": "Community {index} of {total}",
       "live": "Tournament running",
+      "featured": {
+        "live": "Now: {name}",
+        "upcoming": "Next: {name}"
+      },
       "tournamentsLabel": "{count, plural, one {tournament} other {tournaments}}",
       "playersLabel": "{count, plural, one {player} other {players}}",
       "cta": {
@@ -3277,15 +3311,43 @@
       "more": "All statistics",
       "mostWins": "Most wins",
       "winsSub": "tournaments won",
-      "mostPlayed": "Most played",
-      "mostPlayedSub": "{game} · share of the time in parsed matches",
-      "mostPlayedEmpty": "No parsed matches yet."
+      "titles": "{count, plural, one {title} other {titles}}",
+      "main": "Main character: {name}",
+      "career": "<b>{tournaments}</b> {tournamentsCount, plural, one {tournament} other {tournaments}} · <b>{maps}</b> {mapsCount, plural, one {map} other {maps}}",
+      "records": "Platform records",
+      "recordsSub": "{game} · the best of all time, from results and match logs",
+      "allRecords": "All records"
     },
     "organizer": {
       "eyebrow": "For organizers",
       "title": "Run your community's tournaments on OWT",
       "lede": "Registration, the balancer, brackets and match statistics. Your community page opens the moment you create it.",
-      "cta": "Create a community"
+      "cta": "Create a community",
+      "inside": "What's inside",
+      "pause": "Pause",
+      "play": "Play",
+      "tabs": {
+        "registration": {
+          "title": "Registration",
+          "text": "Your own form with roles and ranks. Entries are reviewed in one table, check-in takes a couple of clicks.",
+          "page": "Tournament entries"
+        },
+        "balancer": {
+          "title": "Balancer and mixes",
+          "text": "The balancer splits players into even teams by rating and role; mixes come together in lobbies.",
+          "page": "Mix room"
+        },
+        "brackets": {
+          "title": "Brackets",
+          "text": "Groups, single and double elimination. The bracket builds itself and updates after every match.",
+          "page": "Playoff bracket"
+        },
+        "matches": {
+          "title": "Matches and stats",
+          "text": "Score, maps and every player's stats from the logs, straight into the players' profiles.",
+          "page": "Match page"
+        }
+      }
     }
   },
   "getWorkspace": {
@@ -3327,6 +3389,8 @@
       "submit": "Create community",
       "submitSignedOut": "Sign in and create",
       "note": "One community per account, and you become its owner. Next comes a short setup: the profile, colours and Discord. A subdomain is set up in the settings.",
+      "exampleName": "Night Owls",
+      "previewCounts": "0 tournaments · 0 players",
       "revoked": {
         "title": "Community creation is turned off for your account",
         "hint": "If that is a mistake, message the platform team on Discord."
@@ -3337,40 +3401,51 @@
       }
     },
     "proof": {
-      "title": "Already running tournaments on OWT"
+      "title": "Already running tournaments on OWT",
+      "counts": "<b>{tournaments}</b> {tournamentsCount, plural, one {tournament} other {tournaments}} · <b>{players}</b> {playersCount, plural, one {player} other {players}}"
     },
     "features": {
       "title": "Everything a tournament needs: from entry to archive",
       "docs": "Documentation",
       "howTo": "How to set it up",
+      "inside": "What's inside",
+      "pause": "Pause",
+      "play": "Play",
+      "more": "More on the platform",
       "shots": {
         "form": {
           "title": "Registration form",
+          "page": "Form builder",
           "text": "A questionnaire of steps and questions with required fields and a preview. Save it as a template, and every tournament of the community starts from it.",
           "alt": "The “Form with ranks” registration form builder in the admin panel: the Accounts, Roles, Ranks, Scrims and Extra info steps and the Accounts questions (Battle.net, Discord, Twitch, Boosty)"
         },
         "registration": {
           "title": "Registration",
+          "page": "Tournament participants",
           "text": "The public entry list: roles, top heroes, entry history, status, balancer readiness and check-in. Status filters and search.",
           "alt": "The participants of “Турнир Тхао #5”: 148 entries, of which 142 approved, 3 pending, 3 withdrawn; roles, top heroes, statuses and check-in"
         },
         "entries": {
           "title": "Entries",
+          "page": "Tournament entries",
           "text": "Every entry in one table: roles and ranks, status, balancer readiness and check-in. Filters, saved views and CSV export.",
           "alt": "The entries table of “Турнир Тхао #5” in the admin panel: players, roles and ranks, entry and balancer statuses, check-in; 148 entries, 3 pending"
         },
         "stages": {
           "title": "Brackets and stages",
+          "page": "Tournament stages",
           "text": "A tournament is built from stages: Swiss groups, a double-elimination playoff. Each stage has its own seeding, series format and round schedule, and the bracket is visible at once.",
           "alt": "The stage builder of “Турнир Тхао #5” in the admin panel: the Groups and Playoffs stages, double-elimination playoff settings and a bracket preview"
         },
         "bracket": {
           "title": "The bracket on the tournament page",
+          "page": "Playoff bracket",
           "text": "The published bracket for players and viewers: upper and lower brackets, the score and the format of every encounter.",
           "alt": "The double-elimination playoff bracket of “Турнир Сабов Anakq #42”: upper and lower brackets, BO3 encounter scores"
         },
         "mapStats": {
           "title": "Match stats",
+          "page": "Map statistics",
           "text": "Every map's log is parsed on its own: rating, eliminations, damage, healing and blocking for every player on both teams.",
           "alt": "Statistics for the Samoa map in the 67-41=наше место versus Омский газмяс match: the numbers of all ten players on both teams"
         }
@@ -3378,29 +3453,38 @@
       "grid": {
         "balancer": {
           "title": "Balancer",
-          "text": "Even teams picked by role and division in minutes."
+          "text": "Even teams picked by role and division in minutes.",
+          "alt": "The balancer of “MoonRise Mix Vol.5 TEST”: team distribution with an average of 3514 and a spread of 20, team rosters with roles, ranks and preferences, quality 0.38"
         },
         "draft": {
           "title": "Captain draft",
-          "text": "A live room: captains pick in turn while viewers watch."
+          "text": "A live room: captains pick in turn while viewers watch.",
+          "alt": "The draft room of “MoonRise Draft Vol.2”: the draft is over after 56 picks, the draft summary, players by role and 14 complete teams"
         },
         "mixes": {
           "title": "Mixes",
-          "text": "Quick games for an evening: lobby, rosters, score and rating."
+          "text": "Quick games for an evening: lobby, rosters, score and rating.",
+          "alt": "Lobby A's room: two teams of five with ranks and captain crowns, the match history below"
         },
         "roles": {
           "title": "Roles and access",
-          "text": "Owner, administrators, referees and mix hosts, each with their own rights."
+          "text": "Owner, administrators, referees and mix hosts, each with their own rights.",
+          "alt": "Access → Roles in the admin panel: the Anakq community's system roles and the referee role's rights, 27 of 130 selected"
         },
         "api": {
           "title": "API and keys",
-          "text": "An HTTP API, WebSocket and narrowly scoped keys for bots."
+          "text": "An HTTP API, WebSocket and narrowly scoped keys for bots.",
+          "alt": "The “Create API key” dialog: a “Бот результатов” key that never expires with three rights — match.read, standing.read and tournament.read"
         }
       }
     },
     "domains": {
       "title": "The community site at your own address",
       "sub": "Player links and tournament history do not change when the address does.",
+      "stepsLabel": "Four steps",
+      "pause": "Pause",
+      "play": "Play",
+      "docs": "How to connect a domain",
       "steps": {
         "platform": {
           "title": "A page on the platform",
@@ -3446,17 +3530,62 @@
     },
     "faq": {
       "title": "Common questions",
-      "price": {
-        "q": "How much does it cost?",
-        "a": "Free for communities."
+      "docs": "FAQ and troubleshooting in the docs",
+      "topics": {
+        "start": "Getting started",
+        "catalog": "Directory and address",
+        "tournaments": "Tournaments",
+        "team": "Discord and your team"
       },
-      "verification": {
-        "q": "What does verification give?",
-        "a": "The platform team reviews communities by hand. Besides a place in the directory and the trusted badge, verification unlocks tournament analytics, and achievements are recalculated at once instead of in a queue."
-      },
-      "discord": {
-        "q": "Is Discord required?",
-        "a": "Not for tournaments. Without a linked server and the bot, match logs are not read, announcements are not posted, subscriber roles are not checked and mix players are not moved between voice channels."
+      "items": {
+        "price": {
+          "q": "How much does it cost?",
+          "a": "Free for communities."
+        },
+        "accounts": {
+          "q": "How many communities can I create?",
+          "a": "One per account: you become its owner and administrator. If community creation is turned off for your account, the button is unavailable — message the platform team in that case."
+        },
+        "review": {
+          "q": "Can I run tournaments before verification?",
+          "a": "Yes. A community works the moment it is created: you can run tournaments, invite members and share its link. Until it is reviewed it is only missing from the public communities list on the home page."
+        },
+        "verification": {
+          "q": "What does verification give?",
+          "a": "The platform team reviews communities by hand. Besides a place in the directory and the trusted badge, verification unlocks tournament analytics, and achievements are recalculated at once instead of in a queue."
+        },
+        "domain": {
+          "q": "How do I connect my own domain?",
+          "a": "In <b>Settings → Domain</b> enter the domain and add the two records shown on screen at your DNS provider: a TXT record proves the domain is yours, a CNAME points it at the platform. The platform re-checks the records on its own, and <b>Verify now</b> checks at once. Until verification passes, the ordinary platform address keeps working."
+        },
+        "hidden": {
+          "q": "Can I hide the community?",
+          "a": "Yes. <b>Hidden</b> in <b>Settings → Visibility</b> removes it from the home page and from other people's community switcher. Its members still see it, and direct links — the platform address, the subdomain, a custom domain — keep working."
+        },
+        "teams": {
+          "q": "How are teams formed?",
+          "a": "The method is picked in the tournament settings: the balancer splits the pool of admitted players into even teams, in a captain draft the captains pick players live, and with team registration captains build their own rosters and you only review them."
+        },
+        "sheets": {
+          "q": "Can I take entries from a Google Sheet?",
+          "a": "Yes. <b>Registration → Sheets feed</b> takes entries from Google Sheets: map the sheet's columns to entry fields and press <b>Sync now</b>, and <b>Auto-sync</b> keeps them up to date on its own. Such entries are marked with the Google Sheets source."
+        },
+        "stats": {
+          "q": "Where do match stats come from?",
+          "a": "From the logs Overwatch writes after a game. Upload the files under the tournament's <b>Matches → Logs</b>, or post them in the Discord channel for logs if one is set up — the bot picks them up. A parsed log gives player statistics per map, MVP placements and the input for achievements."
+        },
+        "discord": {
+          "q": "Is Discord required?",
+          "a": "Not for tournaments. Without a linked server and the bot, match logs are not read, announcements are not posted, subscriber roles are not checked and mix players are not moved between voice channels."
+        },
+        "roles": {
+          "q": "How do I give my organizer team access?",
+          "a": "Roles are handed out in <b>Members</b>: Admin runs tournaments and settings, Referee enters match results and handles entries but does not change the bracket, Host runs mixes and does not open the admin panel. Only the owner manages roles and permissions."
+        },
+        "mixes": {
+          "q": "What are mixes and who runs them?",
+          "a": "A mix is a pickup lobby: the players who turned up are split into two teams by rank and role, and the results are recorded. A host runs it on the public site, under <b>Matches → Mixes</b> — no admin panel needed. Anyone can watch a mix, signed out included."
+        }
       }
     },
     "quotes": {

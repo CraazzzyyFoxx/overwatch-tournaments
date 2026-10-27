@@ -41,7 +41,7 @@ function load() {
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
-  act(() => root.render(<CreateForm />));
+  act(() => root.render(<CreateForm year={2026} />));
 }
 
 function leave() {

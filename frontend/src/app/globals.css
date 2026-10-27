@@ -175,6 +175,10 @@
   --text-display: clamp(2rem, 4.6vw, 3.5rem);
   --text-display--line-height: 1.03;
   --text-display--letter-spacing: -0.01em;
+  /* The one hero figure of a numbers block (home: the player count), 56 → 96px. */
+  --text-figure: clamp(3.5rem, 7vw, 6rem);
+  --text-figure--line-height: 1;
+  --text-figure--letter-spacing: -0.045em;
   /* Uppercase labels (eyebrows, table heads, chips). One value for Inter. */
   --tracking-label: 0.08em;
 }
@@ -818,6 +822,52 @@
       color-mix(in srgb, var(--aqt-hero-tint) 26%, transparent),
       transparent 70%
     );
+  }
+}
+
+/* Showcase motion (the home page's tournament showcase and spotlight).
+
+   `.aqt-zoom`: the picture of a whole-card link leans in a little while the
+   card (its `group`) is under the pointer or holds keyboard focus. Its frame
+   clips it (`overflow-hidden`), so the card itself never changes size — the
+   one sanctioned picture zoom; `hover:scale-*` utilities stay banned.
+
+   `.aqt-bar-grow`: a stage bar grows in from its start, once, as it first
+   renders. Its keyframe also drives the spotlight's countdown line, at the
+   spotlight's own interval. Both hold still under reduced motion. */
+.aqt-zoom {
+  transition: transform 0.7s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@media (hover: hover) {
+  .group:hover .aqt-zoom {
+    transform: scale(1.05);
+  }
+}
+
+.group:focus-visible .aqt-zoom {
+  transform: scale(1.05);
+}
+
+@keyframes aqt-grow-x {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+.aqt-bar-grow {
+  transform-origin: left;
+  animation: aqt-grow-x 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) 0.2s both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .group:hover .aqt-zoom,
+  .group:focus-visible .aqt-zoom {
+    transform: none;
+  }
+
+  .aqt-bar-grow {
+    animation: none;
   }
 }
 

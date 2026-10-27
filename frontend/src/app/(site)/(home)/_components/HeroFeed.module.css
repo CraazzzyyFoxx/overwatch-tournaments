@@ -1,0 +1,16 @@
+/* The hero feed's arrival: the card that just slid in on top lights the way a
+   pointed-at card does, then settles. `HeroFeedRotator` sets `data-stepped` on
+   the list at its first step, so the card on top at load stays still. */
+.list[data-stepped] > :first-child > * {
+  animation: fresh 1.7s ease-out;
+}
+
+@keyframes fresh {
+  0%,
+  80% {
+    border-color: color-mix(in srgb, var(--aqt-teal) 65%, transparent);
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--aqt-teal) 25%, transparent),
+      0 22px 44px -22px color-mix(in srgb, var(--aqt-teal) 55%, transparent);
+  }
+}

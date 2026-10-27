@@ -1,36 +1,69 @@
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
-import { useTranslations } from "next-intl";
+import { ArrowRight, ChartColumn, ClipboardList, Network, Scale } from "lucide-react";
+import { getLocale, getTranslations } from "next-intl/server";
 
-import { HeroFrame } from "@/components/site/PageHero";
 import { LEDE_CLASS, SECTION_TITLE_CLASS } from "@/components/site/open-layout";
+import { OrganizerTabs } from "@/components/site/OrganizerTabs";
 import { owtButton } from "@/components/site/owt-button";
 import { Eyebrow } from "@/components/ui/eyebrow";
 import { cn } from "@/lib/utils";
 
-/** The page's one organizer CTA (mock `.org`). */
-export function OrganizerBanner() {
-  const t = useTranslations("home.organizer");
+import { FEATURES } from "./PlatformFeatures";
+
+/** The tabs, in order, each with its icon; the screenshot is the features block's own. */
+const TABS = [
+  ["registration", ClipboardList],
+  ["balancer", Scale],
+  ["brackets", Network],
+  ["matches", ChartColumn]
+] as const;
+
+/**
+ * The page's one organizer CTA (mock O2a): the pitch and its button beside
+ * four feature tabs, each showing the real screenshot of what it names.
+ */
+export async function OrganizerBanner() {
+  const [t, locale] = await Promise.all([getTranslations("home"), getLocale()]);
+  const language = locale === "ru" ? "ru" : "en";
+  const tabs = TABS.flatMap(([key, Icon]) => {
+    const feature = FEATURES.find((candidate) => candidate.key === key);
+    return feature
+      ? [
+          {
+            key,
+            icon: <Icon aria-hidden />,
+            title: t(`organizer.tabs.${key}.title` as const),
+            text: t(`organizer.tabs.${key}.text` as const),
+            page: t(`organizer.tabs.${key}.page` as const),
+            alt: t(`features.${key}.alt` as const),
+            src: feature.src(language),
+            width: feature.width,
+            height: feature.height
+          }
+        ]
+      : [];
+  });
 
   return (
-    <HeroFrame variant="plain">
-      <div className="grid grid-cols-1 items-center gap-x-10 gap-y-6 px-[clamp(20px,4vw,48px)] py-[clamp(28px,3.5vw,44px)] md:grid-cols-[minmax(0,1fr)_auto]">
-        <div>
-          <Eyebrow as="p">{t("eyebrow")}</Eyebrow>
-          <h2 id="home-org-title" className={cn(SECTION_TITLE_CLASS, "mt-3 font-semibold")}>
-            {t("title")}
-          </h2>
-          <p className={cn(LEDE_CLASS, "mt-3")}>{t("lede")}</p>
-        </div>
+    <OrganizerTabs
+      tabs={tabs}
+      labels={{ inside: t("organizer.inside"), pause: t("organizer.pause"), play: t("organizer.play") }}
+      cta={
         <Link
           href="/get-workspace"
           prefetch={false}
-          className={cn(owtButton({ variant: "primary", size: "lg" }), "w-full justify-self-start sm:w-auto")}
+          className={cn(owtButton({ variant: "primary", size: "lg" }), "w-full sm:w-auto")}
         >
-          {t("cta")}
+          {t("organizer.cta")}
           <ArrowRight aria-hidden />
         </Link>
-      </div>
-    </HeroFrame>
+      }
+    >
+      <Eyebrow as="p">{t("organizer.eyebrow")}</Eyebrow>
+      <h2 id="home-org-title" className={cn(SECTION_TITLE_CLASS, "mt-3 font-semibold")}>
+        {t("organizer.title")}
+      </h2>
+      <p className={cn(LEDE_CLASS, "mt-3")}>{t("organizer.lede")}</p>
+    </OrganizerTabs>
   );
 }

@@ -7,6 +7,7 @@ import { useTranslations } from "next-intl";
 import { useCatalogEntities } from "@/hooks/useCatalogEntities";
 import { tournamentPicture } from "@/lib/tournament/art";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
+import { stageProgress } from "@/lib/tournament/stage-progress";
 import { getTournamentStatusMeta } from "@/lib/tournament/status";
 import { tournamentHref } from "@/lib/tournament/url";
 import { formatDateRange } from "@/lib/datetime";
@@ -17,8 +18,6 @@ import { TournamentCover } from "@/components/tournaments/TournamentCover";
 import { GameLabel } from "@/components/workspace/GameLabel";
 import type { DisciplineDescriptor } from "@/types/discipline.types";
 import type { TeamFormation, Tournament } from "@/types/tournament.types";
-
-import { stageProgress } from "./tournaments-helpers";
 
 /**
  * One tournament in the card view.

@@ -6,7 +6,7 @@ import { extendTailwindMerge } from "tailwind-merge";
 const twMerge = extendTailwindMerge({
   extend: {
     classGroups: {
-      "font-size": [{ text: ["label", "caption", "body", "ui", "heading", "title", "headline", "display"] }],
+      "font-size": [{ text: ["label", "caption", "body", "ui", "heading", "title", "headline", "display", "figure"] }],
       tracking: [{ tracking: ["label"] }]
     }
   }
@@ -49,4 +49,3 @@ export function hexToRgba(hex: string, alpha: number): string | null {
   const b = Number.parseInt(normalized.slice(4, 6), 16);
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
-

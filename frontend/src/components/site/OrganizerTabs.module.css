@@ -1,0 +1,126 @@
+/* The organizer tour's screenshot (`OrganizerTabs`: the home banner and the
+   organizer page). From 768px it sits in a browser window tipped back in 3D,
+   bleeding off the frame's right edge; it straightens a little under the
+   pointer and tips back on a switch (Web Animations, in the component). A
+   phone shows it flat under the copy. */
+
+.stage {
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  position: relative;
+  padding: 0 clamp(20px, 4vw, 56px) clamp(28px, 4vw, 52px);
+}
+
+/* The teal bloom behind the window. */
+.stage::before {
+  content: "";
+  position: absolute;
+  inset: 0 -20% -10% 0;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(45% 45% at 55% 50%, color-mix(in srgb, var(--aqt-teal) 24%, transparent), transparent 70%);
+}
+
+.screen {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--aqt-teal) 40%, transparent);
+  border-radius: 14px;
+  background: var(--aqt-card);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--aqt-teal) 16%, transparent),
+    0 0 90px -14px color-mix(in srgb, var(--aqt-teal) 55%, transparent),
+    0 40px 80px -30px color-mix(in srgb, var(--aqt-bg) 85%, transparent);
+}
+
+/* A glint across the glass. */
+.screen::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(115deg, var(--aqt-overlay-4), transparent 32%);
+}
+
+/* All four screenshots lie stacked: the active one fades in, settling from a slight zoom. */
+.shot {
+  opacity: 0;
+  transform: scale(1.03);
+  transform-origin: top left;
+  transition:
+    opacity 650ms var(--ease),
+    transform 1100ms var(--ease);
+}
+
+.on {
+  opacity: 1;
+  transform: none;
+}
+
+/* The active rail tab's line over the list's rule (`AutoplayRail`): whole
+   while the tabs stand still, filling over the interval while they turn. */
+.rail {
+  position: absolute;
+  inset-block: 0;
+  left: -2px;
+  width: 2px;
+  background: var(--aqt-teal);
+  box-shadow: 0 0 10px var(--aqt-teal);
+  transform-origin: top;
+}
+
+.run {
+  animation: rail linear both;
+}
+
+@keyframes rail {
+  from {
+    transform: scaleY(0);
+  }
+}
+
+@media (min-width: 48rem) {
+  .stage {
+    padding: 0;
+    aspect-ratio: 16 / 10;
+    perspective: 1800px;
+  }
+
+  .tilt {
+    --tilt: rotateY(-15deg) rotateX(7deg) rotateZ(-1.5deg);
+    position: absolute;
+    top: 24px;
+    left: 6%;
+    width: 104%;
+    transform: var(--tilt);
+    transform-origin: 0% 40%;
+    transition: transform 800ms var(--ease);
+    mask-image: linear-gradient(black 70%, transparent 98%);
+  }
+}
+
+/* Beside the copy: as tall as the copy column, the window running off its foot. */
+@media (min-width: 64rem) {
+  .stage {
+    aspect-ratio: auto;
+    min-height: 520px;
+  }
+
+  .tilt {
+    top: 64px;
+    left: 52px;
+    width: 122%;
+  }
+}
+
+@media (min-width: 48rem) and (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .stage:hover .tilt {
+    --tilt: rotateY(-7deg) rotateX(3deg) rotateZ(-0.5deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shot,
+  .tilt {
+    transition: none;
+  }
+}

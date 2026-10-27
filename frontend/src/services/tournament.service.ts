@@ -145,14 +145,31 @@ export default class tournamentService {
         sort: "id",
         order: "desc",
         status: ACTIVE_STATUSES,
-        // The home "now on the platform" block reads all three off one list:
-        // a running tournament shows teams + participants, an open one its
-        // registrations.
-        entities: ["registrations_count", "participants_count", "teams_count"]
+        // The home "now on the platform" block reads all of these off one list:
+        // a running tournament shows its stage, teams and participants, an
+        // open one its registrations.
+        entities: ["stages", "registrations_count", "participants_count", "teams_count"]
       }
     })
       .then((response) => response.json())
       .then((response: PaginatedResponse<Tournament>) => normalizePaginatedResponse(response));
+  }
+
+  /**
+   * Every visible tournament's start date across all communities, oldest first, for the home's per-year bars.
+   * Anonymous, like the platform totals beside it, so the bars add up to the same count for every viewer.
+   */
+  // ponytail: one `per_page: -1` read with no entities (the server stops at 500 rows); a per-year aggregate on the
+  // overall statistics read once the list grows large.
+  static async getStartDates(): Promise<Tournament["start_date"][]> {
+    return apiFetch(`/api/v1/tournaments`, {
+      skipAuth: true,
+      query: { workspace_id: "all", page: 1, per_page: -1, sort: "start_date", order: "asc" }
+    })
+      .then((response) => response.json())
+      .then((response: PaginatedResponse<Tournament>) =>
+        response.results.map((tournament) => tournament.start_date)
+      );
   }
 
   static async get(id: number): Promise<Tournament> {

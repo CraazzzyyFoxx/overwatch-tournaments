@@ -3,9 +3,9 @@ import { cn } from "@/lib/utils";
 import styles from "./hero-steps.module.css";
 
 /**
- * The organizer hero's three steps as one path: a node per step, a line
- * between them. The list itself numbers the steps for assistive tech, so the
- * nodes are hidden from it.
+ * The organizer hero's three steps as one compact path under the preview
+ * window: a node per step, a line between them. The list itself numbers the
+ * steps for assistive tech, so the nodes are hidden from it.
  */
 export function HeroSteps({
   label,
@@ -23,10 +23,10 @@ export function HeroSteps({
           <span aria-hidden className={styles.node}>
             {index + 1}
           </span>
-          <b className="pt-[3px] font-display text-ui font-semibold leading-[1.4] text-[color:var(--aqt-fg)]">
+          <b className="pt-[5px] font-display text-body font-semibold leading-[1.35] text-[color:var(--aqt-fg)]">
             {step.title}
           </b>
-          <p className="text-body leading-relaxed text-[color:var(--aqt-fg-muted)]">{step.text}</p>
+          <p className="text-caption leading-relaxed text-[color:var(--aqt-fg-muted)] text-pretty">{step.text}</p>
         </li>
       ))}
     </ol>

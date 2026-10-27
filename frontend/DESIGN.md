@@ -39,9 +39,10 @@ players: every screen answers a concrete question ("who won", "who carried",
   as the grouping device.
 - _Tactical_: a broadcast-overlay voice for data — small uppercase labels,
   tabular figures, a heavy display face on scores.
-- Dials: **variance 3** (calm, grid-aligned, predictable), **motion 2**
-  (colour/opacity transitions only), **density 6** ("analytics comfortable":
-  denser than marketing, never cramped).
+- Dials: **variance 3** (calm, grid-aligned, predictable), **motion 4**
+  (transitions, small one-shot reveals, hover glow and picture zoom; §10),
+  **density 6** ("analytics comfortable": denser than marketing, never
+  cramped).
 - One accent: teal. Everything else on screen is a neutral or a data colour.
 
 ## 2. Colour
@@ -135,6 +136,7 @@ carries its line-height, weight stays explicit):
 | `text-title`    | 22 / 1.15 / −0.01em | section `h2`, mixed case, display face                                                             |
 | `text-headline` | 30 / 1.1 / −0.02em  | compact hero titles                                                                                |
 | `text-display`  | clamp(32–56) / 1.03 | page-hero `h1`                                                                                     |
+| `text-figure`   | clamp(56–96) / 1 / −0.045em | the one hero figure of a numbers block (the home bento's player count) |
 
 - `tracking-label` (0.08em) is the only tracking for uppercase text. Not
   `tracking-[0.06em]`, not 0.04em.
@@ -249,7 +251,16 @@ plain fact. That ends here.
   a hole, not as something to press.
 - Hover on a row is `bg-[color:var(--aqt-overlay-2)]`; on a card it is the
   border moving to `--aqt-border-3` (or teal for a whole-card link). Never a
-  scale or size change.
+  scale or size change of the card itself.
+- **Game polish** is allowed anywhere on the site (it started on the
+  landing, §13): a status pill on a picture sits on frosted glass
+  (`GLASS_CLASS`, `components/tournaments/TournamentFacts.tsx`), text over a
+  picture sits on a bottom scrim, a whole-card link or a stat tile glows
+  softly teal under the pointer, and a card's picture leans in inside its
+  clipping frame (`.aqt-zoom` in `globals.css`, the one sanctioned picture
+  zoom: the frame clips it, so the card never changes size; `hover:scale-*`
+  utilities stay banned). Rows, tables and the admin keep the plain hovers
+  above.
 
 ## 6. Components — reuse these, do not re-roll them
 
@@ -271,6 +282,9 @@ plain fact. That ends here.
 | Hero / map images          | `CatalogEntityImage` (`components/catalog/CatalogEntityImage.tsx`): hero faces square, map stills `shape="wide"` (4:3); initials when there is no image                                                                                                                                             |
 | Group colour               | `groupHue(name)`, `groupIndex(name)`, `groupDisplayName(name, word)` (`lib/tournament/group.ts`)                                                                                                                                                                                                       |
 | Media queries              | `useMediaQuery(query)` (`hooks/useMediaQuery.ts`), `usePrefersReducedMotion()` — never a hand-rolled `matchMedia` listener                                                                                                                                                                         |
+| Autoplay                   | `useAutoplay(count, intervalMs, held?)` (`hooks/useAutoplay.ts`) for anything that turns by itself: a pause/play `Button`, a hold while hovered or focused, and `held` for an outside hold such as `useOffscreen` (`hooks/useOffscreen.ts`); it starts stopped under reduced motion. The spotlight, the home hero's feed, the product tours and the `/get-workspace` domain stepper turn through it |
+| Product tour               | `OrganizerTabs` (`components/site/OrganizerTabs.tsx`): feature tabs beside a tilted, glowing product screenshot that crossfades, with a progress line, a pause button and an optional docs link per tab. The home's organizer banner and the `/get-workspace` tour are both this one component |
+| One-shot reveal            | `NumbersReveal` (`app/(site)/(home)/_components/NumbersReveal.tsx`): arms a block's reveal only while it is off screen, counts every `[data-count]` up inside its own text (`data-clock` as `m:ss`), and leaves the final state under reduced motion. The bento (`as="dl"`) and the leaders block use it |
 
 ### Controls
 
@@ -317,7 +331,10 @@ the last-resort `global-error`) are listed in the script with their reason.
 | Eyebrow / uppercase label | `Eyebrow` / `eyebrowClass(tone)` (`ui/eyebrow.tsx`), tone `faint` (default) · `dim` · `muted` |
 | W/L/D square       | `ResTag` (`components/match/cells.tsx`)                                    |
 | MVP placement      | `MvpOrdinal` (`disciplines/overwatch/match/MvpOrdinal.tsx`): gold for 1st only |
-| Platform totals    | `LeadersContent` (`components/site/leaders.tsx`) on `/` and the community page; `KpiFigure` from the same file for totals that sit beside another block (the `/get-workspace` community row); `HeroStat` figures in the `/statistics` hero (`statistics/_components/OverallFigures.tsx`) |
+| Platform totals    | the home bento `PlatformNumbers` (§13); `LeadersContent` (`components/site/leaders.tsx`) on the community page; `KpiFigure` from the same file for totals that sit beside another block (the `/get-workspace` community row); `HeroStat` figures in the `/statistics` hero (`statistics/_components/OverallFigures.tsx`) |
+| Tournament facts   | `tournamentFacts` + `FactsRow` / `IconFact` (`components/tournaments/TournamentFacts.tsx`): dates, players and teams, or before the start the date, a countdown and the applications, each after its icon; `StageBar` for a running tournament's stage |
+| Tournament spotlight | `TournamentSpotlight` (`components/tournaments/TournamentSpotlight.tsx`): one tournament on a large stage, thumbnails switch it, autoplay every 7 s with a pause button. Built, not mounted yet |
+| Platform record    | `RecordFigure`, `RecordHolder`, `RecordContext` (`statistics/_components/records.tsx`): one record's figure, holder and where it happened, the same on `/statistics`, in the home leaders block and in the home hero's feed |
 | Markdown           | `components/Markdown.tsx`; editing `components/admin/MarkdownEditor.tsx`   |
 | Spinner (rare)     | `ui/spinner.tsx` — prefer a skeleton                                       |
 
@@ -405,14 +422,26 @@ system.
 
 - Transitions: colour, border, opacity, `transform` for a chevron. ~150ms.
 - A floating panel fades in and out (~150ms): no zoom, no slide.
-- No entrance animations, no staggered reveals, no perpetual loops — except
-  the live pulse (`StatusDot pulse`, `.livePulse`) on something that is live,
-  and the settings page change through `kit/SettingsContinuation` (the old
+- **Reveals are allowed anywhere, small and once**: as a block first scrolls
+  into view its figures count up and its bars, charts, cells or rows fill in
+  (about a second, a short stagger at most), once per page view, never again
+  on a re-scroll. A block already on screen when the page hydrates shows its
+  final state, and so does everything under reduced motion. The home's
+  numbers bento (`NumbersReveal`, §13) is the reference; a running
+  tournament's stage bar grows in (`.aqt-bar-grow`).
+- No perpetual loops — except the live pulse (`StatusDot pulse`,
+  `.livePulse`) on something that is live, and autoplay that has a pause
+  button: the home's community carousel (§13, its rail's own logic) and,
+  through `useAutoplay`, the home hero's results feed (every 4.8 s, also held
+  while off screen), the product tours (`OrganizerTabs`, every 6 s), the
+  `/get-workspace` domain stepper (every 5 s) and the tournament spotlight
+  (`TournamentSpotlight`: every 7 s). Each holds while hovered or focused and
+  starts stopped under reduced motion.
+- The settings page change goes through `kit/SettingsContinuation` (the old
   page lifts away in 180ms, the new one rises from where its ghost was in
   320ms; reversed going back), which says which way the reader went. A pick
   in `kit/SectionNav` plays the same 320ms entrance on the content column,
   from below for a section under the open one, from above for one over it.
-  The home's community carousel advances on its own (§13), with a pause.
 - The mix match room (`app/balancer/mix/_room`) moves what the server moved,
   through view transitions: a drafted player flies from the pool into their
   slot, a banned or picked hero from the grid into its team's ban row or
@@ -484,28 +513,53 @@ the home hero adds a near-black `135deg` gradient from `--aqt-bg-2` to
 `/` is the product's landing, for players, organizers and partners alike, in
 this order:
 
-1. **The hero**, text only: what the platform is, the player search, the
-   tournament list and the organizer page.
-2. **The tournaments**, one row of four (`NowOnPlatform`): what runs first
-   (live, then open), then the newest finished ones. With nothing active the
-   row is titled "Recent tournaments". A card is its picture on top (16:9 from
-   640px, a 4:3 thumbnail beside the text on a phone), the name, the community
-   and the dates; a running or open one has its status pill on the picture,
-   on an opaque backing, a finished one none. Hovered, the frame turns teal
-   and the picture's opacity goes from 85% to full: colour and opacity only,
-   never a zoom.
-3. **The platform in six figures** (`PlatformNumbers`): players, tournaments,
-   communities, matches, maps, hours, over every community and all time, the
-   audience a partner reaches. Zero is shown; a figure the read does not carry
-   is left out; when the totals cannot be read the strip is absent.
+1. **The hero**: what the platform is (the h1, `text-display`, its accent
+   word teal, then the lede), the player search, the tournament list and the
+   two small links. Beside it (under it on a phone) a feed of the platform's
+   latest results (`HeroFeed`, behind its own Suspense boundary so the copy
+   never waits): the latest finals, records the leaders block does not show
+   (`LEADER_RECORDS`), and the maps of the latest series with logs, each card
+   tagged by kind. A new card slides in on top every 4.8 s; under reduced
+   motion the feed is a still list. Each read fails on its own and drops only
+   its cards.
+2. **The tournaments**, a showcase (`NowOnPlatform`): what runs first (live,
+   then open), then the newest finished ones, five in all. With nothing active
+   it is titled "Recent tournaments". The first is the featured card: its
+   picture at 16:9 under a bottom scrim, the status pill on frosted glass
+   (none for a finished one), the community, the name in the display face, a
+   running one's stage bar, then its icon facts (`FactsRow`). The other four
+   are rows, beside it from `lg` and under it below: a 16:9 thumbnail, the
+   pill while running or open, the name, the community and one icon fact.
+   Hovered, the featured card's frame turns teal with a soft glow, its picture
+   leans in (`.aqt-zoom`) and "Open tournament" fades in; a row takes the
+   overlay fill and the same picture zoom.
+3. **The platform in numbers** (`PlatformNumbers`), a bento over every
+   community and all time, the audience a partner reaches: players (the big
+   tile: the figure in `text-figure`, a dot per player with the champions in
+   gold, the teams and tournament days), tournaments with a bar per start
+   year, communities with their avatars, hours as days (past 60, weeks)
+   without a break, maps with the first installed game's mode split and most
+   played map, and encounters with finals, upsets and the average map length.
+   Each figure counts up and each chart fills once, as the bento first
+   scrolls into view (`NumbersReveal`); already on screen, or under reduced
+   motion, it shows the final state. Zero is shown; a figure the read does
+   not carry leaves its tile out; when the totals cannot be read the block is
+   absent, while any other read failing drops only its chart.
 4. **The communities**, a carousel (`DirectoryRail`) right under the figures
    that count them: whole cards, three across from 1100px, two from 640px, one
-   on a phone; arrows and dots, swipe and drag. It advances one card every 6 s
-   while nobody is pointing at it, focused in it or scrolled away, and stops
-   for good once the visitor steers it; the pause button restarts it. Under
-   `prefers-reduced-motion` it starts paused. The last card is a dashed "Your
-   community here" linking to `/get-workspace`. `#directory` is its anchor,
-   the footer's "Communities" link.
+   on a phone; arrows and dots, swipe and drag. A card is a framed tile with
+   the showcase's hover glow, led by the community's logo (communities have no
+   banner, and a tournament's picture would only repeat the showcase): the
+   logo with a soft teal glow, the status pill while a tournament runs or
+   opens, the name, the verified custom domain, that tournament's name ("Now"
+   or "Next"), the description on one line, and the tournaments and players
+   counting up once (`NumbersReveal`). It advances
+   one card every 6 s while nobody is pointing at it, focused in it or
+   scrolled away, and stops for good once the visitor steers it; the pause
+   button restarts it. Under `prefers-reduced-motion` it starts paused. The
+   last card is a dashed teal "Your community here" linking to
+   `/get-workspace`. `#directory` is its anchor, the footer's "Communities"
+   link.
 5. **What the platform does** (`PlatformFeatures`): six rows, each a real
    screenshot beside its audience, a title, two lines and a link: the player
    profile and the hero ratings (players), registration, the balancer and
@@ -514,12 +568,20 @@ this order:
    window is the organizer tour's: 16:10 from the top-left, fading out at the
    bottom. Captures come from `public/showcase/` and the 2.0.0 release notes
    (`public/changelog/2.0.0/`, one per interface language).
-6. **Platform leaders** (`PlatformLeaders`): the top five by titles (every
-   game under "all games", the game's own under one) beside the five
-   characters played most, by their share of the parsed playtime, with a bar
-   scaled to the leader. Characters are always one game's: the page's, or
-   under all games the first one installed, named in the board's line.
-7. **The organizer banner.**
+6. **Platform leaders** (`PlatformLeaders`): the titles podium (every game
+   under "all games", the game's own under one): the top three on 2-1-3
+   columns in medal colours with a crown on the first, each with their main
+   character and career line, rising 3→2→1 as the block first scrolls into
+   view, the fourth and fifth as rows. Beside it the four platform records of
+   `LEADER_RECORDS` (win streak, biggest upset, most eliminations on a map,
+   the longest map) as tiles with counting figures, linking to the records on
+   `/statistics#records`. The log records are one game's: the page's, or under
+   all games the first one installed, named in the board's line.
+7. **The organizer banner** (`OrganizerBanner`): the copy and the CTA beside
+   four feature tabs (registration, balancer and mixes, brackets, matches and
+   statistics) that switch a tilted product screenshot with a teal glow
+   (`PlatformFeatures`' captures, per interface language); the tabs advance
+   every 6 s with a progress line and a pause button. Flat on a phone.
 
 Every tournament card, on the home page and in the tournament list, has a
 picture (`tournamentPicture`, `lib/tournament/art.ts`). The organizer's cover
@@ -538,20 +600,29 @@ are out, rather than flash a picture it would swap; a failed read falls
 through to the next source, and only when none has a picture is the name
 drawn. Pictures are always `alt=""`.
 
-`/get-workspace`, in order: the hero with the community form, the community row
-(verified communities beside two platform totals; absent when its reads fail),
-the feature tour (one screenshot window under `ui/tabs.tsx` tabs, then a grid of
-what the tabs do not show), the custom-domain walk-through, the facts strip,
-the FAQ, the closing CTA. Screenshots are real production captures under
-`public/showcase/`; the tour's panels share one subgrid, so the window holds
-the same place on every tab. `OrganizerQuotes` is built and not mounted: it
-goes under the community row once there are real quotes with names.
+`/get-workspace`, in order: the hero with the community form and a live
+preview (`CommunityPreview`: a tilted browser window whose community page
+builds from the typed name and address, the three steps under it in their
+final state), the community row (totals counting up beside up to six linked
+community chips from `getPublicCommunities`; absent when its reads fail), the
+feature tour (`OrganizerTabs` with the six tour topics and their docs links,
+then the "More on the platform" bento, `MoreFeatures`: the open feature large
+with its real capture, a press on a small tile swaps it in through a view
+transition), the custom-domain walk-through (`DomainSteps`: four steps on one
+screen beside one branded browser and the DNS records whose status follows
+the step), the facts strip, the FAQ (`OrganizerFaq`: twelve questions in four
+topics, two columns of native disclosures, each answer linking its docs
+page), and the closing banner (`ClosingCta`: a name field that fills the hero
+form, scrolls to it and focuses its button). Screenshots are real captures
+under `public/showcase/`. `OrganizerQuotes` is built and not mounted: it goes
+under the community row once there are real quotes with names.
 
-The community form keeps its name/slug contract: the host and `/workspace/`
-prefix sit in a wrapping URL preview below the slug input. What was typed
-before "sign in and create" survives the OAuth round trip in `sessionStorage`.
-Inputs use 16px text, 48px shells, visible focus/invalid states. Repeated
-section eyebrows are omitted.
+The community form keeps its name/slug contract; the full address lives in
+the preview window's address bar, which is also what a screen reader hears
+for the slug field. What was typed before "sign in and create" survives the
+OAuth round trip in `sessionStorage`. Inputs use 16px text, 44px shells to
+line up with the button, visible focus/invalid states. Repeated section
+eyebrows are omitted.
 
 Share cards: `lib/og/landing.tsx` draws both. `/` names its `og` route from the
 apex metadata only, since an `opengraph-image` file would also cover every
