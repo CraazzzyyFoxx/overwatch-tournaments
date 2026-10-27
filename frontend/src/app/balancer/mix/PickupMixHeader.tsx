@@ -35,6 +35,7 @@ import {
 import { Eyebrow } from "@/components/ui/eyebrow";
 import { NumberInput } from "@/components/ui/number-input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Spinner } from "@/components/ui/spinner";
@@ -234,7 +235,7 @@ export function PickupMixHeader({
           {tm("title")}
         </BackLink>
 
-        <span aria-hidden="true" className="h-5 w-px shrink-0 bg-[color:var(--aqt-border)]" />
+        <Separator orientation="vertical" className="h-5" />
 
         {/* Wraps rather than squeezing: on a phone the id and the stage drop under the name, which keeps its width. */}
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2.5 gap-y-1">

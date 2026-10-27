@@ -8,9 +8,9 @@ import MatchLogIndicator from "@/components/match/MatchLogIndicator";
 import { acceptedScore } from "@/components/pick-ban/pick-ban-model";
 import TeamName from "@/components/TeamName";
 import { Card } from "@/components/ui/card";
-import { eyebrowClass } from "@/components/ui/eyebrow";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatusDot } from "@/components/ui/status-dot";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { GameMark } from "@/components/workspace/GameMark";
 import { useBracketRoundLabel } from "@/hooks/useBracketRoundLabel";
 import { UNKNOWN_ROUND_SHAPE } from "@/lib/bracket/round-name";
@@ -278,28 +278,29 @@ export function EncountersDataTable({
     { label: t("encounters.col.when"), className: "w-36 text-right" },
     { label: t("encounters.col.logs"), className: "w-16 text-center" }
   ];
-  const cell = "border-b border-[color:var(--aqt-border)] px-3 py-3 align-middle";
+  // The hairline sits on the cell: under `border-separate` a row's own border does not paint.
+  const cell = "border-b border-[color:var(--aqt-border)] px-3 py-3";
 
   const tableRow = (encounter: Encounter) => {
     const row = view(encounter);
     return (
-      <tr
+      <TableRow
         key={encounter.id}
         className={cn(
           // Safari does not make a `<tr>` the containing block of the stretched
           // link (WebKit 240961): the transform does, the clip keeps it in the row.
-          "relative [clip-path:inset(0)] [transform:translate(0)] transition-colors hover:bg-[color:var(--aqt-overlay-2)]",
+          "relative [clip-path:inset(0)] [transform:translate(0)]",
           isEncounterLive(encounter) &&
             "bg-[color:color-mix(in_srgb,var(--aqt-status-live)_5%,transparent)]"
         )}
       >
-        <td className={cell}>
+        <TableCell className={cell}>
           <div className="flex min-w-0 items-center gap-2.5">
             {gameMark(encounter)}
             {matchupLink(encounter, row)}
           </div>
-        </td>
-        <td className={cell}>
+        </TableCell>
+        <TableCell className={cell}>
           <div className="flex flex-col gap-1.5">
             {score(row)}
             <span className="flex items-center gap-2">
@@ -307,16 +308,16 @@ export function EncountersDataTable({
               {pips(encounter, row)}
             </span>
           </div>
-        </td>
-        <td className={cell}>
+        </TableCell>
+        <TableCell className={cell}>
           <span className="block truncate text-caption font-medium text-[color:var(--aqt-fg-muted)]">
             {encounter.tournament?.name ?? "—"}
           </span>
           <span className="block truncate text-label text-[color:var(--aqt-fg-dim)]">
             {row.stage} · {row.round}
           </span>
-        </td>
-        <td className={cell}>
+        </TableCell>
+        <TableCell className={cell}>
           {row.closeness == null ? (
             <span className={FAINT}>—</span>
           ) : (
@@ -334,8 +335,8 @@ export function EncountersDataTable({
               </span>
             </span>
           )}
-        </td>
-        <td className={cn(cell, "text-right")}>
+        </TableCell>
+        <TableCell className={cn(cell, "text-right")}>
           {/* Sentence case: an uppercase, tracked date shouted and wrapped. */}
           <span className="flex flex-col items-end gap-0.5 whitespace-nowrap leading-tight">
             <span className="text-caption font-medium tabular-nums text-[color:var(--aqt-fg-muted)]">
@@ -355,9 +356,9 @@ export function EncountersDataTable({
               </span>
             ) : null}
           </span>
-        </td>
-        <td className={cn(cell, "text-center")}>{logs(encounter)}</td>
-      </tr>
+        </TableCell>
+        <TableCell className={cn(cell, "text-center")}>{logs(encounter)}</TableCell>
+      </TableRow>
     );
   };
 
@@ -425,42 +426,41 @@ export function EncountersDataTable({
       </ul>
 
       <Card className="hidden overflow-hidden md:block">
-        <table
+        <Table
           aria-busy={loading || undefined}
-          className="w-full table-fixed border-separate border-spacing-0 [&>tbody>tr:last-child>td]:border-b-0"
+          className="table-fixed border-separate border-spacing-0 [&>tbody>tr:last-child>td]:border-b-0"
         >
           <caption className="sr-only">{t("encounters.table.label")}</caption>
-          <thead className="bg-[color:var(--aqt-overlay-1)]">
-            <tr>
+          <TableHeader className="bg-[color:var(--aqt-overlay-1)]">
+            <TableRow>
               {header.map((column) => (
-                <th
+                <TableHead
                   key={column.label}
                   scope="col"
                   className={cn(
-                    eyebrowClass(),
-                    "border-b border-[color:var(--aqt-border)] px-3 py-2.5 text-left font-bold whitespace-nowrap",
+                    "h-auto border-b border-[color:var(--aqt-border)] px-3 py-2.5 font-bold whitespace-nowrap",
                     column.className
                   )}
                 >
                   {column.label}
-                </th>
+                </TableHead>
               ))}
-            </tr>
-          </thead>
-          <tbody>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {loading
               ? skeletonRows.map((index) => (
-                  <tr key={index}>
+                  <TableRow key={index} className="hover:bg-transparent">
                     {header.map((column) => (
-                      <td key={column.label} className={cell}>
+                      <TableCell key={column.label} className={cell}>
                         <Skeleton className="h-8 w-full" />
-                      </td>
+                      </TableCell>
                     ))}
-                  </tr>
+                  </TableRow>
                 ))
               : rows.map(tableRow)}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </Card>
     </div>
   );

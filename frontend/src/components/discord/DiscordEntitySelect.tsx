@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { CommandGroup, CommandItem } from "@/components/ui/command";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 
 /** A `CommandGroup` worth of entities. Omit `heading` for a single flat group
@@ -211,7 +212,7 @@ export function DiscordEntitySelect<T extends { id: string; name: string }>({
         aria-label={labels.refresh}
         title={labels.refresh}
       >
-        <RefreshCw aria-hidden className={cn(isLoading && "animate-spin motion-reduce:animate-none")} />
+        {isLoading ? <Spinner /> : <RefreshCw aria-hidden />}
       </Button>
       <Button
         type="button"

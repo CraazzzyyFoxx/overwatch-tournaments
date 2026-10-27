@@ -4,7 +4,8 @@ import { useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { ChevronDown } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { Button, triggerChevronClass } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
+import { triggerChevronClass } from "@/components/ui/chevron";
 import Image from "@/components/ui/image";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { type DivisionGridLike, sortTiersDescending } from "@/lib/divisions/grid";

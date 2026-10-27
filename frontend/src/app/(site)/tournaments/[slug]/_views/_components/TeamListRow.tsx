@@ -19,6 +19,7 @@ import {
 import TeamName from "@/components/TeamName";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { disclosureChevronClass } from "@/components/ui/chevron";
 import { sortTeamPlayers, splitHandle } from "@/lib/player";
 import { groupDisplayName, groupHue } from "@/lib/tournament/group";
 import { cn } from "@/lib/utils";
@@ -91,7 +92,7 @@ export const TeamListRow = ({
   }));
 
   return (
-    <Card asChild className={cn(TEAM_CARD_CLASS, "group")}>
+    <Card asChild className={cn(TEAM_CARD_CLASS, "group/disclosure")}>
       <details>
         <summary className="cursor-pointer list-none rounded-xl focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[color:var(--aqt-teal)] [&::-webkit-details-marker]:hidden">
           <div className={cn(TEAM_CARD_HEADER, "grid items-center gap-2.5 sm:gap-5", columns)}>
@@ -160,10 +161,7 @@ export const TeamListRow = ({
                 value={record ? `${record.won}–${record.lost}` : "—"}
               />
             ) : null}
-            <ChevronDown
-              className="size-4 text-[color:var(--aqt-fg-faint)] transition-transform group-open:rotate-180"
-              aria-hidden
-            />
+            <ChevronDown className={disclosureChevronClass} aria-hidden />
           </div>
         </summary>
         <TeamCardDivider />

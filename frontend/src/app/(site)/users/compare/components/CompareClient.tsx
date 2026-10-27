@@ -7,7 +7,9 @@ import { useTranslations } from "next-intl";
 import { CardSurface } from "@/components/profile/atoms";
 import ComparePageHero from "@/app/(site)/users/compare/components/ComparePageHero";
 import CompareFiltersPanel from "@/app/(site)/users/compare/components/CompareFiltersPanel";
-import CompareUnifiedTable from "@/app/(site)/users/compare/components/CompareUnifiedTable";
+import CompareUnifiedTable, {
+  CompareUnifiedTableSkeleton
+} from "@/app/(site)/users/compare/components/CompareUnifiedTable";
 import { useUserCompareSearchParams } from "@/app/(site)/users/compare/hooks/useUserCompareSearchParams";
 import { useUserCompareData } from "@/app/(site)/users/compare/hooks/useUserCompareData";
 import { UsersMissingGrid } from "@/app/(site)/users/components/shared/UsersMissingGrid";
@@ -174,11 +176,12 @@ const PageContent = ({ scope, initial }: Readonly<{ scope: StatsScope; initial: 
       ) : isDivisionGridRequired(activeError) && discipline ? (
         <UsersMissingGrid discipline={discipline} gameName={gameName} axis={workspaceId} />
       ) : selectionPending ? (
-        <CardSurface>
-          <div className="flex justify-center py-16" role="status" aria-busy="true">
-            <Spinner />
-          </div>
-        </CardSurface>
+        <>
+          <p className="flex items-center gap-1.5 px-1 text-caption text-[color:var(--aqt-fg-dim)]">
+            <span>{baselineSummary}</span>
+          </p>
+          <CompareUnifiedTableSkeleton isHeroScope={compareParams.isHeroScope} />
+        </>
       ) : compareParams.subjectUserId ? (
         <>
           <p aria-live="polite" className="flex items-center gap-1.5 px-1 text-caption text-[color:var(--aqt-fg-dim)]">

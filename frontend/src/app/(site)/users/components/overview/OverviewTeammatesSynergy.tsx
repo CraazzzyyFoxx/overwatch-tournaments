@@ -13,8 +13,8 @@ import { cn } from "@/lib/utils";
 import { getPlayerSlug } from "@/lib/player";
 import { Button } from "@/components/ui/button";
 import { DataPagination } from "@/components/ui/data-pagination";
-import { eyebrowClass } from "@/components/ui/eyebrow";
 import { SearchField } from "@/components/ui/search-field";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   Dialog,
   DialogContent,
@@ -174,73 +174,70 @@ const AllTeammatesTable = ({
           onValueChange={onSearchChange}
         />
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
-        <table className="aqt-tnum w-full border-collapse text-caption">
-          <thead className="sticky top-0 z-[1] bg-[color:var(--aqt-bg)]">
-            <tr>
-              {[
-                { id: "player", label: t("users.overview.teammates.col.player"), left: true },
-                { id: "played", label: t("users.overview.teammates.col.played"), left: false },
-                { id: "maps", label: t("users.overview.teammates.col.maps"), left: false },
-                { id: "wr", label: t("users.overview.teammates.col.wr"), left: false },
-                ...(hasKda ? [{ id: "kda", label: t("users.overview.teammates.col.kda"), left: false }] : []),
-                ...(hasMvp ? [{ id: "mvp", label: t("users.overview.teammates.col.mvp"), left: false }] : [])
-              ].map((h) => (
-                <th
-                  key={h.id}
-                  className={cn(
-                    eyebrowClass(),
-                    "aqt-tnum border-b border-[color:var(--aqt-border)] bg-[color:var(--aqt-bg)] px-3 py-2.5",
-                    h.left ? "text-left" : "text-right"
-                  )}
-                >
-                  {h.label}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {paged.map((tm) => (
-                <tr key={tm.user.id} className="border-b border-[color:var(--aqt-border)] last:border-b-0 hover:bg-[hsl(0_0%_100%/0.02)]">
-                  <td className="px-3 py-2">
-                    <HoverPrefetchLink href={`/users/${getPlayerSlug(tm.user.name)}`} className="hover:text-[color:var(--aqt-teal)]">
-                      <HandleLabel
-                        handle={tm.user.name}
-                        className="font-semibold text-[color:var(--aqt-fg)]"
-                        tagClassName="aqt-tnum text-label"
-                      />
-                    </HoverPrefetchLink>
-                  </td>
-                  <td className="aqt-tnum px-3 py-2 text-right text-[color:var(--aqt-fg-muted)]">{tm.tournaments}</td>
-                  <td className="aqt-tnum px-3 py-2 text-right text-[color:var(--aqt-fg-muted)]">{tm.maps}</td>
-                  <td
-                    className="aqt-tnum px-3 py-2 text-right font-semibold"
-                    style={{ color: winrateColor(tm.winrate * 100) }}
-                  >
-                    {(tm.winrate * 100).toFixed(0)}%
-                  </td>
-                  {hasKda ? (
-                    <td className="aqt-tnum px-3 py-2 text-right text-[color:var(--aqt-fg-muted)]">
-                      {formatStat(tm.stats?.kda, 2)}
-                    </td>
-                  ) : null}
-                  {hasMvp ? (
-                    <td className="aqt-tnum px-3 py-2 text-right text-[color:var(--aqt-fg-muted)]">
-                      {formatStat(tm.stats?.performance, 1)}
-                    </td>
-                  ) : null}
-                </tr>
+      <Table
+        wrapperClassName="min-h-0 flex-1 overflow-y-auto px-2 pb-2"
+        className="aqt-tnum border-collapse"
+      >
+        <TableHeader className="sticky top-0 z-[1] bg-[color:var(--aqt-bg)]">
+          <TableRow>
+            {[
+              { id: "player", label: t("users.overview.teammates.col.player"), left: true },
+              { id: "played", label: t("users.overview.teammates.col.played"), left: false },
+              { id: "maps", label: t("users.overview.teammates.col.maps"), left: false },
+              { id: "wr", label: t("users.overview.teammates.col.wr"), left: false },
+              ...(hasKda ? [{ id: "kda", label: t("users.overview.teammates.col.kda"), left: false }] : []),
+              ...(hasMvp ? [{ id: "mvp", label: t("users.overview.teammates.col.mvp"), left: false }] : [])
+            ].map((h) => (
+              <TableHead
+                key={h.id}
+                className={cn("aqt-tnum bg-[color:var(--aqt-bg)] px-3 py-2.5", !h.left && "text-right")}
+              >
+                {h.label}
+              </TableHead>
             ))}
-            {filtered.length === 0 ? (
-              <tr>
-                <td colSpan={4 + Number(hasKda) + Number(hasMvp)} className="px-3 py-6 text-center text-caption text-[color:var(--aqt-fg-dim)]">
-                  {t("users.overview.teammates.noMatch")}
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
-      </div>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {paged.map((tm) => (
+            <TableRow key={tm.user.id}>
+              <TableCell className="px-3 py-2">
+                <HoverPrefetchLink href={`/users/${getPlayerSlug(tm.user.name)}`} className="hover:text-[color:var(--aqt-teal)]">
+                  <HandleLabel
+                    handle={tm.user.name}
+                    className="font-semibold text-[color:var(--aqt-fg)]"
+                    tagClassName="aqt-tnum text-label"
+                  />
+                </HoverPrefetchLink>
+              </TableCell>
+              <TableCell className="aqt-tnum px-3 py-2 text-right text-[color:var(--aqt-fg-muted)]">{tm.tournaments}</TableCell>
+              <TableCell className="aqt-tnum px-3 py-2 text-right text-[color:var(--aqt-fg-muted)]">{tm.maps}</TableCell>
+              <TableCell
+                className="aqt-tnum px-3 py-2 text-right font-semibold"
+                style={{ color: winrateColor(tm.winrate * 100) }}
+              >
+                {(tm.winrate * 100).toFixed(0)}%
+              </TableCell>
+              {hasKda ? (
+                <TableCell className="aqt-tnum px-3 py-2 text-right text-[color:var(--aqt-fg-muted)]">
+                  {formatStat(tm.stats?.kda, 2)}
+                </TableCell>
+              ) : null}
+              {hasMvp ? (
+                <TableCell className="aqt-tnum px-3 py-2 text-right text-[color:var(--aqt-fg-muted)]">
+                  {formatStat(tm.stats?.performance, 1)}
+                </TableCell>
+              ) : null}
+            </TableRow>
+          ))}
+          {filtered.length === 0 ? (
+            <TableRow className="hover:bg-transparent">
+              <TableCell colSpan={4 + Number(hasKda) + Number(hasMvp)} className="px-3 py-6 text-center text-caption text-[color:var(--aqt-fg-dim)]">
+                {t("users.overview.teammates.noMatch")}
+              </TableCell>
+            </TableRow>
+          ) : null}
+        </TableBody>
+      </Table>
       {filtered.length > perPage ? (
         <DataPagination
           page={safePage}

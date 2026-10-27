@@ -4,7 +4,8 @@ import * as React from "react";
 import * as SelectPrimitive from "@radix-ui/react-select";
 import { Check, ChevronDown, ChevronUp } from "lucide-react";
 
-import { selectTriggerClass, triggerChevronClass } from "@/components/ui/button";
+import { selectTriggerClass } from "@/components/ui/button";
+import { triggerChevronClass } from "@/components/ui/chevron";
 import { eyebrowClass } from "@/components/ui/eyebrow";
 import {
   floatingPanelClass,

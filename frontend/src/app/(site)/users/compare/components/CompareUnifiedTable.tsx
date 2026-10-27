@@ -1,13 +1,14 @@
 "use client";
 
 import { RefreshCw } from "lucide-react";
+import type { ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import { CardSurface } from "@/components/profile/atoms";
 import CatalogEntityImage from "@/components/catalog/CatalogEntityImage";
 import { Button } from "@/components/ui/button";
-import { eyebrowClass } from "@/components/ui/eyebrow";
+import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
-import { cn } from "@/lib/utils";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { CompareRow } from "@/app/(site)/users/compare/types";
 import { formatDuration, formatMetricValue } from "@/app/(site)/users/compare/utils";
 import TrendDelta from "@/app/(site)/users/compare/components/TrendDelta";
@@ -86,23 +87,23 @@ const CompareMetricRow = ({ row }: { row: CompareRow }) => {
     winner === "right" ? { color: "var(--aqt-emerald)" } : { color: "var(--aqt-fg)" };
 
   return (
-    <tr className="border-b border-[color:var(--aqt-border)] last:border-b-0 hover:bg-[hsl(0_0%_100%/0.02)]">
-      <td
+    <TableRow>
+      <TableCell
         className="truncate px-3.5 py-2.5 text-caption font-medium text-[color:var(--aqt-fg)]"
         title={row.label}
       >
         {row.label}
-      </td>
+      </TableCell>
 
-      <td
+      <TableCell
         className={`aqt-tnum px-3 py-2.5 text-right text-caption tabular-nums whitespace-nowrap ${winner === "left" ? "font-bold" : ""}`}
         style={leftValueStyle}
       >
         {formatMetricValue(row.subjectValue)}
-      </td>
+      </TableCell>
 
       {/* Twin bars, mirrored around the column's centre line (where "vs" sits). */}
-      <td className="px-3 py-2.5">
+      <TableCell className="px-3 py-2.5">
         <div className="mx-auto flex w-full max-w-[260px] items-center gap-1.5">
           <div className="flex h-2.5 flex-1 justify-end overflow-hidden rounded-l-sm bg-[hsl(0_0%_100%/0.04)]">
             <div
@@ -110,7 +111,7 @@ const CompareMetricRow = ({ row }: { row: CompareRow }) => {
               style={{ width: `${leftPercent}%` }}
             />
           </div>
-          <div className="h-2.5 w-px shrink-0 bg-[color:var(--aqt-border)]" />
+          <Separator orientation="vertical" className="h-2.5" />
           <div className="flex h-2.5 flex-1 justify-start overflow-hidden rounded-r-sm bg-[hsl(0_0%_100%/0.04)]">
             <div
               className={`h-full rounded-r-sm transition-all duration-500 motion-reduce:transition-none ${rightBarColor}`}
@@ -118,23 +119,23 @@ const CompareMetricRow = ({ row }: { row: CompareRow }) => {
             />
           </div>
         </div>
-      </td>
+      </TableCell>
 
-      <td
+      <TableCell
         className={`aqt-tnum px-3 py-2.5 text-left text-caption tabular-nums whitespace-nowrap ${winner === "right" ? "font-bold" : ""}`}
         style={rightValueStyle}
       >
         {formatMetricValue(row.baselineValue)}
-      </td>
+      </TableCell>
 
-      <td className="px-3.5 py-2.5 text-right whitespace-nowrap">
+      <TableCell className="px-3.5 py-2.5 text-right whitespace-nowrap">
         <TrendDelta
           delta={row.delta}
           deltaPercent={row.deltaPercent}
           betterWorse={row.betterWorse}
         />
-      </td>
-    </tr>
+      </TableCell>
+    </TableRow>
   );
 };
 
@@ -146,34 +147,31 @@ const UnifiedSkeleton = ({ isHeroScope }: { isHeroScope: boolean }) => {
   const rowCount = isHeroScope ? 6 : 8;
 
   return (
-    <tbody>
+    <TableBody>
       {Array.from({ length: rowCount }).map((_, index) => (
-        <tr
-          key={`skeleton-row-${index}`}
-          className="border-b border-[color:var(--aqt-border)] last:border-b-0"
-        >
-          <td className="px-3.5 py-2.5">
+        <TableRow key={`skeleton-row-${index}`} className="hover:bg-transparent">
+          <TableCell className="px-3.5 py-2.5">
             <Skeleton className="h-4 w-40 max-w-full" />
-          </td>
-          <td className="px-3 py-2.5">
+          </TableCell>
+          <TableCell className="px-3 py-2.5">
             <div className="flex justify-end">
               <Skeleton className="h-4 w-12" />
             </div>
-          </td>
-          <td className="px-3 py-2.5">
+          </TableCell>
+          <TableCell className="px-3 py-2.5">
             <Skeleton className="mx-auto h-2.5 w-full max-w-[260px] rounded-sm" />
-          </td>
-          <td className="px-3 py-2.5">
+          </TableCell>
+          <TableCell className="px-3 py-2.5">
             <Skeleton className="h-4 w-12" />
-          </td>
-          <td className="px-3.5 py-2.5">
+          </TableCell>
+          <TableCell className="px-3.5 py-2.5">
             <div className="flex justify-end">
               <Skeleton className="h-4 w-16" />
             </div>
-          </td>
-        </tr>
+          </TableCell>
+        </TableRow>
       ))}
-    </tbody>
+    </TableBody>
   );
 };
 
@@ -233,13 +231,97 @@ const ColumnIdentity = ({
 };
 
 /* ------------------------------------------------------------------ */
-/*  Main component                                                     */
+/*  Frame (card, columns, header row)                                  */
 /* ------------------------------------------------------------------ */
 
-const headBase = cn(
-  eyebrowClass(),
-  "aqt-tnum border-b border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.015)] py-3 align-bottom"
-);
+const headBase = "aqt-tnum bg-[hsl(0_0%_100%/0.015)] py-3 align-bottom";
+
+/** Shared by the table and its skeleton, so nothing moves when the rows land. */
+const CompareTableFrame = ({
+  subjectHead,
+  baselineHead,
+  children
+}: {
+  subjectHead: ReactNode;
+  baselineHead: ReactNode;
+  children: ReactNode;
+}) => {
+  const t = useTranslations();
+
+  return (
+    <CardSurface flush>
+      <div
+        className="overflow-x-auto"
+        role="region"
+        aria-label={t("users.compare.hero.title")}
+        tabIndex={0}
+      >
+        {/* Fixed layout: every column keeps its width whatever the values, so
+            the names in the header sit exactly over their numbers. */}
+        <Table
+          wrapperClassName="overflow-visible"
+          className="aqt-tnum min-w-[920px] table-fixed border-collapse"
+        >
+          <colgroup>
+            <col className="w-[22%]" />
+            <col className="w-[20%]" />
+            <col />
+            <col className="w-[20%]" />
+            <col className="w-[15%]" />
+          </colgroup>
+          <TableHeader>
+            <TableRow>
+              <TableHead className={`${headBase} px-3.5`}>{t("users.compare.colMetric")}</TableHead>
+              <TableHead className={`${headBase} px-3`}>{subjectHead}</TableHead>
+              <TableHead className={`${headBase} px-3 text-center`}>{t("common.vs")}</TableHead>
+              <TableHead className={`${headBase} px-3`}>{baselineHead}</TableHead>
+              <TableHead className={`${headBase} px-3.5 text-right`}>
+                <abbr title={t("users.compare.colDeltaTitle")} className="no-underline">
+                  {t("users.compare.colDelta")}
+                </abbr>
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          {children}
+        </Table>
+      </div>
+    </CardSurface>
+  );
+};
+
+/** The table before the selection is checked: frame, unnamed columns, skeleton rows. */
+export const CompareUnifiedTableSkeleton = ({ isHeroScope }: { isHeroScope: boolean }) => {
+  const t = useTranslations();
+  // `ColumnIdentity`'s lines, mirrored the same way: name, caption (hero in hero scope), playtime.
+  const [subjectHead, baselineHead] = (["text-right", "text-left"] as const).map((align) => (
+    <div key={align} className={`flex min-w-0 flex-col gap-0.5 ${align}`}>
+      <span className="text-sm">
+        <Skeleton variant="text" className="w-28 max-w-full" />
+      </span>
+      <span className="text-label">
+        <Skeleton variant="text" className="w-20 max-w-full" />
+      </span>
+      {isHeroScope ? (
+        <span className="text-label">
+          <Skeleton variant="text" className="w-24 max-w-full" />
+        </span>
+      ) : null}
+    </div>
+  ));
+
+  return (
+    <div role="status" aria-busy="true">
+      <span className="sr-only">{t("common.loading")}</span>
+      <CompareTableFrame subjectHead={subjectHead} baselineHead={baselineHead}>
+        <UnifiedSkeleton isHeroScope={isHeroScope} />
+      </CompareTableFrame>
+    </div>
+  );
+};
+
+/* ------------------------------------------------------------------ */
+/*  Main component                                                     */
+/* ------------------------------------------------------------------ */
 
 const CompareUnifiedTable = ({
   subjectName,
@@ -263,95 +345,66 @@ const CompareUnifiedTable = ({
       aria-busy={loading || refreshing}
       className={refreshing ? "opacity-70 transition-opacity" : "transition-opacity"}
     >
-      <CardSurface flush>
-        <div
-          className="overflow-x-auto"
-          role="region"
-          aria-label={t("users.compare.hero.title")}
-          tabIndex={0}
-        >
-          {/* Fixed layout: every column keeps its width whatever the values, so
-              the names in the header sit exactly over their numbers. */}
-          <table className="aqt-tnum w-full min-w-[920px] table-fixed border-collapse text-caption">
-            <colgroup>
-              <col className="w-[22%]" />
-              <col className="w-[20%]" />
-              <col />
-              <col className="w-[20%]" />
-              <col className="w-[15%]" />
-            </colgroup>
-            <thead>
-              <tr>
-                <th className={`${headBase} px-3.5 text-left`}>{t("users.compare.colMetric")}</th>
-                <th className={`${headBase} px-3`}>
-                  <ColumnIdentity
-                    name={subjectName}
-                    caption={t("users.compare.selectedUserColumn")}
-                    hero={isHeroScope ? subjectHero ?? {} : undefined}
-                    align="right"
-                  />
-                </th>
-                <th className={`${headBase} px-3 text-center`}>{t("common.vs")}</th>
-                <th className={`${headBase} px-3`}>
-                  <ColumnIdentity
-                    name={baselineName}
-                    caption={
-                      isTargetBaseline ? t("users.compare.compareAgainst") : t("users.compare.baseline")
-                    }
-                    hero={isHeroScope ? baselineHero ?? {} : undefined}
-                    align="left"
-                  />
-                </th>
-                <th className={`${headBase} px-3.5 text-right`}>
-                  <abbr title={t("users.compare.colDeltaTitle")} className="no-underline">
-                    {t("users.compare.colDelta")}
-                  </abbr>
-                </th>
-              </tr>
-            </thead>
-
-            {loading ? (
-              <UnifiedSkeleton isHeroScope={isHeroScope} />
-            ) : showError ? (
-              <tbody>
-                <tr>
-                  <td
-                    colSpan={5}
-                    className="px-3.5 py-10 text-center text-sm text-[color:var(--aqt-rose)]"
-                  >
-                    <div className="flex flex-col items-center gap-3">
-                      <span>{errorMessage}</span>
-                      {onRetry ? (
-                        <Button variant="outline" size="sm" onClick={onRetry}>
-                          <RefreshCw aria-hidden />
-                          {t("users.compare.retry")}
-                        </Button>
-                      ) : null}
-                    </div>
-                  </td>
-                </tr>
-              </tbody>
-            ) : !hasRows ? (
-              <tbody>
-                <tr>
-                  <td
-                    colSpan={5}
-                    className="px-3.5 py-10 text-center text-sm text-[color:var(--aqt-fg-muted)]"
-                  >
-                    {t("users.compare.noMetrics")}
-                  </td>
-                </tr>
-              </tbody>
-            ) : (
-              <tbody>
-                {rows.map((row) => (
-                  <CompareMetricRow key={row.key} row={row} />
-                ))}
-              </tbody>
-            )}
-          </table>
-        </div>
-      </CardSurface>
+      <CompareTableFrame
+        subjectHead={
+          <ColumnIdentity
+            name={subjectName}
+            caption={t("users.compare.selectedUserColumn")}
+            hero={isHeroScope ? subjectHero ?? {} : undefined}
+            align="right"
+          />
+        }
+        baselineHead={
+          <ColumnIdentity
+            name={baselineName}
+            caption={
+              isTargetBaseline ? t("users.compare.compareAgainst") : t("users.compare.baseline")
+            }
+            hero={isHeroScope ? baselineHero ?? {} : undefined}
+            align="left"
+          />
+        }
+      >
+        {loading ? (
+          <UnifiedSkeleton isHeroScope={isHeroScope} />
+        ) : showError ? (
+          <TableBody>
+            <TableRow className="hover:bg-transparent">
+              <TableCell
+                colSpan={5}
+                className="px-3.5 py-10 text-center text-sm text-[color:var(--aqt-rose)]"
+              >
+                <div className="flex flex-col items-center gap-3">
+                  <span>{errorMessage}</span>
+                  {onRetry ? (
+                    <Button variant="outline" size="sm" onClick={onRetry}>
+                      <RefreshCw aria-hidden />
+                      {t("users.compare.retry")}
+                    </Button>
+                  ) : null}
+                </div>
+              </TableCell>
+            </TableRow>
+          </TableBody>
+        ) : !hasRows ? (
+          <TableBody>
+            <TableRow className="hover:bg-transparent">
+              <TableCell
+                colSpan={5}
+                className="px-3.5 py-10 text-center text-sm text-[color:var(--aqt-fg-muted)]"
+              >
+                {t("users.compare.noMetrics")}
+              </TableCell>
+            </TableRow>
+          </TableBody>
+        ) : (
+          <TableBody>
+            {rows.map((row) => (
+              <CompareMetricRow key={row.key} row={row} />
+            ))}
+          </TableBody>
+        )}
+      </CompareTableFrame>
     </div>
   );
 };

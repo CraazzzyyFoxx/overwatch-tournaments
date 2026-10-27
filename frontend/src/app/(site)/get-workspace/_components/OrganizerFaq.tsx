@@ -5,7 +5,9 @@ import { getLocale, getTranslations } from "next-intl/server";
 
 import { findGuideArticle, toDocLocale } from "@/app/(site)/docs/nav";
 import { MoreLink, Section, SectionHead } from "@/components/site/open-layout";
+import { disclosureChevronClass } from "@/components/ui/chevron";
 import { Eyebrow } from "@/components/ui/eyebrow";
+import { cn } from "@/lib/utils";
 
 const TITLE_ID = "gw-faq-title";
 
@@ -85,14 +87,11 @@ export async function OrganizerFaq() {
                     <details
                       key={key}
                       open={topicIndex === 0 && index === 0}
-                      className="group border-b border-[color:var(--aqt-border)]"
+                      className="group/disclosure border-b border-[color:var(--aqt-border)]"
                     >
-                      <summary className="group/q flex cursor-pointer list-none items-center justify-between gap-4 py-3.5 font-display text-ui font-semibold leading-snug text-[color:var(--aqt-fg)] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[color:var(--aqt-teal)] [&::-webkit-details-marker]:hidden">
+                      <summary className="flex cursor-pointer list-none items-center justify-between gap-4 py-3.5 font-display text-ui font-semibold leading-snug text-[color:var(--aqt-fg)] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[color:var(--aqt-teal)] [&::-webkit-details-marker]:hidden">
                         {t(`items.${key}.q`)}
-                        <ChevronDown
-                          aria-hidden
-                          className="size-4.5 shrink-0 text-[color:var(--aqt-fg-faint)] transition-[transform,color] duration-200 group-open:rotate-180 group-open:text-[color:var(--aqt-teal)] group-hover/q:text-[color:var(--aqt-teal)]"
-                        />
+                        <ChevronDown aria-hidden className={cn(disclosureChevronClass, "size-4.5")} />
                       </summary>
                       <div className="pb-4 pr-9 text-body leading-relaxed text-[color:var(--aqt-fg-muted)]">
                         <p className="text-pretty">{t.rich(`items.${key}.a`, { b: bold })}</p>

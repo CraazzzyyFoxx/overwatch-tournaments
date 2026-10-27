@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Eyebrow } from "@/components/ui/eyebrow";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Table, TableBody, TableCell, TableHead, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import type { FeasibilityReport } from "@/types/balancer.types";
 
@@ -177,35 +178,38 @@ function PoolDiagnostics({
       <Eyebrow as="div" tone="muted" className="border-b border-border/60 px-3 py-2">
         {t("roleSupply")}
       </Eyebrow>
-      <table className="w-full">
-        <tbody>
+      <Table className="text-label">
+        <TableBody>
           {feasibility.roles.map((role) => {
             const delta = role.supply - role.demand;
 
             return (
-              <tr key={role.role} className="border-b border-border/40 last:border-0">
-                <th scope="row" className="px-3 py-1.5 text-left font-medium text-foreground">
+              <TableRow key={role.role} className="border-border/40">
+                <TableHead
+                  scope="row"
+                  className="h-auto px-3 py-1.5 font-medium normal-case tracking-normal text-foreground"
+                >
                   {role.role}
-                </th>
-                <td className="py-1.5 text-right tabular-nums text-muted-foreground">
+                </TableHead>
+                <TableCell className="px-0 py-1.5 text-right tabular-nums text-muted-foreground">
                   {role.supply}/{role.demand}
-                </td>
-                <td className="py-1.5 pl-2 text-right tabular-nums text-muted-foreground">
+                </TableCell>
+                <TableCell className="py-1.5 pl-2 pr-0 text-right tabular-nums text-muted-foreground">
                   {role.flex_supply > 0 ? t("flexSupply", { count: role.flex_supply }) : ""}
-                </td>
-                <td
+                </TableCell>
+                <TableCell
                   className={cn(
                     "px-3 py-1.5 text-right font-medium tabular-nums",
                     delta < 0 ? "text-rose-300" : "text-emerald-300",
                   )}
                 >
                   {delta < 0 ? t("short", { count: -delta }) : delta > 0 ? `+${delta}` : t("even")}
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             );
           })}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
       <dl className="border-t border-border/60">
         {rows.map((row) => (
           <div key={row.label} className="flex items-baseline justify-between gap-3 px-3 py-1.5">

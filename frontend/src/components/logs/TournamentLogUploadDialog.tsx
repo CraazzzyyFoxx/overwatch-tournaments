@@ -249,7 +249,7 @@ function DirectoryUploadDialog({
                   {directory.handle.name}
                 </span>
                 <Button type="button" variant="ghost" size="sm" disabled={locked} onClick={() => void loadFiles()}>
-                  <RefreshCw className={cn("size-3.5", busy && "animate-spin motion-reduce:animate-none")} aria-hidden />
+                  {busy ? <Spinner className="size-3.5" /> : <RefreshCw className="size-3.5" aria-hidden />}
                   {t("refresh")}
                 </Button>
                 <Button type="button" variant="ghost" size="sm" disabled={locked} onClick={() => void loadFiles(true)}>

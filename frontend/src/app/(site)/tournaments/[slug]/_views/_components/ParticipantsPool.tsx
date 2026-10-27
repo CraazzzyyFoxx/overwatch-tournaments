@@ -11,6 +11,7 @@ import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import DivisionIcon from "@/components/DivisionIcon";
 import { CatalogEntityStrip } from "@/components/catalog/CatalogEntityImage";
 import { Card } from "@/components/ui/card";
+import { disclosureChevronClass } from "@/components/ui/chevron";
 import { answerFlag } from "@/lib/forms/answers";
 import { resolveDivisionFromRank } from "@/lib/divisions/grid";
 import { useSlotLabel } from "@/hooks/useSlotLabel";
@@ -332,13 +333,9 @@ function RoleColumn({
           <ul>{visible.map(renderRow)}</ul>
         )}
         {rest.length > 0 ? (
-          <details className="group mt-1 border-t border-[color:var(--aqt-border)] pt-1">
+          <details className="group/disclosure mt-1 border-t border-[color:var(--aqt-border)] pt-1">
             <summary className="flex cursor-pointer list-none items-center gap-1 rounded-md px-1.5 py-1 text-label text-[color:var(--aqt-fg-muted)] transition-colors hover:bg-[color:var(--aqt-overlay-2)] hover:text-[color:var(--aqt-fg)]">
-              <ChevronDown
-                size={12}
-                aria-hidden
-                className="transition-transform group-open:rotate-180"
-              />
+              <ChevronDown aria-hidden className={cn(disclosureChevronClass, "size-3")} />
               {t("tournamentDetail.participantsPool.more", { count: rest.length })}
             </summary>
             <ul>{rest.map((entry, index) => renderRow(entry, index + VISIBLE_PER_COLUMN))}</ul>
@@ -540,13 +537,9 @@ export default function ParticipantsPool({
 
       {withdrawn.length > 0 ? (
         <Card asChild>
-          <details className="group px-3 py-2">
+          <details className="group/disclosure px-3 py-2">
             <summary className="flex cursor-pointer list-none items-center gap-1.5 text-xs text-[color:var(--aqt-fg-muted)] transition-colors hover:text-[color:var(--aqt-fg)]">
-              <ChevronDown
-                size={12}
-                aria-hidden
-                className="transition-transform group-open:rotate-180"
-              />
+              <ChevronDown aria-hidden className={cn(disclosureChevronClass, "size-3")} />
               {t("tournamentDetail.participantsPool.withdrawn", { count: withdrawn.length })}
             </summary>
             <ul className="mt-2 flex flex-wrap gap-x-3 gap-y-1">

@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 
 import { ConnectionIndicator } from "@/components/realtime/ConnectionIndicator";
 import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 import { StatusDot } from "@/components/ui/status-dot";
 import type { DraftGating } from "@/lib/draft/logic";
 import { seatOf, viewerCount } from "@/lib/draft/room-model";
@@ -58,7 +59,7 @@ export function RoomHeader({ owner, board, gating, presence, connectionState }: 
         <ChevronLeft className="h-4 w-4 shrink-0" aria-hidden />
         <span className="truncate">{owner.name}</span>
       </Link>
-      <span aria-hidden className="hidden h-5 w-px bg-[color:var(--aqt-border-2)] sm:block" />
+      <Separator orientation="vertical" className="hidden h-5 bg-[color:var(--aqt-border-2)] sm:block" />
       <h1 className="font-onest text-heading font-semibold">{t("shell.title")}</h1>
       <Badge hue={STATUS_COLOR[status]} voice="label" shape="pill" className="shrink-0">
         <StatusDot />

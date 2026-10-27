@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { triggerChevronClass } from "@/components/ui/chevron";
 import {
   Collapsible,
   CollapsibleContent,
@@ -29,12 +30,9 @@ export default function OrganizerTools({ tournamentId, workspaceId }: Readonly<O
     <Card className="p-2">
       <Collapsible>
         <CollapsibleTrigger asChild>
-          <Button variant="ghost" className="group w-full justify-between">
+          <Button variant="ghost" className="group/trigger w-full justify-between">
             {t("analytics.organizer.title")}
-            <ChevronDown
-              aria-hidden
-              className="text-[color:var(--aqt-fg-muted)] motion-safe:transition-transform motion-safe:duration-150 group-data-[state=open]:rotate-180"
-            />
+            <ChevronDown aria-hidden className={triggerChevronClass} />
           </Button>
         </CollapsibleTrigger>
         <CollapsibleContent className="mt-2 border-t border-[color:var(--aqt-border)] px-4 pb-2 pt-4">

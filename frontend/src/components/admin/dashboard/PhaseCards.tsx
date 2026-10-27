@@ -14,6 +14,7 @@ import { TONE_TEXT, type Tone } from "@/components/ui/tone";
 import { eyebrowClass } from "@/components/ui/eyebrow";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { triggerChevronClass } from "@/components/ui/chevron";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import Image from "@/components/ui/image";
 import { Progress } from "@/components/ui/progress";
@@ -58,9 +59,9 @@ export function PhaseCards({ cards }: Readonly<{ cards: DashboardTournamentCard[
             ))}
           </CollapsibleContent>
           <CollapsibleTrigger asChild>
-            <Button variant="ghost" size="sm" className="w-fit text-muted-foreground">
+            <Button variant="ghost" size="sm" className="group/trigger w-fit text-muted-foreground">
               {open ? t("fewerCards") : t("moreCards", { count: rest.length })}
-              <ChevronDown className={cn("size-3.5 transition-transform", open && "rotate-180")} aria-hidden />
+              <ChevronDown className={cn(triggerChevronClass, "size-3.5")} aria-hidden />
             </Button>
           </CollapsibleTrigger>
         </Collapsible>

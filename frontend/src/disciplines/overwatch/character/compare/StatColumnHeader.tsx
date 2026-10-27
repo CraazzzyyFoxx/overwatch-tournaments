@@ -11,6 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
+import { TableHead } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 
 import { StatColumnDef, StatKey } from "./stat-columns";
@@ -44,11 +45,12 @@ const StatColumnHeader = ({
   const SortIcon = !isActive ? ArrowUpDown : sortDir === "asc" ? ArrowUp : ArrowDown;
 
   return (
-    <th
+    <TableHead
       scope="col"
       aria-sort={isActive ? (sortDir === "asc" ? "ascending" : "descending") : "none"}
       className={cn(
-        "border-b border-[color:var(--aqt-border)] px-2 py-2.5 align-middle font-normal",
+        // The cell carries the hairline: the table is `border-separate`, where row borders draw nothing.
+        "border-b border-[color:var(--aqt-border)] py-2.5 font-normal",
         isActive
           ? "bg-[color:var(--aqt-overlay-1)] shadow-[inset_0_-2px_0_var(--aqt-teal)]"
           : "bg-[color:var(--aqt-card)]"
@@ -101,7 +103,7 @@ const StatColumnHeader = ({
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-    </th>
+    </TableHead>
   );
 };
 

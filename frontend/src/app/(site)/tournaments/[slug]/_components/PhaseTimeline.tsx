@@ -4,6 +4,7 @@ import { useTranslations } from "next-intl";
 import { useFormatter } from "@/lib/datetime/client";
 
 import { Eyebrow } from "@/components/ui/eyebrow";
+import { Separator } from "@/components/ui/separator";
 import { useMinuteClock } from "@/hooks/useMinuteClock";
 import { cn } from "@/lib/utils";
 import type { Tournament } from "@/types/tournament.types";
@@ -138,7 +139,7 @@ export function PhaseTimeline({
                 )}
               />
               {isLast ? null : (
-                <span aria-hidden className="mt-1 w-px flex-1 bg-[color:var(--aqt-border)]" />
+                <Separator orientation="vertical" className="mt-1 h-auto flex-1" />
               )}
             </div>
             <div className={cn("flex min-w-0 flex-wrap items-baseline justify-between gap-x-3", isLast ? "pb-0" : "pb-3")}>

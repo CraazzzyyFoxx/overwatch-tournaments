@@ -75,7 +75,7 @@ export function MatchCard({
         <span
           className={cn(
             "shrink-0 font-onest font-bold leading-none tabular-nums",
-            size === "sm" ? "text-base" : "text-[20px]",
+            size === "sm" ? "text-base" : "text-title",
             won ? "text-[color:var(--aqt-teal)]" : "text-[color:var(--aqt-fg-muted)]"
           )}
         >

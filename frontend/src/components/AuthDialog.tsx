@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useOAuthProviders } from "@/hooks/useOAuthProviders";
 import { getSocialProviderConfig } from "@/lib/social/providers";
@@ -95,7 +96,7 @@ const AuthDialog = ({ tenantWorkspace }: AuthModalProps) => {
         </div>
 
         {/* Divider */}
-        <div className="h-px bg-border/70" />
+        <Separator className="bg-border/70" />
 
         {/* Provider buttons */}
         <div className="grid gap-2 px-8 py-5">
@@ -135,7 +136,7 @@ const AuthDialog = ({ tenantWorkspace }: AuthModalProps) => {
         </div>
 
         {/* Footer */}
-        <div className="h-px bg-border/70" />
+        <Separator className="bg-border/70" />
         <div className="flex justify-center px-8 py-4">
           <p className="text-center text-label leading-relaxed text-[color:var(--aqt-fg-faint)]">
             {t.rich("auth.agreement", {

@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import TeamName from "@/components/TeamName";
 import { Badge } from "@/components/ui/badge";
 import { Eyebrow, eyebrowClass } from "@/components/ui/eyebrow";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useBracketRoundLabel } from "@/hooks/useBracketRoundLabel";
 import type { BracketRoundShape } from "@/lib/bracket/round-name";
 import type { RoundGroup } from "@/lib/bracket/view";
@@ -76,6 +77,10 @@ export function OverviewMiniBracket({
   );
 }
 
+/** The compact ladder: no left gutter, the columns sit flush with the card's padding. */
+const LADDER_HEAD = "h-auto px-0 py-1.5 font-medium";
+const LADDER_CELL = "px-0 py-1.5";
+
 /** The group stage's ladders, in place of a bracket the stage does not have. */
 export function OverviewGroupTable({
   stage,
@@ -110,7 +115,7 @@ export function OverviewGroupTable({
           against the far edge of a 900px row. */}
       <div className={cn("grid gap-x-8 gap-y-5", standingsGroups.length > 1 && "sm:grid-cols-2")}>
         {standingsGroups.map((group) => (
-          <table className="w-full table-fixed text-sm" key={group.key}>
+          <Table className="caption-top table-fixed text-sm" key={group.key}>
             <caption
               className={cn(
                 "text-left",
@@ -123,33 +128,33 @@ export function OverviewGroupTable({
                 ? t("tournamentDetail.overview.groupTable.title", { stage: stage.name })
                 : groupDisplayName(group.name, t("common.group"))}
             </caption>
-            <thead>
-              <tr className={cn(eyebrowClass(), "border-b border-[color:var(--aqt-border)]")}>
-                <th scope="col" className="w-8 py-1.5 pr-2 text-left font-medium">
+            <TableHeader>
+              <TableRow>
+                <TableHead scope="col" className={cn(LADDER_HEAD, "w-8 pr-2")}>
                   <span aria-hidden>{t("tournamentDetail.overview.groupTable.pos")}</span>
                   <span className="sr-only">
                     {t("tournamentDetail.overview.groupTable.posLabel")}
                   </span>
-                </th>
-                <th scope="col" className="py-1.5 pr-2 text-left font-medium">
+                </TableHead>
+                <TableHead scope="col" className={cn(LADDER_HEAD, "pr-2")}>
                   {t("tournamentDetail.overview.groupTable.team")}
-                </th>
-                <th scope="col" className="w-20 py-1.5 pr-2 text-right font-medium">
+                </TableHead>
+                <TableHead scope="col" className={cn(LADDER_HEAD, "w-20 pr-2 text-right")}>
                   {t("standings.colWDL")}
-                </th>
-                <th scope="col" className="w-12 py-1.5 text-right font-medium">
+                </TableHead>
+                <TableHead scope="col" className={cn(LADDER_HEAD, "w-12 text-right")}>
                   {t("tournamentDetail.overview.groupTable.points")}
-                </th>
-              </tr>
-            </thead>
-            <tbody>
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {group.rows.map((row) => (
                 // A team a Swiss threshold eliminated keeps its place, read as done.
-                <tr key={row.id} className={cn(row.swiss_status === "eliminated" && "opacity-60")}>
-                  <td className="aqt-tnum py-1.5 pr-2 text-[color:var(--aqt-fg-muted)]">
+                <TableRow key={row.id} className={cn(row.swiss_status === "eliminated" && "opacity-60")}>
+                  <TableCell className={cn(LADDER_CELL, "aqt-tnum pr-2 text-[color:var(--aqt-fg-muted)]")}>
                     {row.position}
-                  </td>
-                  <td className="py-1.5 pr-2">
+                  </TableCell>
+                  <TableCell className={cn(LADDER_CELL, "pr-2")}>
                     <span className="flex min-w-0 items-center gap-2">
                       <TeamName team={row.team ?? { name: t("common.tbd") }} size="xs" />
                       {row.swiss_status ? (
@@ -167,20 +172,20 @@ export function OverviewGroupTable({
                         </Badge>
                       ) : null}
                     </span>
-                  </td>
+                  </TableCell>
                   {/* W·D·L, not W–L: these stages draw, and a "3–0" printed
                       for a 3W-2D-0L run contradicts both the matches played
                       and the points beside it. */}
-                  <td className="aqt-tnum py-1.5 pr-2 text-right">
+                  <TableCell className={cn(LADDER_CELL, "aqt-tnum pr-2 text-right")}>
                     {row.win}·{row.draw}·{row.lose}
-                  </td>
-                  <td className="aqt-tnum py-1.5 text-right font-semibold">
+                  </TableCell>
+                  <TableCell className={cn(LADDER_CELL, "aqt-tnum text-right font-semibold")}>
                     {formatPoints(row.points)}
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         ))}
       </div>
     </OverviewSection>
@@ -223,7 +228,7 @@ export function OverviewFfaTable({
     >
       <div className={cn("grid gap-x-8 gap-y-5", seated.length > 1 && "sm:grid-cols-2")}>
         {seated.map((lobby) => (
-          <table className="w-full table-fixed text-sm" key={lobby.encounter_id}>
+          <Table className="caption-top table-fixed text-sm" key={lobby.encounter_id}>
             <caption
               className={cn(
                 "text-left",
@@ -234,26 +239,26 @@ export function OverviewFfaTable({
             >
               {lobby.name}
             </caption>
-            <thead>
-              <tr className={cn(eyebrowClass(), "border-b border-[color:var(--aqt-border)]")}>
-                <th scope="col" className="w-8 py-1.5 pr-2 text-left font-medium">
+            <TableHeader>
+              <TableRow>
+                <TableHead scope="col" className={cn(LADDER_HEAD, "w-8 pr-2")}>
                   <span aria-hidden>{t("tournamentDetail.overview.groupTable.pos")}</span>
                   <span className="sr-only">
                     {t("tournamentDetail.overview.groupTable.posLabel")}
                   </span>
-                </th>
-                <th scope="col" className="py-1.5 pr-2 text-left font-medium">
+                </TableHead>
+                <TableHead scope="col" className={cn(LADDER_HEAD, "pr-2")}>
                   {t("tournamentDetail.overview.groupTable.team")}
-                </th>
-                <th scope="col" className="w-16 py-1.5 pr-2 text-right font-medium">
+                </TableHead>
+                <TableHead scope="col" className={cn(LADDER_HEAD, "w-16 pr-2 text-right")}>
                   {t("ffa.colGames")}
-                </th>
-                <th scope="col" className="w-12 py-1.5 text-right font-medium">
+                </TableHead>
+                <TableHead scope="col" className={cn(LADDER_HEAD, "w-12 text-right")}>
                   {t("tournamentDetail.overview.groupTable.points")}
-                </th>
-              </tr>
-            </thead>
-            <tbody>
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {/* Unranked rows (`position` null until the standings job runs)
                   keep their seating order at the bottom — `FfaLobbyTable`'s rule. */}
               {[...lobby.rows]
@@ -263,24 +268,24 @@ export function OverviewFfaTable({
                       (right.position ?? Number.MAX_SAFE_INTEGER) || left.slot - right.slot
                 )
                 .map((row) => (
-                  <tr key={row.team_id}>
-                    <td className="aqt-tnum py-1.5 pr-2 text-[color:var(--aqt-fg-muted)]">
+                  <TableRow key={row.team_id}>
+                    <TableCell className={cn(LADDER_CELL, "aqt-tnum pr-2 text-[color:var(--aqt-fg-muted)]")}>
                       {row.position ?? "—"}
-                    </td>
-                    <td className="py-1.5 pr-2">
+                    </TableCell>
+                    <TableCell className={cn(LADDER_CELL, "pr-2")}>
                       <TeamName
                         team={{ name: row.team_name, image_url: row.team_image_url }}
                         size="xs"
                       />
-                    </td>
-                    <td className="aqt-tnum py-1.5 pr-2 text-right">{row.games_played}</td>
-                    <td className="aqt-tnum py-1.5 text-right font-semibold">
+                    </TableCell>
+                    <TableCell className={cn(LADDER_CELL, "aqt-tnum pr-2 text-right")}>{row.games_played}</TableCell>
+                    <TableCell className={cn(LADDER_CELL, "aqt-tnum text-right font-semibold")}>
                       {formatPoints(row.points)}
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         ))}
       </div>
     </OverviewSection>

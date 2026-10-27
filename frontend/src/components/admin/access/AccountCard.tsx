@@ -3,11 +3,12 @@
 import { createContext, useContext, useId, useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import type { QueryClient } from "@tanstack/react-query";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 
 import { SettingGroup } from "@/components/kit/SettingRow";
 import { StatusPill } from "@/components/kit/StatusPill";
 import { Button } from "@/components/ui/button";
+import { triggerChevronClass } from "@/components/ui/chevron";
 import { eyebrowClass } from "@/components/ui/eyebrow";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { accessQueryKeys } from "@/lib/access/query-keys";
@@ -104,16 +105,14 @@ export function AccountDisclosure({
             size="icon-sm"
             aria-label={title}
             aria-expanded={isOpen}
+            className="group/trigger"
             aria-controls={isOpen ? contentId : undefined}
             onClick={() => {
               setOwnOpen(!isOpen);
               onOpenChange?.(!isOpen);
             }}
           >
-            <ChevronDown
-              aria-hidden
-              className={cn("transition-transform motion-reduce:transition-none", isOpen && "rotate-180")}
-            />
+            <ChevronDown aria-hidden className={triggerChevronClass} />
           </Button>
         }
       >
@@ -130,11 +129,8 @@ export function AccountDisclosure({
     <Collapsible open={open} onOpenChange={onOpenChange} asChild>
       <section className="space-y-2.5">
         <h3>
-          <CollapsibleTrigger className="group flex min-h-7 w-full items-center gap-1.5 rounded-md text-left focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">
-            <ChevronRight
-              aria-hidden
-              className="size-3.5 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-90 motion-reduce:transition-none"
-            />
+          <CollapsibleTrigger className="group/trigger flex min-h-7 w-full items-center gap-1.5 rounded-md text-left focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">
+            <ChevronDown aria-hidden className={cn(triggerChevronClass, "size-3.5")} />
             <span className={eyebrowClass("muted")}>{title}</span>
             {summary != null ? <span className={SUMMARY_CLASS}>{summary}</span> : null}
           </CollapsibleTrigger>

@@ -11,7 +11,9 @@ stale — say which, do not average the two.
   `/docs/design-book.html`). It illustrates; it does not override this file.
 - `npm run lint:design` (`scripts/check-design-compliance.mjs`) enforces the
   mechanical subset: no raw hex or Tailwind neutrals, the `color:` hint, an
-  11px hard floor on type, no glyph icons, no fake buttons.
+  11px hard floor on type, no `text-[Npx]`, no glyph icons, no fake buttons, no
+  native control, `<table>` or `<img>` outside `ui/`, no hand-turned chevron, no
+  hand-drawn hairline, no hand-rolled spinner.
 
 ## 0. The five rules agents break most
 
@@ -141,7 +143,7 @@ carries its line-height, weight stays explicit):
 
 - `tracking-label` (0.08em) is the only tracking for uppercase text. Not
   `tracking-[0.06em]`, not 0.04em.
-- No `text-[Npx]`, no `font-size: 11px`. Missing a size? Add a role.
+- No `text-[Npx]` (`lint:design` R12), no `font-size: 11px`. Missing a size? Add a role.
 - Numbers that line up use `.aqt-tnum`.
 - Uppercase is for labels the product writes ("ROLE", "AVG SR"), never for
   user content (team names, tournament names, nicknames).
@@ -311,9 +313,9 @@ own layer).
 ### Controls
 
 **Library controls only.** Native `<button>`, `<input>`, `<select>`,
-`<textarea>` and `<img>` appear only inside `components/ui/*`. Feature code
+`<textarea>`, `<table>` and `<img>` appear only inside `components/ui/*`. Feature code
 uses the primitives below; when none fits, add a variant or a primitive to
-`components/ui/` rather than hand-rolling one. `lint:design` (R8, R9)
+`components/ui/` rather than hand-rolling one. `lint:design` (R8–R10)
 enforces it; its few exemptions (OG renderer, user markdown, image capture,
 the last-resort `global-error`) are listed in the script with their reason.
 
@@ -336,7 +338,7 @@ the last-resort `global-error`) are listed in the script with their reason.
 | Tabs that are addresses     | `kit/LinkTabs.tsx` (`aria-current="page"`, `level={2}` for sub-tabs, `variant="pill"` for a segmented look)             |
 | View/mode of the same data  | `ui/toggle-group.tsx`, `pill` by default (`accent` per item; `variant="card"` for option cards), no `type` prop; group and items take any DOM prop and a `ref` (an item works under `TooltipTrigger asChild`); `aria-invalid` turns the frame red. On tournament sections `ViewSegment` (`?view=` / `?tab=`, default never written to the URL) |
 | Pagination                  | `ui/data-pagination.tsx` (`leading` slot for the range or rows-per-page); the current page is a `Button variant="accent"` |
-| Data table                  | `components/data-table/DataTable.tsx`: hover `--aqt-overlay-2`, checked rows `--aqt-overlay-3`, the inspector's current row a teal tint. A plain table is `ui/table.tsx` (`text-caption` cells, `--aqt-border` hairlines, heads in the eyebrow voice at the faint tone; a head holding user content adds `normal-case tracking-normal`), never a hand-rolled `<table>`; in an editor `adminDetailTableStyles` (`admin/AdminDetailTable.tsx`) |
+| Data table                  | `components/data-table/DataTable.tsx`: hover `--aqt-overlay-2`, checked rows `--aqt-overlay-3`, the inspector's current row a teal tint. A plain table is `ui/table.tsx` (`text-caption` cells, `--aqt-border` hairlines, heads in the eyebrow voice at the faint tone; a head holding user content adds `normal-case tracking-normal`), never a hand-rolled `<table>` (R10). `<caption>`, `<colgroup>` and `<tfoot>` stay native inside `Table`; its caption sits at the bottom, `caption-top` for a visible heading. A table that owns its scrolling passes `wrapperClassName`. In an editor `adminDetailTableStyles` (`admin/AdminDetailTable.tsx`) |
 | Load more                   | `InfiniteScrollFooter` (`ui/infinite-scroll.tsx`): translated inside, `unit` a translated noun, `size="lg"` on the public feed |
 | URL state                   | `hooks/useQueryParams.ts`                                                                                               |
 | Button                      | `ui/button.tsx`, `type="button"` unless a form's submit passes `type="submit"`. Filled, semibold: `default` (teal, the screen's main action) · `destructive` · `positive` (check in). Tonal: `outline` (the everyday button, raised off any surface). Quiet: `ghost` · `ghost-destructive` (icon remove) · `link`. Tinted: `accent` (teal row action, and the chosen option of a choice, so picking never changes its shape). `dashed` (add one more). Sizes `default` · `sm` · `lg` · `xs` · `icon` (36px, beside form-row controls) · `icon-toolbar` (32px, beside `size="sm"` controls) · `icon-sm` (28px, icon beside text) · `icon-xs` · `inline` (a link in a sentence) · `label` (sortable header) — never `size="icon"` plus a `size-8` override. Disabled keeps pointer events (`cursor-not-allowed`, 50%) so a title or tooltip says why; hover does not react. Every button sinks on press (§10) |
@@ -344,9 +346,9 @@ the last-resort `global-error`) are listed in the script with their reason.
 | Navigation sidebar          | `SidebarMenuButton` (`ui/sidebar.tsx`) with the `Tabs rail` recipe, sizes `sm` 28px/13px · `default` 32px/14px · `lg` 48px identity row, no call-site classes; `SidebarTrigger` is the outline `icon-sm` button. Ctrl/Cmd+B is ignored while focus is in a field |
 | Dialog / sheet chrome       | `DialogContent` / `SheetContent`; `DialogHeader` / `DialogFooter` `variant="panel"` for the edge-to-edge panel with a bordered header and footer; `closeButton={false}` when the panel draws its own close, `DialogClose` / `SheetClose`; `AlertDialogAction variant` (`destructive`, `positive`). Title, description, header spacing and footer layout belong to the primitive: call sites add no text size, font, colour, `space-y` or `gap`. The close label is `common.close` |
 | Floating bar / dock         | `OverlayBar` (`tone: Tone`), `Dock` (`headingLevel`), both on `floatingGlassClass` |
-| Divider                     | `ui/separator.tsx` (1px `--aqt-border`), never a `div h-px`                                                             |
+| Divider                     | `ui/separator.tsx` (1px `--aqt-border`; `orientation="vertical"` for a rule between inline items or a timeline's connector), never a `div h-px` (R13) |
 | Scroll / resize             | `ui/scroll-area.tsx` (thumb `--aqt-border-3`, `ScrollBar orientation="horizontal"`); `ui/resizable.tsx` (1px `--aqt-border` line, `--aqt-border-3` on hover or drag) |
-| Disclosure                  | `ui/collapsible.tsx`; the trigger is marked `group/trigger` and its chevron wears `triggerChevronClass` (Radix sets `aria-expanded`), never a hand-rolled rotate |
+| Disclosure                  | `ui/collapsible.tsx`; the trigger is marked `group/trigger` and its chevron wears `triggerChevronClass` (Radix sets `aria-expanded`; a hand-toggled button sets it itself). A native `<details>` is marked `group/disclosure` and its summary's chevron wears `disclosureChevronClass`. Both live in `ui/chevron.ts` (no `"use client"`, so Server Components use them too). The class owns colour and turn: a call site adds only a size and layout. Never a hand-rolled rotate (R11) |
 | Range                       | `ui/slider.tsx`, `aria-label` or `aria-labelledby` required, `accent` for a role-tinted track; disabled dims the whole slider |
 
 ### Status and data
@@ -368,7 +370,7 @@ the last-resort `global-error`) are listed in the script with their reason.
 | Tournament spotlight | `TournamentSpotlight` (`components/tournaments/TournamentSpotlight.tsx`): one tournament on a large stage, thumbnails switch it, autoplay every 7 s with a pause button. Built, not mounted yet |
 | Platform record    | `RecordFigure`, `RecordHolder`, `RecordContext` (`statistics/_components/records.tsx`): one record's figure, holder and where it happened, the same on `/statistics`, in the home leaders block and in the home hero's feed |
 | Markdown           | `components/Markdown.tsx`; editing `components/admin/MarkdownEditor.tsx`   |
-| Spinner (rare)     | `ui/spinner.tsx` — prefer a skeleton                                       |
+| Spinner (rare)     | `ui/spinner.tsx`, the one spinner (`animate-spin` elsewhere fails R14). Only for a wait the reader started or is watching: inside the control whose action is pending (`isPending ? <Spinner /> : <Icon />`), the icon of a running step or job beside its state in words, or a background refetch beside the stale content. Content that is loading draws its skeleton (§9) |
 
 ## 7. Layout
 
@@ -825,7 +827,9 @@ Rules on every admin screen:
 - [ ] No fact appears twice in one view.
 - [ ] Every control offers a real choice.
 - [ ] Tokens only; type roles only; `bun run lint:design` passes (it also
-      fails a native control or `<img>` outside `components/ui/`).
+      fails a native control, `<table>` or `<img>` outside `components/ui/`,
+      a hand-turned chevron, a `text-[Npx]`, a hand-drawn hairline and a
+      hand-rolled spinner).
 - [ ] Skeleton matches the layout; `empty`, `error`, `filtered-empty` all
       render.
 - [ ] Checked at 390 / 768 / 1024 / 1440; no horizontal page scroll.

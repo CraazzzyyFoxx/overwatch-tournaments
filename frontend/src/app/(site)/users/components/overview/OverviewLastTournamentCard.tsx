@@ -11,7 +11,8 @@ import { type MapResultPip } from "@/app/(site)/users/components/overview/map-re
 import { UserTournamentStat } from "@/types/statistics.types";
 import { CardSurface } from "@/components/profile/atoms";
 import { ResTag, type ResTagKind } from "@/components/match/cells";
-import { Button, triggerChevronClass } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
+import { triggerChevronClass } from "@/components/ui/chevron";
 import { Eyebrow } from "@/components/ui/eyebrow";
 import { isRankedEntry, LobbyStatGrid, type LobbyStatTile } from "@/components/profile/LobbyStatGrid";
 import ProfileWidget from "@/components/profile/ProfileWidget";
@@ -164,7 +165,7 @@ const OverviewLastTournamentCard = ({ tournament, metadata, tournaments, userId,
             height={52}
           />
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-1.5 font-onest text-[20px] font-bold leading-none text-[color:var(--aqt-fg)]">
+            <div className="flex items-center gap-1.5 font-onest text-title font-bold leading-none text-[color:var(--aqt-fg)]">
               <PlayerRoleIcon role={tournament.role} ontology={ontology} size={18} decorative />
               {roleLabel}
             </div>

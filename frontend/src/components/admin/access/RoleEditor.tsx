@@ -9,7 +9,7 @@ import {
   type PermissionCatalogEntry
 } from "@/components/admin/access/PermissionPicker";
 import { SaveBar } from "@/components/kit/SaveBar";
-import { Badge } from "@/components/ui/badge";
+import { StatusIcon } from "@/components/admin/StatusIcon";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -165,10 +165,7 @@ function RoleForm({
                 {detail.name}
               </h2>
               {detail.is_system ? (
-                <Badge variant="outline" className="shrink-0 text-muted-foreground">
-                  <Lock aria-hidden className="size-3" />
-                  {tc("system")}
-                </Badge>
+                <StatusIcon icon={Lock} label={tc("system")} variant="muted" className="shrink-0" />
               ) : null}
             </div>
             <p className="mt-0.5 text-sm text-muted-foreground">

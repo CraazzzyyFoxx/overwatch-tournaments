@@ -4,7 +4,7 @@ import { useTranslations } from "next-intl";
 import Link from "next/link";
 
 import { InspectorField, InspectorSection } from "@/components/kit/InspectorField";
-import { SocialAccountList } from "@/components/social/SocialAccountList";
+import { SocialAccountList } from "./SocialAccountList";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { initials } from "@/lib/utils";
@@ -39,7 +39,7 @@ export function PersonInspectorPanel({
 
       {person.social_accounts?.length ? (
         <InspectorSection title={t("socialIdentities")}>
-          <SocialAccountList accounts={person.social_accounts} linkify={false} />
+          <SocialAccountList accounts={person.social_accounts} />
         </InspectorSection>
       ) : null}
 

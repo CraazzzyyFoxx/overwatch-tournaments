@@ -21,6 +21,7 @@ import { TeamPlacement } from "@/components/TournamentTeamCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { triggerChevronClass } from "@/components/ui/chevron";
 import { IconTooltip } from "@/components/ui/icon-tooltip";
 import {
   Table,
@@ -227,8 +228,9 @@ function TeamRows({
               aria-expanded={open}
               aria-label={t("analytics.standings.togglePlayers", { team: team.name })}
               onClick={onToggle}
+              className="group/trigger"
             >
-              <ChevronDown aria-hidden className={cn("transition-transform", open && "rotate-180")} />
+              <ChevronDown aria-hidden className={triggerChevronClass} />
             </Button>
             <span className="w-8 shrink-0">
               {team.placement != null ? <TeamPlacement placement={team.placement} medal={ended} /> : null}

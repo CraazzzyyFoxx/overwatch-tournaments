@@ -31,6 +31,7 @@ import {
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
 import { PageStateCard } from "@/components/ui/page-state-card";
+import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useNodeCapture } from "@/hooks/useNodeCapture";
 import { cn } from "@/lib/utils";
@@ -620,10 +621,7 @@ export function PickupTeamsPanel({
                       ) : null}
                       {canWrite ? (
                         <>
-                          <span
-                            aria-hidden="true"
-                            className="mx-1 h-5 w-px bg-[color:var(--aqt-border)]"
-                          />
+                          <Separator orientation="vertical" className="mx-1 h-5" />
                           {/* Once a night, irreversible from here: an icon that only
                             turns red on hover, behind the same confirm as before,
                             instead of the loudest pill in the row. */}

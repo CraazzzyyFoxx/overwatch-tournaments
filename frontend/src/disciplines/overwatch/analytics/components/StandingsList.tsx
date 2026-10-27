@@ -9,6 +9,7 @@ import { TeamPlacement } from "@/components/TournamentTeamCard";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { RowButton } from "@/components/ui/row-button";
+import { Separator } from "@/components/ui/separator";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { groupDisplayName, groupHue } from "@/lib/tournament/group";
 import { formatPlace, standingsRank } from "@/disciplines/overwatch/analytics/analytics.helpers";
@@ -64,7 +65,7 @@ function PlaceConnector({ team, maxPosition }: Readonly<{ team: TeamVM; maxPosit
 
   return (
     <span role="img" aria-label={summary} title={summary} className="relative block h-4 min-w-0">
-      <span className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-[color:var(--aqt-border-2)]" />
+      <Separator className="absolute inset-x-0 top-1/2 -translate-y-1/2 bg-[color:var(--aqt-border-2)]" />
       {actual != null && actual !== predicted ? (
         <span
           className="absolute top-1/2 h-0.5 -translate-y-1/2 rounded-full"

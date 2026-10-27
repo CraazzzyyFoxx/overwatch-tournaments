@@ -3,7 +3,8 @@
 import { type ReactElement, type ReactNode } from "react";
 import { Check, ChevronDown } from "lucide-react";
 
-import { selectTriggerClass, triggerChevronClass } from "@/components/ui/button";
+import { selectTriggerClass } from "@/components/ui/button";
+import { triggerChevronClass } from "@/components/ui/chevron";
 import {
   Command,
   CommandEmpty,

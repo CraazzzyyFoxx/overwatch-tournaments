@@ -122,7 +122,7 @@ describe("the encounters table's rows", () => {
     }
     // CSS picks the layout: the cards below `md`, the table from it.
     expect(container.querySelector("ul")?.className).toContain("md:hidden");
-    expect(container.querySelector("table")?.parentElement?.className).toMatch(/\bhidden\b.*\bmd:block\b/);
+    expect(container.querySelector("table")?.closest('[data-ui="card"]')?.className).toMatch(/\bhidden\b.*\bmd:block\b/);
   });
 
   it("show one pip per decided map, named by its winner", async () => {

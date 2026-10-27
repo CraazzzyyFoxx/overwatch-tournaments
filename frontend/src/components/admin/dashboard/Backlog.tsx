@@ -6,6 +6,7 @@ import { ChevronDown } from "lucide-react";
 
 import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { Card } from "@/components/ui/card";
+import { triggerChevronClass } from "@/components/ui/chevron";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Skeleton } from "@/components/ui/skeleton";
 import { GameIcon } from "@/components/workspace/GameIcon";
@@ -82,17 +83,14 @@ export function Backlog({
       <Card asChild className={className}>
         <section aria-label={title}>
           <h2>
-            <CollapsibleTrigger className="flex w-full items-baseline gap-3 rounded-xl p-6 text-left focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
+            <CollapsibleTrigger className="group/trigger flex w-full items-baseline gap-3 rounded-xl p-6 text-left focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
               <span className={BLOCK_TITLE}>{title}</span>
               {backlog.tournaments_total > 0 ? (
                 <span className="text-sm text-muted-foreground">
                   {t("backlogSummary", { count: backlog.tournaments_total })}
                 </span>
               ) : null}
-              <ChevronDown
-                className={cn("ml-auto size-4 shrink-0 self-center text-muted-foreground transition-transform", open && "rotate-180")}
-                aria-hidden
-              />
+              <ChevronDown className={cn(triggerChevronClass, "ml-auto self-center")} aria-hidden />
             </CollapsibleTrigger>
           </h2>
           <CollapsibleContent className="space-y-4 px-6 pb-6">

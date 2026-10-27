@@ -5,6 +5,7 @@ import { useId } from "react";
 import { ArrowUpRight, ChevronDown, Clock3, TimerReset } from "lucide-react";
 import { useTranslations } from "next-intl";
 
+import { disclosureChevronClass } from "@/components/ui/chevron";
 import { NumberInput } from "@/components/ui/number-input";
 import { Label } from "@/components/ui/label";
 import {
@@ -229,10 +230,10 @@ export function DraftConfigStep({
         </p>
       </div>
 
-      <details className="group rounded-xl border border-border">
+      <details className="group/disclosure rounded-xl border border-border">
         <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 text-sm font-medium">
           {t("advanced")}
-          <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" aria-hidden />
+          <ChevronDown className={disclosureChevronClass} aria-hidden />
         </summary>
         <div className="space-y-4 border-t border-border px-4 py-4">
           <div className="flex items-start justify-between gap-4">

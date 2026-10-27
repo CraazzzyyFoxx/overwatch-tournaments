@@ -4,6 +4,7 @@ import { useTranslations } from "next-intl";
 
 import RosterSlotGlyph from "@/components/registration/RosterSlotGlyph";
 import { Eyebrow } from "@/components/ui/eyebrow";
+import { Separator } from "@/components/ui/separator";
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";
 import { useSlotLabel } from "@/hooks/useSlotLabel";
 import { slotCodesOf } from "@/lib/roster/shape";
@@ -93,7 +94,7 @@ export function OverviewFormatCard({ tournament }: Readonly<{ tournament: Tourna
                   <span className="aqt-tnum grid size-6 shrink-0 place-items-center rounded-full border border-[color:var(--aqt-border-2)] text-label text-[color:var(--aqt-fg-muted)]">
                     {waveIndex + 1}
                   </span>
-                  {isLast ? null : <span className="mt-1 w-px flex-1 bg-[color:var(--aqt-border)]" />}
+                  {isLast ? null : <Separator orientation="vertical" className="mt-1 h-auto flex-1" />}
                 </div>
                 <div className={cn("grid min-w-0 content-start gap-2 pt-0.5", isLast ? "pb-0" : "pb-4")}>
                   {wave.map((stage) => {

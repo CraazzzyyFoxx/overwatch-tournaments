@@ -2,6 +2,7 @@ import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 
 import { Card } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
@@ -96,7 +97,7 @@ function RoomSkeleton() {
             <Skeleton className="size-4" />
             <Skeleton className="h-3.5 w-30" />
           </div>
-          <span className="hidden h-5 w-px flex-none bg-[color:var(--aqt-border-2)] sm:block" />
+          <Separator orientation="vertical" className="hidden h-5 bg-[color:var(--aqt-border-2)] sm:block" />
           <Skeleton className="h-4.5 w-18" />
           <Skeleton className="h-6 w-18 flex-none rounded-full" data-draft-skeleton="status-pill" />
           <div className="ml-auto flex min-w-0 items-center gap-4">

@@ -6,6 +6,7 @@ import { ArrowUpRight, ChevronDown } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import TeamName from "@/components/TeamName";
+import { disclosureChevronClass } from "@/components/ui/chevron";
 import { Eyebrow } from "@/components/ui/eyebrow";
 import { withReturnTo } from "@/lib/auth/return-to";
 import { encounterSeatScore } from "@/lib/encounter/detail";
@@ -156,7 +157,7 @@ export function MatchRow({
           </HoverPrefetchLink>
         ) : null}
         {expandable ? (
-          <ChevronDown className="size-3.5 transition-transform group-open:rotate-180" aria-hidden />
+          <ChevronDown className={cn(disclosureChevronClass, "size-3.5")} aria-hidden />
         ) : (
           <span className="inline-block size-3.5" aria-hidden />
         )}
@@ -171,7 +172,7 @@ export function MatchRow({
   }
 
   return (
-    <details className={cn("group", rowBorder)}>
+    <details className={cn("group/disclosure", rowBorder)}>
       <summary
         className={cn(
           "cursor-pointer list-none [&::-webkit-details-marker]:hidden focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[color:var(--aqt-teal)]",

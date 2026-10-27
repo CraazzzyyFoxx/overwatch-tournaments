@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { Eyebrow } from "@/components/ui/eyebrow";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import userService from "@/services/user.service";
 import { getPlayerSlug } from "@/lib/player";
 import type { LobbyLeaderboard } from "@/types/user.types";
@@ -120,57 +121,54 @@ const LobbyLeaderboardModal = ({ userId, tournamentId, stat, statLabel, onClose 
         ) : entries.length === 0 ? (
           <p className="py-6 text-center text-caption text-[color:var(--aqt-fg-dim)]">{t("common.noData")}</p>
         ) : (
-          <div className="max-h-[60vh] overflow-y-auto">
-            <table className="w-full border-collapse text-caption">
-              <tbody>
-                {entries.map((e) => {
-                  const isYou = e.player_id === userId;
-                  return (
-                    <tr
-                      key={e.player_id}
-                      className="border-b border-[color:var(--aqt-border)] last:border-b-0"
-                      style={isYou ? { background: "color-mix(in srgb, var(--aqt-teal) 12%, transparent)" } : undefined}
-                    >
-                      <td className="aqt-tnum px-3 py-2 text-right align-middle" style={{ width: 40 }}>
-                        <span className="font-bold" style={{ color: medalColor(e.rank) ?? "var(--aqt-fg-faint)" }}>
-                          {e.rank}
+          <Table wrapperClassName="max-h-[60vh] overflow-y-auto" className="border-collapse">
+            <TableBody>
+              {entries.map((e) => {
+                const isYou = e.player_id === userId;
+                return (
+                  <TableRow
+                    key={e.player_id}
+                    style={isYou ? { background: "color-mix(in srgb, var(--aqt-teal) 12%, transparent)" } : undefined}
+                  >
+                    <TableCell className="aqt-tnum px-3 py-2 text-right" style={{ width: 40 }}>
+                      <span className="font-bold" style={{ color: medalColor(e.rank) ?? "var(--aqt-fg-faint)" }}>
+                        {e.rank}
+                      </span>
+                    </TableCell>
+                    <TableCell className="px-3 py-2">
+                      <HoverPrefetchLink
+                        href={`/users/${getPlayerSlug(e.name)}`}
+                        className="font-semibold text-[color:var(--aqt-fg)] hover:text-[color:var(--aqt-teal)]"
+                      >
+                        {e.name}
+                      </HoverPrefetchLink>
+                      {isYou ? (
+                        <Eyebrow className="aqt-tnum ml-2 text-[color:var(--aqt-teal)]">
+                          {t("users.overview.leaderboard.you")}
+                        </Eyebrow>
+                      ) : null}
+                    </TableCell>
+                    <TableCell className="px-3 py-2" style={{ width: 160 }}>
+                      <div className="flex items-center gap-2">
+                        <span className="h-[5px] flex-1 overflow-hidden rounded-full bg-[color:var(--aqt-card-2)]">
+                          <span
+                            className="block h-full rounded-full"
+                            style={{
+                              width: `${barPct(e.value)}%`,
+                              background: "linear-gradient(90deg, var(--aqt-teal-deep), var(--aqt-teal))"
+                            }}
+                          />
                         </span>
-                      </td>
-                      <td className="px-3 py-2 align-middle">
-                        <HoverPrefetchLink
-                          href={`/users/${getPlayerSlug(e.name)}`}
-                          className="font-semibold text-[color:var(--aqt-fg)] hover:text-[color:var(--aqt-teal)]"
-                        >
-                          {e.name}
-                        </HoverPrefetchLink>
-                        {isYou ? (
-                          <Eyebrow className="aqt-tnum ml-2 text-[color:var(--aqt-teal)]">
-                            {t("users.overview.leaderboard.you")}
-                          </Eyebrow>
-                        ) : null}
-                      </td>
-                      <td className="px-3 py-2 align-middle" style={{ width: 160 }}>
-                        <div className="flex items-center gap-2">
-                          <span className="h-[5px] flex-1 overflow-hidden rounded-full bg-[color:var(--aqt-card-2)]">
-                            <span
-                              className="block h-full rounded-full"
-                              style={{
-                                width: `${barPct(e.value)}%`,
-                                background: "linear-gradient(90deg, var(--aqt-teal-deep), var(--aqt-teal))"
-                              }}
-                            />
-                          </span>
-                          <span className="aqt-tnum w-14 text-right font-bold text-[color:var(--aqt-fg)]">
-                            {fmtValue(e.value)}
-                          </span>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                        <span className="aqt-tnum w-14 text-right font-bold text-[color:var(--aqt-fg)]">
+                          {fmtValue(e.value)}
+                        </span>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
         )}
       </DialogContent>
     </Dialog>

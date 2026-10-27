@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Eyebrow } from "@/components/ui/eyebrow";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { RowButton } from "@/components/ui/row-button";
+import { Separator } from "@/components/ui/separator";
 import { GameMark } from "@/components/workspace/GameMark";
 import { useScopePillOpen } from "@/components/workspace/scope-pill-store";
 import { WorkspaceAvatar } from "@/components/workspace/WorkspaceAvatar";
@@ -291,7 +292,7 @@ export function ScopePill() {
           </div>
           {tenant ? null : (
             <>
-              <div className="my-1.5 h-px bg-[color:var(--aqt-border)]" />
+              <Separator className="my-1.5" />
               {workspace ? (
                 <Link
                   href={`/workspace/${workspace.slug}`}

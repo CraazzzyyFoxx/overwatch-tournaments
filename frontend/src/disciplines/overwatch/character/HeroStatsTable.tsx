@@ -4,8 +4,8 @@ import { useState } from "react";
 import { Crown } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { eyebrowClass } from "@/components/ui/eyebrow";
 import { SearchField } from "@/components/ui/search-field";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useFormatter } from "@/lib/datetime/client";
 import { cn } from "@/lib/utils";
 
@@ -13,10 +13,7 @@ import { sections, type StatRow } from "./hero-stats";
 import StatGameLink from "./StatGameLink";
 import { deltaColor, formatDelta, formatStatValue } from "./utils";
 
-const HEAD = cn(
-  eyebrowClass(),
-  "aqt-tnum whitespace-nowrap border-b border-[color:var(--aqt-border)] px-3 py-2.5 text-right"
-);
+const HEAD = "aqt-tnum whitespace-nowrap px-3 py-2.5 text-right";
 /** The stat column stays put while the figures scroll under it on a narrow screen. */
 const STICKY = "sticky left-0 z-10 bg-[color:var(--aqt-card)]";
 
@@ -54,43 +51,55 @@ const HeroStatsTable = ({ rows, lowSampleNote }: { rows: StatRow[]; lowSampleNot
         // `relative`: the Δ head's screen-reader text is absolutely positioned, and would otherwise widen the page.
         className="relative overflow-x-auto rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-[color:var(--aqt-teal)]"
       >
-        <table className="aqt-tnum w-full min-w-[46rem] border-collapse text-caption">
-          <thead>
-            <tr>
-              <th scope="col" className={cn(HEAD, STICKY, "text-left")}>
+        {/* The region above owns the scroll (and the sticky stat column), so the table's own wrapper stays inert. */}
+        <Table wrapperClassName="overflow-visible" className="aqt-tnum min-w-[46rem] border-collapse">
+          <TableHeader>
+            <TableRow>
+              <TableHead scope="col" className={cn(HEAD, STICKY, "text-left")}>
                 {t("users.heroes.col.stat")}
-              </th>
-              <th scope="col" className={HEAD}>
+              </TableHead>
+              <TableHead scope="col" className={HEAD}>
                 {t("users.heroes.col.avg10")}
-              </th>
-              <th scope="col" className={HEAD}>
+              </TableHead>
+              <TableHead scope="col" className={HEAD}>
                 {t("users.heroes.col.global10")}
-              </th>
-              <th scope="col" className={HEAD} title={lowSampleNote ?? undefined}>
+              </TableHead>
+              <TableHead scope="col" className={HEAD} title={lowSampleNote ?? undefined}>
                 <span aria-hidden>Δ</span>
                 <span className="sr-only">{t("users.heroes.col.delta")}</span>
-              </th>
-              <th scope="col" className={HEAD}>
+              </TableHead>
+              <TableHead scope="col" className={HEAD}>
                 {t("users.heroes.col.overall")}
-              </th>
-              <th scope="col" className={HEAD}>
+              </TableHead>
+              <TableHead scope="col" className={HEAD}>
                 {t("users.heroes.col.bestYou")}
-              </th>
-              <th scope="col" className={HEAD}>
+              </TableHead>
+              <TableHead scope="col" className={HEAD}>
                 {t("users.heroes.col.bestAll")}
-              </th>
-            </tr>
-          </thead>
+              </TableHead>
+            </TableRow>
+          </TableHeader>
           {shown.map((section) => (
-            <tbody key={section.group}>
-              <tr>
-                <th scope="rowgroup" colSpan={7} className={cn(eyebrowClass("dim"), "px-3 pb-1.5 pt-4 text-left")}>
+            <TableBody key={section.group}>
+              <TableRow className="border-b-0 hover:bg-transparent">
+                <TableHead
+                  scope="rowgroup"
+                  colSpan={7}
+                  className="px-3 pb-1.5 pt-4 text-[color:var(--aqt-fg-dim)]"
+                >
                   {t(`users.heroes.group.${section.group}`)}
-                </th>
-              </tr>
+                </TableHead>
+              </TableRow>
               {section.rows.map((row) => (
-                <tr key={row.name} className="h-11 border-b border-[color:var(--aqt-border)] last:border-b-0">
-                  <th scope="row" className={cn(STICKY, "px-3 py-2 text-left font-medium text-[color:var(--aqt-fg)]")}>
+                <TableRow key={row.name} className="group h-11">
+                  {/* Opaque, so the figures scroll under it; the row hover is layered on top. */}
+                  <TableHead
+                    scope="row"
+                    className={cn(
+                      STICKY,
+                      "px-3 py-2 text-caption font-medium normal-case tracking-normal text-[color:var(--aqt-fg)] group-hover:bg-[image:linear-gradient(var(--aqt-overlay-2),var(--aqt-overlay-2))]"
+                    )}
+                  >
                     <span className="inline-flex items-center gap-1.5">
                       {label(row)}
                       {row.holdsRecord ? (
@@ -101,31 +110,31 @@ const HeroStatsTable = ({ rows, lowSampleNote }: { rows: StatRow[]; lowSampleNot
                         />
                       ) : null}
                     </span>
-                  </th>
-                  <td className="px-3 py-2 text-right font-semibold text-[color:var(--aqt-fg)]">
+                  </TableHead>
+                  <TableCell className="px-3 py-2 text-right font-semibold text-[color:var(--aqt-fg)]">
                     {formatStatValue(format, row.name, row.value)}
-                  </td>
-                  <td className="px-3 py-2 text-right text-[color:var(--aqt-fg-dim)]">
+                  </TableCell>
+                  <TableCell className="px-3 py-2 text-right text-[color:var(--aqt-fg-dim)]">
                     {row.average == null ? "—" : formatStatValue(format, row.name, row.average)}
-                  </td>
-                  <td
+                  </TableCell>
+                  <TableCell
                     className="px-3 py-2 text-right font-bold"
                     style={{ color: deltaColor(row.delta) }}
                     title={row.delta == null ? (lowSampleNote ?? undefined) : undefined}
                   >
                     {row.delta == null ? "—" : formatDelta(row.delta)}
-                  </td>
-                  <td className="px-3 py-2 text-right text-[color:var(--aqt-fg-muted)]">
+                  </TableCell>
+                  <TableCell className="px-3 py-2 text-right text-[color:var(--aqt-fg-muted)]">
                     {row.total == null ? "—" : formatStatValue(format, row.name, row.total)}
-                  </td>
-                  <td className="px-3 py-1.5 text-right text-[color:var(--aqt-fg-faint)]">
+                  </TableCell>
+                  <TableCell className="px-3 py-1.5 text-right text-[color:var(--aqt-fg-faint)]">
                     {row.best ? (
                       <StatGameLink game={row.best} value={formatStatValue(format, row.name, row.best.value)} />
                     ) : (
                       "—"
                     )}
-                  </td>
-                  <td className="px-3 py-1.5 text-right text-[color:var(--aqt-fg-faint)]">
+                  </TableCell>
+                  <TableCell className="px-3 py-1.5 text-right text-[color:var(--aqt-fg-faint)]">
                     {row.record ? (
                       <StatGameLink
                         game={row.record}
@@ -135,12 +144,12 @@ const HeroStatsTable = ({ rows, lowSampleNote }: { rows: StatRow[]; lowSampleNot
                     ) : (
                       "—"
                     )}
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
+            </TableBody>
           ))}
-        </table>
+        </Table>
         {shown.length === 0 ? (
           <p className="py-8 text-center text-caption text-[color:var(--aqt-fg-dim)]">{t("users.heroes.noStatsMatch")}</p>
         ) : null}

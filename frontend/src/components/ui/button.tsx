@@ -26,16 +26,6 @@ export const outlineSurfaceClass =
   "border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-3)] text-[color:var(--aqt-fg)] shadow-[inset_0_1px_0_var(--aqt-overlay-3)] hover:border-[color:var(--aqt-border-3)] hover:bg-[color:var(--aqt-overlay-4)] aria-expanded:border-[color:var(--aqt-border-3)]";
 
 /**
- * The trailing chevron of a select-like trigger: it turns over while the panel
- * is open, read off the `aria-expanded` of the trigger marked `group/trigger`
- * (named, so an expanded ancestor never turns it). A named group rather than a
- * `[[aria-expanded=true]>&]` selector: happy-dom keeps the `&gt;` that selector
- * serializes to inside an SVG class, and every hydration test would mismatch.
- */
-export const triggerChevronClass =
-  "size-4 shrink-0 opacity-50 transition-transform duration-150 group-aria-expanded/trigger:rotate-180";
-
-/**
  * The select-like trigger, worn by `SelectTrigger`, the `Combobox` trigger and
  * both date pickers so a plain and a searchable picker read as one control: `sm` the 32px toolbar
  * row (13px), `default` the 36px form row (14px); `default` the outline button's
@@ -49,7 +39,7 @@ export function selectTriggerClass(
   return cn(
     // `*:` rather than `[&>span]:`: happy-dom keeps the `&gt;` React serializes
     // a `>` in a class to, and every hydration test of a page with a picker
-    // would mismatch (see `triggerChevronClass`). Same for quotes in `[class*=…]`.
+    // would mismatch (see `ui/chevron.ts`). Same for quotes in `[class*=…]`.
     "group/trigger flex w-full items-center justify-between gap-2 whitespace-nowrap rounded-lg px-3 py-2 font-medium transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive data-[placeholder]:text-[color:var(--aqt-fg-dim)] *:min-w-0 *:truncate [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*=size-])]:size-4",
     size === "sm" ? "h-8 text-caption" : "h-9 text-sm",
     variant === "surface"

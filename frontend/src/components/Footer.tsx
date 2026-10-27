@@ -87,14 +87,14 @@ export function Footer({ tenant }: Readonly<{ tenant: Workspace | null }>) {
             {tenant ? (
               <>
                 <WorkspaceAvatar workspace={tenant} size={28} />
-                <span className="font-display text-[16px] font-extrabold tracking-[0.02em]">
+                <span className="font-display text-ui font-extrabold tracking-[0.02em]">
                   {tenant.name}
                 </span>
               </>
             ) : (
               <>
                 <Image src="/brand-mark.svg" alt="" width={28} height={28} className="rounded-[7px]" />
-                <span className="font-display text-[17px] font-extrabold leading-none tracking-[0.02em]">
+                <span className="font-display text-heading font-extrabold leading-none tracking-[0.02em]">
                   {BRAND_NAME}
                 </span>
               </>

@@ -22,6 +22,7 @@ import { EmptyNote, LoadErrorNote } from "@/components/kit/EmptyNote";
 import { SettingGroup } from "@/components/kit/SettingRow";
 import { formatDate, formatRelative } from "@/components/kit/format-time";
 import { Button } from "@/components/ui/button";
+import { disclosureChevronClass } from "@/components/ui/chevron";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { adminQueryKeys } from "@/lib/admin/query-keys";
@@ -94,10 +95,7 @@ function CheckRunRow({ run }: Readonly<{ run: SubscriptionCheckLogRow[] }>) {
       <span className="text-body font-medium">{PROVIDER_LABELS[latest.provider] ?? latest.provider}</span>
       <span className="text-caption tabular-nums text-muted-foreground">{meta}</span>
       {folded ? (
-        <ChevronDown
-          aria-hidden
-          className="size-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180 motion-reduce:transition-none"
-        />
+        <ChevronDown aria-hidden className={disclosureChevronClass} />
       ) : null}
       {reason ? (
         <span className={cn("text-caption", latest.error ? "text-danger" : "text-muted-foreground")}>
@@ -114,7 +112,7 @@ function CheckRunRow({ run }: Readonly<{ run: SubscriptionCheckLogRow[] }>) {
   if (!folded) return <li className={ROW_CLASS}>{line}</li>;
   return (
     <li>
-      <details className="group">
+      <details className="group/disclosure">
         <summary
           className={cn(
             ROW_CLASS,

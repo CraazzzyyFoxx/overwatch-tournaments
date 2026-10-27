@@ -6,7 +6,8 @@ import { type DateTimeFormatOptions, useTranslations } from "next-intl";
 import { useFormatter } from "@/lib/datetime/client";
 import { type DateRange } from "react-day-picker";
 
-import { selectTriggerClass, triggerChevronClass } from "@/components/ui/button";
+import { selectTriggerClass } from "@/components/ui/button";
+import { triggerChevronClass } from "@/components/ui/chevron";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 

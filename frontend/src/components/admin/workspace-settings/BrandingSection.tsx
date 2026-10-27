@@ -4,6 +4,7 @@ import { useTranslations } from "next-intl";
 import { ChevronDown } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { triggerChevronClass } from "@/components/ui/chevron";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Switch } from "@/components/ui/switch";
 import { SaveBar } from "@/components/kit/SaveBar";
@@ -127,11 +128,8 @@ export function BrandingSection({ workspaceId }: Readonly<{ workspaceId: number 
             <SettingGroup id="overrides" title={t("corePalette")} description={t("corePaletteHelp")}>
               <Collapsible defaultOpen={overridesSaved}>
                 <CollapsibleTrigger asChild>
-                  <Button type="button" variant="ghost" size="sm" className="group -ml-2">
-                    <ChevronDown
-                      aria-hidden
-                      className="size-4 transition-transform group-data-[state=open]:rotate-180"
-                    />
+                  <Button type="button" variant="ghost" size="sm" className="group group/trigger -ml-2">
+                    <ChevronDown aria-hidden className={triggerChevronClass} />
                     <span className="group-data-[state=open]:hidden">{t("showOverrides")}</span>
                     <span className="hidden group-data-[state=open]:inline">{t("hideOverrides")}</span>
                   </Button>

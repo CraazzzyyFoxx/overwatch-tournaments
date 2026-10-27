@@ -25,6 +25,7 @@ import {
   useAuditTranslator
 } from "@/components/kit/audit-log";
 import { Button } from "@/components/ui/button";
+import { triggerChevronClass } from "@/components/ui/chevron";
 import { ApiError } from "@/lib/api/error";
 import { cn } from "@/lib/utils";
 import adminService from "@/services/admin.service";
@@ -243,10 +244,10 @@ function AuditEntry({ entry }: Readonly<{ entry: AuditLogRead }>) {
             size="sm"
             aria-expanded={open}
             onClick={() => setOpen((current) => !current)}
-            className="shrink-0 gap-1 text-muted-foreground"
+            className="group/trigger shrink-0 gap-1 text-muted-foreground"
           >
             {open ? t("hideDetails") : t("details")}
-            <ChevronDown aria-hidden className={cn("transition-transform", open && "rotate-180")} />
+            <ChevronDown aria-hidden className={triggerChevronClass} />
           </Button>
         ) : null}
       </div>

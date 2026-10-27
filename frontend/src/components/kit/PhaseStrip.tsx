@@ -3,6 +3,7 @@
 import { Check } from "lucide-react";
 import { useTranslations } from "next-intl";
 
+import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 
 export type PhaseState = "done" | "current" | "todo";
@@ -61,9 +62,7 @@ export function PhaseStrip({ phases, variant = "labelled" }: Readonly<PhaseStrip
     <ol aria-label={t("phases")} className="flex flex-wrap items-center gap-x-2 gap-y-1">
       {phases.map((phase, index) => (
         <li key={phase.key} className="flex items-center gap-2">
-          {index > 0 ? (
-            <span aria-hidden className="h-px w-4 shrink-0 bg-border sm:w-6" />
-          ) : null}
+          {index > 0 ? <Separator className="w-4 sm:w-6" /> : null}
           <span
             aria-current={phase.state === "current" ? "step" : undefined}
             className={cn(

@@ -5,8 +5,7 @@ import { useTranslations } from "next-intl";
 import { useDebounce } from "use-debounce";
 import { EncounterWithUserStats } from "@/types/user.types";
 import { DataPagination } from "@/components/ui/data-pagination";
-import { eyebrowClass } from "@/components/ui/eyebrow";
-import { cn } from "@/lib/utils";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useQueryParams } from "@/hooks/useQueryParams";
 import { CardSurface } from "@/components/profile/atoms";
 import MatchRow from "@/app/(site)/users/components/matches/MatchRow";
@@ -120,37 +119,29 @@ const MatchesTable = ({
 
       <div className="grid grid-cols-1 items-start gap-3.5 xl:grid-cols-[1fr_320px]">
         <CardSurface flush>
-          <div className="overflow-x-auto">
-            <table className="aqt-tnum w-full border-collapse text-body">
-              <thead>
-                <tr>
-                  {headers.map((h) => (
-                    <th
-                      key={h}
-                      className={cn(
-                        eyebrowClass(),
-                        "aqt-tnum border-b border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-1)] px-3.5 py-3 text-left"
-                      )}
-                    >
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {encounters.map((enc) => (
-                  <MatchRow key={enc.id} enc={enc} selfUserId={selfUserId} showGame={allGames} />
+          <Table className="aqt-tnum border-collapse text-body">
+            <TableHeader>
+              <TableRow>
+                {headers.map((h) => (
+                  <TableHead key={h} className="aqt-tnum bg-[color:var(--aqt-overlay-1)] px-3.5 py-3">
+                    {h}
+                  </TableHead>
                 ))}
-                {encounters.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="px-3.5 py-10 text-center text-[color:var(--aqt-fg-dim)]">
-                      {t("users.matches.noMatches")}
-                    </td>
-                  </tr>
-                ) : null}
-              </tbody>
-            </table>
-          </div>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {encounters.map((enc) => (
+                <MatchRow key={enc.id} enc={enc} selfUserId={selfUserId} showGame={allGames} />
+              ))}
+              {encounters.length === 0 ? (
+                <TableRow className="hover:bg-transparent">
+                  <TableCell colSpan={8} className="px-3.5 py-10 text-center text-[color:var(--aqt-fg-dim)]">
+                    {t("users.matches.noMatches")}
+                  </TableCell>
+                </TableRow>
+              ) : null}
+            </TableBody>
+          </Table>
           <DataPagination
             page={page}
             totalPages={pages}

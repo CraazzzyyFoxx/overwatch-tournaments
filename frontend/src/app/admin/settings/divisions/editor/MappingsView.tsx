@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import { Card } from "@/components/ui/card";
 import { eyebrowClass } from "@/components/ui/eyebrow";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import type { DivisionGridReadinessSource, DivisionTier } from "@/types/workspace.types";
 
@@ -117,34 +118,34 @@ export function MappingsView({
             </p>
 
             <Card className="min-w-0 overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border text-left">
-                    <th scope="col" className="px-3 py-2 font-medium">
+              <Table wrapperClassName="overflow-visible">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead scope="col" className="px-3 py-2 normal-case tracking-normal">
                       {t("table.versionDivision", { version: readiness.version_label })}
-                    </th>
-                    <th scope="col" className="px-3 py-2 font-medium">
+                    </TableHead>
+                    <TableHead scope="col" className="px-3 py-2">
                       {t("table.rankRange")}
-                    </th>
-                    <th scope="col" className="px-3 py-2 font-medium">
+                    </TableHead>
+                    <TableHead scope="col" className="px-3 py-2 normal-case tracking-normal">
                       {t("mappingLabels.inTarget", { target: targetLabel })}
-                    </th>
-                    <th scope="col" className="px-3 py-2 font-medium">
+                    </TableHead>
+                    <TableHead scope="col" className="px-3 py-2">
                       {t("mappingLabels.match")}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {rows.map((row) => {
                     const target = resolveTarget(row, chosen, bands);
                     const sourceTierId = row.source.id;
                     return (
-                      <tr key={row.source.slug} className="border-b border-border last:border-b-0">
-                        <td className="px-3 py-2">{row.source.name}</td>
-                        <td className="px-3 py-2 text-xs tabular-nums text-muted-foreground">
+                      <TableRow key={row.source.slug}>
+                        <TableCell className="px-3 py-2">{row.source.name}</TableCell>
+                        <TableCell className="px-3 py-2 text-xs tabular-nums text-muted-foreground">
                           {rankRangeLabel(row.source)}
-                        </td>
-                        <td className="px-3 py-2">
+                        </TableCell>
+                        <TableCell className="px-3 py-2">
                           {editable && sourceTierId !== undefined ? (
                             <MappingTargetPicker
                               row={row}
@@ -157,20 +158,20 @@ export function MappingsView({
                           ) : (
                             <span className="text-warning">{t("mappings.unresolved")}</span>
                           )}
-                        </td>
-                        <td
+                        </TableCell>
+                        <TableCell
                           className={cn(
                             "px-3 py-2 text-xs",
                             target === null ? "text-warning" : "text-muted-foreground"
                           )}
                         >
                           {matchLabel(row, target)}
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     );
                   })}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </Card>
           </section>
         );

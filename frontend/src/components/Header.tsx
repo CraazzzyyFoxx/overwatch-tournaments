@@ -14,6 +14,7 @@ import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { PlayerSearchCombobox } from "@/components/PlayerSearchCombobox";
 import { NAV_GROUPS, NAV_LINKS, currentNavHref, navItemAvailable } from "@/components/site/site-nav-groups";
 import { Button } from "@/components/ui/button";
+import { triggerChevronClass } from "@/components/ui/chevron";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,6 +22,7 @@ import {
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
 import { Eyebrow } from "@/components/ui/eyebrow";
+import { Separator } from "@/components/ui/separator";
 import { Sheet, SheetClose, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import UserMenu from "@/components/UserMenu";
 import { WorkspaceAvatar, type WorkspaceAvatarSource } from "@/components/workspace/WorkspaceAvatar";
@@ -135,7 +137,7 @@ const Header = ({ tenantMode, tenantWorkspace }: HeaderProps) => {
                     ) : (
                       <>
                         <Image src="/brand-mark.svg" alt="" width={28} height={28} className="size-7 rounded-[7px]" />
-                        <span className="font-display text-[17px] font-extrabold leading-none tracking-[0.02em]">
+                        <span className="font-display text-heading font-extrabold leading-none tracking-[0.02em]">
                           {BRAND_NAME}
                         </span>
                       </>
@@ -253,13 +255,13 @@ const Header = ({ tenantMode, tenantWorkspace }: HeaderProps) => {
               >
                 <Image src="/brand-mark.svg" alt="" width={28} height={28} className="size-7 rounded-[7px]" />
                 {/* 1024–1279 the nav joins the row; the mark carries the brand alone. */}
-                <span className="font-display text-[17px] font-extrabold leading-none tracking-[0.02em] lg:max-xl:hidden">
+                <span className="font-display text-heading font-extrabold leading-none tracking-[0.02em] lg:max-xl:hidden">
                   {BRAND_NAME}
                 </span>
               </Link>
-              <span
-                aria-hidden
-                className="hidden h-[22px] w-px shrink-0 bg-[color:var(--aqt-border-2)] sm:block"
+              <Separator
+                orientation="vertical"
+                className="hidden h-[22px] shrink-0 bg-[color:var(--aqt-border-2)] sm:block"
               />
               <ScopePill />
             </>
@@ -274,13 +276,10 @@ const Header = ({ tenantMode, tenantWorkspace }: HeaderProps) => {
                     <Button
                       variant="ghost"
                       data-current={isCurrent || undefined}
-                      className={cn("group [&_svg]:size-3.5", NAV_ITEM_CLASS)}
+                      className={cn("group/trigger [&_svg]:size-3.5", NAV_ITEM_CLASS)}
                     >
                       {t(`nav.groups.${group.key}`)}
-                      <ChevronDown
-                        aria-hidden
-                        className="text-[color:var(--aqt-fg-faint)] transition-transform group-data-[state=open]:rotate-180"
-                      />
+                      <ChevronDown aria-hidden className={triggerChevronClass} />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="start" sideOffset={8} className={POP_CLASS}>

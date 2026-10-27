@@ -10,6 +10,7 @@ import { useQuery } from "@tanstack/react-query";
 import { EmptyNote } from "@/components/kit/EmptyNote";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { triggerChevronClass } from "@/components/ui/chevron";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Eyebrow } from "@/components/ui/eyebrow";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -302,14 +303,11 @@ function PregameRoomBody({ encounterId, seriesReport = true }: Readonly<PregameR
             type="button"
             variant="outline"
             size="sm"
-            className="h-auto min-h-11 max-w-full whitespace-normal text-left"
+            className="group/trigger h-auto min-h-11 max-w-full whitespace-normal text-left"
           >
             <ShieldCheck className="h-4 w-4 shrink-0" aria-hidden />
             {t(adminOpen ? "admin.hideUi" : "admin.showUi")}
-            <ChevronDown
-              className={`h-4 w-4 shrink-0 ${adminOpen ? "rotate-180" : ""}`}
-              aria-hidden
-            />
+            <ChevronDown className={triggerChevronClass} aria-hidden />
           </Button>
         </CollapsibleTrigger>
         <CollapsibleContent className="mt-3">

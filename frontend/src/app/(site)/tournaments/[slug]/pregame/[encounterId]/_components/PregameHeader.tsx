@@ -18,6 +18,7 @@ import { PickBanItemThumb } from "@/components/pick-ban/PickBanItemThumb";
 import type { PickBanItemLike } from "@/components/pick-ban/PickBanGrid";
 import { Button } from "@/components/ui/button";
 import { Eyebrow, eyebrowClass } from "@/components/ui/eyebrow";
+import { Separator } from "@/components/ui/separator";
 import { StatusDot } from "@/components/ui/status-dot";
 import { cn } from "@/lib/utils";
 import { seatAt, seatTeam, type Duel } from "@/lib/encounter/seats";
@@ -434,7 +435,7 @@ function SeriesPips({
           style={{ background: index < scoreOne ? "var(--aqt-teal)" : "var(--aqt-border-2)" }}
         />
       ))}
-      <span className="mx-0.5 h-2.5 w-px bg-[color:var(--aqt-border-3)]" />
+      <Separator orientation="vertical" className="mx-0.5 h-2.5 bg-[color:var(--aqt-border-3)]" />
       {Array.from({ length: toWin }, (_, index) => (
         <span
           key={`two-${index}`}
@@ -482,10 +483,9 @@ function PhaseRail({
           return (
             <li key={entry.phase} className="flex items-center">
               {index > 0 ? (
-                <span
-                  aria-hidden
+                <Separator
                   className={cn(
-                    "h-px w-5 shrink-0 sm:w-8",
+                    "w-5 sm:w-8",
                     entry.done || active
                       ? "bg-[color:var(--aqt-teal)]/50"
                       : "bg-[color:var(--aqt-border-2)]"

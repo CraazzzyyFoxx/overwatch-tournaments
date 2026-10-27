@@ -9,9 +9,9 @@ import { useTranslations } from "next-intl";
 import { ImageOff } from "lucide-react";
 
 import CatalogEntityImage from "@/components/catalog/CatalogEntityImage";
-import { eyebrowClass } from "@/components/ui/eyebrow";
 import { characterClassOf, classRank } from "@/components/pick-ban/pick-ban-model";
 import { TournamentTeamCardFrame } from "@/components/TournamentTeamCard";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";
 import { tournamentCharacterPlaytimeQueryOptions } from "@/lib/tournament/character-playtime-query";
 import { tournamentHref } from "@/lib/tournament/url";
@@ -322,36 +322,34 @@ function MapsTab({ tournament, slug }: Readonly<{ tournament: Tournament; slug: 
           id="map-stats"
           className="scroll-mt-28 overflow-x-auto rounded-[12px] border border-[color:var(--aqt-overlay-border)] bg-[color:var(--aqt-overlay-1)]"
         >
-          <table className="w-full text-sm">
-            <thead>
-              <tr className={cn(eyebrowClass(), "border-b border-[color:var(--aqt-overlay-border)]")}>
-                <th scope="col" className="py-2.5 pl-3.5 pr-3 text-left font-medium">
+          <Table wrapperClassName="overflow-visible" className="text-sm">
+            <TableHeader>
+              <TableRow className="border-[color:var(--aqt-overlay-border)]">
+                <TableHead scope="col" className="h-auto py-2.5 pl-3.5 pr-3 font-medium">
                   {t("tournamentDetail.mapPool.col.map")}
-                </th>
-                <th scope="col" className="py-2.5 pr-3 text-right font-medium sm:w-[45%] sm:text-left">
+                </TableHead>
+                <TableHead scope="col" className="h-auto py-2.5 pl-0 pr-3 text-right font-medium sm:w-[45%] sm:text-left">
                   {t("tournamentDetail.mapPool.col.played")}
-                </th>
-                <th scope="col" className="py-2.5 pr-3.5 text-right font-medium">
+                </TableHead>
+                <TableHead scope="col" className="h-auto py-2.5 pl-0 pr-3.5 text-right font-medium">
                   {t("tournamentDetail.mapPool.col.avgDuration")}
-                </th>
-              </tr>
-            </thead>
-            <tbody>
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {rows.map(({ map, mode }) => {
                 const counts = playedCounts[map.id];
                 const played = counts?.played ?? 0;
                 const muted = played === 0;
                 return (
-                  <tr
+                  <TableRow
                     key={map.id}
                     className={cn(
-                      "relative border-b border-[color:var(--aqt-overlay-border)] last:border-b-0",
-                      muted
-                        ? "text-[color:var(--aqt-fg-dim)]"
-                        : "transition-colors hover:bg-[color:var(--aqt-overlay-2)]"
+                      "relative border-[color:var(--aqt-overlay-border)]",
+                      muted && "text-[color:var(--aqt-fg-dim)] hover:bg-transparent"
                     )}
                   >
-                    <td className="py-2 pl-3.5 pr-3">
+                    <TableCell className="py-2 pl-3.5 pr-3">
                       <span className="flex items-center gap-3">
                         <span className="relative hidden aspect-video w-16 shrink-0 overflow-hidden rounded border border-[color:var(--aqt-border)] sm:block">
                           {map.image_path ? (
@@ -396,8 +394,8 @@ function MapsTab({ tournament, slug }: Readonly<{ tournament: Tournament; slug: 
                           </span>
                         </span>
                       </span>
-                    </td>
-                    <td className="py-2 pr-3">
+                    </TableCell>
+                    <TableCell className="py-2 pl-0 pr-3">
                       <span className="flex items-center justify-end gap-3 sm:justify-start">
                         {/* The bar is the glance; under 640px the count alone
                             keeps the row on screen. */}
@@ -412,15 +410,15 @@ function MapsTab({ tournament, slug }: Readonly<{ tournament: Tournament; slug: 
                         </span>
                         <span className="aqt-tnum w-6 text-right font-semibold">{played}</span>
                       </span>
-                    </td>
-                    <td className="aqt-tnum py-2 pr-3.5 text-right">
+                    </TableCell>
+                    <TableCell className="aqt-tnum py-2 pl-0 pr-3.5 text-right">
                       {counts?.avgDurationSec != null ? clock(counts.avgDurationSec) : "—"}
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 );
               })}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
       )}
     </>

@@ -12,11 +12,11 @@ import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { FormStreak } from "@/components/profile/atoms";
 import { Card } from "@/components/ui/card";
 import { DataPagination } from "@/components/ui/data-pagination";
-import { eyebrowClass } from "@/components/ui/eyebrow";
 import { IconTooltip } from "@/components/ui/icon-tooltip";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { SearchField } from "@/components/ui/search-field";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useMinuteClock } from "@/hooks/useMinuteClock";
 import { LOW_SAMPLE_GAMES, winrateColor } from "@/lib/colors";
@@ -271,28 +271,28 @@ export function PickupLeaderboard({
       />
       {ready && top.length > 0 ? (
         <>
-          <table className="w-full table-fixed border-collapse">
+          <Table className="table-fixed border-collapse">
             <caption className="sr-only">{t("ranking")}</caption>
-            <thead>
-              <tr className={cn(eyebrowClass(), "whitespace-nowrap")}>
-                <th scope="col" className="w-10 py-2 ps-4 text-start font-medium">
+            <TableHeader>
+              <TableRow className="whitespace-nowrap">
+                <TableHead scope="col" className="w-10 py-2 ps-4 pe-0 text-start">
                   <span className="sr-only">{t("rank")}</span>
-                </th>
-                <th scope="col" className="py-2 text-start font-medium">
+                </TableHead>
+                <TableHead scope="col" className="px-0 py-2 text-start">
                   {t("player")}
-                </th>
-                <th scope="col" className="hidden w-[6.5rem] py-2 ps-2 text-start font-medium sm:table-cell xl:hidden 2xl:table-cell">
+                </TableHead>
+                <TableHead scope="col" className="hidden w-[6.5rem] py-2 ps-2 pe-0 text-start sm:table-cell xl:hidden 2xl:table-cell">
                   {t("form")}
-                </th>
-                <th scope="col" className="w-16 px-1 py-2 text-end font-medium">
+                </TableHead>
+                <TableHead scope="col" className="w-16 px-1 py-2 text-end">
                   {t("wins")}
-                </th>
-                <th scope="col" className="w-24 py-2 pe-4 ps-1 text-end font-medium">
+                </TableHead>
+                <TableHead scope="col" className="w-24 py-2 pe-4 ps-1 text-end">
                   {t("winRate")}
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[color:var(--aqt-border)] border-t border-[color:var(--aqt-border)]">
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {top.map((player, index) => (
                 <RailRow
                   key={player.key}
@@ -302,13 +302,13 @@ export function PickupLeaderboard({
                   ontology={ontology}
                 />
               ))}
-            </tbody>
+            </TableBody>
             {pinned ? (
-              <tbody className="border-t-2 border-[color:var(--aqt-border-2)]">
+              <TableBody className="border-t-2 border-[color:var(--aqt-border-2)]">
                 <RailRow rank={viewerRank || null} player={pinned} you ontology={ontology} />
-              </tbody>
+              </TableBody>
             ) : null}
-          </table>
+          </Table>
           {pinned && viewerRank === 0 ? (
             <p className="px-4 pb-1 text-caption text-[color:var(--aqt-fg-dim)]">
               {t("unranked", { games: pinned.games, minGames: LEADERBOARD_MIN_GAMES })}
@@ -337,28 +337,28 @@ function RailRow({
   ontology
 }: Readonly<{ rank: number | null; player: RatedPlayer; you: boolean; ontology: RoleOntology | null }>) {
   return (
-    <tr
+    <TableRow
       className={cn(
         "text-body",
         you && "bg-[color:color-mix(in_srgb,var(--aqt-teal)_7%,transparent)]"
       )}
     >
-      <td className="py-2.5 ps-4 text-caption tabular-nums text-[color:var(--aqt-fg-faint)]">
+      <TableCell className="py-2.5 ps-4 pe-0 text-caption tabular-nums text-[color:var(--aqt-fg-faint)]">
         {rank ? String(rank).padStart(2, "0") : null}
-      </td>
-      <th scope="row" className="min-w-0 py-2.5 text-start font-normal">
+      </TableCell>
+      <TableHead scope="row" className="min-w-0 px-0 py-2.5 text-start text-body font-normal normal-case tracking-normal">
         <PlayerName player={player} ontology={ontology} you={you} />
-      </th>
-      <td className="hidden py-2.5 ps-2 sm:table-cell xl:hidden 2xl:table-cell">
+      </TableHead>
+      <TableCell className="hidden py-2.5 ps-2 pe-0 sm:table-cell xl:hidden 2xl:table-cell">
         <Form player={player} count={5} />
-      </td>
-      <td className="px-1 py-2.5 text-end tabular-nums">
+      </TableCell>
+      <TableCell className="px-1 py-2.5 text-end tabular-nums">
         <WinsOf player={player} />
-      </td>
-      <td className="py-2.5 pe-4 ps-1 text-end">
+      </TableCell>
+      <TableCell className="py-2.5 pe-4 ps-1 text-end">
         <WinRate player={player} />
-      </td>
-    </tr>
+      </TableCell>
+    </TableRow>
   );
 }
 
@@ -407,77 +407,80 @@ export function PickupRatingTable({
   } else if (ready && rows.length > 0) {
     body = (
       <div role="region" aria-labelledby={`${id}-title`} tabIndex={0} className="overflow-x-auto focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[color:var(--aqt-teal)]">
-        <table className="w-full min-w-[34rem] border-collapse">
+        <Table className="min-w-[34rem] border-collapse" wrapperClassName="overflow-visible">
           <caption className="sr-only">{t("ranking")}</caption>
-          <thead>
-            <tr className={cn(eyebrowClass(), "whitespace-nowrap")}>
-              <th scope="col" className="w-14 py-2.5 ps-4 text-start font-medium">
+          <TableHeader>
+            <TableRow className="whitespace-nowrap">
+              <TableHead scope="col" className="w-14 py-2.5 ps-4 pe-0 text-start">
                 <span className="sr-only">{t("rank")}</span>
-              </th>
-              <th scope="col" className="py-2.5 text-start font-medium">
+              </TableHead>
+              <TableHead scope="col" className="px-0 py-2.5 text-start">
                 {t("player")}
-              </th>
-              <th scope="col" className="hidden py-2.5 ps-3 text-start font-medium lg:table-cell">
+              </TableHead>
+              <TableHead scope="col" className="hidden py-2.5 ps-3 pe-0 text-start lg:table-cell">
                 {t("form")}
-              </th>
-              <th scope="col" className="w-20 px-2 py-2.5 text-end font-medium">
+              </TableHead>
+              <TableHead scope="col" className="w-20 py-2.5 text-end">
                 {t("wins")}
-              </th>
-              <th scope="col" className="w-20 px-2 py-2.5 text-end font-medium">
+              </TableHead>
+              <TableHead scope="col" className="w-20 py-2.5 text-end">
                 {t("winRate")}
-              </th>
-              <th scope="col" className="hidden w-20 px-2 py-2.5 text-end font-medium md:table-cell">
+              </TableHead>
+              <TableHead scope="col" className="hidden w-20 py-2.5 text-end md:table-cell">
                 {t("streak")}
-              </th>
-              <th scope="col" className="hidden w-32 py-2.5 pe-4 ps-2 text-end font-medium md:table-cell">
+              </TableHead>
+              <TableHead scope="col" className="hidden w-32 py-2.5 pe-4 text-end md:table-cell">
                 {t("lastPlayed")}
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-[color:var(--aqt-border)] border-t border-[color:var(--aqt-border)]">
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {rows.map((player) => {
               const you = player.key === viewer?.key;
               return (
-                <tr
+                <TableRow
                   key={player.key}
                   className={cn(
-                    "text-body transition-colors hover:bg-[color:var(--aqt-overlay-2)]",
+                    "text-body",
                     you && "bg-[color:color-mix(in_srgb,var(--aqt-teal)_7%,transparent)]"
                   )}
                 >
-                  <td className="py-3 ps-4 text-caption tabular-nums text-[color:var(--aqt-fg-faint)]">
+                  <TableCell className="py-3 ps-4 pe-0 text-caption tabular-nums text-[color:var(--aqt-fg-faint)]">
                     {String(ranks.get(player.key) ?? 0).padStart(2, "0")}
-                  </td>
-                  <th scope="row" className="min-w-0 max-w-[16rem] py-3 text-start font-normal">
+                  </TableCell>
+                  <TableHead
+                    scope="row"
+                    className="min-w-0 max-w-[16rem] px-0 py-3 text-start text-body font-normal normal-case tracking-normal"
+                  >
                     <PlayerName player={player} ontology={ontology} you={you} />
-                  </th>
-                  <td className="hidden py-3 ps-3 lg:table-cell">
+                  </TableHead>
+                  <TableCell className="hidden py-3 ps-3 pe-0 lg:table-cell">
                     <Form player={player} count={10} />
-                  </td>
-                  <td className="px-2 py-3 text-end tabular-nums">
+                  </TableCell>
+                  <TableCell className="py-3 text-end tabular-nums">
                     <WinsOf player={player} />
-                  </td>
-                  <td className="px-2 py-3 text-end">
+                  </TableCell>
+                  <TableCell className="py-3 text-end">
                     <WinRate player={player} />
-                  </td>
-                  <td className="hidden px-2 py-3 text-end md:table-cell">
+                  </TableCell>
+                  <TableCell className="hidden py-3 text-end md:table-cell">
                     <Streak player={player} />
-                  </td>
-                  <td
+                  </TableCell>
+                  <TableCell
                     title={
                       player.lastPlayedAt
                         ? format.dateTime(new Date(player.lastPlayedAt), { dateStyle: "medium", timeStyle: "short" })
                         : undefined
                     }
-                    className="hidden py-3 pe-4 ps-2 text-end text-caption tabular-nums text-[color:var(--aqt-fg-dim)] md:table-cell"
+                    className="hidden py-3 pe-4 text-end text-caption tabular-nums text-[color:var(--aqt-fg-dim)] md:table-cell"
                   >
                     {now !== null ? formatRelative(format, player.lastPlayedAt, now) : null}
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               );
             })}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
     );
   }

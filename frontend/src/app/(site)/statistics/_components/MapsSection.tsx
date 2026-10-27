@@ -6,11 +6,10 @@ import { ImageOff } from "lucide-react";
 import { OpenEmptyRow, OpenLoadError, Section, SectionHead } from "@/components/site/open-layout";
 import { TournamentTeamCardFrame } from "@/components/TournamentTeamCard";
 import Image from "@/components/ui/image";
-import { eyebrowClass } from "@/components/ui/eyebrow";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getFormatter } from "@/lib/datetime/server";
 import { isTenantHost } from "@/lib/site/tenant-host";
-import { cn } from "@/lib/utils";
 import statisticsService from "@/services/statistics.service";
 
 import { clock } from "./statistics.model";
@@ -74,30 +73,27 @@ export async function MapsSection({ discipline }: Readonly<{ discipline: string 
               metricLabel={t("col.games")}
               metricValue={format.number(games)}
             >
-              <table className="w-full text-caption">
-                <thead>
-                  <tr className={cn(eyebrowClass(), "whitespace-nowrap")}>
-                    <th scope="col" className="py-2 pl-3.5 pr-3 text-left font-medium">
+              <Table>
+                <TableHeader>
+                  <TableRow className="whitespace-nowrap border-[color:var(--aqt-overlay-border)]">
+                    <TableHead scope="col" className="h-auto py-2 pl-3.5 pr-3 font-medium">
                       {t("col.map")}
-                    </th>
-                    <th scope="col" className="py-2 pr-3 text-right font-medium">
+                    </TableHead>
+                    <TableHead scope="col" className="h-auto py-2 pl-0 pr-3 text-right font-medium">
                       {t("col.games")}
-                    </th>
-                    <th scope="col" className="py-2 pr-3 text-right font-medium">
+                    </TableHead>
+                    <TableHead scope="col" className="h-auto py-2 pl-0 pr-3 text-right font-medium">
                       {t("col.share")}
-                    </th>
-                    <th scope="col" className="py-2 pr-3.5 text-right font-medium">
+                    </TableHead>
+                    <TableHead scope="col" className="h-auto py-2 pl-0 pr-3.5 text-right font-medium">
                       {t("col.avgDuration")}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {maps.map((row) => (
-                    <tr
-                      key={row.map.id}
-                      className="border-t border-[color:var(--aqt-overlay-border)] transition-colors hover:bg-[color:var(--aqt-overlay-2)]"
-                    >
-                      <td className="w-full max-w-0 py-1.5 pl-3.5 pr-3">
+                    <TableRow key={row.map.id} className="border-[color:var(--aqt-overlay-border)]">
+                      <TableCell className="w-full max-w-0 py-1.5 pl-3.5 pr-3">
                         <span className="flex min-w-0 items-center gap-3">
                           <span className="relative hidden aspect-video w-14 shrink-0 overflow-hidden rounded border border-[color:var(--aqt-border)] sm:block">
                             {row.map.image_path ? (
@@ -112,9 +108,9 @@ export async function MapsSection({ discipline }: Readonly<{ discipline: string 
                             {row.map.name}
                           </span>
                         </span>
-                      </td>
-                      <td className="aqt-tnum py-1.5 pr-3 text-right">{format.number(row.games)}</td>
-                      <td className="py-1.5 pr-3">
+                      </TableCell>
+                      <TableCell className="aqt-tnum py-1.5 pl-0 pr-3 text-right">{format.number(row.games)}</TableCell>
+                      <TableCell className="py-1.5 pl-0 pr-3">
                         <span className="flex items-center justify-end gap-2.5">
                           {/* The bar is the glance; under 640px the share alone keeps the row on screen. */}
                           <span
@@ -130,14 +126,14 @@ export async function MapsSection({ discipline }: Readonly<{ discipline: string 
                             {format.number(row.share, { style: "percent", minimumFractionDigits: 1, maximumFractionDigits: 1 })}
                           </span>
                         </span>
-                      </td>
-                      <td className="aqt-tnum py-1.5 pr-3.5 text-right text-[color:var(--aqt-fg-muted)]">
+                      </TableCell>
+                      <TableCell className="aqt-tnum py-1.5 pl-0 pr-3.5 text-right text-[color:var(--aqt-fg-muted)]">
                         {row.avg_duration_s === null ? "—" : clock(row.avg_duration_s)}
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </TournamentTeamCardFrame>
           );
         })}

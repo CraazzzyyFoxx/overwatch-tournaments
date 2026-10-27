@@ -28,6 +28,7 @@ import TeamTable from "./TeamTable";
 import TeamComparison from "./TeamComparison";
 import Leaders from "./Leaders";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Table } from "@/components/ui/table";
 import KillFeedTimeline from "./KillFeedTimeline";
 import type { MatchWithStats } from "@/types/encounter.types";
 
@@ -88,33 +89,31 @@ const MatchStatsView = ({ match, home, away }: MatchStatsViewProps) => {
     </div>
   ) : null;
 
-  // ONE table, ONE horizontal scroll container, two `<tbody>` sections. Two
-  // sibling tables each scrolled independently, so reaching a right-hand stat
-  // column on one team desynced it from the other — the exact comparison this
-  // panel exists to make.
+  // ONE table, ONE horizontal scroll container (the table's own wrapper), two
+  // `<tbody>` sections. Two sibling tables each scrolled independently, so
+  // reaching a right-hand stat column on one team desynced it from the other —
+  // the exact comparison this panel exists to make.
   const tables = (
     <Card className="overflow-hidden">
-      <div className="relative w-full overflow-auto">
-        {/* The rating column's MVP cards: one provider, so moving between badges skips the open delay. */}
-        <TooltipProvider>
-          <table className="w-full caption-bottom text-sm">
-            <TeamTable
-              team={home}
-              isHome={true}
-              matchRound={activeRound}
-              columns={columns}
-              columnMax={columnMax}
-            />
-            <TeamTable
-              team={away}
-              isHome={false}
-              matchRound={activeRound}
-              columns={columns}
-              columnMax={columnMax}
-            />
-          </table>
-        </TooltipProvider>
-      </div>
+      {/* The rating column's MVP cards: one provider, so moving between badges skips the open delay. */}
+      <TooltipProvider>
+        <Table>
+          <TeamTable
+            team={home}
+            isHome={true}
+            matchRound={activeRound}
+            columns={columns}
+            columnMax={columnMax}
+          />
+          <TeamTable
+            team={away}
+            isHome={false}
+            matchRound={activeRound}
+            columns={columns}
+            columnMax={columnMax}
+          />
+        </Table>
+      </TooltipProvider>
     </Card>
   );
 

@@ -4,6 +4,7 @@ import { useTranslations } from "next-intl";
 import { owtButton } from "@/components/site/owt-button";
 import { Eyebrow } from "@/components/ui/eyebrow";
 import Image from "@/components/ui/image";
+import { Separator } from "@/components/ui/separator";
 import { WorkspaceAvatar } from "@/components/workspace/WorkspaceAvatar";
 import { BRAND_NAME } from "@/config/site";
 import { PLATFORM_ZONE } from "@/lib/site/host";
@@ -82,7 +83,7 @@ export function CommunityPreview({
           <div className="flex h-11 items-center gap-2.5 border-b border-[color:var(--aqt-border)] px-3.5">
             <Image src="/brand-mark.svg" alt="" width={18} height={18} className="rounded-[4px]" />
             <b className="font-display text-body font-extrabold leading-none tracking-[0.02em]">{BRAND_NAME}</b>
-            <span className="h-4 w-px bg-[color:var(--aqt-border-2)]" />
+            <Separator orientation="vertical" className="h-4 bg-[color:var(--aqt-border-2)]" />
             <WorkspaceAvatar workspace={avatar} size={20} />
             <span className="min-w-0 truncate text-caption text-[color:var(--aqt-fg-muted)]">{shown}</span>
             <span className="ml-auto hidden shrink-0 gap-3.5 text-label text-[color:var(--aqt-fg-dim)] sm:flex">

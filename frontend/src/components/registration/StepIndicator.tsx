@@ -3,6 +3,7 @@
 import { Check } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 
 interface Step {
@@ -24,10 +25,9 @@ export default function StepIndicator({ steps, current, onSelect }: Readonly<Ste
         return (
           <div key={step.label} className="flex items-center gap-1">
             {i > 0 && (
-              <div
-                aria-hidden
+              <Separator
                 className={cn(
-                  "h-px w-8 transition-colors",
+                  "w-8 transition-colors",
                   isCompleted
                     ? "bg-[color:var(--aqt-fg-dim)]"
                     : "bg-[color:var(--aqt-border-2)]",

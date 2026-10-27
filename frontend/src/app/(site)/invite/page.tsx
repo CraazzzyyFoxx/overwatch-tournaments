@@ -6,8 +6,9 @@ import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { useSyncExternalStore } from "react";
 
-import InviteAcceptWizard from "@/components/registration/InviteAcceptWizard";
+import InviteAcceptWizard, { InviteAcceptWizardSkeleton } from "@/components/registration/InviteAcceptWizard";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";
 import { useSlotLabel } from "@/hooks/useSlotLabel";
@@ -18,7 +19,6 @@ import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import { useAuthModalStore } from "@/stores/auth-modal.store";
 import registrationService from "@/services/registration.service";
 import registrationTeamService from "@/services/registration-team.service";
-import { Spinner } from "@/components/ui/spinner";
 
 /**
  * Where a shared team-invite link lands.
@@ -45,7 +45,7 @@ export default function InviteLandingPage() {
   // than into an effect: a lazy `useState` initializer would either throw during
   // the server render or hydrate a tree the server never produced. The server
   // snapshot is `null` — meaning "not read yet", which is a different answer from
-  // `""` meaning "no fragment" and drives a spinner instead of a wrong verdict.
+  // `""` meaning "no fragment" and drives a skeleton instead of a wrong verdict.
   const hash = useSyncExternalStore(subscribeToHashChange, readHash, readHashOnServer);
   const token = hash === null ? null : readInviteTokenFromHash(hash);
   const hashRead = hash !== null;
@@ -75,10 +75,20 @@ export default function InviteLandingPage() {
     enabled: !!preview?.is_redeemable,
   });
 
+  // Every answer to the preview opens with the offer's two lines, so the wait
+  // draws those.
   if (!hashRead || (token && previewQuery.isLoading)) {
     return (
       <Shell title={t("landing.title")}>
-        <Spinner className="size-5 text-[color:var(--aqt-fg-muted)]" label={tCommon("loading")} />
+        <div role="status" aria-busy="true" className="flex flex-col gap-1">
+          <span className="sr-only">{tCommon("loading")}</span>
+          <p className="text-base text-[color:var(--aqt-fg)]">
+            <Skeleton variant="text" className="w-5/6" />
+          </p>
+          <p className="text-sm text-[color:var(--aqt-fg-muted)]">
+            <Skeleton variant="text" className="w-1/3" />
+          </p>
+        </div>
       </Shell>
     );
   }
@@ -150,11 +160,16 @@ export default function InviteLandingPage() {
     );
   }
 
+  // The wizard replaces the offer (its own card restates team, slot and bench),
+  // so the wait draws the wizard, not the offer plus something.
   if (formQuery.isLoading) {
     return (
       <Shell title={t("landing.title")}>
-        {offer}
-        <Spinner className="size-5 text-[color:var(--aqt-fg-muted)]" label={tCommon("loading")} />
+        <InviteAcceptWizardSkeleton
+          label={tCommon("loading")}
+          slotLine={showsRoles(metadata.data)}
+          substitute={preview.is_substitute}
+        />
       </Shell>
     );
   }
@@ -170,7 +185,7 @@ export default function InviteLandingPage() {
   }
 
   // A redeemable invite whose tournament has no registration form is a broken
-  // configuration, not a loading state — spinning forever would hide it.
+  // configuration, not a loading state — a skeleton forever would hide it.
   if (!formQuery.data) {
     return (
       <Shell title={t("landing.title")}>

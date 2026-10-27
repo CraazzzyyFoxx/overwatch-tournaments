@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 import { CardSurface } from "@/components/profile/atoms";
 import { Button } from "@/components/ui/button";
-import { eyebrowClass } from "@/components/ui/eyebrow";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { winrateColor } from "@/lib/colors";
 import { cn } from "@/lib/utils";
 import { ArrowRight } from "lucide-react";
@@ -65,7 +65,7 @@ const OpponentRecord = ({ o }: { o: OpponentStat }) => (
   </>
 );
 
-const thLeft = cn(eyebrowClass(), "aqt-tnum border-b border-[color:var(--aqt-border)] px-3 py-2 text-left");
+const thLeft = "aqt-tnum px-3 py-2";
 const thRight = `${thLeft} text-right`;
 
 const MatchesSidebars = ({ opponentStats, stageStats }: MatchesSidebarsProps) => {
@@ -99,40 +99,35 @@ const MatchesSidebars = ({ opponentStats, stageStats }: MatchesSidebarsProps) =>
                 <DialogHeader>
                   <DialogTitle>{t("users.matches.allOpponents")}</DialogTitle>
                 </DialogHeader>
-                <div className="max-h-[60vh] overflow-y-auto">
-                  <table className="w-full border-collapse text-caption">
-                    <thead>
-                      <tr>
-                        <th className={thLeft}>{t("users.matches.colOpponent")}</th>
-                        <th className={thRight}>{t("standings.colWDL")}</th>
-                        <th className={thRight}>{t("users.matches.colWinrate")}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {opponentStats.map((o) => {
-                        const total = oppTotal(o);
-                        const wr = oppWinrate(o);
-                        return (
-                          <tr
-                            key={o.name}
-                            className="border-b border-[color:var(--aqt-border)] last:border-b-0 hover:bg-[color:var(--aqt-overlay-2)]"
+                <Table wrapperClassName="max-h-[60vh] overflow-y-auto" className="border-collapse">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className={thLeft}>{t("users.matches.colOpponent")}</TableHead>
+                      <TableHead className={thRight}>{t("standings.colWDL")}</TableHead>
+                      <TableHead className={thRight}>{t("users.matches.colWinrate")}</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {opponentStats.map((o) => {
+                      const total = oppTotal(o);
+                      const wr = oppWinrate(o);
+                      return (
+                        <TableRow key={o.name}>
+                          <TableCell className="px-3 py-2 font-semibold text-[color:var(--aqt-fg)]">{o.name}</TableCell>
+                          <TableCell className="aqt-tnum px-3 py-2 text-right">
+                            <OpponentRecord o={o} />
+                          </TableCell>
+                          <TableCell
+                            className="aqt-tnum px-3 py-2 text-right font-bold"
+                            style={{ color: total > 0 ? winrateColor(wr) : "var(--aqt-fg-faint)" }}
                           >
-                            <td className="px-3 py-2 font-semibold text-[color:var(--aqt-fg)]">{o.name}</td>
-                            <td className="aqt-tnum px-3 py-2 text-right">
-                              <OpponentRecord o={o} />
-                            </td>
-                            <td
-                              className="aqt-tnum px-3 py-2 text-right font-bold"
-                              style={{ color: total > 0 ? winrateColor(wr) : "var(--aqt-fg-faint)" }}
-                            >
-                              {total > 0 ? `${wr.toFixed(0)}%` : "—"}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+                            {total > 0 ? `${wr.toFixed(0)}%` : "—"}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
               </DialogContent>
             </Dialog>
           ) : undefined
