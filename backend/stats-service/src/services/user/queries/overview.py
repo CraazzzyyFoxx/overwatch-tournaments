@@ -39,8 +39,9 @@ from ._scope import (
 if typing.TYPE_CHECKING:
     from src import schemas as app_schemas
 
-# Overview sorts whose ORDER BY is a correlated scalar subquery evaluated over the
-# whole filtered population (not just the page). Cached id-order applies to these.
+# Overview sorts whose ORDER BY is an aggregate (a correlated scalar subquery; winrate's a
+# grouped pass) evaluated over the whole filtered population (not just the page). Cached
+# id-order applies to these.
 _EXPENSIVE_OVERVIEW_SORTS = frozenset(
     {"tournaments_count", "achievements_count", "avg_placement", "winrate", "best_placement"}
 )
@@ -286,78 +287,75 @@ class UserOverviewQueries(DisciplineQueries):
             .scalar_subquery()
         )
 
-    def _overview_winrate_expr(
-        self,
-        user_id_column: sa.ColumnElement[typing.Any],
-        *,
-        grid: DivisionGrid,
-        workspace_id: int | None = None,
-    ) -> sa.ScalarSelect:
-        """Map winrate over the scoped encounters — NULL when no maps were played.
+    def _overview_winrate_sample(self, *, workspace_id: int | None) -> sa.Subquery:
+        """Per user: map winrate over the scoped two-seat encounters (NULL without maps) and how many of them have a
+        result (``encounters``, the winrate's sample size) -- the winrate sort's keys, for every user at once.
 
-        ponytail: two correlated subqueries per sorted row (this and
-        ``_overview_encounters_played_expr``); the unfiltered page is served from
-        the cached id order, so only a *filtered* winrate sort pays for them.
+        Each seat's maps are computed once (``MATERIALIZED``) and only then fanned out to its roster: as two
+        correlated subqueries per user, every rostered player re-ran the seat's maps subqueries twice, so the cached
+        whole-population order took ~1.5 s. Same scope as :meth:`_overview_scope_where` with no role, division or
+        tournament filter.
         """
-        where_conditions = self._overview_scope_where(
-            user_id_column,
-            role=None,
-            div_min=None,
-            div_max=None,
-            tournament_id=None,
-            grid=grid,
-            workspace_id=workspace_id,
+        seat = Seat(name="overview_winrate_seat")
+        seat_maps = (
+            seat.join(
+                sa.select(
+                    models.Team.id.label("team_id"),
+                    models.Encounter.id.label("encounter_id"),
+                    seat.maps_won.label("won"),
+                    seat.maps_lost.label("lost"),
+                ).select_from(models.Team),
+                models.Team.id,
+            )
+            .join(models.Tournament, models.Tournament.id == models.Encounter.tournament_id)
+            .where(
+                *self.discipline_filter(models.Tournament.discipline),
+                models.Tournament.is_finished.is_(True),
+                models.Tournament.is_league.is_(False),
+                *([models.Tournament.workspace_id == workspace_id] if workspace_id is not None else []),
+            )
+            .cte("overview_winrate_seat_maps")
+            .prefix_with("MATERIALIZED")
         )
-        sides = self._overview_encounter_select(
-            lambda seat: (seat.maps_won.label("won"), seat.maps_lost.label("lost")),
-            *where_conditions,
-        ).subquery("overview_winrate_sides")
+        sides = (
+            sa.select(
+                models.WorkspaceMember.player_id.label("user_id"),
+                seat_maps.c.encounter_id,
+                seat_maps.c.won,
+                seat_maps.c.lost,
+            )
+            .select_from(models.Player)
+            .join(seat_maps, seat_maps.c.team_id == models.Player.team_id)
+            .join(models.WorkspaceMember, models.WorkspaceMember.id == models.Player.workspace_member_id)
+            .where(
+                models.Player.is_substitution.is_(False),
+                # The roster entry's own tournament too, as ``_compare_player_scope_filters`` has it.
+                *[models.Player.tournament.has(cond) for cond in self.discipline_filter(models.Tournament.discipline)],
+            )
+            .subquery("overview_winrate_sides")
+        )
+        maps = sides.c.won + sides.c.lost
         return (
             sa.select(
-                sa.func.sum(sides.c.won) / sa.func.nullif(sa.func.sum(sides.c.won + sides.c.lost), 0).cast(sa.Float)
+                sides.c.user_id,
+                sa.func.count(sa.distinct(sa.case((maps > 0, sides.c.encounter_id)))).label("encounters"),
+                (sa.func.sum(sides.c.won) / sa.func.nullif(sa.func.sum(maps), 0).cast(sa.Float)).label("winrate"),
             )
-            .select_from(sides)
-            .scalar_subquery()
-        )
-
-    def _overview_encounters_played_expr(
-        self,
-        user_id_column: sa.ColumnElement[typing.Any],
-        *,
-        grid: DivisionGrid,
-        workspace_id: int | None = None,
-    ) -> sa.ScalarSelect:
-        """Scoped encounters that have a result — the winrate's sample size."""
-        where_conditions = self._overview_scope_where(
-            user_id_column,
-            role=None,
-            div_min=None,
-            div_max=None,
-            tournament_id=None,
-            grid=grid,
-            workspace_id=workspace_id,
-        )
-        sides = self._overview_encounter_select(
-            lambda seat: (models.Encounter.id.label("encounter_id"), (seat.maps_won + seat.maps_lost).label("maps")),
-            *where_conditions,
-        ).subquery("overview_encounters_played_sides")
-        return (
-            sa.select(sa.func.count(sa.distinct(sides.c.encounter_id)))
-            .select_from(sides)
-            .where(sides.c.maps > 0)
-            .scalar_subquery()
+            .group_by(sides.c.user_id)
+            .subquery("overview_winrate_sample")
         )
 
     def _overview_order_by(
         self,
+        query: sa.Select,
         sort_key: str,
         *,
         descending: bool,
         grid: DivisionGrid,
         workspace_id: int | None,
         min_encounters: int,
-    ) -> list[sa.ColumnElement[typing.Any]]:
-        """ORDER BY terms for an overview sort, workspace-scoped like the displayed values.
+    ) -> sa.Select:
+        """``query`` (selecting from ``User``) ordered by an overview sort, workspace-scoped like the displayed values.
 
         ``models.User.id`` is always the final tiebreaker so paging is stable.
         """
@@ -375,19 +373,18 @@ class UserOverviewQueries(DisciplineQueries):
         elif sort_key == "best_placement":
             expr = self._overview_best_placement_expr(models.User.id, grid=grid, workspace_id=workspace_id)
         elif sort_key == "winrate":
-            encounters = self._overview_encounters_played_expr(models.User.id, grid=grid, workspace_id=workspace_id)
-            winrate = self._overview_winrate_expr(models.User.id, grid=grid, workspace_id=workspace_id)
+            sample = self._overview_winrate_sample(workspace_id=workspace_id)
             # Thin samples go after everybody else whichever way the column is
             # sorted: a 100% winrate off two maps is not the top of the table.
-            return [
-                sa.case((encounters >= min_encounters, 0), else_=1).asc(),
-                _directed(winrate),
+            return query.outerjoin(sample, sample.c.user_id == models.User.id).order_by(
+                sa.case((sa.func.coalesce(sample.c.encounters, 0) >= min_encounters, 0), else_=1).asc(),
+                _directed(sample.c.winrate),
                 models.User.id.asc(),
-            ]
+            )
         else:
             expr = models.User.depth_get_column(sort_key.split("."))
 
-        return [_directed(expr), models.User.id.asc()]
+        return query.order_by(_directed(expr), models.User.id.asc())
 
     # Cache key intentionally omits `session`/`grid` (see get_profile). For the sorts
     # this path serves — the correlated aggregates with *no* role/division/logs/search
@@ -417,15 +414,13 @@ class UserOverviewQueries(DisciplineQueries):
         min_encounters) instead of being recomputed for every page and every
         concurrent viewer.
         """
-        id_query = _apply_workspace_member_filter(sa.select(models.User.id), workspace_id)
-        id_query = id_query.order_by(
-            *self._overview_order_by(
-                sort_key,
-                descending=descending,
-                grid=grid,
-                workspace_id=workspace_id,
-                min_encounters=min_encounters,
-            )
+        id_query = self._overview_order_by(
+            _apply_workspace_member_filter(sa.select(models.User.id), workspace_id),
+            sort_key,
+            descending=descending,
+            grid=grid,
+            workspace_id=workspace_id,
+            min_encounters=min_encounters,
         )
         ids = list((await session.execute(id_query)).scalars().all())
         # EXISTS-scoped User.id is unique — len(ids) is the count query.
@@ -505,14 +500,13 @@ class UserOverviewQueries(DisciplineQueries):
                 discipline=self.discipline,
             )
 
-        query = query.order_by(
-            *self._overview_order_by(
-                sort_key,
-                descending=is_desc,
-                grid=grid,
-                workspace_id=workspace_id,
-                min_encounters=params.min_encounters,
-            )
+        query = self._overview_order_by(
+            query,
+            sort_key,
+            descending=is_desc,
+            grid=grid,
+            workspace_id=workspace_id,
+            min_encounters=params.min_encounters,
         )
 
         paged = params.apply_pagination(query.add_columns(sa.func.count().over().label("overview_total")))

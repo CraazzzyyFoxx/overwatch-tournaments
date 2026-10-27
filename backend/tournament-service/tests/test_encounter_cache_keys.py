@@ -34,8 +34,8 @@ class EncounterCacheKeyTests(IsolatedAsyncioTestCase):
         load_encounters = AsyncMock(return_value=([], 0))
 
         with patch.object(encounter_flows.flows_service.encounters, "get_all_encounters", load_encounters):
-            await encounter_flows.flows_service.get_all_encounters(SimpleNamespace(), first)
-            await encounter_flows.flows_service.get_all_encounters(SimpleNamespace(), second)
+            await encounter_flows.flows_service.encounters_page(SimpleNamespace(), first)
+            await encounter_flows.flows_service.encounters_page(SimpleNamespace(), second)
 
         self.assertEqual(load_encounters.await_count, 2)
 
@@ -51,14 +51,14 @@ class EncounterCacheKeyTests(IsolatedAsyncioTestCase):
             encounter_schemas.EncounterSearchParams(is_upset=True),
         ]
         for template, function in (
-            (encounter_flows.ENCOUNTERS_CACHE_KEY, encounter_flows.EncounterFlowsService.get_all_encounters),
+            (encounter_flows.ENCOUNTERS_CACHE_KEY, encounter_flows.EncounterFlowsService.encounters_page),
             (
                 encounter_flows.ENCOUNTERS_OVERVIEW_CACHE_KEY,
-                encounter_flows.EncounterFlowsService.get_encounters_overview,
+                encounter_flows.EncounterFlowsService.overview_page,
             ),
             (
                 encounter_flows.ENCOUNTERS_INSIGHTS_CACHE_KEY,
-                encounter_flows.EncounterFlowsService.get_encounters_insights,
+                encounter_flows.EncounterFlowsService.insights_page,
             ),
         ):
             keys = {

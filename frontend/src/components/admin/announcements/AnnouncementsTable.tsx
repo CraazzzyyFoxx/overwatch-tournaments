@@ -2,11 +2,11 @@
 
 import { useMemo, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Archive, CircleDot, Clock } from "lucide-react";
+import { Archive, CircleDot, Clock, Plus } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import { useFormatter } from "@/lib/datetime/client";
 
-import { DataTable, columnMeta } from "@/components/data-table";
+import { DataTable, columnMeta, type TableCommand } from "@/components/data-table";
 import { StatusIcon } from "@/components/admin/StatusIcon";
 import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,8 @@ import { announcementState } from "./announcement-draft";
 interface AnnouncementsTableProps {
   rows: NotificationItem[];
   isLoading: boolean;
+  /** Absent when the operator may read this feed but not publish to it. */
+  onCompose?: () => void;
   /** Absent when the operator may read this feed but not write to it. */
   onRetire?: (row: NotificationItem) => void;
   isRetiring: boolean;
@@ -32,6 +34,7 @@ const STATE_ICON = {
 export function AnnouncementsTable({
   rows,
   isLoading,
+  onCompose,
   onRetire,
   isRetiring,
 }: Readonly<AnnouncementsTableProps>) {
@@ -119,6 +122,17 @@ export function AnnouncementsTable({
     return list;
   }, [t, locale, format, onRetire, isRetiring]);
 
+  const commands: TableCommand[] = [
+    {
+      id: "compose",
+      label: t("notifications.admin.form.title"),
+      icon: Plus,
+      onSelect: onCompose,
+      primary: true,
+      hidden: onCompose === undefined
+    }
+  ];
+
   return (
     <>
       <DataTable
@@ -128,6 +142,7 @@ export function AnnouncementsTable({
         getRowId={(row) => String(row.id)}
         emptyMessage={t("notifications.admin.empty")}
         initialPageSize={25}
+        commands={commands}
       />
       {/* Says what actually happens: the row and its read marks stay, the
           announcement simply stops being shown from now on. */}

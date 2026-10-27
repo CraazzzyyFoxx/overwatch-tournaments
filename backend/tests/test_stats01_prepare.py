@@ -15,6 +15,7 @@ import pytest
 import sqlalchemy as sa
 
 from scripts import stats01_prepare as prep
+from shared.testing.db import MIGRATION_PROOF_SKIP, migration_proofs_enabled
 from shared.testing.stats_parity import legacy_database, raw_objects, seed_legacy
 
 RAW = b"timestamp,event,player\r\n0,match_start,Player#1234\r\n"
@@ -30,6 +31,8 @@ class ObjectStore:
 
 @pytest.fixture(scope="module")
 def legacy_template():
+    if not migration_proofs_enabled():
+        pytest.skip(MIGRATION_PROOF_SKIP)
     with legacy_database() as url:
         engine = sa.create_engine(url)
         with engine.begin() as conn:

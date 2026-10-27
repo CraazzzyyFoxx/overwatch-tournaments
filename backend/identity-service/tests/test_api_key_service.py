@@ -91,19 +91,31 @@ def _owner_payload(
     )
 
 
-def _patch_owner(monkeypatch: pytest.MonkeyPatch, payload: schemas.TokenPayload) -> None:
-    """Stub the RBAC *builder* only.
+def _patch_owner(
+    monkeypatch: pytest.MonkeyPatch, payload: schemas.TokenPayload, *, owner: models.AuthUser | None = None
+) -> None:
+    """Stub the RBAC *builder* only (and the owner row a cache miss loads).
 
     The rehydration and ``has_workspace_permission`` calls that decide what the
     key may do stay real -- stubbing those would leave the narrowing untested,
     which is the one thing here that can escalate privilege.
     """
+    owner_row = owner if owner is not None else _user()
 
     class _Builder:
-        async def build(self, _session, _user, *, cached=None) -> schemas.TokenPayload:
+        async def build(self, _session, _user, *, cached=None, generation=None) -> schemas.TokenPayload:
             return payload
 
+        async def resolve(self, session, user_id, load_user, **_state):
+            user = await load_user(session, user_id)
+            return None if user is None else (payload, user.is_active)
+
+    async def get_identity(_session, user_id: int, **_kwargs) -> models.AuthUser:
+        assert user_id == owner_row.id
+        return owner_row
+
     monkeypatch.setattr(api_keys, "payloads", _Builder())
+    monkeypatch.setattr(api_keys, "users", SimpleNamespace(get_identity=get_identity))
 
 
 def test_create_api_key_returns_secret_once_and_stores_only_hash(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -468,23 +480,24 @@ def test_validate_api_key_applies_and_forwards_the_deny_overlay(monkeypatch: pyt
 
 
 @pytest.mark.parametrize(
-    ("row", "raw_key"),
+    ("row", "raw_key", "owner"),
     [
-        (_api_key_row(secret="expected"), "bad-format"),
-        (_api_key_row(secret="expected"), "aqt_sk_publicid_wrong"),
-        (_api_key_row(revoked_at=datetime.now(UTC)), "aqt_sk_publicid_secret-token"),
-        (_api_key_row(expires_at=datetime.now(UTC) - timedelta(seconds=1)), "aqt_sk_publicid_secret-token"),
-        (_api_key_row(user=_user(active=False)), "aqt_sk_publicid_secret-token"),
-        (_api_key_row(workspace=_workspace(active=False)), "aqt_sk_publicid_secret-token"),
+        (_api_key_row(secret="expected"), "bad-format", None),
+        (_api_key_row(secret="expected"), "aqt_sk_publicid_wrong", None),
+        (_api_key_row(revoked_at=datetime.now(UTC)), "aqt_sk_publicid_secret-token", None),
+        (_api_key_row(expires_at=datetime.now(UTC) - timedelta(seconds=1)), "aqt_sk_publicid_secret-token", None),
+        (_api_key_row(), "aqt_sk_publicid_secret-token", _user(active=False)),
+        (_api_key_row(workspace=_workspace(active=False)), "aqt_sk_publicid_secret-token", None),
     ],
 )
 def test_validate_api_key_rejects_invalid_revoked_expired_or_inactive(
     monkeypatch: pytest.MonkeyPatch,
     row: models.ApiKey,
     raw_key: str,
+    owner: models.AuthUser | None,
 ) -> None:
     session = _FakeSession([{"scalar": row}])
-    _patch_owner(monkeypatch, _owner_payload(workspace_permissions=_TEAM_CREATE))
+    _patch_owner(monkeypatch, _owner_payload(workspace_permissions=_TEAM_CREATE), owner=owner)
 
     payload = asyncio.run(api_keys.validate(session, raw_key))
 
@@ -520,6 +533,41 @@ def test_grantable_scopes_for_a_wildcard_owner_cover_the_catalog(monkeypatch: py
     assert grantable == ALL_SCOPE_NAMES
 
 
+def _stamped_actor(
+    roles: list[str],
+    permissions: list[dict[str, str]],
+    *,
+    denies: list[dict[str, object]] | None = None,
+    is_superuser: bool = False,
+) -> models.AuthUser:
+    """The actor as ``resolve_active_user`` hands it over: identity-only row, RBAC stamped on."""
+    user = _user()
+    user.is_superuser = is_superuser
+    user.set_rbac_cache(
+        role_names=[],
+        permissions=[],
+        workspaces=[{"workspace_id": 11, "slug": "main"}],
+        workspace_rbac={11: {"roles": roles, "permissions": permissions}},
+        denies=denies,
+    )
+    return user
+
+
+def _manageable_workspace(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An active workspace 11, and no RBAC build: a stamped actor is asked as-is."""
+
+    async def get_workspace(_session, workspace_id: int) -> models.Workspace:
+        assert workspace_id == 11
+        return _workspace()
+
+    class _NoBuild:
+        async def build(self, *_args, **_kwargs):
+            raise AssertionError("a stamped actor needs no RBAC lookup")
+
+    monkeypatch.setattr(api_keys.workspaces, "get", get_workspace)
+    monkeypatch.setattr(api_keys, "payloads", _NoBuild())
+
+
 @pytest.mark.parametrize(
     ("role_name", "permissions"),
     [
@@ -528,57 +576,56 @@ def test_grantable_scopes_for_a_wildcard_owner_cover_the_catalog(monkeypatch: py
         ("owner", [{"resource": "*", "action": "*"}]),
     ],
 )
-def test_workspace_admin_and_owner_manage_api_keys_via_rbac_alone(
+def test_workspace_admin_and_owner_manage_api_keys_from_their_stamped_rbac(
     monkeypatch: pytest.MonkeyPatch,
     role_name: str,
     permissions: list[dict[str, str]],
 ) -> None:
-    """Guards the removal of the legacy role-name shortcut in
-    ``_has_workspace_import_access``: authorization must come from the
-    workspace RBAC permission set, with no name-based fast path.
-    """
-    session = _FakeSession()
-
-    async def get_workspace(_session, workspace_id: int) -> models.Workspace:
-        assert workspace_id == 11
-        return _workspace()
-
-    async def get_member(_session, *, workspace_id: int, auth_user_id: int) -> models.WorkspaceMember:
-        assert (workspace_id, auth_user_id) == (11, 7)
-        return models.WorkspaceMember(workspace_id=workspace_id, player_id=42)
-
-    async def workspace_rbac(_session, _user_id, _workspace_ids) -> dict:
-        return {11: ([role_name], permissions)}
-
-    monkeypatch.setattr(api_keys.workspaces, "get", get_workspace)
-    monkeypatch.setattr(api_keys.members, "get_member", get_member)
-    monkeypatch.setattr(api_keys.roles, "workspace_rbac_for_user", workspace_rbac)
+    _manageable_workspace(monkeypatch)
 
     # Raises HTTPException(403) on denial; returning None is the pass signal.
-    assert asyncio.run(api_keys.ensure_can_manage(session, user=_user(), workspace_id=11)) is None
+    actor = _stamped_actor([role_name], permissions)
+    assert asyncio.run(api_keys.ensure_can_manage(_FakeSession(), user=actor, workspace_id=11)) is None
 
 
 def test_ensure_can_manage_denies_a_workspace_member_without_team_create(monkeypatch: pytest.MonkeyPatch) -> None:
-    session = _FakeSession()
+    _manageable_workspace(monkeypatch)
+    actor = _stamped_actor(["viewer"], [{"resource": "team", "action": "read"}])
+
+    with pytest.raises(api_keys_module.HTTPException) as exc_info:
+        asyncio.run(api_keys.ensure_can_manage(_FakeSession(), user=actor, workspace_id=11))
+
+    assert exc_info.value.status_code == 403
+    assert "team.create required" in exc_info.value.detail
+
+
+@pytest.mark.parametrize("is_superuser", [False, True], ids=["owner", "superuser"])
+def test_key_management_honors_the_deny_overlay(monkeypatch: pytest.MonkeyPatch, is_superuser: bool) -> None:
+    """A deny on ``team.create`` here outranks the owner wildcard and the superuser bypass."""
+    _manageable_workspace(monkeypatch)
+    actor = _stamped_actor(
+        ["owner"],
+        _WILDCARD,
+        denies=[{"resource": "team", "action": "create", "workspace_id": 11}],
+        is_superuser=is_superuser,
+    )
+
+    with pytest.raises(api_keys_module.HTTPException) as exc_info:
+        asyncio.run(api_keys.ensure_can_manage(_FakeSession(), user=actor, workspace_id=11))
+
+    assert exc_info.value.status_code == 403
+
+
+def test_an_unstamped_user_is_judged_by_their_built_rbac(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Scripts and fixtures hand over a bare row; its RBAC then comes from the builder."""
 
     async def get_workspace(_session, _workspace_id: int) -> models.Workspace:
         return _workspace()
 
-    async def get_member(_session, *, workspace_id: int, auth_user_id: int) -> models.WorkspaceMember:
-        return models.WorkspaceMember(workspace_id=workspace_id, player_id=42)
-
-    async def workspace_rbac(_session, _user_id, _workspace_ids) -> dict:
-        return {11: (["viewer"], [{"resource": "team", "action": "read"}])}
-
     monkeypatch.setattr(api_keys.workspaces, "get", get_workspace)
-    monkeypatch.setattr(api_keys.members, "get_member", get_member)
-    monkeypatch.setattr(api_keys.roles, "workspace_rbac_for_user", workspace_rbac)
+    _patch_owner(monkeypatch, _owner_payload(workspace_permissions=_TEAM_CREATE))
 
-    with pytest.raises(api_keys_module.HTTPException) as exc_info:
-        asyncio.run(api_keys.ensure_can_manage(session, user=_user(), workspace_id=11))
-
-    assert exc_info.value.status_code == 403
-    assert "team.create required" in exc_info.value.detail
+    assert asyncio.run(api_keys.ensure_can_manage(_FakeSession(), user=_user(), workspace_id=11)) is None
 
 
 @pytest.mark.parametrize(

@@ -61,8 +61,9 @@ const AnalyticsPage = ({ scope }: Readonly<{ scope: StatsScope }>) => {
   // The picker follows the viewing filter; the selected event keeps its owner.
   const pickerWorkspaceId = scope === "all" ? "all" : currentWorkspaceId;
   const tournamentsQuery = useQuery({
-    queryKey: tournamentQueryKeys.byWorkspace(pickerWorkspaceId ?? "global"),
-    queryFn: () => tournamentService.getAll(null, pickerWorkspaceId)
+    // Its own entry: the hero's stage progress reads the stages the other `byWorkspace` pickers do not load.
+    queryKey: [...tournamentQueryKeys.byWorkspace(pickerWorkspaceId ?? "global"), "stages"],
+    queryFn: () => tournamentService.getAll(null, pickerWorkspaceId, null, ["stages", "participants_count"])
   });
   const gamesQuery = useDisciplines(pickerWorkspaceId ?? "all");
   // Offered (and opened by default): tournaments of the scope's ENABLED games that have an analytics board. A

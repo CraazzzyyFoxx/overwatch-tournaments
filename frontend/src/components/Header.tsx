@@ -47,10 +47,8 @@ const MENU_ITEM_CLASS =
   "text-[color:var(--aqt-fg)] outline-none transition-colors hover:bg-[color:var(--aqt-overlay-3)] " +
   "focus-visible:bg-[color:var(--aqt-overlay-3)] focus-visible:shadow-[inset_0_0_0_2px_var(--aqt-teal)]";
 
-/** Mock `.pop`: the floating panel every header disclosure lands in. */
-const POP_CLASS =
-  "min-w-[240px] max-w-[min(360px,calc(100vw-24px))] rounded-xl border-[color:var(--aqt-border-2)] " +
-  "bg-[color:var(--aqt-card-2)] p-1.5 shadow-[0_18px_50px_rgb(0_0_0/0.5)]";
+/** Mock `.pop`: the size and inset of every header dropdown; its surface is the shared floating panel. */
+const POP_CLASS = "min-w-[240px] max-w-[min(360px,calc(100vw-24px))] p-1.5";
 
 interface HeaderProps {
   /**

@@ -2,3 +2,8 @@
 *.md
 Dockerfile
 .dockerignore
+/gateway.exe
+/gateway
+*.test
+*.prof
+/out/

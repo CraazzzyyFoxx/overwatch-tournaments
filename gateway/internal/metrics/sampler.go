@@ -8,7 +8,7 @@ import (
 // ConnCounter reports live WebSocket connection stats. *ws.Hub satisfies it.
 type ConnCounter interface {
 	Count() int
-	DistinctUsers() int
+	AuthenticatedCount() int
 }
 
 // CountsProvider supplies the rolling unique-active-user windows. *Recorder
@@ -27,7 +27,7 @@ func (m *Metrics) Sampler(ctx context.Context, rec CountsProvider, hub ConnCount
 	sample := func() {
 		if hub != nil {
 			m.wsConns.WithLabelValues("total").Set(float64(hub.Count()))
-			m.wsConns.WithLabelValues("authenticated").Set(float64(hub.DistinctUsers()))
+			m.wsConns.WithLabelValues("authenticated").Set(float64(hub.AuthenticatedCount()))
 		}
 		if rec != nil {
 			cctx, cancel := context.WithTimeout(ctx, 5*time.Second)

@@ -14,6 +14,7 @@ leaving anyone idle -- a full field is worth more than a first meeting.
 
 from __future__ import annotations
 
+import time
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from itertools import islice
@@ -26,29 +27,39 @@ _NON_CANONICAL_DISTANCE = 10_000
 # Monrad order puts the good pairings first, so the cap only bounds a field that
 # is nearly played out; the fallback keeps such a round valid, just not vetted.
 _LOOKAHEAD_BUDGET = 200
-# Hard ceiling on search nodes visited by one generate_round call, shared by the
-# candidate enumeration and the next-round matching probe. _LOOKAHEAD_BUDGET caps
-# how many finished rounds are weighed; this caps the work spent looking for them,
-# so a played-out field cannot stall the worker on an exponential tree.
+# Hard ceiling on search nodes visited by one search, shared by the candidate
+# enumeration and the next-round matching probe. _LOOKAHEAD_BUDGET caps how many
+# finished rounds are weighed; this caps the work spent looking for them, so a
+# played-out field cannot stall the worker on an exponential tree.
 _SEARCH_NODE_BUDGET = 50_000
+# ...and on its wall time: a node sorts its candidates, so its cost grows with the
+# field -- 50k nodes of a 30-team field ran 1.2 s on the event loop. A round makes
+# at most two searches (rematch-free, then the fallback), so a call stays under 1 s.
+_SEARCH_SECONDS = 0.4
 
 
 class SwissPairingImpossibleError(ValueError):
-    """Raised when no complete Swiss round can be built without a rematch."""
+    """Raised when no complete Swiss round can be built, not even with rematches."""
+
+
+class _BudgetExhausted(Exception):
+    """One search ran out of nodes or time; the round falls back, it is not impossible."""
 
 
 class _NodeBudget:
-    """Shared countdown of search nodes; raises once the field costs too much."""
+    """Countdown of search nodes and wall time for one search; raises once the field costs too much."""
 
-    __slots__ = ("remaining",)
+    __slots__ = ("deadline", "remaining")
 
-    def __init__(self, limit: int) -> None:
+    def __init__(self, limit: int = _SEARCH_NODE_BUDGET, seconds: float = _SEARCH_SECONDS) -> None:
         self.remaining = limit
+        self.deadline = time.perf_counter() + seconds
 
     def spend(self) -> None:
         self.remaining -= 1
-        if self.remaining < 0:
-            raise SwissPairingImpossibleError("Swiss pairing search node budget exhausted for this field")
+        # The clock is read every 256 nodes: a node is microseconds, the read is not free.
+        if self.remaining < 0 or ((self.remaining & 0xFF) == 0 and time.perf_counter() > self.deadline):
+            raise _BudgetExhausted
 
 
 @dataclass(frozen=True)
@@ -303,33 +314,40 @@ def generate_round(
     sorted_teams = sorted(standings, key=lambda standing: (standing.points, standing.buchholz), reverse=True)
     team_ids = [standing.team_id for standing in sorted_teams]
     bye_history = bye_history or set()
-    budget = _NodeBudget(_SEARCH_NODE_BUDGET)
 
     def _pick(allow_rematches: bool) -> tuple[int | None, list[tuple[int, int]]] | None:
+        budget = _NodeBudget()
         first: tuple[int | None, list[tuple[int, int]]] | None = None
-        for candidate in _bye_candidates(team_ids, bye_history):
-            pairing_standings = [standing for standing in sorted_teams if standing.team_id != candidate]
-            pairing_team_ids = [standing.team_id for standing in pairing_standings]
-            metadata = _build_team_meta(pairing_standings)
-            for option in islice(
-                _iter_pairings(
-                    pairing_team_ids,
-                    metadata=metadata,
-                    played_pairs=played_pairs,
-                    budget=budget,
-                    allow_rematches=allow_rematches,
-                ),
-                _LOOKAHEAD_BUDGET,
-            ):
-                if first is None:
-                    first = (candidate, option)
-                if _keeps_next_round_pairable(team_ids, played_pairs, option, budget):
-                    return candidate, option
+        try:
+            for candidate in _bye_candidates(team_ids, bye_history):
+                pairing_standings = [standing for standing in sorted_teams if standing.team_id != candidate]
+                pairing_team_ids = [standing.team_id for standing in pairing_standings]
+                metadata = _build_team_meta(pairing_standings)
+                for option in islice(
+                    _iter_pairings(
+                        pairing_team_ids,
+                        metadata=metadata,
+                        played_pairs=played_pairs,
+                        budget=budget,
+                        allow_rematches=allow_rematches,
+                    ),
+                    _LOOKAHEAD_BUDGET,
+                ):
+                    if first is None:
+                        first = (candidate, option)
+                    if _keeps_next_round_pairable(team_ids, played_pairs, option, budget):
+                        return candidate, option
+        except _BudgetExhausted:
+            # Out of budget: the best-ranked round found so far stands, unvetted
+            # for the next round -- or, with none found, the fallback below runs.
+            pass
         return first
 
     # A rematch-free round is always preferred. Only when the field has played
-    # itself into a corner is one reused, and then the fewest the greedy pass
-    # can manage -- a round where two teams sit idle is worse than a repeat.
+    # itself into a corner (or the search for a rematch-free round ran out of
+    # budget) is one reused, and then the fewest the greedy pass can manage -- a
+    # round where two teams sit idle is worse than a repeat. Each search gets
+    # its own budget, so an exhausted first one still leaves the fallback room.
     chosen = _pick(allow_rematches=False) or _pick(allow_rematches=True)
     if chosen is None:
         raise SwissPairingImpossibleError("Unable to pair a Swiss round for this field")

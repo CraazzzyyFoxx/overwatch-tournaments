@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 
+from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
@@ -18,6 +19,7 @@ from shared.services.tournament.computation import (
     create_job,
     dispatch_job,
 )
+from src.core import db
 
 JobKind = Literal["bracket", "standings"]
 JobStatus = Literal["pending", "running", "succeeded", "failed", "superseded"]
@@ -25,6 +27,9 @@ FailureDisposition = Literal["retry", "failed", "refused", "ignored"]
 
 TERMINAL_STATUSES = ("succeeded", "failed", "superseded")
 MAX_ATTEMPTS = 3
+#: How long ``purge_finished_jobs`` keeps terminal jobs (the admin job list) before deleting them.
+FINISHED_RETENTION = timedelta(days=30)
+PURGE_BATCH = 5000
 
 
 def failure_message(exc: Exception) -> str:
@@ -179,6 +184,14 @@ class ComputationJobsService:
         job = await self.get_job(session, job_id, for_update=True)
         if job is None or job.kind != kind or job.status in TERMINAL_STATUSES:
             return None
+        if job.status == "running" and job.attempts >= MAX_ATTEMPTS:
+            # Every attempt ended in a redelivery, not a failure: the worker died mid-job (an OOM kill does
+            # that). The queues have no delivery limit, so this is the only place that stops the loop.
+            job.status = "failed"
+            job.error = f"Worker stopped during all {MAX_ATTEMPTS} attempts"
+            job.finished_at = datetime.now(UTC)
+            await session.commit()
+            return None
         # A redelivered message can legitimately find a running job after the
         # previous worker crashed. The execution transaction locks the job row, so
         # reclaiming here remains single-flight while making crash recovery prompt.
@@ -241,3 +254,26 @@ class ComputationJobsService:
 
 
 jobs_service = ComputationJobsService()
+
+
+async def purge_finished_jobs(session_factory: Any = db.async_session_maker) -> int:
+    """Delete terminal jobs older than ``FINISHED_RETENTION``; returns how many went.
+
+    Daily scheduler job. ``PURGE_BATCH`` rows per transaction so no single delete holds locks or bloats WAL for long.
+    Pending and running jobs are never purged.
+    """
+    cutoff = datetime.now(UTC) - FINISHED_RETENTION
+    repo = TournamentComputationJobRepository()
+    deleted = 0
+    while True:
+        async with session_factory() as session:
+            count = await repo.delete_finished_before(
+                session, statuses=TERMINAL_STATUSES, cutoff=cutoff, limit=PURGE_BATCH
+            )
+            await session.commit()
+        deleted += count
+        if count < PURGE_BATCH:
+            break
+    if deleted:
+        logger.info("Purged {} finished computation jobs", deleted)
+    return deleted

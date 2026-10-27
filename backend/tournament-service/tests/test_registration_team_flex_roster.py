@@ -48,8 +48,9 @@ from shared.models.tenancy.workspace import Workspace  # noqa: E402
 from shared.models.tournament import Tournament, TournamentPhaseSchedule  # noqa: E402
 from shared.services.team_format import save_tournament_format  # noqa: E402
 from src.schemas.registration import RegistrationSubmit  # noqa: E402
-from src.services.registration import teams as teams_module  # noqa: E402
 from src.services.registration.teams import TEAM_COMPLETE, TEAM_FORMING, teams_service  # noqa: E402
+from src.services.registration.teams import invitee as invitee_module  # noqa: E402
+from src.services.registration.teams import invites as invites_module  # noqa: E402
 
 #: Three places, none of them a role: the squad shape this file exists for.
 ALL_FLEX = {"flex": 3}
@@ -163,7 +164,7 @@ def test_a_three_flex_roster_is_founded_and_filled_by_two_invites(db_session) ->
     async def _run() -> tuple[str, list[str], str, list[str]]:
         seeded = await _seed(db_session)
         try:
-            team, _ = await teams_service.create_team(
+            team, _registration, _issues = await teams_service.create_team(
                 db_session,
                 tournament_id=seeded.tournament_id,
                 auth_user=seeded.captain,
@@ -195,8 +196,8 @@ def test_a_three_flex_roster_is_founded_and_filled_by_two_invites(db_session) ->
 
     # This is a roster/DB check; Redis limiter behavior has its own fail-closed tests.
     with (
-        patch.object(teams_module, "assert_invite_attempt_allowed", AsyncMock()),
-        patch.object(teams_module, "assert_accept_attempt_allowed", AsyncMock()),
+        patch.object(invites_module, "assert_invite_attempt_allowed", AsyncMock()),
+        patch.object(invitee_module, "assert_accept_attempt_allowed", AsyncMock()),
     ):
         create_status, create_slots, final_status, final_slots = asyncio.run(_run())
 

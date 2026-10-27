@@ -372,16 +372,23 @@ class WorkspaceMemberChangedEvent(BaseEvent):
     """Workspace membership or workspace roles changed for some auth users.
 
     Published by: app-service (member add/update/remove, owner transfer,
-    workspace create, profile merge) in the same transaction as the write.
+    workspace create/delete, player delete, profile merge) and by the shared
+    RBAC writers every service runs (``shared.rbac.bootstrap.stage_rbac_change``:
+    member admission, role grant, bulk role autofill, system-role permission
+    reconciliation), in the same transaction as the write.
     Consumed by: identity-service ``workspace_member_changed``, which drops the
     cached RBAC payload of every listed user. Dropping a key is idempotent, so
     a redelivery is harmless and the event needs no deterministic id.
     """
 
     event_type: str = Field(default="workspace_member_changed", frozen=True)
-    workspace_id: int | None = Field(default=None, description="Workspace ID; None for a cross-workspace merge")
+    workspace_id: int | None = Field(default=None, description="Workspace ID; None when not workspace-scoped")
     auth_user_ids: list[int] = Field(..., min_length=1, description="Auth users whose RBAC must be reloaded")
-    change: str = Field(..., description="added | roles_changed | removed | owner_transferred | merged")
+    change: str = Field(
+        ...,
+        description="added | roles_changed | removed | owner_transferred | merged | role_permissions_changed"
+        " | workspace_deleted | player_deleted",
+    )
 
 
 class SteamAccountChangedEvent(BaseEvent):

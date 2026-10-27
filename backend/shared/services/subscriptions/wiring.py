@@ -12,6 +12,7 @@ must not read any single service's settings.
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -56,8 +57,10 @@ def build_strategies(
     session: AsyncSession,
     *,
     twitch_client_id: str | None = None,
+    token_key: str | None = None,
     broker: Any | None = None,
     proxy: str | None = None,
+    release: Callable[[], Awaitable[None]] | None = None,
 ) -> dict[str, ProviderStrategy]:
     """Map ``provider`` -> live resolution strategy.
 
@@ -65,15 +68,20 @@ def build_strategies(
     (``boosty``/``twitch``), not the mechanism that answers: Boosty's tier comes
     from Discord roles, which is an implementation detail recorded in the
     verdict's ``source``. Discord is asked through ``broker`` (discord-service
-    holds the only bot token); ``proxy`` is Twitch's egress.
+    holds the only bot token); ``proxy`` is Twitch's egress and ``token_key``
+    (``OAUTH_TOKEN_ENCRYPTION_KEY``) opens the patrons' stored Twitch tokens.
+    ``release`` runs after each strategy's DB read, before its first network call
+    (e.g. ``session.commit``, so no provider call waits inside a transaction).
 
     A provider with no credentials is still registered: its strategy resolves to
     ``unknown`` with a reason, which is strictly better than the resolver
     reporting ``no_strategy_for_provider`` and hiding the real cause.
     """
     return {
-        SocialProvider.BOOSTY: BoostyDiscordStrategy(session, broker=broker),
-        SocialProvider.TWITCH: TwitchSubscriptionStrategy(session, client_id=twitch_client_id, proxy=proxy),
+        SocialProvider.BOOSTY: BoostyDiscordStrategy(session, broker=broker, release=release),
+        SocialProvider.TWITCH: TwitchSubscriptionStrategy(
+            session, client_id=twitch_client_id, token_key=token_key, proxy=proxy, release=release
+        ),
     }
 
 
@@ -81,12 +89,21 @@ def build_resolver(
     session: AsyncSession,
     *,
     twitch_client_id: str | None = None,
+    token_key: str | None = None,
     broker: Any | None = None,
     proxy: str | None = None,
+    release: Callable[[], Awaitable[None]] | None = None,
 ) -> SubscriptionResolver:
     return SubscriptionResolver(
         store=build_store(session),
-        strategies=build_strategies(session, twitch_client_id=twitch_client_id, broker=broker, proxy=proxy),
+        strategies=build_strategies(
+            session,
+            twitch_client_id=twitch_client_id,
+            token_key=token_key,
+            broker=broker,
+            proxy=proxy,
+            release=release,
+        ),
         # Every real resolver records history: the collector needs it for the admin
         # tab, and the registration/check-in gates are exactly the checks an
         # organizer later asks "why was this player refused?" about.

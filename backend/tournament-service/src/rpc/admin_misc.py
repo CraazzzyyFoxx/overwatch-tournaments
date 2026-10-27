@@ -22,7 +22,6 @@ from faststream.rabbit.annotations import RabbitMessage
 from shared import models
 from shared.core import http_status as status
 from shared.core.errors import BaseAPIException as HTTPException
-from shared.repository import StatsMatchRepository
 from shared.rpc.identity import ensure_workspace_permission
 from shared.rpc.query import build_query_model
 from shared.services.audit import record_admin_audit
@@ -89,7 +88,7 @@ async def _assert_source_correction_allowed(session: Any, encounter_id: int) -> 
     to re-resolve the frozen seeds). A missing encounter is left to the service
     below to 404 on.
     """
-    encounter = await enc_service.encounter_service.encounter_repo.get(session, encounter_id)
+    encounter = await enc_service.encounter_service.get_encounter(session, encounter_id)
     if encounter is not None:
         await admin_stage_service.assert_source_correction_allowed(session, encounter)
 
@@ -97,7 +96,7 @@ async def _assert_source_correction_allowed(session: Any, encounter_id: int) -> 
 async def _assert_bracket_live(session: Any, encounter_id: int) -> None:
     """Refuse a result on a preview bracket until its stage is activated.
     A missing encounter is left to the service to 404 on."""
-    encounter = await enc_service.encounter_service.encounter_repo.get(session, encounter_id)
+    encounter = await enc_service.encounter_service.get_encounter(session, encounter_id)
     if encounter is not None:
         await assert_encounter_live(session, encounter)
 
@@ -114,9 +113,6 @@ async def _slot_state(session: Any, encounter: models.Encounter) -> schemas.Enco
     )
 
 
-_match_repo = StatsMatchRepository()
-
-
 def register(broker: Any, logger: Any) -> None:
     # ── encounters ────────────────────────────────────────────────────────
 
@@ -128,7 +124,7 @@ def register(broker: Any, logger: Any) -> None:
             ws_id = await auth.get_match_workspace_id(session, match_id)
             ensure_workspace_permission(user, ws_id, "match", "result")
             body = schemas.MatchUpdate.model_validate(_payload(data))
-            encounter_id = await _match_repo.get_encounter_id(session, match_id)
+            encounter_id = await enc_service.encounter_service.get_match_encounter_id(session, match_id)
             await record_admin_audit(
                 session,
                 action="encounter.update_match",

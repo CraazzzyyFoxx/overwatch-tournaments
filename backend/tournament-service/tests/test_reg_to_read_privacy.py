@@ -21,7 +21,7 @@ from types import SimpleNamespace
 from shared.domain.roster import PlayerRoster, RosterRole  # noqa: E402
 from shared.models.registration.registration import Registration  # noqa: E402
 from shared.schemas.identity import PlayerIdentityRead  # noqa: E402
-from src.schemas.registration_build import _reg_to_read  # noqa: E402
+from src.services.registration.read_model import _reg_to_read  # noqa: E402
 
 #: What a form that asks the four public questions publishes. ``organizer_notes``
 #: is fixed-visibility ``organizers`` in the builtin catalog, and ``staff_note``

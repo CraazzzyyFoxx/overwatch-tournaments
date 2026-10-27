@@ -17,6 +17,7 @@ __all__ = (
     "StageItemSummaryRead",
     "StageItemInputRead",
     "StageScoring",
+    "StageScoringRead",
     "StageBestOf",
     "ScoringColumnSettings",
     "GrandFinalType",
@@ -158,6 +159,31 @@ class StageScoring(BaseModel):
         return self
 
 
+class ScoringColumnRead(BaseModel):
+    """``ScoringColumnSettings`` as stored: read back without the write-time checks."""
+
+    key: str
+    label: str
+    public: bool = True
+    better: Literal["higher", "lower"] = "higher"
+
+
+class StageScoringRead(BaseModel):
+    """``StageScoring`` as stored, without its write validators.
+
+    A read reports the rule the stage was saved with; re-validating it would recompile the formula on every stage
+    read, and a rule saved before the formula language reserved another name would 422 every list that embeds it.
+    """
+
+    win: float | None = None
+    draw: float | None = None
+    loss: float | None = None
+    preset: Literal["wins", "points"] | None = None
+    columns: list[ScoringColumnRead] | None = None
+    placement_points: list[float] | None = None
+    formula: str | None = None
+
+
 class StageBestOf(BaseModel):
     """Series length per encounter: ``final`` (an elimination stage's last round),
     a Swiss decisive match's ``swiss_qualify`` / ``swiss_eliminate`` (the larger
@@ -189,7 +215,7 @@ class _StageRegulationRead(BaseModel):
     ranking_preset: str | None = None
     #: ``None`` = the preset's order.
     tiebreak_order: list[str] | None = None
-    scoring: StageScoring = Field(default_factory=StageScoring)
+    scoring: StageScoringRead = Field(default_factory=StageScoringRead)
     #: ``None`` = a bye pays the win points.
     swiss_bye_points: float | None = None
     #: Swiss: wins (byes included) that put a team through; ``None`` = never.

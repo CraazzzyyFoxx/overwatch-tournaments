@@ -6,7 +6,7 @@ only up to LIVE; PLAYOFFS/COMPLETED stay manual/event-driven. Tournaments in
 manual mode (``auto_transitions_enabled = False``) are never touched.
 
 Candidates are picked with a coarse SQL filter (enabled + source status + any
-due schedule row), then each is re-locked ``FOR UPDATE SKIP LOCKED`` in its own
+due schedule row), then each is re-locked ``FOR NO KEY UPDATE SKIP LOCKED`` in its own
 session and re-checked with the precise pure helper ``next_due_status`` before
 transitioning — one transaction per tournament, so a failure in one never
 aborts the loop.
@@ -60,7 +60,9 @@ async def run_due_transitions(
                         models.Tournament.auto_transitions_enabled.is_(True),
                         models.Tournament.status.in_(tournament_state.AUTO_TRANSITION_SOURCE_STATUSES),
                     )
-                    .with_for_update(of=models.Tournament, skip_locked=True)
+                    # NO KEY UPDATE: held across transition_status's notification fan-out, a plain FOR UPDATE
+                    # would block the KEY SHARE foreign-key checks of every insert under this tournament.
+                    .with_for_update(of=models.Tournament, skip_locked=True, key_share=True)
                 )
                 tournament = result.scalar_one_or_none()
                 if tournament is None:

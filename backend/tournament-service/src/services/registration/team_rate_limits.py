@@ -38,6 +38,7 @@ __all__ = (
     "TEAM_INVITE_TOTAL_CAP",
     "assert_accept_attempt_allowed",
     "assert_invite_attempt_allowed",
+    "count_attempt",
 )
 
 #: A 12-slot roster (``MAX_TEAM_SIZE``) needs at most 11 invites; 30 leaves room
@@ -93,6 +94,22 @@ def _unavailable(code: str, msg: str) -> ApiHTTPException:
     return ApiHTTPException(status_code=503, detail=[ApiExc(msg=msg, code=code)])
 
 
+async def count_attempt(client: aioredis.Redis, key: str, window_seconds: int) -> int:
+    """Count one hit on ``key`` and return the total in the current window.
+
+    ``INCR`` then ``EXPIRE … NX`` in one MULTI: the window opens at the first hit,
+    a later hit never extends it, and no failure between the two can leave a
+    counter without an expiry -- which would rate-limit the actor forever. ``NX``
+    also gives a key some earlier code left without a TTL its expiry back.
+    Needs Redis 7+ (every compose file runs ``redis/redis-stack:latest``, 7.x).
+    """
+    async with client.pipeline(transaction=True) as pipe:
+        pipe.incr(key)
+        pipe.expire(key, window_seconds, nx=True)
+        attempts, _ = await pipe.execute()
+    return int(attempts)
+
+
 async def _consume(key: str, *, limit: int, window_seconds: int, redis: aioredis.Redis | None) -> bool | None:
     """Count one attempt. ``True`` = allowed, ``False`` = over limit, ``None`` = no
     verdict available (Redis missing or erroring)."""
@@ -100,9 +117,7 @@ async def _consume(key: str, *, limit: int, window_seconds: int, redis: aioredis
     if client is None:
         return None
     try:
-        attempts = await client.incr(key)
-        if attempts == 1:
-            await client.expire(key, window_seconds)
+        attempts = await count_attempt(client, key, window_seconds)
     except RedisError as exc:
         logger.warning(f"team rate limit unavailable for {key}: {exc}")
         return None

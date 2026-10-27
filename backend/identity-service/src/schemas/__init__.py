@@ -13,6 +13,7 @@ from .api_key import (
     ApiKeyUpdate,
 )
 from .auth import (
+    AccountDeleteRequest,
     AuthLinkedPlayer,
     AuthUser,
     AuthUserWorkspace,
@@ -54,6 +55,7 @@ from .rbac import (
     AuthUserListParams,
     AuthUserListQueryParams,
     AuthUserListRead,
+    AuthUserLookupRead,
     AuthUserPlayerLinkAssign,
     PermissionBase,
     PermissionCreate,
@@ -81,6 +83,7 @@ __all__ = [
     "SessionRead",
     "RefreshTokenRequest",
     "PasswordSetRequest",
+    "AccountDeleteRequest",
     "ServiceTokenRequest",
     "ServiceToken",
     "ServiceTokenPayload",
@@ -117,6 +120,7 @@ __all__ = [
     "LinkedPlayer",
     "AdminSessionRead",
     "AuthUserListRead",
+    "AuthUserLookupRead",
     "AuthUserDetailRead",
     "AuthUserLinkedPlayerRead",
     "AuthUserPlayerLinkAssign",

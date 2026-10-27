@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
-import { ChevronLeft, Plus, X } from "lucide-react";
+import { ChevronLeft, ListFilter, Plus, X } from "lucide-react";
 import { useDebounce } from "use-debounce";
 
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,7 @@ import { Combobox, ComboboxCheck } from "@/components/ui/combobox";
 import { CommandGroup, CommandItem } from "@/components/ui/command";
 import { FilterChip } from "@/components/ui/filter-chip";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { SearchField } from "@/components/ui/search-field";
+import { useTableToolbarNarrow } from "@/components/data-table/toolbar-context";
 import {
   isFilterActive,
   type FilterState,
@@ -22,8 +22,12 @@ import {
 export interface FilterBarProps {
   defs: FilterDef[];
   filters: FilterState;
-  search?: { placeholder: string; value: string; onChange: (value: string) => void };
-  trailing?: ReactNode;
+  /**
+   * Filter controls that are not a `FilterDef` — a range picker, a "pending"
+   * shortcut — drawn with the inline selects. Never a command: those are the
+   * table's `commands`.
+   */
+  extraFilters?: ReactNode;
 }
 
 /** One active chip: which filter, which value, and how to drop it. */
@@ -46,21 +50,26 @@ const INLINE_ALL = "__all__";
 type InlineDef = Extract<FilterDef, { kind: "single" }> & { inline: { allLabel: string } };
 
 /**
- * The one filter surface for the admin panel: search + removable chips + a
- * "+ Filter" popover holding everything not yet applied.
+ * The one filter surface for the admin panel: removable chips + a "+ Filter"
+ * popover holding everything not yet applied.
  *
  * It replaced both earlier conventions at once — a "Filter by tournament"
  * `<Select>` in the table toolbar and the per-column funnel popovers — so a
  * screen has exactly one place where "narrow this list" lives, and that place
  * writes the URL.
+ *
+ * In a narrow table toolbar its pieces become the toolbar row's own items:
+ * the picker shrinks to an icon with the active count beside the search, and
+ * the chips, inline selects and extra filters take a row below, only while
+ * there are any.
  */
 export function FilterBar({
   defs,
   filters,
-  search,
-  trailing
+  extraFilters
 }: Readonly<FilterBarProps>) {
   const t = useTranslations("kit.actions");
+  const narrow = useTableToolbarNarrow();
   const [open, setOpen] = useState(false);
   const [pickerKey, setPickerKey] = useState<string | null>(null);
   /** The picker's search field, shared by both levels; reset whenever the level changes. */
@@ -191,144 +200,168 @@ export function FilterBar({
         ? entityResults
         : picker.options;
 
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      {search ? (
-        <SearchField
-          containerClassName="w-full sm:w-64"
-          label={search.placeholder}
-          placeholder={search.placeholder}
-          value={search.value}
-          onValueChange={search.onChange}
-        />
-      ) : null}
+  const inlineSelects = inline.map((def) => {
+    const value = filters.values[def.key];
+    return (
+      <Select
+        key={def.key}
+        value={typeof value === "string" && value !== "" ? value : INLINE_ALL}
+        onValueChange={(next) => write(def, next === INLINE_ALL ? null : next)}
+      >
+        <SelectTrigger size="sm" aria-label={def.label} className="w-auto min-w-36 gap-2">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={INLINE_ALL}>{def.inline.allLabel}</SelectItem>
+          {def.options.map((option) => (
+            <SelectItem key={option.value} value={option.value}>
+              <span className="flex items-center gap-2">
+                {option.icon}
+                {option.label}
+              </span>
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    );
+  });
 
-      {inline.map((def) => {
-        const value = filters.values[def.key];
-        return (
-          <Select
-            key={def.key}
-            value={typeof value === "string" && value !== "" ? value : INLINE_ALL}
-            onValueChange={(next) => write(def, next === INLINE_ALL ? null : next)}
-          >
-            <SelectTrigger size="sm" aria-label={def.label} className="w-auto min-w-36 gap-2">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={INLINE_ALL}>{def.inline.allLabel}</SelectItem>
-              {def.options.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  <span className="flex items-center gap-2">
-                    {option.icon}
-                    {option.label}
-                  </span>
-                </SelectItem>
+  const chipButtons = chips.map((chip) => (
+    <FilterChip
+      key={chip.id}
+      active
+      aria-label={t("removeFilter", { label: chip.label })}
+      onClick={chip.onRemove}
+    >
+      {chip.label}
+      <X aria-hidden className="size-3" />
+    </FilterChip>
+  ));
+
+  const pickerPopover =
+    available.length > 0 ? (
+      <Combobox
+        open={open}
+        onOpenChange={(next) => (next ? setOpen(true) : closePicker())}
+        trigger={
+          // A menu trigger, not a toggle: drop the chip's `aria-pressed`.
+          narrow ? (
+            // The chips sit on a row of their own here; the count says they are there.
+            <FilterChip aria-label={t("addFilter")} aria-pressed={undefined} count={chips.length > 0 ? chips.length : undefined}>
+              <ListFilter aria-hidden className="size-3.5" />
+            </FilterChip>
+          ) : (
+            <FilterChip aria-label={t("addFilter")} aria-pressed={undefined}>
+              <Plus aria-hidden className="size-3" />
+              {t("filter")}
+            </FilterChip>
+          )
+        }
+        header={
+          picker === null ? null : (
+            <div className="flex items-center gap-1 border-b border-border/60 px-2 py-1.5">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => openLevel(null)}
+                aria-label={t("backToFilterList")}
+                className="text-muted-foreground"
+              >
+                <ChevronLeft aria-hidden />
+              </Button>
+              <span className="text-xs font-medium text-foreground">{picker.label}</span>
+            </div>
+          )
+        }
+        searchValue={query}
+        onSearchValueChange={setQuery}
+        searchPlaceholder={
+          picker === null ? t("filterBy") : t("searchPicker", { label: picker.label.toLowerCase() })
+        }
+        emptyMessage={picker === null ? t("noFilters") : t("nothingMatchesShort")}
+        shouldFilter={picker?.kind !== "entity"}
+      >
+        <CommandGroup>
+          {picker === null
+            ? available.map((def) => (
+                <CommandItem
+                  key={def.key}
+                  value={def.label}
+                  onSelect={() => {
+                    if (def.kind === "toggle") {
+                      write(def, true);
+                      closePicker();
+                      return;
+                    }
+                    openLevel(def.key);
+                  }}
+                >
+                  {def.label}
+                </CommandItem>
+              ))
+            : pickerOptions.map((option) => (
+                <CommandItem
+                  key={option.value}
+                  value={option.label}
+                  onSelect={() => selectOption(picker, option)}
+                >
+                  {option.icon}
+                  <span className="min-w-0 flex-1 truncate">{option.label}</span>
+                  {option.count !== undefined ? (
+                    <span className="text-xs tabular-nums text-muted-foreground">{option.count}</span>
+                  ) : null}
+                  {picker.kind === "multi" ? <ComboboxCheck selected={isPicked(option)} /> : null}
+                </CommandItem>
               ))}
-            </SelectContent>
-          </Select>
-        );
-      })}
+        </CommandGroup>
+      </Combobox>
+    ) : null;
 
-      <div role="group" aria-label={t("activeFilters")} className="flex flex-wrap items-center gap-2">
+  const clearAll =
+    chips.length > 1 ? (
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        onClick={filters.clear}
+        className="text-muted-foreground"
+      >
+        {t("clearAll")}
+      </Button>
+    ) : null;
 
-        {chips.map((chip) => (
-          <FilterChip
-            key={chip.id}
-            active
-            aria-label={t("removeFilter", { label: chip.label })}
-            onClick={chip.onRemove}
-          >
-            {chip.label}
-            <X aria-hidden className="size-3" />
-          </FilterChip>
-        ))}
-
-        {available.length > 0 ? (
-          <Combobox
-            open={open}
-            onOpenChange={(next) => (next ? setOpen(true) : closePicker())}
-            trigger={
-              // A menu trigger, not a toggle: drop the chip's `aria-pressed`.
-              <FilterChip aria-label={t("addFilter")} aria-pressed={undefined}>
-                <Plus aria-hidden className="size-3" />
-                {t("filter")}
-              </FilterChip>
-            }
-            header={
-              picker === null ? null : (
-                <div className="flex items-center gap-1 border-b border-border/60 px-2 py-1.5">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    onClick={() => openLevel(null)}
-                    aria-label={t("backToFilterList")}
-                    className="text-muted-foreground"
-                  >
-                    <ChevronLeft aria-hidden />
-                  </Button>
-                  <span className="text-xs font-medium text-foreground">{picker.label}</span>
-                </div>
-              )
-            }
-            searchValue={query}
-            onSearchValueChange={setQuery}
-            searchPlaceholder={
-              picker === null ? t("filterBy") : t("searchPicker", { label: picker.label.toLowerCase() })
-            }
-            emptyMessage={picker === null ? t("noFilters") : t("nothingMatchesShort")}
-            shouldFilter={picker?.kind !== "entity"}
-          >
-            <CommandGroup>
-              {picker === null
-                ? available.map((def) => (
-                    <CommandItem
-                      key={def.key}
-                      value={def.label}
-                      onSelect={() => {
-                        if (def.kind === "toggle") {
-                          write(def, true);
-                          closePicker();
-                          return;
-                        }
-                        openLevel(def.key);
-                      }}
-                    >
-                      {def.label}
-                    </CommandItem>
-                  ))
-                : pickerOptions.map((option) => (
-                    <CommandItem
-                      key={option.value}
-                      value={option.label}
-                      onSelect={() => selectOption(picker, option)}
-                    >
-                      {option.icon}
-                      <span className="min-w-0 flex-1 truncate">{option.label}</span>
-                      {option.count !== undefined ? (
-                        <span className="text-xs tabular-nums text-muted-foreground">{option.count}</span>
-                      ) : null}
-                      {picker.kind === "multi" ? <ComboboxCheck selected={isPicked(option)} /> : null}
-                    </CommandItem>
-                  ))}
-            </CommandGroup>
-          </Combobox>
-        ) : null}
-
-        {chips.length > 1 ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={filters.clear}
-            className="text-muted-foreground"
-          >
-            {t("clearAll")}
-          </Button>
+  if (narrow) {
+    const hasRow = inline.length > 0 || Boolean(extraFilters) || chips.length > 0;
+    return (
+      // `contents`: the picker is the toolbar row's item, beside the search; the rest is its last row.
+      <div className="contents">
+        {pickerPopover}
+        {hasRow ? (
+          <div className="order-last flex basis-full flex-wrap items-center gap-2">
+            {inlineSelects}
+            {extraFilters}
+            {chips.length > 0 ? (
+              <div role="group" aria-label={t("activeFilters")} className="flex flex-wrap items-center gap-2">
+                {chipButtons}
+                {clearAll}
+              </div>
+            ) : null}
+          </div>
         ) : null}
       </div>
+    );
+  }
 
-      {trailing ? <div className="ml-auto flex flex-wrap items-center gap-2">{trailing}</div> : null}
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {inlineSelects}
+      {extraFilters}
+      <div role="group" aria-label={t("activeFilters")} className="flex flex-wrap items-center gap-2">
+        {chipButtons}
+        {pickerPopover}
+        {clearAll}
+      </div>
     </div>
   );
 }

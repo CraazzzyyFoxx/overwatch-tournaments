@@ -19,7 +19,6 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
-from shared.core import enums
 from shared.disciplines import DISCIPLINES
 from shared.disciplines.ingest import BoundMatch
 from shared.messaging.config import ACHIEVEMENT_EVALUATE_QUEUE, MATCH_INGESTED_EXCHANGE
@@ -92,8 +91,8 @@ async def lock_owners(
             .execution_options(populate_existing=True)
         )
     ).one_or_none()
-    if encounter is None or game is None or game.state == enums.EncounterGameState.CANCELLED:
-        raise StaleTarget("the target game no longer exists or was cancelled")
+    if encounter is None or game is None:
+        raise StaleTarget("the target game no longer exists")
     job = await _jobs.get_for_update(session, job_id, workspace_id=workspace_id)
     if job is None:
         raise ClaimSuperseded("the ingest job no longer exists")

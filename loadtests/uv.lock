@@ -644,10 +644,14 @@ version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "locust" },
+    { name = "websocket-client" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "locust", specifier = ">=2.32,<3.0" }]
+requires-dist = [
+    { name = "locust", specifier = ">=2.32,<3.0" },
+    { name = "websocket-client", specifier = ">=1.8,<2" },
+]
 
 [[package]]
 name = "packaging"

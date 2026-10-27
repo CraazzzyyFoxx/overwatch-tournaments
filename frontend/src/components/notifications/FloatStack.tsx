@@ -49,9 +49,11 @@ const CONTAINER_CLASS = cn(
   // Always mounted, even with nothing to show: the screen-reader status line
   // lives inside and `display:none` would silence it. Empty, it has no height.
   "pointer-events-none fixed inset-x-0 bottom-0 z-40 grid grid-cols-[minmax(0,1fr)]",
-  // From 640 the stack is in the flow, centred under the header plate. The
-  // margin only comes with a card: empty, it would widen the header gap.
-  "sm:sticky sm:inset-x-auto sm:bottom-auto sm:top-[calc(10px+var(--aqt-header-h)+8px)] sm:mx-auto sm:has-[section]:mt-2.5 sm:w-[min(680px,calc(100%-2rem))] md:w-[min(680px,calc(100%-3rem))] xl:w-[min(680px,calc(100%-5rem))]"
+  // From 640 a card pinned under the header plate, over the page rather than in
+  // its flow: nothing moves when it comes or goes. `z-[45]` keeps it above the
+  // pages' own z-40 sticky tab bars that pin into the same strip, and under the
+  // header and modals (z-50).
+  "sm:bottom-auto sm:top-[calc(10px+var(--aqt-header-h)+8px)] sm:z-[45] sm:mx-auto sm:w-[min(680px,calc(100%-2rem))]"
 );
 const SURFACE_CLASS =
   "pointer-events-auto relative overflow-hidden border shadow-[0_18px_40px_-12px_rgb(0_0_0/0.65),0_2px_6px_rgb(0_0_0/0.3)] motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 sm:rounded-[14px] sm:shadow-[0_14px_30px_-14px_rgb(0_0_0/0.7)] motion-safe:sm:slide-in-from-top-2";
@@ -94,9 +96,8 @@ type Row =
  *
  * In the DOM right after the header, so a keyboard reader reaches an urgent
  * action before the page body rather than after the footer. Phones get a sheet
- * along the bottom edge; from 640px the stack sits in the flow at the top of
- * the page and pins under the header plate once it scrolls: it pushes the page
- * down, never covers it.
+ * along the bottom edge, from 640px a card pinned under the header plate: both
+ * float over the page and never push it down.
  */
 export function FloatStack({ initialAnnouncements, tenantWorkspaceId, release }: Readonly<FloatStackProps>) {
   const t = useTranslations("notifications");
@@ -127,7 +128,7 @@ export function FloatStack({ initialAnnouncements, tenantWorkspaceId, release }:
 
   // Beside anything else the release is a row; alone, the event card. Once a
   // row on this page it stays one, so answering the check-in above it does not
-  // make the page jump. The next page decides afresh.
+  // make the stack jump. The next page decides afresh.
   const [rowOnPath, setRowOnPath] = useState<string | null>(null);
   if (shownRelease && crowded && rowOnPath !== pathname) setRowOnPath(pathname);
   const releaseAsEvent = shownRelease != null && !crowded && rowOnPath !== pathname;

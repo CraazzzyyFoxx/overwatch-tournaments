@@ -40,6 +40,17 @@ def _loaded_relationship(model: typing.Any, name: str) -> typing.Any | None:
 #: and round come from.
 HistoryRow = tuple[models.Encounter, models.BracketEncounter]
 
+#: The entities ``get_by_tournament`` honours: all its key keeps of the client's list (``canonical_entities``).
+READ_ENTITIES = frozenset({"team", "stage", "stage_item", "tournament", "matches_history"})
+
+
+class _StageFacts(typing.NamedTuple):
+    """What every standing row of one stage reads off it."""
+
+    read: schemas.StageSummaryRead | None
+    rule_profile: str
+    tiebreak_order: list[str]
+
 
 def _history_by_team(encounters: typing.Sequence[HistoryRow]) -> dict[int, list[HistoryRow]]:
     """Index the history by the teams that actually sat in each encounter.
@@ -81,6 +92,7 @@ class StandingsFlowsService:
         histories_by_team: dict[int, list[HistoryRow]] | None = None,
         tournament_cache: schemas.TournamentRead | None = None,
         team_cache: dict[int, schemas.TeamRead] | None = None,
+        stage_cache: dict[int, _StageFacts] | None = None,
     ) -> schemas.StandingRead:
         """Convert a Standing to ``StandingRead`` with the requested related ``entities``."""
         team: schemas.TeamRead | None = None
@@ -102,8 +114,21 @@ class StandingsFlowsService:
                 )
                 if team_cache is not None:
                     team_cache[team_model.id] = team
-        if _entity_requested(entities, "stage") and stage_model is not None:
-            stage = schemas.StageSummaryRead.model_validate(stage_model, from_attributes=True)
+        # A stage's read and its effective rules are the same for each of its rows: built once per stage.
+        source_rule_profile = tiebreak_order = None
+        if stage_model is not None:
+            facts = stage_cache.get(stage_model.id) if stage_cache is not None else None
+            if facts is None:
+                facts = _StageFacts(
+                    schemas.StageSummaryRead.model_validate(stage_model, from_attributes=True)
+                    if _entity_requested(entities, "stage")
+                    else None,
+                    service._rule_profile(stage_model),
+                    service._tiebreak_order(stage_model),
+                )
+                if stage_cache is not None:
+                    stage_cache[stage_model.id] = facts
+            stage, source_rule_profile, tiebreak_order = facts
         if _entity_requested(entities, "stage_item") and stage_item_model is not None:
             stage_item = schemas.StageItemSummaryRead.model_validate(stage_item_model, from_attributes=True)
         if _entity_requested(entities, "tournament") and tournament_model is not None:
@@ -121,11 +146,6 @@ class StandingsFlowsService:
                     await self.standings.get_completed_match_history_by_tournament(session, standing.tournament_id)
                 )
             matches_history = _history_for_standing(standing, histories_by_team.get(standing.team_id, []))
-
-        # Expose the effective rule profile + tie-break order so clients can render
-        # an accurate "ranked by …" legend without duplicating the engine defaults.
-        source_rule_profile = service._rule_profile(stage_model) if stage_model is not None else None
-        tiebreak_order = service._tiebreak_order(stage_model) if stage_model is not None else None
 
         return schemas.StandingRead(
             **standing.to_dict(),
@@ -151,30 +171,24 @@ class StandingsFlowsService:
             matches_history=sort_matches(matches_history),
         )
 
+    # Values are the dumped wire dicts (``v2``), not pickled ``StandingRead``s: a hit is then a plain unpickle, and
+    # since cashews hands a value back unvalidated, a wire change bumps the version.
     @versioned(
         generations=tournament_generations("{tournament_id}", STANDINGS),
         ttl=config.settings.standings_cache_ttl,
-        key="standings_by_tournament:{tournament_id}:{entities}",
+        key="standings_by_tournament:v2:{tournament_id}:{entities}",
         prefix="fastapi:",
     )
     async def get_by_tournament(
-        self,
-        session: AsyncSession,
-        tournament_id: int,
-        entities: list[str],
-        *,
-        tournament: models.Tournament | None = None,
-    ) -> list[schemas.StandingRead]:
-        """All standings of a tournament as ``StandingRead``, with the requested ``entities``.
+        self, session: AsyncSession, tournament_id: int, entities: list[str]
+    ) -> list[dict[str, typing.Any]]:
+        """All standings of a tournament as ``StandingRead`` wire dicts (``exclude_none``), with the requested
+        ``entities`` (the key's too: pass them through ``canonical_entities(..., READ_ENTITIES)``).
 
         Standings rows change on a recalculation and on a stage restructure; the
         embedded ``matches_history`` also moves whenever an encounter does. Every
         one of those publishes a resource in ``STANDINGS``, whose generation is
         part of this key, so a plain TTL cache here is safe.
-
-        ``tournament`` is an optional pre-fetched model (callers typically loaded
-        it for a visibility check), read only on a cache miss when "tournament"
-        is a requested entity.
         """
         standings = await self.standings.get_by_tournament(session, tournament_id, entities)
         histories_by_team = None
@@ -182,24 +196,26 @@ class StandingsFlowsService:
             histories_by_team = _history_by_team(
                 await self.standings.get_completed_match_history_by_tournament(session, tournament_id)
             )
-        # Every standing shares one tournament and often repeats a team across
-        # stages/stage_items — precompute/memoize instead of re-serializing per row.
+        # Every standing shares one tournament and often repeats a team and a stage
+        # across rows — precompute/memoize instead of re-serializing per row.
         tournament_cache = None
         if _entity_requested(entities, "tournament"):
-            tournament_model = (
-                tournament if tournament is not None else await tournament_flows_service.get(session, tournament_id, [])
-            )
+            tournament_model = await tournament_flows_service.get(session, tournament_id, [])
             tournament_cache = await tournament_flows_service.to_pydantic(session, tournament_model, [])
         team_cache: dict[int, schemas.TeamRead] = {}
+        stage_cache: dict[int, _StageFacts] = {}
         return [
-            await self.to_pydantic(
-                session,
-                standing,
-                entities,
-                histories_by_team=histories_by_team,
-                tournament_cache=tournament_cache,
-                team_cache=team_cache,
-            )
+            (
+                await self.to_pydantic(
+                    session,
+                    standing,
+                    entities,
+                    histories_by_team=histories_by_team,
+                    tournament_cache=tournament_cache,
+                    team_cache=team_cache,
+                    stage_cache=stage_cache,
+                )
+            ).model_dump(mode="json", exclude_none=True)
             for standing in standings
         ]
 

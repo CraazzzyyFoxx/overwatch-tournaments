@@ -627,13 +627,14 @@ class _BoardSession:
     ``scalar``: max(WorkspaceEvent.id) over the draft AND bracket topics, then
     the form version's ``schema_json`` (read only when some registration
     actually answered one).
-    ``execute``: teams, picks, players (repository ``list_by_session`` reads).
-    The owner reads (discipline, rated dimension) come off the session row itself.
+    ``execute``: teams, picks (repository ``list_by_session`` reads). The seats and
+    their rosters come off the read snapshot (``_pool``); the owner reads
+    (discipline, rated dimension) come off the session row itself.
     """
 
-    def __init__(self, *, schema_json: dict | None, players: list) -> None:
+    def __init__(self, *, schema_json: dict | None) -> None:
         self._scalar = [None, schema_json]
-        self._results = [[], [], players]
+        self._results = [[], []]
 
     async def scalar(self, _statement):
         return self._scalar.pop(0)
@@ -642,14 +643,19 @@ class _BoardSession:
         return _ExecuteResult(self._results.pop(0))
 
 
-class _FakeRosters:
-    """``DraftRosterService`` stand-in: the engine's answer per seat."""
+def _pool(monkeypatch, players: list[DraftPlayer], rosters: dict[int, object]) -> None:
+    """The read snapshot ``build_board`` takes its seats and their engine rosters from."""
 
-    def __init__(self, rosters: dict[int, object]) -> None:
-        self._rosters = rosters
+    async def _load_snapshot(_session, _draft_session) -> DraftSnapshot:
+        return DraftSnapshot(
+            teams=(),
+            players=tuple(players),
+            picks=(),
+            rosters={p.id: rosters[p.id] for p in players if p.id in rosters},
+        )
 
-    async def load(self, _session, _draft_session, players) -> dict:
-        return {player.id: self._rosters[player.id] for player in players if player.id in self._rosters}
+    monkeypatch.setattr(feasibility_service, "load_snapshot", _load_snapshot)
+    monkeypatch.setattr(draft_feasibility, "_read_snapshots", {})
 
 
 def _seat(player_id: int) -> DraftPlayer:
@@ -700,28 +706,25 @@ def test_board_projects_public_answers_and_never_ships_the_rest(monkeypatch) -> 
     monkeypatch.setattr(feasibility_service, "resolve_shape", _shape)
     draft = _live_draft()
     player = _seat(20)
-    monkeypatch.setattr(
-        board.board_service,
-        "rosters",
-        _FakeRosters(
-            {
-                20: roster(
-                    120,
-                    ranks={"support": 3000},
-                    handle="Ana#1",
-                    player_name="Canonical Ana",
-                    public_notes="prefers Ana",
-                    custom_fields={"vk": "vk.com/ana", "phone": "+70000000000"},
-                )
-            }
-        ),
+    _pool(
+        monkeypatch,
+        [player],
+        {
+            20: roster(
+                120,
+                ranks={"support": 3000},
+                handle="Ana#1",
+                player_name="Canonical Ana",
+                public_notes="prefers Ana",
+                custom_fields={"vk": "vk.com/ana", "phone": "+70000000000"},
+            )
+        },
     )
     session = _BoardSession(
         schema_json=_schema(
             {"key": "vk", "label": "VK profile", "kind": "url", "visibility": "public"},
             {"key": "phone", "label": "Phone", "kind": "text", "visibility": "organizers"},
         ),
-        players=[player],
     )
 
     snapshot = asyncio.run(board.board_service.build_board(session, draft))  # type: ignore[arg-type]
@@ -747,7 +750,7 @@ def test_board_ranks_a_player_on_their_own_role_under_role_slots(monkeypatch) ->
     # a role at all. Contract: DraftPlayerRead.effective_rank's docstring.
     player = _seat(21)
     resolved = roster(121, ranks={"support": 2800, "damage": 4000}, primary="support", handle="Ana#2")
-    monkeypatch.setattr(board.board_service, "rosters", _FakeRosters({21: resolved}))
+    _pool(monkeypatch, [player], {21: resolved})
 
     async def _role_shape(*_args, **_kwargs):
         return DEFAULT_ROSTER_SHAPE
@@ -755,7 +758,7 @@ def test_board_ranks_a_player_on_their_own_role_under_role_slots(monkeypatch) ->
     monkeypatch.setattr(feasibility_service, "resolve_shape", _role_shape)
     role_slots = asyncio.run(
         board.board_service.build_board(  # type: ignore[arg-type]
-            _BoardSession(schema_json=None, players=[player]), _live_draft(session_id=91)
+            _BoardSession(schema_json=None), _live_draft(session_id=91)
         )
     )
     assert role_slots.players[0].effective_rank == 2800
@@ -771,7 +774,7 @@ def test_board_ranks_a_player_on_their_own_role_under_role_slots(monkeypatch) ->
     monkeypatch.setattr(feasibility_service, "resolve_shape", _flex_shape)
     all_flex = asyncio.run(
         board.board_service.build_board(  # type: ignore[arg-type]
-            _BoardSession(schema_json=None, players=[player]), _live_draft(session_id=92)
+            _BoardSession(schema_json=None), _live_draft(session_id=92)
         )
     )
     assert all_flex.players[0].effective_rank == 4000
@@ -785,11 +788,11 @@ def test_board_renders_a_seat_whose_registration_resolved_to_nothing(monkeypatch
         return DEFAULT_ROSTER_SHAPE
 
     monkeypatch.setattr(feasibility_service, "resolve_shape", _shape)
-    monkeypatch.setattr(board.board_service, "rosters", _FakeRosters({}))
+    _pool(monkeypatch, [_seat(22)], {})
 
     snapshot = asyncio.run(
         board.board_service.build_board(  # type: ignore[arg-type]
-            _BoardSession(schema_json=None, players=[_seat(22)]), _live_draft(session_id=93)
+            _BoardSession(schema_json=None), _live_draft(session_id=93)
         )
     )
 

@@ -25,17 +25,16 @@ class TournamentComputationJob(db.TimeStampIntegerMixin):
             unique=True,
             postgresql_where=text("status IN ('pending', 'running')"),
         ),
-        Index("ix_tournament_computation_job_status", "status"),
         Index("ix_tournament_computation_job_tournament_kind", "tournament_id", "kind"),
         {"schema": "tournament"},
     )
 
     kind: Mapped[str] = mapped_column(String(16), nullable=False)
     operation: Mapped[str] = mapped_column(String(48), nullable=False)
+    # Indexed by ``ix_tournament_computation_job_tournament_kind``'s leading column.
     tournament_id: Mapped[int] = mapped_column(
         ForeignKey("tournament.tournament.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     stage_id: Mapped[int | None] = mapped_column(
         ForeignKey("tournament.stage.id", ondelete="CASCADE"),

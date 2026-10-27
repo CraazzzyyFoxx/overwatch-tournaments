@@ -1,11 +1,10 @@
 "use client";
 
 import { useMemo, useRef, useState, type KeyboardEvent } from "react";
-import { ChevronsUpDown } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { Button } from "@/components/ui/button";
-import { VARIANT_CLASS } from "@/components/ui/combobox";
+import { Button, triggerChevronClass } from "@/components/ui/button";
 import Image from "@/components/ui/image";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { type DivisionGridLike, sortTiersDescending } from "@/lib/divisions/grid";
@@ -144,7 +143,7 @@ export function DivisionRangePicker({ grid, min, max, onChange, ariaLabel, disab
           aria-haspopup="dialog"
           aria-label={`${ariaLabel}: ${labelText}`}
           title={labelText}
-          className={cn("w-full justify-between", VARIANT_CLASS.toolbar)}
+          className="group/trigger w-full justify-between"
         >
           <span className="flex min-w-0 items-center gap-1.5 overflow-hidden">
             {ends.length === 0 ? <span className="truncate">{labelText}</span> : null}
@@ -156,7 +155,7 @@ export function DivisionRangePicker({ grid, min, max, onChange, ariaLabel, disab
               </span>
             ))}
           </span>
-          <ChevronsUpDown aria-hidden className="h-4 w-4 shrink-0 opacity-50" />
+          <ChevronDown aria-hidden className={triggerChevronClass} />
         </Button>
       </PopoverTrigger>
       <PopoverContent

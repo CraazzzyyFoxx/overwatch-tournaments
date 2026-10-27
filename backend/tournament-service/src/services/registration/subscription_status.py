@@ -35,6 +35,7 @@ from src.schemas.registration import (
     SubscriptionStatusRead,
 )
 from src.services.admission import AdmissionConfig, AdmissionStage
+from src.services.registration.team_rate_limits import count_attempt
 
 __all__ = (
     "REDEEM_ATTEMPT_LIMIT",
@@ -139,9 +140,7 @@ async def assert_redeem_attempt_allowed(
 
     key = f"subs:redeem:{workspace_id}:{auth_user_id}"
     try:
-        attempts = await client.incr(key)
-        if attempts == 1:
-            await client.expire(key, REDEEM_WINDOW_SECONDS)
+        attempts = await count_attempt(client, key, REDEEM_WINDOW_SECONDS)
     except RedisError as exc:
         logger.warning(f"redeem rate limit unavailable, allowing attempt: {exc}")
         return

@@ -135,14 +135,19 @@ def canonical_division_expr(
     )
 
 
-def require_grid_version_read_access(user: AuthUser, workspace_id: int | None) -> None:
+def require_grid_version_read_access(
+    user: AuthUser, workspace_id: int | None, detail: str = "Division grid version not found"
+) -> None:
     """System grids (workspace_id IS NULL) are readable by any authenticated user.
 
-    Workspace-owned grids require membership so versions cannot be enumerated
-    cross-workspace by id. Superuser is a workspace member of every workspace.
+    A workspace-owned grid is readable by the workspace's members (superuser is a member of every workspace) and by
+    whoever holds ``division_grid.read`` there. Anyone else gets the 404 a missing id gets: a 403 would confirm the
+    row exists, so ids could be enumerated cross-workspace.
     """
-    if workspace_id is not None and not user.is_workspace_member(workspace_id):
-        raise HTTPException(status_code=403, detail="Not a member of this workspace")
+    if workspace_id is not None and not (
+        user.is_workspace_member(workspace_id) or user.has_workspace_permission(workspace_id, "division_grid", "read")
+    ):
+        raise HTTPException(status_code=404, detail=detail)
 
 
 def require_marketplace_source_access(
@@ -151,9 +156,9 @@ def require_marketplace_source_access(
     source_workspace_id: int,
     source_is_hidden: bool,
 ) -> None:
-    """Hidden source workspaces stay members/superuser-only on the marketplace."""
+    """Hidden source workspaces stay members/superuser-only on the marketplace: to anyone else they do not exist."""
     if source_is_hidden and not user.is_superuser and source_workspace_id not in user.get_workspace_ids():
-        raise HTTPException(status_code=403, detail="Source workspace is not accessible")
+        raise HTTPException(status_code=404, detail="Workspace not found")
 
 
 def runtime_fallback_grid(discipline: str | None) -> DivisionGrid:

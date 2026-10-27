@@ -65,15 +65,15 @@ class InvalidationConsumerTests(IsolatedAsyncioTestCase):
 
     async def test_published_event_reaches_the_handler_and_bumps_the_generations(self) -> None:
         names = ("tournament:42:tournament.standings", "tournament:*:tournament.standings")
-        before = await current(*names)
+        before = [await current(name) for name in names]
 
         async with TestRabbitBroker(self.broker) as broker:
             await broker.publish(_event(), exchange=EXCHANGE, routing_key="cache.invalidated.tournament.42")
 
         # The handler ran to completion: a rejected message never gets here.
         assert self.dropped == ["tournament.standings"]
-        after = await current(*names)
-        assert [a != b for a, b in zip(after.split("."), before.split("."), strict=True)] == [True, True]
+        after = [await current(name) for name in names]
+        assert [a != b for a, b in zip(after, before, strict=True)] == [True, True]
 
     async def test_unknown_resource_is_delivered_not_rejected(self) -> None:
         """A resource outside this build's vocabulary (a newer publisher) is a no-op, never a nack."""

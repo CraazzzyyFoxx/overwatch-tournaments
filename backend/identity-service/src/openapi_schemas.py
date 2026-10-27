@@ -30,6 +30,7 @@ OPERATIONS: dict[str, Op] = {
     "rpc.identity.get_me": Op(response=schemas.AuthUser),
     "rpc.identity.update_me": Op(request=schemas.UserUpdate, response=schemas.AuthUser),
     "rpc.identity.set_password": Op(request=schemas.PasswordSetRequest),
+    "rpc.identity.delete_me": Op(request=schemas.AccountDeleteRequest),
     "rpc.identity.me.avatar_set": Op(response=schemas.AuthUser),
     "rpc.identity.me.avatar_delete": Op(response=schemas.AuthUser),
     # ── oauth ──────────────────────────────────────────────────────────────
@@ -60,8 +61,10 @@ OPERATIONS: dict[str, Op] = {
     "rpc.identity.rbac.create_role": Op(request=schemas.RoleCreate, response=schemas.RoleRead),
     "rpc.identity.rbac.update_role": Op(request=schemas.RoleUpdate, response=schemas.RoleRead),
     # ── RBAC: auth users ───────────────────────────────────────────────────
+    # A workspace-scoped operator's search returns AuthUserLookupRead rows (C4).
     "rpc.identity.rbac.list_auth_users": Op(
-        response=Paginated[schemas.AuthUserListRead], query=schemas.AuthUserListQueryParams
+        response=Paginated[schemas.AuthUserListRead | schemas.AuthUserLookupRead],
+        query=schemas.AuthUserListQueryParams,
     ),
     "rpc.identity.rbac.get_auth_user": Op(response=schemas.AuthUserDetailRead),
     "rpc.identity.rbac.get_user_roles": Op(response=schemas.RoleRead, response_array=True),

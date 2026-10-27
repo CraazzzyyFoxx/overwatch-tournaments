@@ -56,6 +56,7 @@ def _linked_player(player_id: int, name: str) -> SimpleNamespace:
     return SimpleNamespace(
         id=player_id,
         name=name,
+        avatar_url=f"https://cdn.example/{player_id}.png",
         created_at=now,
     )
 
@@ -75,7 +76,6 @@ def _user(
         username=email.split("@")[0],
         first_name="Ada",
         last_name="Lovelace",
-        avatar_url=None,
         is_active=True,
         is_superuser=False,
         is_verified=True,
@@ -168,17 +168,21 @@ def test_list_auth_users_route_returns_user_summaries(monkeypatch: pytest.Monkey
     admin_role = _role(1, "admin")
     users = [_user(7, "ada@example.com", roles=[admin_role], player=_linked_player(12, "AdaPlayer"))]
 
-    async def fake_list_with_rbac(session, params, *, include_player=False):
-        assert params.search == "ada"
-        assert params.role_id == 1
-        assert params.is_active is True
-        assert params.is_superuser is False
+    async def fake_list_with_rbac(session, params, **filters):
+        assert filters == {
+            "search": "ada",
+            "role_id": 1,
+            "exclude_role_id": None,
+            "is_active": True,
+            "is_superuser": False,
+            "include_player": True,
+            "member_of_workspace_id": None,
+        }
         assert params.page == 2
         assert params.per_page == 25
-        assert include_player is True
         return users, 51
 
-    monkeypatch.setattr(auth_users, "list_with_rbac", fake_list_with_rbac)
+    monkeypatch.setattr(auth_user_admin._users, "list_with_rbac", fake_list_with_rbac)
 
     response = asyncio.run(
         auth_user_admin.list(
@@ -377,6 +381,7 @@ def test_get_auth_user_route_returns_effective_permissions(monkeypatch: pytest.M
     assert response.linked_players[0].player_id == 42
     assert response.linked_players[0].player_name == "GracePlayer"
     assert response.linked_players[0].is_primary is True
+    assert response.avatar_url == "https://cdn.example/42.png"  # the account's avatar is its player's
     assert response.effective_permissions == ["admin.*", "team.read", "team.update"]
 
 
@@ -436,16 +441,18 @@ def test_get_current_user_info_returns_linked_players(monkeypatch: pytest.Monkey
     assert response.linked_players[0].player_id == 42
     assert response.linked_players[0].player_name == "GracePlayer"
     assert response.linked_players[0].is_primary is True
+    assert response.avatar_url == "https://cdn.example/42.png"
 
 
 def test_list_auth_sessions_route_returns_superuser_inventory(monkeypatch: pytest.MonkeyPatch) -> None:
     now = datetime.now(UTC)
 
-    async def fake_list_all_sessions(session, *, user_id=None, search=None, status=None):
+    async def fake_list_all_sessions(session, params, *, user_id=None, search=None, status=None):
+        assert (params.page, params.per_page) == (1, 20)
         assert user_id == 12
         assert search == "ada"
         assert status == "active"
-        return [
+        page = [
             {
                 "session_id": "session-1",
                 "user_id": 12,
@@ -460,6 +467,7 @@ def test_list_auth_sessions_route_returns_superuser_inventory(monkeypatch: pytes
                 "ip_address": "10.0.0.1",
             }
         ]
+        return page, 41
 
     monkeypatch.setattr(sessions, "list_all_sessions", fake_list_all_sessions)
 
@@ -471,64 +479,13 @@ def test_list_auth_sessions_route_returns_superuser_inventory(monkeypatch: pytes
         )
     )
 
-    assert response["total"] == 1
+    # The total is the filtered count from SQL, not the page length.
+    assert response["total"] == 41
     assert response["page"] == 1
     results = response["results"]
     assert len(results) == 1
     assert results[0].session_id == "session-1"
     assert results[0].email == "ada@example.com"
-
-
-def test_list_auth_sessions_route_sorts_and_paginates(monkeypatch: pytest.MonkeyPatch) -> None:
-    base = datetime(2026, 1, 1, tzinfo=UTC)
-
-    def _summary(session_id: str, hours: int) -> dict:
-        seen = base.replace(hour=hours)
-        return {
-            "session_id": session_id,
-            "user_id": 1,
-            "email": f"{session_id}@example.com",
-            "username": session_id,
-            "status": "active",
-            "login_at": seen,
-            "last_seen_at": seen,
-            "expires_at": seen,
-            "revoked_at": None,
-            "user_agent": "Chrome",
-            "ip_address": "10.0.0.1",
-        }
-
-    summaries = [_summary("s1", 1), _summary("s2", 2), _summary("s3", 3)]
-
-    async def fake_list_all_sessions(session, *, user_id=None, search=None, status=None):
-        return list(summaries)
-
-    monkeypatch.setattr(sessions, "list_all_sessions", fake_list_all_sessions)
-
-    # last_seen_at desc, page 1 of size 2 -> newest two sessions.
-    response = asyncio.run(
-        session_admin.list_auth_sessions(
-            object(),
-            SimpleNamespace(is_superuser=True),
-            schemas.SessionListParams(page=1, per_page=2, sort="last_seen_at", order="desc"),
-        )
-    )
-
-    assert response["total"] == 3
-    ids = [row.session_id for row in response["results"]]
-    assert ids == ["s3", "s2"]
-
-    # page 2 -> the remaining oldest session.
-    response_page2 = asyncio.run(
-        session_admin.list_auth_sessions(
-            object(),
-            SimpleNamespace(is_superuser=True),
-            schemas.SessionListParams(page=2, per_page=2, sort="last_seen_at", order="desc"),
-        )
-    )
-
-    assert response_page2["total"] == 3
-    assert [row.session_id for row in response_page2["results"]] == ["s1"]
 
 
 def test_assign_linked_player_to_auth_user_route_calls_admin_link_service(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -692,9 +649,10 @@ def test_delete_oauth_connection_route_blocks_last_passwordless_login() -> None:
         auth_user=auth_user,
     )
 
-    # execute() order: the connection with its auth user, then the COUNT of the
-    # user's remaining connections (1 -> this is the last one).
-    session = _AdminQueueSession(results=[connection, 1])
+    # execute() order: the connection with its auth user, the account-row lock
+    # (SELECT … FOR UPDATE, taken before counting), then the COUNT of the user's
+    # remaining connections (1 -> this is the last one).
+    session = _AdminQueueSession(results=[connection, None, 1])
 
     with pytest.raises(HTTPException) as exc_info:
         asyncio.run(
@@ -864,3 +822,67 @@ def test_remove_role_route_blocks_removing_last_workspace_owner() -> None:
     assert exc_info.value.detail == "Cannot remove the last workspace owner role assignment"
     assert target.roles == [owner_role]
     assert session.commit_called is False
+
+
+def _workspace_operator(user_id: int) -> SimpleNamespace:
+    """A non-superuser holding every permission in workspace 7 -- ``role.update`` included -- through a custom role."""
+    return SimpleNamespace(
+        id=user_id,
+        username=f"op{user_id}",
+        email=f"op{user_id}@example.com",
+        is_superuser=False,
+        has_permission=lambda _resource, _action: False,
+        has_workspace_permission=lambda workspace_id, _resource, _action: workspace_id == 7,
+    )
+
+
+def test_a_non_owner_with_role_update_can_neither_assign_nor_remove_owner() -> None:
+    """Q2: ``role.update`` in the workspace is not enough to hand out or take away ``owner``."""
+    owner_role = _role(5, "owner", workspace_id=7)
+    co_owner = _user(9, "grace@example.com", roles=[owner_role])
+    newcomer = _user(10, "alan@example.com", roles=[])
+    # execute(): target user, the role; scalar(): "the actor holds owner there" -> no.
+    for flow, target in ((role_admin.remove_from_user, co_owner), (role_admin.assign_to_user, newcomer)):
+        session = _AdminQueueSession(results=[target, owner_role, False])
+        with pytest.raises(HTTPException) as exc_info:
+            asyncio.run(flow(session, _workspace_operator(3), SimpleNamespace(user_id=target.id, role_id=5)))
+
+        assert (exc_info.value.status_code, exc_info.value.detail) == (
+            403,
+            "Only a workspace owner can grant or revoke the owner role",
+        )
+        assert session.commit_called is False
+    assert co_owner.roles == [owner_role]
+    assert newcomer.roles == []
+
+
+def test_a_workspace_owner_can_assign_and_remove_owner() -> None:
+    owner_role = _role(5, "owner", workspace_id=7)
+    newcomer = _user(10, "alan@example.com", roles=[])
+    cache = _RecordingCache()
+    # execute(): target user, the role; scalar(): the actor holds owner, then the membership probe.
+    session = _AdminQueueSession(results=[newcomer, owner_role, True, True])
+
+    asyncio.run(
+        RoleAdminService(cache=cache).assign_to_user(
+            session, _workspace_operator(3), SimpleNamespace(user_id=10, role_id=5)
+        )
+    )
+
+    assert newcomer.roles == [owner_role]
+    assert session.commit_called is True
+
+    co_owner = _user(9, "grace@example.com", roles=[owner_role])
+    # execute(): target user, the role; scalar(): the actor holds owner; then the last-owner guard: owner role
+    # lookup (execute), "target holds owner", the owner tally (2 -> not the last one).
+    session = _AdminQueueSession(results=[co_owner, owner_role, True, owner_role, True, 2])
+
+    asyncio.run(
+        RoleAdminService(cache=cache).remove_from_user(
+            session, _workspace_operator(3), SimpleNamespace(user_id=9, role_id=5)
+        )
+    )
+
+    assert co_owner.roles == []
+    assert session.commit_called is True
+    assert cache.invalidated == [10, 9]

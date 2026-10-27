@@ -121,6 +121,7 @@ def test_full_cache_hit_answers_the_whole_payload_without_the_database() -> None
     skipped too, not just the reads.
     """
     entry = {
+        "user": {"email": "cached@example.com", "username": "cached", "is_active": True, "is_superuser": False},
         "roles": ["user"],
         "permissions": [{"resource": "tournament", "action": "read"}],
         "workspaces": [[11, "ws-eleven"]],
@@ -137,6 +138,12 @@ def test_full_cache_hit_answers_the_whole_payload_without_the_database() -> None
     assert cache.reads == 1
     assert cache.writes == []
 
+    assert (payload.sub, payload.email, payload.username, payload.is_superuser) == (
+        5,
+        "cached@example.com",
+        "cached",
+        False,
+    )
     assert payload.roles == ["user"]
     assert payload.permissions == [{"resource": "tournament", "action": "read"}]
     assert payload.denies == [{"resource": "tournament", "action": "delete", "workspace_id": None}]
@@ -152,6 +159,7 @@ def test_full_cache_hit_answers_the_whole_payload_without_the_database() -> None
 def test_a_handed_over_cache_entry_skips_even_the_redis_read() -> None:
     """``cached=`` lets a caller that already read the entry hand it over."""
     entry = {
+        "user": {"email": "cached@example.com", "username": "cached", "is_active": True, "is_superuser": False},
         "roles": [],
         "permissions": [],
         "workspaces": [],

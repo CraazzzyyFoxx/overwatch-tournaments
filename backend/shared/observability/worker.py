@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import time
 import uuid
 from collections.abc import Callable
@@ -61,9 +62,28 @@ WORKER_PUBLISH_FAILURES_TOTAL = Counter(
     "Total number of failed publish attempts performed by services and workers.",
     ("queue",),
 )
+EVENT_LOOP_LAG_SECONDS = Gauge(
+    "event_loop_lag_seconds",
+    "How late the latest 0.5 s sleep on the process's event loop woke up.",
+    ("service",),
+)
+DB_POOL_CHECKED_OUT = Gauge("db_pool_checked_out", "Connections checked out of the SQLAlchemy pool.", ("service",))
+DB_POOL_OVERFLOW = Gauge("db_pool_overflow", "Pool connections open beyond pool_size.", ("service",))
+DB_POOL_SIZE = Gauge("db_pool_size", "SQLAlchemy pool_size.", ("service",))
+DB_POOL_MAX_OVERFLOW = Gauge("db_pool_max_overflow", "SQLAlchemy max_overflow.", ("service",))
+SCHEDULER_JOB_SKIPPED_TOTAL = Counter(
+    "scheduler_job_skipped_total",
+    "APScheduler runs skipped: the previous run still going (max_instances) or past its grace time (missed).",
+    # ``job_id``, not ``job``: Prometheus' own target label would rename it to ``exported_job``.
+    ("service", "job_id", "reason"),
+)
 
 _metrics_server_lock = Lock()
 _metrics_server_started = False
+#: How long the container healthcheck waits for the broker before calling the process unready.
+_PING_SECONDS = 2.0
+_LAG_SAMPLE_SECONDS = 0.5
+_lag_task: asyncio.Task[None] | None = None
 
 
 def _normalize_headers(headers: dict[str, Any] | None) -> dict[str, Any]:
@@ -123,6 +143,83 @@ def start_worker_metrics_server(port: int | None, *, ready: Callable[[], tuple[b
             )
             Thread(target=server.serve_forever, name="worker-metrics", daemon=True).start()
         _metrics_server_started = True
+
+
+class Readiness:
+    """\"Serving\" for ``GET /health``: started, the broker connection is up and every consumer is running.
+
+    The probe answers on the metrics listener's thread, so the broker is asked on the process's own event loop.
+    """
+
+    def __init__(self, broker: Any) -> None:
+        self._broker = broker
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._serving = False
+
+    def bind(self) -> None:
+        """Remember the running loop (call from a startup hook)."""
+        self._loop = asyncio.get_running_loop()
+
+    def serving(self, value: bool) -> None:
+        self._serving = value
+
+    def __call__(self) -> tuple[bool, str]:
+        loop = self._loop
+        if loop is None or not self._serving:
+            return False, "not serving"
+        try:
+            return asyncio.run_coroutine_threadsafe(self._check(), loop).result(timeout=_PING_SECONDS + 1)
+        except Exception as exc:
+            return False, f"probe failed: {exc!r}"
+
+    async def _check(self) -> tuple[bool, str]:
+        if not await self._broker.ping(_PING_SECONDS):
+            return False, "broker unreachable"
+        stopped = [str(getattr(sub, "queue", sub)) for sub in self._broker.subscribers if not sub.running]
+        if stopped:
+            return False, f"consumers not running: {', '.join(stopped)}"
+        return True, "ok"
+
+
+def start_loop_lag_monitor(service: str) -> None:
+    """Sample the running event loop's lag every 0.5 s into ``event_loop_lag_seconds`` (call from a startup hook).
+
+    A handler hogging the CPU or a blocking call delays every other task; this shows it before latency does.
+    """
+    global _lag_task
+    if _lag_task is not None and not _lag_task.done():
+        return
+    gauge = EVENT_LOOP_LAG_SECONDS.labels(service=service)
+
+    async def sample() -> None:
+        while True:
+            started = time.perf_counter()
+            await asyncio.sleep(_LAG_SAMPLE_SECONDS)
+            gauge.set(max(time.perf_counter() - started - _LAG_SAMPLE_SECONDS, 0.0))
+
+    _lag_task = asyncio.get_running_loop().create_task(sample(), name="event-loop-lag")
+
+
+def register_db_pool_metrics(engine: Any, service: str) -> None:
+    """Export ``engine``'s pool occupancy, read at scrape time (an ``AsyncEngine`` or a sync ``Engine``)."""
+    pool = getattr(engine, "sync_engine", engine).pool
+    DB_POOL_CHECKED_OUT.labels(service=service).set_function(pool.checkedout)
+    # QueuePool counts overflow from -pool_size while the pool is still filling.
+    DB_POOL_OVERFLOW.labels(service=service).set_function(lambda: max(pool.overflow(), 0))
+    DB_POOL_SIZE.labels(service=service).set(pool.size())
+    DB_POOL_MAX_OVERFLOW.labels(service=service).set(getattr(pool, "_max_overflow", 0))
+
+
+def instrument_scheduler(scheduler: Any, service: str) -> None:
+    """Count an APScheduler's skipped runs into ``scheduler_job_skipped_total{service,job_id,reason}``."""
+    # Imported here: not every process that imports this package runs APScheduler.
+    from apscheduler.events import EVENT_JOB_MAX_INSTANCES, EVENT_JOB_MISSED
+
+    def count(event: Any) -> None:
+        reason = "max_instances" if event.code == EVENT_JOB_MAX_INSTANCES else "missed"
+        SCHEDULER_JOB_SKIPPED_TOTAL.labels(service=service, job_id=event.job_id, reason=reason).inc()
+
+    scheduler.add_listener(count, EVENT_JOB_MAX_INSTANCES | EVENT_JOB_MISSED)
 
 
 def build_message_headers(

@@ -19,6 +19,7 @@ from __future__ import annotations
 import base64
 import importlib
 import json
+import math
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -39,6 +40,7 @@ schemas = importlib.import_module("src.schemas")
 s3_types = importlib.import_module("shared.clients.s3.types")
 
 UploadResult = s3_types.UploadResult
+MAX_AVATAR_SIZE = importlib.import_module("shared.clients.s3").MAX_AVATAR_SIZE
 
 TOURNAMENT_ID = 72
 WORKSPACE_ID = 1
@@ -68,15 +70,15 @@ IDENTITY_NO_PERMISSION = {
 
 
 class _FakeS3:
-    """Records ``delete_prefix`` calls into a shared ordered trace."""
+    """Records ``delete_prefix`` calls (and what they spare) into a shared ordered trace."""
 
     def __init__(self, trace: list[str]) -> None:
         self._trace = trace
         self.deleted_prefixes: list[str] = []
 
-    async def delete_prefix(self, prefix: str) -> int:
+    async def delete_prefix(self, prefix: str, *, keep: str | None = None) -> int:
         self.deleted_prefixes.append(prefix)
-        self._trace.append(f"s3.delete_prefix:{prefix}")
+        self._trace.append(f"s3.delete_prefix:{prefix}" + (f" keep={keep}" if keep else ""))
         return 1
 
 
@@ -201,8 +203,13 @@ class TournamentImageSubjects(IsolatedAsyncioTestCase):
         self.s3 = _FakeS3(self.trace)
         self.set_image_calls: list[tuple[int, str, str | None]] = []
         self.upload_kwargs: dict = {}
+        #: Overridable so a test can make the row write fail.
+        self.set_image_error: Exception | None = None
         #: Whatever the handler staged on the session -- the audit row.
         self.staged: list = []
+
+    async def _commit(self) -> None:
+        self.trace.append("commit")
 
     async def _invoke(self, subject: str, data: dict, *, upload_result: object | None = None) -> dict:
         broker = CapturingBroker()
@@ -226,17 +233,23 @@ class TournamentImageSubjects(IsolatedAsyncioTestCase):
         async def fake_set_tournament_image(_session, tournament_id, *, slot, url):
             self.set_image_calls.append((tournament_id, slot, url))
             self.trace.append(f"set_tournament_image:{slot}:{url}")
+            if self.set_image_error is not None:
+                raise self.set_image_error
             stored["cover_image_url" if slot == "cover" else "logo_url"] = url
             return SimpleNamespace(id=tournament_id, **stored)
 
         async def fake_tournament_read(_session, tournament, entities):
             # Same entity set registry._ser_tournament hydrates, so the admin form
             # reads this reply exactly as it reads a PATCH reply.
-            self.assertEqual(["stages", "roster_shape", "division_grid_version"], entities)
+            self.assertEqual(["stages", "roster_shape", "division_grid_version", "rules"], entities)
             return _tournament_read(cover_image_url=tournament.cover_image_url, logo_url=tournament.logo_url)
 
         with (
-            patch.object(helpers.db, "async_session_maker", FakeSessionMaker(SimpleNamespace(add=self.staged.append))),
+            patch.object(
+                helpers.db,
+                "async_session_maker",
+                FakeSessionMaker(SimpleNamespace(add=self.staged.append, commit=self._commit)),
+            ),
             patch.object(tournament_binary, "get_s3", fake_get_s3),
             patch.object(tournament_binary, "upload_avatar", fake_upload_avatar),
             patch.object(tournament_binary.auth, "get_tournament_workspace_id", fake_workspace_id),
@@ -336,6 +349,81 @@ class TournamentImageSubjects(IsolatedAsyncioTestCase):
         self.assertEqual("bad_request", envelope["error"]["code"])
         self.assertEqual("File type not allowed", envelope["error"]["message"])
         self.assertEqual([], self.set_image_calls, "a failed upload must not touch the tournament")
+        self.assertEqual([], self.s3.deleted_prefixes, "a failed upload must leave the previous files")
+
+    async def test_upload_removes_previous_files_only_after_the_row_commits(self):
+        key = f"avatars/tournaments/{TOURNAMENT_ID}/cover/abc123def456.webp"
+        envelope = await self._invoke(
+            self.UPLOAD,
+            self._upload_payload("cover"),
+            upload_result=UploadResult(success=True, key=key, public_url=COVER_URL),
+        )
+
+        self.assertTrue(envelope.get("ok"), envelope)
+        # The gate's read transaction ends before S3; the slot's previous files go
+        # only once the row points at the new key and no transaction is open, and
+        # the new key itself is spared.
+        self.assertEqual(
+            [
+                "commit",
+                "upload_avatar",
+                f"set_tournament_image:cover:{COVER_URL}",
+                "commit",
+                f"s3.delete_prefix:avatars/tournaments/{TOURNAMENT_ID}/cover/ keep={key}",
+            ],
+            self.trace,
+        )
+
+    async def test_failed_row_write_keeps_the_previous_files(self):
+        self.set_image_error = tournament_binary.HTTPException(status_code=404, detail="Tournament not found")
+
+        envelope = await self._invoke(
+            self.UPLOAD,
+            self._upload_payload("cover"),
+            upload_result=UploadResult(success=True, key="k", public_url=COVER_URL),
+        )
+
+        self.assertFalse(envelope["ok"], envelope)
+        self.assertEqual([], self.s3.deleted_prefixes)
+
+    async def test_oversized_base64_is_refused_before_decoding(self):
+        # Not even base64: a handler that decoded first would not answer "too large".
+        too_long = "!" * (4 * math.ceil(MAX_AVATAR_SIZE / 3) + 1)
+
+        envelope = await self._invoke(
+            self.UPLOAD,
+            {**self._upload_payload("cover"), "content_b64": too_long},
+            upload_result=UploadResult(success=True, key="k", public_url=COVER_URL),
+        )
+
+        self.assertFalse(envelope["ok"], envelope)
+        self.assertEqual("unprocessable", envelope["error"]["code"])
+        self.assertIn("too large", envelope["error"]["message"])
+        self.assertEqual(["commit"], self.trace, "nothing may reach S3")
+
+    async def test_malformed_base64_is_422_not_500(self):
+        envelope = await self._invoke(
+            self.UPLOAD,
+            {**self._upload_payload("cover"), "content_b64": "abc"},
+            upload_result=UploadResult(success=True, key="k", public_url=COVER_URL),
+        )
+
+        self.assertFalse(envelope["ok"], envelope)
+        self.assertEqual("unprocessable", envelope["error"]["code"])
+        self.assertEqual(["commit"], self.trace, "nothing may reach S3")
+
+    async def test_a_file_at_the_size_cap_is_accepted(self):
+        """The gateway relays files up to the cap; the worker must take them whole."""
+        content = b"\x89PNG\r\n\x1a\n" + b"\x00" * (MAX_AVATAR_SIZE - 8)
+
+        envelope = await self._invoke(
+            self.UPLOAD,
+            {**self._upload_payload("cover"), "content_b64": base64.b64encode(content).decode()},
+            upload_result=UploadResult(success=True, key="k", public_url=COVER_URL),
+        )
+
+        self.assertTrue(envelope.get("ok"), envelope)
+        self.assertEqual(MAX_AVATAR_SIZE, len(self.upload_kwargs["file_data"]))
 
     async def test_unknown_slot_400s_before_any_s3_call(self):
         envelope = await self._invoke(
@@ -363,7 +451,7 @@ class TournamentImageSubjects(IsolatedAsyncioTestCase):
         self.assertEqual("bad_request", envelope["error"]["code"])
         self.assertEqual([], self.trace)
 
-    async def test_delete_removes_objects_before_clearing_the_column(self):
+    async def test_delete_clears_the_column_before_removing_objects(self):
         envelope = await self._invoke(self.DELETE, {"id": TOURNAMENT_ID, "slot": "logo", "identity": IDENTITY})
 
         self.assertTrue(envelope.get("ok"), envelope)
@@ -373,12 +461,26 @@ class TournamentImageSubjects(IsolatedAsyncioTestCase):
         # take the cover down with the logo.
         self.assertEqual([f"avatars/tournaments/{TOURNAMENT_ID}/logo/"], self.s3.deleted_prefixes)
         self.assertEqual([(TOURNAMENT_ID, "logo", None)], self.set_image_calls)
-        # Order is the whole point: bytes go first, so a failed DB write cannot
-        # leave a URL pointing at objects that no longer exist.
+        # Order is the whole point: the gate's read transaction ends first, and
+        # the bytes go only after the cleared row commits, so a failed DB write
+        # can never leave a URL pointing at objects that no longer exist.
         self.assertEqual(
-            [f"s3.delete_prefix:avatars/tournaments/{TOURNAMENT_ID}/logo/", "set_tournament_image:logo:None"],
+            [
+                "commit",
+                "set_tournament_image:logo:None",
+                "commit",
+                f"s3.delete_prefix:avatars/tournaments/{TOURNAMENT_ID}/logo/",
+            ],
             self.trace,
         )
+
+    async def test_failed_row_clear_deletes_nothing(self):
+        self.set_image_error = tournament_binary.HTTPException(status_code=404, detail="Tournament not found")
+
+        envelope = await self._invoke(self.DELETE, {"id": TOURNAMENT_ID, "slot": "logo", "identity": IDENTITY})
+
+        self.assertFalse(envelope["ok"], envelope)
+        self.assertEqual([], self.s3.deleted_prefixes)
 
     async def test_delete_with_unknown_slot_400s_before_any_s3_call(self):
         envelope = await self._invoke(self.DELETE, {"id": TOURNAMENT_ID, "slot": "banner", "identity": IDENTITY})

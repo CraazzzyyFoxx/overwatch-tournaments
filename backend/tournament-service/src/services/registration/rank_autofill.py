@@ -27,7 +27,6 @@ from src.services.registration._common import (
     RegistrationCommonService,
     _common_service,
     included_balancer_status,
-    resolve_roster,
     sync_included_balancer_status,
 )
 from src.services.registration.rank_sources import (
@@ -450,6 +449,9 @@ class RankAutofillService:
         applied_registrations = 0
         role_updates = 0
         balancer_additions = 0
+        # Applied rows whose verdict is recomputed once, after the loop: ``True`` when the row joins the pool
+        # (status set outright), ``False`` when only a ready/incomplete row is re-derived.
+        resync: dict[int, tuple[models.Registration, bool]] = {}
 
         for registration in registrations:
             tag_key = primary_identity_key(registration, provider=provider)
@@ -523,20 +525,28 @@ class RankAutofillService:
 
             if apply and will_add_to_balancer:
                 registration.exclude_reason = None
-                # Re-resolved AFTER the writes above: autoflush publishes them, so
-                # the verdict is the one the pool will actually see.
-                registration.balancer_status = included_balancer_status(await resolve_roster(session, registration))
                 balancer_additions += 1
                 changed = True
             elif not apply and will_add_to_balancer:
                 balancer_additions += 1
 
             if apply and changed:
-                if not will_add_to_balancer:
-                    sync_included_balancer_status(registration, await resolve_roster(session, registration))
+                resync[registration.id] = (registration, will_add_to_balancer)
                 await self.common._register_registration_changed(session, registration)
 
             players.append(row)
+
+        if resync:
+            # One resolve for every applied row, AFTER the writes above: autoflush
+            # publishes them, so each verdict is the one the pool will actually see.
+            resolved = await roster_engine.for_tournament(
+                session, tournament_id, registration_ids=list(resync), include_deleted=True
+            )
+            for registration_id, (registration, joins_pool) in resync.items():
+                if joins_pool:
+                    registration.balancer_status = included_balancer_status(resolved.get(registration_id))
+                else:
+                    sync_included_balancer_status(registration, resolved.get(registration_id))
 
         if apply and (applied_registrations > 0 or balancer_additions > 0):
             await session.commit()

@@ -273,7 +273,8 @@ export function RoomChat({
                             </ContextMenuTrigger>
                             {canDelete || canMute ? (
                               <ContextMenuContent className="w-48">
-                                <ContextMenuLabel className="truncate">
+                                {/* A nickname is the user's own text: no label caps. */}
+                                <ContextMenuLabel className="truncate normal-case tracking-normal">
                                   {message.author_name}
                                 </ContextMenuLabel>
                                 {canDelete ? (

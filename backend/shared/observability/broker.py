@@ -1,8 +1,8 @@
 """Shared RabbitBroker factory.
 
 Centralizes the FastStream broker construction policy so every service inherits
-the same logging verbosity, the deadline-drop middleware, and (opt-in) consumer
-QoS. Mirrors the ``setup_*`` helpers in this package.
+the same logging verbosity, the deadline middleware, graceful shutdown and
+(opt-in) RPC concurrency. Mirrors the ``setup_*`` helpers in this package.
 """
 
 import logging
@@ -10,7 +10,8 @@ from typing import Any
 
 from faststream.rabbit import Channel, RabbitBroker
 
-from shared.rpc.deadline import DeadlineDropMiddleware
+#: Seconds ``broker.stop()`` waits for running handlers before closing (compose ``stop_grace_period`` is longer).
+GRACEFUL_TIMEOUT_SECONDS = 20
 
 
 def make_rabbit_broker(
@@ -26,30 +27,38 @@ def make_rabbit_broker(
     - FastStream's per-message access logs are demoted to ``log_level``
       (default DEBUG) so they stay below the normal INFO sink but reappear
       under ``LOG_LEVEL=debug``. Consume failures still log at ERROR.
-    - ``DeadlineDropMiddleware`` is always installed: RPC requests whose
-      gateway deadline already passed are acked and skipped. Messages without
-      the ``x-deadline-ms`` header (background events/jobs) are unaffected.
-    - ``prefetch_count`` (optional) sets the default-channel QoS: it bounds
-      concurrent message processing per process, keeping the backlog in the
-      queue — where the gateway's per-message TTL can expire it — instead of
-      the consumer buffer. RPC-hosting entrypoints pass
-      ``settings.rpc_prefetch_count`` (env ``RPC_PREFETCH_COUNT``).
+    - ``DeadlineDropMiddleware`` is always installed: gateway RPC requests
+      (``x-deadline-ms``) are traced, timed, dropped when already stale and
+      cancelled at their deadline. Messages without the header (background
+      events/jobs) are unaffected.
+    - ``graceful_timeout`` defaults to ``GRACEFUL_TIMEOUT_SECONDS``: on shutdown
+      in-flight handlers finish (and ack) instead of being dropped and redelivered.
+    - ``prefetch_count`` (optional) sets the default-channel QoS — per
+      consumer, not per process — and caps the process at that many concurrent
+      gateway RPC handlers (``shared.rpc.deadline.configure_rpc_concurrency``).
+      RPC-hosting entrypoints pass ``settings.rpc_prefetch_count`` (env
+      ``RPC_PREFETCH_COUNT``).
 
     Args:
         url: AMQP connection URL.
         logger: Logger passed to the broker (the service's loguru logger).
         log_level: Level for FastStream's per-message access logs.
-        prefetch_count: Default-channel QoS cap; ``None`` keeps the broker
-            default (unlimited).
+        prefetch_count: Default-channel QoS and process RPC concurrency cap;
+            ``None`` keeps the broker default (unlimited) and no cap.
         **kwargs: Forwarded verbatim to ``RabbitBroker``; ``middlewares`` is
             merged after the deadline middleware.
 
     Returns:
         A configured ``RabbitBroker``.
     """
+    # Imported here: ``shared.rpc.deadline`` imports ``shared.observability.correlation``, i.e. this package.
+    from shared.rpc.deadline import DeadlineDropMiddleware, configure_rpc_concurrency
+
     middlewares = (DeadlineDropMiddleware, *kwargs.pop("middlewares", ()))
     if prefetch_count:
         kwargs.setdefault("default_channel", Channel(prefetch_count=prefetch_count))
+        configure_rpc_concurrency(prefetch_count)
+    kwargs.setdefault("graceful_timeout", GRACEFUL_TIMEOUT_SECONDS)
     return RabbitBroker(url, logger=logger, log_level=log_level, middlewares=middlewares, **kwargs)
 
 

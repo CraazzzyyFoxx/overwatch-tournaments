@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from unittest.mock import ANY, AsyncMock, patch
 
-import httpx
-
 from shared.core.errors import ApiExc, ApiHTTPException
 from shared.schemas.events import ChallongePushRequestedEvent
 from shared.tests.encounter_writer_case import EncounterWriterCase
@@ -47,7 +45,7 @@ class ChallongePushConsumerTests(EncounterWriterCase):
         def refused(status: int) -> ApiHTTPException:
             return ApiHTTPException(status_code=status, detail=[ApiExc(code="challonge", msg="no")])
 
-        for failure in (httpx.ConnectTimeout("slow"), refused(503)):
-            self.assertIsNone(await self.consume(3, AsyncMock(side_effect=failure)), failure)
+        # A transport failure reaches here as the client's 503 too.
+        self.assertIsNone(await self.consume(3, AsyncMock(side_effect=refused(503))))
         with self.assertRaises(ApiHTTPException):
             await self.consume(3, AsyncMock(side_effect=refused(400)))

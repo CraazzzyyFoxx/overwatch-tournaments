@@ -40,7 +40,7 @@ func New() *Metrics {
 		reg: reg,
 		requests: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "gateway_http_requests_total",
-			Help: "Total HTTP requests handled by the gateway, by route template, method and status code.",
+			Help: "Total HTTP requests handled by the gateway, by route template, method (non-standard ones as OTHER) and status code.",
 		}, []string{"route", "method", "code"}),
 		duration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name: "gateway_http_request_duration_seconds",

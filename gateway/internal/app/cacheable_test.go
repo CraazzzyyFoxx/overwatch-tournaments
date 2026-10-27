@@ -33,6 +33,28 @@ func TestByHostNeverCacheable(t *testing.T) {
 	}
 }
 
+// The banner rule must match its own route table, and must never grant
+// AuthedRead: a signed-in viewer's body omits the announcements they already
+// dismissed, so serving them the anonymous entry would bring every dismissed
+// banner back.
+func TestAnnouncementCacheableReads(t *testing.T) {
+	routes := make(map[string]string, len(AnnouncementPublicRoutes))
+	for _, r := range AnnouncementPublicRoutes {
+		routes[r.Pattern] = r.Method
+	}
+	for pattern, rule := range AnnouncementCacheableReads {
+		if method, ok := routes[pattern]; !ok || method != http.MethodGet {
+			t.Errorf("cacheable pattern %q is not a GET in AnnouncementPublicRoutes", pattern)
+		}
+		if rule.AuthedRead {
+			t.Errorf("%s must never grant AuthedRead", pattern)
+		}
+	}
+	if _, ok := AnnouncementCacheableReads["/api/v1/announcements/active"]; !ok {
+		t.Fatal("/api/v1/announcements/active must be cached for anonymous visitors")
+	}
+}
+
 // The workspaces list is one endpoint serving three scopes; dispatch only
 // forwards query params a route declares (edge/dispatch.go), so dropping
 // "scope" here would silently pin every caller to the public directory —

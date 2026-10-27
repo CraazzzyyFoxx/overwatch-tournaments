@@ -1,15 +1,17 @@
-"""The public registration list and both team families moved to versioned cache names (``:v2:``).
+"""The public registration list and the teams list moved to versioned cache names (``:v2:``, teams ``:v3:``).
 
 Their payloads changed shape in the multi-game cutover (``top_characters``, a required
-``TournamentHistoryEntry.discipline``, roles as ``{dimension, role}``) while the keys stayed put. Values are pickled in a
-Redis that outlives a deploy and cashews hands them back without re-validating, so a warm pre-cutover entry would be
-served in the old shape. These tests pin the keys cashews really writes, that a pre-bump entry is never read, and that
-a tournament write misses the versioned reads of exactly one tournament.
+``TournamentHistoryEntry.discipline``, roles as ``{dimension, role}``) while the keys stayed put, and the teams list
+then moved from the pickled model to its wire dict. Values are pickled in a Redis that outlives a deploy and cashews
+hands them back without re-validating, so a warm pre-bump entry would be served in the old shape. These tests pin the
+keys cashews really writes, that a pre-bump entry is never read, and that a tournament write misses the versioned reads
+of exactly one tournament.
 """
 
 from __future__ import annotations
 
 import importlib
+import re
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -43,7 +45,9 @@ async def _stored() -> set[str]:
 
 
 def _pre_bump(key: str) -> str:
-    return key.replace(":v2:", ":", 1)
+    """The same key one version back (``:v2:`` had none before it)."""
+    version = int(re.search(r":v(\d+):", key).group(1))
+    return key.replace(f":v{version}:", ":" if version == 2 else f":v{version - 1}:", 1)
 
 
 class RegistrationAndTeamCacheNamespaceTests(IsolatedAsyncioTestCase):
@@ -76,7 +80,7 @@ class RegistrationAndTeamCacheNamespaceTests(IsolatedAsyncioTestCase):
     async def test_each_family_writes_its_v2_key_and_never_reads_the_pre_bump_one(self) -> None:
         for read, upstream, prefix in (
             (self._registration_list, self.build, "fastapi::registration_list:v2:7:"),
-            (self._teams_page, self.page, "fastapi::teams:v2:5:7:"),
+            (self._teams_page, self.page, "fastapi::teams:v3:5:7:"),
         ):
             fresh = await read(7)
             (key,) = await _stored()

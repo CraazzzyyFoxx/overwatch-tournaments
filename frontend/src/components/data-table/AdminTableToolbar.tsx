@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useCallback, useId, useState, useSyncExternalStore } from "react";
 import { useTranslations } from "next-intl";
-import { Bookmark, ChevronLeft, ChevronRight, Download, MoreHorizontal, Rows3, Rows4, Settings2 } from "lucide-react";
+import { Bookmark, ChevronLeft, ChevronRight, Download, Layers, Settings2, SlidersHorizontal } from "lucide-react";
 
+import { Link, cn } from "@/components/data-table/host";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -12,14 +13,17 @@ import {
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
 import { SearchField } from "@/components/ui/search-field";
 import { Spinner } from "@/components/ui/spinner";
-import { CategorizedColumnPicker } from "@/components/ui/categorized-column-picker";
 import type { AdminColumnCategory } from "@/components/data-table/columns";
-import { AdminSavedViews, useSavedViews, type SavedViewsExtra } from "@/components/data-table/SavedViews";
+import { useSavedViews } from "@/components/data-table/SavedViews";
+import { TableToolbarContext } from "@/components/data-table/toolbar-context";
+import type { DataTableGroupBy, TableCommand } from "@/components/data-table/types";
 import type { AdminTableDensity } from "@/components/data-table/useTablePreferences";
 
 /** One offerable column, as the picker and the visibility store see it. */
@@ -31,58 +35,250 @@ export interface PickerColumn {
   mandatory: boolean;
 }
 
+/** The table's own controls over how its rows are shown: everything behind the "View" menu. */
+export interface AdminTableViewProps {
+  selectedCount: number;
+  onExportCsv: () => void;
+  canExport: boolean;
+  /** Absent where the rows are cards, which have no density. */
+  density?: AdminTableDensity;
+  onToggleDensity: () => void;
+  prefsKey: string;
+  visibility: Record<string, boolean>;
+  onVisibilityChange: (next: Record<string, boolean>) => void;
+  /** Absent when the screen gave no `columnsStorageKey`, or its own cards replace the columns. */
+  pickerColumns?: PickerColumn[];
+  onToggleColumn: (id: string) => void;
+  onResetColumns: () => void;
+  groupBy?: DataTableGroupBy;
+}
+
 export interface AdminTableToolbarProps {
-  /** Below `md`, where rows are cards: the table's own controls fold into one "⋯" menu. */
-  compact: boolean;
+  ref?: React.Ref<HTMLDivElement>;
+  /** From `useNarrowToolbar`: the toolbar's own width, not the window's. */
+  narrow: boolean;
   showSearch: boolean;
   searchInputId: string;
   searchLabel: string;
   searchValue: string;
   onSearchChange: (value: string) => void;
-  /** The screen's own filter bar, between the search box and the table's controls. */
-  toolbar?: React.ReactNode;
+  /** The screen's `FilterBar`. */
+  filters?: React.ReactNode;
   isRefreshing: boolean;
-  /** Already resolved against the current selection by the table. */
-  bulkActions?: React.ReactNode;
-  /** Selected rows that are not on the current page, which bulk actions still include. */
-  offPageSelected: number;
-  selectedCount: number;
-  onExportCsv: () => void;
-  canExport: boolean;
-  density: AdminTableDensity;
-  onToggleDensity: () => void;
-  prefsKey: string;
-  visibility: Record<string, boolean>;
-  onVisibilityChange: (next: Record<string, boolean>) => void;
-  /** Absent when the screen gave no `columnsStorageKey`: no picker then. */
-  pickerColumns?: PickerColumn[];
-  onToggleColumn: (id: string) => void;
-  onResetColumns: () => void;
-  actions?: React.ReactNode;
+  /** The visible ones: `hidden` is already dropped. */
+  commands: TableCommand[];
+  view: AdminTableViewProps;
 }
 
 const CATEGORIES: readonly AdminColumnCategory[] = ["core", "meta", "admin"];
 
 /**
- * One row above the table: search, the screen's filter bar (chips wrap inside
- * it), then the table's own controls. Two stacked rows cost a full band of
- * chrome for a chip row that is empty most of the time.
+ * Below this width the toolbar folds. It is the toolbar's own width, so a
+ * table squeezed beside an open Inspector folds on a wide screen too; a
+ * phone is always under it.
+ */
+const NARROW_TOOLBAR_PX = 640;
+
+/**
+ * Whether the toolbar the returned ref lands on is narrow, read through an
+ * external-store subscription so a resize re-renders before the frame paints.
+ * Zero width — not laid out yet, a hidden tab, a test DOM — keeps the wide row.
+ */
+export function useNarrowToolbar(): [(node: HTMLDivElement | null) => void, boolean] {
+  const [node, setNode] = useState<HTMLDivElement | null>(null);
+  const subscribe = useCallback(
+    (onChange: () => void) => {
+      if (!node || typeof ResizeObserver === "undefined") return () => {};
+      const observer = new ResizeObserver(onChange);
+      observer.observe(node);
+      return () => observer.disconnect();
+    },
+    [node]
+  );
+  const narrow = useSyncExternalStore(
+    subscribe,
+    () => {
+      const width = node?.getBoundingClientRect().width ?? 0;
+      return width > 0 && width < NARROW_TOOLBAR_PX;
+    },
+    () => false
+  );
+
+  return [setNode, narrow];
+}
+
+/**
+ * One row above the table in three zones, each with one meaning: what
+ * narrows the list (the search, the screen's `FilterBar`), how it is shown
+ * (the "View" menu), and what the screen does with it (`commands`, the one
+ * primary last).
  *
- * `compact` (a phone) keeps the search and a "⋯" on one row, the filters on the
- * next, and only the screen's own buttons after them: the CSV, views and column
- * controls would otherwise take a row of their own.
+ * Narrow, it stays one row: the search, the filter picker as an icon, the
+ * "View" menu — which then opens with the secondary commands — and the
+ * primary as its icon. Active filter chips and a disabled primary's reason
+ * drop to a row of their own, only while there are any.
  */
 export function AdminTableToolbar({
-  compact,
+  ref,
+  narrow,
   showSearch,
   searchInputId,
   searchLabel,
   searchValue,
   onSearchChange,
-  toolbar,
+  filters,
   isRefreshing,
-  bulkActions,
-  offPageSelected,
+  commands,
+  view
+}: Readonly<AdminTableToolbarProps>) {
+  const t = useTranslations("kitTable.dataTableExtra");
+  const primary = commands.find((command) => command.primary);
+  const secondary = commands.filter((command) => command !== primary);
+
+  return (
+    <TableToolbarContext.Provider value={narrow}>
+      <div
+        ref={ref}
+        className={cn(
+          "flex flex-wrap items-center border-b border-border/40 px-4 py-2.5",
+          narrow ? "gap-2" : "gap-3"
+        )}
+      >
+        {showSearch ? (
+          <SearchField
+            id={searchInputId}
+            containerClassName={narrow ? "min-w-40 flex-1" : "w-64 shrink-0"}
+            autoComplete="off"
+            name="admin-table-search"
+            label={searchLabel}
+            placeholder={searchLabel}
+            value={searchValue}
+            onValueChange={onSearchChange}
+          />
+        ) : null}
+
+        {/* Narrow, the filter bar's pieces are this row's own items: its picker beside the search, its chips below.
+            Wide, it is sized by its chips (`grow`, not `flex-1`): when they and the commands do not fit one line,
+            the commands wrap under them instead of the chips folding into a column. */}
+        {filters ? <div className={narrow ? "contents" : "min-w-0 grow"}>{filters}</div> : null}
+
+        {isRefreshing ? (
+          <output className="flex shrink-0 items-center text-muted-foreground">
+            <Spinner className="size-3" />
+            <span className="sr-only">{t("refreshing")}</span>
+          </output>
+        ) : null}
+
+        {narrow ? (
+          <>
+            <ViewMenu {...view} narrow commands={secondary} />
+            {primary ? <CommandButton command={primary} narrow /> : null}
+          </>
+        ) : (
+          <div className="ml-auto flex max-w-full flex-wrap items-center justify-end gap-2">
+            <ViewMenu {...view} narrow={false} commands={[]} />
+            {secondary.map((command) => (
+              <CommandButton key={command.id} command={command} narrow={false} />
+            ))}
+            {primary ? <CommandButton command={primary} narrow={false} /> : null}
+          </div>
+        )}
+      </div>
+    </TableToolbarContext.Provider>
+  );
+}
+
+/** Spinner while in flight, else the command's icon. */
+function CommandGlyph({ command }: Readonly<{ command: TableCommand }>) {
+  const Icon = command.icon;
+  if (command.pending) return <Spinner />;
+  return Icon ? <Icon aria-hidden /> : null;
+}
+
+/**
+ * A command as a button. Narrow, the primary shrinks to its icon (a command
+ * without one keeps its label) and its reason takes the toolbar's last row.
+ */
+function CommandButton({ command, narrow }: Readonly<{ command: TableCommand; narrow: boolean }>) {
+  const reasonId = useId();
+  const iconOnly = narrow && command.icon !== undefined;
+  const disabled = command.disabled === true || command.disabledReason !== undefined;
+  const props = {
+    variant: command.primary ? ("default" as const) : ("outline" as const),
+    size: "sm" as const,
+    className: iconOnly ? "w-8 px-0" : undefined,
+    "aria-label": iconOnly ? command.label : undefined,
+    title: iconOnly ? command.label : undefined,
+    "aria-describedby": command.disabledReason ? reasonId : undefined
+  };
+  const content = (
+    <>
+      <CommandGlyph command={command} />
+      {iconOnly ? null : command.label}
+    </>
+  );
+  const reason = command.disabledReason ? (
+    <span id={reasonId} className={cn("text-caption text-muted-foreground", narrow && "order-last basis-full")}>
+      {command.disabledReason}
+    </span>
+  ) : null;
+
+  return (
+    <>
+      {narrow ? null : reason}
+      {command.href !== undefined && !disabled ? (
+        <Button asChild {...props}>
+          <Link href={command.href}>{content}</Link>
+        </Button>
+      ) : (
+        <Button type="button" {...props} disabled={disabled} onClick={command.onSelect}>
+          {content}
+        </Button>
+      )}
+      {narrow ? reason : null}
+    </>
+  );
+}
+
+/** A secondary command folded into the narrow "View" menu; a reason reads under its label. */
+function CommandMenuItem({ command }: Readonly<{ command: TableCommand }>) {
+  const disabled = command.disabled === true || command.disabledReason !== undefined;
+  const content = (
+    <>
+      <CommandGlyph command={command} />
+      {command.disabledReason ? (
+        <span className="flex min-w-0 flex-col">
+          {command.label}
+          <span className="text-caption text-muted-foreground">{command.disabledReason}</span>
+        </span>
+      ) : (
+        command.label
+      )}
+    </>
+  );
+
+  return command.href !== undefined && !disabled ? (
+    <DropdownMenuItem asChild>
+      <Link href={command.href}>{content}</Link>
+    </DropdownMenuItem>
+  ) : (
+    <DropdownMenuItem disabled={disabled} onSelect={command.onSelect}>
+      {content}
+    </DropdownMenuItem>
+  );
+}
+
+type ViewLevel = "root" | "group" | "views" | "columns";
+
+/**
+ * How the rows are shown, in one menu on every width: CSV, density, then
+ * grouping, saved views and columns as a second level that replaces the
+ * items — a side submenu has no room beside a menu on a phone and runs off
+ * the screen edge. Narrow, the secondary commands lead it.
+ */
+function ViewMenu({
+  narrow,
+  commands,
   selectedCount,
   onExportCsv,
   canExport,
@@ -94,162 +290,23 @@ export function AdminTableToolbar({
   pickerColumns,
   onToggleColumn,
   onResetColumns,
-  actions
-}: Readonly<AdminTableToolbarProps>) {
-  const t = useTranslations("kitTable.dataTableExtra");
-  const savedViewsExtra: SavedViewsExtra = {
-    get: () => visibility,
-    apply: (next) => onVisibilityChange(next as Record<string, boolean>)
-  };
-
-  const search = showSearch ? (
-    <SearchField
-      id={searchInputId}
-      containerClassName={compact ? "min-w-0 flex-1" : "w-full sm:w-64 sm:shrink-0"}
-      autoComplete="off"
-      name="admin-table-search"
-      label={searchLabel}
-      placeholder={searchLabel}
-      value={searchValue}
-      onValueChange={onSearchChange}
-    />
-  ) : null;
-
-  const spinner = isRefreshing ? (
-    <output className="flex shrink-0 items-center text-muted-foreground">
-      <Spinner className="size-3" />
-      <span className="sr-only">{t("refreshing")}</span>
-    </output>
-  ) : null;
-
-  const offPage =
-    offPageSelected > 0 ? (
-      <span className="text-xs tabular-nums text-muted-foreground" title={t("selectedRowsOtherPages")}>
-        {t("selectedOnOtherPages", { count: offPageSelected })}
-      </span>
-    ) : null;
-
-  if (compact) {
-    const menu = (
-      <div className="ml-auto flex shrink-0 items-center gap-3">
-        {spinner}
-        <AdminTableMenu
-          selectedCount={selectedCount}
-          onExportCsv={onExportCsv}
-          canExport={canExport}
-          prefsKey={prefsKey}
-          savedViewsExtra={savedViewsExtra}
-          visibility={visibility}
-          pickerColumns={pickerColumns}
-          onToggleColumn={onToggleColumn}
-          onResetColumns={onResetColumns}
-        />
-      </div>
-    );
-    return (
-      <div className="flex flex-wrap items-center gap-3 border-b border-border/40 px-4 py-2.5">
-        {search}
-        {search ? menu : null}
-        {/* Under a search the filters take the next row whole; without one they share the menu's row. */}
-        {toolbar ? <div className={search ? "w-full" : "min-w-0 flex-1"}>{toolbar}</div> : null}
-        {search ? null : menu}
-        {/* `empty:hidden`: a screen action that renders nothing must not leave a gap-sized row. */}
-        <div className="ml-auto flex max-w-full flex-wrap items-center justify-end gap-2 empty:hidden">
-          {bulkActions}
-          {offPage}
-          {actions}
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex flex-wrap items-center gap-3 border-b border-border/40 px-4 py-2.5">
-      {search}
-
-      {toolbar ? <div className="min-w-32 flex-1">{toolbar}</div> : null}
-
-      {spinner}
-
-      <div className="ml-auto flex max-w-full shrink-0 flex-wrap items-center justify-end gap-2">
-        {bulkActions}
-        {offPage}
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={onExportCsv}
-          disabled={!canExport}
-          title={selectedCount > 0 ? t("exportSelected", { count: selectedCount }) : t("exportCurrent")}
-        >
-          <Download aria-hidden className="size-3.5" />
-          {t("csv")}
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="w-8 px-0"
-          aria-pressed={density === "compact"}
-          aria-label={density === "compact" ? t("comfortableRows") : t("compactRows")}
-          title={density === "compact" ? t("comfortableRows") : t("compactRows")}
-          onClick={onToggleDensity}
-        >
-          {density === "compact" ? <Rows3 aria-hidden className="size-3.5" /> : <Rows4 aria-hidden className="size-3.5" />}
-        </Button>
-        <AdminSavedViews storageKey={prefsKey} extra={savedViewsExtra} />
-        {pickerColumns ? (
-          <CategorizedColumnPicker<AdminColumnCategory, PickerColumn>
-            columns={pickerColumns}
-            categories={CATEGORIES}
-            categoryLabel={(category) => t(category)}
-            visibility={visibility}
-            onToggle={onToggleColumn}
-            onReset={onResetColumns}
-            triggerLabel={t("columns")}
-            resetLabel={t("resetColumns")}
-            isMandatory={(id) => pickerColumns.some((column) => column.id === id && column.mandatory)}
-          />
-        ) : null}
-        {actions}
-      </div>
-    </div>
-  );
-}
-
-/**
- * The phone's "⋯": CSV export, then the views and columns as a second level
- * that replaces the menu's items — a Radix side submenu has no room beside a
- * menu on a phone and runs off the screen edge. No density toggle: the cards a
- * phone shows have no row density.
- */
-function AdminTableMenu({
-  selectedCount,
-  onExportCsv,
-  canExport,
-  prefsKey,
-  savedViewsExtra,
-  visibility,
-  pickerColumns,
-  onToggleColumn,
-  onResetColumns
-}: Readonly<
-  Pick<
-    AdminTableToolbarProps,
-    | "selectedCount"
-    | "onExportCsv"
-    | "canExport"
-    | "prefsKey"
-    | "visibility"
-    | "pickerColumns"
-    | "onToggleColumn"
-    | "onResetColumns"
-  > & { savedViewsExtra: SavedViewsExtra }
->) {
+  groupBy
+}: Readonly<AdminTableViewProps & { narrow: boolean; commands: TableCommand[] }>) {
   const t = useTranslations("kitTable.dataTableExtra");
   const actionsT = useTranslations("kit.actions");
-  const savedViews = useSavedViews(prefsKey, savedViewsExtra);
-  const [level, setLevel] = useState<"root" | "views" | "columns">("root");
+  const savedViews = useSavedViews(prefsKey, {
+    get: () => visibility,
+    apply: (next) => onVisibilityChange(next as Record<string, boolean>)
+  });
+  const [level, setLevel] = useState<ViewLevel>("root");
+
+  /** `preventDefault` keeps the menu open while it switches level. */
+  const enter = (next: ViewLevel) => (event: Event) => {
+    event.preventDefault();
+    if (next === "views") savedViews.reload();
+    setLevel(next);
+  };
+  const levelTitle = level === "group" ? groupBy?.label : level === "views" ? t("views") : t("columns");
 
   return (
     <>
@@ -259,39 +316,51 @@ function AdminTableMenu({
             type="button"
             variant="outline"
             size="sm"
-            className="w-8 px-0"
-            aria-label={t("tableMenu")}
-            title={t("tableMenu")}
+            className={narrow ? "ml-auto w-8 px-0" : undefined}
+            aria-label={narrow ? t("view") : undefined}
+            title={narrow ? t("view") : undefined}
           >
-            <MoreHorizontal aria-hidden className="size-3.5" />
+            <SlidersHorizontal aria-hidden className="size-3.5" />
+            {narrow ? null : t("view")}
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuContent align="end" className="w-64">
           {level === "root" ? (
             <>
+              {commands.length > 0 ? (
+                <>
+                  {commands.map((command) => (
+                    <CommandMenuItem key={command.id} command={command} />
+                  ))}
+                  <DropdownMenuSeparator />
+                </>
+              ) : null}
               <DropdownMenuItem disabled={!canExport} onSelect={onExportCsv}>
                 <Download aria-hidden />
                 {selectedCount > 0 ? t("exportSelected", { count: selectedCount }) : t("exportCurrent")}
               </DropdownMenuItem>
-              {/* `preventDefault` keeps the menu open while it switches level. */}
-              <DropdownMenuItem
-                onSelect={(event) => {
-                  event.preventDefault();
-                  savedViews.reload();
-                  setLevel("views");
-                }}
-              >
+              {density ? (
+                <DropdownMenuCheckboxItem checked={density === "compact"} onCheckedChange={onToggleDensity}>
+                  {t("compactRows")}
+                </DropdownMenuCheckboxItem>
+              ) : null}
+              {groupBy ? (
+                <DropdownMenuItem onSelect={enter("group")}>
+                  <Layers aria-hidden />
+                  <span className="min-w-0 flex-1 truncate">{groupBy.label}</span>
+                  <span className="text-caption text-muted-foreground">
+                    {groupBy.options.find((option) => option.value === groupBy.value)?.label}
+                  </span>
+                  <ChevronRight aria-hidden />
+                </DropdownMenuItem>
+              ) : null}
+              <DropdownMenuItem onSelect={enter("views")}>
                 <Bookmark aria-hidden />
                 {t("views")}
                 <ChevronRight aria-hidden className="ml-auto" />
               </DropdownMenuItem>
               {pickerColumns ? (
-                <DropdownMenuItem
-                  onSelect={(event) => {
-                    event.preventDefault();
-                    setLevel("columns");
-                  }}
-                >
+                <DropdownMenuItem onSelect={enter("columns")}>
                   <Settings2 aria-hidden />
                   {t("columns")}
                   <ChevronRight aria-hidden className="ml-auto" />
@@ -300,17 +369,20 @@ function AdminTableMenu({
             </>
           ) : (
             <>
-              <DropdownMenuItem
-                aria-label={actionsT("back")}
-                onSelect={(event) => {
-                  event.preventDefault();
-                  setLevel("root");
-                }}
-              >
+              <DropdownMenuItem aria-label={actionsT("back")} onSelect={enter("root")}>
                 <ChevronLeft aria-hidden />
-                {level === "views" ? t("views") : t("columns")}
+                {levelTitle}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
+              {level === "group" && groupBy ? (
+                <DropdownMenuRadioGroup value={groupBy.value} onValueChange={groupBy.onChange}>
+                  {groupBy.options.map((option) => (
+                    <DropdownMenuRadioItem key={option.value} value={option.value}>
+                      {option.label}
+                    </DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
+              ) : null}
               {level === "views" ? savedViews.items : null}
               {level === "columns" && pickerColumns ? (
                 <>

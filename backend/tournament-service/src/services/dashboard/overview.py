@@ -2,10 +2,11 @@
 
 A card is every tournament that is not finished, plus a ``completed`` one inside
 its wrap-up window (14 days after ``finished_at``) whose wrap-up is not done.
-Round trips: the candidates (their per-tournament extras ride as correlated
-scalar subqueries), one GROUP BY over their encounters, one per-tournament issue
-scan of the whole workspace (backlog + the cards' empty slots), the roster's
-identity count, plus ``ReadinessService`` per card -- cards stay few.
+Round trips: the candidates (their per-tournament extras, the granted readiness
+counts included, ride as correlated scalar subqueries), one GROUP BY over their
+encounters, the backlog (newest rows plus window totals in one statement) and
+the roster's identity count. A card costs no statement of its own: its readiness
+is assembled from the candidate row and the encounter counts.
 
 ``wrap_up.done`` is decided on unmasked data: whether a completed tournament
 still has a card must not depend on who is looking. Every other gated value is
@@ -28,11 +29,13 @@ from shared.core import enums
 from shared.core.tournament_state import FINISHED_STATUSES, PHASE_ORDER
 from src import schemas
 from src.services.dashboard.readiness import (
+    build_readiness,
     has_enabled_achievement_rules,
     latest_evaluation_run_status,
+    setup_counts,
     standings_recalc_pending,
+    team_counts,
 )
-from src.services.dashboard.readiness import readiness as readiness_service
 
 __all__ = ("AdminDashboardService", "DashboardPermissions", "overview")
 
@@ -209,11 +212,17 @@ class AdminDashboardService:
         permissions: DashboardPermissions,
         now: datetime,
     ) -> schemas.AdminDashboard:
-        candidates = await self._candidates(session, workspace_id, now)
+        candidates = await self._candidates(session, workspace_id, permissions, now)
         encounters = await self._encounter_counts(session, [row.Tournament.id for row in candidates], now)
-        scan = await self._issue_scan(session, workspace_id, permissions)
 
-        built: list[tuple[tuple, schemas.DashboardTournamentCard, list[schemas.DashboardTimelineEvent]]] = []
+        built: list[
+            tuple[
+                tuple,
+                schemas.DashboardTournamentCard,
+                list[schemas.DashboardTimelineEvent],
+                list[schemas.DashboardIssue],
+            ]
+        ] = []
         for row in candidates:
             tournament: models.Tournament = row.Tournament
             counts = encounters.get(tournament.id, Counter())
@@ -257,9 +266,9 @@ class AdminDashboardService:
                 else None,
                 registrations_last_24h=row.registrations_last_24h if permissions.team_read else None,
                 has_challonge_source=row.has_challonge_source,
-                readiness=await readiness_service.compute_readiness(
-                    session,
-                    tournament.id,
+                readiness=build_readiness(
+                    tournament,
+                    {**row._mapping, **counts},
                     can_tournament_read=permissions.tournament_read,
                     can_team_read=permissions.team_read,
                     can_match_read=permissions.match_read,
@@ -280,42 +289,46 @@ class AdminDashboardService:
             # Ordered on the unmasked deadline: the order is not a secret, the schedule fields are masked.
             group = 0 if phase == "live" else 2 if phase == "wrap_up" else 1
             key = (group, deadline is None, deadline.timestamp() if deadline else 0.0, -tournament.id)
-            built.append((key, card, _timeline_events(tournament, now)))
+            events = _timeline_events(tournament, now)
+            card_issues = _card_issues(
+                card,
+                phase_overdue=permissions.tournament_read and any(event.overdue for event in events),
+                slots_empty=row.slots_empty if permissions.tournament_read else None,
+                now=now,
+            )
+            built.append((key, card, events, card_issues))
         built.sort(key=lambda item: item[0])
 
-        scan_by_id = {row.id: row for row in scan}
         issues: list[schemas.DashboardIssue] = []
         timeline: list[schemas.DashboardTimelineEvent] = []
-        for _key, card, events in built:
+        for _key, _card, events, card_issues in built:
             timeline.extend(events)
-            issues.extend(
-                _card_issues(
-                    card,
-                    phase_overdue=permissions.tournament_read and any(event.overdue for event in events),
-                    slots_empty=scan_by_id[card.id].stage_slots_empty if card.id in scan_by_id else None,
-                    now=now,
-                )
-            )
+            issues.extend(card_issues)
         issues.sort(key=lambda issue: _SEVERITY_RANK[issue.severity])
         timeline.sort(key=lambda event: event.at)
 
-        card_ids = {card.id for _key, card, _events in built}
+        cards = [card for _key, card, _events, _issues in built]
         return schemas.AdminDashboard(
             generated_at=now,
-            tournaments=[card for _key, card, _events in built],
+            tournaments=cards,
             timeline=timeline if permissions.tournament_read else None,
             issues=issues,
-            backlog=self._backlog(
-                [row for row in scan if row.id not in card_ids],
+            backlog=await self._backlog(
+                session,
+                workspace_id,
                 permissions,
+                card_ids=[card.id for card in cards],
                 users_without_identities=await self._users_without_identities(session, workspace_id)
                 if permissions.user_read
                 else None,
             ),
         )
 
-    async def _candidates(self, session: AsyncSession, workspace_id: int, now: datetime) -> list[sa.Row]:
-        """Card candidates with their per-tournament extras; wrap-up ``done`` is decided by the caller."""
+    async def _candidates(
+        self, session: AsyncSession, workspace_id: int, permissions: DashboardPermissions, now: datetime
+    ) -> list[sa.Row]:
+        """Card candidates with their per-tournament extras and the granted readiness counts; wrap-up ``done``
+        is decided by the caller."""
         tournament = models.Tournament
         encounter = models.Encounter
         last_confirmed = (
@@ -353,6 +366,8 @@ class AdminDashboardService:
                     "has_achievement_rules"
                 ),
                 standings_recalc_pending(tournament.id).label("recalc_pending"),
+                *(setup_counts(tournament.id) if permissions.tournament_read else ()),
+                *(team_counts(tournament.id) if permissions.team_read else ()),
             ).where(
                 tournament.workspace_id == workspace_id,
                 sa.or_(
@@ -397,10 +412,17 @@ class AdminDashboardService:
         )
         return {row.tournament_id: Counter(row._asdict()) for row in rows}
 
-    async def _issue_scan(
-        self, session: AsyncSession, workspace_id: int, permissions: DashboardPermissions
-    ) -> list[sa.Row]:
-        """Every workspace tournament, newest first, with its data-quality counts (``NULL`` when masked)."""
+    async def _backlog(
+        self,
+        session: AsyncSession,
+        workspace_id: int,
+        permissions: DashboardPermissions,
+        *,
+        card_ids: list[int],
+        users_without_identities: int | None,
+    ) -> schemas.DashboardBacklog:
+        """Workspace tournaments without a card that have a visible data-quality issue (counts ``NULL`` when
+        masked): the newest ``BACKLOG_ROWS`` of them, with the totals over all of them as window aggregates."""
         tournament = models.Tournament
         encounter = models.Encounter
         team = models.Team
@@ -423,23 +445,78 @@ class AdminDashboardService:
         )
         has_stages = sa.exists().where(stage.tournament_id == tournament.id)
 
-        def gated(granted: bool, column: Any) -> Any:
-            return column if granted else sa.null()
+        def gated(granted: bool, column: Any, type_: Any) -> Any:
+            # Typed: an untyped NULL leaves the subquery column ``text``, which the ``> 0`` below cannot compare.
+            return column if granted else sa.cast(sa.null(), type_)
 
-        result = await session.execute(
+        scan = (
             sa.select(
                 tournament.id,
                 tournament.name,
                 tournament.discipline,
-                gated(permissions.match_read, missing_logs.scalar_subquery()).label("missing_logs"),
-                gated(permissions.team_read, teams_without_players.scalar_subquery()).label("teams_without_players"),
-                gated(permissions.tournament_read, stage_slots_empty.scalar_subquery()).label("stage_slots_empty"),
-                gated(permissions.tournament_read, has_stages).label("has_stages"),
+                tournament.start_date,
+                gated(permissions.match_read, missing_logs.scalar_subquery(), sa.BigInteger).label("missing_logs"),
+                gated(permissions.team_read, teams_without_players.scalar_subquery(), sa.BigInteger).label(
+                    "teams_without_players"
+                ),
+                gated(permissions.tournament_read, stage_slots_empty.scalar_subquery(), sa.BigInteger).label(
+                    "stage_slots_empty"
+                ),
+                gated(permissions.tournament_read, has_stages, sa.Boolean).label("has_stages"),
             )
-            .where(tournament.workspace_id == workspace_id)
-            .order_by(tournament.start_date.desc().nulls_last(), tournament.id.desc())
+            .where(tournament.workspace_id == workspace_id, tournament.id.not_in(card_ids))
+            .subquery("scan")
         )
-        return list(result.all())
+        rows = (
+            await session.execute(
+                sa.select(
+                    scan,
+                    sa.func.count().over().label("tournaments_total"),
+                    sa.func.sum(scan.c.missing_logs).over().label("missing_logs_total"),
+                    sa.func.sum(scan.c.teams_without_players).over().label("teams_without_players_total"),
+                    sa.func.count().filter(scan.c.has_stages.is_(False)).over().label("without_stages_total"),
+                    sa.func.sum(scan.c.stage_slots_empty).over().label("stage_slots_empty_total"),
+                )
+                .where(
+                    sa.or_(
+                        scan.c.missing_logs > 0,
+                        scan.c.teams_without_players > 0,
+                        scan.c.stage_slots_empty > 0,
+                        scan.c.has_stages.is_(False),
+                    )
+                )
+                .order_by(scan.c.start_date.desc().nulls_last(), scan.c.id.desc())
+                .limit(BACKLOG_ROWS)
+            )
+        ).all()
+        # The window runs before the LIMIT: every row carries the totals over all matches; no row, nothing to total.
+        totals = rows[0] if rows else None
+
+        def total(column: str, granted: bool) -> int | None:
+            if not granted:
+                return None
+            return int(getattr(totals, column)) if totals is not None else 0
+
+        return schemas.DashboardBacklog(
+            rows=[
+                schemas.DashboardBacklogRow(
+                    tournament_id=row.id,
+                    tournament_name=row.name,
+                    discipline=row.discipline,
+                    encounters_missing_logs=row.missing_logs,
+                    teams_without_players=row.teams_without_players,
+                    stage_slots_empty=row.stage_slots_empty,
+                    has_stages=row.has_stages,
+                )
+                for row in rows
+            ],
+            tournaments_total=total("tournaments_total", True),
+            encounters_missing_logs=total("missing_logs_total", permissions.match_read),
+            teams_without_players=total("teams_without_players_total", permissions.team_read),
+            tournaments_without_stages=total("without_stages_total", permissions.tournament_read),
+            stage_slots_empty=total("stage_slots_empty_total", permissions.tournament_read),
+            users_without_identities=users_without_identities,
+        )
 
     @staticmethod
     async def _users_without_identities(session: AsyncSession, workspace_id: int) -> int:
@@ -456,39 +533,6 @@ class AdminDashboardService:
                 )
             )
             or 0
-        )
-
-    @staticmethod
-    def _backlog(
-        scan: list[sa.Row], permissions: DashboardPermissions, *, users_without_identities: int | None
-    ) -> schemas.DashboardBacklog:
-        rows = [
-            schemas.DashboardBacklogRow(
-                tournament_id=row.id,
-                tournament_name=row.name,
-                discipline=row.discipline,
-                encounters_missing_logs=row.missing_logs,
-                teams_without_players=row.teams_without_players,
-                stage_slots_empty=row.stage_slots_empty,
-                has_stages=row.has_stages,
-            )
-            for row in scan
-            if row.missing_logs or row.teams_without_players or row.stage_slots_empty or row.has_stages is False
-        ]
-
-        def total(field: str, granted: bool) -> int | None:
-            return sum(getattr(row, field) for row in rows) if granted else None
-
-        return schemas.DashboardBacklog(
-            rows=rows[:BACKLOG_ROWS],
-            tournaments_total=len(rows),
-            encounters_missing_logs=total("encounters_missing_logs", permissions.match_read),
-            teams_without_players=total("teams_without_players", permissions.team_read),
-            tournaments_without_stages=sum(row.has_stages is False for row in rows)
-            if permissions.tournament_read
-            else None,
-            stage_slots_empty=total("stage_slots_empty", permissions.tournament_read),
-            users_without_identities=users_without_identities,
         )
 
 

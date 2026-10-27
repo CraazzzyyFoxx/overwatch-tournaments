@@ -10,6 +10,7 @@ from faststream.rabbit.annotations import RabbitMessage
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.schemas.rpc import rpc_error, rpc_ok
 from src.services.oauth import oauth
+from src.services.oauth_accounts import oauth_accounts
 from src.services.token_validation import token_validation
 
 from . import _common as c
@@ -17,15 +18,18 @@ from . import _common as c
 __all__ = ("register",)
 
 
-# Isolated QoS: these flows block on external provider HTTP (token + userinfo
-# exchanges). On the default channel a few slow calls would occupy the
-# process-wide RPC_PREFETCH_COUNT slots that ``rpc.identity.validate_token`` --
-# the hot path of every authenticated request -- needs, and the gateway would
-# shed token validations. Their own channel bounds them to 8.
+# These flows block on external provider HTTP (token + userinfo exchanges). QoS
+# is per consumer (FastStream ``global_qos=False``), so they never take
+# ``rpc.identity.validate_token``'s prefetch slots on any channel; this channel
+# only keeps each provider-bound subscriber at 8 messages in flight.
 _PROVIDER_CHANNEL = Channel(prefetch_count=8)
 
 
 def register(broker: Any, logger: Any) -> None:
+    # Refuse to start rather than fail every Discord/Twitch sign-in for want of
+    # OAUTH_TOKEN_ENCRYPTION_KEY (raises when one is enabled without a valid key).
+    oauth_accounts.token_key()
+
     @broker.subscriber("rpc.identity.oauth_providers")
     async def _oauth_providers(data: dict, msg: RabbitMessage) -> dict:
         return rpc_ok([provider.model_dump(mode="json") for provider in oauth.list_providers()])

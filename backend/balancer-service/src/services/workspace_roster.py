@@ -352,16 +352,6 @@ def _handle_error(provider: str, key: str) -> ApiHTTPException:
     )
 
 
-async def _free_player_name(session: AsyncSession, handle: str) -> str:
-    """``players.user.name`` is unique and a display name proves nothing: a taken name is suffixed, never reused."""
-    users = UserRepository()
-    name, n = handle, 1
-    while await users.get_by_name(session, name) is not None:
-        n += 1
-        name = f"{handle} ({n})"
-    return name
-
-
 async def ensure_member_for_identity(
     session: AsyncSession,
     *,
@@ -438,7 +428,7 @@ async def ensure_member_for_identity(
                     ],
                 )
     else:
-        user = await UserRepository().create(session, models.User(name=await _free_player_name(session, shown)))
+        user = await UserRepository().create_player(session, name=shown, identity=(provider, normalized))
         await social_identity_service.upsert(session, user_id=user.id, provider=provider, username=shown)
     member = await get_or_create_workspace_member(session, workspace_id=workspace_id, player_id=user.id)
     if display_name is not None:

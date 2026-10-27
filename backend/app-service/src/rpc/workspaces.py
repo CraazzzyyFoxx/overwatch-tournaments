@@ -4,7 +4,9 @@ Reads (list/get) are public. create is open to any ACTIVE authenticated user,
 capped per account (``ensure_create_limit``) and slug-filtered against the
 platform's reserved slugs; the tier RPC that lifts a new workspace out of
 ``unverified`` (``verification_set``) is the superuser-only half. Member ops are
-workspace-scoped (workspace_member.{read,create,update,delete}). workspace
+workspace-scoped (workspace_member.{read,create,update,delete}); granting or
+revoking the ``owner`` role additionally takes ``owner`` there (or a superuser,
+``ensure_owner_role_change_allowed``). workspace
 update/delete go through the shared CRUD engine (see services/workspace/registry.py
 + rpc/admin_crud.py). The custom-domain set/verify/clear trio is bespoke too —
 like member ops, gated on the workspace-scoped ``workspace.update`` permission —
@@ -64,9 +66,15 @@ def _path_int(data: dict[str, Any], key: str) -> int:
         raise HTTPException(status_code=422, detail=f"{key} is required") from exc
 
 
+def _avatar_url(auth_user: models.AuthUser | None) -> str | None:
+    """An account's avatar is its player's (``players.user.avatar_url``); ``player`` must already be loaded."""
+    player = auth_user.player if auth_user else None
+    return player.avatar_url if player else None
+
+
 async def _member_payload(session: AsyncSession, member: models.WorkspaceMember) -> schemas.WorkspaceMemberRead:
     auth_user_id = await workspace_service.get_member_auth_user_id(session, member)
-    auth_user = await _auth_user_repo.get(session, auth_user_id)
+    auth_user = await _auth_user_repo.get_identity(session, auth_user_id, include_player=True)
     roles = await workspace_service.get_member_workspace_roles(session, member.workspace_id, auth_user_id)
     return schemas.WorkspaceMemberRead.model_validate(
         {
@@ -79,7 +87,7 @@ async def _member_payload(session: AsyncSession, member: models.WorkspaceMember)
             "email": auth_user.email if auth_user else None,
             "first_name": auth_user.first_name if auth_user else None,
             "last_name": auth_user.last_name if auth_user else None,
-            "avatar_url": auth_user.avatar_url if auth_user else None,
+            "avatar_url": _avatar_url(auth_user),
             "rbac_roles": roles,
         }
     )
@@ -91,9 +99,10 @@ def _member_read(
     roles: list[models.Role],
 ) -> schemas.WorkspaceMemberRead:
     """Build a member payload from already-loaded rows (no queries) — the batched
-    counterpart of ``_member_payload``. ``rbac_roles`` are Role ORM objects that
-    Pydantic validates via ``from_attributes`` (incl. ``is_system``); system
-    roles sort before custom, then by name."""
+    counterpart of ``_member_payload``; ``auth_user.player`` comes eager from the
+    page query. ``rbac_roles`` are Role ORM objects that Pydantic validates via
+    ``from_attributes`` (incl. ``is_system``); system roles sort before custom,
+    then by name."""
     return schemas.WorkspaceMemberRead.model_validate(
         {
             "id": member.id,
@@ -105,7 +114,7 @@ def _member_read(
             "email": auth_user.email,
             "first_name": auth_user.first_name,
             "last_name": auth_user.last_name,
-            "avatar_url": auth_user.avatar_url,
+            "avatar_url": _avatar_url(auth_user),
             "rbac_roles": sorted(roles, key=lambda role: (not role.is_system, role.name)),
         }
     )
@@ -115,22 +124,23 @@ async def _owner_payload(session: AsyncSession, workspace: models.Workspace) -> 
     """``Workspace.owner_id`` resolved to a person, or ``None`` when unstamped.
 
     Same transport-level enrichment as ``_member_payload``: one auth-user read
-    keyed by an id the workspace row already carries. ``owner_id`` is nullable
-    by design (workspaces predating self-service, and the FK is ``SET NULL``),
-    and so is the answer -- "nobody is on the hook for this one" is a fact the
-    admin screens have to be able to render.
+    (its player eager, for the avatar) keyed by an id the workspace row already
+    carries. ``owner_id`` is nullable by design (workspaces predating
+    self-service, and the FK is ``SET NULL``), and so is the answer -- "nobody is
+    on the hook for this one" is a fact the admin screens have to be able to
+    render.
     """
     owner_id = workspace.owner_id
     if owner_id is None:
         return None
-    auth_user = await _auth_user_repo.get(session, owner_id)
+    auth_user = await _auth_user_repo.get_identity(session, owner_id, include_player=True)
     return schemas.WorkspaceOwnerRead(
         auth_user_id=owner_id,
         username=auth_user.username if auth_user else None,
         email=auth_user.email if auth_user else None,
         first_name=auth_user.first_name if auth_user else None,
         last_name=auth_user.last_name if auth_user else None,
-        avatar_url=auth_user.avatar_url if auth_user else None,
+        avatar_url=_avatar_url(auth_user),
     )
 
 
@@ -376,6 +386,9 @@ def register(broker: Any, logger: Any) -> None:
             role_ids = await workspace_service.resolve_member_role_ids(
                 session, workspace_id, role_ids=body.role_ids, role_name=body.role
             )
+            await workspace_service.ensure_owner_role_change_allowed(
+                session, workspace_id, user, target_auth_user_id=body.auth_user_id, role_ids=role_ids
+            )
             await record_admin_audit(
                 session,
                 action="workspace.member_add",
@@ -413,6 +426,9 @@ def register(broker: Any, logger: Any) -> None:
             role_ids = await workspace_service.resolve_member_role_ids(
                 session, workspace_id, role_ids=body.role_ids, role_name=body.role
             )
+            await workspace_service.ensure_owner_role_change_allowed(
+                session, workspace_id, user, target_auth_user_id=auth_user_id, role_ids=role_ids
+            )
             await record_admin_audit(
                 session,
                 action="workspace.member_update",
@@ -442,6 +458,9 @@ def register(broker: Any, logger: Any) -> None:
             member = await workspace_service.get_member(session, workspace_id, auth_user_id)
             if not member:
                 raise HTTPException(status_code=404, detail="Member not found")
+            await workspace_service.ensure_owner_role_change_allowed(
+                session, workspace_id, user, target_auth_user_id=auth_user_id, role_ids=None
+            )
             if not await workspace_service.can_remove_member(session, member):
                 raise HTTPException(status_code=400, detail="Cannot remove the last workspace owner")
             await record_admin_audit(

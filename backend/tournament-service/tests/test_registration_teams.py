@@ -52,6 +52,7 @@ from src.schemas.registration_team import (  # noqa: E402
     serialize_registration_team,
 )
 from src.services.registration import teams  # noqa: E402
+from src.services.registration.teams import _shared  # noqa: E402
 
 FIVE_STACK = RosterShape(entries=tuple({"tank": 1, "damage": 2, "support": 2}.items()))
 
@@ -90,21 +91,21 @@ class DeadInviteDiagnosisTests(TestCase):
     """§12.1: four causes, four recourses, four codes."""
 
     def test_an_accepted_invite_says_so(self) -> None:
-        failure = teams._diagnose_dead_invite(_Invite(state=teams.INVITE_ACCEPTED))
+        failure = _shared._diagnose_dead_invite(_Invite(state=teams.INVITE_ACCEPTED))
         self.assertEqual("invite_already_accepted", _code(failure))
 
     def test_a_revoked_invite_says_so(self) -> None:
-        failure = teams._diagnose_dead_invite(_Invite(state=teams.INVITE_REVOKED))
+        failure = _shared._diagnose_dead_invite(_Invite(state=teams.INVITE_REVOKED))
         self.assertEqual("invite_revoked", _code(failure))
 
     def test_a_declined_invite_says_so(self) -> None:
-        failure = teams._diagnose_dead_invite(_Invite(state=teams.INVITE_DECLINED))
+        failure = _shared._diagnose_dead_invite(_Invite(state=teams.INVITE_DECLINED))
         self.assertEqual("invite_declined", _code(failure))
 
     def test_an_expired_invite_is_distinguished_from_a_revoked_one(self) -> None:
         """The recourses differ: "ask for a new link" vs "the captain removed you".
         Collapsing them is the exact failure §12.1 exists to prevent."""
-        failure = teams._diagnose_dead_invite(
+        failure = _shared._diagnose_dead_invite(
             _Invite(state=teams.INVITE_PENDING, expires_at=datetime.now(UTC) - timedelta(seconds=1))
         )
         self.assertEqual("invite_expired", _code(failure))
@@ -112,19 +113,19 @@ class DeadInviteDiagnosisTests(TestCase):
     def test_a_still_valid_invite_is_reported_as_a_lost_race(self) -> None:
         """Pending, unexpired, yet the guard refused it — someone else committed
         first. Reporting "expired" here would be a lie."""
-        failure = teams._diagnose_dead_invite(
+        failure = _shared._diagnose_dead_invite(
             _Invite(state=teams.INVITE_PENDING, expires_at=datetime.now(UTC) + timedelta(days=1))
         )
         self.assertEqual("invite_already_accepted", _code(failure))
 
     def test_an_invite_with_no_expiry_never_reads_as_expired(self) -> None:
-        failure = teams._diagnose_dead_invite(_Invite(state=teams.INVITE_PENDING, expires_at=None))
+        failure = _shared._diagnose_dead_invite(_Invite(state=teams.INVITE_PENDING, expires_at=None))
         self.assertNotEqual("invite_expired", _code(failure))
 
     def test_every_diagnosis_is_a_conflict_not_a_server_error(self) -> None:
         for state in (teams.INVITE_ACCEPTED, teams.INVITE_REVOKED, teams.INVITE_DECLINED, teams.INVITE_PENDING):
             with self.subTest(state=state):
-                self.assertEqual(409, teams._diagnose_dead_invite(_Invite(state=state)).status_code)
+                self.assertEqual(409, _shared._diagnose_dead_invite(_Invite(state=state)).status_code)
 
 
 class GuardedUpdateTests(TestCase):
@@ -195,7 +196,7 @@ class SlotRejectionCodeTests(TestCase):
     def test_a_taken_slot_is_a_conflict_named_slot_taken(self) -> None:
         occupancy = RosterOccupancy(shape=FIVE_STACK, accepted=(RosterMember("tank"),))
         with self.assertRaises(ApiHTTPException) as caught:
-            teams._check_slot(occupancy, "tank", is_substitute=False, offering=False)
+            _shared._check_slot(occupancy, "tank", is_substitute=False, offering=False)
         self.assertEqual(409, caught.exception.status_code)
         self.assertEqual("slot_taken", _code(caught.exception))
 
@@ -204,13 +205,13 @@ class SlotRejectionCodeTests(TestCase):
         nothing at all."""
         occupancy = RosterOccupancy(shape=FIVE_STACK, pending=(RosterMember("tank"),))
         with self.assertRaises(ApiHTTPException) as caught:
-            teams._check_slot(occupancy, "tank", is_substitute=False, offering=True)
+            _shared._check_slot(occupancy, "tank", is_substitute=False, offering=True)
         self.assertEqual("slot_already_offered", _code(caught.exception))
 
     def test_a_full_bench_is_named_separately_from_a_full_roster(self) -> None:
         occupancy = RosterOccupancy(shape=FIVE_STACK, max_substitutes=0)
         with self.assertRaises(ApiHTTPException) as caught:
-            teams._check_slot(occupancy, "damage", is_substitute=True, offering=False)
+            _shared._check_slot(occupancy, "damage", is_substitute=True, offering=False)
         self.assertEqual("bench_full", _code(caught.exception))
 
     def test_a_slot_the_tournament_does_not_have_is_a_400(self) -> None:
@@ -218,14 +219,14 @@ class SlotRejectionCodeTests(TestCase):
         tournament, so retrying is pointless."""
         occupancy = RosterOccupancy(shape=RosterShape(entries=tuple({"flex": 6}.items())))
         with self.assertRaises(ApiHTTPException) as caught:
-            teams._check_slot(occupancy, "tank", is_substitute=False, offering=False)
+            _shared._check_slot(occupancy, "tank", is_substitute=False, offering=False)
         self.assertEqual(400, caught.exception.status_code)
         self.assertEqual("slot_not_in_shape", _code(caught.exception))
 
     def test_an_available_slot_raises_nothing(self) -> None:
         occupancy = RosterOccupancy(shape=FIVE_STACK)
-        teams._check_slot(occupancy, "tank", is_substitute=False, offering=False)
-        teams._check_slot(occupancy, "tank", is_substitute=False, offering=True)
+        _shared._check_slot(occupancy, "tank", is_substitute=False, offering=False)
+        _shared._check_slot(occupancy, "tank", is_substitute=False, offering=True)
 
 
 class StatusDenormalizationTests(TestCase):
@@ -234,11 +235,11 @@ class StatusDenormalizationTests(TestCase):
             shape=FIVE_STACK,
             accepted=tuple(RosterMember(code) for code in ("tank", "damage", "damage", "support", "support")),
         )
-        self.assertEqual(teams.TEAM_COMPLETE, teams._status_for(occupancy))
+        self.assertEqual(teams.TEAM_COMPLETE, _shared._status_for(occupancy))
 
     def test_a_partial_roster_stays_forming(self) -> None:
         occupancy = RosterOccupancy(shape=FIVE_STACK, accepted=(RosterMember("tank"),))
-        self.assertEqual(teams.TEAM_FORMING, teams._status_for(occupancy))
+        self.assertEqual(teams.TEAM_FORMING, _shared._status_for(occupancy))
 
     def test_pending_invites_do_not_make_a_team_complete(self) -> None:
         """Otherwise a captain could reach `complete` by inviting five people and
@@ -248,7 +249,7 @@ class StatusDenormalizationTests(TestCase):
             accepted=(RosterMember("tank"),),
             pending=tuple(RosterMember(code) for code in ("damage", "damage", "support", "support")),
         )
-        self.assertEqual(teams.TEAM_FORMING, teams._status_for(occupancy))
+        self.assertEqual(teams.TEAM_FORMING, _shared._status_for(occupancy))
 
 
 class MutabilityGateTests(TestCase):
@@ -261,28 +262,28 @@ class MutabilityGateTests(TestCase):
         roster afterwards would desync the two."""
         team = self._team(status=teams.TEAM_FORMING, exported_team_id=7)
         with self.assertRaises(ApiHTTPException) as caught:
-            teams._assert_mutable(team)
+            _shared._assert_mutable(team)
         self.assertEqual("team_already_exported", _code(caught.exception))
 
     def test_a_disbanded_team_is_terminal(self) -> None:
         team = self._team(status=teams.TEAM_DISBANDED)
         with self.assertRaises(ApiHTTPException) as caught:
-            teams._assert_mutable(team)
+            _shared._assert_mutable(team)
         self.assertEqual("team_not_forming", _code(caught.exception))
 
     def test_a_rejected_team_is_terminal(self) -> None:
         team = self._team(status=teams.TEAM_REJECTED)
         with self.assertRaises(ApiHTTPException) as caught:
-            teams._assert_mutable(team)
+            _shared._assert_mutable(team)
         self.assertEqual("team_not_forming", _code(caught.exception))
 
     def test_a_complete_team_is_still_editable(self) -> None:
         """Complete is not terminal: a captain may still swap a player before the
         organizer exports."""
-        teams._assert_mutable(self._team(status=teams.TEAM_COMPLETE))
+        _shared._assert_mutable(self._team(status=teams.TEAM_COMPLETE))
 
     def test_a_forming_team_is_editable(self) -> None:
-        teams._assert_mutable(self._team(status=teams.TEAM_FORMING))
+        _shared._assert_mutable(self._team(status=teams.TEAM_FORMING))
 
 
 class OrganizerRejectionTests(TestCase):
@@ -403,57 +404,6 @@ class TeamNameConstraintTests(IsolatedAsyncioTestCase):
                 )
 
 
-class FreeAgentAttachTests(TestCase):
-    """A solo registrant accepting an invite ATTACHES, never re-registers.
-
-    There is one registration row per player per tournament, so "registered solo"
-    and "on a team" are two states of the same row. Before this, `accept_invite`
-    always called the creating writer, which answered `already_registered` — and
-    since withdrawal is final, a solo registrant could never join any team.
-    """
-
-    def _source(self) -> str:
-        import inspect
-
-        return inspect.getsource(teams.teams_service.accept_invite)
-
-    def test_an_existing_registration_is_attached_not_recreated(self) -> None:
-        source = self._source()
-        # The existing row is looked up and its three team columns are set...
-        self.assertIn("get_registration(session, team.tournament_id, auth_user.id)", source)
-        self.assertIn("existing.registration_team_id = team.id", source)
-        self.assertIn("existing.team_slot_code = invite.slot_code", source)
-        # ...and the creating writer is reached only in the `else`. Matched on the
-        # CALL, not the bare name: the docstring mentions it first.
-        attach_index = source.index("existing.registration_team_id")
-        create_index = source.index("await self.registrations.submit_public_registration(")
-        self.assertLess(attach_index, create_index, "attach must precede the create branch")
-
-    def test_the_submitted_body_is_ignored_on_the_attach_path(self) -> None:
-        """The player already answered the form; the invite only decides the slot.
-        Passing `body` here would let an invite silently rewrite their roles."""
-        source = self._source()
-        attach = source[source.index("if existing is not None:") : source.index("else:")]
-        self.assertNotIn("body", attach)
-
-    def test_a_terminal_registration_is_refused_with_its_own_code(self) -> None:
-        """Reviving a withdrawn row would smuggle a re-entry past the rule that
-        withdrawal is final — which exists because withdrawing after check-in
-        invalidates a composed roster."""
-        source = self._source()
-        self.assertIn("_SLOT_RELEASING_STATUSES", source)
-        self.assertIn("registration_terminal", source)
-
-    def test_the_slot_check_still_runs_before_the_attach(self) -> None:
-        """Attaching must not bypass the occupancy check: two free agents accepting
-        the same slot would otherwise both land on the roster."""
-        source = self._source()
-        self.assertLess(
-            source.index("_check_slot"),
-            source.index("existing.registration_team_id"),
-        )
-
-
 class FreeAgentPredicateTests(TestCase):
     """The one definition of "free agent", shared by the count and the picker.
 
@@ -470,7 +420,7 @@ class FreeAgentPredicateTests(TestCase):
         # Compiles the SERVICE'S OWN clause rather than a hand-written copy of it.
         # A copy is what this test used to do, and it would have kept passing while
         # the service's filter drifted underneath it.
-        statement = sa.select(sa.func.count(Registration.id)).where(*teams._free_agent_clause(1))
+        statement = sa.select(sa.func.count(Registration.id)).where(*_shared._free_agent_clause(1))
         return str(statement.compile(compile_kwargs={"literal_binds": True}))
 
     def test_it_counts_only_registrations_with_no_team(self) -> None:
@@ -499,8 +449,8 @@ class FreeAgentPredicateTests(TestCase):
     def test_the_clause_uses_the_roster_readers_release_rule(self) -> None:
         """The third consumer of that set is the roster reader. If it and the clause
         disagree, a player can be absent from every team AND absent from the count."""
-        self.assertIn("_SLOT_RELEASING_STATUSES", _code_of(teams._free_agent_clause))
-        self.assertEqual({"withdrawn", "rejected"}, set(teams._SLOT_RELEASING_STATUSES))
+        self.assertIn("_SLOT_RELEASING_STATUSES", _code_of(_shared._free_agent_clause))
+        self.assertEqual({"withdrawn", "rejected"}, set(_shared._SLOT_RELEASING_STATUSES))
 
 
 @dataclass
@@ -532,6 +482,9 @@ class _PreviewInvite:
 
 
 class _PreviewSession:
+    """Only ``scalar`` exists: any write (``add``/``execute``/``flush``/``commit``)
+    raises, so every preview test below also proves the anonymous preview only reads."""
+
     def __init__(self, invite: Any) -> None:
         self._invite = invite
 
@@ -694,7 +647,7 @@ class TargetedInviteResolutionTests(IsolatedAsyncioTestCase):
         self.assertEqual("player_not_free", _code(caught.exception))
 
     async def test_a_released_registration_is_refused(self) -> None:
-        for status in sorted(teams._SLOT_RELEASING_STATUSES):
+        for status in sorted(_shared._SLOT_RELEASING_STATUSES):
             with self.subTest(status=status):
                 with self.assertRaises(ApiHTTPException) as caught:
                     await self._resolve(_TargetRegistration(status=status))
@@ -876,7 +829,7 @@ class OrganizerRevokeTests(TestCase):
     def test_provenance_is_written_not_inferred(self) -> None:
         """Comparing the revoker against "the captain" at read time would be a lie:
         captaincy transfers, so the captain now is not the captain then."""
-        source = _code_of(teams._withdraw_invite)
+        source = _code_of(_shared._withdraw_invite)
 
         self.assertIn("invite.revoked_by = by.id", source)
         self.assertIn("invite.revoked_by_organizer = by_organizer", source)

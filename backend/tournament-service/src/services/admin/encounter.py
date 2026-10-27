@@ -17,10 +17,10 @@ from shared.repository import (
     StageRepository,
     StatsMatchRepository,
     TeamRepository,
-    TournamentRepository,
 )
 from shared.repository.stats_reads import MatchReadContext, get_match_reads
 from shared.services.encounter.participants import MemberSnapshot, active_teams, place_team, vacate_slot
+from shared.services.realtime import Resource, Scope, emit
 from shared.services.stats_evidence import capture_stats_evidence, owner_scopes, stage_stats_evidence
 from shared.services.stats_owner_delete import capture_owner_delete, stage_owner_delete
 from src import schemas
@@ -29,10 +29,11 @@ from src.services.bracket.swiss_state import remove_swiss_bye_round
 from src.services.notifications.lifecycle import after_encounter_teams_changed, lifecycle_notifier
 from src.services.tournament.events import enqueue_tournament_recalculation
 
-# ``enqueue_tournament_recalculation`` emits ``tournament.encounters``, and the
-# realtime rail drops this service's cached encounter reads from that emit's
-# after-commit hook, before the event reaches any client -- so these writes do
-# no cache purge of their own.
+# ``enqueue_tournament_recalculation`` emits ``tournament.encounters`` (and an
+# edit that cannot move standings emits it alone), and the realtime rail drops
+# this service's cached encounter reads from that emit's after-commit hook,
+# before the event reaches any client -- so these writes do no cache purge of
+# their own.
 
 # What an admin may still edit on a lobby: it has no sides, no series score and
 # no bracket slot, so every other column of the duel-shaped row is meaningless.
@@ -162,7 +163,6 @@ class AdminEncounterService:
         stage_repo: StageRepository = StageRepository(),
         stage_item_repo: StageItemRepository = StageItemRepository(),
         team_repo: TeamRepository = TeamRepository(),
-        tournament_repo: TournamentRepository = TournamentRepository(),
     ) -> None:
         self.encounter_repo = encounter_repo
         self.match_repo = match_repo
@@ -170,7 +170,17 @@ class AdminEncounterService:
         self.stage_repo = stage_repo
         self.stage_item_repo = stage_item_repo
         self.team_repo = team_repo
-        self.tournament_repo = tournament_repo
+
+    async def get_encounter(
+        self, session: AsyncSession, encounter_id: int, *, for_update: bool = False
+    ) -> models.Encounter | None:
+        """The bare encounter row, ``None`` when missing. ``for_update`` takes its row lock."""
+        if for_update:
+            return await self.encounter_repo.get_for_update(session, encounter_id)
+        return await self.encounter_repo.get(session, encounter_id)
+
+    async def get_match_encounter_id(self, session: AsyncSession, match_id: int) -> int | None:
+        return await self.match_repo.get_encounter_id(session, match_id)
 
     async def _resolve_stage_refs(
         self,
@@ -237,7 +247,15 @@ class AdminEncounterService:
         """Create a new encounter and seat the teams the payload names."""
         _reject_completed_status(data.status)
 
-        tournament = await self.tournament_repo.get(session, data.tournament_id)
+        # Two columns, not ``tournament_repo.get``: a tournament row loads its
+        # grid version and phase schedule eagerly (four statements).
+        tournament = (
+            await session.execute(
+                select(models.Tournament.workspace_id, models.Tournament.discipline).where(
+                    models.Tournament.id == data.tournament_id
+                )
+            )
+        ).first()
 
         if not tournament:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tournament not found")
@@ -366,6 +384,7 @@ class AdminEncounterService:
             await self._assert_source_correction_allowed(session, encounter)
 
         position = await session.get(models.BracketEncounter, encounter.id)
+        old_coordinate = (position.stage_id, position.stage_item_id, position.round) if position else None
         resolved_stage_id, resolved_stage_item_id = await self._resolve_stage_refs(
             session,
             tournament_id=encounter.tournament_id,
@@ -391,6 +410,14 @@ class AdminEncounterService:
         if "current_map_index" in update_data:
             update_data["current_game_position"] = update_data.pop("current_map_index")
 
+        # Only what standings are computed from asks for a recompute: the status,
+        # the bracket coordinate and the series length. A rename, a reschedule or
+        # a live-position step does not (the payload carries no scores -- the
+        # result endpoint owns them).
+        affects_standings = old_coordinate != (resolved_stage_id, resolved_stage_item_id, new_round) or any(
+            field in update_data and update_data[field] != getattr(encounter, field) for field in ("status", "best_of")
+        )
+
         tournament_id = encounter.tournament_id
         # Read only when the payload carries the field: an edit that never
         # mentions ``scheduled_at`` cannot have changed it.
@@ -401,7 +428,10 @@ class AdminEncounterService:
         if "scheduled_at" in update_data and encounter.scheduled_at != previous_scheduled_at:
             await lifecycle_notifier.on_encounter_changed(session, encounter)
 
-        await enqueue_tournament_recalculation(session, tournament_id)
+        if affects_standings:
+            await enqueue_tournament_recalculation(session, tournament_id)
+        else:
+            await emit(session, scope=Scope.tournament(tournament_id), invalidates=[Resource.TOURNAMENT_ENCOUNTERS])
         await session.commit()
         await session.refresh(encounter)
 

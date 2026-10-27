@@ -17,7 +17,9 @@ from src.services.computation.jobs import jobs_service
 
 task_router = RabbitRouter()
 
-# Isolated channel: recalculation fan-in must not compete with RPC QoS slots.
+# Own channel, prefetch 4 for this one consumer (QoS is per consumer, never
+# process-wide). Each event only enqueues a standings job; the compute consumers
+# in serve.py run it under the process's compute cap.
 _EVENTS_CHANNEL = Channel(prefetch_count=4)
 
 

@@ -52,7 +52,7 @@ export default function TournamentHistoryCell({
         </TooltipTrigger>
         <TooltipContent
           side="top"
-          className="max-w-xs border border-[color:var(--aqt-border)] bg-[color:var(--aqt-card)] px-3 py-2 text-[color:var(--aqt-fg)] shadow-xl shadow-black/40"
+          className="max-w-xs px-3 py-2"
         >
           <ul className="space-y-1 text-xs">
             {history.map((h) => (

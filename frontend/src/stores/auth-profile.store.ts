@@ -25,6 +25,8 @@ export type AuthProfile = {
   /** Denied "resource.action" capabilities (negative RBAC). */
   denies: string[];
   isSuperuser: boolean;
+  /** The account can sign in with a password; deleting it then asks for that password. */
+  hasPassword?: boolean;
   workspaces: WorkspaceRbac[];
   linkedPlayers: AuthLinkedPlayer[];
   primaryLinkedPlayer?: AuthLinkedPlayer;

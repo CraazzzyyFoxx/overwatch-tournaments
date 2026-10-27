@@ -3,7 +3,8 @@ from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 
 from cashews import cache
-from sqlalchemy.ext.asyncio import AsyncSession
+from cashews.exceptions import CacheBackendInteractionError
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from shared import models
 from shared.core import errors, pagination, utils
@@ -18,15 +19,15 @@ from shared.repository import (
 from shared.repository.stats_reads import MatchReadContext
 from shared.schemas.catalog import CatalogEntityRead
 from shared.schemas.match import MatchEventsRead
-from shared.services.cache_generations import versioned
+from shared.services.cache_generations import current, versioned
 from shared.services.challonge_refs import resolve_encounter_challonge, resolve_tournament_challonge
 from shared.services.match_reads import match_events_read, match_header_fields, match_statistics_read
 from src import schemas
 from src.core import config
+from src.core.caching import single_flight
 from src.services.bracket.advancement import SlotSource, resolve_slot_sources
 from src.services.encounter.service import STRIP_ENTITIES, EncounterService, encounter_is_live, encounter_service
-from src.services.map.flows import MapFlowsService, map_to_read
-from src.services.map.flows import flows_service as map_flows_service
+from src.services.map.flows import map_to_read
 from src.services.team.flows import TeamFlowsService
 from src.services.team.flows import flows_service as team_flows_service
 from src.services.tournament.cache_resources import ENCOUNTERS, tournament_generations
@@ -34,11 +35,12 @@ from src.services.tournament.flows import TournamentFlowsService
 from src.services.tournament.flows import flows_service as tournament_flows_service
 
 # Every family embeds ``EncounterRead`` (and its ``MatchRead``, ``EncounterGameRead.map``/``.mode``). Their values are
-# pickled in a persistent Redis that outlives a deploy and cashews returns an unpickled value as it is, without
-# re-validating its nested models, so a wire change to those models needs a new namespace (``native_``, then ``:v2``,
-# ``:v3`` for ``played_at`` and ``is_live``, ``:v4`` for ``is_final`` and the overview's counts), not a TTL wait. The
-# key names EVERY query param that changes the SQL: one without the game served the first game's page to every other
-# game for the whole TTL.
+# the dumped wire dicts in a persistent Redis that outlives a deploy, and cashews returns a value as it was stored, so
+# a wire change to those models needs a new namespace (``native_``, then ``:v2``, ``:v3`` for ``played_at`` and
+# ``is_live``, ``:v4`` for ``is_final`` and the overview's counts, ``:v5``/insights ``:v2`` for storing the wire dict
+# instead of the pickled model), not a TTL wait. The key names EVERY query param that changes the SQL: one without the
+# game served the first game's page to every other game for the whole TTL. The viewer is in it for ``scope=my_team``
+# only: every other scope is passed ``None`` (``scope_viewer``), so logged-in readers share one entry.
 # ``ENCOUNTERS`` (``tournament/cache_resources.py``) names the writes that miss all three;
 # ``tests/test_encounter_cache_namespaces.py`` pins that against the keys cashews renders from these templates.
 _ENCOUNTER_QUERY_KEY = (
@@ -47,9 +49,17 @@ _ENCOUNTER_QUERY_KEY = (
     "{params.best_of}:{params.status}:{params.has_logs}:{params.is_final}:{params.is_upset}:{params.closeness_min}:"
     "{params.closeness_max}:{params.scope}:{params.discipline}:{params.slot_count}:{viewer_auth_user_id}"
 )
-ENCOUNTERS_CACHE_KEY = f"native_encounters:v4:{_ENCOUNTER_QUERY_KEY}"
-ENCOUNTERS_OVERVIEW_CACHE_KEY = f"native_encounters_overview:v4:{_ENCOUNTER_QUERY_KEY}"
-ENCOUNTERS_INSIGHTS_CACHE_KEY = f"native_encounters_insights:v1:{_ENCOUNTER_QUERY_KEY}"
+ENCOUNTERS_CACHE_KEY = f"native_encounters:v5:{_ENCOUNTER_QUERY_KEY}"
+ENCOUNTERS_OVERVIEW_CACHE_KEY = f"native_encounters_overview:v5:{_ENCOUNTER_QUERY_KEY}"
+ENCOUNTERS_INSIGHTS_CACHE_KEY = f"native_encounters_insights:v2:{_ENCOUNTER_QUERY_KEY}"
+
+#: The entities an encounter read honours: all a cached read's key keeps of the client's list (``canonical_entities``).
+READ_ENTITIES = frozenset({"tournament", "teams", "matches", "stage", "stage_item"})
+
+
+def scope_viewer(params: schemas.EncounterSearchParams, viewer_auth_user_id: int | None) -> int | None:
+    """The viewer an encounter read depends on: ``scope=my_team``'s, nobody's for any other scope."""
+    return viewer_auth_user_id if params.scope == "my_team" else None
 
 
 def _seats(encounter: models.Encounter) -> list[models.EncounterTeam]:
@@ -210,7 +220,6 @@ class EncounterFlowsService:
         self,
         *,
         encounters: EncounterService = encounter_service,
-        maps: MapFlowsService = map_flows_service,
         teams: TeamFlowsService = team_flows_service,
         tournaments: TournamentFlowsService = tournament_flows_service,
         game_teams: EncounterGameTeamRepository = EncounterGameTeamRepository(),
@@ -220,7 +229,6 @@ class EncounterFlowsService:
         team_repo: TeamRepository = TeamRepository(),
     ) -> None:
         self.encounters = encounters
-        self.maps = maps
         self.teams = teams
         self.tournaments = tournaments
         self.game_team_repo = game_teams
@@ -286,14 +294,22 @@ class EncounterFlowsService:
                 # ``to_pydantic`` touches unloaded relationships (``MissingGreenlet``). ``populate_existing`` makes
                 # the options apply: a load otherwise hands back an identity-mapped row as it was FIRST loaded (e.g.
                 # bare, via a native match read) and ignores them.
-                rows = await session.execute(
-                    self.team_repo.select()
-                    .where(models.Team.id.in_(missing_teams))
-                    .options(*TeamRepository.team_entities(nested))
-                    .execution_options(populate_existing=True)
+                rows = (
+                    (
+                        await session.execute(
+                            self.team_repo.select()
+                            .where(models.Team.id.in_(missing_teams))
+                            .options(*TeamRepository.team_entities(nested))
+                            .execution_options(populate_existing=True)
+                        )
+                    )
+                    .unique()
+                    .scalars()
+                    .all()
                 )
-                for row in rows.unique().scalars():
-                    teams[row.id] = await self.teams.to_pydantic(session, row, nested)
+                # The division grid once per tournament, not once per team.
+                for row, read in zip(rows, await self.teams.to_pydantic_many(session, rows, nested), strict=True):
+                    teams[row.id] = read
 
         matches: dict[int, schemas.MatchRead] = {}
         game_lines: dict[int, list[schemas.EncounterGameTeamRead]] = {}
@@ -425,12 +441,6 @@ class EncounterFlowsService:
         [read] = await self._reads(session, [encounter], entities, page=True)
         return read
 
-    @versioned(
-        generations=tournament_generations("{params.tournament_id}", ENCOUNTERS),
-        ttl=config.settings.encounters_cache_ttl,
-        key=ENCOUNTERS_CACHE_KEY,
-        prefix="fastapi:",
-    )
     async def get_all_encounters(
         self,
         session: AsyncSession,
@@ -438,7 +448,7 @@ class EncounterFlowsService:
         workspace_id: int | None = None,
         viewer_auth_user_id: int | None = None,
     ) -> pagination.Paginated[schemas.EncounterRead]:
-        """One page of encounters matching ``params``, serialized."""
+        """One page of encounters matching ``params``, serialized. Uncached: ``list_encounters`` is the cached read."""
         encounters, total = await self.encounters.get_all_encounters(
             session,
             params,
@@ -495,16 +505,6 @@ class EncounterFlowsService:
             saved_view_id=saved_view_id,
         )
 
-    @versioned(
-        generations=tournament_generations("{params.tournament_id}", ENCOUNTERS),
-        ttl=config.settings.encounters_cache_ttl,
-        key=ENCOUNTERS_OVERVIEW_CACHE_KEY,
-        prefix="fastapi:",
-        # NB: no ``lock=True`` — cashews builds the herd-lock key WITHOUT the
-        # ``prefix``, and this codebase routes backends purely by key prefix (no
-        # default backend), so the lock raises NotConfiguredError. TTL rollover
-        # herds are mitigated by the FILTER-consolidated aggregate query instead.
-    )
     async def get_encounters_overview(
         self,
         session: AsyncSession,
@@ -512,7 +512,8 @@ class EncounterFlowsService:
         workspace_id: int | None = None,
         viewer_auth_user_id: int | None = None,
     ) -> schemas.EncounterOverviewRead:
-        """The browse's counts and live strip under ``params`` (``EncounterOverviewRead``)."""
+        """The browse's counts and live strip under ``params`` (``EncounterOverviewRead``). Uncached:
+        ``encounters_overview`` is the cached read."""
         data = await self.encounters.get_overview_data(
             session,
             params,
@@ -526,13 +527,6 @@ class EncounterFlowsService:
             live=await self._reads(session, data["live"], STRIP_ENTITIES, page=True),
         )
 
-    @versioned(
-        generations=tournament_generations("{params.tournament_id}", ENCOUNTERS),
-        ttl=config.settings.encounters_cache_ttl,
-        key=ENCOUNTERS_INSIGHTS_CACHE_KEY,
-        prefix="fastapi:",
-        # No ``lock=True``, for the overview's reason above.
-    )
     async def get_encounters_insights(
         self,
         session: AsyncSession,
@@ -540,7 +534,8 @@ class EncounterFlowsService:
         workspace_id: int | None = None,
         viewer_auth_user_id: int | None = None,
     ) -> schemas.EncounterInsightsRead:
-        """The analytics of the completed encounters under ``params`` (``EncounterInsightsRead``)."""
+        """The analytics of the completed encounters under ``params`` (``EncounterInsightsRead``). Uncached:
+        ``insights_page`` is the cached read."""
         data = await self.encounters.get_insights_data(
             session,
             params,
@@ -566,6 +561,116 @@ class EncounterFlowsService:
             sweeps=data["sweeps"],
             went_distance=data["went_distance"],
         )
+
+    # The cached families: each stores its builder's wire dict (``exclude_none``, as the subjects send it), so a hit
+    # is a plain unpickle with no model to rebuild. Pass the viewer through ``scope_viewer`` and the entities through
+    # ``canonical_entities(..., READ_ENTITIES)``: both are in the key. No ``lock=True``: cashews builds the herd-lock
+    # key WITHOUT the ``prefix``, and this codebase routes backends purely by key prefix (no default backend), so the
+    # lock raises NotConfiguredError -- ``single_flight`` coalesces the list's and the overview's herds instead.
+    @versioned(
+        generations=tournament_generations("{params.tournament_id}", ENCOUNTERS),
+        ttl=config.settings.encounters_cache_ttl,
+        key=ENCOUNTERS_CACHE_KEY,
+        prefix="fastapi:",
+    )
+    async def encounters_page(
+        self,
+        session: AsyncSession,
+        params: schemas.EncounterSearchParams,
+        workspace_id: int | None = None,
+        viewer_auth_user_id: int | None = None,
+    ) -> dict[str, typing.Any]:
+        page = await self.get_all_encounters(session, params, workspace_id, viewer_auth_user_id)
+        return page.model_dump(mode="json", exclude_none=True)
+
+    @versioned(
+        generations=tournament_generations("{params.tournament_id}", ENCOUNTERS),
+        ttl=config.settings.encounters_cache_ttl,
+        key=ENCOUNTERS_OVERVIEW_CACHE_KEY,
+        prefix="fastapi:",
+    )
+    async def overview_page(
+        self,
+        session: AsyncSession,
+        params: schemas.EncounterSearchParams,
+        workspace_id: int | None = None,
+        viewer_auth_user_id: int | None = None,
+    ) -> dict[str, typing.Any]:
+        overview = await self.get_encounters_overview(session, params, workspace_id, viewer_auth_user_id)
+        return overview.model_dump(mode="json", exclude_none=True)
+
+    @versioned(
+        generations=tournament_generations("{params.tournament_id}", ENCOUNTERS),
+        ttl=config.settings.encounters_cache_ttl,
+        key=ENCOUNTERS_INSIGHTS_CACHE_KEY,
+        prefix="fastapi:",
+    )
+    async def insights_page(
+        self,
+        session: AsyncSession,
+        params: schemas.EncounterSearchParams,
+        workspace_id: int | None = None,
+        viewer_auth_user_id: int | None = None,
+    ) -> dict[str, typing.Any]:
+        insights = await self.get_encounters_insights(session, params, workspace_id, viewer_auth_user_id)
+        return insights.model_dump(mode="json", exclude_none=True)
+
+    async def list_encounters(
+        self,
+        session_maker: async_sessionmaker[AsyncSession],
+        params: schemas.EncounterSearchParams,
+        *,
+        workspace_id: int | None = None,
+        viewer_auth_user_id: int | None = None,
+    ) -> dict[str, typing.Any]:
+        """``rpc.tournament.list_encounters``: the cached page, built once per burst of identical requests."""
+        viewer = scope_viewer(params, viewer_auth_user_id)
+        return await self._coalesced(self.encounters_page, session_maker, params, workspace_id, viewer)
+
+    async def encounters_overview(
+        self,
+        session_maker: async_sessionmaker[AsyncSession],
+        params: schemas.EncounterSearchParams,
+        *,
+        workspace_id: int | None = None,
+        viewer_auth_user_id: int | None = None,
+    ) -> dict[str, typing.Any]:
+        """``rpc.tournament.encounters_overview``: the cached overview, built once per burst of identical requests.
+
+        Outside ``scope=my_team`` the overview is viewer-agnostic but for its ``my_team`` count, so it is cached
+        without the viewer (``my_team`` 0) and a signed-in viewer's own count is counted on top.
+        """
+        viewer = scope_viewer(params, viewer_auth_user_id)
+        overview = await self._coalesced(self.overview_page, session_maker, params, workspace_id, viewer)
+        if viewer_auth_user_id is None or viewer is not None:
+            return overview
+        async with session_maker() as session:
+            my_team = await self.encounters.get_my_team_count(
+                session, params, workspace_id=workspace_id, viewer_auth_user_id=viewer_auth_user_id
+            )
+        # A copy: the cached value is every concurrent follower's too.
+        return {**overview, "counts": {**overview["counts"], "my_team": my_team}}
+
+    async def _coalesced(
+        self,
+        read: typing.Callable[..., typing.Awaitable[dict[str, typing.Any]]],
+        session_maker: async_sessionmaker[AsyncSession],
+        params: schemas.EncounterSearchParams,
+        workspace_id: int | None,
+        viewer_auth_user_id: int | None,
+    ) -> dict[str, typing.Any]:
+        """``read`` through ``single_flight``, keyed like its cache key and the generations in it."""
+        try:
+            generation = await current(*tournament_generations(str(params.tournament_id), ENCOUNTERS))
+        except CacheBackendInteractionError:
+            generation = None  # the read bypasses the cache too; coalescing is all that is left
+
+        async def build() -> dict[str, typing.Any]:
+            async with session_maker() as session:
+                return await read(session, params, workspace_id, viewer_auth_user_id)
+
+        flight = (read.__name__, generation, workspace_id, viewer_auth_user_id, repr(params))
+        return await single_flight(flight, build)
 
     async def get_all_matches(
         self, session: AsyncSession, params: schemas.MatchSearchParams, workspace_id: int | None = None

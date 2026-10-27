@@ -9,12 +9,12 @@ import { LayoutGrid } from "lucide-react";
 import type { TeamFormation, Tournament } from "@/types/tournament.types";
 import { formatDateRange } from "@/lib/datetime";
 import { cn } from "@/lib/utils";
+import { stageProgress } from "@/lib/tournament/stage-progress";
 import { getTournamentStatusMeta } from "@/lib/tournament/status";
 import { tournamentHref } from "@/lib/tournament/url";
 import { TournamentStatusPill } from "@/components/tournaments/StatusPill";
 import { GameLabel } from "@/components/workspace/GameLabel";
 import type { DisciplineDescriptor } from "@/types/discipline.types";
-import { stageProgress } from "./tournaments-helpers";
 
 const TournamentRow = ({
   tournament,

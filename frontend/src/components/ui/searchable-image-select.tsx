@@ -3,7 +3,7 @@
 import { useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 
-import { Combobox, ComboboxCheck, type ComboboxVariant } from "@/components/ui/combobox";
+import { Combobox, ComboboxCheck } from "@/components/ui/combobox";
 import { CommandGroup, CommandItem } from "@/components/ui/command";
 import Image from "@/components/ui/image";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -37,8 +37,6 @@ interface SearchableImageSelectBaseProps {
   isLoading?: boolean;
   /** Whether the selector is disabled (loading or error). */
   disabled?: boolean;
-  /** Trigger surface; `toolbar` (default) is the public toolbar look, `default` the admin field. */
-  variant?: ComboboxVariant;
   /** `sm` (default) is the 32px toolbar row, `default` the 36px form row. */
   size?: "sm" | "default";
   /** Merged over the trigger's classes (width, surface). */
@@ -79,7 +77,6 @@ const SearchableImageSelect = (props: SearchableImageSelectProps) => {
     ariaLabel,
     isLoading = false,
     disabled = false,
-    variant = "toolbar",
     size = "sm",
     triggerClassName
   } = props;
@@ -147,7 +144,6 @@ const SearchableImageSelect = (props: SearchableImageSelectProps) => {
       }
       labelTitle={labelText}
       triggerAriaLabel={ariaLabel ?? (id ? undefined : placeholder)}
-      variant={variant}
       size={size}
       disabled={disabled}
       triggerClassName={triggerClassName}

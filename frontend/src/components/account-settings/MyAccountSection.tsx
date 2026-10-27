@@ -12,7 +12,6 @@ import { Input } from "@/components/ui/input";
 import { revalidateUser } from "@/app/actions/users";
 import { usePermissions } from "@/hooks/usePermissions";
 import { ApiError, getApiErrorMessage } from "@/lib/api/error";
-import { refreshAccessToken } from "@/lib/auth/tokens";
 import { notify } from "@/lib/notify";
 import { MAX_AVATAR_BYTES } from "@/lib/uploads";
 import meService from "@/services/me.service";
@@ -86,10 +85,9 @@ export default function MyAccountSection() {
     mutationFn: (username: string) => meService.updateUsername(username),
     // A refusal belongs under the field it is about, not in a toast.
     meta: { suppressErrorToast: true },
-    onSuccess: async () => {
-      // The access token carries the name too (audit labels, chat fallback):
-      // re-issue it so the rest of the platform stops seeing the old one.
-      await refreshAccessToken();
+    onSuccess: () => {
+      // identity drops the cached identity on rename and tells the gateway, so the next request already
+      // carries the new name; the access token itself holds no name to re-issue.
       fetchMe({ force: true });
       notify.success(t("name.saved"));
     },

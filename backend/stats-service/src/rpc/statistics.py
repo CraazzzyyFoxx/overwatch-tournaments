@@ -33,7 +33,7 @@ def register(broker: Any, logger: Any, *, channel: Any) -> None:
                 session,
                 schemas.CharacterPlaytimePaginationParams.from_query_params(qp),
                 discipline=discipline,
-                workspace_id=c.q1(data, "workspace_id", int),
+                workspace_id=c.q_workspace_id(data),
             )
 
         return await c.envelope(logger, "statistics.character_playtime", op, session_factory=_SF)
@@ -65,7 +65,7 @@ def register(broker: Any, logger: Any, *, channel: Any) -> None:
                 session,
                 pagination.PaginationSortParams.from_query_params(qp),
                 discipline=c.optional_discipline(data),
-                workspace_id=c.q1(data, "workspace_id", int),
+                workspace_id=c.q_workspace_id(data),
             )
 
         return await c.envelope(logger, "statistics.champion", op, session_factory=_SF)
@@ -78,7 +78,7 @@ def register(broker: Any, logger: Any, *, channel: Any) -> None:
                 session,
                 pagination.PaginationSortParams.from_query_params(qp),
                 discipline=c.optional_discipline(data),
-                workspace_id=c.q1(data, "workspace_id", int),
+                workspace_id=c.q_workspace_id(data),
             )
 
         return await c.envelope(logger, "statistics.winrate", op, session_factory=_SF)
@@ -91,7 +91,7 @@ def register(broker: Any, logger: Any, *, channel: Any) -> None:
                 session,
                 build_query_model(schemas.PlayerLeaderboardQueryParams, data.get("query")),
                 discipline=c.optional_discipline(data),
-                workspace_id=c.q1(data, "workspace_id", int),
+                workspace_id=c.q_workspace_id(data),
             )
 
         return await c.envelope(logger, "statistics.players", op, session_factory=_SF)
@@ -101,7 +101,7 @@ def register(broker: Any, logger: Any, *, channel: Any) -> None:
     async def _records(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
             return await statistics_service.get_records(
-                session, discipline=c.optional_discipline(data), workspace_id=c.q1(data, "workspace_id", int)
+                session, discipline=c.optional_discipline(data), workspace_id=c.q_workspace_id(data)
             )
 
         return await c.envelope(logger, "statistics.records", op, session_factory=_SF)
@@ -113,7 +113,7 @@ def register(broker: Any, logger: Any, *, channel: Any) -> None:
             return await statistics_service.get_maps(
                 session,
                 discipline=c.require_discipline(data, in_path=True),
-                workspace_id=c.q1(data, "workspace_id", int),
+                workspace_id=c.q_workspace_id(data),
             )
 
         return await c.envelope(logger, "statistics.maps", op, session_factory=_SF)

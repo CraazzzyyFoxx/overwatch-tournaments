@@ -173,17 +173,26 @@ async def _subscriptions(
     """One composed outcome per registration, in one resolver pass.
 
     Guards run cheapest-first, so a list with no linked accounts never reaches
-    the resolver.
+    the resolver. A member of a currently covered team is answered by the team's
+    stamp and never asked about.
     """
     target = _subscription_target(config, stage)
     if resolver is None or target is None:
         return {}
     workspace_id, rule = target
 
-    auth_user_id_by_reg = await load_auth_user_ids(session, registrations)
+    covered = {
+        registration.id
+        for registration in registrations
+        if config.subscription_scope == "team"
+        and (team := getattr(registration, "registration_team", None)) is not None
+        and team_subscription_is_current(team)
+    }
+    signals: dict[int, SubscriptionSignal] = {reg_id: _coverage_signal() for reg_id in covered}
+    auth_user_id_by_reg = await load_auth_user_ids(session, [r for r in registrations if r.id not in covered])
     user_ids = list(dict.fromkeys(uid for uid in auth_user_id_by_reg.values() if uid is not None))
     if not user_ids:
-        return {}
+        return signals
 
     outcomes = await resolver.evaluate(
         workspace_id=workspace_id,
@@ -194,7 +203,6 @@ async def _subscriptions(
         source=source,
     )
 
-    signals: dict[int, SubscriptionSignal] = {}
     for reg_id, auth_user_id in auth_user_id_by_reg.items():
         if auth_user_id is None:
             continue
@@ -203,11 +211,6 @@ async def _subscriptions(
             continue
         outcome, verdicts = resolved
         signals[reg_id] = build_subscription_signal(outcome, verdicts)
-    if config.subscription_scope == "team":
-        for registration in registrations:
-            team = getattr(registration, "registration_team", None)
-            if team is not None and team_subscription_is_current(team):
-                signals[registration.id] = _coverage_signal()
     return signals
 
 
@@ -281,15 +284,23 @@ async def resolve_admission(
     config: AdmissionConfig,
     resolver: RequirementEvaluator | None = None,
     stage: AdmissionStage = AdmissionStage.check_in,
+    live: bool = False,
 ) -> dict[int, AdmissionEvaluation]:
     """Evaluate a whole list without forcing a provider call.
 
     Display surfaces should keep the default ``stage=check_in``: it is the last
     gate, the only one at which every requirement is in force, so a badge never
     shows a requirement as harmless right up until check-in refuses the player.
+
+    ``live=True`` is the check-in gate for a whole roster: one forced provider
+    batch, attributed to the stage's collection source, instead of one
+    :func:`resolve_admission_for_gate` per member. It applies no sign-up
+    softening, so it is for ``stage=check_in`` only.
     """
     if not registrations:
         return {}
+    if live and stage is not AdmissionStage.check_in:
+        raise ValueError("a live roster resolve is the check-in gate only")
 
     profiles = await _profiles(session, registrations, config)
     subscriptions = await _subscriptions(
@@ -297,9 +308,9 @@ async def resolve_admission(
         registrations,
         config,
         resolver=resolver,
-        force_refresh=False,
-        allow_stale=True,
-        source=SubscriptionCollectionSource.scheduled,
+        force_refresh=live,
+        allow_stale=not live,
+        source=_GATE_SOURCE[stage] if live else SubscriptionCollectionSource.scheduled,
         stage=stage,
     )
     return {

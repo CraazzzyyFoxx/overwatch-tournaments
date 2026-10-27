@@ -5,10 +5,12 @@
 // are added.
 //
 // Scope: paths, methods, path/query parameters, auth requirements (security),
-// tags and success status are derived from the RouteSpec. Request/response body
-// SCHEMAS come from schemas.json — a manifest exported from the Python services'
-// Pydantic models (see backend/scripts/export_openapi_schemas.py), keyed by RPC
-// subject. Endpoints without a manifest entry fall back to a generic object.
+// tags, success status and — for bespoke handlers — the multipart request or
+// raw-bytes response (RouteSpec.Media) are derived from the RouteSpec. JSON
+// request/response body SCHEMAS come from schemas.json — a manifest exported
+// from the Python services' Pydantic models (see
+// backend/scripts/export_openapi_schemas.py), keyed by RPC subject. Endpoints
+// without a manifest entry fall back to a generic object.
 package openapi
 
 import (
@@ -17,6 +19,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/edge"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/rpc"
@@ -58,7 +61,10 @@ type manifest struct {
 	Operations map[string]opModels        `json:"operations"`
 }
 
-var loadedManifest = loadManifest()
+// loadedManifest parses schemas.json on the first build, not at package init:
+// with docs disabled the gateway never builds, so it never pays for the parse
+// or keeps the parsed pool alive.
+var loadedManifest = sync.OnceValue(loadManifest)
 
 func loadManifest() manifest {
 	m := manifest{Schemas: map[string]json.RawMessage{}, Operations: map[string]opModels{}}
@@ -265,7 +271,7 @@ func build(info Info, groups []Group, envelope bool) []byte {
 		version = "dev"
 	}
 
-	b := &builder{man: loadedManifest, refs: map[string]bool{}, envelope: envelope}
+	b := &builder{man: loadedManifest(), refs: map[string]bool{}, envelope: envelope}
 	tags := make([]any, 0, len(groups))
 	paths := map[string]any{}
 
@@ -326,7 +332,9 @@ func (b *builder) operation(route edge.RouteSpec, tag string) map[string]any {
 	if params := b.parameters(route); len(params) > 0 {
 		op["parameters"] = params
 	}
-	if route.Body {
+	if m := route.Media; len(m.Files)+len(m.Fields) > 0 {
+		op["requestBody"] = multipartBody(m)
+	} else if route.Body {
 		op["requestBody"] = b.requestBody(route)
 	}
 	op["security"] = security(route)
@@ -450,8 +458,34 @@ func (b *builder) requestBody(route edge.RouteSpec) map[string]any {
 		}
 	}
 	return map[string]any{
-		"required": true,
+		"required": !route.BodyOptional,
 		"content":  map[string]any{"application/json": map[string]any{"schema": schema}},
+	}
+}
+
+// multipartBody documents a bespoke multipart/form-data upload: file parts are
+// binary strings (an array when the part name repeats, "files[]"), text parts
+// plain strings. The file parts are required — they are the upload.
+func multipartBody(m edge.Media) map[string]any {
+	file := map[string]any{"type": "string", "format": "binary", "contentMediaType": "application/octet-stream"}
+	props := map[string]any{}
+	for _, name := range m.Files {
+		if strings.HasSuffix(name, "[]") {
+			props[name] = map[string]any{"type": "array", "items": file}
+		} else {
+			props[name] = file
+		}
+	}
+	for _, name := range m.Fields {
+		props[name] = map[string]any{"type": "string"}
+	}
+	schema := map[string]any{"type": "object", "properties": props}
+	if len(m.Files) > 0 {
+		schema["required"] = m.Files
+	}
+	return map[string]any{
+		"required": true,
+		"content":  map[string]any{"multipart/form-data": map[string]any{"schema": schema}},
 	}
 }
 
@@ -464,7 +498,14 @@ func (b *builder) responses(route edge.RouteSpec) map[string]any {
 	}
 
 	success := map[string]any{"description": "Success"}
-	if status != 204 {
+	switch {
+	case status == 204:
+	case route.Media.Response != "":
+		// Raw bytes, identical on v1 and v2: never wrapped in the envelope.
+		success["content"] = map[string]any{
+			route.Media.Response: map[string]any{"schema": map[string]any{"type": "string", "format": "binary"}},
+		}
+	default:
 		success["content"] = map[string]any{
 			"application/json": map[string]any{"schema": b.responseSchema(route)},
 		}
@@ -540,7 +581,7 @@ func (b *builder) components() map[string]any {
 				"type":         "http",
 				"scheme":       "bearer",
 				"bearerFormat": "JWT",
-				"description":  "Session JWT access token. REST operations read it from this header only; the `owt_access_token` cookie (legacy `aqt_access_token` as a fallback) and the `?token=Bearer <jwt>` query parameter authenticate WebSocket connections.",
+				"description":  "Session JWT access token (EdDSA). REST operations read it from this header only. WebSocket connections take it from this header (scripts) or the `owt_access_token` cookie (browsers; legacy `aqt_access_token` as a fallback); a `?token=` query parameter is never read.",
 			},
 			"apiKeyAuth": map[string]any{
 				"type":         "http",

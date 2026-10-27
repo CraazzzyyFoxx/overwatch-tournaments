@@ -6,7 +6,7 @@ import type { Row } from "@tanstack/react-table";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 
-import { DataTable, type DataTableGroup } from "@/components/data-table";
+import { DataTable, type DataTableGroup, type TableCommand } from "@/components/data-table";
 import { FilterBar } from "@/components/kit/FilterBar";
 import { ConfirmDialog, type ConfirmIntent } from "@/components/kit/ConfirmDialog";
 import { EntityFormDialog } from "@/components/kit/EntityFormDialog";
@@ -16,7 +16,6 @@ import {
   StatusForm,
   type StatusFormState
 } from "@/components/admin/statuses/StatusForm";
-import { Button } from "@/components/ui/button";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { usePermissions } from "@/hooks/usePermissions";
 import { notify } from "@/lib/notify";
@@ -247,6 +246,27 @@ export function StatusesBrowser({ workspaceId }: Readonly<{ workspaceId: number 
         description: t("confirm.deleteDescription", { name: pendingStatus?.name ?? "" })
       };
 
+  const commands: TableCommand[] = [
+    {
+      id: "add",
+      label: t("add"),
+      icon: Plus,
+      primary: true,
+      hidden: !canManageStatuses,
+      onSelect: () => {
+        setEditingStatus(null);
+        setForm({
+          ...EMPTY_STATUS_FORM,
+          // The scope chip is the admin's current context, so a new
+          // status starts in the scope they are looking at.
+          scope: scopeFilter === "balancer" ? "balancer" : "registration"
+        });
+        setFormError(null);
+        setDialogOpen(true);
+      }
+    }
+  ];
+
   if (statusesQuery.isError) {
     return (
       <PageStateCard
@@ -271,33 +291,8 @@ export function StatusesBrowser({ workspaceId }: Readonly<{ workspaceId: number 
         emptyMessage={t("empty")}
         initialPageSize={25}
         columnsStorageKey="workspace-statuses-table-columns"
-        toolbar={
-          <FilterBar
-            defs={filterDefs}
-            filters={filters}
-            trailing={
-              canManageStatuses ? (
-                <Button
-                  size="sm"
-                  onClick={() => {
-                    setEditingStatus(null);
-                    setForm({
-                      ...EMPTY_STATUS_FORM,
-                      // The scope chip is the admin's current context, so a new
-                      // status starts in the scope they are looking at.
-                      scope: scopeFilter === "balancer" ? "balancer" : "registration"
-                    });
-                    setFormError(null);
-                    setDialogOpen(true);
-                  }}
-                >
-                  <Plus className="mr-2 size-4" aria-hidden />
-                  {t("add")}
-                </Button>
-              ) : null
-            }
-          />
-        }
+        toolbar={<FilterBar defs={filterDefs} filters={filters} />}
+        commands={commands}
       />
 
       <p className="max-w-prose text-xs text-muted-foreground">{t("note")}</p>

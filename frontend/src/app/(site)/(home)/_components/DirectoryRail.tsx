@@ -256,6 +256,8 @@ export function DirectoryRail({
         >
           <ChevronLeft aria-hidden strokeWidth={1.5} />
         </Button>
+        {/* A scroller clips on both axes: `pb-10` is room for a card's hover glow, and `-mb-10` takes it back from the
+            layout, so the arrows still centre on the cards and the dots keep their place. */}
         <div
           ref={railRef}
           id={RAIL_ID}
@@ -265,7 +267,7 @@ export function DirectoryRail({
           data-dragging={dragging || undefined}
           className={cn(
             "col-span-3 row-start-1 md:col-span-1 md:col-start-2",
-            "snap-x snap-mandatory overflow-x-auto overscroll-x-contain py-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+            "snap-x snap-mandatory overflow-x-auto overscroll-x-contain pt-0.5 pb-10 -mb-10 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
             "[@media(pointer:fine)]:cursor-grab",
             "data-[dragging]:cursor-grabbing data-[dragging]:snap-none data-[dragging]:select-none data-[dragging]:[&_a]:pointer-events-none"
           )}

@@ -55,15 +55,16 @@ async def recheck_registration(session: AsyncSession, registration: Any, *, auth
     """Re-check whatever this tournament requires. The caller commits.
 
     Subscriptions are resolved live right here (``force_refresh``), so the next
-    read of the registration already carries the new verdict. The profile check
-    is a rank fetch stats-service runs off the outbox event, so it lands a little
-    later.
+    read of the registration already carries the new verdict. The resolver commits
+    the session after its reads, so no provider call holds a transaction open:
+    call this before any write of your own. The profile check is a rank fetch
+    stats-service runs off the outbox event, so it lands a little later.
     """
     form = await _common_service.get_registration_form(session, registration.tournament_id)
     if form is None:
         return
     if form.require_subscription:
-        resolver = subscription_resolver(session)
+        resolver = subscription_resolver(session, release=session.commit)
         rule = await resolver.load_requirement(workspace_id=form.workspace_id)
         if rule is not None:
             await resolver.evaluate(

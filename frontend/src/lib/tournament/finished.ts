@@ -16,7 +16,7 @@ export interface FinishedTournament {
 
 /**
  * The newest completed tournaments, each with its champion — the "last
- * tournament" and chronicle blocks of the home and community pages.
+ * tournament" and chronicle blocks of the community page.
  *
  * There is no "tournaments with winners" read, so the champion comes off the
  * teams read with `placement` (the same source the tournament overview's

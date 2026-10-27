@@ -9,7 +9,8 @@ which the bot cannot do.
 
 One instance per request. The RPC batch reply (``prefetch``) and the guild role
 list are memoized on the instance so a batch of users costs one round trip and
-the memo never outlives the request that filled it.
+the memo never outlives the request that filled it. A failed batch is memoized
+too: its members raise the batch's error instead of each waiting out one more RPC.
 
 Errors are the ``DiscordError`` family (:mod:`shared.services.discord_errors`):
 the resolver's decision table already speaks that vocabulary and every caller
@@ -52,6 +53,8 @@ class DiscordClient:
         self._rpc_timeout = rpc_timeout
         # (guild_id, user_id) -> role ids, or None for "not a member".
         self._members: dict[tuple[str, str], list[str] | None] = {}
+        # guild_id -> why its batch failed.
+        self._failed_batches: dict[str, DiscordError] = {}
         self._guild_role_ids: dict[str, set[str]] = {}
         self._guild_roles_lock = asyncio.Lock()
 
@@ -61,12 +64,17 @@ class DiscordClient:
         """One RPC for a whole batch.
 
         Fills the member memo and the guild's role-id set, so the per-user
-        ``member_roles`` calls that follow never touch the network.
+        ``member_roles`` calls that follow never touch the network — not even
+        when the batch failed: they raise its error.
         """
         wanted = sorted({str(uid) for uid in user_ids if uid})
         if not wanted:
             return
-        data = await self._rpc(DISCORD_MEMBER_ROLES_QUEUE, {"guild_id": guild_id, "user_ids": wanted})
+        try:
+            data = await self._rpc(DISCORD_MEMBER_ROLES_QUEUE, {"guild_id": guild_id, "user_ids": wanted})
+        except DiscordError as exc:
+            self._failed_batches[guild_id] = exc
+            raise
         self._guild_role_ids[guild_id] = {str(r) for r in (data.get("guild_role_ids") or [])}
         for uid, info in (data.get("members") or {}).items():
             found = isinstance(info, dict) and bool(info.get("found"))
@@ -76,6 +84,9 @@ class DiscordClient:
         """Role ids one member holds in ``guild_id``. Raises ``MemberNotFound`` when absent."""
         key = (guild_id, str(user_id))
         if key not in self._members:
+            failure = self._failed_batches.get(guild_id)
+            if failure is not None:
+                raise type(failure)(*failure.args)
             await self.prefetch(guild_id, [user_id])
         roles = self._members.get(key)
         if roles is None:

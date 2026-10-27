@@ -236,6 +236,13 @@ function click(node: Element | null | undefined) {
   });
 }
 
+/** An item of the open menu; a second level replaces the root items in place. */
+function menuItem(role: "menuitem" | "menuitemradio", label: string): Element | undefined {
+  return [...document.querySelectorAll(`[role='${role}']`)].find((node) =>
+    (node.textContent ?? "").trim().startsWith(label)
+  );
+}
+
 // An open Radix menu puts `pointer-events: none` on the body; left behind, it
 // swallows the next test's first click.
 afterEach(async () => {
@@ -262,15 +269,20 @@ beforeEach(() => {
 });
 
 describe("RegistrationsTable toolbar", () => {
-  it("keeps the counts in the toolbar, never in a header row", async () => {
+  it("keeps the counts out of the header row: the total at the table's foot", async () => {
     const scope = await mount();
     const headerText = scope.querySelector("thead")?.textContent ?? "";
+    const total = [...scope.querySelectorAll("div")].find((node) => node.textContent === "25 registrations");
 
     expect(headerText).not.toContain("25");
     expect(scope.textContent).toContain("1 pending");
     // Unfiltered: a single total, not a redundant "25/25".
     expect(scope.textContent).not.toContain("25/25");
-    expect([...scope.querySelectorAll("span")].map((node) => node.textContent)).toContain("25");
+    // Under the table, not one of its rows.
+    expect(total).toBeDefined();
+    expect(total?.closest("table")).toBeNull();
+    const table = scope.querySelector("table");
+    expect(table && total ? table.compareDocumentPosition(total) & Node.DOCUMENT_POSITION_FOLLOWING : 0).toBeTruthy();
   });
 
   it("fetches the whole pool once, so the pending count survives filtering", async () => {
@@ -326,27 +338,29 @@ describe("RegistrationsTable toolbar", () => {
 
   it("offers the shared column picker instead of its own", async () => {
     const scope = await mount();
-    const trigger = [...scope.querySelectorAll("button")].find((node) =>
-      node.textContent?.includes("Columns")
-    );
+    // The table's own "View" menu: columns and grouping live behind it.
+    const view = [...scope.querySelectorAll("button")].find((node) => node.textContent?.trim() === "View");
 
-    await click(trigger);
+    await click(view);
+    await click(menuItem("menuitem", "Columns"));
 
     expect(document.body.textContent).toContain("Reset to defaults");
   });
 
   it("groups the page into labelled sections on demand", async () => {
     const scope = await mount();
-    const groupSelect = scope.querySelector("[aria-label='Group registrations']");
+    const view = [...scope.querySelectorAll("button")].find((node) => node.textContent?.trim() === "View");
 
-    await click(groupSelect);
-    const option = [...document.querySelectorAll("[role='option']")].find((node) =>
-      node.textContent?.includes("Group by check-in")
-    );
-    await click(option);
+    await click(view);
+    await click(menuItem("menuitem", "Group registrations"));
+    await click(menuItem("menuitemradio", "Group by check-in"));
 
     // Both buckets: the pool has no checked-in rows, so one section holds all 25.
-    expect(scope.textContent).toContain("25 registrations");
+    // A section header is a body row without a row id; the foot's total says the same words.
+    const sectionHeaders = [...scope.querySelectorAll("tbody tr:not([data-row-id])")].map(
+      (node) => node.textContent ?? ""
+    );
+    expect(sectionHeaders.some((text) => text.includes("25 registrations"))).toBe(true);
   });
 });
 

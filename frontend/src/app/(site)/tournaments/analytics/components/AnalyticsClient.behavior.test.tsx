@@ -137,7 +137,7 @@ describe("tournament analytics host", () => {
     await render("");
 
     expect(nav.replace).toHaveBeenCalledWith("/tournaments/analytics?tournamentId=20");
-    expect(tournaments.getAll).toHaveBeenCalledWith(null, "all");
+    expect(tournaments.getAll).toHaveBeenCalledWith(null, "all", null, ["stages", "participants_count"]);
   });
 
   it("offers no tournament of a disabled game: a League-only workspace keeps its old Overwatch events unopened", async () => {

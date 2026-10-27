@@ -1,5 +1,6 @@
 import { SITE_NAME } from "@/config/site";
-import { OG_SIZE, renderEncounterOg } from "@/lib/og/encounter";
+import { OG_SIZE } from "@/lib/og/base";
+import { renderEncounterOg } from "@/lib/og/encounter";
 
 export const size = OG_SIZE;
 export const contentType = "image/png";

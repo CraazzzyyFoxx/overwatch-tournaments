@@ -24,7 +24,8 @@ DOCS: dict[str, dict] = {
     "rpc.identity.invalidate_session": {
         "summary": "Invalidate cached permissions for a user",
         "description": (
-            "Permission: a valid service token (any scope); no user credential and no per-scope check. "
+            "Permission: a valid service token carrying the `identity:invalidate` scope (403 without it); no user "
+            "credential. "
             "Drops the cached RBAC entry for the given user_id, so "
             "their next request re-resolves roles and permissions from the database instead of waiting out "
             "the cache TTL; returns 204 No Content. Despite the endpoint name it does NOT revoke tokens or "
@@ -39,7 +40,7 @@ DOCS: dict[str, dict] = {
     },
     "rpc.identity.login": {
         "summary": "Login",
-        "description": "Permission: public; no authentication required — the email/password pair is the credential. Authenticates email + password and returns an access+refresh token, recording the session with the forwarded user-agent and IP.",
+        "description": "Permission: public; no authentication required — the email/password pair is the credential. Authenticates email + password and returns an access+refresh token, recording the session with the forwarded user-agent and IP. After 10 failed attempts for one email within 15 minutes, that email is locked for 15 minutes: 429 `Too many failed login attempts. Try again later.`, checked before the password; a successful login clears the count.",
     },
     "rpc.identity.refresh": {
         "summary": "Refresh token",
@@ -63,7 +64,7 @@ DOCS: dict[str, dict] = {
     },
     "rpc.identity.get_me": {
         "summary": "Get current user",
-        "description": "Permission: authenticated (active) user, session bearer or API key; self-service. Returns the profile of the bearer-authenticated user.",
+        "description": "Permission: authenticated (active) user, session bearer or API key; self-service. Returns the profile of the bearer-authenticated user; `has_password` tells whether the account has a password (else it signs in through OAuth only).",
     },
     "rpc.identity.update_me": {
         "summary": "Update current user",
@@ -71,11 +72,11 @@ DOCS: dict[str, dict] = {
     },
     "rpc.identity.delete_me": {
         "summary": "Delete current account",
-        "description": "Permission: authenticated (active) user; self-service — the caller's own account only. Permanently deletes the active user's own account (sessions, OAuth connections, API keys, role grants) and returns 204. Historical data is preserved: the linked player identity survives with its account link nulled, so tournaments, matches, statistics and registrations are untouched. 400 for a superuser account.",
+        "description": "Permission: authenticated (active) user; self-service — the caller's own account only. Permanently deletes the active user's own account (sessions, OAuth connections, API keys, role grants) and returns 204. Historical data is preserved: the linked player identity survives with its account link nulled, so tournaments, matches, statistics and registrations are untouched. 400 for a superuser account. Re-authentication: an account with a password sends `{\"current_password\": ...}` (400 when missing, 401 when wrong); a passwordless account needs a session that signed in within the last 10 minutes, else 403 `reauth_required`.",
     },
     "rpc.identity.set_password": {
         "summary": "Set password",
-        "description": "Permission: authenticated (active) user; self-service — the current password must be supplied when one is already set. Sets or changes the active user's password; returns 204 No Content.",
+        "description": "Permission: authenticated (active) user; self-service — the current password must be supplied when one is already set (400 when missing, 401 when wrong); setting the first password needs a session that signed in within the last 10 minutes, else 403 `reauth_required`. Sets or changes the active user's password and signs out every other session; returns 204 No Content.",
     },
     "rpc.identity.me.avatar_set": {
         "summary": "Set avatar",
@@ -225,7 +226,7 @@ DOCS: dict[str, dict] = {
     # ── RBAC: auth users ───────────────────────────────────────────────────
     "rpc.identity.rbac.list_auth_users": {
         "summary": "List auth users",
-        "description": "Permission: `auth_user.read` — checked in the workspace when workspace_id is given, globally otherwise. Returns auth users filtered by search/role_id/exclude_role_id/is_active/is_superuser/workspace_id. `exclude_role_id` drops users holding any listed role.",
+        "description": "Permission: `auth_user.read` — checked in the workspace when workspace_id is given, globally otherwise. Without workspace_id: every account, filtered by search/role_id/exclude_role_id/is_active/is_superuser (`exclude_role_id` drops users holding any listed role). With workspace_id and no search: only that workspace's active members, same filters. With workspace_id and search (trimmed; under 3 characters returns an empty page): a caller holding global `auth_user.read` gets the global search; any other caller gets at most 20 `AuthUserLookupRead` items (`id`, `username`, `avatar_url`) whose username contains the search or whose email equals it, other filters ignored.",
     },
     "rpc.identity.rbac.get_auth_user": {
         "summary": "Get auth user",

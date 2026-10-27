@@ -3,24 +3,23 @@
 /**
  * Shared pieces for the game-catalogue admin pages (maps, heroes, gamemodes).
  *
- * All three pages are the same shape — a sync-from-game + create toolbar and a
- * dialog that doubles as create and edit — so the toolbar and the two dialog
- * helpers live here instead of being copy-pasted three times.
+ * All three pages are the same shape — sync-from-game + create commands over
+ * the table and a dialog that doubles as create and edit — so the commands and
+ * the two dialog helpers live here instead of being copy-pasted three times.
  */
 
 import { Plus } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
+import type { TableCommand } from "@/components/data-table";
 
-interface CatalogToolbarActionsProps {
+interface CatalogCommandsProps {
   /**
-   * Permission gate for the cluster. Syncing and creating a catalogue entry are
-   * granted together (superuser), so the toolbar renders nothing when false.
+   * Permission gate for both commands. Syncing and creating a catalogue entry
+   * are granted together (superuser), so both are hidden when false.
    */
   canSync: boolean;
-  /** A sync runs in the background: the button says so and stays clickable — `onSync` then reopens its modal. */
+  /** A sync runs in the background: the command says so and stays clickable — `onSync` then reopens its modal. */
   isSyncing: boolean;
   onSync: () => void;
   /** Sentence-case label naming the object, e.g. "Sync maps from game". */
@@ -30,34 +29,25 @@ interface CatalogToolbarActionsProps {
   createLabel: string;
 }
 
-export function CatalogToolbarActions({
+export function useCatalogCommands({
   canSync,
   isSyncing,
   onSync,
   syncLabel,
   onCreate,
   createLabel
-}: Readonly<CatalogToolbarActionsProps>) {
+}: Readonly<CatalogCommandsProps>): TableCommand[] {
   const t = useTranslations("adminWorkspace.content.catalog.sync");
-  if (!canSync) {
-    return null;
-  }
-
-  return (
-    // A fragment, not a row: the table toolbar's control group wraps its own
-    // children, so the buttons drop to a new line on a phone instead of
-    // pushing off the left edge as one unbreakable block.
-    <>
-      <Button variant="outline" onClick={onSync}>
-        {isSyncing ? <Spinner /> : null}
-        {isSyncing ? t("running") : syncLabel}
-      </Button>
-      <Button onClick={onCreate}>
-        <Plus aria-hidden className="mr-2 h-4 w-4" />
-        {createLabel}
-      </Button>
-    </>
-  );
+  return [
+    {
+      id: "sync",
+      label: isSyncing ? t("running") : syncLabel,
+      onSelect: onSync,
+      pending: isSyncing,
+      hidden: !canSync
+    },
+    { id: "create", label: createLabel, icon: Plus, onSelect: onCreate, primary: true, hidden: !canSync }
+  ];
 }
 
 /**

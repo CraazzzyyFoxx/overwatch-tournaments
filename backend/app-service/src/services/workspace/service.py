@@ -24,6 +24,7 @@ from shared.rbac import (
     replace_user_workspace_roles,
     user_has_only_workspace_owner_role,
 )
+from shared.rbac.bootstrap import ensure_can_change_owner_role, stage_rbac_change
 from shared.repository import (
     AuthUserRepository,
     RoleRepository,
@@ -315,6 +316,24 @@ class WorkspaceService:
         return workspace
 
     async def delete(self, session: AsyncSession, workspace: models.Workspace) -> None:
+        # Before the delete: afterwards nothing is left to say whose RBAC payload listed this workspace.
+        members = (
+            sa.select(models.User.auth_user_id)
+            .join(models.WorkspaceMember, models.WorkspaceMember.player_id == models.User.id)
+            .where(
+                models.WorkspaceMember.workspace_id == workspace.id,
+                models.WorkspaceMember.removed_at.is_(None),
+                models.WorkspaceMember.observed_only.is_(False),
+                models.User.auth_user_id.is_not(None),
+            )
+        )
+        holders = (
+            sa.select(models.user_roles.c.user_id)
+            .join(models.Role, models.Role.id == models.user_roles.c.role_id)
+            .where(models.Role.workspace_id == workspace.id)
+        )
+        affected = await session.scalars(sa.union(members, holders))
+        await stage_rbac_change(session, affected, change="workspace_deleted", workspace_id=workspace.id)
         captures = await capture_owner_delete(session, workspace_id=workspace.id)
         await self.workspace_repo.delete(session, workspace)
         await stage_owner_delete(
@@ -518,6 +537,28 @@ class WorkspaceService:
             user_id=auth_user_id,
             workspace_id=member.workspace_id,
         )
+
+    async def ensure_owner_role_change_allowed(
+        self,
+        session: AsyncSession,
+        workspace_id: int,
+        actor: typing.Any,
+        *,
+        target_auth_user_id: int,
+        role_ids: list[int] | None,
+    ) -> None:
+        """403 unless ``actor`` may grant or revoke ``owner`` the way this member write would.
+
+        ``role_ids`` is the target's new role set in the workspace; ``None`` removes the member. Only a write that
+        changes whether the target holds ``owner`` is gated, by the shared rule (``ensure_can_change_owner_role``).
+        Ownership transfer keeps its own gate (``owner_transfer``).
+        """
+        owner = await self.role_repo.get_by_name(session, name="owner", workspace_id=workspace_id)
+        if owner is None:
+            return
+        holds = target_auth_user_id in set(await self.user_role_repo.user_ids_for_role(session, owner.id))
+        if holds != (role_ids is not None and owner.id in role_ids):
+            await ensure_can_change_owner_role(session, actor=actor, workspace_id=workspace_id)
 
     async def remove_member(self, session: AsyncSession, member: models.WorkspaceMember) -> None:
         """Revoke the member's roles and stamp ``removed_at``; the row stays.

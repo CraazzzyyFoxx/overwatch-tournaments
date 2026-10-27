@@ -3,17 +3,16 @@
 import { useCallback, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Plus } from "lucide-react";
 
-import { DataTable } from "@/components/data-table";
+import { DataTable, type TableCommand } from "@/components/data-table";
 import {
   entityFormError,
   onEntityDialogClose
 } from "@/components/admin/CatalogToolbarActions";
 import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import { EntityFormDialog } from "@/components/kit/EntityFormDialog";
-import { Button } from "@/components/ui/button";
 import { PageStateCard } from "@/components/ui/page-state-card";
-import { Spinner } from "@/components/ui/spinner";
 import { hasUnsavedChanges } from "@/lib/form-change";
 import { notify } from "@/lib/notify";
 import adminService from "@/services/admin.service";
@@ -33,7 +32,7 @@ export interface TournamentLinksTabProps {
   canCreate: boolean;
   canUpdate: boolean;
   canDelete: boolean;
-  /** `stream.update` in the tournament's workspace — gates the re-poll button. */
+  /** `stream.update` in the tournament's workspace — gates the re-poll command. */
   canRepollStreams: boolean;
 }
 
@@ -243,6 +242,21 @@ export function TournamentLinksTab({
     });
   };
 
+  const commands: TableCommand[] = [
+    {
+      id: "repoll",
+      label: t("refresh"),
+      onSelect: () => repollMutation.mutate(),
+      // Nothing to poll without an official stream link, so the command is
+      // absent rather than disabled — a disabled control invites a guess at
+      // what would enable it.
+      hidden: !(canRepollStreams && hasActiveStreamLink),
+      pending: repollMutation.isPending,
+      disabled: repollMutation.isPending
+    },
+    { id: "add", label: t("add"), icon: Plus, onSelect: openCreate, primary: true, hidden: !canCreate }
+  ];
+
   return (
     <>
       {linksQuery.isError ? (
@@ -258,30 +272,7 @@ export function TournamentLinksTab({
           columns={columns}
           getRowId={(link) => String(link.id)}
           emptyMessage={t("empty")}
-          actions={
-            <>
-              {/* Nothing to poll without an official stream link, so the button is
-                  absent rather than disabled — a disabled control invites a guess
-                  at what would enable it. */}
-              {canRepollStreams && hasActiveStreamLink && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => repollMutation.mutate()}
-                  disabled={repollMutation.isPending}
-                >
-                  {repollMutation.isPending ? <Spinner /> : null}
-                  {t("refresh")}
-                </Button>
-              )}
-              {canCreate && (
-                <Button type="button" size="sm" onClick={openCreate}>
-                  {t("add")}
-                </Button>
-              )}
-            </>
-          }
+          commands={commands}
         />
       )}
 

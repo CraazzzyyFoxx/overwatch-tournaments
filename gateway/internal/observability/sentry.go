@@ -18,9 +18,10 @@ import (
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/config"
 )
 
-// sensitiveQueryParams are stripped from captured request query strings. The WS
-// endpoint accepts the JWT via ?token=; sentryhttp records the raw query string
-// regardless of SendDefaultPII, so scrub these defensively for every event.
+// sensitiveQueryParams are stripped from captured request query strings. The
+// gateway no longer reads ?token=, but older WebSocket clients may still send
+// one and sentryhttp records the raw query string regardless of SendDefaultPII,
+// so scrub these defensively for every event.
 var sensitiveQueryParams = map[string]struct{}{
 	"token":         {},
 	"access_token":  {},

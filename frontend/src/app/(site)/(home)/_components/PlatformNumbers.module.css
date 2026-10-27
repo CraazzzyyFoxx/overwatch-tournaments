@@ -1,0 +1,104 @@
+/* The home's numbers bento: a lit surface per tile, a soft teal glow on hover
+   and a one-shot reveal. The markup is the drawn state. `NumbersReveal` holds
+   it back with `data-reveal="armed"` only while the block is still off-screen,
+   then sets `"in"`, under which the charts transition to that state. */
+
+.tile {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border: 1px solid var(--aqt-border);
+  border-radius: var(--aqt-radius);
+  background: radial-gradient(130% 120% at 0% 0%, var(--aqt-card-2), var(--aqt-card) 62%);
+  box-shadow: inset 0 1px 0 var(--aqt-overlay-3);
+  transition:
+    border-color 250ms,
+    box-shadow 350ms;
+}
+
+/* The faint teal lift in the top-right corner, under the tile's content. */
+.tile::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(55% 60% at 100% 0%, color-mix(in srgb, var(--aqt-teal) 9%, transparent), transparent 70%);
+}
+
+.tile:hover {
+  border-color: var(--aqt-border-3);
+  box-shadow:
+    inset 0 1px 0 var(--aqt-overlay-4),
+    0 24px 50px -32px color-mix(in srgb, var(--aqt-teal) 50%, transparent);
+}
+
+/* Tournaments per year: the bars rise in turn, each count follows its bar. */
+.bar {
+  position: relative;
+  height: var(--h);
+  border-radius: 6px 6px 3px 3px;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--aqt-teal) 50%, transparent),
+    color-mix(in srgb, var(--aqt-teal) 10%, transparent)
+  );
+}
+
+/* This year's bar. */
+.hot {
+  background: linear-gradient(180deg, var(--aqt-teal), color-mix(in srgb, var(--aqt-teal) 25%, transparent));
+  box-shadow: 0 0 22px color-mix(in srgb, var(--aqt-teal) 45%, transparent);
+}
+
+[data-reveal="armed"] .bar {
+  height: 0;
+}
+
+[data-reveal="in"] .bar {
+  transition: height 800ms cubic-bezier(0.2, 0.8, 0.2, 1) calc(var(--i) * 70ms);
+}
+
+[data-reveal="armed"] .bar > * {
+  opacity: 0;
+}
+
+[data-reveal="in"] .bar > * {
+  transition: opacity 300ms calc(var(--i) * 70ms + 550ms);
+}
+
+/* The dot field and the mode split sweep in from the left; the champions'
+   gold fades in once the sweep has passed. */
+[data-reveal="armed"] .sweep {
+  clip-path: inset(0 100% 0 0);
+}
+
+[data-reveal="in"] .sweep {
+  transition: clip-path 1000ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+[data-reveal="armed"] .gold {
+  opacity: 0;
+}
+
+[data-reveal="in"] .gold {
+  transition: opacity 450ms 800ms;
+}
+
+/* A cell per day (or week) of play, lit in sequence. */
+.cell {
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--aqt-teal) 78%, transparent);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--aqt-teal) 35%, transparent);
+}
+
+[data-reveal="armed"] .cell {
+  background: var(--aqt-overlay-4);
+  box-shadow: none;
+}
+
+[data-reveal="in"] .cell {
+  transition:
+    background-color 250ms calc(var(--i) * 16ms),
+    box-shadow 250ms calc(var(--i) * 16ms);
+}

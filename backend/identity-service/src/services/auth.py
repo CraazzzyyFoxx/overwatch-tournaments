@@ -6,6 +6,8 @@ UA/IP it sees from nginx.
 
 from __future__ import annotations
 
+import asyncio
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from loguru import logger
@@ -23,9 +25,11 @@ from shared.repository import (
     WorkspaceMemberRepository,
 )
 from src import schemas
+from src.core.metrics import LOGIN_TOTAL, REFRESH_TOTAL
 from src.schemas.auth import permission_key
 from src.services.audit import record_operator_audit
 from src.services.auth_users import AuthUserService, auth_users
+from src.services.login_throttle import LOCKED_DETAIL, LoginThrottle, login_throttle
 from src.services.security import PasswordHasher, TokenCodec, passwords, token_codec
 from src.services.session_cache import SessionCache, session_cache
 from src.services.sessions import RefreshTokenService, SessionService, refresh_tokens, sessions
@@ -34,6 +38,12 @@ from src.services.token_payload import TokenPayloadBuilder, token_payloads
 __all__ = ["AuthenticationService", "auth"]
 
 _INVALID_REFRESH_TOKEN = "Invalid or expired refresh token"
+# A refresh that lost its token to a concurrent one waits this long for the winner's pair.
+_IDEM_POLL_ATTEMPTS = 10
+_IDEM_POLL_INTERVAL_SECONDS = 0.1
+# Passwordless re-authentication: the caller's session must have signed in this recently.
+REAUTH_WINDOW = timedelta(minutes=10)
+REAUTH_REQUIRED = "reauth_required"
 
 
 class AuthenticationService:
@@ -54,6 +64,7 @@ class AuthenticationService:
         players: UserRepository = UserRepository(),
         socials: SocialAccountRepository = SocialAccountRepository(),
         hasher: PasswordHasher = passwords,
+        throttle: LoginThrottle = login_throttle,
     ) -> None:
         self.users = users
         self.tokens = tokens
@@ -67,6 +78,7 @@ class AuthenticationService:
         self.players = players
         self.socials = socials
         self.hasher = hasher
+        self.throttle = throttle
 
     # --- session issuance ---
 
@@ -83,18 +95,11 @@ class AuthenticationService:
 
         Shared by password login and the OAuth callback: both must stamp the
         same claim set and the same ``sid``, since the ``sid`` is what session
-        revocation and the access-token blacklist are keyed on.
+        revocation and the access-token blacklist are keyed on. The token names
+        the account and the session only; everything else is resolved per request.
         """
         session_id, session_started_at = self.codec.new_session()
-        access_token = self.codec.access_token(
-            {
-                "sub": str(user.id),
-                "email": user.email,
-                "username": user.username,
-                "is_superuser": user.is_superuser,
-                "sid": str(session_id),
-            }
-        )
+        access_token = self.codec.access_token({"sub": str(user.id), "sid": str(session_id)})
         refresh_token = self.codec.new_refresh_token()
         await self.tokens.issue(
             session,
@@ -121,17 +126,27 @@ class AuthenticationService:
         user_agent: str | None,
         ip_address: str | None,
     ) -> schemas.Token:
+        # Before the password is looked at: a locked email gets no oracle, right or wrong.
+        if await self.throttle.is_locked(email):
+            LOGIN_TOTAL.labels(result="locked").inc()
+            raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=LOCKED_DETAIL)
         user = await self.users.authenticate(session, email, password)
         if not user:
+            await self.throttle.record_failure(email)
+            LOGIN_TOTAL.labels(result="invalid").inc()
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Incorrect email or password",
                 headers={"WWW-Authenticate": "Bearer"},
             )
+        await self.throttle.clear(email)
         if not user.is_active:
+            LOGIN_TOTAL.labels(result="inactive").inc()
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User account is inactive")
 
-        return await self.issue_session(session, user, user_agent=user_agent, ip_address=ip_address)
+        token = await self.issue_session(session, user, user_agent=user_agent, ip_address=ip_address)
+        LOGIN_TOTAL.labels(result="success").inc()
+        return token
 
     async def refresh(
         self,
@@ -140,11 +155,20 @@ class AuthenticationService:
         user_agent: str | None,
         ip_address: str | None,
     ) -> schemas.Token:
-        """Rotate a refresh token, reusing the caller's logical session id."""
+        """Rotate a refresh token, reusing the caller's logical session id.
+
+        The old token is consumed by an ``UPDATE ... WHERE NOT is_revoked`` run
+        under the owner's row lock, and only the transaction that flipped it
+        mints a successor. A loser -- a concurrent refresh of the same token, or
+        one that lost to a logout -- rolls back and answers with the winner's
+        pair from the idempotency entry, or 401 when none appears: a revoked
+        session never gains a live successor.
+        """
         # Fast-path: a concurrent request already rotated this token.
         old_token_hash = self.codec.hash_refresh_token(refresh_token)
         cached_pair = await self.cache.get_refresh_idem(old_token_hash)
         if cached_pair is not None:
+            REFRESH_TOTAL.labels(result="idempotent").inc()
             return schemas.Token(**cached_pair)
 
         record = await self.tokens.get_active_record(session, refresh_token)
@@ -158,20 +182,28 @@ class AuthenticationService:
             grace_replay = record is not None
         if not record:
             # Triggers reuse-detection on a known-but-revoked token.
-            await self.tokens.handle_reuse(session, refresh_token)
+            reused = await self.tokens.handle_reuse(session, refresh_token)
+            REFRESH_TOTAL.labels(result="reuse" if reused else "invalid").inc()
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=_INVALID_REFRESH_TOKEN)
 
-        user = await self.users.get_with_rbac(session, record.user_id)
+        # Identity-only, and locked: the owner's row is what serializes this
+        # rotation against every revocation of the user's sessions.
+        user = await self.auth_users_repo.get(
+            session, record.user_id, options=self.auth_users_repo.identity_options(), for_update=True
+        )
         if not user:
+            REFRESH_TOTAL.labels(result="invalid").inc()
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=_INVALID_REFRESH_TOKEN)
         if not user.is_active:
+            REFRESH_TOTAL.labels(result="invalid").inc()
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User account is inactive")
 
         if grace_replay:
             # Retire the successor minted by the lost rotation so the session
             # keeps exactly one live refresh token; keep the sid unbanned — the
-            # access token issued below carries it.
-            await self.tokens.revoke_session(
+            # access token issued below carries it. Nothing to retire means a
+            # concurrent replay or a logout got there first.
+            consumed = await self.tokens.revoke_session(
                 session,
                 record.user_id,
                 record.session_id,
@@ -179,19 +211,11 @@ class AuthenticationService:
                 blacklist=False,
             )
         else:
-            revoked = await self.tokens.revoke_token(session, refresh_token, commit=False)
-            if not revoked:
-                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=_INVALID_REFRESH_TOKEN)
+            consumed = await self.tokens.revoke_token(session, refresh_token, commit=False)
+        if not consumed:
+            return await self._lost_rotation(session, old_token_hash)
 
-        access_token = self.codec.access_token(
-            {
-                "sub": str(user.id),
-                "email": user.email,
-                "username": user.username,
-                "is_superuser": user.is_superuser,
-                "sid": str(record.session_id),
-            }
-        )
+        access_token = self.codec.access_token({"sub": str(user.id), "sid": str(record.session_id)})
         new_refresh_token = self.codec.new_refresh_token()
         await self.tokens.issue(
             session,
@@ -209,7 +233,25 @@ class AuthenticationService:
         await session.commit()
 
         await self.cache.set_refresh_idem(old_token_hash, access_token, new_refresh_token)
+        REFRESH_TOTAL.labels(result="grace" if grace_replay else "rotated").inc()
         return schemas.Token(access_token=access_token, refresh_token=new_refresh_token)
+
+    async def _lost_rotation(self, session: AsyncSession, old_token_hash: str) -> schemas.Token:
+        """Another transaction consumed the token after we read it.
+
+        A concurrent refresh of the same token publishes its pair right after
+        its commit (which our UPDATE waited on), so wait briefly for it. None
+        appearing means a revocation won: 401, with nothing minted here.
+        """
+        await session.rollback()
+        for _ in range(_IDEM_POLL_ATTEMPTS):
+            cached_pair = await self.cache.get_refresh_idem(old_token_hash)
+            if cached_pair is not None:
+                REFRESH_TOTAL.labels(result="idempotent").inc()
+                return schemas.Token(**cached_pair)
+            await asyncio.sleep(_IDEM_POLL_INTERVAL_SECONDS)
+        REFRESH_TOTAL.labels(result="concurrent").inc()
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=_INVALID_REFRESH_TOKEN)
 
     # --- sessions ---
 
@@ -340,8 +382,42 @@ class AuthenticationService:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="This name or email is already taken"
             ) from exc
-        await session.refresh(user)
-        return user
+        # Email and username ride in the cached RBAC entry the token path answers from.
+        await self.cache.invalidate_rbac(user.id)
+        # The identity map hands back this very instance with its expired columns reloaded, plus the player the
+        # account's avatar is read off.
+        reloaded = await self.users.get_identity(session, user.id, include_player=True)
+        assert reloaded is not None  # the caller's own row, just committed
+        return reloaded
+
+    @staticmethod
+    def _current_session(user: models.AuthUser) -> UUID | None:
+        raw = getattr(user, "_current_session_id", None)
+        try:
+            return UUID(raw) if raw else None
+        except ValueError:
+            return None
+
+    async def _reauthenticate(self, session: AsyncSession, user: models.AuthUser, current_password: str | None) -> None:
+        """Prove the caller holds the account right now, before a credential-level change.
+
+        A password account proves it with the current password. A passwordless
+        one cannot, so the caller's own session must have signed in within
+        ``REAUTH_WINDOW`` (a stolen, long-lived session does not qualify); else
+        403 ``reauth_required`` and the client sends the user through sign-in.
+        """
+        if user.hashed_password:
+            if not current_password:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Current password is required")
+            if not await self.hasher.verify(current_password, user.hashed_password):
+                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Current password is incorrect")
+            return
+        session_id = self._current_session(user)
+        current = (
+            None if session_id is None else await self.session_reader.get_user_session(session, user.id, session_id)
+        )
+        if current is None or current["status"] != "active" or datetime.now(UTC) - current["login_at"] > REAUTH_WINDOW:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=REAUTH_REQUIRED)
 
     async def set_password(
         self,
@@ -349,19 +425,18 @@ class AuthenticationService:
         user: models.AuthUser,
         payload: schemas.PasswordSetRequest,
     ) -> None:
-        if user.hashed_password:
-            if not payload.current_password:
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Current password is required")
-            if not self.hasher.verify(payload.current_password, user.hashed_password):
-                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Current password is incorrect")
-        user.hashed_password = self.hasher.hash(payload.new_password)
-        await session.commit()
+        """Set the first password or change it; every OTHER session is signed out."""
+        await self._reauthenticate(session, user, payload.current_password)
+        user.hashed_password = await self.hasher.hash(payload.new_password)
+        # Commits the new hash together with the revocation, then blacklists the revoked sids.
+        await self.tokens.revoke_all(session, user.id, keep_session_id=self._current_session(user))
 
     async def delete_me(
         self,
         session: AsyncSession,
         user: models.AuthUser,
         *,
+        current_password: str | None = None,
         ip_address: str | None = None,
         user_agent: str | None = None,
     ) -> None:
@@ -390,12 +465,14 @@ class AuthenticationService:
         Superusers are refused: self-deleting the account that administers the
         platform is a footgun the admin surface already refuses in the other
         direction (deleting yourself from the auth-user admin is rejected too).
+        Everyone else re-authenticates first (``_reauthenticate``).
         """
         if user.is_superuser:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Superuser accounts cannot be deleted here. Ask another administrator to remove it.",
             )
+        await self._reauthenticate(session, user, current_password)
 
         user_id = user.id
         email = user.email  # captured before the delete/commit expires the instance

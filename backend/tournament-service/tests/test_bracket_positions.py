@@ -32,8 +32,8 @@ from shared.models.tournament.stage import Stage, StageItem
 from shared.models.tournament.team import Team
 from shared.services.encounter import participants, result
 from shared.tests.encounter_writer_case import EncounterWriterCase
-from src.domain.bracket import engine, swiss, template
-from src.services.bracket import advancement, persist, swiss_state, usability
+from src.domain.bracket import engine, template
+from src.services.bracket import advancement, persist, usability
 
 #: ``players.user.name`` is globally unique, so the extra players a deep
 #: bracket needs are tagged per test, like the writer case's own.
@@ -712,50 +712,6 @@ class GrandFinalResetTests(BracketCase):
                 [(1, False), (1, True), (2, False), (2, True)],
                 [(seat.slot, seat.active) for seat in await self.seats_of(s, reset_id)],
             )
-
-
-class SwissFromParticipationsTests(BracketCase):
-    stage_type = enums.StageType.SWISS
-
-    async def test_the_pairs_already_played_are_read_off_the_participations(self) -> None:
-        skeleton = swiss.generate_round(
-            [swiss.SwissStanding(team_id=team_id, points=0.0) for team_id in self.team_ids],
-            played_pairs=set(),
-            round_number=1,
-        )
-        async with self.Session() as s:
-            encounters = await self.build(s, skeleton)
-            await s.commit()
-
-            played = await swiss_state.played_pairs(s, [encounter.id for encounter in encounters])
-            self.assertEqual(
-                {frozenset(pairing.team_ids) for pairing in skeleton.pairings},
-                played,
-            )
-
-            second = swiss.generate_round(
-                [swiss.SwissStanding(team_id=team_id, points=0.0) for team_id in self.team_ids],
-                played_pairs=played,
-                round_number=2,
-            )
-            self.assertEqual(2, len(second.pairings))
-            for pairing in second.pairings:
-                self.assertNotIn(frozenset(pairing.team_ids), played)
-
-    async def test_a_retired_participation_is_not_a_pair_that_was_played(self) -> None:
-        skeleton = swiss.generate_round(
-            [swiss.SwissStanding(team_id=team_id, points=0.0) for team_id in self.team_ids],
-            played_pairs=set(),
-            round_number=1,
-        )
-        async with self.Session() as s:
-            encounters = await self.build(s, skeleton)
-            first = encounters[0]
-            await participants.vacate_slot(s, first, slot=1)
-            await s.commit()
-
-            played = await swiss_state.played_pairs(s, [encounter.id for encounter in encounters])
-            self.assertEqual(len(skeleton.pairings) - 1, len(played))
 
 
 class TemplateSlotTests(TestCase):

@@ -74,6 +74,11 @@ func CorrelationIDFromContext(ctx context.Context) string {
 // into the context, and emits one access-log line per request. It must wrap the
 // REST ServeMux directly (inside the Sentry handler) so that, after ServeHTTP,
 // r.Pattern holds the matched route template.
+//
+// It also parses the caller once, BEFORE next, and stores the result — nil for
+// anonymous — with auth.WithUser: the middleware it wraps (metrics, the
+// anonymous rate limiter) read it back instead of verifying the JWT again, so
+// it must stay outside them.
 func Middleware(next http.Handler, base *slog.Logger, authn *auth.Authenticator) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
@@ -97,7 +102,14 @@ func Middleware(next http.Handler, base *slog.Logger, authn *auth.Authenticator)
 			reqLog = reqLog.With(slog.String("trace_id", span.TraceID.String()))
 		}
 		orig := r
-		r = r.WithContext(WithCorrelationID(With(r.Context(), reqLog), cid))
+		ctx := WithCorrelationID(With(r.Context(), reqLog), cid)
+		// user_id (from the local JWT, no RPC). The token itself is never logged.
+		var user *auth.User
+		if authn != nil {
+			user = authn.UserFromRequest(r)
+			ctx = auth.WithUser(ctx, user)
+		}
+		r = r.WithContext(ctx)
 
 		rec := &responseRecorder{ResponseWriter: w, status: http.StatusOK}
 		next.ServeHTTP(rec, r)
@@ -116,11 +128,8 @@ func Middleware(next http.Handler, base *slog.Logger, authn *auth.Authenticator)
 			slog.Int64("duration_ms", time.Since(start).Milliseconds()),
 			slog.Int("bytes", rec.bytes),
 		}
-		// user_id (from the local JWT, no RPC). The token itself is never logged.
-		if authn != nil {
-			if u := authn.UserFromRequest(r); u != nil {
-				attrs = append(attrs, slog.Int64("user_id", u.ID))
-			}
+		if user != nil {
+			attrs = append(attrs, slog.Int64("user_id", user.ID))
 		}
 		reqLog.LogAttrs(r.Context(), levelForStatus(rec.status), "request completed", attrs...)
 	})

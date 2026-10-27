@@ -7,7 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 import { DataTable } from "@/components/data-table";
 import { CatalogAliasesField, CatalogImageField, CatalogNameField } from "@/components/admin/CatalogFormFields";
 import { CatalogSyncDialog } from "@/components/admin/CatalogSyncDialog";
-import { CatalogToolbarActions } from "@/components/admin/CatalogToolbarActions";
+import { useCatalogCommands } from "@/components/admin/CatalogToolbarActions";
 import { FilterBar } from "@/components/kit/FilterBar";
 import { useFilters } from "@/components/kit/useFilters";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -96,6 +96,14 @@ export function MapsBrowser({ descriptor, discipline, kind, kindLabel }: Readonl
     onEdit: crud.openEdit,
     onDelete: crud.setDeletingEntity,
   });
+  const commands = useCatalogCommands({
+    canSync: isSuperuser,
+    isSyncing: sync.running,
+    onSync: sync.start,
+    syncLabel: t("catalog.entity.sync", { game: descriptor.name }),
+    onCreate: crud.openCreate,
+    createLabel: t("catalog.entity.create", { kind: kindLabel }),
+  });
 
   return (
     <>
@@ -116,16 +124,7 @@ export function MapsBrowser({ descriptor, discipline, kind, kindLabel }: Readonl
         toolbar={<FilterBar defs={filterDefs} filters={filters} />}
         emptyMessage={t("catalog.entity.empty", { kind: kindLabel })}
         onRowDoubleClick={isSuperuser ? (row) => crud.openEdit(row.original) : undefined}
-        actions={
-          <CatalogToolbarActions
-            canSync={isSuperuser}
-            isSyncing={sync.running}
-            onSync={sync.start}
-            syncLabel={t("catalog.entity.sync", { game: descriptor.name })}
-            onCreate={crud.openCreate}
-            createLabel={t("catalog.entity.create", { kind: kindLabel })}
-          />
-        }
+        commands={commands}
       />
 
       <CatalogEntityDialogs crud={crud} kindLabel={kindLabel}>

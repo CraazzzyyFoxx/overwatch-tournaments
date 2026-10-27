@@ -2,14 +2,13 @@ package identity
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
-	"io"
 	"net/http"
 	"time"
 
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/apierr"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/rpc"
+	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/upload"
 )
 
 const (
@@ -68,6 +67,11 @@ func (b *Binary) AvatarSet(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	release, ok := upload.Admit(w, r, maxAvatarUpload)
+	if !ok {
+		return
+	}
+	defer release()
 	// Cap the multipart body to bound memory/disk before parsing.
 	r.Body = http.MaxBytesReader(w, r.Body, maxAvatarUpload)
 	if err := r.ParseMultipartForm(maxAvatarUpload); err != nil {
@@ -80,21 +84,19 @@ func (b *Binary) AvatarSet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer func() { _ = f.Close() }()
-	raw, err := io.ReadAll(io.LimitReader(f, maxAvatarUpload))
-	if err != nil {
-		writeDetail(w, http.StatusBadRequest, "failed to read file")
-		return
-	}
 	ct := hdr.Header.Get("Content-Type")
 	if ct == "" {
 		ct = "application/octet-stream"
 	}
-	body, _ := json.Marshal(map[string]any{
-		"access_token": token,
-		"content_b64":  base64.StdEncoding.EncodeToString(raw),
-		"content_type": ct,
-		"filename":     hdr.Filename,
+	fields := map[string]any{"access_token": token, "content_type": ct, "filename": hdr.Filename}
+	// The file is base64'd straight into the message, not via a string + re-marshal.
+	body, err := upload.Body(fields, "content_b64", upload.Base64Len(hdr.Size), func(out []byte) ([]byte, error) {
+		return upload.AppendBase64(out, f)
 	})
+	if err != nil {
+		writeDetail(w, http.StatusBadRequest, "failed to read file")
+		return
+	}
 	b.relayAvatar(w, r, queueAvatarSet, body)
 }
 

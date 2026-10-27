@@ -20,7 +20,14 @@ from shared.repository.realtime import WorkspaceEventRepository
 from shared.services.pickup_mix_realtime import emit_pickup_mix_changed
 from shared.services.realtime import DomainEvent, Scope, emit
 
-__all__ = ("DRAFT_BOARD_DOMAIN", "DRAFT_BOARD_RESOURCE", "last_event_id", "mix_changed", "publish_draft_event")
+__all__ = (
+    "DRAFT_BOARD_DOMAIN",
+    "DRAFT_BOARD_RESOURCE",
+    "MOVED_BOARDS_KEY",
+    "last_event_id",
+    "mix_changed",
+    "publish_draft_event",
+)
 
 #: The topic suffix of a session's board: ``draft:{session_id}:board``.
 DRAFT_BOARD_DOMAIN = "board"
@@ -29,6 +36,9 @@ DRAFT_BOARD_DOMAIN = "board"
 # key, so a generic applier folds the delta into the cached draft board instead
 # of refetching it.
 DRAFT_BOARD_RESOURCE = "draft.board"
+
+#: ``session.info`` key: the draft sessions whose board this transaction moved; ``board`` builds each once it commits.
+MOVED_BOARDS_KEY = "draft_moved_boards"
 
 _events = WorkspaceEventRepository()
 
@@ -52,6 +62,7 @@ async def publish_draft_event(
         ),
         actor_user_id=actor_user_id,
     )
+    session.info.setdefault(MOVED_BOARDS_KEY, set()).add(draft_session.id)
 
 
 async def last_event_id(session: AsyncSession, draft_session_id: int) -> int | None:
@@ -59,7 +70,7 @@ async def last_event_id(session: AsyncSession, draft_session_id: int) -> int | N
 
     Each draft mutation persists its event in its own transaction (above), so a new id is a new board state. Roles
     and ranks are read live, not copied into the draft; an edit made elsewhere reaches a cached board when its short
-    TTL runs out (``board._BOARD_CACHE_TTL``).
+    TTL runs out (``board._BOARD_CACHE_TTL_SECONDS``).
     """
     return await _events.last_id_for_topics(session, (Scope.draft(draft_session_id).domain_topic(DRAFT_BOARD_DOMAIN),))
 

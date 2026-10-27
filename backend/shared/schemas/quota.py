@@ -18,9 +18,11 @@ from pydantic import BaseModel, ConfigDict, Field
 __all__ = (
     "QUOTA_SCOPES",
     "QuotaLimitsPayload",
+    "QuotaLimitsWrite",
     "QuotaOperationRead",
     "QuotaOperationWrite",
     "QuotaPlanLimitRead",
+    "QuotaPlanLimitWrite",
     "QuotaPlanRead",
     "QuotaPlanWrite",
     "QuotaScope",
@@ -34,6 +36,8 @@ QUOTA_SCOPES: tuple[QuotaScope, ...] = ("workspace", "key", "session")
 
 
 class QuotaLimitsPayload(BaseModel):
+    """Limits as stored: every read of a plan/override row parses through this, so it stays permissive."""
+
     model_config = ConfigDict(extra="forbid")
 
     requests_per_minute: int | None = Field(None, ge=0)
@@ -51,7 +55,19 @@ class QuotaLimitsPayload(BaseModel):
         return all(value is None for value in self.model_dump().values())
 
 
+class QuotaLimitsWrite(QuotaLimitsPayload):
+    """Limits an admin or API caller may store. Stricter than reads, so a row
+    stored before the rule (a 0 rpm) still reads back and enforces as before."""
+
+    # ``None`` is "inherit" (override) / "unlimited" (plan); 0 would refuse every call.
+    requests_per_minute: int | None = Field(None, ge=1)
+
+
 class QuotaPlanLimitRead(QuotaLimitsPayload):
+    scope: QuotaScope
+
+
+class QuotaPlanLimitWrite(QuotaLimitsWrite):
     scope: QuotaScope
 
 
@@ -71,7 +87,7 @@ class QuotaPlanWrite(BaseModel):
     slug: str = Field(..., min_length=1, max_length=32, pattern=r"^[a-z0-9][a-z0-9-]*$")
     title: str = Field(..., min_length=1, max_length=64)
     description: str | None = None
-    limits: list[QuotaPlanLimitRead] = Field(default_factory=list)
+    limits: list[QuotaPlanLimitWrite] = Field(default_factory=list)
 
 
 class QuotaOperationRead(BaseModel):

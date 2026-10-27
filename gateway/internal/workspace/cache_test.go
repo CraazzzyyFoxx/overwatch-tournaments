@@ -1,13 +1,52 @@
 package workspace
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
 
+// set stores v unfenced. Lookups store through fill; tests seed with this.
+func (c *ttlCache[K, V]) set(k K, v V) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.setLocked(k, v)
+}
+
+func (c *ttlCache[K, V]) capacity() int { return c.maxEntries }
+
+// storeCache is what the Store-wide tests need from each of its caches.
+type storeCache interface {
+	generation() uint64
+	capacity() int
+}
+
+// storeCaches lists every cache a Store holds; keep it in step with Store.
+func storeCaches(s *Store) map[string]storeCache {
+	return map[string]storeCache{
+		"tournament":    s.tournament,
+		"members":       s.members,
+		"organizers":    s.organizers,
+		"customDomains": s.customDomains,
+		"hidden":        s.hidden,
+		"preview":       s.preview,
+		"encOwner":      s.encOwner,
+		"mixMembers":    s.mixMembers,
+		"captains":      s.captains,
+		"draftCaptains": s.draftCaptains,
+		"draftHosts":    s.draftHosts,
+		"draftOwner":    s.draftOwner,
+		"roomSettings":  s.roomSettings,
+		"wsRPM":         s.wsRPM,
+	}
+}
+
 func TestTTLCache(t *testing.T) {
-	c := newTTLCache[int64, int64](time.Minute)
+	c := newBoundedTTLCache[int64, int64](time.Minute, 8)
 	clock := time.Unix(1000, 0)
 	c.now = func() time.Time { return clock }
 
@@ -33,21 +72,36 @@ func TestTTLCache(t *testing.T) {
 	}
 }
 
-// TestTTLCache_UnboundedByDefault pins today's behaviour for the existing
-// (operator-controlled key space) callers: newTTLCache never evicts on its
-// own, however many distinct keys are inserted.
-func TestTTLCache_UnboundedByDefault(t *testing.T) {
-	c := newTTLCache[int, bool](time.Minute)
-	for i := 0; i < 10_000; i++ {
-		c.set(i, i%2 == 0)
+// An expired entry used to leave the map only when its own key was read
+// again, so under a stream of distinct keys the ttl never freed memory. The
+// next insertion must reclaim every expired entry, and only those.
+func TestTTLCache_InsertionReclaimsExpiredEntries(t *testing.T) {
+	c := newBoundedTTLCache[int, bool](time.Minute, 100)
+	clock := time.Unix(1000, 0)
+	c.now = func() time.Time { return clock }
+
+	for i := range 10 {
+		c.set(i, true)
 	}
-	for i := 0; i < 10_000; i++ {
-		v, ok := c.get(i)
-		if !ok {
-			t.Fatalf("key %d: expected a hit in an unbounded cache, got a miss", i)
-		}
-		if v != (i%2 == 0) {
-			t.Fatalf("key %d: got %v, want %v", i, v, i%2 == 0)
+	clock = clock.Add(30 * time.Second)
+	c.set(10, true)
+	clock = clock.Add(31 * time.Second) // 0..9 expired, 10 still fresh
+	c.set(11, true)
+
+	if len(c.m) != 2 || c.ll.Len() != 2 {
+		t.Fatalf("after an insertion past the ttl: %d map / %d list entries, want 2", len(c.m), c.ll.Len())
+	}
+	if _, ok := c.get(10); !ok {
+		t.Fatal("an unexpired entry must survive the reclaim")
+	}
+}
+
+// Every Store cache is keyed by something a client picks in a subscribe (or
+// an anonymous request), so none may grow without bound.
+func TestStore_EveryCacheIsBounded(t *testing.T) {
+	for name, c := range storeCaches(New(nil)) {
+		if c.capacity() <= 0 {
+			t.Errorf("the %s cache is unbounded", name)
 		}
 	}
 }
@@ -206,5 +260,174 @@ func TestStore_InvalidateRoomAccessDropsTheDraftsCaptainAnswers(t *testing.T) {
 	s.draftCaptains.setIfCurrent(former, true, inFlight)
 	if _, ok := s.draftCaptains.get(former); ok {
 		t.Fatal("an answer read before the invalidation must not be cached after it")
+	}
+}
+
+// An organizer closes a chat while a spectator-setting read is in flight. That
+// read saw "spectators allowed"; storing it after the invalidation would hand
+// the revoker's re-check the pre-toggle answer and keep the spectator in.
+func TestStore_InvalidateRoomAccessFencesTheSettingsFill(t *testing.T) {
+	s := New(nil)
+	key := roomKey{kind: "encounter", refID: 3}
+	inFlight := s.roomSettings.generation()
+
+	s.InvalidateRoomAccess("encounter", 3)
+
+	s.roomSettings.setIfCurrent(key, true, inFlight)
+	if _, ok := s.roomSettings.get(key); ok {
+		t.Fatal("a settings read that started before the invalidation must not be cached after it")
+	}
+}
+
+// After the realtime bus lost frames (a Redis re-subscription) no cached
+// answer is known to be current: Reset must empty every cache and keep a
+// lookup already in flight from storing what it read before.
+func TestStore_ResetFlushesAndFencesEveryCache(t *testing.T) {
+	s := New(nil)
+	key := memberKey{userID: 1, workspaceID: 10}
+	s.members.set(key, true)
+	s.customDomains.set("tenant.example.com", true)
+	inFlight := s.members.generation()
+	before := map[string]uint64{}
+	for name, c := range storeCaches(s) {
+		before[name] = c.generation()
+	}
+
+	s.Reset()
+
+	for name, c := range storeCaches(s) {
+		if c.generation() == before[name] {
+			t.Errorf("Reset did not flush the %s cache", name)
+		}
+	}
+	if _, ok := s.members.get(key); ok {
+		t.Fatal("a membership cached before the reset must be re-read")
+	}
+	if _, ok := s.customDomains.get("tenant.example.com"); ok {
+		t.Fatal("a custom-domain answer cached before the reset must be re-read")
+	}
+	s.members.setIfCurrent(key, true, inFlight)
+	if _, ok := s.members.get(key); ok {
+		t.Fatal("an answer read before the reset must not be cached after it")
+	}
+}
+
+// A reconnect herd subscribing to one cold key used to fire one query per
+// socket until the first answer landed. Concurrent misses for one key must
+// share one query, and its answer must be cached for everyone after.
+func TestFill_CollapsesConcurrentMisses(t *testing.T) {
+	c := newBoundedTTLCache[string, bool](time.Minute, 8)
+	var queries atomic.Int32
+	release := make(chan struct{})
+	fetch := func(context.Context) (bool, bool, error) {
+		queries.Add(1)
+		<-release
+		return true, true, nil
+	}
+
+	const callers = 16
+	var wg sync.WaitGroup
+	for range callers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if v, found, err := c.fill(context.Background(), "cold.example.com", fetch); err != nil || !found || !v {
+				t.Errorf("fill = (%v, %v, %v), want (true, true, nil)", v, found, err)
+			}
+		}()
+	}
+	// Hold the first query until the others have had time to join its flight.
+	for queries.Load() == 0 {
+		time.Sleep(time.Millisecond)
+	}
+	time.Sleep(50 * time.Millisecond)
+	close(release)
+	wg.Wait()
+
+	if n := queries.Load(); n != 1 {
+		t.Fatalf("%d concurrent misses ran %d queries, want 1", callers, n)
+	}
+	if v, ok := c.get("cold.example.com"); !ok || !v {
+		t.Fatalf("the shared answer must be cached, got (%v, %v)", v, ok)
+	}
+}
+
+// A lookup that starts after an eviction (an RBAC change, a closed chat) must
+// neither join nor be answered by a query that started before it, and that
+// older query must not overwrite the newer answer when it finally lands.
+func TestFill_LookupAfterEvictionRunsItsOwnQuery(t *testing.T) {
+	c := newBoundedTTLCache[memberKey, bool](time.Minute, 8)
+	key := memberKey{userID: 1, workspaceID: 10}
+	entered, release := make(chan struct{}), make(chan struct{})
+	stale := make(chan bool)
+	go func() {
+		v, _, _ := c.fill(context.Background(), key, func(context.Context) (bool, bool, error) {
+			close(entered)
+			<-release
+			return true, true, nil // read while the user was still a member
+		})
+		stale <- v
+	}()
+	<-entered
+
+	c.evictWhere(func(k memberKey) bool { return k.userID == 1 })
+
+	// Joining the pre-eviction flight would block until release; the timeout
+	// turns that into a failure instead of a hang.
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	v, _, err := c.fill(ctx, key, func(context.Context) (bool, bool, error) { return false, true, nil })
+	if err != nil || v {
+		t.Fatalf("post-eviction fill = (%v, %v), want its own (false, nil)", v, err)
+	}
+	close(release)
+	if !<-stale {
+		t.Fatal("the pre-eviction caller must still get its own answer")
+	}
+	if v, ok := c.get(key); !ok || v {
+		t.Fatalf("the pre-eviction answer must not replace the newer one, got (%v, %v)", v, ok)
+	}
+}
+
+// The caller that started a flight hanging up (a socket closing mid-subscribe)
+// must not fail the callers that joined it: a failed lookup is a denial, and
+// on the revoker's path a revocation.
+func TestFill_LeaderLeavingDoesNotFailTheFlight(t *testing.T) {
+	c := newBoundedTTLCache[int64, bool](time.Minute, 8)
+	entered, release := make(chan struct{}), make(chan struct{})
+	fetch := func(ctx context.Context) (bool, bool, error) {
+		close(entered)
+		select {
+		case <-release:
+			return true, true, nil
+		case <-ctx.Done():
+			return false, false, ctx.Err()
+		}
+	}
+
+	leaderCtx, leave := context.WithCancel(context.Background())
+	leader := make(chan error)
+	go func() {
+		_, _, err := c.fill(leaderCtx, 7, fetch)
+		leader <- err
+	}()
+	<-entered
+	joined := make(chan error)
+	go func() {
+		v, _, err := c.fill(context.Background(), 7, fetch)
+		if err == nil && !v {
+			err = errors.New("got false")
+		}
+		joined <- err
+	}()
+	time.Sleep(50 * time.Millisecond) // let the second caller join the flight
+
+	leave()
+	if err := <-leader; !errors.Is(err, context.Canceled) {
+		t.Fatalf("the departed caller must get its own cancellation, got %v", err)
+	}
+	close(release)
+	if err := <-joined; err != nil {
+		t.Fatalf("the joined caller must still get the answer, got %v", err)
 	}
 }

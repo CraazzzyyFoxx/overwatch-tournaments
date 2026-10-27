@@ -292,6 +292,9 @@ class AnalyticsFlowsService:
             logger.warning("No analytics data found for tournament {}", tournament_id)
             return []
 
+        # Points and Linear are CPU over the workspace's whole history (~0.3 ms a row, a minute at ~170k rows): end the
+        # read transaction first, or pgBouncer's 60 s idle-in-transaction timeout kills it. Nothing is written yet.
+        await session.commit()
         df = compute_points_shifts(df)
         df = compute_linear_metrics(df, shift_scale=settings.linear_shift_scale)
 

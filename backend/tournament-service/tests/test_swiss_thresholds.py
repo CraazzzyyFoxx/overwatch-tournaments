@@ -20,6 +20,7 @@ sys.path.insert(0, str(backend_root))
 sys.path.insert(0, str(backend_root / "tournament-service"))
 
 stage_service = importlib.import_module("src.services.admin.stage")
+stage_generation = importlib.import_module("src.services.admin.stage.generation")
 standings = importlib.import_module("src.services.standings.service")
 enums = importlib.import_module("shared.core.enums")
 models = importlib.import_module("shared.models")
@@ -34,11 +35,11 @@ class GenerationTests(IsolatedAsyncioTestCase):
     def setUp(self) -> None:
         self.recorded_bye = AsyncMock()
         patches = (
-            patch.object(stage_service, "record_swiss_bye", self.recorded_bye),
-            patch.object(stage_service, "clear_swiss_byes", AsyncMock()),
-            patch.object(stage_service, "clear_swiss_scope_stopped", AsyncMock()),
-            patch.object(stage_service, "mark_swiss_scope_stopped", AsyncMock()),
-            patch.object(stage_service, "swiss_bye_team_ids", AsyncMock(return_value=[])),
+            patch.object(stage_generation, "record_swiss_bye", self.recorded_bye),
+            patch.object(stage_generation, "clear_swiss_byes", AsyncMock()),
+            patch.object(stage_generation, "clear_swiss_scope_stopped", AsyncMock()),
+            patch.object(stage_generation, "mark_swiss_scope_stopped", AsyncMock()),
+            patch.object(stage_generation, "swiss_bye_team_ids", AsyncMock(return_value=[])),
         )
         for patcher in patches:
             patcher.start()

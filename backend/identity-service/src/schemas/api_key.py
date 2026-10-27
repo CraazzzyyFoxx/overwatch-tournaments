@@ -7,7 +7,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from shared.core import pagination
-from shared.schemas.quota import QuotaLimitsPayload
+from shared.schemas.quota import QuotaLimitsWrite
 
 __all__ = (
     "ApiKeyCreate",
@@ -46,7 +46,7 @@ class ApiKeyQuotaWrite(BaseModel):
     putting the key back on whatever its workspace and plan hand down.
     """
 
-    limits: QuotaLimitsPayload
+    limits: QuotaLimitsWrite
 
 
 class ApiKeyRead(BaseModel):

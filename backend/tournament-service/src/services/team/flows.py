@@ -1,3 +1,5 @@
+import typing
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
@@ -14,6 +16,9 @@ from src.services.user.flows import flows_service as user_flows_service
 from src.services.user.flows import user_to_read
 
 from .service import TeamService, team_service
+
+#: The entities ``to_pydantic`` honours: all a cached read's key keeps of the client's list (``canonical_entities``).
+READ_ENTITIES = frozenset({"tournament", "players", "captain", "placement", "group"})
 
 
 def resolve_team_placement(team: models.Team) -> int | None:
@@ -202,12 +207,25 @@ class TeamFlowsService:
         """Return the player by id, or None."""
         return await self.teams.get_player(session, player_id, entities)
 
-    # `v2` key version: Redis keeps values across a deploy and cashews returns them unvalidated, so a
-    # `TeamRead` shape change must bump it.
+    async def to_pydantic_many(
+        self, session: AsyncSession, teams: typing.Iterable[models.Team], entities: list[str]
+    ) -> list[schemas.TeamRead]:
+        """``to_pydantic`` for each team, resolving the division grid once per tournament rather than once per team
+        (one SQL statement and two Redis round trips each)."""
+        grids: dict[int, DivisionGrid] = {}
+        reads = []
+        for team in teams:
+            if "players" in entities and team.tournament_id not in grids:
+                grids[team.tournament_id] = await get_division_grid(session, None, tournament_id=team.tournament_id)
+            reads.append(await self.to_pydantic(session, team, entities, grid=grids.get(team.tournament_id)))
+        return reads
+
+    # Values are the dumped wire dict (``v3``), not a pickled ``Paginated[TeamRead]``: Redis keeps values across a
+    # deploy and cashews returns them unvalidated, so a wire change must bump the version.
     @versioned(
         generations=tournament_generations("{params.tournament_id}", TEAMS),
         ttl=config.settings.teams_cache_ttl,
-        key="teams:v2:{workspace_id}:{params.tournament_id}:{params.page}:{params.per_page}:{params.sort}:{params.order}:{params.entities}:{params.search}:{params.discipline}",
+        key="teams:v3:{workspace_id}:{params.tournament_id}:{params.page}:{params.per_page}:{params.sort}:{params.order}:{params.entities}:{params.search}:{params.discipline}:{params.only_count}",
         prefix="fastapi:",
     )
     async def get_all(
@@ -215,29 +233,17 @@ class TeamFlowsService:
         session: AsyncSession,
         params: schemas.TeamFilterParams,
         workspace_id: int | None = None,
-    ) -> pagination.Paginated[schemas.TeamRead]:
-        """Return a page of teams as ``TeamRead``, optionally scoped to one workspace."""
-        if params.tournament_id:
-            await tournament_flows_service.get(session, params.tournament_id, [])
-
+    ) -> dict[str, typing.Any]:
+        """A page of teams as ``Paginated[TeamRead]``'s wire dict (``exclude_none``), optionally scoped to one
+        workspace. A ``tournament_id`` is the caller's to gate: this neither loads nor 404s it. ``params.entities``
+        is the key's too: pass them through ``canonical_entities(..., READ_ENTITIES)``."""
         results, total = await self.teams.get_all(session, params, workspace_id=workspace_id)
-        grids = {}
-        results_pydantic = []
-        for result in results:
-            grid = None
-            if "players" in params.entities:
-                t_id = result.tournament_id
-                if t_id not in grids:
-                    grids[t_id] = await get_division_grid(session, None, tournament_id=t_id)
-                grid = grids[t_id]
-            results_pydantic.append(await self.to_pydantic(session, result, entities=params.entities, grid=grid))
-
         return pagination.Paginated(
-            results=results_pydantic,
+            results=await self.to_pydantic_many(session, results, params.entities),
             total=total,
             per_page=params.per_page,
             page=params.page,
-        )
+        ).model_dump(mode="json", exclude_none=True)
 
 
 flows_service = TeamFlowsService()

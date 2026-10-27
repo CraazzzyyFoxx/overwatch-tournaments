@@ -29,7 +29,8 @@ import { buildColumnLayout } from "@/components/data-table/column-layout";
 import { renderBodyItem, type RowHandlers, type SharedRowProps } from "@/components/data-table/body-rows";
 import { AdminRowContextMenu } from "@/components/data-table/AdminRowContextMenu";
 import { AdminTableHeader } from "@/components/data-table/AdminTableHeader";
-import { AdminTableToolbar, type PickerColumn } from "@/components/data-table/AdminTableToolbar";
+import { AdminTableToolbar, useNarrowToolbar, type PickerColumn } from "@/components/data-table/AdminTableToolbar";
+import { BulkBar } from "@/components/data-table/BulkBar";
 import { AdminTableEmptyState } from "@/components/data-table/AdminTableEmptyState";
 import { AdminTableMobileList } from "@/components/data-table/AdminTableMobileList";
 import { useAdminTableState } from "@/components/data-table/useAdminTableState";
@@ -86,7 +87,7 @@ export function DataTable<TData>({
   emptyMessage,
   onRowClick,
   onRowDoubleClick,
-  actions,
+  commands,
   initialPageSize = 15,
   pageSizeOptions = DEFAULT_PAGE_SIZE_OPTIONS,
   filterKey,
@@ -98,11 +99,13 @@ export function DataTable<TData>({
   bulkActions,
   renderExpanded,
   groupRows,
+  groupBy,
   columnsStorageKey,
   paging = "pages",
   rowUnit = "rows",
   cellAlign = "middle",
   toolbar,
+  summary,
   inspectorId,
   onPageRowsChange,
   renderMobileCard,
@@ -153,6 +156,7 @@ export function DataTable<TData>({
   const { density, setDensity, columnSizing, setColumnSizing, columnOrder, setColumnOrder } =
     useTablePreferences(prefsKey, columns);
   const { scrollElement, tableRef, cardRef } = useTableScrollBox();
+  const [toolbarRef, narrowToolbar] = useNarrowToolbar();
 
   const { data, clientRows, isInitialLoading, isRefreshing } = useAdminTableData({
     queryKey,
@@ -403,9 +407,7 @@ export function DataTable<TData>({
 
   /**
    * The built-in search box stays unless a `toolbar` was handed in without a
-   * `searchPlaceholder` — that is the screen saying "my filter bar owns the
-   * search". Passing both keeps the table's own box, for a toolbar that is
-   * only chips.
+   * `searchPlaceholder`: that is a screen whose server does not search.
    */
   const showSearch = searchPlaceholder !== undefined || toolbar === undefined;
   const searchLabel = searchPlaceholder ?? t("search");
@@ -421,6 +423,7 @@ export function DataTable<TData>({
   );
 
   const offPageSelected = selectedData.length - selectedOnPage;
+  const clearSelection = () => setRowSelection({});
 
   return (
     <Card
@@ -432,30 +435,33 @@ export function DataTable<TData>({
       )}
     >
       <AdminTableToolbar
-        compact={isMobile}
+        ref={toolbarRef}
+        narrow={narrowToolbar}
         showSearch={showSearch}
         searchInputId={searchInputId}
         searchLabel={searchLabel}
         searchValue={searchValue}
         onSearchChange={setSearchValue}
-        toolbar={toolbar}
+        filters={toolbar}
         isRefreshing={isRefreshing}
-        bulkActions={bulkActions && selectedData.length > 0 ? bulkActions(selectedData, () => setRowSelection({})) : null}
-        offPageSelected={offPageSelected}
-        selectedCount={selectedData.length}
-        onExportCsv={exportCsv}
-        canExport={pageRows.length > 0}
-        density={density}
-        onToggleDensity={() => setDensity(density === "compact" ? "comfortable" : "compact")}
-        prefsKey={prefsKey}
-        visibility={visibility}
-        onVisibilityChange={setVisibility}
-        // A phone's cards are built from the first visible columns, so the picker stays there only
-        // while no `renderMobileCard` replaces them.
-        pickerColumns={columnsStorageKey && !(isMobile && renderMobileCard) ? pickerColumns : undefined}
-        onToggleColumn={toggleColumn}
-        onResetColumns={resetToDefaults}
-        actions={actions}
+        commands={(commands ?? []).filter((command) => !command.hidden)}
+        view={{
+          selectedCount: selectedData.length,
+          onExportCsv: exportCsv,
+          canExport: pageRows.length > 0,
+          // Cards have no row density.
+          density: isMobile ? undefined : density,
+          onToggleDensity: () => setDensity(density === "compact" ? "comfortable" : "compact"),
+          prefsKey,
+          visibility,
+          onVisibilityChange: setVisibility,
+          // A phone's cards are built from the first visible columns, so the picker stays there only
+          // while no `renderMobileCard` replaces them.
+          pickerColumns: columnsStorageKey && !(isMobile && renderMobileCard) ? pickerColumns : undefined,
+          onToggleColumn: toggleColumn,
+          onResetColumns: resetToDefaults,
+          groupBy
+        }}
       />
 
       {/* ── TABLE ───────────────────────────────────────── */}
@@ -554,7 +560,7 @@ export function DataTable<TData>({
         )}
       </div>
 
-      {safeTotal > 0 && !isInfinite && !showAll && (
+      {safeTotal > 0 && !isInfinite && !showAll ? (
         <DataPagination
           page={currentPage}
           totalPages={totalPageCount}
@@ -563,7 +569,7 @@ export function DataTable<TData>({
           // One page: the count and the page size stay (a larger page is how a
           // reader gets back a split list); only the pager goes.
           leading={
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
               <span className="tabular-nums">{tTable("range", { start: rangeStart, end: rangeEnd, total: safeTotal })}</span>
               <div className="flex items-center gap-1.5">
                 <span>{tTable("rows")}</span>
@@ -586,10 +592,19 @@ export function DataTable<TData>({
                   </SelectContent>
                 </Select>
               </div>
+              {summary ? <span>{summary}</span> : null}
             </div>
           }
         />
-      )}
+      ) : summary ? (
+        <div className="border-t border-border/40 px-4 py-2 text-label text-[color:var(--aqt-fg-dim)]">{summary}</div>
+      ) : null}
+
+      {bulkActions && selectedData.length > 0 ? (
+        <BulkBar count={selectedData.length} offPage={offPageSelected} onClear={clearSelection}>
+          {bulkActions(selectedData, clearSelection)}
+        </BulkBar>
+      ) : null}
     </Card>
   );
 }

@@ -51,7 +51,6 @@ const board = (patch: Partial<DraftBoard> & { shape: RosterShape }): DraftBoard 
   picks: [],
   players: [],
   current_pick: null,
-  server_time: "2026-09-23T00:00:00Z",
   last_event_id: null,
   ...patch
 });

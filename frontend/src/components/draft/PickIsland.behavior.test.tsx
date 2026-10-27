@@ -143,7 +143,6 @@ function board(players: DraftPlayer[], sessionPatch: Partial<DraftBoard["session
     picks: [CURRENT, { ...CURRENT, id: 12, overall_no: 2, pick_in_round: 2, draft_team_id: 2, status: "upcoming" }],
     players,
     current_pick: CURRENT,
-    server_time: "2026-09-23T00:00:00Z",
     last_event_id: null
   };
 }

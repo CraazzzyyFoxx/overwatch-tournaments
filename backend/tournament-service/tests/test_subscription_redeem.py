@@ -19,6 +19,9 @@ from unittest import IsolatedAsyncioTestCase
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from fakeredis import FakeServer  # noqa: E402
+from fakeredis.aioredis import FakeRedis  # noqa: E402
+
 from shared.core.errors import BaseAPIException as HTTPException  # noqa: E402
 from shared.services.subscriptions import SubscriptionSource, SubscriptionState, VerificationMethod  # noqa: E402
 from shared.services.subscriptions.challenge_code import hash_code  # noqa: E402
@@ -281,24 +284,10 @@ class TestVerificationMethodGatesRedemption(IsolatedAsyncioTestCase):
         assert [item["code"] for item in caught.exception.detail] == ["subscription_code_rejected"]
 
 
-class _Counter:
-    """The two Redis calls the limiter makes."""
-
-    def __init__(self):
-        self.count = 0
-
-    async def incr(self, key):
-        self.count += 1
-        return self.count
-
-    async def expire(self, key, seconds):
-        return True
-
-
 class TestRedeemRateLimit(IsolatedAsyncioTestCase):
     async def test_the_attempt_past_the_limit_is_refused_with_a_code(self):
         """The client translates the code; a bare sentence left English users reading Russian."""
-        redis = _Counter()
+        redis = FakeRedis(server=FakeServer(), decode_responses=True)
         for _ in range(REDEEM_ATTEMPT_LIMIT):
             await assert_redeem_attempt_allowed(workspace_id=WS, auth_user_id=USER, redis=redis)
         with self.assertRaises(HTTPException) as caught:

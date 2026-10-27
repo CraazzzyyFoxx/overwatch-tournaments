@@ -158,16 +158,19 @@ def test_callback_state_nonce_is_single_use(monkeypatch: pytest.MonkeyPatch) -> 
     assert exc_info.value.detail == "OAuth state has already been used"
 
 
-def test_callback_state_nonce_check_fails_open_when_redis_is_down(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Deliberate asymmetry: the nonce claim fails OPEN. Locking every OAuth
-    login out during a Redis outage is worse than accepting a replay window
-    already capped by the state's own short expiry."""
+def test_callback_state_nonce_check_fails_closed_when_redis_is_down(monkeypatch: pytest.MonkeyPatch) -> None:
+    """With Redis down a state cannot be proven unused: 503 ``unavailable``,
+    and the code is never exchanged (no replay window at all)."""
     _use_redis(monkeypatch, _DownRedisClient())
-    _install_fake_callback(monkeypatch, _fake_auth_user())
+    handle_callback_mock = _install_fake_callback(monkeypatch, _fake_auth_user())
 
     state = _login_state(origin="https://owt.craazzzyyfoxx.me")
 
-    assert _run_callback(state).mode == "cookie"
+    with pytest.raises(HTTPException) as exc_info:
+        _run_callback(state)
+
+    assert exc_info.value.status_code == 503
+    handle_callback_mock.assert_not_awaited()
 
 
 # ─── callback: ticket ISSUANCE ──────────────────────────────────────────────

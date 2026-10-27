@@ -19,20 +19,13 @@ import {
 } from "@/components/balancer/registrations/_components/registrationGrouping";
 import { useRegistrationFilters } from "@/components/balancer/registrations/_hooks/useRegistrationFilters";
 import { useRegistrationMutations } from "@/components/balancer/registrations/_hooks/useRegistrationMutations";
-import { DataTable, type DataTableGroup, createKebabColumn } from "@/components/data-table";
+import { DataTable, type DataTableGroup, type TableCommand, createKebabColumn } from "@/components/data-table";
 import { useAuditTrail } from "@/components/kit/AuditTrailSheet";
 import { FilterBar } from "@/components/kit/FilterBar";
 import { Inspector } from "@/components/kit/Inspector";
 import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from "@/components/ui/select";
 import { useQueryParams } from "@/hooks/useQueryParams";
 import { usePermissions } from "@/hooks/usePermissions";
 import { mergeStatusOptions } from "@/lib/registration/balancer-statuses";
@@ -304,6 +297,16 @@ export default function RegistrationsTable({
     ? (registrations.find((registration) => String(registration.id) === openId) ?? null)
     : null;
 
+  const commands: TableCommand[] = [
+    {
+      id: "create",
+      label: t("registrationsAdmin.table.create"),
+      icon: UserPlus,
+      onSelect: () => setCreateOpen(true),
+      hidden: !canAccessPermission("registration.create", workspaceId)
+    }
+  ];
+
   if (!tournamentId) {
     return (
       <Alert>
@@ -341,7 +344,44 @@ export default function RegistrationsTable({
           inspectorId={openId}
           onRowClick={(row) => setParams({ id: String(row.original.id) })}
           groupRows={groupBy === "none" ? undefined : groupPageRows}
-          toolbar={<FilterBar defs={filterDefs} filters={filters} />}
+          toolbar={
+            <FilterBar
+              defs={filterDefs}
+              filters={filters}
+              extraFilters={
+                pendingCount > 0 ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0 gap-1.5 text-warning"
+                    aria-pressed={isPendingFilterOn}
+                    onClick={() => filters.set("status", isPendingFilterOn ? [] : ["pending"])}
+                    title={
+                      isPendingFilterOn
+                        ? t("registrationsAdmin.table.clearPending")
+                        : t("registrationsAdmin.table.showPending", { count: pendingCount })
+                    }
+                  >
+                    <Clock className="h-3.5 w-3.5" aria-hidden />
+                    {t("registrationsAdmin.table.pending", { count: pendingCount })}
+                  </Button>
+                ) : null
+              }
+            />
+          }
+          groupBy={{
+            label: t("registrationsAdmin.table.groupAria"),
+            value: groupBy,
+            options: [
+              { value: "none", label: t("registrationsAdmin.table.noGrouping") },
+              { value: "check_in", label: t("registrationsAdmin.table.groupCheckIn") },
+              { value: "balancer_status", label: t("registrationsAdmin.table.groupBalancer") },
+              { value: "admission", label: t("registrationsAdmin.table.groupAdmission") }
+            ],
+            onChange: (value) => setGroupBy(value as RegistrationGroupingMode)
+          }}
+          summary={t("registrationsAdmin.table.registrationCount", { count: registrations.length })}
+          commands={commands}
           bulkActions={(selected, clearSelection) => (
             <RegistrationBulkActions
               selected={selected}
@@ -352,65 +392,6 @@ export default function RegistrationsTable({
               addToBalancerPending={bulkAddToBalancerMutation.isPending}
             />
           )}
-          actions={
-            <>
-              <span
-                className="shrink-0 text-xs tabular-nums text-muted-foreground"
-                title={t("registrationsAdmin.table.registrationCount", {
-                  count: registrations.length
-                })}
-              >
-                {registrations.length}
-              </span>
-              {pendingCount > 0 ? (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="shrink-0 gap-1.5 text-warning"
-                  aria-pressed={isPendingFilterOn}
-                  onClick={() => filters.set("status", isPendingFilterOn ? [] : ["pending"])}
-                  title={
-                    isPendingFilterOn
-                      ? t("registrationsAdmin.table.clearPending")
-                      : t("registrationsAdmin.table.showPending", { count: pendingCount })
-                  }
-                >
-                  <Clock className="h-3.5 w-3.5" aria-hidden />
-                  {t("registrationsAdmin.table.pending", { count: pendingCount })}
-                </Button>
-              ) : null}
-              <Select
-                value={groupBy}
-                onValueChange={(value) => setGroupBy(value as RegistrationGroupingMode)}
-              >
-                <SelectTrigger
-                  size="sm"
-                  className="w-[160px]"
-                  aria-label={t("registrationsAdmin.table.groupAria")}
-                >
-                  <SelectValue placeholder={t("registrationsAdmin.table.groupBy")} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">{t("registrationsAdmin.table.noGrouping")}</SelectItem>
-                  <SelectItem value="check_in">
-                    {t("registrationsAdmin.table.groupCheckIn")}
-                  </SelectItem>
-                  <SelectItem value="balancer_status">
-                    {t("registrationsAdmin.table.groupBalancer")}
-                  </SelectItem>
-                  <SelectItem value="admission">
-                    {t("registrationsAdmin.table.groupAdmission")}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-              {canAccessPermission("registration.create", workspaceId) && (
-                <Button variant="outline" size="sm" onClick={() => setCreateOpen(true)}>
-                  <UserPlus className="mr-2 h-4 w-4" aria-hidden />
-                  {t("registrationsAdmin.table.create")}
-                </Button>
-              )}
-            </>
-          }
         />
       </div>
 

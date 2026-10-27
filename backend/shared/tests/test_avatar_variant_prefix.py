@@ -1,10 +1,10 @@
 """Pin the ``variant`` sub-prefix in the avatar key layout.
 
-``upload_avatar`` clears an entity's whole prefix before writing, so an entity
-carrying MORE THAN ONE image (a tournament's cover and its logo) needs the two
-images in separate sub-prefixes -- otherwise uploading one deletes the other.
-That is the bug ``variant`` exists to prevent, and the reason a delete must be
-scoped to its own variant.
+The cleanup after an upload clears an entity's whole prefix except the new key,
+so an entity carrying MORE THAN ONE image (a tournament's cover and its logo)
+needs the two images in separate sub-prefixes -- otherwise uploading one
+deletes the other. That is the bug ``variant`` exists to prevent, and the reason
+the cleanup and a delete must be scoped to their own variant.
 
 The ``variant=None`` cases are just as load-bearing: every pre-existing caller
 (user, workspace, player, team, registration-team avatars) passes no variant,
@@ -45,7 +45,7 @@ class TestAvatarPrefix(IsolatedAsyncioTestCase):
         self.assertEqual("avatars/teams/5/", avatar_prefix("teams", 5))
         self.assertEqual("avatars/teams/5/", avatar_prefix("teams", 5, None))
 
-    async def test_upload_writes_and_clears_only_its_own_variant(self):
+    async def test_upload_writes_only_under_its_own_variant(self):
         s3 = _s3()
 
         result = await upload_avatar(
@@ -60,8 +60,6 @@ class TestAvatarPrefix(IsolatedAsyncioTestCase):
         self.assertTrue(result.success)
         self.assertTrue(result.key.startswith("avatars/tournaments/7/cover/"))
         self.assertTrue(result.key.endswith(".png"))
-        # The sibling variant's prefix is NOT touched -- this is the whole point.
-        s3.delete_prefix.assert_awaited_once_with("avatars/tournaments/7/cover/")
 
     async def test_upload_without_variant_keeps_the_flat_key(self):
         s3 = _s3()
@@ -70,11 +68,12 @@ class TestAvatarPrefix(IsolatedAsyncioTestCase):
 
         self.assertTrue(result.key.startswith("avatars/teams/5/"))
         self.assertNotIn("None", result.key)
-        s3.delete_prefix.assert_awaited_once_with("avatars/teams/5/")
+        self.assertEqual("avatars/teams/5/", result.key.rsplit("/", 1)[0] + "/")
 
-    async def test_delete_is_scoped_to_the_variant(self):
+    async def test_cleanup_is_scoped_to_the_variant(self):
         s3 = _s3()
 
-        await delete_old_avatar(s3, entity_type="tournaments", entity_id=7, variant="logo")
+        await delete_old_avatar(s3, entity_type="tournaments", entity_id=7, variant="logo", keep="k")
 
-        s3.delete_prefix.assert_awaited_once_with("avatars/tournaments/7/logo/")
+        # The sibling variant's prefix is NOT touched -- this is the whole point.
+        s3.delete_prefix.assert_awaited_once_with("avatars/tournaments/7/logo/", keep="k")

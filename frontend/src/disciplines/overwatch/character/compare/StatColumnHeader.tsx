@@ -6,7 +6,8 @@ import { useTranslations } from "next-intl";
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
@@ -90,15 +91,13 @@ const StatColumnHeader = ({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="center" className="max-h-[340px] w-52 overflow-y-auto">
-            {options.map((opt) => (
-              <DropdownMenuItem
-                key={opt.key}
-                onSelect={() => onSelect(opt.key)}
-                className={cn("cursor-pointer", opt.key === def.key && "bg-[color:var(--aqt-overlay-3)] font-semibold")}
-              >
-                {t(opt.labelKey)}
-              </DropdownMenuItem>
-            ))}
+            <DropdownMenuRadioGroup value={def.key} onValueChange={onSelect}>
+              {options.map((opt) => (
+                <DropdownMenuRadioItem key={opt.key} value={opt.key} className="cursor-pointer">
+                  {t(opt.labelKey)}
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

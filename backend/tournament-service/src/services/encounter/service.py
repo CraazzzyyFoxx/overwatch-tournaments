@@ -711,6 +711,29 @@ class EncounterService:
             "live": live,
         }
 
+    async def get_my_team_count(
+        self,
+        session: AsyncSession,
+        params: schemas.EncounterSearchParams,
+        *,
+        workspace_id: int | None = None,
+        viewer_auth_user_id: int,
+    ) -> int:
+        """The overview's ``my_team`` count alone -- the one count that depends on the viewer whatever the scope --
+        so the rest of the overview can be cached without one. The same clauses as its ``FILTER`` there."""
+        toggles = _toggle_clauses(params, viewer_auth_user_id)
+        toggles.pop("scope", None)
+        query = _apply_encounter_filters(
+            sa.select(sa.func.count()).select_from(models.Encounter),
+            _without_status_and_toggles(params),
+            workspace_id=workspace_id,
+        ).where(
+            _status_predicate(params.status, datetime.now(UTC)) if params.status else sa.true(),
+            *toggles.values(),
+            _my_team_condition(viewer_auth_user_id),
+        )
+        return int(await session.scalar(query) or 0)
+
     async def get_insights_data(
         self,
         session: AsyncSession,

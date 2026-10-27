@@ -63,7 +63,6 @@ function MissTargetPicker({
       searchPlaceholder={t("catalog.search")}
       isLoading={targets.isLoading}
       disabled={targets.isLoading || disabled}
-      variant="default"
       size="default"
     />
   );

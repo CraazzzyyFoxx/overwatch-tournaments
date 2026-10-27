@@ -483,7 +483,7 @@ WORKSPACE_MEMBER_CHANGED_QUEUE = RabbitQueue(
     arguments={
         "x-dead-letter-exchange": "dlx",
         "x-dead-letter-routing-key": "workspace_member_changed.dlq",
-        "x-message-ttl": 120000,  # 2 minutes: the cache entry it drops lives 60 s anyway
+        "x-message-ttl": 120000,  # 2 min; a drop that expires unread is covered by identity's startup RBAC flush
     },
 )
 

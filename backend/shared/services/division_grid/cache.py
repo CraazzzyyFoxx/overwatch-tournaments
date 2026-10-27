@@ -6,6 +6,10 @@ from dataclasses import asdict, dataclass
 from typing import Any
 
 from cashews import cache
+from sqlalchemy import event
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
+from sqlalchemy.util.concurrency import await_only
 
 from shared.division_grid import DivisionGrid, DivisionTier
 from shared.services.cache_generations import bump, current
@@ -416,3 +420,34 @@ async def invalidate_mapping(source_version_id: int, target_version_id: int) -> 
             target_version_id,
             exc,
         )
+
+
+_AFTER_COMMIT_KEY = "division_grid_cache_after_commit"
+
+
+def invalidate_after_commit(
+    session: AsyncSession | Session, invalidation: Callable[..., Awaitable[None]], *args: int
+) -> None:
+    """Run ``invalidation(*args)`` (one of the ``invalidate_*`` above) once ``session``'s transaction commits.
+
+    Write paths invalidate through this, never inside their transaction: a reader in between would re-cache the
+    pre-commit row under the fresh key or generation, for the whole TTL. A stage a rollback leaves behind costs one
+    spare invalidation at the session's next commit.
+    """
+    session.info.setdefault(_AFTER_COMMIT_KEY, {})[invalidation, args] = None
+
+
+@event.listens_for(Session, "after_commit")
+def _invalidate_committed(session: Session) -> None:
+    if session.in_nested_transaction():
+        return  # releasing a SAVEPOINT is not a commit
+    staged = session.info.pop(_AFTER_COMMIT_KEY, None)
+    if staged:
+        # An AsyncSession commit runs in SQLAlchemy's greenlet: the caller's ``await commit()`` returns only once the
+        # stale entries are unreachable, so not even its own reply can race them.
+        await_only(_run_staged(staged))
+
+
+async def _run_staged(staged: dict[tuple[Callable[..., Awaitable[None]], tuple[int, ...]], None]) -> None:
+    for invalidation, args in staged:
+        await invalidation(*args)

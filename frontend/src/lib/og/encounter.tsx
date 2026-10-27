@@ -21,32 +21,7 @@ import encounterService from "@/services/encounter.service";
 import type { Encounter } from "@/types/encounter.types";
 import type { Player, Team } from "@/types/team.types";
 
-export const OG_SIZE = { width: 1200, height: 630 };
-
-/**
- * Satori rasterizes outside the browser: it cannot read `woff2`, and the font
- * bundled with `next/og` carries no Cyrillic, so half of every roster would
- * come out as tofu. These are static instances of the same vendored Onest the
- * site itself loads (see `src/app/fonts/README.md`). `next.config.mjs` traces
- * them into the standalone output, where `process.cwd()` is the app root.
- */
-const FONT_DIR = join(process.cwd(), "src", "app", "fonts");
-
-let fontsPromise: Promise<
-  { name: string; data: Buffer; weight: 400 | 700; style: "normal" }[]
-> | null = null;
-
-function loadFonts() {
-  // Read once per process: the files never change under a running server.
-  fontsPromise ??= Promise.all([
-    readFile(join(FONT_DIR, "onest-400.ttf")),
-    readFile(join(FONT_DIR, "onest-700.ttf"))
-  ]).then(([regular, bold]) => [
-    { name: "Onest", data: regular, weight: 400 as const, style: "normal" as const },
-    { name: "Onest", data: bold, weight: 700 as const, style: "normal" as const }
-  ]);
-  return fontsPromise;
-}
+import { ACCENT, BG, FAINT, FG, LINE, MUTED, OG_SIZE, loadOgFonts } from "./base";
 
 /**
  * Rank crests, inlined. `getDivisionIconSrc` hands back a site-relative path
@@ -92,16 +67,6 @@ async function resolveCrests(grid: DivisionGridLike, teams: (Team | null)[]) {
   );
   return resolved;
 }
-
-// Every colour below is a literal hex on purpose: Satori cannot resolve the
-// `--aqt-*` custom properties, so the dark theme is mirrored by hand — the same
-// trade the player card (`users/[slug]/opengraph-image.tsx`) makes.
-const BG = "linear-gradient(135deg, #0b1120 0%, #111a2e 100%)";
-const FG = "#e8eef7";
-const MUTED = "#8aa0bd";
-const FAINT = "#6b7f9c";
-const LINE = "#1f2b45";
-const ACCENT = "#2dd4bf";
 
 /** Satori has no CSS masks. Tint the white module SVG bytes at this server-only boundary. */
 async function resolveRoleArtwork(ontology: RoleOntology | null): Promise<Map<number, string>> {
@@ -345,7 +310,7 @@ function Shell({ children }: { children: React.ReactNode }) {
  * falls back to a branded card rather than a broken image.
  */
 export async function renderEncounterOg(encounterId: number) {
-  const options = { ...OG_SIZE, fonts: await loadFonts() };
+  const options = { ...OG_SIZE, fonts: await loadOgFonts() };
 
   let encounter: Encounter;
   try {

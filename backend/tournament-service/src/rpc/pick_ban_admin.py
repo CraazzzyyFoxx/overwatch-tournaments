@@ -28,13 +28,13 @@ from shared.core.enums import (
 )
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.domain import pick_ban_rules as pbr
-from shared.repository import EncounterRepository
 from shared.rpc.identity import ensure_workspace_permission
 from shared.services.audit import record_admin_audit
 from src.core import auth
 from src.rpc import admin_misc
 from src.rpc._helpers import _actor_player_id, _dump, _identity, _path_int, _payload, _q1, _require_id, _run
 from src.schemas import captain as captain_schemas
+from src.services.admin.encounter import encounter_service as admin_encounter_service
 from src.services.bracket.usability import assert_encounter_live
 from src.services.encounter import pick_ban_action as pick_ban_action
 from src.services.encounter import pick_ban_config, room_control, room_journal
@@ -60,7 +60,7 @@ async def _load_encounter(session: Any, encounter_id: int) -> models.Encounter:
     the identity map would otherwise be served at the version this session first
     saw, defeating the lock.
     """
-    encounter = await EncounterRepository().get_for_update(session, encounter_id)
+    encounter = await admin_encounter_service.get_encounter(session, encounter_id, for_update=True)
     if encounter is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Encounter not found")
     return encounter

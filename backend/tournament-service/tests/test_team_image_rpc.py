@@ -8,7 +8,7 @@ Three things can only go wrong in the seam between ``upload_avatar`` and
 2. a *rejected* upload (bad magic bytes, oversized file) must 400 and write
    nothing — a team whose ``image_url`` was set from a failed ``UploadResult``
    would point at an object that never existed;
-3. delete must remove the S3 objects **before** clearing the column, so a failed
+3. delete must clear the column **before** removing the S3 objects, so a failed
    DB write can only ever leave a URL pointing at bytes that still exist.
 
 ``set_team_image`` itself is exercised directly (it must enqueue the
@@ -71,15 +71,15 @@ IDENTITY_NO_PERMISSION = {
 
 
 class _FakeS3:
-    """Records ``delete_prefix`` calls into a shared ordered trace."""
+    """Records ``delete_prefix`` calls (and what they spare) into a shared ordered trace."""
 
     def __init__(self, trace: list[str]) -> None:
         self._trace = trace
         self.deleted_prefixes: list[str] = []
 
-    async def delete_prefix(self, prefix: str) -> int:
+    async def delete_prefix(self, prefix: str, *, keep: str | None = None) -> int:
         self.deleted_prefixes.append(prefix)
-        self._trace.append(f"s3.delete_prefix:{prefix}")
+        self._trace.append(f"s3.delete_prefix:{prefix}" + (f" keep={keep}" if keep else ""))
         return 1
 
 
@@ -173,8 +173,13 @@ class TeamImageSubjects(IsolatedAsyncioTestCase):
         self.trace: list[str] = []
         self.s3 = _FakeS3(self.trace)
         self.set_image_calls: list[tuple[int, str | None]] = []
+        #: Overridable so a test can make the row write fail.
+        self.set_image_error: Exception | None = None
         #: Whatever the handler staged on the session -- the audit row.
         self.staged: list = []
+
+    async def _commit(self) -> None:
+        self.trace.append("commit")
 
     async def _invoke(self, subject: str, data: dict, *, upload_result: object | None = None) -> dict:
         broker = CapturingBroker()
@@ -197,6 +202,8 @@ class TeamImageSubjects(IsolatedAsyncioTestCase):
         async def fake_set_team_image(_session, team_id, image_url):
             self.set_image_calls.append((team_id, image_url))
             self.trace.append(f"set_team_image:{image_url}")
+            if self.set_image_error is not None:
+                raise self.set_image_error
             return SimpleNamespace(id=team_id, image_url=image_url)
 
         async def fake_to_pydantic(_session, team, entities):
@@ -204,7 +211,11 @@ class TeamImageSubjects(IsolatedAsyncioTestCase):
             return _team_read(team.image_url)
 
         with (
-            patch.object(helpers.db, "async_session_maker", FakeSessionMaker(SimpleNamespace(add=self.staged.append))),
+            patch.object(
+                helpers.db,
+                "async_session_maker",
+                FakeSessionMaker(SimpleNamespace(add=self.staged.append, commit=self._commit)),
+            ),
             patch.object(team_binary, "get_s3", fake_get_s3),
             patch.object(team_binary, "upload_avatar", fake_upload_avatar),
             patch.object(team_binary.auth, "get_team_workspace_id", fake_workspace_id),
@@ -266,7 +277,7 @@ class TeamImageSubjects(IsolatedAsyncioTestCase):
         self.assertEqual("File type not allowed", envelope["error"]["message"])
         self.assertEqual([], self.set_image_calls, "a failed upload must not touch the team")
 
-    async def test_delete_removes_objects_before_clearing_the_column(self):
+    async def test_delete_clears_the_column_before_removing_objects(self):
         envelope = await self._invoke(
             "rpc.tournament.teams.image_delete",
             {"id": TEAM_ID, "identity": IDENTITY},
@@ -277,9 +288,40 @@ class TeamImageSubjects(IsolatedAsyncioTestCase):
         self.assertIsNone(envelope["data"]["image_url"])
         self.assertEqual([f"avatars/teams/{TEAM_ID}/"], self.s3.deleted_prefixes)
         self.assertEqual([(TEAM_ID, None)], self.set_image_calls)
-        # Order is the whole point: bytes go first, so a failed DB write cannot
-        # leave image_url pointing at objects that no longer exist.
-        self.assertEqual([f"s3.delete_prefix:avatars/teams/{TEAM_ID}/", "set_team_image:None"], self.trace)
+        # Order is the whole point: the gate's read transaction ends first, and
+        # the bytes go only after the cleared row commits, so a failed DB write
+        # can never leave image_url pointing at objects that no longer exist.
+        self.assertEqual(
+            ["commit", "set_team_image:None", "commit", f"s3.delete_prefix:avatars/teams/{TEAM_ID}/"], self.trace
+        )
+
+    async def test_failed_row_clear_deletes_nothing(self):
+        self.set_image_error = team_binary.HTTPException(status_code=404, detail="Team not found")
+
+        envelope = await self._invoke("rpc.tournament.teams.image_delete", {"id": TEAM_ID, "identity": IDENTITY})
+
+        self.assertFalse(envelope["ok"], envelope)
+        self.assertEqual([], self.s3.deleted_prefixes)
+
+    async def test_upload_removes_previous_files_only_after_the_row_commits(self):
+        key = f"avatars/teams/{TEAM_ID}/abc123def456.webp"
+        envelope = await self._invoke(
+            "rpc.tournament.teams.image_upload",
+            {"id": TEAM_ID, "identity": IDENTITY, "content_b64": CONTENT_B64, "content_type": "image/png"},
+            upload_result=UploadResult(success=True, key=key, public_url=PUBLIC_URL),
+        )
+
+        self.assertTrue(envelope.get("ok"), envelope)
+        self.assertEqual(
+            [
+                "commit",
+                "upload_avatar",
+                f"set_team_image:{PUBLIC_URL}",
+                "commit",
+                f"s3.delete_prefix:avatars/teams/{TEAM_ID}/ keep={key}",
+            ],
+            self.trace,
+        )
 
     async def test_upload_without_team_update_is_forbidden(self):
         envelope = await self._invoke(

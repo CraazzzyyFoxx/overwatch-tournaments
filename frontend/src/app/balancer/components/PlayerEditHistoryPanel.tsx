@@ -234,10 +234,10 @@ export function PlayerEditHistoryPanel({
           {t("loadFrom")}
         </Label>
         <Select value={history.workspaceValue} onValueChange={history.changeWorkspace}>
-          <SelectTrigger size="sm" className="h-6 w-[180px] border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] text-[color:var(--aqt-fg)] px-2">
+          <SelectTrigger size="sm" className="h-6 w-[180px] px-2">
             <SelectValue placeholder={t("selectWorkspace")} />
           </SelectTrigger>
-          <SelectContent className="border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-card)] text-[color:var(--aqt-fg)] text-label">
+          <SelectContent>
             <SelectItem value="current" className="text-label">
               {t("currentWorkspace")}
             </SelectItem>

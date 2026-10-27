@@ -13,13 +13,15 @@ freezes as a historical fact.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Collection, Iterable, Mapping, Sequence
+from dataclasses import dataclass, field, fields
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, NamedTuple
 
 import sqlalchemy as sa
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import aliased, selectinload
 
 from shared.core.social import display_social_handle
 from shared.disciplines import identity_provider, rated_role_codes
@@ -28,6 +30,9 @@ from shared.domain.member_rank import RankScope, ResolvedRank
 from shared.domain.player_sub_roles import workspace_sub_role_slug
 from shared.domain.roster import CharacterRef, PlayerRoster, RosterRole, flex_role_mode
 from shared.domain.roster_shape import RosterShape
+from shared.models.catalog import CatalogRole
+from shared.models.catalog.entity import CatalogEntity
+from shared.models.identity.user import User
 from shared.models.registration.registration import (
     Registration,
     RegistrationForm,
@@ -94,12 +99,100 @@ def _pool_clauses(tournament_id: int) -> tuple[Any, ...]:
     )
 
 
+def _any_of(column: Any, ids: Iterable[int]) -> Any:
+    """``column = ANY(:ids)``: one array parameter where ``IN`` binds one per id, so the statement text is the same
+    at any count and the driver reuses its prepared (asyncpg) or converted (psycopg) form of it."""
+    return column == sa.any_(sa.literal(list(ids), ARRAY(sa.Integer)))
+
+
 def _character_refs(role: RegistrationRole) -> tuple[CharacterRef, ...]:
     return tuple(
         CharacterRef(id=entry.entity.id, slug=entry.entity.slug, image_path=entry.entity.image_path)
         for entry in sorted(role.hero_entries or [], key=lambda entry: entry.priority)
         if entry.entity is not None
     )
+
+
+class _Person(NamedTuple):
+    """Who a registration's workspace member is, as its roster carries it."""
+
+    player_id: int | None
+    auth_user_id: int | None
+    player_name: str | None
+
+    @classmethod
+    def of(cls, member: WorkspaceMember | None) -> _Person | None:
+        """Off a loaded ``workspace_member -> player`` chain (``registration_load_options``)."""
+        if member is None:
+            return None
+        player = member.player
+        return cls(
+            member.player_id,
+            player.auth_user_id if player is not None else None,
+            player.name if player is not None else None,
+        )
+
+
+class _Member(NamedTuple):
+    """One row of :meth:`RosterEngine._members`: the member's workspace, which the rank layers check, and its person."""
+
+    workspace_id: int
+    person: _Person
+
+
+@dataclass(slots=True)
+class _RoleRow:
+    """A ``RegistrationRole`` as :meth:`RosterEngine.for_tournament` reads it: what the engine reads off one, with
+    the ``role``/``subrole`` hybrids folded in."""
+
+    id: int
+    role: str
+    subrole: str | None
+    priority: int
+    is_primary: bool
+    is_active: bool
+    rank_value: int | None
+
+
+@dataclass(slots=True)
+class _IdentityRow:
+    provider: str
+    position: int
+    handle: str
+
+
+@dataclass(slots=True)
+class _RegistrationRow:
+    """A ``Registration`` as :meth:`RosterEngine.for_tournament` reads it: the columns and collections the engine
+    reads off one loaded with ``registration_load_options``, as plain rows. ``resolve`` takes either."""
+
+    id: int
+    workspace_member_id: int | None
+    display_name: str | None
+    public_notes: str | None
+    admin_notes: str | None
+    custom_fields_json: dict[str, Any] | None
+    status: str
+    balancer_status: str
+    exclude_reason: str | None
+    checked_in: bool
+    registration_team_id: int | None
+    team_slot_code: str | None
+    is_substitute: bool
+    stream_pov: bool
+    roles: list[_RoleRow] = field(init=False, default_factory=list)
+    identities: list[_IdentityRow] = field(init=False, default_factory=list)
+
+    def primary_game_identity(self, *, provider: str) -> _IdentityRow | None:
+        """``Registration.primary_game_identity``."""
+        return next((row for row in self.identities if row.provider == provider and row.position == 0), None)
+
+
+#: The ``Registration`` columns behind a ``_RegistrationRow``, in its field order.
+_REGISTRATION_COLUMNS = tuple(getattr(Registration, column.name) for column in fields(_RegistrationRow) if column.init)
+
+type _Registration = Registration | _RegistrationRow
+type _Role = RegistrationRole | _RoleRow
 
 
 class RosterEngine:
@@ -129,14 +222,20 @@ class RosterEngine:
         (approved, not deleted, and a ``balancer_status`` that does not exclude) --
         this is what the draft seeds from and what the balance job balances.
         """
-        tournament = await self.tournaments.get(session, tournament_id)
-        if tournament is None:
+        row = (
+            await session.execute(
+                sa.select(Tournament.workspace_id, Tournament.discipline).where(Tournament.id == tournament_id)
+            )
+        ).one_or_none()
+        if row is None:
             return {}
+        workspace_id, discipline = row
+        # Plain Core rows, no ORM: building the objects for the registrations, their roles and identities, a role's
+        # top characters and the member's player was most of a load's time, for values read once.
         query = (
-            sa.select(Registration)
+            sa.select(*_REGISTRATION_COLUMNS)
             .where(Registration.tournament_id == tournament_id)
-            .options(*registration_load_options())
-            .order_by(_primary_tag_order(identity_provider(tournament.discipline)).asc(), Registration.id.asc())
+            .order_by(_primary_tag_order(identity_provider(discipline)).asc(), Registration.id.asc())
         )
         if not include_deleted:
             query = query.where(Registration.deleted_at.is_(None))
@@ -145,16 +244,21 @@ class RosterEngine:
         if registration_ids is not None:
             if not registration_ids:
                 return {}
-            query = query.where(Registration.id.in_(list(registration_ids)))
+            query = query.where(_any_of(Registration.id, registration_ids))
 
-        registrations = list(await session.scalars(query))
+        registrations = [_RegistrationRow(*values) for values in await session.execute(query)]
+        await self._collections(session, registrations)
         return await self.resolve(
             session,
             registrations,
-            workspace_id=tournament.workspace_id,
+            workspace_id=workspace_id,
             tournament_id=tournament_id,
-            discipline=tournament.discipline,
-            role_codes=rated_role_codes(tournament.discipline),
+            discipline=discipline,
+            role_codes=rated_role_codes(discipline),
+            characters=await self._characters(session, [role.id for reg in registrations for role in reg.roles]),
+            members=await self._members(
+                session, {reg.workspace_member_id for reg in registrations if reg.workspace_member_id is not None}
+            ),
         )
 
     async def pool_ids(self, session: AsyncSession, tournament_id: int, registration_ids: Sequence[int]) -> set[int]:
@@ -169,7 +273,7 @@ class RosterEngine:
         rows = await session.scalars(
             sa.select(Registration.id).where(
                 Registration.tournament_id == tournament_id,
-                Registration.id.in_(list(registration_ids)),
+                _any_of(Registration.id, registration_ids),
                 *_pool_clauses(tournament_id),
             )
         )
@@ -178,7 +282,7 @@ class RosterEngine:
     async def resolve(
         self,
         session: AsyncSession,
-        registrations: Sequence[Registration],
+        registrations: Sequence[_Registration],
         *,
         workspace_id: int | None,
         tournament_id: int | None = None,
@@ -188,12 +292,17 @@ class RosterEngine:
         author_user_id: int | None = None,
         role_codes: Sequence[str] | None = None,
         discipline: str | None = None,
+        characters: Mapping[int, tuple[CharacterRef, ...]] | None = None,
+        members: Mapping[int, _Member] | None = None,
     ) -> dict[int, PlayerRoster]:
         """Resolve already-loaded registrations. Rows must carry
         :func:`registration_load_options`.
 
         ``form``/``grid`` are read from the tournament when omitted; pass them when
         the caller already holds them (the admin list does) to save two queries.
+        ``characters`` (by registration role id) and ``members`` (by workspace
+        member id) are :meth:`for_tournament`'s own Core reads; without them both
+        come off the rows.
         """
         if not registrations:
             return {}
@@ -225,18 +334,25 @@ class RosterEngine:
             grid=grid,
             order=order,
             author_user_id=author_user_id,
+            members=members,
         )
         provider = identity_provider(discipline)
         return {
-            reg.id: self._build(reg, declared[reg.id], resolved.get(reg.id, {}), mode=mode, provider=provider)
+            reg.id: self._build(
+                reg,
+                declared[reg.id],
+                resolved.get(reg.id, {}),
+                mode=mode,
+                provider=provider,
+                characters=characters,
+                members=members,
+            )
             for reg in registrations
         }
 
     # -- role set ------------------------------------------------------------
 
-    def _declared_roles(
-        self, reg: Registration, *, mode: str, role_codes: Sequence[str]
-    ) -> tuple[RegistrationRole | str, ...]:
+    def _declared_roles(self, reg: _Registration, *, mode: str, role_codes: Sequence[str]) -> tuple[_Role | str, ...]:
         """The roles this registration declares, in priority order.
 
         ``optional``: the active rows, as written. ``all_roles``/``forced``: the
@@ -268,14 +384,15 @@ class RosterEngine:
     async def _resolve_ranks(
         self,
         session: AsyncSession,
-        registrations: Sequence[Registration],
+        registrations: Sequence[_Registration],
         *,
-        declared: Mapping[int, tuple[RegistrationRole | str, ...]],
+        declared: Mapping[int, tuple[_Role | str, ...]],
         workspace_id: int | None,
         discipline: str,
         grid: DivisionGrid | None,
         order: Sequence[RankScope],
         author_user_id: int | None,
+        members: Mapping[int, _Member] | None,
     ) -> dict[int, dict[str, ResolvedRank]]:
         """``{registration_id: {role: ResolvedRank}}`` under ``order``.
 
@@ -308,13 +425,20 @@ class RosterEngine:
             }
 
         roles_wanted = sorted({role for roles in own.values() for role in roles})
+        players = (
+            await self._players_by_member(session, workspace_id=workspace_id, member_ids=list(member_of.values()))
+            if members is None
+            else {
+                member_id: members[member_id].person.player_id
+                for member_id in set(member_of.values())
+                if member_id in members and members[member_id].workspace_id == workspace_id
+            }
+        )
         resolved = await self.ranks.resolve(
             session,
             workspace_id=workspace_id,
             discipline=discipline,
-            members=await self._players_by_member(
-                session, workspace_id=workspace_id, member_ids=list(member_of.values())
-            ),
+            members=players,
             roles=roles_wanted,
             order=order,
             author_user_id=author_user_id,
@@ -357,16 +481,97 @@ class RosterEngine:
         )
         return dict(rows.all())
 
+    async def _collections(self, session: AsyncSession, registrations: Sequence[_RegistrationRow]) -> None:
+        """Fill each row's ``roles`` and ``identities``, one query each. A role's ``role``/``subrole`` fold its leaf
+        and parent codes the way the ``RegistrationRole`` hybrids' Python side does; joined here, where the hybrids'
+        SQL side is two correlated subqueries per row."""
+        by_id = {reg.id: reg for reg in registrations}
+        if not by_id:
+            return
+        parent = aliased(CatalogRole)
+        roles = await session.execute(
+            sa.select(
+                RegistrationRole.registration_id,
+                RegistrationRole.id,
+                CatalogRole.code,
+                parent.code,
+                RegistrationRole.priority,
+                RegistrationRole.is_primary,
+                RegistrationRole.is_active,
+                RegistrationRole.rank_value,
+            )
+            .join(CatalogRole, CatalogRole.id == RegistrationRole.role_id)
+            .outerjoin(parent, parent.id == CatalogRole.parent_role_id)
+            .where(_any_of(RegistrationRole.registration_id, by_id))
+        )
+        for registration_id, role_id, leaf, parent_code, *flags in roles:
+            role, subrole = (leaf, None) if parent_code is None else (parent_code, leaf)
+            by_id[registration_id].roles.append(_RoleRow(role_id, role, subrole, *flags))
+        identities = await session.execute(
+            sa.select(
+                RegistrationIdentity.registration_id,
+                RegistrationIdentity.provider,
+                RegistrationIdentity.position,
+                RegistrationIdentity.handle,
+            )
+            .where(_any_of(RegistrationIdentity.registration_id, by_id))
+            # ``Registration.identities``' own order.
+            .order_by(
+                RegistrationIdentity.registration_id, RegistrationIdentity.provider, RegistrationIdentity.position
+            )
+        )
+        for registration_id, *identity in identities:
+            by_id[registration_id].identities.append(_IdentityRow(*identity))
+
+    async def _characters(self, session: AsyncSession, role_ids: Sequence[int]) -> dict[int, tuple[CharacterRef, ...]]:
+        """``{registration_role_id: top characters}``, in the registrant's order: ``_character_refs`` off a loaded
+        ``hero_entries -> entity`` chain, in one query."""
+        if not role_ids:
+            return {}
+        rows = await session.execute(
+            sa.select(RegistrationRoleEntity.role_id, CatalogEntity.id, CatalogEntity.slug, CatalogEntity.image_path)
+            .join(CatalogEntity, CatalogEntity.id == RegistrationRoleEntity.entity_id)
+            .where(_any_of(RegistrationRoleEntity.role_id, role_ids))
+            .order_by(RegistrationRoleEntity.role_id, RegistrationRoleEntity.priority)
+        )
+        characters: dict[int, list[CharacterRef]] = {}
+        for role_id, entity_id, slug, image_path in rows:
+            characters.setdefault(role_id, []).append(CharacterRef(id=entity_id, slug=slug, image_path=image_path))
+        return {role_id: tuple(refs) for role_id, refs in characters.items()}
+
+    async def _members(self, session: AsyncSession, member_ids: Collection[int]) -> dict[int, _Member]:
+        """Each workspace member with its player, in one query: ``_build``'s person and ``_resolve_ranks``' member ->
+        player map, where the ``workspace_member -> player`` chain and ``_players_by_member`` took three."""
+        if not member_ids:
+            return {}
+        rows = await session.execute(
+            sa.select(
+                WorkspaceMember.id,
+                WorkspaceMember.workspace_id,
+                WorkspaceMember.player_id,
+                User.auth_user_id,
+                User.name,
+            )
+            .outerjoin(User, User.id == WorkspaceMember.player_id)
+            .where(_any_of(WorkspaceMember.id, member_ids))
+        )
+        return {
+            member_id: _Member(workspace_id, _Person(player_id, auth_user_id, name))
+            for member_id, workspace_id, player_id, auth_user_id, name in rows
+        }
+
     # -- assembly ------------------------------------------------------------
 
     def _build(
         self,
-        reg: Registration,
-        declared: tuple[RegistrationRole | str, ...],
+        reg: _Registration,
+        declared: tuple[_Role | str, ...],
         resolved: Mapping[str, ResolvedRank],
         *,
         mode: str,
         provider: str,
+        characters: Mapping[int, tuple[CharacterRef, ...]] | None,
+        members: Mapping[int, _Member] | None,
     ) -> PlayerRoster:
         entries: list[RosterRole] = []
         from_row: set[str] = set()
@@ -384,7 +589,13 @@ class RosterEngine:
                     is_primary=bool(row.is_primary) if row is not None else False,
                     priority=priority,
                     subrole=row.subrole if row is not None else None,
-                    top_characters=_character_refs(row) if row is not None else (),
+                    top_characters=(
+                        ()
+                        if row is None
+                        else _character_refs(row)
+                        if characters is None
+                        else characters.get(row.id, ())
+                    ),
                 )
             )
 
@@ -414,16 +625,19 @@ class RosterEngine:
             else len(declared_playable) > 1 and all(entry.is_primary for entry in declared_playable)
         )
 
-        member = reg.workspace_member
-        player = member.player if member is not None else None
+        if members is None:
+            person = _Person.of(reg.workspace_member)
+        else:
+            member = members.get(reg.workspace_member_id)
+            person = member.person if member is not None else None
         primary = reg.primary_game_identity(provider=provider)
         return PlayerRoster(
             registration_id=reg.id,
             identity=PlayerIdentityRead.of(provider, primary.handle if primary is not None else None),
             display_name=reg.display_name,
-            player_id=member.player_id if member is not None else None,
-            auth_user_id=player.auth_user_id if player is not None else None,
-            player_name=player.name if player is not None else None,
+            player_id=person.player_id if person is not None else None,
+            auth_user_id=person.auth_user_id if person is not None else None,
+            player_name=person.player_name if person is not None else None,
             workspace_member_id=reg.workspace_member_id,
             roles=tuple(entries),
             is_full_flex=is_full_flex,

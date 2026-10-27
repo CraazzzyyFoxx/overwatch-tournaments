@@ -16,6 +16,7 @@ from typing import Any
 from pydantic import ValidationError
 
 from shared.core.errors import BaseAPIException as HTTPException
+from shared.rpc.common import integrity_error
 from shared.schemas.rpc import rpc_error, rpc_ok, status_to_code
 from src.core import db
 from src.services.token_validation import token_validation
@@ -59,7 +60,12 @@ async def envelope(
         return rpc_error("unprocessable", _validation_detail(exc))
     except HTTPException as exc:
         return rpc_error(status_to_code(exc.status_code), str(exc.detail))
-    except Exception:  # pragma: no cover - defensive worker guard
+    except Exception as exc:
+        if (mapped := integrity_error(exc)) is not None:
+            code, message, details = mapped
+            logger.warning(f"{label} RPC: {message} ({details.get('constraint')})")
+            return rpc_error(code, message, details)
+        # Defensive worker guard.
         logger.exception(f"{label} RPC failed")
         return rpc_error("internal", failure)
 

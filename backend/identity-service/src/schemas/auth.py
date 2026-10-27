@@ -1,9 +1,9 @@
 import re
 import unicodedata
 from datetime import datetime
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import AliasChoices, AliasPath, BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 __all__ = (
     "USERNAME_MAX_LENGTH",
@@ -18,11 +18,13 @@ __all__ = (
     "SessionRead",
     "RefreshTokenRequest",
     "PasswordSetRequest",
+    "AccountDeleteRequest",
     "ServiceTokenRequest",
     "ServiceToken",
     "ServiceTokenPayload",
     "TokenApiKeyInfo",
     "TokenApiKeyLimits",
+    "AccountAvatarUrl",
     "AuthLinkedPlayer",
     "AuthUser",
     "UserUpdate",
@@ -224,6 +226,17 @@ class PasswordSetRequest(BaseModel):
         return None if v is None else _fits_bcrypt(v)
 
 
+class AccountDeleteRequest(BaseModel):
+    """Optional body of ``DELETE /auth/me``: the current password, for an account that has one."""
+
+    current_password: str | None = Field(default=None, max_length=100)
+
+    @field_validator("current_password")
+    @classmethod
+    def validate_current_password(cls, v: str | None) -> str | None:
+        return None if v is None else _fits_bcrypt(v)
+
+
 class AuthUserWorkspace(BaseModel):
     """Workspace RBAC info for authenticated user response."""
 
@@ -242,6 +255,13 @@ class AuthLinkedPlayer(BaseModel):
     linked_at: str
 
 
+#: An account's avatar is its player's (``players.user.avatar_url``), None without one. The plain key re-validates
+#: a payload already dumped from the account.
+AccountAvatarUrl = Annotated[
+    str | None, Field(validation_alias=AliasChoices(AliasPath("player", "avatar_url"), "avatar_url"))
+]
+
+
 class AuthUser(BaseModel):
     """Schema for authenticated user response"""
 
@@ -250,10 +270,12 @@ class AuthUser(BaseModel):
     username: str
     first_name: str | None = None
     last_name: str | None = None
-    avatar_url: str | None = None
+    avatar_url: AccountAvatarUrl = None
     is_active: bool
     is_superuser: bool
     is_verified: bool
+    # Read off the ORM row's ``hashed_password`` (only ever as a bool); the plain key re-validates a dumped payload.
+    has_password: bool = Field(default=False, validation_alias=AliasChoices("has_password", "hashed_password"))
     roles: list[str] = Field(default_factory=list)
     permissions: list[str] = Field(default_factory=list)  # List of "resource.action" strings
     denies: list[str] = Field(default_factory=list)  # Denied "resource.action" capabilities
@@ -279,6 +301,11 @@ class AuthUser(BaseModel):
                     out.append(name)
             return out
         return v
+
+    @field_validator("has_password", mode="before")
+    @classmethod
+    def password_presence(cls, v) -> bool:
+        return bool(v)
 
     @field_validator("permissions", mode="before")
     @classmethod

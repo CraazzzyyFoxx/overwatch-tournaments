@@ -13,9 +13,10 @@ gateway maps 400 -> bad_request).
 
 import pytest
 
-from tests.conftest import RpcHarness, build_query
+from tests.conftest import RpcHarness, build_query, seeded_db
 
 
+@seeded_db
 @pytest.mark.parametrize(
     ("page", "per_page", "sort", "order", "entities", "query", "fields"),
     [
@@ -61,6 +62,7 @@ def test_search_achievement(
         assert query in content["results"][0]["name"].lower()
 
 
+@seeded_db
 @pytest.mark.parametrize(
     ("achievement_id",),
     [
@@ -78,6 +80,7 @@ def test_get_achievement_by_id(rpc: RpcHarness, achievement_id: int) -> None:
     assert content["id"] == achievement_id
 
 
+@seeded_db
 @pytest.mark.parametrize(
     ("user_id",),
     [
@@ -94,6 +97,7 @@ def test_get_achievement_by_user(rpc: RpcHarness, user_id: int) -> None:
     assert content.__len__() > 0
 
 
+@seeded_db
 @pytest.mark.parametrize(
     ("user_id",),
     [
@@ -115,6 +119,7 @@ def test_get_achievement_by_user_filter_without_tournament(rpc: RpcHarness, user
         assert achievement["tournaments"] == []
 
 
+@seeded_db
 @pytest.mark.parametrize(
     ("user_id",),
     [

@@ -252,8 +252,12 @@ or roll back together. **Every service that writes outbox rows also drains them*
 `serve.py` schedules `shared.messaging.outbox.drain_outbox(session_factory, broker)` every
 second (tournament, stats-worker, app, balancer, analytics-svc). The drain takes its batch
 `FOR UPDATE SKIP LOCKED` and holds the locks until the one commit that ends the pass, so any
-number of drains across services and replicas never publish a row twice; failures retry with
-exponential backoff capped at 300 s. One relay per service means no service's events stop
+number of drains across services and replicas never publish a row twice; each publish gets 10 s, a batch starts
+none after 20 s and ends at its first timeout (so it commits inside pgBouncer's 60 s idle-in-transaction limit),
+failures retry with exponential backoff capped at 300 s, and the 20th failure parks the row as
+`dead` (kept for inspection, never drained again; `outbox_dead_total`). Published rows are
+deleted after 7 days by `purge_outbox`, a daily job tournament-svc alone schedules (the purge is
+table-wide). One relay per service means no service's events stop
 flowing because another service is down (they all did, when tournament-service ran the only
 drain).
 
@@ -317,7 +321,9 @@ names: `resource_generation(resource, "{tournament_id}")` for a tournament-scope
 name (`user_cache`, `division_grid/cache.py`). `emit`'s commit bumps the generations of every
 resource it staled — one `SET` each, in the Redis all services share (`configure_realtime`) —
 so another service's cached copy misses before the writer's `commit()` returns; the
-`cache.invalidated` outbox consumer re-bumps them durably. A new cached read names its
+`cache.invalidated` outbox consumer durably re-bumps only the generations not bumped since the
+event (a lost commit bump): a value is `<hex>.<bump_ms>`, and re-bumping one the commit already
+moved would only orphan entries cached since. A new cached read names its
 generations; a new write only has to `emit` what it staled.
 
 ## Errors
@@ -334,10 +340,22 @@ keeps them in step with the gateway.
 
 All services share one Postgres and one `MetaData`, so nothing *stops* a service from selecting
 another's tables. The rule is: **read freely through `shared/repository` and `shared/services`;
-write only what your service owns.** A write to a table another service owns goes through that
-service — `request_dict` for a command that needs an answer, an outbox event when it doesn't.
-Direct cross-service writes are the failure mode this convention exists to prevent, because the
-DB will not catch them and neither will a test.
+write a table only through the module that owns its rules.** Most tables have one writing service
+as well. The identity tables are the deliberate exception: registration, the mix roster, match-log
+ingest and OAuth all have to create players, attach handles and grant workspace roles inside their
+own transaction, so each of those tables has one shared **writer module** that every service calls:
+
+| Table | Writer module |
+|---|---|
+| `players.user` (row creation, `auth_user_id` link) | `UserRepository.create_player` / `ensure_for_auth_user` / `link_auth_user` (`shared/repository/identity.py`) |
+| `players.social_account`, `players.social_account_visibility` | `SocialIdentityService` (`shared/services/social_identity.py`) |
+| `auth.*` rows (accounts, OAuth connections, API keys, tokens, roles, denies) | identity-service, through `shared/repository/identity.py` |
+| `auth.user_roles` workspace grants | `shared/rbac/bootstrap.py` (plus the RBAC admin in `shared/repository/identity.py`) |
+| all of the above, during a profile merge | `shared/repository/auth_merge.py` |
+
+`backend/tests/test_identity_write_ownership.py` fails on a construction or link write outside
+these modules. Any other table another service owns is written through that service:
+`request_dict` for a command that needs an answer, an outbox event when it doesn't.
 
 ## Class + singleton, not a bag of functions, not a DI container
 
@@ -442,7 +460,11 @@ layers, checked by `uv run --project .. lint-imports` from the service directory
 `app-service` adds a `services-independence` contract (`services.user` and `services.workspace` never
 import each other), and `stats-service` a `read-services-layers` contract for its public
 read surface (`services.achievement_reads` → `services.user` → `services.{hero,map,statistics}`),
-which grandfathers three pre-existing `map.service` imports by name so they cannot grow silently. A
+which grandfathers three pre-existing `map.service` imports by name so they cannot grow silently.
+`tournament-service` roots `shared` as well, so its `rpc-no-sql` also forbids `shared.repository`
+(a handler reaches a row, lock included, through a service method), and it adds `schemas-are-wire`:
+`src.schemas` imports no `sqlalchemy`, `shared.repository` or `src.services` (builders that load
+data, such as `services/registration/read_model.py`, live in services). A
 flat service needs nothing beyond the three above. `backend/.importlinter` covers the `shared` kernel
 (`shared.*` never imports a discipline module directly). A new service copies the first three
 contracts of `stats-service/.importlinter`.

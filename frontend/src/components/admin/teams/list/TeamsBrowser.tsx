@@ -1,11 +1,11 @@
 "use client";
 
-import { useId, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 
-import { DataTable } from "@/components/data-table";
+import { DataTable, type TableCommand } from "@/components/data-table";
 import { FilterBar } from "@/components/kit/FilterBar";
 import { Inspector } from "@/components/kit/Inspector";
 import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
@@ -19,7 +19,6 @@ import {
   tournamentOptions
 } from "@/components/admin/tournament-filter";
 import { RowGameLabel, gameColumn } from "@/components/workspace/game-column";
-import { Button } from "@/components/ui/button";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useQueryParams } from "@/hooks/useQueryParams";
 import { ALL_DISCIPLINES } from "@/lib/site/discipline-scope";
@@ -75,7 +74,6 @@ export function TeamsBrowser({
   const [pageRows, setPageRows] = useState<Team[]>([]);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<Team | null>(null);
-  const createReasonId = useId();
 
   const tournamentsQuery = useQuery({
     queryKey: tournamentQueryKeys.adminList(workspaceId, ALL_DISCIPLINES),
@@ -127,6 +125,20 @@ export function TeamsBrowser({
   const openRow = pageRows.find((row) => String(row.id) === openId) ?? null;
   const openIndex = openRow ? pageRows.indexOf(openRow) : -1;
 
+  // A team belongs to one tournament: until the list is scoped to one, the
+  // command is there but says what it is waiting for.
+  const commands: TableCommand[] = [
+    {
+      id: "create",
+      label: t("create"),
+      icon: Plus,
+      primary: true,
+      hidden: !canCreateTeam,
+      disabledReason: selectedTournamentId == null ? t("pickTournament") : undefined,
+      onSelect: () => setCreateDialogOpen(true)
+    }
+  ];
+
   return (
     <>
       <div
@@ -140,34 +152,8 @@ export function TeamsBrowser({
             filterKey={filters.filterKey}
             inspectorId={openId}
             getRowId={(row) => String(row.id)}
-            toolbar={
-              <FilterBar
-                defs={defs}
-                filters={filters}
-                trailing={
-                  // A team belongs to one tournament: until the list is scoped
-                  // to one, the action is there but says what it is waiting for.
-                  canCreateTeam ? (
-                    <>
-                      {selectedTournamentId == null ? (
-                        <span id={createReasonId} className="text-caption text-muted-foreground">
-                          {t("pickTournament")}
-                        </span>
-                      ) : null}
-                      <Button
-                        size="sm"
-                        disabled={selectedTournamentId == null}
-                        aria-describedby={selectedTournamentId == null ? createReasonId : undefined}
-                        onClick={() => setCreateDialogOpen(true)}
-                      >
-                        <Plus className="size-4" aria-hidden />
-                        {t("create")}
-                      </Button>
-                    </>
-                  ) : null
-                }
-              />
-            }
+            toolbar={<FilterBar defs={defs} filters={filters} />}
+            commands={commands}
             emptyMessage={
               selectedTournamentId
                 ? t("emptyFiltered")

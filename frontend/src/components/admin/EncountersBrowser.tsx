@@ -6,7 +6,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { usePathname } from "next/navigation";
 import { FileX2, Plus } from "lucide-react";
 
-import { DataTable } from "@/components/data-table";
+import { DataTable, type TableCommand } from "@/components/data-table";
 import { StatusIcon } from "@/components/admin/StatusIcon";
 import { RowGameLabel, gameColumn } from "@/components/workspace/game-column";
 import { EncounterForm } from "@/components/admin/EncounterForm";
@@ -23,9 +23,7 @@ import {
   strandedTournamentParams,
   tournamentOptions
 } from "@/components/admin/tournament-filter";
-import { Button } from "@/components/ui/button";
 import { PageStateCard } from "@/components/ui/page-state-card";
-import { Spinner } from "@/components/ui/spinner";
 import { invalidateTournamentWorkspace } from "@/lib/tournament/workspace-query-keys";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useBracketRoundLabel } from "@/hooks/useBracketRoundLabel";
@@ -200,22 +198,24 @@ export function EncountersBrowser({
       ? `/admin/tournaments/${tournamentId}/matches/reports`
       : "/admin/matches?view=reports";
 
-  const trailing = (
-    <>
-      {canSync && scopeTournamentId != null && challongeReady ? (
-        <Button variant="outline" size="sm" disabled={syncMutation.isPending} onClick={() => syncMutation.mutate()}>
-          {syncMutation.isPending ? <Spinner /> : null}
-          {t("sync")}
-        </Button>
-      ) : null}
-      {canCreate && createReady ? (
-        <Button size="sm" onClick={form.openCreate}>
-          <Plus aria-hidden className="size-4" />
-          {t("create")}
-        </Button>
-      ) : null}
-    </>
-  );
+  const commands: TableCommand[] = [
+    {
+      id: "sync",
+      label: t("sync"),
+      hidden: !(canSync && scopeTournamentId != null && challongeReady),
+      pending: syncMutation.isPending,
+      disabled: syncMutation.isPending,
+      onSelect: () => syncMutation.mutate()
+    },
+    {
+      id: "create",
+      label: t("create"),
+      icon: Plus,
+      primary: true,
+      hidden: !(canCreate && createReady),
+      onSelect: form.openCreate
+    }
+  ];
 
   return (
     <div
@@ -232,13 +232,8 @@ export function EncountersBrowser({
           filterKey={filters.filterKey}
           inspectorId={openId}
           getRowId={(row) => String(row.id)}
-          toolbar={
-            <FilterBar
-              defs={defs}
-              filters={filters}
-              trailing={trailing}
-            />
-          }
+          toolbar={<FilterBar defs={defs} filters={filters} />}
+          commands={commands}
           emptyMessage={
             scopeTournamentId == null
               ? t("emptyTournament")

@@ -5,7 +5,7 @@ import { ChevronDownIcon, X } from "lucide-react";
 import { type DateTimeFormatOptions, useTranslations } from "next-intl";
 import { useFormatter } from "@/lib/datetime/client";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
+import { Button, triggerChevronClass } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { TimeInput } from "@/components/ui/time-input";
@@ -142,14 +142,14 @@ export function DateTimePicker({
                 data-empty={!selected}
                 disabled={disabled}
                 className={cn(
-                  "w-full justify-between",
+                  "group/trigger w-full justify-between",
                   "data-[empty=true]:text-muted-foreground"
                 )}
               >
                 <span className="truncate">
                   {selected ? formatDateTimeDisplay(format, selected) : (placeholder ?? t("select"))}
                 </span>
-                <ChevronDownIcon data-icon="inline-end" />
+                <ChevronDownIcon data-icon="inline-end" className={triggerChevronClass} />
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-auto overflow-hidden p-0" align="start">

@@ -202,12 +202,15 @@ async def load_game_seats(
     encounter_id: int | None = None,
     tournament_id: int | None = None,
     players: Sequence[int] | None = None,
+    include_cancelled: bool = False,
 ) -> list[GameSeats]:
-    """Non-cancelled games of the owner, filtered by the given constraints, with their seats and rosters.
+    """Games of the owner, filtered by the given constraints, with their seats and rosters.
 
-    ``doc`` keeps only games its map and mode fit (:func:`fits`); ``hinted`` also admits a game that names no map
-    yet. ``players`` keeps only games where at least one of those global players is rostered on a participating seat,
-    so the search starts from evidence and never walks a workspace's whole history.
+    A search skips cancelled games unless ``include_cancelled``; a game named in ``game_ids`` (an operator's pin, or the
+    game an observation already sits on) is loaded whatever its state. ``doc`` keeps only games its map and mode fit
+    (:func:`fits`); ``hinted`` also admits a game that names no map yet. ``players`` keeps only games where at least one
+    of those global players is rostered on a participating seat, so the search starts from evidence and never walks a
+    workspace's whole history.
     """
     game, encounter, side, member, anchor = (
         models.EncounterGame,
@@ -225,13 +228,11 @@ async def load_game_seats(
     query = (
         sa.select(game.id, game.encounter_id, game.map_id, game.mode_id, game.result_version)
         .join(encounter, encounter.id == game.encounter_id)
-        .where(
-            encounter.workspace_id == workspace_id,
-            encounter.discipline == discipline,
-            game.state != enums.EncounterGameState.CANCELLED,
-        )
+        .where(encounter.workspace_id == workspace_id, encounter.discipline == discipline)
         .order_by(game.id)
     )
+    if game_ids is None and not include_cancelled:
+        query = query.where(game.state != enums.EncounterGameState.CANCELLED)
     if doc is not None:
         query = query.where(
             sa.or_(game.map_id == doc.map_id, game.map_id.is_(None)) if hinted else game.map_id == doc.map_id
@@ -321,21 +322,38 @@ async def find_binding(
             raise BindingMismatch("the attached game differs from the game this log is already bound to")
         game_ids = [hint.encounter_game_id]
     pinned = hint is not None or game_ids is not None
-    candidates = await load_game_seats(
-        session,
-        workspace_id=workspace_id,
-        discipline=doc.discipline,
-        doc=doc,
-        hinted=pinned,
-        game_ids=game_ids,
-        encounter_id=None if hint is None else hint.encounter_id,
-        tournament_id=None if hint is None else hint.tournament_id,
-        # Evidence first: without a hint only games where a known participant is rostered are searched at all.
-        players=None if pinned else sorted(set(known_players.values())),
-    )
+
+    async def search(*, include_cancelled: bool = False) -> list[GameSeats]:
+        return await load_game_seats(
+            session,
+            workspace_id=workspace_id,
+            discipline=doc.discipline,
+            doc=doc,
+            hinted=pinned,
+            game_ids=game_ids,
+            encounter_id=None if hint is None else hint.encounter_id,
+            tournament_id=None if hint is None else hint.tournament_id,
+            # Evidence first: without a hint only games where a known participant is rostered are searched at all.
+            players=None if pinned else sorted(set(known_players.values())),
+            include_cancelled=include_cancelled,
+        )
+
+    candidates = await search()
+    if (
+        not candidates
+        and game_ids is None
+        and hint is not None
+        and hint.encounter_id is not None
+        and not await load_game_seats(
+            session, workspace_id=workspace_id, discipline=doc.discipline, encounter_id=hint.encounter_id
+        )
+    ):
+        # The operator named an encounter that has no live game at all: a series entered whole keeps only the
+        # position its room cancelled, and the log can be observed nowhere else.
+        candidates = await search(include_cancelled=True)
     if hint is not None and hint.encounter_game_id is not None and not candidates:
-        # The hint names a game of this workspace (validated) that is not a live game the document's map/mode fits.
-        raise BindingMismatch("the attached game is cancelled or is played on another map or mode than the log's")
+        # The hint names a game of this workspace (validated) that the document's map/mode does not fit.
+        raise BindingMismatch("the attached game is played on another map or mode than the log's")
     verdicts = [(game, *match_teams(doc.doc, known_players, game)) for game in candidates]
     fitting = [(game, teams) for game, verdict, teams in verdicts if verdict == "bound"]
     if hint is not None and not fitting:

@@ -130,7 +130,7 @@ class PointsLinearChronologyTests(IsolatedAsyncioTestCase):
 
 
 class AtomicRecalculationTests(IsolatedAsyncioTestCase):
-    async def test_recalculation_commits_once_after_every_write(self) -> None:
+    async def test_every_write_commits_at_once_after_the_read_transaction_ends(self) -> None:
         calls: list[str] = []
         session = SimpleNamespace(
             execute=AsyncMock(side_effect=lambda *args, **kwargs: calls.append("execute")),
@@ -155,8 +155,8 @@ class AtomicRecalculationTests(IsolatedAsyncioTestCase):
         self.assertEqual([analytics_flows.POINTS, analytics_flows.LINEAR, analytics_flows.OPENSKILL], algorithms)
         self.assertIn("execute", calls)
         self.assertIn("add", calls)
-        self.assertEqual(1, calls.count("commit"))
-        self.assertEqual("commit", calls[-1])
+        # The read transaction ends before the CPU pass and any write; every write then commits at once, last.
+        self.assertEqual([0, len(calls) - 1], [i for i, c in enumerate(calls) if c == "commit"])
 
 
 class DriftChronologyTests(TestCase):

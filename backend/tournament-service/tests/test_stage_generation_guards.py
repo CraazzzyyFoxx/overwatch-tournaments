@@ -1,4 +1,4 @@
-"""Tests for the admin/stage.py guards around bracket generation, plus the
+"""Tests for the admin/stage guards around bracket generation, plus the
 ahead-of-seeding bracket the same entry point builds:
 
 * ``generate_encounters`` must never insert a second set of matches on top of
@@ -31,6 +31,8 @@ sys.path.insert(0, str(backend_root / "tournament-service"))
 enums = importlib.import_module("shared.core.enums")
 errors = importlib.import_module("shared.core.errors")
 stage_service = importlib.import_module("src.services.admin.stage")
+stage_base = importlib.import_module("src.services.admin.stage.base")
+stage_generation = importlib.import_module("src.services.admin.stage.generation")
 
 from tests._stage_regulation import stage_regulation  # noqa: E402
 
@@ -104,14 +106,14 @@ class GenerateEncountersGuardTests(IsolatedAsyncioTestCase):
 
         with (
             patch.object(stage_service.stage_service, "get_stage", AsyncMock(return_value=stage)),
-            patch.object(stage_service, "_collect_item_team_ids", lambda item: [10, 20]),
+            patch.object(stage_generation, "_collect_item_team_ids", lambda item: [10, 20]),
             patch.object(stage_service.stage_service, "_generate_stage_skeleton", AsyncMock(return_value="skeleton")),
             patch.object(stage_service.stage_service, "_load_team_names", AsyncMock(return_value={})),
             patch.object(stage_service.stage_service, "_team_lineups", AsyncMock(return_value={})),
             patch.object(
                 stage_service.stage_service, "_create_encounters_from_skeleton", AsyncMock(return_value=[new_encounter])
             ) as create,
-            patch.object(stage_service, "enqueue_tournament_recalculation", AsyncMock()),
+            patch.object(stage_base, "enqueue_tournament_recalculation", AsyncMock()),
             patch.object(stage_service.stage_service, "_publish_structure_changed", AsyncMock()),
         ):
             result = await stage_service.stage_service.generate_encounters(session, 77, commit=False)
@@ -172,13 +174,13 @@ class GenerateEncountersGuardTests(IsolatedAsyncioTestCase):
 
         with (
             patch.object(stage_service.stage_service, "get_stage", AsyncMock(return_value=stage)),
-            patch.object(stage_service, "_bracket_seeds", lambda *_: ([1, 2, 3, 4], [])),
+            patch.object(stage_generation, "_bracket_seeds", lambda *_: ([1, 2, 3, 4], [])),
             patch.object(stage_service.stage_service, "_generate_stage_skeleton", AsyncMock(return_value="skeleton")),
             patch.object(stage_service.stage_service, "_load_team_names", AsyncMock(return_value={})),
             patch.object(
                 stage_service.stage_service, "_create_encounters_from_skeleton", AsyncMock(return_value=new_encounters)
             ) as create,
-            patch.object(stage_service, "enqueue_tournament_recalculation", AsyncMock()),
+            patch.object(stage_base, "enqueue_tournament_recalculation", AsyncMock()),
             patch.object(stage_service.stage_service, "_publish_structure_changed", AsyncMock()),
         ):
             result = await stage_service.stage_service.generate_encounters(session, 99, commit=False)
@@ -206,14 +208,14 @@ class GenerateEncountersGuardTests(IsolatedAsyncioTestCase):
 
         with (
             patch.object(stage_service.stage_service, "get_stage", AsyncMock(return_value=stage)),
-            patch.object(stage_service, "_bracket_seeds", lambda *_: ([1, 2, 3, 4], [])),
+            patch.object(stage_generation, "_bracket_seeds", lambda *_: ([1, 2, 3, 4], [])),
             patch.object(stage_service.stage_service, "_load_rankable_teams", AsyncMock(return_value=teams)),
             patch.object(
                 stage_service.stage_service, "_generate_stage_skeleton", AsyncMock(return_value="skeleton")
             ) as gen,
             patch.object(stage_service.stage_service, "_load_team_names", AsyncMock(return_value={})),
             patch.object(stage_service.stage_service, "_create_encounters_from_skeleton", AsyncMock(return_value=[])),
-            patch.object(stage_service, "enqueue_tournament_recalculation", AsyncMock()),
+            patch.object(stage_base, "enqueue_tournament_recalculation", AsyncMock()),
             patch.object(stage_service.stage_service, "_publish_structure_changed", AsyncMock()),
         ):
             await stage_service.stage_service.generate_encounters(session, 99, commit=False)
@@ -242,7 +244,7 @@ class GenerateEncountersGuardTests(IsolatedAsyncioTestCase):
             patch.object(
                 stage_service.stage_service, "_create_encounters_from_skeleton", AsyncMock(return_value=[])
             ) as create,
-            patch.object(stage_service, "enqueue_tournament_recalculation", AsyncMock()),
+            patch.object(stage_base, "enqueue_tournament_recalculation", AsyncMock()),
             patch.object(stage_service.stage_service, "_publish_structure_changed", AsyncMock()),
         ):
             await stage_service.stage_service.generate_encounters(session, 99, commit=False)
@@ -278,7 +280,7 @@ class GenerateEncountersGuardTests(IsolatedAsyncioTestCase):
             patch.object(
                 stage_service.stage_service, "_create_encounters_from_skeleton", AsyncMock(return_value=[])
             ) as create,
-            patch.object(stage_service, "enqueue_tournament_recalculation", AsyncMock()),
+            patch.object(stage_base, "enqueue_tournament_recalculation", AsyncMock()),
             patch.object(stage_service.stage_service, "_publish_structure_changed", AsyncMock()),
         ):
             await stage_service.stage_service.generate_encounters(session, 99, commit=False)
@@ -301,7 +303,7 @@ class GenerateEncountersGuardTests(IsolatedAsyncioTestCase):
 
         with (
             patch.object(stage_service.stage_service, "get_stage", AsyncMock(return_value=stage)),
-            patch.object(stage_service, "_bracket_seeds", lambda *_: ([1, 2, 3, 4], [])),
+            patch.object(stage_generation, "_bracket_seeds", lambda *_: ([1, 2, 3, 4], [])),
             patch.object(
                 stage_service.stage_service,
                 "_load_team_names",
@@ -309,8 +311,8 @@ class GenerateEncountersGuardTests(IsolatedAsyncioTestCase):
             ),
             patch.object(stage_service.stage_service, "_team_lineups", AsyncMock(return_value={})),
             patch.object(stage_service.stage_service, "_create_encounters_from_skeleton", AsyncMock()) as create,
-            patch.object(stage_service, "place_team", AsyncMock()) as seat,
-            patch.object(stage_service, "enqueue_tournament_recalculation", AsyncMock()),
+            patch.object(stage_generation, "place_team", AsyncMock()) as seat,
+            patch.object(stage_base, "enqueue_tournament_recalculation", AsyncMock()),
             patch.object(stage_service.stage_service, "_publish_structure_changed", AsyncMock()),
         ):
             result = await stage_service.stage_service.generate_encounters(session, 99, commit=False)
@@ -343,7 +345,7 @@ class GenerateEncountersGuardTests(IsolatedAsyncioTestCase):
 
         with (
             patch.object(stage_service.stage_service, "get_stage", AsyncMock(return_value=stage)),
-            patch.object(stage_service, "_bracket_seeds", lambda *_: ([1, 2, 3, 4], [])),
+            patch.object(stage_generation, "_bracket_seeds", lambda *_: ([1, 2, 3, 4], [])),
             patch.object(stage_service.stage_service, "_create_encounters_from_skeleton", AsyncMock()) as create,
         ):
             with self.assertRaises(HTTPException) as ctx:
@@ -367,7 +369,7 @@ class GenerateEncountersGuardTests(IsolatedAsyncioTestCase):
 
         with (
             patch.object(stage_service.stage_service, "get_stage", AsyncMock(return_value=stage)),
-            patch.object(stage_service, "_bracket_seeds", lambda *_: (list(range(1, 9)), [])),
+            patch.object(stage_generation, "_bracket_seeds", lambda *_: (list(range(1, 9)), [])),
             patch.object(stage_service.stage_service, "_create_encounters_from_skeleton", AsyncMock()) as create,
         ):
             with self.assertRaises(HTTPException) as ctx:

@@ -9,6 +9,8 @@ and goes straight to ``publish_envelope_to_redis``.
 
 from __future__ import annotations
 
+import asyncio
+
 from redis.asyncio import Redis
 
 from shared.models.platform.realtime import WorkspaceEvent
@@ -53,23 +55,26 @@ async def publish_envelope_to_redis(
     )
 
 
+#: The emit path's publisher: one pooled client per event loop and URL, made by the loop's first publish. A client
+#: is bound to the loop that opened its connections, and a service runs one loop for its life, so in practice this
+#: is one client per process.
+_pooled: tuple[asyncio.AbstractEventLoop, str, Redis] | None = None
+
+
+def _pooled_client(redis_url: str) -> Redis:
+    global _pooled
+    loop = asyncio.get_running_loop()
+    if _pooled is None or _pooled[0] is not loop or _pooled[1] != redis_url:
+        _pooled = (loop, redis_url, Redis.from_url(redis_url, decode_responses=True))
+    return _pooled[2]
+
+
 async def publish_event_to_redis_url(
     redis_url: str,
     *,
     topic: str,
     envelope: WorkspaceEventEnvelope,
 ) -> None:
-    redis = Redis.from_url(redis_url, decode_responses=True)
-    closing = False
-    try:
-        await publish_envelope_to_redis(redis, topic=topic, envelope=envelope)
-    except GeneratorExit:
-        # The coroutine is being *closed*, not cancelled (loop teardown or a
-        # reclaimed task). A closing coroutine may not suspend again, so awaiting
-        # the client's teardown would raise ``RuntimeError: coroutine ignored
-        # GeneratorExit`` and bury the real shutdown. The socket dies with the loop.
-        closing = True
-        raise
-    finally:
-        if not closing:
-            await redis.aclose()
+    """Publish on the loop's pooled client: a pick publishes two or three events and a chat message one, and each
+    used to pay a fresh connection."""
+    await publish_envelope_to_redis(_pooled_client(redis_url), topic=topic, envelope=envelope)

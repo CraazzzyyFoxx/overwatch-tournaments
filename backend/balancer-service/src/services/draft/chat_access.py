@@ -47,7 +47,10 @@ class DraftChatAccess:
         session: AsyncSession,
         auth_user: AuthUser | None,
         room: ChatRoom,
+        *,
+        for_update: bool = False,
     ) -> ChatMembership:
+        # ``for_update`` (``ChatAccess``) is unused: a draft chat never locked its session row.
         draft = await self.sessions_repo.get(session, room.ref_id)
         if draft is None:
             # 404, the same answer a hidden tournament gets just below: a 403 here

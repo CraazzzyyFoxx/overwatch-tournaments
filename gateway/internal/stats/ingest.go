@@ -3,7 +3,6 @@ package stats
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -16,6 +15,7 @@ import (
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/edge"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/httplog"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/rpc"
+	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/upload"
 )
 
 const (
@@ -74,6 +74,11 @@ func (i *Ingest) Submit(w http.ResponseWriter, r *http.Request) {
 		writeTooLarge(w)
 		return
 	}
+	release, ok := upload.Admit(w, r, MaxIngestBody)
+	if !ok {
+		return
+	}
+	defer release()
 
 	// One bounded buffer, sized from Content-Length when the client declared it.
 	buf := bytes.NewBuffer(make([]byte, 0, max(r.ContentLength, 0)))
@@ -96,20 +101,13 @@ func (i *Ingest) Submit(w http.ResponseWriter, r *http.Request) {
 	i.relay(w, r, ingestSubmitQueue, body, submitStatus)
 }
 
-// ingestRPCBody builds {"identity","ip_address","user_agent","raw_base64"} in a single allocation: the original
+// ingestRPCBody builds {"identity","ip_address","raw_base64","user_agent"} in a single allocation: the original
 // bytes are base64-encoded straight into the final message instead of via a string and a re-marshal.
 func ingestRPCBody(identity map[string]any, ip, userAgent string, raw []byte) ([]byte, error) {
-	head, err := json.Marshal(map[string]any{"identity": identity, "ip_address": ip, "user_agent": userAgent})
-	if err != nil {
-		return nil, err
-	}
-	const key = `,"raw_base64":"`
-	// head ends with "}", replaced by the base64 member's closing `"}`.
-	out := make([]byte, 0, len(head)-1+len(key)+base64.StdEncoding.EncodedLen(len(raw))+2)
-	out = append(out, head[:len(head)-1]...)
-	out = append(out, key...)
-	out = base64.StdEncoding.AppendEncode(out, raw)
-	return append(out, '"', '}'), nil
+	fields := map[string]any{"identity": identity, "ip_address": ip, "user_agent": userAgent}
+	return upload.Body(fields, "raw_base64", upload.Base64Len(int64(len(raw))), func(out []byte) ([]byte, error) {
+		return upload.AppendBase64(out, bytes.NewReader(raw))
+	})
 }
 
 // submitStatus: queued or running work is 202, any other actual state is 200.

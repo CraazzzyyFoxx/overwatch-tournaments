@@ -21,14 +21,18 @@ from shared.services.realtime_publisher import publish_envelope_to_redis
 from src.core.cache import _UNAVAILABLE, RedisStore
 from src.core.redis import get_redis
 
-# The cached payload carries the user's workspace memberships (id + slug) too,
-# so a hit answers the token path with no database round trip at all.
-RBAC_TTL_SECONDS = 60
+# The cached payload carries the user's workspace memberships (id + slug) and
+# identity fields too, so a hit answers the token path with no database round
+# trip at all. 600 s is safe only because every RBAC/identity mutation drops the
+# entry explicitly (and identity flushes them all at startup, for drops that
+# expired in the queue while it was down); the TTL is the backstop, not the bound.
+RBAC_TTL_SECONDS = 600
 
-# Bumped by every RBAC drop. A fill reads it BEFORE its database reads and
-# writes only while it is unchanged (``_SET_IF_GENERATION``), so a validation
-# that read the database before a membership commit cannot put the pre-change
-# RBAC back after that change's invalidation. The TTL only has to outlive one
+# Bumped by every RBAC drop. A fill reads it BEFORE it loads anything -- the
+# account row included -- in the same MGET as the entry, and writes only while
+# it is unchanged (``_SET_IF_GENERATION``), so a validation that read the
+# database before a membership or account commit cannot put the pre-change
+# entry back after that change's invalidation. The TTL only has to outlive one
 # fill: a generation that expired mid-fill reads "0" again, the value a fill
 # that started before the very first bump would still match.
 RBAC_GENERATION_KEY_PREFIX = "rbac:gen:"
@@ -82,29 +86,51 @@ class SessionCache:
         """Cached RBAC payload, or None on a miss/outage."""
         return await self._rbac.get_json(user_id)
 
-    async def rbac_generation(self, user_id: int) -> str | None:
-        """The generation a fill hands to ``set_rbac``; read it BEFORE the database.
+    async def rbac_state(self, user_id: int) -> tuple[dict[str, Any] | None, str | None]:
+        """``(RBAC entry, generation)`` in ONE round trip; read it BEFORE loading the user.
 
-        None on an outage -- nothing could be written then anyway.
+        The generation is what a fill hands to ``set_rbac``. ``(None, None)`` on
+        an outage -- nothing could be written then anyway.
         """
+        entry, generation, _revoked = await self.token_state(user_id, None)
+        return entry, generation
+
+    async def token_state(self, user_id: int, session_id: str | None) -> tuple[dict[str, Any] | None, str | None, bool]:
+        """``(RBAC entry, generation, sid revoked?)`` in ONE round trip -- the token path's whole Redis cost.
+
+        Fails soft to ``(None, None, False)``: a miss (the database answers, and
+        nothing is cached) and not-revoked. On an outage revocation cannot be
+        proven; the database revocation still applies at the next refresh, so a
+        stale access token survives at most one access-token TTL.
+        """
+        keys = [self._rbac.key(user_id), self._rbac_generation.key(user_id)]
+        if session_id:
+            keys.append(self._revoked_sessions.key(session_id))
         try:
-            return await get_redis().get(self._rbac_generation.key(user_id)) or "0"
+            raw, generation, *revoked = await get_redis().mget(keys)
         except _UNAVAILABLE as exc:
-            logger.warning(f"Redis unavailable during RBAC generation read; falling back gracefully: {exc}")
-            return None
+            self._rbac._degraded("read", exc)
+            return None, None, False
+        entry = await self._rbac.decode(user_id, raw)
+        return entry, generation or "0", any(flag is not None for flag in revoked)
 
     async def set_rbac(
         self,
         user_id: int,
         *,
         generation: str | None,
+        user: dict[str, Any],
         roles: list[str],
         permissions: list[dict[str, str]],
         workspaces: list[list[Any]] | None = None,
         workspace_roles: dict[str, dict] | None = None,
         denies: list[dict[str, Any]] | None = None,
     ) -> None:
-        """Store what a fill loaded, unless the user's RBAC was dropped since it read ``generation``."""
+        """Store what a fill loaded, unless the user's RBAC was dropped since it read ``generation``.
+
+        ``user`` is ``{email, username, is_active, is_superuser}``: with it a hit
+        answers ``validate_token`` without loading the account row.
+        """
         if generation is None:
             return
         # Every component is stored unconditionally, empty included. A missing
@@ -113,6 +139,7 @@ class SessionCache:
         # permanent partial hit: the load would repeat on every single request
         # and the entry would be rewritten each time.
         payload: dict[str, Any] = {
+            "user": user,
             "roles": roles,
             "permissions": permissions,
             "workspaces": workspaces or [],
@@ -130,7 +157,7 @@ class SessionCache:
                 self._rbac.ttl,
             )
         except _UNAVAILABLE as exc:
-            logger.warning(f"Redis unavailable during RBAC cache write; falling back gracefully: {exc}")
+            self._rbac._degraded("write", exc)
 
     async def invalidate_rbac(self, *user_ids: int) -> None:
         if not user_ids:
@@ -140,7 +167,7 @@ class SessionCache:
                 self._queue_rbac_drop(pipeline, user_ids)
                 await pipeline.execute()
         except _UNAVAILABLE as exc:
-            logger.warning(f"Redis unavailable during RBAC invalidation; falling back gracefully: {exc}")
+            self._rbac._degraded("invalidation", exc)
         else:
             for user_id in user_ids:
                 logger.info(f"RBAC cache invalidated for user {user_id}")
@@ -171,6 +198,30 @@ class SessionCache:
             except (RedisError, OSError, RuntimeError) as exc:
                 logger.warning(f"RBAC change for user {user_id} not announced to the gateway: {exc}")
 
+    async def flush_rbac_cache(self) -> int:
+        """Drop every cached RBAC entry; returns how many (0 on an outage).
+
+        Run at identity startup: a ``WorkspaceMemberChangedEvent`` that expired
+        unread in its queue (2-minute TTL) while identity was down would
+        otherwise leave its stale entry alive for up to ``RBAC_TTL_SECONDS``.
+        """
+        flushed = 0
+        try:
+            client = get_redis()
+            batch: list[str] = []
+            async for key in client.scan_iter(match=f"{RBAC_USER_KEY_PREFIX}*", count=500):
+                batch.append(key)
+                if len(batch) == 500:
+                    flushed += await client.unlink(*batch)
+                    batch.clear()
+            if batch:
+                flushed += await client.unlink(*batch)
+        except _UNAVAILABLE as exc:
+            self._rbac._degraded("invalidation", exc)
+        else:
+            logger.info(f"RBAC cache flushed: {flushed} entries")
+        return flushed
+
     # --- Revoked sessions ---
 
     async def blacklist_session(self, session_id: str, ttl_seconds: int) -> None:
@@ -180,8 +231,17 @@ class SessionCache:
         await self._revoked_sessions.mark(session_id, ttl=ttl_seconds)
 
     async def blacklist_sessions(self, session_ids: set[str], ttl_seconds: int) -> None:
-        for session_id in session_ids:
-            await self.blacklist_session(session_id, ttl_seconds)
+        """``blacklist_session`` for many sids, in one pipelined round trip."""
+        session_ids = {session_id for session_id in session_ids if session_id}
+        if not session_ids or ttl_seconds <= 0:
+            return
+        try:
+            async with get_redis().pipeline(transaction=False) as pipeline:
+                for session_id in sorted(session_ids):
+                    pipeline.set(self._revoked_sessions.key(session_id), "1", ex=ttl_seconds)
+                await pipeline.execute()
+        except _UNAVAILABLE as exc:
+            self._revoked_sessions._degraded("write", exc)
 
     async def finalize_profile_merge(
         self,
@@ -198,15 +258,6 @@ class SessionCache:
             self._queue_rbac_drop(pipeline, auth_user_ids)
             await pipeline.execute()
         await self._announce_rbac_changed(auth_user_ids)
-
-    async def is_session_blacklisted(self, session_id: str | None) -> bool:
-        """True only when the session is known-revoked (fails open otherwise).
-
-        On an outage we cannot prove the session was revoked; the database
-        revocation still applies at the next refresh, so a stale access token
-        survives at most one access-token TTL.
-        """
-        return await self._revoked_sessions.has(session_id or "")
 
     # --- Refresh idempotency ---
 

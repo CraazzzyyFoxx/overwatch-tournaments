@@ -1,0 +1,82 @@
+/* The organizer hero's preview window (`CommunityPreview`): the community page
+   the form is about to create, in the organizer banner's glowing window. From
+   1024px it sits tipped back in 3D beside the form and straightens a little
+   under the pointer; below that it lies flat under the form. */
+
+.stage {
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  position: relative;
+  isolation: isolate;
+}
+
+/* The teal bloom behind the window. */
+.stage::before {
+  content: "";
+  position: absolute;
+  inset: -10% -14% -6% -10%;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(45% 45% at 55% 40%, color-mix(in srgb, var(--aqt-teal) 22%, transparent), transparent 70%);
+}
+
+.screen {
+  position: relative;
+  overflow: clip;
+  border: 1px solid color-mix(in srgb, var(--aqt-teal) 40%, transparent);
+  border-radius: var(--aqt-radius);
+  background: var(--aqt-bg);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--aqt-teal) 16%, transparent),
+    0 0 90px -14px color-mix(in srgb, var(--aqt-teal) 55%, transparent),
+    0 40px 80px -30px color-mix(in srgb, var(--aqt-bg) 85%, transparent);
+}
+
+/* A glint across the glass. */
+.screen::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(115deg, var(--aqt-overlay-4), transparent 32%);
+}
+
+/* The community page's own hero: its teal hairline and corner bloom. */
+.page {
+  position: relative;
+  isolation: isolate;
+  border-top: 2px solid var(--aqt-teal);
+}
+
+.page::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(60% 140% at 0% 100%, color-mix(in srgb, var(--aqt-teal) 14%, transparent), transparent 70%);
+}
+
+@media (min-width: 64rem) {
+  .stage {
+    perspective: 1600px;
+  }
+
+  .screen {
+    --tilt: rotateY(-11deg) rotateX(5deg) rotateZ(-1deg);
+    transform: var(--tilt);
+    transform-origin: 30% 50%;
+    transition: transform 800ms var(--ease);
+  }
+}
+
+@media (min-width: 64rem) and (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .stage:hover .screen {
+    --tilt: rotateY(-5deg) rotateX(2deg) rotateZ(-0.3deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .screen {
+    transition: none;
+  }
+}

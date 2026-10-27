@@ -378,3 +378,49 @@ func keys(m map[string]any) []string {
 	}
 	return out
 }
+
+// A bespoke upload documented as JSON (or with no body at all) cannot be called
+// from a generated SDK or the Scalar "try it"; a raw download documented as
+// JSON makes clients parse bytes. Media must drive both, on v1 and v2.
+func TestBuild_MediaDocumentsMultipartUploadsAndBinaryDownloads(t *testing.T) {
+	groups := []Group{{Tag: "Files", Routes: []edge.RouteSpec{
+		{Method: "POST", Pattern: "/api/v1/logs", Queue: "rpc.logs.upload", Auth: edge.AuthRequired,
+			Media: edge.Media{Files: []string{"files[]"}, Fields: []string{"tournament_id"}}},
+		{Method: "GET", Pattern: "/api/v1/logs/{id}", Queue: "rpc.logs.get", Auth: edge.AuthRequired,
+			Media: edge.Media{Response: "application/octet-stream"}},
+	}}}
+	for name, raw := range map[string][]byte{
+		"v1": Build(Info{Title: "t"}, groups),
+		"v2": BuildV2(Info{Title: "t"}, groups),
+	} {
+		prefix := "/api/" + name
+		var doc map[string]any
+		if err := json.Unmarshal(raw, &doc); err != nil {
+			t.Fatal(err)
+		}
+		paths := asMap(t, doc["paths"], "paths")
+
+		post := asMap(t, asMap(t, paths[prefix+"/logs"], "logs")["post"], "post")
+		content := asMap(t, asMap(t, post["requestBody"], "requestBody")["content"], "content")
+		if _, ok := content["application/json"]; ok || len(content) != 1 {
+			t.Fatalf("%s upload content = %v, want multipart only", name, content)
+		}
+		schema := asMap(t, asMap(t, content["multipart/form-data"], "multipart")["schema"], "schema")
+		props := asMap(t, schema["properties"], "properties")
+		files := asMap(t, props["files[]"], "files[]")
+		if files["type"] != "array" || asMap(t, files["items"], "items")["format"] != "binary" {
+			t.Errorf("%s files[] = %v, want an array of binary", name, files)
+		}
+		if asMap(t, props["tournament_id"], "tournament_id")["type"] != "string" {
+			t.Errorf("%s tournament_id = %v", name, props["tournament_id"])
+		}
+
+		get := asMap(t, asMap(t, paths[prefix+"/logs/{id}"], "log")["get"], "get")
+		ok := asMap(t, asMap(t, get["responses"], "responses")["200"], "200")
+		body := asMap(t, ok["content"], "200.content")
+		bin, found := body["application/octet-stream"]
+		if !found || len(body) != 1 || asMap(t, asMap(t, bin, "bin")["schema"], "schema")["format"] != "binary" {
+			t.Errorf("%s download 200 content = %v, want raw octet-stream only (no envelope)", name, body)
+		}
+	}
+}

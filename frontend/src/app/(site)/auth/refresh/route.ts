@@ -32,7 +32,9 @@ export async function POST(request: Request) {
   try {
     const tokens = await authService.refresh(refreshToken, getForwardedClientHeaders(request));
 
-    const response = NextResponse.json(tokens, { status: 200 });
+    // The refresh token travels solely in the httpOnly cookie set below; never
+    // hand it to page JavaScript in the body.
+    const response = NextResponse.json({ access_token: tokens.access_token }, { status: 200 });
 
     // Domain-wide (`.owt`) ONLY on the platform apex/subdomains (SSO across
     // subdomains). On a workspace CUSTOM domain the browser rejects a `.owt`

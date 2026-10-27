@@ -36,7 +36,6 @@ for root in (str(SERVICE_ROOT), str(BACKEND_ROOT)):
         sys.path.insert(0, root)
 
 from src.schemas.admission import AdmissionRead  # noqa: E402
-from src.schemas.registration_build import AdmissionChips  # noqa: E402
 from src.services.admission import (  # noqa: E402
     AdmissionConfig,
     AdmissionDecision,
@@ -48,6 +47,7 @@ from src.services.admission import (  # noqa: E402
 from src.services.admission.evaluate import evaluate  # noqa: E402
 from src.services.admission.reasons import reason  # noqa: E402
 from src.services.admission.registry import REQUIREMENTS  # noqa: E402
+from src.services.registration.read_model import AdmissionChips  # noqa: E402
 
 
 def _config(*, profile: bool = False, subscription: bool = False) -> AdmissionConfig:

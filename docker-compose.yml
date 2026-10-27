@@ -270,6 +270,16 @@ services:
       - ./logs/tournament-svc:/logs
     networks:
       - app-network
+    # /health answers 200 only once the broker connection is up and the process serves (consumers and scheduler
+    # running); 503 while starting or shutting down.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9103/health', timeout=5)"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    # In-flight handlers get the broker's 20 s graceful_timeout on SIGTERM; Docker's default 10 s would cut them.
+    stop_grace_period: 30s
     deploy:
       resources:
         limits:
@@ -666,9 +676,10 @@ services:
       dockerfile: Dockerfile
     ports:
       - "${GATEWAY_HOST_PORT:-8080}:8080"
+    # No auth.env: the gateway verifies access tokens with JWT_PUBLIC_KEY
+    # (gateway.env, `make jwt-public-key`) and never sees JWT_SECRET_KEY.
     env_file:
       - ./backend/env/common.env
-      - ./backend/env/auth.env
       - ./backend/env/gateway.env
     environment:
       # OpenTelemetry tracing into the shared otel-collector (same block as the
@@ -689,6 +700,9 @@ services:
         condition: service_healthy
     networks:
       - app-network
+    # SIGTERM drains in-flight requests for GATEWAY_SHUTDOWN_TIMEOUT (30s
+    # default) before the rest are cut; Docker's default 10s would SIGKILL first.
+    stop_grace_period: 40s
     deploy:
       resources:
         limits:

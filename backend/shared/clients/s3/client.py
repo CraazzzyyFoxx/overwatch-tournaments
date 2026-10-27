@@ -254,13 +254,13 @@ class S3Client:
 
     # ── Batch operations ─────────────────────────────────────────────────
 
-    async def delete_prefix(self, prefix: str) -> int:
-        """Delete all objects under a prefix. Returns count of deleted objects.
+    async def delete_prefix(self, prefix: str, *, keep: str | None = None) -> int:
+        """Delete all objects under a prefix except ``keep``. Returns count of deleted objects.
 
         Uses the batch ``delete_objects`` API (up to 1000 keys per call) instead
         of one request per key.
         """
-        keys = await self.list_objects(prefix)
+        keys = [key for key in await self.list_objects(prefix) if key != keep]
         if not keys:
             return 0
         deleted = 0

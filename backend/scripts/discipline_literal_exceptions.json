@@ -1902,16 +1902,6 @@
       "remove_when": "pick-ban kind is migrated to 'character'"
     },
     {
-      "path": "backend/tournament-service/src/services/map/service.py",
-      "rule": "catalog-label",
-      "token": "gamemode",
-      "context": "if \"gamemode\" in in_entities:",
-      "count": 1,
-      "reason": "persisted/wire identifier (column default, table/schema name, stored parser/mode id, URL value, include token)",
-      "owner": "P9",
-      "remove_when": "identifier is migrated with its data/URL"
-    },
-    {
       "path": "backend/tournament-service/src/services/registration/rank_autofill.py",
       "rule": "ow-prefix",
       "token": "ow_rank_value",

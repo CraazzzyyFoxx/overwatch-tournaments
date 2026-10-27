@@ -140,7 +140,7 @@ function HoverPopover({
         </Button>
       </PopoverTrigger>
       <PopoverContent
-        className="w-80 rounded-xl"
+        className="w-80"
         animate={false}
         onOpenAutoFocus={(e) => e.preventDefault()}
         // Focus never enters the card, so there is none to return. Radix would focus the trigger on close, and the

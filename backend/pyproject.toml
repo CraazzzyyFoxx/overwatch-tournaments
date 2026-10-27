@@ -1,7 +1,6 @@
 [tool.uv]
 dev-dependencies = [
     "pytest<8.0.0,>=7.4.3",
-    "mypy<2.0.0,>=1.8.0",
     "ruff<1.0.0,>=0.2.2",
     "pre-commit<4.0.0,>=3.6.2",
     "types-passlib<2.0.0.0,>=1.7.7.20240106",
@@ -11,6 +10,9 @@ dev-dependencies = [
     # two-scope charge is the one piece of this codebase that only a Redis
     # script interpreter can verify.
     "fakeredis[lua]>=2.38",
+    # The type-check gate (scripts/typecheck.sh). Pinned: ty is pre-1.0 and its
+    # diagnostics move between releases; bump on purpose, recalibrate ty-gate.toml.
+    "ty==0.0.92",
 ]
 
 [tool.uv.workspace]
@@ -19,11 +21,9 @@ members = ["shared", "app-service", "identity-service", "discord-service", "stat
 [tool.uv.sources]
 shared = { workspace = true }
 
-[tool.mypy]
-strict = true
-exclude = ["venv", ".venv"]
-
 [tool.ty.environment]
+# Editor config. The CI gate is ty-gate.toml (see scripts/typecheck.sh): with
+# every service as a root at once, `src` resolves to the first service listed.
 # Point ty at the workspace venv so it resolves `shared` (editable install)
 # and all third-party packages.
 python = ".venv"

@@ -90,8 +90,11 @@ curl -sX POST -H 'Cookie: owtdev_refresh_token=x' https://<dev-host>/auth/refres
 - `backend/env/*.env` — from the `.example` files, with `PLATFORM_ZONE`,
   `GATEWAY_WS_ALLOWED_ORIGINS` and `OAUTH_REDIRECT` on the dev host,
   `SESSION_COOKIE_PREFIX=owtdev` in `gateway.env`, a
-  **dev-only** `JWT_SECRET_KEY`, and `POSTGRES_*` pointing at the dev
-  database.
+  **dev-only** `JWT_SECRET_KEY` (and `gateway.env`'s `JWT_PUBLIC_KEY` for it: `make
+  prod-jwt-public-key` after the build below), a **dev-only** `OAUTH_TOKEN_ENCRYPTION_KEY`
+  (base64url of 32 random bytes, the generator is in `auth.env.example`; the same value in
+  `auth.env`, `stats.env` and `tournament.env` — identity refuses to start without it while
+  Discord or Twitch OAuth is on), and `POSTGRES_*` pointing at the dev database.
 - `proxy/xray.json` — the `proxy` sidecar's config, if outbound API calls need it. A dead
   outbound shows up as every Discord check answering `unknown`.
 
@@ -120,7 +123,7 @@ make prod-discord-emoji    # the dev bot's own application emoji; skips what is 
 NGINX_CONF_SHA=$(sha256sum nginx/nginx.conf | cut -c1-12) \
 docker compose -f docker-compose.production.yml up -d --wait --no-build \
     --scale app-svc=1 --scale identity-svc=1 --scale tournament-svc=2 --scale frontend=2 \
-    proxy rabbitmq redis app-svc identity-svc tournament-svc stats-svc stats-worker balancer-svc \
+    proxy rabbitmq redis app-svc identity-svc identity-auth-svc tournament-svc stats-svc stats-worker balancer-svc \
     analytics-svc analytics-worker stream-svc gateway frontend nginx
 ```
 
@@ -179,7 +182,8 @@ Equal table counts alone are not a losslessness proof.
   and `assets/*` are public. Verify an actual raw-object round trip and denied anonymous read.
   Parser retention can delete objects; a separate database alone does not protect shared S3.
   Historical raw references remain `unverified` until actual copied bytes are inspected.
-- Rotate the **dev-only** `JWT_SECRET_KEY` consistently for identity and gateway. Recreate
+- Rotate the **dev-only** `JWT_SECRET_KEY` for identity and put its new `make prod-jwt-public-key`
+  into gateway's `JWT_PUBLIC_KEY`. Recreate
   gateway too: it has an in-memory identity cache. Missing SQL sessions do not invalidate
   otherwise valid access JWTs; old Redis refresh/RBAC responses cannot be reused.
   A fresh project avoids flushing shared cache namespaces or deleting SID revocation flags.

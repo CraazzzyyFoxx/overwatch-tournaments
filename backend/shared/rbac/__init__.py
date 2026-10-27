@@ -32,7 +32,7 @@ from .scopes import (
     unknown_scopes,
 )
 
-RBAC_CACHE_VERSION = 3
+RBAC_CACHE_VERSION = 4
 RBAC_USER_KEY_PREFIX = f"rbac:v{RBAC_CACHE_VERSION}:user:"
 
 __all__ = (

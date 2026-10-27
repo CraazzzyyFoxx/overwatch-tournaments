@@ -22,7 +22,7 @@ from shared.repository.chat import (
     ChatMuteRepository,
     ChatRoomSettingsRepository,
 )
-from shared.repository.identity import AuthUserRepository
+from shared.repository.identity import UserRepository
 from shared.services.chat.access import ChatAccess, ChatMembership
 from shared.services.chat.room import CHAT_DOMAIN, ChatRoom
 from shared.services.chat.schemas import (
@@ -95,13 +95,13 @@ class ChatService:
         messages: ChatMessageRepository | None = None,
         settings: ChatRoomSettingsRepository | None = None,
         mutes: ChatMuteRepository | None = None,
-        auth_users: AuthUserRepository | None = None,
+        players: UserRepository | None = None,
     ) -> None:
         self.access = access
         self.messages = messages or ChatMessageRepository()
         self.settings = settings or ChatRoomSettingsRepository()
         self.mutes = mutes or ChatMuteRepository()
-        self.auth_users = auth_users or AuthUserRepository()
+        self.players = players or UserRepository()
 
     # ── policy ───────────────────────────────────────────────────────────────
 
@@ -115,13 +115,15 @@ class ChatService:
         auth_user: Any | None,
         room: ChatRoom,
     ) -> tuple[ChatMembership, bool]:
-        """Membership + the room's spectator setting, or 403.
+        """Membership + the room's spectator setting, or 403 -- for a WRITE.
 
         The resolver already refused anyone who may not see the ROOM; this adds
         the only rule the resolver deliberately does not know — whether merely
-        watching includes reading the chat.
+        watching includes reading the chat. Every caller writes, so the resolver
+        locks (``for_update=True``): one account's posts queue, which is what the
+        count-then-insert rate limit relies on.
         """
-        membership = await self.access.resolve(session, auth_user, room)
+        membership = await self.access.resolve(session, auth_user, room, for_update=True)
         visible = await self.spectators_can_read(session, room)
         if membership.is_spectator and not visible:
             raise HTTPException(
@@ -179,7 +181,8 @@ class ChatService:
         after_id: int | None = None,
         limit: int = HISTORY_DEFAULT,
     ) -> ChatEnvelope:
-        membership = await self.access.resolve(session, auth_user, room)
+        # The history read: every spectator polls it, so it never takes the resolver's lock.
+        membership = await self.access.resolve(session, auth_user, room, for_update=False)
         visible = await self.spectators_can_read(session, room)
         if membership.is_spectator and not visible:
             # Watching a closed room is a normal visit, not a failed read: the room answers that it is closed and
@@ -198,7 +201,7 @@ class ChatService:
         )
         # One extra two-column query for the whole page, not one per row: the
         # transcript usually repeats a handful of authors.
-        avatars = await self.auth_users.avatar_urls(session, {row.auth_user_id for row in rows})
+        avatars = await self.players.avatar_urls_by_auth_user(session, {row.auth_user_id for row in rows})
 
         mute = None
         if auth_user is not None:
@@ -307,7 +310,7 @@ class ChatService:
         # Also on the event, not just the reply: every other subscriber renders
         # this message straight from the payload and would otherwise show a
         # faceless row until the next full read.
-        avatars = await self.auth_users.avatar_urls(session, (auth_user.id,))
+        avatars = await self.players.avatar_urls_by_auth_user(session, (auth_user.id,))
         message = _read(row, avatars.get(auth_user.id))
         await self._emit(
             session,

@@ -26,6 +26,9 @@ _invalid_service_token = HTTPException(
     headers={"WWW-Authenticate": "Bearer"},
 )
 
+# The one scope ``invalidate_rbac`` demands (SERVICE_SCOPES in auth.env grants it per client).
+INVALIDATE_SCOPE = "identity:invalidate"
+
 
 class ServiceTokenService:
     def __init__(
@@ -103,7 +106,11 @@ class ServiceTokenService:
         and machine clients are configured outside this repository; renaming it
         would break callers we cannot see.
         """
-        self._decode(token)  # requires a valid service token
+        if INVALIDATE_SCOPE not in self.validate(token).scopes:  # validate() raises 401 on a bad token
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Service token lacks the {INVALIDATE_SCOPE} scope",
+            )
         await self.cache.invalidate_rbac(user_id)
 
 

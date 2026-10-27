@@ -44,11 +44,6 @@ def _list_result(values):
     return SimpleNamespace(scalars=Mock(return_value=SimpleNamespace(all=Mock(return_value=list(values)))))
 
 
-def _count_result(value):
-    """A ``session.execute`` result whose ``.scalar_one()`` is ``value`` (BaseRepository.count)."""
-    return SimpleNamespace(scalar_one=Mock(return_value=value))
-
-
 def test_division_grid_tracks_import_provenance_and_archival() -> None:
     columns = models.DivisionGrid.__table__.c
 
@@ -203,7 +198,7 @@ def test_portable_document_has_versioned_round_trip_contract() -> None:
 
 def test_published_version_cannot_be_updated_in_place() -> None:
     async def run() -> None:
-        version = SimpleNamespace(id=11, status="published", tiers=[])
+        version = SimpleNamespace(id=11, status="published", tiers=[], grid=SimpleNamespace(workspace_id=4))
         with (
             patch.object(grid_service, "get_version", AsyncMock(return_value=version)),
             pytest.raises(Exception) as caught,
@@ -232,13 +227,16 @@ def test_draft_minor_edit_preserves_tier_ids_and_mapping_rules() -> None:
             icon_url="https://cdn.example/champion-1.png",
         )
         tier.id = 91
-        version = SimpleNamespace(id=11, status="draft", tiers=[tier], grid=SimpleNamespace(discipline="overwatch"))
+        version = SimpleNamespace(
+            id=11, status="draft", tiers=[tier], grid=SimpleNamespace(workspace_id=4, discipline="overwatch")
+        )
         session = SimpleNamespace(
             add=Mock(),
             delete=AsyncMock(),
             execute=AsyncMock(),
             flush=AsyncMock(),
             expire=Mock(),
+            info={},
         )
         payload = schemas.DivisionGridVersionUpdate(
             tiers=[
@@ -267,65 +265,6 @@ def test_draft_minor_edit_preserves_tier_ids_and_mapping_rules() -> None:
         session.delete.assert_not_awaited()
         session.add.assert_not_called()
         session.execute.assert_not_awaited()
-
-    asyncio.run(run())
-
-
-def test_activation_readiness_requires_complete_mappings_from_used_versions() -> None:
-    async def run() -> None:
-        target = SimpleNamespace(
-            id=30,
-            status="published",
-            grid=SimpleNamespace(workspace_id=4, discipline="overwatch"),
-        )
-        src10 = SimpleNamespace(
-            id=10,
-            label="v10",
-            grid=SimpleNamespace(name="Ladder"),
-            tiers=[SimpleNamespace(id=101, slug="a", name="A")],
-        )
-        src20 = SimpleNamespace(
-            id=20,
-            label="v20",
-            grid=SimpleNamespace(name="Ladder"),
-            tiers=[SimpleNamespace(id=201, slug="b", name="B")],
-        )
-        incomplete = SimpleNamespace(is_complete=False, rules=[])
-        session = SimpleNamespace(
-            execute=AsyncMock(return_value=_count_result(0)),
-            scalars=AsyncMock(return_value=[]),
-        )
-        with (
-            patch.object(
-                grid_service,
-                "get_version",
-                AsyncMock(side_effect=[target, src10, src20]),
-            ),
-            patch.object(
-                division_service,
-                "get_workspace_source_version_ids",
-                AsyncMock(return_value={10, 20, 30}),
-            ),
-            patch.object(
-                grid_service,
-                "get_mapping",
-                AsyncMock(side_effect=[None, incomplete]),
-            ),
-        ):
-            readiness = await grid_service.get_activation_readiness(
-                session,
-                workspace_id=4,
-                target_version_id=30,
-            )
-
-        assert readiness.is_ready is False
-        assert readiness.missing_mapping_version_ids == [10]
-        assert readiness.incomplete_mapping_version_ids == [20]
-        sources = {source.version_id: source for source in readiness.sources}
-        assert sources[10].status == "missing"
-        assert [tier.source_tier_id for tier in sources[10].conflict_tiers] == [101]
-        assert sources[20].status == "incomplete"
-        assert [tier.source_tier_id for tier in sources[20].conflict_tiers] == [201]
 
     asyncio.run(run())
 

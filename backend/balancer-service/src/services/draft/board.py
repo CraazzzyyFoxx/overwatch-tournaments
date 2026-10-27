@@ -5,17 +5,18 @@ from __future__ import annotations
 import asyncio
 import time
 from collections.abc import Awaitable, Callable, Mapping
-from datetime import UTC, datetime
 from typing import Any, NamedTuple
 from uuid import uuid4
 
 from cashews import cache
-from sqlalchemy.ext.asyncio import AsyncSession
+from loguru import logger
+from sqlalchemy import event
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.orm import Session
 
 from shared.models.draft import DraftSession
 from shared.repository.draft import (
     DraftPickRepository,
-    DraftPlayerRepository,
     DraftSessionRepository,
     DraftTeamRepository,
 )
@@ -24,13 +25,12 @@ from src import schemas
 from src.services.draft import loaders
 from src.services.draft import realtime as draft_rt
 from src.services.draft.feasibility import DraftFeasibilityService, feasibility_service, single_flight
-from src.services.draft.rosters import DraftRosterService, draft_rosters
 
 # Safety-net TTL for the public board cache: the event-id in the key already
 # invalidates on every persisted draft event, so the TTL only bounds how long a
 # role or rank edited elsewhere (read live, never evented on the board) stays
 # stale, and expires dead keys.
-_BOARD_CACHE_TTL = "5s"
+_BOARD_CACHE_TTL_SECONDS = 5
 
 
 def _board_cache_key(session_id: int, last_event_id: int | None) -> str:
@@ -155,19 +155,15 @@ class DraftBoardService:
         *,
         sessions_repo: DraftSessionRepository = DraftSessionRepository(),
         teams_repo: DraftTeamRepository = DraftTeamRepository(),
-        players_repo: DraftPlayerRepository = DraftPlayerRepository(),
         picks_repo: DraftPickRepository = DraftPickRepository(),
         form_versions_repo: RegistrationFormVersionRepository = RegistrationFormVersionRepository(),
         feasibility: DraftFeasibilityService = feasibility_service,
-        rosters: DraftRosterService = draft_rosters,
     ) -> None:
         self.sessions_repo = sessions_repo
         self.teams_repo = teams_repo
-        self.players_repo = players_repo
         self.picks_repo = picks_repo
         self.form_versions_repo = form_versions_repo
         self.feasibility = feasibility
-        self.rosters = rosters
 
     async def get_active_session(self, session: AsyncSession, tournament_id: int) -> DraftSession | None:
         active = await self.sessions_repo.get_active_for_tournament(session, tournament_id)
@@ -250,22 +246,26 @@ class DraftBoardService:
             cached = await single_flight(
                 cache_key,
                 lambda: _compute_once(
-                    cache_key, lambda: self._load_board(session, draft_session, last_event_id), _BOARD_CACHE_TTL
+                    cache_key,
+                    lambda: self._load_board(session, draft_session, last_event_id),
+                    f"{_BOARD_CACHE_TTL_SECONDS}s",
                 ),
             )
-        # server_time drives client clock sync; never serve a stale one.
-        return cached.model_copy(update={"server_time": datetime.now(UTC)})
+        return cached
 
     async def _load_board(
         self, session: AsyncSession, draft_session: DraftSession, last_event_id: int | None
     ) -> schemas.DraftBoardSnapshot:
-        """Build the public board snapshot from the database (no caching -- see ``build_board``)."""
+        """Build the public board snapshot (no board caching -- see ``build_board``; its seats ride the shared read
+        snapshot -- see ``DraftFeasibilityService.board_snapshot``)."""
         teams = await self.teams_repo.list_by_session(session, draft_session.id, options=loaders.team_options())
         picks = await self.picks_repo.list_by_session(session, draft_session.id, options=loaders.pick_options())
-        players = await self.players_repo.list_by_session(session, draft_session.id, options=loaders.player_options())
-        # ONE resolve for the whole board: roles, ranks, sub-role, flex, notes and
-        # custom-field answers all come from here, live off the registration.
-        rosters = await self.rosters.load(session, draft_session, players)
+        # Players and their ONE roster resolve (roles, ranks, sub-role, flex, notes, custom-field answers, live off
+        # the registration) come off the read snapshot of this very state, shared with its fit and queue reads.
+        snapshot = await self.feasibility.board_snapshot(
+            session, draft_session, last_event_id, max_age=_BOARD_CACHE_TTL_SECONDS
+        )
+        players, rosters = snapshot.players, snapshot.rosters
 
         # Skipped entirely for a pool where nobody answered a custom field, so
         # those drafts pay nothing for the feature.
@@ -305,7 +305,6 @@ class DraftBoardService:
                 for p in players
             ],
             current_pick=schemas.DraftPickRead.from_pick(current, dimension=dimension) if current else None,
-            server_time=datetime.now(UTC),
             last_event_id=last_event_id,
         )
         return snapshot
@@ -340,3 +339,42 @@ class DraftBoardService:
 
 
 board_service = DraftBoardService()
+
+# --- prewarm ------------------------------------------------------------------
+
+_prewarm_session_factory: async_sessionmaker[AsyncSession] | None = None
+_prewarms: set[asyncio.Task[None]] = set()
+
+
+def configure_prewarm(session_factory: async_sessionmaker[AsyncSession]) -> None:
+    """Build every committed board state before the room asks for it (``serve.py``); unset in tests and scripts."""
+    global _prewarm_session_factory
+    _prewarm_session_factory = session_factory
+
+
+async def _prewarm(session_factory: async_sessionmaker[AsyncSession], draft_session_id: int) -> None:
+    """Build the board of a just-committed state, and with it the read snapshot it shares, so the room's re-reads
+    (a rollback's board herd, every pick's fit and queue) find both warm instead of all building them at once.
+    Best-effort: a failure leaves the readers to build it themselves, as before."""
+    try:
+        async with session_factory() as session:
+            draft = await board_service.sessions_repo.get(session, draft_session_id)
+            if draft is not None:
+                await board_service.build_board(session, draft)
+    except Exception:  # noqa: BLE001
+        logger.opt(exception=True).warning("Draft board prewarm failed for session {}", draft_session_id)
+
+
+@event.listens_for(Session, "after_commit")
+def _prewarm_moved_boards(session: Session) -> None:
+    if session.in_nested_transaction():
+        return
+    # A mark a rolled-back transaction left behind costs one spare build at most.
+    moved: set[int] | None = session.info.pop(draft_rt.MOVED_BOARDS_KEY, None)
+    if not moved or _prewarm_session_factory is None:
+        return
+    loop = asyncio.get_running_loop()
+    for draft_session_id in moved:
+        task = loop.create_task(_prewarm(_prewarm_session_factory, draft_session_id))
+        _prewarms.add(task)
+        task.add_done_callback(_prewarms.discard)

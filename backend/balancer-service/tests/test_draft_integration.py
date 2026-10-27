@@ -1445,6 +1445,26 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
 
             self.assertEqual(await feasibility_service.team_fit_scores(s, draft, team_id=team_id), [])
 
+    async def test_a_fit_read_after_a_pick_never_offers_the_drafted_player(self) -> None:
+        # Every team's fit at one board state shares that state's candidate list; a pick is a new
+        # state (its event), so a list built before it must never answer after it.
+        async with self.Session() as s:
+            draft = await self._live_draft(s)
+            first = await s.get(DraftPick, draft.current_pick_id)
+            await feasibility_service.team_fit_scores(s, draft, team_id=first.draft_team_id)
+            await lifecycle.lifecycle_service.autopick_pick(
+                s, draft, first, expected_version=first.version, actor_auth_user_id=self.captain_auth_user_ids[0]
+            )
+            await s.commit()
+            await s.refresh(draft)
+            await s.refresh(first)
+            following = await s.get(DraftPick, draft.current_pick_id)
+
+            scores = await feasibility_service.team_fit_scores(s, draft, team_id=following.draft_team_id)
+
+            self.assertTrue(scores)
+            self.assertNotIn(first.picked_player_id, {score.player_id for score in scores})
+
     async def test_journal_reads_newest_first_and_names_only_human_actors(self) -> None:
         async with self.Session() as s:
             draft = await self._live_draft(s)

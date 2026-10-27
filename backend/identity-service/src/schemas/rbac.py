@@ -11,9 +11,12 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from shared.core import pagination
 from shared.rpc.query import parse_id_list
 
+from .auth import AccountAvatarUrl
+
 __all__ = (
     "AuthUserLinkedPlayerRead",
     "AuthUserListRead",
+    "AuthUserLookupRead",
     "AuthUserDetailRead",
     "AdminSessionRead",
     "AuthUserPlayerLinkAssign",
@@ -120,7 +123,7 @@ class AuthUserListRead(BaseModel):
     username: str
     first_name: str | None = None
     last_name: str | None = None
-    avatar_url: str | None = None
+    avatar_url: AccountAvatarUrl = None
     is_active: bool
     is_superuser: bool
     is_verified: bool
@@ -136,6 +139,20 @@ class AuthUserDetailRead(AuthUserListRead):
     """Schema for auth-user detail view with effective permissions."""
 
     effective_permissions: list[str] = Field(default_factory=list)
+
+
+class AuthUserLookupRead(BaseModel):
+    """An account found by a workspace-scoped operator's global search: who it is, nothing about it.
+
+    No email, roles, players or flags: the operator may only read their own
+    workspace's members, and this exists so they can find someone to add.
+    """
+
+    id: int
+    username: str
+    avatar_url: AccountAvatarUrl = None
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class AdminSessionRead(BaseModel):

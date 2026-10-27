@@ -3,11 +3,10 @@
 import { useCallback, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
-import { DataTable } from "@/components/data-table";
+import { DataTable, type TableCommand } from "@/components/data-table";
 import { FilterBar } from "@/components/kit/FilterBar";
 import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import { useFilters } from "@/components/kit/useFilters";
-import { Button } from "@/components/ui/button";
 import { notify } from "@/lib/notify";
 import { usePermissions } from "@/hooks/usePermissions";
 import { rbacService } from "@/services/rbac.service";
@@ -104,26 +103,23 @@ export function MembersBrowser({
     requestRemoval: setPendingRemoval
   });
 
-  const tableActions = (
-    <>
-      {canUpdateMembers ? (
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={autofillMutation.isPending}
-          onClick={() => autofillMutation.mutate()}
-        >
-          {tw("fillMissing")}
-        </Button>
-      ) : null}
-      {canCreateMembers ? (
-        <Button size="sm" onClick={() => setAddOpen(true)}>
-          <Plus aria-hidden className="size-4" />
-          {t("addMember")}
-        </Button>
-      ) : null}
-    </>
-  );
+  const commands: TableCommand[] = [
+    {
+      id: "fill-missing",
+      label: tw("fillMissing"),
+      hidden: !canUpdateMembers,
+      disabled: autofillMutation.isPending,
+      onSelect: () => autofillMutation.mutate()
+    },
+    {
+      id: "add-member",
+      label: t("addMember"),
+      icon: Plus,
+      primary: true,
+      hidden: !canCreateMembers,
+      onSelect: () => setAddOpen(true)
+    }
+  ];
 
   return (
     <>
@@ -151,7 +147,7 @@ export function MembersBrowser({
         getRowId={(row) => String(row.auth_user_id)}
         toolbar={<FilterBar defs={filterDefs} filters={filters} />}
         emptyMessage={tw("noMembers")}
-        actions={tableActions}
+        commands={commands}
       />
 
       {canCreateMembers ? (

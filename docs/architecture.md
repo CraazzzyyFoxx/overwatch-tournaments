@@ -99,8 +99,9 @@ process as its Discord gateway session.
    enforced (`limit_req_dry_run off`, `limit_conn_dry_run off`).
    nginx speaks only HTTP/1.1.
 2. The **gateway** (`gateway/cmd/gateway/main.go`):
-   - validates JWTs locally with the shared HS256 secret; for RBAC-gated routes it
-     revalidates and enriches the principal via `rpc.identity.validate_token`;
+   - verifies access JWTs locally (EdDSA, with identity's public key `JWT_PUBLIC_KEY`; it holds
+     no signing secret); for RBAC-gated routes it revalidates and enriches the principal via
+     `rpc.identity.validate_token`;
    - dispatches typed REST routes to workers as **RabbitMQ request/reply RPC**
      (`rpc.app.*`, `rpc.identity.*`, `rpc.tournament.*`, `rpc.stats.*`, `rpc.balancer.*`,
      `rpc.analytics.*`, `rpc.discord.*`), carrying an `x-deadline-ms` budget;
@@ -118,12 +119,17 @@ via FastStream. See [`backend/shared/README.md`](../backend/shared/README.md) fo
 
 - **RPC (request/reply).** The gateway publishes to `rpc.<service>.<method>` with a
   `reply_to` + `correlation_id` and an `x-deadline-ms` header (matched by a per-message
-  TTL). Workers return an `{ok, data, error}` envelope. Requests whose deadline has passed
-  are dropped by `DeadlineDropMiddleware`; `prefetch_count` provides QoS backpressure;
-  failures route to per-queue DLX/DLQ.
+  TTL). Workers return an `{ok, data, error}` envelope. AMQP `prefetch_count` QoS is per
+  consumer, so the process-wide bound is a permit pool: at most `RPC_PREFETCH_COUNT`
+  (default 16) deadline-carrying handlers run at once per process
+  (`make_rabbit_broker(prefetch_count=…)` → `configure_rpc_concurrency`).
+  `DeadlineDropMiddleware` drops a request whose deadline passed before it got a permit and
+  cancels a handler still running at the deadline (its transaction rolls back); failures route
+  to per-queue DLX/DLQ.
 - **Domain events + transactional outbox.** State changes write an `event_outbox` row in the
   same DB transaction; every service that writes rows drains them every second
-  (`FOR UPDATE SKIP LOCKED`, retry with backoff), so no service's events depend on another
+  (`FOR UPDATE SKIP LOCKED`, retry with backoff; a row that fails 20 publishes is parked as
+  `dead`), so no service's events depend on another
   service being up. The event map (`backend/shared/messaging/config.py`,
   `backend/shared/schemas/events.py`): `tournament.events` carries `encounter.completed`,
   `registration.approved` / `rank_check_requested`, `state.changed` (consumed by

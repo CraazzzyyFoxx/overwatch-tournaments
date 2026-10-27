@@ -113,7 +113,6 @@ function makeBoard(): DraftBoard {
     picks: [p1, pick(2, 11, "upcoming")],
     players: [player(50), player(51)],
     current_pick: p1,
-    server_time: "2026-06-05T00:00:00Z",
     last_event_id: 0,
   };
 }

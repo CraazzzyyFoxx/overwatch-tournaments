@@ -96,7 +96,7 @@ function SignedInBell({ authUserId }: Readonly<{ authUserId: number }>) {
         sideOffset={8}
         collisionPadding={16}
         animate={false}
-        className="flex max-h-[min(640px,calc(100dvh-96px))] w-[400px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-xl border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-card-2)] p-0 shadow-[0_18px_50px_rgb(0_0_0/0.5)]"
+        className="flex max-h-[min(640px,calc(100dvh-96px))] w-[400px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden p-0"
         // The panel focuses its heading on mount (the first open waits for
         // its chunk, so the heading is not there yet when the popover opens).
         onOpenAutoFocus={(event) => event.preventDefault()}

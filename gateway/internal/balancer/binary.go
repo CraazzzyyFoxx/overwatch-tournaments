@@ -2,7 +2,6 @@ package balancer
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"io"
 	"log/slog"
@@ -12,6 +11,7 @@ import (
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/apierr"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/edge"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/rpc"
+	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/upload"
 )
 
 const (
@@ -42,27 +42,31 @@ func (b *Binary) TeamsImport(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	release, ok := upload.Admit(w, r, maxUpload)
+	if !ok {
+		return
+	}
+	defer release()
 	r.Body = http.MaxBytesReader(w, r.Body, maxUpload)
 	if err := r.ParseMultipartForm(maxUpload); err != nil {
 		writeDetail(w, http.StatusBadRequest, "invalid multipart form")
 		return
 	}
-	f, _, err := r.FormFile("data")
+	f, hdr, err := r.FormFile("data")
 	if err != nil {
 		writeDetail(w, http.StatusBadRequest, "data file is required")
 		return
 	}
 	defer func() { _ = f.Close() }()
-	raw, err := io.ReadAll(io.LimitReader(f, maxUpload))
+	if pf := r.FormValue("payload_format"); pf != "" {
+		data["payload_format"] = pf
+	}
+	body, err := fileJSON(data, hdr.Size, f)
 	if err != nil {
 		writeDetail(w, http.StatusBadRequest, "failed to read file")
 		return
 	}
-	data["content_b64"] = base64.StdEncoding.EncodeToString(raw)
-	if pf := r.FormValue("payload_format"); pf != "" {
-		data["payload_format"] = pf
-	}
-	b.relayJSON(w, r, "rpc.balancer.admin.teams_import", data, http.StatusOK)
+	b.relayJSON(w, r, "rpc.balancer.admin.teams_import", body, http.StatusOK)
 }
 
 // JobCreate: POST /api/v1/balancer/jobs. Multipart: file part "player_data_file"
@@ -74,6 +78,11 @@ func (b *Binary) JobCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	attachQuery(data, r) // forward workspace_id (and any other query param)
+	release, ok := upload.Admit(w, r, maxUpload)
+	if !ok {
+		return
+	}
+	defer release()
 	r.Body = http.MaxBytesReader(w, r.Body, maxUpload)
 	if err := r.ParseMultipartForm(maxUpload); err != nil {
 		writeDetail(w, http.StatusBadRequest, "invalid multipart form")
@@ -85,12 +94,6 @@ func (b *Binary) JobCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer func() { _ = f.Close() }()
-	raw, err := io.ReadAll(io.LimitReader(f, maxUpload))
-	if err != nil {
-		writeDetail(w, http.StatusBadRequest, "failed to read file")
-		return
-	}
-	data["content_b64"] = base64.StdEncoding.EncodeToString(raw)
 	data["content_type"] = hdr.Header.Get("Content-Type")
 	data["filename"] = hdr.Filename
 	if cfg := r.FormValue("config_overrides"); cfg != "" {
@@ -99,7 +102,20 @@ func (b *Binary) JobCreate(w http.ResponseWriter, r *http.Request) {
 	if tid := r.FormValue("tournament_id"); tid != "" {
 		data["tournament_id"] = tid
 	}
-	b.relayJSON(w, r, "rpc.balancer.jobs.create", data, http.StatusAccepted)
+	body, err := fileJSON(data, hdr.Size, f)
+	if err != nil {
+		writeDetail(w, http.StatusBadRequest, "failed to read file")
+		return
+	}
+	b.relayJSON(w, r, "rpc.balancer.jobs.create", body, http.StatusAccepted)
+}
+
+// fileJSON is the RPC message: data plus content_b64, the file base64'd
+// straight into the message.
+func fileJSON(data map[string]any, size int64, f io.Reader) ([]byte, error) {
+	return upload.Body(data, "content_b64", upload.Base64Len(size), func(out []byte) ([]byte, error) {
+		return upload.AppendBase64(out, f)
+	})
 }
 
 func attachQuery(data map[string]any, r *http.Request) {
@@ -136,8 +152,7 @@ func (b *Binary) identityInto(w http.ResponseWriter, r *http.Request, data map[s
 }
 
 // relayJSON calls the RPC and relays the success envelope data as a JSON response.
-func (b *Binary) relayJSON(w http.ResponseWriter, r *http.Request, queue string, data map[string]any, success int) {
-	body, _ := json.Marshal(data)
+func (b *Binary) relayJSON(w http.ResponseWriter, r *http.Request, queue string, body []byte, success int) {
 	ctx, cancel := context.WithTimeout(r.Context(), binaryRPCTimeout)
 	defer cancel()
 

@@ -94,19 +94,14 @@ async def _discord_ids_by_registration(
     return {r.id: by_member.get(r.workspace_member_id or 0, []) for r in registrations}
 
 
-async def _taken_identity_keys(
-    session: AsyncSession,
-    *,
-    tournament_id: int,
-    exclude_team_id: int,
-) -> set[str]:
-    others = list(
+async def _identity_keys_by_team(session: AsyncSession, *, tournament_id: int) -> dict[int, set[str]]:
+    """Every live team member's identity keys in the tournament, grouped by team."""
+    members = list(
         await session.scalars(
             sa.select(models.Registration)
             .where(
                 models.Registration.tournament_id == tournament_id,
                 models.Registration.registration_team_id.is_not(None),
-                models.Registration.registration_team_id != exclude_team_id,
                 models.Registration.deleted_at.is_(None),
                 models.Registration.status.notin_(_SLOT_RELEASING),
             )
@@ -115,11 +110,13 @@ async def _taken_identity_keys(
             .options(selectinload(models.Registration.identities))
         )
     )
-    discord_ids = await _discord_ids_by_registration(session, others)
-    taken: set[str] = set()
-    for registration in others:
-        taken.update(_identity_keys(registration, discord_ids.get(registration.id, [])))
-    return taken
+    discord_ids = await _discord_ids_by_registration(session, members)
+    by_team: dict[int, set[str]] = {}
+    for registration in members:
+        by_team.setdefault(registration.registration_team_id, set()).update(
+            _identity_keys(registration, discord_ids.get(registration.id, []))
+        )
+    return by_team
 
 
 def _starter_ranks(
@@ -194,10 +191,29 @@ class TeamEligibilityService:
         discord: DiscordClient,
     ) -> list[EligibilityIssue]:
         """All configured team rules for this roster. Empty when every rule is off."""
-        if form is None:
-            return []
+        issues = await self.evaluate_many(
+            session, [(team, members)], form=form, shape=shape, workspace=workspace, discord=discord
+        )
+        return issues[team.id]
 
-        issues: list[EligibilityIssue] = []
+    async def evaluate_many(
+        self,
+        session: AsyncSession,
+        rosters: Sequence[tuple[models.RegistrationTeam, Sequence[models.Registration]]],
+        *,
+        form: models.RegistrationForm | None,
+        shape: Any,
+        workspace: models.Workspace | None,
+        discord: DiscordClient,
+    ) -> dict[int, list[EligibilityIssue]]:
+        """:meth:`evaluate` for several teams of ONE tournament: every read, the rank
+        resolve and the Discord batch happen once, not once per team."""
+        issues: dict[int, list[EligibilityIssue]] = {team.id: [] for team, _members in rosters}
+        if form is None or not rosters:
+            return issues
+        first = rosters[0][0]
+        members = [member for _team, roster in rosters for member in roster]
+
         ranked = (
             form.team_rank_min is not None or form.team_rank_max is not None or form.team_max_rank_spread is not None
         )
@@ -209,28 +225,34 @@ class TeamEligibilityService:
                     .options(*registration_load_options())
                 )
             )
-            rosters = await self.rosters.resolve(
-                session, loaded, workspace_id=team.workspace_id, tournament_id=team.tournament_id
+            resolved = await self.rosters.resolve(
+                session, loaded, workspace_id=first.workspace_id, tournament_id=first.tournament_id
             )
-            issues.extend(
-                evaluate_rank_rules(
-                    _starter_ranks(members, rosters, shape),
-                    rank_min=form.team_rank_min,
-                    rank_max=form.team_rank_max,
-                    max_spread=form.team_max_rank_spread,
+            for team, roster in rosters:
+                issues[team.id].extend(
+                    evaluate_rank_rules(
+                        _starter_ranks(roster, resolved, shape),
+                        rank_min=form.team_rank_min,
+                        rank_max=form.team_rank_max,
+                        max_spread=form.team_max_rank_spread,
+                    )
                 )
-            )
 
-        discord_ids = await _discord_ids_by_registration(session, list(members))
+        discord_ids = await _discord_ids_by_registration(session, members)
         if form.team_unique_identity:
-            this_keys = {m.id: _identity_keys(m, discord_ids.get(m.id, [])) for m in members}
-            taken = await _taken_identity_keys(session, tournament_id=team.tournament_id, exclude_team_id=team.id)
-            issues.extend(evaluate_unique_identity(this_keys=this_keys, taken_keys=taken))
+            keys_by_team = await _identity_keys_by_team(session, tournament_id=first.tournament_id)
+            for team, roster in rosters:
+                taken = set().union(*(keys for team_id, keys in keys_by_team.items() if team_id != team.id))
+                this_keys = {m.id: _identity_keys(m, discord_ids.get(m.id, [])) for m in roster}
+                issues[team.id].extend(evaluate_unique_identity(this_keys=this_keys, taken_keys=taken))
 
         if form.team_require_discord_guild:
             guild_id = getattr(workspace, "discord_guild_id", None) if workspace is not None else None
-            signals = await _discord_signals(list(members), discord_ids, guild_id=guild_id, discord=discord)
-            issues.extend(evaluate_discord_guild(signals, guild_id=guild_id, require=True))
+            signals = await _discord_signals(members, discord_ids, guild_id=guild_id, discord=discord)
+            for team, roster in rosters:
+                issues[team.id].extend(
+                    evaluate_discord_guild({m.id: signals[m.id] for m in roster}, guild_id=guild_id, require=True)
+                )
 
         return issues
 

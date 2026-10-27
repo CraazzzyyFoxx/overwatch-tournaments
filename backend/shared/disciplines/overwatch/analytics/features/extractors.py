@@ -167,51 +167,72 @@ async def extract_match_features(
         return pd.DataFrame()
 
     facts = player_facts(discipline="overwatch")
-    home = team_scores(discipline="overwatch", stat_code="score")
-    away = team_scores(discipline="overwatch", stat_code="score")
-    # Observation order, not encounter slots, is part of the trained input boundary.
-    home_score = sa.cast(home.c.value, sa.Integer)
-    away_score = sa.cast(away.c.value, sa.Integer)
-    identity_columns = (
-        models.Tournament.id.label("tournament_id"),
-        facts.c.encounter_id.label("encounter_id"),
-        facts.c.match_id.label("match_id"),
-        facts.c.map_entity_id.label("map_id"),
-        home.c.tournament_team_id.label("home_team_id"),
-        away.c.tournament_team_id.label("away_team_id"),
-        home_score.label("home_score"),
-        away_score.label("away_score"),
-        facts.c.duration_s.label("match_time"),
-        facts.c.player_id.label("user_id"),
-        facts.c.tournament_team_id.label("team_id"),
-        models.Player.id.label("player_id"),
-        models.Player.role.label("role"),
-        models.Player.rank.label("rank"),
-        models.Player.is_newcomer.label("is_newcomer"),
+    # Pivot first: the score/roster joins and the per-row role subquery then run once per (player, match), not once
+    # per stat fact — grouping by ``Player.role`` evaluated its correlated lookup for every fact row.
+    keys = (
+        facts.c.tournament_id,
+        facts.c.encounter_id,
+        facts.c.match_id,
+        facts.c.map_entity_id,
+        facts.c.duration_s,
+        facts.c.player_id,
+        facts.c.tournament_team_id,
+        facts.c.workspace_member_id,
     )
+    pivot = (
+        sa.select(*keys, *[_stat_col(facts, stat, name) for stat, name in STAT_COLUMNS])
+        .where(facts.c.tournament_id.in_(tournament_ids), facts.c.segment == 0, facts.c.entity_id.is_(None))
+        .group_by(*keys)
+        .subquery()
+    )
+
+    def side(position: int, name: str) -> sa.Lateral:
+        # A per-row index lookup: as a plain join the planner under-estimates both sides and nest-loops the score
+        # subquery unparameterized, rescanning every match's score facts per row. LIMIT keeps PostgreSQL from
+        # flattening the LATERAL back into that join; (match, source position) holds at most one score fact anyway.
+        scores = team_scores(discipline="overwatch", stat_code="score")
+        return (
+            sa.select(scores.c.tournament_team_id, sa.cast(scores.c.value, sa.Integer).label("score"))
+            .where(scores.c.match_id == pivot.c.match_id, scores.c.source_position == position)
+            .limit(1)
+            .lateral(name)
+        )
+
+    # Observation order, not encounter slots, is part of the trained input boundary.
+    home, away = side(1, "home"), side(2, "away")
     query = (
-        sa.select(*identity_columns, *[_stat_col(facts, stat, name) for stat, name in STAT_COLUMNS])
-        .select_from(facts)
-        .join(models.Tournament, models.Tournament.id == facts.c.tournament_id)
-        .join(home, sa.and_(home.c.match_id == facts.c.match_id, home.c.source_position == 1))
-        .join(away, sa.and_(away.c.match_id == facts.c.match_id, away.c.source_position == 2))
+        sa.select(
+            models.Tournament.id.label("tournament_id"),
+            pivot.c.encounter_id,
+            pivot.c.match_id,
+            pivot.c.map_entity_id.label("map_id"),
+            home.c.tournament_team_id.label("home_team_id"),
+            away.c.tournament_team_id.label("away_team_id"),
+            home.c.score.label("home_score"),
+            away.c.score.label("away_score"),
+            pivot.c.duration_s.label("match_time"),
+            pivot.c.player_id.label("user_id"),
+            pivot.c.tournament_team_id.label("team_id"),
+            models.Player.id.label("player_id"),
+            models.Player.role.label("role"),
+            models.Player.rank.label("rank"),
+            models.Player.is_newcomer.label("is_newcomer"),
+            *[pivot.c[name] for _, name in STAT_COLUMNS],
+        )
+        .select_from(pivot)
+        .join(models.Tournament, models.Tournament.id == pivot.c.tournament_id)
+        .join(home, sa.true())
+        .join(away, sa.true())
         .join(
             models.Player,
             sa.and_(
-                models.Player.team_id == facts.c.tournament_team_id,
-                models.Player.tournament_id == facts.c.tournament_id,
-                models.Player.workspace_member_id == facts.c.workspace_member_id,
+                models.Player.team_id == pivot.c.tournament_team_id,
+                models.Player.tournament_id == pivot.c.tournament_id,
+                models.Player.workspace_member_id == pivot.c.workspace_member_id,
             ),
         )
-        .where(
-            models.Tournament.id.in_(tournament_ids),
-            facts.c.segment == 0,
-            facts.c.entity_id.is_(None),
-            models.Player.is_substitution.is_(False),
-            *workspace_scope_filter(workspace_id, workspace_ids),
-        )
-        .group_by(*identity_columns)
-        .order_by(models.Tournament.id, facts.c.encounter_id, facts.c.match_id, facts.c.player_id, models.Player.id)
+        .where(models.Player.is_substitution.is_(False), *workspace_scope_filter(workspace_id, workspace_ids))
+        .order_by(models.Tournament.id, pivot.c.encounter_id, pivot.c.match_id, pivot.c.player_id, models.Player.id)
     )
 
     result = await session.execute(query)

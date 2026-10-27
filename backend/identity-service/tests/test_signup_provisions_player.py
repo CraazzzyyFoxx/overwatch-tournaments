@@ -35,7 +35,7 @@ def test_register_provisions_players_user(db_session) -> None:
     payload = UserRegister(
         email=f"signup-{suffix}@example.com",
         username=f"signup_{suffix}",
-        password="correct-horse-battery",
+        password="Correct-horse-battery1!",
     )
 
     async def _run():
@@ -43,6 +43,8 @@ def test_register_provisions_players_user(db_session) -> None:
         player = (
             await db_session.execute(sa.select(User).where(User.auth_user_id == auth_user.id))
         ).scalar_one_or_none()
+        # Release the read transaction before asyncio.run closes its owning loop.
+        await db_session.close()
         return auth_user, player
 
     auth_user, player = asyncio.run(_run())

@@ -83,8 +83,6 @@ async def create_workspace_grid(
         else [],
     )
     await _grids.create(session, grid)
-    for version in grid.versions:
-        await division_grid_cache.invalidate_grid_version(version.id)
     # Every column, version and tier loaded now: a read model serialized later must not lazy-load.
     return await session.scalar(
         sa.select(DivisionGrid)
@@ -161,4 +159,4 @@ async def provision_default_grids(
             activated = True
     if activated:
         await session.refresh(workspace, ["division_grid_defaults"])
-        await division_grid_cache.invalidate_workspace(workspace.id)
+        division_grid_cache.invalidate_after_commit(session, division_grid_cache.invalidate_workspace, workspace.id)

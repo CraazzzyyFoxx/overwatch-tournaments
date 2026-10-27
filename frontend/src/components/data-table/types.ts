@@ -1,5 +1,6 @@
 import type React from "react";
 import type { ColumnDef, Row } from "@tanstack/react-table";
+import type { LucideIcon } from "lucide-react";
 
 import type { AdminTableFilters } from "@/components/data-table/filters";
 
@@ -26,6 +27,41 @@ export interface DataTableGroup<TData> {
   rows: Row<TData>[];
 }
 
+/**
+ * A screen's command over its list — create, sync, upload, open a tool. Never a
+ * filter or a way of looking at the rows: those are the `toolbar`'s and the
+ * "View" menu's. The table lays commands out itself: outline buttons with the
+ * one `primary` last, and on a narrow table the secondary ones fold into the
+ * "View" menu while the primary stays as its icon.
+ */
+export interface TableCommand {
+  /** Stable key among the table's commands. */
+  id: string;
+  label: string;
+  /** Required for a `primary` that should shrink to an icon on a narrow table; without one it keeps its label. */
+  icon?: LucideIcon;
+  /** Omitted for a pure `href` command. */
+  onSelect?: () => void;
+  href?: string;
+  /** The filled button, last in the row. At most one per table. */
+  primary?: boolean;
+  /** A permission the reader lacks: the command is absent, never disabled (DESIGN §14). */
+  hidden?: boolean;
+  /** In flight: a spinner stands in for the icon. Whether it can be pressed again is `disabled`'s call. */
+  pending?: boolean;
+  disabled?: boolean;
+  /** Disabled until something else is true, saying what: shown as text beside the command, not only as a tooltip. */
+  disabledReason?: string;
+}
+
+/** The reader's grouping choice, offered in the table's "View" menu; `groupRows` does the grouping. */
+export interface DataTableGroupBy {
+  label: string;
+  value: string;
+  options: { value: string; label: string }[];
+  onChange: (value: string) => void;
+}
+
 export interface DataTableProps<TData> {
   /**
    * Server mode: one page per request. Mutually exclusive with `rows` — the
@@ -50,8 +86,8 @@ export interface DataTableProps<TData> {
   columns: ColumnDef<TData>[];
   /**
    * Label and placeholder for the built-in search box. Omit it together with
-   * a `toolbar` that carries its own search, and this one is not rendered —
-   * two search fields over one table is the bug, not the feature.
+   * a `toolbar` and no search box is rendered: a screen whose server does not
+   * search must not offer a field that does nothing.
    */
   searchPlaceholder?: string;
   emptyMessage?: string;
@@ -105,7 +141,11 @@ export interface DataTableProps<TData> {
    * (its checkbox is not rendered and select-all skips it).
    */
   enableRowSelection?: (row: Row<TData>) => boolean;
-  /** Rendered in the toolbar while at least one row is selected. */
+  /**
+   * The buttons acting on the selected rows. The table shows them in its
+   * floating selection bar, with the count (off-page rows included) and a way
+   * to clear it; the toolbar never changes with the selection.
+   */
   bulkActions?: (selected: TData[], clearSelection: () => void) => React.ReactNode;
 
   /** Detail panel revealed by the leading chevron. */
@@ -116,23 +156,28 @@ export interface DataTableProps<TData> {
    * row. Receives the rows in display order and must return all of them.
    */
   groupRows?: (rows: Row<TData>[]) => DataTableGroup<TData>[];
+  groupBy?: DataTableGroupBy;
 
   /**
-   * Shows the "Columns" picker and persists visibility under this
+   * Offers "Columns" in the "View" menu and persists visibility under this
    * localStorage key. Only columns declaring `meta.category` are offered.
    */
   columnsStorageKey?: string;
 
   onRowClick?: (row: Row<TData>) => void;
   onRowDoubleClick?: (row: Row<TData>) => void;
-  actions?: React.ReactNode;
+  /** The screen's commands over the list; see `TableCommand`. */
+  commands?: TableCommand[];
 
   /**
-   * Rendered in its own row above the table: this is where `FilterBar`
-   * goes. Unlike `actions` (a cluster to the right of the search box) it owns
-   * the full width, because a chip row wraps.
+   * The screen's `FilterBar`, after the search box. On a narrow table its
+   * "+ Filter" turns into an icon beside the search and its chips take a row
+   * of their own, only while there are any.
    */
   toolbar?: React.ReactNode;
+
+  /** A line about the whole list — a total, an average — at the table's foot. */
+  summary?: React.ReactNode;
 
   /**
    * Row currently open in the inspector (`?id=`). That row is marked

@@ -19,6 +19,8 @@ The browser then asks for an authorization URL (`GET /api/v1/auth/oauth/{provide
 
 Password login also exists — `POST /api/v1/auth/login` with `{"email": ..., "password": ...}`. It only works for accounts that actually have a password: an account created through OAuth has none until its owner sets one via `POST /api/v1/auth/set-password`. A wrong pair and a password-less account are indistinguishable from outside — both answer 401.
 
+Ten failed logins for one email within 15 minutes lock password login for that email: for the next 15 minutes every attempt answers 429 `Too many failed login attempts. Try again later.`, the right password included, because the lock is checked before the password. A successful login resets the count. Failures against an email no account uses count the same way, so the lock does not reveal which emails are registered.
+
 Both paths return the same pair:
 
 ```json
@@ -31,19 +33,42 @@ Both paths return the same pair:
 
 Lifetimes are service constants: the access token lives 15 minutes, the refresh token 30 days.
 
+### The access token
+
+The access token is a JWT signed with EdDSA (Ed25519), header `{"alg": "EdDSA", "typ": "JWT"}`. Its claims are exactly:
+
+| Claim | Value |
+| --- | --- |
+| `sub` | the account id (`auth.user`), as a string |
+| `sid` | the session id (UUID) |
+| `type` | `access` |
+| `iat`, `exp` | issued-at and expiry, Unix seconds |
+| `iss` | `owt-identity` |
+| `aud` | `owt` |
+| `jti` | a unique token id, 32 hex characters |
+
+There is no email, username, role or superuser flag in it: who the account is and what it may do comes from `GET /api/v1/auth/me`, and the gateway resolves permissions through identity (caching the verdict for up to 30 seconds). Only identity holds the private key; the gateway has just the public one and verifies signatures locally, so a token signed with anything else — another algorithm included — is rejected before it reaches a service.
+
 ### Refreshing a session
 
-`POST /api/v1/auth/refresh` with `{"refresh_token": ...}` returns a new pair and revokes the one you sent: a session always holds exactly one live refresh token. The session id (`sid`) is preserved, so the session list and session revocation keep pointing at the same record.
+`POST /api/v1/auth/refresh` with `{"refresh_token": ...}` returns a new pair and revokes the one you sent: a session always holds exactly one live refresh token. The session id (`sid`) is preserved, so the session list and session revocation keep pointing at the same record. Refreshing does not make a session "recent": the 10-minute sign-in window below counts from the login that started it.
 
 Rotation forgives a lost response: replaying a token that was rotated less than 60 seconds ago exchanges it once more. Later, the same replay counts as reuse — the request gets 401 and the session that token belonged to is revoked (the account's other sessions stay alive).
 
-Revoking a session also closes an access token that has not expired yet: its `sid` is blacklisted, and the blacklist is checked on every validation. The only delay is the gateway's verdict cache — 30 seconds for a session token.
+Revoking a session also closes an access token that has not expired yet: its `sid` is blacklisted, and the blacklist is checked on every validation. Every revocation (sign-out, sign-out everywhere, revoking one session, an admin revoke, a detected refresh reuse, a password change) also tells the gateway to drop its cached verdicts for the account and to re-check the account's open WebSockets, so it does not wait for the 30-second verdict cache.
+
+### Passwords and deleting the account
+
+`GET /api/v1/auth/me` reports `has_password`. Two operations re-check that the person at the keyboard is the owner:
+
+- **`POST /api/v1/auth/set-password`.** Changing an existing password needs `current_password`. Setting the first password on an account that has none needs a recent sign-in: the session must have started at most 10 minutes ago, otherwise the answer is 403 with the message `reauth_required`. On success every other session of the account is revoked; the one that made the call stays signed in.
+- **`DELETE /api/v1/auth/me`.** Takes an optional JSON body `{"current_password": "..."}`. A password account must send it: without it the answer is 400 `Current password is required`, with a wrong one 401 `Current password is incorrect`. An account without a password needs the same recent sign-in, otherwise 403 `reauth_required` — sign in again and repeat the request within 10 minutes. A superuser account cannot be deleted (400).
 
 ### How the credential travels
 
-REST routes read the credential from the `Authorization` header **only**. Cookies are the site's own storage: the frontend keeps the access token in the `owt_access_token` cookie and the refresh token in the httpOnly `owt_refresh_token` cookie, and puts the access token into the header itself on every API call. The one exception is the match-log download (`GET /api/v1/matches/{match_id}/log`): the browser navigates to that link, no JavaScript runs to attach a header, so the route also accepts the session cookie. Even there the header wins.
+REST routes read the credential from the `Authorization` header **only**. Cookies are the site's own storage: the frontend keeps the access token in the `owt_access_token` cookie and the refresh token in the httpOnly `owt_refresh_token` cookie, and puts the access token into the header itself on every API call. The site's own refresh route (`POST /auth/refresh`, not the API) answers `{"access_token": ...}` only: the refresh token never reaches page JavaScript, it travels solely in that httpOnly cookie. The one exception is the match-log download (`GET /api/v1/matches/{match_id}/log`): the browser navigates to that link, no JavaScript runs to attach a header, so the route also accepts the session cookie. Even there the header wins.
 
-A `?token=` query parameter is never read by REST — it applies to the WebSocket handshake only, see [Realtime (WebSocket)](/docs/dev/realtime).
+A `?token=` query parameter is never read — not by REST and not by the WebSocket handshake, which takes the header or the cookie, see [Realtime (WebSocket)](/docs/dev/realtime).
 
 ## API keys
 

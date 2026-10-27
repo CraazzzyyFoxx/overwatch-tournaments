@@ -43,6 +43,7 @@ from src.services.encounter.games import (
 )
 from src.services.encounter.pick_ban_session import PickBanSessionService, pick_ban_session_service
 from src.services.encounter.realtime_commit import emit_pick_ban_update
+from src.services.encounter.settle import enqueue_challonge_push
 from src.services.tournament.events import enqueue_tournament_recalculation
 
 __all__ = ("GameCorrectionService", "game_correction_service")
@@ -119,6 +120,10 @@ class GameCorrectionService:
         await enqueue_tournament_recalculation(session, encounter.tournament_id)
         await emit_pick_ban_update(session, encounter.id)
         await emit_pick_ban_update(session, encounter.id, kind=PickBanKind.HERO.value)
+        # Every confirm path pushes; a correction bumps the version (reopen, then
+        # re-confirm), so the push already queued for the old one goes stale.
+        if encounter.result_status == EncounterResultStatus.CONFIRMED:
+            await enqueue_challonge_push(session, encounter)
         await session.commit()
         lines = (await self.games.lines_by_game(session, [game])).get(game.id) or []
         claims = (await self.games.claim_payloads(session, [game]))[game.id]

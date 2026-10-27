@@ -1,9 +1,11 @@
 """Native observation grain, tenant/discipline boundaries and real cascade ownership."""
 
 import asyncio
+import re
 
 import pytest
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import selectinload
@@ -89,6 +91,13 @@ async def _player_grain(stats_parity_database):
                 .values(encounter_game_id=None)
             )
             assert {row.match_id: (row.value, row.source_position) for row in await session.execute(query)} == rows
+            # A reader projecting neither source_position nor tournament_team_id never joins match_team or
+            # encounter.team: as inner joins, their correlated keys were estimated at one row per match team and a
+            # one-player read nest-looped every match team past the statement timeout.
+            lean = sa.select(facts.c.value).where(facts.c.player_id == ids["player"])
+            lean_sql = lean.compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True})
+            plan = "\n".join(await session.scalars(sa.text(f"EXPLAIN {lean_sql}")))
+            assert not re.search(r"\bon (match_)?team\b", plan), plan
             foreign = player_facts(discipline="lol")
             assert (
                 await session.scalar(

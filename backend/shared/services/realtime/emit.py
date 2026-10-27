@@ -380,12 +380,14 @@ async def enqueue_invalidation_outbox(
     resources: Sequence[Resource],
     entity_ids: Mapping[str, Sequence[int]] | None = None,
 ) -> None:
-    """Durable half of a cross-service invalidation: one outbox row, retried and DLQ'd.
+    """Durable half of a cross-service invalidation: one outbox row.
 
+    The drain retries a failed publish with backoff and parks the row as ``dead`` after
+    ``shared.messaging.outbox.MAX_ATTEMPTS`` (counted and alerted; there is no producer-side DLQ).
     ``emit`` already bumps the shared cache generations at commit, but that bump
-    is a single attempt. Each consuming service re-bumps them from this row (and
-    hangs its own follow-up work off it), so a bump lost to a Redis blip is
-    retried instead of leaving another service's cached reads stale until TTL.
+    is a single attempt. Each consuming service re-bumps the ones that bump missed
+    from this row (and hangs its own follow-up work off it), so a bump lost to a
+    Redis blip is retried instead of leaving another service's cached reads stale until TTL.
     Called by the owning service when a resource it stales is cached elsewhere too.
     """
     await enqueue_outbox_event(

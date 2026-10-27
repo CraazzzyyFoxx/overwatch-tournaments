@@ -318,14 +318,10 @@ class ScrimService:
 
         ``Team.captain_id`` points at the domain player, not the auth user, and a
         scrim captain may never have registered for anything.
-
-        Not ``UserRepository.ensure_for_auth_user``: that one falls back to a
-        ``user-<id>`` name and suffixes it on collision.
         """
-        player = await self.user_repo.get_by_auth_user_id(session, user.id)
-        if player is not None:
-            return player
-        return await self.user_repo.create(session, models.User(name=user.username or user.email, auth_user_id=user.id))
+        return await self.user_repo.ensure_for_auth_user(
+            session, auth_user_id=user.id, name_hint=user.username or user.email
+        )
 
     # ── container ────────────────────────────────────────────────────────────
 

@@ -34,7 +34,10 @@ layering every backend service follows.
   search and name lookup (`rpc.app.users.{list,search,by_name}`). Profile and identity edits made
   here bump the `shared.services.user_cache` generations that stats-service's `/users/*` and
   achievement read caches are keyed by, so those caches miss as soon as the edit commits.
-- **Tenancy** — workspaces, membership and roles, custom domains, and Discord guild claim.
+- **Tenancy** — workspaces, membership and roles, custom domains, and Discord guild claim. Granting
+  the workspace `owner` role, or taking it from a member (role update or removal), takes `owner` in
+  that workspace or a superuser on top of the `workspace_member.*` permission; otherwise 403 "Only a
+  workspace owner can grant or revoke the owner role". Ownership transfer keeps its own rule.
 - **Notifications** — the inbox and announcements, the operator view of a workspace's
   notifications, and Discord delivery of notification rows off the `notification_delivery` queue.
 - **Audit** — the read-only platform audit feed and per-entity trail.
@@ -120,13 +123,16 @@ separately, off the realtime invalidation topics the writer publishes after its 
 
 `WorkspaceMemberChangedEvent`, through the transactional outbox straight onto the
 `workspace_member_changed` queue (default exchange): staged by every `WorkspaceService` operation
-that changes who holds a workspace role (create, member add/update/remove, owner transfer) and by
-the profile merge, in the write's own transaction. identity-service consumes it and drops the cached
-RBAC payload of the listed users. The `WorkspaceService` operations also send the same event to
-identity as the RPC `rpc.identity.workspace_member_changed` right after committing and wait for it
-(identity then has the gateway evict those users' cached principals), so the creator's first
-settings save or a removed member's next call already sees the change; a failed call only loses
-that head start. App-service publishes no Redis realtime topics.
+that changes who holds a workspace role (create, member add/update/remove, owner transfer,
+workspace delete — every member and role holder, staged before the delete), by the admin player
+delete (the linked account) and by the profile merge, in the write's own transaction. The shared
+writers stage it too (`shared.rbac.bootstrap.stage_rbac_change`): member admission, role grants,
+the bulk role autofill and system-role permission reconciliation. identity-service consumes it and
+drops the cached RBAC payload of the listed users. The `WorkspaceService` operations also send the
+same event to identity as the RPC `rpc.identity.workspace_member_changed` right after committing
+and wait for it (identity then has the gateway evict those users' cached principals), so the
+creator's first settings save or a removed member's next call already sees the change; a failed
+call only loses that head start. App-service publishes no Redis realtime topics.
 
 ### Scheduled work
 
@@ -202,7 +208,9 @@ No outbound calls to third-party APIs, so no `proxy` egress. (The compose block 
 
 Behaviour-changing settings:
 
-- `RABBITMQ_URL` — required, no default. `RPC_PREFETCH_COUNT` caps unacked RPC messages per channel.
+- `RABBITMQ_URL` — required, no default. `RPC_PREFETCH_COUNT` (default 16) caps how many gateway RPC
+  handlers run at once in the process (a permit pool, `shared.rpc.deadline.configure_rpc_concurrency`);
+  it is also each RPC consumer's AMQP prefetch, which RabbitMQ applies per consumer, not per channel.
 - `REDIS_URL` — the base URL; the service derives `/3` and `/4` from it.
 - `POSTGRES_*` and the `DB_POOL_*` knobs. Set `DB_PGBOUNCER=true` **before** scaling replicas — each
   process opens up to `DB_POOL_SIZE + DB_MAX_OVERFLOW` server connections.

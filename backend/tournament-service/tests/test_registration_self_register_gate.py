@@ -496,7 +496,7 @@ def test_admin_check_in_ignores_the_check_in_window() -> None:
     the self-service path (``registration_service.check_in_registration``) is
     window-gated."""
     from types import SimpleNamespace
-    from unittest.mock import AsyncMock, patch
+    from unittest.mock import AsyncMock, MagicMock, patch
 
     from src.services.registration import lifecycle
 
@@ -511,7 +511,9 @@ def test_admin_check_in_ignores_the_check_in_window() -> None:
     async def fake_get(_self, _session, _registration_id):
         return registration
 
-    session = SimpleNamespace(commit=_noop)
+    # The checked-in-by account read finds nothing: only the window rule is under test.
+    no_rows = MagicMock(**{"unique.return_value.scalars.return_value.first.return_value": None})
+    session = SimpleNamespace(commit=_noop, execute=AsyncMock(return_value=no_rows))
     service = lifecycle.lifecycle_service
 
     with (

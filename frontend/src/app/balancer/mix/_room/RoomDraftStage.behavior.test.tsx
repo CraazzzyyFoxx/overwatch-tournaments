@@ -110,7 +110,6 @@ function draft(status: "ready" | "live", mine: boolean): DraftBoard {
       player(4, { player_name: "delta", primary_role: { dimension: OW_SHAPE.dimension ?? "player_role", role: "tank" }, role_ranks: { tank: 2400 } }),
     ],
     current_pick: status === "live" ? pick : null,
-    server_time: "2026-10-23T12:00:00Z",
     last_event_id: 0,
   } as unknown as DraftBoard;
 }

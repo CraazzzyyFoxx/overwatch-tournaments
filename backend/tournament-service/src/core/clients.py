@@ -8,6 +8,8 @@ patrons it no longer applies to.
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.services.discord_client import DiscordClient
@@ -24,11 +26,20 @@ def discord_client() -> DiscordClient:
     return DiscordClient(broker=optional_broker())
 
 
-def subscription_resolver(session: AsyncSession) -> SubscriptionResolver:
-    """Resolver wired with this service's provider credentials."""
+def subscription_resolver(
+    session: AsyncSession, *, release: Callable[[], Awaitable[None]] | None = None
+) -> SubscriptionResolver:
+    """Resolver wired with this service's provider credentials.
+
+    ``release`` runs after the strategies' DB reads and before any provider call;
+    the admission gate passes ``session.commit`` so no Discord/Twitch call holds a
+    transaction (and its pgBouncer server connection) open.
+    """
     return build_resolver(
         session,
         twitch_client_id=settings.twitch_client_id,
+        token_key=settings.oauth_token_encryption_key,
         broker=optional_broker(),
         proxy=settings.proxy_url,
+        release=release,
     )

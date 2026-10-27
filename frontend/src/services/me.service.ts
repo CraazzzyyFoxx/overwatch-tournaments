@@ -51,14 +51,20 @@ const meService = {
    *  Returns 204. Historical data is deliberately untouched: identity-svc drops
    *  only account-owned rows (sessions, OAuth connections, API keys, roles) and
    *  unclaims the player identity, so tournaments, matches, statistics and
-   *  registrations survive. Refused for a superuser account (400). */
-  async deleteAccount(): Promise<void> {
-    await apiFetch("/api/v1/auth/me", { method: "DELETE" });
+   *  registrations survive. Refused for a superuser account (400).
+   *  A password account must send its current password (400 missing, 401 wrong);
+   *  a passwordless one needs a sign-in at most 10 minutes old, else 403
+   *  `reauth_required`. */
+  async deleteAccount(currentPassword?: string): Promise<void> {
+    await apiFetch("/api/v1/auth/me", {
+      method: "DELETE",
+      body: currentPassword ? { current_password: currentPassword } : undefined
+    });
   },
 
   /** Rename the current account (its site-wide name). 400 when another account
    *  already holds the name (case-insensitive), 403 under an `account.rename`
-   *  deny. The access token still carries the old name until it is refreshed. */
+   *  deny. */
   async updateUsername(username: string): Promise<unknown> {
     const res = await apiFetch("/api/v1/auth/me", { method: "PATCH", body: { username } });
     return res.json();

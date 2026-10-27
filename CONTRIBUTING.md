@@ -109,6 +109,7 @@ the ruff version from `backend/uv.lock`. Then, per area you touched:
 # Backend
 cd backend
 uv run bash scripts/lint.sh                       # ruff check + ruff format --check
+uv run bash scripts/typecheck.sh                  # ty, one run per package
 bash scripts/export_openapi_schemas.sh --check
 uv run python scripts/export_ow_ladder.py --check
 uv run python scripts/export_erd.py --check
@@ -132,9 +133,18 @@ go test -race ./...
 python3 scripts/check_doc_links.py                 # relative links resolve
 ```
 
-Type checking (`mypy` / `ty`) is deliberately **not** part of the backend gate. `next build`
-runs only on `master`, not on pull requests — do not run it locally to test a change;
-`bun run typecheck` and `bun run lint` are the fast signal.
+The backend type check is `ty` against `backend/ty-gate.toml`: every rule is an error except the
+ones listed there, which already had hits when the gate landed (their counts are beside them). Fix
+a listed rule's hits, then delete its line. The backend suites run in CI against a real Postgres
+(the `docker-compose.test.yml` container, as a service), so DB-integration tests run there rather
+than skip. The exception is the historical migration cutover proofs in `backend/tests`
+(`test_stats01_*`, `test_enclayer01_*`, `test_discipline01*_upgrade`, …): the parts that rebuild
+scratch databases at old revisions take hours, so they skip unless
+`shared.testing.db.migration_proofs_enabled()` — `OWT_MIGRATION_PROOFS=1` on that ephemeral test
+Postgres. Their tests that need no scratch database still run.
+CI proves the current chain with `alembic upgrade head` instead. `next build` runs only on
+`master`, not on pull requests — do not run it locally to test a change; `bun run typecheck` and
+`bun run lint` are the fast signal.
 
 The frontend runs one test runner. `vitest.config.ts` collects `src/**/*.test.ts(x)` by glob,
 so a new test file runs the moment it is written — nothing to register anywhere.

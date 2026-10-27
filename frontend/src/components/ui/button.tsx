@@ -13,6 +13,25 @@ import { cn } from "@/lib/utils";
  */
 const SOLID = "font-semibold shadow-[inset_0_1px_0_var(--aqt-sheen)] hover:brightness-110";
 
+/**
+ * The tonal surface: raised off whatever it sits on (a page, a card, a dialog),
+ * never a darker well punched into it. The `outline` button and every
+ * select-like trigger (`SelectTrigger`, `Combobox`) wear it; the border steps
+ * up while the panel the control opens is open.
+ */
+export const outlineSurfaceClass =
+  "border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-3)] text-[color:var(--aqt-fg)] shadow-[inset_0_1px_0_var(--aqt-overlay-3)] hover:border-[color:var(--aqt-border-3)] hover:bg-[color:var(--aqt-overlay-4)] aria-expanded:border-[color:var(--aqt-border-3)]";
+
+/**
+ * The trailing chevron of a select-like trigger: it turns over while the panel
+ * is open, read off the `aria-expanded` of the trigger marked `group/trigger`
+ * (named, so an expanded ancestor never turns it). A named group rather than a
+ * `[[aria-expanded=true]>&]` selector: happy-dom keeps the `&gt;` that selector
+ * serializes to inside an SVG class, and every hydration test would mismatch.
+ */
+export const triggerChevronClass =
+  "size-4 shrink-0 opacity-50 transition-transform duration-150 group-aria-expanded/trigger:rotate-180";
+
 const buttonVariants = cva(
   [
     "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium",
@@ -32,12 +51,8 @@ const buttonVariants = cva(
         destructive: cn("bg-destructive text-destructive-foreground", SOLID),
         /** A "go" confirmation the player can miss (check in): emerald fill. */
         positive: cn("bg-[color:var(--aqt-emerald)] text-[color:var(--aqt-bg)]", SOLID),
-        /**
-         * The everyday button: a tonal fill raised off whatever surface it sits
-         * on (a page, a card, a dialog), never a darker well punched into it.
-         */
-        outline:
-          "border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-3)] text-[color:var(--aqt-fg)] shadow-[inset_0_1px_0_var(--aqt-overlay-3)] hover:border-[color:var(--aqt-border-3)] hover:bg-[color:var(--aqt-overlay-4)]",
+        /** The everyday button: the tonal surface (`outlineSurfaceClass`). */
+        outline: outlineSurfaceClass,
         ghost: "hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-fg)]",
         /** An icon-only remove/delete beside a row: quiet at rest, the destructive tint on hover. */
         "ghost-destructive": "text-muted-foreground hover:bg-destructive/10 hover:text-destructive",

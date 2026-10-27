@@ -50,7 +50,8 @@ from shared.services.social_identity import social_identity_service  # noqa: E40
 from shared.services.team_format import save_tournament_format  # noqa: E402
 from src.schemas.registration import RegistrationSubmit  # noqa: E402
 from src.services.registration import service as reg_service  # noqa: E402
-from src.services.registration import teams as teams_module  # noqa: E402
+from src.services.registration.teams import invitee as invitee_module  # noqa: E402
+from src.services.registration.teams import invites as invites_module  # noqa: E402
 from src.services.registration.teams import teams_service  # noqa: E402
 from tests._lol_grid import seed_lol_grid  # noqa: E402
 
@@ -182,7 +183,7 @@ def test_every_receiver_names_the_owning_games_handle(db_session, discipline: st
         try:
             captain_handles = _handles(seeded, "Cap")
             agent_handles = _handles(seeded, "Agent")
-            team, captain_read = await teams_service.create_team(
+            team, captain, _issues = await teams_service.create_team(
                 db_session,
                 tournament_id=seeded.tournament_id,
                 auth_user=seeded.captain,
@@ -209,7 +210,7 @@ def test_every_receiver_names_the_owning_games_handle(db_session, discipline: st
             registration = (
                 await db_session.execute(
                     sa.select(models.Registration)
-                    .where(models.Registration.id == captain_read.id)
+                    .where(models.Registration.id == captain.id)
                     .options(
                         selectinload(models.Registration.workspace_member).selectinload(models.WorkspaceMember.player)
                     )
@@ -224,7 +225,7 @@ def test_every_receiver_names_the_owning_games_handle(db_session, discipline: st
                 "captain": captain_handles,
                 "agent": agent_handles,
                 "submit": agent_read.primary_handle,
-                "create": captain_read.primary_handle,
+                "create": captain.primary_game_identity(provider=provider).handle,
                 "free_agents": [row.primary_handle for row in free_agents],
                 "roster": [member.primary_handle for member in described.members],
                 "invite": [entry.target_handle for entry in history.items],
@@ -235,8 +236,8 @@ def test_every_receiver_names_the_owning_games_handle(db_session, discipline: st
             await _drop(db_session, seeded)
 
     with (
-        patch.object(teams_module, "assert_invite_attempt_allowed", AsyncMock()),
-        patch.object(teams_module, "assert_accept_attempt_allowed", AsyncMock()),
+        patch.object(invites_module, "assert_invite_attempt_allowed", AsyncMock()),
+        patch.object(invitee_module, "assert_accept_attempt_allowed", AsyncMock()),
     ):
         got = asyncio.run(_run())
 

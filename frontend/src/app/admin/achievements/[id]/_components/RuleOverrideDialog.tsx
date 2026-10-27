@@ -124,7 +124,6 @@ export function RuleOverrideDialog({
           value={draft.tournamentId}
           onValueChange={(tournamentId) => onDraftChange({ ...draft, tournamentId })}
           placeholder={t("overrideDialog.none")}
-          variant="default"
           size="default"
         />
       </div>

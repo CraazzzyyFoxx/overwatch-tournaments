@@ -135,9 +135,11 @@ def register(broker: Any, logger: Any) -> None:
         data = data or {}
 
         async def op(session: Any, user: Any) -> None:
+            payload = schemas.AccountDeleteRequest.model_validate(data)
             await auth.delete_me(
                 session,
                 user,
+                current_password=payload.current_password,
                 ip_address=data.get("ip_address"),
                 user_agent=data.get("user_agent"),
             )

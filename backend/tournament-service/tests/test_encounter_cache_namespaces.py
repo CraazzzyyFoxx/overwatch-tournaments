@@ -79,16 +79,16 @@ class EncounterCacheNamespaceTests(IsolatedAsyncioTestCase):
 
     def test_every_family_moved_off_its_pre_cutover_name(self) -> None:
         for template, function, name in (
-            (flows.ENCOUNTERS_CACHE_KEY, flows.EncounterFlowsService.get_all_encounters, "native_encounters:v4"),
+            (flows.ENCOUNTERS_CACHE_KEY, flows.EncounterFlowsService.encounters_page, "native_encounters:v5"),
             (
                 flows.ENCOUNTERS_OVERVIEW_CACHE_KEY,
-                flows.EncounterFlowsService.get_encounters_overview,
-                "native_encounters_overview:v4",
+                flows.EncounterFlowsService.overview_page,
+                "native_encounters_overview:v5",
             ),
             (
                 flows.ENCOUNTERS_INSIGHTS_CACHE_KEY,
-                flows.EncounterFlowsService.get_encounters_insights,
-                "native_encounters_insights:v1",
+                flows.EncounterFlowsService.insights_page,
+                "native_encounters_insights:v2",
             ),
         ):
             key = _key(template, function, workspace_id=5, tournament_id=7)
@@ -106,7 +106,7 @@ class EncounterCacheNamespaceTests(IsolatedAsyncioTestCase):
             patch.object(flows, "resolve_slot_sources", AsyncMock(return_value={})),
         ):
             for tournament_id in (7, 70):
-                await service.get_all_encounters(
+                await service.encounters_page(
                     object(), schemas.EncounterSearchParams(tournament_id=tournament_id), workspace_id=5
                 )
             stored = [key async for key in cache.scan("fastapi:*")]
@@ -114,7 +114,7 @@ class EncounterCacheNamespaceTests(IsolatedAsyncioTestCase):
             for tournament_id in (7, 70):
                 prefix = _key(
                     flows.ENCOUNTERS_CACHE_KEY,
-                    flows.EncounterFlowsService.get_all_encounters,
+                    flows.EncounterFlowsService.encounters_page,
                     workspace_id=5,
                     tournament_id=tournament_id,
                 )
@@ -124,7 +124,7 @@ class EncounterCacheNamespaceTests(IsolatedAsyncioTestCase):
 
             # Tournament 7 is rebuilt and 70 is not: a generation names one tournament exactly.
             for tournament_id in (7, 70):
-                await service.get_all_encounters(
+                await service.encounters_page(
                     object(), schemas.EncounterSearchParams(tournament_id=tournament_id), workspace_id=5
                 )
         self.assertEqual(3, read.await_count, "the write did not force exactly one rebuild")
@@ -138,19 +138,19 @@ class EncounterCacheNamespaceTests(IsolatedAsyncioTestCase):
             patch.object(flows, "resolve_tournament_challonge", AsyncMock(return_value={})),
         ):
             params = schemas.EncounterSearchParams(tournament_id=7)
-            await service.get_encounters_overview(object(), params, workspace_id=5)
+            await service.overview_page(object(), params, workspace_id=5)
             expected = _key(
                 flows.ENCOUNTERS_OVERVIEW_CACHE_KEY,
-                flows.EncounterFlowsService.get_encounters_overview,
+                flows.EncounterFlowsService.overview_page,
                 workspace_id=5,
                 tournament_id=7,
             )
             [stored] = [key async for key in cache.scan("fastapi:*")]
             self.assertTrue(stored.startswith(expected), stored)
 
-            await service.get_encounters_overview(object(), params, workspace_id=5)
+            await service.overview_page(object(), params, workspace_id=5)
             await _write(7, Resource.TOURNAMENT_ENCOUNTERS)
-            await service.get_encounters_overview(object(), params, workspace_id=5)
+            await service.overview_page(object(), params, workspace_id=5)
         self.assertEqual(2, read.await_count, "the write did not force a rebuild")
 
     async def test_every_resource_that_changes_an_encounter_misses_every_family(self) -> None:
@@ -167,9 +167,9 @@ class EncounterCacheNamespaceTests(IsolatedAsyncioTestCase):
             async def read_all() -> None:
                 for tournament_id in (7, 8):
                     params = schemas.EncounterSearchParams(tournament_id=tournament_id)
-                    await service.get_all_encounters(object(), params, workspace_id=5)
-                    await service.get_encounters_overview(object(), params, workspace_id=5)
-                    await service.get_encounters_insights(object(), params, workspace_id=5)
+                    await service.encounters_page(object(), params, workspace_id=5)
+                    await service.overview_page(object(), params, workspace_id=5)
+                    await service.insights_page(object(), params, workspace_id=5)
 
             await read_all()
             for resource in (Resource.TOURNAMENT_ENCOUNTERS, Resource.TOURNAMENT_STRUCTURE):

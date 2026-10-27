@@ -6,12 +6,12 @@ package respcache
 // cannot be published without the cache knowing what to drop, and a rule
 // cannot outlive the resource it serves.
 //
-// An EMPTY (non-nil) slice is meaningful and different from a missing entry:
-// it says "this cache holds nothing for that resource" — notifications are
-// per-user and never cached anonymously. A MISSING entry falls back to nil,
-// which drops every entry for the scope; that is the fail-safe for a resource
-// added to the manifest before this table caught up, and the parity test
-// exists so it stays theoretical.
+// An EMPTY (non-nil) slice is meaningful and different from nil: it says
+// "this cache holds nothing for that resource" — notifications are per-user
+// and never cached anonymously. nil — set deliberately, or a MISSING entry —
+// drops every entry for the scope: deliberate for a resource that can change
+// any page, and the fail-safe for a resource added to the manifest before
+// this table caught up (the parity test exists so that stays theoretical).
 var resourcePatterns = map[string][]string{
 	// The tournament read model. bareTournamentDetailPattern (not a literal
 	// substring) because the path segment is either a numeric id or an opaque
@@ -23,18 +23,19 @@ var resourcePatterns = map[string][]string{
 	// (/tournaments/{id}/stages/{stage_id}/ffa): an FFA result write emits
 	// only tournament.encounters and the recalculation it enqueues only
 	// standings/detail/encounters, so without it the entry lived out its TTL
-	// while the standings beside it were already fresh.
-	"tournament.encounters": {"/api/v1/encounters", "/ffa"},
-	"tournament.standings":  {"/standings", "/ffa"},
+	// while the standings beside it were already fresh. "/api/v1/users/" is
+	// a player's page for this tournament (/users/{id}/tournaments/{tid} and
+	// its /encounters and /leaderboard, stats.PublicCacheableReads): parsed
+	// logs emit only encounters/standings. The scope already narrows it to
+	// this tournament — a user's TTL-only profile reads live under id 0.
+	"tournament.encounters": {"/api/v1/encounters", "/ffa", "/api/v1/users/"},
+	"tournament.standings":  {"/standings", "/ffa", "/api/v1/users/"},
 	"tournament.teams":      {"/api/v1/teams"},
-	// A section appearing or disappearing changes every page-shell read.
-	"tournament.structure": {
-		bareTournamentDetailPattern,
-		"/stages",
-		"/standings",
-		"/api/v1/encounters",
-		"/api/v1/teams",
-	},
+	// Every page of the tournament: a section appearing or disappearing
+	// changes the page-shell reads, and the same resource carries a
+	// visibility flip (is_hidden), after which no anonymous entry of the
+	// tournament may survive — the participants list included.
+	"tournament.structure": nil,
 	// The public participants list, plus the detail read that embeds live
 	// participants_count / registrations_count.
 	"tournament.registrations": {"/registration/list", bareTournamentDetailPattern},

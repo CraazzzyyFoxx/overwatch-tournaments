@@ -1,4 +1,4 @@
-"""RBAC administration: the write surface behind ``rpc.app.rbac.*``.
+"""RBAC administration: the write surface behind ``rpc.identity.rbac.*``.
 
 Every guard lives in ``rbac_policy``, every statement in the repository layer;
 what is left in these services is the flow — ordering, audit trail, cache

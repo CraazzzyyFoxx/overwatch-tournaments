@@ -9,8 +9,11 @@ proven ``schemas.OAuthUserInfo``; what that identity means for a site account is
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import re
 from abc import ABC, abstractmethod
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit
 
@@ -43,6 +46,12 @@ def _raise_provider_call_error(exc: BaseException, *, provider_label: str, error
         ) from exc
     logger.error("{}: {}", error_detail, exc)
     raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=error_detail) from exc
+
+
+def _s256(code_verifier: str) -> str:
+    """RFC 7636 ``S256`` code challenge: ``base64url(sha256(code_verifier))``, unpadded."""
+    digest = hashlib.sha256(code_verifier.encode("ascii")).digest()
+    return base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
 
 
 class OAuthHttpClient:
@@ -86,12 +95,12 @@ class OAuthProviderBase(ABC):
         self.http = http
 
     @abstractmethod
-    def get_authorization_url(self, state: str) -> str:
-        """Get OAuth authorization URL"""
+    def get_authorization_url(self, state: str, code_verifier: str) -> str:
+        """The provider's authorization URL; a PKCE provider sends ``code_verifier``'s S256 challenge."""
 
     @abstractmethod
-    async def exchange_code(self, code: str) -> dict[str, Any]:
-        """Exchange authorization code for access token"""
+    async def exchange_code(self, code: str, *, state: str, code_verifier: str) -> dict[str, Any]:
+        """Exchange the callback's ``code`` for tokens; ``state`` is that callback's, already verified."""
 
     @abstractmethod
     async def get_user_info(self, access_token: str) -> schemas.OAuthUserInfo:
@@ -99,25 +108,31 @@ class OAuthProviderBase(ABC):
 
 
 class DiscordOAuthProvider(OAuthProviderBase):
+    """Uses PKCE (S256), which Discord documents for its authorization-code grant. Twitch, Battle.net and Riot
+    Sign-On document no PKCE, so they do not send it."""
+
     provider_name = "discord"
 
-    def get_authorization_url(self, state: str) -> str:
+    def get_authorization_url(self, state: str, code_verifier: str) -> str:
         params = {
             "client_id": settings.DISCORD_CLIENT_ID,
             "redirect_uri": settings.OAUTH_REDIRECT,
             "response_type": "code",
             "scope": "identify email guilds",
             "state": state,
+            "code_challenge": _s256(code_verifier),
+            "code_challenge_method": "S256",
         }
         return f"{settings.DISCORD_OAUTH_URL}?{urlencode(params)}"
 
-    async def exchange_code(self, code: str) -> dict[str, Any]:
+    async def exchange_code(self, code: str, *, state: str, code_verifier: str) -> dict[str, Any]:
         data = {
             "client_id": settings.DISCORD_CLIENT_ID,
             "client_secret": settings.DISCORD_CLIENT_SECRET,
             "grant_type": "authorization_code",
             "code": code,
             "redirect_uri": settings.OAUTH_REDIRECT,
+            "code_verifier": code_verifier,
         }
 
         try:
@@ -218,7 +233,7 @@ class TwitchOAuthProvider(OAuthProviderBase):
     # ``evidence.reason == "missing_scope"`` and the UI offers a reconnect.
     SCOPES = "user:read:email user:read:subscriptions"
 
-    def get_authorization_url(self, state: str) -> str:
+    def get_authorization_url(self, state: str, code_verifier: str) -> str:
         params = {
             "client_id": settings.TWITCH_CLIENT_ID,
             "redirect_uri": settings.OAUTH_REDIRECT,
@@ -228,7 +243,7 @@ class TwitchOAuthProvider(OAuthProviderBase):
         }
         return f"{settings.TWITCH_OAUTH_URL}?{urlencode(params)}"
 
-    async def exchange_code(self, code: str) -> dict[str, Any]:
+    async def exchange_code(self, code: str, *, state: str, code_verifier: str) -> dict[str, Any]:
         data = {
             "client_id": settings.TWITCH_CLIENT_ID,
             "client_secret": settings.TWITCH_CLIENT_SECRET,
@@ -302,7 +317,7 @@ class BattleNetOAuthProvider(OAuthProviderBase):
         region = settings.BATTLENET_REGION.strip().lower() or "eu"
         return f"https://{region}.battle.net/oauth"
 
-    def get_authorization_url(self, state: str) -> str:
+    def get_authorization_url(self, state: str, code_verifier: str) -> str:
         params = {
             "client_id": settings.BATTLENET_CLIENT_ID,
             "redirect_uri": settings.OAUTH_REDIRECT,
@@ -312,7 +327,7 @@ class BattleNetOAuthProvider(OAuthProviderBase):
         }
         return f"{self._oauth_base_url()}/authorize?{urlencode(params)}"
 
-    async def exchange_code(self, code: str) -> dict[str, Any]:
+    async def exchange_code(self, code: str, *, state: str, code_verifier: str) -> dict[str, Any]:
         data = {
             "grant_type": "authorization_code",
             "code": code,
@@ -393,7 +408,7 @@ class RiotOAuthProvider(OAuthProviderBase):
         cluster = settings.RIOT_ACCOUNT_CLUSTER.strip().lower() or "europe"
         return f"https://{cluster}.api.riotgames.com/riot/account/v1/accounts/me"
 
-    def get_authorization_url(self, state: str) -> str:
+    def get_authorization_url(self, state: str, code_verifier: str) -> str:
         params = {
             "client_id": settings.RIOT_CLIENT_ID,
             "redirect_uri": settings.OAUTH_REDIRECT,
@@ -403,7 +418,7 @@ class RiotOAuthProvider(OAuthProviderBase):
         }
         return f"{self.AUTH_URL}/authorize?{urlencode(params)}"
 
-    async def exchange_code(self, code: str) -> dict[str, Any]:
+    async def exchange_code(self, code: str, *, state: str, code_verifier: str) -> dict[str, Any]:
         data = {"grant_type": "authorization_code", "code": code, "redirect_uri": settings.OAUTH_REDIRECT}
         try:
             response = await self.http.client().post(
@@ -468,28 +483,45 @@ class SteamOpenIDProvider(OAuthProviderBase):
     _IDENTIFIER_SELECT = "http://specs.openid.net/auth/2.0/identifier_select"
     _CLAIMED_ID = re.compile(r"https://steamcommunity\.com/openid/id/(\d{17})")
     # check_authentication vouches for the signed fields only; an unsigned claimed_id is anyone's to forge.
-    _MUST_BE_SIGNED = frozenset({"op_endpoint", "claimed_id", "identity", "return_to"})
+    _MUST_BE_SIGNED = frozenset({"op_endpoint", "claimed_id", "identity", "return_to", "response_nonce"})
+    # A signed answer older than this is refused: replaying one would otherwise sign its claimed_id in again.
+    _NONCE_MAX_AGE = timedelta(minutes=5)
 
-    def get_authorization_url(self, state: str) -> str:
+    @staticmethod
+    def _return_to(state: str) -> str:
+        """The return URL a flow sends Steam, carrying its own ``state``: an answer naming any other is not ours."""
+        return f"{settings.OAUTH_REDIRECT}?{urlencode({'state': state})}"
+
+    @classmethod
+    def _nonce_is_fresh(cls, nonce: str) -> bool:
+        """OpenID 2.0 ``response_nonce`` opens with its UTC issue time, ``2005-05-15T17:11:51Z``."""
+        try:
+            issued = datetime.strptime(nonce[:20], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)
+        except ValueError:
+            return False
+        return abs(datetime.now(UTC) - issued) <= cls._NONCE_MAX_AGE
+
+    def get_authorization_url(self, state: str, code_verifier: str) -> str:
         redirect = urlsplit(settings.OAUTH_REDIRECT)
         params = {
             "openid.ns": self._OPENID_NS,
             "openid.mode": "checkid_setup",
-            "openid.return_to": f"{settings.OAUTH_REDIRECT}?{urlencode({'state': state})}",
+            "openid.return_to": self._return_to(state),
             "openid.realm": f"{redirect.scheme}://{redirect.netloc}",
             "openid.identity": self._IDENTIFIER_SELECT,
             "openid.claimed_id": self._IDENTIFIER_SELECT,
         }
         return f"{self.LOGIN_URL}?{urlencode(params)}"
 
-    async def exchange_code(self, code: str) -> dict[str, Any]:
+    async def exchange_code(self, code: str, *, state: str, code_verifier: str) -> dict[str, Any]:
         params = dict(parse_qsl(code, keep_blank_values=True))
         claimed = self._CLAIMED_ID.fullmatch(params.get("openid.claimed_id", ""))
         if (
             claimed is None
             or params.get("openid.op_endpoint") != self.LOGIN_URL
-            or not params.get("openid.return_to", "").startswith(f"{settings.OAUTH_REDIRECT}?")
+            or params.get("openid.return_to") != self._return_to(state)
             or not self._MUST_BE_SIGNED <= set(params.get("openid.signed", "").split(","))
+            or not self._nonce_is_fresh(params.get("openid.response_nonce", ""))
         ):
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid Steam sign-in response")
         try:

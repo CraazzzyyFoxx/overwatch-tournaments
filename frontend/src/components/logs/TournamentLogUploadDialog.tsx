@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useRef, useState, type ReactNode } from "react";
+import { useId, useImperativeHandle, useRef, useState, type ReactNode, type Ref } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { FilePlus, FileUp, FolderOpen, RefreshCw, Settings } from "lucide-react";
@@ -34,10 +34,17 @@ import { AutoUploadStatus } from "./AutoUploadStatus";
 
 const LOG_FILE_ACCEPT = ".log,.txt,.csv";
 
+/** Opens the dialog without a trigger, e.g. from a table command. */
+export interface TournamentLogUploadHandle {
+  open: () => void;
+}
+
 interface TournamentLogUploadDialogProps {
   tournamentId: number;
   encounters: Encounter[];
-  trigger: ReactNode;
+  /** Omitted when the dialog is opened through `ref` instead. */
+  trigger?: ReactNode;
+  ref?: Ref<TournamentLogUploadHandle>;
   initialEncounterId?: number | null;
   onUploaded?: () => void;
   /** Watch the folder and offer the automatic tab. Only the encounter room opts in. */
@@ -63,7 +70,7 @@ export function TournamentLogUploadDialog(props: Readonly<TournamentLogUploadDia
 }
 
 function DirectoryUploadDialog({
-  tournamentId, encounters, trigger, initialEncounterId = null, onUploaded, autoUpload = false
+  tournamentId, encounters, trigger, ref, initialEncounterId = null, onUploaded, autoUpload = false
 }: Readonly<TournamentLogUploadDialogProps>) {
   const t = useTranslations("accountSettings.logDirectory");
   const format = useFormatter();
@@ -201,6 +208,14 @@ function DirectoryUploadDialog({
     setOpen(nextOpen);
   }
 
+  // Same path as the trigger, so the saved folder is still read inside the
+  // click that grants any permission prompt.
+  useImperativeHandle(ref, () => ({
+    open: () => {
+      if (!directory.isLoading) handleOpenChange(true);
+    }
+  }));
+
   function openSettings() {
     setOpen(false);
     useAccountSettingsModalStore.getState().open("logs");
@@ -208,7 +223,7 @@ function DirectoryUploadDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger asChild disabled={directory.isLoading}>{trigger}</DialogTrigger>
+      {trigger ? <DialogTrigger asChild disabled={directory.isLoading}>{trigger}</DialogTrigger> : null}
       <DialogContent className="max-w-xl gap-5">
         <DialogHeader>
           <DialogTitle>{t("uploadTitle")}</DialogTitle>

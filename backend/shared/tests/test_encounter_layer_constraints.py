@@ -23,6 +23,7 @@ from shared.models.encounter import (
     EncounterTeamMember,
     ScoringRule,
 )
+from shared.models.encounter.pick_ban import PickBanEntry, PickBanSession
 from shared.models.identity.user import User
 from shared.models.tenancy.workspace import Workspace, WorkspaceMember
 from shared.models.tournament.bracket_encounter import BracketEncounter
@@ -364,6 +365,52 @@ class EncounterLayerConstraintTests(IsolatedAsyncioTestCase):
                     0,
                     await self._scalar(f"SELECT count(*) FROM encounter.{table} WHERE {column} = :{value}"),
                 )
+
+    async def test_deleting_the_encounter_takes_the_board_its_participations_acted_on(self) -> None:
+        async with self.Session() as s:
+            room = PickBanSession(
+                encounter_id=self.ids["e"],
+                kind=enums.PickBanKind.HERO,
+                pool_json={},
+                seed_source=enums.VetoSeedSource.FALLBACK_FIRST_SLOT,
+                resolved_sequence_json=[],
+                ruleset_json={},
+            )
+            s.add(room)
+            await s.flush()
+            team = enums.PickBanActorKind.TEAM
+            s.add_all(
+                [
+                    PickBanEntry(
+                        session_id=room.id,
+                        encounter_id=self.ids["e"],
+                        item_id=1,
+                        status=enums.MapPoolEntryStatus.PICKED,
+                        picked_by_kind=team,
+                        picked_by_team_id=self.ids["p1"],
+                    ),
+                    PickBanEntry(
+                        session_id=room.id,
+                        encounter_id=self.ids["e"],
+                        item_id=2,
+                        status=enums.MapPoolEntryStatus.PROTECTED,
+                        protected_by_kind=team,
+                        protected_by_team_id=self.ids["p2"],
+                    ),
+                ]
+            )
+            await s.commit()
+
+        # Postgres runs the encounter's cascades in trigger-name order, which
+        # differs between databases: production reached the participations
+        # before the room. Deleting them first in the same transaction is that
+        # order -- and the ORM's, when the seats are loaded.
+        async with self.Session() as s:
+            await s.execute(sa.text("DELETE FROM encounter.team WHERE encounter_id = :e"), self.ids)
+            await s.execute(sa.text("DELETE FROM encounter.encounter WHERE id = :e"), self.ids)
+            await s.commit()
+
+        self.assertEqual(0, await self._scalar("SELECT count(*) FROM encounter.pick_ban_entry WHERE encounter_id = :e"))
 
     async def test_deleting_the_tournament_takes_its_encounters(self) -> None:
         await self._execute("DELETE FROM tournament.tournament WHERE id = :t")

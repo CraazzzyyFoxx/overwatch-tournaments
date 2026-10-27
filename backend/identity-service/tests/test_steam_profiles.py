@@ -59,6 +59,7 @@ def test_refresh_writes_new_names_and_keeps_the_last_known_one_on_silence_or_fai
         SimpleNamespace(id=1, username=KITKAT, display_name="old"),  # renamed on Steam
         SimpleNamespace(id=2, username=RABS, display_name="Rabscuttle"),  # Steam does not answer for it
     ]
+    events: list[str] = []
 
     async def list_by_provider(_session, provider, *, ids=None):
         assert (provider, ids) == ("steam", None)
@@ -68,11 +69,24 @@ def test_refresh_writes_new_names_and_keeps_the_last_known_one_on_silence_or_fai
         for field, value in data.items():
             setattr(instance, field, value)
 
+    async def commit():
+        events.append("commit")
+
+    fetch = steam_profiles.fetch_profiles
+
+    async def fetch_profiles(http, account_ids):
+        events.append("fetch")
+        return await fetch(http, account_ids)
+
     monkeypatch.setattr(steam_profiles._accounts, "list_by_provider", list_by_provider)
     monkeypatch.setattr(steam_profiles._accounts, "update_fields", update_fields)
+    monkeypatch.setattr(steam_profiles, "fetch_profiles", fetch_profiles)
+    session = SimpleNamespace(commit=commit)
 
-    assert asyncio.run(steam_profiles.refresh_display_names(None, _client([]))) == 1
+    assert asyncio.run(steam_profiles.refresh_display_names(session, _client([]))) == 1
     assert [a.display_name for a in accounts] == ["KitKat", "Rabscuttle"]
 
-    assert asyncio.run(steam_profiles.refresh_display_names(None, _client([], fail=True))) == 0
+    assert asyncio.run(steam_profiles.refresh_display_names(session, _client([], fail=True))) == 0
     assert [a.display_name for a in accounts] == ["KitKat", "Rabscuttle"]
+    # The account read's transaction ends before every HTTP round of a refresh: none is held across the requests.
+    assert events == ["commit", "fetch", "commit", "fetch"]

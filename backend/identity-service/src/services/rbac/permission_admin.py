@@ -9,7 +9,7 @@ from shared.core import pagination
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.models.identity.rbac import Permission
 from shared.rbac import ensure_permission_catalog
-from shared.repository import PermissionRepository, UserRoleRepository
+from shared.repository import PermissionRepository, UserPermissionDenyRepository, UserRoleRepository
 from src import schemas
 from src.services.audit import record_operator_audit
 from src.services.rbac_policy import RbacPolicy, rbac_policy
@@ -34,11 +34,13 @@ class PermissionAdminService:
         policy: RbacPolicy = rbac_policy,
         permissions: PermissionRepository = PermissionRepository(),
         role_grants: UserRoleRepository = UserRoleRepository(),
+        denies: UserPermissionDenyRepository = UserPermissionDenyRepository(),
         cache: SessionCache = session_cache,
     ) -> None:
         self._policy = policy
         self._permissions = permissions
         self._role_grants = role_grants
+        self._denies = denies
         self._cache = cache
 
     async def list(
@@ -120,8 +122,9 @@ class PermissionAdminService:
         if not permission:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Permission not found")
 
-        # Read before the delete cascades the role grants away.
-        holders: set[int] = set()
+        # Read before the delete cascades the role grants and denies away: a
+        # cached entry of either kind still names this permission.
+        holders: set[int] = set(await self._denies.user_ids_for_permission(session, permission_id))
         for role_id in await self._permissions.role_ids_with_permission(session, permission_id):
             holders.update(await self._role_grants.user_ids_for_role(session, role_id))
 

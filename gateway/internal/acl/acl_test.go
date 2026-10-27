@@ -504,3 +504,65 @@ func TestAllow_UnknownTopicDenied(t *testing.T) {
 		t.Fatal("unknown topic must be denied")
 	}
 }
+
+// A workspace-scoped API key authenticates as its owner, and the membership
+// lookups are keyed by that owner: unconfined, a key read every workspace its
+// owner belongs to, and the owner's inbox. In its own workspace it keeps the
+// owner's grants; elsewhere (and in a mix, which has no workspace) it gets
+// exactly what anonymous gets.
+func TestAllow_APIKeyConfinedToItsWorkspace(t *testing.T) {
+	ctx := context.Background()
+	key := &auth.User{ID: 7, APIKeyWorkspaceID: 3}
+	hidden := fakeVis{hiddenFound: true, hidden: true, encTID: 42, encFound: true, draftTID: 42, draftFound: true}
+	cases := []struct {
+		name  string
+		topic string
+		ws    int64 // workspace that owns tournament 42
+		vis   fakeVis
+		want  bool
+	}{
+		{"own workspace topic", "workspace:3:invalidation", 3, hidden, true},
+		{"other workspace topic", "workspace:4:invalidation", 3, hidden, false},
+		{"owner's notifications", "user:7:notifications", 3, hidden, false},
+		{"owner's invalidation", "user:7:invalidation", 3, hidden, false},
+		{"own workspace balancer", "tournament:42:balancer", 3, hidden, true},
+		{"other workspace balancer", "tournament:42:balancer", 4, hidden, false},
+		{"own hidden tournament", "tournament:42:bracket", 3, hidden, true},
+		{"other hidden tournament", "tournament:42:bracket", 4, hidden, false},
+		{"own closed encounter chat", "encounter:5:chat", 3, hidden, true},
+		{"other closed encounter chat", "encounter:5:chat", 4, hidden, false},
+		{"other closed draft chat", "draft:5:chat", 4, hidden, false},
+		{"mix encounter chat", "encounter:5:chat", 3, fakeVis{encFound: true, encMix: true}, false},
+		{"closed mix draft chat", "draft:5:chat", 3, fakeVis{draftFound: true, draftMix: true}, false},
+		{"public bracket elsewhere", "tournament:42:bracket", 4, visibleVis(), true},
+		{"open chat elsewhere", "encounter:5:chat", 4, fakeVis{hiddenFound: true, encTID: 42, encFound: true, spectatorRead: true}, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			// The owner holds every grant everywhere.
+			members := &fakeMembers{member: true, organizer: true, captain: true, draftCaptain: true, draftHost: true, mixMember: true}
+			r := New(fakeResolver{workspaceID: tc.ws, found: true}, members, tc.vis)
+			ok, err := r.Allow(ctx, key, tc.topic)
+			if err != nil || ok != tc.want {
+				t.Fatalf("Allow(key, %s) = %v (err=%v), want %v", tc.topic, ok, err, tc.want)
+			}
+		})
+	}
+}
+
+// The superuser bypass never applies to a key, even one whose principal claims
+// the bit (ws.Principals never sets it): a key acts as itself in one
+// workspace, never as its superuser owner.
+func TestAllow_APIKeyNeverSuperuser(t *testing.T) {
+	ctx := context.Background()
+	key := &auth.User{ID: 7, APIKeyWorkspaceID: 3, IsSuperuser: true}
+	hidden := fakeVis{hiddenFound: true, hidden: true, encTID: 42, encFound: true, draftTID: 42, draftFound: true}
+	r := New(fakeResolver{workspaceID: 4, found: true}, &fakeMembers{}, hidden)
+	for _, topic := range []string{
+		"workspace:4:invalidation", "tournament:42:balancer", "tournament:42:bracket", "encounter:5:chat", "draft:5:chat",
+	} {
+		if ok, err := r.Allow(ctx, key, topic); err != nil || ok {
+			t.Errorf("Allow(key, %s) = %v (err=%v), want false", topic, ok, err)
+		}
+	}
+}

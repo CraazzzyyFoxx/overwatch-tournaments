@@ -1,6 +1,6 @@
 .PHONY: help dev-build dev-up dev-up-full dev-down dev-restart dev-logs dev-ps dev-health dev-rebuild \
-	prod-build prod-pull prod-migrate prod-discord-emoji prod-up prod-down prod-logs prod-scale prod-small prod-medium prod-large migrate discord-emoji test clean \
-	maint-on maint-eta maint-off \
+	prod-build prod-pull prod-migrate prod-pgbouncer-reconnect prod-discord-emoji prod-up prod-down prod-logs prod-scale prod-small prod-medium prod-large migrate discord-emoji test clean \
+	maint-on maint-eta maint-off jwt-public-key prod-jwt-public-key \
 	build up down restart logs ps health build-prod up-prod down-prod logs-prod \
 	app-logs identity-logs stats-logs frontend-logs discord-logs balancer-logs stream-logs \
 	app-restart identity-restart stats-restart frontend-restart \
@@ -47,7 +47,8 @@ BACKUP_COMPOSE = docker compose -f docker-compose.backup.yml --env-file $(BACKUP
 # hottest uncacheable route (registration/form) = ~18 rps per replica, the user
 # profile reads ~20 ms on live routes plus ~107 ms per response-cache miss
 # (measured on app-svc before the /users/* and statistics reads moved to
-# stats-svc, which now gets the replica counts app-svc had),
+# stats-svc, which now gets the replica counts app-svc had; app-svc is down
+# to gateway-cached public reads + admin writes, so one replica in every size),
 # identity ~6-12 ms and bounded by SESSIONS, not rps (the gateway caches each
 # validate_token verdict for 30s). small = a 4 CPU / 8G box, large needs 8.
 # `make prod-up` / `make prod-scale` / GitHub release all honour PROD_SIZE so a
@@ -56,8 +57,8 @@ BACKUP_COMPOSE = docker compose -f docker-compose.backup.yml --env-file $(BACKUP
 # or poke one service: make prod-up PROD_SCALE='app-svc=2 balancer-svc=2'
 PROD_SIZE ?= small
 PROD_SCALE_small  := app-svc=1 stats-svc=1 identity-svc=1 tournament-svc=2 frontend=2
-PROD_SCALE_medium := app-svc=2 stats-svc=2 identity-svc=1 tournament-svc=2 frontend=2
-PROD_SCALE_large  := app-svc=2 stats-svc=2 identity-svc=2 tournament-svc=4 frontend=3
+PROD_SCALE_medium := app-svc=1 stats-svc=2 identity-svc=1 tournament-svc=2 frontend=2
+PROD_SCALE_large  := app-svc=1 stats-svc=2 identity-svc=2 tournament-svc=4 frontend=3
 PROD_SCALE ?= $(PROD_SCALE_$(PROD_SIZE))
 
 help:
@@ -73,7 +74,8 @@ help:
 	@echo ""
 	@echo "  make prod-build     - Build production images locally (CI normally builds them)"
 	@echo "  make prod-pull      - Pull the images CI built (IMAGE_TAG=<release> to pin)"
-	@echo "  make prod-migrate   - alembic upgrade head from the pulled image"
+	@echo "  make prod-migrate   - alembic upgrade head from the pulled image, then prod-pgbouncer-reconnect"
+	@echo "  make prod-pgbouncer-reconnect - RECONNECT the bundled pgBouncer (re-prepares statements after a column retype)"
 	@echo "  make prod-discord-emoji - Upload the bot's missing Discord emoji (one-shot)"
 	@echo "  make prod-up        - Start production stack (PROD_SIZE=small|medium|large)"
 	@echo "  make prod-down      - Stop production stack"
@@ -99,6 +101,7 @@ help:
 	@echo ""
 	@echo "  make migrate        - Run backend migrations"
 	@echo "  make test           - Run backend tests"
+	@echo "  make jwt-public-key - Print the gateway's JWT_PUBLIC_KEY (prod-jwt-public-key: production stack)"
 	@echo "  make e2e-up         - Start the isolated e2e stack and migrate its empty DB"
 	@echo "  make e2e            - Run the Playwright suite against it (E2E_ARGS='--project=api')"
 	@echo "  make e2e-down       - Stop it (the DB is tmpfs: gone)"
@@ -215,6 +218,34 @@ migrate:
 
 prod-migrate:
 	$(PROD_COMPOSE) run --rm --no-deps app-svc alembic upgrade head
+	@$(MAKE) --no-print-directory prod-pgbouncer-reconnect
+
+# The services keep prepared statements behind pgBouncer, and so do the backends
+# it shares between clients: after a migration that retypes a column a statement
+# selects, each fails with "cached plan must not change result type" until its
+# backend is recycled. RECONNECT on the admin console (ADMIN_USERS in the compose
+# file) closes every server connection as its transaction ends. Bundled pgBouncer
+# only (profile `db`, running); an external pooler is a manual step
+# (docs/production-host.md#pgbouncer). Never fatal: the migration has landed, and
+# a deploy must not stop between it and `prod-up`.
+prod-pgbouncer-reconnect:
+	@if $(PROD_COMPOSE) ps --status running --services | grep -qx pgbouncer; then \
+		$(PROD_COMPOSE) exec -T pgbouncer sh -c 'PGPASSWORD="$$POSTGRES_PASSWORD" psql -h 127.0.0.1 -p 6432 -U "$$POSTGRES_USER" -d pgbouncer -c RECONNECT' </dev/null \
+			|| echo "warning: pgBouncer RECONNECT failed; restart pgbouncer if this release retyped a column (docs/production-host.md#pgbouncer)"; \
+	fi
+
+# The gateway's JWT_PUBLIC_KEY (backend/env/gateway.env): the Ed25519 public key
+# identity signs tokens with, derived from auth.env's JWT_SECRET_KEY. Computed in
+# the identity image with compose's own env files, so it is exactly what identity
+# logs at startup. Redo it whenever JWT_SECRET_KEY changes.
+JWT_PUBLIC_KEY_CMD = run --rm --no-deps -T identity-svc python -c \
+	"from src.services.security import token_codec; print(token_codec.public_key_b64)"
+
+jwt-public-key:
+	@$(COMPOSE) $(JWT_PUBLIC_KEY_CMD)
+
+prod-jwt-public-key:
+	@$(PROD_COMPOSE) $(JWT_PUBLIC_KEY_CMD)
 
 # One-shot: upload the bot's missing Discord emoji, then exit (see the
 # `discord-emoji` service). Safe to rerun: existing names are skipped.

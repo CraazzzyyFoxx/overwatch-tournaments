@@ -18,18 +18,10 @@ from shared.schemas.events import (
     TournamentStateChangedEvent,
 )
 from shared.schemas.identity import PlayerIdentityRead
-from shared.services.notifications import notify
+from shared.services.notifications import PersonalNotification, notify_users
 from shared.services.realtime import Resource, Scope, emit, enqueue_invalidation_outbox
 from shared.services.scrim_scope import is_scrim_container
 from src.services.computation.jobs import jobs_service
-
-#: Tournament names already snapshotted in this transaction, keyed by id.
-#: ``bulk_approve_registrations`` decides a whole batch for ONE tournament in a
-#: loop, so reading the name per registration is an N+1 that grows with the
-#: batch. The session's identity map cannot serve as that cache: it holds clean
-#: instances WEAKLY, so a ``session.get`` result is collected between iterations
-#: and re-queried every time.
-_TOURNAMENT_NAMES_KEY = "notification_tournament_names"
 
 #: Tournaments whose standings this transaction already asked for. A result
 #: write that completes its encounter reaches ``enqueue_tournament_recalculation``
@@ -79,35 +71,18 @@ def _session_info(session: AsyncSession) -> dict[Any, Any] | None:
     return getattr(getattr(session, "sync_session", None) or session, "info", None)
 
 
-async def _tournament_name(session: AsyncSession, tournament_id: int) -> str:
-    """The tournament's name for a snapshot, read at most once per transaction.
-
-    Single-column scalar projection, memoized on the session -- see
-    ``_TOURNAMENT_NAMES_KEY`` for why the identity map is not the memo.
-    """
-    info = _session_info(session)
-    names: dict[int, str] = info.setdefault(_TOURNAMENT_NAMES_KEY, {}) if info is not None else {}
-    if tournament_id not in names:
-        names[tournament_id] = (
-            await session.scalar(sa.select(models.Tournament.name).where(models.Tournament.id == tournament_id)) or ""
-        )
-    return names[tournament_id]
-
-
 @event.listens_for(Session, "after_commit")
 def _drop_transaction_scratch_after_commit(session: Session) -> None:
     # Per-transaction scratch; a session outlives its transactions. A released
     # savepoint fires this too, but its work is still the outer transaction's.
     if session.in_nested_transaction():
         return
-    session.info.pop(_TOURNAMENT_NAMES_KEY, None)
     session.info.pop(_STANDINGS_REQUESTED_KEY, None)
 
 
 @event.listens_for(Session, "after_rollback")
 def _drop_transaction_scratch_after_rollback(session: Session) -> None:
     # Fires for a rolled-back savepoint too: forgetting a request it undid costs at most one spare job.
-    session.info.pop(_TOURNAMENT_NAMES_KEY, None)
     session.info.pop(_STANDINGS_REQUESTED_KEY, None)
 
 
@@ -141,65 +116,83 @@ async def enqueue_tournament_recalculation(
     )
 
 
-async def get_registration_workspace_id(session: AsyncSession, tournament_id: int) -> int:
-    # Registration has no denormalized workspace_id column — derive it via
-    # the owning tournament (registrations are always tournament-scoped).
-    workspace_id = await session.scalar(
-        sa.select(models.Tournament.workspace_id).where(models.Tournament.id == tournament_id)
-    )
-    assert workspace_id is not None, f"Tournament {tournament_id} has no workspace_id"
-    return int(workspace_id)
-
-
-async def registration_identity(
+async def _event_snapshot(
     session: AsyncSession,
-    registration: models.Registration,
-) -> PlayerIdentityRead | None:
+    registrations: Sequence[models.Registration],
+) -> tuple[Any, list[tuple[int | None, int | None]]]:
+    """What the registration events snapshot for ``registrations`` of ONE tournament: the tournament
+    (``workspace_id``, ``discipline``, ``name``) and each registrant's ``(player_id, auth_user_id)``.
+
+    At most two reads whatever the batch size, and none for what the caller already holds: the admin
+    review paths pass a registration from ``get_registration_by_id``, whose options eager-load
+    ``tournament`` and ``workspace_member.player``. Those are read off the instance dict rather than the
+    attribute: touching an unloaded relationship on an async session raises instead of lazy-loading,
+    which is why ``lifecycle._workspace_id_for`` does the same.
+
+    Registration has no denormalized workspace_id column, and ``workspace_member_id`` is its only
+    identity anchor: a registration without a member has no player, and a shadow player (no site
+    account behind its ``players.user`` row) no ``auth_user_id``.
+    """
+    first = registrations[0]
+    assert all(r.tournament_id == first.tournament_id for r in registrations), "one tournament per batch"
+    tournament = first.__dict__.get("tournament")
+    if tournament is None:
+        tournament = (
+            await session.execute(
+                sa.select(models.Tournament.workspace_id, models.Tournament.discipline, models.Tournament.name).where(
+                    models.Tournament.id == first.tournament_id
+                )
+            )
+        ).one()
+    players = [
+        member.__dict__.get("player") if (member := r.__dict__.get("workspace_member")) is not None else None
+        for r in registrations
+    ]
+    member_ids = {
+        r.workspace_member_id
+        for r, player in zip(registrations, players, strict=True)
+        if player is None and r.workspace_member_id is not None
+    }
+    members: dict[int, Any] = {}
+    if member_ids:
+        rows = await session.execute(
+            sa.select(models.WorkspaceMember.id, models.WorkspaceMember.player_id, models.User.auth_user_id)
+            .join(models.User, models.User.id == models.WorkspaceMember.player_id)
+            .where(models.WorkspaceMember.id.in_(member_ids))
+        )
+        members = {row.id: row for row in rows}
+    registrants: list[tuple[int | None, int | None]] = []
+    for registration, player in zip(registrations, players, strict=True):
+        if player is not None:
+            registrants.append((player.id, player.auth_user_id))
+        elif (row := members.get(registration.workspace_member_id)) is not None:
+            registrants.append((row.player_id, row.auth_user_id))
+        else:
+            registrants.append((None, None))
+    return tournament, registrants
+
+
+def _identity(registration: models.Registration, discipline: str) -> PlayerIdentityRead | None:
     """The registration's primary handle for its tournament's identity provider, as the events carry it.
 
     Never another provider's handle: a tournament whose discipline declares no provider has no identity.
     """
-    owner = registration.__dict__.get("tournament")
-    code = (
-        owner.discipline
-        if owner is not None
-        else await session.scalar(
-            sa.select(models.Tournament.discipline).where(models.Tournament.id == registration.tournament_id)
-        )
-    )
-    provider = discipline_spec(code).identity_provider if code is not None else None
+    provider = discipline_spec(discipline).identity_provider
     if provider is None:
         return None
     primary = registration.primary_game_identity(provider=provider)
     return PlayerIdentityRead.of(provider, primary.handle if primary is not None else None)
 
 
-async def get_registration_player_id(
-    session: AsyncSession,
-    registration: models.Registration,
-) -> int | None:
-    """The registration's domain player id (players.user.id), via its member.
-
-    workspace_member_id is the row's only identity anchor; an explicit scalar
-    query avoids lazy-loading the relationship in async code. Registrations
-    without a member have no player identity.
-    """
-    if registration.workspace_member_id is None:
-        return None
-    return await session.scalar(
-        sa.select(models.WorkspaceMember.player_id).where(models.WorkspaceMember.id == registration.workspace_member_id)
-    )
-
-
 async def _notify_registration_decision(
     session: AsyncSession,
-    registration: models.Registration,
-    player_id: int | None,
+    registrations: Sequence[models.Registration],
+    registrants: Sequence[tuple[int | None, int | None]],
+    tournament: Any,
     *,
     kind: str,
-    workspace_id: int | None,
 ) -> None:
-    """Tell the registrant their entry was decided.
+    """Tell each registrant their entry was decided; ``registrants`` is ``_event_snapshot``'s, row for row.
 
     A shadow player -- a real competitor with no site account behind their
     ``players.user`` row -- has no inbox, so there is simply no row. That is not
@@ -207,44 +200,28 @@ async def _notify_registration_decision(
 
     ``ponytail:`` no de-duplication. A status toggled approved -> rejected ->
     approved notifies three times, because the write is unconditional. The
-    upgrade path is a suppression window inside ``notify()`` (skip a repeat of
+    upgrade path is a suppression window inside ``notify_users()`` (skip a repeat of
     the same recipient/kind/entity within N minutes), not a unique index, which
     would also block the legitimate repeat.
     """
-    # The admin review paths (`approve_registration`, `reject_registration`,
-    # `update_registration_profile`) reach here with a registration loaded by
-    # `get_registration_by_id`, whose options already eager-load
-    # `workspace_member.player` and `tournament`. Read them off the instance dict
-    # rather than the attribute: touching an unloaded relationship on an async
-    # session raises instead of lazy-loading, which is why
-    # `lifecycle._workspace_id_for` does the same.
-    member = registration.__dict__.get("workspace_member")
-    player = member.__dict__.get("player") if member is not None else None
-    if player is not None:
-        recipient = player.auth_user_id
-    elif player_id is not None:
-        recipient = await session.scalar(sa.select(models.User.auth_user_id).where(models.User.id == player_id))
-    else:
-        recipient = None
-    if recipient is None:
-        return
-    tournament = registration.__dict__.get("tournament")
-    tournament_name = (
-        tournament.name if tournament is not None else await _tournament_name(session, registration.tournament_id)
-    )
-    await notify(
+    await notify_users(
         session,
         kind=kind,
-        recipient_auth_user_id=int(recipient),
-        # The organizer that owns the tournament, so their operators can find
-        # (and retire) the decision rows their own review produced. Passed in
-        # rather than re-read: both callers already resolved it.
-        source_workspace_id=workspace_id,
-        payload={
-            "tournament_id": registration.tournament_id,
-            "tournament_name": tournament_name,
-            "registration_id": registration.id,
-        },
+        notifications=[
+            PersonalNotification(
+                recipient_auth_user_id=int(recipient),
+                payload={
+                    "tournament_id": registration.tournament_id,
+                    "tournament_name": tournament.name,
+                    "registration_id": registration.id,
+                },
+                # The organizer that owns the tournament, so their operators can find
+                # (and retire) the decision rows their own review produced.
+                source_workspace_id=tournament.workspace_id,
+            )
+            for registration, (_player_id, recipient) in zip(registrations, registrants, strict=True)
+            if recipient is not None
+        ],
     )
 
 
@@ -252,32 +229,43 @@ async def enqueue_registration_approved(
     session: AsyncSession,
     registration: models.Registration,
 ) -> None:
-    workspace_id = await get_registration_workspace_id(session, registration.tournament_id)
-    player_id = await get_registration_player_id(session, registration)
-    await enqueue_outbox_event(
-        session,
-        RegistrationApprovedEvent(
-            tournament_id=registration.tournament_id,
-            workspace_id=workspace_id,
-            registration_id=registration.id,
-            user_id=player_id,
-            identity=await registration_identity(session, registration),
-            source_service="tournament-service",
-        ),
-        exchange=TOURNAMENT_EVENTS_EXCHANGE,
-        routing_key="tournament.registration.approved",
-    )
-    await _notify_registration_decision(
-        session, registration, player_id, kind="registration.approved", workspace_id=workspace_id
-    )
-    await emit(
-        session,
-        scope=Scope.tournament(registration.tournament_id),
-        invalidates=[Resource.TOURNAMENT_REGISTRATIONS],
-        # A row created in this same transaction has no id until it flushes;
-        # entity_ids is optional precision, so no id just means no narrowing.
-        entity_ids={"registration_ids": [registration.id]} if registration.id is not None else None,
-    )
+    await enqueue_registrations_approved(session, [registration])
+
+
+async def enqueue_registrations_approved(
+    session: AsyncSession,
+    registrations: Sequence[models.Registration],
+) -> None:
+    """Per registration of ONE tournament: the approval event, the registrant's inbox row and the page
+    invalidation, in a constant number of statements -- ``bulk_approve_registrations`` approves up to 500 at
+    once. The approval rows ride the inbox rows' flush (or the caller's commit when nobody has an inbox)."""
+    if not registrations:
+        return
+    tournament, registrants = await _event_snapshot(session, registrations)
+    for registration, (player_id, _recipient) in zip(registrations, registrants, strict=True):
+        await enqueue_outbox_event(
+            session,
+            RegistrationApprovedEvent(
+                tournament_id=registration.tournament_id,
+                workspace_id=tournament.workspace_id,
+                registration_id=registration.id,
+                user_id=player_id,
+                identity=_identity(registration, tournament.discipline),
+                source_service="tournament-service",
+            ),
+            exchange=TOURNAMENT_EVENTS_EXCHANGE,
+            routing_key="tournament.registration.approved",
+            flush=False,
+        )
+        await emit(
+            session,
+            scope=Scope.tournament(registration.tournament_id),
+            invalidates=[Resource.TOURNAMENT_REGISTRATIONS],
+            # A row created in this same transaction has no id until it flushes;
+            # entity_ids is optional precision, so no id just means no narrowing.
+            entity_ids={"registration_ids": [registration.id]} if registration.id is not None else None,
+        )
+    await _notify_registration_decision(session, registrations, registrants, tournament, kind="registration.approved")
 
 
 async def notify_registration_rejected(
@@ -285,11 +273,8 @@ async def notify_registration_rejected(
     registration: models.Registration,
 ) -> None:
     """Tell the registrant and the open pages; no domain event, nothing consumes a rejection."""
-    workspace_id = await get_registration_workspace_id(session, registration.tournament_id)
-    player_id = await get_registration_player_id(session, registration)
-    await _notify_registration_decision(
-        session, registration, player_id, kind="registration.rejected", workspace_id=workspace_id
-    )
+    tournament, registrants = await _event_snapshot(session, [registration])
+    await _notify_registration_decision(session, [registration], registrants, tournament, kind="registration.rejected")
     await emit(
         session,
         scope=Scope.tournament(registration.tournament_id),
@@ -305,14 +290,15 @@ async def enqueue_registration_rank_check(
     registration: models.Registration,
 ) -> None:
     """Ask the discipline's rank collector to re-fetch the registrant's accounts (the profile check)."""
+    tournament, [(player_id, _recipient)] = await _event_snapshot(session, [registration])
     await enqueue_outbox_event(
         session,
         RegistrationRankCheckRequestedEvent(
             tournament_id=registration.tournament_id,
-            workspace_id=await get_registration_workspace_id(session, registration.tournament_id),
+            workspace_id=tournament.workspace_id,
             registration_id=registration.id,
-            user_id=await get_registration_player_id(session, registration),
-            identity=await registration_identity(session, registration),
+            user_id=player_id,
+            identity=_identity(registration, tournament.discipline),
             source_service="tournament-service",
         ),
         exchange=TOURNAMENT_EVENTS_EXCHANGE,

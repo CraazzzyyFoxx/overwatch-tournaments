@@ -6,7 +6,8 @@ purely about config and caching.
 
 Credentials are constructor arguments, never read from a global settings object:
 ``shared`` is imported by every service and must not depend on any one service's
-configuration.
+configuration. The optional ``release`` hook runs after a strategy's database read
+and before its first network call, so a caller can end its transaction first.
 """
 
 import asyncio
@@ -21,6 +22,7 @@ from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
+from shared.core import secretbox
 from shared.core.social import SocialProvider
 from shared.services.discord_client import DiscordClient
 from shared.services.discord_errors import DiscordError
@@ -158,9 +160,16 @@ class BoostyDiscordStrategy:
     no bot token; without a broker the verdict is ``bot_not_configured``.
     """
 
-    def __init__(self, session: AsyncSession, *, broker: Any | None = None) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        *,
+        broker: Any | None = None,
+        release: Callable[[], Awaitable[None]] | None = None,
+    ) -> None:
         self._session = session
         self._broker = broker
+        self._release = release
 
     async def resolve_many(
         self, *, config: dict[str, Any], auth_user_ids: Sequence[int]
@@ -168,6 +177,8 @@ class BoostyDiscordStrategy:
         discord_ids = await load_provider_user_ids(
             self._session, auth_user_ids=auth_user_ids, oauth_provider=SocialProvider.DISCORD
         )
+        if self._release is not None:
+            await self._release()
 
         # One client per batch: its member/role memo must not outlive this call.
         discord = DiscordClient(broker=self._broker)
@@ -176,8 +187,9 @@ class BoostyDiscordStrategy:
             try:
                 await discord.prefetch(guild_id, [uid for ids in discord_ids.values() for uid in ids])
             except DiscordError:
-                # Per-user resolution below asks again and files the outcome
-                # (``bot_not_configured`` / ``provider_unavailable``) per verdict.
+                # Not asked again per account: the client memoizes the failed batch,
+                # so each account files its outcome (``bot_not_configured`` /
+                # ``guild_not_accessible`` / ``provider_unavailable``) at once.
                 pass
 
         resolver = DiscordRoleResolver(
@@ -218,9 +230,12 @@ class BoostyDiscordStrategy:
 class TwitchSubscriptionStrategy:
     """Twitch tiers via Helix ``GET /subscriptions/user``.
 
-    Uses each patron's own stored user access token. A 401 means either an expired
-    token or a token predating the ``user:read:subscriptions`` scope; both surface
-    as ``HelixMissingScope`` so the UI offers a reconnect instead of refusing the
+    Uses each patron's own stored user access token, sealed at rest by identity
+    (``shared.core.secretbox``) and opened here with ``token_key``
+    (``OAUTH_TOKEN_ENCRYPTION_KEY``); one that cannot be opened -- no or a wrong key --
+    is logged and treated as absent. A 401 means either an expired token or a token
+    predating the ``user:read:subscriptions`` scope; both surface as
+    ``HelixMissingScope`` so the UI offers a reconnect instead of refusing the
     patron. Refreshing the token is identity-service's job, not this module's.
     """
 
@@ -229,18 +244,24 @@ class TwitchSubscriptionStrategy:
         session: AsyncSession,
         *,
         client_id: str | None,
+        token_key: str | None = None,
         proxy: str | None = None,
         api_base: str = TWITCH_HELIX_BASE,
+        release: Callable[[], Awaitable[None]] | None = None,
     ) -> None:
         self._session = session
         self._client_id = client_id
+        self._token_key = token_key
         self._proxy = proxy
         self._api_base = api_base
+        self._release = release
 
     async def resolve_many(
         self, *, config: dict[str, Any], auth_user_ids: Sequence[int]
     ) -> dict[int, SubscriptionVerdict]:
         connections = await self._load_connections(auth_user_ids)
+        if self._release is not None:
+            await self._release()
 
         async with httpx.AsyncClient(proxy=self._proxy, timeout=_TIMEOUT) as client:
             semaphore = asyncio.Semaphore(15)
@@ -290,8 +311,17 @@ class TwitchSubscriptionStrategy:
                 continue
             connections = out.setdefault(auth_user_id, [])
             if all(existing != provider_user_id for existing, _ in connections):
-                connections.append((provider_user_id, access_token))
+                connections.append((provider_user_id, self._open(access_token)))
         return out
+
+    def _open(self, stored: str | None) -> str | None:
+        if not stored:
+            return None
+        try:
+            return secretbox.decrypt(stored, secretbox.load_key(self._token_key))
+        except ValueError as exc:
+            logger.error(f"stored twitch token is unusable (OAUTH_TOKEN_ENCRYPTION_KEY): {exc}")
+            return None
 
     def _checker(self, client: httpx.AsyncClient, token: str | None) -> Callable[..., Awaitable[dict[str, Any]]]:
         async def check(*, broadcaster_id: str, user_id: str) -> dict[str, Any]:

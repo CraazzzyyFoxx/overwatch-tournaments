@@ -18,6 +18,10 @@ from src.services.security import PasswordHasher, passwords
 
 __all__ = ["AuthUserService", "auth_users"]
 
+# A cost-12 bcrypt hash of a throwaway string, verified when there is no real hash to check (unknown email,
+# passwordless account) so those answers take as long as a wrong password and do not reveal the account.
+_DUMMY_PASSWORD_HASH = "$2b$12$RBiKwjeeRvYHhOT0x4pnjurHzfnmiJo2zF09dP2LT1XaEDs.v3GpW"
+
 
 class AuthUserService:
     """Auth-account lifecycle and loading. Owns nothing about tokens."""
@@ -69,26 +73,6 @@ class AuthUserService:
         """
         return await self.users.get_identity(session, user_id, include_player=include_player)
 
-    async def list_with_rbac(
-        self,
-        session: AsyncSession,
-        params: schemas.AuthUserListParams,
-        *,
-        include_player: bool = False,
-    ) -> tuple[list[models.AuthUser], int]:
-        """Page of auth users plus the total matching the same filters."""
-        users, total = await self.users.list_with_rbac(
-            session,
-            params,
-            search=params.search,
-            role_id=params.role_id,
-            exclude_role_id=params.exclude_role_id or None,
-            is_active=params.is_active,
-            is_superuser=params.is_superuser,
-            include_player=include_player,
-        )
-        return list(users), total
-
     # --- authentication ---
 
     async def authenticate(
@@ -102,14 +86,13 @@ class AuthUserService:
         Every failure mode collapses to ``None`` so the caller can answer with
         one indistinguishable message: unknown email, an OAuth-only account
         (no ``hashed_password``), and a wrong password must not be tellable
-        apart from the outside.
+        apart from the outside -- not by the answer, and not by its timing.
+        Identity-only load: the RBAC is never read on this path.
         """
-        user = await self.users.get_by_email_with_rbac(session, email)
-        if not user:
-            return None
-        if not user.hashed_password:
-            return None
-        if not self.hasher.verify(password, user.hashed_password):
+        user = await self.users.get_identity_by_email(session, email)
+        hashed_password = user.hashed_password if user is not None else None
+        matches = await self.hasher.verify(password, hashed_password or _DUMMY_PASSWORD_HASH)
+        if not hashed_password or not matches:
             return None
         return user
 
@@ -128,7 +111,7 @@ class AuthUserService:
             models.AuthUser(
                 email=data.email,
                 username=data.username,
-                hashed_password=self.hasher.hash(data.password),
+                hashed_password=await self.hasher.hash(data.password),
                 first_name=data.first_name,
                 last_name=data.last_name,
             ),
@@ -142,7 +125,8 @@ class AuthUserService:
         await session.commit()
         # The reload targets the same primary key, so the identity map hands back
         # this very instance repopulated; a refresh() first would be a second SELECT.
-        reloaded = await self.get_with_rbac(session, user.id)
+        # The player rides along: the account's avatar is read off it.
+        reloaded = await self.get_with_rbac(session, user.id, include_player=True)
         assert reloaded is not None  # just committed under this session
         return reloaded
 
@@ -186,7 +170,7 @@ class AuthUserService:
         """Global role names + deduped permissions, read off a loaded instance.
 
         Requires the instance to have been loaded with RBAC options; the SQL
-        equivalent for a bare user id is ``RoleRepository.global_rbac_for_user``.
+        equivalent for a bare user id is ``RoleRepository.rbac_for_user``.
         """
         roles: list[str] = []
         permissions: list[dict[str, str]] = []

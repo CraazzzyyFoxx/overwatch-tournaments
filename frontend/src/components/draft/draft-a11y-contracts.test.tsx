@@ -87,7 +87,6 @@ function makeBoard(players: DraftPlayer[], slots: RosterSlotMap, status: DraftSt
     picks: [],
     players,
     current_pick: null,
-    server_time: "2026-09-23T10:00:00Z",
     last_event_id: null
   } as unknown as DraftBoard;
 }

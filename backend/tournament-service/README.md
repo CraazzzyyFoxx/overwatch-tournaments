@@ -18,7 +18,11 @@ layering.
 - **Entry point:** `serve.py`
 - **Run command:** `faststream run serve:app`
 - **Transport:** RabbitMQ request/reply (`rpc.tournament.*`, `rpc.tournament.admin.*`); no HTTP
-- **Metrics:** Prometheus on `WORKER_METRICS_PORT` (dev 9103, prod 9103)
+- **Metrics:** Prometheus on `WORKER_METRICS_PORT` (dev 9103, prod 9103), including
+  `event_loop_lag_seconds`, `db_pool_checked_out|overflow|size|max_overflow` and
+  `scheduler_job_skipped_total` with `service="tournament-svc"`. The same port serves `GET /health`:
+  200 once the broker connection is up and the consumers and scheduler run, 503 before that and from
+  the start of shutdown (the compose healthcheck probes it)
 
 ## Responsibilities
 
@@ -59,8 +63,8 @@ The worker subscribes to two namespaces on RabbitMQ:
 
 | Namespace | What it carries |
 | --- | --- |
-| `rpc.tournament.*` | ~180 typed methods, one subscriber per subject |
-| `rpc.tournament.admin.*` | Generic admin CRUD (`create` / `update` / `get` / `list`) dispatched by entity through the shared admin engine |
+| `rpc.tournament.*` | 241 typed methods, one subscriber per subject |
+| `rpc.tournament.admin.*` | Generic admin CRUD (`create` / `update` / `get` / `list` / `delete`) dispatched by entity through the shared admin engine — 246 subjects in all |
 
 Method groups:
 
@@ -88,6 +92,114 @@ Method groups:
 The full method list with request/response schemas is published at `/api/docs`, generated from
 `src/openapi_schemas.py` (`OPERATIONS`) and `src/openapi_docs.py` (`DOCS`).
 
+### Request handling
+
+- **Deadlines and concurrency.** Every gateway request carries an `x-deadline-ms` header. At most
+  `RPC_PREFETCH_COUNT` (default 16) such handlers run at once in the process: one process-wide pool
+  of permits (`shared.rpc.deadline.configure_rpc_concurrency`), because AMQP prefetch applies per
+  consumer and every subject is a consumer of its own. A request whose deadline passed while it
+  waited for a permit is dropped unanswered (`rpc_stale_dropped_total`). A handler still running
+  500 ms past its deadline is cancelled and its transaction rolled back
+  (`rpc_deadline_cancelled_total{queue}`); the gateway has
+  already answered 504. `rpc_duration_seconds{queue,code}` times every handled request. Events and
+  compute jobs carry no deadline and take no permit.
+- **Compute.** The three compute queues share one AMQP channel with `prefetch_count=4` per consumer,
+  and one process-wide semaphore runs at most 4 bracket / standings / grid-import jobs at once.
+- **Gateway timeouts.** The gateway gives the tournament public reads (`/tournaments*`,
+  `/encounters*`, `/matches*`, `/teams*`, stage reads) a 30 s deadline.
+- **Shutdown.** `/health` turns 503 first, the scheduler stops, then the broker gives in-flight
+  handlers up to 20 s (`graceful_timeout`; compose `stop_grace_period: 30s`) before the Redis and
+  quota clients close.
+
+### Error contract
+
+Every subject answers through `src/rpc/_helpers.py` (`_run` / `_read`), so these hold everywhere:
+
+- A query value that does not parse (`?workspace_id=abc`, an empty `?limit=`) is 422 `unprocessable`
+  with `details.fields[0].code = "invalid_query_param"`. It is never dropped as if absent.
+  `workspace_id=all` means every workspace on the reads that accept it.
+- A database constraint violation is 409 `conflict` (unique or exclusion) or 422 `unprocessable`
+  (foreign key, check, not-null), with the constraint name in `details.constraint`. It is never 500.
+- A subject that needs an identity answers 401 without one, reads included (`scrim_list_mine`,
+  `ffa_stage_admin`).
+
+Rules per area. `/api/docs` has them per subject:
+
+- **Registration and teams.**
+  - A link invite (no target user) redeems by `token` only. Accept or decline by `invite_id`
+    answers 404 `invite_not_found`. Both bodies name exactly one of `token` and `invite_id` (422
+    otherwise).
+  - `regteam_accept` never moves a player who is already on a team (409 `already_on_team`). For a
+    caller with no registration it runs the sign-up admission gate (400 refusal; 409
+    `registration_changed` if the registration vanished in between).
+  - Team check-in evaluates every member's admission in one batch before it takes the team lock.
+    409 `roster_changed` when the roster moved in between.
+  - The admission gate commits the request's session before it answers, so the entitlement and
+    check-log rows survive a refusal. It ends its read transaction before any Discord or Twitch
+    call, and a Discord guild whose batch lookup failed is not asked again within the request.
+  - Sign-up grants the workspace's existing `player` role and seeds the role catalog only when that
+    role is missing, so it no longer repairs a drifted role's permissions; role administration and
+    workspace creation still do.
+  - A status change through `reg_update` or `reg_create_manual` needs `registration.approve` (to
+    approved) or `registration.reject` (to rejected or banned). `reg_restore` lands `approved`, so it
+    needs `registration.approve` too. `reg_user_rank_history` checks its permission (403) before it
+    validates (422).
+  - Sheet sync re-applies only rows whose hash changed. An unchanged run counts nothing and sends no
+    invalidation. It keeps ranks the sheet does not map, and one feed never syncs twice at once (the
+    second run returns zero counts).
+- **Results, brackets and standings.**
+  - The FFA writes (`ffa_game_results_set`, `ffa_game_cancel`, `ffa_games_count_set`) and
+    `ffa_lobby` refuse a duel with 409 `ffa_not_a_lobby`.
+  - A games-count change or a game cancel that confirms a lobby runs every effect of a
+    confirmation: the completed event, bracket advance, standings and the Challonge push. One that
+    un-confirms a lobby retires every seat its old result advanced, as `encounter_reopen_result` does.
+  - An admin game correction that leaves the series confirmed pushes the corrected result to
+    Challonge.
+  - `encounter_set_result` naming a participation outside the encounter is 422
+    `not_a_participation`.
+  - An admin encounter edit requests a standings recompute only when status, stage, stage item,
+    round or `best_of` change.
+  - `stage_seed` refuses a stage that has encounters (409) and waits for the stage row lock like the
+    other stage writers. A stage-item input's `source_stage_item_id` must belong to the same
+    tournament (400).
+  - A standings job diff-writes its rows, so standing ids survive a recompute. A job that changed
+    nothing publishes no invalidation and no achievement event. A refused Swiss round or
+    requalification is logged and never fails the job.
+  - A Swiss search out of budget pairs the round with the fewest rematches instead of stopping
+    (under 1 s per call).
+  - A job that was redelivered 3 times while running is marked `failed`.
+- **Integrations.**
+  - Challonge import and export answer real errors, never a 200 with `{error}`: 404 for an unknown
+    tournament, 422 when it has no Challonge source, 409 while an import or export of it is
+    already running (an admin request waits 3 s for it), and 503 `challonge_unavailable` when
+    Challonge is unreachable, times out, rate-limits or fails.
+  - On every Challonge-calling route, a Challonge 404 is 404 `challonge_not_found`.
+  - A sync tick writes nothing for a match Challonge did not change: no log row, no recompute, no
+    invalidation. Such a match counts as `skipped`, and `matches_synced` counts real writes only.
+    The sync-log `limit` is clamped to 1..200, and `error_message` is `"<ExceptionType>: <message>"`.
+  - Image uploads: base64 over the 5 MiB cap, or malformed, is 422. The gateway caps the multipart
+    body at 5 MiB + 64 KiB.
+  - The old image is deleted only after the new URL commits, and a delete clears the row before it
+    touches S3. A failed S3 cleanup is logged, not an error. Tournament image replies include
+    `rules`.
+  - Division grids: an id the caller cannot see is 404 (the permission check, 403, comes after).
+    `division_grid.read` holders read versions and mappings. A system grid is read-only: every write
+    to it, its versions or tiers, and a mapping from one of its versions, is 403
+    `division_grid_read_only` (copy it with `grid_workspace_create(from_version_id)` instead). A
+    workspace's own rows that point at it stay allowed: activating a system version as the workspace
+    default, and mapping the workspace's own versions onto one. A portable import validates every
+    version (400). A stale import job is requeued after 15 minutes, and marketplace conflicts are 409
+    or 404.
+  - Tournament link writes refresh the public overview at once. Generated slugs skip retired
+    (redirect) slugs.
+- **Public reads.**
+  - `list_tournaments`: `status` may repeat (`?status=live&status=playoffs` matches either), and
+    `per_page=-1` returns at most 500 rows.
+  - `lookup_tournaments`, `statistics_history` and `statistics_division` never list a hidden
+    workspace's tournaments.
+  - `list_teams?sort=group|placement` paginates, lists teams without a group or placement last, and
+    its `total` matches the rows.
+
 ### Organizer dashboard
 
 Three authenticated reads (`src/rpc/dashboard.py` over `src/services/dashboard/`), routed by the gateway's
@@ -109,7 +221,8 @@ evaluation status.
   start, the work queue derived from the masked cards, and the backlog of the other tournaments. Whether a wrap-up
   is done is decided on unmasked data, so a card does not depend on who is looking.
 - **Trends** (`trends.py`): the workspace's last 10 finished, public, non-league tournaments, one point each.
-- **Readiness** (`readiness.py`): the hub's living checklist for one tournament, in up to three round trips.
+- **Readiness** (`readiness.py`): the hub's living checklist for one tournament, in one statement; a
+  dashboard card's readiness comes from the rows the dashboard already fetched.
 
 Besides this service's own schemas they read `achievements.evaluation_run` (the newest run's status) and
 `achievements.rule` (whether the tournament's game has an enabled rule), log coverage through `encounter.has_logs`,
@@ -124,15 +237,16 @@ which is derived from game-bound `stats.match` observations (only duels count: a
 | `tournament_bracket_jobs` | `tournament.compute` | Bracket generation / regeneration job |
 | `tournament_standings_jobs` | `tournament.compute` | Standings computation job |
 | `division_grid_import_jobs` | `tournament.compute` | Marketplace grid import job |
-| `tournament_changed_tournament_service` | `tournament.changed` | Cache invalidation + realtime fan-out (5 min message TTL) |
+| `cache_invalidation_tournament_service` | `cache.invalidation` | A `CacheInvalidatedEvent` from any service's outbox (`cache.invalidated.#`): re-bumps only the shared cache generations whose commit-time bump was lost (5 min message TTL, own DLQ) |
 | `tournament_standings_invalidated` | `tournament.events` | `stats-service`'s door into the standings path (a parsed log landed): requests the same coalesced standings job an in-service write requests |
 | `match.ingested.tournament` | `match.ingested` | Ingest evidence from `stats-service`: the match layer decides (`logs_official`, owner policy) and journals one `match_ingested` receipt (10 min TTL, own DLQ) |
-| `tournament_challonge_push` | `tournament.events` | A confirmed result to push to Challonge; skipped when the encounter's `result_version` moved on or the link is gone, requeued on a transport error, Challonge 429/5xx or a transient database error, dead-lettered otherwise (own channel, `prefetch_count=2`) |
+| `tournament_challonge_push` | `tournament.events` | A confirmed result to push to Challonge; skipped when the encounter's `result_version` moved on or the link is gone, requeued on a transport error, Challonge 429/5xx or a transient database error, dead-lettered otherwise (own channel, `prefetch_count=1`; no transaction is open during the HTTP call) |
 | `tournament_pick_ban_room_open` | `tournament.events` | A mix match started with hero bans (balancer-service's Start match): runs the room healer on its encounter, which opens the room from the preset Start froze on the lobby; idempotent, dead-lettered on failure (10 min TTL) |
 
-The three compute queues run on a dedicated AMQP channel with `prefetch_count=4`, so a burst of
-recomputes cannot occupy the RPC channel's QoS slots. Each has a dead-letter queue, declared on
-startup.
+The three compute queues run on a dedicated AMQP channel with `prefetch_count=4` per consumer, so a
+burst of recomputes cannot occupy the RPC consumers' QoS slots, and one process-wide semaphore runs
+at most 4 of their jobs at once (see [Request handling](#request-handling)). Each has a dead-letter
+queue, declared on startup.
 
 ### Domain events published
 
@@ -140,7 +254,7 @@ All of these go through the outbox, never directly from the request transaction:
 
 | Routing key | Exchange | Emitted when |
 | --- | --- | --- |
-| `tournament.changed.{tournament_id}` | `tournament.changed` | Any structure / results / registration change |
+| `cache.invalidated.tournament.{tournament_id}` | `cache.invalidation` | A write staled tournament resources another service caches (`publish_tournament_invalidation`): a `CacheInvalidatedEvent` naming them, the durable copy of the commit-time generation bump |
 | `tournament.state.changed` | `tournament.events` | Status transition (manual or automatic); consumed by `analytics-worker`, which creates the compute job of a `completed` tournament |
 | `tournament.registration.approved` | `tournament.events` | Registration approved |
 | `tournament.registration.rank_check_requested` | `tournament.events` | Registrant asked to re-check their profile |
@@ -196,9 +310,15 @@ signal per kind it changed and commits once. It is driven from three places
 
 - a post-commit trigger staged by `emit_pick_ban_update`, so every room write heals the room it
   touched; writes that move a room without signalling it (team changes, stage activation, pick-ban
-  config edits) stage it themselves;
-- the `pick_ban_room_due` tick, for the only change nobody writes — a step's timer running out;
-- the `pick_ban_room_sweep` backstop, for writes committed in another service.
+  config edits) stage it themselves. A config edit re-checks only rooms that are fully seated with
+  every seat ready, one transaction per room;
+- the `pick_ban_room_due` tick, for the only change nobody writes — a step's timer running out. A
+  room whose steps fail to build counts as due, so the healer isolates and logs it instead of
+  failing the tick;
+- the `pick_ban_room_sweep` backstop, every 5 minutes, for a room left owing a heal anyway (a missed
+  tick, a writer that died after its commit). An SQL prefilter skips rooms that cannot owe anything
+  (no live session, no pick-ban config at the tournament level or on the room's own stage, and an
+  open game already) and closed scrim rooms; each room it visits gets its own transaction.
 
 Both sweeps take the encounter with `SKIP LOCKED`, which is what makes running them on every
 replica safe. Clients do not need to poll for progress: the reconcile signals the room when it
@@ -208,15 +328,23 @@ lands. Paused steps still never expire.
 
 | Job | Interval | What it does |
 | --- | --- | --- |
-| `event_outbox_drain` | 1 s | Drains `public.event_outbox` (batch of 100) |
+| `event_outbox_drain` | 1 s | Drains `public.event_outbox` (batch of 100, any producer's rows) |
 | `pick_ban_room_due` | 1 s | Settles pick-ban rooms whose step timer ran out (`SKIP LOCKED`) |
-| `pick_ban_room_sweep` | 60 s | Reconciles in-play rooms whose last writer was another service |
+| `pick_ban_room_sweep` | 5 min | Backstop: reconciles rooms still owing a heal (see above) |
 | `auto_transition_tournaments` | 30 s | Applies due phase transitions |
 | `registration_google_sheet_sync` | 5 min | Pulls due Google Sheets registration feeds |
 | `challonge_active_sync` | `CHALLONGE_AUTO_SYNC_INTERVAL_MINUTES` (default 5) | Pulls Challonge → local for active tournaments |
-| `division_grid_import_recovery` | 5 min (plus once at startup) | Re-dispatches import jobs stranded by a restart |
-| `realtime_workspace_event_purge` | 1 day | Deletes `realtime.workspace_event` rows on `tournament:%:bracket`, `%:invalidation` and `%:chat` older than 7 days |
-| `chat_purge` | 1 day | Deletes `chat_message` rows older than 90 days and `chat_mute` rows whose `muted_until` elapsed over 90 days ago |
+| `division_grid_import_recovery` | 5 min (plus once at startup) | Requeues import jobs still `running` 15 minutes after they started (their worker was lost to a restart) |
+| `realtime_workspace_event_purge` | daily, 04:00 | Deletes `realtime.workspace_event` rows on `tournament:%:bracket`, `%:invalidation` and `%:chat` older than 7 days |
+| `chat_purge` | daily, 04:00 | Deletes `chat_message` rows older than 90 days and `chat_mute` rows whose `muted_until` elapsed over 90 days ago |
+| `event_outbox_purge` | daily, 04:00 | Deletes `published` `public.event_outbox` rows older than 7 days. The table is shared and only this service schedules it; `dead` rows are kept |
+| `computation_job_purge` | daily, 04:00 | Deletes terminal (`succeeded` / `failed` / `superseded`) `computation_job` rows created over 30 days ago |
+| `challonge_sync_log_purge` | daily, 04:00 | Deletes `challonge_sync_log` rows older than 30 days |
+
+The daily jobs are cron jobs at 04:00 in the scheduler's local time, with up to 10 minutes of jitter
+and a one-hour misfire grace, so a worker redeployed more often than daily still runs them. The
+three new purges delete 5000 rows per transaction. A run APScheduler skips (still running, or
+missed) counts in `scheduler_job_skipped_total{service,job_id,reason}`.
 
 Registration windows and invite caps are *not* scheduled: registration openness is evaluated from the
 `REGISTRATION` phase-schedule row on every read and write, and invite caps are reset on demand
@@ -284,16 +412,24 @@ row's status, a version fence, a cache key that is simply dropped again): no con
 The drain (`shared.messaging.outbox.drain_outbox`, scheduled every second by `serve.py` and by every
 other service that writes outbox rows) is one tick of the relay:
 
-1. Selects up to 100 rows in `pending` or `failed` state whose `next_attempt_at` has passed, ordered
-   by `created_at`, with `FOR UPDATE SKIP LOCKED`. The skip-locked clause is what makes concurrent
-   drains safe: every replica of every producing service runs one, two drains never claim the same
-   row, and neither blocks on the other.
-2. Publishes each row persistently and marks it `published`, then commits the whole batch once. The
-   batch stays locked until that commit, so no other drain can take a row this one already published;
-   a crash between a publish and the commit replays the batch.
-3. On a publish failure, marks the row `failed`, increments `attempts`, records `last_error` and sets
-   `next_attempt_at` to now plus an exponential backoff of `2^(attempts-1)` seconds, capped at 300 s.
-   Failed rows are retried forever; there is no poison-message limit.
+1. Reads the age of the oldest `pending` or `failed` row in the table (backing-off rows included) into the gauge
+   `outbox_oldest_pending_age_seconds`, then selects up to 100 rows in `pending` or `failed` state whose
+   `next_attempt_at` has passed, ordered by `created_at`, with `FOR UPDATE SKIP LOCKED`. The skip-locked clause is
+   what makes concurrent drains safe: every replica of every producing service runs one, two drains never claim the
+   same row, and neither blocks on the other.
+2. Publishes each row persistently, each publish under a 10 s timeout, and marks it `published`,
+   then commits the whole batch once. The batch stays locked until that commit, so no other drain can
+   take a row this one already published; a crash between a publish and the commit replays the batch.
+   The batch starts no publish after 20 s, and its first publish timeout ends it, so the commit lands within 30 s,
+   inside pgBouncer's 60 s `idle_transaction_timeout`; rows it did not try stay `pending` for the next tick.
+3. On a publish failure (a timeout included), marks the row `failed`, increments `attempts`, records
+   `last_error` and sets `next_attempt_at` to now plus an exponential backoff of `2^(attempts-1)`
+   seconds, capped at 300 s. The 20th failure marks the row `dead` instead: no drain takes it again,
+   it stays in the table for inspection, and it counts in `outbox_dead_total` (alert
+   `OutboxDeadEvents`) with an ERROR log.
+
+Published rows are kept 7 days, then deleted by the daily `event_outbox_purge` (see
+[Scheduled work](#scheduled-work)); `pending`, `failed` and `dead` rows are never purged.
 
 **No single drain.** `event_outbox` is one global table with no per-service partition, and any drain
 publishes any row. Since every producing service runs the drain, `tournament-svc` is no longer a hard
@@ -397,7 +533,7 @@ project at [`../migrations/`](../migrations/).
 - **`subscriptions`** — `provider_config` and `requirement` through the admin RPCs, plus the
   `entitlement` and `check_log` rows the admission gate writes as it resolves verdicts.
 - **`public`** — division grids and their versions/mappings/import jobs, plus `event_outbox` (written
-  by every producer, drained only here).
+  and drained by every producer; only this service purges its published rows).
 - **`realtime`** — `workspace_event` rows for the topics listed above, and the daily purge of stale
   bracket events.
 
@@ -421,8 +557,8 @@ Entity diagrams: [tournament](../../docs/database_erd.md#tournament--tournament-
 - **PostgreSQL** — the shared ORM; all of the above.
 - **RabbitMQ** — RPC transport, the three durable compute queues, the recalculation-event queues, and
   the outbox's publish target.
-- **Redis** — realtime pub/sub for the gateway's WebSocket fan-out, and the `cashews` response cache
-  (`api_cache_url` = db 5, `backend_cache_url` = db 6) invalidated after commit.
+- **Redis** — realtime pub/sub for the gateway's WebSocket fan-out, the shared cache generations, and
+  the `cashews` response cache (`api_cache_url` = db 5, `backend_cache_url` = db 6) keyed by them.
 - **S3** — team logos, tournament covers/logos, registered-team crests.
 - **Challonge API** — bracket import/export and the auto-sync pull, via the outbound `proxy` container.
 - **Google Sheets** — registration feeds fetched as CSV exports over HTTPS.
@@ -442,7 +578,7 @@ actually change behaviour:
 | `CHALLONGE_AUTO_SYNC_INTERVAL_MINUTES` | Interval of that pull (default 5) |
 | `TWITCH_CLIENT_ID` | Twitch entitlement provider. **Missing does not fail loudly**: Twitch resolves `unknown` (`twitch_client_not_configured`), which fails open, and a Twitch-gated tournament admits everybody |
 | `WORKER_METRICS_PORT` | Prometheus scrape port (9103 in both environments) |
-| `RPC_PREFETCH_COUNT` | QoS on the RPC channel; the compute channel is fixed at 4 |
+| `RPC_PREFETCH_COUNT` | How many gateway RPC handlers run at once in the process (default 16; also each RPC consumer's AMQP prefetch). Compute jobs have their own fixed cap of 4 |
 | `REDIS_URL`, `RABBITMQ_URL` | Transport endpoints |
 
 ## Running
@@ -455,31 +591,49 @@ faststream run serve:app
 
 In compose the dev container adds `--reload --reload-dir /app/tournament-service --reload-dir
 /app/shared` with forced polling (`WATCHFILES_FORCE_POLLING=true`), and bind-mounts both the service
-and `backend/shared`. Production runs the bare command with a healthcheck that only proves the Python
-interpreter starts (`python -c "import sys; sys.exit(0)"`) — it does not verify broker connectivity or
-subscriber readiness. No profile: the service starts with the default stack. Resource ceilings are
-0.5 CPU / 512 MB in dev and 1.0 CPU / 768 MB in production, single replica.
+and `backend/shared`. Both environments' healthcheck probes `http://localhost:9103/health`, so
+`make prod-up` (`up --wait`) waits for the consumers, and `stop_grace_period: 30s` covers the broker's 20 s
+drain. No profile: the service starts with the default stack. Resource ceilings are 0.5 CPU /
+512 MB in dev and 1.0 CPU / 768 MB per replica in production, 2 replicas at `PROD_SIZE=small|medium`
+and 4 at `large` (`Makefile`).
 
 ## Operational notes
 
-- **Scaling is safe but untested.** The two pieces of shared mutable state — the outbox drain and
-  the auto-transition tick — both claim rows `FOR UPDATE SKIP LOCKED`, so a second replica cannot
-  double-publish or double-transition. The APScheduler jobs are not leader-locked, though: every
-  replica runs every job, and the locking makes that correct rather than free.
-- **Shutdown abandons in-flight scheduled jobs** (`scheduler.shutdown(wait=False)`). This is
-  deliberate and safe: an abandoned outbox batch rolls back and is republished on the next tick
-  (at-least-once, as always), and the sync flows commit incrementally and are idempotent, so an
-  interrupted job resumes on the next tick instead of blocking shutdown for minutes.
+- **Replicas.** The shared mutable state — the outbox drain, the auto-transition tick and the
+  pick-ban sweeps — is claimed with `SKIP LOCKED`, so a second replica cannot double-publish,
+  double-transition or double-heal. The APScheduler jobs are not leader-locked, though: every replica
+  runs every job, and the locking makes that correct rather than free. The daily purges are batched
+  deletes, harmless to run twice.
+- **Shutdown abandons in-flight scheduled jobs** (`scheduler.shutdown(wait=False)`; the asyncio
+  executor cancels them). This is deliberate and safe: an abandoned outbox batch rolls back and is
+  republished on the next tick (at-least-once, as always), and each sheet feed or Challonge
+  tournament commits once at its end (a Challonge import's per-match savepoints only isolate a
+  failing match), so an interrupted one rolls back whole and the next tick re-runs it. In-flight RPC
+  and compute handlers get the broker's 20 s to finish.
 - **Dead-letter queues** exist for every consumed queue and are declared at startup. There is no
   automatic DLQ replay; stuck jobs and dead-lettered Challonge pushes need manual inspection (the
   organizer's manual "push result" re-sends one).
-- **Outbox retries are unbounded.** A permanently unroutable event retries every 300 s forever and
-  keeps its row in the drain's working set. Watch `Outbox publish failed` warnings.
+- **Outbox retries stop at 20.** A permanently unroutable event backs off to one attempt every 300 s,
+  then turns `dead` and leaves the drain's working set; dead rows stay in `event_outbox` for
+  inspection. Alerts: `OutboxBacklogOld` (oldest pending row over 5 minutes), `OutboxDeadEvents`.
 - **Stale import-job recovery** runs at startup and every 5 minutes, so a restart mid-import does not
-  strand a marketplace grid import.
-- **Cache invalidation is fire-and-forget** after commit, on background tasks anchored in a module
-  set (an unanchored `create_task` can be collected mid-flight). A failed invalidation logs and is
-  not retried; TTLs (5 min for most reads, 30 s for match detail) are the backstop.
+  strand a marketplace grid import for more than 15 minutes.
+- **Cache invalidation.** A write's commit bumps the shared cache generation of every resource it
+  staled (Redis `cachegen:*`) before `commit()` returns, so neither the reply nor a client's refetch
+  can read the old entry; the realtime publish after it is fire-and-forget, on background tasks
+  anchored in a module set. That bump is one attempt. Its durable copy is the `cache.invalidated`
+  outbox row: this service's consumer (`cache_invalidation_tournament_service`), like every caching
+  service's, re-bumps a generation only when it was not bumped since the event (values are
+  `<hex>.<bump_ms>`), so a lost bump is redone without orphaning entries cached after it. TTLs
+  (5 min for most reads, 30 s for match detail) bound the reads no generation keys.
+- **Cached reads.** The generation-keyed reads cache the response's wire dict, never a pickled
+  model, so a wire change bumps the key's version and the cache starts cold once after that deploy.
+  `entities` enter a key whitelisted per read and sorted. The encounter list, overview and insights
+  entries are shared across viewers (only `scope=my_team` keys the viewer; the overview's `my_team`
+  count is added per viewer), and a cold list or overview is built once per burst (`single_flight`).
 - **Recalculation cost.** Every confirmed encounter result enqueues a standings job for its
   tournament. Scrim containers are excluded at the enqueue site, not in the worker, precisely because
   a job that is created, delivered and discarded is a permanent per-report cost that looks healthy.
+  An admin encounter edit enqueues one only when status, bracket position or `best_of` changed, and
+  a Challonge tick only for a match Challonge changed. A job whose table did not change writes no
+  standings rows and publishes no invalidation.

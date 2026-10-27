@@ -245,7 +245,7 @@ class FakeSocialAccounts:
 class FakeSessionCache:
     """Stands in for the ``session_cache`` singleton, recording every call.
 
-    Pass ``rbac_entry`` to make ``get_rbac`` return a fixed cache hit (for the
+    Pass ``rbac_entry`` to make ``get_rbac``/``rbac_state``/``token_state`` return a fixed cache hit (for the
     tests that check a full hit skips the database); leave it ``None`` for
     every flow that only writes/invalidates/blacklists and never reads a
     cached RBAC entry back.
@@ -262,8 +262,14 @@ class FakeSessionCache:
         self.reads += 1
         return self.rbac_entry
 
-    async def rbac_generation(self, user_id: int) -> str:
-        return "0"
+    async def rbac_state(self, user_id: int) -> tuple[dict | None, str]:
+        self.reads += 1
+        return self.rbac_entry, "0"
+
+    async def token_state(self, user_id: int, session_id: str | None) -> tuple[dict | None, str, bool]:
+        """The entry, generation "0", and "is this sid blacklisted (by an earlier call here)?"."""
+        self.reads += 1
+        return self.rbac_entry, "0", any(session_id == sid for sid, _ttl in self.blacklisted)
 
     async def set_rbac(self, user_id: int, **payload: object) -> None:
         self.writes.append((user_id, payload))

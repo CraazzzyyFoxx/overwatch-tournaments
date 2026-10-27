@@ -6,7 +6,7 @@ params as ``data["id"]`` and query params as ``data["query"][key] = [values]``.
 
 from __future__ import annotations
 
-import re
+from dataclasses import replace
 from typing import Any
 
 from faststream.rabbit.annotations import RabbitMessage
@@ -14,14 +14,16 @@ from faststream.rabbit.annotations import RabbitMessage
 from shared.core.enums import PickBanKind
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.domain import pick_ban_rules as pbr
-from shared.repository import TournamentRepository
+from shared.rpc.common import q_workspace_id
 from shared.rpc.identity import rehydrate_user_optional
 from shared.rpc.query import build_query_model
 from shared.schemas.discipline_filter import DisciplineFilterQuery
 from shared.services.division_grid.access import build_workspace_division_grid_normalizer
 from shared.services.division_grid.normalization import DivisionGridNormalizationError
-from shared.services.tournament.visibility import assert_tournament_viewable, ensure_tournament_viewable
+from shared.services.tournament.visibility import ensure_tournament_viewable
 from src import schemas
+from src.core import db
+from src.core.caching import canonical_entities
 from src.core.workspace import get_division_grid
 from src.rpc._helpers import _bool, _path_int, _q, _q1, _read, _require_id, _require_q1
 from src.services import visibility_resolvers
@@ -31,8 +33,7 @@ from src.services.encounter import pick_ban_config
 from src.services.standings import flows as standings_flows
 from src.services.team import flows as team_flows
 from src.services.tournament import flows as tournament_flows
-
-_NUMERIC_REF = re.compile(r"^[1-9]\d*$")
+from src.services.tournament.service import tournament_service
 
 
 async def _resolve_tournament_id(session: Any, data: dict[str, Any]) -> int:
@@ -44,11 +45,10 @@ async def _resolve_tournament_id(session: Any, data: dict[str, Any]) -> int:
     raw = str(data.get("id") or "").strip()
     if not raw:
         raise HTTPException(status_code=422, detail="id is required")
-    ref: int | str = int(raw) if _NUMERIC_REF.fullmatch(raw) else raw
-    tournament = await TournamentRepository().resolve_public_ref(session, ref)
-    if tournament is None:
+    tournament_id = await tournament_service.resolve_public_id(session, raw)
+    if tournament_id is None:
         raise HTTPException(status_code=404, detail="Tournament not found")
-    return tournament.id
+    return tournament_id
 
 
 def _identity_user_id(data: dict[str, Any]) -> int | None:
@@ -60,6 +60,22 @@ def _identity_user_id(data: dict[str, Any]) -> int | None:
         return None
 
 
+def _encounter_params(data: dict[str, Any]) -> schemas.EncounterSearchParams:
+    """The browse's params, with the entities its cached reads key on (``canonical_entities``)."""
+    params = schemas.EncounterSearchParams.from_query_params(
+        build_query_model(schemas.EncounterSearchQueryParams, data.get("query"))
+    )
+    return replace(params, entities=canonical_entities(params.entities, encounter_flows.READ_ENTITIES))
+
+
+async def _gate_encounter_board(session: Any, data: dict[str, Any]) -> None:
+    """Gate a ``tournament_id``-scoped encounter read BEFORE its cached read: the key carries no visibility, and the
+    strips name hidden encounters."""
+    tid = _q1(data, "tournament_id", int)
+    if tid is not None:
+        await ensure_tournament_viewable(session, rehydrate_user_optional(data.get("identity")), tid)
+
+
 def register(broker: Any, logger: Any) -> None:
     @broker.subscriber("rpc.tournament.get_tournament")
     async def _get_tournament(data: dict, msg: RabbitMessage) -> dict:
@@ -68,7 +84,8 @@ def register(broker: Any, logger: Any) -> None:
             tournament_id = await _resolve_tournament_id(session, data)
             # Gate BEFORE the cached get_read (cache is keyed without the viewer).
             await ensure_tournament_viewable(session, viewer, tournament_id)
-            return await tournament_flows.flows_service.get_read(session, tournament_id, _q(data, "entities") or [])
+            entities = canonical_entities(_q(data, "entities"), tournament_flows.READ_ENTITIES)
+            return await tournament_flows.flows_service.get_read(session, tournament_id, entities)
 
         return await _read(logger, op, exclude_none=True)
 
@@ -77,7 +94,7 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             return await tournament_flows.flows_service.lookup(
                 session,
-                workspace_id=_q1(data, "workspace_id", int),
+                workspace_id=q_workspace_id(data),
                 is_league=_q1(data, "is_league", _bool),
                 # One game's tournaments: absent is every game, a code nobody installed is 422.
                 discipline=build_query_model(DisciplineFilterQuery, data.get("query")).discipline,
@@ -111,11 +128,11 @@ def register(broker: Any, logger: Any) -> None:
     async def _get_standings(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
             viewer = rehydrate_user_optional(data.get("identity"))
+            tournament_id = _require_id(data)
             # Gate BEFORE the cached get_by_tournament (cache is keyed without the viewer).
-            tournament = await assert_tournament_viewable(session, viewer, _require_id(data))
-            return await standings_flows.flows_service.get_by_tournament(
-                session, tournament.id, _q(data, "entities") or [], tournament=tournament
-            )
+            await ensure_tournament_viewable(session, viewer, tournament_id)
+            entities = canonical_entities(_q(data, "entities"), standings_flows.READ_ENTITIES)
+            return await standings_flows.flows_service.get_by_tournament(session, tournament_id, entities)
 
         return await _read(logger, op, exclude_none=True)
 
@@ -123,7 +140,7 @@ def register(broker: Any, logger: Any) -> None:
     async def _statistics_history(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
             return await tournament_flows.flows_service.get_history_tournaments(
-                session, workspace_id=_q1(data, "workspace_id", int)
+                session, workspace_id=q_workspace_id(data)
             )
 
         return await _read(logger, op)
@@ -133,7 +150,7 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             # One game's tournaments, its grid and its rated roles: absent is 422, unknown 404.
             discipline = pick_ban_config.installed_discipline(_require_q1(data, "discipline")).code
-            workspace_id = _q1(data, "workspace_id", int)
+            workspace_id = q_workspace_id(data)
             fallback_grid = await get_division_grid(session, workspace_id, discipline=discipline)
             normalizer = None
             if workspace_id is not None:
@@ -153,7 +170,7 @@ def register(broker: Any, logger: Any) -> None:
     async def _statistics_overall(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
             return await tournament_flows.flows_service.get_tournaments_overall(
-                session, workspace_id=_q1(data, "workspace_id", int)
+                session, workspace_id=q_workspace_id(data)
             )
 
         return await _read(logger, op)
@@ -170,7 +187,7 @@ def register(broker: Any, logger: Any) -> None:
             )
             await ensure_tournament_viewable(session, viewer, tournament_id)
             return await encounter_flows.flows_service.get_match_with_stats(
-                session, match_id, _q(data, "entities") or [], workspace_id=_q1(data, "workspace_id", int)
+                session, match_id, _q(data, "entities") or [], workspace_id=q_workspace_id(data)
             )
 
         return await _read(logger, op)
@@ -185,7 +202,7 @@ def register(broker: Any, logger: Any) -> None:
             )
             await ensure_tournament_viewable(session, viewer, tournament_id)
             return await encounter_flows.flows_service.get_match_kill_feed(
-                session, match_id, workspace_id=_q1(data, "workspace_id", int)
+                session, match_id, workspace_id=q_workspace_id(data)
             )
 
         return await _read(logger, op)
@@ -216,31 +233,32 @@ def register(broker: Any, logger: Any) -> None:
 
         return await _read(logger, op, exclude_none=True)
 
-    async def _encounter_board(data: dict, session: Any, read: Any) -> Any:
-        """The overview and the insights: the list's params and gate, one board read."""
-        tid = _q1(data, "tournament_id", int)
-        if tid is not None:
-            # Gate BEFORE the cached read: its key carries no visibility, and the strips name hidden encounters.
-            await ensure_tournament_viewable(session, rehydrate_user_optional(data.get("identity")), tid)
-        qp = build_query_model(schemas.EncounterSearchQueryParams, data.get("query"))
-        return await read(
-            session,
-            schemas.EncounterSearchParams.from_query_params(qp),
-            workspace_id=_q1(data, "workspace_id", int),
-            viewer_auth_user_id=_identity_user_id(data),
-        )
-
     @broker.subscriber("rpc.tournament.encounters_overview")
     async def _encounters_overview(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            return await _encounter_board(data, session, encounter_flows.flows_service.get_encounters_overview)
+            await _gate_encounter_board(session, data)
+            # The shared build runs on a session of its own: this one must not sit idle in transaction meanwhile.
+            await session.commit()
+            return await encounter_flows.flows_service.encounters_overview(
+                db.async_session_maker,
+                _encounter_params(data),
+                workspace_id=q_workspace_id(data),
+                viewer_auth_user_id=_identity_user_id(data),
+            )
 
         return await _read(logger, op, exclude_none=True)
 
     @broker.subscriber("rpc.tournament.encounters_insights")
     async def _encounters_insights(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            return await _encounter_board(data, session, encounter_flows.flows_service.get_encounters_insights)
+            await _gate_encounter_board(session, data)
+            params = _encounter_params(data)
+            return await encounter_flows.flows_service.insights_page(
+                session,
+                params,
+                q_workspace_id(data),
+                encounter_flows.scope_viewer(params, _identity_user_id(data)),
+            )
 
         return await _read(logger, op, exclude_none=True)
 
@@ -251,7 +269,7 @@ def register(broker: Any, logger: Any) -> None:
             if user_id is None:
                 raise HTTPException(status_code=401, detail="Not authenticated")
             return await encounter_flows.flows_service.get_saved_views(
-                session, workspace_id=_q1(data, "workspace_id", int), auth_user_id=user_id
+                session, workspace_id=q_workspace_id(data), auth_user_id=user_id
             )
 
         return await _read(logger, op, exclude_none=True)
@@ -290,16 +308,13 @@ def register(broker: Any, logger: Any) -> None:
     @broker.subscriber("rpc.tournament.list_encounters")
     async def _list_encounters(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            viewer = rehydrate_user_optional(data.get("identity"))
-            tid = _q1(data, "tournament_id", int)
-            if tid is not None:
-                await ensure_tournament_viewable(session, viewer, tid)
-            qp = build_query_model(schemas.EncounterSearchQueryParams, data.get("query"))
-            params = schemas.EncounterSearchParams.from_query_params(qp)
-            return await encounter_flows.flows_service.get_all_encounters(
-                session,
-                params,
-                workspace_id=_q1(data, "workspace_id", int),
+            await _gate_encounter_board(session, data)
+            # The shared build runs on a session of its own: this one must not sit idle in transaction meanwhile.
+            await session.commit()
+            return await encounter_flows.flows_service.list_encounters(
+                db.async_session_maker,
+                _encounter_params(data),
+                workspace_id=q_workspace_id(data),
                 viewer_auth_user_id=_identity_user_id(data),
             )
 
@@ -315,7 +330,7 @@ def register(broker: Any, logger: Any) -> None:
             qp = build_query_model(schemas.MatchSearchQueryParams, data.get("query"))
             params = schemas.MatchSearchParams.from_query_params(qp)
             return await encounter_flows.flows_service.get_all_matches(
-                session, params, workspace_id=_q1(data, "workspace_id", int)
+                session, params, workspace_id=q_workspace_id(data)
             )
 
         return await _read(logger, op)
@@ -329,7 +344,8 @@ def register(broker: Any, logger: Any) -> None:
                 await ensure_tournament_viewable(session, viewer, tid)
             qp = build_query_model(schemas.TeamFilterQueryParams, data.get("query"))
             params = schemas.TeamFilterParams.from_query_params(qp)
-            return await team_flows.flows_service.get_all(session, params, workspace_id=_q1(data, "workspace_id", int))
+            params = replace(params, entities=canonical_entities(params.entities, team_flows.READ_ENTITIES))
+            return await team_flows.flows_service.get_all(session, params, workspace_id=q_workspace_id(data))
 
         return await _read(logger, op, exclude_none=True)
 

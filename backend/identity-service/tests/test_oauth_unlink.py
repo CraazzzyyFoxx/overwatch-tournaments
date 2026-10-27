@@ -53,6 +53,16 @@ def _conn(provider: str, provider_user_id: str = "x") -> SimpleNamespace:
     return SimpleNamespace(provider=provider, provider_user_id=provider_user_id)
 
 
+class _FakeUsers:
+    """``AuthUserRepository`` stand-in recording the row lock the unlink takes."""
+
+    def __init__(self, calls: list):
+        self.calls = calls
+
+    async def lock(self, session, user_id):
+        self.calls.append(("lock", user_id))
+
+
 def _service(conns, *, unverified: int = 0, player=_LINKED_PLAYER):
     """``OAuthFlowService`` wired to in-memory collaborators.
 
@@ -61,8 +71,28 @@ def _service(conns, *, unverified: int = 0, player=_LINKED_PLAYER):
     """
     connections = _FakeConnections(conns)
     socials = _FakeSocials(unverified=unverified)
-    service = OAuthFlowService(connections=connections, socials=socials, players=_FakePlayers(player))
+    connections.calls = []
+    service = OAuthFlowService(
+        connections=connections, socials=socials, players=_FakePlayers(player), users=_FakeUsers(connections.calls)
+    )
     return service, connections, socials
+
+
+def test_the_account_row_is_locked_before_its_connections_are_counted() -> None:
+    """Two concurrent unlinks of a passwordless account's last two providers must
+    serialize on the account row, or both see two connections and both delete."""
+    user = SimpleNamespace(id=1, hashed_password=None)
+    service, connections, _socials = _service([_conn("battlenet"), _conn("discord")])
+    original_list = connections.list_by_user
+
+    async def recording_list(session, auth_user_id):
+        connections.calls.append(("list", auth_user_id))
+        return await original_list(session, auth_user_id)
+
+    connections.list_by_user = recording_list
+    asyncio.run(service.unlink(_FakeSession(), user, "discord"))
+
+    assert connections.calls[:2] == [("lock", 1), ("list", 1)]
 
 
 def test_stale_verified_mark_is_cleared_not_reported_as_last_provider() -> None:

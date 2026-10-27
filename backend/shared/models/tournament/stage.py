@@ -109,7 +109,7 @@ class Stage(db.TimeStampIntegerMixin):
     is_active: Mapped[bool] = mapped_column(Boolean(), default=False, server_default="false")
     # Sticky, unlike ``is_active``: set True the first time the stage is
     # activated and never cleared again, even after a later stage's
-    # activation flips ``is_active`` back to False. ``admin/stage.py::
+    # activation flips ``is_active`` back to False. ``admin/stage/generation.py::
     # generate_encounters`` can populate a stage's encounters while it is
     # still Draft (a preview of the bracket shape before the stage goes
     # live) -- captains cannot report or veto against those encounters

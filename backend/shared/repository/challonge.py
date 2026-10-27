@@ -8,6 +8,7 @@ translate Challonge's ids to local team/encounter ids under one source.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from datetime import datetime
 
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -156,6 +157,18 @@ class ChallongeSyncLogRepository(BaseRepository[models.ChallongeSyncLog]):
             query = query.limit(limit)
         result = await session.execute(query)
         return result.unique().scalars().all()
+
+    async def delete_older_than(self, session: AsyncSession, cutoff: datetime, *, limit: int) -> int:
+        """Drop up to ``limit`` rows created before ``cutoff``; returns how many went.
+
+        Bounded so a retention job can run one short transaction per batch.
+        """
+        log = models.ChallongeSyncLog
+        batch = sa.select(log.id).where(log.created_at < cutoff).limit(limit)
+        result = await session.execute(
+            sa.delete(log).where(log.id.in_(batch)).execution_options(synchronize_session=False)
+        )
+        return result.rowcount or 0
 
 
 __all__ = (

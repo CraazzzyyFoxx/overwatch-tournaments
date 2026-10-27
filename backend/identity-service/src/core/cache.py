@@ -7,9 +7,10 @@ under one of two postures:
 * **fail-soft** (``get_json``/``put_json``/``drop``/``take_json``) — Redis is an
   optimization; an outage costs a DB round trip or a shorter-lived guarantee,
   never a failed request.
-* **strict** (``put_json_strict``) — the value has no fallback. A cross-domain
-  SSO/link ticket that was never stored can never be redeemed, so an explicit
-  error beats handing the browser a code that will silently fail.
+* **strict** (``put_json_strict``/``claim``) — the value has no fallback. A
+  cross-domain SSO/link ticket that was never stored can never be redeemed, and
+  a single-use nonce whose use was never recorded can be replayed, so an
+  explicit error beats a silent failure or a silent bypass.
 
 ``get_redis`` is imported at module scope on purpose: tests swap it out to point
 a whole store at a fake client.
@@ -23,6 +24,7 @@ from typing import Any
 from loguru import logger
 from redis.exceptions import RedisError
 
+from src.core.metrics import REDIS_DEGRADED_TOTAL
 from src.core.redis import get_redis
 
 # ``RuntimeError`` covers "Redis was never initialised" (see ``get_redis``), which
@@ -44,27 +46,30 @@ class RedisStore:
         return f"{self.prefix}{suffix}"
 
     def _degraded(self, action: str, exc: Exception) -> None:
+        REDIS_DEGRADED_TOTAL.labels(store=self.purpose, action=action).inc()
         logger.warning(f"Redis unavailable during {self.purpose} {action}; falling back gracefully: {exc}")
 
     async def get_json(self, suffix: str | int) -> Any | None:
-        """Decoded payload, or None on a miss, an outage, or a corrupt entry.
+        """Decoded payload, or None on a miss, an outage, or a corrupt entry."""
+        try:
+            raw = await get_redis().get(self.key(suffix))
+        except _UNAVAILABLE as exc:
+            self._degraded("read", exc)
+            return None
+        return await self.decode(suffix, raw)
+
+    async def decode(self, suffix: str | int, raw: str | None) -> Any | None:
+        """``raw`` as read for ``suffix`` (by ``get_json`` or a caller's own MGET), decoded.
 
         A corrupt entry is evicted: it can only ever fail to decode again, and
         leaving it in place would pin the caller to the slow path until its TTL.
         """
-        key = self.key(suffix)
-        try:
-            raw = await get_redis().get(key)
-        except _UNAVAILABLE as exc:
-            self._degraded("read", exc)
-            return None
-
         if raw is None:
             return None
         try:
             return json.loads(raw)
         except (json.JSONDecodeError, TypeError):
-            logger.warning(f"Corrupted {self.purpose} entry at {key}, evicting")
+            logger.warning(f"Corrupted {self.purpose} entry at {self.key(suffix)}, evicting")
             await self.drop(suffix)
             return None
 
@@ -115,15 +120,14 @@ class RedisStore:
     async def claim(self, suffix: str | int, *, ttl: int | None = None) -> bool:
         """Set-if-absent. True when this caller won the claim.
 
-        Fails OPEN (True on an outage): the callers using this for single-use
-        enforcement already bound the replay window another way, and refusing
-        every claim would lock the flow out entirely during an outage.
+        Fails CLOSED (raises on an outage): a single-use value whose first use
+        cannot be recorded cannot be proven unused, so the caller must refuse it.
         """
         try:
             claimed = await get_redis().set(self.key(suffix), "1", nx=True, ex=ttl or self.ttl)
         except _UNAVAILABLE as exc:
-            self._degraded("claim", exc)
-            return True
+            logger.error(f"Redis unavailable during {self.purpose} claim; refusing: {exc}")
+            raise
         return bool(claimed)
 
     async def has(self, suffix: str | int) -> bool:

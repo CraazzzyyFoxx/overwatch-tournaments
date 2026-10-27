@@ -136,6 +136,8 @@ existing, non-hidden, supported tournaments.
 **Measuring the shift methods.** `backtest` trains, activates and infers for real inside a transaction it rolls back,
 with fold artifacts in a removed temporary directory, and scores the v2 shift and its baselines (no move, Points,
 Linear, OpenSkill) by their agreement with the organizers' realised moves — what organizers did, not ground truth.
+That transaction stays open across every fold's model fits, which pgBouncer ends after 60 s idle: run `backtest` on a
+direct connection (`-e POSTGRES_HOST=postgres -e POSTGRES_PORT=5432 -e DB_PGBOUNCER=false` on the bundled database).
 `evaluate` is read-only and scores the levels each method implies (organizer rank, no move, previous rank minus the
 stored shift) on who wins the duel encounters of the next tournament: per method k of P(home wins) = σ(−k·Δlevel),
 log-loss, Brier, AUC and coverage of stored rows.
@@ -212,8 +214,9 @@ Settings that change behaviour:
 - `FORECAST_CONFIDENCE_THRESHOLD` (0.8) — the probability a climb/drop needs before the
   forecast shows it; applied at read time, no recompute.
 - `WORKER_METRICS_PORT` — Prometheus exposition only, not an API.
-- `RPC_PREFETCH_COUNT` (default 16) — `analytics-svc` concurrency; the worker uses the
-  broker default.
+- `RPC_PREFETCH_COUNT` (default 16) — how many gateway RPC handlers `analytics-svc` runs at once (a
+  process-wide permit pool, `shared.rpc.deadline.configure_rpc_concurrency`), and each RPC consumer's
+  AMQP prefetch (QoS is per consumer, not per channel). The worker uses the broker default.
 
 ## Running
 
@@ -261,8 +264,9 @@ docker compose -f docker-compose.yml -f docker-compose.gpu.yml --profile workers
   returns — the message is acked. Delivery is at-least-once, so `run_job` skips (acks and
   logs) a replayed event for a job that already `succeeded` or `failed`; a redelivered
   `running` job is run again, since on the single worker that means the attempt that marked
-  it died with its connection. Recovery means creating a new job. Messages that do
-  dead-letter (TTL expiry, broker-side nack, a
+  it died with its connection. Recovery means creating a new job. A training job commits before
+  each model fit (no transaction idles across a fit), so the artifacts it registered before a
+  failure stay active. Messages that do dead-letter (TTL expiry, broker-side nack, a
   `tournament_state_changed` handler error) land on `<queue>.dlq`.
 - **Do not scale `analytics-worker`.** APScheduler runs in-process with no leader lock, so
   a second replica multi-fires the nightly drift check. Replicating `analytics-svc` is

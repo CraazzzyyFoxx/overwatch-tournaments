@@ -9,6 +9,7 @@ from shared.core import pagination
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.models.identity.rbac import Permission, Role
 from shared.rbac import ensure_workspace_system_roles, user_has_only_workspace_owner_role
+from shared.rbac.bootstrap import ensure_can_change_owner_role
 from shared.repository import (
     AuthUserRepository,
     PermissionRepository,
@@ -297,6 +298,8 @@ class RoleAdminService:
         # A grant must be authorized in the role's own scope; a global
         # ``role.update`` holder is not thereby an operator inside a workspace.
         self._policy.require_role_scope(current_user, role.workspace_id, "update", global_fallback=False)
+        if role.workspace_id is not None and role.name == "owner":
+            await ensure_can_change_owner_role(session, actor=current_user, workspace_id=role.workspace_id)
         if role.workspace_id is not None and not await self._members.exists_for_auth_user(
             session, workspace_id=role.workspace_id, auth_user_id=data.user_id
         ):
@@ -348,6 +351,8 @@ class RoleAdminService:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found")
 
         self._policy.require_role_scope(current_user, role.workspace_id, "update", global_fallback=False)
+        if role.workspace_id is not None and role.name == "owner":
+            await ensure_can_change_owner_role(session, actor=current_user, workspace_id=role.workspace_id)
 
         if role not in user.roles:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User does not have this role")

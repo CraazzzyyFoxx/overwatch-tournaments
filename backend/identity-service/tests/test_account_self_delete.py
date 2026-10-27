@@ -17,6 +17,7 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
+import bcrypt
 import pytest
 
 from shared.core.errors import BaseAPIException as HTTPException
@@ -28,6 +29,15 @@ from src.services import audit as audit_module  # noqa: E402
 from src.services.auth import auth  # noqa: E402
 from src.services.session_cache import session_cache  # noqa: E402
 from src.services.sessions import refresh_tokens  # noqa: E402
+
+_PASSWORD = "Correct-Horse-1"
+# Cost 4: these tests are about what the deletion touches, not about bcrypt.
+_HASHED_PASSWORD = bcrypt.hashpw(_PASSWORD.encode(), bcrypt.gensalt(4)).decode()
+
+
+def _delete(session, user, **kwargs):
+    """``delete_me`` past its re-authentication: the caller proves the current password."""
+    return auth.delete_me(session, user, current_password=_PASSWORD, **kwargs)
 
 
 class _FakeSession:
@@ -64,6 +74,7 @@ def _user(*, is_superuser: bool = False) -> SimpleNamespace:
         username="grace",
         email="grace@example.com",
         is_superuser=is_superuser,
+        hashed_password=_HASHED_PASSWORD,
     )
 
 
@@ -108,7 +119,7 @@ def test_deleting_an_account_never_deletes_the_player(patched: dict) -> None:
     session = _FakeSession(player_id=42)
     user = _user()
 
-    asyncio.run(auth.delete_me(session, user))
+    asyncio.run(_delete(session, user))
 
     assert session.deleted == [user]
     assert session.commit_called is True
@@ -121,7 +132,7 @@ def test_deleting_an_account_never_deletes_the_player(patched: dict) -> None:
 def test_verified_marks_are_released_so_the_provider_can_be_linked_again(patched: dict) -> None:
     session = _FakeSession(player_id=42)
 
-    asyncio.run(auth.delete_me(session, _user()))
+    asyncio.run(_delete(session, _user()))
 
     assert len(session.executed) == 1
     release = str(session.executed[0].compile(compile_kwargs={"literal_binds": True}))
@@ -135,7 +146,7 @@ def test_no_player_means_nothing_to_release(patched: dict) -> None:
     session = _FakeSession(player_id=None)
     user = _user()
 
-    asyncio.run(auth.delete_me(session, user))
+    asyncio.run(_delete(session, user))
 
     assert session.executed == []
     assert session.deleted == [user]
@@ -146,7 +157,7 @@ def test_live_sessions_are_revoked_inside_the_deleting_transaction(patched: dict
     """``commit=False``: the revoke must not commit ahead of the delete, but it
     still blacklists the session ids so already-issued access tokens die now
     instead of outliving the account by an access-token TTL."""
-    asyncio.run(auth.delete_me(_FakeSession(player_id=42), _user()))
+    asyncio.run(_delete(_FakeSession(player_id=42), _user()))
 
     assert patched["revoked"] == [(9, False)]
     # ...and it runs while the account row is still there to revoke against.
@@ -154,7 +165,7 @@ def test_live_sessions_are_revoked_inside_the_deleting_transaction(patched: dict
 
 
 def test_audit_row_is_written_before_the_delete(patched: dict) -> None:
-    asyncio.run(auth.delete_me(_FakeSession(player_id=42), _user(), ip_address="10.0.0.1"))
+    asyncio.run(_delete(_FakeSession(player_id=42), _user(), ip_address="10.0.0.1"))
 
     assert len(patched["audited"]) == 1
     entry = patched["audited"][0]
@@ -171,7 +182,7 @@ def test_superuser_account_is_refused(patched: dict) -> None:
     session = _FakeSession(player_id=42)
 
     with pytest.raises(HTTPException) as exc_info:
-        asyncio.run(auth.delete_me(session, _user(is_superuser=True)))
+        asyncio.run(_delete(session, _user(is_superuser=True)))
 
     assert exc_info.value.status_code == 400
     assert exc_info.value.detail == (

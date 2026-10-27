@@ -28,7 +28,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.engine import URL, Connection, make_url
 
 from shared.division_grid import DEFAULT_GRID
-from shared.testing.db import BEFORE_LEGACY_DROP, ensure_test_postgres, is_ephemeral_test_dsn, postgres_env
+from shared.testing.db import ensure_test_postgres, is_ephemeral_test_dsn, postgres_env
 
 BASE = 910_000
 STAMP = datetime(2026, 1, 2, 12, tzinfo=UTC)
@@ -1284,21 +1284,6 @@ def stats_parity_template() -> Iterator[tuple[str, dict[str, int]]]:
 @pytest.fixture
 def stats_parity_database(stats_parity_template: tuple[str, dict[str, int]]) -> Iterator[tuple[str, dict[str, int]]]:
     template, ids = stats_parity_template
-    with legacy_database(template_url=template) as url:
-        yield url, ids.copy()
-
-
-@pytest.fixture(scope="module")
-def stats_parity_receipt_template() -> Iterator[tuple[str, dict[str, int]]]:
-    """The same seed one revision short of ``legacy01``: stats01 receipts read the legacy storage it drops."""
-    yield from _populated_template(BEFORE_LEGACY_DROP)
-
-
-@pytest.fixture
-def stats_parity_receipt_database(
-    stats_parity_receipt_template: tuple[str, dict[str, int]],
-) -> Iterator[tuple[str, dict[str, int]]]:
-    template, ids = stats_parity_receipt_template
     with legacy_database(template_url=template) as url:
         yield url, ids.copy()
 

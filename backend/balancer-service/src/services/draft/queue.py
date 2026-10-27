@@ -125,7 +125,9 @@ class DraftQueueService:
         pick = await self.picks_repo.get(session, draft_session.current_pick_id)
         if pick is None or pick.draft_team_id != team_id:
             return None
-        choice = await self.selection.autopick_choice(session, draft_session, pick, snapshot=snapshot)
+        # The on-clock captain's options read asks the same matchings of the same state: run once for both.
+        options = await self.feasibility.read_pick_options(session, draft_session, team_id=team_id)
+        choice = await self.selection.autopick_choice(session, draft_session, pick, snapshot=snapshot, options=options)
         if choice is None:
             return None
         shape = await self.feasibility.resolve_shape(session, draft_session)

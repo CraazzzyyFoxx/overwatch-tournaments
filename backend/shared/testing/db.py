@@ -37,8 +37,10 @@ Usage in an async test body or ``IsolatedAsyncioTestCase`` method::
 session, plain-``def test_x(db_session):`` case; the whole probe lives inside
 one ``asyncio.run()`` and hands back an ordinary (already-connected)
 ``AsyncSession`` for the test body to drive with its own ``asyncio.run(...)``
-calls -- safe as long as the test issues at most one such call per session
-(the pattern every existing sync-fixture caller already follows).
+call. The test must issue at most one such call per session and release the
+session (``await session.close()``, or ``async with session:``) before that
+call returns: teardown runs on yet another loop and cannot roll back a
+connection still bound to the test's closed one.
 """
 
 from __future__ import annotations
@@ -110,6 +112,19 @@ def is_ephemeral_test_dsn() -> bool:
     """True when POSTGRES_* still point at the committed dummy, not a real DSN."""
     env = postgres_env()
     return env["host"].lower() in EPHEMERAL_HOSTS and env["port"] == EPHEMERAL_PORT and env["db"] == EPHEMERAL_DB
+
+
+#: Why a historical migration cutover proof did not run.
+MIGRATION_PROOF_SKIP = "historical cutover proof: only on the ephemeral test Postgres with OWT_MIGRATION_PROOFS=1"
+
+
+def migration_proofs_enabled() -> bool:
+    """Whether the historical migration cutover proofs may build their scratch databases.
+
+    They rebuild databases at old revisions and take hours, so they are opt-in (``OWT_MIGRATION_PROOFS=1``), and
+    only ever on the committed ephemeral test Postgres.
+    """
+    return is_ephemeral_test_dsn() and os.environ.get("OWT_MIGRATION_PROOFS") == "1"
 
 
 def _ci_blocks_docker() -> bool:

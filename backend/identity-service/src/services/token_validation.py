@@ -51,9 +51,9 @@ def _not_linked() -> HTTPException:
 def _stamp_rbac(user: models.AuthUser, payload: schemas.TokenPayload) -> None:
     """Attach ``payload``'s RBAC to ``user`` as the model's instance cache.
 
-    Mandatory, not an optimisation. Both resolvers below can return a row loaded
-    with ``noload(AuthUser.roles)`` -- ``get_identity``, taken whenever the Redis
-    RBAC entry is warm, and the API-key path, which has no ORM RBAC by design.
+    Mandatory, not an optimisation. Both resolvers below return a row loaded
+    with ``noload(AuthUser.roles)`` -- ``get_identity`` for a bearer token, and
+    the API-key path -- because RBAC comes from the payload, never the row.
     ``noload`` yields an EMPTY collection rather than raising, so without this
     every ``has_permission`` / ``has_workspace_permission`` on such a user
     silently answers False; only ``is_superuser`` (a column on the row) survives.
@@ -95,6 +95,11 @@ class TokenValidationService:
         Raises 401 on any invalid credential — including a decodable token for a
         deactivated account, which on this path is indistinguishable from a bad
         token by design (the gateway has no user to report 403 about).
+
+        A full RBAC cache hit answers from Redis alone (one round trip, zero SQL):
+        the entry carries the account's ``is_active`` and is dropped with every
+        change to it. A miss loads the identity-only row -- after the generation
+        that fences the fill was read -- and fills the entry.
         """
         if self.keys.is_api_key(raw_token):
             api_key_payload = await self.keys.validate(session, raw_token)
@@ -102,10 +107,13 @@ class TokenValidationService:
                 raise _credentials_error()
             return api_key_payload
 
-        user, cached = await self._resolve_bearer(session, raw_token)
-        if not user.is_active:
+        user_id, _session_id, cached, generation = await self._resolve_bearer(raw_token)
+        resolved = await self.payloads.resolve(
+            session, user_id, self.users.get_identity, cached=cached, generation=generation
+        )
+        if resolved is None or not resolved[1]:
             raise _credentials_error()
-        return await self.payloads.build(session, user, cached=cached)
+        return resolved[0]
 
     async def discord_identity(self, session: AsyncSession, discord_user_id: str) -> schemas.TokenPayload:
         """RBAC for the account a Discord user id is linked to, for the bot to act as.
@@ -124,14 +132,14 @@ class TokenValidationService:
         )
         if connection is None:
             raise _not_linked()
-        user = await self.users.get_identity(session, connection.auth_user_id)
-        if user is None:
+        resolved = await self.payloads.resolve(session, connection.auth_user_id, self.users.get_identity)
+        if resolved is None:
             # The link outlived the account row; indistinguishable from "never
             # linked" to the bot, and the same thing to tell the clicking user.
             raise _not_linked()
-        if not user.is_active:
+        payload, is_active = resolved
+        if not is_active:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Inactive user")
-        payload = await self.payloads.build(session, user)
         return payload.model_copy(update={"credential_type": "discord"})
 
     async def resolve_active_user(self, session: AsyncSession, raw_token: str) -> models.AuthUser:
@@ -141,14 +149,19 @@ class TokenValidationService:
         session list/revoke) can tell the caller's own session apart from the
         others without re-decoding the token.
         """
-        user, cached = await self._resolve_bearer(session, raw_token)
+        user_id, session_id, cached, generation = await self._resolve_bearer(raw_token)
+        # The ORM row, not the payload: handlers mutate it. Identity-only, so
+        # the RBAC every caller then authorizes against has to be stamped from
+        # ``build`` -- free on a full cache hit, a fill otherwise. Loaded after
+        # ``_resolve_bearer`` read the generation that fences that fill.
+        user = await self.users.get_identity(session, user_id)
+        if user is None:
+            raise _credentials_error()
+        if session_id is not None:
+            object.__setattr__(user, "_current_session_id", session_id)
         if not user.is_active:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Inactive user")
-        # The row may carry no ORM roles at all (warm cache -> ``get_identity``),
-        # so the RBAC every caller then authorizes against has to come from here.
-        # ``build`` is free on a full cache hit and falls back to the database for
-        # whatever the entry is missing.
-        _stamp_rbac(user, await self.payloads.build(session, user, cached=cached))
+        _stamp_rbac(user, await self.payloads.build(session, user, cached=cached, generation=generation))
         return user
 
     async def resolve_active_principal(
@@ -182,17 +195,13 @@ class TokenValidationService:
         _stamp_rbac(user, payload)
         return user, payload.api_key
 
-    async def _resolve_bearer(
-        self,
-        session: AsyncSession,
-        raw_token: str,
-    ) -> tuple[models.AuthUser, dict[str, Any] | None]:
-        """Decode a bearer token and load its user, returning the RBAC cache entry.
+    async def _resolve_bearer(self, raw_token: str) -> tuple[int, str | None, dict[str, Any], str | None]:
+        """Decode a bearer token and read its Redis state: ``(user id, sid, RBAC entry, generation)``.
 
-        The entry is returned rather than discarded so ``build`` does not read it
-        a second time on the same request, and because its presence is what
-        decides whether the user needs role/permission hydration at all: on a
-        warm cache the row is loaded without its two collection round trips.
+        The entry is ``{}`` on a miss/outage and is returned rather than
+        discarded, so ``build`` does not read it a second time on the same
+        request; the generation, read before any account row is loaded, is what
+        a fill on this request hands to ``set_rbac``.
         """
         credentials_exception = _credentials_error()
         # Narrow the catch to the decode only: a downstream 403/404
@@ -211,25 +220,18 @@ class TokenValidationService:
             user_id = int(user_id_str)
         except (TypeError, ValueError):
             raise credentials_exception
+        if not isinstance(session_id, str) or not session_id:
+            session_id = None
 
         # A revoked session (logout / revoke / reuse-detection) blacklists its
         # sid; reject the still-unexpired access token that carries it. This is
         # the path the gateway hits on every request, so the check propagates
-        # globally (bounded by the gateway's short token cache).
-        if isinstance(session_id, str) and await self.cache.is_session_blacklisted(session_id):
+        # globally (bounded by the gateway's short token cache). Read together
+        # with the RBAC entry: one round trip for both.
+        cached, generation, revoked = await self.cache.token_state(user_id, session_id)
+        if revoked:
             raise credentials_exception
-
-        cached = await self.cache.get_rbac(user_id)
-        if cached is None:
-            user = await self.users.get_with_rbac(session, user_id)
-        else:
-            user = await self.users.get_identity(session, user_id)
-        if user is None:
-            raise credentials_exception
-
-        if isinstance(session_id, str) and session_id:
-            object.__setattr__(user, "_current_session_id", session_id)
-        return user, cached
+        return user_id, session_id, cached or {}, generation
 
 
 token_validation = TokenValidationService()

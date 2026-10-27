@@ -22,7 +22,7 @@ from psycopg.types.json import Json, Jsonb
 
 from shared.disciplines import DISCIPLINES
 from shared.domain.player_sub_roles import normalize_sub_role, workspace_sub_role_code
-from shared.testing.db import ensure_test_postgres, is_ephemeral_test_dsn, postgres_env
+from shared.testing.db import MIGRATION_PROOF_SKIP, ensure_test_postgres, migration_proofs_enabled, postgres_env
 
 BACKEND = pathlib.Path(__file__).resolve().parents[1]
 PRE_REVISION = "discipline01"
@@ -189,8 +189,8 @@ def _scramble_names(conn) -> None:
 @pytest.fixture(scope="module")
 def legacy_template():
     ensure_test_postgres()
-    if not is_ephemeral_test_dsn():
-        pytest.skip("creates scratch databases: only on the ephemeral test Postgres")
+    if not migration_proofs_enabled():
+        pytest.skip(MIGRATION_PROOF_SKIP)
     _recreate(TEMPLATE_DB)
     done = _alembic(TEMPLATE_DB, PRE_REVISION, OWT_APPLY_ENCOUNTER_LAYER_DROP="1")
     assert done.returncode == 0, done.stderr[-3000:]

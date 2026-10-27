@@ -23,6 +23,7 @@ from sqlalchemy import (
     Integer,
     String,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -91,6 +92,12 @@ class PickBanSession(db.TimeStampIntegerMixin):
     __tablename__ = "pick_ban_session"
     __table_args__ = (
         Index("ix_pick_ban_session_encounter_id", "encounter_id"),
+        #: The room reconcile tick's per-second scan of the live, timed rooms.
+        Index(
+            "ix_pick_ban_session_active_unpaused",
+            "encounter_id",
+            postgresql_where=text("status = 'active' AND paused_at IS NULL"),
+        ),
         UniqueConstraint("encounter_id", "kind", name="uq_pick_ban_session_encounter_kind"),
         #: Target of the board's and the log's composite FKs.
         UniqueConstraint("id", "encounter_id", name="uq_pick_ban_session_id_encounter"),
@@ -191,17 +198,23 @@ class PickBanEntry(db.TimeStampIntegerMixin):
             ondelete="CASCADE",
             name="fk_pick_ban_entry_session",
         ),
+        # Deferred, not ``SET NULL``: ``ck_pick_ban_entry_*_by`` cannot hold a
+        # ``team`` actor without its participation, and an encounter's delete
+        # reaches its participations and its rooms in whichever order Postgres
+        # fires their cascades -- the entries are gone by commit either way.
         ForeignKeyConstraint(
             ["picked_by_team_id", "encounter_id"],
             ["encounter.team.id", "encounter.team.encounter_id"],
-            ondelete="SET NULL (picked_by_team_id)",
             name="fk_pick_ban_entry_picked_by",
+            deferrable=True,
+            initially="DEFERRED",
         ),
         ForeignKeyConstraint(
             ["protected_by_team_id", "encounter_id"],
             ["encounter.team.id", "encounter.team.encounter_id"],
-            ondelete="SET NULL (protected_by_team_id)",
             name="fk_pick_ban_entry_protected_by",
+            deferrable=True,
+            initially="DEFERRED",
         ),
         ForeignKeyConstraint(
             ["picked_for_member_id"],

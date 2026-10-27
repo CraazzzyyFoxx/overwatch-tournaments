@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowRight } from "lucide-react";
 
+import type { TableCommand } from "@/components/data-table";
 import { getAdminDetailTableStyles } from "@/components/admin/AdminDetailTable";
 import { WizardShell } from "@/components/kit/WizardShell";
 import { Button } from "@/components/ui/button";
@@ -31,11 +32,11 @@ import { ChallongeTeamPicker } from "./ChallongeTeamPicker";
 import { UNMAPPED_TEAM_VALUE, getChallongeParticipantKey } from "./model";
 
 /**
- * The Teams tab's "Sync teams" button and the Challonge mapping dialog it opens.
- * The dialog renders even when the button does not: `?challongeSync=1` opens it
- * regardless of `canImportTeams`.
+ * The Teams tab's "Sync teams" command and the Challonge mapping dialog it
+ * opens. The dialog is returned even when the command is hidden:
+ * `?challongeSync=1` opens it regardless of `canImportTeams`.
  */
-export function ChallongeTeamSync({
+export function useChallongeTeamSync({
   tournamentId,
   hasChallongeSource,
   canImportTeams
@@ -43,7 +44,7 @@ export function ChallongeTeamSync({
   tournamentId: number;
   hasChallongeSource: boolean;
   canImportTeams: boolean;
-}>) {
+}>): { command: TableCommand; dialog: ReactNode } {
   const t = useTranslations("adminTournament.teams");
   const tx = useTranslations("adminTournament.teamsExtra");
   const queryClient = useQueryClient();
@@ -198,238 +199,235 @@ export function ChallongeTeamSync({
     syncTeamsMutation.mutate(selectedChallongeMappings);
   };
 
-  return (
-    <>
-      {canImportTeams && hasChallongeSource ? (
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={openChallongeSyncDialog}
-          disabled={syncTeamsMutation.isPending}
+  const command: TableCommand = {
+    id: "challonge-sync",
+    label: t("sync"),
+    onSelect: openChallongeSyncDialog,
+    hidden: !(canImportTeams && hasChallongeSource),
+    disabled: syncTeamsMutation.isPending
+  };
+
+  const dialog = (
+    <Dialog
+      open={challongeSyncDialogOpen}
+      onOpenChange={(open) => {
+        if (open) {
+          setChallongeSyncDialogOpen(true);
+        } else {
+          closeChallongeSyncDialog();
+        }
+      }}
+    >
+      <DialogContent className="max-h-[90vh] max-w-5xl overflow-y-auto" aria-describedby={undefined}>
+        <DialogHeader className="border-b border-border/60 pb-4">
+          <DialogTitle>{t("syncChallonge")}</DialogTitle>
+        </DialogHeader>
+
+        {/* Two steps rather than one long table with a Sync button at the
+            bottom: the mapping is destructive on the internal teams, and the
+            confirm step is where the admin reads back what will be written
+            instead of re-scanning the picker column they just filled in. */}
+        <WizardShell
+          steps={[
+            { key: "map", label: t("mapParticipants"), state: onConfirmStep ? "done" : "current" },
+            { key: "confirm", label: t("confirm"), state: onConfirmStep ? "current" : "todo" }
+          ]}
+          footer={{
+            back: onConfirmStep ? () => setChallongeSyncStep("map") : undefined,
+            next: onConfirmStep
+              ? {
+                  label: syncTeamsMutation.isPending ? tx("syncing") : tx("syncMappings"),
+                  onClick: submitChallongeMappings,
+                  disabled: !canSubmitChallongeMappings || syncTeamsMutation.isPending
+                }
+              : {
+                  label: t("continue"),
+                  onClick: () => setChallongeSyncStep("confirm"),
+                  disabled: !canSubmitChallongeMappings
+                },
+            secondary: (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={closeChallongeSyncDialog}
+                disabled={syncTeamsMutation.isPending}
+              >
+                {t("cancel")}
+              </Button>
+            )
+          }}
         >
-          {t("sync")}
-        </Button>
-      ) : null}
-
-      <Dialog
-        open={challongeSyncDialogOpen}
-        onOpenChange={(open) => {
-          if (open) {
-            setChallongeSyncDialogOpen(true);
-          } else {
-            closeChallongeSyncDialog();
-          }
-        }}
-      >
-        <DialogContent className="max-h-[90vh] max-w-5xl overflow-y-auto" aria-describedby={undefined}>
-          <DialogHeader className="border-b border-border/60 pb-4">
-            <DialogTitle>{t("syncChallonge")}</DialogTitle>
-          </DialogHeader>
-
-          {/* Two steps rather than one long table with a Sync button at the
-              bottom: the mapping is destructive on the internal teams, and the
-              confirm step is where the admin reads back what will be written
-              instead of re-scanning the picker column they just filled in. */}
-          <WizardShell
-            steps={[
-              { key: "map", label: t("mapParticipants"), state: onConfirmStep ? "done" : "current" },
-              { key: "confirm", label: t("confirm"), state: onConfirmStep ? "current" : "todo" }
-            ]}
-            footer={{
-              back: onConfirmStep ? () => setChallongeSyncStep("map") : undefined,
-              next: onConfirmStep
-                ? {
-                    label: syncTeamsMutation.isPending ? tx("syncing") : tx("syncMappings"),
-                    onClick: submitChallongeMappings,
-                    disabled: !canSubmitChallongeMappings || syncTeamsMutation.isPending
-                  }
-                : {
-                    label: t("continue"),
-                    onClick: () => setChallongeSyncStep("confirm"),
-                    disabled: !canSubmitChallongeMappings
-                  },
-              secondary: (
+          {onConfirmStep ? (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                {tx("mappingSummary", { selected: selectedChallongeMappings.length, total: challongeParticipants.length })}
+              </p>
+              <ul className="divide-y divide-border/60">
+                {confirmedChallongeRows.map((row) => (
+                  <li
+                    key={row.key}
+                    className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-sm"
+                  >
+                    <span className="min-w-0 flex-1 truncate" title={row.participant}>
+                      {row.participant}
+                    </span>
+                    <ArrowRight
+                      className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                      aria-hidden
+                    />
+                    <span className="min-w-0 flex-1 truncate font-medium" title={row.team}>
+                      {row.team}
+                    </span>
+                    <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                      {row.group}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-xs tabular-nums text-muted-foreground">
+                  {t.rich("participantsSummary", {
+                    participants: challongeParticipants.length,
+                    unmapped: activeUnmappedParticipants.length,
+                    warn: (chunks) => (
+                      <span className={activeUnmappedParticipants.length > 0 ? "text-warning" : undefined}>
+                        {chunks}
+                      </span>
+                    )
+                  })}
+                </p>
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={closeChallongeSyncDialog}
-                  disabled={syncTeamsMutation.isPending}
+                  onClick={applyChallongeSuggestions}
+                  disabled={
+                    isChallongePreviewLoading ||
+                    !challongeParticipants.some(
+                      (participant) => participant.suggested_team_id != null
+                    )
+                  }
                 >
-                  {t("cancel")}
+                  {t("apply")}
                 </Button>
-              )
-            }}
-          >
-            {onConfirmStep ? (
-              <div className="space-y-4">
-                <p className="text-sm text-muted-foreground">
-                  {tx("mappingSummary", { selected: selectedChallongeMappings.length, total: challongeParticipants.length })}
-                </p>
-                <ul className="divide-y divide-border/60">
-                  {confirmedChallongeRows.map((row) => (
-                    <li
-                      key={row.key}
-                      className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-sm"
-                    >
-                      <span className="min-w-0 flex-1 truncate" title={row.participant}>
-                        {row.participant}
-                      </span>
-                      <ArrowRight
-                        className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
-                        aria-hidden
-                      />
-                      <span className="min-w-0 flex-1 truncate font-medium" title={row.team}>
-                        {row.team}
-                      </span>
-                      <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
-                        {row.group}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
               </div>
-            ) : (
-              <div className="space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <p className="text-xs tabular-nums text-muted-foreground">
-                    {t.rich("participantsSummary", {
-                      participants: challongeParticipants.length,
-                      unmapped: activeUnmappedParticipants.length,
-                      warn: (chunks) => (
-                        <span className={activeUnmappedParticipants.length > 0 ? "text-warning" : undefined}>
-                          {chunks}
-                        </span>
-                      )
-                    })}
-                  </p>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={applyChallongeSuggestions}
-                    disabled={
-                      isChallongePreviewLoading ||
-                      !challongeParticipants.some(
-                        (participant) => participant.suggested_team_id != null
-                      )
-                    }
-                  >
-                    {t("apply")}
-                  </Button>
-                </div>
 
-                <div className="max-h-[52vh] overflow-auto rounded-md border border-border/60">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className={tableStyles.headerRow}>
-                        <TableHead className={tableStyles.head}>{tx("participant")}</TableHead>
-                        <TableHead className={tableStyles.head}>{t("group")}</TableHead>
-                        <TableHead className={tableStyles.head}>{t("current")}</TableHead>
-                        <TableHead className={tableStyles.head}>{t("suggestion")}</TableHead>
-                        <TableHead className={tableStyles.head}>{t("internalTeam")}</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {isChallongePreviewLoading ? (
-                        [0, 1, 2].map((index) => (
-                          <TableRow key={index} className={tableStyles.row}>
-                            <TableCell className={tableStyles.cell} colSpan={5}>
-                              <Skeleton className="h-8 w-full" />
-                            </TableCell>
-                          </TableRow>
-                        ))
-                      ) : challongeParticipants.length ? (
-                        challongeParticipants.map((participant) => {
-                          const participantKey = getChallongeParticipantKey(participant);
-                          const currentTeam =
-                            participant.mapped_team_id != null
-                              ? challongeTeamsById.get(participant.mapped_team_id)
-                              : undefined;
-                          const suggestedTeam =
-                            participant.suggested_team_id != null
-                              ? challongeTeamsById.get(participant.suggested_team_id)
-                              : undefined;
-
-                          return (
-                            <TableRow key={participantKey} className={tableStyles.row}>
-                              <TableCell className={tableStyles.cell}>
-                                <div className="min-w-0">
-                                  <div className="truncate font-medium" title={participant.name}>
-                                    {participant.name}
-                                  </div>
-                                  <div className="mt-0.5 text-xs tabular-nums text-muted-foreground">
-                                    {tx("participantNumber", {
-                                      id: participant.participant_id,
-                                      challongeId: participant.challonge_id
-                                    })}
-                                  </div>
-                                </div>
-                              </TableCell>
-                              <TableCell className={tableStyles.cell}>
-                                {participant.group_name ?? tx("mainGroup")}
-                              </TableCell>
-                              <TableCell className={tableStyles.cell}>
-                                {currentTeam ? (
-                                  <span className="truncate" title={currentTeam.name}>
-                                    {currentTeam.name}
-                                  </span>
-                                ) : (
-                                  <span className="text-muted-foreground">{t("unmapped")}</span>
-                                )}
-                              </TableCell>
-                              <TableCell className={tableStyles.cell}>
-                                {suggestedTeam ? (
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-8 max-w-[180px] justify-start px-2"
-                                    aria-label={t("mapAria", { participant: participant.name, team: suggestedTeam.name })}
-                                    onClick={() =>
-                                      setChallongeMappingDraft((current) => ({
-                                        ...current,
-                                        [participantKey]: String(suggestedTeam.id)
-                                      }))
-                                    }
-                                  >
-                                    <span className="truncate">{suggestedTeam.name}</span>
-                                  </Button>
-                                ) : null}
-                              </TableCell>
-                              <TableCell className={tableStyles.cell}>
-                                <ChallongeTeamPicker
-                                  participant={participant}
-                                  teams={challongeTeamOptions}
-                                  value={getChallongeMappingValue(participant)}
-                                  onChange={(next) =>
-                                    setChallongeMappingDraft((current) => ({
-                                      ...current,
-                                      [participantKey]: next
-                                    }))
-                                  }
-                                />
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })
-                      ) : (
-                        <TableRow className={tableStyles.row}>
+              <div className="max-h-[52vh] overflow-auto rounded-md border border-border/60">
+                <Table>
+                  <TableHeader>
+                    <TableRow className={tableStyles.headerRow}>
+                      <TableHead className={tableStyles.head}>{tx("participant")}</TableHead>
+                      <TableHead className={tableStyles.head}>{t("group")}</TableHead>
+                      <TableHead className={tableStyles.head}>{t("current")}</TableHead>
+                      <TableHead className={tableStyles.head}>{t("suggestion")}</TableHead>
+                      <TableHead className={tableStyles.head}>{t("internalTeam")}</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {isChallongePreviewLoading ? (
+                      [0, 1, 2].map((index) => (
+                        <TableRow key={index} className={tableStyles.row}>
                           <TableCell className={tableStyles.cell} colSpan={5}>
-                            <div className="py-4 text-sm text-muted-foreground">
-                              {t("noParticipants")}
-                            </div>
+                            <Skeleton className="h-8 w-full" />
                           </TableCell>
                         </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
-                </div>
+                      ))
+                    ) : challongeParticipants.length ? (
+                      challongeParticipants.map((participant) => {
+                        const participantKey = getChallongeParticipantKey(participant);
+                        const currentTeam =
+                          participant.mapped_team_id != null
+                            ? challongeTeamsById.get(participant.mapped_team_id)
+                            : undefined;
+                        const suggestedTeam =
+                          participant.suggested_team_id != null
+                            ? challongeTeamsById.get(participant.suggested_team_id)
+                            : undefined;
+
+                        return (
+                          <TableRow key={participantKey} className={tableStyles.row}>
+                            <TableCell className={tableStyles.cell}>
+                              <div className="min-w-0">
+                                <div className="truncate font-medium" title={participant.name}>
+                                  {participant.name}
+                                </div>
+                                <div className="mt-0.5 text-xs tabular-nums text-muted-foreground">
+                                  {tx("participantNumber", {
+                                    id: participant.participant_id,
+                                    challongeId: participant.challonge_id
+                                  })}
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell className={tableStyles.cell}>
+                              {participant.group_name ?? tx("mainGroup")}
+                            </TableCell>
+                            <TableCell className={tableStyles.cell}>
+                              {currentTeam ? (
+                                <span className="truncate" title={currentTeam.name}>
+                                  {currentTeam.name}
+                                </span>
+                              ) : (
+                                <span className="text-muted-foreground">{t("unmapped")}</span>
+                              )}
+                            </TableCell>
+                            <TableCell className={tableStyles.cell}>
+                              {suggestedTeam ? (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-8 max-w-[180px] justify-start px-2"
+                                  aria-label={t("mapAria", { participant: participant.name, team: suggestedTeam.name })}
+                                  onClick={() =>
+                                    setChallongeMappingDraft((current) => ({
+                                      ...current,
+                                      [participantKey]: String(suggestedTeam.id)
+                                    }))
+                                  }
+                                >
+                                  <span className="truncate">{suggestedTeam.name}</span>
+                                </Button>
+                              ) : null}
+                            </TableCell>
+                            <TableCell className={tableStyles.cell}>
+                              <ChallongeTeamPicker
+                                participant={participant}
+                                teams={challongeTeamOptions}
+                                value={getChallongeMappingValue(participant)}
+                                onChange={(next) =>
+                                  setChallongeMappingDraft((current) => ({
+                                    ...current,
+                                    [participantKey]: next
+                                  }))
+                                }
+                              />
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })
+                    ) : (
+                      <TableRow className={tableStyles.row}>
+                        <TableCell className={tableStyles.cell} colSpan={5}>
+                          <div className="py-4 text-sm text-muted-foreground">
+                            {t("noParticipants")}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
               </div>
-            )}
-          </WizardShell>
-        </DialogContent>
-      </Dialog>
-    </>
+            </div>
+          )}
+        </WizardShell>
+      </DialogContent>
+    </Dialog>
   );
+
+  return { command, dialog };
 }

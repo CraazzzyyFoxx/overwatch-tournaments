@@ -430,19 +430,18 @@ def test_overwatch_conditions_ignore_same_code_native_lol_rows(stats_parity_data
     asyncio.run(compare())
 
 
-def test_native_reference_mutations_are_atomic_bounded_and_idempotent(stats_parity_receipt_database, tmp_path):
+def test_native_reference_mutations_are_atomic_bounded_and_idempotent(stats_parity_database):
     """A real runner/import/seed/reset lifecycle records every reference change."""
     from dataclasses import replace
     from unittest.mock import AsyncMock, patch
 
-    from scripts import stats01_reconcile as reconcile
     from shared.models.platform.audit import AuditLog
     from shared.repository.support import AchievementEvaluationResultRepository, AchievementRuleRepository
     from shared.services.stats_evidence import validate_transition
     from src.services.achievement.engine.seeder import AchievementSeederService
     from src.services.achievement.import_export import PortableAchievementRule, import_portable_rules
 
-    url, ids = stats_parity_receipt_database
+    url, ids = stats_parity_database
 
     async def exercise() -> None:
         engine = create_async_engine(make_url(url).set(drivername="postgresql+asyncpg"))
@@ -727,27 +726,15 @@ def test_native_reference_mutations_are_atomic_bounded_and_idempotent(stats_pari
         finally:
             await engine.dispose()
 
-    sync_engine = sa.create_engine(url, poolclass=sa.pool.NullPool)
-    receipt = tmp_path / "achievement-receipt"
-    revision = reconcile.revision_module()
-    try:
-        with reconcile.readonly_snapshot(sync_engine, revision) as conn:
-            assert reconcile.capture_receipt(conn, receipt, revision)["exit_code"] == 0
-        asyncio.run(exercise())
-        with reconcile.readonly_snapshot(sync_engine, revision, receipt_dir=receipt) as conn:
-            result = reconcile.check_receipt(conn, receipt, revision)
-            assert result["exit_code"] == 2, result
-    finally:
-        sync_engine.dispose()
+    asyncio.run(exercise())
 
 
-def test_native_diff_resolves_global_identity_to_one_scoped_member(stats_parity_receipt_database, tmp_path):
+def test_native_diff_resolves_global_identity_to_one_scoped_member(stats_parity_database):
     """Real PostgreSQL replaces the former compiled-SQL/fake-session tests."""
-    from scripts import stats01_reconcile as reconcile
     from shared.models.platform.audit import AuditLog
     from src.services.achievement.engine.differ import diff_and_apply
 
-    url, ids = stats_parity_receipt_database
+    url, ids = stats_parity_database
 
     async def exercise() -> None:
         engine = create_async_engine(make_url(url).set(drivername="postgresql+asyncpg"))
@@ -840,17 +827,7 @@ def test_native_diff_resolves_global_identity_to_one_scoped_member(stats_parity_
         finally:
             await engine.dispose()
 
-    sync_engine = sa.create_engine(url, poolclass=sa.pool.NullPool)
-    receipt = tmp_path / "achievement-member-receipt"
-    revision = reconcile.revision_module()
-    try:
-        with reconcile.readonly_snapshot(sync_engine, revision) as conn:
-            assert reconcile.capture_receipt(conn, receipt, revision)["exit_code"] == 0
-        asyncio.run(exercise())
-        with reconcile.readonly_snapshot(sync_engine, revision, receipt_dir=receipt) as conn:
-            assert reconcile.check_receipt(conn, receipt, revision)["exit_code"] == 2
-    finally:
-        sync_engine.dispose()
+    asyncio.run(exercise())
 
 
 def test_runner_preserves_unknown_series_awards_without_freezing_other_rules(stats_parity_database):

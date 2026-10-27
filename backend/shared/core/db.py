@@ -160,10 +160,11 @@ class DatabaseEngines:
 def _unique_prepared_statement_name() -> str:
     """Generate a unique asyncpg prepared statement name.
 
-    Under pgBouncer transaction pooling a single backend connection is shared
-    across clients, so prepared statements must not reuse names; a unique name
-    per statement avoids "prepared statement already exists / does not exist"
-    errors.
+    Without pgBouncer's prepared-statement tracking (pgBouncer < 1.21 or
+    ``max_prepared_statements = 0``) one backend is shared across clients, so
+    prepared statements must not reuse names; a unique name per statement avoids
+    "prepared statement already exists" errors. With tracking, pgBouncer maps
+    client names to its own and the unique name is merely harmless.
     """
     return f"__asyncpg_{uuid.uuid4()}__"
 
@@ -195,6 +196,7 @@ def create_database(
     connect_timeout: float = 10.0,
     statement_timeout: int = 30000,
     pgbouncer: bool = False,
+    pgbouncer_prepared_statements: bool = True,
     session_settings: Mapping[str, str] | None = None,
 ) -> DatabaseEngines:
     """Factory for creating database engine + session maker pairs.
@@ -213,9 +215,9 @@ def create_database(
             engine (e.g. planner knobs); applied the same way as
             ``statement_timeout``.
         pgbouncer: Configure for connecting through pgBouncer in transaction
-            pooling mode. Disables asyncpg prepared-statement caching, uses
-            unique prepared-statement names, and applies ``statement_timeout``
-            per-transaction via ``SET LOCAL`` instead of as a startup parameter.
+            pooling mode. Uses unique prepared-statement names and applies
+            ``statement_timeout`` per-transaction (as ``SET LOCAL``) instead of
+            as a startup parameter.
             The client-side pool is still kept: pgBouncer caps *server* backends,
             while a connection-per-request client (NullPool) burns a pgBouncer
             client slot and a full connect round-trip per message, and leaves
@@ -223,6 +225,14 @@ def create_database(
             connection surfaces as an error instead of a transparent reconnect.
             Size the pool so replicas x (pool_size + max_overflow) stays under
             pgBouncer's ``max_client_conn``.
+        pgbouncer_prepared_statements: With ``pgbouncer``, keep SQLAlchemy's
+            per-connection prepared-statement cache, so a repeated statement is
+            one round trip instead of prepare + execute + close. Needs pgBouncer
+            >= 1.21 with ``max_prepared_statements > 0`` (1.24+ defaults to 200),
+            which re-prepares a client's statements on whichever backend serves
+            its transaction. ``False`` disables the cache
+            (``prepared_statement_cache_size=0``) for an older pooler or one
+            with ``max_prepared_statements = 0``. Ignored without ``pgbouncer``.
 
     Returns:
         A DatabaseEngines instance with engine and session maker attributes.
@@ -243,8 +253,9 @@ def create_database(
     if statement_timeout > 0:
         settings["statement_timeout"] = str(statement_timeout)
     if pgbouncer:
-        connect_args["prepared_statement_cache_size"] = 0
         connect_args["prepared_statement_name_func"] = _unique_prepared_statement_name
+        if not pgbouncer_prepared_statements:
+            connect_args["prepared_statement_cache_size"] = 0
     elif settings:
         connect_args["server_settings"] = settings
 
@@ -269,8 +280,8 @@ class _HasDbSettings(Protocol):
     """Structural type for ``BaseServiceSettings``-shaped config objects.
 
     Every service's ``Settings``/``AppConfig`` extends ``BaseServiceSettings``,
-    which declares exactly these nine fields — matched structurally instead of
-    importing ``shared.core.config`` here, to avoid a config <-> db import cycle.
+    which declares these fields — matched structurally instead of importing
+    ``shared.core.config`` here, to avoid a config <-> db import cycle.
     """
 
     db_url_asyncpg: str
@@ -283,12 +294,13 @@ class _HasDbSettings(Protocol):
     db_connect_timeout: float
     db_statement_timeout: int
     db_pgbouncer: bool
+    db_pgbouncer_prepared_statements: bool
 
 
 def create_database_from_settings(
     settings: _HasDbSettings, *, session_settings: Mapping[str, str] | None = None
 ) -> DatabaseEngines:
-    """``create_database`` reading its nine pool knobs off a service's settings."""
+    """``create_database`` reading its pool knobs off a service's settings."""
     return create_database(
         async_url=settings.db_url_asyncpg,
         pool_size=settings.db_pool_size,
@@ -300,5 +312,6 @@ def create_database_from_settings(
         connect_timeout=settings.db_connect_timeout,
         statement_timeout=settings.db_statement_timeout,
         pgbouncer=settings.db_pgbouncer,
+        pgbouncer_prepared_statements=settings.db_pgbouncer_prepared_statements,
         session_settings=session_settings,
     )

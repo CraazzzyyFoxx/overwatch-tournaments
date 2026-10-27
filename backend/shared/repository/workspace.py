@@ -6,7 +6,7 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import contains_eager, selectinload
 
 from shared import models
 from shared.core.errors import BaseAPIException
@@ -91,14 +91,15 @@ class WorkspaceRepository(BaseRepository[models.Workspace]):
         return workspace
 
     async def lock_by_id(self, session: AsyncSession, workspace_id: int) -> int | None:
-        """``SELECT id ... FOR UPDATE`` — serialize concurrent writers on one workspace.
+        """``SELECT id ... FOR NO KEY UPDATE`` — serialize concurrent writers on one workspace.
 
         Used by the division-grid import paths, where two imports into the same
-        workspace must not interleave. The projection is deliberate: the caller wants
-        the lock, not the row.
+        workspace must not interleave. NO KEY: the FK inserts of rows referencing the
+        workspace (tournaments, grids) take FOR KEY SHARE and go on meanwhile. The
+        projection is deliberate: the caller wants the lock, not the row.
         """
         return await session.scalar(
-            sa.select(models.Workspace.id).where(models.Workspace.id == workspace_id).with_for_update()
+            sa.select(models.Workspace.id).where(models.Workspace.id == workspace_id).with_for_update(key_share=True)
         )
 
     async def set_default_grid_version(
@@ -389,7 +390,7 @@ class WorkspaceMemberRepository(BaseRepository[models.WorkspaceMember]):
         unlimited_cap: int = 10_000,
     ) -> tuple[int, list[tuple[models.WorkspaceMember, models.AuthUser, list[models.Role]]]]:
         """Paginated, searchable, role-filterable RBAC members with their
-        workspace roles.
+        workspace roles; each auth user's ``player`` rides the page's own join.
 
         Three statements regardless of page size — count, page, and one batched
         role fetch grouped in memory — instead of a role query per row.
@@ -421,13 +422,17 @@ class WorkspaceMemberRepository(BaseRepository[models.WorkspaceMember]):
                 models.WorkspaceMember.id.asc(),
             ]
 
-        page_query = self._members_filter(
-            sa.select(models.WorkspaceMember, models.AuthUser),
-            workspace_id=workspace_id,
-            search=search,
-            role_id=role_id,
-            exclude_role_id=exclude_role_id,
-        ).order_by(*order_cols)
+        page_query = (
+            self._members_filter(
+                sa.select(models.WorkspaceMember, models.AuthUser),
+                workspace_id=workspace_id,
+                search=search,
+                role_id=role_id,
+                exclude_role_id=exclude_role_id,
+            )
+            .options(contains_eager(models.AuthUser.player))
+            .order_by(*order_cols)
+        )
         if per_page == -1:
             page_query = page_query.limit(unlimited_cap)
         else:
@@ -671,13 +676,16 @@ async def get_or_create_workspace_member(
     # an RBAC member, so such a row must not be role-less. Fires ONLY on a
     # real insert or a revival (not idempotent hits) and ONLY when the player has an auth
     # account; the helper is additive (never downgrades a later ``player`` /
-    # explicit grant). Local import avoids any shared.repository<->shared.rbac
+    # explicit grant). The new membership changes the account's RBAC payload (its
+    # workspace list) whether or not a role was granted, so identity is told in
+    # this transaction. Local import avoids any shared.repository<->shared.rbac
     # import-time coupling on this widely-imported module.
-    from shared.rbac import assign_default_member_role_if_roleless
+    from shared.rbac.bootstrap import assign_default_member_role_if_roleless, stage_rbac_change
 
     auth_user_id = await session.scalar(sa.select(models.User.auth_user_id).where(models.User.id == player_id))
     if auth_user_id is not None:
         await assign_default_member_role_if_roleless(session, user_id=auth_user_id, workspace_id=workspace_id)
+        await stage_rbac_change(session, [auth_user_id], change="added", workspace_id=workspace_id)
     return member
 
 
@@ -775,25 +783,24 @@ class RoleRepository(BaseRepository[models.Role]):
         )
         return list(result.scalars().all())
 
-    async def global_rbac_for_user(
+    async def rbac_for_user(
         self,
         session: AsyncSession,
         user_id: int,
-    ) -> tuple[list[str], list[dict[str, str]]]:
-        """Global (``workspace_id IS NULL``) role names + deduped permissions.
+        workspace_ids: Sequence[int],
+    ) -> tuple[tuple[list[str], list[dict[str, str]]], dict[int, tuple[list[str], list[dict[str, str]]]]]:
+        """Global (``workspace_id IS NULL``) RBAC plus ``workspace_rbac_for_user``, in ONE statement.
 
-        Explicit joins rather than relationship traversal: this runs on the token
-        path, where an ORM lazy-load would raise under AsyncSession.
+        The token path's cache miss. Explicit joins rather than relationship
+        traversal: an ORM lazy-load would raise under AsyncSession.
         """
-        rows = await session.execute(
-            sa.select(models.Role.name, models.Permission.resource, models.Permission.action)
-            .select_from(user_roles)
-            .join(models.Role, user_roles.c.role_id == models.Role.id)
-            .outerjoin(role_permissions, role_permissions.c.role_id == models.Role.id)
-            .outerjoin(models.Permission, role_permissions.c.permission_id == models.Permission.id)
-            .where(user_roles.c.user_id == user_id, models.Role.workspace_id.is_(None))
-        )
-        return _collect_rbac(rows.all())
+        scope = models.Role.workspace_id.is_(None)
+        if workspace_ids:
+            scope = sa.or_(scope, models.Role.workspace_id.in_(list(workspace_ids)))
+        grouped = await self._grouped_rbac(session, user_id, scope)
+        return _collect_rbac(grouped.get(None, [])), {
+            ws_id: _collect_rbac(grouped.get(ws_id, [])) for ws_id in workspace_ids
+        }
 
     async def workspace_rbac_for_user(
         self,
@@ -801,15 +808,23 @@ class RoleRepository(BaseRepository[models.Role]):
         user_id: int,
         workspace_ids: Sequence[int],
     ) -> dict[int, tuple[list[str], list[dict[str, str]]]]:
-        """Same shape as ``global_rbac_for_user``, keyed by workspace id.
+        """Role names + deduped permissions, keyed by workspace id.
 
         Every requested workspace is present in the result (empty lists when the
         user holds no role there), so callers never need a ``.get`` default.
         """
-        result: dict[int, tuple[list[str], list[dict[str, str]]]] = {ws_id: ([], []) for ws_id in workspace_ids}
         if not workspace_ids:
-            return result
+            return {}
+        grouped = await self._grouped_rbac(session, user_id, models.Role.workspace_id.in_(list(workspace_ids)))
+        return {ws_id: _collect_rbac(grouped.get(ws_id, [])) for ws_id in workspace_ids}
 
+    @staticmethod
+    async def _grouped_rbac(
+        session: AsyncSession,
+        user_id: int,
+        scope: sa.ColumnElement[bool],
+    ) -> dict[int | None, list[tuple[str, str | None, str | None]]]:
+        """``(role_name, resource, action)`` rows of the user's roles in ``scope``, by role workspace."""
         rows = await session.execute(
             sa.select(
                 models.Role.workspace_id,
@@ -821,15 +836,12 @@ class RoleRepository(BaseRepository[models.Role]):
             .join(models.Role, user_roles.c.role_id == models.Role.id)
             .outerjoin(role_permissions, role_permissions.c.role_id == models.Role.id)
             .outerjoin(models.Permission, role_permissions.c.permission_id == models.Permission.id)
-            .where(user_roles.c.user_id == user_id, models.Role.workspace_id.in_(list(workspace_ids)))
+            .where(user_roles.c.user_id == user_id, scope)
         )
-
-        grouped: dict[int, list[tuple[str, str | None, str | None]]] = {}
+        grouped: dict[int | None, list[tuple[str, str | None, str | None]]] = {}
         for ws_id, role_name, resource, action in rows.all():
             grouped.setdefault(ws_id, []).append((role_name, resource, action))
-        for ws_id, ws_rows in grouped.items():
-            result[ws_id] = _collect_rbac(ws_rows)
-        return result
+        return grouped
 
 
 def _collect_rbac(

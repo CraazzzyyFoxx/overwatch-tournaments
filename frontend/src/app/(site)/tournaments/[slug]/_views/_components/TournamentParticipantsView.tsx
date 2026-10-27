@@ -746,7 +746,7 @@ function TournamentParticipantsView({ tournament }: Readonly<{ tournament: Tourn
               <SelectTrigger
                 aria-label={t("tournamentDetail.participantsPool.divisionFilterLabel")}
                 size="sm"
-                className="filter-sort w-[10.5rem] shadow-none focus:ring-0 focus:ring-offset-0"
+                className="w-[10.5rem]"
               >
                 <SelectValue />
               </SelectTrigger>

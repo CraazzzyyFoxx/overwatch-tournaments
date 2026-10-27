@@ -1,6 +1,10 @@
 package app
 
-import "github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/edge"
+import (
+	"time"
+
+	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/edge"
+)
 
 // NotificationRoutes is the personal inbox: a paginated read, the bulk
 // read-mark write and the delete. All AuthRequired — the audience is computed
@@ -59,9 +63,22 @@ var NotificationUserAdminRoutes = []edge.RouteSpec{
 // viewer already dismissed — every logged-in reader would keep seeing them.
 // stream.PublicRoutes documents the same choice for the same reason. Anonymous
 // visitors still reach it and get the global-audience rows.
+//
+// It is the busiest read on the site — the (site) layout fetches it during
+// SSR and FloatStack again on the client, on every page for every visitor —
+// so it carries announcementReadTimeout, not the 120s edge default, and its
+// anonymous answer rides the response cache (AnnouncementCacheableReads).
 var AnnouncementPublicRoutes = []edge.RouteSpec{
-	{Method: "GET", Pattern: "/api/v1/announcements/active", Queue: "rpc.app.active_announcements", Auth: edge.AuthOptional},
+	{Method: "GET", Pattern: "/api/v1/announcements/active", Queue: "rpc.app.active_announcements", Auth: edge.AuthOptional, Timeout: announcementReadTimeout},
 }
+
+// announcementReadTimeout bounds the banner read (one short query).
+// At the 120s default every call an app-service stall left unanswered pinned
+// one of the queue's 64 in-flight slots for two minutes after the page gave
+// up, which is how rpc.app.active_announcements sat at the cap and shed
+// (Sentry OWT-TOURNAMENTS-2A7). Same value and reason as stream's
+// publicReadTimeout.
+const announcementReadTimeout = 15 * time.Second
 
 // AnnouncementAdminRoutes is the operator CRUD. AuthRequired only; which
 // principal is actually needed depends on the row's audience (workspace grant

@@ -19,6 +19,7 @@ schemas = importlib.import_module("src.schemas")
 def _result(value):
     result = Mock()
     result.scalar_one_or_none.return_value = value
+    result.first.return_value = value
     result.unique.return_value = result
     result.scalars.return_value = SimpleNamespace(first=lambda: value, all=lambda: [] if value is None else [value])
     return result
@@ -103,6 +104,7 @@ class AdminEncounterOutboxTests(IsolatedAsyncioTestCase):
             tournament_id=1,
             scheduled_at=None,
             name="old",
+            best_of=3,
             status=admin_encounter_service.enums.EncounterStatus.OPEN,
             result_status=admin_encounter_service.enums.EncounterResultStatus.NONE,
         )

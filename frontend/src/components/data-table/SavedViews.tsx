@@ -1,6 +1,6 @@
 "use client";
 
-import { Bookmark, X } from "lucide-react";
+import { X } from "lucide-react";
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 
@@ -11,13 +11,7 @@ import {
   DialogHeader,
   DialogTitle
 } from "@/components/ui/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger
-} from "@/components/ui/dropdown-menu";
+import { DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
@@ -61,14 +55,14 @@ function applyView(view: SavedView, extra?: SavedViewsExtra) {
 }
 
 /**
- * Saved views as menu `items` plus the save `dialog`, for either host: the
- * toolbar's "Views" button or the phone menu's "Views" submenu. The dialog is
- * returned apart so the host renders it outside its menu: picking "Save
- * current view…" closes the menu, which would unmount a dialog inside it.
+ * Saved views as menu `items` plus the save `dialog`, for the table's "View"
+ * menu. The dialog is returned apart so the host renders it outside its menu:
+ * picking "Save current view…" closes the menu, which would unmount a dialog
+ * inside it.
  *
- * localStorage is client-only, so the host calls `reload` as its menu opens:
- * an event, never the server render, and it picks up a view saved in another
- * tab. Every reader of `views` sits behind that menu.
+ * localStorage is client-only, so the host calls `reload` as the views level
+ * opens: an event, never the server render, and it picks up a view saved in
+ * another tab. Every reader of `views` sits behind that level.
  */
 export function useSavedViews(storageKey: string, extra?: SavedViewsExtra) {
   const t = useTranslations("kitTable.dataTableExtra");
@@ -167,33 +161,5 @@ function SaveViewDialog({ onSave, onClose }: Readonly<{ onSave: (name: string) =
         </Button>
       </DialogContent>
     </Dialog>
-  );
-}
-
-export function AdminSavedViews({
-  storageKey,
-  extra
-}: {
-  storageKey: string;
-  extra?: SavedViewsExtra;
-}) {
-  const t = useTranslations("kitTable.dataTableExtra");
-  const savedViews = useSavedViews(storageKey, extra);
-
-  return (
-    <>
-      <DropdownMenu onOpenChange={(open) => (open ? savedViews.reload() : undefined)}>
-        <DropdownMenuTrigger asChild>
-          <Button variant="outline" size="sm">
-            <Bookmark aria-hidden />
-            {t("views")}
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-56">
-          {savedViews.items}
-        </DropdownMenuContent>
-      </DropdownMenu>
-      {savedViews.dialog}
-    </>
   );
 }

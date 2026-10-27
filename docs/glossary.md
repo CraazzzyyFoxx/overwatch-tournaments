@@ -108,4 +108,4 @@ player-facing subset see [`../frontend/src/i18n/GLOSSARY.md`](../frontend/src/i1
 | **Outbox** | `event_outbox`. A state change writes its domain event in the same transaction as the change; a sweeper drains the table and publishes, so an event can never be lost or emitted for a rolled-back write. |
 | **Realtime topic** | A named channel a client can subscribe to over WebSocket — `tournament:{id}:bracket`, `encounter:{id}:map-veto`, and so on. Access is checked per topic. |
 | **Replay** | Redelivery of missed realtime events after a reconnect, from `realtime.workspace_event`. Non-durable topics have no event row and therefore no replay. |
-| **Response cache** | The gateway's in-process cache of anonymous public reads, 30 s TTL, invalidated by the workers over Redis pub/sub. |
+| **Response cache** | The gateway's in-process cache of anonymous public reads, 30 s TTL, invalidated by the workers over Redis pub/sub. Live draft reads are scoped to their draft session instead: 5 s TTL, dropped by any frame on the session's board or chat topic. |

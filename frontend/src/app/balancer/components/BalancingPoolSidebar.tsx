@@ -375,7 +375,7 @@ export const BalancingPoolSidebar = forwardRef<BalancingPoolSidebarHandle, Balan
               <SelectTrigger
                 size="sm"
                 aria-label={t("sidebar.sortLabel")}
-                className="w-[10.5rem] shrink-0 rounded-lg border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] text-[color:var(--aqt-fg)]"
+                className="w-[10.5rem] shrink-0"
               >
                 <SelectValue />
               </SelectTrigger>

@@ -7,9 +7,11 @@ already holds it, and the real Alembic process applies ``regstat01``. Only local
 
 from __future__ import annotations
 
+import pytest
 import sqlalchemy as sa
 
 from shared.registration_statuses import BUILTIN_STATUS_META
+from shared.testing.db import MIGRATION_PROOF_SKIP, migration_proofs_enabled
 from shared.testing.stats_parity import legacy_database, upgrade_database
 
 
@@ -23,6 +25,8 @@ def _rows(url: str, statement: str) -> list:
 
 
 def test_upgrade_seeds_every_missing_builtin_once_and_keeps_existing_rows():
+    if not migration_proofs_enabled():
+        pytest.skip(MIGRATION_PROOF_SKIP)
     with legacy_database() as url:
         result = upgrade_database(url, "defgrid01")
         assert result.returncode == 0, result.stdout + result.stderr

@@ -1,0 +1,38 @@
+/*
+ * The organizer page's feature bento (`MoreFeatures`): picking a tile swaps it
+ * into the large slot inside a view transition, so every tile morphs from its
+ * old box to its new one. Scoped to a page that renders the bento; the
+ * component never starts one under reduced motion.
+ */
+
+/* Only the tiles are named: the page itself is never captured, so it stays clickable through a swap. */
+:root:has([data-gw-more]) {
+  view-transition-name: none;
+}
+
+:root:has([data-gw-more])::view-transition {
+  pointer-events: none;
+}
+
+/* A tile's box grows or shrinks and clips what it holds, like a card opening rather than a picture stretching. */
+:root:has([data-gw-more])::view-transition-group(*) {
+  overflow: clip;
+  border-radius: var(--aqt-radius);
+  animation-duration: 350ms;
+  animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+:root:has([data-gw-more])::view-transition-old(*),
+:root:has([data-gw-more])::view-transition-new(*) {
+  block-size: 100%;
+  object-fit: none;
+  object-position: left top;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root:has([data-gw-more])::view-transition-group(*),
+  :root:has([data-gw-more])::view-transition-old(*),
+  :root:has([data-gw-more])::view-transition-new(*) {
+    animation: none;
+  }
+}

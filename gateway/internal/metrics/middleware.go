@@ -45,6 +45,10 @@ func (w *statusWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
 // the authenticated user (resolved from the local JWT, no RPC) for each request.
 // It must wrap the ServeMux directly so that, after ServeHTTP, r.Pattern holds
 // the matched route template used as a low-cardinality label.
+//
+// It sits inside httplog.Middleware, which already parsed the caller and stored
+// it in the context (auth.WithUser); authn is only the fallback when nothing
+// outside did, so a JWT is verified once per request, not once per middleware.
 func (m *Metrics) Middleware(next http.Handler, authn *auth.Authenticator, rec ActiveRecorder) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
@@ -52,16 +56,32 @@ func (m *Metrics) Middleware(next http.Handler, authn *auth.Authenticator, rec A
 
 		next.ServeHTTP(sw, r)
 
-		route := routeLabel(r.Pattern)
-		m.requests.WithLabelValues(route, r.Method, strconv.Itoa(sw.status)).Inc()
-		m.duration.WithLabelValues(route, r.Method).Observe(time.Since(start).Seconds())
+		route, method := routeLabel(r.Pattern), methodLabel(r.Method)
+		m.requests.WithLabelValues(route, method, strconv.Itoa(sw.status)).Inc()
+		m.duration.WithLabelValues(route, method).Observe(time.Since(start).Seconds())
 
-		if rec != nil && authn != nil {
-			if u := authn.UserFromRequest(r); u != nil {
+		if rec != nil {
+			u, resolved := auth.UserFromContext(r.Context())
+			if !resolved && authn != nil {
+				u = authn.UserFromRequest(r)
+			}
+			if u != nil {
 				rec.Record(u.ID)
 			}
 		}
 	})
+}
+
+// methodLabel bounds the method label to the standard methods. net/http accepts
+// any token as a method and the catch-all route answers it, so the raw value
+// would mint a counter + histogram child per invented method, never deleted.
+func methodLabel(method string) string {
+	switch method {
+	case http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut, http.MethodPatch,
+		http.MethodDelete, http.MethodConnect, http.MethodOptions, http.MethodTrace:
+		return method
+	}
+	return "OTHER"
 }
 
 // routeLabel turns a ServeMux pattern ("GET /api/v1/heroes/{id}" or "/path")

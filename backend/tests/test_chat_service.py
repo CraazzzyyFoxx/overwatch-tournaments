@@ -112,14 +112,14 @@ class _Mutes:
         return True
 
 
-class _AuthUsers:
-    """Avatars live on the account, so the service reads them per page."""
+class _Players:
+    """Avatars live on the account's player, so the service reads them per page."""
 
     def __init__(self, avatars: dict[int, str | None] | None = None) -> None:
         self.avatars = avatars or {}
         self.asked: list[set[int]] = []
 
-    async def avatar_urls(self, _session: Any, auth_user_ids: Any) -> dict[int, str | None]:
+    async def avatar_urls_by_auth_user(self, _session: Any, auth_user_ids: Any) -> dict[int, str | None]:
         ids = set(auth_user_ids)
         self.asked.append(ids)
         return {user_id: self.avatars[user_id] for user_id in ids if user_id in self.avatars}
@@ -129,7 +129,7 @@ class _Access:
     def __init__(self, membership: ChatMembership | None) -> None:
         self.membership = membership
 
-    async def resolve(self, _session: Any, _auth_user: Any, _room: ChatRoom) -> ChatMembership:
+    async def resolve(self, _session: Any, _auth_user: Any, _room: ChatRoom, *, for_update: bool) -> ChatMembership:
         if self.membership is None:
             raise HTTPException(status_code=403, detail="nope")
         return self.membership
@@ -165,7 +165,7 @@ class ChatServiceTest(IsolatedAsyncioTestCase):
         messages: _Messages | None = None,
         settings: _Settings | None = None,
         mutes: _Mutes | None = None,
-        auth_users: _AuthUsers | None = None,
+        players: _Players | None = None,
     ) -> tuple[ChatService, _Messages, _Settings, _Mutes]:
         messages = messages or _Messages()
         settings = settings if settings is not None else _Settings()
@@ -175,7 +175,7 @@ class ChatServiceTest(IsolatedAsyncioTestCase):
             messages=messages,
             settings=settings,
             mutes=mutes,
-            auth_users=auth_users or _AuthUsers(),
+            players=players or _Players(),
         )
         return service, messages, settings, mutes
 
@@ -264,9 +264,9 @@ class ChatServiceTest(IsolatedAsyncioTestCase):
         said, and a live subscriber gets the face in the payload rather than a
         blank circle until the next full read.
         """
-        avatars = _AuthUsers({CAPTAIN.id: "https://cdn/avatars/7.png"})
+        avatars = _Players({CAPTAIN.id: "https://cdn/avatars/7.png"})
         rows = [_row(1, auth_user_id=CAPTAIN.id), _row(2, auth_user_id=VIEWER.id)]
-        service, *_ = self._service(_Access(CAPTAIN_MEMBER), messages=_Messages(rows), auth_users=avatars)
+        service, *_ = self._service(_Access(CAPTAIN_MEMBER), messages=_Messages(rows), players=avatars)
 
         envelope = await service.envelope(_Session(), CAPTAIN, ChatRoom.draft(3))
         self.assertEqual(envelope.messages[0].author_avatar_url, "https://cdn/avatars/7.png")

@@ -17,6 +17,13 @@ groups:
       - record: worker:processing_p95_5m
         expr: histogram_quantile(0.95, sum by (job, instance, queue, handler, le) (rate(worker_processing_duration_seconds_bucket[5m])))
 
+      # Gateway RPC handling in the worker (shared.rpc.deadline), permit wait included.
+      - record: rpc:duration_p95_5m
+        expr: histogram_quantile(0.95, sum by (job, queue, le) (rate(rpc_duration_seconds_bucket[5m])))
+
+      - record: rpc:requests:rate5m
+        expr: sum by (job, queue) (rate(rpc_duration_seconds_count[5m]))
+
       - record: rabbitmq:queue_depth
         expr: sum by (queue) (rabbitmq_queue_messages{queue!~".*\\.dlq"})
 
@@ -67,3 +74,76 @@ groups:
         annotations:
           summary: "Redis cache hit ratio is low"
           description: "Redis keyspace hit ratio stayed below 50% for 10 minutes while command throughput remained non-trivial."
+
+      - alert: RpcSubjectSlow
+        expr: rpc:duration_p95_5m > 5 and rpc:requests:rate5m > 0.05
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "RPC {{ $labels.queue }} p95 is above 5 s"
+          description: "{{ $labels.job }} answers {{ $labels.queue }} with a p95 of {{ $value | humanizeDuration }} (permit wait included) for 10 minutes."
+
+      - alert: RpcDeadlineCancellations
+        expr: sum by (job, queue) (increase(rpc_deadline_cancelled_total[10m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "RPC handlers of {{ $labels.queue }} are cancelled at their deadline"
+          description: "{{ $labels.job }} cancelled {{ $value }} running {{ $labels.queue }} handlers in 10 minutes: clients got a 504 and the work was rolled back."
+
+      - alert: RpcStaleDrops
+        expr: sum by (job, queue) (increase(rpc_stale_dropped_total[10m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "RPC requests to {{ $labels.queue }} expire before a handler is free"
+          description: "{{ $labels.job }} dropped {{ $value }} {{ $labels.queue }} requests in 10 minutes whose gateway deadline passed while they waited: the process is saturated."
+
+      # Every drain reports the table-wide oldest pending/failed row (backing-off rows included), so max() over
+      # processes is the backlog's age.
+      - alert: OutboxBacklogOld
+        expr: max(outbox_oldest_pending_age_seconds) > 300
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Outbox events wait more than 5 minutes to be published"
+          description: "The oldest pending or failed event_outbox row is {{ $value | humanizeDuration }} old: publishes are failing or drains are falling behind."
+
+      - alert: OutboxDeadEvents
+        expr: sum by (job) (increase(outbox_dead_total[1h])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "Outbox events gave up after 20 failed publishes"
+          description: "{{ $labels.job }} parked {{ $value }} event_outbox rows as dead in the last hour; they are kept (status='dead') and never retried."
+
+      - alert: SchedulerJobsSkipped
+        expr: sum by (job, job_id, reason) (increase(scheduler_job_skipped_total[10m])) > 10
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Scheduled job {{ $labels.job_id }} keeps skipping runs ({{ $labels.reason }})"
+          description: "{{ $labels.job }} skipped {{ $labels.job_id }} {{ $value }} times in 10 minutes: its runs outlast their interval or the event loop is starved."
+
+      - alert: EventLoopLagHigh
+        expr: max_over_time(event_loop_lag_seconds[2m]) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.service }} event loop lags more than 0.5 s"
+          description: "A 0.5 s sleep on {{ $labels.service }}'s event loop woke {{ $value | humanizeDuration }} late: CPU-bound or blocking work is delaying every handler."
+
+      - alert: DbPoolNearMax
+        expr: db_pool_checked_out / clamp_min(db_pool_size + db_pool_max_overflow, 1) > 0.9
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.service }} DB pool is above 90% checked out"
+          description: "{{ $labels.service }} holds {{ $value | humanizePercentage }} of pool_size + max_overflow; further checkouts queue up to pool_timeout."

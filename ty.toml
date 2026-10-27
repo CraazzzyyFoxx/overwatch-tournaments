@@ -2,6 +2,8 @@
 # `shared` is an editable install via a setuptools finder hook that ty
 # does not execute, so `backend` must be a first-party root — extra-paths
 # alone do not resolve `shared.*`.
+# Editor-only: with every service as a root, each `src` resolves to the first
+# one listed. The CI gate is backend/ty-gate.toml (backend/scripts/typecheck.sh).
 [environment]
 python = "backend/.venv"
 python-version = "3.14"

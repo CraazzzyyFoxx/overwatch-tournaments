@@ -25,3 +25,14 @@ var PublicCacheableReads = map[string]respcache.Rule{
 	// stats.PublicCacheableReads). TTLOnly: there is no per-user realtime signal.
 	"/api/v1/users/{name}": {Extract: respcache.TTLOnly()},
 }
+
+// AnnouncementCacheableReads opts the site banner (AnnouncementPublicRoutes)
+// into the same cache; split from PublicCacheableReads so each table is
+// checked against its own route table. The anonymous answer is the global set,
+// identical for every visitor (app-service active_announcements reads no
+// identity and nothing host-dependent for it). TTLOnly: publishing or
+// retiring an announcement emits no realtime signal. NO AuthedRead: a
+// signed-in body drops the rows that viewer already dismissed.
+var AnnouncementCacheableReads = map[string]respcache.Rule{
+	"/api/v1/announcements/active": {Extract: respcache.TTLOnly()},
+}

@@ -92,6 +92,13 @@ def _dump(obj: Any) -> Any:
     return obj.model_dump(mode="json")
 
 
+#: What a tournament / team write replies with: the CRUD serializers below and the
+#: image upload/delete subjects (``src/rpc/{tournament,team}_binary.py``) share
+#: these, so the admin form reads every write's reply the same way.
+TOURNAMENT_ENTITIES = ["stages", "roster_shape", "division_grid_version", "rules"]
+TEAM_ENTITIES = ["tournament", "players", "players.user", "captain"]
+
+
 class AdminRegistryService:
     """Session-taking hooks the ``REGISTRY`` table binds into its EntityConfigs."""
 
@@ -153,13 +160,10 @@ class AdminRegistryService:
         # `tournament_read`, not `to_pydantic`: only it resolves the
         # `challonge_source`-derived ids/slugs, without which a just-linked bracket
         # reads back as unlinked.
-        entities = ["stages", "roster_shape", "division_grid_version", "rules"]
-        return _dump(await self.tournament_flows.tournament_read(session, m, entities))
+        return _dump(await self.tournament_flows.tournament_read(session, m, TOURNAMENT_ENTITIES))
 
     async def _ser_team(self, session: AsyncSession, m: Any) -> Any:
-        return _dump(
-            await self.team_flows.to_pydantic(session, m, ["tournament", "players", "players.user", "captain"])
-        )
+        return _dump(await self.team_flows.to_pydantic(session, m, TEAM_ENTITIES))
 
     async def _ser_player(self, session: AsyncSession, m: Any) -> Any:
         # to_pydantic_player requires the effective division grid to resolve

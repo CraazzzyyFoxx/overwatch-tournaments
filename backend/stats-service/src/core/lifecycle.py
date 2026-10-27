@@ -6,13 +6,13 @@ so neither entry point can drift on the order of startup or shutdown.
 
 from __future__ import annotations
 
-import asyncio
 from collections.abc import Awaitable, Iterable
 from typing import Any
 
 from faststream import FastStream
 
 from shared.observability import (
+    Readiness,
     make_rabbit_broker,
     setup_logging,
     setup_sentry,
@@ -26,45 +26,6 @@ from src.core import config, db
 from src.core.broker import set_worker_broker
 from src.core.caching import configure_cache
 from src.core.clients import realtime_redis, s3_client
-
-#: How long the container healthcheck waits for the broker before calling the process unready.
-_PING_SECONDS = 2.0
-
-
-class Readiness:
-    """\"Serving\" for ``GET /health``: started, the broker connection is up and every consumer is running.
-
-    The probe answers on the metrics listener's thread, so the broker is asked on the process's own event loop.
-    """
-
-    def __init__(self, broker: Any) -> None:
-        self._broker = broker
-        self._loop: asyncio.AbstractEventLoop | None = None
-        self._serving = False
-
-    def bind(self) -> None:
-        """Remember the running loop (call from a startup hook)."""
-        self._loop = asyncio.get_running_loop()
-
-    def serving(self, value: bool) -> None:
-        self._serving = value
-
-    def __call__(self) -> tuple[bool, str]:
-        loop = self._loop
-        if loop is None or not self._serving:
-            return False, "not serving"
-        try:
-            return asyncio.run_coroutine_threadsafe(self._check(), loop).result(timeout=_PING_SECONDS + 1)
-        except Exception as exc:
-            return False, f"probe failed: {exc!r}"
-
-    async def _check(self) -> tuple[bool, str]:
-        if not await self._broker.ping(_PING_SECONDS):
-            return False, "broker unreachable"
-        stopped = [str(getattr(sub, "queue", sub)) for sub in self._broker.subscribers if not sub.running]
-        if stopped:
-            return False, f"consumers not running: {', '.join(stopped)}"
-        return True, "ok"
 
 
 def create_process(service_name: str, *, prefetch_count: int) -> tuple[Any, Any, FastStream]:

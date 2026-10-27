@@ -4,12 +4,15 @@
 //
 // Both `cover_image_url` and `logo_url` are optional uploads, and an organizer
 // who never uploaded either is the common case — so "no image" is a rendering
-// contract, not an edge case. A grey `<img>` with an empty `src` (which every
-// browser resolves against the current page and requests) and a decorative
-// placeholder logo are exactly what this pins against.
+// contract, not an edge case. Without a cover the card draws the map last
+// played in the tournament, before anything is played a still of one of its
+// game's maps, and only a game with none gets the drawn name. A grey
+// `<img>` with an empty `src` (which every browser resolves against the current
+// page and requests) and a decorative placeholder logo are exactly what this
+// pins against.
 import { NextIntlClientProvider } from "next-intl";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import en from "@/i18n/messages/en.json";
 import type { Tournament } from "@/types/tournament.types";
@@ -45,8 +48,33 @@ vi.mock("next/image", () => ({
     // eslint-disable-next-line @next/next/no-img-element -- this IS the next/image stand-in
   }) => <img {...props} alt={props.alt ?? ""} />
 }));
+// What a card without a cover is drawn from: the tournament's latest played
+// series (its one `useQuery`), and its game's map catalog.
+const latest = vi.hoisted(() => ({ data: undefined as unknown, isError: false }));
+vi.mock("@tanstack/react-query", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@tanstack/react-query")>()),
+  useQuery: () => latest
+}));
+const catalog = vi.hoisted(() => ({
+  data: undefined as unknown[] | undefined,
+  isError: false
+}));
+vi.mock("@/hooks/useCatalogEntities", () => ({
+  useCatalogEntities: () => catalog
+}));
 
 import TournamentCard from "./TournamentCard";
+
+const MAP_STILL = "https://cdn.example/maps/ilios.jpg";
+const PLAYED_MAP = "https://cdn.example/maps/samoa.jpg";
+
+beforeEach(() => {
+  // Nothing played yet; the game has one map still.
+  latest.data = null;
+  latest.isError = false;
+  catalog.data = [{ id: 3, name: "Ilios", slug: "ilios", image_path: MAP_STILL, parent: { slug: "control" } }];
+  catalog.isError = false;
+});
 
 /** Every field spelled out: test files are outside `tsconfig.json`, so a cast
  *  would type-check green over a fixture that is missing what the card reads. */
@@ -101,11 +129,31 @@ function render(over: Partial<Tournament> = {}, games?: Map<string, DisciplineDe
 }
 
 describe("TournamentCard", () => {
-  it("renders the placeholder instead of an image when there is no cover", () => {
+  it("draws the map last played in it when there is no cover", () => {
+    latest.data = { matches: [{ id: 9, map_index: 3, map: { id: 7, slug: "samoa", image_path: PLAYED_MAP } }] };
     const host = render();
 
-    expect(host.querySelector("img[data-cover]")).toBeNull();
-    expect(host.querySelector("[data-cover-fallback]")).toBeTruthy();
+    expect(host.querySelector("img[data-cover]")?.getAttribute("src")).toBe(PLAYED_MAP);
+    expect(host.querySelector("[data-cover-fallback]")).toBeNull();
+  });
+
+  it("draws a still of one of its game's maps before anything is played in it", () => {
+    expect(render().querySelector("img[data-cover]")?.getAttribute("src")).toBe(MAP_STILL);
+  });
+
+  it("keeps the frame empty while it reads, and falls through a read that fails", () => {
+    // An empty frame for a moment, rather than a picture flashing in and then
+    // swapping for the played map.
+    latest.data = undefined;
+    const loading = render();
+    expect(loading.querySelector("img[data-cover]")).toBeNull();
+    expect(loading.querySelector("[data-cover-fallback]")).toBeNull();
+
+    latest.isError = true;
+    expect(render().querySelector("img[data-cover]")?.getAttribute("src")).toBe(MAP_STILL);
+
+    catalog.isError = true;
+    expect(render().querySelector("[data-cover-fallback]")).toBeTruthy();
   });
 
   it("renders the uploaded cover when there is one", () => {
@@ -118,9 +166,10 @@ describe("TournamentCard", () => {
     expect(host.querySelector("[data-cover-fallback]")).toBeNull();
   });
 
-  it("draws the tournament's name as its cover when there is no image", () => {
-    // The fallback is a second kind of cover, not a placeholder — and stays
+  it("draws the tournament's name as its cover when its game has no map stills", () => {
+    // The fallback is a last kind of cover, not a placeholder — and stays
     // `aria-hidden`, because the `<h3>` below already announces the name.
+    catalog.data = [];
     const fallback = render().querySelector("[data-cover-fallback]");
 
     expect(fallback?.textContent).toContain("Spring Cup");

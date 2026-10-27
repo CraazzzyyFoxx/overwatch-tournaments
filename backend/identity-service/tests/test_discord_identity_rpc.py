@@ -51,15 +51,14 @@ class _FakeUsers:
 
 def _reply(data: dict, *, connection: object | None, user: object | None, monkeypatch: pytest.MonkeyPatch) -> dict:
     connections = _FakeConnections(connection)
+
+    async def resolve(session, user_id: int, load_user, **_state):
+        built_user = await load_user(session, user_id)
+        return None if built_user is None else (await _payload(built_user), built_user.is_active)
+
     monkeypatch.setattr(token_validation, "connections", connections)
     monkeypatch.setattr(token_validation, "users", _FakeUsers(user))
-    monkeypatch.setattr(
-        token_validation,
-        "payloads",
-        SimpleNamespace(
-            build=lambda _session, built_user: _payload(built_user),
-        ),
-    )
+    monkeypatch.setattr(token_validation, "payloads", SimpleNamespace(resolve=resolve))
     monkeypatch.setattr(db, "async_session_maker", _FakeSessionMaker(object()))
     handler = _handler(tokens_rpc, "rpc.identity.discord_identity")
     return asyncio.run(handler(data, None))

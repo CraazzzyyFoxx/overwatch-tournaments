@@ -1,0 +1,48 @@
+/* The organizer hero's steps as a compact path under the preview window: a
+   glowing node per step, the line between them. Drawn in its final state: the
+   hero is on screen when the page hydrates (DESIGN §10). */
+.steps {
+  display: grid;
+  align-content: start;
+}
+
+.step {
+  position: relative;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  column-gap: 12px;
+  row-gap: 2px;
+  padding-bottom: 16px;
+}
+
+.step:last-child {
+  padding-bottom: 0;
+}
+
+.node {
+  grid-row: span 2;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--aqt-teal);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--aqt-teal) 14%, var(--aqt-bg-2));
+  color: var(--aqt-teal);
+  font: 600 var(--text-label) / 1 var(--aqt-data);
+  font-variant-numeric: tabular-nums;
+  box-shadow:
+    0 0 0 4px color-mix(in srgb, var(--aqt-teal) 7%, transparent),
+    0 0 18px -4px color-mix(in srgb, var(--aqt-teal) 60%, transparent);
+}
+
+/* The line to the next step, from under this node to just above the next. */
+.step:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  top: 33px;
+  bottom: 5px;
+  left: 13.5px;
+  width: 1px;
+  background: linear-gradient(var(--aqt-teal), color-mix(in srgb, var(--aqt-teal) 30%, transparent));
+}

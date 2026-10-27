@@ -6,6 +6,7 @@ from shared import models
 from shared.core import http_status as status
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.repository import TournamentLinkRepository
+from shared.services.realtime import Resource, Scope, emit
 from src import schemas
 
 _CONFLICT_DETAIL = "Tournament link with this kind and url already exists for this tournament."
@@ -87,6 +88,7 @@ class TournamentLinkService:
                 is_active=data.is_active,
             ),
         )
+        await _invalidate(session, link.tournament_id)
         await session.commit()
         await session.refresh(link)
         return link
@@ -113,7 +115,7 @@ class TournamentLinkService:
 
         for field, value in update_data.items():
             setattr(link, field, value)
-
+        await _invalidate(session, link.tournament_id)
         await session.commit()
         await session.refresh(link)
         return link
@@ -121,7 +123,15 @@ class TournamentLinkService:
     async def deactivate_link(self, session: AsyncSession, link_id: int) -> None:
         link = await self.get_link(session, link_id)
         link.is_active = False
+        await _invalidate(session, link.tournament_id)
         await session.commit()
+
+
+async def _invalidate(session: AsyncSession, tournament_id: int) -> None:
+    """``tournament.detail``: the public overview carries the active links and is
+    cached under that generation, so a link write without this serves stale
+    links and never tells an open page to refetch."""
+    await emit(session, scope=Scope.tournament(tournament_id), invalidates=[Resource.TOURNAMENT_DETAIL])
 
 
 tournament_link_service = TournamentLinkService()

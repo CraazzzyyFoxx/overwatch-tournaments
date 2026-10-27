@@ -53,6 +53,14 @@ class ChatAccess(Protocol):
     tournament, a missing referent). Returning a spectator membership means
     "allowed to watch this room" — whether watching includes reading the chat
     is the room's setting, decided by ``ChatService``.
+
+    ``for_update`` is the service saying which side of the room it is on: True
+    for a write (a post, a delete, moderation), where a resolver that owns a row
+    lock for its referent takes it so one account's writes queue (the post rate
+    limit counts, then inserts); False for the history read, which every
+    spectator polls and which must never queue behind a writer.
     """
 
-    async def resolve(self, session: Any, auth_user: Any | None, room: ChatRoom) -> ChatMembership: ...
+    async def resolve(
+        self, session: Any, auth_user: Any | None, room: ChatRoom, *, for_update: bool
+    ) -> ChatMembership: ...

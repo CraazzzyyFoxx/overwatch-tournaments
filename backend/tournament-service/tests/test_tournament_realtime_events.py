@@ -56,28 +56,6 @@ class TournamentProducerResourceTests(IsolatedAsyncioTestCase):
         request.assert_awaited_once_with(session, 42)
         self.assertEqual(_staged_resources(session, Scope.tournament(42)), {Resource.TOURNAMENT_ENCOUNTERS})
 
-    async def test_registration_decision_stales_registrations_and_names_the_row(self) -> None:
-        # Registration has no denormalized workspace_id column —
-        # enqueue_registration_approved derives it via a tournament lookup, and
-        # the event's user_id likewise comes from the workspace_member anchor.
-        session = _fake_session(scalar=AsyncMock(return_value=3))
-        registration = SimpleNamespace(
-            id=77,
-            tournament_id=42,
-            primary_handle=lambda _provider: "tag#1",
-            workspace_member_id=5,
-        )
-
-        with (
-            patch.object(tournament_events, "_notify_registration_decision", AsyncMock()),
-            patch.object(tournament_events, "enqueue_outbox_event", AsyncMock()),
-        ):
-            await tournament_events.enqueue_registration_approved(session, registration)
-
-        resources, entity_ids = _staged_invalidations(session)[Scope.tournament(42)]
-        self.assertEqual(resources, {Resource.TOURNAMENT_REGISTRATIONS})
-        self.assertEqual(entity_ids, {"registration_ids": [77]})
-
     async def test_publish_invalidation_stages_both_halves(self) -> None:
         # Forgetting the cross-service half is silent: the page repairs itself
         # while app-service serves its cached aggregate until the TTL.

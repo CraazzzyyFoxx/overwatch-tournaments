@@ -211,7 +211,7 @@ class TournamentSummaryRpcTests(IsolatedAsyncioTestCase):
             "data": {
                 "id": self.tournament_id,
                 "name": self.tournament_name,
-                "status": "registration",
+                "status": "announcement",
                 "workspace_id": self.workspace_id,
             },
         }

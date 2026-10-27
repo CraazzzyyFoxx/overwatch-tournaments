@@ -214,21 +214,25 @@ def test_find_or_create_oauth_user_reuses_existing_user_by_provider_user_id() ->
 def test_link_player_if_unowned_sets_link_when_unowned() -> None:
     player = SimpleNamespace(id=1, auth_user_id=None)
     auth_user = SimpleNamespace(id=99)
+    session = _FakeSession([])
 
-    linked = OAuthAccountService._link_player_if_unowned(player, auth_user)
+    linked = asyncio.run(oauth_accounts._link_player_if_unowned(session, player, auth_user))
 
     assert linked is True
     assert player.auth_user_id == 99
+    assert session.flush_calls == 1
 
 
 def test_link_player_if_unowned_is_idempotent_for_same_owner() -> None:
     player = SimpleNamespace(id=1, auth_user_id=99)
     auth_user = SimpleNamespace(id=99)
+    session = _FakeSession([])
 
-    linked = OAuthAccountService._link_player_if_unowned(player, auth_user)
+    linked = asyncio.run(oauth_accounts._link_player_if_unowned(session, player, auth_user))
 
     assert linked is False
     assert player.auth_user_id == 99
+    assert session.flush_calls == 0
 
 
 def test_link_player_if_unowned_never_overwrites_a_different_owner() -> None:
@@ -236,11 +240,13 @@ def test_link_player_if_unowned_never_overwrites_a_different_owner() -> None:
     different auth user is left untouched — never silently reassigned."""
     player = SimpleNamespace(id=1, auth_user_id=7)
     auth_user = SimpleNamespace(id=99)
+    session = _FakeSession([])
 
-    linked = OAuthAccountService._link_player_if_unowned(player, auth_user)
+    linked = asyncio.run(oauth_accounts._link_player_if_unowned(session, player, auth_user))
 
     assert linked is False
     assert player.auth_user_id == 7
+    assert session.flush_calls == 0
 
 
 def test_find_or_create_oauth_user_provisions_own_player_when_matched_player_is_foreign_owned() -> None:

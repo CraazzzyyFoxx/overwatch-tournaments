@@ -1,5 +1,6 @@
 """The organizer dashboard (real-DB integration): card set and phases, the wrap-up window and its ``done``
-rule, the timeline's overdue rule, issue severities, backlog invariants and permission masking::
+rule, the timeline's overdue rule, issue severities, backlog invariants, card readiness against the checklist,
+the statement budget and permission masking::
 
     uv run pytest tournament-service/tests/test_admin_dashboard.py -v
 
@@ -16,16 +17,28 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import sqlalchemy as sa
+from sqlalchemy import event as sa_event
 
 from shared.core import enums
 from shared.models.achievements import AchievementRule, EvaluationRun
+from shared.models.catalog.role import CatalogRole, RoleDimension
 from shared.models.identity.social import SocialAccount
 from shared.models.identity.user import User
-from shared.models.registration.registration import Registration
+from shared.models.registration.registration import Registration, RegistrationForm, RegistrationRole
 from shared.models.tenancy.workspace import Workspace, WorkspaceMember
-from shared.models.tournament import Team, Tournament, TournamentPhaseSchedule, TournamentRecalculationState
+from shared.models.tournament import (
+    BracketEncounter,
+    Stage,
+    StageItem,
+    StageItemInput,
+    Team,
+    Tournament,
+    TournamentPhaseSchedule,
+    TournamentRecalculationState,
+)
 from src.schemas import AdminDashboard
 from src.services.dashboard.overview import DashboardPermissions, overview
+from src.services.dashboard.readiness import readiness
 from tests.encounter_seed import seed_encounter, seed_scoring_rule
 
 TS = enums.TournamentStatus
@@ -325,6 +338,255 @@ def test_users_without_identities_count_only_the_workspace_roster(db_session) ->
     dashboard, _ctx, _now = _run(db_session, seed)
 
     assert dashboard.backlog.users_without_identities == 1
+
+
+def test_backlog_totals_count_every_row_past_the_twenty_shown(db_session) -> None:
+    async def seed(session: Any, workspace_id: int, now: datetime) -> dict[str, Any]:
+        rule_id = await seed_scoring_rule(session, workspace_id)
+        archived = []
+        for days in range(25):
+            tournament = await _tournament(session, workspace_id, TS.ARCHIVED, start_date=now - timedelta(days=days))
+            session.add(Team(tournament_id=tournament.id, name="Empty", balancer_name="empty"))
+            archived.append(tournament)
+        # Every extra lands on a tournament past the 20 rows shown: only the totals can see it.
+        session.add(Team(tournament_id=archived[-1].id, name="Empty too", balancer_name="empty too"))
+        await _duel(session, archived[-2], rule_id)
+        stage = Stage(
+            tournament_id=archived[-3].id,
+            name="Groups",
+            stage_type=enums.StageType.ROUND_ROBIN,
+            scoring_rule_id=rule_id,
+        )
+        session.add(stage)
+        await session.flush()
+        item = StageItem(stage_id=stage.id, name="Bracket", type=enums.StageItemType.GROUP)
+        session.add(item)
+        await session.flush()
+        session.add_all(StageItemInput(stage_item_id=item.id, slot=slot) for slot in (1, 2, 3))
+        # A card: its issues are the work queue's, never the backlog's.
+        card = await _tournament(session, workspace_id, TS.REGISTRATION)
+        session.add(Team(tournament_id=card.id, name="Card", balancer_name="card"))
+        await session.flush()
+        return {"archived": [tournament.id for tournament in archived]}
+
+    dashboard, ids, _now = _run(db_session, seed)
+
+    backlog = dashboard.backlog
+    assert [row.tournament_id for row in backlog.rows] == ids["archived"][:20]
+    assert (
+        backlog.tournaments_total,
+        backlog.teams_without_players,
+        backlog.encounters_missing_logs,
+        backlog.stage_slots_empty,
+        backlog.tournaments_without_stages,
+    ) == (25, 26, 1, 3, 24)
+
+
+# --- card readiness + statement budget ----------------------------------------------
+
+
+def test_card_readiness_is_the_checklist_of_its_tournament(db_session) -> None:
+    """A card's readiness is assembled from the dashboard's own rows; it must still be exactly the checklist of its
+    tournament under the same grants. Two cards with different data: a subquery correlated on the wrong tournament
+    shows up as one card carrying the other's counts."""
+    now = datetime.now(UTC)
+    grants = (
+        EVERYTHING,
+        DashboardPermissions(False, True, False, False, False),
+        DashboardPermissions(True, False, True, False, True),
+    )
+
+    async def go() -> tuple[list[tuple[Any, Any]], dict[str, int]]:
+        workspace_id = await _workspace(db_session)
+        try:
+            rule_id = await seed_scoring_rule(db_session, workspace_id)
+            registration = await _tournament(
+                db_session,
+                workspace_id,
+                TS.REGISTRATION,
+                schedule=((TS.REGISTRATION, now - timedelta(days=1), now + timedelta(days=3)),),
+            )
+            live = await _tournament(db_session, workspace_id, TS.LIVE)
+            team = Team(tournament_id=live.id, name="Seeded", balancer_name="seeded")
+            db_session.add(team)
+            db_session.add(RegistrationForm(tournament_id=registration.id, workspace_id=workspace_id, is_open=True))
+            regs = [
+                Registration(
+                    tournament_id=registration.id,
+                    display_name="a",
+                    status="approved",
+                    checked_in=True,
+                    balancer_status="ready",
+                ),
+                Registration(
+                    tournament_id=registration.id, display_name="b", status="approved", balancer_status="incomplete"
+                ),
+                Registration(tournament_id=registration.id, display_name="c", status="pending"),
+                Registration(tournament_id=live.id, display_name="d", status="approved", checked_in=True),
+            ]
+            db_session.add_all(regs)
+            await db_session.flush()
+            roles = {
+                role.code: role
+                for role in await db_session.scalars(
+                    sa.select(CatalogRole)
+                    .join(RoleDimension, RoleDimension.id == CatalogRole.dimension_id)
+                    .where(
+                        RoleDimension.discipline == registration.discipline,
+                        RoleDimension.rated.is_(True),
+                        CatalogRole.workspace_id.is_(None),
+                    )
+                )
+            }
+            for reg, code in ((regs[0], "tank"), (regs[2], "support"), (regs[3], "damage")):
+                db_session.add(
+                    RegistrationRole(
+                        registration_id=reg.id,
+                        catalog_role=roles[code],
+                        dimension_id=roles[code].dimension_id,
+                        is_primary=True,
+                        rank_value=2000,
+                    )
+                )
+            # One single-slot bracket each: unwired on the registration card, filled on the live one.
+            stage_ids = {}
+            for tournament, input_type, team_id in (
+                (registration, enums.StageItemInputType.EMPTY, None),
+                (live, enums.StageItemInputType.FINAL, team.id),
+            ):
+                stage = Stage(
+                    tournament_id=tournament.id,
+                    name="Bracket",
+                    stage_type=enums.StageType.SINGLE_ELIMINATION,
+                    scoring_rule_id=rule_id,
+                )
+                db_session.add(stage)
+                await db_session.flush()
+                item = StageItem(stage_id=stage.id, name="Bracket", type=enums.StageItemType.SINGLE_BRACKET)
+                db_session.add(item)
+                await db_session.flush()
+                db_session.add(StageItemInput(stage_item_id=item.id, slot=1, input_type=input_type, team_id=team_id))
+                stage_ids[tournament.id] = stage.id
+            placed = await _duel(db_session, live, rule_id, round_=None)
+            db_session.add(
+                BracketEncounter(encounter_id=placed.id, tournament_id=live.id, stage_id=stage_ids[live.id], round=1)
+            )
+            await _duel(db_session, live, rule_id, completed=False, scheduled_at=now - timedelta(hours=1))
+            for status in (enums.EncounterResultStatus.PENDING_CONFIRMATION, enums.EncounterResultStatus.DISPUTED):
+                (await _duel(db_session, live, rule_id, completed=False)).result_status = status
+            await seed_encounter(db_session, live, rule_id, [(None, 0), (None, 0), (None, 0)], name="Lobby")
+            db_session.add_all(
+                [
+                    TournamentRecalculationState(tournament_id=live.id, requested_generation=2, completed_generation=1),
+                    AchievementRule(
+                        workspace_id=workspace_id,
+                        slug=f"dash-{uuid.uuid4().hex[:8]}",
+                        name="Rule",
+                        description_ru="ru",
+                        description_en="en",
+                        discipline=live.discipline,
+                        category="overall",
+                        scope="global",
+                        grain="user",
+                        condition_tree={},
+                        depends_on=[],
+                        enabled=True,
+                        rule_version=1,
+                    ),
+                    EvaluationRun(workspace_id=workspace_id, trigger="manual", tournament_id=live.id, status="done"),
+                ]
+            )
+            ids = {"registration": registration.id, "live": live.id}
+            await db_session.commit()
+            db_session.expunge_all()
+
+            pairs = []
+            for permissions in grants:
+                dashboard = await overview.get_dashboard(
+                    db_session, workspace_id=workspace_id, permissions=permissions, now=now
+                )
+                for card in dashboard.tournaments:
+                    checklist = await readiness.compute_readiness(
+                        db_session,
+                        card.id,
+                        can_tournament_read=permissions.tournament_read,
+                        can_team_read=permissions.team_read,
+                        can_match_read=permissions.match_read,
+                        can_achievement_read=permissions.achievement_read,
+                    )
+                    pairs.append((card.readiness, checklist))
+            return pairs, ids
+        finally:
+            await _drop(db_session, workspace_id, [])
+
+    pairs, ids = asyncio.run(go())
+
+    assert len(pairs) == 2 * len(grants)
+    for card_readiness, checklist in pairs:
+        assert card_readiness == checklist
+    # Not two empty checklists agreeing: every group carries data, and the two cards carry different data.
+    full = {card_readiness.tournament_id: card_readiness for card_readiness, _ in pairs[:2]}
+    registration, live = full[ids["registration"]], full[ids["live"]]
+    assert (registration.schedule_configured, registration.stage_slots_filled, registration.bracket_generated) == (
+        True,
+        False,
+        False,
+    )
+    assert (registration.registrations_pending, registration.registrations_ranked, registration.pool_need_fix) == (
+        1,
+        2,
+        1,
+    )
+    assert registration.registration_form_configured is True
+    assert (live.stage_slots_filled, live.bracket_generated, live.duel_encounters_total) == (True, True, 4)
+    assert (live.results_overdue, live.results_pending_confirmation, live.results_disputed) == (1, 1, 1)
+    assert (live.registrations_checked_in, live.registrations_ranked) == (1, 1)
+    assert (live.standings_recalc_pending, live.achievements_status, registration.achievements_status) == (
+        True,
+        "done",
+        "none",
+    )
+
+
+def test_the_dashboard_costs_the_same_statements_at_any_card_count(db_session) -> None:
+    now = datetime.now(UTC)
+
+    async def go() -> list[tuple[int, int]]:
+        workspace_id = await _workspace(db_session)
+        engine = db_session.bind.sync_engine
+        statements: list[str] = []
+
+        def record(_conn: Any, _cursor: Any, statement: str, *_args: Any) -> None:
+            statements.append(statement)
+
+        sa_event.listen(engine, "before_cursor_execute", record)
+        try:
+            costs = []
+            for added in (1, 2):
+                for _ in range(added):
+                    tournament = await _tournament(
+                        db_session,
+                        workspace_id,
+                        TS.REGISTRATION,
+                        schedule=((TS.REGISTRATION, now - timedelta(days=1), now + timedelta(days=3)),),
+                    )
+                    db_session.add(Registration(tournament_id=tournament.id, display_name="p", status="pending"))
+                await db_session.commit()
+                db_session.expunge_all()
+                statements.clear()
+                dashboard = await overview.get_dashboard(
+                    db_session, workspace_id=workspace_id, permissions=EVERYTHING, now=now
+                )
+                costs.append((len(dashboard.tournaments), len(statements)))
+            return costs
+        finally:
+            sa_event.remove(engine, "before_cursor_execute", record)
+            await _drop(db_session, workspace_id, [])
+
+    (one, one_cost), (three, three_cost) = asyncio.run(go())
+
+    assert (one, three) == (1, 3)
+    assert one_cost == three_cost
 
 
 # --- RPC gate + masking ------------------------------------------------------------

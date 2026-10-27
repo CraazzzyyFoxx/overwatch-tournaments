@@ -8,6 +8,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/auth"
+	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/auth/authtest"
 )
 
 func newBuf(t *testing.T) (*slog.Logger, *bytes.Buffer) {
@@ -155,5 +158,34 @@ func TestLevelForStatus(t *testing.T) {
 		if got := levelForStatus(status); got != want {
 			t.Errorf("levelForStatus(%d) = %v, want %v", status, got, want)
 		}
+	}
+}
+
+// The access log and the metrics middleware inside it each verified the same
+// JWT. The log now parses once, before next, and hands the result inward —
+// including "anonymous", so the inner layer does not re-parse that either.
+func TestMiddlewareHandsTheParsedUserToInnerMiddleware(t *testing.T) {
+	signed := authtest.Token("42")
+
+	base, buf := newBuf(t)
+	var got *auth.User
+	var resolved bool
+	h := Middleware(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		got, resolved = auth.UserFromContext(r.Context())
+	}), base, auth.New(authtest.PublicKey))
+
+	req := httptest.NewRequest(http.MethodGet, "/me", nil)
+	req.Header.Set("Authorization", "Bearer "+signed)
+	h.ServeHTTP(httptest.NewRecorder(), req)
+	if !resolved || got == nil || got.ID != 42 {
+		t.Fatalf("inner saw user=%v resolved=%v, want 42", got, resolved)
+	}
+	if ls := lines(t, buf); ls[0]["user_id"] != float64(42) {
+		t.Fatalf("access log user_id = %v, want 42", ls[0]["user_id"])
+	}
+
+	h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/me", nil))
+	if !resolved || got != nil {
+		t.Fatalf("anonymous: inner saw user=%v resolved=%v, want nil resolved", got, resolved)
 	}
 }

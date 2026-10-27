@@ -36,16 +36,18 @@ groups:
       - alert: BackupDumpSuspiciouslySmall
         # A dump that suddenly halves in size is a silent broken dump
         # (wrong database, truncated pg_dump, empty schema) — not "a small backup".
+        # Baseline is the 14-day median, not the max: one oversized run (a temporary
+        # copy of the database dumped alongside it) must not keep every normal run below half.
         expr: |
           max(owt_backup_last_bytes) > 0
-          and max(owt_backup_last_bytes) < 0.5 * max(max_over_time(owt_backup_last_bytes[14d]))
+          and max(owt_backup_last_bytes) < 0.5 * max(quantile_over_time(0.5, owt_backup_last_bytes[14d]))
         for: 1h
         labels:
           severity: warning
         annotations:
           summary: "Backup size dropped by more than half"
           description: >-
-            This run uploaded {{ $value | humanize1024 }}B vs the 14-day maximum.
+            This run uploaded {{ $value | humanize1024 }}B, under half the 14-day median.
             Confirm the right database is dumped and pg_dump is not aborting.
 
   # Log archive: textfile owt_logship.prom, written by the host's nightly log upload. Rotated logs stay on the

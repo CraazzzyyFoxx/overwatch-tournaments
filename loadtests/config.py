@@ -35,18 +35,20 @@ CATALOG_DISCIPLINE: str = os.getenv("OWT_CATALOG_DISCIPLINE", "overwatch")
 
 # -- draft room scenario (draft_locustfile.py) ------------------------------
 
-#: Tournament whose LIVE draft the scenario drives. Required by that
-#: locustfile; the public suite ignores it.
-DRAFT_TOURNAMENT_ID: int | None = _int_or_none("OWT_DRAFT_TOURNAMENT_ID")
-
-#: Token for the draft room. Fit, queue and feasibility are AuthRequired and
-#: the driver's autopick needs the `team:create` workspace permission, so one
-#: organizer token covers every seat the scenario simulates.
-DRAFT_TOKEN: str = os.getenv("OWT_DRAFT_TOKEN", "").strip() or AUTH_TOKEN
+#: The room the scenario plays: ids and every seat's token, written by
+#: `draft_seed.py`. Holds live tokens, so it is gitignored.
+DRAFT_ROOM: str = os.getenv("OWT_DRAFT_ROOM", ".draft-room.json")
 
 #: Seconds between the driver's autopicks — the event rate the room reacts to.
 DRAFT_PICK_INTERVAL: float = float(os.getenv("OWT_DRAFT_PICK_INTERVAL", "10"))
 
-#: How many of the viewers are organizers (they also re-read feasibility);
-#: the rest are captains holding one team each.
-DRAFT_ORGANIZERS: int = int(os.getenv("OWT_DRAFT_ORGANIZERS", "1"))
+#: After this many picks the driver rolls the last one back (every client
+#: re-reads the board) and resumes. Unset: no rollback.
+DRAFT_ROLLBACK_AFTER: int | None = _int_or_none("OWT_DRAFT_ROLLBACK_AFTER")
+
+#: Seconds between one captain's chat messages (0: the room stays silent).
+DRAFT_CHAT_EVERY: float = float(os.getenv("OWT_DRAFT_CHAT_EVERY", "60"))
+
+#: `Origin` of the simulated tabs; the gateway refuses a socket from an origin
+#: outside GATEWAY_WS_ALLOWED_ORIGINS. Defaults to the target host.
+DRAFT_ORIGIN: str = os.getenv("OWT_DRAFT_ORIGIN", "").strip()

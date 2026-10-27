@@ -1,9 +1,9 @@
 "use client";
 
 import { type ReactElement, type ReactNode } from "react";
-import { Check, ChevronsUpDown } from "lucide-react";
+import { Check, ChevronDown } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { Button, triggerChevronClass } from "@/components/ui/button";
 import {
   Command,
   CommandEmpty,
@@ -27,21 +27,16 @@ interface ComboboxClearAction {
 }
 
 /**
- * Trigger surface: `default` the admin field, `toolbar` the public toolbar control
- * (the `SearchField` border and fill), `surface` the public form control skin
+ * Trigger surface: `default` the outline button's tonal surface, the same as
+ * every `SelectTrigger`; `surface` the public form control skin
  * (`Input variant="surface"`; red once `aria-invalid`).
  */
-export type ComboboxVariant = "default" | "toolbar" | "surface";
+type ComboboxVariant = "default" | "surface";
 
-export const VARIANT_CLASS: Record<ComboboxVariant, string> = {
-  default: "border-border/60 bg-background/80 hover:bg-background/90",
-  toolbar:
-    "border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.02)] text-[color:var(--aqt-fg)] hover:bg-[hsl(0_0%_100%/0.04)]",
-  surface: cn(
-    controlSurfaceClass,
-    "hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-fg)]"
-  )
-};
+const SURFACE_CLASS = cn(
+  controlSurfaceClass,
+  "hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-fg)]"
+);
 
 interface ComboboxDefaultTrigger {
   trigger?: undefined;
@@ -144,8 +139,8 @@ export function Combobox(props: Readonly<ComboboxProps>) {
         aria-invalid={props["aria-invalid"]}
         aria-describedby={props["aria-describedby"]}
         className={cn(
-          "w-full justify-between",
-          VARIANT_CLASS[props.variant ?? "default"],
+          "group/trigger w-full justify-between px-3",
+          props.variant === "surface" && SURFACE_CLASS,
           props.triggerClassName
         )}
       >
@@ -155,7 +150,7 @@ export function Combobox(props: Readonly<ComboboxProps>) {
         >
           {props.label}
         </span>
-        <ChevronsUpDown aria-hidden className="h-4 w-4 shrink-0 opacity-50" />
+        <ChevronDown aria-hidden className={triggerChevronClass} />
       </Button>
     ) : (
       props.trigger
@@ -203,7 +198,10 @@ export function ComboboxCheck({ selected }: Readonly<{ selected: boolean }>) {
   return (
     <Check
       aria-hidden
-      className={cn("ml-2 h-4 w-4 shrink-0", selected ? "opacity-100" : "opacity-0")}
+      className={cn(
+        "ml-2 h-4 w-4 shrink-0 text-[color:var(--aqt-teal)]",
+        selected ? "opacity-100" : "opacity-0"
+      )}
     />
   );
 }

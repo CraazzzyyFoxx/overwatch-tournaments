@@ -76,7 +76,6 @@ export function EvaluateAchievementsDialog({
           value={tournamentId}
           onValueChange={onTournamentChange}
           placeholder={t("evaluateDialog.allTournaments")}
-          variant="default"
           size="default"
         />
       </div>

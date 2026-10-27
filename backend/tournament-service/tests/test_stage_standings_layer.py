@@ -47,6 +47,7 @@ from shared.testing.db import ensure_test_postgres
 from src import schemas
 from src.services.admin.stage import rule_values, stage_service
 from src.services.challonge import sync as challonge_sync
+from src.services.challonge.sync import upsert as sync_upsert
 from src.services.scrim.service import _free_slot, scrim_service
 from src.services.standings.service import Seat, StageEncounter, standings_service
 
@@ -552,7 +553,7 @@ class StandingsTests(StageLayerCase):
             )
             await s.commit()
         async with self.Session() as s:
-            standings = await standings_service.recalculate_for_tournament(s, self.tournament_id)
+            standings = (await standings_service.recalculate_for_tournament(s, self.tournament_id)).standings
         by_team = {standing.team_id: standing for standing in standings}
         self.assertEqual(1, by_team[seats[0].team_id].position)
         self.assertEqual(1, by_team[seats[0].team_id].win)
@@ -696,7 +697,7 @@ class SwissThresholdTests(StageLayerCase):
         )
 
         async with self.Session() as s:
-            table = await standings_service.recalculate_for_tournament(s, self.tournament_id)
+            table = (await standings_service.recalculate_for_tournament(s, self.tournament_id)).standings
         self.assertEqual(
             {t0: "qualified", t1: "qualified", t2: "eliminated", t3: "eliminated"},
             {row.team_id: row.swiss_status for row in table},
@@ -992,7 +993,7 @@ class ChallongeRoundTripTests(StageLayerCase):
                     "_resolve_stage_refs_for_match",
                     AsyncMock(return_value=SimpleNamespace(stage_id=stage.id, stage_item_id=None)),
                 ),
-                patch.object(challonge_sync, "after_encounter_teams_changed", AsyncMock()),
+                patch.object(sync_upsert, "after_encounter_teams_changed", AsyncMock()),
             ):
                 result = await challonge_sync.sync_service._upsert_encounter_from_challonge(
                     s,
@@ -1066,7 +1067,7 @@ class ChallongeRoundTripTests(StageLayerCase):
         )
         async with self.Session() as s:
             match_lookup.by_challonge_id[9001] = await s.get_one(Encounter, encounter_id)
-            with patch.object(challonge_sync, "advance_and_announce", AsyncMock()):
+            with patch.object(sync_upsert, "advance_and_announce", AsyncMock()):
                 await challonge_sync.sync_service._advance_completed_challonge_matches(
                     s, [(source, self._match())], match_lookup=match_lookup
                 )
@@ -1085,7 +1086,7 @@ class ChallongeRoundTripTests(StageLayerCase):
         )
         async with self.Session() as s:
             match_lookup.by_challonge_id[9001] = await s.get_one(Encounter, encounter_id)
-            with patch.object(challonge_sync, "advance_and_announce", AsyncMock()):
+            with patch.object(sync_upsert, "advance_and_announce", AsyncMock()):
                 await challonge_sync.sync_service._advance_completed_challonge_matches(
                     s, [(source, self._match())], match_lookup=match_lookup
                 )
@@ -1154,7 +1155,7 @@ class ChallongeRoundTripTests(StageLayerCase):
         stage = await self.make_stage(enums.StageType.SINGLE_ELIMINATION)
         _created, encounter_id = await self._import(self._match(), stage=stage)
 
-        with patch.object(challonge_sync, "lock_encounter", wraps=challonge_sync.lock_encounter) as lock:
+        with patch.object(sync_upsert, "lock_encounter", wraps=sync_upsert.lock_encounter) as lock:
             await self._advance_remote_complete(encounter_id, stage)
             lock.assert_awaited_with(ANY, encounter_id)
             lock.reset_mock()

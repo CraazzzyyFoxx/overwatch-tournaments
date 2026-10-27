@@ -33,6 +33,7 @@ from src.domain.draft.entities import (
     DraftFeasibilityState,
     DraftPickOption,
     DraftSnapshot,
+    FitPlayer,
     FitResult,
     TeamFitScore,
 )
@@ -79,9 +80,26 @@ async def single_flight[T](key: str, compute: Callable[[], Awaitable[T]]) -> T:
         del _inflight[key]
 
 
+@dataclasses.dataclass(slots=True)
+class _ReadState:
+    """One board state as every read of it sees it."""
+
+    at: float
+    key: str
+    snapshot: DraftSnapshot
+    #: ``sug.fit_players`` of the available players: the same list for every team's fit, so the first builds it.
+    fit_players: list[FitPlayer] | None = None
+    #: ``evaluate_pick_options`` per team: the on-clock captain's options and its queue's autopick preview ask the
+    #: same matchings of the same state, so they run once.
+    pick_options: dict[int, tuple[DraftPickOption, ...]] = dataclasses.field(default_factory=dict)
+
+
 # Bounds staleness for writes that bypass the event log, like the board's TTL.
 _READ_SNAPSHOT_TTL_SECONDS = 15.0
-_read_snapshots: dict[str, tuple[float, DraftSnapshot]] = {}
+_read_snapshots: dict[str, _ReadState] = {}
+# The shape (the owner's team format) and role impacts (its balancer knobs) behind the fit reads: neither moves with
+# the board, yet each fit, asked per team by every captain at once, re-read both. Same staleness bound.
+_read_contexts: dict[tuple[int, int], tuple[float, RosterShape, dict[str, float]]] = {}
 
 
 class DraftFeasibilityService:
@@ -170,17 +188,68 @@ class DraftFeasibilityService:
         that resolves after mutating must see its own change, which a shared
         snapshot of the prior state would hide.
         """
-        event_id = await draft_rt.last_event_id(session, draft_session.id)
+        state = await self._read_state(session, draft_session)
+        teams = await self.teams_repo.list_by_session(session, draft_session.id)
+        return dataclasses.replace(state.snapshot, teams=tuple(teams))
+
+    async def board_snapshot(
+        self, session: AsyncSession, draft_session: DraftSession, last_event_id: int | None, *, max_age: float
+    ) -> DraftSnapshot:
+        """The read snapshot of the state at ``last_event_id`` for the public board.
+
+        Shared with that state's fit and queue reads, so a board built first warms them and a board built after them
+        loads nothing; reloaded once older than ``max_age``, so the board keeps its own staleness bound. READ PATHS
+        ONLY, like ``load_read_snapshot``.
+        """
+        return (await self._state_at(session, draft_session, last_event_id, max_age=max_age)).snapshot
+
+    async def _read_state(self, session: AsyncSession, draft_session: DraftSession) -> _ReadState:
+        return await self._state_at(session, draft_session, await draft_rt.last_event_id(session, draft_session.id))
+
+    async def _state_at(
+        self,
+        session: AsyncSession,
+        draft_session: DraftSession,
+        event_id: int | None,
+        *,
+        max_age: float = _READ_SNAPSHOT_TTL_SECONDS,
+    ) -> _ReadState:
         key = f"{draft_session.id}:{draft_session.version}:{event_id or 0}"
         now = time.monotonic()
-        for stale in [k for k, (at, _) in _read_snapshots.items() if now - at > _READ_SNAPSHOT_TTL_SECONDS]:
+        for stale in [k for k, state in _read_snapshots.items() if now - state.at > _READ_SNAPSHOT_TTL_SECONDS]:
             del _read_snapshots[stale]
-        entry = _read_snapshots.get(key)
-        if entry is None:
+        state = _read_snapshots.get(key)
+        if state is None or now - state.at > max_age:
             snapshot = await single_flight(f"snapshot:{key}", lambda: self.load_snapshot(session, draft_session))
-            entry = _read_snapshots.setdefault(key, (now, snapshot))
-        teams = await self.teams_repo.list_by_session(session, draft_session.id)
-        return dataclasses.replace(entry[1], teams=tuple(teams))
+            state = _read_snapshots.get(key)
+            # The flight's first caller stores it, its joiners share that state; a reload replaces the older one.
+            if state is None or state.snapshot is not snapshot:
+                state = _read_snapshots[key] = _ReadState(now, key, snapshot)
+        return state
+
+    async def read_context(
+        self, session: AsyncSession, draft_session: DraftSession
+    ) -> tuple[RosterShape, dict[str, float]]:
+        """``resolve_shape`` and ``resolve_role_impact`` shared by the read paths of one session in this process.
+
+        READ PATHS ONLY, like ``load_read_snapshot``: a write resolves both live.
+        """
+        key = (draft_session.id, draft_session.version)
+        now = time.monotonic()
+        for stale in [k for k, (at, *_) in _read_contexts.items() if now - at > _READ_SNAPSHOT_TTL_SECONDS]:
+            del _read_contexts[stale]
+        entry = _read_contexts.get(key)
+        if entry is None:
+
+            async def load() -> tuple[float, RosterShape, dict[str, float]]:
+                return (
+                    now,
+                    await self.resolve_shape(session, draft_session),
+                    await self.resolve_role_impact(session, draft_session),
+                )
+
+            entry = _read_contexts.setdefault(key, await single_flight(f"context:{key}", load))
+        return entry[1], entry[2]
 
     async def analyze_session(
         self,
@@ -212,8 +281,8 @@ class DraftFeasibilityService:
     ) -> tuple[DraftPickOption, ...]:
         if state is None:
             state = await self.load_feasibility_state(session, draft_session)
-        # Up to 21 forced-pick matchings (see evaluate_pick_options) — pure CPU,
-        # run them off the event loop.
+        # Forced-pick matchings only for the unsafe options (see
+        # evaluate_pick_options) — pure CPU, run them off the event loop.
         return await asyncio.to_thread(
             evaluate_pick_options,
             team_id=team_id,
@@ -250,7 +319,33 @@ class DraftFeasibilityService:
                 status_code=403,
                 detail="Only the on-clock captain or an admin may read options",
             )
-        return await self.evaluate_session_pick_options(session, draft_session, team_id=pick.draft_team_id)
+        return await self.read_pick_options(session, draft_session, team_id=pick.draft_team_id)
+
+    async def read_pick_options(
+        self, session: AsyncSession, draft_session: DraftSession, *, team_id: int
+    ) -> tuple[DraftPickOption, ...]:
+        """``evaluate_session_pick_options`` once per board state and team, off the shared read snapshot.
+
+        READ PATHS ONLY, like ``load_read_snapshot``: a pick validates against a snapshot of its own.
+        """
+        state = await self._read_state(session, draft_session)
+        options = state.pick_options.get(team_id)
+        if options is None:
+            shape, _ = await self.read_context(session, draft_session)
+            snapshot = state.snapshot
+            matching = build_feasibility_state(
+                shape=shape,
+                teams=snapshot.teams,
+                players=snapshot.players,
+                picks=snapshot.picks,
+                rosters=snapshot.rosters,
+            )
+            options = await single_flight(
+                f"options:{state.key}:{team_id}",
+                lambda: self.evaluate_session_pick_options(session, draft_session, team_id=team_id, state=matching),
+            )
+            state.pick_options[team_id] = options
+        return options
 
     async def rank_current_suggestions(
         self,
@@ -307,15 +402,18 @@ class DraftFeasibilityService:
         """
         if draft_session.status in (DraftStatus.COMPLETED.value, DraftStatus.CANCELLED.value):
             return []
-        snapshot = await self.load_read_snapshot(session, draft_session)
-        shape = await self.resolve_shape(session, draft_session)
+        # Fit reads no team row, so it skips the per-call teams re-read the queue needs.
+        state = await self._read_state(session, draft_session)
+        snapshot = state.snapshot
+        shape, impact = await self.read_context(session, draft_session)
         counts = rules.team_slot_counts(snapshot.players, snapshot.picks, team_id, shape, snapshot.rosters)
-        impact = await self.resolve_role_impact(session, draft_session)
         capacity = rules.role_openings(shape, counts, impact)
         if not any(opening > 0 for opening in capacity.values()):
             return []  # this team's roster is full
-        available = [p for p in snapshot.players if p.status == DraftPlayerStatus.AVAILABLE.value]
-        players = sug.fit_players(available, snapshot.rosters)
+        if state.fit_players is None:
+            available = [p for p in snapshot.players if p.status == DraftPlayerStatus.AVAILABLE.value]
+            state.fit_players = sug.fit_players(available, snapshot.rosters)
+        players = state.fit_players
         results = sug.candidates(
             players,
             capacity,

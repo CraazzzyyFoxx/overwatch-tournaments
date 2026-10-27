@@ -1,16 +1,16 @@
 """Domain-separated key derivation for the identity service.
 
 Derives a distinct 32-byte subkey per purpose (refresh-token hashing, OAuth
-``state`` signing, API-key secret hashing) from the master secret with
-HKDF-SHA256 (RFC 5869, stdlib ``hashlib`` + ``hmac``). One key shared across
-domains means a weakness or leak in any one usage compromises all of them and
-opens cross-protocol confusion attacks.
+``state`` signing, API-key secret hashing, the JWT signing key) from the master
+secret with HKDF-SHA256 (RFC 5869, stdlib ``hashlib`` + ``hmac``). One key shared
+across domains means a weakness or leak in any one usage compromises all of them
+and opens cross-protocol confusion attacks.
 
 Notes:
-  * The **access/service JWT** keeps signing with the raw master secret, because
-    the Go gateway validates those tokens locally with the same raw secret.
-    Deriving a JWT subkey here would invalidate every issued token and break
-    edge validation. JWTs therefore remain the master key's single "raw" use.
+  * Access/service JWTs are signed with Ed25519 (EdDSA) whose 32-byte seed is
+    ``jwt_signing_seed``; the gateway holds only the public key. The raw master
+    secret is only read to accept legacy HS256 tokens during the post-upgrade
+    window (``security.TokenCodec``).
   * Refresh-token and API-key hashes are verified against BOTH the derived and
     the raw-secret HMAC (``legacy_hmac_sha256_hex``) but written only in the
     derived form, so already-persisted hashes keep verifying.
@@ -26,6 +26,7 @@ import hmac
 _INFO_REFRESH_TOKEN = b"anak-identity:refresh-token:v1"
 _INFO_OAUTH_STATE = b"anak-identity:oauth-state:v1"
 _INFO_API_KEY = b"anak-identity:api-key:v1"
+_INFO_JWT_SIGNING = b"anak-identity:jwt-signing:v1"
 
 _HASH = hashlib.sha256
 _HASH_LEN = _HASH().digest_size  # 32
@@ -63,6 +64,11 @@ def api_key_secret_key(master_secret: str) -> bytes:
     return derive_key(master_secret, _INFO_API_KEY)
 
 
+def jwt_signing_seed(master_secret: str) -> bytes:
+    """32-byte Ed25519 private-key seed for access/service JWTs."""
+    return derive_key(master_secret, _INFO_JWT_SIGNING)
+
+
 def hmac_sha256_hex(key: bytes, message: str) -> str:
     return hmac.new(key, message.encode("utf-8"), _HASH).hexdigest()
 
@@ -74,3 +80,8 @@ def legacy_hmac_sha256_hex(master_secret: str, message: str) -> str:
     used for new writes.
     """
     return hmac.new(master_secret.encode("utf-8"), message.encode("utf-8"), _HASH).hexdigest()
+
+
+def oauth_pkce_key(master_secret: str) -> bytes:
+    """Key a flow's PKCE ``code_verifier`` is derived from (HMAC of its state nonce), so it is never stored."""
+    return derive_key(master_secret, b"anak-identity:oauth-pkce:v1")

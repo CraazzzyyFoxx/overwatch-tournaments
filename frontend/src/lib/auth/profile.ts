@@ -12,6 +12,7 @@ type AuthProfileResponse = {
   permissions?: string[];
   denies?: string[];
   is_superuser?: boolean;
+  has_password?: boolean;
   linked_players?: Array<{
     player_id: number;
     player_name: string;
@@ -42,6 +43,7 @@ export function mapAuthProfile(data: AuthProfileResponse): AuthProfile {
     permissions: data.permissions ?? [],
     denies: data.denies ?? [],
     isSuperuser: data.is_superuser ?? false,
+    hasPassword: data.has_password ?? false,
     workspaces: (data.workspaces ?? []).map((ws) => ({
       workspace_id: ws.workspace_id,
       slug: ws.slug,

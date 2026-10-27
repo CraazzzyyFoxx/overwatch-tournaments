@@ -175,6 +175,10 @@
   --text-display: clamp(2rem, 4.6vw, 3.5rem);
   --text-display--line-height: 1.03;
   --text-display--letter-spacing: -0.01em;
+  /* The one hero figure of a numbers block (home: the player count), 56 → 96px. */
+  --text-figure: clamp(3.5rem, 7vw, 6rem);
+  --text-figure--line-height: 1;
+  --text-figure--letter-spacing: -0.045em;
   /* Uppercase labels (eyebrows, table heads, chips). One value for Inter. */
   --tracking-label: 0.08em;
 }
@@ -647,40 +651,6 @@
   }
 }
 
-/* ── Overlay surface (design request) ──────────────────────────────────────
-   The shadcn overlays inherited the brand-tinted --popover / --border tokens,
-   which read teal ("бирюзовый") on branded workspaces. Repaint them from
-   global tokens only: fill = page background, white text, and a contrasting
-   neutral (non-teal) rim so the panel stays distinct against the page.
-   Every floating panel shares it -- a popover and a menu opened side by side
-   in one toolbar must not read as two design systems. Scoped via each
-   primitive's unique transform-origin utility, so no component-code changes.
-   Unlayered → wins over the @layer base/utilities token defaults and over any
-   inherited (.dark or .site-theme brand) --popover value. */
-.origin-\[--radix-popover-content-transform-origin\],
-.origin-\[--radix-dropdown-menu-content-transform-origin\],
-.origin-\[--radix-context-menu-content-transform-origin\],
-.origin-\[--radix-select-content-transform-origin\] {
-  --popover: var(--background);
-  --popover-foreground: 0 0% 100%;
-  border-color: hsl(0 0% 100% / 0.16);
-}
-
-/* ── Tooltip surface (design request) ──────────────────────────────────────
-   The default <Tooltip> fills with bg-primary (teal) + dark text; a few
-   analytics tooltips repaint with bg-popover. Unify to the same treatment as
-   the Popover: fill = page background, white text, contrasting neutral rim.
-   Set the paint properties directly (not via --popover) since tooltips key off
-   --primary, not the popover token. Scoped to the tooltip via its unique
-   transform-origin utility. Unlayered → beats bg-primary / bg-popover /
-   border-border utilities. */
-.origin-\[--radix-tooltip-content-transform-origin\] {
-  background-color: hsl(var(--background));
-  color: hsl(0 0% 100%);
-  border: 1px solid hsl(0 0% 100% / 0.16);
-  box-shadow: 0 10px 30px -12px hsl(0 0% 0% / 0.7);
-}
-
 /* ═══════════════════════════════════════════════════════════════════════
    Redesign token layer (global) — OWT handoff palette.
    Dark-only app, so defined on :root. Namespaced --aqt-* to avoid clashing
@@ -852,6 +822,52 @@
       color-mix(in srgb, var(--aqt-hero-tint) 26%, transparent),
       transparent 70%
     );
+  }
+}
+
+/* Showcase motion (the home page's tournament showcase and spotlight).
+
+   `.aqt-zoom`: the picture of a whole-card link leans in a little while the
+   card (its `group`) is under the pointer or holds keyboard focus. Its frame
+   clips it (`overflow-hidden`), so the card itself never changes size — the
+   one sanctioned picture zoom; `hover:scale-*` utilities stay banned.
+
+   `.aqt-bar-grow`: a stage bar grows in from its start, once, as it first
+   renders. Its keyframe also drives the spotlight's countdown line, at the
+   spotlight's own interval. Both hold still under reduced motion. */
+.aqt-zoom {
+  transition: transform 0.7s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@media (hover: hover) {
+  .group:hover .aqt-zoom {
+    transform: scale(1.05);
+  }
+}
+
+.group:focus-visible .aqt-zoom {
+  transform: scale(1.05);
+}
+
+@keyframes aqt-grow-x {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+.aqt-bar-grow {
+  transform-origin: left;
+  animation: aqt-grow-x 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) 0.2s both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .group:hover .aqt-zoom,
+  .group:focus-visible .aqt-zoom {
+    transform: none;
+  }
+
+  .aqt-bar-grow {
+    animation: none;
   }
 }
 

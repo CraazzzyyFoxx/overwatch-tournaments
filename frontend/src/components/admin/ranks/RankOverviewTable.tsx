@@ -490,7 +490,7 @@ function RankOverviewRows({
         <FilterBar
           defs={defs}
           filters={filters}
-          trailing={
+          extraFilters={
             <>
               {allGames ? null : (
                 <div className="w-64">

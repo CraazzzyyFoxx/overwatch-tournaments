@@ -5,6 +5,7 @@ import (
 	"io"
 	"log/slog"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -97,5 +98,67 @@ func TestRun_RelaysFromRedis(t *testing.T) {
 		case <-deadline:
 			t.Fatal("timed out waiting for relayed frame")
 		}
+	}
+}
+
+// resetCounter is a Resetter leg that only counts resets.
+type resetCounter struct{ n atomic.Int32 }
+
+func (*resetCounter) Broadcast(string, []byte) {}
+func (r *resetCounter) Reset()                 { r.n.Add(1) }
+
+// go-redis re-subscribes on its own after a dropped connection and the frames
+// published in the gap are gone, so the legs must be reset — through Fanout,
+// skipping the leg that is not a Resetter. The very first subscription is not
+// a gap.
+func TestRun_ResetsLegsAfterResubscribe(t *testing.T) {
+	mr, err := miniredis.Run()
+	if err != nil {
+		t.Fatalf("miniredis: %v", err)
+	}
+	defer mr.Close()
+
+	client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	defer client.Close()
+
+	fb := newFakeBroadcaster()
+	resets := &resetCounter{}
+	sub := New(client, Fanout(fb, resets), discardLog())
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() { _ = sub.Run(ctx) }()
+
+	// relay publishes on topic until the subscriber relays it, skipping frames
+	// left over from an earlier relay.
+	relay := func(topic string) {
+		t.Helper()
+		deadline := time.After(10 * time.Second)
+		for {
+			_ = client.Publish(ctx, ChannelPrefix+topic, `{}`).Err()
+			select {
+			case c := <-fb.ch:
+				if c.topic == topic {
+					return
+				}
+			case <-time.After(50 * time.Millisecond):
+			case <-deadline:
+				t.Fatalf("timed out waiting for a frame on %s", topic)
+			}
+		}
+	}
+
+	relay("tournament:1:bracket")
+	if n := resets.n.Load(); n != 0 {
+		t.Fatalf("the first subscription must not reset, got %d resets", n)
+	}
+
+	mr.Close() // drops the subscriber's connection
+	if err := mr.Restart(); err != nil {
+		t.Fatalf("miniredis restart: %v", err)
+	}
+	relay("tournament:2:bracket")
+	if n := resets.n.Load(); n != 1 {
+		t.Fatalf("a re-subscription must reset once before relaying, got %d resets", n)
 	}
 }

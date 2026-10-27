@@ -18,7 +18,7 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
-from shared.clients.s3.upload import upload_asset, upload_avatar
+from shared.clients.s3.upload import delete_old_avatar, upload_asset, upload_avatar
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.repository import WorkspaceRepository
 from shared.services.audit import record_audit
@@ -105,6 +105,8 @@ class WorkspaceBinaryService:
             icon_after=workspace.icon_url,
         )
         await session.commit()
+        # Only once the row points at the new key may the previous files go.
+        await delete_old_avatar(s3_client, entity_type="workspaces", entity_id=workspace_id, keep=result.key)
         return workspace
 
     async def clear_icon(self, session: AsyncSession, *, workspace_id: int, actor: Any) -> models.Workspace:

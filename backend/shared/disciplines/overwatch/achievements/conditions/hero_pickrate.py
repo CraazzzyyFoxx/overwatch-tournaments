@@ -54,44 +54,35 @@ async def execute_hero_pickrate(
         facts.c.entity_id.is_not(None),
         facts.c.segment == 0,
         facts.c.workspace_id == context.workspace_id,
+        # Custom-game encounters carry no tournament; without this they would pool into one NULL "tournament".
+        facts.c.tournament_id.is_not(None),
     ]
     if context.tournament:
         base_where.append(facts.c.tournament_id == context.tournament.id)
 
-    def _playtime_base(*columns: Any) -> sa.Select[Any]:
-        return sa.select(*columns).select_from(facts).where(*base_where)
-
-    total_sq = (
-        _playtime_base(
+    # One read of the facts: playtime per (tournament, hero, player), with the hero's and the tournament's
+    # totals summed over those groups by window functions. Reading ``player_facts`` three times (total, per
+    # hero, per player) and joining the reads back together fetched every fact of the tournament's matches
+    # three times and ran past the 30 s statement timeout on a single production tournament.
+    player_hero_time = sa.func.sum(facts.c.value)
+    pickrate = (
+        sa.select(
+            facts.c.player_id,
             facts.c.tournament_id,
-            sa.func.sum(facts.c.value).label("total_time"),
-        ).group_by(facts.c.tournament_id)
-    ).subquery("pickrate_total")
-
-    hero_sq = (
-        _playtime_base(
-            facts.c.tournament_id,
-            facts.c.entity_id,
-            sa.func.sum(facts.c.value).label("hero_time"),
-        ).group_by(facts.c.tournament_id, facts.c.entity_id)
-    ).subquery("pickrate_hero")
-
-    rare_heroes = (
-        sa.select(hero_sq.c.tournament_id, hero_sq.c.entity_id)
-        .join(total_sq, total_sq.c.tournament_id == hero_sq.c.tournament_id)
-        .where(op_fn(hero_sq.c.hero_time, value * total_sq.c.total_time))
-    ).subquery("rare_heroes")
+            sa.func.sum(player_hero_time)
+            .over(partition_by=(facts.c.tournament_id, facts.c.entity_id))
+            .label("hero_time"),
+            sa.func.sum(player_hero_time).over(partition_by=facts.c.tournament_id).label("total_time"),
+        )
+        .select_from(facts)
+        .where(*base_where)
+        .group_by(facts.c.tournament_id, facts.c.entity_id, facts.c.player_id)
+    ).subquery("pickrate")
 
     query = (
-        _playtime_base(facts.c.player_id, facts.c.tournament_id)
-        .join(
-            rare_heroes,
-            sa.and_(
-                rare_heroes.c.tournament_id == facts.c.tournament_id,
-                rare_heroes.c.entity_id == facts.c.entity_id,
-            ),
-        )
-        .group_by(facts.c.player_id, facts.c.tournament_id)
+        sa.select(pickrate.c.player_id, pickrate.c.tournament_id)
+        .where(op_fn(pickrate.c.hero_time, value * pickrate.c.total_time))
+        .distinct()
     )
 
     result = await session.execute(query)

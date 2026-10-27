@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -93,6 +93,19 @@ def _primary_game_handle_key(answers: Mapping[str, Any], provider: str) -> str |
     """
     handles = answers.get(identity_key(provider)) or []
     return normalize_social_handle(provider, handles[0]) if handles else None
+
+
+def _row_hash(
+    raw_row_json: dict[str, str], parsed_fields_json: dict[str, Any], mode: str, registration: models.Registration
+) -> str:
+    """What a binding remembers of the apply that wrote it; any change re-applies the row.
+
+    The cells, their parse (so a mapping edit counts) and the flex mode (a mode edit
+    rewrites role sets), plus whether the sheet could write the roles at all: pinning
+    or unpinning a profile changes what the next apply does with the same row.
+    """
+    writable = registration.balancer_profile_overridden_at is None
+    return hashlib.sha1(repr((raw_row_json, parsed_fields_json, mode, writable)).encode("utf-8")).hexdigest()
 
 
 async def fetch_google_sheet_rows(
@@ -188,6 +201,7 @@ def apply_sheet_fields_to_registration(
     schema: FormSchema,
     catalog_roles: Mapping[str, models.CatalogRole],
     allow_balancer_overwrite: bool,
+    sheet_ranked_roles: Collection[str],
     mode: FlexRoleMode = "optional",
 ) -> bool:
     """Write one parsed sheet row onto a registration.
@@ -201,6 +215,11 @@ def apply_sheet_fields_to_registration(
     deferred to one batch at the end of the sync: the verdict comes from the
     roster engine, which needs a session, and asking it per row would put a
     resolve inside a loop that runs every five minutes per tournament.
+
+    Only ranks of ``sheet_ranked_roles`` (the roles the mapping reads a rank
+    for) come from the sheet. Every other role keeps the rank it held, because
+    autofill and organizers write ``rank_value`` too and a sheet without that
+    column has nothing to say about it.
     """
     registration.display_name = parsed_fields.get("display_name") or registration.display_name
     answer_service.apply(registration, values, schema=schema, hero_catalog=None, catalog_roles=catalog_roles)
@@ -208,6 +227,7 @@ def apply_sheet_fields_to_registration(
     if not allow_balancer_overwrite:
         return False
     registration.admin_notes = parsed_fields.get("admin_notes")
+    stored_ranks = {role.role: role.rank_value for role in registration.roles}
     replace_registration_roles(
         registration,
         build_registration_role_payloads(
@@ -217,6 +237,9 @@ def apply_sheet_fields_to_registration(
         catalog_roles=catalog_roles,
         mode=mode,
     )
+    for role in registration.roles:
+        if role.role not in sheet_ranked_roles:
+            role.rank_value = stored_ranks.get(role.role)
     return True
 
 
@@ -229,6 +252,8 @@ class SheetSyncResult:
     total: int
     skipped: int = 0
     errors: list[dict[str, Any]] = field(default_factory=list)
+    # Another sync of this feed held its lock: nothing was applied, counted or stamped.
+    locked: bool = False
 
 
 class SheetSyncService:
@@ -605,34 +630,54 @@ class SheetSyncService:
         tournament_id: int,
     ) -> SheetSyncResult:
         feed = await self.require_google_sheet_feed(session, tournament_id)
-        grid = await self.common.get_tournament_grid(session, tournament_id)
-        tournament = await self.common.ensure_tournament_exists(session, tournament_id)
-        form = await self.common.get_registration_form(session, tournament_id)
-        # A feed can be configured before anyone opens the form builder. The
-        # shipped default question set then stands in as the sheet's answer
-        # vocabulary, so an import still lands the battle tag -- the row's own
-        # identity -- instead of writing nothing at all. Same fallback as
-        # ``_registration_schema``, spelled out because the sync needs the form
-        # row itself for ``current_version_id``.
-        provider = identity_provider(tournament.discipline)
-        schema = schema_from_form(form) or default_schema(provider)
-        # The sheet sync is the one role-write path that does not go through the form. In a
-        # non-optional flex mode a sheet row must land with the same role set as any
-        # other, so the mode is resolved once per sync rather than per row.
-        mode = flex_role_mode_from_schema(schema)
-        catalog_roles = await CatalogRoleRepository().rated_rows(
-            session, discipline=tournament.discipline, workspace_id=tournament.workspace_id
-        )
-        role_codes = tuple(role.code for role in DISCIPLINES[tournament.discipline].rated_dimension.roles)
         now = datetime.now(UTC)
+        # The fetch can take GOOGLE_SHEET_FETCH_TIMEOUT: end the transaction before it
+        # (committing whatever the caller staged) so no pooled connection waits on Google.
+        await session.commit()
 
         try:
             rows = await fetch_google_sheet_rows(feed.source_url, sheet_id=feed.sheet_id, gid=feed.gid)
+            # The scheduler and the sheet_sync RPC can reach one feed at once; the
+            # loser skips rather than race the winner's inserts. The two-key form
+            # is its own lock space, apart from every one-key lock in the codebase.
+            if not await session.scalar(
+                sa.select(sa.func.pg_try_advisory_xact_lock(sa.func.hashtext("registration.sheet_sync"), feed.id))
+            ):
+                return SheetSyncResult(feed=feed, created=0, updated=0, withdrawn=0, total=0, locked=True)
+            grid = await self.common.get_tournament_grid(session, tournament_id)
+            tournament = await self.common.ensure_tournament_exists(session, tournament_id)
+            form = await self.common.get_registration_form(session, tournament_id)
+            # A feed can be configured before anyone opens the form builder. The
+            # shipped default question set then stands in as the sheet's answer
+            # vocabulary, so an import still lands the battle tag -- the row's own
+            # identity -- instead of writing nothing at all. Same fallback as
+            # ``_registration_schema``, spelled out because the sync needs the form
+            # row itself for ``current_version_id``.
+            provider = identity_provider(tournament.discipline)
+            schema = schema_from_form(form) or default_schema(provider)
+            # The sheet sync is the one role-write path that does not go through the form. In a
+            # non-optional flex mode a sheet row must land with the same role set as any
+            # other, so the mode is resolved once per sync rather than per row.
+            mode = flex_role_mode_from_schema(schema)
+            catalog_roles = await CatalogRoleRepository().rated_rows(
+                session, discipline=tournament.discipline, workspace_id=tournament.workspace_id
+            )
+            role_codes = tuple(role.code for role in DISCIPLINES[tournament.discipline].rated_dimension.roles)
+
             headers = rows[0]
             mapping_config = feed.mapping_config_json or suggest_mapping_from_headers(
                 headers, schema=schema, role_codes=role_codes, provider=provider
             )
             value_mapping = feed.value_mapping_json or build_default_value_mapping()
+            targets = mapping_config.get("targets") or {}
+            # Roles whose rank the mapping reads off the sheet (a target ``get_selector_values``
+            # reads: columns or a constant). Any other role keeps the rank it already holds.
+            sheet_ranked_roles = {
+                code
+                for code in role_codes
+                for key in (f"roles.{code}.rank_value", f"roles.{code}.division_input")
+                if targets.get(key) and targets[key].get("mode") not in ("disabled", "auto")
+            }
             subrole_catalog = await resolve_subrole_catalog(
                 session, tournament.workspace_id, discipline=tournament.discipline
             )
@@ -683,8 +728,8 @@ class SheetSyncService:
             )
             bindings_by_key = {binding.source_record_key: binding for binding in existing_bindings}
 
-            # Bulk prefetches for the per-row loop, which runs every 5 minutes per
-            # tournament, so per-row lookups would cost queries even for unchanged rows:
+            # Bulk prefetches for the per-row loop, so a changed row costs no
+            # lookups of its own (unchanged rows are skipped before any):
             # 1. Active registrations keyed by normalized primary game handle.
             reuse_rows = await session.execute(
                 self.registration_repo.select()
@@ -738,6 +783,16 @@ class SheetSyncService:
                 # Seen BEFORE validation: a row the sheet still carries must not
                 # be withdrawn just because one of its cells no longer parses.
                 seen_keys.add(source_record_key)
+                binding = bindings_by_key.get(source_record_key)
+                parsed_fields_json = serialize_parsed_fields(parsed_fields)
+                # Applied as-is last time: nothing to validate, write or count. A
+                # withdrawn registration is re-applied, so a row back on the sheet restores it.
+                if (
+                    binding is not None
+                    and binding.row_hash == _row_hash(raw_row_json, parsed_fields_json, mode, binding.registration)
+                    and binding.registration.status != "withdrawn"
+                ):
+                    continue
                 values, answer_errors = await self._validated_row_answers(
                     session,
                     parsed_fields,
@@ -752,7 +807,6 @@ class SheetSyncService:
                     skipped += 1
                     continue
 
-                binding = bindings_by_key.get(source_record_key)
                 registration = binding.registration if binding else None
 
                 if registration is None:
@@ -796,6 +850,7 @@ class SheetSyncService:
                         schema=schema,
                         catalog_roles=catalog_roles,
                         allow_balancer_overwrite=allow_balancer_overwrite,
+                        sheet_ranked_roles=sheet_ranked_roles,
                         mode=mode,
                     ):
                         resync_status_by_id[registration.id] = registration
@@ -816,8 +871,7 @@ class SheetSyncService:
                     known_handles=known_handles,
                 )
 
-                parsed_fields_json = serialize_parsed_fields(parsed_fields)
-                row_hash = hashlib.sha1(repr(raw_row_json).encode("utf-8")).hexdigest()
+                row_hash = _row_hash(raw_row_json, parsed_fields_json, mode, registration)
                 if binding is None:
                     # Every column is set up front so the insert is one statement:
                     # the repository's create() flushes, and assigning after it would
@@ -892,6 +946,8 @@ class SheetSyncService:
                 errors=row_errors,
             )
         except HTTPException as exc:
+            # The rows applied before the failure must not ride the stamp's commit.
+            await session.rollback()
             feed.last_synced_at = now
             feed.last_sync_status = "failed"
             feed.last_error = str(exc.detail)
@@ -936,7 +992,7 @@ async def sync_due_google_sheet_feeds(
                 results.append(
                     {
                         "tournament_id": feed.tournament_id,
-                        "status": "success",
+                        "status": "locked" if sync_result.locked else "success",
                         "created": sync_result.created,
                         "updated": sync_result.updated,
                         "withdrawn": sync_result.withdrawn,

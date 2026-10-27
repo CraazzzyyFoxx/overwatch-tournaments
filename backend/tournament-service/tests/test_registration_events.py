@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import IsolatedAsyncioTestCase
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 backend_root = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(backend_root))
@@ -16,6 +16,9 @@ sys.path.insert(0, str(backend_root / "tournament-service"))
 # `admin` facade: the lifecycle functions resolve collaborators from their own
 # module globals, so patching the facade would not intercept them.
 registration_service = importlib.import_module("src.services.registration.lifecycle")
+
+#: The reviewer-account read finds nothing: only the event-vs-commit order is under test.
+_NO_ROWS = MagicMock(**{"unique.return_value.scalars.return_value.first.return_value": None})
 
 
 class RegistrationEventOutboxTests(IsolatedAsyncioTestCase):
@@ -33,7 +36,9 @@ class RegistrationEventOutboxTests(IsolatedAsyncioTestCase):
             reviewed_by=None,
             exclude_reason="manual",
         )
-        session = SimpleNamespace(commit=AsyncMock(side_effect=lambda: calls.append("commit")))
+        session = SimpleNamespace(
+            commit=AsyncMock(side_effect=lambda: calls.append("commit")), execute=AsyncMock(return_value=_NO_ROWS)
+        )
 
         async def fake_enqueue(_session, _registration):
             calls.append("enqueue")
@@ -70,7 +75,9 @@ class RegistrationEventOutboxTests(IsolatedAsyncioTestCase):
             reviewed_at=None,
             reviewed_by=None,
         )
-        session = SimpleNamespace(commit=AsyncMock(side_effect=lambda: calls.append("commit")))
+        session = SimpleNamespace(
+            commit=AsyncMock(side_effect=lambda: calls.append("commit")), execute=AsyncMock(return_value=_NO_ROWS)
+        )
 
         async def fake_notify(_session, _registration):
             calls.append("notify")

@@ -61,7 +61,7 @@ export interface SaveBarProps {
  * shares `useUnsavedGuard` with `EntityFormDialog`, so navigating away goes
  * through the same discard prompt.
  *
- * Chrome matches `admin/BulkBar` and `ui/OverlayBar` -- the other two "act now"
+ * Chrome matches `data-table/BulkBar` and `ui/OverlayBar` -- the other two "act now"
  * bars -- a rounded, bordered, blurred card floating above the content it acts
  * on. It used to be a full-bleed strip with a top border only, which read as
  * the page's footer rather than as a transient control, and was the one element

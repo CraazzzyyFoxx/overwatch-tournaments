@@ -123,3 +123,22 @@ func TestRegister_DisabledServesNothing(t *testing.T) {
 		t.Errorf("/api/docs (docs disabled) status = %d, want 404 (unregistered)", rec.Code)
 	}
 }
+
+// Docs off used to build all four specs anyway, and admin docs off kept the
+// admin specs alive behind a 404. Only what is served may be built.
+func TestNew_BuildsOnlyTheServedSpecs(t *testing.T) {
+	pub := []Group{{Tag: "Public", Routes: []edge.RouteSpec{{Method: "GET", Pattern: "/api/v1/things", Queue: "rpc.thing.list"}}}}
+	adm := []Group{{Tag: "Admin", Routes: []edge.RouteSpec{{Method: "GET", Pattern: "/api/v1/admin/things", Queue: "rpc.thing.admin"}}}}
+	info := Info{Title: "t"}
+
+	if s := New(config.Docs{Enabled: false, AdminEnabled: true}, info, pub, adm); s.publicSpec != nil || s.publicV2Spec != nil || s.adminSpec != nil || s.adminV2Spec != nil || s.publicPage != nil || s.adminPage != nil {
+		t.Error("docs disabled still built specs")
+	}
+	s := New(config.Docs{Enabled: true}, info, pub, adm)
+	if s.publicSpec == nil || s.publicV2Spec == nil || s.publicPage == nil {
+		t.Error("public docs enabled but not built")
+	}
+	if s.adminSpec != nil || s.adminV2Spec != nil || s.adminPage != nil {
+		t.Error("admin docs disabled still built the admin specs")
+	}
+}

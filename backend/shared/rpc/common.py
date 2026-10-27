@@ -22,6 +22,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from pydantic import ValidationError
+from sqlalchemy.exc import IntegrityError
 
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.models.identity.auth_user import AuthUser
@@ -48,6 +49,7 @@ __all__ = (
     "field_entry",
     "http_error",
     "validation_error",
+    "integrity_error",
     "retry_after_seconds",
     "envelope",
 )
@@ -70,38 +72,40 @@ def q(data: dict[str, Any], key: str) -> list[str] | None:
 
 
 def q1(data: dict[str, Any], key: str, cast: Callable[[str], Any] = str, default: Any = None) -> Any:
+    """First value of query param ``key`` through ``cast``; ``default`` when absent.
+
+    A value ``cast`` rejects is a 422, never the default: a silently dropped filter answers a different question.
+    """
     vals = q(data, key)
     if not vals:
         return default
     try:
         return cast(vals[0])
-    except (TypeError, ValueError):
-        return default
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=422, detail={"field": key, "msg": f"{key} is invalid", "code": "invalid_query_param"}
+        ) from exc
 
 
 def q_workspace_scope(data: dict[str, Any]) -> WorkspaceScope | None:
     """Parse ``?workspace_id=`` into a domain-read workspace scope.
 
     ``"all"`` is the public opt-in for a deliberate cross-workspace read
-    (``ALL_WORKSPACES``), an integer is a scoped read, and anything else
-    (missing, junk) is ``None`` — which ``require_workspace_scope`` turns into
-    a 400 on the surfaces that must stay workspace-scoped.
+    (``ALL_WORKSPACES``), an integer is a scoped read, a missing param is
+    ``None`` — which ``require_workspace_scope`` turns into a 400 on the
+    surfaces that must stay workspace-scoped — and anything else is a 422.
     """
-    raw = q1(data, "workspace_id")
-    if raw == ALL_WORKSPACES.value:
+    if q1(data, "workspace_id") == ALL_WORKSPACES.value:
         return ALL_WORKSPACES
-    try:
-        return int(raw)
-    except (TypeError, ValueError):
-        return None
+    return q1(data, "workspace_id", int)
 
 
 def q_workspace_id(data: dict[str, Any]) -> int | None:
     """Concrete ``workspace_id`` for reads whose default already is global.
 
-    ``all`` — like a missing or malformed param — means "every workspace" and
-    maps to ``None``. Reads that must fail closed on a missing scope use
-    :func:`q_workspace_scope` with ``require_workspace_scope`` instead.
+    ``all`` — like a missing param — means "every workspace" and maps to
+    ``None``; a malformed one is a 422. Reads that must fail closed on a missing
+    scope use :func:`q_workspace_scope` with ``require_workspace_scope`` instead.
     """
     scope = q_workspace_scope(data)
     return scope if isinstance(scope, int) else None
@@ -325,6 +329,28 @@ def validation_error(exc: ValidationError) -> tuple[str, dict[str, Any]]:
     return message, {"fields": fields}
 
 
+def integrity_error(exc: BaseException) -> tuple[str, str, dict[str, Any]] | None:
+    """Map a constraint violation that reached the envelope to ``(code, message, details)``.
+
+    A unique (or exclusion) violation is a lost race against a concurrent write: ``conflict``/409. A foreign-key,
+    check or not-null violation means the input referenced or carried something invalid: ``unprocessable``/422.
+    ``details["constraint"]`` names the constraint when the driver reports it. ``None`` for anything that is not a
+    SQLAlchemy ``IntegrityError``, so the RPC transport packages never import SQLAlchemy to ask.
+    """
+    if not isinstance(exc, IntegrityError):
+        return None
+    orig = exc.orig
+    sqlstate = getattr(orig, "sqlstate", None) or getattr(orig, "pgcode", None)
+    # asyncpg's own exception (the adapted DBAPI error's cause) carries the constraint name.
+    constraint = getattr(getattr(orig, "__cause__", None), "constraint_name", None) or getattr(
+        orig, "constraint_name", None
+    )
+    details = {"constraint": constraint} if constraint else {}
+    if sqlstate in ("23505", "23P01"):
+        return "conflict", "Already exists", details
+    return "unprocessable", "Violates a database constraint", details
+
+
 async def envelope(
     logger: Any,
     label: str,
@@ -351,6 +377,11 @@ async def envelope(
     except ValidationError as exc:
         message, details = validation_error(exc)
         return rpc_error("unprocessable", message, details)
-    except Exception:  # pragma: no cover - defensive worker guard
+    except Exception as exc:
+        if (mapped := integrity_error(exc)) is not None:
+            code, message, details = mapped
+            logger.warning("{} rpc {}: {} ({})", service, label, message, details.get("constraint"))
+            return rpc_error(code, message, details)
+        # Defensive worker guard.
         logger.exception("{} rpc failed: {}", service, label)
         return rpc_error("internal", "internal error")

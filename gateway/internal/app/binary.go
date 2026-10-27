@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
-	"io"
 	"log/slog"
 	"net/http"
 	"time"
@@ -12,6 +11,7 @@ import (
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/apierr"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/edge"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/rpc"
+	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/upload"
 )
 
 const (
@@ -52,10 +52,12 @@ func (b *Binary) IconUpload(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if !b.attachFile(w, r, id) {
+	body, release, ok := b.fileBody(w, r, id)
+	if !ok {
 		return
 	}
-	b.relayJSON(w, r, "rpc.app.workspaces.icon_upload", id, http.StatusOK)
+	defer release()
+	b.relayJSON(w, r, "rpc.app.workspaces.icon_upload", body, http.StatusOK)
 }
 
 // IconDelete: DELETE /api/v1/workspaces/{id}/icon (workspace.update in worker).
@@ -64,7 +66,8 @@ func (b *Binary) IconDelete(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	b.relayJSON(w, r, "rpc.app.workspaces.icon_delete", id, http.StatusOK)
+	body, _ := json.Marshal(id)
+	b.relayJSON(w, r, "rpc.app.workspaces.icon_delete", body, http.StatusOK)
 }
 
 // AssetUpload: POST /api/v1/assets/{asset_type}/{slug} (superuser in worker).
@@ -77,10 +80,12 @@ func (b *Binary) AssetUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	attachQuery(data, r)
-	if !b.attachFile(w, r, data) {
+	body, release, ok := b.fileBody(w, r, data)
+	if !ok {
 		return
 	}
-	b.relayJSON(w, r, "rpc.app.assets.upload", data, http.StatusOK)
+	defer release()
+	b.relayJSON(w, r, "rpc.app.assets.upload", body, http.StatusOK)
 }
 
 // AssetDelete: DELETE /api/v1/assets/{asset_type}/{slug} (superuser in worker).
@@ -93,7 +98,8 @@ func (b *Binary) AssetDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	attachQuery(data, r)
-	b.relayJSON(w, r, "rpc.app.assets.delete", data, http.StatusOK)
+	body, _ := json.Marshal(data)
+	b.relayJSON(w, r, "rpc.app.assets.delete", body, http.StatusOK)
 }
 
 // MatchLog: GET /api/v1/matches/{match_id}/log. Returns the raw log bytes
@@ -109,7 +115,8 @@ func (b *Binary) MatchLog(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	env, ok := b.invoke(w, r, "rpc.app.matches.log", data)
+	body, _ := json.Marshal(data)
+	env, ok := b.invoke(w, r, "rpc.app.matches.log", body)
 	if !ok {
 		return
 	}
@@ -123,7 +130,7 @@ func (b *Binary) MatchLog(w http.ResponseWriter, r *http.Request) {
 		writeDetail(w, http.StatusBadGateway, "invalid service response")
 		return
 	}
-	body, err := base64.StdEncoding.DecodeString(payload.ContentB64)
+	logBytes, err := base64.StdEncoding.DecodeString(payload.ContentB64)
 	if err != nil {
 		writeDetail(w, http.StatusBadGateway, "invalid log payload")
 		return
@@ -137,7 +144,7 @@ func (b *Binary) MatchLog(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Disposition", `attachment; filename="`+payload.Filename+`"`)
 	}
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(body)
+	_, _ = w.Write(logBytes)
 }
 
 // UserAvatarUpload: POST /api/v1/admin/users/{id}/avatar (user.update in worker).
@@ -147,10 +154,12 @@ func (b *Binary) UserAvatarUpload(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if !b.attachFile(w, r, id) {
+	body, release, ok := b.fileBody(w, r, id)
+	if !ok {
 		return
 	}
-	b.relayJSON(w, r, "rpc.app.users.avatar_upload", id, http.StatusOK)
+	defer release()
+	b.relayJSON(w, r, "rpc.app.users.avatar_upload", body, http.StatusOK)
 }
 
 // identityInto resolves the bearer identity (required) and injects it into data.
@@ -187,27 +196,40 @@ func (b *Binary) identityFrom(
 	return data, true
 }
 
-// attachFile parses the multipart "file" part and base64-encodes it into data.
-func (b *Binary) attachFile(w http.ResponseWriter, r *http.Request, data map[string]any) bool {
+// fileBody admits the upload against the gateway's memory budget, parses the
+// multipart "file" part and returns the RPC message: data plus content_type and
+// content_b64, the file base64'd straight into the message. On success the
+// caller must defer release, which frees the reservation once the RPC is done.
+func (b *Binary) fileBody(w http.ResponseWriter, r *http.Request, data map[string]any) (body []byte, release func(), ok bool) {
+	rel, admitted := upload.Admit(w, r, maxUpload)
+	if !admitted {
+		return nil, nil, false
+	}
+	defer func() {
+		if !ok {
+			rel()
+		}
+	}()
 	r.Body = http.MaxBytesReader(w, r.Body, maxUpload)
 	if err := r.ParseMultipartForm(maxUpload); err != nil {
 		writeDetail(w, http.StatusBadRequest, "invalid multipart form")
-		return false
+		return nil, nil, false
 	}
 	f, hdr, err := r.FormFile("file")
 	if err != nil {
 		writeDetail(w, http.StatusBadRequest, "file is required")
-		return false
+		return nil, nil, false
 	}
 	defer func() { _ = f.Close() }()
-	raw, err := io.ReadAll(io.LimitReader(f, maxUpload))
+	data["content_type"] = hdr.Header.Get("Content-Type")
+	body, err = upload.Body(data, "content_b64", upload.Base64Len(hdr.Size), func(out []byte) ([]byte, error) {
+		return upload.AppendBase64(out, f)
+	})
 	if err != nil {
 		writeDetail(w, http.StatusBadRequest, "failed to read file")
-		return false
+		return nil, nil, false
 	}
-	data["content_b64"] = base64.StdEncoding.EncodeToString(raw)
-	data["content_type"] = hdr.Header.Get("Content-Type")
-	return true
+	return body, rel, true
 }
 
 func attachQuery(data map[string]any, r *http.Request) {
@@ -222,16 +244,15 @@ func attachQuery(data map[string]any, r *http.Request) {
 	}
 }
 
-func (b *Binary) relayJSON(w http.ResponseWriter, r *http.Request, queue string, data map[string]any, success int) {
-	env, ok := b.invoke(w, r, queue, data)
+func (b *Binary) relayJSON(w http.ResponseWriter, r *http.Request, queue string, body []byte, success int) {
+	env, ok := b.invoke(w, r, queue, body)
 	if !ok {
 		return
 	}
 	apierr.WriteOK(w, success, env)
 }
 
-func (b *Binary) invoke(w http.ResponseWriter, r *http.Request, queue string, data map[string]any) (rpc.Envelope, bool) {
-	body, _ := json.Marshal(data)
+func (b *Binary) invoke(w http.ResponseWriter, r *http.Request, queue string, body []byte) (rpc.Envelope, bool) {
 	ctx, cancel := context.WithTimeout(r.Context(), binaryRPCTimeout)
 	defer cancel()
 

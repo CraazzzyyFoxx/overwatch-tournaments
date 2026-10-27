@@ -4,8 +4,8 @@ Row-level social-identity writes stay in ``shared.services.social_identity``
 (the unified ``social_account`` writer); the methods here add the admin
 surface's 404/409 policy on top of it.
 
-Writes go through ``UserRepository``/``AuthUserRepository``; this service owns
-the transaction boundary (``commit``), and the RPC layer owns none.
+Writes go through ``UserRepository``; this service owns the transaction
+boundary (``commit``), and the RPC layer owns none.
 """
 
 from __future__ import annotations
@@ -19,7 +19,8 @@ from shared import models
 from shared.core import http_status as status
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.core.pagination import paginated_dict
-from shared.repository import AuthUserRepository, UserRepository
+from shared.rbac.bootstrap import stage_rbac_change
+from shared.repository import UserRepository
 from shared.services.social_identity import (
     SocialAccountNotOAuthLinked,
     SocialHandleConflict,
@@ -34,14 +35,8 @@ __all__ = ("UserAdminService", "users")
 
 
 class UserAdminService:
-    def __init__(
-        self,
-        *,
-        players: UserRepository = UserRepository(),
-        auth_users: AuthUserRepository = AuthUserRepository(),
-    ) -> None:
+    def __init__(self, *, players: UserRepository = UserRepository()) -> None:
         self.players = players
-        self.auth_users = auth_users
 
     # ─── User CRUD ───────────────────────────────────────────────────────────
 
@@ -147,7 +142,7 @@ class UserAdminService:
                 detail=f"User with name '{data.name}' already exists",
             )
 
-        user = await self.players.create(session, models.User(name=data.name))
+        user = await self.players.create_player(session, name=data.name)
         user_id = user.id
         await session.commit()
         return await self.get_user_or_404(session, user_id)
@@ -184,6 +179,9 @@ class UserAdminService:
         if not user:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
+        if user.auth_user_id is not None:
+            # The player's workspace memberships go with it, out of the linked account's RBAC payload.
+            await stage_rbac_change(session, [user.auth_user_id], change="player_deleted")
         captures = await capture_owner_delete(session, user_id=user_id)
         await self.players.delete(session, user)
         await stage_owner_delete(
@@ -325,34 +323,17 @@ class UserAdminService:
     # ─── Avatar ──────────────────────────────────────────────────────────────
 
     async def set_avatar(self, session: AsyncSession, *, user_id: int, avatar_url: str | None) -> models.User:
-        """Point the player's avatar at ``avatar_url`` (``None`` clears it), mirror it
-        onto the linked auth user, and return the reloaded player.
+        """Point the player's avatar at ``avatar_url`` (``None`` clears it) and return
+        the reloaded player. It is the account's avatar too: every reader of a linked
+        account's avatar reads the player's.
 
         The S3 object itself is written/removed by the caller — this owns only the
         database side of it, plus the transaction.
         """
         player_user = await self.get_user_or_404(session, user_id)
         player_user.avatar_url = avatar_url
-        await self._propagate_avatar_to_auth_user(session, player_user, avatar_url)
         await session.commit()
         return await self.get_user_or_404(session, user_id)
-
-    async def _propagate_avatar_to_auth_user(
-        self, session: AsyncSession, player_user: models.User, avatar_url: str | None
-    ) -> None:
-        """Mirror an admin-set player avatar onto the linked auth user's ``avatar_url``.
-
-        The public profile / admin dialog read ``players.avatar_url``, but the header
-        and the self-service My Account modal read ``AuthUser.avatar_url`` (via ``/me``).
-        Without this, an admin avatar change would update only the player and the two
-        views would desync. This is the inverse of identity-svc's ``_propagate_to_player``
-        (which mirrors self-service changes onto the player). No-op for players with no
-        linked account."""
-        if player_user.auth_user_id is None:
-            return
-        auth_user = await self.auth_users.get(session, player_user.auth_user_id)
-        if auth_user is not None:
-            auth_user.avatar_url = avatar_url
 
 
 users = UserAdminService()

@@ -10,9 +10,10 @@ decommissioned HTTP service; assertions mirror the old test on the envelope
 
 import pytest
 
-from tests.conftest import RpcHarness, build_query
+from tests.conftest import RpcHarness, build_query, seeded_db
 
 
+@seeded_db
 @pytest.mark.parametrize(
     ("page", "per_page", "sort", "order", "entities"),
     [

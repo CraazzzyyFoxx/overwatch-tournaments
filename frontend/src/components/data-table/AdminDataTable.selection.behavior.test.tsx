@@ -2,7 +2,7 @@
 //
 // Selection and sorting contracts that reach past the current page:
 //  1. server mode — a row selected on page 1 is still handed to `bulkActions`
-//     after paging to page 2, and the toolbar says how many are off-page;
+//     after paging to page 2, and the selection bar says how many are off-page;
 //  2. client mode — Shift+click on a second header stacks the sort and the URL
 //     carries both columns, restoring them on a reload.
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";

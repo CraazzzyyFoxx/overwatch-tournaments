@@ -57,15 +57,55 @@ func TestLimiter_Allow_BoundsBurstsPerKey(t *testing.T) {
 	}
 }
 
-// reqFrom builds a request from a fixed client IP (X-Real-IP is what
-// clientip.From trusts first behind nginx) with an optional Authorization header.
+// TestLimiter_AtCapacityKeepsActiveBudgets: a flood of new keys into a full
+// table must not hand an exhausted client a fresh burst. It used to — once no
+// bucket was idle, the whole table was dropped. Newcomers share the overflow
+// bucket instead, and get their own again once tracked buckets go idle.
+func TestLimiter_AtCapacityKeepsActiveBudgets(t *testing.T) {
+	l := New(1, time.Minute)
+	now := time.Unix(1_000_000, 0)
+	l.now = func() time.Time { return now }
+
+	if !l.Allow("victim") || l.Allow("victim") {
+		t.Fatal("setup: victim should get exactly its burst of 1")
+	}
+	for i := range 2 * maxKeys {
+		l.Allow(strconv.Itoa(i))
+	}
+	if l.Allow("victim") {
+		t.Fatal("an exhausted client must stay limited after new keys flood a full table")
+	}
+	if len(l.buckets) > maxKeys {
+		t.Fatalf("table must stay bounded at %d, got %d", maxKeys, len(l.buckets))
+	}
+
+	// A window later every tracked bucket has refilled, so each newcomer takes
+	// the slot of an idle one — with only the shared overflow bucket the
+	// second would be refused.
+	now = now.Add(time.Minute)
+	for _, k := range []string{"late1", "late2"} {
+		if !l.Allow(k) {
+			t.Fatalf("%s: a newcomer must get its own bucket once tracked ones sit idle", k)
+		}
+	}
+}
+
+// reqFrom builds a request from a fixed client IP (the socket peer, which
+// clientip.From falls back to with no proxy headers) with an optional
+// Authorization header.
 func reqFrom(ip, authorization string) *http.Request {
 	r := httptest.NewRequest(http.MethodGet, "/api/v1/tournaments", nil)
-	r.Header.Set("X-Real-IP", ip)
+	r.RemoteAddr = ip + ":1234"
 	if authorization != "" {
 		r.Header.Set("Authorization", authorization)
 	}
 	return r
+}
+
+// bearerIs stands in for main's "authenticated" predicate: only the one
+// credential it names counts as valid.
+func bearerIs(token string) func(*http.Request) bool {
+	return func(r *http.Request) bool { return r.Header.Get("Authorization") == "Bearer "+token }
 }
 
 // TestLimiter_WrapAnon_AnonymousThrottledByIP proves anonymous requests share a
@@ -77,7 +117,7 @@ func TestLimiter_WrapAnon_AnonymousThrottledByIP(t *testing.T) {
 	h := l.WrapAnon(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		calls++
 		w.WriteHeader(http.StatusOK)
-	}))
+	}), bearerIs("good"))
 
 	// First anonymous request from 1.1.1.1 passes.
 	rec := httptest.NewRecorder()
@@ -105,19 +145,31 @@ func TestLimiter_WrapAnon_AnonymousThrottledByIP(t *testing.T) {
 	}
 }
 
-// TestLimiter_WrapAnon_BearerBypasses proves authenticated requests never
-// consume the anonymous bucket, even well past the limit.
-func TestLimiter_WrapAnon_BearerBypasses(t *testing.T) {
+// TestLimiter_WrapAnon_OnlyAuthenticatedBypasses: a credential the predicate
+// vouches for never consumes the anonymous bucket, even well past the limit —
+// but merely sending `Authorization: Bearer <junk>` no longer switches the
+// limiter off, which used to exempt anyone who sent any bearer at all.
+func TestLimiter_WrapAnon_OnlyAuthenticatedBypasses(t *testing.T) {
 	l := New(1, 1000*time.Second)
 	h := l.WrapAnon(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
-	}))
-	for i := 0; i < 5; i++ {
+	}), bearerIs("good"))
+	for i := range 5 {
 		rec := httptest.NewRecorder()
-		h.ServeHTTP(rec, reqFrom("1.1.1.1", "Bearer some.jwt.token"))
+		h.ServeHTTP(rec, reqFrom("1.1.1.1", "Bearer good"))
 		if rec.Code != http.StatusOK {
 			t.Fatalf("authenticated request %d must bypass the anon limiter, got %d", i, rec.Code)
 		}
+	}
+
+	codes := make([]int, 0, 2)
+	for range 2 {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, reqFrom("2.2.2.2", "Bearer junk"))
+		codes = append(codes, rec.Code)
+	}
+	if codes[0] != http.StatusOK || codes[1] != http.StatusTooManyRequests {
+		t.Fatalf("a junk bearer must be charged like an anonymous request: want [200 429], got %v", codes)
 	}
 }
 
@@ -127,7 +179,7 @@ func TestLimiter_WrapAnon_DisabledPassThrough(t *testing.T) {
 	l := New(0, 0)
 	h := l.WrapAnon(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
-	}))
+	}), bearerIs("good"))
 	for i := 0; i < 5; i++ {
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, reqFrom("1.1.1.1", ""))
@@ -137,8 +189,9 @@ func TestLimiter_WrapAnon_DisabledPassThrough(t *testing.T) {
 	}
 }
 
-// TestIsAnonymous covers the bearer-detection edge cases the throttle decision
-// hinges on: only a non-empty, scheme-insensitive bearer counts as authenticated.
+// TestIsAnonymous covers the bearer-detection edge cases WrapMetered's
+// public-traffic decision hinges on: only a non-empty, scheme-insensitive
+// bearer counts as a credential to resolve.
 func TestIsAnonymous(t *testing.T) {
 	cases := []struct {
 		authorization string
@@ -166,7 +219,7 @@ func TestIsAnonymous(t *testing.T) {
 // shape WrapFailures is wired for in main.go.
 func wrapFailuresReq(ip string) *http.Request {
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/refresh", nil)
-	r.Header.Set("X-Real-IP", ip)
+	r.RemoteAddr = ip + ":1234"
 	return r
 }
 
@@ -274,14 +327,14 @@ func TestLimiter_WrapFailures_DisabledPassThrough(t *testing.T) {
 // the request's Authorization header value ("<key>:<perMinute>"), standing in
 // for principal.Resolver.APIKeyQuota without an RPC stub. An empty header means
 // "not API-key traffic".
-func staticQuota(r *http.Request) (string, int, bool) {
+func staticQuota(r *http.Request) (string, int, error) {
 	raw := r.Header.Get("Authorization")
 	if raw == "" {
-		return "", 0, false
+		return "", 0, nil
 	}
 	key, rpm, _ := strings.Cut(raw, ":")
 	n, _ := strconv.Atoi(rpm)
-	return key, n, true
+	return key, n, nil
 }
 
 func keyReq(auth string) *http.Request {
@@ -362,7 +415,7 @@ func TestLimiter_WrapAPIKey_FallsBackToConfiguredLimit(t *testing.T) {
 }
 
 // TestLimiter_WrapAPIKey_NonKeyTrafficUntouched proves session and anonymous
-// requests keep their exact previous behaviour: quota reports ok=false for them,
+// requests keep their exact previous behaviour: quota reports no key for them,
 // and nothing is metered no matter how many arrive.
 func TestLimiter_WrapAPIKey_NonKeyTrafficUntouched(t *testing.T) {
 	l := New(1, time.Minute)
@@ -389,7 +442,7 @@ func TestLimiter_WrapAPIKey_NonKeyTrafficUntouched(t *testing.T) {
 // returns the handler unchanged, without ever consulting the quota.
 func TestLimiter_WrapAPIKey_DisabledPassThrough(t *testing.T) {
 	quotaCalls := 0
-	counting := func(r *http.Request) (string, int, bool) {
+	counting := func(r *http.Request) (string, int, error) {
 		quotaCalls++
 		return staticQuota(r)
 	}

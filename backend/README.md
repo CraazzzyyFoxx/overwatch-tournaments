@@ -105,6 +105,14 @@ $ make test
 The lower-level `bash ./scripts/test.sh` still exists, but prefer `make test`. A coverage report is
 generated at `htmlcov/index.html`.
 
+The historical migration cutover proofs in `tests/` skip their scratch-database tests by default
+(`shared.testing.db.migration_proofs_enabled()`): they build databases at old revisions and take
+hours. Run them deliberately, on the ephemeral test Postgres from `docker-compose.test.yml` only:
+
+```console
+$ OWT_MIGRATION_PROOFS=1 uv run pytest tests
+```
+
 ## Migrations
 
 Database schema is managed with [Alembic](https://alembic.sqlalchemy.org/); migration scripts live in

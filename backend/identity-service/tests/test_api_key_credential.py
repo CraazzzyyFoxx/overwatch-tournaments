@@ -119,13 +119,15 @@ def _key_info(api_key_id: int = 123) -> schemas.TokenApiKeyInfo:
     )
 
 
-async def _owner_authority(_session, user: models.AuthUser):
+async def _owner_authority(_session, owner_id: int):
     """Stands in for the owner's real RBAC lookup: ``validate`` narrows the key's
     scopes against it, and building it for real would mean a live session cache."""
+    owner = _owner()
+    assert owner_id == owner.id
     payload = schemas.TokenPayload(
-        sub=user.id,
-        email=user.email,
-        username=user.username,
+        sub=owner.id,
+        email=owner.email,
+        username=owner.username,
         workspaces=[
             schemas.WorkspaceMembership(
                 workspace_id=11,

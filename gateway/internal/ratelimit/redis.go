@@ -99,9 +99,10 @@ func NewRedis(rdb redis.Scripter, local *Limiter, logger *slog.Logger, onFallbac
 }
 
 // WrapAPIKey is Limiter.WrapAPIKey with the counter in Redis: same per-minute
-// semantics, same 429 body, same pass-through for session/anonymous traffic and
-// for a disabled limiter, but the budget is spent once per key rather than once
-// per key per replica.
+// semantics, same 429 body, same 401/503 for a key identity refuses or cannot
+// judge, same pass-through for session/anonymous traffic and for a disabled
+// limiter, but the budget is spent once per key rather than once per key per
+// replica.
 func (l *RedisLimiter) WrapAPIKey(next http.Handler, quota KeyQuota) http.Handler {
 	if l.rdb == nil {
 		return l.local.WrapAPIKey(next, quota)
@@ -110,8 +111,12 @@ func (l *RedisLimiter) WrapAPIKey(next http.Handler, quota KeyQuota) http.Handle
 		return next
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		key, perMinute, ok := quota(r)
-		if !ok {
+		key, perMinute, err := quota(r)
+		if err != nil {
+			refuseIdentity(w, r, err)
+			return
+		}
+		if key == "" {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -237,7 +242,8 @@ return {1, 0, used, ttl}
 
 // Caller is the identity behind one request, reduced to what metering needs.
 // It is a plain struct rather than the resolver's own type so this package
-// keeps not knowing about identity resolution (main.go adapts principal.Info).
+// keeps not knowing about identity resolution (principal.Resolver.MeterCaller
+// adapts principal.Info).
 type Caller struct {
 	// APIKey distinguishes machine traffic (metered on its own key bucket and
 	// refusable there) from a browser session (counted on the workspace bucket
@@ -255,11 +261,12 @@ type Caller struct {
 	Superuser bool
 }
 
-// CallerFunc resolves the identity behind a request. ok=false means the
-// identity could not be judged (backend down, token rejected) and the request
-// must pass through UNMETERED — the route behind it answers 401/503, and a 429
-// there would be a lie.
-type CallerFunc func(r *http.Request) (Caller, bool)
+// CallerFunc resolves the identity behind a request. ok=false with a nil error
+// means no usable identity (a rejected session token) and the request passes
+// through UNMETERED — the route behind it answers 401 where one is due, and a
+// 429 there would be a lie. ErrKeyRejected and any other error are answered
+// by refuseIdentity (401 / 503), exactly as in WrapAPIKey.
+type CallerFunc func(r *http.Request) (c Caller, ok bool, err error)
 
 // WorkspaceLimitFunc resolves a workspace's effective workspace-scope
 // requests_per_minute: limited=false means no ceiling, exists=false means no
@@ -290,15 +297,21 @@ type plan struct {
 //     sized for metered operations, and one UI page load fans out into enough
 //     calls to exhaust it.
 //
-// Everything else passes through untouched: an unjudgeable identity, a request
-// that names no workspace at all, and a workspace that does not exist.
+// A rejected API key is a 401 and an identity backend that cannot judge the
+// caller a 503, as in WrapAPIKey. Everything else passes through untouched: a
+// rejected session token, a request that names no workspace at all, and a
+// workspace that does not exist.
 func (l *RedisLimiter) WrapMetered(next http.Handler, who CallerFunc, ceiling WorkspaceLimitFunc) http.Handler {
 	if l.rdb == nil || who == nil || ceiling == nil {
 		return next
 	}
 	window := int(rpmWindow.Seconds())
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		p := l.plan(r, who, ceiling)
+		p, err := l.plan(r, who, ceiling)
+		if err != nil {
+			refuseIdentity(w, r, err)
+			return
+		}
 		if p.keyBucket == "" && p.wsBucket == "" {
 			next.ServeHTTP(w, r)
 			return
@@ -352,19 +365,20 @@ func (l *RedisLimiter) WrapMetered(next http.Handler, who CallerFunc, ceiling Wo
 }
 
 // plan decides which buckets a request charges. It never widens authority: a
-// workspace a caller cannot name is simply not charged to it.
-func (l *RedisLimiter) plan(r *http.Request, who CallerFunc, ceiling WorkspaceLimitFunc) plan {
+// workspace a caller cannot name is simply not charged to it. An error is the
+// CallerFunc's, for refuseIdentity.
+func (l *RedisLimiter) plan(r *http.Request, who CallerFunc, ceiling WorkspaceLimitFunc) (plan, error) {
 	p := plan{keyLimit: noLimit, wsLimit: noLimit}
 	queried := queryWorkspaceID(r)
 
 	if isAnonymous(r) {
 		p.wsBucket = l.publicBucket(r, ceiling, queried)
-		return p
+		return p, nil
 	}
 
-	c, ok := who(r)
-	if !ok {
-		return p
+	c, ok, err := who(r)
+	if err != nil || !ok {
+		return p, err
 	}
 
 	if c.APIKey {
@@ -382,7 +396,7 @@ func (l *RedisLimiter) plan(r *http.Request, who CallerFunc, ceiling WorkspaceLi
 			workspace = c.WorkspaceIDs[0]
 		}
 		p.wsBucket, p.wsLimit = l.workspaceBucket(r, ceiling, workspace)
-		return p
+		return p, nil
 	}
 
 	switch {
@@ -395,7 +409,7 @@ func (l *RedisLimiter) plan(r *http.Request, who CallerFunc, ceiling WorkspaceLi
 	case len(c.WorkspaceIDs) == 1:
 		p.wsBucket, p.wsLimit = l.workspaceBucket(r, ceiling, c.WorkspaceIDs[0])
 	}
-	return p
+	return p, nil
 }
 
 // workspaceBucket names the metered bucket for a workspace the caller may be

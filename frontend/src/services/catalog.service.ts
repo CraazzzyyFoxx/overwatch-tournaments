@@ -4,6 +4,8 @@ import type { CatalogEntityRead, CatalogKind, CatalogListFilters } from "@/types
 
 interface RequestOptions {
   signal?: AbortSignal;
+  /** Data Cache for a server read: the catalog is public and changes with a release, not between requests. */
+  next?: { revalidate?: number | false };
 }
 
 /**
@@ -16,12 +18,13 @@ export default class catalogService {
     discipline: string,
     kind: CatalogKind,
     filters: CatalogListFilters = {},
-    { signal }: RequestOptions = {}
+    { signal, next }: RequestOptions = {}
   ): Promise<PaginatedResponse<CatalogEntityRead>> {
     const { attrs, ...rest } = filters;
     return apiFetch(`/api/v1/catalog/${encodeURIComponent(discipline)}/${kind}`, {
       skipWorkspace: true,
       signal,
+      next,
       query: { ...rest, ...(attrs !== undefined && { attrs: JSON.stringify(attrs) }) }
     }).then((res) => res.json());
   }

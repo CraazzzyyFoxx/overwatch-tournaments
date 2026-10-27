@@ -28,10 +28,6 @@ dependencies = [
     "shared",
 ]
 
-[tool.mypy]
-strict = true
-exclude = ["venv", ".venv", "alembic"]
-
 [tool.ty.environment]
 python = "../.venv"
 python-version = "3.14"

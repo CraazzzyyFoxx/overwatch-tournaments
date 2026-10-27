@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/coder/websocket"
+
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/principal"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/protocol"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/safego"
@@ -26,16 +28,18 @@ const visibilityChangedEvent = "chat.visibility_changed"
 
 // ACLCache drops cached topic-ACL answers the realtime bus says have changed.
 // Implemented by workspace.Store; the revoker needs it because the answer it
-// is about to re-compute is exactly the one the frame contradicts.
+// is about to re-compute is exactly the one the frame contradicts, and Reset
+// because a bus that lost frames contradicts every answer.
 type ACLCache interface {
 	InvalidateRoomAccess(roomKind string, refID int64)
 	EvictUser(userID int64)
+	Reset()
 }
 
 // TopicRevoker re-authorizes live subscribers when who may read a topic
 // changes: an organizer toggling a chat room's spectator read, or a draft's
 // captain being replaced (chat.visibility_changed on that room's topic), or
-// identity-svc announcing that a user's memberships or roles changed
+// identity-svc announcing that a user's sessions, memberships or roles changed
 // (realtime:user:{id}:rbac).
 //
 // The topic ACL is evaluated at SUBSCRIBE time only, so closing a chat or
@@ -44,22 +48,26 @@ type ACLCache interface {
 // client-side unsubscribe would make the revocation advisory, so it happens
 // here, on the server, off the realtime frame announcing the change.
 //
-// It implements events.Broadcaster and is registered in the existing
-// events.Fanout alongside the hub and the response cache.
+// It implements events.Broadcaster and events.Resetter and is registered in
+// the existing events.Fanout alongside the hub and the response cache — AFTER
+// principal.Resolver, whose leg evicts the user's cached verdicts first, so
+// the re-validation here reaches identity-svc rather than the old answer.
 type TopicRevoker struct {
-	hub   *Hub
-	authz Authorizer
-	cache ACLCache
-	log   *slog.Logger
+	hub        *Hub
+	authz      Authorizer
+	cache      ACLCache
+	principals PrincipalFunc
+	log        *slog.Logger
 }
 
-// NewTopicRevoker returns a revoker over hub, deciding with authz and dropping
-// the contradicted cache entries before it asks.
-func NewTopicRevoker(hub *Hub, authz Authorizer, cache ACLCache, log *slog.Logger) *TopicRevoker {
+// NewTopicRevoker returns a revoker over hub, deciding with authz, dropping
+// the contradicted cache entries before it asks, and re-judging a user's
+// sockets through principals (the handshake's own rules, see Principals).
+func NewTopicRevoker(hub *Hub, authz Authorizer, cache ACLCache, principals PrincipalFunc, log *slog.Logger) *TopicRevoker {
 	if log == nil {
 		log = slog.Default()
 	}
-	return &TopicRevoker{hub: hub, authz: authz, cache: cache, log: log}
+	return &TopicRevoker{hub: hub, authz: authz, cache: cache, principals: principals, log: log}
 }
 
 // Broadcast implements events.Broadcaster. It is called for EVERY realtime
@@ -84,6 +92,13 @@ func (t *TopicRevoker) Broadcast(topic string, payload []byte) {
 	safego.Go(func() { t.reauthorize(topic, roomKind, refID) })
 }
 
+// Reset implements events.Resetter: the bus lost frames, so any of them may
+// have been the RBAC or visibility change a cached ACL answer predates, and
+// every answer goes. Nothing is re-authorized here — the hub's own Reset, a
+// later leg of the same fan-out, closes every socket, and the clients'
+// resubscribes run the topic ACL against the emptied cache.
+func (t *TopicRevoker) Reset() { t.cache.Reset() }
+
 func (t *TopicRevoker) reauthorize(topic, roomKind string, refID int64) {
 	t.cache.InvalidateRoomAccess(roomKind, refID)
 
@@ -100,9 +115,10 @@ func (t *TopicRevoker) reauthorize(topic, roomKind string, refID int64) {
 	}
 }
 
-// reauthorizeUser re-checks every topic the user's live connections hold. Most
-// answers are unchanged and come straight from the cache; the ones that hinge
-// on the membership or role that just changed are re-read.
+// reauthorizeUser re-judges each of the user's live connections, then
+// re-checks every topic a surviving one holds. Most answers are unchanged and
+// come straight from the cache; the ones that hinge on the membership or role
+// that just changed are re-read.
 func (t *TopicRevoker) reauthorizeUser(userID int64) {
 	conns := t.hub.connsOf(userID)
 	if len(conns) == 0 {
@@ -113,10 +129,34 @@ func (t *TopicRevoker) reauthorizeUser(userID int64) {
 	defer cancel()
 
 	for _, c := range conns {
+		if !t.revalidate(ctx, c) {
+			continue
+		}
 		for _, topic := range c.subscribedTopics() {
 			t.revokeUnlessAllowed(ctx, c, topic, "You are no longer allowed to subscribe to this topic")
 		}
 	}
+}
+
+// revalidate judges c's credential again: identity-svc publishes the user's
+// rbac frame after every session revocation too (logout, password change, an
+// admin's revoke), and an open socket must not outlive its session. A
+// credential no longer valid closes the socket (policy violation); a valid one
+// gets its fresh principal, whose superuser bit may have flipped. When
+// identity-svc cannot answer, the socket keeps the principal it has — an
+// outage must not drop every live socket — and its topics are still re-checked.
+func (t *TopicRevoker) revalidate(ctx context.Context, c *Conn) bool {
+	fresh, err := t.principals(ctx, c.principal().Token)
+	switch {
+	case err != nil:
+		t.log.Warn("socket re-validation failed; keeping its principal", "err", err)
+	case fresh == nil:
+		c.closeWith(websocket.StatusPolicyViolation, "credential revoked")
+		return false
+	default:
+		c.user.Store(fresh)
+	}
+	return true
 }
 
 func (t *TopicRevoker) revokeUnlessAllowed(ctx context.Context, c *Conn, topic, message string) {
@@ -124,7 +164,7 @@ func (t *TopicRevoker) revokeUnlessAllowed(ctx context.Context, c *Conn, topic, 
 	// still entitled, and the frame we are reacting to says the entitlement
 	// just changed — so the subscription goes. The client can resubscribe once
 	// the lookup works again, and the subscribe path applies the same rule.
-	allowed, err := t.authz.Allow(ctx, c.user, topic)
+	allowed, err := t.authz.Allow(ctx, c.principal(), topic)
 	if err != nil {
 		t.log.Warn("topic re-authorization failed", "topic", topic, "err", err)
 	}

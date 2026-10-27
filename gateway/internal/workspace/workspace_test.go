@@ -5,11 +5,36 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
 )
+
+// Every ACL cache is keyed by ids a client picks (and caches negative answers),
+// so every one must be bounded — at most aclCacheMaxEntries live keys.
+func TestNewBoundsEveryCache(t *testing.T) {
+	s := reflect.ValueOf(New(nil)).Elem()
+	checked := 0
+	for i := range s.NumField() {
+		f := s.Field(i)
+		if f.Kind() != reflect.Pointer || f.IsNil() || f.Elem().Kind() != reflect.Struct {
+			continue
+		}
+		bound := f.Elem().FieldByName("maxEntries")
+		if !bound.IsValid() {
+			continue
+		}
+		checked++
+		if n := bound.Int(); n <= 0 || n > aclCacheMaxEntries {
+			t.Errorf("%s: maxEntries = %d, want 1..%d", s.Type().Field(i).Name, n, aclCacheMaxEntries)
+		}
+	}
+	if checked == 0 {
+		t.Fatal("found no caches to check")
+	}
+}
 
 // The captain lookup runs against the encounter layer (spec §13.3): an encounter's participants are the live rows
 // of `encounter.team` — there is no home/away pair and no `encounter_participant` table any more.

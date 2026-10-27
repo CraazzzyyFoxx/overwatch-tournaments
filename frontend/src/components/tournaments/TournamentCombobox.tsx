@@ -2,7 +2,6 @@
 
 import { useTranslations } from "next-intl";
 
-import type { ComboboxVariant } from "@/components/ui/combobox";
 import SearchableImageSelect, {
   type SearchableImageOption
 } from "@/components/ui/searchable-image-select";
@@ -24,8 +23,6 @@ interface TournamentComboboxProps<E extends string = never> {
   ariaLabel?: string;
   isLoading?: boolean;
   disabled?: boolean;
-  /** `toolbar` (default) on the public pages, `default` in admin forms. */
-  variant?: ComboboxVariant;
   size?: "sm" | "default";
   triggerClassName?: string;
 }
@@ -46,7 +43,6 @@ export function TournamentCombobox<E extends string = never>({
   ariaLabel,
   isLoading,
   disabled,
-  variant,
   size,
   triggerClassName
 }: Readonly<TournamentComboboxProps<E>>) {
@@ -79,7 +75,6 @@ export function TournamentCombobox<E extends string = never>({
       ariaLabel={ariaLabel}
       isLoading={isLoading}
       disabled={disabled}
-      variant={variant}
       size={size}
       triggerClassName={triggerClassName}
     />

@@ -109,6 +109,11 @@ class _Log:
             except ValueError:
                 logger.warning(f"Skipping row with invalid time '{row_parts[2]}' in {self.label}")
                 continue
+            if event_type == LogEventType.MercyRez and not (len(row_parts) > 4 and row_parts[4].strip()):
+                # A revive no Mercy cast (Anran's) is logged as mercy_rez with an empty reviver: no participant and
+                # no Mercy resurrect, so the row says nothing the log can keep.
+                logger.warning(f"Skipping resurrection without a reviver in {self.label}: {line}")
+                continue
             if event_type == LogEventType.MatchStart and self.started_at is None:
                 self.started_at = _aware(row_parts[0])
             parsed.append((event_type, time, row_parts[3:]))

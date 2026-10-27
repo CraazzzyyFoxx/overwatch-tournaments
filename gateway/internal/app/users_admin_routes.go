@@ -7,8 +7,8 @@ import "github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/edge"
 // require auth; fine-grained ACL is enforced in the worker handler: user CRUD =
 // "user.<action>", merge = superuser, social identity add/update/delete/primary =
 // superuser, social visibility = "user.read". Served under /api/v1/admin/users/*
-// (frontend calls apiFetch("app", "admin/users...")). Avatar upload + CSV import
-// are multipart -> base64 binary handlers (see binary.go), not in this table.
+// (frontend calls apiFetch("app", "admin/users...")). Avatar upload is
+// multipart -> a base64 binary handler (see binary.go), not in this table.
 var UsersAdminRoutes = []edge.RouteSpec{
 	// user CRUD
 	{Method: "GET", Pattern: "/api/v1/admin/users", Queue: "rpc.app.users.admin_list", AllQuery: true, Auth: edge.AuthRequired},

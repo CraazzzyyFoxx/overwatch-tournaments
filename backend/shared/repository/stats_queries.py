@@ -34,9 +34,14 @@ def player_facts(*, discipline: str | None) -> sa.Subquery:
         # The match/encounter owner of match_team and encounter.team is already pinned by the composite FKs
         # (fk_fact_team, fk_match_team_match, fk_match_team_encounter_team). Restating it as join predicates makes
         # the planner multiply their selectivities as independent, estimate one row and nest-loop millions.
-        .join(mt, sa.and_(mt.match_id == f.match_id, mt.encounter_team_id == f.encounter_team_id))
+        # Those FKs (on NOT NULL keys) also guarantee exactly one match_team/encounter.team row per fact, so the outer
+        # joins return the same rows. Outer, PostgreSQL drops them when a reader projects neither ``source_position``
+        # nor ``tournament_team_id``, and never estimates the still-correlated two-column match_team join below the
+        # fact rows; inner, it read as one row per match team instead of hundreds, and a one-player hero compare
+        # probed every match team of the game past the 30s statement timeout.
+        .outerjoin(mt, sa.and_(mt.match_id == f.match_id, mt.encounter_team_id == f.encounter_team_id))
         .join(e, sa.and_(e.id == m.encounter_id, e.workspace_id == m.workspace_id, e.discipline == m.discipline))
-        .join(et, et.id == f.encounter_team_id)
+        .outerjoin(et, et.id == f.encounter_team_id)
         .where(f.workspace_member_id.is_not(None), *([m.discipline == discipline] if discipline is not None else []))
         .subquery()
     )

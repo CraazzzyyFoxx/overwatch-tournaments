@@ -22,13 +22,7 @@ from shared.core.errors import BaseAPIException as HTTPException
 from shared.core.pagination import paginated_dict
 from shared.quota import admin as quota_admin
 from shared.rbac import SCOPE_PAIRS, normalize_scopes, scope_pairs, unknown_scopes
-from shared.repository import (
-    ApiKeyRepository,
-    QuotaApiKeyLimitRepository,
-    RoleRepository,
-    WorkspaceMemberRepository,
-    WorkspaceRepository,
-)
+from shared.repository import ApiKeyRepository, AuthUserRepository, QuotaApiKeyLimitRepository, WorkspaceRepository
 from shared.rpc.identity import rehydrate_user
 from shared.schemas.quota import QuotaLimitsPayload, QuotaScopePolicy, QuotaUsageRead
 from src import schemas
@@ -73,16 +67,14 @@ class ApiKeyService:
         *,
         keys: ApiKeyRepository = ApiKeyRepository(),
         workspaces: WorkspaceRepository = WorkspaceRepository(),
-        members: WorkspaceMemberRepository = WorkspaceMemberRepository(),
-        roles: RoleRepository = RoleRepository(),
+        users: AuthUserRepository = AuthUserRepository(),
         quota_limits: QuotaApiKeyLimitRepository = QuotaApiKeyLimitRepository(),
         payloads: TokenPayloadBuilder = token_payloads,
         config: Any = settings,
     ) -> None:
         self.keys = keys
         self.workspaces = workspaces
-        self.members = members
-        self.roles = roles
+        self.users = users
         self.quota_limits = quota_limits
         self.payloads = payloads
         self.config = config
@@ -149,15 +141,6 @@ class ApiKeyService:
 
     # -- authorization -----------------------------------------------------
 
-    @staticmethod
-    def _has_permission_payload(permissions: list[dict[str, str]], resource: str, action: str) -> bool:
-        for permission in permissions:
-            pr = permission.get("resource")
-            pa = permission.get("action")
-            if (pr == resource or pr == "*") and (pa == action or pa == "*"):
-                return True
-        return False
-
     async def _ensure_active_workspace(self, session: AsyncSession, workspace_id: int) -> models.Workspace:
         workspace = await self.workspaces.get(session, workspace_id)
         if workspace is None:
@@ -165,25 +148,6 @@ class ApiKeyService:
         if not workspace.is_active:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Workspace is inactive")
         return workspace
-
-    async def _has_workspace_import_access(
-        self,
-        session: AsyncSession,
-        *,
-        user: models.AuthUser,
-        workspace_id: int,
-    ) -> bool:
-        if user.is_superuser or user.has_permission("team", "create"):
-            return True
-
-        member = await self.members.get_member(session, workspace_id=workspace_id, auth_user_id=user.id)
-        if member is None:
-            return False
-        # Decided by RBAC alone, never by role name: the owner is covered by the
-        # wildcard ``*``/``*`` grant behind ``admin.*``.
-        workspace_rbac = await self.roles.workspace_rbac_for_user(session, user.id, [workspace_id])
-        _, permissions = workspace_rbac.get(workspace_id, ([], []))
-        return self._has_permission_payload(permissions, "team", "create")
 
     async def ensure_can_manage(
         self,
@@ -193,27 +157,46 @@ class ApiKeyService:
         workspace_id: int,
     ) -> None:
         await self._ensure_active_workspace(session, workspace_id)
-        if not await self._has_workspace_import_access(session, user=user, workspace_id=workspace_id):
+        actor = await self._authority(session, user)
+        # One predicate, deny overlay included: a deny on ``team.create`` here
+        # outranks every grant -- superuser and the owner's ``*``/``*`` alike.
+        if not actor.has_workspace_permission(workspace_id, "team", "create"):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Permission denied for workspace {workspace_id}: team.create required",
             )
 
+    async def _authority(self, session: AsyncSession, user: models.AuthUser) -> models.AuthUser:
+        """``user`` as a principal to put RBAC questions to.
+
+        The caller ``resolve_active_user`` hands over already carries its stamped
+        RBAC, so asking costs nothing; any other user (a script, a test) is built
+        from its RBAC payload, as every worker rehydrates the gateway's identity.
+        """
+        if getattr(user, "_cached_permissions", None) is not None:
+            return user
+        payload = await self.payloads.build(session, user)
+        return rehydrate_user(payload.model_dump(mode="json"))
+
     async def _owner_authority(
         self,
         session: AsyncSession,
-        user: models.AuthUser,
-    ) -> tuple[schemas.TokenPayload, models.AuthUser]:
-        """The owner's full RBAC, as both the payload and a queryable AuthUser.
+        owner_id: int,
+    ) -> tuple[schemas.TokenPayload, models.AuthUser] | None:
+        """A key owner's full RBAC, as both the payload and a queryable AuthUser.
 
+        ``None`` for a missing or deactivated owner. Cache first: the owner row
+        is loaded only on a miss, and only after the generation that fences the
+        fill, so the entry can never store account fields (``is_active``,
+        ``is_superuser``) older than a drop that committed after them.
         ``rehydrate_user`` is the very function every worker applies to the
         gateway-injected identity, so a permission question answered here gets
-        the identical answer it would get downstream. Built from the payload
-        rather than from ``user``'s ORM relationships on purpose: on a warm RBAC
-        cache the row is loaded without its role collections, and touching
-        ``AuthUser.roles`` then would lazy-load outside the async greenlet.
+        the identical answer it would get downstream.
         """
-        payload = await self.payloads.build(session, user)
+        resolved = await self.payloads.resolve(session, owner_id, self.users.get_identity)
+        if resolved is None or not resolved[1]:
+            return None
+        payload = resolved[0]
         return payload, rehydrate_user(payload.model_dump(mode="json"))
 
     async def grantable_scopes(
@@ -234,7 +217,7 @@ class ApiKeyService:
         they are allow-by-default and deny-only, never workspace grants, so no
         member "holds" them in the RBAC sense and no key can carry them.
         """
-        _, owner = await self._owner_authority(session, user)
+        owner = await self._authority(session, user)
         return frozenset(
             name
             for name, (resource, action) in SCOPE_PAIRS.items()
@@ -597,12 +580,13 @@ class ApiKeyService:
             return None
         if api_key.expires_at is not None and api_key.expires_at <= _now():
             return None
-        if api_key.user is None or not api_key.user.is_active:
-            return None
         if api_key.workspace is None or not api_key.workspace.is_active:
             return None
 
-        owner_payload, owner = await self._owner_authority(session, api_key.user)
+        authority = await self._owner_authority(session, api_key.auth_user_id)
+        if authority is None:
+            return None
+        owner_payload, owner = authority
         # A key must not outlive its owner's membership: losing the workspace
         # kills every key scoped to it without waiting for anyone to revoke.
         if not owner.is_workspace_member(api_key.workspace_id):
@@ -621,9 +605,9 @@ class ApiKeyService:
             await session.commit()
 
         return schemas.TokenPayload(
-            sub=api_key.user.id,
-            email=api_key.user.email,
-            username=api_key.user.username,
+            sub=owner_payload.sub,
+            email=owner_payload.email,
+            username=owner_payload.username,
             # Never carrying role NAMES: they are blanket bypasses in AuthUser
             # (_has_admin_equivalent_role, _has_admin_panel_role), and a delegated
             # credential must be fully described by the permission list below.

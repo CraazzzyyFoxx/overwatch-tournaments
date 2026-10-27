@@ -36,9 +36,13 @@ class EncounterChatAccess:
         session: AsyncSession,
         auth_user: models.AuthUser | None,
         room: ChatRoom,
+        *,
+        for_update: bool,
     ) -> ChatMembership:
-        # Format-agnostic: a lobby has a pre-game room too, and its chat is not a series feature.
-        encounter = await load_room_encounter(session, room.ref_id, for_update=True)
+        # Format-agnostic: a lobby has a pre-game room too, and its chat is not a series feature. Locked for a write
+        # (one account's posts queue, so the rate limit's count-then-insert holds); a plain read for the history every
+        # spectator polls, which must not queue behind the captains.
+        encounter = await load_room_encounter(session, room.ref_id, for_update=for_update)
         if encounter.custom_game_id is not None:
             return await self._mix_member(session, auth_user, encounter)
         # Before anything else: an outsider must not learn that a hidden

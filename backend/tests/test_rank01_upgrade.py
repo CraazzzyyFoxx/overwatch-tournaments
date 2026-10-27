@@ -17,7 +17,7 @@ import psycopg
 import pytest
 from psycopg.types.json import Json
 
-from shared.testing.db import ensure_test_postgres, is_ephemeral_test_dsn, postgres_env
+from shared.testing.db import MIGRATION_PROOF_SKIP, ensure_test_postgres, migration_proofs_enabled, postgres_env
 
 BACKEND = pathlib.Path(__file__).resolve().parents[1]
 PRE_REVISION = "quota0003"
@@ -70,8 +70,8 @@ def _requests() -> dict[int, dict]:
 @pytest.fixture(scope="module")
 def legacy_jobs():
     ensure_test_postgres()
-    if not is_ephemeral_test_dsn():
-        pytest.skip("creates a scratch database: only on the ephemeral test Postgres")
+    if not migration_proofs_enabled():
+        pytest.skip(MIGRATION_PROOF_SKIP)
     with _connect("postgres") as admin:
         admin.execute(f'DROP DATABASE IF EXISTS "{SCRATCH_DB}" WITH (FORCE)')
         admin.execute(f'CREATE DATABASE "{SCRATCH_DB}"')

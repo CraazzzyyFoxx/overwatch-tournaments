@@ -36,6 +36,9 @@ sys.path.insert(0, str(backend_root / "tournament-service"))
 
 
 stage_service = importlib.import_module("src.services.admin.stage")
+stage_crud = importlib.import_module("src.services.admin.stage.crud")
+stage_generation = importlib.import_module("src.services.admin.stage.generation")
+stage_seeding = importlib.import_module("src.services.admin.stage.seeding")
 stage_common = importlib.import_module("src.services.admin.stage_common")
 schemas = importlib.import_module("src.schemas")
 enums = importlib.import_module("shared.core.enums")
@@ -64,11 +67,11 @@ class SwissRoundRobinShortcutTests(IsolatedAsyncioTestCase):
         self.session = SimpleNamespace()
         self.recorded = AsyncMock()
         patches = (
-            patch.object(stage_service, "record_swiss_bye", self.recorded),
-            patch.object(stage_service, "clear_swiss_byes", AsyncMock()),
-            patch.object(stage_service, "clear_swiss_scope_stopped", AsyncMock()),
-            patch.object(stage_service, "mark_swiss_scope_stopped", AsyncMock()),
-            patch.object(stage_service, "swiss_bye_team_ids", AsyncMock(return_value=[])),
+            patch.object(stage_generation, "record_swiss_bye", self.recorded),
+            patch.object(stage_generation, "clear_swiss_byes", AsyncMock()),
+            patch.object(stage_generation, "clear_swiss_scope_stopped", AsyncMock()),
+            patch.object(stage_generation, "mark_swiss_scope_stopped", AsyncMock()),
+            patch.object(stage_generation, "swiss_bye_team_ids", AsyncMock(return_value=[])),
         )
         for patcher in patches:
             patcher.start()
@@ -181,13 +184,15 @@ class SeedTeamsSlotTests(IsolatedAsyncioTestCase):
             delete=AsyncMock(),
             flush=AsyncMock(),
             commit=AsyncMock(),
+            execute=AsyncMock(),  # the stage lock
+            scalar=AsyncMock(return_value=0),  # no encounters generated yet
         )
 
         with (
             patch.object(service, "get_stage", AsyncMock(side_effect=[stage, stage])),
             patch.object(service.team_repo, "bulk_get", AsyncMock(return_value=teams)),
             patch.object(service, "_publish_structure_changed", AsyncMock()),
-            patch.object(stage_service, "enqueue_tournament_recalculation", AsyncMock()),
+            patch.object(stage_seeding, "enqueue_tournament_recalculation", AsyncMock()),
         ):
             await service.seed_teams(session, 1, [11, 12])
 
@@ -353,7 +358,7 @@ class UpdateStageTests(IsolatedAsyncioTestCase):
         with (
             patch.object(service, "get_stage", AsyncMock(side_effect=[stage, stage])),
             patch.object(service, "_publish_structure_changed", AsyncMock()),
-            patch.object(stage_service, "enqueue_tournament_recalculation", AsyncMock()),
+            patch.object(stage_crud, "enqueue_tournament_recalculation", AsyncMock()),
         ):
             await service.update_stage(session, 1, data)
 
@@ -411,9 +416,9 @@ class UpdateStageTests(IsolatedAsyncioTestCase):
     async def test_a_kept_round_is_edited_in_place_not_recreated(self) -> None:
         # ``(stage_id, round)`` is the primary key: replacing the row would
         # insert the new one before deleting the old and collide on it.
-        kept = stage_service.models.StageRoundBestOf(round=1, best_of=2)
+        kept = stage_crud.models.StageRoundBestOf(round=1, best_of=2)
         stage = self._stage()
-        stage.round_best_of = [kept, stage_service.models.StageRoundBestOf(round=2, best_of=5)]
+        stage.round_best_of = [kept, stage_crud.models.StageRoundBestOf(round=2, best_of=5)]
 
         await self._update(stage, schemas.StageUpdate(best_of={"default": 3, "by_round": {1: 5}, "final": 7}))
 

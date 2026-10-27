@@ -3,8 +3,9 @@
 It registers no ingest, rank, achievement or tournament-event consumer and starts no schedule but the outbox drain (its
 handlers commit outbox rows, which must go out even while no worker runs); the rest belongs to ``serve_worker.py``.
 The public reads (``rpc.stats.{statistics,users,achievements}.*``) are the hottest anonymous traffic in the system and
-run on their own channel, so a burst of cold 20-30 s compare reads and the admin/ingest handlers never share one QoS
-window. Run: ``faststream run serve_rpc:app``.
+run on their own channel. QoS is per consumer (FastStream ``global_qos=False``), not per channel, so they and the
+admin/ingest handlers draw on the same process-wide ``RPC_PREFETCH_COUNT`` handler permits (``shared.rpc.deadline``).
+Run: ``faststream run serve_rpc:app``.
 """
 
 from faststream.rabbit import Channel
@@ -13,11 +14,12 @@ from redis.asyncio import Redis
 from shared.disciplines import DISCIPLINES
 from shared.disciplines import jobs as discipline_jobs
 from shared.messaging.outbox import drain_outbox
+from shared.observability import Readiness
 from shared.services.scheduler import IntervalScheduler
 from src.core import config, db
 from src.core.caching import backend_cache_url
 from src.core.clients import realtime_redis
-from src.core.lifecycle import Readiness, close_clients, create_process, start_clients, start_observability
+from src.core.lifecycle import close_clients, create_process, start_clients, start_observability
 from src.rpc import (
     achievement_reads as rpc_achievement_reads,
 )

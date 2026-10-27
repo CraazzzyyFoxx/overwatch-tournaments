@@ -1,3 +1,5 @@
+import asyncio
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -23,15 +25,19 @@ from shared.messaging.config import (
     TOURNAMENT_STANDINGS_JOBS_DLQ,
     TOURNAMENT_STANDINGS_JOBS_QUEUE,
 )
-from shared.messaging.outbox import drain_outbox
+from shared.messaging.outbox import drain_outbox, purge_outbox
 from shared.messaging.topology import declare_dead_letter_queue
 from shared.observability import (
+    Readiness,
+    instrument_scheduler,
     make_rabbit_broker,
     observe_message_processing,
     observe_scheduled_job,
+    register_db_pool_metrics,
     setup_logging,
     setup_sentry,
     setup_tracing,
+    start_loop_lag_monitor,
     start_worker_metrics_server,
 )
 from shared.quota import close as close_quota
@@ -64,6 +70,7 @@ from src.rpc import reads as rpc_reads
 from src.services.admin import registry as admin_registry
 from src.services.challonge import sync as challonge_sync
 from src.services.computation.bracket_worker import process_bracket_job
+from src.services.computation.jobs import purge_finished_jobs
 from src.services.computation.standings_worker import process_standings_job
 from src.services.division_grid.import_jobs import process_import_job, recover_stale_import_jobs
 from src.services.encounter import challonge_push_events, log_evidence_events, room_open_events, room_reconcile
@@ -82,10 +89,15 @@ broker = make_rabbit_broker(
 )
 app = FastStream(broker)
 scheduler = AsyncIOScheduler()
+# ``GET /health`` on the metrics port: unready until the consumers run, again once shutdown begins.
+readiness = Readiness(broker)
 
 # Long-running compute jobs get their own AMQP channel so a burst of bracket /
-# standings recomputes can't occupy the RPC default-channel QoS slots.
+# standings recomputes can't occupy the RPC channel. Its prefetch is per
+# consumer (QoS is not process-wide), so the three compute queues can hold 12
+# deliveries; ``_COMPUTE_SLOTS`` is what caps the process at 4 running jobs.
 _JOBS_CHANNEL = Channel(prefetch_count=4)
+_COMPUTE_SLOTS = asyncio.Semaphore(4)
 
 # Expose the worker broker to event publishers that don't thread one through
 # (e.g. standings-invalidation enqueues from the bracket/standings workers).
@@ -111,8 +123,8 @@ configure_quota(
     edge_workspace_metering=config.settings.quota_edge_workspace_metering,
 )
 
-# Durable half of the cross-service invalidations: re-bumps the generations the
-# writer already bumped at its commit, in case that bump was lost.
+# Durable half of the cross-service invalidations: re-bumps a generation only
+# when the writer's commit-time bump for that event was lost.
 register_invalidation_consumer(
     broker,
     logger,
@@ -147,8 +159,8 @@ team_format.register(broker, logger)
 # Ad-hoc scrim rooms. Provisioning only — a room is then played through the
 # pre-game subjects registered just above.
 scrim.register(broker, logger)
-# Recalculation-event consumers (tournament.changed / standings.invalidated):
-# cache invalidation + standings recalculation run on those domain events.
+# standings.invalidated: each event becomes a durable standings job, which the
+# compute consumers at the bottom of this file run.
 broker.include_router(recalculation_events.task_router)
 # Ingest evidence (match.ingested): the match layer alone decides whether a log becomes official.
 broker.include_router(log_evidence_events.task_router)
@@ -233,6 +245,12 @@ async def purge_chat(
         await session.commit()
 
 
+async def purge_retention(job: str, purge: Callable[[async_sessionmaker[AsyncSession]], Awaitable[int]]) -> None:
+    """A retention purge (computation jobs, Challonge sync log) as one observed job; the purge logs its own count."""
+    async with observe_scheduled_job(job):
+        await purge(db.async_session_maker)
+
+
 @app.on_startup
 async def start_worker() -> None:
     await broker.connect()
@@ -267,7 +285,10 @@ async def start_worker() -> None:
         release=config.settings.sentry_release,
         engine=db.async_engine,
     )
-    start_worker_metrics_server(config.settings.worker_metrics_port)
+    readiness.bind()
+    start_worker_metrics_server(config.settings.worker_metrics_port, ready=readiness)
+    register_db_pool_metrics(db.async_engine, "tournament-svc")
+    start_loop_lag_monitor("tournament-svc")
     await recover_stale_import_jobs()
     scheduler.add_job(
         recover_stale_import_jobs,
@@ -279,11 +300,12 @@ async def start_worker() -> None:
         drain_outbox, "interval", seconds=1, id="event_outbox_drain", args=(db.async_session_maker, broker)
     )
     # A step's timer running out is the only thing that moves a room with nobody
-    # writing anything, so it needs its own tick; the sweep catches rooms whose
-    # last mover committed in another service. Both take the encounter lock with
-    # SKIP LOCKED, which is what makes running them on every replica safe.
+    # writing anything, so it needs its own tick. The sweep is a backstop for a
+    # room left owing a step anyway (a missed tick, a writer that died after its
+    # commit). Both take the encounter lock with SKIP LOCKED, which is what makes
+    # running them on every replica safe.
     scheduler.add_job(settle_due_pick_ban_rooms, "interval", seconds=1, id="pick_ban_room_due")
-    scheduler.add_job(sweep_stalled_pick_ban_rooms, "interval", seconds=60, id="pick_ban_room_sweep")
+    scheduler.add_job(sweep_stalled_pick_ban_rooms, "interval", minutes=5, id="pick_ban_room_sweep")
     scheduler.add_job(
         sync_registration_google_sheet_feeds,
         "interval",
@@ -302,46 +324,61 @@ async def start_worker() -> None:
         seconds=30,
         id="auto_transition_tournaments",
     )
-    scheduler.add_job(
-        purge_stale_realtime_events,
-        "interval",
-        days=1,
-        id="realtime_workspace_event_purge",
-    )
-    scheduler.add_job(
-        purge_chat,
-        "interval",
-        days=1,
-        id="chat_purge",
-    )
+    # Retention runs at a wall-clock hour, not every 24 h of uptime: a worker
+    # redeployed more often than daily would never reach an interval job's first
+    # run. The grace keeps a busy loop at 04:00 from skipping the day.
+    daily = {"trigger": "cron", "hour": 4, "jitter": 600, "misfire_grace_time": 3600}
+    scheduler.add_job(purge_stale_realtime_events, id="realtime_workspace_event_purge", **daily)
+    scheduler.add_job(purge_chat, id="chat_purge", **daily)
+    # purge_outbox observes itself as "event_outbox_purge".
+    scheduler.add_job(purge_outbox, id="event_outbox_purge", args=(db.async_session_maker,), **daily)
+    for job, purge in (
+        ("computation_job_purge", purge_finished_jobs),
+        ("challonge_sync_log_purge", challonge_sync.purge_sync_log),
+    ):
+        scheduler.add_job(purge_retention, id=job, args=(job, purge), **daily)
+    instrument_scheduler(scheduler, "tournament-svc")
     scheduler.start()
     logger.info("Tournament worker scheduler started")
 
 
+@app.after_startup
+async def serve_worker() -> None:
+    readiness.serving(True)
+
+
 @app.on_shutdown
 async def stop_scheduler() -> None:
-    # wait=False intentionally abandons in-flight scheduled jobs (outbox drain,
-    # sheet/Challonge sync) instead of blocking shutdown for up to minutes.
-    # This is safe: an abandoned outbox batch rolls back and is republished on
-    # the next tick (at-least-once), and the sync flows commit incrementally
-    # (per encounter / per batch) and are idempotent on re-run, so an
-    # interrupted job resumes cleanly on the next tick.
+    readiness.serving(False)
+    # The asyncio executor cancels in-flight scheduled jobs (outbox drain,
+    # sheet/Challonge sync); it cannot wait for them. This is safe: a cancelled
+    # outbox batch rolls back and is republished on the next tick (at-least-once),
+    # and each sheet feed / each Challonge tournament commits once, at its end (a
+    # Challonge import's per-match savepoints only isolate a failing match), so an
+    # interrupted one rolls back whole and the next tick re-runs it idempotently.
     scheduler.shutdown(wait=False)
-    # The realtime publisher's and challonge.sync's pooled clients: unclosed,
-    # each leaks a connection per worker restart.
+
+
+@app.after_shutdown
+async def close_clients() -> None:
+    # Only once broker.stop() has let the in-flight handlers finish: they publish
+    # through these. Unclosed, each pooled client (realtime publisher,
+    # challonge.sync's lock, the quota gate's own) leaks a connection per restart.
     await close_realtime_redis()
     await challonge_sync.close_redis()
-    # Third pooled client, same leak: the quota gate opened its own above.
     await close_quota()
 
 
 @broker.subscriber(TOURNAMENT_BRACKET_JOBS_QUEUE, exchange=TOURNAMENT_COMPUTE_EXCHANGE, channel=_JOBS_CHANNEL)
 async def consume_bracket_job(data: dict, msg: RabbitMessage) -> None:
-    async with observe_message_processing(
-        queue=TOURNAMENT_BRACKET_JOBS_QUEUE,
-        handler="consume_bracket_job",
-        message=msg,
-        logger=logger,
+    async with (
+        _COMPUTE_SLOTS,
+        observe_message_processing(
+            queue=TOURNAMENT_BRACKET_JOBS_QUEUE,
+            handler="consume_bracket_job",
+            message=msg,
+            logger=logger,
+        ),
     ):
         event = TournamentComputationJobEvent.model_validate(data)
         await process_bracket_job(event.job_id)
@@ -349,11 +386,14 @@ async def consume_bracket_job(data: dict, msg: RabbitMessage) -> None:
 
 @broker.subscriber(TOURNAMENT_STANDINGS_JOBS_QUEUE, exchange=TOURNAMENT_COMPUTE_EXCHANGE, channel=_JOBS_CHANNEL)
 async def consume_standings_job(data: dict, msg: RabbitMessage) -> None:
-    async with observe_message_processing(
-        queue=TOURNAMENT_STANDINGS_JOBS_QUEUE,
-        handler="consume_standings_job",
-        message=msg,
-        logger=logger,
+    async with (
+        _COMPUTE_SLOTS,
+        observe_message_processing(
+            queue=TOURNAMENT_STANDINGS_JOBS_QUEUE,
+            handler="consume_standings_job",
+            message=msg,
+            logger=logger,
+        ),
     ):
         event = TournamentComputationJobEvent.model_validate(data)
         await process_standings_job(event.job_id)
@@ -365,10 +405,13 @@ async def consume_standings_job(data: dict, msg: RabbitMessage) -> None:
     channel=_JOBS_CHANNEL,
 )
 async def consume_division_grid_import_job(data: dict, msg: RabbitMessage) -> None:
-    async with observe_message_processing(
-        queue=DIVISION_GRID_IMPORT_JOBS_QUEUE,
-        handler="consume_division_grid_import_job",
-        message=msg,
-        logger=logger,
+    async with (
+        _COMPUTE_SLOTS,
+        observe_message_processing(
+            queue=DIVISION_GRID_IMPORT_JOBS_QUEUE,
+            handler="consume_division_grid_import_job",
+            message=msg,
+            logger=logger,
+        ),
     ):
         await process_import_job(int(data["job_id"]))
