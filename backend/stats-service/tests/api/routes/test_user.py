@@ -76,6 +76,24 @@ def _get_compare_metric(payload: dict[str, object], key: str) -> dict[str, objec
     return next(metric for metric in payload["metrics"] if metric["key"] == key)
 
 
+def _ensure_catalog_entity(db: Session, kind: str) -> int:
+    """Any Overwatch catalog entity of ``kind``; a fresh database has none, so one is created."""
+    row = (
+        db.query(models.CatalogEntity.id)
+        .filter_by(discipline="overwatch", kind=kind)
+        .order_by(models.CatalogEntity.id)
+        .first()
+    )
+    if row is not None:
+        return row[0]
+    entity = models.CatalogEntity(
+        discipline="overwatch", kind=kind, slug=f"compare-division-{kind}", name=f"Compare Division {kind}", attrs={}
+    )
+    db.add(entity)
+    db.flush()
+    return entity.id
+
+
 def _ensure_compare_division_fixture(db: Session) -> dict[str, int | str]:
     """A workspace with its own two-tier Overwatch grid (division 1: rank < 2000, division 2: rank >= 2000).
 
@@ -84,17 +102,7 @@ def _ensure_compare_division_fixture(db: Session) -> dict[str, int | str]:
     Idempotent (fixed ids, checked before insert); the rows persist across runs.
     """
     ids = _COMPARE_FIXTURE_IDS
-    hero_row, map_row = (
-        db.query(models.CatalogEntity.id)
-        .filter_by(discipline="overwatch", kind=kind)
-        .order_by(models.CatalogEntity.id)
-        .first()
-        for kind in ("character", "map")
-    )
-    assert hero_row is not None
-    assert map_row is not None
-    hero_id = hero_row[0]
-    map_id = map_row[0]
+    hero_id, map_id = (_ensure_catalog_entity(db, kind) for kind in ("character", "map"))
     role = "damage"
     fixture: dict[str, int | str] = {
         "subject_user_id": ids["subject_user"],
