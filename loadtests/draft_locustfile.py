@@ -32,6 +32,10 @@ The socket rides locust's table as request type ``WS``: ``connect`` and
 ``replay <event_type>`` for events a resubscribe caught up on, and a ``drop``
 failure for every socket that closed under its client.
 
+``OWT_SOURCE_NET`` gives every simulated user its own source address, so the
+per-IP limits along the path (traefik, nginx, the gateway) count one client
+per user, as they would in a real room.
+
 Run (the stack and the gateway restart: README.md):
     cd loadtests
     uv run python draft_seed.py --host http://127.0.0.1:8090 --teams 20 --spectator-accounts 40
@@ -43,19 +47,23 @@ Run (the stack and the gateway restart: README.md):
 from __future__ import annotations
 
 import contextlib
+import ipaddress
 import itertools
 import json
 import logging
 import random
+import socket
+import ssl
 import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 
 import gevent
 import websocket
 from locust import HttpUser, constant, events, task
+from requests.adapters import HTTPAdapter
 
 import config
 
@@ -129,6 +137,9 @@ ROOM = _load_room()
 _captain_seats = itertools.count()
 _spectator_seats = itertools.count()
 _t0 = time.monotonic()
+#: The next user's own source address (`OWT_SOURCE_NET`); None leaves it to the OS, every user on one address.
+_source_ips = ipaddress.ip_network(config.SOURCE_NET).hosts() if config.SOURCE_NET else None
+_tls = ssl.create_default_context()
 
 
 @events.test_start.add_listener
@@ -159,6 +170,38 @@ def delivery_ms(event: dict[str, Any]) -> float:
     return max(0.0, (time.time() - datetime.fromisoformat(occurred).timestamp()) * 1000)
 
 
+class _SourceAdapter(HTTPAdapter):
+    """Opens every connection of one user from that user's own address."""
+
+    def __init__(self, source: str) -> None:
+        self.source = source
+        super().__init__()
+
+    def init_poolmanager(self, *args: Any, **kwargs: Any) -> None:
+        super().init_poolmanager(*args, source_address=(self.source, 0), **kwargs)
+
+
+def take_source(client: Any) -> str | None:
+    """Bind a new user's HTTP client to its own source address; its socket follows (`source_socket`)."""
+    if _source_ips is None:
+        return None
+    source = str(next(_source_ips))
+    adapter = _SourceAdapter(source)
+    client.mount("http://", adapter)
+    client.mount("https://", adapter)
+    return source
+
+
+def source_socket(url: str, source: str) -> socket.socket:
+    """A connected socket from `source`, TLS-wrapped for wss: websocket-client handshakes over it as is."""
+    parts = urlsplit(url)
+    secure = parts.scheme == "wss"
+    sock = socket.create_connection(
+        (parts.hostname, parts.port or (443 if secure else 80)), timeout=10, source_address=(source, 0)
+    )
+    return _tls.wrap_socket(sock, server_hostname=parts.hostname) if secure else sock
+
+
 class Seat(HttpUser):
     """One browser tab in the room: the page's reads and its one socket."""
 
@@ -183,6 +226,7 @@ class Seat(HttpUser):
         self.board_topic = f"draft:{self.sid}:board"
         self.chat_topic = f"draft:{self.sid}:chat"
         self.claim_seat()
+        self.source = take_source(self.client)
         if self.token:
             self.client.headers["Authorization"] = f"Bearer {self.token}"
 
@@ -314,7 +358,12 @@ class Seat(HttpUser):
         started = time.perf_counter()
         try:
             ws = websocket.create_connection(
-                url, timeout=10, origin=config.DRAFT_ORIGIN or self.host, header=header, enable_multithread=True
+                url,
+                timeout=10,
+                origin=config.DRAFT_ORIGIN or self.host,
+                header=header,
+                enable_multithread=True,
+                socket=source_socket(url, self.source) if self.source else None,
             )
         except Exception as exc:  # noqa: BLE001 - every handshake failure is a failed connect
             ws_metric("connect", since_ms(started), exc=ConnectionError(f"{type(exc).__name__} {at()}"))
@@ -521,6 +570,7 @@ class DraftDriver(HttpUser):
     wait_time = constant(0)
 
     def on_start(self) -> None:
+        take_source(self.client)
         self.client.headers["Authorization"] = f"Bearer {ROOM['organizer']['token']}"
         self.sid = int(ROOM["session_id"])
         self.picks = 0

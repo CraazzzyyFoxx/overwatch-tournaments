@@ -71,6 +71,8 @@ uv run locust --worker --processes 4
 | `OWT_DRAFT_ROLLBACK_AFTER` | _(none)_ | **Draft scenario:** after this many picks the driver rolls the last one back (every client re-reads the board) and resumes |
 | `OWT_DRAFT_CHAT_EVERY` | `60` | **Draft scenario:** seconds between one captain's chat messages; `0` keeps the room silent |
 | `OWT_DRAFT_ORIGIN` | the target host | **Draft scenario:** `Origin` of the simulated tabs; the gateway refuses sockets from origins outside `GATEWAY_WS_ALLOWED_ORIGINS` |
+| `OWT_DRAFT_PSQL` | psql in the e2e stack's Postgres | **Draft scenario:** the command that runs one SQL statement on the target's database (`draft_seed.py` appends the statement), e.g. `docker exec db_postgres psql -U system -d owt_dev -tAc` on the dev site |
+| `OWT_SOURCE_NET` | _(none)_ | **Draft scenario:** a network every simulated user takes its own source address from (`127.1.0.0/16` with the stack on the generator's host), so the per-IP limits along the path — traefik, nginx, the gateway — count one client per user, as in a real room; unset, every user shares the generator's address |
 
 ## Draft room scenario (`draft_locustfile.py`)
 
@@ -212,6 +214,34 @@ The fit/queue herds are 80 per-team computations queued on one event loop, not
 roster loads; they move by ±300 ms between identical runs, so their
 before/after difference is noise. Run 2 lost one board read client-side in the
 rollback herd (status 0, no error at the gateway or nginx).
+
+### Dev site (`dev.owt.craazzzyyfoxx.me` on `home`)
+
+The same scenario against the dev deployment (`owt-dev-p4`: the production
+compose at `PROD_SIZE=small`, a restored production database). The generator
+ran on `home` itself, in a throwaway container with host networking and the
+public hostname pinned to `127.0.0.1` (`--add-host`): every request took the
+real path — TLS at traefik, the dev nginx, the gateway — without the WAN, and
+`OWT_SOURCE_NET=127.1.0.0/16` gave every simulated user its own address. On
+that edge this is not optional: traefik's `websecure` entrypoint limits every
+client IP to 100 r/s (burst 50), and a first run from one address took 374
+429s from it, all in the herds (182 board reads in the rollback alone). The
+seeding is one client, so it went to the dev nginx directly, with
+`OWT_DRAFT_PSQL="docker exec db_postgres psql -U system -d owt_dev -tAc"`, and
+the gateway ran with `GATEWAY_WS_MAX_ANON_CONNS_PER_IP=0` and
+`GATEWAY_AUTH_RATE_LIMIT=100000` for the duration (a throwaway compose
+overlay). The seeded rows were deleted afterwards.
+
+| Dev site | 20 teams | 40 teams |
+| --- | --- | --- |
+| HTTP errors outside the restart second / failed WS connects | 0 / 0 | 0 / 0 (one 502 inside it) |
+| Board lookup p95, join wave | 34 ms | 53 ms |
+| Rollback herd p95 at the gateway: board / fit / queue | 50 / 199 / 145 ms | 66 / 534 / 357 ms |
+| Reconnect herd p95 at the gateway: board / chat / fit / queue | 14 / 99 / 92 / 89 ms | 6 / 246 / 215 / 241 ms |
+| fit / queue p95, whole run | 110 / 140 ms | 390 / 240 ms |
+| Autopick p95 / pick options p95 | 150 / 46 ms | 180 / 120 ms |
+| Pick event delivery p95 / p99 | 130 / 150 ms | 160 / 260 ms |
+| balancer CPU, join wave average / peak | 10% / 46% | 16% / 62% |
 
 ## Interpreting results
 
