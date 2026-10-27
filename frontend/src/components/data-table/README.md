@@ -38,8 +38,8 @@ project, satisfy `host.ts`, and it works.
   the screen only says what goes in which:
   - *narrow the list* — the search box and the screen's `FilterBar` (`toolbar`);
   - *how it is shown* — one "View" menu on every width: CSV export (selection or
-    current view), density, grouping (`groupBy`), saved views (URL + column
-    visibility, per screen), columns (`columnsStorageKey`);
+    current view), density, sort (cards only: they have no header), grouping (`groupBy`),
+    saved views (URL + column visibility, per screen), columns (`columnsStorageKey`);
   - *what the screen does* — `commands`, data rather than JSX (`TableCommand`):
     outline buttons, the one `primary` last; a permission the reader lacks is
     `hidden`, a precondition is a `disabledReason` shown as text.
@@ -108,7 +108,7 @@ next to it.
 | `head-cell.tsx` / `body-cells.tsx` / `body-rows.tsx` | One `<th>`, one `<td>` (plus the leading checkbox/chevron cell), and one `<tr>`: a memoised `BodyRow` that repaints only when its own props (selected, expanded, current, tabbable, layout, debounced search) change. |
 | `AdminTableHeader.tsx` | The sticky header row, select-all, and the dnd-kit boundary the reorder chunk fills in. |
 | `AdminTableHead.tsx` / `ColumnDnd.tsx` | The resizable header cell, and its draggable variant in a lazily imported chunk. |
-| `AdminTableToolbar.tsx` / `toolbar-context.ts` | The toolbar's three zones (search + the screen's `toolbar`; the View menu: CSV, density, grouping, saved views, columns; `commands`) and `useNarrowToolbar`, the toolbar's own width; the context tells the screen's `FilterBar` when it is narrow. |
+| `AdminTableToolbar.tsx` / `toolbar-context.ts` | The toolbar's three zones (search + the screen's `toolbar`; the View menu: CSV, density, sort for cards, grouping, saved views, columns; `commands`) and `useNarrowToolbar`, the toolbar's own width; the context tells the screen's `FilterBar` when it is narrow. |
 | `BulkBar.tsx` | The floating selection bar around the screen's `bulkActions`. |
 | `AdminTableMobileList.tsx` | Rows as cards below `md`. |
 | `AdminTableEmptyState.tsx` | No rows, and the way out of the search/filter that emptied them. |

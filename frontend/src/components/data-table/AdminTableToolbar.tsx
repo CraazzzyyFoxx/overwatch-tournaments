@@ -2,7 +2,19 @@
 
 import React, { useCallback, useId, useState, useSyncExternalStore } from "react";
 import { useTranslations } from "next-intl";
-import { Bookmark, ChevronLeft, ChevronRight, Download, Layers, Settings2, SlidersHorizontal } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  Bookmark,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  Layers,
+  Settings2,
+  SlidersHorizontal
+} from "lucide-react";
+import type { ColumnSort } from "@tanstack/react-table";
 
 import { Link, cn } from "@/components/data-table/host";
 import { Button } from "@/components/ui/button";
@@ -35,6 +47,14 @@ export interface PickerColumn {
   mandatory: boolean;
 }
 
+/** Sorting from the View menu, for cards: they have no header to click. */
+export interface AdminTableSort {
+  columns: { id: string; label: React.ReactNode }[];
+  /** Cards sort by one column at a time. */
+  value?: ColumnSort;
+  onChange: (next: ColumnSort) => void;
+}
+
 /** The table's own controls over how its rows are shown: everything behind the "View" menu. */
 export interface AdminTableViewProps {
   selectedCount: number;
@@ -51,6 +71,7 @@ export interface AdminTableViewProps {
   onToggleColumn: (id: string) => void;
   onResetColumns: () => void;
   groupBy?: DataTableGroupBy;
+  sort?: AdminTableSort;
 }
 
 export interface AdminTableToolbarProps {
@@ -268,7 +289,7 @@ function CommandMenuItem({ command }: Readonly<{ command: TableCommand }>) {
   );
 }
 
-type ViewLevel = "root" | "group" | "views" | "columns";
+type ViewLevel = "root" | "sort" | "group" | "views" | "columns";
 
 /**
  * How the rows are shown, in one menu on every width: CSV, density, then
@@ -290,7 +311,8 @@ function ViewMenu({
   pickerColumns,
   onToggleColumn,
   onResetColumns,
-  groupBy
+  groupBy,
+  sort
 }: Readonly<AdminTableViewProps & { narrow: boolean; commands: TableCommand[] }>) {
   const t = useTranslations("kitTable.dataTableExtra");
   const actionsT = useTranslations("kit.actions");
@@ -306,7 +328,9 @@ function ViewMenu({
     if (next === "views") savedViews.reload();
     setLevel(next);
   };
-  const levelTitle = level === "group" ? groupBy?.label : level === "views" ? t("views") : t("columns");
+  const levelTitle =
+    level === "sort" ? t("sort") : level === "group" ? groupBy?.label : level === "views" ? t("views") : t("columns");
+  const sortLabel = sort?.columns.find((column) => column.id === sort.value?.id)?.label;
 
   return (
     <>
@@ -345,6 +369,23 @@ function ViewMenu({
                 </DropdownMenuCheckboxItem>
               ) : null}
               {groupBy ? (
+              {sort?.columns.length ? (
+                <DropdownMenuItem onSelect={enter("sort")}>
+                  <ArrowUpDown aria-hidden />
+                  <span className="min-w-0 flex-1 truncate">{t("sort")}</span>
+                  {sortLabel ? (
+                    <span className="flex min-w-0 items-center gap-1 text-caption text-muted-foreground">
+                      <span className="truncate">{sortLabel}</span>
+                      {sort.value?.desc ? (
+                        <ArrowDown aria-label={t("sortDesc")} className="size-3 shrink-0" />
+                      ) : (
+                        <ArrowUp aria-label={t("sortAsc")} className="size-3 shrink-0" />
+                      )}
+                    </span>
+                  ) : null}
+                  <ChevronRight aria-hidden />
+                </DropdownMenuItem>
+              ) : null}
                 <DropdownMenuItem onSelect={enter("group")}>
                   <Layers aria-hidden />
                   <span className="min-w-0 flex-1 truncate">{groupBy.label}</span>
@@ -375,6 +416,39 @@ function ViewMenu({
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               {level === "group" && groupBy ? (
+              {level === "sort" && sort ? (
+                <>
+                  <DropdownMenuRadioGroup
+                    value={sort.value?.id ?? ""}
+                    onValueChange={(id) => sort.onChange({ id, desc: sort.value?.desc ?? false })}
+                  >
+                    {sort.columns.map((column) => (
+                      <DropdownMenuRadioItem
+                        key={column.id}
+                        value={column.id}
+                        // Stay open: the direction is picked next.
+                        onSelect={(event) => event.preventDefault()}
+                      >
+                        {column.label}
+                      </DropdownMenuRadioItem>
+                    ))}
+                  </DropdownMenuRadioGroup>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuRadioGroup
+                    value={sort.value?.desc ? "desc" : "asc"}
+                    onValueChange={(dir) => sort.value && sort.onChange({ id: sort.value.id, desc: dir === "desc" })}
+                  >
+                    <DropdownMenuRadioItem value="asc" disabled={!sort.value} onSelect={(event) => event.preventDefault()}>
+                      <ArrowUp aria-hidden className="size-3.5" />
+                      {t("sortAsc")}
+                    </DropdownMenuRadioItem>
+                    <DropdownMenuRadioItem value="desc" disabled={!sort.value} onSelect={(event) => event.preventDefault()}>
+                      <ArrowDown aria-hidden className="size-3.5" />
+                      {t("sortDesc")}
+                    </DropdownMenuRadioItem>
+                  </DropdownMenuRadioGroup>
+                </>
+              ) : null}
                 <DropdownMenuRadioGroup value={groupBy.value} onValueChange={groupBy.onChange}>
                   {groupBy.options.map((option) => (
                     <DropdownMenuRadioItem key={option.value} value={option.value}>

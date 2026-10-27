@@ -2,7 +2,7 @@
 
 import React, { useEffect, useEffectEvent, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import type { Row } from "@tanstack/react-table";
+import { flexRender, type Row } from "@tanstack/react-table";
 
 import { Card } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
@@ -459,7 +459,21 @@ export function DataTable<TData>({
           pickerColumns: columnsStorageKey && !(isMobile && renderMobileCard) ? pickerColumns : undefined,
           onToggleColumn: toggleColumn,
           onResetColumns: resetToDefaults,
-          groupBy
+          groupBy,
+          // Cards have no header to sort from.
+          sort: isMobile
+            ? {
+                columns: table
+                  .getLeafHeaders()
+                  .filter((header) => header.column.getCanSort())
+                  .map((header) => ({
+                    id: header.column.id,
+                    label: flexRender(header.column.columnDef.header, header.getContext())
+                  })),
+                value: sorting[0],
+                onChange: (next) => setSorting([next])
+              }
+            : undefined
         }}
       />
 
