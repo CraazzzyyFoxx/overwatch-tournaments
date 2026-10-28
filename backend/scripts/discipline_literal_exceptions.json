@@ -2182,46 +2182,6 @@
       "remove_when": "identifier is migrated with its data/URL"
     },
     {
-      "path": "frontend/src/app/(site)/tournaments/[slug]/_views/TournamentStatsPage.tsx",
-      "rule": "catalog-label",
-      "token": "heroes",
-      "context": "export const STATS_TABS = [\"heroes\", \"maps\"] as const;",
-      "count": 1,
-      "reason": "persisted/wire identifier (column default, table/schema name, stored parser/mode id, URL value, include token)",
-      "owner": "P9",
-      "remove_when": "identifier is migrated with its data/URL"
-    },
-    {
-      "path": "frontend/src/app/(site)/tournaments/[slug]/_views/TournamentStatsPage.tsx",
-      "rule": "catalog-label",
-      "token": "heroes",
-      "context": "const tab = readViewParam(searchParams, \"tab\", STATS_TABS, \"heroes\");",
-      "count": 1,
-      "reason": "persisted/wire identifier (column default, table/schema name, stored parser/mode id, URL value, include token)",
-      "owner": "P9",
-      "remove_when": "identifier is migrated with its data/URL"
-    },
-    {
-      "path": "frontend/src/app/(site)/tournaments/[slug]/_views/TournamentStatsPage.tsx",
-      "rule": "catalog-label",
-      "token": "heroes",
-      "context": "{ value: \"heroes\", label: t(\"common.characters\") },",
-      "count": 1,
-      "reason": "persisted/wire identifier (column default, table/schema name, stored parser/mode id, URL value, include token)",
-      "owner": "P9",
-      "remove_when": "identifier is migrated with its data/URL"
-    },
-    {
-      "path": "frontend/src/app/(site)/tournaments/[slug]/_views/TournamentStatsPage.tsx",
-      "rule": "catalog-label",
-      "token": "heroes",
-      "context": "defaultValue=\"heroes\"",
-      "count": 1,
-      "reason": "persisted/wire identifier (column default, table/schema name, stored parser/mode id, URL value, include token)",
-      "owner": "P9",
-      "remove_when": "identifier is migrated with its data/URL"
-    },
-    {
       "path": "frontend/src/components/pick-ban/PregameAdminControls.tsx",
       "rule": "catalog-label",
       "token": "hero",
@@ -3242,6 +3202,36 @@
       "remove_when": "pick-ban kind is migrated to 'character'"
     },
     {
+      "path": "frontend/src/types/tournament.types.ts",
+      "rule": "stat-code",
+      "token": "damage_delta",
+      "context": "| \"damage_delta\";",
+      "count": 1,
+      "reason": "wire identifier: a stats-service tournament player-stat rank code (API sort key), not a stat definition",
+      "owner": "P9",
+      "remove_when": "tournament stats columns read their stat definitions from the discipline metadata"
+    },
+    {
+      "path": "frontend/src/types/tournament.types.ts",
+      "rule": "stat-code",
+      "token": "eliminations",
+      "context": "| \"eliminations\"",
+      "count": 1,
+      "reason": "wire identifier: a stats-service tournament player-stat rank code (API sort key), not a stat definition",
+      "owner": "P9",
+      "remove_when": "tournament stats columns read their stat definitions from the discipline metadata"
+    },
+    {
+      "path": "frontend/src/types/tournament.types.ts",
+      "rule": "stat-code",
+      "token": "hero_damage_dealt",
+      "context": "| \"hero_damage_dealt\"",
+      "count": 1,
+      "reason": "wire identifier: a stats-service tournament player-stat rank code (API sort key), not a stat definition",
+      "owner": "P9",
+      "remove_when": "tournament stats columns read their stat definitions from the discipline metadata"
+    },
+    {
       "path": "frontend/src/types/user.types.ts",
       "rule": "identity",
       "token": "battlenet",
@@ -3330,6 +3320,126 @@
       "reason": "wire identifier: a stats.StatRecord code (the platform records feed), not a stat definition",
       "owner": "P9",
       "remove_when": "the home leaders block reads its featured records from the API"
+    },
+    {
+      "path": "frontend/src/app/(site)/tournaments/[slug]/_views/TournamentStatsPage.tsx",
+      "rule": "catalog-label",
+      "token": "heroes",
+      "context": "const TABS = [\"players\", \"bans\", \"heroes\", \"maps\"] as const;",
+      "count": 1,
+      "reason": "persisted/wire identifier (column default, table/schema name, stored parser/mode id, URL value, include token)",
+      "owner": "P9",
+      "remove_when": "identifier is migrated with its data/URL"
+    },
+    {
+      "path": "frontend/src/app/(site)/tournaments/[slug]/_views/TournamentStatsPage.tsx",
+      "rule": "stat-code",
+      "token": "damage_delta",
+      "context": "statColumn(\"damage_delta\")",
+      "count": 1,
+      "reason": "wire identifier: a stats-service tournament player-stat rank code (API sort key), not a stat definition",
+      "owner": "P9",
+      "remove_when": "tournament stats columns read their stat definitions from the discipline metadata"
+    },
+    {
+      "path": "frontend/src/app/(site)/tournaments/[slug]/_views/TournamentStatsPage.tsx",
+      "rule": "stat-code",
+      "token": "eliminations",
+      "context": "\"eliminations\",",
+      "count": 1,
+      "reason": "wire identifier: a stats-service tournament player-stat rank code (API sort key), not a stat definition",
+      "owner": "P9",
+      "remove_when": "tournament stats columns read their stat definitions from the discipline metadata"
+    },
+    {
+      "path": "frontend/src/app/(site)/tournaments/[slug]/_views/TournamentStatsPage.tsx",
+      "rule": "stat-code",
+      "token": "eliminations",
+      "context": "statColumn(\"eliminations\"),",
+      "count": 1,
+      "reason": "wire identifier: a stats-service tournament player-stat rank code (API sort key), not a stat definition",
+      "owner": "P9",
+      "remove_when": "tournament stats columns read their stat definitions from the discipline metadata"
+    },
+    {
+      "path": "frontend/src/app/(site)/tournaments/[slug]/_views/TournamentStatsPage.tsx",
+      "rule": "stat-code",
+      "token": "hero_damage_dealt",
+      "context": "\"hero_damage_dealt\",",
+      "count": 1,
+      "reason": "wire identifier: a stats-service tournament player-stat rank code (API sort key), not a stat definition",
+      "owner": "P9",
+      "remove_when": "tournament stats columns read their stat definitions from the discipline metadata"
+    },
+    {
+      "path": "frontend/src/app/(site)/tournaments/[slug]/_views/TournamentStatsPage.tsx",
+      "rule": "stat-code",
+      "token": "hero_damage_dealt",
+      "context": "statColumn(\"hero_damage_dealt\"),",
+      "count": 1,
+      "reason": "wire identifier: a stats-service tournament player-stat rank code (API sort key), not a stat definition",
+      "owner": "P9",
+      "remove_when": "tournament stats columns read their stat definitions from the discipline metadata"
+    },
+    {
+      "path": "frontend/src/app/(site)/tournaments/[slug]/_views/tournamentInsights.model.ts",
+      "rule": "role-vocabulary",
+      "token": "damage",
+      "context": "export const ROLE_ORDER = [\"tank\", \"damage\", \"support\"] as const;",
+      "count": 1,
+      "reason": "OW role order for the tournament insights role breakdown",
+      "owner": "P9",
+      "remove_when": "tournament insights read roles from the discipline's catalog.role ontology"
+    },
+    {
+      "path": "frontend/src/app/(site)/tournaments/[slug]/_views/tournamentInsights.model.ts",
+      "rule": "role-vocabulary",
+      "token": "support",
+      "context": "export const ROLE_ORDER = [\"tank\", \"damage\", \"support\"] as const;",
+      "count": 1,
+      "reason": "OW role order for the tournament insights role breakdown",
+      "owner": "P9",
+      "remove_when": "tournament insights read roles from the discipline's catalog.role ontology"
+    },
+    {
+      "path": "frontend/src/app/(site)/tournaments/[slug]/_views/tournamentInsights.model.ts",
+      "rule": "role-vocabulary",
+      "token": "tank",
+      "context": "export const ROLE_ORDER = [\"tank\", \"damage\", \"support\"] as const;",
+      "count": 1,
+      "reason": "OW role order for the tournament insights role breakdown",
+      "owner": "P9",
+      "remove_when": "tournament insights read roles from the discipline's catalog.role ontology"
+    },
+    {
+      "path": "frontend/src/lib/tournament/insights-query.ts",
+      "rule": "stat-code",
+      "token": "damage_delta",
+      "context": "\"damage_delta\"",
+      "count": 1,
+      "reason": "wire identifier: a stats-service tournament player-stat rank code (API sort key), not a stat definition",
+      "owner": "P9",
+      "remove_when": "tournament stats columns read their stat definitions from the discipline metadata"
+    },
+    {
+      "path": "frontend/src/lib/tournament/insights-query.ts",
+      "rule": "stat-code",
+      "token": "eliminations",
+      "context": "\"eliminations\",",
+      "count": 1,
+      "reason": "wire identifier: a stats-service tournament player-stat rank code (API sort key), not a stat definition",
+      "owner": "P9",
+      "remove_when": "tournament stats columns read their stat definitions from the discipline metadata"
+    },
+    {
+      "path": "frontend/src/lib/tournament/insights-query.ts",
+      "rule": "stat-code",
+      "token": "hero_damage_dealt",
+      "context": "\"hero_damage_dealt\",",
+      "count": 1,
+      "reason": "wire identifier: a stats-service tournament player-stat rank code (API sort key), not a stat definition",
+      "owner": "P9",
+      "remove_when": "tournament stats columns read their stat definitions from the discipline metadata"
     }
   ]
 }
