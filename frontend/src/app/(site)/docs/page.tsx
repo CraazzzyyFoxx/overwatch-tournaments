@@ -1,21 +1,22 @@
-import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 
+import { DOC_CARDS, DOC_TITLE, DocCard, P } from "./mdx";
 import { GUIDE_IDS } from "./nav";
-import styles from "./docs.module.css";
 
 export default async function DocsPage() {
   const t = await getTranslations("docs");
   return (
-    <article className={styles.prose}>
-      <h1>{t("title")}</h1>
-      <p>{t("lead")}</p>
-      <div className={styles.cards}>
+    <article className="max-w-2xl">
+      <h1 className={DOC_TITLE}>{t("title")}</h1>
+      <P>{t("lead")}</P>
+      <div className={DOC_CARDS}>
         {GUIDE_IDS.map((id) => (
-          <Link key={id} href={`/docs/${id}`} className={styles.card}>
-            <span className={styles.cardTitle}>{t(`sections.${id}.title`)}</span>
-            <span className={styles.cardDesc}>{t(`sections.${id}.description`)}</span>
-          </Link>
+          <DocCard
+            key={id}
+            href={`/docs/${id}`}
+            title={t(`sections.${id}.title`)}
+            description={t(`sections.${id}.description`)}
+          />
         ))}
       </div>
     </article>

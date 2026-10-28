@@ -19,6 +19,9 @@ class Settings(BaseServiceSettings):
     # on a short TTL instead of targeted invalidation (the key has no
     # tournament_id to name a tournament's cache generations by).
     match_cache_ttl: int = 30
+    # A pick-ban write invalidates no tournament cache (realtime_commit.py), so the tournament's pick-ban outcomes
+    # stay fresh during a live tournament by TTL alone.
+    pick_ban_outcomes_cache_ttl: int = 30
 
     # Subscription-entitlement provider credentials. Optional: without it Twitch
     # still answers `unknown` (fail open) with a reason, so a missing credential

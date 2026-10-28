@@ -156,7 +156,6 @@ export function TeamRosters({
           ))}
         </FilterChipGroup>
         <ToggleGroup
-          type="single"
           variant="pill"
           size="sm"
           value={sort}

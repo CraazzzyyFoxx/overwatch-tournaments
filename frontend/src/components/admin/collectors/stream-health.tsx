@@ -103,7 +103,7 @@ export function StreamHealthDashboard() {
       </div>
 
       {alerting && (
-        <Alert variant={diagnosis.tone === "danger" ? "destructive" : "default"}>
+        <Alert tone={diagnosis.tone}>
           <AlertTriangle aria-hidden className="h-4 w-4" />
           <AlertTitle>{t(`status.${diagnosis.key}.label`)}</AlertTitle>
           {t.has(hintKey) ? <AlertDescription>{t(hintKey)}</AlertDescription> : null}

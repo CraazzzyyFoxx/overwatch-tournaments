@@ -381,9 +381,9 @@ describe("person hub", () => {
       // The kebab column: the pencil+trash pair is gone, the header is sr-only.
       "Actions"
     ]);
-    expect(headerCells(container)[0].className).toContain("admin-sticky-col");
-    expect(container.querySelector("tbody tr")?.firstElementChild?.className).toContain(
-      "admin-sticky-col"
+    expect(headerCells(container)[0].getAttribute("data-sticky")).toBe("left");
+    expect(container.querySelector("tbody tr")?.firstElementChild?.getAttribute("data-sticky")).toBe(
+      "left"
     );
     // The roster row carries the person's own name: the hub header already says it.
     expect(container.querySelector("tbody")?.textContent).not.toContain("#2515");

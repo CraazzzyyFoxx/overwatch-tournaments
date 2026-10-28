@@ -238,7 +238,7 @@ export function EvaluationRunSummary({
   const meta = [scope, formatDuration(run, format)].filter(Boolean).join(" · ");
 
   return (
-    <Card asChild variant="flat">
+    <Card asChild>
       <section role="status" className="space-y-4 p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-start gap-3">

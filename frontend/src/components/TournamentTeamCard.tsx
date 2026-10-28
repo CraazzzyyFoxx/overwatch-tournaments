@@ -1,9 +1,5 @@
 "use client";
 
-// The card's own global CSS (`.team-card`, `.roster`, `.group-chip`), moved
-// out of globals.css and next to its only consumer.
-import "./TournamentTeamCard.css";
-
 import React from "react";
 import { useTranslations } from "next-intl";
 import { useFormatter } from "@/lib/datetime/client";
@@ -16,6 +12,10 @@ import DivisionIcon from "@/components/DivisionIcon";
 import { CatalogEntityStrip } from "@/components/catalog/CatalogEntityImage";
 import TeamName from "@/components/TeamName";
 import { Badge } from "@/components/ui/badge";
+import { Card, CardTitle } from "@/components/ui/card";
+import { eyebrowClass } from "@/components/ui/eyebrow";
+import { Separator } from "@/components/ui/separator";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { IconTooltip } from "@/components/ui/icon-tooltip";
 import { PlaceBadge } from "@/components/ui/place-badge";
 import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
@@ -185,7 +185,7 @@ export function RosterPlayer({
       ) : null}
       {highlightUserId != null && player.user_id === highlightUserId ? (
         <span className={ICON_SLOT}>
-          <Badge palette="aqt" tone="accent" voice="label">
+          <Badge tone="accent" voice="label">
             {t("users.tournaments.you")}
           </Badge>
         </span>
@@ -247,6 +247,13 @@ function avgMvpColor(value: number): string {
   return "var(--aqt-fg)";
 }
 
+/** Head and cell padding: 10px left is load-bearing, `RosterRole` draws the branch at 22px. */
+const ROSTER_HEAD = "h-6.5 px-2.5 py-1.5";
+/** One slot (a `group/slot` tbody) lights up together: a player with their subs. */
+const ROSTER_CELL =
+  "border-t border-[color:var(--aqt-overlay-border)] px-2.5 py-1.25 group-hover/slot:bg-[color:var(--aqt-overlay-2)]";
+const ROSTER_ROW = "border-0 hover:bg-transparent";
+
 export const TournamentTeamTable = ({
   players,
   tournamentGrid,
@@ -274,88 +281,87 @@ export const TournamentTeamTable = ({
   const signatureTitle = t("users.tournaments.roster.signatureHeroes");
 
   return (
-    <div className="roster-scroll">
-      <table className="roster">
-        <thead>
-          <tr>
-            <th scope="col" style={{ width: 48 }}>
-              {t("teams.roster.role")}
-            </th>
-            <th scope="col">{t("teams.roster.battleTag")}</th>
-            <th scope="col" style={{ width: 96 }}>
-              {t("teams.roster.rank")}
-            </th>
-            {showMvp ? (
-              <th scope="col" style={{ width: 64, textAlign: "right" }}>
-                {t("users.tournaments.roster.avgMvp")}
-              </th>
-            ) : null}
-            {showHeroes ? (
-              <th scope="col" style={{ width: 100 }}>
-                {t("users.tournaments.roster.heroes")}
-              </th>
-            ) : null}
-          </tr>
-        </thead>
-        {/* One <tbody> per slot: hover lights a player together with their
-            subs, so the highlight never cuts the branch line in half. */}
-        {rosterSlots(players, ontology ?? null).map((slot) => (
-          <tbody key={slot[0].id}>
-            {slot.map((player, index) => {
-              const position = { slot, index };
-              const dimmed = isReplaced(position);
-              return (
-                <tr key={player.id}>
-                  <td className="relative">
-                    <RosterRole role={player.role} position={position} ontology={ontology} />
-                  </td>
-                  <td>
-                    <RosterPlayer
-                      player={player}
-                      captainUserId={captainUserId}
-                      highlightUserId={highlightUserId}
-                      dimmed={dimmed}
-                    />
-                  </td>
-                  <td>
-                    <RosterRank
-                      division={player.division}
-                      rank={player.rank}
-                      tournamentGrid={tournamentGrid}
-                      discipline={discipline}
-                      dimmed={dimmed}
-                    />
-                  </td>
-                  {showMvp ? (
-                    <td
-                      className="aqt-tnum tabular-nums"
-                      style={{
-                        textAlign: "right",
-                        color:
-                          player.avg_mvp != null ? avgMvpColor(player.avg_mvp) : "var(--aqt-fg-dim)"
-                      }}
-                    >
-                      {player.avg_mvp != null ? player.avg_mvp.toFixed(1) : "—"}
-                    </td>
-                  ) : null}
-                  {showHeroes ? (
-                    <td>
-                      {player.characters && player.characters.length > 0 ? (
-                        <div title={signatureTitle} aria-label={signatureTitle}>
-                          <CatalogEntityStrip entities={player.characters} size="sm" limit={3} />
-                        </div>
-                      ) : (
-                        <span className="text-[color:var(--aqt-fg-dim)]">—</span>
-                      )}
-                    </td>
-                  ) : null}
-                </tr>
-              );
-            })}
-          </tbody>
-        ))}
-      </table>
-    </div>
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead scope="col" className={ROSTER_HEAD} style={{ width: 48 }}>
+            {t("teams.roster.role")}
+          </TableHead>
+          <TableHead scope="col" className={ROSTER_HEAD}>
+            {t("teams.roster.battleTag")}
+          </TableHead>
+          <TableHead scope="col" className={ROSTER_HEAD} style={{ width: 96 }}>
+            {t("teams.roster.rank")}
+          </TableHead>
+          {showMvp ? (
+            <TableHead scope="col" className={ROSTER_HEAD} style={{ width: 64, textAlign: "right" }}>
+              {t("users.tournaments.roster.avgMvp")}
+            </TableHead>
+          ) : null}
+          {showHeroes ? (
+            <TableHead scope="col" className={ROSTER_HEAD} style={{ width: 100 }}>
+              {t("users.tournaments.roster.heroes")}
+            </TableHead>
+          ) : null}
+        </TableRow>
+      </TableHeader>
+      {/* One <tbody> per slot: hover lights a player together with their
+          subs, so the highlight never cuts the branch line in half. */}
+      {rosterSlots(players, ontology ?? null).map((slot) => (
+        <TableBody key={slot[0].id} className="group/slot">
+          {slot.map((player, index) => {
+            const position = { slot, index };
+            const dimmed = isReplaced(position);
+            return (
+              <TableRow key={player.id} className={ROSTER_ROW}>
+                <TableCell className={cn(ROSTER_CELL, "relative")}>
+                  <RosterRole role={player.role} position={position} ontology={ontology} />
+                </TableCell>
+                <TableCell className={ROSTER_CELL}>
+                  <RosterPlayer
+                    player={player}
+                    captainUserId={captainUserId}
+                    highlightUserId={highlightUserId}
+                    dimmed={dimmed}
+                  />
+                </TableCell>
+                <TableCell className={ROSTER_CELL}>
+                  <RosterRank
+                    division={player.division}
+                    rank={player.rank}
+                    tournamentGrid={tournamentGrid}
+                    discipline={discipline}
+                    dimmed={dimmed}
+                  />
+                </TableCell>
+                {showMvp ? (
+                  <TableCell
+                    className={cn(ROSTER_CELL, "aqt-tnum tabular-nums")}
+                    style={{
+                      textAlign: "right",
+                      color: player.avg_mvp != null ? avgMvpColor(player.avg_mvp) : "var(--aqt-fg-dim)"
+                    }}
+                  >
+                    {player.avg_mvp != null ? player.avg_mvp.toFixed(1) : "—"}
+                  </TableCell>
+                ) : null}
+                {showHeroes ? (
+                  <TableCell className={ROSTER_CELL}>
+                    {player.characters && player.characters.length > 0 ? (
+                      <div title={signatureTitle} aria-label={signatureTitle}>
+                        <CatalogEntityStrip entities={player.characters} size="sm" limit={3} />
+                      </div>
+                    ) : (
+                      <span className="text-[color:var(--aqt-fg-dim)]">—</span>
+                    )}
+                  </TableCell>
+                ) : null}
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      ))}
+    </Table>
   );
 };
 
@@ -380,6 +386,46 @@ export function TeamPlacement({ placement, medal }: { placement: number; medal: 
       #{placement}
     </span>
   );
+}
+
+/** The group card's surface over `Card`: overlay fill and rim; under the pointer the rim lifts. */
+export const TEAM_CARD_CLASS =
+  "overflow-hidden border-[color:var(--aqt-overlay-border)] bg-[color:var(--aqt-overlay-1)] transition-colors hover:border-[color:var(--aqt-border-3)] hover:bg-[color:var(--aqt-overlay-2)]";
+/** The header band above the divider. */
+export const TEAM_CARD_HEADER = "px-3.5 pb-3 pt-2.5";
+/** The card's name: one truncating line. */
+export const TEAM_CARD_NAME =
+  "min-w-0 truncate text-ui font-semibold leading-[1.3] text-[color:var(--aqt-fg)]";
+
+/** Encounter-bound cards: the seat's colour along the top edge, kept under the pointer. */
+const SLOT_EDGE = {
+  1: "border-t-3 border-t-[color:var(--aqt-teal)] hover:border-t-[color:var(--aqt-teal)]",
+  2: "border-t-3 border-t-[color:var(--aqt-rose)] hover:border-t-[color:var(--aqt-rose)]"
+} as const;
+
+/** A header figure on the right: its label over its value ("Avg SR" over 3,760). */
+export function TeamCardMetric({
+  label,
+  value,
+  className
+}: Readonly<{ label?: React.ReactNode; value?: React.ReactNode; className?: string }>) {
+  return (
+    <span className={cn("shrink-0 text-right", className)}>
+      {label != null && (
+        <span className={eyebrowClass("faint", "mb-0.5 block font-normal leading-none")}>{label}</span>
+      )}
+      {value != null && (
+        <span className="block text-body font-semibold tabular-nums text-[color:var(--aqt-fg)]">
+          {value}
+        </span>
+      )}
+    </span>
+  );
+}
+
+/** The hairline between a group card's bands. */
+export function TeamCardDivider() {
+  return <Separator className="bg-[color:var(--aqt-overlay-border)]" />;
 }
 
 interface TournamentTeamCardFrameProps extends Omit<React.HTMLAttributes<HTMLElement>, "slot"> {
@@ -408,27 +454,26 @@ export const TournamentTeamCardFrame = ({
   const hasMetric = metricLabel != null || metricValue != null;
 
   return (
-    <article className={cn("team-card", className)} data-slot={slot} {...props}>
-      <header className="tc-header">
-        {hasTags && (
-          <div className="tc-tags">
-            {leadingTag ?? <span />}
-            {positionTag}
-          </div>
-        )}
-        <div className="tc-name-row">
-          <h3 className="tc-name">{name}</h3>
-          {hasMetric && (
-            <div className="tc-sr">
-              {metricLabel != null && <div className="l">{metricLabel}</div>}
-              {metricValue != null && <div className="v">{metricValue}</div>}
+    <Card asChild className={cn(TEAM_CARD_CLASS, slot && SLOT_EDGE[slot], className)}>
+      <article data-slot={slot} {...props}>
+        <header className={TEAM_CARD_HEADER}>
+          {hasTags && (
+            <div className="mb-2.5 flex items-center justify-between gap-2.5">
+              {leadingTag ?? <span />}
+              {positionTag}
             </div>
           )}
-        </div>
-      </header>
-      <div className="tc-divider" />
-      {children}
-    </article>
+          <div className="flex items-center justify-between gap-3">
+            <CardTitle asChild className={TEAM_CARD_NAME}>
+              <h3>{name}</h3>
+            </CardTitle>
+            {hasMetric && <TeamCardMetric label={metricLabel} value={metricValue} />}
+          </div>
+        </header>
+        <TeamCardDivider />
+        {children}
+      </article>
+    </Card>
   );
 };
 
@@ -460,12 +505,9 @@ export const TournamentTeamCard = ({
       name={<TeamName team={team} size="md" />}
       leadingTag={
         showGroup && team.group?.name ? (
-          <span
-            className="group-chip"
-            style={{ "--group-hue": groupHue(team.group.name) } as React.CSSProperties}
-          >
+          <Badge hue={groupHue(team.group.name)} voice="label">
             {groupDisplayName(team.group.name, t("common.group"))}
-          </span>
+          </Badge>
         ) : undefined
       }
       positionTag={

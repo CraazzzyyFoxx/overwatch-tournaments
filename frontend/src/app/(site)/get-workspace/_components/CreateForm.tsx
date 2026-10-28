@@ -240,7 +240,6 @@ function CreateFormBody({
                   ref={nameRef}
                   id="ws-name"
                   name="name"
-                  variant="surface"
                   className="h-11"
                   value={name}
                   onChange={(event) => {
@@ -262,7 +261,6 @@ function CreateFormBody({
                 <Input
                   id="ws-slug"
                   name="slug"
-                  variant="surface"
                   className="h-11"
                   value={slug}
                   // Typing a name with spaces is the common first move; the mock

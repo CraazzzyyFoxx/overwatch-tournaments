@@ -242,13 +242,13 @@ function radio(name: string) {
 }
 
 function chip(label: string) {
-  return Array.from(document.querySelectorAll(".aqt-filter-chip")).find((button) =>
+  return Array.from(document.querySelectorAll('[data-slot="filter-chip"]')).find((button) =>
     button.textContent?.trim().startsWith(label)
   );
 }
 
 function chipCount(label: string) {
-  return chip(label)?.querySelector(".aqt-count")?.textContent?.trim() ?? null;
+  return chip(label)?.querySelector('[data-slot="filter-chip-count"]')?.textContent?.trim() ?? null;
 }
 
 function cards(container: HTMLElement) {
@@ -340,11 +340,11 @@ describe("tournaments list", () => {
     await click(radio(en.tournamentsList.view.list));
 
     expect(urlsWritten()).toContain("/tournaments?view=list");
-    expect(container.querySelector("table.tn")).toBeTruthy();
+    expect(container.querySelector("[data-tournament-table] table")).toBeTruthy();
     // The list view ships BOTH layouts and lets the viewport pick: the table is
     // desktop-only (two of its six columns fit on a phone), the grid is the
     // mobile list whatever `?view=` says.
-    expect(container.querySelector(".tn-card")?.className).toContain("max-md:hidden");
+    expect(container.querySelector("[data-tournament-table]")?.className).toContain("max-md:hidden");
     expect(container.querySelector("[data-tournament-grid]")?.className).toContain("md:hidden");
     // `DataPagination` renders a labelled `<nav>` as soon as there is more than
     // one page. Nothing on this page may.
@@ -354,7 +354,7 @@ describe("tournaments list", () => {
   it("opens straight into the list view from a shared ?view=list link", async () => {
     const container = await mount("?view=list");
 
-    expect(container.querySelector("table.tn")).toBeTruthy();
+    expect(container.querySelector("[data-tournament-table] table")).toBeTruthy();
     expect(container.querySelector("[data-tournament-grid]")?.className).toContain("md:hidden");
     // One footer, under BOTH views: scroll depth belongs to the page, not to
     // whichever layout is rendering the rows.
@@ -390,7 +390,7 @@ describe("tournaments list", () => {
 
     // Layout is not a filter: `view` stays out of the query key, so the two
     // pages already paid for are re-used rather than re-requested.
-    expect(container.querySelectorAll("table.tn tbody tr")).toHaveLength(24);
+    expect(container.querySelectorAll("[data-tournament-table] tbody tr")).toHaveLength(24);
     expect(listTournaments.mock.calls.length).toBe(requests);
   });
 

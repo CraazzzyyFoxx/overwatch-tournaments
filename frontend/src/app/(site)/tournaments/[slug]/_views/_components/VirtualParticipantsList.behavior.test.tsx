@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { Window } from "happy-dom";
-import { act, useState, type ReactNode } from "react";
+import { act, useState } from "react";
 import type { Root } from "react-dom/client";
 
 import type { Registration } from "@/types/registration.types";
@@ -90,34 +90,9 @@ vi.mock("@/lib/datetime/client", () => ({
 vi.mock("@/components/RankHistory", () => ({
   default: () => <div data-rank-history="true" />
 }));
-vi.mock("@/components/ui/checkbox", () => ({
-  Checkbox: ({
-    checked,
-    disabled,
-    onCheckedChange
-  }: {
-    checked?: boolean;
-    disabled?: boolean;
-    onCheckedChange?: (checked: boolean) => void;
-  }) => (
-    <button
-      aria-checked={checked}
-      disabled={disabled}
-      onClick={() => onCheckedChange?.(!checked)}
-      role="checkbox"
-      type="button"
-    />
-  )
-}));
-vi.mock("@/components/ui/popover", () => ({
-  Popover: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  PopoverContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  PopoverTrigger: ({ children }: { children: ReactNode }) => <>{children}</>
-}));
 
 let createRoot: typeof import("react-dom/client").createRoot;
 let VirtualParticipantsList: typeof import("./VirtualParticipantsList").default;
-let ColumnPicker: typeof import("./ColumnPicker").default;
 
 function restoreGlobals() {
   for (const [key, descriptor] of previousGlobals) {
@@ -298,7 +273,6 @@ beforeAll(async () => {
   };
   ({ createRoot } = await import("react-dom/client"));
   ({ default: VirtualParticipantsList } = await import("./VirtualParticipantsList"));
-  ({ default: ColumnPicker } = await import("./ColumnPicker"));
 });
 
 afterEach(() => {
@@ -499,45 +473,6 @@ describe("VirtualParticipantsList mount budget", () => {
     expect(row.querySelectorAll('[data-participant-kind="identity"]')).toHaveLength(1);
     expect(row.querySelectorAll('[data-participant-kind="status"]')).toHaveLength(1);
     expect(row.querySelector('[data-column-id="notes"]')).toBeNull();
-
-  });
-
-  it("locks mandatory identity and status controls in the column picker", () => {
-    const toggled: string[] = [];
-    const container = document.createElement("div");
-    document.body.append(container);
-    const root = createTestRoot(container);
-
-    act(() => {
-      root.render(
-        <ColumnPicker
-          columns={[imageColumn, statusColumn, heavyColumn]}
-          onReset={() => {}}
-          onToggle={(id) => toggled.push(id)}
-          visibility={{ _identity: true, _status: true, notes: false }}
-        />
-      );
-    });
-
-    const labels = Array.from(container.querySelectorAll("label"));
-    const identityToggle = labels
-      .find((label) => label.textContent?.includes("Player"))!
-      .querySelector<HTMLButtonElement>('[role="checkbox"]')!;
-    const statusToggle = labels
-      .find((label) => label.textContent?.includes("Status"))!
-      .querySelector<HTMLButtonElement>('[role="checkbox"]')!;
-    const notesToggle = labels
-      .find((label) => label.textContent?.includes("Notes"))!
-      .querySelector<HTMLButtonElement>('[role="checkbox"]')!;
-
-    expect(identityToggle.disabled).toBe(true);
-    expect(statusToggle.disabled).toBe(true);
-    identityToggle.click();
-    statusToggle.click();
-    expect(toggled).toEqual([]);
-    expect(notesToggle.disabled).toBe(false);
-    notesToggle.click();
-    expect(toggled).toEqual(["notes"]);
 
   });
 

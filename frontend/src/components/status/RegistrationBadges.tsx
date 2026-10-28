@@ -71,7 +71,7 @@ function FlagBadge({
   ...props
 }: Readonly<FlagBadgeProps & { icon: LucideIcon; tone: Tone; label: string; hint: string }>) {
   return (
-    <Badge palette="aqt" size="sm" tone={tone} title={hint} className={className} {...props}>
+    <Badge size="sm" tone={tone} title={hint} className={className} {...props}>
       <Icon className="size-3 shrink-0" aria-hidden />
       {label}
     </Badge>
@@ -353,7 +353,7 @@ export function SubscriptionProviderBadge({
   const Icon = icon;
 
   return (
-    <Badge palette="aqt" size="sm" tone={tone} className={className}>
+    <Badge size="sm" tone={tone} className={className}>
       <Icon className="size-3.5 shrink-0" aria-hidden />
       <SocialIcon provider={provider} size={12} className="shrink-0" decorative />
       {`${providerLabel}: ${detail}`}

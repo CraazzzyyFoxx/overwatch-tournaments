@@ -341,7 +341,6 @@ function FieldRow({
           max={1_000_000_000}
           aria-label={t("columnFor", { column: column.label, name })}
           aria-invalid={(flagBlanks && stats[column.key] === null) || undefined}
-          className="aria-invalid:border-destructive"
           value={stats[column.key]}
           onValueChange={(value) => onStat(column.key, value)}
         />

@@ -71,7 +71,6 @@ export function SeriesPreview({
       <div className="flex flex-wrap items-center gap-2">
         <p className="text-sm font-medium">{t("preview.title")}</p>
         <ToggleGroup
-          type="single"
           variant="pill"
           size="sm"
           value={String(previewBestOf)}

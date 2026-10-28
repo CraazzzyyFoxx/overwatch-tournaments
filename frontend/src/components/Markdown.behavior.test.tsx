@@ -72,7 +72,7 @@ describe("Markdown", () => {
     expect(html.querySelectorAll("th")).toHaveLength(2);
     expect(html.querySelector("td")?.textContent).toBe("Head-to-head");
     // A wide table must scroll inside its own box rather than stretch the page.
-    expect(html.querySelector("table")?.parentElement?.className).toContain("overflow-x-auto");
+    expect(html.querySelector("table")?.parentElement?.className).toMatch(/\boverflow-(?:x-)?auto\b/);
   });
 
   it("starts the document's heading levels below the page's own h1", () => {

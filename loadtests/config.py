@@ -8,6 +8,7 @@ inside CI without editing code.
 from __future__ import annotations
 
 import os
+import shlex
 
 
 def _int_or_none(name: str) -> int | None:
@@ -52,3 +53,14 @@ DRAFT_CHAT_EVERY: float = float(os.getenv("OWT_DRAFT_CHAT_EVERY", "60"))
 #: `Origin` of the simulated tabs; the gateway refuses a socket from an origin
 #: outside GATEWAY_WS_ALLOWED_ORIGINS. Defaults to the target host.
 DRAFT_ORIGIN: str = os.getenv("OWT_DRAFT_ORIGIN", "").strip()
+
+#: The command that runs one SQL statement on the target stack's database, the
+#: statement appended as its last argument: how `draft_seed.py` promotes its
+#: organizer. Unset: psql inside the e2e stack's Postgres.
+DRAFT_PSQL: list[str] = shlex.split(os.getenv("OWT_DRAFT_PSQL", ""))
+
+#: A network every simulated user takes its own source address from (e.g.
+#: `127.1.0.0/16` with the stack on the generator's host), so per-IP limits
+#: along the path count one client per user. Unset: every user shares the
+#: generator's address.
+SOURCE_NET: str = os.getenv("OWT_SOURCE_NET", "").strip()

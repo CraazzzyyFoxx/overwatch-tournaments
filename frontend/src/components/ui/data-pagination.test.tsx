@@ -55,7 +55,7 @@ describe("DataPagination", () => {
 
     expect(html).toContain("border-t px-4 py-3");
     // Layout classes come from the shared shell, not from the caller.
-    expect(html).toContain("flex flex-wrap items-center justify-between gap-3");
+    expect(html).toContain("flex flex-wrap items-center gap-3");
   });
 
   it("omits the navigation landmark and page buttons when there is one page", () => {

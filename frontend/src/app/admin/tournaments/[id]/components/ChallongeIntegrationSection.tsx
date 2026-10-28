@@ -148,7 +148,7 @@ export function ChallongeIntegrationSection({
           placeholder={t("placeholder")}
           value={slug}
           onChange={(event) => onSlugChange(event.target.value)}
-          className="mt-1.5 bg-background/50"
+          className="mt-1.5"
         />
       </div>
 
@@ -185,7 +185,7 @@ export function ChallongeIntegrationSection({
           shows the same problem N times with no hint that the fix is a mapping on
           another tab. It blocks the import, hence the one alert. */}
       {hasChallongeSource && unmappedParticipantIds.length > 0 ? (
-        <Alert>
+        <Alert tone="warning">
           <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
             <span>
               {tx.rich("unmappedParticipants", {

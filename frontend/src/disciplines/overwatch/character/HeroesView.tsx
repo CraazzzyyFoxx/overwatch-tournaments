@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { CardSurface } from "@/components/profile/atoms";
-import SearchableImageSelect from "@/components/ui/searchable-image-select";
+import { SearchableImageSelect } from "@/components/ui/searchable-image-select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { SlotProps } from "@/disciplines/types";
 import { characterClass } from "@/lib/catalog/attrs";
@@ -110,6 +110,7 @@ const HeroesView = ({ characters, filterSlot, maps, retryMaps, metadata }: SlotP
             clearable={false}
             placeholder={t("users.heroes.pickHero")}
             ariaLabel={t("users.heroes.pickHero")}
+            size="sm"
             triggerClassName="w-full"
           />
         </div>
@@ -132,7 +133,6 @@ const HeroesView = ({ characters, filterSlot, maps, retryMaps, metadata }: SlotP
             headerClassName="flex-wrap [&>div:first-child]:flex-wrap [&>div:first-child]:gap-y-0.5"
             action={
               <ToggleGroup
-                type="single"
                 variant="pill"
                 size="sm"
                 value={view}

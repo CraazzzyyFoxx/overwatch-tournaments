@@ -508,6 +508,7 @@ function RankOverviewRows({
                   startDate={dateFrom || undefined}
                   endDate={dateTo || undefined}
                   placeholder={t("filters.dateRange")}
+                  size="sm"
                   onChange={(from, to) =>
                     setParams({ [DATE_PARAMS.from]: from || null, [DATE_PARAMS.to]: to || null })
                   }

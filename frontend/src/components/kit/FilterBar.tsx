@@ -6,7 +6,7 @@ import { ChevronLeft, ListFilter, Plus, X } from "lucide-react";
 import { useDebounce } from "use-debounce";
 
 import { Button } from "@/components/ui/button";
-import { Combobox, ComboboxCheck } from "@/components/ui/combobox";
+import { Combobox, ComboboxCheck, ComboboxMeta } from "@/components/ui/combobox";
 import { CommandGroup, CommandItem } from "@/components/ui/command";
 import { FilterChip } from "@/components/ui/filter-chip";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -190,7 +190,7 @@ export function FilterBar({
 
   const pickerValue = picker ? filters.values[picker.key] : undefined;
   const isPicked = (option: FilterOption) =>
-    Array.isArray(pickerValue) && pickerValue.includes(option.value);
+    Array.isArray(pickerValue) ? pickerValue.includes(option.value) : pickerValue === option.value;
 
   /** Options for the second popover level. A `toggle` never reaches it. */
   const pickerOptions: FilterOption[] =
@@ -246,8 +246,14 @@ export function FilterBar({
         trigger={
           // A menu trigger, not a toggle: drop the chip's `aria-pressed`.
           narrow ? (
-            // The chips sit on a row of their own here; the count says they are there.
-            <FilterChip aria-label={t("addFilter")} aria-pressed={undefined} count={chips.length > 0 ? chips.length : undefined}>
+            // The chips sit on a row of their own here; the count says they are there. 40px below `sm`,
+            // the search field's height there.
+            <FilterChip
+              aria-label={t("addFilter")}
+              aria-pressed={undefined}
+              count={chips.length > 0 ? chips.length : undefined}
+              className="max-sm:h-10"
+            >
               <ListFilter aria-hidden className="size-3.5" />
             </FilterChip>
           ) : (
@@ -308,10 +314,8 @@ export function FilterBar({
                 >
                   {option.icon}
                   <span className="min-w-0 flex-1 truncate">{option.label}</span>
-                  {option.count !== undefined ? (
-                    <span className="text-xs tabular-nums text-muted-foreground">{option.count}</span>
-                  ) : null}
-                  {picker.kind === "multi" ? <ComboboxCheck selected={isPicked(option)} /> : null}
+                  {option.count !== undefined ? <ComboboxMeta>{option.count}</ComboboxMeta> : null}
+                  <ComboboxCheck selected={isPicked(option)} />
                 </CommandItem>
               ))}
         </CommandGroup>

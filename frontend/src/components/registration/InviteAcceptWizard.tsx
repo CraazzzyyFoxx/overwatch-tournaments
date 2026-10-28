@@ -231,3 +231,40 @@ export default function InviteAcceptWizard({
     </div>
   );
 }
+
+/**
+ * The wizard's first frame while its `form` loads: the summary card, then the
+ * same `h-40` stand-in the wizard itself shows while `myRegQuery` resolves, then
+ * the decline row — so mounting the wizard swaps text into place, not layout.
+ * `slotLine`/`substitute` mirror the card's conditional rows.
+ */
+export function InviteAcceptWizardSkeleton({
+  label,
+  slotLine,
+  substitute,
+}: Readonly<{ label: string; slotLine: boolean; substitute: boolean }>) {
+  return (
+    <div role="status" aria-busy="true" className="flex flex-col gap-4">
+      <span className="sr-only">{label}</span>
+      <div className="grid gap-1.5 rounded-lg border border-[color:var(--aqt-border)] bg-muted/20 p-3">
+        <p className="text-sm font-medium">
+          <Skeleton variant="text" className="w-1/3" />
+        </p>
+        {slotLine && (
+          <p className="text-xs">
+            <Skeleton variant="text" className="w-5/6" />
+          </p>
+        )}
+        {substitute && (
+          <p className="text-xs">
+            <Skeleton variant="text" className="w-1/2" />
+          </p>
+        )}
+      </div>
+      <Skeleton className="h-40 w-full rounded-lg" />
+      <div className="flex justify-end">
+        <Skeleton className="h-9 w-24" />
+      </div>
+    </div>
+  );
+}

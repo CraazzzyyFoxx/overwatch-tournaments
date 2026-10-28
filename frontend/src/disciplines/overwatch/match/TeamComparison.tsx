@@ -7,6 +7,7 @@ import { COMPARISON_STATS, STAT_META, formatStat, teamTotal, type MatchStatsTeam
 import TeamName from "@/components/TeamName";
 import { Card } from "@/components/ui/card";
 import { Eyebrow } from "@/components/ui/eyebrow";
+import { Separator } from "@/components/ui/separator";
 
 interface TeamComparisonProps {
   home: MatchStatsTeam;
@@ -53,7 +54,7 @@ const TeamComparison = ({ home, away, round }: TeamComparisonProps) => {
   });
 
   return (
-    <Card variant="flat">
+    <Card>
       <div className="flex items-center justify-between border-b border-[color:var(--aqt-border)] px-4 py-3">
         <TeamName
           team={home}
@@ -96,7 +97,7 @@ const TeamComparison = ({ home, away, round }: TeamComparisonProps) => {
                     }}
                   />
                 </div>
-                <div className="h-[10px] w-px bg-[color:var(--aqt-border-2)]" />
+                <Separator orientation="vertical" className="h-[10px] bg-[color:var(--aqt-border-2)]" />
                 <div className="flex flex-1 justify-start">
                   <div
                     className="h-[6px] rounded-r-full"

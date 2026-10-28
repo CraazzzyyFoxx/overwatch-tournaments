@@ -360,7 +360,7 @@ function JsonTransfer({
             }}
           />
           {invalid ? (
-            <Alert variant="destructive">
+            <Alert tone="danger">
               <AlertDescription>{t("json.importFailed")}</AlertDescription>
             </Alert>
           ) : null}

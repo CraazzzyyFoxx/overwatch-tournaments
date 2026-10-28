@@ -2,11 +2,11 @@
 
 import { useId, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
-import { ChevronRight, X } from "lucide-react";
+import { ChevronDown, X } from "lucide-react";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { SettingGroup, SettingRow } from "@/components/kit/SettingRow";
-import { eyebrowClass } from "@/components/ui/eyebrow";
 import { Button } from "@/components/ui/button";
+import { triggerChevronClass } from "@/components/ui/chevron";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Input } from "@/components/ui/input";
@@ -19,7 +19,7 @@ import { teamFormatPayload, type TeamFormatDimension, type TeamFormatRule, type 
 import { cn } from "@/lib/utils";
 
 const MODES = ["off", "informational", "preference", "enforced"] as const;
-const HEAD = cn("h-8 px-0 pr-3", eyebrowClass("muted"));
+const HEAD = "h-8 px-0 pr-3";
 const CELL = "px-0 py-2 pr-3";
 const ROW = "border-border/60 hover:bg-transparent";
 
@@ -167,8 +167,8 @@ export function TeamFormatEditor({ value, ontology, presets, onChange, disabled 
           {mode !== "off" && <Collapsible className="py-3 last:pb-0"
             defaultOpen={entry?.player_min_assignments != null || entry?.player_max_assignments != null}>
             <CollapsibleTrigger asChild>
-              <Button type="button" variant="ghost" size="sm" className="group -ml-3">
-                <ChevronRight aria-hidden className="size-4 transition-transform group-data-[state=open]:rotate-90" />{t("advanced")}
+              <Button type="button" variant="ghost" size="sm" className="group/trigger -ml-3">
+                <ChevronDown aria-hidden className={triggerChevronClass} />{t("advanced")}
               </Button>
             </CollapsibleTrigger>
             <CollapsibleContent className="pt-2">

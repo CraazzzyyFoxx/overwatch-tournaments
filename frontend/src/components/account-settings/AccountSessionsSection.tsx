@@ -7,6 +7,7 @@ import { useFormatter } from "@/lib/datetime/client";
 import { SettingGroup } from "@/components/kit/SettingRow";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { disclosureChevronClass } from "@/components/ui/chevron";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAccountSessions, useRevokeAccountSession } from "@/hooks/useAccountSessions";
@@ -197,14 +198,11 @@ export default function AccountSessionsSection() {
 
           {/* Ended sessions only matter when auditing, so they start collapsed. */}
           {ended.length > 0 ? (
-            <details className="group py-3 first:pt-0 last:pb-0">
-              <summary className="flex min-h-9 cursor-pointer list-none items-center gap-2 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+            <details className="group/disclosure py-3 first:pt-0 last:pb-0">
+              <summary className="flex min-h-9 cursor-pointer list-none items-center gap-2 rounded-md outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
                 <span className="text-body font-medium text-[color:var(--aqt-fg)]">{t("historyTitle")}</span>
                 <span className="aqt-tnum text-caption text-[color:var(--aqt-fg-dim)]">{ended.length}</span>
-                <ChevronDown
-                  aria-hidden
-                  className="ms-auto size-4 text-[color:var(--aqt-fg-muted)] transition-transform group-open:rotate-180"
-                />
+                <ChevronDown aria-hidden className={cn(disclosureChevronClass, "ms-auto")} />
               </summary>
               <ul className="mt-3 divide-y divide-border/60">
                 {ended.map((session) => (

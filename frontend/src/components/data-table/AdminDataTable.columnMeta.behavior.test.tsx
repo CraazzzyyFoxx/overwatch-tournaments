@@ -69,7 +69,7 @@ async function render(columns: ColumnDef<Row>[]) {
 
 /** `right` of every right-pinned cell matching `selector`, in column order. */
 function rightOffsets(selector: "th" | "td"): string[] {
-  return [...container.querySelectorAll<HTMLElement>(`${selector}.admin-sticky-col-right`)].map(
+  return [...container.querySelectorAll<HTMLElement>(`${selector}[data-sticky="right"]`)].map(
     (cell) => cell.style.right
   );
 }
@@ -99,9 +99,9 @@ describe("DataTable column meta", () => {
 
     expect(rightOffsets("th")).toEqual(["196px", "96px", "0px"]);
     expect(rightOffsets("td")).toEqual(["196px", "96px", "0px"]);
-    expect(headerCell("name").classList.contains("admin-sticky-col-right")).toBe(false);
+    expect(headerCell("name").hasAttribute("data-sticky")).toBe(false);
     // The edge shadow marks the innermost pinned column only.
-    const edges = [...container.querySelectorAll("thead th.admin-sticky-col-right-edge")];
+    const edges = [...container.querySelectorAll('thead th[data-sticky="right"][data-sticky-edge]')];
     expect(edges).toHaveLength(1);
     expect(edges[0]?.textContent).toBe("team");
   });
@@ -109,7 +109,7 @@ describe("DataTable column meta", () => {
   it("leaves the actions column unpinned when nothing pins right", async () => {
     await render([column("name"), column("team"), actions]);
 
-    expect(container.querySelectorAll(".admin-sticky-col-right")).toHaveLength(0);
+    expect(container.querySelectorAll('[data-sticky="right"]')).toHaveLength(0);
   });
 
   it("wraps with `ellipsis: false` and titles with `ellipsis: true`", async () => {

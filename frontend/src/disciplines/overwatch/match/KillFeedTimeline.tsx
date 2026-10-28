@@ -9,6 +9,7 @@ import encounterService from "@/services/encounter.service";
 import CatalogEntityImage from "@/components/catalog/CatalogEntityImage";
 import { Card } from "@/components/ui/card";
 import { Eyebrow } from "@/components/ui/eyebrow";
+import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { splitHandle } from "@/lib/player";
 import { readTimeline, type TimelineKill, type TimelineMark } from "./timeline";
@@ -321,7 +322,7 @@ const KillFeedTimeline = ({ matchId, members, home, away }: KillFeedTimelineProp
   };
 
   return (
-    <Card variant="flat" className="p-4">
+    <Card className="p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <Eyebrow className="aqt-tnum">{t("matches.timeline.title")}</Eyebrow>
         {status === "ready" && totalKills > 0 ? legend : null}
@@ -374,7 +375,7 @@ const KillFeedTimeline = ({ matchId, members, home, away }: KillFeedTimelineProp
                             <span className="aqt-tnum text-label text-[color:var(--aqt-fg-faint)]">
                               {formatClock(item.time)}
                             </span>
-                            <div className="h-px flex-1 bg-[color:var(--aqt-border)]" />
+                            <Separator className="flex-1" />
                             {fightScore ? (
                               <span className="aqt-tnum text-label">
                                 <span style={{ color: "var(--aqt-teal)" }}>{fightScore.home ?? "—"}</span>

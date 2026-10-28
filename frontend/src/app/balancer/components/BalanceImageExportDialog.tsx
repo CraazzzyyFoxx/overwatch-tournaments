@@ -16,6 +16,7 @@ import {
   DialogTitle
 } from "@/components/ui/dialog";
 import { Eyebrow, eyebrowClass } from "@/components/ui/eyebrow";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { resolveDivisionFromRank, getDivisionIconSrc, getDivisionLabel } from "@/lib/divisions/grid";
 import {
   capturePngBlob,
@@ -218,13 +219,11 @@ export function BalanceImageExportDialog({
           <DialogHeader variant="panel">
             <div className="flex flex-col gap-3 pr-8 lg:flex-row lg:items-start lg:justify-between">
               <div>
-                <DialogTitle className="flex items-center gap-2 text-base font-semibold text-[color:var(--aqt-fg)]">
-                  <Images className="h-4 w-4 text-cyan-200" />
+                <DialogTitle className="flex items-center gap-2">
+                  <Images className="h-4 w-4 text-[color:var(--aqt-teal)]" aria-hidden />
                   {t("title")}
                 </DialogTitle>
-                <DialogDescription className="mt-1 text-xs text-[color:var(--aqt-fg-dim)]">
-                  {t("description")}
-                </DialogDescription>
+                <DialogDescription className="mt-1">{t("description")}</DialogDescription>
               </div>
 
               <div className="flex flex-wrap gap-2">
@@ -276,7 +275,7 @@ export function BalanceImageExportDialog({
             {!isGenerating && !error ? (
               <div className="flex flex-col gap-4">
                 {images.map((image, index) => (
-                  <Card key={image.id} variant="flat" className="overflow-hidden">
+                  <Card key={image.id} className="overflow-hidden">
                     <div className="flex items-center justify-between gap-3 border-b border-[color:var(--aqt-border)] px-3 py-2.5">
                       <Eyebrow as="div" tone="muted">
                         {t("image", { index: index + 1 })}
@@ -400,33 +399,25 @@ function BalanceExportTeamCard({
     <div className="overflow-hidden rounded-2xl border border-[color:var(--aqt-border)] bg-[color:var(--aqt-card)] shadow-[0_16px_48px_rgba(0,0,0,0.24)]">
       <BalanceTeamHeader team={team} teamIndex={teamIndex} />
 
-      <table className="w-full min-w-90 caption-bottom text-sm">
-        <thead>
-          <tr className="border-b border-[color:var(--aqt-border)]">
-            <th className={cn(eyebrowClass("dim"), "h-8 w-13 px-4 text-left align-middle")}>
-              {t("role")}
-            </th>
-            <th className={cn(eyebrowClass("dim"), "h-8 min-w-45 px-0 text-left align-middle")}>
-              {t("player")}
-            </th>
-            <th className={cn(eyebrowClass("dim"), "h-8 w-18 px-2 text-center align-middle")}>
-              {t("rank")}
-            </th>
-            <th className={cn(eyebrowClass("dim"), "h-8 w-22 px-3 text-center align-middle")}>
-              {t("prefs")}
-            </th>
-          </tr>
-        </thead>
+      <Table className="min-w-90" wrapperClassName="overflow-visible">
+        <TableHeader>
+          <TableRow>
+            <TableHead className="h-8 w-13 px-4">{t("role")}</TableHead>
+            <TableHead className="h-8 min-w-45 px-0">{t("player")}</TableHead>
+            <TableHead className="h-8 w-18 text-center">{t("rank")}</TableHead>
+            <TableHead className="h-8 w-22 px-3 text-center">{t("prefs")}</TableHead>
+          </TableRow>
+        </TableHeader>
         {bucketKeys.map((roleKey) => (
-          <tbody key={`${team.id}-${roleKey}`}>
+          <TableBody key={`${team.id}-${roleKey}`} className="[&_tr:last-child]:border-b">
             {team.roster[roleKey].map((player) => (
-              <tr key={player.uuid} className="border-b border-[color:var(--aqt-border)]">
-                <td className="w-13 px-4 py-2.5">
+              <TableRow key={player.uuid}>
+                <TableCell className="w-13 px-4 py-2.5">
                   <div className="flex justify-center">
                     <PlayerRoleIcon role={roleKey} ontology={ontology} size={18} />
                   </div>
-                </td>
-                <td className="min-w-45 py-2.5 pr-2">
+                </TableCell>
+                <TableCell className="min-w-45 py-2.5 pl-0 pr-2">
                   <div className="flex min-w-0 flex-col gap-0.5">
                     <div className="flex min-w-0 items-center gap-2">
                       <span
@@ -442,11 +433,11 @@ function BalanceExportTeamCard({
                       </Eyebrow>
                     ) : null}
                   </div>
-                </td>
-                <td className="w-18 px-2 py-2.5">
+                </TableCell>
+                <TableCell className="w-18 py-2.5">
                   <ExportDivisionIcon divisionGrid={divisionGrid} rank={player.assigned_rating} />
-                </td>
-                <td className="w-22 px-3 py-2.5">
+                </TableCell>
+                <TableCell className="w-22 px-3 py-2.5">
                   <div className="flex items-center justify-center gap-1">
                     {player.role_preferences.length > 0 ? (
                       player.role_preferences.slice(0, 3).map((preference, index) => (
@@ -461,23 +452,23 @@ function BalanceExportTeamCard({
                       <span className="text-xs text-[color:var(--aqt-fg-faint)]">-</span>
                     )}
                   </div>
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             ))}
 
             {team.roster[roleKey].length === 0 ? (
-              <tr className="border-b border-[color:var(--aqt-border)]">
-                <td
+              <TableRow>
+                <TableCell
                   colSpan={4}
                   className={cn(eyebrowClass(), "px-3 py-2.5 text-center")}
                 >
                   {t("emptyRole", { role: slotLabel(roleKey).toLowerCase() })}
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             ) : null}
-          </tbody>
+          </TableBody>
         ))}
-      </table>
+      </Table>
     </div>
   );
 }

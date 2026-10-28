@@ -209,12 +209,10 @@ export function SmurfTagsCell({
               +{hiddenCount} {t("common.more")}
             </Button>
           </DialogTrigger>
-          <DialogContent className="border-[color:var(--aqt-border)] bg-[color:var(--aqt-card)] sm:max-w-md">
+          <DialogContent className="sm:max-w-md">
             <DialogHeader>
-              <DialogTitle className="text-[color:var(--aqt-fg)]">{t("common.smurfBattleTags")}</DialogTitle>
-              <DialogDescription className="text-[color:var(--aqt-fg-muted)]">
-                {t("common.smurfDesc")}
-              </DialogDescription>
+              <DialogTitle>{t("common.smurfBattleTags")}</DialogTitle>
+              <DialogDescription>{t("common.smurfDesc")}</DialogDescription>
             </DialogHeader>
             <ScrollArea className="max-h-[320px] pr-2">
               <div className="flex flex-col gap-2">

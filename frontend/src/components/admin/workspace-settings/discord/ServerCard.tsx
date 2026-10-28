@@ -64,7 +64,7 @@ function OwnerMark({ name, src }: Readonly<{ name: string; src?: string | null }
     <span className="inline-flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
       <Avatar className="size-5 rounded-full border">
         {src ? <AvatarImage src={src} alt="" /> : null}
-        <AvatarFallback className="bg-muted text-label font-medium">{initials(name)}</AvatarFallback>
+        <AvatarFallback>{initials(name)}</AvatarFallback>
       </Avatar>
       <span className="truncate" title={label}>
         {label}
@@ -165,7 +165,7 @@ export function ServerCard({
                 </DropdownMenuItem>
               ) : null}
               <DropdownMenuItem
-                className="text-danger focus:text-danger"
+                variant="destructive"
                 disabled={unlinking}
                 onSelect={onUnlink}
               >

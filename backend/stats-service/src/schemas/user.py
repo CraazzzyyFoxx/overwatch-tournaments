@@ -50,6 +50,9 @@ __all__ = (
     "UserTournamentStat",
     "LobbyLeaderboardEntry",
     "LobbyLeaderboard",
+    "TournamentPlayerStat",
+    "TournamentPlayerStatsRow",
+    "TournamentPlayerStats",
     "CharacterStat",
     "CharacterWithUserStats",
     "CharacterStatBest",
@@ -343,6 +346,27 @@ class LobbyLeaderboard(BaseModel):
     stat: str
     total_players: int
     entries: list[LobbyLeaderboardEntry]
+
+
+class TournamentPlayerStat(BaseModel):
+    """One player's tournament average of one stat and its rank in the lobby (lower is better)."""
+
+    value: float
+    rank: int
+
+
+class TournamentPlayerStatsRow(BaseModel):
+    player_id: int  # user id (models.User.id), as in ``LobbyLeaderboardEntry``
+    #: By stat code; only the stats the player has data for.
+    stats: dict[str, TournamentPlayerStat]
+
+
+class TournamentPlayerStats(BaseModel):
+    """Every player's ``LobbyLeaderboard`` value and rank for the tournament page's stats, in one read."""
+
+    #: The largest ranked population across the stats (the ``total`` a rank is read against).
+    total_players: int
+    players: list[TournamentPlayerStatsRow]
 
 
 class UserMapCharacterStats(BaseModel):

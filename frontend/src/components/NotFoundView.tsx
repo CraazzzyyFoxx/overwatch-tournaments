@@ -26,7 +26,7 @@ export async function NotFoundView() {
 
   return (
     <div className="flex flex-1 items-center py-4 md:py-8">
-      <section className="liquid-glass relative isolate w-full overflow-hidden rounded-[32px] border border-[color:var(--aqt-border)] px-6 py-8 sm:px-8 sm:py-10 lg:px-12 lg:py-12">
+      <section className="relative isolate w-full overflow-hidden rounded-[32px] border border-[color:var(--aqt-border)] px-6 py-8 sm:px-8 sm:py-10 lg:px-12 lg:py-12">
         <div
           aria-hidden
           className="absolute right-5 top-5 text-[4rem] font-black leading-none tracking-[-0.08em] text-[color:var(--aqt-fg)]/5 sm:text-[5.5rem] lg:text-[7rem]"
@@ -66,7 +66,7 @@ export async function NotFoundView() {
           </div>
 
           <div className="space-y-4 lg:w-full lg:justify-self-end">
-            <Card className="liquid-glass-panel relative overflow-hidden p-3">
+            <Card className="relative overflow-hidden p-3">
               <div className="relative aspect-[5/4] overflow-hidden rounded-[24px] border border-[color:var(--aqt-border)]">
                 <Image
                   src="/not-found.avif"
@@ -78,7 +78,7 @@ export async function NotFoundView() {
               </div>
             </Card>
 
-            <Card className="liquid-glass-panel p-4 sm:p-5">
+            <Card className="p-4 sm:p-5">
               <Eyebrow as="p" tone="dim" className="px-1">
                 {t("notFound.quickRecovery")}
               </Eyebrow>
@@ -88,7 +88,7 @@ export async function NotFoundView() {
                   <Link
                     key={href}
                     href={href}
-                    className="group flex items-center gap-4 rounded-[22px] border border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-1)] p-4 outline-none transition-colors duration-200 hover:bg-[color:var(--aqt-overlay-3)] focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]"
+                    className="group flex items-center gap-4 rounded-[22px] border border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-1)] p-4 outline-hidden transition-colors duration-200 hover:bg-[color:var(--aqt-overlay-3)] focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]"
                   >
                     <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl border border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-2)] text-[color:var(--aqt-fg)]">
                       <Icon className="size-4" aria-hidden />

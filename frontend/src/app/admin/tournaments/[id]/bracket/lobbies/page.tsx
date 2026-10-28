@@ -119,7 +119,7 @@ function LobbyCard({ lobby }: Readonly<{ lobby: FfaLobby }>) {
   return (
     <Card>
       <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3 space-y-0">
-        <CardTitle className="text-base">{lobby.name}</CardTitle>
+        <CardTitle>{lobby.name}</CardTitle>
         {/* Keyed by the length it edits: the lobby refetches after every write,
             and a field seeded once would keep showing the number the organizer
             replaced (or the one another organizer replaced). */}

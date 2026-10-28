@@ -20,6 +20,7 @@ import { FilterChip, FilterChipGroup } from "@/components/ui/filter-chip";
 import { SearchField } from "@/components/ui/search-field";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { RowButton } from "@/components/ui/row-button";
+import { Separator } from "@/components/ui/separator";
 import { CardSurface } from "@/components/profile/atoms";
 import { TournamentCombobox } from "@/components/tournaments/TournamentCombobox";
 import { GameIcon } from "@/components/workspace/GameIcon";
@@ -186,7 +187,7 @@ const AchievementsView = ({ achievements, tournaments = [], selectedTournament, 
             </FilterChip>
           </>
         ) : null}
-        <span aria-hidden className="aqt-filter-divider" />
+        <Separator orientation="vertical" className="mx-0.5 h-5" />
         {tournaments.length > 0 && (
           <div className="w-48">
             <TournamentCombobox
@@ -194,6 +195,8 @@ const AchievementsView = ({ achievements, tournaments = [], selectedTournament, 
               value={selectedTournament}
               onValueChange={onTournamentChange}
               extraOptions={[{ value: "none", label: tr("users.achievements.filter.withoutTournament") }]}
+              size="sm"
+              variant="surface"
             />
           </div>
         )}
@@ -281,7 +284,7 @@ const AchievementsView = ({ achievements, tournaments = [], selectedTournament, 
                             {tr("users.achievements.locked")}
                           </span>
                         ) : (
-                          <span className="aqt-rar-fg">{tierNames[r]}</span>
+                          <span className="text-[hsl(var(--rar))]">{tierNames[r]}</span>
                         )}
                         <span className="aqt-tnum">{(ach.rarity * 100).toFixed(2)}%</span>
                         {ach.count > 0 ? <span className="aqt-tnum">×{ach.count}</span> : null}

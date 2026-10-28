@@ -10,9 +10,7 @@ import { useRoleName } from "@/hooks/useRoleName";
 import { registrationRoles, showsRoles, type RoleOntology } from "@/lib/roster/ontology";
 import type { DivisionGridLike } from "@/lib/divisions/grid";
 import { UserSearchCombobox } from "@/components/kit/ServerSearchCombobox";
-import SearchableImageSelect, {
-  type SearchableImageOption,
-} from "@/components/ui/searchable-image-select";
+import { SearchableImageSelect, type SearchableImageOption } from "@/components/ui/searchable-image-select";
 import { DivisionRangePicker } from "@/components/DivisionRangePicker";
 import { TournamentCombobox } from "@/components/tournaments/TournamentCombobox";
 import type { CatalogEntityRead } from "@/types/catalog.types";
@@ -175,6 +173,7 @@ const CompareFiltersPanel = ({
                 placeholder={t("users.compare.allRoles")}
                 ariaLabel={t("users.compare.filters.roleFilter")}
                 disabled={isTargetBaseline}
+                size="sm"
               />
             </FilterField>
           ) : null}
@@ -198,6 +197,7 @@ const CompareFiltersPanel = ({
               ariaLabel={t("common.tournament")}
               isLoading={isTournamentsLoading}
               disabled={isTournamentsLoading || isTournamentsError}
+              size="sm"
             />
           </FilterField>
         </div>
@@ -230,6 +230,7 @@ const CompareFiltersPanel = ({
                   ariaLabel={t("users.compare.filters.primaryHero")}
                   isLoading={isHeroesLoading}
                   disabled={isHeroesLoading || isHeroesError}
+                  size="sm"
                 />
               </FilterField>
 
@@ -245,6 +246,7 @@ const CompareFiltersPanel = ({
                   ariaLabel={t("users.compare.filters.compareHero")}
                   isLoading={isHeroesLoading}
                   disabled={isHeroesLoading || isHeroesError}
+                  size="sm"
                 />
               </FilterField>
 
@@ -260,6 +262,7 @@ const CompareFiltersPanel = ({
                   ariaLabel={t("users.compare.filters.mapFilter")}
                   isLoading={isMapsLoading}
                   disabled={isMapsLoading || isMapsError}
+                  size="sm"
                 />
               </FilterField>
             </div>

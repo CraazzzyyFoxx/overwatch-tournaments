@@ -6,7 +6,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { ArrowRightLeft, Pencil, Trash2, UserCog } from "lucide-react";
 
 import { columnMeta, createKebabColumn } from "@/components/data-table";
-import { SocialAccountList } from "@/components/social/SocialAccountList";
+import { SocialAccountList } from "./SocialAccountList";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { initials } from "@/lib/utils";
 import type { AuthAdminUser } from "@/types/rbac.types";
@@ -46,9 +46,9 @@ export function usePeopleColumns({
         }),
         cell: ({ row }) => (
           <div className="flex min-w-0 items-center gap-2.5">
-            <Avatar className="size-7 text-xs">
+            <Avatar className="size-7">
               <AvatarImage src={row.original.avatar_url ?? undefined} alt="" />
-              <AvatarFallback className="bg-muted/60 font-medium text-muted-foreground">
+              <AvatarFallback>
                 {initials(row.original.name)}
               </AvatarFallback>
             </Avatar>
@@ -67,7 +67,7 @@ export function usePeopleColumns({
         enableSorting: false,
         cell: ({ row }) =>
           row.original.social_accounts?.length ? (
-            <SocialAccountList accounts={row.original.social_accounts} linkify={false} />
+            <SocialAccountList accounts={row.original.social_accounts} />
           ) : null
       },
       // Without the global auth grant there is nothing to read, so no column

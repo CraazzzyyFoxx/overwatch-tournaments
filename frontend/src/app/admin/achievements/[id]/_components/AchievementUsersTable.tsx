@@ -120,6 +120,7 @@ export function AchievementUsersTable({
                 value={tournamentId}
                 onValueChange={setTournamentId}
                 placeholder={t("detail.allTournaments")}
+                size="sm"
               />
             </div>
           ) : undefined

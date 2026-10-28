@@ -552,7 +552,7 @@ function PickupMixDetail({ initialGame }: Readonly<{ initialGame: CustomGame }>)
                 />
                 {teamsPanel}
                 {matches.length > 0 ? (
-                  <Card variant="flat" className="px-4 py-3.5">
+                  <Card className="px-4 py-3.5">
                     <MatchHistoryList
                       matches={matches}
                       lobbyCount={lobbyCount}

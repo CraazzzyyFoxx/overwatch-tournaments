@@ -15,7 +15,7 @@ export default function Loading() {
       <HeroFrame>
         <div className="flex flex-col gap-7 px-6 py-8 md:px-10 md:py-9 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex min-w-0 flex-col gap-5 sm:flex-row sm:items-start">
-            <Skeleton className="aqt-ach-crest shrink-0" />
+            <Skeleton className="aspect-square w-[clamp(96px,12vw,132px)] shrink-0 rounded-2xl" />
             <div className="flex min-w-0 flex-col gap-3">
               <Skeleton className="h-3 w-32" />
               <Skeleton className="h-10 w-72 max-w-full" />
@@ -43,7 +43,7 @@ export default function Loading() {
 
       <CardSurface className="min-w-0" title={t("achievements.detail.earnedBy")} flush>
         {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="aqt-earner-row">
+          <div key={i} className="grid grid-cols-[34px_1fr_auto] items-center gap-3.5 border-b border-[color:var(--aqt-border)] px-4.5 py-2.75 last:border-b-0">
             <Skeleton className="h-4 w-5 justify-self-end" />
             <Skeleton className="h-5 w-40" />
             <Skeleton className="h-4 w-8 justify-self-end" />

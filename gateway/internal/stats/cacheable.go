@@ -50,4 +50,8 @@ var PublicCacheableReads = map[string]respcache.Rule{
 	"/api/v1/users/{id}/tournaments/{tournament_id}":             {Extract: respcache.FromPathValue("tournament_id")},
 	"/api/v1/users/{id}/tournaments/{tournament_id}/encounters":  {Extract: respcache.FromPathValue("tournament_id")},
 	"/api/v1/users/{id}/tournaments/{tournament_id}/leaderboard": {Extract: respcache.FromPathValue("tournament_id")},
+	// The tournament page's per-player stat ranks: the same leaderboards, all
+	// players at once. AuthedRead: the viewer is used only in the visibility
+	// gate (rpc/statistics.py), so the body is the same for every viewer.
+	"/api/v1/tournaments/{id}/player-stats": {Extract: respcache.FromPathValue("id"), AuthedRead: true},
 }

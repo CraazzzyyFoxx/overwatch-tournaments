@@ -3,13 +3,13 @@
 import { useId, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CircleOff } from "lucide-react";
+import { CircleOff, FileJson } from "lucide-react";
 
 import { StatusIcon } from "@/components/admin/StatusIcon";
 import { EntityFormDialog } from "@/components/kit/EntityFormDialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
+import { FileButton } from "@/components/ui/file-button";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
@@ -156,7 +156,6 @@ export function AchievementImportDialog({
         <div className="space-y-4">
           <div className="space-y-1">
             <ToggleGroup
-              type="single"
               variant="pill"
               size="sm"
               aria-label={t("import.source")}
@@ -181,13 +180,19 @@ export function AchievementImportDialog({
 
           {source === "file" ? (
             <div className="space-y-2">
-              <Label htmlFor="import-file">{t("import.fileLabel")}</Label>
-              <Input
-                id="import-file"
-                type="file"
+              <Label id="import-file-label">{t("import.fileLabel")}</Label>
+              <FileButton
+                variant="outline"
                 accept="application/json,.json"
-                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-              />
+                onFiles={([next]) => setFile(next)}
+                aria-labelledby="import-file-label import-file-name"
+                className="w-full justify-start"
+              >
+                <FileJson aria-hidden />
+                <span id="import-file-name" className="truncate">
+                  {file?.name ?? t("import.chooseFile")}
+                </span>
+              </FileButton>
             </div>
           ) : (
             <>

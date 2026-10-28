@@ -123,7 +123,7 @@ describe("buildTournamentSchedule", () => {
     }
   });
 
-  it("counts the current phase down to its own closing time and fills its progress", () => {
+  it("counts the current phase down to its own closing time", () => {
     const { segments } = buildTournamentSchedule({
       tournament: tournament({ status: "check_in" }),
       now: at(19, 30)
@@ -133,7 +133,6 @@ describe("buildTournamentSchedule", () => {
     expect(registration.state).toBe("done");
     expect(checkIn.state).toBe("current");
     expect(checkIn.countdownMs).toBe(15 * 60_000);
-    expect(checkIn.progress).toBeCloseTo(30 / 45, 5);
     // Exactly one boundary is counted down, so two competing timers can never
     // disagree about what happens next.
     expect(live.countdownMs).toBeNull();
@@ -164,7 +163,7 @@ describe("buildTournamentSchedule", () => {
       now: at(18)
     });
 
-    expect(segments[0]).toMatchObject({ state: "current", countdownMs: null, progress: null });
+    expect(segments[0]).toMatchObject({ state: "current", countdownMs: null });
     expect(segments[1].countdownMs).toBe(60 * 60_000);
   });
 
@@ -175,7 +174,6 @@ describe("buildTournamentSchedule", () => {
     });
 
     expect(segments[0].countdownMs).toBeNull();
-    expect(segments[0].progress).toBe(1);
     expect(segments[1]).toMatchObject({ state: "upcoming", countdownMs: null });
   });
 
@@ -207,7 +205,7 @@ describe("buildTournamentSchedule", () => {
       now: at(19, 30)
     });
 
-    expect(segments[0]).toMatchObject({ state: "current", countdownMs: null, progress: null });
+    expect(segments[0]).toMatchObject({ state: "current", countdownMs: null });
   });
 });
 
@@ -231,7 +229,11 @@ describe("nextPhaseBoundary", () => {
   });
 
   it("is null when nothing lies ahead — a finished tournament or an empty schedule", () => {
-    expect(nextPhaseBoundary({ tournament: tournament({ status: "completed" }), now: at(23) })).toBeNull();
-    expect(nextPhaseBoundary({ tournament: tournament({ phase_schedule: [] }), now: at(9) })).toBeNull();
+    expect(
+      nextPhaseBoundary({ tournament: tournament({ status: "completed" }), now: at(23) })
+    ).toBeNull();
+    expect(
+      nextPhaseBoundary({ tournament: tournament({ phase_schedule: [] }), now: at(9) })
+    ).toBeNull();
   });
 });

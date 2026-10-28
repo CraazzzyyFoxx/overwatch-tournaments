@@ -23,6 +23,19 @@ const PopoverClose = PopoverPrimitive.Close;
 export const floatingPanelClass =
   "rounded-[10px] border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-card-2)] text-[color:var(--aqt-fg)] shadow-[inset_0_1px_0_var(--aqt-overlay-3)]";
 
+/** The panel's only motion: a fade in and out on Radix's `data-state`. */
+export const floatingPanelFadeClass =
+  "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0";
+
+/**
+ * A row of a floating panel: every select and combobox option and every menu
+ * item. 32px under a mouse, 44px under a finger (`pointer-coarse`), 6px radius.
+ * Each primitive adds its own cursor fill and disabled state: Radix and cmdk
+ * mark them with different attributes.
+ */
+export const floatingRowClass =
+  "relative flex cursor-default select-none items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-hidden pointer-coarse:min-h-11";
+
 const PopoverContent = React.forwardRef<
   React.ElementRef<typeof PopoverPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof PopoverPrimitive.Content> & { animate?: boolean }
@@ -66,10 +79,9 @@ const PopoverContent = React.forwardRef<
           event.stopPropagation();
         }}
         className={cn(
-          "z-50 w-72 p-4 outline-none",
+          "z-50 w-72 p-4 outline-hidden",
           floatingPanelClass,
-          animate &&
-            "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0",
+          animate && floatingPanelFadeClass,
           className
         )}
         {...props}

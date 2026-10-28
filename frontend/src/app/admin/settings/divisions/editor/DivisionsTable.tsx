@@ -241,7 +241,7 @@ export function DivisionsTable({
 
   return (
     <div className="flex flex-col gap-3">
-      <Card variant="flat" className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 px-3 py-2">
+      <Card className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 px-3 py-2">
         <div className="flex min-w-0 max-w-prose flex-col gap-0.5">
           <span className={eyebrowClass("muted")}>{t("table.rankScale")}</span>
           <p className="text-xs text-muted-foreground">
@@ -255,7 +255,6 @@ export function DivisionsTable({
         </div>
         {scaleChoice ? (
           <ToggleGroup
-            type="single"
             variant="pill"
             size="sm"
             value={scale}
@@ -340,7 +339,7 @@ function FloorField({
             }
           }}
           size="sm"
-          className="h-7 w-20 px-1.5 tabular-nums aria-invalid:border-destructive"
+          className="h-7 w-20 tabular-nums"
         />
         <span className="text-muted-foreground">&ndash; {band.rankMax ?? "\u221e"}</span>
       </div>

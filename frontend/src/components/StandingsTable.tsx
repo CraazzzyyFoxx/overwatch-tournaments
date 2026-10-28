@@ -1,6 +1,6 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Lock } from "lucide-react";
+import { ChevronUp, Info, Lock, Trophy } from "lucide-react";
 
 import { Encounter } from "@/types/encounter.types";
 import { Stage, StageItem, Standings } from "@/types/tournament.types";
@@ -16,8 +16,11 @@ import {
   type TiebreakerMetricId
 } from "@/lib/tournament/tiebreakers";
 import tournamentService from "@/services/tournament.service";
-import styles from "./StandingsTable.module.css";
 import TeamName from "@/components/TeamName";
+import { ResTag, type ResTagKind } from "@/components/match/cells";
+import { Badge } from "@/components/ui/badge";
+import { Eyebrow } from "@/components/ui/eyebrow";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 interface StandingTableProps {
   standings: Standings[];
@@ -67,6 +70,41 @@ export function upperBracketCut(
 
 type ResultKind = "w" | "l" | "t";
 
+/** A tie is a draw square (`ResTag` "d") that keeps its own letter. */
+const RES_TAG_KIND: Record<ResultKind, ResTagKind> = { w: "w", l: "l", t: "d" };
+
+/** The row's place against the lines: the crowned winner, a tie a line cuts, the advancing block. */
+type Zone = "crown" | "tie" | "advance";
+
+const ROW_TINT: Record<Zone, string> = {
+  crown:
+    "bg-[color:color-mix(in_srgb,var(--aqt-medal-gold)_6%,transparent)] hover:bg-[color:color-mix(in_srgb,var(--aqt-medal-gold)_10%,transparent)]",
+  tie: "bg-[color:color-mix(in_srgb,var(--aqt-amber)_8%,transparent)] hover:bg-[color:color-mix(in_srgb,var(--aqt-amber)_13%,transparent)]",
+  advance:
+    "bg-[color:color-mix(in_srgb,var(--aqt-teal)_5%,transparent)] hover:bg-[color:color-mix(in_srgb,var(--aqt-teal)_9%,transparent)]"
+};
+
+const RANK_TONE: Record<Zone, string> = {
+  crown: "text-[color:var(--aqt-medal-gold)]",
+  tie: "text-[color:var(--aqt-amber)]",
+  advance: "text-[color:var(--aqt-teal)]"
+};
+
+const CELL = "px-2.5 py-2.75";
+const HEAD = "h-auto px-2.5 py-2.5 whitespace-nowrap";
+
+/**
+ * The team column stays put while the row scrolls under it. Opaque, so the
+ * cells sliding beneath never show through, and ruled on its right edge by a
+ * pseudo-element: a collapsed table's own border would not travel with it.
+ */
+const STICKY_TEAM =
+  "sticky left-0 z-2 bg-[color:var(--aqt-card)] after:absolute after:inset-y-0 after:right-0 after:w-px after:bg-[color:var(--aqt-border)]";
+
+/** A dashed rule across the table, its `data-label` centred on it. */
+const CUT_LINE =
+  "relative h-0 before:absolute before:inset-x-3.5 before:top-0 before:border-t-[1.5px] before:border-dashed before:border-[color:color-mix(in_srgb,var(--aqt-teal)_40%,transparent)] after:absolute after:left-1/2 after:top-1/2 after:-translate-x-1/2 after:-translate-y-1/2 after:whitespace-nowrap after:bg-[color:var(--aqt-card)] after:px-2.5 after:py-0.5 after:font-[family-name:var(--aqt-data)] after:text-label after:font-bold after:uppercase after:tracking-label after:text-[color:var(--aqt-teal)] after:content-[attr(data-label)]";
+
 /** The team's own seat and what the other seats scored, from the encounter's participations. */
 function seatScores(teamId: number, encounter: Encounter): { own: number; others: number[] } {
   const seats = encounter.teams ?? [];
@@ -95,21 +133,30 @@ function computeMaps(teamId: number, history: Encounter[]) {
 }
 
 function MapDiff({ diff }: Readonly<{ diff: number }>) {
-  const tone = diff > 0 ? "pos" : diff < 0 ? "neg" : "zero";
+  const tone =
+    diff > 0
+      ? "text-[color:var(--aqt-emerald)]"
+      : diff < 0
+        ? "text-[color:var(--aqt-rose)]"
+        : "text-[color:var(--aqt-fg-dim)]";
   const text = diff > 0 ? `+${diff}` : diff < 0 ? `−${Math.abs(diff)}` : "0";
-  return <span className={cn("st-diff", tone)}>{text}</span>;
+  return (
+    <span data-diff className={cn("aqt-tnum text-caption font-bold", tone)}>
+      {text}
+    </span>
+  );
 }
 
 function FormChips({ results }: Readonly<{ results: ResultKind[] }>) {
   if (results.length === 0) {
-    return <span style={{ color: "var(--fg-faint)" }}>—</span>;
+    return <span className="text-[color:var(--aqt-fg-faint)]">—</span>;
   }
   return (
-    <span className="form-chips">
+    <span data-form className="inline-flex gap-0.75">
       {results.slice(-5).map((result, index) => (
-        <span key={index} className={cn("fc", result)}>
+        <ResTag key={index} kind={RES_TAG_KIND[result]}>
           {result.toUpperCase()}
-        </span>
+        </ResTag>
       ))}
     </span>
   );
@@ -118,19 +165,34 @@ function FormChips({ results }: Readonly<{ results: ResultKind[] }>) {
 function TeamCell({ standing, showGroup }: Readonly<{ standing: Standings; showGroup: boolean }>) {
   const t = useTranslations();
   const groupName = standing.team?.group?.name;
+  // A team a Swiss threshold eliminated keeps its place in the table, read as done.
+  const eliminated = standing.swiss_status === "eliminated";
   return (
-    <div className="st-team">
-      <div className="stack">
-        <TeamName team={standing.team} size="xs" nameClassName="nm" />
+    <div className="flex min-w-32.5 items-center gap-3">
+      <div className="flex flex-col gap-0.5">
+        <TeamName
+          team={standing.team}
+          size="xs"
+          nameClassName={cn(
+            "font-display text-body leading-tight font-bold",
+            eliminated ? "text-[color:var(--aqt-fg-dim)]" : "text-[color:var(--aqt-fg)]"
+          )}
+        />
         {showGroup && groupName && (
-          <span className="sub">{groupDisplayName(groupName, t("common.group"))}</span>
+          <span className="aqt-tnum text-label leading-tight text-[color:var(--aqt-fg-dim)]">
+            {groupDisplayName(groupName, t("common.group"))}
+          </span>
         )}
       </div>
       {/* A Swiss threshold's verdict, the server's: final, unlike the cut-line. */}
       {standing.swiss_status === "qualified" ? (
-        <span className="st-status adv">{t("standings.swissQualified")}</span>
-      ) : standing.swiss_status === "eliminated" ? (
-        <span className="st-status out">{t("standings.swissEliminated")}</span>
+        <Badge data-status voice="label" tone="accent">
+          {t("standings.swissQualified")}
+        </Badge>
+      ) : eliminated ? (
+        <Badge data-status voice="label" tone="neutral">
+          {t("standings.swissEliminated")}
+        </Badge>
       ) : null}
     </div>
   );
@@ -241,76 +303,86 @@ const StandingsTable = ({
   return (
     <div>
       <section
-        className={cn("st-scroll", styles.standingsViewport)}
+        className="relative w-full min-w-0 max-w-full overflow-x-auto overflow-y-clip overscroll-x-contain [scrollbar-width:none] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[color:var(--aqt-teal)] [&::-webkit-scrollbar]:hidden"
         aria-label={t("tournamentDetail.publicPages.standings.tableLabel")}
         tabIndex={0}
       >
-        <table className={cn("st", styles.standingsTable)}>
-          <thead>
+        <Table wrapperClassName="overflow-visible" className="min-w-184">
+          <TableHeader>
             {is_groups ? (
-              <tr>
+              <TableRow>
                 {/* Wide enough for a two-digit rank plus the tie `=` marker,
                     which otherwise wraps under the number. */}
-                <th scope="col" className="whitespace-nowrap" style={{ width: 52 }}>
+                <TableHead scope="col" className={HEAD} style={{ width: 52 }}>
                   #
-                </th>
-                <th scope="col" className={styles.stickyTeamColumn}>
+                </TableHead>
+                <TableHead scope="col" className={cn(HEAD, STICKY_TEAM, "z-3")}>
                   {t("standings.colTeam")}
-                </th>
-                <th scope="col" className="c" style={{ width: 70 }}>
+                </TableHead>
+                <TableHead scope="col" className={cn(HEAD, "text-center")} style={{ width: 70 }}>
                   {t("standings.colWDL")}
-                </th>
-                <th scope="col" className="r" style={{ width: 48 }}>
+                </TableHead>
+                <TableHead scope="col" className={cn(HEAD, "text-right")} style={{ width: 48 }}>
                   {t("standings.colPts")}
-                </th>
-                <th scope="col" className="r" style={{ width: 48 }} title={t("common.headToHead")}>
+                </TableHead>
+                <TableHead
+                  scope="col"
+                  className={cn(HEAD, "text-right")}
+                  style={{ width: 48 }}
+                  title={t("common.headToHead")}
+                >
                   {t("standings.colH2H")}
-                </th>
+                </TableHead>
                 {/* Two numbers, and `13.0 · 17.5` is the widest they get: the
                     column is sized for that so the pair never breaks onto a
                     second line and doubles the row's height. */}
-                <th
+                <TableHead
                   scope="col"
-                  className="r whitespace-nowrap"
+                  className={cn(HEAD, "text-right")}
                   style={{ width: 116 }}
                   title={t("standings.buchholzMedianFull")}
                 >
                   {t("common.buchholz")}
-                </th>
-                <th scope="col" className="r" style={{ width: 54 }} title={t("common.scoreDiff")}>
+                </TableHead>
+                <TableHead
+                  scope="col"
+                  className={cn(HEAD, "text-right")}
+                  style={{ width: 54 }}
+                  title={t("common.scoreDiff")}
+                >
                   +/−
-                </th>
-                <th scope="col" className="c" style={{ width: 110 }}>
+                </TableHead>
+                <TableHead scope="col" className={cn(HEAD, "text-center")} style={{ width: 110 }}>
                   {t("standings.colForm")}
-                </th>
-                <th scope="col" className="c" style={{ width: 80 }}>
+                </TableHead>
+                <TableHead scope="col" className={cn(HEAD, "text-center")} style={{ width: 80 }}>
                   <span className="sr-only">{t("common.status")}</span>
-                </th>
-              </tr>
+                </TableHead>
+              </TableRow>
             ) : (
-              <tr>
-                <th scope="col" style={{ width: 56 }}>
+              <TableRow>
+                <TableHead scope="col" className={HEAD} style={{ width: 56 }}>
                   #
-                </th>
-                <th scope="col" className={styles.stickyTeamColumn}>
+                </TableHead>
+                <TableHead scope="col" className={cn(HEAD, STICKY_TEAM, "z-3")}>
                   {t("standings.colTeam")}
-                </th>
-                <th scope="col" className="c" style={{ width: 90 }}>
+                </TableHead>
+                <TableHead scope="col" className={cn(HEAD, "text-center")} style={{ width: 90 }}>
                   {t("standings.colRecord")}
-                </th>
-                <th scope="col" className="r" style={{ width: 170 }}>
+                </TableHead>
+                <TableHead scope="col" className={cn(HEAD, "text-right")} style={{ width: 170 }}>
                   {t("standings.colMaps")}
-                </th>
-                <th scope="col" className="r" style={{ width: 80 }}>
+                </TableHead>
+                <TableHead scope="col" className={cn(HEAD, "text-right")} style={{ width: 80 }}>
                   {t("standings.colMapDiff")}
-                </th>
-                <th scope="col" className="c" style={{ width: 130 }}>
+                </TableHead>
+                <TableHead scope="col" className={cn(HEAD, "text-center")} style={{ width: 130 }}>
                   {t("standings.colForm")}
-                </th>
-              </tr>
+                </TableHead>
+              </TableRow>
             )}
-          </thead>
-          <tbody>
+          </TableHeader>
+          <TableBody>
             {sortedStandings.map((standing, index) => {
               const position = is_groups ? standing.position : standing.overall_position;
               const tieHead = is_groups ? standing.tie_group : null;
@@ -337,18 +409,32 @@ const StandingsTable = ({
                   : tieVerdict === "upper"
                     ? t("standings.tieDecidesUpper")
                     : undefined;
-              const rowClass = cn(
-                crowned ? "crown" : advancing ? "advance" : undefined,
-                tieVerdict ? "tie" : undefined,
-                standing.swiss_status === "eliminated" ? "swiss-out" : undefined
-              );
+              // The row is amber even while it is provisionally advancing,
+              // because that is exactly what is unsettled.
+              const zone: Zone | null = crowned
+                ? "crown"
+                : tieVerdict
+                  ? "tie"
+                  : advancing
+                    ? "advance"
+                    : null;
 
               return (
                 <React.Fragment
                   key={`${standing.stage_item_id ?? standing.stage_id ?? "s"}-${standing.team_id}`}
                 >
-                  <tr className={rowClass || undefined}>
-                    <td className="whitespace-nowrap">
+                  <TableRow
+                    data-advance={advancing || undefined}
+                    data-tie={tieVerdict ?? undefined}
+                    className={zone ? ROW_TINT[zone] : undefined}
+                  >
+                    <TableCell className={cn(CELL, "whitespace-nowrap")}>
+                      {crowned && (
+                        <Trophy
+                          aria-hidden
+                          className="mr-1.5 inline size-3.5 align-[-0.125em] text-[color:var(--aqt-medal-gold)]"
+                        />
+                      )}
                       {/* Every row of a cluster shows its head's position, so
                           4/4/6 reads as "these two were never separated". The
                           next distinct row keeps the position it earned.
@@ -356,14 +442,22 @@ const StandingsTable = ({
                           nothing in the overall table, which ranks by
                           `overall_position`. */}
                       <span
-                        className="st-rank"
+                        data-rank
+                        className={cn(
+                          "inline-block min-w-6 font-display text-title leading-none font-extrabold tabular-nums",
+                          standing.swiss_status === "eliminated"
+                            ? "text-[color:var(--aqt-fg-dim)]"
+                            : zone
+                              ? RANK_TONE[zone]
+                              : "text-[color:var(--aqt-fg-faint)]"
+                        )}
                         title={tieHead != null ? tieClusterTitle : undefined}
                       >
                         {tieHead ?? position}
                       </span>
                       {tieHead != null && (
                         <span
-                          className="ml-0.5 text-[color:var(--fg-dim)]"
+                          className="ml-0.5 text-[color:var(--aqt-fg-dim)]"
                           title={tieClusterTitle}
                           aria-label={tieClusterTitle}
                         >
@@ -372,36 +466,45 @@ const StandingsTable = ({
                       )}
                       {standing.is_pinned && (
                         <span
-                          className="ml-1 inline-flex align-[-0.125em] text-[color:var(--fg-dim)]"
+                          className="ml-1 inline-flex align-[-0.125em] text-[color:var(--aqt-fg-dim)]"
                           title={pinnedTitle}
                         >
                           <Lock aria-hidden className="size-3" />
                           <span className="sr-only">{pinnedTitle}</span>
                         </span>
                       )}
-                    </td>
-                    <td className={styles.stickyTeamColumn}>
+                    </TableCell>
+                    <TableCell className={cn(CELL, STICKY_TEAM)}>
                       <TeamCell standing={standing} showGroup={!is_groups} />
-                    </td>
+                    </TableCell>
+                    <TableCell className={cn(CELL, "text-center")}>
+                      <span className="aqt-tnum inline-flex items-baseline gap-1 text-body font-semibold">
+                        <span className="text-[color:var(--aqt-emerald)]">{standing.win}</span>
+                        <span className="text-[color:var(--aqt-fg-faint)]">·</span>
+                        <span className="text-[color:var(--aqt-amber)]">{standing.draw}</span>
+                        <span className="text-[color:var(--aqt-fg-faint)]">·</span>
+                        <span className="text-[color:var(--aqt-fg-dim)]">{standing.lose}</span>
+                      </span>
+                    </TableCell>
 
                     {is_groups ? (
                       <>
-                        <td className="c">
-                          <span className="st-record">
-                            <span className="w">{standing.win}</span>
-                            <span className="sep">·</span>
-                            <span className="d">{standing.draw}</span>
-                            <span className="sep">·</span>
-                            <span className="l">{standing.lose}</span>
-                          </span>
-                        </td>
-                        <td className="r tabular-nums text-[color:var(--fg-muted)]">
+                        <TableCell
+                          className={cn(CELL, "text-right tabular-nums text-[color:var(--aqt-fg-muted)]")}
+                        >
                           {standing.points.toFixed(1)}
-                        </td>
-                        <td className="r tabular-nums text-[color:var(--fg-dim)]">
+                        </TableCell>
+                        <TableCell
+                          className={cn(CELL, "text-right tabular-nums text-[color:var(--aqt-fg-dim)]")}
+                        >
                           {standing.tb ? standing.tb : "—"}
-                        </td>
-                        <td className="r tabular-nums whitespace-nowrap text-[color:var(--fg-dim)]">
+                        </TableCell>
+                        <TableCell
+                          className={cn(
+                            CELL,
+                            "whitespace-nowrap text-right tabular-nums text-[color:var(--aqt-fg-dim)]"
+                          )}
+                        >
                           {standing.buchholz == null ? (
                             "—"
                           ) : (
@@ -417,125 +520,115 @@ const StandingsTable = ({
                               )}
                             </>
                           )}
-                        </td>
-                        <td className="r">
+                        </TableCell>
+                        <TableCell className={cn(CELL, "text-right")}>
                           <MapDiff diff={standing.score_differential ?? maps.diff} />
-                        </td>
-                        <td className="c">
+                        </TableCell>
+                        <TableCell className={cn(CELL, "text-center")}>
                           <FormChips results={results} />
-                        </td>
-                        <td className="c">
+                        </TableCell>
+                        <TableCell className={cn(CELL, "text-center")}>
                           {/* The tie IS the status: the line cuts through this
                               cluster, so "advancing" would be a promise the
                               results have not made. */}
                           {tieVerdict ? (
-                            <span className="st-status tie" title={tieVerdictTitle}>
+                            <Badge data-status voice="label" tone="warning" title={tieVerdictTitle}>
                               {t("standings.tieStatus")}
-                            </span>
+                            </Badge>
                           ) : advancing ? (
-                            <span className="st-status adv">
-                              <span className="arrow" />
+                            <Badge data-status voice="label" tone="accent">
+                              <ChevronUp aria-hidden className="size-3" />
                               {t("standings.advancing")}
-                            </span>
+                            </Badge>
                           ) : (
-                            <span className="st-status out">{t("standings.eliminated")}</span>
+                            <Badge data-status voice="label" tone="neutral">
+                              {t("standings.eliminated")}
+                            </Badge>
                           )}
-                        </td>
+                        </TableCell>
                       </>
                     ) : (
                       <>
-                        <td className="c">
-                          <span className="st-record">
-                            <span className="w">{standing.win}</span>
-                            <span className="sep">·</span>
-                            <span className="d">{standing.draw}</span>
-                            <span className="sep">·</span>
-                            <span className="l">{standing.lose}</span>
-                          </span>
-                        </td>
-                        <td className="r">
-                          <span className="st-maps">
-                            <span className="num">
+                        <TableCell className={cn(CELL, "text-right")}>
+                          <span className="flex items-center justify-end gap-2.25">
+                            <span className="aqt-tnum min-w-12.5 text-right text-caption font-semibold text-[color:var(--aqt-fg-muted)]">
                               {maps.won}–{maps.lost}
                             </span>
-                            <span className="bar">
-                              <span className="w" style={{ width: `${wPct}%` }} />
-                              <span className="l" style={{ width: `${100 - wPct}%` }} />
+                            {/* The map split: won emerald, lost rose. */}
+                            <span className="flex h-1.5 w-22.5 overflow-hidden rounded-full bg-[color:var(--aqt-overlay-2)]">
+                              <span
+                                className="h-full bg-[color:var(--aqt-emerald)]"
+                                style={{ width: `${wPct}%` }}
+                              />
+                              <span
+                                className="h-full bg-[color:color-mix(in_srgb,var(--aqt-rose)_40%,transparent)]"
+                                style={{ width: `${100 - wPct}%` }}
+                              />
                             </span>
                           </span>
-                        </td>
-                        <td className="r">
+                        </TableCell>
+                        <TableCell className={cn(CELL, "text-right")}>
                           <MapDiff diff={maps.diff} />
-                        </td>
-                        <td className="c">
+                        </TableCell>
+                        <TableCell className={cn(CELL, "text-center")}>
                           <FormChips results={results} />
-                        </td>
+                        </TableCell>
                       </>
                     )}
-                  </tr>
+                  </TableRow>
 
                   {showUpperCut && index === upperCut - 1 && (
-                    <tr>
-                      <td
+                    <TableRow>
+                      <TableCell
                         colSpan={columnCount}
-                        className="st-cut st-upper-cut"
+                        className={cn(CELL, CUT_LINE)}
+                        data-cut="upper"
                         data-label={t("standings.upperBracketCut", { count: upperCut })}
                       />
-                    </tr>
+                    </TableRow>
                   )}
 
                   {showCut && index === resolvedAdvanceCount - 1 && (
-                    <tr>
-                      <td
+                    <TableRow>
+                      <TableCell
                         colSpan={columnCount}
-                        className="st-cut"
+                        className={cn(CELL, CUT_LINE)}
+                        data-cut="advance"
                         data-label={t("common.topAdvance", { count: resolvedAdvanceCount })}
                       />
-                    </tr>
+                    </TableRow>
                   )}
                 </React.Fragment>
               );
             })}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </section>
       {is_groups &&
       sortedStandings[0]?.tiebreak_order &&
       sortedStandings[0].tiebreak_order.length > 0 ? (
-        <div className="st-footer">
-          <span className="label">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="13"
-              height="13"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              style={{ display: "inline-block", verticalAlign: "middle" }}
-            >
-              <circle cx="12" cy="12" r="10" />
-              <line x1="12" x2="12" y1="16" y2="12" />
-              <line x1="12" x2="12.01" y1="8" y2="8" />
-            </svg>
+        <div className="flex items-center gap-3 border-t border-[color:var(--aqt-border)] px-4.5 py-3 text-label max-sm:flex-col max-sm:items-start max-sm:gap-2">
+          <Eyebrow className="inline-flex items-center gap-1.5 whitespace-nowrap">
+            <Info aria-hidden className="size-3.25" />
             <span>{t("common.tiebreakers")}</span>
-          </span>
-          <div className="items">
+          </Eyebrow>
+          <div className="flex flex-wrap items-center gap-1.5">
             {sortedStandings[0].tiebreak_order.map((metricId, idx) => {
               const label = tiebreakerLabel(metricId, labelFor);
               return (
                 <React.Fragment key={metricId}>
                   {/* Ordering separator beside real text, so it takes the same
                       aria-hidden treatment as the sanctioned "View all →". The
-                      rank each badge holds is already in its title. */}
+                      rank each metric holds is already in its title. */}
                   {idx > 0 && (
-                    <span className="sep" aria-hidden>
+                    <span className="text-[color:var(--aqt-fg-faint)]" aria-hidden>
                       →
                     </span>
                   )}
-                  <span className="badge" title={t("standings.priority", { n: String(idx + 1) })}>
+                  <span
+                    className="font-medium text-[color:var(--aqt-fg-dim)]"
+                    title={t("standings.priority", { n: String(idx + 1) })}
+                  >
                     {label}
                   </span>
                 </React.Fragment>

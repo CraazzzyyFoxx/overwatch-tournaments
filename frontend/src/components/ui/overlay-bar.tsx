@@ -2,20 +2,23 @@
 
 import { useEffect, useRef, type ReactNode } from "react";
 
-import { dockStack } from "@/components/ui/dock";
+import { dockStack, floatingGlassClass } from "@/components/ui/dock";
+import type { Tone } from "@/components/ui/tone";
 import { cn } from "@/lib/utils";
 
-type OverlayBarTone = "neutral" | "warn" | "active";
-
-const TONE_BORDER: Record<OverlayBarTone, string> = {
-  neutral: "border-[color:var(--aqt-border-2)]",
-  warn: "border-[color:var(--aqt-warm)]/60",
-  active: "border-[color:var(--aqt-teal)]/60",
+/** The rim takes the tone; `neutral` keeps the glass's own control rim. */
+const TONE_BORDER: Record<Tone, string> = {
+  neutral: "",
+  accent: "border-primary/60",
+  success: "border-success/60",
+  warning: "border-warning/60",
+  info: "border-info/60",
+  danger: "border-danger/60"
 };
 
 interface OverlayBarProps {
-  /** Border accent -- "warn" for a connectivity/attention problem, "active" for "you can act now". */
-  tone?: OverlayBarTone;
+  /** Rim accent: `accent` for "you can act now", `warning` for a connectivity/attention problem. */
+  tone?: Tone;
   ariaLabel?: string;
   className?: string;
   children: ReactNode;
@@ -36,7 +39,12 @@ interface OverlayBarProps {
  *   carries; `0px` while they sit clear of it -- a capped bar on a wide screen
  *   ends short of the corner, and docks lifted there float over nothing.
  */
-export function OverlayBar({ tone = "neutral", ariaLabel, className, children }: Readonly<OverlayBarProps>) {
+export function OverlayBar({
+  tone = "neutral",
+  ariaLabel,
+  className,
+  children
+}: Readonly<OverlayBarProps>) {
   const ref = useRef<HTMLElement>(null);
 
   useEffect(() => {
@@ -71,9 +79,10 @@ export function OverlayBar({ tone = "neutral", ariaLabel, className, children }:
     <section
       ref={ref}
       className={cn(
-        "fixed bottom-2 left-1/2 z-40 w-[min(1320px,94vw)] -translate-x-1/2 rounded-xl border bg-[color:var(--aqt-card)]/95 p-3 shadow-xl backdrop-blur transition-colors supports-[padding:max(0px)]:pb-[max(0.75rem,env(safe-area-inset-bottom))]",
+        "fixed bottom-2 left-1/2 z-40 w-[min(1320px,94vw)] -translate-x-1/2 p-3 transition-colors supports-[padding:max(0px)]:pb-[max(0.75rem,env(safe-area-inset-bottom))]",
+        floatingGlassClass,
         TONE_BORDER[tone],
-        className,
+        className
       )}
       aria-label={ariaLabel}
     >

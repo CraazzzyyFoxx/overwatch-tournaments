@@ -25,7 +25,10 @@ function isOptimizable(src: ImageProps["src"]): boolean {
   if (src.startsWith("/") && !src.startsWith("//")) return true;
   try {
     const url = new URL(src);
-    return url.search === "" && REMOTE.some((pattern) => pattern.origin === url.origin && pattern.path.test(url.pathname));
+    return (
+      url.search === "" &&
+      REMOTE.some((pattern) => pattern.origin === url.origin && pattern.path.test(url.pathname))
+    );
   } catch {
     return false;
   }
@@ -37,5 +40,10 @@ function isOptimizable(src: ImageProps["src"]): boolean {
  * optimizer refuses such a URL (`next dev` throws while rendering, a build serves a 400), so it is served as is.
  */
 export default function Image(props: ComponentProps<typeof NextImage>) {
-  return <NextImage {...props} {...(!props.unoptimized && !isOptimizable(props.src) ? { unoptimized: true } : null)} />;
+  return (
+    <NextImage
+      {...props}
+      {...(!props.unoptimized && !isOptimizable(props.src) ? { unoptimized: true } : null)}
+    />
+  );
 }

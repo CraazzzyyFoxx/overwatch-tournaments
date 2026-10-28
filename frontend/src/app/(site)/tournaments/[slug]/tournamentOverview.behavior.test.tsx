@@ -3,18 +3,22 @@ import { HydrationBoundary, type DehydratedState } from "@tanstack/react-query";
 import { isValidElement, Suspense, type ReactElement } from "react";
 
 import { ApiError } from "@/lib/api/error";
+import { ffaStageQueryOptions } from "@/lib/tournament/ffa-stage-query";
 import { mapPoolConfigsQueryOptions } from "@/lib/tournament/map-pool-query";
 import { tournamentOverviewQueryOptions } from "@/lib/tournament/overview-query";
 import { tournamentRegistrationFormQueryOptions } from "@/lib/tournament/registrations-query";
+import encounterService from "@/services/encounter.service";
+import ffaService from "@/services/ffa.service";
 import pickBanService from "@/services/pickBan.service";
 import registrationService from "@/services/registration.service";
 import streamService from "@/services/stream.service";
 import tournamentService from "@/services/tournament.service";
-import type { Tournament } from "@/types/tournament.types";
+import type { StageSummary, Tournament } from "@/types/tournament.types";
 
 import TournamentOverviewBoundary from "./TournamentOverviewBoundary";
 import { TournamentShellSkeleton } from "./_components/TournamentSkeletons";
 import { tournamentStreamsQueryOptions } from "./_queries/tournamentStreams";
+import { createBracketQueryPlan } from "./bracket/bracketData";
 
 vi.mock("next-intl/server", () => ({
   getTranslations: async () => (key: string) => key
@@ -91,7 +95,10 @@ function deferred<T>() {
 beforeEach(() => {
   vi.spyOn(registrationService, "getForm").mockResolvedValue(null);
   vi.spyOn(pickBanService, "listPublicConfigs").mockResolvedValue({ configs: [] });
-  vi.spyOn(streamService, "getTournamentStreams").mockResolvedValue({ official: [], participants: [] });
+  vi.spyOn(streamService, "getTournamentStreams").mockResolvedValue({
+    official: [],
+    participants: []
+  });
 });
 
 afterEach(() => {
@@ -101,9 +108,9 @@ afterEach(() => {
 describe("TournamentLayout streaming overview", () => {
   it("renders the client shell inside the overview seed, without awaiting the overview itself", async () => {
     const pendingOverview = deferred<Tournament>();
-    const overviewSpy = vi.spyOn(tournamentService, "getPublicOverview").mockReturnValue(
-      pendingOverview.promise
-    );
+    const overviewSpy = vi
+      .spyOn(tournamentService, "getPublicOverview")
+      .mockReturnValue(pendingOverview.promise);
     const layoutPromise = TournamentLayout({ children: null, params: paramsFor("summer-clash") });
 
     const firstResult = await Promise.race([
@@ -163,9 +170,9 @@ describe("TournamentLayout streaming overview", () => {
   });
 
   it("uses intentional streamed notFound control flow for an API 404", async () => {
-    const overviewSpy = vi.spyOn(tournamentService, "getPublicOverview").mockRejectedValue(
-      new ApiError(404, [{ msg: "Tournament not found", code: "not_found" }])
-    );
+    const overviewSpy = vi
+      .spyOn(tournamentService, "getPublicOverview")
+      .mockRejectedValue(new ApiError(404, [{ msg: "Tournament not found", code: "not_found" }]));
 
     let thrown: unknown;
     try {
@@ -179,9 +186,9 @@ describe("TournamentLayout streaming overview", () => {
   });
 
   it("renders the shell unseeded for a non-404 overview failure, deferring to its own retry", async () => {
-    const overviewSpy = vi.spyOn(tournamentService, "getPublicOverview").mockRejectedValue(
-      new Error("upstream unavailable")
-    );
+    const overviewSpy = vi
+      .spyOn(tournamentService, "getPublicOverview")
+      .mockRejectedValue(new Error("upstream unavailable"));
     const shell = <div data-shell />;
 
     const result = await TournamentOverviewBoundary({ slug: "summer-clash", children: shell });
@@ -191,9 +198,9 @@ describe("TournamentLayout streaming overview", () => {
   });
 
   it("hydrates a successful overview with every read the shell makes", async () => {
-    const overviewSpy = vi.spyOn(tournamentService, "getPublicOverview").mockResolvedValue(
-      overviewFixture
-    );
+    const overviewSpy = vi
+      .spyOn(tournamentService, "getPublicOverview")
+      .mockResolvedValue(overviewFixture);
 
     const result = await TournamentOverviewBoundary({ slug: "summer-clash", children: null });
 
@@ -217,6 +224,81 @@ describe("TournamentLayout streaming overview", () => {
     );
   });
 
+  it("seeds the hero's played count while it is played: the encounters and every FFA stage's lobbies", async () => {
+    // The overview below reads the same entries; unseeded, the shell created them empty before the overview's own
+    // boundary ran, so the server drew the overview's skeleton while the browser — whose shell had fetched them by
+    // then — drew its content.
+    const stage = (
+      id: number,
+      stage_type: StageSummary["stage_type"],
+      order: number
+    ): StageSummary => ({
+      id,
+      tournament_id: overviewFixture.id,
+      name: `Stage ${id}`,
+      description: null,
+      stage_type,
+      max_rounds: 2,
+      advance_count: null,
+      advance_upper_count: null,
+      order,
+      is_active: true,
+      is_published: true,
+      is_completed: false,
+      ranking_preset: null,
+      tiebreak_order: null,
+      scoring: {
+        win: null,
+        draw: null,
+        loss: null,
+        preset: null,
+        columns: null,
+        placement_points: null,
+        formula: null
+      },
+      swiss_bye_points: null,
+      swiss_qualify_wins: null,
+      swiss_eliminate_losses: null,
+      de_grand_final_type: "no_reset",
+      seed_ranking: "slot",
+      best_of: {
+        default: 3,
+        by_round: {},
+        final: null,
+        swiss_qualify: null,
+        swiss_eliminate: null
+      },
+      has_custom_bracket: false,
+      challonge_id: null,
+      challonge_slug: null
+    });
+    const live = {
+      ...overviewFixture,
+      stages: [stage(5, "ffa_league", 1), stage(6, "single_elimination", 2)]
+    };
+    vi.spyOn(tournamentService, "getPublicOverview").mockResolvedValue(live);
+    vi.spyOn(encounterService, "getAll").mockResolvedValue({
+      results: [],
+      total: 0,
+      page: 1,
+      per_page: -1
+    });
+    vi.spyOn(ffaService, "getStage").mockResolvedValue([]);
+
+    const result = await TournamentOverviewBoundary({ slug: "summer-clash", children: null });
+
+    if (!isValidElement(result)) throw new Error("Expected a React element");
+    const seeded = (result.props as { state: DehydratedState }).state.queries.map(
+      (query) => query.queryKey
+    );
+    expect(seeded).toEqual(
+      expect.arrayContaining([
+        createBracketQueryPlan(live, null).encounters.queryKey,
+        ffaStageQueryOptions(live.id, 5).queryKey
+      ])
+    );
+  });
+
   // The URL segment carries no format the layout itself must validate:
   // resolve_public_ref accepts a current slug, a legacy numeric id, or a
   // retired slug identically, so a mismatch (or a stale link) surfaces as an
@@ -224,9 +306,9 @@ describe("TournamentLayout streaming overview", () => {
   // synchronous rejection before that fetch runs.
   for (const ref of arbitraryRefs) {
     it(`passes ref ${ref} straight through to the outer shell without blocking on the overview`, async () => {
-      const overviewSpy = vi.spyOn(tournamentService, "getPublicOverview").mockResolvedValue(
-        overviewFixture
-      );
+      const overviewSpy = vi
+        .spyOn(tournamentService, "getPublicOverview")
+        .mockResolvedValue(overviewFixture);
 
       const result = await TournamentLayout({ children: null, params: paramsFor(ref) });
 
@@ -244,9 +326,9 @@ describe("TournamentLayout streaming overview", () => {
   });
 
   it("falls back to generic metadata when the overview ref does not resolve", async () => {
-    const overviewSpy = vi.spyOn(tournamentService, "getPublicOverview").mockRejectedValue(
-      new ApiError(404, [{ msg: "Tournament not found", code: "not_found" }])
-    );
+    const overviewSpy = vi
+      .spyOn(tournamentService, "getPublicOverview")
+      .mockRejectedValue(new ApiError(404, [{ msg: "Tournament not found", code: "not_found" }]));
 
     const metadata = await generateMetadata({ params: paramsFor("missing-tournament") });
 

@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Eyebrow } from "@/components/ui/eyebrow";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Table, TableBody, TableCell, TableHead, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import type { FeasibilityReport } from "@/types/balancer.types";
 
@@ -24,8 +25,6 @@ export type VariantStats = {
   off_role_above_minimum?: number | null;
   feasibility?: FeasibilityReport | null;
 } | null;
-
-const CHIP_CLASS = "rounded-full whitespace-nowrap tabular-nums";
 
 /**
  * The bar carries up to ten stats. Past ~1536px of viewport the row wrapped and doubled the
@@ -49,11 +48,13 @@ export function BalanceStatsRow({ stats }: Readonly<{ stats: VariantStats }>) {
     <div className="flex flex-wrap items-center gap-2">
       {stats.composite_score != null ? (
         <Badge
+          shape="pill"
+          tone="success"
           title={t("objectives", {
             balance: stats.balance_objective_norm?.toFixed(3) ?? stats.balance_objective?.toFixed(3) ?? "—",
             comfort: stats.comfort_objective_norm?.toFixed(3) ?? stats.comfort_objective?.toFixed(3) ?? "—"
           })}
-          className={cn(CHIP_CLASS, "border-emerald-400/20 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/10")}
+          className="tabular-nums"
         >
           <Sparkles className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
           {t("quality", { score: stats.composite_score.toFixed(2) })}
@@ -61,10 +62,7 @@ export function BalanceStatsRow({ stats }: Readonly<{ stats: VariantStats }>) {
       ) : null}
 
       {stats.mmr_std_dev != null ? (
-        <Badge
-          title={t("stdDevHint")}
-          className={cn(CHIP_CLASS, "border-blue-400/20 bg-blue-500/10 text-blue-200 hover:bg-blue-500/10")}
-        >
+        <Badge shape="pill" tone="info" title={t("stdDevHint")} className="tabular-nums">
           <BarChart2 className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
           {t("stdDev", { value: stats.mmr_std_dev.toFixed(1) })}
         </Badge>
@@ -73,20 +71,14 @@ export function BalanceStatsRow({ stats }: Readonly<{ stats: VariantStats }>) {
       <OffRoleChip stats={stats} />
 
       {benched != null && benched > 0 ? (
-        <Badge
-          title={t("benchedHint", { count: benched })}
-          className={cn(CHIP_CLASS, "border-rose-400/20 bg-rose-500/10 text-rose-200 hover:bg-rose-500/10")}
-        >
+        <Badge shape="pill" tone="danger" title={t("benchedHint", { count: benched })} className="tabular-nums">
           <UserX className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
           {t("benched", { count: benched })}
         </Badge>
       ) : null}
 
       {collisions != null && collisions > 0 ? (
-        <Badge
-          title={t("collisionsHint", { count: collisions })}
-          className={cn(CHIP_CLASS, "border-primary/30 bg-primary/10 text-primary hover:bg-primary/10")}
-        >
+        <Badge shape="pill" tone="accent" title={t("collisionsHint", { count: collisions })} className="tabular-nums">
           <Shuffle className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
           {t("collisions", { count: collisions })}
         </Badge>
@@ -97,14 +89,12 @@ export function BalanceStatsRow({ stats }: Readonly<{ stats: VariantStats }>) {
           <PopoverTrigger asChild>
             <Button
               type="button"
-              variant="outline"
+              variant={shortfall > 0 ? "destructive" : "outline"}
               size="xs"
               aria-label={t("poolAria")}
               className={cn(
                 "rounded-full tabular-nums",
-                shortfall > 0
-                  ? "border-rose-400/25 bg-rose-500/10 text-rose-200 hover:bg-rose-500/15"
-                  : "text-[color:var(--aqt-fg-muted)] hover:text-[color:var(--aqt-fg)]",
+                shortfall === 0 && "text-[color:var(--aqt-fg-muted)] hover:text-[color:var(--aqt-fg)]",
               )}
             >
               {t("pool")}
@@ -149,15 +139,7 @@ function OffRoleChip({ stats }: Readonly<{ stats: NonNullable<VariantStats> }>) 
   const Icon = isPerfect || isOptimal ? CheckCircle2 : AlertCircle;
 
   return (
-    <Badge
-      title={title}
-      className={cn(
-        CHIP_CLASS,
-        isPerfect || isOptimal
-          ? "border-emerald-400/25 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/10"
-          : "border-orange-400/20 bg-orange-500/10 text-orange-200 hover:bg-orange-500/10",
-      )}
-    >
+    <Badge shape="pill" tone={isPerfect || isOptimal ? "success" : "warning"} title={title} className="tabular-nums">
       <Icon className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
       {t("offRole", { count })}
       {ratePart}
@@ -196,35 +178,38 @@ function PoolDiagnostics({
       <Eyebrow as="div" tone="muted" className="border-b border-border/60 px-3 py-2">
         {t("roleSupply")}
       </Eyebrow>
-      <table className="w-full">
-        <tbody>
+      <Table className="text-label">
+        <TableBody>
           {feasibility.roles.map((role) => {
             const delta = role.supply - role.demand;
 
             return (
-              <tr key={role.role} className="border-b border-border/40 last:border-0">
-                <th scope="row" className="px-3 py-1.5 text-left font-medium text-foreground">
+              <TableRow key={role.role} className="border-border/40">
+                <TableHead
+                  scope="row"
+                  className="h-auto px-3 py-1.5 font-medium normal-case tracking-normal text-foreground"
+                >
                   {role.role}
-                </th>
-                <td className="py-1.5 text-right tabular-nums text-muted-foreground">
+                </TableHead>
+                <TableCell className="px-0 py-1.5 text-right tabular-nums text-muted-foreground">
                   {role.supply}/{role.demand}
-                </td>
-                <td className="py-1.5 pl-2 text-right tabular-nums text-muted-foreground">
+                </TableCell>
+                <TableCell className="py-1.5 pl-2 pr-0 text-right tabular-nums text-muted-foreground">
                   {role.flex_supply > 0 ? t("flexSupply", { count: role.flex_supply }) : ""}
-                </td>
-                <td
+                </TableCell>
+                <TableCell
                   className={cn(
                     "px-3 py-1.5 text-right font-medium tabular-nums",
                     delta < 0 ? "text-rose-300" : "text-emerald-300",
                   )}
                 >
                   {delta < 0 ? t("short", { count: -delta }) : delta > 0 ? `+${delta}` : t("even")}
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             );
           })}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
       <dl className="border-t border-border/60">
         {rows.map((row) => (
           <div key={row.label} className="flex items-baseline justify-between gap-3 px-3 py-1.5">

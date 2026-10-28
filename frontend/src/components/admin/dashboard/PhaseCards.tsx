@@ -14,6 +14,7 @@ import { TONE_TEXT, type Tone } from "@/components/ui/tone";
 import { eyebrowClass } from "@/components/ui/eyebrow";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { triggerChevronClass } from "@/components/ui/chevron";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import Image from "@/components/ui/image";
 import { Progress } from "@/components/ui/progress";
@@ -58,9 +59,9 @@ export function PhaseCards({ cards }: Readonly<{ cards: DashboardTournamentCard[
             ))}
           </CollapsibleContent>
           <CollapsibleTrigger asChild>
-            <Button variant="ghost" size="sm" className="w-fit text-muted-foreground">
+            <Button variant="ghost" size="sm" className="group/trigger w-fit text-muted-foreground">
               {open ? t("fewerCards") : t("moreCards", { count: rest.length })}
-              <ChevronDown className={cn("size-3.5 transition-transform", open && "rotate-180")} aria-hidden />
+              <ChevronDown className={cn(triggerChevronClass, "size-3.5")} aria-hidden />
             </Button>
           </CollapsibleTrigger>
         </Collapsible>
@@ -277,7 +278,7 @@ function ChecklistRow({ item, progress }: Readonly<{ item: ChecklistItem; progre
           ) : null}
         </div>
         {/* The detail prints the count; the bar only shows how far along it is. */}
-        {progress == null ? null : <Progress value={progress} aria-hidden className="mt-2 h-1" />}
+        {progress == null ? null : <Progress value={progress} aria-hidden size="sm" className="mt-2" />}
       </div>
     </>
   );
@@ -289,7 +290,7 @@ function ChecklistRow({ item, progress }: Readonly<{ item: ChecklistItem; progre
       href={item.href}
       className={cn(
         shared,
-        "transition-colors hover:bg-accent/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+        "transition-colors hover:bg-accent/30 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
       )}
     >
       {body}
@@ -312,7 +313,7 @@ function Meter({ label, value, total }: Readonly<{ label: string; value: number;
         value={total > 0 ? Math.min(100, (value / total) * 100) : 0}
         aria-label={label}
         getValueLabel={() => text}
-        className="h-1.5"
+        size="sm"
       />
     </div>
   );

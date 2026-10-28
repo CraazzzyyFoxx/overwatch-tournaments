@@ -4,6 +4,7 @@ import { useTranslations } from "next-intl";
 import { useFormatter } from "@/lib/datetime/client";
 
 import { Eyebrow } from "@/components/ui/eyebrow";
+import { Separator } from "@/components/ui/separator";
 import { useMinuteClock } from "@/hooks/useMinuteClock";
 import { cn } from "@/lib/utils";
 import type { Tournament } from "@/types/tournament.types";
@@ -15,13 +16,6 @@ export type PhaseTimelineProps = {
     Tournament,
     "status" | "team_formation" | "phase_schedule" | "auto_transitions_enabled"
   >;
-  /**
-   * `horizontal` — a stepper across the page, for the registration-phase
-   * overview where the phases ARE the page; below `sm` it falls back to the
-   * vertical list, since four steps do not fit a phone. `vertical` — a compact
-   * side-column list once play has started and the phases are context, not content.
-   */
-  orientation: "horizontal" | "vertical";
   /** Viewer clock override for deterministic tests; defaults to the minute clock. */
   now?: number;
   /** Anchor id, so the header chip can deep-link here. */
@@ -38,13 +32,12 @@ const STAMP = {
 } as const;
 
 /**
- * The tournament's phase schedule as one timeline: done / current / upcoming.
+ * The tournament's phase schedule as one vertical timeline: done / current /
+ * upcoming, each step with its start or, for the next boundary, a countdown.
  *
- * Replaces the standalone Schedule tab. Everything about WHICH phases appear
- * and which is current comes from `buildTournamentSchedule`; this component
- * only decides how to draw the same segments in two orientations. Times are the
- * viewer's local time — the app formatter carries their zone — and the zone is
- * named in the header so nobody has to guess.
+ * Everything about WHICH phases appear and which is current comes from
+ * `buildTournamentSchedule`; this component only draws the segments. Times are
+ * the viewer's local time — the app formatter carries their zone.
  *
  * Teal marks exactly one thing: the phase happening now. A current phase whose
  * window has closed (registration over, check-in not yet open) is drawn in the
@@ -52,7 +45,6 @@ const STAMP = {
  */
 export function PhaseTimeline({
   tournament,
-  orientation,
   now: nowOverride,
   id,
   className
@@ -75,18 +67,6 @@ export function PhaseTimeline({
     if (Number.isNaN(date.getTime())) return null;
     return format.dateTime(date, STAMP);
   };
-  // One range, not "start – end time": a window that ends on another day (a
-  // week of registration) must say so. `formatRange` drops the repeated day
-  // itself when both ends share it.
-  const span = (segment: PhaseSegment) => {
-    if (segment.startsAt === null) return null;
-    const start = new Date(segment.startsAt);
-    if (Number.isNaN(start.getTime())) return null;
-    const end = segment.endsAt === null ? null : new Date(segment.endsAt);
-    return end === null || Number.isNaN(end.getTime())
-      ? format.dateTime(start, STAMP)
-      : format.dateTimeRange(start, end, STAMP);
-  };
   // A current phase nobody scheduled has no time to print: "now" is its time.
   const nowText = <span className="text-[color:var(--aqt-teal)]">{t("common.now")}</span>;
 
@@ -103,165 +83,72 @@ export function PhaseTimeline({
     <>
       {t(`common.statusBadge.${segment.status}`)}
       {segment.windowClosed ? (
-        <Eyebrow className="ml-1.5">
-          {t("tournamentDetail.publicPages.schedule.closed")}
-        </Eyebrow>
+        <Eyebrow className="ml-1.5">{t("tournamentDetail.publicPages.schedule.closed")}</Eyebrow>
       ) : null}
     </>
   );
 
-  const verticalList = (
-    <ol aria-label={t("tournamentDetail.publicPages.schedule.title")}>
-      {segments.map((segment, index) => {
-        const now = isNow(segment);
-        const isLast = index === segments.length - 1;
-        const startText = stamp(segment.startsAt);
-        // The horizontal band's phone fallback sits under the hero, which
-        // already counts down to this boundary; the side-column list does not.
-        const countdownText = orientation === "vertical" ? countdown(segment) : null;
-        return (
-          <li
-            key={segment.status}
-            aria-current={segment.state === "current" ? "step" : undefined}
-            className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3"
-          >
-            <div className="flex flex-col items-center pt-1.5">
-              <span
-                aria-hidden
-                className={cn(
-                  "size-2.5 shrink-0 rounded-full",
-                  now
-                    ? "bg-[color:var(--aqt-teal)] ring-[3px] ring-[color:var(--aqt-overlay-2)]"
-                    : segment.state === "upcoming"
-                      ? "border border-[color:var(--aqt-border)]"
-                      : "bg-[color:var(--aqt-fg-faint)]"
-                )}
-              />
-              {isLast ? null : (
-                <span aria-hidden className="mt-1 w-px flex-1 bg-[color:var(--aqt-border)]" />
-              )}
-            </div>
-            <div className={cn("flex min-w-0 flex-wrap items-baseline justify-between gap-x-3", isLast ? "pb-0" : "pb-3")}>
-              <span
-                className={cn(
-                  "text-sm",
-                  now
-                    ? "font-semibold text-[color:var(--aqt-teal)]"
-                    : segment.state === "upcoming"
-                      ? "text-[color:var(--aqt-fg-dim)]"
-                      : "text-[color:var(--aqt-fg-muted)]"
-                )}
-              >
-                {label(segment)}
-              </span>
-              <span className="aqt-tnum text-label text-[color:var(--aqt-fg-faint)]">
-                {countdownText ??
-                  (segment.startsAt === null ? (
-                    nowText
-                  ) : startText ? (
-                    <time dateTime={segment.startsAt}>{startText}</time>
-                  ) : null)}
-              </span>
-            </div>
-          </li>
-        );
-      })}
-    </ol>
-  );
-
-  if (orientation === "vertical") {
-    return (
-      <div id={id} className={cn("scroll-mt-28", className)}>
-        {verticalList}
-      </div>
-    );
-  }
-
   return (
     <div id={id} className={cn("scroll-mt-28", className)}>
-      <div className="sm:hidden">{verticalList}</div>
-      {/* `overflow-x-auto` also clips vertically, so the 7px the "now" dot
-          rises above the step bar is padding inside the scroll box. */}
-      <ol
-        className="hidden auto-cols-[minmax(9rem,1fr)] grid-flow-col gap-1 overflow-x-auto pt-2 sm:grid"
-        aria-label={t("tournamentDetail.publicPages.schedule.title")}
-      >
-        {segments.map((segment) => {
+      <ol aria-label={t("tournamentDetail.publicPages.schedule.title")}>
+        {segments.map((segment, index) => {
           const now = isNow(segment);
-          const spanText = span(segment);
-          // How far through its own window the phase is — set by the model
-          // only for a current phase whose window has an end. The step bar
-          // then fills to it and the marker rides it, so "closes in 46
-          // minutes" is also readable as a position.
-          const elapsed = now && segment.progress !== null ? segment.progress : null;
-          const pct = elapsed === null ? null : `${Math.round(elapsed * 1000) / 10}%`;
+          const isLast = index === segments.length - 1;
+          const startText = stamp(segment.startsAt);
+          const countdownText = countdown(segment);
           return (
             <li
               key={segment.status}
               aria-current={segment.state === "current" ? "step" : undefined}
-              className={cn(
-                "relative border-t-[3px] px-3 pb-2 pt-2.5",
-                now
-                  ? cn(
-                      "bg-[color:var(--aqt-overlay-1)]",
-                      // With a progress fill the border is the unspent part of
-                      // the window, so it drops to the neutral track colour.
-                      pct === null
-                        ? "border-[color:var(--aqt-teal)]"
-                        : "border-[color:var(--aqt-border)]"
-                    )
-                  : segment.state === "upcoming"
-                    ? "border-[color:var(--aqt-border)] text-[color:var(--aqt-fg-dim)]"
-                    : "border-[color:var(--aqt-fg-faint)]"
-              )}
+              className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3"
             >
-              {pct === null ? null : (
-                <span
-                  aria-hidden
-                  className="absolute -top-[3px] left-0 h-[3px] bg-[color:var(--aqt-teal)]"
-                  style={{ width: pct }}
-                />
-              )}
-              {now ? (
+              <div className="flex flex-col items-center pt-1.5">
                 <span
                   aria-hidden
                   className={cn(
-                    "absolute -top-[7px] size-[11px] rounded-full bg-[color:var(--aqt-teal)] ring-[3px] ring-[color:var(--aqt-bg)]",
-                    pct === null ? "left-3" : "-translate-x-1/2"
+                    "size-2.5 shrink-0 rounded-full",
+                    now
+                      ? "bg-[color:var(--aqt-teal)] ring-[3px] ring-[color:var(--aqt-overlay-2)]"
+                      : segment.state === "upcoming"
+                        ? "border border-[color:var(--aqt-border)]"
+                        : "bg-[color:var(--aqt-fg-faint)]"
                   )}
-                  // Clamped to the segment's own edges: at 0% or 100% an
-                  // untranslated marker would hang outside the scroll box and
-                  // get clipped.
-                  style={pct === null ? undefined : { left: `clamp(6px, ${pct}, calc(100% - 6px))` }}
                 />
-              ) : null}
-              <div className={cn("text-ui font-semibold", now && "text-[color:var(--aqt-teal)]")}>
-                {label(segment)}
+                {isLast ? null : (
+                  <Separator orientation="vertical" className="mt-1 h-auto flex-1" />
+                )}
               </div>
-              {/* No countdown here: the hero right above already says "in 12
-                  hours" for this very boundary; the step keeps its window. */}
-              <div className="aqt-tnum mt-0.5 text-label text-[color:var(--aqt-fg-muted)]">
-                {segment.startsAt === null ? nowText : spanText}
+              <div
+                className={cn(
+                  "flex min-w-0 flex-wrap items-baseline justify-between gap-x-3",
+                  isLast ? "pb-0" : "pb-3"
+                )}
+              >
+                <span
+                  className={cn(
+                    "text-sm",
+                    now
+                      ? "font-semibold text-[color:var(--aqt-teal)]"
+                      : segment.state === "upcoming"
+                        ? "text-[color:var(--aqt-fg-dim)]"
+                        : "text-[color:var(--aqt-fg-muted)]"
+                  )}
+                >
+                  {label(segment)}
+                </span>
+                <span className="aqt-tnum text-label text-[color:var(--aqt-fg-faint)]">
+                  {countdownText ??
+                    (segment.startsAt === null ? (
+                      nowText
+                    ) : startText ? (
+                      <time dateTime={segment.startsAt}>{startText}</time>
+                    ) : null)}
+                </span>
               </div>
             </li>
           );
         })}
       </ol>
     </div>
-  );
-}
-
-/**
- * The viewer's zone, named beside the timeline's heading so nobody has to guess
- * whose clock the times are on. Null until hydration, like the timeline itself.
- */
-export function ViewerTimeZone() {
-  const format = useFormatter();
-  const now = useMinuteClock();
-  if (now === null) return null;
-  return (
-    <span className="aqt-tnum text-caption text-[color:var(--aqt-fg-faint)]">
-      {format.dateTime(new Date(now), { timeZoneName: "short" }).split(" ").pop()}
-    </span>
   );
 }

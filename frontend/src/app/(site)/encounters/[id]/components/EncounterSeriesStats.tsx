@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { useQueries } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 
-import { cn } from "@/lib/utils";
+import { Card } from "@/components/ui/card";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import LabelledSelect from "@/components/match/LabelledSelect";
@@ -16,7 +16,7 @@ import encounterService from "@/services/encounter.service";
 import type { MatchWithStats } from "@/types/encounter.types";
 import type { DisciplineMetadata } from "@/types/discipline.types";
 import { buildSeriesTable, memberEntities } from "@/lib/stats/table";
-import styles from "@/components/match/EncounterDetail.module.css";
+import { CARD_SUB, CardHead } from "@/components/match/EncounterAtoms";
 import { encounterQueryKeys } from "@/lib/encounters/query-keys";
 
 interface EncounterSeriesStatsProps {
@@ -69,14 +69,16 @@ export default function EncounterSeriesStats({
   const partial = loaded.length < matchIds.length;
 
   return (
-    <div className={styles.statsStack}>
+    <div className="flex flex-col gap-3.5">
       {partial ? (
-        <output className={cn("block", styles.card, styles.cardBody, styles.statsNotice)}>
-          {t("encounters.detail.statsPartial", {
-            counted: loaded.length,
-            total: matchIds.length
-          })}
-        </output>
+        <Card asChild className="block p-4.5 text-label leading-normal text-[color:var(--aqt-fg-dim)]">
+          <output>
+            {t("encounters.detail.statsPartial", {
+              counted: loaded.length,
+              total: matchIds.length
+            })}
+          </output>
+        </Card>
       ) : null}
 
       <DisciplineWidget
@@ -110,11 +112,10 @@ function GenericSeriesStatistics({
   const table = buildSeriesTable(matches, metadata.stat_defs, active);
 
   return (
-    <div className={styles.card}>
-      <div className={styles.cardHead}>
-        <h3 className={styles.cardTitle}>{t("encounters.detail.seriesTableTitle")}</h3>
-        <span className={styles.cardSub}>{t("encounters.detail.seriesTableSub")}</span>
-      </div>
+    <Card className="overflow-hidden">
+      <CardHead title={t("encounters.detail.seriesTableTitle")}>
+        <span className={CARD_SUB}>{t("encounters.detail.seriesTableSub")}</span>
+      </CardHead>
       {entities.length > 0 ? (
         <div className="px-4 pb-3">
           <LabelledSelect
@@ -137,15 +138,15 @@ function GenericSeriesStatistics({
         withMaps
         empty={active === "none" ? "members" : "values"}
       />
-    </div>
+    </Card>
   );
 }
 
 function SeriesStatsSkeleton() {
   return (
-    <div className={styles.statsStack} aria-busy>
+    <div className="flex flex-col gap-3.5" aria-busy>
       <Skeleton className="h-[68px] w-full" />
-      <div className={styles.statsGrid}>
+      <div className="grid grid-cols-1 items-start gap-3.5 xl:grid-cols-2">
         <Skeleton className="h-[320px] w-full" />
         <Skeleton className="h-[320px] w-full" />
       </div>

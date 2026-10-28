@@ -268,7 +268,6 @@ export default function ScrimsPage() {
 
       {isStaff ? (
         <ToggleGroup
-          type="single"
           variant="pill"
           value={scope}
           onValueChange={(next) => { if (next) setScope(next as ScrimListScope); }}

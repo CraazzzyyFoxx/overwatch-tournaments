@@ -82,7 +82,7 @@ export function UsersIndexFilters({
 
   return (
     <div className="z-30 -mx-4 bg-[color:var(--aqt-bg)]/95 px-4 py-2 backdrop-blur md:sticky md:top-[var(--aqt-header-h)] md:-mx-6 md:px-6 xl:-mx-10 xl:px-10">
-      <Card variant="flat" className="flex flex-col gap-2.5 p-2.5 md:flex-row md:flex-wrap md:items-center md:gap-2">
+      <Card className="flex flex-col gap-2.5 p-2.5 md:flex-row md:flex-wrap md:items-center md:gap-2">
         {allGames ? (
           <GameFilterHint className="shrink-0" />
         ) : showsRoles(ontology) ? (
@@ -116,6 +116,7 @@ export function UsersIndexFilters({
               counts={divisionCounts}
               placeholder={t("users.list.filters.divisions")}
               ariaLabel={t("users.list.filters.divisions")}
+              size="sm"
               triggerClassName="w-auto gap-2"
             />
           )}
@@ -131,15 +132,12 @@ export function UsersIndexFilters({
 
           {/* A `<label>` cannot name a `<button role="switch">`, so the name is on
               the control and the visible copy is decorative. */}
-          <span className="flex h-8 shrink-0 items-center gap-2 rounded-lg border border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.02)] px-3 text-label text-[color:var(--aqt-fg-muted)]">
+          <span className="flex h-8 shrink-0 items-center gap-2 rounded-lg border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-2)] px-3 text-label text-[color:var(--aqt-fg-muted)]">
             <Switch
               size="sm"
               checked={hasLogs}
               onCheckedChange={controls.setHasLogs}
               aria-label={t("users.list.filters.withLogs")}
-              // The shared unchecked track is `bg-muted`, which disappears on
-              // this surface; give it a border and a lighter fill.
-              className="border-[color:var(--aqt-border-2)] data-[state=unchecked]:bg-[color:var(--aqt-overlay-3)]"
             />
             <span aria-hidden>{t("users.list.filters.withLogs")}</span>
           </span>
@@ -169,7 +167,6 @@ export function UsersIndexFilters({
         />
 
         <ToggleGroup
-          type="single"
           variant="pill"
           size="sm"
           value={view}

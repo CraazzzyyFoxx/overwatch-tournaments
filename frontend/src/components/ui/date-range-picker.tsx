@@ -1,13 +1,13 @@
 "use client";
 
 import * as React from "react";
-import { CalendarIcon } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { type DateTimeFormatOptions, useTranslations } from "next-intl";
 import { useFormatter } from "@/lib/datetime/client";
 import { type DateRange } from "react-day-picker";
 
-import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
+import { selectTriggerClass } from "@/components/ui/button";
+import { triggerChevronClass } from "@/components/ui/chevron";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
@@ -26,6 +26,11 @@ interface DateRangePickerProps {
   onChange: (startDate: string, endDate: string) => void;
   placeholder?: string;
   id?: string;
+  disabled?: boolean;
+  /** `sm` is the 32px toolbar row, `default` the 36px form row. */
+  size?: "sm" | "default";
+  /** `surface` is the public form skin. */
+  variant?: "default" | "surface";
 }
 
 /**
@@ -39,15 +44,12 @@ interface DateRangePickerProps {
  * and the ISO value sent up, in every zone and identically on server and client.
  */
 function formatDisplay(format: DateFormatter, date: Date): string {
-  return format.dateTime(
-    new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate())),
-    {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-      timeZone: "UTC",
-    }
-  );
+  return format.dateTime(new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate())), {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC"
+  });
 }
 
 function parseDateValue(value?: string): Date | undefined {
@@ -69,6 +71,9 @@ export function DateRangePicker({
   onChange,
   placeholder,
   id,
+  disabled,
+  size,
+  variant
 }: Readonly<DateRangePickerProps>) {
   const t = useTranslations("kit.datePicker");
   const format = useFormatter();
@@ -77,8 +82,7 @@ export function DateRangePicker({
   const from = React.useMemo(() => parseDateValue(startDate), [startDate]);
   const to = React.useMemo(() => parseDateValue(endDate), [endDate]);
 
-  const selected: DateRange | undefined =
-    from || to ? { from, to } : undefined;
+  const selected: DateRange | undefined = from || to ? { from, to } : undefined;
 
   const displayText = React.useMemo(() => {
     if (from && to) return `${formatDisplay(format, from)} - ${formatDisplay(format, to)}`;
@@ -89,26 +93,27 @@ export function DateRangePicker({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button
+        <button
           id={id}
-          variant="outline"
-          data-empty={!from}
-          className={cn(
-            "w-full justify-start text-left",
-            "data-[empty=true]:text-muted-foreground"
-          )}
+          type="button"
+          data-placeholder={from ? undefined : ""}
+          disabled={disabled}
+          className={selectTriggerClass(size, variant)}
         >
-          <CalendarIcon className="mr-2 h-4 w-4" />
-          {displayText || <span>{placeholder ?? t("pickRange")}</span>}
-        </Button>
+          <span>{displayText || (placeholder ?? t("pickRange"))}</span>
+          <ChevronDown aria-hidden className={triggerChevronClass} />
+        </button>
       </PopoverTrigger>
-      <PopoverContent className="w-auto p-0" align="start">
+      <PopoverContent className="w-auto overflow-hidden p-0" align="start">
         <Calendar
           mode="range"
           defaultMonth={from}
           selected={selected}
           onSelect={(range) => {
-            onChange(range?.from ? toIsoDate(range.from) : "", range?.to ? toIsoDate(range.to) : "");
+            onChange(
+              range?.from ? toIsoDate(range.from) : "",
+              range?.to ? toIsoDate(range.to) : ""
+            );
           }}
           numberOfMonths={2}
         />

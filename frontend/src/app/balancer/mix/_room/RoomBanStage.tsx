@@ -182,10 +182,10 @@ export function RoomBanStage({
       ) : null}
 
       {room.isSideStep ? (
-        <Card variant="flat">
+        <Card>
           <CardHeader className="flex flex-col gap-4 pb-3">
             {header}
-            <CardTitle id={sideHintId} className="border-t border-[color:var(--aqt-border)] pt-4 text-base">
+            <CardTitle id={sideHintId} className="border-t border-[color:var(--aqt-border)] pt-4">
               {tPickBan("captain.chooseSideHint")}
             </CardTitle>
           </CardHeader>

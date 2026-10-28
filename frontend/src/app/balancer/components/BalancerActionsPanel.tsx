@@ -44,7 +44,7 @@ export function BalancerActionsPanel({
   }
 
   return (
-    <Card variant="flat">
+    <Card>
       <BalanceActionsBar
         activeVariantStats={
           activeVariant.payload.statistics != null

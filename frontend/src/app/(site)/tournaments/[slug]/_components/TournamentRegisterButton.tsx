@@ -6,11 +6,7 @@ import { CheckCircle2, Clock, LogIn, UserPlus, XCircle } from "lucide-react";
 import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { getCurrentPathForAuthRedirect } from "@/lib/auth/redirect";
 import { cn } from "@/lib/utils";
 import { isRegistrationOpen } from "@/lib/tournament/status";
@@ -28,9 +24,15 @@ import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 
 type Props = {
   tournament: Tournament;
+  /** `sm` (the collapsed rail): every state at the rail's 32px control height. */
+  size?: "default" | "sm";
 };
 
-export default function TournamentRegisterButton({ tournament }: Readonly<Props>) {
+export default function TournamentRegisterButton({
+  tournament,
+  size = "default"
+}: Readonly<Props>) {
+  const small = size === "sm";
   const workspaceId = tournament.workspace_id;
   const tournamentId = tournament.id;
   const tournamentName = tournament.name;
@@ -42,13 +44,13 @@ export default function TournamentRegisterButton({ tournament }: Readonly<Props>
 
   const formQuery = useQuery({
     queryKey: tournamentQueryKeys.registrationForm(workspaceId, tournamentId),
-    queryFn: () => registrationService.getForm(tournamentId),
+    queryFn: () => registrationService.getForm(tournamentId)
   });
 
   const myRegQuery = useQuery({
     queryKey: tournamentQueryKeys.registration(workspaceId, tournamentId),
     queryFn: () => registrationService.getMyRegistration(tournamentId),
-    enabled: isAuthenticated,
+    enabled: isAuthenticated
   });
 
   const form = formQuery.data;
@@ -107,7 +109,8 @@ export default function TournamentRegisterButton({ tournament }: Readonly<Props>
       <HoverPrefetchLink
         href={tournamentHref(tournament, "/participants")}
         className={cn(
-          "inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-opacity hover:opacity-80",
+          "inline-flex items-center gap-2 rounded-lg border font-medium transition-opacity hover:opacity-80",
+          small ? "h-8 px-3 text-caption" : "px-4 py-2 text-sm",
           config.className
         )}
       >
@@ -126,7 +129,12 @@ export default function TournamentRegisterButton({ tournament }: Readonly<Props>
     if (reachedAtLeast(tournament.status, "draft")) return null;
     return (
       // A STATE, not a control: the subtle button's box and palette, without the hover a click would need.
-      <div className="inline-flex h-9 items-center gap-2 rounded-md border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-2)] px-4 text-sm font-medium text-[color:var(--aqt-fg-dim)]">
+      <div
+        className={cn(
+          "inline-flex items-center gap-2 rounded-md border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-2)] font-medium text-[color:var(--aqt-fg-dim)]",
+          small ? "h-8 px-3 text-caption" : "h-9 px-4 text-sm"
+        )}
+      >
         <Clock className="size-4" aria-hidden />
         {t("registration.button.closed")}
       </div>
@@ -135,7 +143,7 @@ export default function TournamentRegisterButton({ tournament }: Readonly<Props>
 
   if (!isAuthenticated) {
     return (
-      <Button type="button" onClick={handleAuthClick}>
+      <Button type="button" size={small ? "sm" : "default"} onClick={handleAuthClick}>
         <LogIn aria-hidden />
         {t("registration.button.loginToRegister")}
       </Button>
@@ -154,14 +162,16 @@ export default function TournamentRegisterButton({ tournament }: Readonly<Props>
 
   return (
     <>
-      <Button type="button" onClick={() => setShowModal(true)}>
+      <Button type="button" size={small ? "sm" : "default"} onClick={() => setShowModal(true)}>
         <UserPlus aria-hidden />
         {t("registration.button.register")}
       </Button>
       <Dialog open={showModal} onOpenChange={setShowModal}>
         <DialogContent className="max-h-[94vh] overflow-y-auto sm:max-w-2xl lg:max-w-3xl">
           <DialogTitle className="sr-only">
-            {tournamentName ? t("registration.wizard.titleFor", { name: tournamentName }) : t("registration.wizard.title")}
+            {tournamentName
+              ? t("registration.wizard.titleFor", { name: tournamentName })
+              : t("registration.wizard.title")}
           </DialogTitle>
           <RegistrationWizard
             workspaceId={workspaceId}

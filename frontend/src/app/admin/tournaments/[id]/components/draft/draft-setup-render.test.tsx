@@ -128,7 +128,7 @@ describe("draft config step", () => {
   test("renders the pick-time presets as one segmented control, not four loose buttons", () => {
     // Pick time and overtime are the two labelled radiogroups here; the format
     // is the tournament's and only named, never edited.
-    expect(html.match(/<div[^>]*role="radiogroup"[^>]*aria-labelledby[^>]*>/g) ?? []).toHaveLength(2);
+    expect(html.match(/<div(?=[^>]*role="radiogroup")(?=[^>]*aria-labelledby)[^>]*>/g) ?? []).toHaveLength(2);
     for (const seconds of [30, 45, 60, 90]) {
       expect(html).toContain(`>${seconds}s</button>`);
     }

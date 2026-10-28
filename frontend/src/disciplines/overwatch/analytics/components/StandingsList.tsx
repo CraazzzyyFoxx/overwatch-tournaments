@@ -6,8 +6,10 @@ import { useLocale, useTranslations } from "next-intl";
 
 import TeamName from "@/components/TeamName";
 import { TeamPlacement } from "@/components/TournamentTeamCard";
+import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { RowButton } from "@/components/ui/row-button";
+import { Separator } from "@/components/ui/separator";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { groupDisplayName, groupHue } from "@/lib/tournament/group";
 import { formatPlace, standingsRank } from "@/disciplines/overwatch/analytics/analytics.helpers";
@@ -63,7 +65,7 @@ function PlaceConnector({ team, maxPosition }: Readonly<{ team: TeamVM; maxPosit
 
   return (
     <span role="img" aria-label={summary} title={summary} className="relative block h-4 min-w-0">
-      <span className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-[color:var(--aqt-border-2)]" />
+      <Separator className="absolute inset-x-0 top-1/2 -translate-y-1/2 bg-[color:var(--aqt-border-2)]" />
       {actual != null && actual !== predicted ? (
         <span
           className="absolute top-1/2 h-0.5 -translate-y-1/2 rounded-full"
@@ -125,7 +127,6 @@ export default function StandingsList({
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <ToggleGroup
-          type="single"
           variant="pill"
           size="sm"
           value={activeMode}
@@ -167,16 +168,14 @@ export default function StandingsList({
                 <span className="flex min-w-0 flex-col gap-0.5">
                   <span className="flex min-w-0 items-center gap-2">
                     <TeamName team={team} size="sm" nameClassName="text-ui font-semibold text-[color:var(--aqt-fg)]" />
-                    {/* Wrapped: `.group-chip` sets its own display, which would outrank `hidden`. */}
                     {showGroups && team.group?.name ? (
-                      <span className="hidden shrink-0 sm:inline-flex">
-                        <span
-                          className="group-chip"
-                          style={{ "--group-hue": groupHue(team.group.name) } as React.CSSProperties}
-                        >
-                          {groupDisplayName(team.group.name, t("common.group"))}
-                        </span>
-                      </span>
+                      <Badge
+                        hue={groupHue(team.group.name)}
+                        voice="label"
+                        className="hidden shrink-0 sm:inline-flex"
+                      >
+                        {groupDisplayName(team.group.name, t("common.group"))}
+                      </Badge>
                     ) : null}
                   </span>
                   <span className="flex min-w-0 items-center gap-1.5 text-caption text-[color:var(--aqt-fg-muted)]">

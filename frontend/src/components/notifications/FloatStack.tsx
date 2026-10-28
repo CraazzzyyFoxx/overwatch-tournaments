@@ -550,7 +550,7 @@ function ReleaseEvent({ release, onClose }: Readonly<{ release: Release; onClose
             v{release.version}
           </span>
         </p>
-        <p className="mt-1 text-pretty font-display text-[16px] font-bold leading-snug text-[color:var(--aqt-fg)]">
+        <p className="mt-1 text-pretty font-display text-ui font-bold leading-snug text-[color:var(--aqt-fg)]">
           {release.title[locale === "en" ? "en" : "ru"]}
         </p>
       </div>

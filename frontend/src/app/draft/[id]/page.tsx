@@ -16,8 +16,7 @@ import { useTournamentQuery } from "@/hooks/useTournamentClientData";
 import { useEntityWorkspace } from "@/hooks/useEntityWorkspace";
 import { Button } from "@/components/ui/button";
 
-import styles from "@/components/draft/DraftRoom.module.css";
-import { DraftBoardSkeleton, DraftRoomSkeleton } from "@/components/draft/DraftRoomSkeleton";
+import { DRAFT_ROOM_CLASS, DraftBoardSkeleton, DraftRoomSkeleton } from "@/components/draft/DraftRoomSkeleton";
 import { shouldShowInitialDraftSkeleton } from "@/components/draft/draft-loading-state";
 
 /** How often a page with no draft to follow asks the tournament again: the organizer may be seeding one. */
@@ -70,7 +69,7 @@ export default function PublicDraftRoomPage() {
   const initialLoadError = tournamentQuery.isError && !tournament;
 
   return (
-    <div className={`${styles.room} site-theme`}>
+    <div className={DRAFT_ROOM_CLASS}>
       <main>
         {initialLoadError || !tournament ? (
           // The same frame the board uses for its own dead ends; the tournament

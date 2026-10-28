@@ -72,18 +72,18 @@ export const AchievementDetailDialog = ({ achievement, onClose }: Props) => {
         if (!open) onClose();
       }}
     >
-      <DialogContent className="max-w-lg border-[color:var(--aqt-border)] bg-[color:var(--aqt-bg)] p-0">
+      <DialogContent variant="panel">
         <div className="aqt-player flex max-h-[80vh] flex-col">
           {ach ? (
             <>
-              <DialogHeader className="border-b border-[color:var(--aqt-border)] px-5 py-4 text-left">
+              <DialogHeader variant="panel">
                 <div className="flex items-start gap-3">
                   <AchievementArt achievement={ach} sizes="52px" className="size-[52px] shrink-0 rounded-xl" />
                   <div className="flex min-w-0 flex-col gap-1">
-                    <DialogTitle className="text-base text-[color:var(--aqt-fg)]">{ach.name}</DialogTitle>
+                    <DialogTitle>{ach.name}</DialogTitle>
                     <div className="flex items-center gap-2 text-label text-[color:var(--aqt-fg-muted)]">
                       {rarity ? (
-                        <span className={cn(rarityVarClass(rarity), "aqt-rar-fg")}>
+                        <span className={cn(rarityVarClass(rarity), "text-[hsl(var(--rar))]")}>
                           {tr(`achievements.rarityName.${rarity}`)}
                         </span>
                       ) : null}
@@ -99,7 +99,7 @@ export const AchievementDetailDialog = ({ achievement, onClose }: Props) => {
               </DialogHeader>
 
               <div className="flex flex-col gap-4 overflow-y-auto px-5 py-4">
-                <DialogDescription className="text-body leading-snug text-[color:var(--aqt-fg-dim)]">
+                <DialogDescription>
                   {description || tr("users.achievements.detail.fallbackDescription")}
                 </DialogDescription>
 
@@ -112,18 +112,20 @@ export const AchievementDetailDialog = ({ achievement, onClose }: Props) => {
                     {ach.tournaments.length > 0 ? (
                       <section className="flex flex-col gap-1.5">
                         <Eyebrow as="h3">{tr("users.achievements.detail.earnedIn")}</Eyebrow>
-                        <div className="flex flex-wrap gap-1.5">
-                          {ach.tournaments.map((t) => (
-                            <HoverPrefetchLink
-                              key={t.id}
-                              href={`/tournaments/${t.id}`}
-                              className="aqt-stage-pill transition-colors hover:text-[color:var(--aqt-teal)]"
-                              title={t.name}
-                            >
-                              {t.name}
-                            </HoverPrefetchLink>
+                        {/* Tournament names are user content: a text line, not uppercase chips (DESIGN §4). */}
+                        <p className="text-caption leading-relaxed text-[color:var(--aqt-fg-muted)]">
+                          {ach.tournaments.map((t, i) => (
+                            <span key={t.id}>
+                              {i > 0 ? <span aria-hidden className="text-[color:var(--aqt-fg-dim)]"> · </span> : null}
+                              <HoverPrefetchLink
+                                href={`/tournaments/${t.id}`}
+                                className="text-[color:var(--aqt-fg)] transition-colors hover:text-[color:var(--aqt-teal)]"
+                              >
+                                {t.name}
+                              </HoverPrefetchLink>
+                            </span>
                           ))}
-                        </div>
+                        </p>
                       </section>
                     ) : null}
 

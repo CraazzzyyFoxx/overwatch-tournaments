@@ -10,7 +10,9 @@
 //    for its dialog and restores the URL (with a null-state popstate, or Next's
 //    router would treat it as a navigation) and the column visibility it was
 //    saved with; deleting one applies nothing; a column toggle keeps the menu
-//    on the columns level.
+//    on the columns level; the sort level (cards' only way to sort) keeps
+//    the direction across a column change and the column across a direction
+//    change, staying open between the two.
 import { NextIntlClientProvider } from "next-intl";
 import { Plus } from "lucide-react";
 import { act } from "react";
@@ -57,7 +59,7 @@ function click(node: Element) {
   });
 }
 
-function item(role: "menuitem" | "menuitemcheckbox", label: string): Element {
+function item(role: "menuitem" | "menuitemcheckbox" | "menuitemradio", label: string): Element {
   const node = [...document.querySelectorAll(`[role='${role}']`)].find((candidate) =>
     (candidate.textContent ?? "").trim().startsWith(label)
   );
@@ -281,5 +283,35 @@ describe("AdminTableToolbar View menu", () => {
     expect(onToggleColumn).toHaveBeenCalledWith("stage");
     expect(item("menuitemcheckbox", "Stage")).toBeTruthy();
     expect(item("menuitemcheckbox", "Name").getAttribute("aria-disabled")).toBe("true");
+  });
+
+  it("sorts from the sort level, keeping the other half of the sort", async () => {
+    const onChange = vi.fn();
+    const columns = [
+      { id: "name", label: "Name" },
+      { id: "stage", label: "Stage" }
+    ];
+    await render({
+      narrow: true,
+      view: {
+        selectedCount: 0,
+        onExportCsv: () => {},
+        canExport: true,
+        onToggleDensity: () => {},
+        prefsKey: "t",
+        visibility,
+        onVisibilityChange,
+        onToggleColumn,
+        onResetColumns: () => {},
+        sort: { columns, value: { id: "name", desc: true }, onChange }
+      }
+    });
+    await open(viewTrigger());
+    await click(item("menuitem", "Sort"));
+    await click(item("menuitemradio", "Stage"));
+    expect(onChange).toHaveBeenLastCalledWith({ id: "stage", desc: true });
+
+    await click(item("menuitemradio", "Ascending"));
+    expect(onChange).toHaveBeenLastCalledWith({ id: "name", desc: false });
   });
 });

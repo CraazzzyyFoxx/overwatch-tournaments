@@ -10,7 +10,6 @@ import { RELEASES } from "@/lib/changelog/releases";
 import { getFormatter } from "@/lib/datetime/server";
 
 import { toDocLocale } from "../docs/nav";
-import styles from "./changelog.module.css";
 import { changelogComponents } from "./mdx";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -36,21 +35,31 @@ export default async function ChangelogPage() {
       {entries.map(({ release, Content }) => {
         const id = `v${release.version}`;
         return (
-          <article key={id} id={id} aria-labelledby={`${id}-title`} className={styles.release}>
-            <div className={styles.meta}>
-              <a href={`#${id}`} className={styles.version}>
-                {id}
-              </a>
-              <time dateTime={release.date} className={styles.date}>
+          // The meta column (version, date) beside the entry from `lg`; above the title below it.
+          // From `md` the entry starts where the hero's title does: its 1px frame plus PageHero compact's `md:px-6`.
+          <article
+            key={id}
+            id={id}
+            aria-labelledby={`${id}-title`}
+            className="mt-12 grid max-w-287 scroll-mt-[var(--aqt-sticky-top)] grid-cols-1 gap-4.5 md:mt-14 md:pl-6.25 lg:grid-cols-[10.5rem_minmax(0,1fr)] lg:gap-12"
+          >
+            <div className="flex items-center gap-3 self-start lg:sticky lg:top-[var(--aqt-sticky-top)] lg:flex-col lg:items-start lg:gap-2.5">
+              <Button variant="outline" size="sm" asChild>
+                <a href={`#${id}`}>{id}</a>
+              </Button>
+              <time dateTime={release.date} className="text-caption text-[color:var(--aqt-fg-dim)]">
                 {format.dateTime(new Date(release.date), { dateStyle: "long", timeZone: "UTC" })}
               </time>
             </div>
-            <div className={styles.body}>
-              <h2 id={`${id}-title`} className={styles.title}>
+            <div>
+              <h2
+                id={`${id}-title`}
+                className="max-w-[34ch] text-balance font-display text-title font-semibold text-[color:var(--aqt-fg)] md:text-headline"
+              >
                 {release.title[lang]}
               </h2>
               <Content components={changelogComponents} />
-              <Button variant="outline" asChild className={styles.fullLog}>
+              <Button variant="outline" asChild className="mt-10">
                 <a href={`${REPO_URL}/releases/tag/${id}`} target="_blank" rel="noreferrer">
                   {t("fullLog")}
                   <ArrowUpRight aria-hidden />

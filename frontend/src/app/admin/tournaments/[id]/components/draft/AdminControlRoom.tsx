@@ -127,7 +127,7 @@ export function AdminControlRoom({ tournamentId, board }: Readonly<AdminControlR
       </HeroFrame>
 
       {session.blocked_reason && (
-        <Alert variant="destructive" className="rounded-xl">
+        <Alert tone="danger">
           <ShieldAlert className="size-4" aria-hidden />
           <AlertTitle>{t("systemPause")}</AlertTitle>
           <AlertDescription className="flex flex-wrap items-center justify-between gap-3">

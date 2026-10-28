@@ -3,9 +3,10 @@
 import { useMemo } from "react";
 import { useTranslations } from "next-intl";
 import type { ColumnDef } from "@tanstack/react-table";
-import { ChevronRight, Link2, RotateCcw } from "lucide-react";
+import { ChevronDown, Link2, RotateCcw } from "lucide-react";
 import { useFormatter } from "@/lib/datetime/client";
 import { columnMeta, createKebabColumn } from "@/components/data-table";
+import { disclosureChevronClass } from "@/components/ui/chevron";
 import { StatusPill } from "@/components/kit/StatusPill";
 import { RawLogStatus } from "@/components/match/MatchLogIndicator";
 import { cn } from "@/lib/utils";
@@ -122,12 +123,12 @@ export function useLogColumns({
           const summary = getErrorSummary(row.original);
           if (!summary) return null;
           return (
-            <details className="group max-w-[28rem]">
+            <details className="group/disclosure max-w-[28rem]">
               <summary className={cn(
                 "inline-flex cursor-pointer list-none items-center gap-1 rounded text-xs focus-visible:outline-2 focus-visible:outline-offset-2",
                 row.original.status === "failed" ? "text-danger" : "text-muted-foreground"
               )}>
-                <ChevronRight className="size-3 shrink-0 group-open:rotate-90" aria-hidden />
+                <ChevronDown className={cn(disclosureChevronClass, "size-3")} aria-hidden />
                 {"code" in summary ? tx(`opError.${summary.code}`) : summary.message}
               </summary>
               <pre

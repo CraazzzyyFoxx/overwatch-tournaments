@@ -1,7 +1,7 @@
 import { getTranslations } from "next-intl/server";
 import { ArrowRight } from "lucide-react";
 import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
-import { CardSurface } from "@/components/profile/atoms";
+import { CARD_HEAD_LINK, CardSurface } from "@/components/profile/atoms";
 import { ScoreCell } from "@/components/match/cells";
 import MatchLogIndicator from "@/components/match/MatchLogIndicator";
 import { CatalogEntityStrip } from "@/components/catalog/CatalogEntityImage";
@@ -30,7 +30,7 @@ const OverviewRecentEncounters = async ({ encounters, userId, userName, tourname
       flush
       title={t("users.overview.recent.title")}
       action={
-        <HoverPrefetchLink href={`/users/${userSlug}?tab=matches`} className="aqt-pf-link">
+        <HoverPrefetchLink href={`/users/${userSlug}?tab=matches`} className={CARD_HEAD_LINK}>
           {t("users.overview.recent.allMatches")}
           <ArrowRight aria-hidden className="size-3" />
         </HoverPrefetchLink>

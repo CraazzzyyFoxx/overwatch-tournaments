@@ -150,7 +150,7 @@ export function PickBanStepTimeline({
                 team: summary.actors.length === 1 ? teamName(summary.actors[0]) : ""
               })}
           {summary.action === "decider" ? (
-            <TooltipProvider delayDuration={150}>
+            <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
@@ -206,7 +206,7 @@ export function PickBanStepTimeline({
   return (
     <Card>
       <CardHeader className="pb-3">
-        <CardTitle className="text-base">{t("steps.title")}</CardTitle>
+        <CardTitle>{t("steps.title")}</CardTitle>
         {session.first_team_id != null ? (
           <p className="flex items-center gap-2 text-sm text-[color:var(--aqt-fg-muted)]">
             <Flag className="h-4 w-4 shrink-0 text-[color:var(--aqt-teal)]" aria-hidden />

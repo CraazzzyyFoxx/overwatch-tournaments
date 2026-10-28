@@ -170,7 +170,6 @@ export function AnnouncementForm({
             {t("notifications.admin.form.defaultLocale")}
           </p>
           <ToggleGroup
-            type="single"
             className="mt-1.5"
             value={filled.includes(form.defaultLocale) ? form.defaultLocale : ""}
             onValueChange={(next) =>

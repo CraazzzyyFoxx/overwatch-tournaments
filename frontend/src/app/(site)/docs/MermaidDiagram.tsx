@@ -4,8 +4,8 @@ import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-
-import styles from "./docs.module.css";
+import { TONE_TEXT } from "@/components/ui/tone";
+import { cn } from "@/lib/utils";
 
 type MermaidApi = (typeof import("mermaid"))["default"];
 
@@ -148,8 +148,8 @@ export function MermaidDiagram({ code, diagramKey }: Readonly<MermaidDiagramProp
   const zoomOut = () => setZoom((z) => Math.max(ZOOM_MIN, Math.round((z - ZOOM_STEP) * 100) / 100));
 
   return (
-    <div className={styles.diagram}>
-      <div className={styles.zoomControls}>
+    <div className="relative mt-3 rounded-lg border border-[color:var(--aqt-border)] bg-[color:var(--aqt-bg)]">
+      <div className="absolute right-2 top-2 z-5 flex gap-1 rounded-lg border border-[color:var(--aqt-border)] bg-[color:var(--aqt-card)] p-1">
         <Button
           variant="outline"
           size="icon-sm"
@@ -159,7 +159,9 @@ export function MermaidDiagram({ code, diagramKey }: Readonly<MermaidDiagramProp
         >
           −
         </Button>
-        <span className={styles.zoomLevel}>{Math.round(zoom * 100)}%</span>
+        <span className="aqt-tnum inline-flex min-w-11 items-center justify-center px-1.5 text-label text-[color:var(--aqt-fg-muted)]">
+          {Math.round(zoom * 100)}%
+        </span>
         <Button
           variant="outline"
           size="icon-sm"
@@ -174,12 +176,25 @@ export function MermaidDiagram({ code, diagramKey }: Readonly<MermaidDiagramProp
         </Button>
       </div>
 
-      <div className={styles.diagramScroll}>
-        <div ref={containerRef} className={styles.diagramInner} style={{ transform: `scale(${zoom})` }} />
+      <div className="max-h-[75vh] min-h-35 overflow-auto px-4 pb-4 pt-12">
+        {/* Mermaid writes an inline `max-width` on its svg; zoom needs the natural size. */}
+        <div
+          ref={containerRef}
+          className="w-max origin-top-left transition-transform duration-80 ease-out [&_svg]:h-auto [&_svg]:max-w-none!"
+          style={{ transform: `scale(${zoom})` }}
+        />
       </div>
 
-      {loading && !error && <div className={styles.diagramState}>{t("rendering")}</div>}
-      {error && <div className={styles.diagramError}>{t("renderError", { message: error })}</div>}
+      {loading && !error && (
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-caption text-[color:var(--aqt-fg-muted)]">
+          {t("rendering")}
+        </div>
+      )}
+      {error && (
+        <div className={cn("whitespace-pre-wrap p-4 text-caption", TONE_TEXT.danger)}>
+          {t("renderError", { message: error })}
+        </div>
+      )}
     </div>
   );
 }

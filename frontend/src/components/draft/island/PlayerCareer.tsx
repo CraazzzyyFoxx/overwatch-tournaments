@@ -211,7 +211,7 @@ export function CareerTables({
           {SKELETON_ROWS.map((row) => (
             <div key={row} className={`${HERO_GRID} py-1`}>
               <Skeleton className="h-7 w-7 rounded-full" />
-              <span className="text-[13px]">
+              <span className="text-caption">
                 <Skeleton variant="text" className="w-20" />
               </span>
             </div>
@@ -226,7 +226,7 @@ export function CareerTables({
           {SKELETON_ROWS.map((row) => (
             <div key={row} className={HISTORY_ROW}>
               <span className="min-w-0">
-                <span className="block text-[13px]">
+                <span className="block text-caption">
                   <Skeleton variant="text" className="w-32" />
                 </span>
                 <span className="block text-xs">
@@ -270,16 +270,16 @@ export function CareerTables({
                     decorative
                   />
                   <span className="flex min-w-0 items-center gap-1.5">
-                    <span className="truncate text-[13px] font-medium">{entry.character.name}</span>
+                    <span className="truncate text-caption font-medium">{entry.character.name}</span>
                   </span>
-                  <span className="text-right text-[13px] tabular-nums text-[color:var(--aqt-fg-muted)]">
+                  <span className="text-right text-caption tabular-nums text-[color:var(--aqt-fg-muted)]">
                     {entry.maps}
                   </span>
                   <span
                     className="flex flex-col items-end gap-0.5"
                     title={low ? t("island.stats.winrateHidden") : t("island.heroes.winrateTitle")}
                   >
-                    <span className="text-[13px] font-semibold tabular-nums" style={{ color }}>
+                    <span className="text-caption font-semibold tabular-nums" style={{ color }}>
                       {low ? "—" : `${Math.round(share * 100)}%`}
                     </span>
                     <span className="h-[3px] w-full overflow-hidden rounded-sm bg-[color:var(--aqt-overlay-3)]" aria-hidden>
@@ -308,7 +308,7 @@ export function CareerTables({
             {card.recent_tournaments.map((entry) => (
                 <li key={entry.id} className={HISTORY_ROW}>
                   <span className="min-w-0">
-                    <span className="block truncate text-[13px] font-medium" title={entry.name}>
+                    <span className="block truncate text-caption font-medium" title={entry.name}>
                       {entry.name}
                     </span>
                     {entry.date && (
@@ -326,10 +326,10 @@ export function CareerTables({
                     grid={divisionGrid}
                     size={20}
                     showValue
-                    className="justify-end text-[13px] text-[color:var(--aqt-fg-muted)]"
+                    className="justify-end text-caption text-[color:var(--aqt-fg-muted)]"
                   />
                   <span
-                    className="whitespace-nowrap text-right text-[13px] font-semibold tabular-nums"
+                    className="whitespace-nowrap text-right text-caption font-semibold tabular-nums"
                     style={{ color: placeColor(entry.placement) }}
                   >
                     {entry.placement == null ? "—" : `#${entry.placement}`}

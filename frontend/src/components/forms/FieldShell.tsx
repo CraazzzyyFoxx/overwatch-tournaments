@@ -27,7 +27,8 @@ interface FieldShellProps {
    * `stacked`: label over the control. `inline`: the control, then its label,
    * on one row (a switch). `group`: several controls under one name — a
    * `<fieldset>` whose `<legend>` is the label and which carries the
-   * invalid/description wiring itself.
+   * description; `aria-invalid` is not supported on a group, so it goes on the
+   * controls themselves (a radio set: on its `radiogroup`) from the render prop.
    */
   layout?: "stacked" | "inline" | "group";
   className?: string;
@@ -86,10 +87,9 @@ export default function FieldShell({
     return (
       <fieldset
         className={cn("m-0 min-w-0 space-y-2 border-0 p-0", className)}
-        aria-invalid={control["aria-invalid"]}
         aria-describedby={control["aria-describedby"]}
       >
-        <legend className="contents">{labelNode}</legend>
+        <legend className="p-0">{labelNode}</legend>
         {body}
         {messages}
       </fieldset>

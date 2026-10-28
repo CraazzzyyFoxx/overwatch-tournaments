@@ -55,6 +55,7 @@ vi.mock("@/components/registration/InviteAcceptWizard", () => ({
   default: ({ teamName, slotCode }: { teamName: string; slotCode: string }) => (
     <div data-testid="wizard">{`wizard:${teamName}:${slotCode}`}</div>
   ),
+  InviteAcceptWizardSkeleton: () => <div data-testid="wizard-skeleton" />,
 }));
 
 const MESSAGES = { en, ru } as const;

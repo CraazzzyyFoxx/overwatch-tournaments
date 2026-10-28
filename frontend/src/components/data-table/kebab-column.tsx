@@ -13,7 +13,6 @@ import {
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
 import { columnMeta } from "@/components/data-table/columns";
-import { cn } from "@/components/data-table/host";
 
 export interface KebabAction {
   label: string;
@@ -65,7 +64,7 @@ function KebabCell({ actions, label, rowId }: Readonly<{ actions: KebabAction[];
               key={action.label}
               asChild={action.href !== undefined}
               onSelect={action.onSelect}
-              className={cn("gap-2", action.destructive && "text-danger focus:text-danger")}
+              variant={action.destructive ? "destructive" : "default"}
             >
               {action.href !== undefined ? (
                 <Link href={action.href}>{content}</Link>

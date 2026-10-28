@@ -431,14 +431,10 @@ const SharePlayerCard = ({ card }: SharePlayerCardProps) => {
           {t("users.profile.toolbar.share")}
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-[680px] border-[color:var(--aqt-border)] bg-[color:var(--aqt-bg)]">
+      <DialogContent className="max-w-[680px]">
         <DialogHeader>
-          <DialogTitle className="font-onest text-[color:var(--aqt-fg)]">
-            {t("users.profile.toolbar.card")}
-          </DialogTitle>
-          <DialogDescription className="text-[color:var(--aqt-fg-muted)]">
-            {t("users.profile.toolbar.cardDescription")}
-          </DialogDescription>
+          <DialogTitle>{t("users.profile.toolbar.card")}</DialogTitle>
+          <DialogDescription>{t("users.profile.toolbar.cardDescription")}</DialogDescription>
         </DialogHeader>
 
         <canvas

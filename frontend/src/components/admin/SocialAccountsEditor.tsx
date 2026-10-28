@@ -249,7 +249,7 @@ function AccountRow({
             aria-busy={busy}
             aria-label={tTable("actionsFor", { label: account.username })}
             title={tTable("actionsFor", { label: account.username })}
-            className={`${MENU_CELL} inline-flex h-7 items-center justify-center rounded-md text-muted-foreground transition-[color,background-color] hover:bg-accent/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50`}
+            className={`${MENU_CELL} inline-flex h-7 items-center justify-center rounded-md text-muted-foreground transition-[color,background-color] hover:bg-accent/40 hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50`}
           >
             <MoreHorizontal aria-hidden className="size-4" />
           </DropdownMenuTrigger>
@@ -270,7 +270,7 @@ function AccountRow({
             >
               {t("edit")}
             </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => setDeleteOpen(true)} className="text-danger focus:text-danger">
+            <DropdownMenuItem onSelect={() => setDeleteOpen(true)} variant="destructive">
               {t("delete")}
             </DropdownMenuItem>
           </DropdownMenuContent>
@@ -359,7 +359,7 @@ function AddAccount({ userId, onUserUpdated }: Readonly<{ userId: number; onUser
             setHandle(event.target.value);
             setRefusal(null);
           }}
-          className="min-w-0 flex-1 border-transparent bg-transparent shadow-none focus-visible:border-input"
+          className="min-w-0 flex-1"
           {...invalidProps(inputId, refusal ?? undefined)}
         />
         <Button type="submit" size="sm" variant="outline" disabled={!value || add.isPending}>

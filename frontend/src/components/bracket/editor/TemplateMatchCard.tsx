@@ -159,7 +159,7 @@ export function TemplateMatchCard({
                 <ArrowDown className="size-4" aria-hidden />
                 {t("moveDown")}
               </DropdownMenuItem>
-              <DropdownMenuItem className="text-danger focus:text-danger" onSelect={onDelete}>
+              <DropdownMenuItem variant="destructive" onSelect={onDelete}>
                 <Trash2 className="size-4" aria-hidden />
                 {t("delete")}
               </DropdownMenuItem>

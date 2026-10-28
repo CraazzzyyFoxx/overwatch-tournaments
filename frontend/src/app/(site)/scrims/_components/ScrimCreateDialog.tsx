@@ -435,7 +435,7 @@ export function ScrimCreateDialog({
             ) : null}
 
             {poolIssues.length > 0 ? (
-              <Alert variant="destructive">
+              <Alert tone="danger">
                 <AlertDescription>
                   <p className="font-medium">{t("poolInvalid")}</p>
                   <ul className="mt-1 list-inside list-disc">

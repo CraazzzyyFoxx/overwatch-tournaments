@@ -17,6 +17,8 @@ import { UserX } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { Badge } from "@/components/ui/badge";
+import { TONE_CLASS } from "@/components/ui/tone";
+import { cn } from "@/lib/utils";
 import workspaceService from "@/services/workspace.service";
 import { memberDisplayName } from "@/lib/workspace/member";
 import type { DivisionGrid, WorkspaceMember } from "@/types/workspace.types";
@@ -202,16 +204,13 @@ export const BalanceEditor = forwardRef<HTMLDivElement, BalanceEditorProps>(func
     >
       <div ref={ref} className="space-y-4">
         {benchedPlayers.length > 0 ? (
-          <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-rose-400/20 bg-rose-500/5 px-4 py-3">
-            <span className="inline-flex items-center gap-1.5 text-label font-medium uppercase tracking-label text-rose-200/80">
-              <UserX className="h-3.5 w-3.5" />
+          <div className={cn("flex flex-wrap items-center gap-2 rounded-xl border px-4 py-3", TONE_CLASS.danger)}>
+            <span className="inline-flex items-center gap-1.5 text-label font-medium uppercase tracking-label">
+              <UserX className="h-3.5 w-3.5" aria-hidden />
               {t("unassigned")}
             </span>
             {benchedPlayers.map((player) => (
-              <Badge
-                key={player.uuid}
-                className="rounded-full border-rose-300/20 bg-rose-500/12 text-rose-100 hover:bg-rose-500/12"
-              >
+              <Badge key={player.uuid} shape="pill" tone="danger">
                 {player.name}
               </Badge>
             ))}

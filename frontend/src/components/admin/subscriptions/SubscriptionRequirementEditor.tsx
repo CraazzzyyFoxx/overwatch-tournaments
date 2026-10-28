@@ -91,7 +91,6 @@ export default function SubscriptionRequirementEditor({
             {t("matchLabel")}
           </span>
           <ToggleGroup
-            type="single"
             value={mode}
             onValueChange={(value) => update({ mode: value as "any" | "all" })}
             aria-labelledby={modeLabelId}

@@ -169,7 +169,7 @@ function ConfigRolesTable({
               onValueChange={(next) => setCell(role, column.key, next)}
               min={column.limits?.min}
               max={column.limits?.max}
-              className="rounded-lg px-2 text-center tabular-nums"
+              className="text-center"
             />
           ))}
         </Fragment>
@@ -193,7 +193,7 @@ function ConfigFieldControl({
 }>) {
   const t = useTranslations("balancerTool.playerEdit.config");
   if (field.type === "boolean") {
-    return <Switch checked={Boolean(value)} onCheckedChange={onChange} />;
+    return <Switch id={`config-${field.key}`} checked={Boolean(value)} onCheckedChange={onChange} />;
   }
 
   if (field.type === "roles") {
@@ -226,6 +226,7 @@ function ConfigFieldControl({
     return (
       <div className="flex flex-col gap-2">
         <Slider
+          aria-labelledby={`config-${field.key}-label`}
           min={min}
           max={max}
           step={0.05}
@@ -256,7 +257,6 @@ function ConfigFieldControl({
       min={field.limits?.min}
       max={field.limits?.max}
       integer={field.type === "integer"}
-      className="rounded-lg"
     />
   );
 }
@@ -288,10 +288,8 @@ export function BalancerConfigDrawer({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent variant="panel" className="w-full sm:max-w-2xl">
         <SheetHeader variant="panel">
-          <SheetTitle className="text-[color:var(--aqt-fg)]">{t("title")}</SheetTitle>
-          <SheetDescription className="text-[color:var(--aqt-fg-muted)]">
-            {t("description", { preset: selectedPresetLabel })}
-          </SheetDescription>
+          <SheetTitle>{t("title")}</SheetTitle>
+          <SheetDescription>{t("description", { preset: selectedPresetLabel })}</SheetDescription>
         </SheetHeader>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
@@ -320,6 +318,7 @@ export function BalancerConfigDrawer({
                         >
                           <div>
                             <Label
+                              id={`config-${field.key}-label`}
                               htmlFor={field.type === "roles" || field.type === "open_slot" ? undefined : `config-${field.key}`}
                               className="text-sm text-[color:var(--aqt-fg)]"
                             >
@@ -360,7 +359,7 @@ export function BalancerConfigDrawer({
           </div>
         </div>
 
-        <SheetFooter className="border-t border-[color:var(--aqt-border-2)] px-5 py-4">
+        <SheetFooter variant="panel">
           <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div className="text-xs text-[color:var(--aqt-fg-dim)]">
               {dirty ? t("unsaved") : t("saved")}

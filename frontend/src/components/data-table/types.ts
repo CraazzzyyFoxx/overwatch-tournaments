@@ -103,7 +103,7 @@ export interface DataTableProps<TData> {
    * still records how deep the list is, so a reload restores the same depth.
    */
   paging?: "pages" | "infinite" | "all";
-  /** Plural noun for the rows in the infinite footer, e.g. "registrations". */
+  /** Translated plural noun for the rows in the infinite footer; the footer's own "rows" by default. */
   rowUnit?: string;
 
   /**

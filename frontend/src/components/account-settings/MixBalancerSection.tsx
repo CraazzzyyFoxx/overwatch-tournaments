@@ -240,7 +240,7 @@ export default function MixBalancerSection() {
                     }))
                   }
                   size="sm"
-                  className="w-16 px-2 tabular-nums"
+                  className="w-16"
                 />
               </div>
             ))}
@@ -263,7 +263,7 @@ export default function MixBalancerSection() {
               setDraft((current) => ({ ...current, variants: next ?? DEFAULT_RESULT_VARIANTS }))
             }
             size="sm"
-            className="w-24 px-2 tabular-nums"
+            className="w-24"
           />
         </SettingRow>
 
@@ -304,7 +304,7 @@ export default function MixBalancerSection() {
             value={draft.pointsPerWin}
             onValueChange={(next) => setDraft((current) => ({ ...current, pointsPerWin: next }))}
             size="sm"
-            className="w-24 px-2 tabular-nums"
+            className="w-24"
           />
         </SettingRow>
       </SettingGroup>

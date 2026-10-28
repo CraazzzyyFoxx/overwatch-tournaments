@@ -6,9 +6,9 @@ import { ArrowDown } from "lucide-react";
 
 import { HandleLabel } from "@/components/HandleLabel";
 import { OpenEmptyRow, OpenLoadError, Section, SectionHead } from "@/components/site/open-layout";
-import { eyebrowClass } from "@/components/ui/eyebrow";
 import { PlaceBadge } from "@/components/ui/place-badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { winrateColor } from "@/lib/colors";
 import { getFormatter } from "@/lib/datetime/server";
 import { getPlayerSlug } from "@/lib/player";
@@ -26,7 +26,6 @@ const SKELETON_ROWS = 10;
 /** A dense data block: framed, and scrolling inside its own labelled region on a phone. */
 const FRAME_CLASS =
   "overflow-x-auto rounded-[12px] border border-[color:var(--aqt-overlay-border)] bg-[color:var(--aqt-overlay-1)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--aqt-teal)]";
-const TABLE_CLASS = "w-full min-w-[34rem] text-caption";
 const ROW_CLASS = "border-b border-[color:var(--aqt-overlay-border)] last:border-b-0";
 
 /** The numeric columns, left to right; each sorts the table by itself. */
@@ -105,23 +104,23 @@ export async function PlayersSection({
   return (
     <Shell sort={params.sort} aside={search}>
       <div role="region" aria-labelledby={TITLE_ID} tabIndex={0} className={FRAME_CLASS}>
-        <table className={TABLE_CLASS}>
-          <thead>
-            <tr className={cn(eyebrowClass(), "whitespace-nowrap border-b border-[color:var(--aqt-overlay-border)]")}>
-              <th scope="col" className="w-14 py-2.5 pl-3.5 pr-2 text-left font-medium">
+        <Table wrapperClassName="overflow-visible" className="min-w-[34rem]">
+          <TableHeader>
+            <TableRow className="whitespace-nowrap border-[color:var(--aqt-overlay-border)]">
+              <TableHead scope="col" className="h-auto w-14 py-2.5 pl-3.5 pr-2 font-medium">
                 {t("col.rank")}
-              </th>
-              <th scope="col" className="py-2.5 pr-3 text-left font-medium">
+              </TableHead>
+              <TableHead scope="col" className="h-auto py-2.5 pl-0 pr-3 font-medium">
                 {t("col.player")}
-              </th>
+              </TableHead>
               {COLUMNS.map((column) => {
                 const active = column.sort === params.sort;
                 return (
-                  <th
+                  <TableHead
                     key={column.sort}
                     scope="col"
                     aria-sort={active ? "descending" : undefined}
-                    className="py-2.5 pl-4 pr-3 text-right font-medium last:pr-3.5 sm:pl-8"
+                    className="h-auto py-2.5 pl-4 pr-3 text-right font-medium last:pr-3.5 sm:pl-8"
                   >
                     <Link
                       href={playersSortHref(column.sort, { discipline: urlDiscipline, query: params.query })}
@@ -135,25 +134,22 @@ export async function PlayersSection({
                       {active ? <ArrowDown aria-hidden className="size-3" /> : null}
                       {t(column.label)}
                     </Link>
-                  </th>
+                  </TableHead>
                 );
               })}
-            </tr>
-          </thead>
-          <tbody>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {data.results.map((row) => (
-                <tr
-                  key={row.id}
-                  className={cn(ROW_CLASS, "transition-colors hover:bg-[color:var(--aqt-overlay-2)]")}
-                >
-                  <td className="py-2 pl-3.5 pr-2">
+                <TableRow key={row.id} className={ROW_CLASS}>
+                  <TableCell className="py-2 pl-3.5 pr-2">
                     {row.rank <= 3 ? (
                       <PlaceBadge place={row.rank} />
                     ) : (
                       <span className="aqt-tnum text-[color:var(--aqt-fg-faint)]">#{row.rank}</span>
                     )}
-                  </td>
-                  <td className="w-full max-w-0 py-2 pr-3">
+                  </TableCell>
+                  <TableCell className="w-full max-w-0 py-2 pl-0 pr-3">
                     <Link
                       href={`/users/${getPlayerSlug(row.name)}`}
                       prefetch={false}
@@ -162,24 +158,24 @@ export async function PlayersSection({
                     >
                       <HandleLabel handle={row.name} />
                     </Link>
-                  </td>
-                  <td
+                  </TableCell>
+                  <TableCell
                     className={cn(
-                      "aqt-tnum py-2 pr-3 text-right font-semibold",
+                      "aqt-tnum py-2 pl-0 pr-3 text-right font-semibold",
                       row.titles === 0 && "font-normal text-[color:var(--aqt-fg-faint)]"
                     )}
                   >
                     {format.number(row.titles)}
-                  </td>
-                  <td className="aqt-tnum py-2 pr-3 text-right">{format.number(row.tournaments)}</td>
-                  <td
-                    className="aqt-tnum whitespace-nowrap py-2 pr-3 text-right text-[color:var(--aqt-fg-muted)]"
+                  </TableCell>
+                  <TableCell className="aqt-tnum py-2 pl-0 pr-3 text-right">{format.number(row.tournaments)}</TableCell>
+                  <TableCell
+                    className="aqt-tnum whitespace-nowrap py-2 pl-0 pr-3 text-right text-[color:var(--aqt-fg-muted)]"
                     title={t("mapsRecord", { won: row.maps_won, lost: row.maps_lost })}
                   >
                     {format.number(row.maps_won)}–{format.number(row.maps_lost)}
-                  </td>
-                  <td
-                    className="aqt-tnum py-2 pr-3.5 text-right font-semibold"
+                  </TableCell>
+                  <TableCell
+                    className="aqt-tnum py-2 pl-0 pr-3.5 text-right font-semibold"
                     title={row.low_sample ? t("lowSample") : undefined}
                     style={{
                       color:
@@ -195,11 +191,11 @@ export async function PlayersSection({
                           minimumFractionDigits: 1,
                           maximumFractionDigits: 1
                         })}
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
       <PlayersPagination
         page={data.page}

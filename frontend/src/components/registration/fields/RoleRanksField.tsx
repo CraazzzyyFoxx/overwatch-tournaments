@@ -121,7 +121,6 @@ export default function RoleRanksField({
                   value={rank}
                   onValueChange={(next) => setRank(role.code, next)}
                   aria-invalid={atFault}
-                  variant="surface"
                   className={division != null ? "pr-11" : undefined}
                 />
                 {division != null ? (

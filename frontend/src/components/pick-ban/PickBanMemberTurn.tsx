@@ -181,7 +181,7 @@ export function PickBanAssignBoard({
     <Card>
       <CardHeader className="flex flex-col gap-4 pb-3">
         {header}
-        <CardTitle className="border-t border-[color:var(--aqt-border)] pt-4 text-base">
+        <CardTitle className="border-t border-[color:var(--aqt-border)] pt-4">
           {t("assign.title")}
         </CardTitle>
       </CardHeader>

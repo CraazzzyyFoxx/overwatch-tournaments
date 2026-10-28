@@ -76,7 +76,7 @@ export default function OverviewTabPage() {
       <PhaseStepper tournament={tournament} />
       {/* Draft live -> Open draft board (§15): the shortest path to the work. */}
       {draftRunning ? (
-        <Alert role="status">
+        <Alert>
           <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
             <span>{t("teamDraft", { status: draftStatus })}</span>
             <Button asChild size="sm" variant="outline" className="shrink-0">

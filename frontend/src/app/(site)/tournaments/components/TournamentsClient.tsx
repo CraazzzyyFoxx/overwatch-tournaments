@@ -219,11 +219,11 @@ const TournamentsClient = ({
 
   if (resolution === null) {
     return gameScope.isError ? (
-      <div className="aqt-tn">
+      <div className="text-body">
         <PageStateCard state="error" headingLevel={1} onAction={gameScope.refetch} />
       </div>
     ) : (
-      <div className="aqt-tn">
+      <div className="text-body">
         <TournamentsPageSkeleton />
       </div>
     );
@@ -231,7 +231,7 @@ const TournamentsClient = ({
 
   if (resolution.game.kind === "invalid" || resolution.game.kind === "empty") {
     return (
-      <div className="aqt-tn">
+      <div className="text-body">
         <GameScopeControl scope={gameScope} variant="multi" headingLevel={1} />
       </div>
     );
@@ -239,7 +239,7 @@ const TournamentsClient = ({
 
   if (isLoading) {
     return (
-      <div className="aqt-tn">
+      <div className="text-body">
         <TournamentsPageSkeleton />
       </div>
     );
@@ -252,7 +252,7 @@ const TournamentsClient = ({
   const matchedTotal = listPages?.pages[0]?.total ?? 0;
 
   return (
-    <div className="aqt-tn space-y-6">
+    <div className="space-y-6 text-body">
       <TournamentsHero
         workspaceName={workspaceName}
         liveEvents={facets?.live ?? 0}
@@ -323,7 +323,7 @@ const TournamentsClient = ({
               total: matchedTotal
             })}
             errorLabel={t("tournamentsList.footer.error")}
-            className="[&>button]:h-11 [&>button]:w-full [&>button]:max-w-sm [&>button]:border-[color:var(--aqt-border-2)] [&>button]:bg-[color:var(--aqt-overlay-2)] [&>button]:text-ui [&>button]:font-semibold [&>button]:text-[color:var(--aqt-fg)] [&>button:hover]:border-[color:var(--aqt-teal)] [&>button:hover]:bg-[color:var(--aqt-overlay-3)]"
+            size="lg"
           />
         </>
       )}

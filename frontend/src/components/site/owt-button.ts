@@ -8,17 +8,22 @@ const BASE =
   "font-[family-name:var(--aqt-data)] font-semibold leading-none cursor-pointer " +
   "transition-[background-color,border-color,color,transform] duration-150 active:translate-y-px " +
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--aqt-teal)] " +
-  "disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 " +
+  // Disabled keeps its pointer events (a title can say why), so each variant
+  // resets its own hover under `disabled:hover:`, as `ui/button.tsx` does.
+  "disabled:cursor-not-allowed disabled:opacity-50 " +
   "[&_svg]:shrink-0";
 
 const VARIANT: Record<OwtButtonVariant, string> = {
   primary:
-    "bg-[color:var(--aqt-teal)] text-primary-foreground hover:bg-[color:color-mix(in_srgb,var(--aqt-teal)_88%,white)]",
+    "bg-[color:var(--aqt-teal)] text-primary-foreground hover:bg-[color:color-mix(in_srgb,var(--aqt-teal)_88%,white)] " +
+    "disabled:hover:bg-[color:var(--aqt-teal)]",
   outline:
     "border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-1)] text-[color:var(--aqt-fg)] " +
-    "hover:border-[color:var(--aqt-border-3)] hover:bg-[color:var(--aqt-overlay-3)]",
+    "hover:border-[color:var(--aqt-border-3)] hover:bg-[color:var(--aqt-overlay-3)] " +
+    "disabled:hover:border-[color:var(--aqt-border-2)] disabled:hover:bg-[color:var(--aqt-overlay-1)]",
   ghost:
-    "text-[color:var(--aqt-fg-muted)] hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-fg)]"
+    "text-[color:var(--aqt-fg-muted)] hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-fg)] " +
+    "disabled:hover:bg-transparent disabled:hover:text-[color:var(--aqt-fg-muted)]"
 };
 
 const SIZE: Record<OwtButtonSize, string> = {

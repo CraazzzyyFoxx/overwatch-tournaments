@@ -51,14 +51,8 @@ function MemberRolesCell({
 
   return (
     <Combobox
-      label={
-        held.length > 0 ? (
-          sortRoles(member.rbac_roles).map(roleLabel).join(" · ")
-        ) : (
-          <span className="text-muted-foreground">{t("noRole")}</span>
-        )
-      }
-      labelTitle={held.length > 0 ? undefined : t("noRole")}
+      label={held.length > 0 ? sortRoles(member.rbac_roles).map(roleLabel).join(" · ") : undefined}
+      placeholder={t("noRole")}
       triggerAriaLabel={tm("userRoles", { member: memberLabel(member) })}
       size="sm"
       triggerClassName="w-auto max-w-full gap-2"
@@ -118,7 +112,7 @@ export function useMemberColumns({
             <div className="flex items-center gap-3 min-w-0">
               <Avatar className="size-8 shrink-0">
                 {member.avatar_url ? <AvatarImage src={member.avatar_url} alt="" /> : null}
-                <AvatarFallback className="text-xs">{initials(memberLabel(member))}</AvatarFallback>
+                <AvatarFallback>{initials(memberLabel(member))}</AvatarFallback>
               </Avatar>
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium text-foreground">

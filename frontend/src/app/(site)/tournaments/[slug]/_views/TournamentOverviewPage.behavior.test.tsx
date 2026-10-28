@@ -1,17 +1,21 @@
 // @vitest-environment happy-dom
 //
 // The overview is the tournament's landing page and it is not one screen: it is
-// three, chosen by `status` (wireframes §3 A/B/C). What is pinned here is
-// exactly the part a reader would notice if a branch regressed:
+// one composition per phase, chosen by `status`. What is pinned here is exactly
+// the part a reader would notice if a branch regressed:
 //
-//  1. before the tournament starts, the phase timeline IS the page — it renders
-//     first and carries `#phases`, because the retired `/schedule` route 301s
-//     to that anchor and a missing id turns the redirect into a no-op scroll;
-//  2. once play starts, live matches come first, and with nothing live the
-//     block falls back rather than disappearing — an empty "Now playing" card
-//     on a tournament with eighty played matches is the failure mode;
-//  3. a finished tournament opens on its result, with third place read off the
-//     lower-bracket final instead of the bracket's top-right corner.
+//  1. before the start, the field is counted by PRIMARY role against the
+//     roster shape, and the schedule keeps `#phases` (the retired `/schedule`
+//     route 301s to that anchor);
+//  2. during the draft, the board says who is on the clock and what was picked;
+//  3. while play runs, live matches come first and a group table is the
+//     OFFICIAL standings (tiebreakers included), with form and map difference
+//     read off the finished series;
+//  4. a finished tournament opens on its result, and the client-only insights
+//     (stats, bans, draft) add cards when they answer and leave none behind
+//     when they fail;
+//  5. every branch closes on the same reference card: description, format,
+//     links.
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { NextIntlClientProvider } from "next-intl";
 import { act } from "react";
@@ -19,17 +23,27 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import en from "@/i18n/messages/en.json";
-import type { Encounter, EncounterTeam } from "@/types/encounter.types";
-import { catalogMap, catalogMode } from "@/test/catalog";
+import { catalogEntity } from "@/test/catalog";
 import type { CatalogEntityRead } from "@/types/catalog.types";
+import type { DraftBoard, DraftPick, DraftPlayer, DraftTeam } from "@/types/draft.types";
+import type { Encounter, EncounterTeam } from "@/types/encounter.types";
 import type { Registration, RegistrationListResponse } from "@/types/registration.types";
-import type { Team } from "@/types/team.types";
 import type { TournamentLink } from "@/types/stream.types";
-import type { PickBanConfig, Stage, StageSummary, Tournament, TournamentStatus } from "@/types/tournament.types";
+import type { Team } from "@/types/team.types";
+import type {
+  PickBanOutcomesResponse,
+  Standings,
+  StageSummary,
+  Tournament,
+  TournamentStatus
+} from "@/types/tournament.types";
 
 import TournamentOverviewPage from "./TournamentOverviewPage";
 
-vi.mock("@/services/discipline.service", async () => (await import("@/test/discipline-metadata")).disciplineServiceMock);
+vi.mock(
+  "@/services/discipline.service",
+  async () => (await import("@/test/discipline-metadata")).disciplineServiceMock
+);
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean;
@@ -44,11 +58,12 @@ const DEPLOYMENT_ZONE = "UTC";
 const getAllEncounters = vi.fn();
 const listRegistrations = vi.fn();
 const getStandings = vi.fn();
-const getStages = vi.fn();
+const getPlayerStats = vi.fn();
+const getPickBanOutcomes = vi.fn();
+const getTournamentBoard = vi.fn();
 const getTeams = vi.fn();
 const getCharacterPlaytime = vi.fn();
-const listPublicConfigs = vi.fn();
-const getAllMaps = vi.fn();
+const listCatalog = vi.fn();
 const getTournamentStreams = vi.fn();
 const getFfaStage = vi.fn();
 
@@ -61,8 +76,12 @@ vi.mock("@/services/registration.service", () => ({
 vi.mock("@/services/tournament.service", () => ({
   default: {
     getStandings: (...args: unknown[]) => getStandings(...args),
-    getStages: (...args: unknown[]) => getStages(...args)
+    getPlayerStats: (...args: unknown[]) => getPlayerStats(...args),
+    getPickBanOutcomes: (...args: unknown[]) => getPickBanOutcomes(...args)
   }
+}));
+vi.mock("@/services/draft.service", () => ({
+  default: { getTournamentBoard: (...args: unknown[]) => getTournamentBoard(...args) }
 }));
 vi.mock("@/services/team.service", () => ({
   default: { getAll: (...args: unknown[]) => getTeams(...args) }
@@ -70,11 +89,8 @@ vi.mock("@/services/team.service", () => ({
 vi.mock("@/services/statistics.service", () => ({
   default: { getCharacterPlaytime: (...args: unknown[]) => getCharacterPlaytime(...args) }
 }));
-vi.mock("@/services/pickBan.service", () => ({
-  default: { listPublicConfigs: (...args: unknown[]) => listPublicConfigs(...args) }
-}));
 vi.mock("@/services/catalog.service", () => ({
-  default: { list: (...args: unknown[]) => getAllMaps(...args) }
+  default: { list: (...args: unknown[]) => listCatalog(...args) }
 }));
 vi.mock("@/services/stream.service", () => ({
   default: { getTournamentStreams: (...args: unknown[]) => getTournamentStreams(...args) }
@@ -333,21 +349,34 @@ function playedBracket(): Encounter[] {
   ];
 }
 
-function makeRegistration(id: number, role: string, battleTag: string): Registration {
+function makeRegistration(
+  id: number,
+  role: string,
+  battleTag: string,
+  overrides: Partial<Registration> = {}
+): Registration {
   return {
     id,
     tournament_id: TOURNAMENT_ID,
     workspace_id: WORKSPACE_ID,
     user_id: id,
     primary_handle: battleTag,
-    roles: [{ role: { dimension: "player_role", role }, is_primary: true, priority: 0, top_characters: [] }],
+    roles: [
+      {
+        role: { dimension: "player_role", role },
+        is_primary: true,
+        priority: 0,
+        top_characters: []
+      }
+    ],
     answers: { stream_pov: false, identity_battlenet: [battleTag] },
     form_version_id: 1,
     form_version_stale: false,
     status: "approved",
     admission: { decision: "admitted", stage: "registration", requirements: [], reasons: [] },
     submitted_at: `2024-08-0${id}T10:00:00Z`,
-    reviewed_at: null
+    reviewed_at: null,
+    ...overrides
   } as Registration;
 }
 
@@ -380,44 +409,183 @@ function regList(
   };
 }
 
-const GAMEMODE = { ...catalogMode(1, "Control"), image_path: "/modes/control.png" };
+/** One official standings row; `record` is win·draw·loss. */
+function makeStanding(
+  id: number,
+  team: Team,
+  position: number,
+  points: number,
+  record: [number, number, number],
+  group: { id: number; name: string } | null = null
+): Standings {
+  return {
+    id,
+    tournament_id: TOURNAMENT_ID,
+    team_id: team.id,
+    stage_id: 7,
+    stage_item_id: group?.id ?? null,
+    position,
+    overall_position: id,
+    matches: record[0] + record[1] + record[2],
+    win: record[0],
+    draw: record[1],
+    lose: record[2],
+    points,
+    buchholz: null,
+    full_buchholz: null,
+    tie_group: null,
+    is_pinned: false,
+    swiss_status: null,
+    tb: null,
+    score_differential: null,
+    ranking_context: null,
+    tb_metrics: null,
+    source_rule_profile: null,
+    tiebreak_order: null,
+    team,
+    tournament: null,
+    stage: null,
+    stage_item: group,
+    matches_history: []
+  } as Standings;
+}
 
-const MAPS: CatalogEntityRead[] = [
-  catalogMap(41, GAMEMODE, { name: "Ilios", image_path: "/maps/ilios.png" }),
-  catalogMap(42, GAMEMODE, { name: "Busan", image_path: "/maps/busan.png" }),
-  catalogMap(43, { ...catalogMode(2, "Hybrid"), image_path: "/modes/hybrid.png" }, {
-    name: "King's Row",
-    image_path: "/maps/kings-row.png"
-  })
+const DRAFT_SESSION_ID = 1;
+
+function draftTeam(
+  id: number,
+  captainUserId: number,
+  name: string,
+  position: number,
+  exportedTeamId: number
+): DraftTeam {
+  return {
+    id,
+    session_id: DRAFT_SESSION_ID,
+    captain_user_id: captainUserId,
+    captain_auth_user_id: null,
+    name,
+    draft_position: position,
+    exported_team_id: exportedTeamId
+  };
+}
+
+function draftPlayer(id: number, name: string, role: string, isCaptain = false): DraftPlayer {
+  return {
+    id,
+    session_id: DRAFT_SESSION_ID,
+    registration_id: id,
+    user_id: 500 + id,
+    identity: null,
+    player_name: name,
+    primary_role: { dimension: "player_role", role },
+    is_flex: false,
+    effective_rank: 3000 + id * 100,
+    status: "available",
+    is_captain: isCaptain,
+    drafted_by_team_id: null,
+    captain_role: isCaptain ? { dimension: "player_role", role } : null,
+    secondary_roles: [],
+    role_ranks: {},
+    role_sources: {},
+    role_top_characters: {},
+    role_sub_roles: {},
+    notes: null,
+    custom_fields: [],
+    version: 1
+  };
+}
+
+function draftPick(
+  overall: number,
+  round: number,
+  draftTeamId: number,
+  role: string,
+  pickedPlayerId: number | null,
+  autopick = false
+): DraftPick {
+  return {
+    id: overall,
+    session_id: DRAFT_SESSION_ID,
+    overall_no: overall,
+    round_no: round,
+    pick_in_round: ((overall - 1) % 2) + 1,
+    draft_team_id: draftTeamId,
+    target_role: { dimension: "player_role", role },
+    target_rank_value: null,
+    status: pickedPlayerId === null ? "upcoming" : autopick ? "autopicked" : "completed",
+    picked_player_id: pickedPlayerId,
+    picked_by_user_id: null,
+    is_autopick: autopick,
+    is_admin_override: false,
+    clock_started_at: `2024-08-12T10:0${overall}:00Z`,
+    clock_expires_at: null,
+    overtime_started_at: null,
+    version: 1
+  };
+}
+
+/**
+ * Two captains, two rounds: Alice took Carol, Bob was autopicked Dave, and Bob
+ * is on the clock for a support. Erin and Finn are what is left in the pool.
+ */
+function liveDraftBoard(): DraftBoard {
+  const onClock = draftPick(3, 2, 2, "support", null);
+  return {
+    session: {
+      id: DRAFT_SESSION_ID,
+      tournament_id: TOURNAMENT_ID,
+      custom_game_id: null,
+      lobby_index: null,
+      workspace_id: WORKSPACE_ID,
+      discipline: "overwatch",
+      status: "live",
+      blocked_reason: null,
+      format: "snake",
+      rounds: 2,
+      pick_time_seconds: 60,
+      overtime_seconds: 0,
+      roster_shape: tournament.roster_shape as DraftBoard["session"]["roster_shape"],
+      current_pick_id: onClock.id,
+      pool_source: "manual",
+      source_balance_id: null,
+      autopick_strategy: "best_fit",
+      allow_admin_override: false,
+      exported_at: null,
+      export_status: null,
+      settings_json: {},
+      version: 1,
+      created_at: null
+    },
+    teams: [
+      draftTeam(1, 501, "Team Alice", 1, ALPHA.id),
+      draftTeam(2, 502, "Team Bob", 2, BETA.id)
+    ],
+    picks: [
+      draftPick(1, 1, 1, "damage", 3),
+      draftPick(2, 1, 2, "damage", 4, true),
+      onClock,
+      draftPick(4, 2, 1, "support", null)
+    ],
+    players: [
+      draftPlayer(1, "Alice", "tank", true),
+      draftPlayer(2, "Bob", "tank", true),
+      draftPlayer(3, "Carol", "damage"),
+      draftPlayer(4, "Dave", "damage"),
+      draftPlayer(5, "Erin", "support"),
+      draftPlayer(6, "Finn", "support")
+    ],
+    current_pick: onClock,
+    last_event_id: null
+  };
+}
+
+const HEROES: CatalogEntityRead[] = [
+  catalogEntity({ id: 1, name: "Kiriko", slug: "kiriko" }),
+  catalogEntity({ id: 2, name: "Ana", slug: "ana" })
 ];
 
-const POOL_CONFIG: PickBanConfig = {
-  id: 1,
-  tournament_id: TOURNAMENT_ID,
-  kind: "map",
-  stage_id: null,
-  round: null,
-  mode: "pool",
-  first_pick_rule: "higher_seed",
-  first_ban_rotation: "fixed",
-  ruleset: {
-    version: 2,
-    timer_seconds: null,
-    on_timeout: "random_fill",
-    phases: [
-      {
-        id: "main",
-        name: null,
-        when: {},
-        pool_filter: {},
-        generator: "bracket",
-        steps: []
-      }
-    ]
-  },
-  item_ids: [41, 42, 43],
-  slots: []
-};
+const NO_BANS: PickBanOutcomesResponse = { hero_bans: [], map_outcomes: [] };
 
 let container: HTMLDivElement;
 let root: Root;
@@ -428,11 +596,20 @@ beforeEach(() => {
   getAllEncounters.mockResolvedValue({ results: [], total: 0, page: 1, per_page: -1 });
   listRegistrations.mockResolvedValue(regList([]));
   getStandings.mockResolvedValue([]);
-  getStages.mockResolvedValue([] as Stage[]);
-  getTeams.mockResolvedValue({ results: [ALPHA, BETA, GAMMA, DELTA], total: 4, page: 1, per_page: -1 });
+  getPlayerStats.mockResolvedValue({ players: [], total_players: 0 });
+  getPickBanOutcomes.mockResolvedValue(NO_BANS);
+  getTournamentBoard.mockResolvedValue(null);
+  getTeams.mockResolvedValue({
+    results: [ALPHA, BETA, GAMMA, DELTA],
+    total: 4,
+    page: 1,
+    per_page: -1
+  });
   getCharacterPlaytime.mockResolvedValue({ results: [], total: 0, page: 1, per_page: -1 });
-  listPublicConfigs.mockResolvedValue({ configs: [POOL_CONFIG] });
-  getAllMaps.mockResolvedValue({ results: MAPS, total: MAPS.length, page: 1, per_page: -1 });
+  listCatalog.mockImplementation(async (_discipline: string, kind: string) => {
+    const results = kind === "character" ? HEROES : [];
+    return { results, total: results.length, page: 1, per_page: -1 };
+  });
   getTournamentStreams.mockResolvedValue({ official: [], participants: [] });
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -469,225 +646,209 @@ async function mount() {
   await settle();
 }
 
-/** Every card heading, in DOM order — the page's shape in one line. */
+/**
+ * Every heading, in DOM order — the page's shape in one line. Cards title with
+ * `h2`; the blocks inside the reference card (about, format, links) with `h3`.
+ */
 function headings(): string[] {
-  return Array.from(container.querySelectorAll("h2")).map((node) => node.textContent?.trim() ?? "");
+  return Array.from(container.querySelectorAll("h2, h3")).map(
+    (node) => node.textContent?.trim() ?? ""
+  );
+}
+
+/** The card (or the reference card's block) under the heading `title`. */
+function card(title: string): HTMLElement | null {
+  const heading = Array.from(container.querySelectorAll("h2, h3")).find(
+    (node) => node.textContent?.trim() === title
+  );
+  return heading?.closest("section") ?? null;
+}
+
+/** Each body row of a table as its cells' text. */
+function rowsOf(table: Element): string[][] {
+  return Array.from(table.querySelectorAll("tbody tr")).map((row) =>
+    Array.from(row.querySelectorAll("td")).map((cell) => cell.textContent?.trim() ?? "")
+  );
+}
+
+function encounterList(results: Encounter[]) {
+  return { results, total: results.length, page: 1, per_page: -1 };
 }
 
 const COPY = en.tournamentDetail.overview;
 
-describe("before the tournament starts (§3A)", () => {
-  beforeEach(() => {
-    tournament = makeTournament("check_in");
+describe("before the tournament starts", () => {
+  it("counts the field by primary role against the roster shape", async () => {
+    tournament = makeTournament("registration");
     listRegistrations.mockResolvedValue(
       regList([
         makeRegistration(1, "tank", "Hornet#21345"),
-        makeRegistration(2, "damage", "zMize#2978"),
-        makeRegistration(3, "damage", "manqa#21668"),
-        makeRegistration(4, "support", "Naord#2100")
+        makeRegistration(2, "tank", "Mirro#2211"),
+        makeRegistration(3, "damage", "zMize#2978"),
+        makeRegistration(4, "damage", "manqa#21668"),
+        makeRegistration(5, "damage", "Kenny#1337"),
+        makeRegistration(6, "support", "Naord#2100"),
+        // Lists tank first but plays support: the PRIMARY role is what counts.
+        makeRegistration(7, "support", "Lina#4242", {
+          roles: [
+            {
+              role: { dimension: "player_role", role: "tank" },
+              is_primary: false,
+              priority: 1,
+              top_characters: []
+            },
+            {
+              role: { dimension: "player_role", role: "support" },
+              is_primary: true,
+              priority: 0,
+              top_characters: []
+            }
+          ]
+        }),
+        // Out of the field: a withdrawn application fills no slot.
+        makeRegistration(8, "support", "Ghost#0001", { status: "withdrawn" })
       ])
+    );
+    await mount();
+
+    const field = card(COPY.field.title);
+    expect(field).not.toBeNull();
+    // Slots 1 tank / 2 damage / 2 support: two tanks fill two teams, three
+    // damage and two supports one each — one complete roster so far.
+    const roles = Array.from(field?.querySelectorAll("ul > li") ?? []).map(
+      (row) => row.textContent
+    );
+    expect(roles).toEqual([
+      `${en.tournamentDetail.roles.tank}enough for 2 teams2`,
+      `${en.tournamentDetail.roles.damage}enough for 1 team3`,
+      `${en.tournamentDetail.roles.support}enough for 1 team2`
+    ]);
+    const text = field?.textContent ?? "";
+    expect(text).toContain(`${COPY.field.teams}1`);
+    expect(text).toContain("each needs 1 tank, 2 damage, 2 supports");
+    // The second roster is short one damage and two supports; tanks are covered.
+    expect(text).toContain(
+      `Team 2 still needs: ${en.tournamentDetail.roles.damage} — 1, ${en.tournamentDetail.roles.support} — 2.`
     );
   });
 
-  it("leads with the phase timeline under the anchor the retired /schedule route points at", async () => {
+  it("counts a team-registration field in teams, with no role shape to fill", async () => {
+    tournament = makeTournament("registration", { team_formation: "registration" });
+    const team = (id: number) =>
+      ({
+        id,
+        name: `Team ${id}`,
+        status: "complete",
+        slot_code: "dps",
+        is_substitute: false,
+        is_captain: false
+      }) as const;
+    listRegistrations.mockResolvedValue(
+      regList([
+        makeRegistration(1, "tank", "Hornet#21345", { team: team(10) }),
+        makeRegistration(2, "damage", "zMize#2978", { team: team(10) }),
+        makeRegistration(3, "support", "Naord#2100", { team: team(11) }),
+        // A withdrawn player's team is not in the field.
+        makeRegistration(4, "support", "Ghost#0001", { team: team(12), status: "withdrawn" })
+      ])
+    );
+    await mount();
+
+    expect(card(COPY.field.title)).toBeNull();
+    const numbers = card(COPY.regNumbers.title)?.textContent ?? "";
+    expect(numbers).toContain(`${COPY.regNumbers.applications}3`);
+    expect(numbers).toContain(`${COPY.regNumbers.teams}2`);
+  });
+
+  it("keeps the schedule under the anchor the retired /schedule route points at", async () => {
+    tournament = makeTournament("check_in");
     await mount();
 
     const phases = container.querySelector("#phases");
     expect(phases).not.toBeNull();
-    // First block on the page: the phases are the content, not context.
-    const cards = Array.from(container.querySelectorAll("section[aria-label] section"));
-    expect(cards[0]?.id).toBe("phases");
     expect(phases?.textContent).toContain(en.common.statusBadge.check_in);
-  });
-
-  it("breaks the sign-ups down by role while the field forms, and shows the format in full", async () => {
-    // Registration still open and no teams yet: the sign-ups are the story.
-    tournament = makeTournament("registration", {
-      teams_count: 0,
-      phase_schedule: [
-        { ...PHASE_SCHEDULE[0], ends_at: new Date("2099-01-01T00:00:00Z").toISOString() },
-        ...PHASE_SCHEDULE.slice(1)
-      ]
-    });
-    await mount();
-    const registration = Array.from(container.querySelectorAll("section")).find((node) =>
-      node.querySelector("h2")?.textContent?.includes(COPY.registration.title)
-    );
-    expect(registration).toBeDefined();
-    const text = registration?.textContent ?? "";
-    expect(text).toContain(en.common.roles.tank);
-    expect(text).toContain(en.common.roles.damage);
-    expect(text).toContain(en.common.roles.support);
-    // Two DPS, one tank, one support — counted off the primary role.
-    expect(text).toContain("2");
-    // The three most recent submissions, newest first; the oldest of the four
-    // (Hornet, 1 Aug) falls off the end.
-    expect(text).toContain("Naord#2100");
-    expect(text).toContain("manqa#21668");
-    expect(text).not.toContain("Hornet#21345");
-
-    expect(headings()).toContain(COPY.format.title);
-    expect(container.textContent).toContain("Players may swap roles between matches.");
-    // The roster shape reads as role glyphs (1 tank, 2 damage, 2 support), each
-    // announced by its slot name — not as "1 × Tank · 2 × DPS".
-    const glyphs = Array.from(container.querySelectorAll('[role="img"]')).map((node) =>
-      node.getAttribute("aria-label")
-    );
-    expect(glyphs).toContain(en.rosterShape.slotCodes.tank);
-    expect(glyphs).toContain(en.rosterShape.slotCodes.damage);
-    expect(glyphs).toContain(en.rosterShape.slotCodes.support);
-    expect(container.textContent).toContain("×2");
-    // The old "1 × Tank" spelling is gone: no slot name in the format card.
-    expect(container.textContent).not.toContain(`× ${en.rosterShape.slotCodes.tank}`);
-  });
-
-  it("shows the strongest teams instead of the sign-ups once the field is set", async () => {
-    // Check-in with four teams formed: the default fixture.
-    await mount();
-
-    expect(headings()).not.toContain(COPY.registration.title);
-    const teams = Array.from(container.querySelectorAll("section")).find(
-      (node) => node.querySelector("h2")?.textContent === COPY.teams.title
-    );
-    expect(teams).toBeDefined();
-    for (const name of ["Alpha", "Beta", "Gamma", "Delta"]) {
-      expect(teams?.textContent).toContain(name);
-    }
-    const all = Array.from(teams?.querySelectorAll("a") ?? []).find(
-      (node) => node.getAttribute("href") === `/tournaments/${SLUG}/teams`
-    );
-    expect(all?.textContent).toContain("All 4 teams");
-  });
-
-  it("previews the maps before the start and leads on to the Maps section", async () => {
-    // A tournament-wide pool (no rounds to lay out) shows as one row of maps.
-    await mount();
-
-    const maps = Array.from(container.querySelectorAll("section")).find(
-      (node) => node.querySelector("h2")?.textContent === COPY.maps.pool
-    );
-    expect(maps).toBeDefined();
-    for (const name of ["Ilios", "Busan", "King's Row"]) {
-      expect(maps?.textContent).toContain(name);
-    }
-    const all = Array.from(maps?.querySelectorAll("a") ?? []).find(
-      (node) => node.getAttribute("href") === `/tournaments/${SLUG}/maps`
-    );
-    expect(all?.textContent).toContain("All 3 maps");
-  });
-
-  it("has no maps block for a tournament without a map pool", async () => {
-    listPublicConfigs.mockResolvedValue({ configs: [] });
-    await mount();
-
-    expect(headings()).not.toContain(COPY.maps.pool);
-    expect(headings()).not.toContain(COPY.maps.firstRound);
-  });
-
-  it("counts teams instead of roles when the tournament registers teams", async () => {
-    tournament = makeTournament("registration", { team_formation: "registration" });
-    await mount();
-
-    const text = container.textContent ?? "";
-    expect(text).toContain(COPY.registration.teams);
-    // No roster read at all: team registration has no per-role shortfall.
-    expect(listRegistrations).not.toHaveBeenCalled();
   });
 });
 
-describe("while it is being played (§3B)", () => {
+describe("while the captains draft", () => {
+  beforeEach(() => {
+    tournament = makeTournament("draft");
+    getTournamentBoard.mockResolvedValue(liveDraftBoard());
+  });
+
+  it("names the captain on the clock and the picks made so far, newest first", async () => {
+    await mount();
+
+    const progress = card(COPY.draft.live);
+    expect(progress).not.toBeNull();
+    const text = progress?.textContent ?? "";
+    expect(text).toContain(`${COPY.draft.onClock}Bob`);
+    expect(text).toContain(COPY.draft.needs.replace("{role}", en.common.roles.support));
+    expect(progress?.querySelector('[aria-label="2 of 4 picks made"]')).not.toBeNull();
+
+    const picks = Array.from(progress?.querySelectorAll("ol > li") ?? []).map(
+      (row) => row.textContent ?? ""
+    );
+    expect(picks).toHaveLength(2);
+    expect(picks[0]).toContain("#2");
+    expect(picks[0]).toContain("Dave");
+    expect(picks[0]).toContain(COPY.draft.teamOf.replace("{captain}", "Bob"));
+    expect(picks[0]).toContain(COPY.draft.autopick);
+    expect(picks[1]).toContain("#1");
+    expect(picks[1]).toContain("Carol");
+    expect(picks[1]).toContain(COPY.draft.teamOf.replace("{captain}", "Alice"));
+    expect(picks[1]).not.toContain(COPY.draft.autopick);
+
+    // The picked players have left the pool; the two supports are what remains.
+    const pool = card(COPY.draft.pool)?.textContent ?? "";
+    expect(pool).toContain("Erin");
+    expect(pool).toContain("Finn");
+    expect(pool).not.toContain("Carol");
+    expect(pool).not.toContain("Dave");
+  });
+
+  it("falls back to the reference alone when there is no draft board yet", async () => {
+    getTournamentBoard.mockResolvedValue(null);
+    await mount();
+
+    expect(headings()).not.toContain(COPY.draft.live);
+    expect(headings()).toContain(COPY.reference.title);
+  });
+});
+
+describe("while it is being played", () => {
   it("puts the live matches first", async () => {
-    getAllEncounters.mockResolvedValue({
-      results: [
+    getAllEncounters.mockResolvedValue(
+      encounterList([
         makeEncounter(1, 1, ALPHA, GAMMA, [1, 1], {
           status: "in_progress",
           ended_at: null,
           is_live: true
         }),
         makeEncounter(2, 1, BETA, DELTA, [2, 0])
-      ],
-      total: 2,
-      page: 1,
-      per_page: -1
-    });
+      ])
+    );
     await mount();
 
-    expect(headings()).toContain(COPY.live.title);
+    expect(headings()).toContain(COPY.live.now);
     const live = container.querySelector("[data-live]");
     expect(live).not.toBeNull();
     expect(live?.textContent).toContain("Alpha");
     expect(live?.textContent).toContain(en.common.live);
   });
 
-  it("falls back to the latest results when nothing is live", async () => {
-    getAllEncounters.mockResolvedValue({
-      results: playedBracket(),
-      total: 4,
-      page: 1,
-      per_page: -1
-    });
+  it("shows the latest results and no live block when nothing is on", async () => {
+    getAllEncounters.mockResolvedValue(encounterList(playedBracket()));
     await mount();
 
     const titles = headings();
-    expect(titles).toContain(COPY.recent.title);
-    expect(titles).not.toContain(COPY.live.title);
-    expect(titles).not.toContain(COPY.upcoming.title);
+    expect(titles).toContain(COPY.live.recent);
+    expect(titles).not.toContain(COPY.live.now);
     expect(container.querySelector("[data-live]")).toBeNull();
   });
 
-  it("offers the upcoming matches when the organizer published a schedule", async () => {
-    const soon = new Date(Date.now() + 3_600_000).toISOString();
-    getAllEncounters.mockResolvedValue({
-      results: [
-        makeEncounter(1, 1, ALPHA, GAMMA, [2, 0]),
-        makeEncounter(9, 2, ALPHA, BETA, [0, 0], {
-          status: "pending",
-          scheduled_at: soon,
-          started_at: null,
-          ended_at: null
-        })
-      ],
-      total: 2,
-      page: 1,
-      per_page: -1
-    });
-    await mount();
-
-    expect(headings()).toContain(COPY.upcoming.title);
-  });
-
-  // The generator draws a round long before anyone gives it a time: open
-  // matches, no schedule, no results. The overview used to call that "nothing
-  // published yet" while the bracket page showed the full grid.
-  it("lists a drawn round that has no schedule and no results yet", async () => {
-    const drawn = (id: number, round: number, one: Team, two: Team) =>
-      makeEncounter(id, round, one, two, [0, 0], {
-        status: "open",
-        result_status: "none",
-        scheduled_at: null,
-        started_at: null,
-        ended_at: null
-      });
-    getAllEncounters.mockResolvedValue({
-      results: [drawn(1, 1, ALPHA, GAMMA), drawn(2, 1, BETA, DELTA)],
-      total: 2,
-      page: 1,
-      per_page: -1
-    });
-    await mount();
-
-    const titles = headings();
-    expect(titles).toContain(COPY.upcoming.title);
-    expect(container.textContent).not.toContain(COPY.empty.title);
-  });
-
   it("draws the active stage as a mini bracket that links into the real one", async () => {
-    getAllEncounters.mockResolvedValue({
-      results: playedBracket(),
-      total: 4,
-      page: 1,
-      per_page: -1
-    });
+    getAllEncounters.mockResolvedValue(encounterList(playedBracket()));
     await mount();
 
     expect(headings()).toContain(COPY.bracketMini.title.replace("{stage}", "Playoff"));
@@ -697,50 +858,72 @@ describe("while it is being played (§3B)", () => {
     expect(deepLink?.getAttribute("href")).toBe(`/tournaments/${SLUG}/bracket?stage=7&match=3`);
   });
 
-  it("shows a group table instead of a bracket for a round-robin stage", async () => {
+  it("ranks a group by its official standings, with form and map difference off the played series", async () => {
     tournament = makeTournament("live", {
       stages: [makeStage({ id: 7, name: "Group A", stage_type: "round_robin" })]
     });
+    // Alpha won both of its series, Beta one of two — yet the official table,
+    // tiebreakers and all, puts Beta first. The table is the server's answer.
     getStandings.mockResolvedValue([
-      {
-        id: 1,
-        tournament_id: TOURNAMENT_ID,
-        team_id: ALPHA.id,
-        stage_id: 7,
-        stage_item_id: null,
-        position: 1,
-        overall_position: 1,
-        matches: 3,
-        win: 3,
-        draw: 0,
-        lose: 0,
-        points: 6,
-        buchholz: null,
-        tb: null,
-        score_differential: null,
-        ranking_context: null,
-        tb_metrics: null,
-        source_rule_profile: null,
-        tiebreak_order: null,
-        team: ALPHA,
-        tournament: null,
-        stage: null,
-        stage_item: null,
-        matches_history: []
-      }
+      makeStanding(1, BETA, 1, 9, [1, 0, 1]),
+      makeStanding(2, ALPHA, 2, 7, [2, 0, 0]),
+      makeStanding(3, GAMMA, 3, 0, [0, 0, 2])
     ]);
-    getAllEncounters.mockResolvedValue({
-      results: [makeEncounter(1, 1, ALPHA, GAMMA, [2, 0])],
-      total: 1,
-      page: 1,
-      per_page: -1
-    });
+    getAllEncounters.mockResolvedValue(
+      encounterList([
+        makeEncounter(1, 1, ALPHA, BETA, [2, 0]),
+        makeEncounter(2, 2, ALPHA, GAMMA, [2, 1]),
+        makeEncounter(3, 3, BETA, GAMMA, [2, 0])
+      ])
+    );
     await mount();
 
     const titles = headings();
     expect(titles).toContain(COPY.groupTable.title.replace("{stage}", "Group A"));
     expect(titles).not.toContain(COPY.bracketMini.title.replace("{stage}", "Group A"));
-    expect(container.textContent).toContain("3·0·0");
+    const tables = Array.from(container.querySelectorAll("table"));
+    expect(tables).toHaveLength(1);
+    // Place, team, form (oldest first), map difference, points.
+    expect(rowsOf(tables[0])).toEqual([
+      ["1", "Beta", "LW", "0", "9"],
+      ["2", "Alpha", "WW", "+3", "7"],
+      ["3", "Gamma", "LL", "−3", "0"]
+    ]);
+  });
+
+  it("keeps the two groups of one stage apart instead of interleaving their ranks", async () => {
+    tournament = makeTournament("live", {
+      stages: [makeStage({ id: 7, name: "Groups", stage_type: "round_robin" })]
+    });
+    // Both groups rank a 1 and a 2 of their own: merged into one list and
+    // sorted by `position` this is the 1,1,2,2 ladder that means nothing.
+    const groupA = { id: 11, name: "A" };
+    const groupB = { id: 12, name: "B" };
+    getStandings.mockResolvedValue([
+      makeStanding(1, ALPHA, 1, 4, [3, 2, 0], groupA),
+      makeStanding(2, GAMMA, 1, 4, [3, 2, 0], groupB),
+      makeStanding(3, BETA, 2, 2.5, [1, 3, 1], groupA),
+      makeStanding(4, DELTA, 2, 2, [2, 0, 3], groupB)
+    ]);
+    getAllEncounters.mockResolvedValue(encounterList([makeEncounter(1, 1, ALPHA, GAMMA, [2, 0])]));
+    await mount();
+
+    const tables = Array.from(container.querySelectorAll("table"));
+    expect(tables.map((node) => node.querySelector("caption")?.textContent)).toEqual([
+      "Group A",
+      "Group B"
+    ]);
+    expect(tables.map((node) => rowsOf(node).map((cells) => cells[1]))).toEqual([
+      ["Alpha", "Beta"],
+      ["Gamma", "Delta"]
+    ]);
+    // Every points cell shares one decimal as soon as one carries a half.
+    expect(tables.flatMap((node) => rowsOf(node).map((cells) => cells[4]))).toEqual([
+      "4.0",
+      "2.5",
+      "4.0",
+      "2.0"
+    ]);
   });
 
   it("shows the lobby tables of an FFA stage, which has neither a bracket nor duels", async () => {
@@ -748,7 +931,6 @@ describe("while it is being played (§3B)", () => {
       stages: [makeStage({ id: 7, name: "League", stage_type: "ffa_league" })]
     });
     // The encounter list answers duels only: an FFA-only tournament has none.
-    getAllEncounters.mockResolvedValue({ results: [], total: 0, page: 1, per_page: -1 });
     const row = (teamId: number, name: string, slot: number, position: number, points: number) => ({
       team_id: teamId,
       team_name: name,
@@ -782,7 +964,6 @@ describe("while it is being played (§3B)", () => {
     ]);
     await mount();
 
-    expect(getFfaStage).toHaveBeenCalledWith(TOURNAMENT_ID, 7);
     expect(headings()).toContain(COPY.groupTable.title.replace("{stage}", "League"));
     const text = container.textContent ?? "";
     expect(text.indexOf("Alpha Lobby")).toBeGreaterThan(-1);
@@ -791,108 +972,15 @@ describe("while it is being played (§3B)", () => {
       (node) => node.textContent === COPY.groupTable.open
     );
     expect(link?.getAttribute("href")).toBe(`/tournaments/${SLUG}/bracket?stage=7`);
-    // No duels is not "nothing published": the lobbies are the matches.
-    expect(text).not.toContain(COPY.empty.title);
-  });
-
-  it("keeps the two groups of one stage apart instead of interleaving their ranks", async () => {
-    tournament = makeTournament("live", {
-      stages: [makeStage({ id: 7, name: "Groups", stage_type: "round_robin" })]
-    });
-    const standingRow = (
-      id: number,
-      team: Team,
-      itemId: number,
-      itemName: string,
-      position: number,
-      record: [number, number, number],
-      points: number
-    ) => ({
-      id,
-      tournament_id: TOURNAMENT_ID,
-      team_id: team.id,
-      stage_id: 7,
-      stage_item_id: itemId,
-      position,
-      overall_position: id,
-      matches: record[0] + record[1] + record[2],
-      win: record[0],
-      draw: record[1],
-      lose: record[2],
-      points,
-      buchholz: null,
-      full_buchholz: null,
-      tie_group: null,
-      is_pinned: false,
-      swiss_status: null,
-      tb: null,
-      score_differential: null,
-      ranking_context: null,
-      tb_metrics: null,
-      source_rule_profile: null,
-      tiebreak_order: null,
-      team,
-      tournament: null,
-      stage: null,
-      stage_item: { id: itemId, name: itemName },
-      matches_history: []
-    });
-    // Both groups rank a 1 and a 2 of their own: merged into one list and
-    // sorted by `position` this is the 1,1,2,2 ladder that means nothing.
-    getStandings.mockResolvedValue([
-      standingRow(1, ALPHA, 11, "A", 1, [3, 2, 0], 4),
-      standingRow(2, GAMMA, 12, "B", 1, [3, 2, 0], 4),
-      standingRow(3, BETA, 11, "A", 2, [1, 3, 1], 2.5),
-      standingRow(4, DELTA, 12, "B", 2, [2, 0, 3], 2)
-    ]);
-    getAllEncounters.mockResolvedValue({
-      results: [makeEncounter(1, 1, ALPHA, GAMMA, [2, 0])],
-      total: 1,
-      page: 1,
-      per_page: -1
-    });
-    await mount();
-
-    const tables = Array.from(container.querySelectorAll("table")).filter((node) =>
-      node.querySelector("caption")?.textContent?.startsWith("Group")
-    );
-    expect(tables.map((node) => node.querySelector("caption")?.textContent)).toEqual([
-      "Group A",
-      "Group B"
-    ]);
-    expect(
-      tables.map((node) =>
-        Array.from(node.querySelectorAll("tbody tr")).map(
-          (cells) => cells.querySelectorAll("td")[1]?.textContent
-        )
-      )
-    ).toEqual([
-      ["Alpha", "Beta"],
-      ["Gamma", "Delta"]
-    ]);
-    // The record carries draws, and every points cell shares one decimal.
-    expect(tables[0].querySelectorAll("tbody td")[2]?.textContent).toBe("3·2·0");
-    expect(
-      tables.flatMap((node) =>
-        Array.from(node.querySelectorAll("tbody tr")).map(
-          (row) => row.querySelectorAll("td")[3]?.textContent
-        )
-      )
-    ).toEqual(["4.0", "2.5", "4.0", "2.0"]);
   });
 });
 
-describe("once it is over (§3C)", () => {
+describe("once it is over", () => {
   beforeEach(() => {
     tournament = makeTournament("completed", {
       stages: [makeStage({ id: 7, is_active: false, is_completed: true })]
     });
-    getAllEncounters.mockResolvedValue({
-      results: playedBracket(),
-      total: 4,
-      page: 1,
-      per_page: -1
-    });
+    getAllEncounters.mockResolvedValue(encounterList(playedBracket()));
   });
 
   it("opens on the result, with third place off the lower-bracket final", async () => {
@@ -913,68 +1001,93 @@ describe("once it is over (§3C)", () => {
     expect(text).toContain(COPY.result.exitedIn.replace("{round}", "LB Final"));
   });
 
-  it("counts the tournament up and links onward to the statistics", async () => {
+  it("ranks the most banned heroes once the pick-ban outcomes answer", async () => {
+    getPickBanOutcomes.mockResolvedValue({
+      hero_bans: [
+        { encounter_id: 1, hero_id: 2, first_map: true, target_player_id: null },
+        { encounter_id: 1, hero_id: 1, first_map: true, target_player_id: null },
+        { encounter_id: 3, hero_id: 1, first_map: true, target_player_id: null },
+        { encounter_id: 3, hero_id: 1, first_map: false, target_player_id: null }
+      ],
+      map_outcomes: []
+    } satisfies PickBanOutcomesResponse);
+    await mount();
+
+    expect(
+      container.querySelector(`[aria-label="${en.tournamentDetail.podium.label}"]`)
+    ).not.toBeNull();
+    const bans = Array.from(card(COPY.bans.title)?.querySelectorAll("ol > li") ?? []).map(
+      (row) => row.textContent ?? ""
+    );
+    expect(bans).toHaveLength(2);
+    expect(bans[0]).toContain("Kiriko");
+    expect(bans[0]).toMatch(/3$/);
+    expect(bans[1]).toContain("Ana");
+    expect(bans[1]).toMatch(/1$/);
+    // The numbers count the same bans: four, over two series.
+    const numbers = card(COPY.numbers.title)?.textContent ?? "";
+    expect(numbers).toContain(`${COPY.numbers.heroBans}4in 2 series`);
+  });
+
+  it("draws no bans card when the series struck only maps", async () => {
+    getPickBanOutcomes.mockResolvedValue({
+      hero_bans: [],
+      map_outcomes: [{ encounter_id: 1, map_id: 4, picked: false }]
+    } satisfies PickBanOutcomesResponse);
+    await mount();
+
+    expect(headings()).toContain(COPY.result.title);
+    expect(card(COPY.bans.title)).toBeNull();
+  });
+
+  it("still draws the result when every insights read fails", async () => {
+    getPlayerStats.mockRejectedValue(new Error("stats down"));
+    getPickBanOutcomes.mockRejectedValue(new Error("bans down"));
+    getTournamentBoard.mockRejectedValue(new Error("draft down"));
+    await mount();
+
+    expect(
+      container.querySelector(`[aria-label="${en.tournamentDetail.podium.label}"]`)
+    ).not.toBeNull();
+    const titles = headings();
+    expect(titles).toContain(COPY.numbers.title);
+    expect(titles).not.toContain(COPY.bans.title);
+    expect(titles).not.toContain(COPY.leaders.title);
+    expect(titles).not.toContain(COPY.draftCard.title);
+    expect(card(COPY.numbers.title)?.textContent).not.toContain(COPY.numbers.heroBans);
+  });
+
+  it("counts the tournament up and lists its most played heroes", async () => {
     getCharacterPlaytime.mockResolvedValue({
-      results: [{ entity: { id: 1, name: "Kiriko", image_path: "/heroes/kiriko.png", attrs: {} }, playtime: 0.091 }],
+      results: [
+        {
+          entity: { id: 1, name: "Kiriko", image_path: "/heroes/kiriko.png", attrs: {} },
+          playtime: 0.091
+        }
+      ],
       total: 1,
       page: 1,
       per_page: -1
     });
     await mount();
 
-    const titles = headings();
-    expect(titles).toContain(COPY.numbers.title);
-    expect(titles).toContain(COPY.heroes.title);
-    expect(container.textContent).toContain("Kiriko");
-    // 4 matches over two calendar days. Teams and players are the header's
-    // stamps — the card used to repeat both one screen below them.
-    const numbers = Array.from(container.querySelectorAll("section")).find((node) =>
-      node.querySelector("h2")?.textContent?.includes(COPY.numbers.title)
-    );
-    expect(numbers?.textContent).toContain(COPY.numbers.matches);
-    expect(numbers?.textContent).toContain(COPY.numbers.days);
-    expect(numbers?.textContent).toContain("4");
-    expect(numbers?.textContent).toContain("2");
+    expect(card(COPY.heroes.title)?.textContent).toContain("Kiriko");
+    // 4 matches over two calendar days.
+    const numbers = card(COPY.numbers.title)?.textContent ?? "";
+    expect(numbers).toContain(`${COPY.numbers.matches}4`);
+    expect(numbers).toContain(`${COPY.numbers.days}2`);
   });
 
   it("drops to third-by-standings when the tournament never had a bracket", async () => {
     tournament = makeTournament("completed", {
       stages: [makeStage({ id: 7, name: "League", stage_type: "round_robin", is_completed: true })]
     });
-    getAllEncounters.mockResolvedValue({
-      results: [makeEncounter(1, 1, ALPHA, GAMMA, [2, 0])],
-      total: 1,
-      page: 1,
-      per_page: -1
-    });
-    getStandings.mockResolvedValue(
-      [ALPHA, BETA, GAMMA].map((team, index) => ({
-        id: index + 1,
-        tournament_id: TOURNAMENT_ID,
-        team_id: team.id,
-        stage_id: 7,
-        stage_item_id: null,
-        position: index + 1,
-        overall_position: index + 1,
-        matches: 3,
-        win: 3 - index,
-        draw: 0,
-        lose: index,
-        points: 6 - index * 2,
-        buchholz: null,
-        tb: null,
-        score_differential: null,
-        ranking_context: null,
-        tb_metrics: null,
-        source_rule_profile: null,
-        tiebreak_order: null,
-        team,
-        tournament: null,
-        stage: null,
-        stage_item: null,
-        matches_history: []
-      }))
-    );
+    getAllEncounters.mockResolvedValue(encounterList([makeEncounter(1, 1, ALPHA, GAMMA, [2, 0])]));
+    getStandings.mockResolvedValue([
+      makeStanding(1, ALPHA, 1, 6, [3, 0, 0]),
+      makeStanding(2, BETA, 2, 4, [2, 0, 1]),
+      makeStanding(3, GAMMA, 3, 2, [1, 0, 2])
+    ]);
     await mount();
 
     const podium = container.querySelector(`[aria-label="${en.tournamentDetail.podium.label}"]`);
@@ -987,12 +1100,10 @@ describe("once it is over (§3C)", () => {
 
 /**
  * The header carries the tournament's STATE and its actions; what the
- * tournament IS, and where the organizer's channels are, live here — in every
- * branch, because the header no longer holds either. Before this the format
- * card existed only before the start, and the links only in the header's action
- * row, which put translucent chips on top of the cover banner.
+ * tournament IS, and where the organizer's channels are, live in the reference
+ * card that closes every branch.
  */
-describe("the reference tail", () => {
+describe("the reference card", () => {
   const DISCORD: TournamentLink = {
     id: 1,
     tournament_id: TOURNAMENT_ID,
@@ -1003,24 +1114,23 @@ describe("the reference tail", () => {
     is_active: true
   };
 
-  for (const status of ["check_in", "live", "completed"] as const) {
+  for (const status of ["check_in", "draft", "live", "completed"] as const) {
     it(`states the format, the full description and the links in the ${status} branch`, async () => {
       tournament = makeTournament(status, { links: [DISCORD] });
-      getAllEncounters.mockResolvedValue({
-        results: playedBracket(),
-        total: 4,
-        page: 1,
-        per_page: -1
-      });
+      getAllEncounters.mockResolvedValue(encounterList(playedBracket()));
       await mount();
 
-      const titles = headings();
+      const reference = card(COPY.reference.title);
+      expect(reference).not.toBeNull();
+      const titles = Array.from(reference?.querySelectorAll("h3") ?? []).map(
+        (node) => node.textContent
+      );
       expect(titles).toContain(COPY.format.title);
       expect(titles).toContain(en.tournamentDetail.links.heading);
       // The whole description, not the header's one clamped line.
-      expect(container.textContent).toContain("Players may swap roles between matches.");
+      expect(reference?.textContent).toContain("Players may swap roles between matches.");
       expect(
-        Array.from(container.querySelectorAll("a")).some(
+        Array.from(reference?.querySelectorAll("a") ?? []).some(
           (node) => node.getAttribute("href") === DISCORD.url
         )
       ).toBe(true);
@@ -1036,21 +1146,21 @@ describe("the reference tail", () => {
     });
     await mount();
 
-    const card = Array.from(container.querySelectorAll("section")).find((node) =>
-      node.querySelector("h2")?.textContent?.includes(COPY.format.title)
-    );
-    const items = Array.from(card?.querySelectorAll("ol > li") ?? []);
+    const format = card(COPY.format.title);
+    const items = Array.from(format?.querySelectorAll("ol > li") ?? []);
     const steps = items.map((node) => node.textContent ?? "");
     // The type is the chip that opens its explanation, beside the organizer's name.
     const chips = (node: Element) =>
-      Array.from(node.querySelectorAll('button[aria-haspopup="dialog"]')).map((chip) => chip.textContent);
+      Array.from(node.querySelectorAll('button[aria-haspopup="dialog"]')).map(
+        (chip) => chip.textContent
+      );
     expect(steps).toHaveLength(2);
     expect(steps[0]).toContain("Groups");
     expect(chips(items[0])).toEqual([COPY.format.types.round_robin.name]);
     expect(steps[1]).toContain("Playoffs");
     expect(chips(items[1])).toEqual([COPY.format.types.double_elimination.name]);
     // Each name once: the stage list is not repeated under a second label.
-    expect((card?.textContent ?? "").split("Playoffs").length - 1).toBe(1);
+    expect((format?.textContent ?? "").split("Playoffs").length - 1).toBe(1);
   });
 
   it("states what each stage's regulation says a reader needs to follow it", async () => {
@@ -1066,16 +1176,20 @@ describe("the reference tail", () => {
           swiss_qualify_wins: 3,
           swiss_eliminate_losses: 3
         }),
-        makeStage({ id: 7, name: "Playoffs", stage_type: "double_elimination", order: 1, advance_count: 2 })
+        makeStage({
+          id: 7,
+          name: "Playoffs",
+          stage_type: "double_elimination",
+          order: 1,
+          advance_count: 2
+        })
       ]
     });
     await mount();
 
-    const steps = Array.from(
-      Array.from(container.querySelectorAll("section"))
-        .find((node) => node.querySelector("h2")?.textContent?.includes(COPY.format.title))
-        ?.querySelectorAll("ol > li") ?? []
-    ).map((node) => node.textContent ?? "");
+    const steps = Array.from(card(COPY.format.title)?.querySelectorAll("ol > li") ?? []).map(
+      (node) => node.textContent ?? ""
+    );
     expect(steps[0]).toContain("5 rounds");
     expect(steps[0]).toContain("Through at 3 wins");
     expect(steps[0]).toContain("Out at 3 losses");
@@ -1091,16 +1205,19 @@ describe("the reference tail", () => {
     tournament = makeTournament("live", {
       stages: [
         makeStage({ id: 6, name: "Swiss system", stage_type: "swiss", order: 0 }),
-        makeStage({ id: 7, name: " double elimination ", stage_type: "double_elimination", order: 1 })
+        makeStage({
+          id: 7,
+          name: " double elimination ",
+          stage_type: "double_elimination",
+          order: 1
+        })
       ]
     });
     await mount();
 
-    const card = Array.from(container.querySelectorAll("section")).find((node) =>
-      node.querySelector("h2")?.textContent?.includes(COPY.format.title)
+    const chips = Array.from(
+      card(COPY.format.title)?.querySelectorAll('button[aria-haspopup="dialog"]') ?? []
     );
-    const chips = Array.from(card?.querySelectorAll('button[aria-haspopup="dialog"]') ?? []);
-
     expect(chips.map((chip) => [chip.textContent, chip.getAttribute("aria-label")])).toEqual([
       ["", COPY.format.types.swiss.name],
       ["", COPY.format.types.double_elimination.name]
@@ -1118,10 +1235,7 @@ describe("the reference tail", () => {
     });
     await mount();
 
-    const card = Array.from(container.querySelectorAll("section")).find((node) =>
-      node.querySelector("h2")?.textContent?.includes(COPY.format.title)
-    );
-    const steps = Array.from(card?.querySelectorAll("ol > li") ?? []).map(
+    const steps = Array.from(card(COPY.format.title)?.querySelectorAll("ol > li") ?? []).map(
       (node) => node.textContent ?? ""
     );
     expect(steps).toHaveLength(2);
@@ -1131,20 +1245,9 @@ describe("the reference tail", () => {
     expect(steps[1]).toContain("Playoff High");
   });
 
-  it("gives the links their own aside before the start, with no map pool to share it", async () => {
-    // The registration branch's aside is optional — it used to appear only for
-    // a map pool, so links alone would have had nowhere to render.
-    tournament = makeTournament("check_in", { links: [DISCORD] });
-    listPublicConfigs.mockResolvedValue({ configs: [] });
-    await mount();
-
-    expect(headings()).toContain(en.tournamentDetail.links.heading);
-    expect(container.querySelector("#map-pool")).toBeNull();
-  });
-
   it("draws no links heading when the only link is the official broadcast", async () => {
     // `TournamentLinkChips` renders nothing for a stream — the dock owns it —
-    // so a card around it would be a heading over an empty row.
+    // so a block around it would be a heading over an empty row.
     tournament = makeTournament("live", {
       links: [{ ...DISCORD, kind: "stream", url: "https://twitch.tv/cast" }]
     });

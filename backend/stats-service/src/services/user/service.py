@@ -28,6 +28,7 @@ from shared.services.division_grid.resolution import (
     resolve_tournament_division,
     resolve_workspace_division,
 )
+from shared.services.realtime import Resource, resource_generation
 from shared.services.user_cache import COMPARE_GENERATIONS, user_generations
 from src import schemas
 from src.core import config
@@ -54,6 +55,26 @@ tournament_stats = [
     enums.LogStatsName.Deaths,
     enums.LogStatsName.Performance,
 ]
+
+#: The stats ``get_tournament_player_stats`` ships: what the tournament page shows, a subset of ``tournament_stats``.
+tournament_player_stats = [
+    enums.LogStatsName.Performance,
+    enums.LogStatsName.KDA,
+    enums.LogStatsName.Eliminations,
+    enums.LogStatsName.Deaths,
+    enums.LogStatsName.Assists,
+    enums.LogStatsName.HeroDamageDealt,
+    enums.LogStatsName.DamageDelta,
+]
+# A parsed log emits encounters + standings on its tournament's scope; a structure change may drop its matches.
+_TOURNAMENT_STATS_GENERATIONS = tuple(
+    resource_generation(resource, "{tournament_id}")
+    for resource in (
+        Resource.TOURNAMENT_ENCOUNTERS,
+        Resource.TOURNAMENT_STANDINGS,
+        Resource.TOURNAMENT_STRUCTURE,
+    )
+)
 
 # The stat a character's career-best game (``CharacterWithUserStats.record``) is judged by, per ``attrs["class"]``
 # (a ``HeroClass`` member name).
@@ -1723,6 +1744,30 @@ class UserService(DisciplineQueries):
             for row in rows
         ]
         return schemas.LobbyLeaderboard(stat=stat, total_players=len(entries), entries=entries)
+
+    @versioned(
+        generations=_TOURNAMENT_STATS_GENERATIONS,
+        ttl=config.settings.users_cache_ttl,
+        key="backend:tournament_player_stats:{self.discipline}:{tournament_id}",
+    )
+    async def get_tournament_player_stats(
+        self, session: AsyncSession, tournament_id: int
+    ) -> schemas.TournamentPlayerStats:
+        """Every player's ``get_tournament_leaderboard`` value and rank for ``tournament_player_stats``, pivoted by
+        player: the same leaderboards, so a player's numbers here are their leaderboard rows."""
+        players: dict[int, dict[str, schemas.TournamentPlayerStat]] = {}
+        total = 0
+        for stat in tournament_player_stats:
+            board = await self.get_tournament_leaderboard(session, tournament_id, stat)
+            total = max(total, board.total_players)
+            for entry in board.entries:
+                players.setdefault(entry.player_id, {})[stat.value] = schemas.TournamentPlayerStat(
+                    value=entry.value, rank=entry.rank
+                )
+        return schemas.TournamentPlayerStats(
+            total_players=total,
+            players=[schemas.TournamentPlayerStatsRow(player_id=pid, stats=stats) for pid, stats in players.items()],
+        )
 
     async def get_heroes(
         self,

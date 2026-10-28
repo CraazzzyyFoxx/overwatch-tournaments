@@ -70,6 +70,8 @@ vi.mock("@/components/ui/popover", () => ({
   // The picker's own name is forwarded: it is what a screen reader announces for the opened roster.
   PopoverContent: ({ children, "aria-label": label }: { children: ReactNode; "aria-label"?: string }) =>
     useContext(PopoverCtx).open ? <div aria-label={label}>{children}</div> : null,
+  // Read by `ui/dialog` at module load (its modal fade).
+  floatingPanelFadeClass: "",
 }));
 // Radix passes the root's `disabled` down to the trigger through context; the
 // stand-in has to do the same or a disabled specialization cell looks enabled.

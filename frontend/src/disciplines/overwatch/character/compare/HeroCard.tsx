@@ -74,7 +74,7 @@ export default function HeroCard({
     : undefined;
 
   return (
-    <Card variant="flat" asChild><section className="relative flex flex-col gap-5 overflow-hidden p-5">
+    <Card asChild><section className="relative flex flex-col gap-5 overflow-hidden p-5">
       {/* The character's own catalog colour, as a soft light from the corner: data colour, not a UI accent. */}
       <span
         aria-hidden

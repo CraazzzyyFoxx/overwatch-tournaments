@@ -3,7 +3,8 @@
 import { type ReactElement, type ReactNode } from "react";
 import { Check, ChevronDown } from "lucide-react";
 
-import { Button, triggerChevronClass } from "@/components/ui/button";
+import { selectTriggerClass } from "@/components/ui/button";
+import { triggerChevronClass } from "@/components/ui/chevron";
 import {
   Command,
   CommandEmpty,
@@ -13,37 +14,41 @@ import {
   CommandList,
   CommandSeparator
 } from "@/components/ui/command";
-import { controlSurfaceClass } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
-/** Trailing row that resets the selection. Wording differs per domain. */
+/**
+ * The "nothing chosen" row: first in the list, its own group, muted, ticked
+ * while nothing is chosen. Wording differs per domain ("None", "All
+ * tournaments", "Unmapped").
+ */
 interface ComboboxClearAction {
-  /** Row label, e.g. "Clear selection" or "Set as TBD". */
   label: string;
   /** cmdk search value for the row; keep it unique inside the list. */
   value: string;
   onSelect: () => void;
+  /**
+   * Whether nothing is chosen. Defaults to the default trigger showing its
+   * placeholder; a custom `trigger` has no placeholder, so pass it.
+   */
+  selected?: boolean;
 }
 
 /**
- * Trigger surface: `default` the outline button's tonal surface, the same as
- * every `SelectTrigger`; `surface` the public form control skin
- * (`Input variant="surface"`; red once `aria-invalid`).
+ * Trigger surface: `default` the outline button's tonal surface, `surface` the
+ * public form control skin (red once `aria-invalid`). The trigger is the
+ * `SelectTrigger`'s own (`selectTriggerClass`), so both pickers look alike.
  */
 type ComboboxVariant = "default" | "surface";
-
-const SURFACE_CLASS = cn(
-  controlSurfaceClass,
-  "hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-fg)]"
-);
 
 interface ComboboxDefaultTrigger {
   trigger?: undefined;
   /** Forwarded to the trigger so a `<Label htmlFor>` can point at it. */
   id?: string;
-  /** Trigger content — the selected label, or the placeholder when nothing is selected. */
-  label: ReactNode;
+  /** Trigger content once something is chosen; empty shows `placeholder`. */
+  label?: ReactNode;
+  /** Shown dimmed while `label` is empty, like `SelectValue`'s placeholder. */
+  placeholder?: string;
   /**
    * Plain-text form of `label`, for the trigger's `title`. Only needed when
    * `label` is not a string, since a `ReactNode` cannot be a tooltip.
@@ -125,36 +130,40 @@ export function Combobox(props: Readonly<ComboboxProps>) {
   // `aria-expanded`/`aria-controls` come from Radix's PopoverTrigger (it points
   // at the content id it also stamps on PopoverContent). Overriding them here
   // would break that link, and cmdk ignores an `id` passed to CommandList.
-  const trigger =
-    props.trigger === undefined ? (
-      <Button
+  // So does `aria-haspopup="dialog"`: the popup is a dialog holding a search
+  // field and its listbox, not a bare listbox.
+  let trigger: ReactElement;
+  // `x && <Label/>` call sites hand over `false`: nothing chosen, like null or "".
+  let empty = false;
+  if (props.trigger === undefined) {
+    empty = props.label == null || props.label === "" || props.label === false;
+    trigger = (
+      <button
         id={props.id}
         type="button"
-        variant="outline"
-        size={props.size === "sm" ? "sm" : "default"}
+        // eslint-disable-next-line jsx-a11y/role-has-required-aria-props -- PopoverTrigger stamps both (see above)
         role="combobox"
         aria-label={props.triggerAriaLabel}
-        aria-haspopup="listbox"
         disabled={props.disabled}
         aria-invalid={props["aria-invalid"]}
         aria-describedby={props["aria-describedby"]}
-        className={cn(
-          "group/trigger w-full justify-between px-3",
-          props.variant === "surface" && SURFACE_CLASS,
-          props.triggerClassName
-        )}
+        data-placeholder={empty ? "" : undefined}
+        className={cn(selectTriggerClass(props.size, props.variant), props.triggerClassName)}
       >
         <span
-          className="truncate"
-          title={props.labelTitle ?? (typeof props.label === "string" ? props.label : undefined)}
+          title={
+            props.labelTitle ??
+            (empty ? props.placeholder : typeof props.label === "string" ? props.label : undefined)
+          }
         >
-          {props.label}
+          {empty ? props.placeholder : props.label}
         </span>
         <ChevronDown aria-hidden className={triggerChevronClass} />
-      </Button>
-    ) : (
-      props.trigger
+      </button>
     );
+  } else {
+    trigger = props.trigger;
+  }
 
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
@@ -165,7 +174,15 @@ export function Combobox(props: Readonly<ComboboxProps>) {
         // list too narrow to read; the inner min() keeps it inside the viewport.
         className="w-[var(--radix-popover-trigger-width)] min-w-[min(16rem,var(--radix-popover-content-available-width))] p-0"
       >
-        <Command shouldFilter={shouldFilter}>
+        <Command
+          shouldFilter={shouldFilter}
+          // Rows take the trigger's text, like `SelectItem` (DESIGN §3, Control text).
+          className={
+            props.trigger === undefined && props.size === "sm"
+              ? "[&_[cmdk-item]]:text-caption"
+              : undefined
+          }
+        >
           {header}
           <CommandInput
             value={searchValue}
@@ -175,17 +192,22 @@ export function Combobox(props: Readonly<ComboboxProps>) {
           />
           <CommandList>
             <CommandEmpty>{emptyMessage}</CommandEmpty>
-            {children}
             {clear ? (
               <>
-                <CommandSeparator />
                 <CommandGroup>
-                  <CommandItem value={clear.value} onSelect={clear.onSelect}>
-                    {clear.label}
+                  <CommandItem
+                    value={clear.value}
+                    onSelect={clear.onSelect}
+                    className="text-[color:var(--aqt-fg-muted)]"
+                  >
+                    <span className="min-w-0 flex-1 truncate">{clear.label}</span>
+                    <ComboboxCheck selected={clear.selected ?? empty} />
                   </CommandItem>
                 </CommandGroup>
+                <CommandSeparator />
               </>
             ) : null}
+            {children}
           </CommandList>
         </Command>
       </PopoverContent>
@@ -193,15 +215,29 @@ export function Combobox(props: Readonly<ComboboxProps>) {
   );
 }
 
-/** Selection tick for a `CommandItem`; keeps the row height stable when unselected. */
+/** Selection tick for a `CommandItem`, last in the row; keeps the row height stable when unselected. */
 export function ComboboxCheck({ selected }: Readonly<{ selected: boolean }>) {
   return (
     <Check
       aria-hidden
       className={cn(
-        "ml-2 h-4 w-4 shrink-0 text-[color:var(--aqt-teal)]",
+        "h-4 w-4 shrink-0 text-[color:var(--aqt-teal)]",
         selected ? "opacity-100" : "opacity-0"
       )}
     />
+  );
+}
+
+/** A row's meta (a facet count, an id, a UTC offset, an email): the one dim caption every picker uses. */
+export function ComboboxMeta({
+  className,
+  children
+}: Readonly<{ className?: string; children: ReactNode }>) {
+  return (
+    <span
+      className={cn("shrink-0 text-caption tabular-nums text-[color:var(--aqt-fg-dim)]", className)}
+    >
+      {children}
+    </span>
   );
 }

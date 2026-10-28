@@ -49,8 +49,6 @@ export type PhaseSegment = {
    * the phase's own start is the boundary worth counting.
    */
   countdownTo: "start" | "close" | null;
-  /** Elapsed fraction (0..1) of a current segment with a closed window. */
-  progress: number | null;
   /**
    * The phase is current but its action window has already closed — the
    * tournament waits for the next phase. Registration is the usual case: the
@@ -82,7 +80,6 @@ type ScheduleInput = {
   now: number;
 };
 
-
 function epoch(iso: string | null): number | null {
   if (iso === null) return null;
   const value = Date.parse(iso);
@@ -113,7 +110,6 @@ export function buildTournamentSchedule({
       endsAt: row.ends_at,
       countdownMs: null,
       countdownTo: null,
-      progress: null,
       windowClosed: false
     });
   }
@@ -136,7 +132,6 @@ export function buildTournamentSchedule({
       endsAt: null,
       countdownMs: null,
       countdownTo: null,
-      progress: null,
       windowClosed: false
     });
   }
@@ -154,7 +149,6 @@ export function buildTournamentSchedule({
       current.countdownTo = "start";
     }
     if (startsAt !== null && endsAt !== null && endsAt > startsAt) {
-      current.progress = Math.min(1, Math.max(0, (now - startsAt) / (endsAt - startsAt)));
       if (current.countdownMs === null && endsAt > now) {
         current.countdownMs = endsAt - now;
         current.countdownTo = "close";

@@ -18,6 +18,7 @@ import { SettingGroup } from "@/components/kit/SettingRow";
 import { formatDate } from "@/components/kit/format-time";
 import { Eyebrow } from "@/components/ui/eyebrow";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";
 import { useSlotLabel } from "@/hooks/useSlotLabel";
@@ -101,42 +102,42 @@ function MatrixTable({
       tabIndex={0}
       className="overflow-x-auto focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[color:var(--aqt-teal)]"
     >
-      <table className="border-collapse text-left">
-        <thead>
-          <tr className="border-b border-border/60">
-            <th scope="col" className={cn(STICKY, "py-2 pr-6 text-left font-normal")}>
+      <Table className="w-auto border-collapse text-left" wrapperClassName="overflow-visible">
+        <TableHeader>
+          <TableRow className="border-border/60">
+            <TableHead scope="col" className={cn(STICKY, "py-2 pl-0 pr-6")}>
               <span className="sr-only">{tOverview("columns.layer")}</span>
-            </th>
+            </TableHead>
             {roles.map((role) => (
-              <th key={role ?? ""} scope="col" className="px-3 py-2 text-left font-normal">
+              <TableHead key={role ?? ""} scope="col" className="px-3 py-2">
                 {role === null ? null : (
-                  <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-label font-medium text-muted-foreground">
+                  <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
                     <PlayerRoleIcon role={role} ontology={ontology} size={16} decorative />
                     {slotLabel(role)}
                   </span>
                 )}
-              </th>
+              </TableHead>
             ))}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-border/60">
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {layers.map((line) => (
             <MatrixRow key={line.key} line={line} roles={roles} grid={grid} />
           ))}
           {authors.length > 0 ? (
-            <tr>
-              <th scope="colgroup" colSpan={roles.length + 1} className="pt-5 pb-1.5 text-left font-normal">
+            <TableRow className="border-border/60 hover:bg-transparent">
+              <TableHead scope="colgroup" colSpan={roles.length + 1} className="px-0 pt-5 pb-1.5">
                 <Eyebrow tone="muted" className="sticky left-0">
                   {t("authors", { count: authors.length })}
                 </Eyebrow>
-              </th>
-            </tr>
+              </TableHead>
+            </TableRow>
           ) : null}
           {authors.map((line) => (
             <MatrixRow key={line.key} line={line} roles={roles} grid={grid} />
           ))}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
     </div>
   );
 }
@@ -152,24 +153,27 @@ function MatrixRow({
   // The tournament number's source is said once under the label when the row agrees, per cell when it does not.
   const sourced = line.layer === "effective_tournament";
   return (
-    <tr>
-      <th scope="row" className={cn(STICKY, "py-2.5 pr-6 text-left align-middle font-normal")}>
+    <TableRow className="border-border/60 hover:bg-transparent">
+      <TableHead
+        scope="row"
+        className={cn(STICKY, "py-2.5 pl-0 pr-6 font-normal normal-case tracking-normal text-card-foreground")}
+      >
         <span className="block max-w-48 truncate text-body font-medium" title={label}>
           {label}
         </span>
         {sourced && line.source ? (
           <span className="block text-caption text-muted-foreground">{tOverview(`sources.${line.source}`)}</span>
         ) : null}
-      </th>
+      </TableHead>
       {roles.map((role) => {
         const cell = line.cells.get(role);
         return (
-          <td key={role ?? ""} className="px-3 py-2.5 align-middle">
+          <TableCell key={role ?? ""} className="px-3 py-2.5">
             {cell ? <RankValue cell={cell} grid={grid} withSource={sourced && !line.source} /> : null}
-          </td>
+          </TableCell>
         );
       })}
-    </tr>
+    </TableRow>
   );
 }
 

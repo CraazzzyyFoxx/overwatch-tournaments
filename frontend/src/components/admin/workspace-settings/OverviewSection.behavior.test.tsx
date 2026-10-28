@@ -143,10 +143,10 @@ async function render(Page: () => React.ReactElement) {
 /** Checklist rows by title: done or not, and where "Set up" points. */
 function rows() {
   return Object.fromEntries(
-    [...container.querySelectorAll('[role="listitem"]')].map((row) => [
-      row.querySelector('[data-slot="item-title"]')?.textContent,
+    [...container.querySelectorAll('[aria-label="Setup checklist"] > li')].map((row) => [
+      row.querySelector("p")?.textContent,
       {
-        done: row.querySelector('[data-slot="item-media"]')?.textContent === "Done",
+        done: row.querySelector(".sr-only")?.textContent === "Done",
         href: row.querySelector("a")?.getAttribute("href") ?? null
       }
     ])

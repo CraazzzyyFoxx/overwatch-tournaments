@@ -1417,6 +1417,10 @@ DOCS: dict[str, dict] = {
         "summary": "List public map pick-ban configs",
         "description": "Permission: public; no authentication required — a hidden tournament is visible only to its workspace's admins and users on its preview allowlist. Returns the tournament's map pick-ban configs in cascade order.",
     },
+    "rpc.tournament.pick_ban_outcomes": {
+        "summary": "List the tournament's pick-ban outcomes",
+        "description": "Permission: public; no authentication required — a hidden tournament is visible only to its workspace's admins and users on its preview allowlist (404 otherwise, and for an unknown tournament). Returns every hero ban of the tournament's encounters an anonymous spectator may see in the room (`hero_bans`: one row per banned hero of a current-attempt submission to a ban step that is revealed or not blind; `first_map` when the step plays round 1, `target_player_id` the opponent roster player a per-player ban is spent on) and every map its map rooms picked or banned (`map_outcomes`). Cached up to 30 seconds: a live room's newest bans may lag that long.",
+    },
     "rpc.tournament.pick_ban_rules_catalog": {
         "summary": "Get the pick-ban ruleset catalog",
         "description": "Permission: public; no authentication required — the catalog describes the rules ENGINE (which condition leaves and constraints exist, what parameters they take) plus ONE discipline's vocabulary: its item groups per kind (character classes declared by its module, mode slugs for maps) and its presets (the module's own plus the generic map presets; a preset's `first_ban_rotation`, when set, is the rotation the preset needs; `mix_eligible` says whether a pickup mix may play it -- a hero preset that bans no player on map 1 of a Bo1). `discipline` is required: 422 when absent, 404 `discipline_not_installed` for a code no module declares, never another game's presets. The pick-ban constructor loads it before a config exists to attach it to.",

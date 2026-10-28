@@ -49,7 +49,7 @@ export default function HeroRail({
   const dimension = ontology ? (ratedDimension(ontology)?.code ?? null) : null;
 
   return (
-    <Card asChild variant="flat" className="grid gap-2.5 rounded-[var(--aqt-radius)] px-4 py-3.5">
+    <Card asChild className="grid gap-2.5 px-4 py-3.5">
       <section aria-label={t("users.heroesCompare.rail.label")}>
         {rows.map(([group, list]) => {
           const role = ontology && dimension && group ? findRole(ontology, { dimension, role: group }) : null;

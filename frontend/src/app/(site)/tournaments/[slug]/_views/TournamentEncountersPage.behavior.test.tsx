@@ -33,8 +33,6 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 const TOURNAMENT_ID = 88;
 const WORKSPACE_ID = 3;
-/** Well after every fixture instant, so nothing is ever "still to come". */
-const NOW = Date.parse("2025-09-01T12:00:00Z");
 
 const getAll = vi.fn();
 
@@ -350,11 +348,7 @@ async function render(encounters: Encounter[], query = "") {
     root.render(
       <QueryClientProvider client={client}>
         <NextIntlClientProvider locale="en" messages={en}>
-          <TournamentEncountersPage
-            tournamentId={TOURNAMENT_ID}
-            slug={String(TOURNAMENT_ID)}
-            now={NOW}
-          />
+          <TournamentEncountersPage tournament={tournament} slug={String(TOURNAMENT_ID)} />
         </NextIntlClientProvider>
       </QueryClientProvider>
     );
@@ -391,9 +385,9 @@ function segment(): { labels: string[]; selected: string | null } | null {
   };
 }
 
-/** The leading cell of every match row, in DOM order. */
+/** The leading cell of every match row, in DOM order: the first cell of the series line. */
 function leadingCells(): string[] {
-  return Array.from(container.querySelectorAll('[data-match-row] > [data-cell="lead"]')).map(
+  return Array.from(container.querySelectorAll("details > summary > div > span:first-child")).map(
     (cell) => (cell.textContent ?? "").trim()
   );
 }
@@ -402,26 +396,31 @@ const COPY = en.tournamentDetail.matches;
 
 describe("tournament matches", () => {
   it("groups by stage and round, final first, without a time view to switch to", async () => {
-    await render(fixtures(false));
+    // A lower-bracket match on top of the fixtures, so the bracket's three sides all show.
+    await render([
+      ...fixtures(false),
+      encounter(506, PLAYOFFS, -1, CHARLIE, DELTA, "2025-08-16T13:00:00Z")
+    ]);
 
-    // Playoffs first (later stage), its Grand Final ahead of the round that fed
-    // it, then the group rounds counting down. The stage is said once, over its
-    // rounds, instead of in front of every one of them.
+    // Playoffs first (later stage): its Grand Final, then the upper bracket, then
+    // the lower; then the group rounds counting down. The stage is said once, over
+    // its rounds, instead of in front of every one of them.
     expect(headings()).toEqual([
       "Playoffs",
       "Grand Final",
       "UB Final",
+      "LB Final",
       "Groups",
       "Round 5",
       "Round 4"
     ]);
     // The round's shared format is said once, on its card, with the count.
-    expect(cardMeta()).toEqual(["Bo2", "Bo2 · 2 matches", "Bo2", "Bo2"]);
+    expect(cardMeta()).toEqual(["Bo2", "Bo2 · 2 matches", "Bo2", "Bo2", "Bo2"]);
     // No `scheduled_at` anywhere: one view, so no switcher at all.
     expect(segment()).toBeNull();
-    // Elimination rows lead with the bracket's match number, group rows with
-    // the group.
-    expect(leadingCells()).toEqual(["M3", "M1", "M2", "Group B", "Group A"]);
+    // Elimination rows lead with the bracket's match number; a group round says
+    // its group on the card, so its rows lead with nothing.
+    expect(leadingCells()).toEqual(["M4", "M1", "M2", "M3", "", ""]);
   });
 
   it("offers the time view once anything is scheduled, and groups it by day", async () => {
@@ -497,7 +496,13 @@ describe("tournament matches", () => {
 
 describe("FFA lobbies", () => {
   const LEAGUE = stage(300, "League", 0, "ffa_league");
-  const row = (teamId: number, name: string, position: number | null, points: number, played: number) => ({
+  const row = (
+    teamId: number,
+    name: string,
+    position: number | null,
+    points: number,
+    played: number
+  ) => ({
     team_id: teamId,
     team_name: name,
     team_image_url: null,
@@ -510,7 +515,13 @@ describe("FFA lobbies", () => {
     wins: 0,
     stats: {},
     games: [
-      { position: 1, state: played > 0 ? ("confirmed" as const) : null, placement: null, points: null, stats: null },
+      {
+        position: 1,
+        state: played > 0 ? ("confirmed" as const) : null,
+        placement: null,
+        points: null,
+        stats: null
+      },
       { position: 2, state: null, placement: null, points: null, stats: null }
     ]
   });

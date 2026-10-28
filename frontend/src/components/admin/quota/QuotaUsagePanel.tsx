@@ -6,7 +6,6 @@ import { useFormatter } from "@/lib/datetime/client";
 import { EmptyNote } from "@/components/kit/EmptyNote";
 import { useMinuteClock } from "@/hooks/useMinuteClock";
 import { Progress } from "@/components/ui/progress";
-import { cn } from "@/lib/utils";
 import type { QuotaScopeUsage, QuotaUsage } from "@/types/auth.types";
 import { QUOTA_CAPS, QUOTA_COUNTERS } from "./dimensions";
 
@@ -57,11 +56,8 @@ function QuotaScopeBars({ usage }: Readonly<{ usage: QuotaScopeUsage }>) {
                   scope: t(`scopes.${usage.scope}.label`),
                   dimension: label
                 })}
-                className={cn(
-                  "mt-1.5 h-2",
-                  percent >= 100 && "[&>div]:bg-danger",
-                  percent >= 80 && percent < 100 && "[&>div]:bg-warning"
-                )}
+                tone={percent >= 100 ? "danger" : percent >= 80 ? "warning" : "accent"}
+                className="mt-1.5"
               />
               {resetIn !== null && now !== null ? (
                 <p className="mt-1 text-caption text-muted-foreground">

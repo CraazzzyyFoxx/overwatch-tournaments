@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { Fragment, useMemo, useState, type ReactNode } from "react";
 import {
   ArrowDown,
   ArrowUp,
@@ -18,9 +18,10 @@ import { HandleLabel } from "@/components/HandleLabel";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import TeamName from "@/components/TeamName";
 import { TeamPlacement } from "@/components/TournamentTeamCard";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { eyebrowClass } from "@/components/ui/eyebrow";
+import { triggerChevronClass } from "@/components/ui/chevron";
 import { IconTooltip } from "@/components/ui/icon-tooltip";
 import {
   Table,
@@ -72,7 +73,7 @@ interface AnalyticsStandingsProps {
 
 const CELL_CLASS = "px-3 py-2";
 const NUM_CLASS = "aqt-tnum text-right";
-const ROW_CLASS = "border-[color:var(--aqt-overlay-border)] hover:bg-[color:var(--aqt-overlay-2)]";
+const ROW_CLASS = "border-[color:var(--aqt-overlay-border)]";
 
 const SIGNED = { maximumFractionDigits: 2, signDisplay: "exceptZero" } as const;
 
@@ -88,7 +89,7 @@ function Head({
   numeric?: boolean;
 }>) {
   return (
-    <TableHead scope="col" className={cn(eyebrowClass(), "h-9 whitespace-nowrap px-3", numeric && "text-right")}>
+    <TableHead scope="col" className={cn("h-9 whitespace-nowrap px-3", numeric && "text-right")}>
       {term ? (
         <span className="inline-flex items-center gap-1">
           {children}
@@ -217,7 +218,7 @@ function TeamRows({
         <TableHead
           scope="rowgroup"
           colSpan={leadSpan}
-          className="h-auto px-3 py-2.5 font-normal text-[color:var(--aqt-fg)]"
+          className="h-auto px-3 py-2.5 text-caption font-normal normal-case tracking-normal text-[color:var(--aqt-fg)]"
         >
           <div className="flex items-center gap-3">
             <Button
@@ -227,8 +228,9 @@ function TeamRows({
               aria-expanded={open}
               aria-label={t("analytics.standings.togglePlayers", { team: team.name })}
               onClick={onToggle}
+              className="group/trigger"
             >
-              <ChevronDown aria-hidden className={cn("transition-transform", open && "rotate-180")} />
+              <ChevronDown aria-hidden className={triggerChevronClass} />
             </Button>
             <span className="w-8 shrink-0">
               {team.placement != null ? <TeamPlacement placement={team.placement} medal={ended} /> : null}
@@ -237,12 +239,9 @@ function TeamRows({
               <span className="flex min-w-0 items-center gap-2">
                 <TeamName team={team} size="sm" nameClassName="text-ui font-semibold" />
                 {showGroup && team.group?.name ? (
-                  <span
-                    className="group-chip shrink-0"
-                    style={{ "--group-hue": groupHue(team.group.name) } as CSSProperties}
-                  >
+                  <Badge hue={groupHue(team.group.name)} voice="label" className="shrink-0">
                     {groupDisplayName(team.group.name, t("common.group"))}
-                  </span>
+                  </Badge>
                 ) : null}
               </span>
               {facts.length > 0 ? (
@@ -449,7 +448,6 @@ const AnalyticsStandings = ({
     <div className="flex min-w-0 flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <ToggleGroup
-          type="single"
           variant="pill"
           size="sm"
           value={mode}
@@ -469,9 +467,9 @@ const AnalyticsStandings = ({
           tabIndex={0}
           className="overflow-x-auto rounded-[inherit] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[color:var(--aqt-teal)]"
         >
-          <Table wrapperClassName="overflow-visible" className="text-caption">
+          <Table wrapperClassName="overflow-visible">
             <TableHeader>
-              <TableRow className="border-[color:var(--aqt-border)] hover:bg-transparent">
+              <TableRow>
                 <Head>{t("analytics.standings.colRole")}</Head>
                 <Head>{t("analytics.standings.colBattleTag")}</Head>
                 <Head>{t("analytics.standings.colCurrent")}</Head>

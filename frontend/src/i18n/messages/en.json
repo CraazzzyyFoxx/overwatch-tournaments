@@ -92,7 +92,6 @@
     "noStages": "No stages configured for this tournament",
     "noBracketMatches": "No bracket matches found for the selected stage",
     "noHeroData": "No hero data yet.",
-    "playtimeLabel": "% playtime",
     "teamsCount": "{count, plural, one {# team} other {# teams}}",
     "roundRobin": "round-robin",
     "swiss": "swiss",
@@ -714,6 +713,7 @@
       }
     },
     "admin": {
+      "rowUnit": "teams",
       "reject": "Reject team",
       "rejectConfirm": "Reject {team}?",
       "rejectWithdraw": "Also withdraw the members' registrations",
@@ -2882,25 +2882,8 @@
     "watchStream": "Watch the broadcast",
     "overview": {
       "loading": "Loading the tournament overview",
-      "empty": {
-        "title": "Nothing published yet",
-        "description": "As soon as the bracket is drawn, the matches show up here."
-      },
       "registration": {
-        "title": "Registrations",
-        "all": "All participants",
-        "total": "Registered",
-        "teams": "Teams",
-        "latest": "Latest"
-      },
-      "teams": {
-        "title": "Teams",
-        "all": "All {count, plural, one {# team} other {# teams}}"
-      },
-      "maps": {
-        "firstRound": "First round maps",
-        "pool": "Map pool",
-        "all": "All {count, plural, one {# map} other {# maps}}"
+        "total": "Registered"
       },
       "format": {
         "title": "How it's played",
@@ -2947,14 +2930,21 @@
         "title": "About"
       },
       "live": {
-        "title": "Now playing",
-        "all": "All matches"
-      },
-      "upcoming": {
-        "title": "Upcoming"
-      },
-      "recent": {
-        "title": "Latest results"
+        "now": "Playing now",
+        "allMatches": "All matches",
+        "recent": "Latest results",
+        "bansSoFar": "Bans so far",
+        "numbers": "Tournament so far",
+        "stagePlayed": "Stage matches",
+        "matchesPlayed": "Matches played",
+        "mapsPlayed": "Maps played",
+        "nextMatch": "Next match",
+        "noNext": "No match yet",
+        "onAir": "live",
+        "vs": "vs",
+        "waiting": "Waiting for the next round's pairings.",
+        "groupPlace": "Place in group",
+        "noneYet": "The team has not played yet."
       },
       "bracketMini": {
         "title": "Bracket · {stage}",
@@ -2976,15 +2966,130 @@
         "all": "All stats"
       },
       "numbers": {
-        "title": "Numbers",
+        "title": "Tournament in numbers",
         "matches": "Matches",
-        "days": "Days"
+        "days": "Days",
+        "heroBans": "Hero bans",
+        "inSeries": "{count, plural, one {in # series} other {in # series}}",
+        "draftPicks": "Draft picks",
+        "autopicks": "{count, plural, =0 {no autopicks} one {# autopick} other {# autopicks}}"
       },
       "result": {
         "title": "Result",
         "finalScore": "{score} in the final",
         "exitedIn": "Eliminated in {round}",
-        "record": "{wins}–{losses} record"
+        "record": "{wins}–{losses} record",
+        "grandFinal": "Grand final"
+      },
+      "reference": {
+        "title": "About the tournament"
+      },
+      "bans": {
+        "title": "Bans",
+        "oneTrick": "Top one-trick",
+        "oneTrickLine": "{hero}: {count} of {total} bans against them"
+      },
+      "my": {
+        "title": "My tournament",
+        "profile": "My profile",
+        "matches": "Team's matches",
+        "roleRank": "Place in role",
+        "roleRankSub": "of {count} {role}",
+        "series": "Series",
+        "seriesSub": "{draws, plural, =0 {} one {# draw, } other {# draws, }}maps {won}:{lost}"
+      },
+      "leaders": {
+        "title": "Best by role"
+      },
+      "draftCard": {
+        "title": "Draft",
+        "allPicks": "All picks",
+        "championStrength": "Champion by roster strength",
+        "championRank": "#{rank}",
+        "championRankSub": "of {total} by average SR",
+        "latePick": "Best late pick",
+        "pickLine": "Round {round}, pick {overall}"
+      },
+      "field": {
+        "title": "Field so far",
+        "titleCheckIn": "Who confirmed",
+        "all": "All applications",
+        "teams": "Teams the field fills",
+        "teamsSub": "each needs {roster}",
+        "slot": {
+          "tank": "{count, plural, one {# tank} other {# tanks}}",
+          "damage": "{count, plural, one {# damage} other {# damage}}",
+          "support": "{count, plural, one {# support} other {# supports}}"
+        },
+        "enoughFor": "{count, plural, one {enough for # team} other {enough for # teams}}",
+        "short": "Team {team} still needs: {list}.",
+        "shortRole": "{role} — {count}"
+      },
+      "regNumbers": {
+        "title": "Registration in numbers",
+        "applications": "Applications",
+        "approved": "Approved",
+        "onReview": "Under review",
+        "checkedIn": "Checked in",
+        "newcomers": "Newcomers",
+        "teams": "Teams",
+        "withdrawn": "{count} withdrawn"
+      },
+      "latest": {
+        "title": "Latest applications"
+      },
+      "notCheckedIn": {
+        "title": "Still to check in",
+        "none": "Every approved player has checked in.",
+        "more": "{count, plural, one {and # more} other {and # more}}"
+      },
+      "announcement": {
+        "title": "Registration soon",
+        "opens": "Registration opens",
+        "tba": "Date to be announced",
+        "starts": "Matches start",
+        "howDraft": "You register as a player with a main role and check in; the captains build the teams in the draft.",
+        "howOther": "Registration opens on the date above; the format and the rules are below."
+      },
+      "formation": {
+        "draft": "captains' draft",
+        "other": "teams by application"
+      },
+      "draft": {
+        "live": "Draft in progress",
+        "room": "Draft room",
+        "pick": "Pick",
+        "round": "Round",
+        "onClock": "On the clock",
+        "needs": "needs: {role}",
+        "progress": "{made} of {total} picks made",
+        "latest": "Latest picks",
+        "autopick": "autopick",
+        "teamOf": "Team {captain}",
+        "teams": "Teams taking shape",
+        "picking": "picking",
+        "noPicks": "captain only so far",
+        "numbers": "Draft in numbers",
+        "inPool": "In the pool",
+        "picked": "Picked",
+        "pool": "Best left in the pool"
+      },
+      "myDraft": {
+        "title": "My draft",
+        "inPool": "You are in the pool",
+        "team": "Roster",
+        "captainNow": "Your pick is now.",
+        "captainNext": "{count, plural, one {Your pick is # turn away.} other {Your pick is # turns away.}}",
+        "captainDone": "All your picks are made.",
+        "pickedAt": "You were picked in round {round}, pick {overall}.",
+        "waiting": "{count, plural, one {Not picked yet: # player left in the pool.} other {Not picked yet: # players left in the pool.}}"
+      },
+      "groups": {
+        "form": "Form",
+        "formLabel": "Last three results",
+        "maps": "Maps",
+        "mapsLabel": "Map difference",
+        "advance": "{count, plural, one {The group's top team goes through} other {The group's top # go through}}"
       }
     },
     "mapPool": {
@@ -3007,7 +3112,10 @@
     },
     "maps": {
       "emptyTitle": "No map pool published",
-      "emptyDescription": "Maps will appear here once the organizer configures the tournament's pick-and-ban pool."
+      "emptyDescription": "Maps will appear here once the organizer configures the tournament's pick-and-ban pool.",
+      "mixedModes": "mixed modes",
+      "playedLede": "Each round has its own pool, one per map of the series; ×N is how often a map was played in that slot, faded ones never came up.",
+      "playedTimes": "{count, plural, =0 {not played} one {played once} other {played # times}}"
     },
     "rules": {
       "emptyTitle": "No rules published",
@@ -3019,20 +3127,96 @@
       "tabsLabel": "Statistics sub-tabs",
       "heroes": {
         "emptyTitle": "No hero data yet",
-        "emptyDescription": "Hero play-time data will appear after match statistics are processed."
+        "emptyDescription": "Hero play-time data will appear after match statistics are processed.",
+        "share": "{share} of play time",
+        "showAll": "All {count}",
+        "showLess": "Show less"
       },
       "maps": {
         "emptyTitle": "No map pool published",
-        "emptyDescription": "Map statistics appear once the organizer configures the pool and teams start playing."
+        "emptyDescription": "Map statistics appear once the organizer configures the pool and teams start playing.",
+        "table": "Map pool",
+        "picked": "Picked",
+        "pickedTitle": "How many times a team chose the map",
+        "banned": "Banned",
+        "bannedTitle": "How many times a team struck the map"
+      },
+      "tabs": {
+        "players": "Players",
+        "bans": "Bans",
+        "heroes": "Heroes",
+        "maps": "Maps"
+      },
+      "performanceHint": "Average place by impact among the map's ten players, 1 is the best.",
+      "metrics": {
+        "performance": {
+          "label": "Average place on a map",
+          "short": "Avg place"
+        },
+        "kda": {
+          "label": "KDA",
+          "short": "KDA"
+        },
+        "eliminations": {
+          "label": "Eliminations per map",
+          "short": "Elims"
+        },
+        "deaths": {
+          "label": "Deaths per map",
+          "short": "Deaths"
+        },
+        "assists": {
+          "label": "Assists per map",
+          "short": "Assists"
+        },
+        "hero_damage_dealt": {
+          "label": "Damage per map",
+          "short": "Damage"
+        },
+        "damage_delta": {
+          "label": "Damage difference per map",
+          "short": "Δ damage"
+        }
+      },
+      "players": {
+        "all": "All players",
+        "leaders": "Leaders",
+        "player": "Player",
+        "roleFilter": "Role",
+        "allRoles": "All roles",
+        "search": "Search players",
+        "searchPlaceholder": "Player or team",
+        "table": "Player statistics",
+        "empty": "No one found: check the name or reset the role.",
+        "footnote": "Per-map averages over maps with logs. {hint} The top three of each column are bold, the leader in teal."
+      },
+      "bans": {
+        "summary": "Ban summary",
+        "summarySoFar": "Bans so far",
+        "seriesWithBans": "Series with bans",
+        "distinctHeroes": "Different heroes",
+        "perSeries": "Bans per series",
+        "mostBanned": "Most banned",
+        "mostBannedSub": "blind on map one, per player after",
+        "split": "{blind} blind, {targeted} per player",
+        "seriesShare": "{share} of series",
+        "oneTricks": "One-tricks",
+        "oneTricksSub": "whose single hero took most of their bans",
+        "oneTricksNote": "From map two, every opponent loses one hero. For a one-trick it is nearly always the same one.",
+        "heroOfTotal": "{count} of {total}",
+        "byRole": "Bans by role",
+        "roleBans": "{count, plural, one {# ban} other {# bans}}",
+        "targeted": "per player",
+        "blind": "blind",
+        "emptyTitle": "No bans",
+        "emptyDescription": "Hero bans in this tournament did not run on the site."
       }
     },
     "matchRow": {
       "openInBracket": "Open in bracket",
-      "map": "Map",
-      "mode": "Mode",
-      "score": "Score",
-      "duration": "Length",
-      "log": "log"
+      "map": "Map {n}",
+      "mapStats": "Map stats",
+      "matchPage": "Match page"
     },
     "podium": {
       "label": "Final placements",
@@ -3100,6 +3284,44 @@
       "empty": {
         "title": "No registrations yet",
         "description": "Participants will appear here when registrations are published."
+      },
+      "results": {
+        "section": "Participants",
+        "all": "All participants",
+        "filter": "Draft slot",
+        "everyone": "Everyone",
+        "captains": "Captains",
+        "subs": "Substitutes",
+        "search": "Search participants",
+        "table": "Tournament participants",
+        "empty": "No one found: check the name or reset the filter.",
+        "footnote": "“Vs pick” compares a player's draft slot with their impact place in the tournament: a late pick near the top is “better than the pick”.",
+        "draft": "Draft",
+        "captain": "Captain",
+        "pick": "pick {overall}",
+        "pickAuto": "pick {overall}, autopick",
+        "sub": "Substitute",
+        "rank": "Rank",
+        "team": "Team",
+        "vsPick": "Vs pick",
+        "vsPickTitle": "The draft slot compared with the impact place in the tournament",
+        "better": "better than the pick",
+        "worse": "worse than the pick",
+        "even": "as picked",
+        "captainsCount": "Captains",
+        "played": "{count} played",
+        "rounds": "Rounds",
+        "picks": "Picks",
+        "autopicks": "Autopicks",
+        "strength": "Roster and result",
+        "strengthSub": "place by average SR → place in the tournament",
+        "over": "Above expectations",
+        "under": "Below expectations",
+        "bestByRound": "Best by draft round",
+        "bestByRoundSub": "by average place",
+        "avgTeamSr": "Average team SR",
+        "srSpread": "Strength gap",
+        "srSpreadSub": "strongest to weakest team"
       }
     },
     "participantsPool": {
@@ -3187,7 +3409,41 @@
       "searchTeam": "Search teams…",
       "noTeamMatch": "No teams match that search.",
       "mapFilter": "Map: {name}",
-      "clearMapFilter": "Clear the map filter"
+      "clearMapFilter": "Clear the map filter",
+      "myTeam": "My team"
+    },
+    "roles": {
+      "tank": "Tanks",
+      "damage": "Damage",
+      "support": "Supports"
+    },
+    "roleOf": {
+      "tank": "tanks",
+      "damage": "damage players",
+      "support": "supports"
+    },
+    "result": {
+      "letter": {
+        "w": "W",
+        "l": "L",
+        "d": "D"
+      },
+      "word": {
+        "w": "Win",
+        "l": "Loss",
+        "d": "Draw"
+      }
+    },
+    "common": {
+      "round": "Round {round}",
+      "ofTotal": "of {total}",
+      "rankOf": "#{rank} of {total}",
+      "rankInTournament": "#{rank} in the tournament",
+      "noLogs": "no logs",
+      "allPlayers": "All players",
+      "more": "More",
+      "shownOf": "{shown} of {total}",
+      "showMore": "Show {count} more"
     }
   },
   "home": {
@@ -7443,6 +7699,17 @@
       "searchLabel": "Search Discord channels",
       "empty": "No channel matches that search. Paste a channel ID to find one by id."
     },
+    "category": {
+      "placeholder": "Select a Discord category",
+      "loading": "Loading categories…",
+      "refresh": "Refresh categories from Discord",
+      "manual": "Enter a category ID instead",
+      "dropdown": "Pick from the list",
+      "idAria": "Discord category ID",
+      "searchPlaceholder": "Search categories…",
+      "searchLabel": "Search Discord categories",
+      "empty": "No category matches that search. Paste a category ID to find one by id."
+    },
     "server": {
       "checking": "Checking the Discord bot…",
       "fallbackName": "Discord server",
@@ -9880,7 +10147,8 @@
         "draft": "Draft"
       },
       "ariaLabel": "Teams sections",
-      "participantsSummary": "{participants, plural, one {# participant} other {# participants}} · <warn>{unmapped} unmapped</warn>"
+      "participantsSummary": "{participants, plural, one {# participant} other {# participants}} · <warn>{unmapped} unmapped</warn>",
+      "rowUnit": "teams"
     },
     "status": {
       "setTo": "Set status to {status}?",
@@ -11093,6 +11361,7 @@
       "fromWorkspace": "Another workspace",
       "fromFile": "JSON file",
       "fileLabel": "Achievement export file",
+      "chooseFile": "Choose a JSON file…",
       "importFile": "Import file",
       "summary": "{created} created, {updated} updated."
     },
@@ -13308,12 +13577,28 @@
   },
   "kit": {
     "ui": {
-      "close": "Close",
+      "breadcrumb": "Breadcrumb",
       "commandPalette": "Command palette",
       "sidebar": "Sidebar",
       "mobileSidebar": "Displays the mobile sidebar.",
       "toggleSidebar": "Toggle sidebar",
-      "extraMore": "+{count} more"
+      "extraMore": "+{count} more",
+      "place": {
+        "gold": "{place, selectordinal, one {#st} two {#nd} few {#rd} other {#th}} place, gold",
+        "silver": "{place, selectordinal, one {#st} two {#nd} few {#rd} other {#th}} place, silver",
+        "bronze": "{place, selectordinal, one {#st} two {#nd} few {#rd} other {#th}} place, bronze",
+        "place": "{place, selectordinal, one {#st} two {#nd} few {#rd} other {#th}} place",
+        "none": "No placement"
+      },
+      "infiniteScroll": {
+        "rows": "rows",
+        "progress": "Showing {loaded, number} {unit}",
+        "progressOf": "Showing {loaded, number} of {total, number} {unit}",
+        "loading": "Loading more {unit}…",
+        "loadMore": "Load more {unit}",
+        "retry": "Try loading {unit} again",
+        "error": "Unable to load more {unit}. Check your connection and try again."
+      }
     },
     "actions": {
       "back": "Back",
@@ -13359,7 +13644,7 @@
       "error": "Could not load accounts. Try again.",
       "minChars": "Type at least 3 characters to search.",
       "empty": "No accounts match that email or username.",
-      "clearSelection": "Clear selection",
+      "none": "No account",
       "userId": "User #{id}"
     },
     "userSearch": {
@@ -13369,7 +13654,7 @@
       "error": "Could not load users. Try again.",
       "minChars": "Type at least 2 characters to search.",
       "empty": "No users match that search. Try a shorter name.",
-      "clearSelection": "Clear selection",
+      "none": "No user",
       "userId": "User #{id}"
     },
     "entityForm": {
@@ -13384,7 +13669,8 @@
       "drop": "Drop",
       "edit": "Edit",
       "upload": "Upload",
-      "remove": "Remove image"
+      "remove": "Remove image",
+      "alt": "Avatar"
     },
     "datePicker": {
       "pickRange": "Pick a date range",
@@ -13617,6 +13903,9 @@
       "selectVisibleRows": "Select visible selectable rows",
       "sortPriority": "Sort priority {index}",
       "sortHint": "Click to sort, Shift+click to add a second sort",
+      "sort": "Sort",
+      "sortAsc": "Ascending",
+      "sortDesc": "Descending",
       "resize": "Resize {id} column",
       "resizeHint": "Drag to resize, double-click to reset",
       "actions": "Actions",
@@ -13681,6 +13970,7 @@
       "moveDown": "Move down",
       "remove": "Remove",
       "columnsSelected": "{count, plural, one {# column selected} other {# columns selected}}",
+      "modeFor": "{field}: value source",
       "modes": {
         "columns": "Map",
         "constant": "Constant",

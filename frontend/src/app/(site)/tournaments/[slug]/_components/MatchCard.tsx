@@ -75,7 +75,7 @@ export function MatchCard({
         <span
           className={cn(
             "shrink-0 font-onest font-bold leading-none tabular-nums",
-            size === "sm" ? "text-base" : "text-[20px]",
+            size === "sm" ? "text-base" : "text-title",
             won ? "text-[color:var(--aqt-teal)]" : "text-[color:var(--aqt-fg-muted)]"
           )}
         >
@@ -88,7 +88,7 @@ export function MatchCard({
   const cardClassName = cn(
     "block overflow-hidden rounded-[10px] border bg-[color:var(--aqt-card)]",
     href &&
-      "transition-colors hover:border-[color:var(--aqt-border-3)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]",
+      "transition-colors hover:border-[color:var(--aqt-border-3)] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]",
     live
       ? "border-[color:color-mix(in_srgb,var(--aqt-rose)_45%,transparent)] shadow-[0_0_0_1px_color-mix(in_srgb,var(--aqt-rose)_30%,transparent)]"
       : "border-[color:var(--aqt-border)]",

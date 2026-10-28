@@ -56,7 +56,7 @@ export function TournamentTeamsTab({
         columns={columns}
         getRowId={(team) => String(team.id)}
         searchPlaceholder={t("searchTeamsPlayers")}
-        rowUnit="teams"
+        rowUnit={t("rowUnit")}
         onRowClick={(row) => router.push(`/admin/teams/${row.original.id}`)}
         emptyMessage={t("empty")}
         commands={commands}

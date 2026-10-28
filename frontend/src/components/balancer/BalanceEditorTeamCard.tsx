@@ -3,14 +3,12 @@
 import { useTranslations } from "next-intl";
 
 import { Card } from "@/components/ui/card";
-import { eyebrowClass } from "@/components/ui/eyebrow";
 import {
   Table,
   TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { cn } from "@/lib/utils";
 import { useSlotLabel } from "@/hooks/useSlotLabel";
 import type { RoleOntology } from "@/lib/roster/ontology";
 import type {
@@ -58,7 +56,7 @@ export function BalanceEditorTeamCard({
   const slotLabel = useSlotLabel(ontology);
 
   return (
-    <Card variant="flat" className="overflow-hidden">
+    <Card className="overflow-hidden">
       <BalanceTeamHeader team={team} teamIndex={teamIndex} />
       {remoteDrags.length > 0 ? (
         <div className="flex flex-col gap-1 border-b border-cyan-300/15 bg-cyan-500/5 px-4 py-2">
@@ -87,19 +85,11 @@ export function BalanceEditorTeamCard({
       ) : null}
       <Table wrapperClassName="overflow-x-auto overflow-y-visible" className="min-w-90">
         <TableHeader>
-          <TableRow className="border-[color:var(--aqt-border)] hover:bg-transparent">
-            <TableHead className={cn(eyebrowClass("dim"), "h-8 w-13 px-4")}>
-              {t("columns.role")}
-            </TableHead>
-            <TableHead className={cn(eyebrowClass("dim"), "h-8 min-w-45 px-0")}>
-              {t("columns.player")}
-            </TableHead>
-            <TableHead className={cn(eyebrowClass("dim"), "h-8 w-18 px-2 text-center")}>
-              {t("columns.rank")}
-            </TableHead>
-            <TableHead className={cn(eyebrowClass("dim"), "h-8 w-22 px-3 text-center")}>
-              {t("columns.prefs")}
-            </TableHead>
+          <TableRow>
+            <TableHead className="h-8 w-13 px-4">{t("columns.role")}</TableHead>
+            <TableHead className="h-8 min-w-45 px-0">{t("columns.player")}</TableHead>
+            <TableHead className="h-8 w-18 px-2 text-center">{t("columns.rank")}</TableHead>
+            <TableHead className="h-8 w-22 px-3 text-center">{t("columns.prefs")}</TableHead>
           </TableRow>
         </TableHeader>
         {bucketKeys.map((roleKey) => (

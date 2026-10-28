@@ -46,7 +46,7 @@ import { slotCodeOrder, type LadderedOntology } from "@/lib/roster/ontology";
 
 import { AdminStrip } from "./AdminStrip";
 import type { DraftOwner } from "./DraftBoard";
-import styles from "./DraftRoom.module.css";
+import { DRAFT_PANEL_HEIGHT_CLASS } from "./DraftRoomSkeleton";
 import { PickIsland } from "./PickIsland";
 import { PickPill } from "./PickPill";
 import { PlayerPool } from "./PlayerPool";
@@ -481,10 +481,10 @@ export function DraftWorkspace({
       <div className="mx-auto max-w-[1720px] px-4 pb-5 pt-3.5 sm:px-6">
         {wide ? (
           <div className="flex items-start gap-3.5">
-            <div className={cn("min-w-0 flex-[1.2_1_600px]", styles.roomPanel)}>
+            <div className={cn("min-w-0 flex-[1.2_1_600px]", DRAFT_PANEL_HEIGHT_CLASS)}>
               {renderPool("player-pool-heading")}
             </div>
-            <div className={cn("min-w-[520px] flex-[1_1_600px]", styles.roomPanel)}>
+            <div className={cn("min-w-[520px] flex-[1_1_600px]", DRAFT_PANEL_HEIGHT_CLASS)}>
               {renderTeams("teams-panel-heading")}
             </div>
           </div>

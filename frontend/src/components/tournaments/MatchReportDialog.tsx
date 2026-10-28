@@ -41,11 +41,9 @@ function MatchReportDialogBody({
 
   return (
     <DialogContent className="max-w-lg">
-      <DialogHeader className="space-y-1">
-        <DialogTitle className="text-[color:var(--aqt-fg)] text-lg font-bold tracking-tight">
-          {t("matchReport.title")}
-        </DialogTitle>
-        <DialogDescription className="text-[color:var(--aqt-fg-muted)] text-sm font-semibold mt-1">
+      <DialogHeader>
+        <DialogTitle>{t("matchReport.title")}</DialogTitle>
+        <DialogDescription>
           {seatsBySlot(encounter.teams).map((seat) => seat.name).join(" vs ")}
         </DialogDescription>
       </DialogHeader>

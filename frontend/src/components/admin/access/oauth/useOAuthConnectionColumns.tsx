@@ -50,7 +50,7 @@ export function useOAuthConnectionColumns({
             <div className="flex min-w-0 items-center gap-3">
               <Avatar className="size-8">
                 <AvatarImage src={connection.avatar_url ?? undefined} alt={connection.username} />
-                <AvatarFallback className="text-xs">
+                <AvatarFallback>
                   {connection.username.slice(0, 2).toUpperCase()}
                 </AvatarFallback>
               </Avatar>

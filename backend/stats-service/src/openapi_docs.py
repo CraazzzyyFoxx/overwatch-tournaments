@@ -227,6 +227,10 @@ DOCS: dict[str, dict] = {
         "summary": "Character leaderboard",
         "description": "Permission: public; no authentication required, though a hidden tournament 404s unless the optional identity may view it. Returns a paginated player leaderboard for one character of the path discipline, resolved against the workspace context and its division grid. In a scoped read a row's `div` is a number on the workspace grid named by its `division_grid_version_id`, returned once in `division_grids`; with `workspace_id=all` it is the canonical number on the game's native ladder (`null` for a game without one), `division_grid_version_id` is `null` and `division_grids` empty. 404 when the id is not a character of that discipline.",
     },
+    "rpc.stats.statistics.tournament_player_stats": {
+        "summary": "Tournament player stats",
+        "description": "Permission: public; no authentication required, though a hidden tournament 404s unless the optional identity may view it (404 too for an unknown tournament). Returns every player's tournament average and rank for `performance` (MVP placement), `kda`, `eliminations`, `deaths`, `assists`, `hero_damage_dealt` and `damage_delta` — the same values and ranks as the per-stat tournament leaderboard, pivoted by player (`player_id` is the user id); a player carries only the stats they have data for. Rank 1 is best: Deaths and the MVP placement rank ascending. `total_players` is the largest ranked population across those stats.",
+    },
     "rpc.stats.statistics.champion": {
         "summary": "Most-champion players",
         "description": "Permission: public; no authentication required. Returns paginated, sortable players ranked by tournaments won, across every game or only the optional `discipline` (404 `discipline_not_installed` for an unknown code), optionally workspace-scoped.",

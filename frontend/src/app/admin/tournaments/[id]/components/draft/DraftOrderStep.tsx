@@ -171,7 +171,6 @@ function SortableCaptain({ id, position, label, rank }: Readonly<SortableCaptain
   return (
     <Card
       ref={setNodeRef}
-      variant="flat"
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className={cn(
         "flex items-center gap-3 px-3 py-2.5",

@@ -280,7 +280,6 @@ export function LineupDragPreview({ row, owner }: Readonly<{ row: CustomGamePlay
 
   return (
     <Card
-      variant="flat"
       className="flex cursor-grabbing items-center gap-2 rounded-lg border-[color:var(--aqt-teal)] px-2.5 py-2"
     >
       <GripVertical

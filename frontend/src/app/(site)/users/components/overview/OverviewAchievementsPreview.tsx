@@ -3,7 +3,7 @@ import { ArrowRight } from "lucide-react";
 import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { AchievementArt } from "@/components/achievements/AchievementArt";
 import { AchievementRarity } from "@/types/achievement.types";
-import { CardSurface } from "@/components/profile/atoms";
+import { CARD_HEAD_LINK, CardSurface } from "@/components/profile/atoms";
 import { Eyebrow } from "@/components/ui/eyebrow";
 import { classifyRarity, rarityVarClass, type Rarity } from "@/lib/achievements/rarity";
 
@@ -41,7 +41,7 @@ const OverviewAchievementsPreview = async ({ achievements, userSlug, limit = DEF
     <CardSurface
       title={t("users.overview.achievementsPreview.title")}
       action={
-        <HoverPrefetchLink href={`/users/${userSlug}?tab=achievements`} className="aqt-pf-link">
+        <HoverPrefetchLink href={`/users/${userSlug}?tab=achievements`} className={CARD_HEAD_LINK}>
           {t("common.all")} {unlocked.length}
           <ArrowRight aria-hidden className="size-3" />
         </HoverPrefetchLink>

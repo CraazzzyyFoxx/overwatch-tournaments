@@ -67,21 +67,15 @@ describe("tournament skeleton compositions", () => {
       resolve(tournamentRoot, "bracket/TournamentBracketPage.tsx"),
       "utf8"
     );
-    const shellSource = skeletonSource.slice(
-      skeletonSource.indexOf("export function TournamentShellSkeleton"),
-      skeletonSource.indexOf("export function TournamentBracketSkeleton")
-    );
     const bracketSkeletonSource = skeletonSource.slice(
       skeletonSource.indexOf("export function TournamentBracketSkeleton"),
       skeletonSource.indexOf("export function TournamentTeamsSkeleton")
     );
 
     expect(bracketSource).toContain('data-page-section="bracket"');
-    expect(bracketSource).not.toContain('className="section-head"');
     expect(skeletonSource).not.toContain("PageHeadingSkeleton");
     expect(bracketSkeletonSource).toContain('data-skeleton-region="bracket-toolbar"');
     expect(bracketSkeletonSource).not.toContain("<ControlRowSkeleton />");
-    expect(shellSource).not.toContain("styles.skeletonGrid");
   });
 
   it("falls back to the hero on the overview and to the one-row header elsewhere", () => {
@@ -145,10 +139,6 @@ describe("TournamentPageState", () => {
     const source = readFileSync(resolve(tournamentRoot, "_components/TournamentPageState.tsx"), "utf8");
 
     expect(source).toContain('from "@/components/ui/page-state-card"');
-    // Only `refresh-error` keeps a bespoke body, because it is the one state
-    // that must render below stale content instead of replacing it.
-    expect(source).toContain("styles.refreshState");
-    expect(source).not.toContain("styles.stateCard");
   });
 });
 
@@ -166,27 +156,9 @@ describe("tournament navigation and loading source contracts", () => {
     expect(source).toContain("scrollTournamentRail");
     expect(source).toContain("disabled={!railState.hasOverflow || !railState.canScrollPrevious}");
     expect(source).toContain("disabled={!railState.hasOverflow || !railState.canScrollNext}");
-    expect(source).toContain("styles.scrollControlHidden");
     expect(source).toContain("measurementContainer: frame");
-    expect(source).toContain("styles.railFrameWithControls");
     expect(source).toContain('inline: "center"');
     expect(source).toContain("scrollIntoView");
-  });
-
-  it("contains sticky overflow at 360px and disables motion when requested", () => {
-    const css = readFileSync(resolve(tournamentRoot, "TournamentDetail.module.css"), "utf8");
-
-    expect(css).toMatch(/position:\s*sticky/);
-    expect(css).toMatch(/overflow-x:\s*auto/);
-    expect(css).toMatch(/max-width:\s*100%/);
-    expect(css).toMatch(
-      /\.railFrame\s*\{[\s\S]*?grid-template-columns:\s*0\s+minmax\(0,\s*1fr\)\s+0/
-    );
-    expect(css).toMatch(
-      /\.railFrameWithControls\s*\{[\s\S]*?grid-template-columns:\s*2rem\s+minmax\(0,\s*1fr\)\s+2rem/
-    );
-    expect(css).toContain("@media (prefers-reduced-motion: reduce)");
-    expect(css).toMatch(/animation:\s*none/);
   });
 });
 

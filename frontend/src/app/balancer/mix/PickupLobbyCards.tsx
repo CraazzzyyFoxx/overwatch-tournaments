@@ -194,7 +194,7 @@ function LobbyCard({
   const shortTitle = short && need != null ? t("shortSeats", { count: candidates, need }) : undefined;
 
   return (
-    <Card variant="flat" asChild className={cn(selected && "border-[color:var(--aqt-teal)]")}>
+    <Card asChild className={cn(selected && "border-[color:var(--aqt-teal)]")}>
       <li data-mix-lobby={selected ? undefined : index} className="flex flex-col gap-3 px-4 py-3.5">
         <div className="flex items-center gap-2">
           <span

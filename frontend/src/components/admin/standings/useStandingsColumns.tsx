@@ -3,10 +3,10 @@
 import { useMemo } from "react";
 import { useTranslations } from "next-intl";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Lock, Pencil, Trash2 } from "lucide-react";
+import { CircleCheck, CircleX, Lock, Pencil, Trash2 } from "lucide-react";
 
+import { StatusIcon } from "@/components/admin/StatusIcon";
 import { createKebabColumn } from "@/components/data-table";
-import { Badge } from "@/components/ui/badge";
 import { PlaceBadge } from "@/components/ui/place-badge";
 import TeamName from "@/components/TeamName";
 import { cn } from "@/lib/utils";
@@ -71,9 +71,9 @@ export function useStandingsColumns({
                 />
               ) : null}
               {status === "qualified" ? (
-                <Badge tone="success" size="sm">{t("swissQualified")}</Badge>
+                <StatusIcon icon={CircleCheck} label={t("swissQualified")} variant="success" className="shrink-0" />
               ) : status === "eliminated" ? (
-                <Badge tone="neutral" size="sm">{t("swissEliminated")}</Badge>
+                <StatusIcon icon={CircleX} label={t("swissEliminated")} variant="muted" className="shrink-0" />
               ) : null}
             </div>
           );

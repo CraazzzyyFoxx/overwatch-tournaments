@@ -5,11 +5,22 @@ import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 
 import { PageHero } from "@/components/site/PageHero";
+import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { cn } from "@/lib/utils";
 
-import styles from "../TournamentDetail.module.css";
 import { isTournamentOverviewPath } from "./tournament-section-nav";
+
+/** A row of controls standing in for a toolbar. */
+const CONTROLS = "flex min-w-0 max-w-full items-center gap-2 overflow-hidden py-0.5";
+
+/** One table row: three cells, the middle one dropped on a phone. */
+const TABLE_ROW =
+  "grid min-h-15 grid-cols-[minmax(8rem,1.4fr)_minmax(5rem,1fr)_minmax(3rem,0.45fr)] items-center gap-4 border-b border-[color:var(--aqt-border)] px-4 py-2.5 last:border-b-0 max-sm:grid-cols-[minmax(0,1fr)_4rem] max-sm:*:nth-2:hidden";
+
+/** The surface a table or a bracket loads into. */
+function SkeletonSurface({ children }: Readonly<{ children: React.ReactNode }>) {
+  return <Card className="min-w-0 overflow-hidden">{children}</Card>;
+}
 
 function SkeletonRegion({
   variant,
@@ -22,7 +33,7 @@ function SkeletonRegion({
 }>) {
   return (
     <div
-      className={styles.skeletonRegion}
+      className="min-w-0 max-w-full text-[color:var(--aqt-fg)]"
       role="status"
       aria-live="polite"
       aria-busy="true"
@@ -37,7 +48,7 @@ function SkeletonRegion({
 
 function ControlRowSkeleton({ search = false }: Readonly<{ search?: boolean }>) {
   return (
-    <div className={styles.skeletonControls}>
+    <div className={CONTROLS}>
       <Skeleton style={{ width: "5.75rem", height: "2.15rem", flex: "0 0 auto" }} />
       <Skeleton style={{ width: "6.5rem", height: "2.15rem", flex: "0 0 auto" }} />
       <Skeleton style={{ width: "5.25rem", height: "2.15rem", flex: "0 0 auto" }} />
@@ -57,9 +68,9 @@ function ControlRowSkeleton({ search = false }: Readonly<{ search?: boolean }>) 
 
 function TableRowsSkeleton({ count = 6 }: Readonly<{ count?: number }>) {
   return (
-    <div className={styles.skeletonRows}>
+    <div className="grid">
       {Array.from({ length: count }, (_, index) => (
-        <div className={styles.skeletonRow} key={index}>
+        <div className={TABLE_ROW} key={index}>
           <Skeleton style={{ width: index % 2 ? "72%" : "86%", height: "0.85rem" }} />
           <Skeleton style={{ width: "68%", height: "0.7rem" }} />
           <Skeleton style={{ width: "2.5rem", height: "1.15rem", justifySelf: "end" }} />
@@ -70,7 +81,7 @@ function TableRowsSkeleton({ count = 6 }: Readonly<{ count?: number }>) {
 }
 
 function TournamentPageSkeletonLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <div className={styles.skeletonStack}>{children}</div>;
+  return <div className="grid gap-4">{children}</div>;
 }
 
 export function TournamentShellSkeleton() {
@@ -84,7 +95,7 @@ export function TournamentShellSkeleton() {
 
   return (
     <SkeletonRegion variant="shell" message={t("common.loading")}>
-      <div className="aqt-tn min-w-0 space-y-4">
+      <div className="min-w-0 space-y-4 text-body">
         {isOverview ? (
           <PageHero
             align="start"
@@ -112,10 +123,13 @@ export function TournamentShellSkeleton() {
           </div>
         )}
 
-        <div className={styles.navRegion} data-shell-region="tabs">
-          <div className={cn(styles.railFrame, styles.railFrameWithControls)}>
+        <div
+          className="sticky top-14 z-40 min-w-0 max-w-full bg-[linear-gradient(180deg,var(--aqt-bg)_78%,transparent)] pt-2"
+          data-shell-region="tabs"
+        >
+          <div className="grid w-full min-w-0 max-w-full grid-cols-[2rem_minmax(0,1fr)_2rem] items-stretch border-b border-[color:var(--aqt-border)] bg-[color:var(--aqt-bg)]/96">
             <Skeleton style={{ width: "2rem", height: "2.75rem" }} />
-            <div className={styles.skeletonControls}>
+            <div className={CONTROLS}>
               {Array.from({ length: 6 }, (_, index) => (
                 <Skeleton
                   key={index}
@@ -189,31 +203,30 @@ export function TournamentBracketSkeleton() {
     <SkeletonRegion variant="bracket" message={t("tournamentDetail.loading.pages.bracket")}>
       <TournamentPageSkeletonLayout>
 
-        <div className={styles.skeletonSurface}>
+        <SkeletonSurface>
           <div
-            className={styles.skeletonHeader}
+            className="flex min-w-0 items-end justify-between gap-4 p-4 max-sm:flex-col max-sm:items-start"
             data-skeleton-region="bracket-toolbar"
-            style={{ padding: "1rem" }}
           >
-            <div className={styles.skeletonControls}>
+            <div className={CONTROLS}>
               <Skeleton style={{ width: "6.5rem", height: "2.15rem" }} />
               <Skeleton style={{ width: "5.5rem", height: "2.15rem" }} />
             </div>
-            <div className={styles.skeletonControls}>
+            <div className={CONTROLS}>
               <Skeleton style={{ width: "5.5rem", height: "2.15rem" }} />
               <Skeleton style={{ width: "4.75rem", height: "2.15rem" }} />
             </div>
           </div>
-          <div className={styles.bracketFrame}>
+          <div className="grid min-h-120 grid-cols-[repeat(3,minmax(12rem,1fr))] gap-8 overflow-hidden p-6 max-sm:grid-cols-[repeat(3,13rem)]">
             {Array.from({ length: 3 }, (_, column) => (
-              <div className={styles.bracketColumn} key={column}>
+              <div className="grid content-start gap-14" key={column}>
                 <Skeleton style={{ width: "6rem", height: "0.65rem" }} />
                 <Skeleton style={{ height: "5rem" }} />
                 <Skeleton style={{ height: "5rem" }} />
               </div>
             ))}
           </div>
-        </div>
+        </SkeletonSurface>
       </TournamentPageSkeletonLayout>
     </SkeletonRegion>
   );
@@ -268,14 +281,14 @@ export function TournamentParticipantsSkeleton() {
       <TournamentPageSkeletonLayout>
 
         <ControlRowSkeleton search />
-        <div className={styles.skeletonSurface}>
-          <div className={styles.skeletonRow}>
+        <SkeletonSurface>
+          <div className={TABLE_ROW}>
             <Skeleton style={{ width: "8rem", height: "0.55rem" }} />
             <Skeleton style={{ width: "6rem", height: "0.55rem" }} />
             <Skeleton style={{ width: "3rem", height: "0.55rem", justifySelf: "end" }} />
           </div>
           <TableRowsSkeleton count={8} />
-        </div>
+        </SkeletonSurface>
       </TournamentPageSkeletonLayout>
     </SkeletonRegion>
   );
@@ -288,18 +301,18 @@ export function TournamentMatchesSkeleton() {
     <SkeletonRegion variant="matches" message={t("tournamentDetail.loading.pages.matches")}>
       <TournamentPageSkeletonLayout>
 
-        <div className={styles.skeletonControls}>
+        <div className={CONTROLS}>
           <Skeleton style={{ width: "min(18rem, 76vw)", height: "2.25rem" }} />
         </div>
-        <div className={styles.skeletonSurface}>
-          <div className={styles.skeletonRow}>
+        <SkeletonSurface>
+          <div className={TABLE_ROW}>
             <Skeleton style={{ width: "7rem", height: "0.55rem" }} />
             <Skeleton style={{ width: "5rem", height: "0.55rem" }} />
             <Skeleton style={{ width: "3rem", height: "0.55rem", justifySelf: "end" }} />
           </div>
           <TableRowsSkeleton count={7} />
-        </div>
-        <div className={styles.skeletonControls} style={{ justifyContent: "flex-end" }}>
+        </SkeletonSurface>
+        <div className={`${CONTROLS} justify-end`}>
           <Skeleton style={{ width: "13rem", height: "2.25rem" }} />
         </div>
       </TournamentPageSkeletonLayout>
@@ -315,15 +328,18 @@ export function TournamentHeroesSkeleton() {
       <TournamentPageSkeletonLayout>
 
         <ControlRowSkeleton />
-        <div className={styles.skeletonSurface}>
+        <SkeletonSurface>
           {Array.from({ length: 8 }, (_, index) => (
-            <div className={styles.heroSkeletonRow} key={index}>
+            <div
+              className="grid min-h-13.5 grid-cols-[minmax(7rem,0.7fr)_minmax(8rem,1.5fr)_3rem] items-center gap-4 border-b border-[color:var(--aqt-border)] px-4 py-2.25"
+              key={index}
+            >
               <Skeleton style={{ width: "78%", height: "1.6rem" }} />
               <Skeleton style={{ width: `${92 - index * 6}%`, height: "0.45rem" }} />
               <Skeleton style={{ width: "2.4rem", height: "0.75rem" }} />
             </div>
           ))}
-        </div>
+        </SkeletonSurface>
       </TournamentPageSkeletonLayout>
     </SkeletonRegion>
   );
@@ -339,19 +355,19 @@ export function TournamentMapsSkeleton() {
         {/* Two surfaces, because the page has two: the pool grid, then the
             per-round breakdown. One tall block would promise a shape the
             arriving content does not have. */}
-        <div className={styles.skeletonSurface}>
-          <div className={styles.skeletonRows}>
+        <SkeletonSurface>
+          <div className="grid">
             {Array.from({ length: 3 }, (_, row) => (
-              <div className={styles.skeletonRow} key={row}>
+              <div className={TABLE_ROW} key={row}>
                 <Skeleton style={{ width: "7rem", height: "0.55rem" }} />
                 <Skeleton style={{ width: "100%", height: "3.5rem" }} />
               </div>
             ))}
           </div>
-        </div>
-        <div className={styles.skeletonSurface}>
+        </SkeletonSurface>
+        <SkeletonSurface>
           <TableRowsSkeleton count={4} />
-        </div>
+        </SkeletonSurface>
       </TournamentPageSkeletonLayout>
     </SkeletonRegion>
   );
@@ -367,7 +383,7 @@ export function TournamentStreamSkeleton() {
             same breakpoint, so the arriving player does not shove the rail
             down the page. Four rail rows: more than a handful of participants
             live at once is the rare case, not the one to reserve space for. */}
-        <div className={styles.skeletonSurface}>
+        <SkeletonSurface>
           <div className="flex items-center justify-between gap-4 border-b border-[color:var(--aqt-border)] px-5 py-3">
             <Skeleton style={{ width: "7rem", height: "1rem" }} />
             <Skeleton style={{ width: "8rem", height: "1.4rem" }} />
@@ -395,7 +411,7 @@ export function TournamentStreamSkeleton() {
               ))}
             </div>
           </div>
-        </div>
+        </SkeletonSurface>
       </TournamentPageSkeletonLayout>
     </SkeletonRegion>
   );

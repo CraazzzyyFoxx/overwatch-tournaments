@@ -1,20 +1,26 @@
 "use client";
 
+import { createContext, useContext, type ReactNode } from "react";
 import { ArrowRight } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
-import { Card } from "@/components/ui/card";
+import { CardSurface } from "@/components/profile/atoms";
+import { Eyebrow } from "@/components/ui/eyebrow";
 import { cn } from "@/lib/utils";
 
 /**
- * One section of the overview: a heading, then its content. Open by default,
- * per DESIGN §5 — a page section is a heading and what it heads; only a dense
- * data block (a table, match rows, the podium) is `framed`, and then only the
- * block, never the heading with it.
- *
- * `size`: `title` in the main column and the full-width bands; `heading` in
- * the narrow reference column, where a 22px heading would outweigh the 15px
- * facts under it.
+ * Every `OverviewSection` is a profile-style card (`CardSurface`); under `OverviewInlineSections` it is a labelled
+ * block INSIDE such a card instead (an eyebrow, not a second heading).
+ */
+const InlineContext = createContext(false);
+
+export function OverviewInlineSections({ children }: Readonly<{ children: ReactNode }>) {
+  return <InlineContext.Provider value>{children}</InlineContext.Provider>;
+}
+
+/**
+ * One block of the tournament's views: a card with a heading and, beside it, where the block continues.
  *
  * Deliberately no `overflow: hidden`: the mini-bracket scrolls horizontally
  * inside its own block, and `#phases` must stay scrollable-to.
@@ -23,56 +29,39 @@ export function OverviewSection({
   title,
   action,
   id,
-  size = "title",
-  framed = false,
   className,
   children
 }: Readonly<{
   title?: string;
-  action?: React.ReactNode;
+  action?: ReactNode;
   id?: string;
-  size?: "title" | "heading";
-  framed?: boolean;
   className?: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }>) {
+  const inline = useContext(InlineContext);
   return (
-    <section className={cn("min-w-0 scroll-mt-28", className)} id={id}>
-      {title || action ? (
-        <div
-          className={cn(
-            "flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1",
-            size === "title" ? "mb-3" : "mb-2.5"
-          )}
-        >
+    // A card section is a flex column, so the stretch `CardColumns` gives the section reaches its card.
+    <section className={cn("min-w-0 scroll-mt-28", !inline && "flex flex-col", className)} id={id}>
+      {inline ? (
+        <>
           {title ? (
-            <h2
-              className={cn(
-                "font-onest font-semibold text-[color:var(--aqt-fg)]",
-                size === "title" ? "text-title" : "text-heading"
-              )}
-            >
+            <Eyebrow as="h3" className="mb-2 block">
               {title}
-            </h2>
-          ) : (
-            <span />
-          )}
-          {action}
-        </div>
-      ) : null}
-      {framed ? (
-        <Card variant="flat" className="min-w-0 p-4">
+            </Eyebrow>
+          ) : null}
           {children}
-        </Card>
+        </>
       ) : (
-        children
+        <CardSurface title={title} action={action} className="flex-1">
+          {children}
+        </CardSurface>
       )}
     </section>
   );
 }
 
 /** "All matches →": where a section continues, beside its heading. */
-export function SectionLink({ href, children }: Readonly<{ href: string; children: React.ReactNode }>) {
+export function SectionLink({ href, children }: Readonly<{ href: string; children: ReactNode }>) {
   return (
     <HoverPrefetchLink
       href={href}
@@ -85,21 +74,59 @@ export function SectionLink({ href, children }: Readonly<{ href: string; childre
 }
 
 /**
- * The two columns under the overview's full-width lead: the phase's own story
- * on the left, the reference that stays the same all tournament long on the
- * right (format, links). The reference column is one quiet stack split by
- * hairlines, not a pile of cards. Below `lg` the story comes first.
+ * The page's two columns, ending on one line: from `lg` each column is a flex stack whose last card grows to the
+ * other column's bottom. Cards must be the direct children. `even` splits 1:1, the default is the 2:1 main/side split.
  */
-export function OverviewColumns({
+export function CardColumns({
   main,
-  aside
-}: Readonly<{ main: React.ReactNode; aside: React.ReactNode }>) {
+  side,
+  even = false
+}: Readonly<{ main: ReactNode; side: ReactNode; even?: boolean }>) {
+  const column = "flex min-w-0 flex-col gap-4 lg:[&>*:last-child]:flex-1";
   return (
-    <div className="grid gap-8 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] lg:gap-10">
-      <div className="grid min-w-0 content-start gap-8">{main}</div>
-      <div className="grid min-w-0 content-start divide-y divide-[color:var(--aqt-border)] [&>*:first-child]:pt-0 [&>*:last-child]:pb-0 [&>*]:py-5">
-        {aside}
-      </div>
+    <div
+      className={cn(
+        "grid min-w-0 gap-4",
+        even ? "lg:grid-cols-2" : "lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]"
+      )}
+    >
+      <div className={column}>{main}</div>
+      <div className={column}>{side}</div>
     </div>
+  );
+}
+
+/** A card subtitle that explains rather than counts: below `sm` the title needs the row. */
+export const wideOnly = (text: string) => <span className="hidden sm:inline">{text}</span>;
+
+/** Description and links on the left, the format (and, before the start, the schedule) on the right. */
+export function AboutTournamentCard({
+  aboutCard,
+  formatCard,
+  linksCard,
+  phasesCard
+}: Readonly<{
+  aboutCard: ReactNode;
+  formatCard: ReactNode;
+  linksCard: ReactNode;
+  phasesCard?: ReactNode;
+}>) {
+  const t = useTranslations("tournamentDetail");
+  return (
+    <OverviewSection title={t("overview.reference.title")}>
+      <OverviewInlineSections>
+        {/* Columns per non-empty side: a tournament with no description or links gives the format the full row. */}
+        <div className="grid gap-x-10 gap-y-6 md:auto-cols-fr md:grid-flow-col">
+          <div className="grid content-start gap-6 empty:hidden">
+            {aboutCard}
+            {linksCard}
+          </div>
+          <div className="grid content-start gap-6">
+            {phasesCard}
+            {formatCard}
+          </div>
+        </div>
+      </OverviewInlineSections>
+    </OverviewSection>
   );
 }

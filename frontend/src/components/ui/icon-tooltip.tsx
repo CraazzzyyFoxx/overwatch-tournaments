@@ -42,7 +42,7 @@ export function IconTooltip({
   control = false
 }: Readonly<IconTooltipProps>) {
   return (
-    <TooltipProvider delayDuration={150}>
+    <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
           {control ? (
@@ -61,7 +61,7 @@ export function IconTooltip({
           {hint ? (
             <>
               <div className="font-semibold">{label}</div>
-              <div className="opacity-75">{hint}</div>
+              <div className="text-[color:var(--aqt-fg-muted)]">{hint}</div>
             </>
           ) : (
             label

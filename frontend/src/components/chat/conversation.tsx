@@ -54,7 +54,7 @@ export const ConversationContent = ({
     scrollClassName={cn("overscroll-contain", scrollClassName)}
     tabIndex={0}
     className={cn(
-      "flex flex-col gap-8 p-4 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
+      "flex flex-col gap-8 p-4 outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
       className
     )}
     {...props}

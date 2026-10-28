@@ -18,12 +18,12 @@ import {
   Users
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { StatusDot } from "@/components/ui/status-dot";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { usePrefersReducedMotion } from "@/hooks/usePrefersReducedMotion";
 import { cn } from "@/lib/utils";
 import type { StageSummary, TournamentStatus } from "@/types/tournament.types";
 
-import styles from "../TournamentDetail.module.css";
 import {
   buildTournamentSectionNav,
   observeTournamentRail,
@@ -49,6 +49,17 @@ const initialRailState: TournamentRailScrollState = {
   canScrollPrevious: false,
   canScrollNext: false
 };
+
+/**
+ * One rail tab, a link or a locked button alike. On a locked `Button` these
+ * win over the primitive's box through `cn`: the rail, not the button, sets
+ * the tab's geometry (44px row, 2px bottom bar sitting on the rail's rule).
+ */
+const NAV_ITEM =
+  "relative inline-flex min-h-11 flex-none items-center gap-2 rounded-none border-0 border-b-2 border-transparent bg-transparent px-3.25 py-2.5 -mb-px text-caption font-medium leading-none whitespace-nowrap no-underline cursor-pointer transition-colors duration-150 motion-reduce:transition-none max-sm:px-2.75 hover:bg-[color:var(--aqt-overlay-2)] focus-visible:bg-[color:var(--aqt-overlay-2)] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring focus-visible:ring-offset-0 [&_svg]:size-3.5";
+
+/** The rail's text fade, standing in for the clipped tabs on the side that can still scroll. */
+const EDGE_FADE = "pointer-events-none absolute inset-y-0 z-2 w-6 to-transparent";
 
 type TournamentSectionNavProps = {
   tournamentId: string;
@@ -143,123 +154,163 @@ export default function TournamentSectionNav({
   };
 
   return (
-    <div className={cn(styles.navRegion, className)} data-collapsed={collapsed || undefined}>
-      <div className={styles.railRow}>
-      {collapsed && collapsedTitle ? (
-        <div className={styles.railLead}>{collapsedTitle}</div>
-      ) : null}
-      <nav
-        ref={frameRef}
-        className={cn(styles.railFrame, railState.hasOverflow && styles.railFrameWithControls)}
-        aria-label={t("tournamentDetail.sectionsNav")}
-      >
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
+    <div
+      className={cn(
+        "sticky top-14 z-40 min-w-0 max-w-full bg-[linear-gradient(180deg,var(--aqt-bg)_78%,transparent)] pt-2",
+        className
+      )}
+      data-collapsed={collapsed || undefined}
+    >
+      {/* One row: an optional collapsed-title lead, the scrolling rail, an
+          optional trailing action slot. The slots mount only while the page's
+          big title is out of view, so the rail never doubles as a second
+          header; below `md` they stay hidden. */}
+      <div className="flex min-w-0 items-stretch border-b border-[color:var(--aqt-border)] bg-[color:var(--aqt-bg)]/96">
+        {collapsed && collapsedTitle ? (
+          // Grows into whatever the rail leaves: the rail scrolls under its own
+          // arrows when it runs out of room, the title has no such escape.
+          <div className="me-2 hidden min-w-0 max-w-[clamp(12rem,30vw,34rem)] flex-[0_1_max-content] items-center gap-2 truncate border-e border-[color:var(--aqt-border)] ps-1 pe-3 text-caption font-semibold text-[color:var(--aqt-fg)] md:flex">
+            {collapsedTitle}
+          </div>
+        ) : null}
+        <nav
+          ref={frameRef}
+          // `flex-auto`, not a 100% basis: a full-width basis made the tab strip
+          // claim the whole row and squeeze the title to an ellipsis. It still
+          // grows into whatever the title and actions leave.
           className={cn(
-            "place-self-center",
-            styles.scrollPrevious,
-            !railState.hasOverflow && styles.scrollControlHidden
+            "grid min-w-0 max-w-full flex-auto items-stretch",
+            railState.hasOverflow
+              ? "grid-cols-[2rem_minmax(0,1fr)_2rem]"
+              : "grid-cols-[0_minmax(0,1fr)_0]"
           )}
-          onClick={() => scrollRail(-1)}
-          aria-label={t("tournamentDetail.nav.scrollPrevious")}
-          aria-hidden={!railState.hasOverflow || undefined}
-          disabled={!railState.hasOverflow || !railState.canScrollPrevious}
+          aria-label={t("tournamentDetail.sectionsNav")}
         >
-          <ArrowLeft aria-hidden="true" />
-        </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            className={cn("col-start-1 place-self-center", !railState.hasOverflow && "hidden")}
+            onClick={() => scrollRail(-1)}
+            aria-label={t("tournamentDetail.nav.scrollPrevious")}
+            aria-hidden={!railState.hasOverflow || undefined}
+            disabled={!railState.hasOverflow || !railState.canScrollPrevious}
+          >
+            <ArrowLeft aria-hidden="true" />
+          </Button>
 
-        <div className={styles.railViewport}>
-          {railState.canScrollPrevious ? (
-            <span className={cn(styles.edgeFade, styles.edgeFadeStart)} aria-hidden="true" />
-          ) : null}
-          <TooltipProvider delayDuration={180}>
-            <div ref={railRef} className={styles.rail}>
-              {items.map((item) => {
-                const Icon = icons[item.id];
-                const label = t(item.labelKey);
-                const content = (
-                  <>
-                    <Icon className={styles.itemIcon} aria-hidden="true" />
-                    <span className={styles.itemLabel}>{label}</span>
-                    {item.id === "bracket" && (status === "live" || status === "playoffs") ? (
-                      <span className={styles.liveTag} aria-hidden="true" />
-                    ) : null}
-                  </>
-                );
-
-                if (!item.available && item.reasonKey) {
-                  const reason = t(item.reasonKey);
-                  // The rail's own tab look (module CSS, unlayered) wins over the
-                  // button's box; `ghost` adds only the focus ring.
-                  return (
-                    <Tooltip key={item.id}>
-                      <TooltipTrigger asChild>
-                        <Button
-                          ref={item.active ? setActiveRef : undefined}
-                          type="button"
-                          variant="ghost"
-                          className={cn(
-                            "rounded-none",
-                            styles.navItem,
-                            styles.locked,
-                            item.active && styles.active
-                          )}
-                          aria-current={item.active ? "page" : undefined}
-                          aria-disabled={!item.available || undefined}
-                          title={collapsed ? `${label} — ${reason}` : reason}
-                          onClick={(event) => event.preventDefault()}
-                        >
-                          {content}
-                          <span className="sr-only"> — {reason}</span>
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="bottom">{reason}</TooltipContent>
-                    </Tooltip>
+          <div className="relative col-start-2 min-w-0 max-w-full overflow-hidden">
+            {railState.canScrollPrevious ? (
+              <span
+                className={cn(EDGE_FADE, "left-0 bg-linear-to-r from-[color:var(--aqt-bg)]")}
+                aria-hidden="true"
+              />
+            ) : null}
+            <TooltipProvider>
+              <div
+                ref={railRef}
+                className="flex w-full max-w-full scroll-px-5 gap-1 overflow-x-auto overflow-y-hidden overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              >
+                {items.map((item) => {
+                  const Icon = icons[item.id];
+                  const label = t(item.labelKey);
+                  // Collapsed (from `md`): the row also carries the title and the
+                  // actions, so the inactive tabs keep their icons and give up
+                  // their labels; the active one stays spelled out, because an
+                  // icon alone cannot say where you are. Driven by `collapsed`,
+                  // not by overflow: condensing on overflow removes the overflow,
+                  // which restores the labels — a measurement loop. Visually
+                  // hidden rather than removed, so the accessible name survives;
+                  // the `title` added in this state covers the sighted reader.
+                  const condensed = collapsed && !item.active;
+                  // The inactive tabs become square 44px icon cells.
+                  const itemClass = cn(NAV_ITEM, condensed && "md:w-11 md:justify-center md:px-0");
+                  const content = (
+                    <>
+                      <Icon className="shrink-0" aria-hidden="true" />
+                      <span className={cn(condensed && "md:sr-only")}>{label}</span>
+                      {item.id === "bracket" && (status === "live" || status === "playoffs") ? (
+                        <StatusDot pulse className="text-[color:var(--aqt-status-live)]" />
+                      ) : null}
+                    </>
                   );
-                }
 
-                return (
-                  <HoverPrefetchLink
-                    key={item.id}
-                    ref={item.active ? setActiveRef : undefined}
-                    href={item.href}
-                    className={cn(styles.navItem, item.active && styles.active)}
-                    title={collapsed && !item.active ? label : undefined}
-                    aria-current={item.active ? "page" : undefined}
-                  >
-                    {content}
-                  </HoverPrefetchLink>
-                );
-              })}
-            </div>
-          </TooltipProvider>
-          {railState.canScrollNext ? (
-            <span className={cn(styles.edgeFade, styles.edgeFadeEnd)} aria-hidden="true" />
-          ) : null}
-        </div>
+                  if (!item.available && item.reasonKey) {
+                    const reason = t(item.reasonKey);
+                    // Locked reads as unavailable at a glance, not as a shade of
+                    // the grey the open tabs use; it keeps the active bar.
+                    return (
+                      <Tooltip key={item.id}>
+                        <TooltipTrigger asChild>
+                          <Button
+                            ref={item.active ? setActiveRef : undefined}
+                            type="button"
+                            variant="ghost"
+                            className={cn(
+                              itemClass,
+                              "cursor-not-allowed text-[color:var(--aqt-fg-faint)] opacity-50 hover:text-[color:var(--aqt-fg-muted)] focus-visible:text-[color:var(--aqt-fg-muted)]",
+                              item.active && "border-b-[color:var(--aqt-teal)]"
+                            )}
+                            aria-current={item.active ? "page" : undefined}
+                            aria-disabled={!item.available || undefined}
+                            title={collapsed ? `${label} — ${reason}` : reason}
+                            onClick={(event) => event.preventDefault()}
+                          >
+                            {content}
+                            <span className="sr-only"> — {reason}</span>
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom">{reason}</TooltipContent>
+                      </Tooltip>
+                    );
+                  }
 
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          className={cn(
-            "place-self-center",
-            styles.scrollNext,
-            !railState.hasOverflow && styles.scrollControlHidden
-          )}
-          onClick={() => scrollRail(1)}
-          aria-label={t("tournamentDetail.nav.scrollNext")}
-          aria-hidden={!railState.hasOverflow || undefined}
-          disabled={!railState.hasOverflow || !railState.canScrollNext}
-        >
-          <ArrowRight aria-hidden="true" />
-        </Button>
-      </nav>
-      {collapsed && collapsedActions ? (
-        <div className={styles.railTrail}>{collapsedActions}</div>
-      ) : null}
+                  return (
+                    <HoverPrefetchLink
+                      key={item.id}
+                      ref={item.active ? setActiveRef : undefined}
+                      href={item.href}
+                      className={cn(
+                        itemClass,
+                        item.active
+                          ? "border-b-[color:var(--aqt-teal)] text-[color:var(--aqt-teal)]"
+                          : "text-[color:var(--aqt-fg-muted)] hover:text-[color:var(--aqt-fg)] focus-visible:text-[color:var(--aqt-fg)]"
+                      )}
+                      title={collapsed && !item.active ? label : undefined}
+                      aria-current={item.active ? "page" : undefined}
+                    >
+                      {content}
+                    </HoverPrefetchLink>
+                  );
+                })}
+              </div>
+            </TooltipProvider>
+            {railState.canScrollNext ? (
+              <span
+                className={cn(EDGE_FADE, "right-0 bg-linear-to-l from-[color:var(--aqt-bg)]")}
+                aria-hidden="true"
+              />
+            ) : null}
+          </div>
+
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            className={cn("col-start-3 place-self-center", !railState.hasOverflow && "hidden")}
+            onClick={() => scrollRail(1)}
+            aria-label={t("tournamentDetail.nav.scrollNext")}
+            aria-hidden={!railState.hasOverflow || undefined}
+            disabled={!railState.hasOverflow || !railState.canScrollNext}
+          >
+            <ArrowRight aria-hidden="true" />
+          </Button>
+        </nav>
+        {collapsed && collapsedActions ? (
+          <div className="hidden min-w-0 flex-none items-center gap-2 ps-3 pe-1 md:flex">
+            {collapsedActions}
+          </div>
+        ) : null}
       </div>
     </div>
   );

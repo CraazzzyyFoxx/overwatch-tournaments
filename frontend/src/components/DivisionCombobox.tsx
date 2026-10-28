@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import { useTranslations } from "next-intl";
 
-import SearchableImageSelect from "@/components/ui/searchable-image-select";
+import { SearchableImageSelect } from "@/components/ui/searchable-image-select";
 import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
 import { type DivisionGridLike, sortTiersDescending } from "@/lib/divisions/grid";
 
@@ -19,6 +19,7 @@ interface DivisionComboboxBaseProps {
   counts?: Record<number, number>;
   ariaLabel?: string;
   disabled?: boolean;
+  size?: "sm" | "default";
   triggerClassName?: string;
 }
 
@@ -44,7 +45,7 @@ type DivisionComboboxProps = DivisionComboboxBaseProps &
  * the number alone does not say which end is the top.
  */
 export function DivisionCombobox(props: Readonly<DivisionComboboxProps>) {
-  const { grid, placeholder, clearable, counts, ariaLabel, disabled, triggerClassName } = props;
+  const { grid, placeholder, clearable, counts, ariaLabel, disabled, size, triggerClassName } = props;
   const t = useTranslations();
   const workspaceGrid = useDivisionGrid();
   const resolvedGrid = grid ?? workspaceGrid;
@@ -67,6 +68,7 @@ export function DivisionCombobox(props: Readonly<DivisionComboboxProps>) {
     clearable,
     ariaLabel,
     disabled,
+    size,
     triggerClassName
   };
 

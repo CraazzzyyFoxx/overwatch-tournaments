@@ -16,6 +16,7 @@ import { useSideLabel } from "@/components/pick-ban/useSideLabel";
 import { BackLink } from "@/components/site/BackLink";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { triggerChevronClass } from "@/components/ui/chevron";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -321,7 +322,7 @@ export function MixRoom({ initialGame, lobbyIndex }: Readonly<{ initialGame: Cus
         variant="ghost"
         size="sm"
         aria-expanded={rostersOpen}
-        className="justify-between lg:hidden"
+        className="group/trigger justify-between lg:hidden"
         onClick={() => setRostersOpen((open) => !open)}
       >
         <span className="truncate">
@@ -332,7 +333,7 @@ export function MixRoom({ initialGame, lobbyIndex }: Readonly<{ initialGame: Cus
             secondCount: `${filled[1] ?? 0}/${teams[1]?.slots.length ?? 0}`
           })}
         </span>
-        <ChevronDown aria-hidden className={cn("size-4 transition-transform", rostersOpen && "rotate-180")} />
+        <ChevronDown aria-hidden className={triggerChevronClass} />
       </Button>
 
       <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-[minmax(260px,360px)_minmax(0,1fr)_minmax(260px,360px)] lg:items-start lg:gap-5">
@@ -368,7 +369,7 @@ export function MixRoom({ initialGame, lobbyIndex }: Readonly<{ initialGame: Cus
         >
           {/* Every phase: players join the game's lobby during the draft or the bans as often as before the start. */}
           {canWrite || lobby?.lobby_code != null ? (
-            <Card variant="flat" className="overflow-hidden">
+            <Card className="overflow-hidden">
               <LobbyCodeStrip
                 lobbyCode={lobby?.lobby_code ?? null}
                 canWrite={canWrite}

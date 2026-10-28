@@ -69,7 +69,7 @@ export function MixFormationControl({
           }}
           onBlur={commitOnBlur ? commit : undefined}
           size="sm"
-          className="w-20 bg-background/50 px-2 tabular-nums"
+          className="w-20"
         />
       ) : null}
     </span>

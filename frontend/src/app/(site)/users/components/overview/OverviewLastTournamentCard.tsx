@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
-import { ArrowUpRight, Hourglass } from "lucide-react";
+import { ArrowUpRight, ChevronDown, Hourglass } from "lucide-react";
 import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { UserTournamentWithStats } from "@/types/user.types";
@@ -10,6 +10,9 @@ import type { DisciplineMetadata } from "@/types/discipline.types";
 import { type MapResultPip } from "@/app/(site)/users/components/overview/map-results";
 import { UserTournamentStat } from "@/types/statistics.types";
 import { CardSurface } from "@/components/profile/atoms";
+import { ResTag, type ResTagKind } from "@/components/match/cells";
+import { Button } from "@/components/ui/button";
+import { triggerChevronClass } from "@/components/ui/chevron";
 import { Eyebrow } from "@/components/ui/eyebrow";
 import { isRankedEntry, LobbyStatGrid, type LobbyStatTile } from "@/components/profile/LobbyStatGrid";
 import ProfileWidget from "@/components/profile/ProfileWidget";
@@ -41,17 +44,17 @@ const formatPercent = (value: number | null | undefined, digits = 0) => {
   return `${(value * 100).toFixed(digits)}%`;
 };
 
-// The card title IS the tournament switcher: heading type, no box. Focus is
-// shown by colour + underline because the title row clips outside rings.
+// The card title IS the tournament switcher: heading type, no box. The title
+// row truncates (clips), so the focus ring is drawn inside.
 const HEADING_TRIGGER =
-  "h-auto w-auto min-w-0 max-w-full justify-start gap-1.5 rounded-sm border-0 bg-transparent p-0 font-semibold text-[length:inherit] text-[color:var(--aqt-fg)] shadow-none hover:bg-transparent hover:text-[color:var(--aqt-teal)] focus-visible:ring-0 focus-visible:text-[color:var(--aqt-teal)] focus-visible:underline focus-visible:underline-offset-2 data-[state=open]:text-[color:var(--aqt-teal)]";
+  "group/trigger -ml-1 min-w-0 max-w-full px-1 font-semibold focus-visible:ring-inset focus-visible:ring-offset-0";
 
-// Map result → the same `.aqt-form-chip` the header's form streak uses, with
+// Map result → the same `ResTag` square the header's form streak uses, with
 // its always-present letter/title (design-book: never colour alone).
-const PIP_CHIP: Record<MapResultPip, string> = {
-  win: "aqt-form-chip w",
-  loss: "aqt-form-chip l",
-  draw: "aqt-form-chip d"
+const PIP_KIND: Record<MapResultPip, ResTagKind> = {
+  win: "w",
+  loss: "l",
+  draw: "d"
 };
 const PIP_LABEL_KEY: Record<MapResultPip, string> = {
   win: "users.overview.win",
@@ -134,14 +137,18 @@ const OverviewLastTournamentCard = ({ tournament, metadata, tournaments, userId,
             value={tournament.id}
             onValueChange={onSelectTournament}
             clearable={false}
-            ariaLabel={tournament.name}
-            triggerClassName={HEADING_TRIGGER}
+            trigger={
+              <Button variant="ghost" size="inline" className={HEADING_TRIGGER}>
+                <span className="truncate">{tournament.name}</span>
+                <ChevronDown aria-hidden className={triggerChevronClass} />
+              </Button>
+            }
           />
           <HoverPrefetchLink
             href={tournamentHref(tournament.id)}
             aria-label={t("users.overview.lastTournament.openTournament")}
             title={t("users.overview.lastTournament.openTournament")}
-            className="inline-flex size-6 shrink-0 items-center justify-center rounded-sm text-[color:var(--aqt-fg-dim)] outline-none transition-colors hover:bg-[hsl(0_0%_100%/0.04)] hover:text-[color:var(--aqt-teal)] focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-[color:var(--aqt-teal)]"
+            className="inline-flex size-6 shrink-0 items-center justify-center rounded-sm text-[color:var(--aqt-fg-dim)] outline-hidden transition-colors hover:bg-[hsl(0_0%_100%/0.04)] hover:text-[color:var(--aqt-teal)] focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-[color:var(--aqt-teal)]"
           >
             <ArrowUpRight aria-hidden className="size-4" />
           </HoverPrefetchLink>
@@ -158,7 +165,7 @@ const OverviewLastTournamentCard = ({ tournament, metadata, tournaments, userId,
             height={52}
           />
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-1.5 font-onest text-[20px] font-bold leading-none text-[color:var(--aqt-fg)]">
+            <div className="flex items-center gap-1.5 font-onest text-title font-bold leading-none text-[color:var(--aqt-fg)]">
               <PlayerRoleIcon role={tournament.role} ontology={ontology} size={18} decorative />
               {roleLabel}
             </div>
@@ -218,13 +225,13 @@ const OverviewLastTournamentCard = ({ tournament, metadata, tournaments, userId,
             </div>
             <div className="flex flex-wrap gap-[3px]">
               {resultPips.map((pip, i) => (
-                <span
+                <ResTag
                   key={`${pip}${i}`}
-                  className={PIP_CHIP[pip]}
+                  kind={PIP_KIND[pip]}
                   title={t(PIP_TITLE_KEY[pip] as Parameters<typeof t>[0])}
                 >
                   {t(PIP_LABEL_KEY[pip] as Parameters<typeof t>[0])}
-                </span>
+                </ResTag>
               ))}
             </div>
             {mapPips && mapPips.length > 0 ? null : (

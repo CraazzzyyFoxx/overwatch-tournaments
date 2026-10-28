@@ -11,6 +11,7 @@ import { EncounterRostersModal } from "@/components/EncounterRostersModal";
 import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import TeamName from "@/components/TeamName";
 import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 import { Eyebrow } from "@/components/ui/eyebrow";
 import { StatusDot } from "@/components/ui/status-dot";
 import { withReturnTo } from "@/lib/auth/return-to";
@@ -45,7 +46,7 @@ export function MatchGutter({
       style={{ width: GUTTER_WIDTH }}
       {...props}
     >
-      <span className="text-[11px] font-semibold tracking-label opacity-70">M</span>
+      <span className="text-label font-semibold leading-none tracking-label opacity-70">M</span>
       <span className="text-caption font-bold tabular-nums">{number}</span>
       {children}
     </div>
@@ -359,7 +360,7 @@ export const MatchCard = memo(function MatchCard({
               </>
             )}
             {interactive && actions && (
-              <span aria-hidden className="mx-0.5 h-3 w-px shrink-0 bg-[color:var(--aqt-border-2)]" />
+              <Separator orientation="vertical" className="mx-0.5 h-3 bg-[color:var(--aqt-border-2)]" />
             )}
             {actions}
           </div>

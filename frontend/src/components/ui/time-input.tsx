@@ -39,8 +39,10 @@ function normalizeTime(value: string): string | null {
   return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
 }
 
-interface TimeInputProps
-  extends Omit<React.ComponentProps<typeof Input>, "onChange" | "type" | "value"> {
+interface TimeInputProps extends Omit<
+  React.ComponentProps<typeof Input>,
+  "onChange" | "type" | "value"
+> {
   value?: string | null;
   onValueChange: (value: string) => void;
 }
@@ -65,10 +67,10 @@ const TimeInput = React.forwardRef<HTMLInputElement, TimeInputProps>(
         spellCheck={false}
         maxLength={5}
         pattern="[0-2]?[0-9]:[0-5][0-9]"
-        placeholder="HH:MM"
+        placeholder={props.placeholder ?? "HH:MM"}
         value={draft}
-        aria-invalid={props["aria-invalid"] || isInvalid || undefined}
-        className={cn("tabular-nums", className)}
+        aria-invalid={isInvalid || props["aria-invalid"] || undefined}
+        className={cn("aqt-tnum", className)}
         onChange={(event) => {
           const nextDraft = event.target.value.replace(/[^\d:]/g, "").slice(0, 5);
           setDraft(nextDraft);

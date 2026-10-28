@@ -78,7 +78,6 @@ export default function MasterDetail({
 
   const viewToggle = (
     <ToggleGroup
-      type="single"
       variant="pill"
       size="sm"
       value={view}

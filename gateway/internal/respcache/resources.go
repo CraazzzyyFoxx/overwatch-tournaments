@@ -25,11 +25,12 @@ var resourcePatterns = map[string][]string{
 	// standings/detail/encounters, so without it the entry lived out its TTL
 	// while the standings beside it were already fresh. "/api/v1/users/" is
 	// a player's page for this tournament (/users/{id}/tournaments/{tid} and
-	// its /encounters and /leaderboard, stats.PublicCacheableReads): parsed
-	// logs emit only encounters/standings. The scope already narrows it to
-	// this tournament — a user's TTL-only profile reads live under id 0.
-	"tournament.encounters": {"/api/v1/encounters", "/ffa", "/api/v1/users/"},
-	"tournament.standings":  {"/standings", "/ffa", "/api/v1/users/"},
+	// its /encounters and /leaderboard, stats.PublicCacheableReads) and
+	// "/player-stats" every player's leaderboard rows at once: parsed logs
+	// emit only encounters/standings. The scope already narrows it to this
+	// tournament — a user's TTL-only profile reads live under id 0.
+	"tournament.encounters": {"/api/v1/encounters", "/ffa", "/api/v1/users/", "/player-stats"},
+	"tournament.standings":  {"/standings", "/ffa", "/api/v1/users/", "/player-stats"},
 	"tournament.teams":      {"/api/v1/teams"},
 	// Every page of the tournament: a section appearing or disappearing
 	// changes the page-shell reads, and the same resource carries a

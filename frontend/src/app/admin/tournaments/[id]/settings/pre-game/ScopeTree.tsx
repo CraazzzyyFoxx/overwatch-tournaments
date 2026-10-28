@@ -93,7 +93,7 @@ export function ScopeTree({
             isSelected
               ? "bg-accent/40 font-medium text-foreground"
               : "text-muted-foreground hover:text-foreground",
-            "focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            "focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-hidden"
           )}
         >
           <span className="min-w-0 flex-1 truncate">{label}</span>

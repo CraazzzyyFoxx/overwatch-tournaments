@@ -1,6 +1,6 @@
 """Public statistics reads, workspace-filtered (the player leaderboards span every game unless one is named): one
-game's character playtime, leaderboard and maps, the champion/winrate boards and the almanac players table and
-records."""
+game's character playtime, leaderboard and maps, the champion/winrate boards, the almanac players table and
+records, and one tournament's per-player stat ranks."""
 
 from __future__ import annotations
 
@@ -16,6 +16,7 @@ from src.core import db
 from src.rpc import _common as c
 from src.services.hero.service import heroes as character_service
 from src.services.statistics.service import statistics as statistics_service
+from src.services.user.service import UserService
 
 _SF = db.async_session_maker
 _STAT_SORT = typing.Literal["id", "name", "value"]
@@ -56,6 +57,17 @@ def register(broker: Any, logger: Any, *, channel: Any) -> None:
             )
 
         return await c.envelope(logger, "statistics.character_leaderboard", op, session_factory=_SF)
+
+    # GET /api/v1/tournaments/{id}/player-stats — every player's tournament leaderboard rows, pivoted by player.
+    @broker.subscriber("rpc.stats.statistics.tournament_player_stats", channel=channel)
+    async def _tournament_player_stats(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            tournament_id = c.require_id(data)
+            await c.gate_tournament(session, data, tournament_id)
+            stats = await UserService.for_tournament(session, tournament_id)
+            return await stats.get_tournament_player_stats(session, tournament_id)
+
+        return await c.envelope(logger, "statistics.tournament_player_stats", op, session_factory=_SF)
 
     @broker.subscriber("rpc.stats.statistics.champion", channel=channel)
     async def _champion(data: dict, msg: RabbitMessage) -> dict:

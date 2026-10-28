@@ -158,18 +158,16 @@ export function NextMapRoll({
       <Combobox
         open={mapPickerOpen}
         onOpenChange={setMapPickerOpen}
-        label={nextMap?.name ?? t("noMap")}
+        label={nextMap?.name}
+        placeholder={t("noMap")}
         variant="surface"
         size="sm"
         triggerClassName="w-40"
         searchPlaceholder={t("searchMaps")}
         emptyMessage={t("noMapsMatch")}
+        clear={{ label: t("noMap"), value: t("noMap"), onSelect: () => pickMap(null), selected: nextMapId == null }}
       >
         <CommandGroup>
-          <CommandItem value={t("noMap")} onSelect={() => pickMap(null)}>
-            <span className="min-w-0 flex-1 truncate">{t("noMap")}</span>
-            <ComboboxCheck selected={nextMapId == null} />
-          </CommandItem>
           {maps.map((map) => (
             <CommandItem key={map.id} value={map.name} onSelect={() => pickMap(map.id)}>
               <span className="min-w-0 flex-1 truncate">{map.name}</span>

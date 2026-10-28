@@ -48,16 +48,15 @@ export function GameField({
         open={open}
         onOpenChange={(next) => (next ? setOpen(true) : close())}
         label={
-          selected ? (
+          selected && (
             <span className="flex items-center gap-2">
               <GameMark discipline={selected} size={16} decorative />
               {selected.name}
             </span>
-          ) : (
-            t("fieldPlaceholder")
           )
         }
-        labelTitle={selected?.name ?? t("fieldPlaceholder")}
+        placeholder={t("fieldPlaceholder")}
+        labelTitle={selected?.name}
         disabled={disabled}
         searchValue={search}
         onSearchValueChange={setSearch}

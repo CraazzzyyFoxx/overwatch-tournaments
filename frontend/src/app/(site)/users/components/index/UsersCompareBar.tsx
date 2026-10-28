@@ -59,7 +59,7 @@ export function UsersCompareBar({ compare }: Readonly<{ compare: CompareSelectio
   const ready = compare.selected.length === MAX_COMPARE;
 
   return (
-    <OverlayBar tone={ready ? "active" : "neutral"} ariaLabel={t("users.list.compare.barLabel")}>
+    <OverlayBar tone={ready ? "accent" : "neutral"} ariaLabel={t("users.list.compare.barLabel")}>
       <div className="flex flex-wrap items-center gap-2">
         <Eyebrow>{t("users.list.compare.title")}</Eyebrow>
         {compare.selected.map((user) => (

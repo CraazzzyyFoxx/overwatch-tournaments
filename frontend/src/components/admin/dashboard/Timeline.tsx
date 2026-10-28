@@ -109,7 +109,7 @@ function TimelineRow({
     // Bleeds to the card edge so the hover fill spans the card.
     <HoverPrefetchLink
       href={`/admin/tournaments/${event.tournament_id}/settings/schedule`}
-      className="-mx-6 grid grid-cols-[4.5rem_minmax(0,1fr)_auto] items-baseline gap-x-3 px-6 py-2 transition-colors hover:bg-accent/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+      className="-mx-6 grid grid-cols-[4.5rem_minmax(0,1fr)_auto] items-baseline gap-x-3 px-6 py-2 transition-colors hover:bg-accent/30 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
     >
       <time dateTime={event.at} className="whitespace-nowrap text-sm tabular-nums text-foreground">
         {format.dateTime(new Date(event.at), { hour: "2-digit", minute: "2-digit" })}

@@ -4,10 +4,22 @@ import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 import type { Encounter, EncounterTeam } from "@/types/encounter.types";
 import { TeamLogo } from "@/components/TeamName";
+import { Card } from "@/components/ui/card";
+import { Eyebrow, eyebrowClass } from "@/components/ui/eyebrow";
 import { acceptedScore } from "@/components/pick-ban/pick-ban-model";
+import {
+  BOARD,
+  BOARD_CENTER,
+  BOARD_SIDE,
+  BOARD_SIDE_TWO,
+  CARD_SUB,
+  HEADER_CARD,
+  HEADER_FOOT,
+  HEADER_TOP,
+  SIDE_TEXT
+} from "@/components/match/EncounterAtoms";
 import { buildSeriesSlots, getSeriesVerdict, type SeriesSlot } from "@/lib/encounter/detail";
 import { duelSeats, seatTeam, type Duel, type DuelSlot } from "@/lib/encounter/seats";
-import styles from "@/components/match/EncounterDetail.module.css";
 
 export type EncounterHeaderFact = { label: string; value: string; sub?: string };
 
@@ -41,58 +53,67 @@ export default function EncounterHeader({
   };
 
   return (
-    <header className={cn(styles.card, styles.header)}>
-      <div className={styles.headerTop}>
-        <div className={styles.headerCrumbs}>{crumbs}</div>
-        <div className={styles.heroActions}>{actions}</div>
-      </div>
-
-      {/* The page's one h1: the matchup, read by the outline the way the old
-          hero title was, while the board below draws it. */}
-      <h1 className="sr-only">
-        {t("encounters.detail.heroTitle", { first: names.one, second: names.two })}
-      </h1>
-      <div className={styles.board}>
-        <TeamBlock seat={seatOne} slot={1} />
-        <div className={styles.boardCenter}>
-          <p className={styles.boardScore}>
-            <span className={styles.scoreOne}>{seatOne?.score ?? 0}</span>
-            <span aria-hidden className={styles.scoreSep}>
-              :
-            </span>
-            <span className={styles.scoreTwo}>{seatTwo?.score ?? 0}</span>
-          </p>
-          <p className={styles.boardVerdict}>
-            {verdict.outcome === "win"
-              ? t("encounters.detail.verdictWin", {
-                  team: verdict.winner === 1 ? names.one : names.two
-                })
-              : verdict.outcome === "draw"
-                ? t("encounters.detail.verdictDraw")
-                : t("encounters.detail.verdictPending")}
-          </p>
-          <MapPips slots={slots} teams={encounter.teams} names={names} />
+    <Card asChild className={HEADER_CARD}>
+      <header>
+        <div className={HEADER_TOP}>
+          <div
+            className={eyebrowClass(
+              "faint",
+              "flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 font-normal"
+            )}
+          >
+            {crumbs}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">{actions}</div>
         </div>
-        <TeamBlock seat={seatTwo} slot={2} />
-      </div>
 
-      <div className={styles.headerFoot}>
-        {pills ? <div className={styles.boardTags}>{pills}</div> : null}
-        {facts.length > 0 ? (
-          <dl className={styles.headerFacts}>
-            {facts.map((fact) => (
-              <div key={fact.label} className={styles.headerFact}>
-                <dt className={styles.label}>{fact.label}</dt>
-                <dd className={styles.headerFactValue}>
-                  {fact.value}
-                  {fact.sub ? <span className={styles.headerFactSub}>{fact.sub}</span> : null}
-                </dd>
-              </div>
-            ))}
-          </dl>
-        ) : null}
-      </div>
-    </header>
+        {/* The page's one h1: the matchup, read by the outline the way the old
+            hero title was, while the board below draws it. */}
+        <h1 className="sr-only">
+          {t("encounters.detail.heroTitle", { first: names.one, second: names.two })}
+        </h1>
+        <div className={BOARD}>
+          <TeamBlock seat={seatOne} slot={1} />
+          <div className={BOARD_CENTER}>
+            <p className="flex items-baseline gap-3 font-display text-display font-bold leading-none tabular-nums">
+              <span className={SIDE_TEXT[1]}>{seatOne?.score ?? 0}</span>
+              <span aria-hidden className="text-title text-[color:var(--aqt-fg-faint)]">
+                :
+              </span>
+              <span className={SIDE_TEXT[2]}>{seatTwo?.score ?? 0}</span>
+            </p>
+            <p className={eyebrowClass("faint", "text-center")}>
+              {verdict.outcome === "win"
+                ? t("encounters.detail.verdictWin", {
+                    team: verdict.winner === 1 ? names.one : names.two
+                  })
+                : verdict.outcome === "draw"
+                  ? t("encounters.detail.verdictDraw")
+                  : t("encounters.detail.verdictPending")}
+            </p>
+            <MapPips slots={slots} teams={encounter.teams} names={names} />
+          </div>
+          <TeamBlock seat={seatTwo} slot={2} />
+        </div>
+
+        <div className={HEADER_FOOT}>
+          {pills ? <div className="flex flex-wrap gap-1.5">{pills}</div> : null}
+          {facts.length > 0 ? (
+            <dl className="flex flex-wrap gap-x-7 gap-y-2.5">
+              {facts.map((fact) => (
+                <div key={fact.label} className="flex flex-col gap-0.75">
+                  <Eyebrow as="dt">{fact.label}</Eyebrow>
+                  <dd className="inline-flex items-baseline gap-2 font-display text-ui font-bold tabular-nums text-[color:var(--aqt-fg)]">
+                    {fact.value}
+                    {fact.sub ? <span className={cn(CARD_SUB, "font-normal")}>{fact.sub}</span> : null}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          ) : null}
+        </div>
+      </header>
+    </Card>
   );
 }
 
@@ -109,19 +130,15 @@ function TeamBlock({
   ].filter(Boolean);
 
   return (
-    <div
-      className={cn(
-        styles.boardSide,
-        slot === 1 ? styles.slotOne : styles.slotTwo,
-        slot === 2 && styles.boardSlotTwo
-      )}
-    >
+    <div className={cn(BOARD_SIDE, slot === 2 && BOARD_SIDE_TWO)}>
       <TeamLogo team={seatTeam(seat)} size="xl" />
-      <div className={styles.boardIdentity}>
+      <div className="flex min-w-0 flex-col gap-1.5">
         {/* Not a heading: a scoreboard label. The h1 above names the matchup. */}
-        <p className={styles.boardName}>{seat?.name ?? t("common.tbd")}</p>
+        <p className={cn("font-display text-heading font-bold wrap-anywhere md:text-title", SIDE_TEXT[slot])}>
+          {seat?.name ?? t("common.tbd")}
+        </p>
         {/* Plain text, not chips: the winner is already the verdict and the pips. */}
-        {meta.length > 0 ? <p className={styles.boardMeta}>{meta.join(" · ")}</p> : null}
+        {meta.length > 0 ? <p className={CARD_SUB}>{meta.join(" · ")}</p> : null}
       </div>
     </div>
   );
@@ -137,11 +154,12 @@ function isPlayed(slot: SeriesSlot, teams: Encounter["teams"]): boolean {
  * first, then never-played, then the winner's side, then a tie.
  */
 function pipToneClass(slot: SeriesSlot, teams: Encounter["teams"]): string {
-  if (slot.isLive) return styles.pipLive;
-  if (!isPlayed(slot, teams)) return styles.pipEmpty;
-  if (slot.winner === 1) return styles.pipOne;
-  if (slot.winner === 2) return styles.pipTwo;
-  return styles.pipDraw;
+  if (slot.isLive)
+    return "border-[color:var(--aqt-status-live)] ring-2 ring-[color:color-mix(in_srgb,var(--aqt-status-live)_18%,transparent)]";
+  if (!isPlayed(slot, teams)) return "border-dashed border-[color:var(--aqt-border-2)]";
+  if (slot.winner === 1) return "bg-[color:var(--aqt-teal)]";
+  if (slot.winner === 2) return "bg-[color:var(--aqt-rose)]";
+  return "bg-[color:var(--aqt-amber)]";
 }
 
 /**
@@ -166,12 +184,16 @@ function MapPips({
 
   return (
     <div
-      className={styles.boardPips}
+      className="flex items-center gap-1"
       role="img"
       aria-label={t("encounters.detail.pipsAria", { summary })}
     >
       {slots.map((slot) => (
-        <span key={slot.index} aria-hidden className={cn(styles.pip, pipToneClass(slot, teams))} />
+        <span
+          key={slot.index}
+          aria-hidden
+          className={cn("h-4.5 w-2.75 rounded-xs border border-transparent", pipToneClass(slot, teams))}
+        />
       ))}
     </div>
   );

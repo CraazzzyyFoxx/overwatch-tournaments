@@ -1,7 +1,9 @@
 import React from "react";
 import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
+import { Card, CardTitle } from "@/components/ui/card";
 import { Eyebrow } from "@/components/ui/eyebrow";
+import { ResTag } from "@/components/match/cells";
 
 // ─── Profile-only atoms (no cross-page consumer; kept local) ──────────────────
 
@@ -12,9 +14,7 @@ export const FormStreak = ({ results, className }: { results: FormResult[]; clas
   return (
     <span className={cn("inline-flex gap-[3px]", className)} aria-label={t("users.profile.atoms.recentForm")}>
       {results.map((r, i) => (
-        <span key={i} className={cn("aqt-form-chip", r === "W" && "w", r === "L" && "l", r === "D" && "d")}>
-          {r}
-        </span>
+        <ResTag key={i} kind={r === "W" ? "w" : r === "L" ? "l" : "d"} />
       ))}
     </span>
   );
@@ -39,9 +39,13 @@ interface CardSurfaceProps {
   titleAs?: "h2" | "h3" | "div";
 }
 
+/** The "All N →" link in a `CardSurface` head: plain mixed-case teal caption text. */
+export const CARD_HEAD_LINK =
+  "inline-flex items-center gap-1 whitespace-nowrap text-caption font-medium text-[color:var(--aqt-teal)] underline-offset-3 hover:underline";
+
 /**
  * The profile's one level of framing. The title is a mixed-case section
- * heading (`.aqt-pf-title`), never an uppercase label with a decorative icon;
+ * heading (`CardTitle`, Onest), never an uppercase label with a decorative icon;
  * everything inside the body stays open — no nested bordered tiles.
  */
 export const CardSurface = ({
@@ -57,20 +61,31 @@ export const CardSurface = ({
 }: CardSurfaceProps) => {
   const hasHead = title !== undefined || subtitle !== undefined || action !== undefined;
   return (
-    <div className={cn("aqt-card-surface", className)}>
+    <Card className={cn("overflow-hidden", className)}>
       {hasHead ? (
-        <div className={cn("aqt-card-head", headerClassName)}>
+        <div
+          className={cn(
+            "flex items-center justify-between gap-2.5 border-b border-[color:var(--aqt-border)] px-4.5 py-3.5",
+            headerClassName
+          )}
+        >
           <div className="flex min-w-0 items-baseline gap-3">
             {title !== undefined ? (
-              <TitleTag className="aqt-pf-title truncate">{title}</TitleTag>
+              <CardTitle asChild className="truncate font-display text-[color:var(--aqt-fg)]">
+                <TitleTag>{title}</TitleTag>
+              </CardTitle>
             ) : null}
-            {subtitle !== undefined ? <span className="aqt-card-sub truncate">{subtitle}</span> : null}
+            {subtitle !== undefined ? (
+              <span className="truncate font-[family-name:var(--aqt-data)] text-label text-[color:var(--aqt-fg-dim)]">
+                {subtitle}
+              </span>
+            ) : null}
           </div>
           {action !== undefined ? <div className="flex items-center gap-2">{action}</div> : null}
         </div>
       ) : null}
-      <div className={cn("aqt-card-body", flush && "aqt-flush", bodyClassName)}>{children}</div>
-    </div>
+      <div className={cn(flush ? "p-0" : "p-4.5", bodyClassName)}>{children}</div>
+    </Card>
   );
 };
 

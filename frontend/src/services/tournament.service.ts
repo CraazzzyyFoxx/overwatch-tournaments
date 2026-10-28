@@ -1,10 +1,12 @@
 import type { StageBracketPreviewMatch } from "@/types/admin.types";
 import { LookupItem, PaginatedResponse } from "@/types/pagination.types";
 import {
+  PickBanOutcomesResponse,
   Stage,
   Standings,
   Tournament,
   TournamentFacets,
+  TournamentPlayerStatsResponse,
   TournamentStatus
 } from "@/types/tournament.types";
 import { apiFetch } from "@/lib/api/fetch";
@@ -136,7 +138,9 @@ export default class tournamentService {
     }).then((response) => response.json());
   }
   /** The running tournaments (`isTournamentStatusActive`), platform-wide unless the caller opts into scope. */
-  static async getActive(opts?: { skipWorkspace?: boolean }): Promise<PaginatedResponse<Tournament>> {
+  static async getActive(opts?: {
+    skipWorkspace?: boolean;
+  }): Promise<PaginatedResponse<Tournament>> {
     return apiFetch(`/api/v1/tournaments`, {
       skipWorkspace: opts?.skipWorkspace ?? true,
       query: {
@@ -212,9 +216,9 @@ export default class tournamentService {
           // schemas that nest TournamentRead must not carry a copy each. Read
           // here because this one payload is the whole page shell — the Rules
           // tab's presence AND its content both come off it.
-          "rules",
-        ],
-      },
+          "rules"
+        ]
+      }
     }).then((response) => response.json());
   }
 
@@ -248,16 +252,31 @@ export default class tournamentService {
 
   static async getStages(id: number): Promise<Stage[]> {
     return apiFetch(`/api/v1/tournaments/${id}/stages`, {
-      skipWorkspace: true,
+      skipWorkspace: true
     }).then((response) => response.json());
   }
 
   /** The bracket `stageId` would generate, for drawing it before its matches exist. */
-  static async getStageBracketPreview(id: number, stageId: number): Promise<StageBracketPreviewMatch[]> {
+  static async getStageBracketPreview(
+    id: number,
+    stageId: number
+  ): Promise<StageBracketPreviewMatch[]> {
     const response = await apiFetch(`/api/v1/tournaments/${id}/stages/${stageId}/bracket-preview`, {
       skipWorkspace: true
     });
     const data: { matches: StageBracketPreviewMatch[] } = await response.json();
     return data.matches;
+  }
+
+  /** Every player's tournament averages and ranks for the stats the statistics section ranks. */
+  static async getPlayerStats(id: number): Promise<TournamentPlayerStatsResponse> {
+    return apiFetch(`/api/v1/tournaments/${id}/player-stats`).then((response) => response.json());
+  }
+
+  /** Every public hero ban and every map pick or ban of the tournament's series. */
+  static async getPickBanOutcomes(id: number): Promise<PickBanOutcomesResponse> {
+    return apiFetch(`/api/v1/tournaments/${id}/pick-ban/outcomes`).then((response) =>
+      response.json()
+    );
   }
 }

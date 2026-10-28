@@ -1,6 +1,5 @@
 "use client";
 
-import type { CSSProperties } from "react";
 import Link from "next/link";
 import { ArrowRight, ChevronDown, Crown } from "lucide-react";
 import { useTranslations } from "next-intl";
@@ -8,8 +7,19 @@ import type { RoleOntology } from "@/lib/roster/ontology";
 import { useFormatter } from "@/lib/datetime/client";
 
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
-import { TeamPlacement, TournamentTeamTable } from "@/components/TournamentTeamCard";
+import {
+  TEAM_CARD_CLASS,
+  TEAM_CARD_HEADER,
+  TEAM_CARD_NAME,
+  TeamCardDivider,
+  TeamCardMetric,
+  TeamPlacement,
+  TournamentTeamTable
+} from "@/components/TournamentTeamCard";
 import TeamName from "@/components/TeamName";
+import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
+import { disclosureChevronClass } from "@/components/ui/chevron";
 import { sortTeamPlayers, splitHandle } from "@/lib/player";
 import { groupDisplayName, groupHue } from "@/lib/tournament/group";
 import { cn } from "@/lib/utils";
@@ -82,101 +92,97 @@ export const TeamListRow = ({
   }));
 
   return (
-    <details className="team-card group">
-      <summary className="cursor-pointer list-none rounded-[12px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[color:var(--aqt-teal)] [&::-webkit-details-marker]:hidden">
-        <div className={cn("tc-header grid items-center gap-2.5 sm:gap-5", columns)}>
-          {hasPlacement ? (
-            <span>
-              <TeamPlacement placement={team.placement as number} medal={medal} />
-            </span>
-          ) : null}
-          <span className="flex min-w-0 flex-col gap-1">
-            <span className="flex min-w-0 items-center gap-2">
-              <span className="tc-name">
-                <TeamName team={team} size="sm" />
+    <Card asChild className={cn(TEAM_CARD_CLASS, "group/disclosure")}>
+      <details>
+        <summary className="cursor-pointer list-none rounded-xl focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[color:var(--aqt-teal)] [&::-webkit-details-marker]:hidden">
+          <div className={cn(TEAM_CARD_HEADER, "grid items-center gap-2.5 sm:gap-5", columns)}>
+            {hasPlacement ? (
+              <span>
+                <TeamPlacement placement={team.placement as number} medal={medal} />
               </span>
-              {/* Wrapped: `.group-chip` sets its own display, which would
-                  outrank a `hidden` utility on the chip itself. */}
-              {showGroup && team.group?.name ? (
-                <span className="hidden shrink-0 sm:inline-flex">
-                  <span
-                    className="group-chip"
-                    style={{ "--group-hue": groupHue(team.group.name) } as CSSProperties}
+            ) : null}
+            <span className="flex min-w-0 flex-col gap-1">
+              <span className="flex min-w-0 items-center gap-2">
+                <span className={TEAM_CARD_NAME}>
+                  <TeamName team={team} size="sm" />
+                </span>
+                {showGroup && team.group?.name ? (
+                  <Badge
+                    hue={groupHue(team.group.name)}
+                    voice="label"
+                    className="hidden shrink-0 sm:inline-flex"
                   >
                     {groupDisplayName(team.group.name, t("common.group"))}
-                  </span>
-                </span>
-              ) : null}
-            </span>
-            {/* The roster at a glance: role glyph + nick, captain crowned. A
-                searched battletag shows in full, marked. */}
-            <span className="truncate text-caption text-[color:var(--aqt-fg-muted)]">
-              {players.map((player) => {
-                const matched = needle !== "" && player.name.toLowerCase().includes(needle);
-                return (
-                  <span
-                    key={player.id}
-                    className={cn("mr-3 last:mr-0", player.is_substitution && "opacity-60")}
-                  >
-                    {/* Inline, not flex: an atomic box is clipped whole, so
-                        `truncate` could only ellipsize plain text runs. */}
-                    <span className="mr-1 inline-block align-[-2px]">
-                      <PlayerRoleIcon role={player.role} ontology={ontology} size={13} decorative />
+                  </Badge>
+                ) : null}
+              </span>
+              {/* The roster at a glance: role glyph + nick, captain crowned. A
+                  searched battletag shows in full, marked. */}
+              <span className="truncate text-caption text-[color:var(--aqt-fg-muted)]">
+                {players.map((player) => {
+                  const matched = needle !== "" && player.name.toLowerCase().includes(needle);
+                  return (
+                    <span
+                      key={player.id}
+                      className={cn("mr-3 last:mr-0", player.is_substitution && "opacity-60")}
+                    >
+                      {/* Inline, not flex: an atomic box is clipped whole, so
+                          `truncate` could only ellipsize plain text runs. */}
+                      <span className="mr-1 inline-block align-[-2px]">
+                        <PlayerRoleIcon role={player.role} ontology={ontology} size={13} decorative />
+                      </span>
+                      {matched ? (
+                        <mark className={MARK_CLASS}>{player.name}</mark>
+                      ) : (
+                        splitHandle(player.name).name
+                      )}
+                      {player.user_id === team.captain_id ? (
+                        <Crown
+                          aria-hidden
+                          className="ml-1 inline-block size-3 align-[-1px] text-[color:var(--aqt-amber)]"
+                        />
+                      ) : null}
                     </span>
-                    {matched ? (
-                      <mark className={MARK_CLASS}>{player.name}</mark>
-                    ) : (
-                      splitHandle(player.name).name
-                    )}
-                    {player.user_id === team.captain_id ? (
-                      <Crown
-                        aria-hidden
-                        className="ml-1 inline-block size-3 align-[-1px] text-[color:var(--aqt-amber)]"
-                      />
-                    ) : null}
-                  </span>
-                );
-              })}
+                  );
+                })}
+              </span>
             </span>
-          </span>
-          {/* Below `sm` the name needs the width; the expanded roster still
-              carries every rank. */}
-          <span className="tc-sr hidden sm:block">
-            <span className="l block">{t("teams.roster.avgSr")}</span>
-            <span className="v block">
-              {format.number(team.avg_sr, { maximumFractionDigits: 0 })}
-            </span>
-          </span>
-          {showsRecord ? (
-            <span className="tc-sr min-w-[2.5rem]">
-              <span className="l block">{t("tournamentDetail.teams.record")}</span>
-              <span className="v block">{record ? `${record.won}–${record.lost}` : "—"}</span>
-            </span>
-          ) : null}
-          <ChevronDown
-            className="size-4 text-[color:var(--aqt-fg-faint)] transition-transform group-open:rotate-180"
-            aria-hidden
-          />
+            {/* Below `sm` the name needs the width; the expanded roster still
+                carries every rank. */}
+            <TeamCardMetric
+              className="hidden sm:block"
+              label={t("teams.roster.avgSr")}
+              value={format.number(team.avg_sr, { maximumFractionDigits: 0 })}
+            />
+            {showsRecord ? (
+              <TeamCardMetric
+                className="min-w-[2.5rem]"
+                label={t("tournamentDetail.teams.record")}
+                value={record ? `${record.won}–${record.lost}` : "—"}
+              />
+            ) : null}
+            <ChevronDown className={disclosureChevronClass} aria-hidden />
+          </div>
+        </summary>
+        <TeamCardDivider />
+        <TournamentTeamTable
+          players={roster}
+          tournamentGrid={tournament.division_grid_version}
+          discipline={tournament.discipline}
+          ontology={ontology}
+          captainUserId={team.captain_id}
+        />
+        <TeamCardDivider />
+        <div className="px-3.5 py-2.5 text-label">
+          <Link
+            href={`/tournaments/${slug}/matches?team=${team.id}`}
+            className="inline-flex items-center gap-1 text-[color:var(--aqt-fg-muted)] transition-colors hover:text-[color:var(--aqt-teal)]"
+          >
+            {t("tournamentDetail.teams.teamMatches")}
+            <ArrowRight aria-hidden className="size-3" />
+          </Link>
         </div>
-      </summary>
-      <div className="tc-divider" />
-      <TournamentTeamTable
-        players={roster}
-        tournamentGrid={tournament.division_grid_version}
-        discipline={tournament.discipline}
-        ontology={ontology}
-        captainUserId={team.captain_id}
-      />
-      <div className="tc-divider" />
-      <div className="px-3.5 py-2.5 text-label">
-        <Link
-          href={`/tournaments/${slug}/matches?team=${team.id}`}
-          className="inline-flex items-center gap-1 text-[color:var(--aqt-fg-muted)] transition-colors hover:text-[color:var(--aqt-teal)]"
-        >
-          {t("tournamentDetail.teams.teamMatches")}
-          <ArrowRight aria-hidden className="size-3" />
-        </Link>
-      </div>
-    </details>
+      </details>
+    </Card>
   );
 };

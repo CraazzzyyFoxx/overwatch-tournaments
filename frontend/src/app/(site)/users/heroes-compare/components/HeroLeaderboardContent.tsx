@@ -16,7 +16,6 @@ import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import { useCatalogEntities, useCatalogSelection } from "@/hooks/useCatalogEntities";
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";
 import { Card } from "@/components/ui/card";
-import { Spinner } from "@/components/ui/spinner";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import ProfileWidget from "@/components/profile/ProfileWidget";
@@ -151,7 +150,7 @@ const HeroLeaderboardContent = ({ scope, initial }: Readonly<{ scope: StatsScope
           onSelect={(id) => updateParams({ hero_id: id })}
         />
       ) : heroesQuery.isLoading ? (
-        <Skeleton className="h-[152px] w-full rounded-[var(--aqt-radius)]" />
+        <Skeleton className="h-[152px] w-full rounded-xl" />
       ) : null}
 
       {heroSelection.status === "error" ? (
@@ -168,11 +167,32 @@ const HeroLeaderboardContent = ({ scope, initial }: Readonly<{ scope: StatsScope
           description={t("users.heroesCompare.invalidHero.description", { game: gameName })}
         />
       ) : heroId !== undefined && !heroChecked ? (
-        <div className="flex justify-center py-16" role="status" aria-busy="true">
-          <Spinner />
+        // The board's frames while the id is checked: the character card and top chart over the leaderboard. The
+        // module's own skeleton is out of the page's reach (zone Z6), so the page draws their outlines.
+        <div role="status" aria-busy="true" className="space-y-[22px]">
+          <span className="sr-only">{t("common.loading")}</span>
+          <div className="grid gap-[22px] lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+            <Skeleton className="h-[400px] rounded-xl" />
+            <Skeleton className="h-[400px] rounded-xl" />
+          </div>
+          <Card className="overflow-hidden">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-[color:var(--aqt-border)] px-4 py-3">
+              <span className="text-lg">
+                <Skeleton variant="text" className="w-28" />
+              </span>
+              <Skeleton className="h-10 w-full md:ml-auto md:h-9 md:w-64" />
+              <Skeleton className="h-8 w-32" />
+            </div>
+            <div className="h-14 border-b border-[color:var(--aqt-border)]" />
+            {Array.from({ length: 15 }, (_, row) => (
+              <div key={row} className="border-b border-[color:var(--aqt-border)] px-3 py-2">
+                <Skeleton className="h-4 w-full" />
+              </div>
+            ))}
+          </Card>
         </div>
       ) : heroId === undefined ? (
-        <Card variant="flat" className="flex flex-col items-center justify-center gap-3.5 rounded-[var(--aqt-radius)] py-[90px] text-center">
+        <Card className="flex flex-col items-center justify-center gap-3.5 py-[90px] text-center">
           <Sword aria-hidden className="h-10 w-10 text-[color:var(--aqt-fg-faint)] opacity-50" />
           <p className="max-w-sm text-sm leading-relaxed text-[color:var(--aqt-fg-dim)]">
             {t("users.heroesCompare.selectHeroPrompt")}

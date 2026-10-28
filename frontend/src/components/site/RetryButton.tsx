@@ -6,7 +6,7 @@ import { RefreshCw } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { Spinner } from "@/components/ui/spinner";
 
 /**
  * "Повторить" for a server-rendered block that failed to load: re-renders the
@@ -26,7 +26,7 @@ export function RetryButton() {
       onClick={() => startTransition(() => router.refresh())}
       className="mt-2.5"
     >
-      <RefreshCw className={cn(pending && "motion-safe:animate-spin")} aria-hidden />
+      {pending ? <Spinner /> : <RefreshCw aria-hidden />}
       {t("retry")}
     </Button>
   );

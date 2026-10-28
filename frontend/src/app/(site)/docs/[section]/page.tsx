@@ -1,9 +1,8 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
 
+import { DOC_CARDS, DOC_TITLE, DocCard, H2, P } from "../mdx";
 import { guideGroups, isGuideId, toDocLocale } from "../nav";
-import styles from "../docs.module.css";
 
 export default async function GuideIndexPage({
   params,
@@ -13,26 +12,16 @@ export default async function GuideIndexPage({
   const [locale, t] = await Promise.all([getLocale(), getTranslations("docs")]);
 
   return (
-    <article className={styles.prose}>
-      <h1>{t(`sections.${section}.title`)}</h1>
-      <p>{t(`sections.${section}.description`)}</p>
+    <article className="max-w-2xl">
+      <h1 className={DOC_TITLE}>{t(`sections.${section}.title`)}</h1>
+      <P>{t(`sections.${section}.description`)}</P>
       {guideGroups(section, toDocLocale(locale)).map((group) => (
         <section key={group.label}>
-          <h2>{group.label}</h2>
-          <div className={styles.cards}>
-            {group.items.map((item) => {
-              const title = <span className={styles.cardTitle}>{item.title}</span>;
-              // `/api/docs` is the gateway's page, not a Next route.
-              return item.bypassNext ? (
-                <a key={item.href} href={item.href} className={styles.card}>
-                  {title}
-                </a>
-              ) : (
-                <Link key={item.href} href={item.href} className={styles.card}>
-                  {title}
-                </Link>
-              );
-            })}
+          <H2>{group.label}</H2>
+          <div className={DOC_CARDS}>
+            {group.items.map((item) => (
+              <DocCard key={item.href} href={item.href} external={item.bypassNext} title={item.title} />
+            ))}
           </div>
         </section>
       ))}

@@ -453,14 +453,10 @@ export function BracketView<M extends BracketMatch>({
             bottom. (`max-h-none` would not: tailwind-merge v3 does not know that
             class, so both caps would survive into the class list.) */}
         <DialogContent className="left-0 top-0 flex h-screen max-h-screen w-screen max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-none bg-[color:var(--aqt-bg)] p-6">
-          <DialogHeader className="mb-4 flex-row items-start justify-between gap-4 space-y-0 border-b border-[color:var(--aqt-border)] pb-3 pr-12 text-left">
+          <DialogHeader className="mb-4 flex-row items-start justify-between gap-4 space-y-0 border-b border-[color:var(--aqt-border)] pb-3">
             <div>
-              <DialogTitle className="text-xl font-bold uppercase tracking-wider text-[color:var(--aqt-fg)]">
-                {bracketTitle}
-              </DialogTitle>
-              <DialogDescription className="text-xs text-[color:var(--aqt-fg-muted)]">
-                {t("common.bracketInstructions")}
-              </DialogDescription>
+              <DialogTitle>{bracketTitle}</DialogTitle>
+              <DialogDescription>{t("common.bracketInstructions")}</DialogDescription>
             </div>
           </DialogHeader>
           {isFullscreen ? framed(true) : null}

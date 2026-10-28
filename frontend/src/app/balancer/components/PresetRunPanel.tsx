@@ -116,7 +116,7 @@ export function PresetRunPanel({
             id="exclude-invalid"
             checked={excludeInvalidPlayers}
             onCheckedChange={onExcludeInvalidPlayersChange}
-            className="data-[state=checked]:bg-amber-400"
+            className="data-[state=checked]:bg-[color:var(--aqt-amber)]"
           />
           <label
             htmlFor="exclude-invalid"
@@ -236,7 +236,7 @@ export function PresetRunPanel({
       {headerSlot ? createPortal(headerControls, headerSlot) : null}
 
       {jobStatus ? (
-        <Card variant="flat" className="px-3 py-2">
+        <Card className="px-3 py-2">
           <div className="rounded-lg border border-[color:var(--aqt-border)] bg-[color:var(--aqt-bg-2)] p-2.5">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
@@ -244,20 +244,15 @@ export function PresetRunPanel({
                 {jobMessage ? <div className="text-xs text-[color:var(--aqt-fg-dim)]">{jobMessage}</div> : null}
               </div>
               <Badge
-                className={cn(
-                  "rounded-full border px-2.5 py-1 text-label font-medium capitalize",
-                  jobStatus === "failed"
-                    ? "border-red-400/20 bg-red-500/10 text-red-200"
-                    : jobStatus === "succeeded"
-                      ? "border-emerald-400/20 bg-emerald-500/10 text-emerald-200"
-                      : "border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-3)] text-[color:var(--aqt-fg-muted)]"
-                )}
+                shape="pill"
+                tone={jobStatus === "failed" ? "danger" : jobStatus === "succeeded" ? "success" : "neutral"}
+                className="px-2.5 py-1 capitalize"
               >
                 {t(`job.status.${jobStatus}`)}
               </Badge>
             </div>
             {jobProgress !== null ? (
-              <Progress value={jobProgress} className="mt-2.5 h-2 bg-[color:var(--aqt-overlay-3)]" />
+              <Progress value={jobProgress} aria-label={t("job.running")} className="mt-2.5" />
             ) : null}
           </div>
         </Card>

@@ -11,13 +11,6 @@ import {
 } from "@/components/kit/useScopedSettingsForm";
 import { FilterChip, FilterChipGroup } from "@/components/ui/filter-chip";
 import { PageStateCard } from "@/components/ui/page-state-card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DiscordChannelSelect } from "@/components/discord/DiscordChannelSelect";
 import { useDiscordChannels } from "@/hooks/useDiscordEntities";
@@ -34,9 +27,6 @@ const VOICE_PERMISSION_MESSAGE_KEYS = {
   connect: "connect",
   move_members: "moveMembers"
 } as const satisfies Record<DiscordVoicePermission, string>;
-
-/** Radix Select has no empty value; this item stands for "no category". */
-const NO_CATEGORY = "none";
 
 function missingLabel(
   t: (key: "viewChannel" | "connect" | "moveMembers") => string,
@@ -169,9 +159,14 @@ export function MixesCard({
         </div>
       ) : (
         <>
-          <SettingRow label={t("announcementChannel")} hint={t("announcementChannelHint")}>
+          <SettingRow
+            htmlFor="mix-announcement-channel"
+            label={t("announcementChannel")}
+            hint={t("announcementChannelHint")}
+          >
             <div className="w-full md:max-w-sm">
               <DiscordChannelSelect
+                id="mix-announcement-channel"
                 workspaceId={workspaceId}
                 value={values.mix_discord_channel_id ?? ""}
                 onChange={(next) => patch({ mix_discord_channel_id: next === "" ? null : next })}
@@ -183,32 +178,26 @@ export function MixesCard({
             </div>
           </SettingRow>
 
-          <SettingRow label={t("voiceCategory")} hint={t("voiceCategoryHint")}>
+          <SettingRow htmlFor="mix-voice-category" label={t("voiceCategory")} hint={t("voiceCategoryHint")}>
             <div className="flex w-full flex-col gap-1 md:max-w-sm">
-              <Select
-                value={categoryId || NO_CATEGORY}
+              <DiscordChannelSelect
+                id="mix-voice-category"
+                type="category"
+                workspaceId={workspaceId}
+                value={categoryId}
                 // A new category invalidates the old general voices: they
                 // belong to the category that is being left behind.
-                onValueChange={(next) =>
+                onChange={(next) =>
                   patch({
-                    mix_voice_category_id: next === NO_CATEGORY ? null : next,
+                    mix_voice_category_id: next === "" ? null : next,
                     mix_general_voice_channel_ids: []
                   })
                 }
-                disabled={busy}
-              >
-                <SelectTrigger aria-label={t("mixVoiceCategory")}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={NO_CATEGORY}>{t("noVoiceCategory")}</SelectItem>
-                  {categories.map((item) => (
-                    <SelectItem key={item.id} value={item.id}>
-                      {item.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                disabled={saving}
+                ariaLabel={t("mixVoiceCategory")}
+                placeholder={t("noVoiceCategory")}
+                noneLabel={t("noVoiceCategory")}
+              />
               {categoryMissing ? (
                 <p className="text-xs text-warning">{t("missing", { value: categoryMissing })}</p>
               ) : null}

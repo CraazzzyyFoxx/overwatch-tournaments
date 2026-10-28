@@ -223,7 +223,6 @@ export function PickIsland(props: Readonly<PickIslandProps>) {
           </div>
           {showTargets && (
             <ToggleGroup
-              type="single"
               variant="pill"
               value={target}
               onValueChange={(value) => onTargetChange(value as PickTarget)}
@@ -444,7 +443,8 @@ function IslandFooter({
             placeholder={t("island.overrideNotePlaceholder")}
             aria-label={t("island.overrideNoteLabel")}
             required
-            className="h-10 min-w-0 flex-1 bg-[color:var(--aqt-bg-2)]"
+            size="lg"
+            className="min-w-0 flex-1"
           />
         )}
 

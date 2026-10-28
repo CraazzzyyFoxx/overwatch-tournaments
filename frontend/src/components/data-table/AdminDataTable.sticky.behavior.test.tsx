@@ -65,7 +65,7 @@ async function render(columns: ColumnDef<Row>[], expandable = false) {
 
 /** `left` of every pinned cell in the header row, in column order. */
 function headerOffsets(): (string | undefined)[] {
-  return [...container.querySelectorAll<HTMLElement>("th.admin-sticky-col")].map(
+  return [...container.querySelectorAll<HTMLElement>('th[data-sticky="left"]')].map(
     (cell) => cell.style.left
   );
 }
@@ -80,12 +80,12 @@ describe("DataTable sticky columns", () => {
     await render([column("name", true), column("team", false)]);
 
     const headers = [...container.querySelectorAll("thead th")];
-    expect(headers[0]?.classList.contains("admin-sticky-col")).toBe(true);
-    expect(headers[1]?.classList.contains("admin-sticky-col")).toBe(false);
+    expect(headers[0]?.getAttribute("data-sticky")).toBe("left");
+    expect(headers[1]?.hasAttribute("data-sticky")).toBe(false);
 
     const cells = [...container.querySelectorAll("tbody td")];
-    expect(cells[0]?.classList.contains("admin-sticky-col")).toBe(true);
-    expect(cells[1]?.classList.contains("admin-sticky-col")).toBe(false);
+    expect(cells[0]?.getAttribute("data-sticky")).toBe("left");
+    expect(cells[1]?.hasAttribute("data-sticky")).toBe(false);
   });
 
   it("stacks offsets from declared sizes", async () => {
@@ -100,19 +100,19 @@ describe("DataTable sticky columns", () => {
     // Leading cell at 0, then the 40px-wide `w-10` expander is accounted for.
     expect(headerOffsets()).toEqual(["0px", "40px", "280px"]);
     const leading = container.querySelector("tbody td");
-    expect(leading?.classList.contains("admin-sticky-col")).toBe(true);
+    expect(leading?.getAttribute("data-sticky")).toBe("left");
   });
 
   it("ignores sticky on a column that is not part of the left-edge prefix", async () => {
     await render([column("name", false), column("team", true)]);
 
-    expect(container.querySelectorAll(".admin-sticky-col")).toHaveLength(0);
+    expect(container.querySelectorAll("[data-sticky]")).toHaveLength(0);
   });
 
   it("marks only the last pinned column with the edge shadow", async () => {
     await render([column("name", true, 240), column("team", true), column("note", false)]);
 
-    const edges = [...container.querySelectorAll("thead th.admin-sticky-col-edge")];
+    const edges = [...container.querySelectorAll('thead th[data-sticky="left"][data-sticky-edge]')];
     expect(edges).toHaveLength(1);
     expect(edges[0]?.textContent).toContain("team");
   });

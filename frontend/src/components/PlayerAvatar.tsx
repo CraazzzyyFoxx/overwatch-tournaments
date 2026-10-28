@@ -29,7 +29,7 @@ export function PlayerAvatar({
       style={{ width: size, height: size }}
     >
       {user.avatar_url ? <AvatarImage src={user.avatar_url} alt={named ? user.name : ""} /> : null}
-      <AvatarFallback className="bg-[color:var(--aqt-overlay-3)] text-label font-bold text-[color:var(--aqt-fg-muted)]">
+      <AvatarFallback className="font-bold">
         {initials(user.name)}
       </AvatarFallback>
     </Avatar>

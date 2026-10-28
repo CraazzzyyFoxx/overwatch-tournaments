@@ -2,8 +2,6 @@ import type { ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
 
-import styles from "../TournamentDetail.module.css";
-
 export type SectionToolbarProps = {
   /** Filter chips, stage switchers — the leading group. */
   children: ReactNode;
@@ -15,8 +13,8 @@ export type SectionToolbarProps = {
 
 /**
  * The one toolbar shape every public tournament section uses: chips on the
- * start, controls on the end, wrapping under itself on narrow screens. Uses the
- * existing `controlRail` rhythm so it sits where the old per-page rails did.
+ * start, controls on the end, wrapping under itself on narrow screens. The
+ * leading group scrolls sideways in place rather than wrapping.
  */
 export function SectionToolbar({ children, end, label, className }: Readonly<SectionToolbarProps>) {
   return (
@@ -25,7 +23,7 @@ export function SectionToolbar({ children, end, label, className }: Readonly<Sec
       aria-label={label}
       className={cn("flex flex-wrap items-center gap-2 sm:gap-3", className)}
     >
-      <div className={cn(styles.controlRail, "min-w-0 basis-full sm:flex-1 sm:basis-auto")}>
+      <div className="flex min-w-0 max-w-full basis-full gap-1.75 overflow-x-auto overflow-y-hidden overscroll-x-contain py-0.5 [scrollbar-width:thin] *:flex-none sm:flex-1 sm:basis-auto">
         {children}
       </div>
       {end ? (

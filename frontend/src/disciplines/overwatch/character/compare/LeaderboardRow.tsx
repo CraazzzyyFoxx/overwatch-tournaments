@@ -4,6 +4,7 @@ import { useTranslations } from "next-intl";
 
 import DivisionIcon from "@/components/DivisionIcon";
 import { HandleLabel } from "@/components/HandleLabel";
+import { TableCell, TableRow } from "@/components/ui/table";
 import { getDivisionLabel } from "@/lib/divisions/grid";
 import { formatSeconds } from "@/lib/format";
 import { getPlayerSlug } from "@/lib/player";
@@ -23,6 +24,7 @@ export interface StatCellSpec {
   sorted: number[];
 }
 
+/** The cells carry the hairline: the table is `border-separate` (for the sticky columns), where row borders draw nothing. */
 export const CELL = "border-b border-[color:var(--aqt-border)] px-3 py-2";
 /** The rank and player columns stay put while a phone scrolls the stat columns under them. */
 export const STICKY_RANK = "sticky left-0 z-[1]";
@@ -78,11 +80,11 @@ const LeaderboardRow = ({
   const bg = isHighlighted ? ROW_HIGHLIGHT : ROW_BG;
 
   return (
-    <tr onMouseEnter={() => onHoverUser(entry.user_id)} onMouseLeave={() => onHoverUser(null)}>
-      <td className={cn(CELL, STICKY_RANK, bg)}>
+    <TableRow onMouseEnter={() => onHoverUser(entry.user_id)} onMouseLeave={() => onHoverUser(null)}>
+      <TableCell className={cn(CELL, STICKY_RANK, bg)}>
         <RankBadge rank={rank} />
-      </td>
-      <td className={cn(CELL, STICKY_PLAYER, bg)}>
+      </TableCell>
+      <TableCell className={cn(CELL, STICKY_PLAYER, bg)}>
         <div className="flex min-w-0 items-center gap-2">
           <DivisionCrest division={entry.div} grid={grid} discipline={discipline} />
           <Link
@@ -90,25 +92,25 @@ const LeaderboardRow = ({
             title={entry.team ? `${entry.username} · ${entry.team}` : entry.username}
             onFocus={() => onHoverUser(entry.user_id)}
             onBlur={() => onHoverUser(null)}
-            className="min-w-0 truncate rounded-sm text-caption font-semibold text-[color:var(--aqt-fg)] outline-none hover:text-[color:var(--aqt-teal)] focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]"
+            className="min-w-0 truncate rounded-sm text-caption font-semibold text-[color:var(--aqt-fg)] outline-hidden hover:text-[color:var(--aqt-teal)] focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]"
           >
             <HandleLabel handle={entry.username} />
           </Link>
         </div>
-      </td>
-      <td className={cn(CELL, "text-right leading-tight", bg)}>
+      </TableCell>
+      <TableCell className={cn(CELL, "text-right leading-tight", bg)}>
         <span className="block text-caption font-semibold tabular-nums text-[color:var(--aqt-fg-muted)]">
           {entry.games_played}
         </span>
         <span className="block text-label tabular-nums text-[color:var(--aqt-fg-faint)]">
           {formatSeconds(entry.playtime_seconds)}
         </span>
-      </td>
+      </TableCell>
       {cells.map(({ def, sorted }, i) => {
         const value = def.getValue(entry);
         const share = beatsShare(sorted, value, def.ascending);
         return (
-          <td
+          <TableCell
             key={`${def.key}-${i}`}
             title={t("users.heroesCompare.table.beats", { value: Math.round(share * 100) })}
             className={cn(CELL, "text-center", isHighlighted && ROW_HIGHLIGHT)}
@@ -121,10 +123,10 @@ const LeaderboardRow = ({
             >
               {def.formatValue(value)}
             </span>
-          </td>
+          </TableCell>
         );
       })}
-    </tr>
+    </TableRow>
   );
 };
 

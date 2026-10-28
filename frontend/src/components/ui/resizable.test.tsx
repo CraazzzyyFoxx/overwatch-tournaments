@@ -41,13 +41,7 @@ function panelSize(scope: HTMLElement, panelId: string): number {
   return Number(panel?.getAttribute("data-panel-size"));
 }
 
-function Harness({
-  onCollapse,
-  onExpand
-}: {
-  onCollapse: () => void;
-  onExpand: () => void;
-}) {
+function Harness({ onCollapse, onExpand }: { onCollapse: () => void; onExpand: () => void }) {
   const sidebarRef = useRef<ImperativePanelHandle>(null);
 
   return (

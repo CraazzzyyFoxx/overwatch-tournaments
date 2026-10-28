@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useOAuthProviders } from "@/hooks/useOAuthProviders";
 import { getSocialProviderConfig } from "@/lib/social/providers";
@@ -74,7 +75,7 @@ const AuthDialog = ({ tenantWorkspace }: AuthModalProps) => {
           <div
             role="img"
             aria-label={brandName}
-            className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl border border-border/70 bg-[color:var(--aqt-overlay-3)] shadow-sm"
+            className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl border border-border/70 bg-[color:var(--aqt-overlay-3)]"
           >
             {tenantWorkspace ? (
               <WorkspaceAvatar workspace={tenantWorkspace} size={22} />
@@ -90,16 +91,12 @@ const AuthDialog = ({ tenantWorkspace }: AuthModalProps) => {
             )}
           </div>
 
-          <DialogTitle className="text-ui font-semibold tracking-[-0.01em] text-[color:var(--aqt-fg)]">
-            {t("auth.signIn")}
-          </DialogTitle>
-          <DialogDescription className="mt-1 text-label font-normal text-[color:var(--aqt-fg-dim)]">
-            {t("auth.continueTo", { siteName: brandName })}
-          </DialogDescription>
+          <DialogTitle>{t("auth.signIn")}</DialogTitle>
+          <DialogDescription className="mt-1">{t("auth.continueTo", { siteName: brandName })}</DialogDescription>
         </div>
 
         {/* Divider */}
-        <div className="h-px bg-border/70" />
+        <Separator className="bg-border/70" />
 
         {/* Provider buttons */}
         <div className="grid gap-2 px-8 py-5">
@@ -139,7 +136,7 @@ const AuthDialog = ({ tenantWorkspace }: AuthModalProps) => {
         </div>
 
         {/* Footer */}
-        <div className="h-px bg-border/70" />
+        <Separator className="bg-border/70" />
         <div className="flex justify-center px-8 py-4">
           <p className="text-center text-label leading-relaxed text-[color:var(--aqt-fg-faint)]">
             {t.rich("auth.agreement", {

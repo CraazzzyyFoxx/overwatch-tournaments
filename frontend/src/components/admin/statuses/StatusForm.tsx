@@ -157,7 +157,7 @@ function StatusColorPicker({
                 value={normalizeHexColor(value)}
                 fallback={normalizedValue}
                 label={t("pickCustom")}
-                onChange={onChange}
+                onValueChange={onChange}
               />
               <Label htmlFor={hexId} className="sr-only">
                 {t("hexCode")}

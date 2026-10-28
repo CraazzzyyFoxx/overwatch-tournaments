@@ -7,15 +7,15 @@ import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import type { SlotProps } from "@/disciplines/types";
 import { LogStatsName } from "../stat-names";
 import { characterClass } from "@/lib/catalog/attrs";
-import { CardSurface } from "@/components/profile/atoms";
+import { CARD_HEAD_LINK, CardSurface } from "@/components/profile/atoms";
 import { formatSeconds } from "@/lib/format";
 import { formatStatValue, getOverall, heroWinrate, statAvg10 } from "./utils";
 import { LOW_SAMPLE_GAMES, winrateColor } from "@/lib/colors";
 import CatalogEntityImage from "@/components/catalog/CatalogEntityImage";
-import { Eyebrow, eyebrowClass } from "@/components/ui/eyebrow";
+import { Eyebrow } from "@/components/ui/eyebrow";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { HeroStatsPopover } from "./HeroUserStatsPopover";
 import { useHeroClass } from "./classes";
-import { cn } from "@/lib/utils";
 
 const LIMIT = 8;
 
@@ -40,7 +40,7 @@ interface Row {
  *  mix an em dash (winrate) with an en dash (vs-avg) in the same row. */
 const EMPTY = "—";
 
-const numHeader = cn(eyebrowClass(), "aqt-tnum border-b border-[color:var(--aqt-border)] px-3 py-2.5 text-right");
+const numHeader = "aqt-tnum px-3 py-2.5 text-right";
 const numCell = "aqt-tnum px-3 py-2.5 text-right text-caption text-[color:var(--aqt-fg-muted)]";
 
 /** Overwatch's most-played heroes on the profile overview (the `topCharacters` slot). */
@@ -93,135 +93,130 @@ const TopHeroesTable = ({ characters, userSlug, metadata }: SlotProps["topCharac
       title={t("users.overview.topHeroes.title")}
       subtitle={t("users.overview.topHeroes.playedByTime", { count: characters.length })}
       action={
-        <HoverPrefetchLink href={`/users/${userSlug}?tab=heroes`} className="aqt-pf-link">
+        <HoverPrefetchLink href={`/users/${userSlug}?tab=heroes`} className={CARD_HEAD_LINK}>
           {t("common.all")} {characters.length}
           <ArrowRight aria-hidden className="size-3" />
         </HoverPrefetchLink>
       }
     >
-      <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-caption">
-          <thead>
-            <tr>
-              <th className={cn(eyebrowClass(), "aqt-tnum border-b border-[color:var(--aqt-border)] px-3 py-2.5 text-left")}>{t("users.overview.topHeroes.col.hero")}</th>
-              <th className={cn(eyebrowClass(), "aqt-tnum border-b border-[color:var(--aqt-border)] px-3 py-2.5 text-center")}>{t("users.overview.topHeroes.col.role")}</th>
-              {columns.games ? <th className={numHeader}>{t("users.overview.topHeroes.col.games")}</th> : null}
-              {columns.playtime ? <th className={numHeader}>{t("users.overview.topHeroes.col.time")}</th> : null}
-              {columns.share ? (
-                <th className={numHeader} title={t("users.overview.topHeroes.col.shareTitle")}>
-                  {t("users.overview.topHeroes.col.share")}
-                </th>
-              ) : null}
-              {columns.winrate ? <th className={numHeader}>{t("users.overview.topHeroes.col.winrate")}</th> : null}
-              {columns.kda ? <th className={numHeader}>{t("users.overview.topHeroes.col.kda")}</th> : null}
-              {columns.dmg10 ? <th className={numHeader}>{t("users.overview.topHeroes.col.dmg10")}</th> : null}
-              {columns.vsAvg ? <th className={numHeader}>{t("users.overview.topHeroes.col.vsAvg")}</th> : null}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => {
-              const roleName = heroClass.label(r.heroClass);
-              return (
-                <tr
-                  key={r.id}
-                  className="border-b border-[color:var(--aqt-border)] last:border-b-0 hover:bg-[hsl(0_0%_100%/0.02)]"
-                >
-                  <td className="px-3 py-2.5">
-                    <div className="flex items-center gap-2.5">
-                      <CatalogEntityImage
-                        entity={r.hero.character}
-                        size="sm"
-                        title={r.hero.character.name}
-                        popover={<HeroStatsPopover hero={r.hero} metadata={metadata} />}
-                      />
-                      <div className="min-w-0">
-                        <div className="truncate text-caption font-bold text-[color:var(--aqt-fg)]">
-                          {r.hero.character.name}
-                        </div>
-                        {r.lowSample ? (
-                          <Eyebrow className="aqt-tnum" title={lowSampleTitle}>
-                            {t("users.overview.topHeroes.lowSample")}
-                          </Eyebrow>
-                        ) : null}
+      <Table className="border-collapse">
+        <TableHeader>
+          <TableRow>
+            <TableHead className="aqt-tnum px-3 py-2.5">{t("users.overview.topHeroes.col.hero")}</TableHead>
+            <TableHead className="aqt-tnum px-3 py-2.5 text-center">{t("users.overview.topHeroes.col.role")}</TableHead>
+            {columns.games ? <TableHead className={numHeader}>{t("users.overview.topHeroes.col.games")}</TableHead> : null}
+            {columns.playtime ? <TableHead className={numHeader}>{t("users.overview.topHeroes.col.time")}</TableHead> : null}
+            {columns.share ? (
+              <TableHead className={numHeader} title={t("users.overview.topHeroes.col.shareTitle")}>
+                {t("users.overview.topHeroes.col.share")}
+              </TableHead>
+            ) : null}
+            {columns.winrate ? <TableHead className={numHeader}>{t("users.overview.topHeroes.col.winrate")}</TableHead> : null}
+            {columns.kda ? <TableHead className={numHeader}>{t("users.overview.topHeroes.col.kda")}</TableHead> : null}
+            {columns.dmg10 ? <TableHead className={numHeader}>{t("users.overview.topHeroes.col.dmg10")}</TableHead> : null}
+            {columns.vsAvg ? <TableHead className={numHeader}>{t("users.overview.topHeroes.col.vsAvg")}</TableHead> : null}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {rows.map((r) => {
+            const roleName = heroClass.label(r.heroClass);
+            return (
+              <TableRow key={r.id}>
+                <TableCell className="px-3 py-2.5">
+                  <div className="flex items-center gap-2.5">
+                    <CatalogEntityImage
+                      entity={r.hero.character}
+                      size="sm"
+                      title={r.hero.character.name}
+                      popover={<HeroStatsPopover hero={r.hero} metadata={metadata} />}
+                    />
+                    <div className="min-w-0">
+                      <div className="truncate text-caption font-bold text-[color:var(--aqt-fg)]">
+                        {r.hero.character.name}
                       </div>
+                      {r.lowSample ? (
+                        <Eyebrow className="aqt-tnum" title={lowSampleTitle}>
+                          {t("users.overview.topHeroes.lowSample")}
+                        </Eyebrow>
+                      ) : null}
                     </div>
-                  </td>
-                  <td className="px-3 py-2.5">
-                    <div className="flex justify-center" title={roleName}>
-                      {heroClass.icon(r.heroClass, 16)}
-                      <span className="sr-only">{roleName}</span>
-                    </div>
-                  </td>
-                  {columns.games ? <td className={numCell}>{r.games}</td> : null}
-                  {columns.playtime ? (
-                    <td className={numCell}>{r.playtime > 0 ? formatSeconds(r.playtime) : EMPTY}</td>
-                  ) : null}
-                  {columns.share ? (
-                    <td className={numCell}>{r.share == null ? EMPTY : `${(r.share * 100).toFixed(0)}%`}</td>
-                  ) : null}
-                  {columns.winrate ? (
-                    <td className={numCell}>
-                      {r.winPct == null ? (
-                        <span title={r.lowSample ? lowSampleTitle : undefined} className="text-[color:var(--aqt-fg-faint)]">
-                          {EMPTY}
-                        </span>
-                      ) : (
-                        <span className="font-bold" style={{ color: winrateColor(r.winPct) }}>
-                          {r.winPct.toFixed(0)}%
-                        </span>
-                      )}
-                    </td>
-                  ) : null}
-                  {columns.kda ? (
-                    <td className={`${numCell} font-semibold text-[color:var(--aqt-fg)]`}>
-                      {r.kda == null ? EMPTY : r.kda.toFixed(2)}
-                    </td>
-                  ) : null}
-                  {columns.dmg10 ? (
-                    <td className={numCell}>{r.dmg10 == null ? EMPTY : formatStatValue(format, "dmg", r.dmg10)}</td>
-                  ) : null}
-                  {columns.vsAvg ? (
-                    <td className={numCell}>
-                      {r.vsAvg == null ? (
-                        <span
-                          className="text-[color:var(--aqt-fg-faint)]"
-                          title={r.lowSample ? lowSampleTitle : t("users.overview.topHeroes.vsAvgTitle")}
-                        >
-                          {EMPTY}
-                        </span>
-                      ) : (
-                        <span
-                          className="font-bold"
-                          title={t("users.overview.topHeroes.vsAvgTitle")}
-                          style={{
-                            color:
-                              r.vsAvg > 0
-                                ? "var(--aqt-emerald)"
-                                : r.vsAvg < 0
-                                  ? "var(--aqt-rose)"
-                                  : "var(--aqt-fg-muted)"
-                          }}
-                        >
-                          {r.vsAvg > 0 ? (
-                            <TrendingUp aria-hidden className="inline size-4 align-[-3px]" />
-                          ) : r.vsAvg < 0 ? (
-                            <TrendingDown aria-hidden className="inline size-4 align-[-3px]" />
-                          ) : (
-                            <span aria-hidden>–</span>
-                          )}{" "}
-                          {/* The icon is decorative; direction reaches AT through this. */}
-                          <span className="sr-only">{r.vsAvg > 0 ? "+" : r.vsAvg < 0 ? "−" : ""}</span>
-                          {Math.abs(r.vsAvg * 100).toFixed(0)}
-                        </span>
-                      )}
-                    </td>
-                  ) : null}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+                  </div>
+                </TableCell>
+                <TableCell className="px-3 py-2.5">
+                  <div className="flex justify-center" title={roleName}>
+                    {heroClass.icon(r.heroClass, 16)}
+                    <span className="sr-only">{roleName}</span>
+                  </div>
+                </TableCell>
+                {columns.games ? <TableCell className={numCell}>{r.games}</TableCell> : null}
+                {columns.playtime ? (
+                  <TableCell className={numCell}>{r.playtime > 0 ? formatSeconds(r.playtime) : EMPTY}</TableCell>
+                ) : null}
+                {columns.share ? (
+                  <TableCell className={numCell}>{r.share == null ? EMPTY : `${(r.share * 100).toFixed(0)}%`}</TableCell>
+                ) : null}
+                {columns.winrate ? (
+                  <TableCell className={numCell}>
+                    {r.winPct == null ? (
+                      <span title={r.lowSample ? lowSampleTitle : undefined} className="text-[color:var(--aqt-fg-faint)]">
+                        {EMPTY}
+                      </span>
+                    ) : (
+                      <span className="font-bold" style={{ color: winrateColor(r.winPct) }}>
+                        {r.winPct.toFixed(0)}%
+                      </span>
+                    )}
+                  </TableCell>
+                ) : null}
+                {columns.kda ? (
+                  <TableCell className={`${numCell} font-semibold text-[color:var(--aqt-fg)]`}>
+                    {r.kda == null ? EMPTY : r.kda.toFixed(2)}
+                  </TableCell>
+                ) : null}
+                {columns.dmg10 ? (
+                  <TableCell className={numCell}>{r.dmg10 == null ? EMPTY : formatStatValue(format, "dmg", r.dmg10)}</TableCell>
+                ) : null}
+                {columns.vsAvg ? (
+                  <TableCell className={numCell}>
+                    {r.vsAvg == null ? (
+                      <span
+                        className="text-[color:var(--aqt-fg-faint)]"
+                        title={r.lowSample ? lowSampleTitle : t("users.overview.topHeroes.vsAvgTitle")}
+                      >
+                        {EMPTY}
+                      </span>
+                    ) : (
+                      <span
+                        className="font-bold"
+                        title={t("users.overview.topHeroes.vsAvgTitle")}
+                        style={{
+                          color:
+                            r.vsAvg > 0
+                              ? "var(--aqt-emerald)"
+                              : r.vsAvg < 0
+                                ? "var(--aqt-rose)"
+                                : "var(--aqt-fg-muted)"
+                        }}
+                      >
+                        {r.vsAvg > 0 ? (
+                          <TrendingUp aria-hidden className="inline size-4 align-[-3px]" />
+                        ) : r.vsAvg < 0 ? (
+                          <TrendingDown aria-hidden className="inline size-4 align-[-3px]" />
+                        ) : (
+                          <span aria-hidden>–</span>
+                        )}{" "}
+                        {/* The icon is decorative; direction reaches AT through this. */}
+                        <span className="sr-only">{r.vsAvg > 0 ? "+" : r.vsAvg < 0 ? "−" : ""}</span>
+                        {Math.abs(r.vsAvg * 100).toFixed(0)}
+                      </span>
+                    )}
+                  </TableCell>
+                ) : null}
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
     </CardSurface>
   );
 };

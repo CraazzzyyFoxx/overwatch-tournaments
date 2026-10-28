@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 import type { DraftGating } from "@/lib/draft/logic";
 import {
   currentRound,
@@ -225,7 +226,7 @@ export function RoomClockStrip({
             )}
           </div>
         </div>
-        <span aria-hidden className="hidden w-px self-stretch bg-[color:var(--aqt-border)] sm:block" />
+        <Separator orientation="vertical" className="hidden h-auto self-stretch sm:block" />
 
         <div className="flex min-w-[230px] flex-[1_1_300px] flex-col gap-2">
           <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1 text-caption">

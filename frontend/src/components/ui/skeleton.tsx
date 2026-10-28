@@ -1,4 +1,4 @@
-import { cn } from "@/lib/utils"
+import { cn } from "@/lib/utils";
 
 /**
  * Loading stand-in. `block` (default) is a `<div>` sized by the caller.
@@ -12,17 +12,17 @@ function Skeleton({
   variant = "block",
   ...props
 }: React.HTMLAttributes<HTMLElement> & { variant?: "block" | "text" }) {
-  const Comp = variant === "text" ? "span" : "div"
+  const Comp = variant === "text" ? "span" : "div";
   return (
     <Comp
       className={cn(
-        "animate-pulse rounded-md bg-primary/10 motion-reduce:animate-none",
-        variant === "text" && "inline-block h-[0.8em] rounded align-middle",
+        "animate-pulse rounded-md bg-[color:var(--aqt-overlay-3)] motion-reduce:animate-none",
+        variant === "text" && "inline-block h-[0.8em] align-middle",
         className
       )}
       {...props}
     />
-  )
+  );
 }
 
-export { Skeleton }
+export { Skeleton };

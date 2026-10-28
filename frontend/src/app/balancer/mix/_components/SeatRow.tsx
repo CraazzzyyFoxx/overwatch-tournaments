@@ -133,8 +133,7 @@ export function SeatDragPreview({ seat, owner }: Readonly<{ seat: PickupSeat; ow
   const tRoom = useTranslations("mixes.room");
   return (
     <Card
-      variant="flat"
-      className="flex cursor-grabbing items-center gap-3 rounded-lg border-[color:var(--aqt-teal)] px-3.5 py-3 shadow-lg"
+      className="flex cursor-grabbing items-center gap-3 rounded-lg border-[color:var(--aqt-teal)] px-3.5 py-3"
     >
       {owner.showsRoles ? (
         <span className="flex size-6 shrink-0 items-center justify-center opacity-90">

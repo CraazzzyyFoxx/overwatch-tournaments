@@ -31,7 +31,8 @@ export function useTournamentPlayedCount(
   const total = duels.length + ffa.lobbies.length;
   if (total === 0) return null;
   return {
-    played: duels.filter(isEncounterCompleted).length + ffa.lobbies.filter(isEncounterCompleted).length,
+    played:
+      duels.filter(isEncounterCompleted).length + ffa.lobbies.filter(isEncounterCompleted).length,
     total
   };
 }

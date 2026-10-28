@@ -50,7 +50,6 @@ export function ViewSegment<V extends string>({
 
   return (
     <ToggleGroup
-      type="single"
       value={current}
       onValueChange={(value) => {
         const next = options.find((o) => o.value === value)?.value;

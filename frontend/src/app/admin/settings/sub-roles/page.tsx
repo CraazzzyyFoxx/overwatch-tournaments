@@ -13,6 +13,7 @@ import { useFilters } from "@/components/kit/useFilters";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { triggerChevronClass } from "@/components/ui/chevron";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ColorSwatch } from "@/components/ui/color-swatch";
 import { Input } from "@/components/ui/input";
@@ -345,8 +346,8 @@ function RoleCard({
 
         {inactive.length > 0 ? (
           <Collapsible className="border-t border-border/60">
-            <CollapsibleTrigger className="group flex w-full items-center gap-1.5 px-4 py-2 text-caption text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
-              <ChevronDown aria-hidden className="size-3.5 transition-transform group-data-[state=open]:rotate-180" />
+            <CollapsibleTrigger className="group/trigger flex w-full items-center gap-1.5 px-4 py-2 text-caption text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
+              <ChevronDown aria-hidden className={cn(triggerChevronClass, "size-3.5")} />
               {t("inactiveToggle", { count: inactive.length })}
             </CollapsibleTrigger>
             <CollapsibleContent>
@@ -518,7 +519,6 @@ function AddSubRole({
             setLabel(event.target.value);
             setRefusal(null);
           }}
-          className="border-transparent bg-transparent shadow-none focus-visible:border-input"
           {...invalidProps(inputId, refusal ?? undefined)}
         />
         <Button type="submit" size="sm" variant="outline" disabled={!value || create.isPending}>
@@ -564,10 +564,10 @@ function PresentationField({
             value={value ?? ""}
             fallback={value === undefined ? (inherited ?? undefined) : undefined}
             label={label}
-            onChange={onChange}
+            onValueChange={onChange}
           />
         ) : (
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-md border border-dashed border-[color:var(--aqt-border-3)]">
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-dashed border-[color:var(--aqt-border-2)]">
             <SubRoleMark
               icon={value && iconAccepted(value, entry.discipline) ? value : value === undefined ? inherited : null}
               color={parent.color}

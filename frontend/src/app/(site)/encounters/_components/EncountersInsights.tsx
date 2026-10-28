@@ -34,11 +34,11 @@ function InsightCard({
   children
 }: Readonly<{ title: string; description?: string; children: ReactNode }>) {
   return (
-    <Card asChild variant="flat">
+    <Card asChild>
       <section aria-label={title}>
         <CardHeader className="space-y-1 p-4 pb-3">
-          <CardTitle asChild>
-            <h3 className="text-body">{title}</h3>
+          <CardTitle asChild className="text-body">
+            <h3>{title}</h3>
           </CardTitle>
           {description ? <CardDescription className="text-caption">{description}</CardDescription> : null}
         </CardHeader>
@@ -268,7 +268,7 @@ export function EncountersInsights({
                 <li key={encounter.id}>
                   <HoverPrefetchLink
                     href={`/encounters/${encounter.id}`}
-                    className="flex items-center gap-3 rounded-sm py-2 text-caption transition-colors hover:text-[color:var(--aqt-teal)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]"
+                    className="flex items-center gap-3 rounded-sm py-2 text-caption transition-colors hover:text-[color:var(--aqt-teal)] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]"
                   >
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-[color:var(--aqt-fg)]">

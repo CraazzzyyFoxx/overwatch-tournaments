@@ -177,11 +177,12 @@ function RoleSubroleSubForm({
               </SelectContent>
             </Select>
             <Button
-              variant="ghost"
-              size="icon"
-              className="size-8 shrink-0 text-muted-foreground/60 hover:text-destructive"
+              variant="ghost-destructive"
+              size="icon-toolbar"
+              className="shrink-0"
               onClick={() => removeItem(index)}
               disabled={items.length <= 1}
+              aria-label={t("removeRole")}
               title={t("removeRole")}
             >
               <Minus className="size-3.5" />

@@ -159,6 +159,45 @@ const RULES = [
       [/components[\\/]site[\\/]PageHero\.tsx$/, "cover wash sizing"],
     ],
   },
+  {
+    id: "R10-raw-table",
+    what: "native <table> outside components/ui (use @/components/ui/table)",
+    files: "**/*.tsx",
+    re: /<table\b/g,
+    exempt: [[/^src[\\/]components[\\/]ui[\\/]/, "the primitive itself"]],
+  },
+  {
+    id: "R11-hand-chevron",
+    what: "hand-rolled chevron turn (use triggerChevronClass / disclosureChevronClass)",
+    files: "**/*.{ts,tsx}",
+    // `-rotate-90` (an SVG ring starting at 12 o'clock) is orientation, not a turn.
+    re: /(?<![\w-])rotate-(?:90|180)\b/g,
+    exempt: [[/^src[\\/]components[\\/]ui[\\/]/, "the primitives themselves"]],
+  },
+  {
+    id: "R12-px-text",
+    what: "text-[Npx] (type roles are the only sizes; missing one? add a role)",
+    files: "**/*.{ts,tsx}",
+    re: /\btext-\[\d+(?:\.\d+)?px\]/g,
+    // R6's sanctioned small decorative coordinate stays sanctioned here.
+    allow: /decorative/i,
+  },
+  {
+    id: "R13-hand-divider",
+    what: "1px line in a border colour (use @/components/ui/separator)",
+    files: "**/*.{ts,tsx}",
+    // Same class string, either order. A variant prefix (`after:w-px`, a sticky
+    // column's edge) is a pseudo-element, not an element a Separator can be.
+    re: /(?<![:\w-])[hw]-px\b(?=[^"'`]*(?<![:\w-])bg-(?:border\b|\[color:var\(--aqt-border[\w-]*\)\]))|(?<![:\w-])bg-(?:border\b|\[color:var\(--aqt-border[\w-]*\)\])[^"'`]*(?<![:\w-])[hw]-px\b/g,
+    exempt: [[/^src[\\/]components[\\/]ui[\\/]/, "the primitive itself"]],
+  },
+  {
+    id: "R14-hand-spinner",
+    what: "animate-spin outside components/ui (use @/components/ui/spinner)",
+    files: "**/*.{ts,tsx,css}",
+    re: /\banimate-spin\b/g,
+    exempt: [[/^src[\\/]components[\\/]ui[\\/]/, "the primitive itself"]],
+  },
 ];
 
 /** Global exemptions, plus the rule's own scoped ones. */

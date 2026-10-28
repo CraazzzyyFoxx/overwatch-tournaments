@@ -170,7 +170,7 @@ export function StreamTheater({ entry, isPlaying, onPlay, now }: Readonly<Stream
           {entry.player ? (
             <Link
               href={`/users/${getPlayerSlug(entry.player.name)}`}
-              className="inline-flex min-w-0 items-center gap-2 text-inherit no-underline outline-none transition-colors hover:text-[color:var(--aqt-teal)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--aqt-teal)]"
+              className="inline-flex min-w-0 items-center gap-2 text-inherit no-underline transition-colors hover:text-[color:var(--aqt-teal)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--aqt-teal)]"
             >
               {entry.player.avatar_url ? (
                 <Image
@@ -214,7 +214,7 @@ export function StreamTheater({ entry, isPlaying, onPlay, now }: Readonly<Stream
           href={entry.url}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex w-fit items-center gap-2 rounded-[9px] border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-2)] px-3 py-2 text-caption font-semibold text-inherit no-underline outline-none transition-colors hover:border-[color:var(--aqt-border-3)] hover:text-[color:var(--aqt-teal)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--aqt-teal)]"
+          className="inline-flex w-fit items-center gap-2 rounded-lg border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-2)] px-3 py-2 text-caption font-semibold text-inherit no-underline transition-colors hover:border-[color:var(--aqt-border-3)] hover:text-[color:var(--aqt-teal)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--aqt-teal)]"
         >
           <SocialIcon provider={entry.platform} size={14} />
           <span>{t("stream.broadcast.watchOn", { platform: provider.label })}</span>

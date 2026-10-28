@@ -2,6 +2,9 @@
 
 import { useTranslations } from "next-intl";
 
+import { floatingGlassClass } from "@/components/ui/dock";
+import { Separator } from "@/components/ui/separator";
+import { cn } from "@/lib/utils";
 import { usePickCountdown } from "@/hooks/usePickCountdown";
 import type { DraftGating } from "@/lib/draft/logic";
 import { turnsUntil, type TeamView } from "@/lib/draft/room-model";
@@ -64,7 +67,10 @@ export function PickPill({ board, gating, actingTeam, overrideMode }: Readonly<P
     <div
       role="status"
       // Phones: the chat launcher owns the bottom-right corner, so the pill floats above it.
-      className="mx-auto flex h-12 w-fit max-w-full items-center gap-3 whitespace-nowrap rounded-full border bg-[color:var(--aqt-card-2)] px-5 shadow-[0_18px_50px_rgb(0_0_0/0.45)] max-sm:mb-[4.5rem]"
+      className={cn(
+        floatingGlassClass,
+        "mx-auto flex h-12 w-fit max-w-full items-center gap-3 whitespace-nowrap px-5 max-sm:mb-[4.5rem]"
+      )}
       style={{ borderColor: actionBorder(board, myTurn, overrideMode) }}
     >
       {/* Ticks every second: kept out of the live region so it is not announced on each tick. */}
@@ -75,7 +81,7 @@ export function PickPill({ board, gating, actingTeam, overrideMode }: Readonly<P
       >
         {countdown.text ?? "—"}
       </span>
-      <span aria-hidden className="h-[22px] w-px bg-[color:var(--aqt-border-2)]" />
+      <Separator orientation="vertical" className="h-[22px] bg-[color:var(--aqt-border-2)]" />
       <span
         className="text-ui font-semibold"
         style={{

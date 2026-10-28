@@ -14,6 +14,7 @@ import {
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import { Spinner } from "@/components/ui/spinner";
+import { TONE_TEXT } from "@/components/ui/tone";
 
 import type { BalancerOperationStep, BalancerOperationStepStatus } from "./operation-steps";
 
@@ -33,11 +34,11 @@ type BalancerOperationDialogProps = {
 
 function OperationStepIcon({ status }: Readonly<{ status: BalancerOperationStepStatus }>) {
   if (status === "running") {
-    return <Spinner className="text-blue-500" />;
+    return <Spinner className={TONE_TEXT.info} />;
   }
 
   if (status === "succeeded") {
-    return <CheckCircle2 className="h-4 w-4 text-emerald-500" />;
+    return <CheckCircle2 className={cn("h-4 w-4", TONE_TEXT.success)} />;
   }
 
   if (status === "failed") {
@@ -82,7 +83,7 @@ export function BalancerOperationDialog({
         </DialogHeader>
 
         <div className="space-y-4">
-          <Progress value={progress} className="h-2" />
+          <Progress value={progress} aria-label={title} />
 
           <div className="space-y-2">
             {steps.map((step) => (

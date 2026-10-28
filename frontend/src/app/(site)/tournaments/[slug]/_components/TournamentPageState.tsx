@@ -3,11 +3,11 @@
 import React from "react";
 import { useTranslations } from "next-intl";
 
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { eyebrowClass } from "@/components/ui/eyebrow";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { cn } from "@/lib/utils";
-
-import styles from "../TournamentDetail.module.css";
 
 type StateCopy = {
   title?: string;
@@ -49,9 +49,9 @@ type TournamentPageStateProps =
  * Tournament-flavoured wrapper over the site-wide `PageStateCard`.
  *
  * The three terminal states are the shared card verbatim, so the tournament
- * pages no longer carry their own empty/error design. `refresh-error` stays
- * bespoke on purpose: it is the only state that must render *below* stale
- * content rather than replace it, so it keeps the module-CSS strip layout.
+ * pages no longer carry their own empty/error design. `refresh-error` is the
+ * only state that must render *below* stale content rather than replace it, so
+ * it is the stale content with a warning `Alert` under it.
  */
 export function TournamentPageState(props: TournamentPageStateProps) {
   const t = useTranslations();
@@ -62,18 +62,20 @@ export function TournamentPageState(props: TournamentPageStateProps) {
       props.description ?? t("tournamentDetail.pageState.refreshError.description");
 
     return (
-      <div className={cn(styles.refreshState, props.className)}>
+      <div className={cn("grid gap-3", props.className)}>
         {props.children}
-        <div className={styles.refreshMessage} role="status" aria-live="polite">
+        <Alert tone="warning" aria-live="polite" className="flex items-center justify-between gap-3">
           <span>
             <strong>{title}</strong> — {description}
           </span>
           <Button type="button" variant="outline" size="sm" onClick={props.onRetry}>
             {t("tournamentDetail.pageState.retry")}
           </Button>
-        </div>
+        </Alert>
         {props.isUpdating ? (
-          <span className={styles.updating}>{t("tournamentDetail.pageState.updating")}</span>
+          <span className={eyebrowClass("faint", "text-[color:var(--aqt-teal)]")}>
+            {t("tournamentDetail.pageState.updating")}
+          </span>
         ) : null}
       </div>
     );

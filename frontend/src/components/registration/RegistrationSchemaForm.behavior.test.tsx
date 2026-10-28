@@ -47,6 +47,8 @@ vi.mock("@/components/ui/popover", () => ({
   },
   PopoverContent: ({ children }: { children: ReactNode }) =>
     useContext(PopoverCtx).open ? <div>{children}</div> : null,
+  // Read by `ui/dialog` at module load (its modal fade).
+  floatingPanelFadeClass: "",
 }));
 vi.mock("@/services/registration.service", () => ({
   default: { getMySubscriptionStatus: async () => ({ required: false, verdicts: {} }) },

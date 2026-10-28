@@ -71,7 +71,7 @@ export function DraftPoolStep({
 
   return (
     <div className="space-y-6">
-      <Card variant="flat" className="p-5">
+      <Card className="p-5">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="text-sm text-muted-foreground">{t("poolPlayers")}</p>
@@ -93,7 +93,7 @@ export function DraftPoolStep({
                 disabled={locked}
                 value={teamCount}
                 onValueChange={(next) => onTeamCountChange(next ?? MIN_DRAFT_TEAM_COUNT)}
-                className="w-20 tabular-nums"
+                className="w-20"
               />
               <Button
                 type="button"
@@ -115,7 +115,7 @@ export function DraftPoolStep({
             )}
           </div>
         </div>
-        <Progress value={percent} className="mt-4 h-2" aria-label={t("poolPlayers")} />
+        <Progress value={percent} className="mt-4" aria-label={t("poolPlayers")} />
         <FactList
           className="mt-4"
           facts={[
@@ -170,7 +170,7 @@ export function DraftPoolStep({
       )}
 
       {(readiness.blockers.length > 0 || (feasibility && !feasibility.is_feasible)) && (
-        <Alert variant="destructive" className="rounded-xl">
+        <Alert tone="warning">
           <ShieldAlert className="size-4" aria-hidden />
           <AlertTitle>{t("blockingIssues")}</AlertTitle>
           <AlertDescription>

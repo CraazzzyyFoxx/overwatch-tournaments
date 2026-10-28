@@ -195,7 +195,7 @@ it("names the last tournament's role on the server, from its own community's met
   expect(mismatches).toEqual([]);
   const server = document.createElement("div");
   server.innerHTML = html;
-  const card = [...server.querySelectorAll(".aqt-card-surface")].find((node) => node.textContent?.includes("Overwatch Open"));
+  const card = [...server.querySelectorAll('[data-ui="card"]')].find((node) => node.textContent?.includes("Overwatch Open"));
   expect(card?.querySelector('[title="Support"]')).toBeTruthy();
   expect(card?.textContent).toContain("Support");
   expect(html).not.toContain("Unknown role");

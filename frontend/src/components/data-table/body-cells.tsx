@@ -7,7 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/components/data-table/host";
 import { ADMIN_ACTION_COLUMN_ID, ALIGN_CLASS, ALIGN_FLEX_CLASS, RESPONSIVE_CLASS, readColumnMeta } from "@/components/data-table/columns";
 import { HighlightMatch } from "@/components/data-table/HighlightMatch";
-import type { ColumnLayout } from "@/components/data-table/column-layout";
+import { STICKY_CELL_CLASS, type ColumnLayout } from "@/components/data-table/column-layout";
 import type { RowHandlers } from "@/components/data-table/body-rows";
 
 export interface BodyCellContext<TData> {
@@ -49,9 +49,10 @@ export function renderLeadingCell<TData>(
         "w-10 min-w-10 pl-4 pr-2",
         cellPadding,
         cellAlign === "top" ? "align-top" : "align-middle",
-        layout.stickyLeft.size > 0 && "admin-sticky-col"
+        layout.stickyLeft.size > 0 && STICKY_CELL_CLASS
       )}
       style={layout.stickyLeft.size > 0 ? { left: 0 } : undefined}
+      data-sticky={layout.stickyLeft.size > 0 ? "left" : undefined}
     >
       <div className="flex items-center gap-1.5">
         {hasExpandedDetail ? (
@@ -125,6 +126,8 @@ export function renderBodyCell<TData>(
         cellProps?.className,
       )}
       style={cellProps?.style ? { ...sticky.style, ...cellProps.style } : sticky.style}
+      data-sticky={sticky["data-sticky"]}
+      data-sticky-edge={sticky["data-sticky-edge"]}
       title={cellProps?.title}
     >
       {isActionColumn ? (

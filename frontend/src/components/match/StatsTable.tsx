@@ -73,7 +73,8 @@ export default function StatsTableView({
           return (
             <TableBody key={section.key} className="border-t border-[color:var(--aqt-border)]">
               <TableRow className="bg-[color:var(--aqt-overlay-2)]">
-                <TableHead scope="colgroup" colSpan={span} className="text-left">
+                {/* A team's name, not a column label: no uppercase on user content. */}
+                <TableHead scope="colgroup" colSpan={span} className="text-caption normal-case tracking-normal text-[color:var(--aqt-fg)]">
                   <span className="inline-flex flex-wrap items-center gap-x-2">
                     <span>{section.name}</span>
                     <span className="text-label font-normal text-[color:var(--aqt-fg-dim)]">
@@ -106,7 +107,7 @@ export default function StatsTableView({
                 </TableRow>
               ) : (
                 section.rows.map((row) => (
-                  <TableRow key={row.key} className="hover:bg-[color:var(--aqt-overlay-1)]">
+                  <TableRow key={row.key}>
                     <TableCell>
                       <PlayerName
                         player={{ name: row.name }}

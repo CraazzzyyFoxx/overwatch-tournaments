@@ -8,7 +8,7 @@ import { useBracketRoundLabel } from "@/hooks/useBracketRoundLabel";
 
 import {
   AdminDetailTableShell,
-  getAdminDetailTableStyles
+  adminDetailTableStyles as styles
 } from "@/components/admin/AdminDetailTable";
 import { EmptyNote } from "@/components/kit/EmptyNote";
 import { SettingGroup } from "@/components/kit/SettingRow";
@@ -308,7 +308,6 @@ export type RoundSchedule = ReturnType<typeof useRoundSchedule>;
 export function RoundScheduleSection({ schedule }: Readonly<{ schedule: RoundSchedule }>) {
   const t = useTranslations("adminBracket.roundSchedule");
   const tEditor = useTranslations("adminBracket.editor");
-  const styles = getAdminDetailTableStyles("compact");
   const { isFfa, source, rows } = schedule;
 
   return (
@@ -327,10 +326,10 @@ export function RoundScheduleSection({ schedule }: Readonly<{ schedule: RoundSch
           {isFfa ? t("emptyBodyLobbies") : t("emptyBody")}
         </EmptyNote>
       ) : (
-        <AdminDetailTableShell variant="compact">
+        <AdminDetailTableShell>
           <Table>
             <TableHeader>
-              <TableRow className={styles.headerRow}>
+              <TableRow>
                 <TableHead className={styles.head}>{t("roundColumn")}</TableHead>
                 <TableHead className={styles.head}>{t("timeColumn")}</TableHead>
                 <TableHead className={styles.head}>
@@ -362,7 +361,7 @@ export function RoundScheduleSection({ schedule }: Readonly<{ schedule: RoundSch
                   <TableCell className={styles.numericCell}>
                     {row.encounters.length}
                     {row.overrides.length > 0 ? (
-                      <span className="ml-2 text-xs text-warning">
+                      <span className="ml-2 text-label text-warning">
                         {t("overrides", { count: row.overrides.length })}
                       </span>
                     ) : null}

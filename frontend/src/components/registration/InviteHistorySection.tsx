@@ -94,9 +94,9 @@ export default function InviteHistorySection({
         </Button>
       </SheetTrigger>
 
-      <SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-lg">
-        <SheetHeader className="space-y-1 border-b border-[color:var(--aqt-border)] px-5 py-4 text-left">
-          <SheetTitle className="flex items-center gap-2 text-base">
+      <SheetContent variant="panel" className="w-full sm:max-w-lg">
+        <SheetHeader variant="panel">
+          <SheetTitle className="flex items-center gap-2">
             <History aria-hidden className="size-4 shrink-0 text-[color:var(--aqt-fg-muted)]" />
             {t("history.toggle")}
           </SheetTitle>

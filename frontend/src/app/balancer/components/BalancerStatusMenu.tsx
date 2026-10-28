@@ -1,19 +1,20 @@
 "use client";
 
-import { Check, Circle } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  ContextMenuItem,
+  ContextMenuRadioGroup,
+  ContextMenuRadioItem,
   ContextMenuSeparator,
   ContextMenuSub,
   ContextMenuSubContent,
@@ -79,13 +80,10 @@ export function BalancerStatusMenu({
       <DropdownMenuTrigger asChild>
         <Button
           type="button"
-          variant="ghost"
+          variant="outline"
           size="sm"
           disabled={disabled}
-          className={cn(
-            "h-7 justify-start rounded-lg border border-[color:var(--aqt-border)] bg-[color:var(--aqt-bg-2)] px-2 text-[color:var(--aqt-fg-muted)] hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-fg)]",
-            size === "compact" ? "max-w-[128px]" : "max-w-[110px]"
-          )}
+          className={cn("h-7 justify-start px-2", size === "compact" ? "max-w-[128px]" : "max-w-[110px]")}
           title={t("title", { status: statusName })}
         >
           <span className="truncate">{statusName}</span>
@@ -93,19 +91,19 @@ export function BalancerStatusMenu({
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-52">
         <DropdownMenuLabel>{t("label")}</DropdownMenuLabel>
-        {options.system.map((option) => (
-          <DropdownMenuItem key={option.value} onClick={() => onChange(option.value)}>
-            {option.value === value ? <Check className="h-4 w-4" /> : <Circle className="h-4 w-4" />}
-            {option.name}
-          </DropdownMenuItem>
-        ))}
-        {options.custom.length > 0 ? <DropdownMenuSeparator /> : null}
-        {options.custom.map((option) => (
-          <DropdownMenuItem key={option.value} onClick={() => onChange(option.value)}>
-            {option.value === value ? <Check className="h-4 w-4" /> : <Circle className="h-4 w-4" />}
-            {option.name}
-          </DropdownMenuItem>
-        ))}
+        <DropdownMenuRadioGroup value={value ?? ""} onValueChange={onChange}>
+          {options.system.map((option) => (
+            <DropdownMenuRadioItem key={option.value} value={option.value}>
+              {option.name}
+            </DropdownMenuRadioItem>
+          ))}
+          {options.custom.length > 0 ? <DropdownMenuSeparator /> : null}
+          {options.custom.map((option) => (
+            <DropdownMenuRadioItem key={option.value} value={option.value}>
+              {option.name}
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -123,19 +121,19 @@ export function BalancerStatusContextMenuItems({ value, statusOptions, disabled,
     <ContextMenuSub>
       <ContextMenuSubTrigger disabled={disabled}>{t("set")}</ContextMenuSubTrigger>
       <ContextMenuSubContent className="w-52">
-        {options.system.map((option) => (
-          <ContextMenuItem key={option.value} onClick={() => onChange(option.value)}>
-            {option.value === value ? <Check className="h-4 w-4" /> : <Circle className="h-4 w-4" />}
-            {option.name}
-          </ContextMenuItem>
-        ))}
-        {options.custom.length > 0 ? <ContextMenuSeparator /> : null}
-        {options.custom.map((option) => (
-          <ContextMenuItem key={option.value} onClick={() => onChange(option.value)}>
-            {option.value === value ? <Check className="h-4 w-4" /> : <Circle className="h-4 w-4" />}
-            {option.name}
-          </ContextMenuItem>
-        ))}
+        <ContextMenuRadioGroup value={value ?? ""} onValueChange={onChange}>
+          {options.system.map((option) => (
+            <ContextMenuRadioItem key={option.value} value={option.value}>
+              {option.name}
+            </ContextMenuRadioItem>
+          ))}
+          {options.custom.length > 0 ? <ContextMenuSeparator /> : null}
+          {options.custom.map((option) => (
+            <ContextMenuRadioItem key={option.value} value={option.value}>
+              {option.name}
+            </ContextMenuRadioItem>
+          ))}
+        </ContextMenuRadioGroup>
       </ContextMenuSubContent>
     </ContextMenuSub>
   );

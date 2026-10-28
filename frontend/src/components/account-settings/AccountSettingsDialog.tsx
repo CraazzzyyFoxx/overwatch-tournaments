@@ -117,7 +117,7 @@ const AccountSettingsDialog = () => {
       <DialogContent
         variant="panel"
         aria-describedby={undefined}
-        className="h-[100dvh] max-h-[100dvh] w-full max-w-none rounded-none border-0 md:h-[min(85dvh,760px)] md:max-h-[calc(100dvh-2rem)] md:w-[calc(100%-2rem)] md:max-w-5xl md:rounded-2xl md:border"
+        className="h-[100dvh] max-h-[100dvh] w-full max-w-none rounded-none border-0 md:h-[min(85dvh,760px)] md:max-h-[calc(100dvh-2rem)] md:w-[calc(100%-2rem)] md:max-w-5xl md:rounded-xl md:border"
       >
         <Tabs
           value={activeTab}
@@ -139,7 +139,7 @@ const AccountSettingsDialog = () => {
           >
             {/* pr-14 keeps the title clear of the dialog's close button. */}
             <div className="flex min-h-14 shrink-0 items-center py-3 pl-4 pr-14 md:pl-5 md:pr-4">
-              <DialogTitle className="text-heading font-semibold leading-tight text-[color:var(--aqt-fg)] md:text-ui">
+              <DialogTitle>
                 {t("title")}
               </DialogTitle>
             </div>
@@ -181,7 +181,7 @@ const AccountSettingsDialog = () => {
                   <h3
                     ref={headingRef}
                     tabIndex={-1}
-                    className="font-display text-title font-semibold text-[color:var(--aqt-fg)] outline-none"
+                    className="font-display text-title font-semibold text-[color:var(--aqt-fg)] outline-hidden"
                   >
                     {t(`${activeTab}.title`)}
                   </h3>
@@ -202,7 +202,7 @@ const AccountSettingsDialog = () => {
 
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5 sm:px-6 md:px-8 md:py-6">
               {RAIL.flatMap((entry) => entry.tabs).map(({ id }) => (
-                <TabsContent key={id} value={id} className="mt-0">
+                <TabsContent key={id} value={id}>
                   {PANELS[id]}
                 </TabsContent>
               ))}

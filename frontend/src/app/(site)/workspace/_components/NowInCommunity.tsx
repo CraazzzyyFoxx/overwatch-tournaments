@@ -388,7 +388,7 @@ async function ChronicleRow({
             {tournament.name}
           </Link>
           {tournament.is_league ? (
-            <Badge palette="aqt" tone="neutral" voice="label">
+            <Badge tone="neutral" voice="label">
               {tSite("league")}
             </Badge>
           ) : null}

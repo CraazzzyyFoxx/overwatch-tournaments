@@ -4,8 +4,8 @@ import * as React from "react";
 import { ChevronDownIcon, X } from "lucide-react";
 import { type DateTimeFormatOptions, useTranslations } from "next-intl";
 import { useFormatter } from "@/lib/datetime/client";
-import { cn } from "@/lib/utils";
-import { Button, triggerChevronClass } from "@/components/ui/button";
+import { Button, selectTriggerClass } from "@/components/ui/button";
+import { triggerChevronClass } from "@/components/ui/chevron";
 import { Calendar } from "@/components/ui/calendar";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { TimeInput } from "@/components/ui/time-input";
@@ -39,6 +39,10 @@ interface DateTimePickerProps {
    * accessible name each control has.
    */
   labelClassName?: string;
+  /** `sm` is the 32px toolbar row, `default` the 36px form row; the time field follows. */
+  size?: "sm" | "default";
+  /** The date trigger's surface; `surface` is the public form skin. */
+  variant?: "default" | "surface";
 }
 
 /**
@@ -118,7 +122,9 @@ export function DateTimePicker({
   timeLabel,
   timeId,
   value,
-  labelClassName
+  labelClassName,
+  size,
+  variant
 }: Readonly<DateTimePickerProps>) {
   const t = useTranslations("kit.datePicker");
   const format = useFormatter();
@@ -135,22 +141,20 @@ export function DateTimePicker({
           </FieldLabel>
           <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
-              <Button
+              <button
                 id={id}
                 type="button"
-                variant="outline"
-                data-empty={!selected}
+                data-placeholder={selected ? undefined : ""}
                 disabled={disabled}
-                className={cn(
-                  "group/trigger w-full justify-between",
-                  "data-[empty=true]:text-muted-foreground"
-                )}
+                className={selectTriggerClass(size, variant)}
               >
-                <span className="truncate">
-                  {selected ? formatDateTimeDisplay(format, selected) : (placeholder ?? t("select"))}
+                <span>
+                  {selected
+                    ? formatDateTimeDisplay(format, selected)
+                    : (placeholder ?? t("select"))}
                 </span>
-                <ChevronDownIcon data-icon="inline-end" className={triggerChevronClass} />
-              </Button>
+                <ChevronDownIcon aria-hidden className={triggerChevronClass} />
+              </button>
             </PopoverTrigger>
             <PopoverContent className="w-auto overflow-hidden p-0" align="start">
               <Calendar
@@ -179,7 +183,7 @@ export function DateTimePicker({
             id={timeId}
             value={timeValue}
             disabled={disabled}
-            className="bg-background"
+            size={size}
             onValueChange={(nextTime) => {
               const baseDate = selected ?? new Date();
               onChange(toLocalDateTime(withTime(baseDate, nextTime || "12:00")));
@@ -190,10 +194,11 @@ export function DateTimePicker({
       {selected && !disabled ? (
         <Button
           type="button"
-          variant="outline"
-          size="icon"
-          className="h-9 w-9 shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+          variant="ghost-destructive"
+          size={size === "sm" ? "icon-toolbar" : "icon"}
+          className="shrink-0"
           onClick={() => onChange("")}
+          aria-label={clearLabel ?? t("clear")}
           title={clearLabel ?? t("clear")}
         >
           <X className="size-4" />

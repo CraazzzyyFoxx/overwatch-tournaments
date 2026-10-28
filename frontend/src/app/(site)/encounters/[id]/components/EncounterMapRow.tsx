@@ -16,10 +16,24 @@ import {
   DialogTrigger
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Eyebrow } from "@/components/ui/eyebrow";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { StatusDot } from "@/components/ui/status-dot";
 import MatchLogIndicator, { RawLogStatus } from "@/components/match/MatchLogIndicator";
 import MatchStatistics from "@/components/match/MatchStatistics";
+import { ScoreCell, type ScoreKind } from "@/components/match/cells";
+import {
+  CARD_SUB,
+  MAP_ACTION,
+  MAP_IDENTITY,
+  MAP_INDEX,
+  MAP_ROW,
+  MAP_SCORE,
+  MAP_THUMB,
+  MAP_TIME,
+  SIDE_TEXT
+} from "@/components/match/EncounterAtoms";
 import encounterService from "@/services/encounter.service";
 import { acceptedScore } from "@/components/pick-ban/pick-ban-model";
 import { formatSeriesClock, type SeriesSlot } from "@/lib/encounter/detail";
@@ -27,8 +41,19 @@ import { mapWithModeName } from "@/lib/catalog/mode";
 import type { Duel } from "@/lib/encounter/seats";
 import type { Encounter } from "@/types/encounter.types";
 import { Badge } from "@/components/ui/badge";
-import styles from "@/components/match/EncounterDetail.module.css";
 import { encounterQueryKeys } from "@/lib/encounters/query-keys";
+
+/** The map on air keeps its tint under the pointer; every other row takes the row hover. */
+const LIVE_ROW = "bg-[color:color-mix(in_srgb,var(--aqt-status-live)_5%,transparent)]";
+const ROW_HOVER = "hover:bg-[color:var(--aqt-overlay-2)]";
+const THUMB_PLACEHOLDER = "grid place-items-center text-[color:var(--aqt-fg-faint)]";
+const MAP_NAME = "font-display text-ui font-semibold wrap-anywhere text-[color:var(--aqt-fg)]";
+const MAP_MODE = cn(CARD_SUB, "inline-flex flex-wrap items-center gap-1.5");
+const META_WARN = "text-[color:var(--aqt-amber)]";
+const SCORE_SEP = "text-label text-[color:var(--aqt-fg-faint)]";
+const DIALOG_FACT = "inline-flex min-w-0 items-center gap-1.5";
+const DIALOG_FACT_VALUE = "inline-flex min-w-0 items-center gap-1.5 text-[color:var(--aqt-fg-muted)]";
+const DIALOG_TEAM = "max-w-44 truncate text-caption font-semibold";
 
 interface EncounterMapRowProps {
   slot: SeriesSlot;
@@ -72,16 +97,16 @@ export default function EncounterMapRow({
   if (!match && game == null) {
     // The page only hands over an empty position while it is being played.
     return (
-      <div className={cn(styles.mapRow, styles.mapRowLive)}>
-        <span className={styles.mapIndex}>{slot.index}</span>
-        <span className={cn(styles.mapThumb, styles.mapThumbPlaceholder)}>
+      <div className={cn(MAP_ROW, "transition-colors", LIVE_ROW)}>
+        <span className={MAP_INDEX}>{slot.index}</span>
+        <span className={cn(MAP_THUMB, THUMB_PLACEHOLDER)}>
           <ImageOff aria-hidden width={18} height={18} />
         </span>
-        <span className={styles.mapIdentity}>
-          <span className={styles.mapName}>{t("encounters.detail.mapInProgress")}</span>
-          <span className={styles.mapMode}>
-            <Badge palette="aqt" shape="pill" tone="danger">
-              <span aria-hidden className={styles.livePulse} />
+        <span className={MAP_IDENTITY}>
+          <span className={MAP_NAME}>{t("encounters.detail.mapInProgress")}</span>
+          <span className={MAP_MODE}>
+            <Badge shape="pill" tone="danger">
+              <StatusDot pulse />
               {t("encounters.state.live")}
             </Badge>
           </span>
@@ -113,22 +138,24 @@ export default function EncounterMapRow({
           secondScore: shown.two
         })
       : t("encounters.detail.mapNotPlayed");
+  const scoreKind: ScoreKind =
+    shown == null || shown.one === shown.two ? "draw" : shown.one > shown.two ? "win" : "loss";
 
   return (
-    <div className={cn(styles.mapRow, slot.isLive && styles.mapRowLive)}>
-      <span className={styles.mapIndex}>{slot.index}</span>
+    <div className={cn(MAP_ROW, "transition-colors", slot.isLive ? LIVE_ROW : ROW_HOVER)}>
+      <span className={MAP_INDEX}>{slot.index}</span>
 
-      <span className={cn(styles.mapThumb, !map?.image_path && styles.mapThumbPlaceholder)}>
+      <span className={cn(MAP_THUMB, !map?.image_path && THUMB_PLACEHOLDER)}>
         {map?.image_path ? (
-          <Image src={map.image_path} alt="" fill sizes="80px" className={styles.mapThumbImage} />
+          <Image src={map.image_path} alt="" fill sizes="80px" className="object-cover" />
         ) : (
           <ImageOff aria-hidden width={18} height={18} />
         )}
       </span>
 
-      <span className={styles.mapIdentity}>
-        <span className={styles.mapName}>{mapName}</span>
-        <span className={styles.mapMode}>
+      <span className={MAP_IDENTITY}>
+        <span className={MAP_NAME}>{mapName}</span>
+        <span className={MAP_MODE}>
           {mode ? (
             <>
               {mode.image_path ? (
@@ -140,55 +167,46 @@ export default function EncounterMapRow({
             t("encounters.match.gamemodeAlt")
           )}
           {slot.isLive ? (
-            <Badge palette="aqt" shape="pill" tone="danger">
-              <span aria-hidden className={styles.livePulse} />
+            <Badge shape="pill" tone="danger">
+              <StatusDot pulse />
               {t("encounters.state.live")}
             </Badge>
           ) : null}
           {parsedDiffers ? (
-            <span className={cn(shown != null && styles.metaWarn)}>
+            <span className={cn(shown != null && META_WARN)}>
               · {t("encounters.game.parsedScore")}{" "}
-              <span className={styles.mono}>
+              <span className="aqt-tnum">
                 {parsed.one}:{parsed.two}
               </span>
             </span>
           ) : null}
           {map?.attrs.in_competitive === false ? (
-            <span className={styles.metaWarn}>· {t("encounters.match.nonCompetitive")}</span>
+            <span className={META_WARN}>· {t("encounters.match.nonCompetitive")}</span>
           ) : null}
         </span>
       </span>
 
-      <span
-        data-game-state={game?.state ?? "none"}
-        className={cn(
-          styles.mapScore,
-          shown == null || shown.one === shown.two
-            ? styles.mapScoreDraw
-            : shown.one > shown.two
-              ? styles.mapScoreWin
-              : styles.mapScoreLoss
-        )}
-        aria-label={scoreLabel}
-      >
+      <span data-game-state={game?.state ?? "none"} className={MAP_SCORE} aria-label={scoreLabel}>
         {shown != null ? (
           <>
-            <span>{shown.one}</span>
-            <span aria-hidden className={styles.mapScoreSep}>
+            <ScoreCell kind={scoreKind} value={String(shown.one)} />
+            <span aria-hidden className={SCORE_SEP}>
               :
             </span>
-            <span>{shown.two}</span>
+            <ScoreCell kind={scoreKind} value={String(shown.two)} />
           </>
         ) : (
-          <span aria-hidden>—</span>
+          <span aria-hidden className="aqt-tnum text-ui font-bold text-[color:var(--aqt-amber)]">
+            —
+          </span>
         )}
       </span>
 
-      <span className={styles.mapTime}>{duration}</span>
+      <span className={MAP_TIME}>{duration}</span>
 
       {/* The scoreboard is the parsed log's; a position with a result but no
           log has nothing to open. */}
-      <span className={styles.mapAction}>
+      <span className={MAP_ACTION}>
         {match?.raw_available ? (
           <MatchLogIndicator
             hasLogs
@@ -206,12 +224,14 @@ export default function EncounterMapRow({
               aria-label={t("encounters.match.openStats", { map: mapName })}
             >
               <BarChart3 aria-hidden />
-              <span className={styles.mapActionLabel}>{t("encounters.detail.openScoreboard")}</span>
+              {/* Icon only below `md`: the button keeps its map-naming
+                  aria-label, and the label's width belongs to the map name. */}
+              <span className="hidden md:inline">{t("encounters.detail.openScoreboard")}</span>
             </Button>
           </DialogTrigger>
-          <DialogContent className="flex max-h-[90vh] w-[95vw] max-w-[1100px] flex-col gap-0 overflow-hidden p-0">
-            <DialogHeader className={cn(styles.dialogHead, "space-y-0")}>
-              <DialogTitle className={styles.dialogTitle}>
+          <DialogContent variant="panel" className="max-h-[90vh] w-[95vw] max-w-[1100px]">
+            <DialogHeader variant="panel">
+              <DialogTitle className="flex items-center gap-2.5">
                 {mode?.image_path ? (
                   <Image
                     src={mode.image_path}
@@ -223,63 +243,61 @@ export default function EncounterMapRow({
                 ) : null}
                 {mapWithModeName(match.map, match.mode) ?? mapName}
               </DialogTitle>
-              <span className={styles.dialogScore}>
-                <span className={cn(styles.dialogTeam, styles.scoreOne)}>{names.one}</span>
-                <span className={cn(styles.scoreOne, "text-lg font-bold")}>
-                  {parsed?.one}
-                </span>
-                <span aria-hidden className={styles.scoreSep}>
-                  :
-                </span>
-                <span className={cn(styles.scoreTwo, "text-lg font-bold")}>
-                  {parsed?.two}
-                </span>
-                <span className={cn(styles.dialogTeam, styles.scoreTwo)}>{names.two}</span>
-              </span>
-              <span className={styles.dialogFacts}>
-                {duration ? (
-                  <span className={styles.dialogFact}>
-                    <span className={styles.label}>{t("encounters.match.playtime")}</span>
-                    <span className={styles.mapFactValue}>{duration}</span>
+              <div className="flex flex-wrap items-center gap-x-4.5 gap-y-2">
+                <span className="aqt-tnum flex items-center gap-2">
+                  <span className={cn(DIALOG_TEAM, SIDE_TEXT[1])}>{names.one}</span>
+                  <span className={cn("text-heading font-bold", SIDE_TEXT[1])}>{parsed?.one}</span>
+                  <span aria-hidden className={SCORE_SEP}>
+                    :
                   </span>
-                ) : null}
-                {game?.result_source != null ? (
-                  <span className={styles.dialogFact}>
-                    <span className={styles.label}>{t("encounters.match.source")}</span>
-                    <span className={styles.mapFactValue}>
-                      {t(`encounters.game.source.${game.result_source}` as never)}
+                  <span className={cn("text-heading font-bold", SIDE_TEXT[2])}>{parsed?.two}</span>
+                  <span className={cn(DIALOG_TEAM, SIDE_TEXT[2])}>{names.two}</span>
+                </span>
+                <span className={cn(CARD_SUB, "ms-auto flex flex-wrap items-center gap-x-3.5 gap-y-1.5")}>
+                  {duration ? (
+                    <span className={DIALOG_FACT}>
+                      <Eyebrow>{t("encounters.match.playtime")}</Eyebrow>
+                      <span className={DIALOG_FACT_VALUE}>{duration}</span>
                     </span>
-                  </span>
-                ) : null}
-                {match.log_name ? (
-                  <span className={styles.dialogFact}>
-                    <span className={styles.label}>{t("encounters.match.logName")}</span>
-                    <span className={styles.mapFactValue}>
-                      <span className={styles.mapFactText}>{match.log_name}</span>
-                    </span>
-                  </span>
-                ) : null}
-                <span className={styles.dialogFact}>
-                  <RawLogStatus raw_status={match.raw_status} raw_available={match.raw_available} />
-                  {match.raw_available ? (
-                    <MatchLogIndicator
-                      hasLogs
-                      logs={[{ matchId: match.id, label: match.map?.name ?? undefined, rawAvailable: match.raw_available }]}
-                    />
                   ) : null}
+                  {game?.result_source != null ? (
+                    <span className={DIALOG_FACT}>
+                      <Eyebrow>{t("encounters.match.source")}</Eyebrow>
+                      <span className={DIALOG_FACT_VALUE}>
+                        {t(`encounters.game.source.${game.result_source}` as never)}
+                      </span>
+                    </span>
+                  ) : null}
+                  {match.log_name ? (
+                    <span className={DIALOG_FACT}>
+                      <Eyebrow>{t("encounters.match.logName")}</Eyebrow>
+                      <span className={DIALOG_FACT_VALUE}>
+                        <span className="truncate">{match.log_name}</span>
+                      </span>
+                    </span>
+                  ) : null}
+                  <span className={DIALOG_FACT}>
+                    <RawLogStatus raw_status={match.raw_status} raw_available={match.raw_available} />
+                    {match.raw_available ? (
+                      <MatchLogIndicator
+                        hasLogs
+                        logs={[{ matchId: match.id, label: match.map?.name ?? undefined, rawAvailable: match.raw_available }]}
+                      />
+                    ) : null}
+                  </span>
+                  <Link
+                    href={`/matches/${match.id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 font-semibold text-[color:var(--aqt-teal)] transition-colors hover:underline"
+                  >
+                    <ExternalLink aria-hidden width={14} height={14} />
+                    <span className="hidden sm:inline">{t("encounters.match.openNewTab")}</span>
+                  </Link>
                 </span>
-                <Link
-                  href={`/matches/${match.id}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={styles.dialogLink}
-                >
-                  <ExternalLink aria-hidden width={14} height={14} />
-                  <span className="hidden sm:inline">{t("encounters.match.openNewTab")}</span>
-                </Link>
-              </span>
+              </div>
             </DialogHeader>
-            <div className={styles.dialogBody}>
+            <div className="flex-1 overflow-y-auto p-4">
               {matchQuery.isError ? (
                 <PageStateCard state="error" onAction={() => void matchQuery.refetch()} />
               ) : matchQuery.data ? (

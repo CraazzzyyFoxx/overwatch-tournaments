@@ -266,7 +266,6 @@ export default function RoleStep({
         <div className="grid gap-1.5">
           <Eyebrow tone="muted">{t("registration.roles.matrix.choiceLabel")}</Eyebrow>
           <ToggleGroup
-            type="single"
             variant="pill"
             size="sm"
             aria-label={t("registration.roles.matrix.choiceLabel")}

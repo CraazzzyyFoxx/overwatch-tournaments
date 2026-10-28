@@ -33,7 +33,7 @@ const SOURCE_GAP_KEY = {
 export function ImpactColumn({ checks, sources, edits }: Readonly<ImpactColumnProps>) {
   const t = useTranslations("adminSettings.divisions");
   return (
-    <Card variant="flat" className="flex flex-col divide-y divide-border">
+    <Card className="flex flex-col divide-y divide-border">
       <Panel title={t("impact.title")}>
         {sources.length === 0 ? (
           <p className="text-xs text-muted-foreground">

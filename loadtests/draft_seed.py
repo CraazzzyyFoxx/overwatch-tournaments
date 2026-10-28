@@ -1,4 +1,4 @@
-"""Seed a live draft room for ``draft_locustfile.py`` on the isolated e2e stack.
+"""Seed a live draft room for ``draft_locustfile.py``.
 
 Everything goes through the public API, the way ``frontend/e2e`` seeds its
 draft: a superuser organizer, a workspace, a draft-formation tournament, one
@@ -7,8 +7,9 @@ support seats per team), the pool itself, the session (seeded in captain order
 and started) and the accounts of the logged-in spectators. The room's ids and
 every seat's token land in a JSON file the locustfile reads (``OWT_DRAFT_ROOM``).
 
-e2e stack only: the organizer is promoted to superuser with SQL inside its
-throwaway Postgres, exactly like ``frontend/e2e/support/users.ts``.
+The organizer is promoted to superuser with SQL, exactly like
+``frontend/e2e/support/users.ts``: inside the e2e stack's throwaway Postgres,
+or through ``OWT_DRAFT_PSQL`` on another stack (``README.md``, dev site).
 
     cd loadtests
     uv run python draft_seed.py --teams 20 --spectator-accounts 40
@@ -32,6 +33,7 @@ import config
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 E2E_COMPOSE = ("docker", "compose", "-p", "owt-e2e", "-f", "docker-compose.yml", "-f", "docker-compose.e2e.yml")
+E2E_PSQL = (*E2E_COMPOSE, "exec", "-T", "postgres", "psql", "-U", "postgres", "-d", "anak_e2e", "-tAc")
 PASSWORD = "Load-Passw0rd"
 #: The captain is the team's tank; the pool fills the other four seats of an Overwatch 5v5 roster.
 POOL_SEATS = ("damage", "damage", "support", "support")
@@ -52,12 +54,8 @@ class Api:
 
 
 def sql(statement: str) -> None:
-    subprocess.run(
-        [*E2E_COMPOSE, "exec", "-T", "postgres", "psql", "-U", "postgres", "-d", "anak_e2e", "-tAc", statement],
-        cwd=REPO_ROOT,
-        check=True,
-        capture_output=True,
-    )
+    psql = config.DRAFT_PSQL or E2E_PSQL
+    subprocess.run([*psql, statement], cwd=REPO_ROOT, check=True, capture_output=True)
 
 
 def make_user(host: str, prefix: str, superuser: bool = False) -> dict[str, Any]:

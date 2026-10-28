@@ -31,8 +31,6 @@ export function useFilePicker({ accept, multiple, disabled, onFiles }: FilePicke
       multiple={multiple}
       disabled={disabled}
       hidden
-      aria-hidden
-      tabIndex={-1}
       onChange={(event) => {
         const files = Array.from(event.target.files ?? []);
         // Picking the same file twice in a row must still fire `change`.

@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { MarkdownEditor } from "@/components/admin/MarkdownEditor";
 import { AuditTrailButton } from "@/components/kit/AuditTrailSheet";
-import { Combobox, ComboboxCheck } from "@/components/ui/combobox";
+import { Combobox, ComboboxCheck, ComboboxMeta } from "@/components/ui/combobox";
 import { SaveBar } from "@/components/kit/SaveBar";
 import { SettingGroup, SettingRow, invalidProps } from "@/components/kit/SettingRow";
 import {
@@ -100,7 +100,7 @@ function TimezoneField({
             }}
           >
             <span className="min-w-0 flex-1 truncate">{zone}</span>
-            <span className="aqt-tnum shrink-0 text-caption text-muted-foreground">{offset}</span>
+            <ComboboxMeta>{offset}</ComboboxMeta>
             <ComboboxCheck selected={zone === value} />
           </CommandItem>
         ))}
@@ -222,7 +222,7 @@ export function GeneralSection({ workspaceId }: Readonly<{ workspaceId: number |
                   href={`/workspace/${workspace.slug}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-0.5 whitespace-nowrap font-medium text-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="inline-flex items-center gap-0.5 whitespace-nowrap font-medium text-foreground underline-offset-4 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   {t("openPage")}
                   <ArrowUpRight aria-hidden className="size-3.5" />

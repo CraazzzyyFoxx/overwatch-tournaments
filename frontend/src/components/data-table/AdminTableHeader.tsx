@@ -10,7 +10,7 @@ import { cn } from "@/components/data-table/host";
 import { ADMIN_ACTION_COLUMN_ID } from "@/components/data-table/columns";
 import { AdminTableHead } from "@/components/data-table/AdminTableHead";
 import { renderHeadCell } from "@/components/data-table/head-cell";
-import type { ColumnLayout } from "@/components/data-table/column-layout";
+import { HEAD_SURFACE_CLASS, STICKY_HEAD_CLASS, type ColumnLayout } from "@/components/data-table/column-layout";
 import type { AdminTableDensity } from "@/components/data-table/useTablePreferences";
 import type { ColumnDndModule } from "@/components/data-table/ColumnDnd";
 
@@ -66,15 +66,16 @@ export function AdminTableHeader<TData>({
         onReorder={onReorder}
       >
       {table.getHeaderGroups().map((headerGroup) => (
-        <TableRow key={headerGroup.id} className="hover:bg-transparent">
+        <TableRow key={headerGroup.id}>
           {hasLeadingColumn ? (
             <TableHead
               className={cn(
                 "w-10 min-w-10 border-b border-border/40 pl-4 pr-2 text-left",
                 density === "compact" ? "h-8" : "h-9",
-                layout.stickyLeft.size > 0 ? "admin-sticky-col" : "admin-table-head"
+                layout.stickyLeft.size > 0 ? STICKY_HEAD_CLASS : HEAD_SURFACE_CLASS
               )}
               style={layout.stickyLeft.size > 0 ? { left: 0 } : undefined}
+              data-sticky={layout.stickyLeft.size > 0 ? "left" : undefined}
             >
               {enableRowSelection ? (
                 <Checkbox

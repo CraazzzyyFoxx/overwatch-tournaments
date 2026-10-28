@@ -44,7 +44,9 @@ export function AdminTableHead<TData>({
     resizeHandler(event);
   };
   return (
-    <TableHead ref={ref} {...rest} className={cn(className, "relative select-none")} style={style}>
+    // `relative` first: a pinned header's `sticky` (also a positioning context
+    // for the resize handle) must win the merge.
+    <TableHead ref={ref} {...rest} className={cn("relative select-none", className)} style={style}>
       {children}
       {header.column.getCanResize() ? (
         <div

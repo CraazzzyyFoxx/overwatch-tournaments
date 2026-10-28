@@ -44,7 +44,7 @@ export function GamesSummary({
       <h2 id="divisions-games" className="text-ui font-semibold text-foreground">
         {t("games.title")}
       </h2>
-      <Card asChild variant="flat">
+      <Card asChild>
         <ul className="divide-y divide-border">
           {games.map((game) => (
             <GameRow key={game.code} workspaceId={workspaceId} game={game} workspace={workspace} grids={grids} />
@@ -60,7 +60,7 @@ export function GamesSummarySkeleton({ rows }: Readonly<{ rows: number }>) {
   return (
     <div aria-hidden className="flex flex-col gap-3">
       <Skeleton className="h-5 w-40" />
-      <Card variant="flat" className="divide-y divide-border">
+      <Card className="divide-y divide-border">
         {Array.from({ length: rows }, (_, index) => (
           <div key={index} className="flex items-center gap-3 px-4 py-3">
             <Skeleton className="size-7 rounded-md" />
@@ -118,7 +118,7 @@ function GameRow({
       <div className="min-w-0 flex-1">
         <Link
           href={`/admin/settings/divisions?${DISCIPLINE_PARAM}=${encodeURIComponent(game.code)}`}
-          className="block truncate text-ui font-medium text-foreground after:absolute after:inset-0 after:content-[''] focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-ring"
+          className="block truncate text-ui font-medium text-foreground after:absolute after:inset-0 after:content-[''] focus-visible:outline-hidden focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-ring"
         >
           {game.name}
         </Link>

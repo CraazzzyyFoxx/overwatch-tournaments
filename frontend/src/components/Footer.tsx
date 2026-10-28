@@ -17,10 +17,10 @@ import { releaseForVersion } from "@/lib/changelog/releases";
 import type { Workspace } from "@/types/workspace.types";
 
 const LINK_CLASS =
-  "inline-flex min-h-8 items-center gap-1.5 text-[color:var(--aqt-fg-muted)] transition-colors hover:text-[color:var(--aqt-fg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
+  "inline-flex min-h-8 items-center gap-1.5 text-[color:var(--aqt-fg-muted)] transition-colors hover:text-[color:var(--aqt-fg)] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
 // Colour spelled out (not inherited) so the cookie-settings `Button` matches the links beside it.
 const META_CLASS =
-  "text-[color:var(--aqt-fg-dim)] transition-colors hover:text-[color:var(--aqt-fg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
+  "text-[color:var(--aqt-fg-dim)] transition-colors hover:text-[color:var(--aqt-fg)] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
 const VERSION_CLASS =
   "rounded-[5px] border border-[color:var(--aqt-border-2)] px-1.5 py-[3px] text-label font-semibold tabular-nums text-[color:var(--aqt-fg-dim)]";
 
@@ -82,19 +82,19 @@ export function Footer({ tenant }: Readonly<{ tenant: Workspace | null }>) {
         <div>
           <FooterLink
             href="/"
-            className="inline-flex min-h-10 items-center gap-2.5 rounded-lg outline-none transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            className="inline-flex min-h-10 items-center gap-2.5 rounded-lg outline-hidden transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
             {tenant ? (
               <>
                 <WorkspaceAvatar workspace={tenant} size={28} />
-                <span className="font-display text-[16px] font-extrabold tracking-[0.02em]">
+                <span className="font-display text-ui font-extrabold tracking-[0.02em]">
                   {tenant.name}
                 </span>
               </>
             ) : (
               <>
                 <Image src="/brand-mark.svg" alt="" width={28} height={28} className="rounded-[7px]" />
-                <span className="font-display text-[17px] font-extrabold leading-none tracking-[0.02em]">
+                <span className="font-display text-heading font-extrabold leading-none tracking-[0.02em]">
                   {BRAND_NAME}
                 </span>
               </>

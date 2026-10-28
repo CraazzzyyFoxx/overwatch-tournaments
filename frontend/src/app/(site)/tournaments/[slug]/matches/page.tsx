@@ -15,7 +15,6 @@ export default async function TournamentMatchesPage({
   params
 }: Readonly<TournamentMatchesPageProps>) {
   const { slug } = await params;
-
   return (
     <TournamentTabBoundary
       slug={slug}
@@ -24,7 +23,7 @@ export default async function TournamentMatchesPage({
       }
     >
       {(overview) => (
-        <TournamentEncountersPage key={overview.id} tournamentId={overview.id} slug={slug} />
+        <TournamentEncountersPage key={overview.id} tournament={overview} slug={slug} />
       )}
     </TournamentTabBoundary>
   );

@@ -15,8 +15,15 @@ import type {
   ReplayCode
 } from "@/types/encounter.types";
 import { duelSeats, type DuelSlot } from "@/lib/encounter/seats";
-import styles from "@/components/match/EncounterDetail.module.css";
+import { TournamentTeamCardFrame } from "@/components/TournamentTeamCard";
+import { Alert } from "@/components/ui/alert";
+import { Eyebrow } from "@/components/ui/eyebrow";
+import { CARD_SUB, SIDE_TEXT, SectionHead } from "@/components/match/EncounterAtoms";
 import { encounterQueryKeys } from "@/lib/encounters/query-keys";
+
+const REPORT_FIELD = "flex min-w-0 flex-col gap-1";
+const REPORT_VALUE =
+  "whitespace-pre-wrap text-caption leading-normal wrap-anywhere text-[color:var(--aqt-fg-muted)]";
 
 interface EncounterCaptainReportsProps {
   encounterId: number;
@@ -68,20 +75,18 @@ export default function EncounterCaptainReports({
     // Own the section: an encounter whose captains never filed anything renders
     // nothing at all, and a heading over emptiness is worse than no heading.
     <section aria-label={t("encounters.detail.reports")}>
-      <div className={styles.sectionHead}>
-        <h2 className={styles.sectionTitle}>{t("encounters.detail.reports")}</h2>
-        <span className={styles.sectionMeta}>
-          {t("encounters.detail.reportsMeta", { count: reports.length })}
-        </span>
-      </div>
-      <div className={styles.statsStack}>
+      <SectionHead
+        title={t("encounters.detail.reports")}
+        meta={t("encounters.detail.reportsMeta", { count: reports.length })}
+      />
+      <div className="flex flex-col gap-3.5">
         {disagree ? (
-          <output className={styles.reportMismatch}>
-            <TriangleAlert aria-hidden width={15} height={15} className="mt-px shrink-0" />
-            {t("encounters.detail.reportsDisagree")}
-          </output>
+          <Alert tone="warning">
+            <TriangleAlert aria-hidden />
+            <p>{t("encounters.detail.reportsDisagree")}</p>
+          </Alert>
         ) : null}
-        <div className={styles.reportGrid}>
+        <div className="grid grid-cols-1 items-start gap-3.5 xl:grid-cols-2">
           {reports.map((report) => (
             <ReportCard
               key={report.id}
@@ -124,57 +129,59 @@ function ReportCard({
   const format = useFormatter();
   const submittedAt = report.updated_at ?? report.created_at;
   const customFields = form?.custom_fields ?? [];
+  const filed = [
+    report.reporter_name,
+    submittedAt
+      ? format.dateTime(new Date(submittedAt), {
+          day: "numeric",
+          month: "short",
+          hour: "2-digit",
+          minute: "2-digit"
+        })
+      : null
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   return (
-    <div className={cn(styles.card, slot === 2 ? styles.slotTwo : styles.slotOne)}>
-      <div className={styles.rosterHead}>
-        <h3 className={styles.rosterName}>{teamName}</h3>
-        <span className={styles.cardSub}>
-          {[
-            report.reporter_name,
-            submittedAt
-              ? format.dateTime(new Date(submittedAt), {
-                  day: "numeric",
-                  month: "short",
-                  hour: "2-digit",
-                  minute: "2-digit"
-                })
-              : null
-          ]
-            .filter(Boolean)
-            .join(" · ")}
-        </span>
-      </div>
-
-      <div className={cn(styles.cardBody, styles.reportFields)}>
-        <div className={styles.reportField}>
-          <span className={styles.label}>{t("encounters.detail.reportedScore")}</span>
-          <span className={styles.reportScore}>
-            <span className={styles.scoreOne}>{reportedScore(report, seatOne)}</span>
-            <span aria-hidden className={styles.scoreSep}>
+    // The seat's card: its hue along the top edge, the same frame as the rosters.
+    <TournamentTeamCardFrame
+      slot={slot}
+      name={teamName}
+      metricValue={filed ? <span className={cn(CARD_SUB, "font-normal")}>{filed}</span> : undefined}
+    >
+      <div className="flex flex-col gap-3 p-3.5">
+        <div className={REPORT_FIELD}>
+          <Eyebrow>{t("encounters.detail.reportedScore")}</Eyebrow>
+          <span className="flex items-baseline gap-2 font-display text-title font-bold tabular-nums">
+            <span className={SIDE_TEXT[1]}>{reportedScore(report, seatOne)}</span>
+            <span aria-hidden className="text-body text-[color:var(--aqt-fg-faint)]">
               :
             </span>
-            <span className={styles.scoreTwo}>{reportedScore(report, seatTwo)}</span>
+            <span className={SIDE_TEXT[2]}>{reportedScore(report, seatTwo)}</span>
           </span>
         </div>
 
         {report.closeness != null ? (
-          <div className={styles.reportField}>
-            <span className={styles.label}>{t("encounters.detail.reportedCloseness")}</span>
-            <span className={cn(styles.reportValue, styles.mono)}>
+          <div className={REPORT_FIELD}>
+            <Eyebrow>{t("encounters.detail.reportedCloseness")}</Eyebrow>
+            <span className={cn(REPORT_VALUE, "aqt-tnum")}>
               {t("encounters.detail.reportedClosenessValue", { value: report.closeness })}
             </span>
           </div>
         ) : null}
 
         {replayCodes.length > 0 ? (
-          <div className={styles.reportField}>
-            <span className={styles.label}>{t("encounters.detail.reportedCodes")}</span>
-            <span className={styles.reportCodes}>
+          <div className={REPORT_FIELD}>
+            <Eyebrow>{t("encounters.detail.reportedCodes")}</Eyebrow>
+            <span className="flex flex-wrap gap-x-4 gap-y-1">
               {[...replayCodes]
                 .sort((a, b) => a.position - b.position)
                 .map(({ position, code }) => (
-                  <span key={position} className={styles.reportCode}>
+                  <span
+                    key={position}
+                    className={cn(CARD_SUB, "tracking-[0.06em] text-[color:var(--aqt-fg-muted)]")}
+                  >
                     {t("common.matchLogs.map", { index: position })} · {code}
                   </span>
                 ))}
@@ -183,9 +190,9 @@ function ReportCard({
         ) : null}
 
         {report.comment ? (
-          <div className={styles.reportField}>
-            <span className={styles.label}>{t("encounters.detail.reportedComment")}</span>
-            <p className={styles.reportValue}>{report.comment}</p>
+          <div className={REPORT_FIELD}>
+            <Eyebrow>{t("encounters.detail.reportedComment")}</Eyebrow>
+            <p className={REPORT_VALUE}>{report.comment}</p>
           </div>
         ) : null}
 
@@ -193,14 +200,14 @@ function ReportCard({
           const value = report.custom_fields?.[definition.key];
           if (!value) return null;
           return (
-            <div key={definition.key} className={styles.reportField}>
-              <span className={styles.label}>{definition.label}</span>
-              <p className={styles.reportValue}>{value}</p>
+            <div key={definition.key} className={REPORT_FIELD}>
+              <Eyebrow>{definition.label}</Eyebrow>
+              <p className={REPORT_VALUE}>{value}</p>
             </div>
           );
         })}
       </div>
-    </div>
+    </TournamentTeamCardFrame>
   );
 }
 

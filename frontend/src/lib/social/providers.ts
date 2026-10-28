@@ -15,7 +15,7 @@ export interface SocialProviderConfig {
   icon: string | null;
   /** Brand accent colour as a CSS value (an `--aqt-brand-*` token reference).
    *  Consumed only in CSS — inline styles and `color-mix` — never parsed in JS,
-   *  so a `var()` reference is safe here. See `SocialAccountBadge`. */
+   *  so a `var()` reference is safe here. See `SocialIcon`. */
   color: string;
   /** Input placeholder for the admin add/edit form. */
   placeholder: string;

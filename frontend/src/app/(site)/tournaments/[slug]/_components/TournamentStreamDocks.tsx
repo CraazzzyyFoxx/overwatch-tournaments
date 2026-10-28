@@ -100,7 +100,7 @@ function ParticipantStreamDock({
         if (!open) onClose();
       }}
       actions={
-        <Button asChild variant="ghost" size="icon" className="size-8 text-[color:var(--aqt-fg-muted)]">
+        <Button asChild variant="ghost" size="icon-sm" className="text-[color:var(--aqt-fg-muted)]">
           <a href={entry.url} target="_blank" rel="noopener noreferrer" aria-label={watchOn} title={watchOn}>
             <ExternalLink aria-hidden />
           </a>

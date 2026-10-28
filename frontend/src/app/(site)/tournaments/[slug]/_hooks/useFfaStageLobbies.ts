@@ -3,8 +3,7 @@
 import { useQueries, type UseQueryResult } from "@tanstack/react-query";
 
 import { FFA_STAGE_TYPES } from "@/lib/bracket/projection";
-import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
-import ffaService from "@/services/ffa.service";
+import { ffaStageQueryOptions } from "@/lib/tournament/ffa-stage-query";
 import type { FfaLobby } from "@/types/ffa.types";
 import type { Tournament } from "@/types/tournament.types";
 
@@ -34,8 +33,7 @@ export function useFfaStageLobbies(tournament: Tournament | undefined, enabled =
   );
   return useQueries({
     queries: stages.map((stage) => ({
-      queryKey: tournamentQueryKeys.ffaStage(tournament!.id, stage.id),
-      queryFn: () => ffaService.getStage(tournament!.id, stage.id),
+      ...ffaStageQueryOptions(tournament!.id, stage.id),
       enabled
     })),
     combine: combineLobbies

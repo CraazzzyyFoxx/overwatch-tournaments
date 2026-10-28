@@ -127,7 +127,7 @@ export function TournamentBroadcastDock({
               href={featured.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex w-fit items-center gap-2 rounded-[9px] border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-3)] px-3 py-2 text-caption font-semibold text-inherit no-underline outline-none transition-colors hover:text-[color:var(--aqt-teal)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--aqt-teal)]"
+              className="inline-flex w-fit items-center gap-2 rounded-lg border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-3)] px-3 py-2 text-caption font-semibold text-inherit no-underline transition-colors hover:text-[color:var(--aqt-teal)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--aqt-teal)]"
             >
               <SocialIcon provider={featured.platform} size={14} />
               <span>
@@ -147,7 +147,7 @@ export function TournamentBroadcastDock({
                     href={entry.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 rounded-[7px] border border-[color:var(--aqt-border-2)] px-2 py-1 text-caption font-medium text-inherit no-underline outline-none transition-colors hover:text-[color:var(--aqt-teal)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--aqt-teal)]"
+                    className="inline-flex items-center gap-1.5 rounded-md border border-[color:var(--aqt-border-2)] px-2 py-1 text-caption font-medium text-inherit no-underline transition-colors hover:text-[color:var(--aqt-teal)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--aqt-teal)]"
                   >
                     <SocialIcon provider={entry.platform} size={12} />
                     <span>{entry.channel || streamPlatformLabel(entry)}</span>

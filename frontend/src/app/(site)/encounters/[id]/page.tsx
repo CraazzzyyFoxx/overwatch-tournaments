@@ -5,10 +5,13 @@ import { getTranslations } from "next-intl/server";
 import { getFormatter } from "@/lib/datetime/server";
 import { MessageSquare } from "lucide-react";
 
-import { cn } from "@/lib/utils";
+import { LinkTabs } from "@/components/kit/LinkTabs";
 import { BackLink } from "@/components/site/BackLink";
 import { HeroCoord, HeroStamp, PageHero } from "@/components/site/PageHero";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Eyebrow } from "@/components/ui/eyebrow";
+import { StatusDot } from "@/components/ui/status-dot";
 import MatchLogIndicator from "@/components/match/MatchLogIndicator";
 import { EntityWorkspace } from "@/components/workspace/EntityWorkspace";
 import { SITE_NAME, SITE_URL } from "@/config/site";
@@ -41,7 +44,11 @@ import {
   getSeriesSeconds
 } from "@/lib/encounter/detail";
 import { mapWithModeName } from "@/lib/catalog/mode";
-import styles from "@/components/match/EncounterDetail.module.css";
+import { SURFACE, SectionHead } from "@/components/match/EncounterAtoms";
+
+/** A crumb that links: the crumb row's own colour, teal under the pointer. */
+const CRUMB_LINK = "transition-colors hover:text-[color:var(--aqt-teal)]";
+const CRUMB_SEP = "opacity-45";
 
 export async function generateMetadata(props: {
   params: Promise<{ id: number }>;
@@ -244,7 +251,7 @@ const EncounterPage = async (props: {
   const openResult = encounter.result_status !== "none" && encounter.result_status !== "confirmed";
 
   return (
-    <div className={styles.surface}>
+    <div className={SURFACE}>
       <EntityWorkspace workspaceId={encounter.tournament?.workspace_id} discipline={encounter.discipline} />
       <HydrationBoundary state={dehydrate(queryClient)}>
         <EncounterHeader
@@ -253,18 +260,18 @@ const EncounterPage = async (props: {
             <>
               <BackLink href="/encounters">{t("encounters.detail.back")}</BackLink>
               <span className="inline-flex flex-wrap items-center gap-2">
-                <Link href={`/tournaments/${encounter.tournament_id}`} className={styles.crumbLink}>
+                <Link href={`/tournaments/${encounter.tournament_id}`} className={CRUMB_LINK}>
                   {encounter.tournament?.name ?? t("common.tournament")}
                 </Link>
-                <span aria-hidden className={styles.crumbSep}>
+                <span aria-hidden className={CRUMB_SEP}>
                   /
                 </span>
                 <span>{stageLabel}</span>
-                <span aria-hidden className={styles.crumbSep}>
+                <span aria-hidden className={CRUMB_SEP}>
                   /
                 </span>
                 <span>{t("encounters.roundNum", { round: encounter.round })}</span>
-                <span aria-hidden className={styles.crumbSep}>
+                <span aria-hidden className={CRUMB_SEP}>
                   /
                 </span>
                 <span>{t("encounters.bestOfShort", { count: encounter.best_of })}</span>
@@ -281,7 +288,7 @@ const EncounterPage = async (props: {
                 liveGames={(encounter.games ?? []).filter((game) => game.state !== "cancelled").length}
               />
               {logs.length > 0 ? (
-                <MatchLogIndicator hasLogs logs={logs} className={styles.iconButton} />
+                <MatchLogIndicator hasLogs logs={logs} className="size-8 rounded-lg" />
               ) : null}
             </>
           }
@@ -289,13 +296,13 @@ const EncounterPage = async (props: {
             state === "Live" || openResult ? (
               <>
                 {state === "Live" ? (
-                  <Badge palette="aqt" shape="pill" tone="danger">
-                    <span aria-hidden className={styles.livePulse} />
+                  <Badge shape="pill" tone="danger">
+                    <StatusDot pulse />
                     {t(`encounters.state.${STATE_KEY[state]}` as never)}
                   </Badge>
                 ) : null}
                 {openResult ? (
-                  <Badge palette="aqt" shape="pill" tone={encounter.result_status === "disputed" ? "danger" : "warning"}>
+                  <Badge shape="pill" tone={encounter.result_status === "disputed" ? "danger" : "warning"}>
                     {t(`encounters.result.${RESULT_KEY[encounter.result_status]}` as never)}
                   </Badge>
                 ) : null}
@@ -305,36 +312,29 @@ const EncounterPage = async (props: {
           facts={facts}
         />
 
-        {/* One tab says nothing to choose between: its content simply follows. */}
-        {tabs.length > 1 ? (
-          <nav aria-label={t("encounters.detail.tabsLabel")} className={styles.tabs}>
-            {tabs.map((tab) => (
-              <Link
-                key={tab}
-                href={tabHref(tab)}
-                scroll={false}
-                aria-current={tab === active ? "page" : undefined}
-                className={cn(styles.tab, tab === active && styles.tabActive)}
-              >
-                {t(`encounters.detail.tabs.${tab}`)}
-              </Link>
-            ))}
-          </nav>
-        ) : null}
+        {/* `LinkTabs` draws nothing for one tab: its content simply follows. */}
+        <LinkTabs
+          ariaLabel={t("encounters.detail.tabsLabel")}
+          activeKey={active ?? ""}
+          scroll={false}
+          items={tabs.map((tab) => ({
+            key: tab,
+            label: t(`encounters.detail.tabs.${tab}`),
+            href: tabHref(tab)
+          }))}
+        />
 
         {active === "overview" ? (
           <>
             <section aria-label={t("common.maps")}>
-              <div className={styles.sectionHead}>
-                <h2 className={styles.sectionTitle}>{t("common.maps")}</h2>
-                <span className={styles.sectionMeta}>
-                  {t("encounters.detail.mapsMeta", {
-                    played: playedSlots.length,
-                    slots: slots.length
-                  })}
-                </span>
-              </div>
-              <div className={cn(styles.card, styles.mapList)}>
+              <SectionHead
+                title={t("common.maps")}
+                meta={t("encounters.detail.mapsMeta", {
+                  played: playedSlots.length,
+                  slots: slots.length
+                })}
+              />
+              <Card className="flex flex-col divide-y divide-[color:var(--aqt-overlay-border)] overflow-hidden">
                 {listedSlots.map((slot) => (
                   <EncounterMapRow
                     key={slot.index}
@@ -345,11 +345,11 @@ const EncounterPage = async (props: {
                   />
                 ))}
                 {unplayedCount > 0 ? (
-                  <p className={styles.mapRowNote}>
+                  <p className="px-4.5 py-3 font-[family-name:var(--aqt-data)] text-label text-[color:var(--aqt-fg-faint)]">
                     {t(hasUnboundHistory ? "encounters.history.slotsWithoutBinding" : "encounters.detail.mapsUnplayed", { count: unplayedCount })}
                   </p>
                 ) : null}
-              </div>
+              </Card>
             </section>
 
             <EncounterWatch encounterId={encounter.id} />
@@ -358,20 +358,18 @@ const EncounterPage = async (props: {
 
             {playedSlots.length > 0 || withStats ? (
               <section aria-label={t("encounters.detail.seriesStats")}>
-                <div className={styles.sectionHead}>
-                  <h2 className={styles.sectionTitle}>{t("encounters.detail.seriesStats")}</h2>
-                </div>
+                <SectionHead title={t("encounters.detail.seriesStats")} />
                 {withStats ? (
                   <EncounterSeriesStats
                     view="overview"
                     matchIds={observations.map((match) => match.id)}
                   />
                 ) : (
-                  <div className={styles.card}>
-                    <p className={cn(styles.cardBody, styles.statsNotice)}>
+                  <Card>
+                    <p className="p-4.5 text-label leading-normal text-[color:var(--aqt-fg-dim)]">
                       {t("encounters.detail.seriesStatsNoLogs")}
                     </p>
-                  </div>
+                  </Card>
                 )}
               </section>
             ) : null}
@@ -388,7 +386,7 @@ const EncounterPage = async (props: {
             </section>
           ) : (
             <section aria-label={t("encounters.detail.rosters")}>
-              <div className={styles.rosterGrid}>
+              <div className="grid grid-cols-1 items-start gap-3.5 lg:grid-cols-2">
                 <EncounterRosterPanel
                   team={seatOne?.team ?? null}
                   slot={1}
@@ -438,7 +436,7 @@ const FfaLobbyPage = async ({ encounter }: Readonly<{ encounter: Encounter }>) =
   const state = getEncounterState(encounter);
 
   return (
-    <div className={styles.surface}>
+    <div className={SURFACE}>
       <EntityWorkspace workspaceId={encounter.tournament?.workspace_id} discipline={encounter.discipline} />
       <PageHero
         align="start"
@@ -447,10 +445,10 @@ const FfaLobbyPage = async ({ encounter }: Readonly<{ encounter: Encounter }>) =
           <>
             <BackLink href="/encounters">{t("encounters.detail.back")}</BackLink>
             <HeroCoord className="inline-flex flex-wrap items-center gap-2">
-              <Link href={`/tournaments/${encounter.tournament_id}`} className={styles.crumbLink}>
+              <Link href={`/tournaments/${encounter.tournament_id}`} className={CRUMB_LINK}>
                 {encounter.tournament?.name ?? t("common.tournament")}
               </Link>
-              <span aria-hidden className={styles.crumbSep}>
+              <span aria-hidden className={CRUMB_SEP}>
                 /
               </span>
               <span>{stageLabel}</span>
@@ -461,7 +459,6 @@ const FfaLobbyPage = async ({ encounter }: Readonly<{ encounter: Encounter }>) =
         meta={
           <>
             <Badge
-              palette="aqt"
               shape="pill"
               tone={
                 state === "Live"
@@ -473,18 +470,18 @@ const FfaLobbyPage = async ({ encounter }: Readonly<{ encounter: Encounter }>) =
                       : "neutral"
               }
             >
-              {state === "Live" ? <span aria-hidden className={styles.livePulse} /> : null}
+              {state === "Live" ? <StatusDot pulse /> : null}
               {/* "Final" is a duel's word and reads as the bracket's final here. */}
               {state === "Final"
                 ? t("ffa.lobbyCompleted")
                 : t(`encounters.state.${STATE_KEY[state]}` as never)}
             </Badge>
-            <Badge palette="aqt" shape="pill" tone="neutral">
-              <span className={styles.label}>{t("ffa.gamesPerLobby")}</span>
-              <span className={styles.mono}>{lobby.best_of}</span>
+            <Badge shape="pill" tone="neutral">
+              <Eyebrow>{t("ffa.gamesPerLobby")}</Eyebrow>
+              <span className="aqt-tnum">{lobby.best_of}</span>
             </Badge>
             {encounter.result_status !== "none" ? (
-              <Badge palette="aqt" shape="pill" tone={encounter.result_status === "confirmed" ? "success" : "warning"}>
+              <Badge shape="pill" tone={encounter.result_status === "confirmed" ? "success" : "warning"}>
                 {t(`encounters.result.${RESULT_KEY[encounter.result_status]}` as never)}
               </Badge>
             ) : null}
@@ -495,7 +492,7 @@ const FfaLobbyPage = async ({ encounter }: Readonly<{ encounter: Encounter }>) =
           games: lobby.best_of
         })}
         actions={
-          <div className={styles.heroActions}>
+          <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" size="sm" asChild>
               <Link href={`/tournaments/${encounter.tournament_id}/pregame/${encounter.id}`}>
                 <MessageSquare aria-hidden />
@@ -515,19 +512,17 @@ const FfaLobbyPage = async ({ encounter }: Readonly<{ encounter: Encounter }>) =
       />
 
       <section aria-label={t("ffa.tableLabel", { lobby: lobby.name })}>
-        <div className={styles.sectionHead}>
-          <h2 className={styles.sectionTitle}>{t("common.standings")}</h2>
-          <span className={styles.sectionMeta}>
-            {t("ffa.participants", { count: lobby.rows.length })}
-          </span>
-        </div>
-        <div className={styles.card}>
+        <SectionHead
+          title={t("common.standings")}
+          meta={t("ffa.participants", { count: lobby.rows.length })}
+        />
+        <Card className="overflow-hidden">
           {lobby.rows.length === 0 ? (
-            <p className={styles.cardBody}>{t("ffa.lobbyEmpty")}</p>
+            <p className="p-4.5">{t("ffa.lobbyEmpty")}</p>
           ) : (
             <FfaLobbyTable lobby={lobby} />
           )}
-        </div>
+        </Card>
       </section>
       <EncounterHistory matches={encounter.matches ?? []} />
     </div>

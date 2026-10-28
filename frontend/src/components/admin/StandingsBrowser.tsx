@@ -245,7 +245,6 @@ export function StandingsBrowser({
       {scopeTournamentId != null ? (
         <div className="flex flex-wrap items-center gap-2">
           <ToggleGroup
-            type="single"
             variant="pill"
             size="sm"
             value={view}

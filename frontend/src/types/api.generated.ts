@@ -3662,6 +3662,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/tournaments/{id}/pick-ban/outcomes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the tournament's pick-ban outcomes
+         * @description Permission: public; no authentication required — a hidden tournament is visible only to its workspace's admins and users on its preview allowlist (404 otherwise, and for an unknown tournament). Returns every hero ban of the tournament's encounters an anonymous spectator may see in the room (`hero_bans`: one row per banned hero of a current-attempt submission to a ban step that is revealed or not blind; `first_map` when the step plays round 1, `target_player_id` the opponent roster player a per-player ban is spent on) and every map its map rooms picked or banned (`map_outcomes`). Cached up to 30 seconds: a live room's newest bans may lag that long.
+         *
+         *     RPC subject: `rpc.tournament.pick_ban_outcomes`
+         */
+        get: operations["get__api_v1_tournaments__id__pick_ban_outcomes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tournaments/{id}/player-stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Tournament player stats
+         * @description Permission: public; no authentication required, though a hidden tournament 404s unless the optional identity may view it (404 too for an unknown tournament). Returns every player's tournament average and rank for `performance` (MVP placement), `kda`, `eliminations`, `deaths`, `assists`, `hero_damage_dealt` and `damage_delta` — the same values and ranks as the per-stat tournament leaderboard, pivoted by player (`player_id` is the user id); a player carries only the stats they have data for. Rank 1 is best: Deaths and the MVP placement rank ascending. `total_players` is the largest ranked population across those stats.
+         *
+         *     RPC subject: `rpc.stats.statistics.tournament_player_stats`
+         */
+        get: operations["get__api_v1_tournaments__id__player_stats"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/tournaments/{id}/stages": {
         parameters: {
             query?: never;
@@ -17350,6 +17394,35 @@ export interface components {
             name: string;
         };
         /**
+         * TournamentPlayerStat
+         * @description One player's tournament average of one stat and its rank in the lobby (lower is better).
+         */
+        "stats.TournamentPlayerStat": {
+            /** Rank */
+            rank: number;
+            /** Value */
+            value: number;
+        };
+        /**
+         * TournamentPlayerStats
+         * @description Every player's ``LobbyLeaderboard`` value and rank for the tournament page's stats, in one read.
+         */
+        "stats.TournamentPlayerStats": {
+            /** Players */
+            players: components["schemas"]["stats.TournamentPlayerStatsRow"][];
+            /** Total Players */
+            total_players: number;
+        };
+        /** TournamentPlayerStatsRow */
+        "stats.TournamentPlayerStatsRow": {
+            /** Player Id */
+            player_id: number;
+            /** Stats */
+            stats: {
+                [key: string]: components["schemas"]["stats.TournamentPlayerStat"];
+            };
+        };
+        /**
          * TournamentStatus
          * @enum {string}
          */
@@ -19702,11 +19775,37 @@ export interface components {
             target_player_id: number | null;
         };
         /**
+         * PickBanHeroBan
+         * @description One banned hero of one ban submission.
+         */
+        "tournament.PickBanHeroBan": {
+            /** Encounter Id */
+            encounter_id: number;
+            /** First Map */
+            first_map: boolean;
+            /** Hero Id */
+            hero_id: number;
+            /** Target Player Id */
+            target_player_id: number | null;
+        };
+        /**
          * PickBanKind
          * @description Which catalog a :class:`PickBanConfig`/session pool draws from.
          * @enum {string}
          */
         "tournament.PickBanKind": TournamentPickBanKind;
+        /**
+         * PickBanMapOutcome
+         * @description One map the map room picked or banned.
+         */
+        "tournament.PickBanMapOutcome": {
+            /** Encounter Id */
+            encounter_id: number;
+            /** Map Id */
+            map_id: number;
+            /** Picked */
+            picked: boolean;
+        };
         /**
          * PickBanSubmissionItemInput
          * @description One item of a blind draft: what is chosen, and for whom on a target step.
@@ -21480,6 +21579,13 @@ export interface components {
              */
             starts_at: string;
             status: components["schemas"]["tournament.TournamentStatus"];
+        };
+        /** TournamentPickBanOutcomes */
+        "tournament.TournamentPickBanOutcomes": {
+            /** Hero Bans */
+            hero_bans: components["schemas"]["tournament.PickBanHeroBan"][];
+            /** Map Outcomes */
+            map_outcomes: components["schemas"]["tournament.PickBanMapOutcome"][];
         };
         /** TournamentRead */
         "tournament.TournamentRead": {
@@ -45227,6 +45333,126 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["tournament.TournamentRead"];
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get__api_v1_tournaments__id__pick_ban_outcomes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["tournament.TournamentPickBanOutcomes"];
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get__api_v1_tournaments__id__player_stats: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["stats.TournamentPlayerStats"];
                 };
             };
             /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */

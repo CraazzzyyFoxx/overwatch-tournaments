@@ -20,7 +20,9 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Eyebrow, eyebrowClass } from "@/components/ui/eyebrow";
+import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
 import { identityProvider } from "@/lib/forms/builtin-keys";
 import { fieldErrorsFrom } from "@/lib/forms/form-errors";
 import { visibleFields } from "@/lib/forms/visible-when";
@@ -295,13 +297,67 @@ export default function RegistrationSchemaForm(props: Readonly<RegistrationSchem
       </div>
     );
   }
-  if (!metadata.data) return <Spinner />;
+  if (!metadata.data) {
+    return <RegistrationSchemaFormSkeleton showTitle={props.mode !== "admin" && !props.hideTitle} />;
+  }
   return (
     <RegistrationSchemaFormBody
       key={`${props.form.discipline}:${metadata.data.workspace_id}`}
       {...props}
       metadata={metadata.data}
     />
+  );
+}
+
+/**
+ * The form's frame while the game's metadata loads: the body's title, step
+ * indicator, field rows and footer, so nothing jumps when it lands. The schema
+ * is not walked here — four generic rows stand in for the first step.
+ */
+function RegistrationSchemaFormSkeleton({ showTitle }: Readonly<{ showTitle: boolean }>) {
+  const t = useTranslations("common");
+  return (
+    <div role="status" aria-busy="true" className="flex flex-col gap-4">
+      <span className="sr-only">{t("loading")}</span>
+      {showTitle && (
+        <div aria-hidden className="text-lg font-semibold">
+          <Skeleton variant="text" className="w-64 max-w-full" />
+        </div>
+      )}
+
+      <div aria-hidden className="flex items-center justify-center gap-1">
+        {[0, 1, 2].map((step) => (
+          <div key={step} className="flex items-center gap-1">
+            {step > 0 && <Separator className="w-8 bg-[color:var(--aqt-border-2)]" />}
+            <div className="flex items-center gap-1.5 sm:pr-2">
+              <Skeleton className="size-6 rounded-full" />
+              <span className="hidden text-xs font-medium sm:inline">
+                <Skeleton variant="text" className="w-14" />
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div aria-hidden className="grid gap-4">
+        {["w-24", "w-32", "w-20", "w-28"].map((width) => (
+          <div key={width} className="flex flex-col gap-2">
+            <div className={eyebrowClass("muted")}>
+              <Skeleton variant="text" className={width} />
+            </div>
+            <Skeleton className="h-9 w-full rounded-lg" />
+          </div>
+        ))}
+      </div>
+
+      <div
+        aria-hidden
+        className="flex items-center justify-between border-t border-[color:var(--aqt-border)] pt-4"
+      >
+        <Skeleton className="h-9 w-20 rounded-lg" />
+        <Skeleton className="h-9 w-24 rounded-lg" />
+      </div>
+    </div>
   );
 }
 

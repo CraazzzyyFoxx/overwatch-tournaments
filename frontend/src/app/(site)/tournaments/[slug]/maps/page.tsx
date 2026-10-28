@@ -18,7 +18,6 @@ export default async function TournamentMapsRoutePage({
   params
 }: Readonly<TournamentMapsRoutePageProps>) {
   const { slug } = await params;
-
   return (
     <TournamentTabBoundary
       slug={slug}
@@ -29,14 +28,7 @@ export default async function TournamentMapsRoutePage({
         ]);
       }}
     >
-      {(overview) => (
-        <TournamentMapsPage
-          key={overview.id}
-          tournamentId={overview.id}
-          slug={slug}
-          discipline={overview.discipline}
-        />
-      )}
+      {(overview) => <TournamentMapsPage key={overview.id} tournament={overview} />}
     </TournamentTabBoundary>
   );
 }

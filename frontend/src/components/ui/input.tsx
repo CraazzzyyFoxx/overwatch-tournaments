@@ -1,46 +1,48 @@
-import * as React from "react"
+import * as React from "react";
 
-import { cn } from "@/lib/utils"
+import { cn } from "@/lib/utils";
 
 /**
- * The public site's control surface (DESIGN §5 "Controls"): 8px radius,
- * `--aqt-overlay-2` fill, `--aqt-border-2` hairline and a real focus ring; red
- * once the control is `aria-invalid`. Exported for a trigger that has no
- * `variant` of its own — set `aria-invalid` on it for the error state.
+ * The control surface (DESIGN §5 "Controls") every text field wears: 8px
+ * radius, `--aqt-overlay-2` fill, `--aqt-border-2` hairline, a dimmed
+ * placeholder, the 2px offset focus ring, and a red border (only the border)
+ * once the control is `aria-invalid`. Exported for a trigger that wears the
+ * same skin — set `aria-invalid` on it for the error state.
  */
 export const controlSurfaceClass =
   "w-full rounded-lg border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-2)] px-3 " +
-  "text-[color:var(--aqt-fg)] shadow-none placeholder:text-[color:var(--aqt-fg-dim)] transition-colors " +
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 " +
-  "focus-visible:ring-offset-background aria-invalid:border-destructive aria-invalid:text-destructive " +
-  "aria-invalid:placeholder:text-destructive/60"
+  "text-[color:var(--aqt-fg)] placeholder:text-[color:var(--aqt-fg-dim)] transition-colors " +
+  "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 " +
+  "focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive";
 
 interface InputProps extends Omit<React.ComponentProps<"input">, "size"> {
-  /** `sm` is the 32px toolbar row (13px text), `default` the 36px form row (14px). */
-  size?: "sm" | "default"
-  /** `surface` is the public-site control skin ({@link controlSurfaceClass}). */
-  variant?: "default" | "surface"
+  /** `sm` is the 32px toolbar row (13px text), `default` the 36px form row, `lg` the 40px one (14px). Below `sm` all are 40px. */
+  size?: "sm" | "default" | "lg";
 }
 
 // Below `sm` every field stays at 16px: iOS Safari zooms the page on focus
-// into anything smaller.
+// into anything smaller. The field grows to 40px there, so 16px text sits in
+// it in proportion instead of filling a 32px box.
 const Input = React.forwardRef<HTMLInputElement, InputProps>(
-  ({ className, type, size = "default", variant = "default", ...props }, ref) => {
+  ({ className, size = "default", ...props }, ref) => {
     return (
       <input
-        type={type}
         className={cn(
-          "flex w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:focus-visible:ring-destructive",
-          size === "sm" ? "h-8 sm:text-caption" : "h-9 sm:text-sm",
-          variant === "surface" && controlSurfaceClass,
+          controlSurfaceClass,
+          "flex py-1 text-base",
+          size === "sm"
+            ? "h-10 sm:h-8 sm:text-caption"
+            : size === "lg"
+              ? "h-10 sm:text-sm"
+              : "h-10 sm:h-9 sm:text-sm",
           className
         )}
         ref={ref}
         {...props}
       />
-    )
+    );
   }
-)
-Input.displayName = "Input"
+);
+Input.displayName = "Input";
 
-export { Input }
+export { Input };

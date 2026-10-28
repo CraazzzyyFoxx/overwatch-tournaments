@@ -4,6 +4,7 @@ import React from "react";
 import { useTranslations } from "next-intl";
 
 import { useDiscordRoles } from "@/hooks/useDiscordEntities";
+import { ComboboxMeta } from "@/components/ui/combobox";
 import { cn } from "@/lib/utils";
 import { DiscordRole } from "@/types/discord.types";
 
@@ -91,12 +92,8 @@ export function DiscordRoleSelect({
       renderOption={(role) => (
         <span className="flex min-w-0 flex-1 items-center gap-2">
           <RoleDot color={role.color} />
-          <span className="truncate font-medium">{role.name}</span>
-          {role.managed && (
-            <span className="ms-auto shrink-0 rounded bg-muted px-1 py-0.5 font-mono text-xs uppercase text-muted-foreground">
-              {t("managed")}
-            </span>
-          )}
+          <span className="truncate">{role.name}</span>
+          {role.managed && <ComboboxMeta className="ms-auto">{t("managed")}</ComboboxMeta>}
         </span>
       )}
       renderSelectedLabel={(role) => (

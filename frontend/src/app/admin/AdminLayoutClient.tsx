@@ -171,7 +171,7 @@ export function AdminLayoutClient({ children, defaultSidebarOpen }: Readonly<Adm
   }
 
   return (
-    <TooltipProvider delayDuration={300}>
+    <TooltipProvider>
       <SidebarProvider
         cookieName={SIDEBAR_COOKIE_NAMES.admin}
         defaultOpen={defaultSidebarOpen}
@@ -188,7 +188,7 @@ export function AdminLayoutClient({ children, defaultSidebarOpen }: Readonly<Adm
         <AdminSidebar />
         <SidebarInset className="min-w-0">
           <header className="sticky top-0 z-20 flex h-12 shrink-0 items-center gap-3 border-b border-border/50 bg-background px-4 md:px-5">
-            <SidebarTrigger className="size-8 rounded-lg border border-border/60" />
+            <SidebarTrigger />
             <Separator orientation="vertical" className="h-5" />
             <AdminBreadcrumb />
           </header>

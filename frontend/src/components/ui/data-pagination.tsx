@@ -47,9 +47,7 @@ interface DataPaginationProps {
   leading?: React.ReactNode;
 }
 
-const PAGE_BUTTON_CLASS = "aqt-tnum min-w-8 px-2 tabular-nums";
-const CURRENT_PAGE_CLASS =
-  "border-[color:color-mix(in_srgb,var(--aqt-teal)_30%,transparent)] bg-[color:color-mix(in_srgb,var(--aqt-teal)_12%,transparent)] text-[color:var(--aqt-teal)] hover:bg-[color:color-mix(in_srgb,var(--aqt-teal)_12%,transparent)]";
+const PAGE_BUTTON_CLASS = "aqt-tnum min-w-8 px-2";
 
 /**
  * The single pagination control for the site and the admin tables. Replaces
@@ -80,15 +78,11 @@ export function DataPagination({
   return (
     <Shell
       aria-label={hasControls ? t("common.pagination.label") : undefined}
-      className={cn("flex flex-wrap items-center justify-between gap-3", className)}
+      className={cn("flex flex-wrap items-center gap-3", className)}
     >
-      {leading ? (
-        <div className="text-label text-[color:var(--aqt-fg-dim)]">{leading}</div>
-      ) : (
-        <span />
-      )}
+      {leading ? <div className="text-label text-[color:var(--aqt-fg-dim)]">{leading}</div> : null}
       {hasControls ? (
-        <div className="flex flex-wrap items-center gap-1.5">
+        <div className="ms-auto flex flex-wrap items-center gap-1.5">
           <Button
             type="button"
             variant="outline"
@@ -114,11 +108,11 @@ export function DataPagination({
               <Button
                 key={entry}
                 type="button"
-                variant="outline"
+                variant={entry === safePage ? "accent" : "outline"}
                 size="sm"
                 aria-current={entry === safePage ? "page" : undefined}
                 aria-label={t("common.pagination.goToPage", { page: entry })}
-                className={cn(PAGE_BUTTON_CLASS, entry === safePage && CURRENT_PAGE_CLASS)}
+                className={PAGE_BUTTON_CLASS}
                 onClick={() => onPageChange(entry)}
               >
                 {entry}

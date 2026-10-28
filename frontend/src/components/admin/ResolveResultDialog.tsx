@@ -3,13 +3,14 @@
 import { useId, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ChevronRight } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { useFormatter } from "@/lib/datetime/client";
 
 import { AdminReportPairCell } from "@/components/admin/AdminReportPairCell";
 import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import { InspectorSection } from "@/components/kit/InspectorField";
 import { Button } from "@/components/ui/button";
+import { triggerChevronClass } from "@/components/ui/chevron";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   Dialog,
@@ -194,10 +195,10 @@ export function ResolveResultDialog({
                 <CollapsibleTrigger
                   className={cn(
                     eyebrowClass("muted"),
-                    "group flex w-full items-center gap-1.5 rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    "group/trigger flex w-full items-center gap-1.5 rounded-sm text-left focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                   )}
                 >
-                  <ChevronRight aria-hidden className="size-3.5 group-data-[state=open]:rotate-90" />
+                  <ChevronDown aria-hidden className={cn(triggerChevronClass, "size-3.5")} />
                   {t("history")}
                 </CollapsibleTrigger>
               </h3>

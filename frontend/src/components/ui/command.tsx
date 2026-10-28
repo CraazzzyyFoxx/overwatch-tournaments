@@ -9,6 +9,7 @@ import { Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { eyebrowClass } from "@/components/ui/eyebrow";
+import { floatingRowClass } from "@/components/ui/popover";
 
 const Command = React.forwardRef<
   React.ElementRef<typeof CommandPrimitive>,
@@ -17,7 +18,7 @@ const Command = React.forwardRef<
   <CommandPrimitive
     ref={ref}
     // No fill of its own: the panel or dialog it sits in paints it.
-    className={cn("flex h-full w-full flex-col overflow-hidden rounded-md", className)}
+    className={cn("flex h-full w-full flex-col overflow-hidden", className)}
     {...props}
   />
 ));
@@ -41,12 +42,15 @@ const CommandInput = React.forwardRef<
   React.ElementRef<typeof CommandPrimitive.Input>,
   React.ComponentPropsWithoutRef<typeof CommandPrimitive.Input>
 >(({ className, ...props }, ref) => (
-  <div className="flex items-center border-b border-[color:var(--aqt-overlay-border)] px-3" cmdk-input-wrapper="">
+  <div
+    className="flex items-center border-b border-[color:var(--aqt-overlay-border)] px-3"
+    cmdk-input-wrapper=""
+  >
     <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
     <CommandPrimitive.Input
       ref={ref}
       className={cn(
-        "flex h-10 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50",
+        "flex h-10 w-full rounded-md bg-transparent py-3 text-base outline-hidden placeholder:text-[color:var(--aqt-fg-dim)] disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm",
         className
       )}
       {...props}
@@ -64,7 +68,7 @@ const CommandList = React.forwardRef<
     ref={ref}
     // `overscroll-contain`: reaching either end must not chain the scroll on to
     // whatever sits behind the list (a dialog body, or the page).
-    className={cn("max-h-[300px] overflow-y-auto overflow-x-hidden overscroll-contain", className)}
+    className={cn("max-h-72 overflow-y-auto overflow-x-hidden overscroll-contain", className)}
     {...props}
   />
 ));
@@ -75,7 +79,11 @@ const CommandEmpty = React.forwardRef<
   React.ElementRef<typeof CommandPrimitive.Empty>,
   React.ComponentPropsWithoutRef<typeof CommandPrimitive.Empty>
 >((props, ref) => (
-  <CommandPrimitive.Empty ref={ref} className="py-6 text-center text-sm" {...props} />
+  <CommandPrimitive.Empty
+    ref={ref}
+    className="py-6 text-center text-sm text-[color:var(--aqt-fg-muted)]"
+    {...props}
+  />
 ));
 
 CommandEmpty.displayName = CommandPrimitive.Empty.displayName;
@@ -102,9 +110,10 @@ const CommandSeparator = React.forwardRef<
   React.ElementRef<typeof CommandPrimitive.Separator>,
   React.ComponentPropsWithoutRef<typeof CommandPrimitive.Separator>
 >(({ className, ...props }, ref) => (
+  // Between groups of the list, which pad themselves: full width, no margin.
   <CommandPrimitive.Separator
     ref={ref}
-    className={cn("-mx-1 h-px bg-[color:var(--aqt-overlay-border)]", className)}
+    className={cn("h-px bg-[color:var(--aqt-overlay-border)]", className)}
     {...props}
   />
 ));
@@ -117,7 +126,8 @@ const CommandItem = React.forwardRef<
   <CommandPrimitive.Item
     ref={ref}
     className={cn(
-      "relative flex min-h-11 cursor-pointer gap-2 select-none items-center rounded-md px-2 py-2 text-sm outline-none data-[disabled=true]:pointer-events-none data-[selected=true]:bg-[color:var(--aqt-overlay-4)] data-[selected=true]:text-[color:var(--aqt-fg)] data-[disabled=true]:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+      floatingRowClass,
+      "data-[disabled=true]:cursor-not-allowed data-[selected=true]:bg-[color:var(--aqt-overlay-4)] data-[selected=true]:text-[color:var(--aqt-fg)] data-[disabled=true]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*=size-])]:size-4",
       className
     )}
     {...props}

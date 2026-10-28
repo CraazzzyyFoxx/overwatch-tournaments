@@ -1,26 +1,38 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { ArrowUpRight, ChevronDown } from "lucide-react";
 import { useTranslations } from "next-intl";
 
+import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import TeamName from "@/components/TeamName";
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { disclosureChevronClass } from "@/components/ui/chevron";
+import Image from "@/components/ui/image";
 import { withReturnTo } from "@/lib/auth/return-to";
 import { encounterSeatScore } from "@/lib/encounter/detail";
+import { seatAt, seatTeam } from "@/lib/encounter/seats";
 import { getEncounterWinner, isEncounterCompleted } from "@/lib/encounter/status";
-import { seatAt, seatTeam, type DuelSlot } from "@/lib/encounter/seats";
 import { cn } from "@/lib/utils";
-import type { Encounter, Match } from "@/types/encounter.types";
+import type { Encounter } from "@/types/encounter.types";
 
-import styles from "../TournamentDetail.module.css";
+/**
+ * One grid for the series line and every map line under it, every track but the two team tracks a fixed width — so
+ * the team tracks come out equal in each line and a map's score sits exactly under the series score: the left number
+ * is always the left team's. Under 640px: team · score · team · chevron; from 640px the lead and the actions join.
+ */
+const LINE =
+  "grid grid-cols-[minmax(0,1fr)_1.25rem_0.75rem_1.25rem_minmax(0,1fr)_1rem] items-center gap-x-2 px-3.5 sm:grid-cols-[6rem_minmax(0,1fr)_1.75rem_1rem_1.75rem_minmax(0,1fr)_3.25rem] sm:gap-x-3";
+const ROW_HOVER = "transition-colors hover:bg-[color:var(--aqt-overlay-2)]";
+const LINK = "text-[color:var(--aqt-fg-muted)] hover:text-[color:var(--aqt-teal)]";
+
+const clock = (seconds: number) =>
+  `${Math.floor(seconds / 60)}:${String(Math.round(seconds % 60)).padStart(2, "0")}`;
 
 export type MatchRowProps = {
   encounter: Encounter;
   /** Leading cell: "21:00", "M10", a group chip. */
   leading?: ReactNode;
-  /** Mono trailing cell: "Group B · Bo2", "LB Final · Bo3". */
+  /** Trailing cell: "Group B · Bo2", "LB Final · Bo3". */
   trailing?: string;
   /** Bracket node for this match; renders a labelled "open in bracket" link when given. */
   bracketHref?: string;
@@ -28,13 +40,11 @@ export type MatchRowProps = {
   returnTo: string;
 };
 
-const ROW_HOVER = "transition-colors hover:bg-[color:var(--aqt-overlay-2)]";
-
 /**
- * One settled (or scheduled) match as a row. The maps of the series unfold
- * under it via `<details>` — no per-row state — with the log and pre-game
- * links that the bracket node hides behind three unlabeled icons. A match with
- * no maps has nothing to unfold, so the whole row opens the match page.
+ * One match as a row, its maps unfolding under it via `<details>` (no per-row state). The maps read like the
+ * scoreboard above them: each map's score under the series score, its winner's number in teal, the map's stats link
+ * only when it has a log, and the pre-game room only while there is a game ahead. A match with no maps has nothing to
+ * unfold, so the whole row opens the match page. Under 640px the series is one line.
  */
 export function MatchRow({
   encounter,
@@ -45,157 +55,195 @@ export function MatchRow({
 }: Readonly<MatchRowProps>) {
   const t = useTranslations();
   const completed = isEncounterCompleted(encounter);
-  const seatScoreLabel = (map: Match) => {
-    const score = encounterSeatScore(map, encounter);
-    return score ? `${score.one} : ${score.two}` : "—";
-  };
-  const scoreOne = seatAt(encounter.teams, 1)?.score ?? 0;
-  const scoreTwo = seatAt(encounter.teams, 2)?.score ?? 0;
-  const hasScore = completed || scoreOne !== 0 || scoreTwo !== 0;
   const winner = getEncounterWinner(encounter);
-  const maps = encounter.matches ?? [];
-  const expandable = maps.length > 0;
-
-  const side = (slot: DuelSlot) => {
-    const won = winner === slot;
-    const lost = winner !== null && !won;
-    const team = seatTeam(seatAt(encounter.teams, slot));
-    return (
-      <span
-        data-cell={`t${slot}`}
-        className={cn(
-          "flex min-w-0",
-          won && "font-semibold text-[color:var(--aqt-fg)]",
-          lost && "text-[color:var(--aqt-fg-dim)]"
-        )}
-      >
-        <TeamName
-          team={team}
-          fallback={t("common.tbd")}
-          size="sm"
-          // Slot 1's name leans on the score from the left on the scoreboard
-          // line; stacked under 640px both names read from the left edge.
-          className={slot === 1 ? "sm:flex-row-reverse" : undefined}
-        />
-      </span>
-    );
-  };
-
-  const score = (slot: DuelSlot) => (
+  const one = seatAt(encounter.teams, 1);
+  const two = seatAt(encounter.teams, 2);
+  const hasScore = completed || (one?.score ?? 0) !== 0 || (two?.score ?? 0) !== 0;
+  const maps = [...(encounter.matches ?? [])].sort(
+    (a, b) => (a.map_index ?? 0) - (b.map_index ?? 0)
+  );
+  const won = "font-semibold text-[color:var(--aqt-fg)]";
+  const lost = winner === null ? undefined : "text-[color:var(--aqt-fg-dim)]";
+  const score = (value: number, lead: boolean) => (
     <span
-      data-cell={`s${slot}`}
       className={cn(
-        styles.score,
-        winner === slot ? "text-[color:var(--aqt-teal)]" : "text-[color:var(--aqt-fg-muted)]",
-        !hasScore && "text-[color:var(--aqt-fg-faint)] sm:invisible"
+        "aqt-tnum text-center font-display text-ui font-bold sm:text-title sm:leading-none",
+        lead ? "text-[color:var(--aqt-teal)]" : "text-[color:var(--aqt-fg-muted)]",
+        !hasScore && "text-[color:var(--aqt-fg-faint)]"
       )}
     >
-      {hasScore ? (slot === 1 ? scoreOne : scoreTwo) : "–"}
+      {hasScore ? value : "–"}
     </span>
   );
 
   const summary = (
-    <div data-match-row className={cn(styles.matchRow, "relative px-3.5 py-2.5 text-ui")}>
-      {/* The stretched link sits under the cells; the bracket link is lifted
-          above it, so the two never nest. */}
-      {expandable ? null : (
+    <div className={cn(LINE, "relative py-2.5 text-ui")}>
+      {maps.length === 0 ? (
         <HoverPrefetchLink
           href={`/encounters/${encounter.id}`}
-          className="absolute inset-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[color:var(--aqt-teal)]"
+          className="absolute inset-0 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[color:var(--aqt-teal)]"
           aria-label={t("bracket.viewMatch")}
         />
-      )}
-      <span data-cell="lead" className="min-w-0 text-label text-[color:var(--aqt-fg-faint)]">
+      ) : null}
+      <span className="min-w-0 truncate text-label text-[color:var(--aqt-fg-faint)] max-sm:hidden">
         {leading}
       </span>
-      {side(1)}
-      {score(1)}
-      <span data-cell="dash" className={cn(styles.score, "text-center font-normal text-[color:var(--aqt-fg-faint)]")}>
+      <TeamName
+        team={seatTeam(one)}
+        fallback={t("common.tbd")}
+        size="sm"
+        reverse
+        className={cn("justify-self-end", winner === 1 ? won : lost)}
+      />
+      {score(one?.score ?? 0, winner === 1)}
+      <span className="text-center text-[color:var(--aqt-fg-faint)]">
         {hasScore ? "–" : <span className="text-label uppercase">vs</span>}
       </span>
-      {score(2)}
-      {side(2)}
-      <span data-cell="act" className="flex items-center justify-end gap-2 text-label text-[color:var(--aqt-fg-faint)]">
-        {trailing ? <span className="hidden whitespace-nowrap sm:inline">{trailing}</span> : null}
+      {score(two?.score ?? 0, winner === 2)}
+      <TeamName
+        team={seatTeam(two)}
+        fallback={t("common.tbd")}
+        size="sm"
+        className={winner === 2 ? won : lost}
+      />
+      <span className="flex items-center justify-end gap-2 text-label text-[color:var(--aqt-fg-faint)]">
+        {trailing ? <span className="hidden whitespace-nowrap xl:inline">{trailing}</span> : null}
         {bracketHref ? (
           <HoverPrefetchLink
             href={bracketHref}
-            /* Negative margin, not a bigger row: the touch target reaches 40px
-               while the row keeps its density. */
-            className="relative -m-2 inline-flex p-2 hover:text-[color:var(--aqt-teal)] md:m-0 md:p-0"
+            className="relative hidden hover:text-[color:var(--aqt-teal)] sm:inline-flex"
             aria-label={t("tournamentDetail.matchRow.openInBracket")}
             title={t("tournamentDetail.matchRow.openInBracket")}
           >
             <ArrowUpRight className="size-3.5" aria-hidden />
           </HoverPrefetchLink>
         ) : null}
-        {expandable ? (
-          <ChevronDown className="size-3.5 transition-transform group-open:rotate-180" aria-hidden />
-        ) : (
-          <span className="inline-block size-3.5" aria-hidden />
-        )}
+        {maps.length > 0 ? (
+          <ChevronDown className={cn(disclosureChevronClass, "size-3.5")} aria-hidden />
+        ) : null}
       </span>
     </div>
   );
 
-  const rowBorder = "border-b border-[color:var(--aqt-border)]/60 last:border-b-0";
-
-  if (!expandable) {
-    return <div className={cn(rowBorder, ROW_HOVER)}>{summary}</div>;
-  }
+  const border = "border-b border-[color:var(--aqt-border)]/60 last:border-b-0";
+  if (maps.length === 0) return <div className={cn(border, ROW_HOVER)}>{summary}</div>;
 
   return (
-    <details className={cn("group", rowBorder)}>
+    <details className={cn("group/disclosure", border)}>
       <summary
         className={cn(
-          "cursor-pointer list-none [&::-webkit-details-marker]:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[color:var(--aqt-teal)]",
+          "cursor-pointer list-none [&::-webkit-details-marker]:hidden focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[color:var(--aqt-teal)]",
           ROW_HOVER
         )}
       >
         {summary}
       </summary>
-      <div className="mx-3.5 mb-2 border-l-2 border-[color:var(--aqt-border)] py-1 pl-3 text-caption sm:ml-[6rem]">
-        <Eyebrow as="div" className="grid grid-cols-[minmax(8rem,14rem)_minmax(0,1fr)_4rem_4rem_auto] gap-2 py-0.5">
-          <span>{t("tournamentDetail.matchRow.map")}</span>
-          <span>{t("tournamentDetail.matchRow.mode")}</span>
-          <span className="text-right">{t("tournamentDetail.matchRow.score")}</span>
-          <span className="text-right">{t("tournamentDetail.matchRow.duration")}</span>
-          <span />
-        </Eyebrow>
-        {maps.map((map) => (
-          <div
-            key={map.id}
-            className="grid grid-cols-[minmax(8rem,14rem)_minmax(0,1fr)_4rem_4rem_auto] items-center gap-2 py-1"
-          >
-            <span className="truncate font-semibold">{map.map?.name ?? "—"}</span>
-            <span className="truncate text-[color:var(--aqt-fg-muted)]">{(map.mode ?? map.map?.parent)?.name ?? "—"}</span>
-            <span className="text-right tabular-nums">
-              {seatScoreLabel(map)}
-            </span>
-            <span className="text-right tabular-nums">
-              {map.duration_s != null
-                ? `${Math.floor(map.duration_s / 60)}:${String(Math.round(map.duration_s % 60)).padStart(2, "0")}`
-                : "—"}
-            </span>
-            <span className="flex justify-end gap-2 text-label">
-              {map.log_name ? (
-                <HoverPrefetchLink href={`/matches/${map.id}`} className="text-[color:var(--aqt-fg-muted)] hover:text-[color:var(--aqt-teal)]">
-                  {t("tournamentDetail.matchRow.log")}
-                </HoverPrefetchLink>
-              ) : null}
-            </span>
-          </div>
-        ))}
-        <div className="mt-1.5 flex gap-3 border-t border-[color:var(--aqt-border)]/60 pt-1.5 text-label">
-          <HoverPrefetchLink href={`/encounters/${encounter.id}`} className="text-[color:var(--aqt-fg-muted)] hover:text-[color:var(--aqt-teal)]">
-            {t("bracket.viewMatch")}
-          </HoverPrefetchLink>
-          <HoverPrefetchLink
-            href={withReturnTo(`/tournaments/${encounter.tournament_id}/pregame/${encounter.id}`, returnTo)}
-            className="text-[color:var(--aqt-fg-muted)] hover:text-[color:var(--aqt-teal)]"
-          >
-            {t("bracket.pregameRoom")}
-          </HoverPrefetchLink>
+      <div className="bg-[color:var(--aqt-overlay-1)] pb-2 text-caption">
+        {maps.map((map, index) => {
+          const mapScore = encounterSeatScore(map, encounter);
+          const mapWinner =
+            mapScore && mapScore.one !== mapScore.two
+              ? mapScore.one > mapScore.two
+                ? 1
+                : 2
+              : null;
+          const mode = map.mode ?? map.map?.parent ?? null;
+          return (
+            <div key={map.id} className={cn(LINE, "py-1.5")}>
+              <span className="truncate text-label tracking-wide text-[color:var(--aqt-fg-faint)] uppercase max-sm:hidden">
+                {t("tournamentDetail.matchRow.map", { n: map.map_index ?? index + 1 })}
+              </span>
+              <span className="flex min-w-0 items-center gap-2">
+                {mode?.image_path ? (
+                  <Image
+                    src={mode.image_path}
+                    alt=""
+                    width={13}
+                    height={13}
+                    aria-hidden
+                    className="shrink-0 opacity-70"
+                  />
+                ) : null}
+                <span className="truncate font-semibold">{map.map?.name ?? "—"}</span>
+                {mode ? (
+                  <span className="truncate text-[color:var(--aqt-fg-dim)] max-md:hidden">
+                    {mode.name}
+                  </span>
+                ) : null}
+              </span>
+              {mapScore ? (
+                <>
+                  <span
+                    className={cn(
+                      "aqt-tnum text-center font-semibold",
+                      mapWinner === 1
+                        ? "text-[color:var(--aqt-teal)]"
+                        : "text-[color:var(--aqt-fg-muted)]"
+                    )}
+                  >
+                    {mapScore.one}
+                  </span>
+                  <span className="text-center text-[color:var(--aqt-fg-faint)]">–</span>
+                  <span
+                    className={cn(
+                      "aqt-tnum text-center font-semibold",
+                      mapWinner === 2
+                        ? "text-[color:var(--aqt-teal)]"
+                        : "text-[color:var(--aqt-fg-muted)]"
+                    )}
+                  >
+                    {mapScore.two}
+                  </span>
+                </>
+              ) : (
+                <span className="col-span-3 text-center text-[color:var(--aqt-fg-faint)]">—</span>
+              )}
+              <span className="flex min-w-0 items-center justify-end gap-3 text-label">
+                <span className="aqt-tnum text-[color:var(--aqt-fg-dim)]">
+                  {map.duration_s != null ? clock(map.duration_s) : "—"}
+                </span>
+                {map.log_name ? (
+                  <HoverPrefetchLink
+                    href={`/matches/${map.id}`}
+                    className={cn(LINK, "max-sm:hidden")}
+                  >
+                    {t("tournamentDetail.matchRow.mapStats")}
+                  </HoverPrefetchLink>
+                ) : null}
+              </span>
+              <span className="flex justify-end">
+                {map.log_name ? (
+                  <HoverPrefetchLink
+                    href={`/matches/${map.id}`}
+                    className={cn(LINK, "sm:hidden")}
+                    aria-label={t("tournamentDetail.matchRow.mapStats")}
+                  >
+                    <ArrowUpRight className="size-3.5" aria-hidden />
+                  </HoverPrefetchLink>
+                ) : null}
+              </span>
+            </div>
+          );
+        })}
+        {/* On the same grid, so the links start where the map names do. */}
+        <div className={cn(LINE, "mt-1 pt-1.5 text-label")}>
+          <span className="max-sm:hidden" />
+          <span className="col-span-5 flex gap-4 max-sm:col-span-6">
+            <HoverPrefetchLink href={`/encounters/${encounter.id}`} className={LINK}>
+              {t("tournamentDetail.matchRow.matchPage")}
+            </HoverPrefetchLink>
+            {completed ? null : (
+              <HoverPrefetchLink
+                href={withReturnTo(
+                  `/tournaments/${encounter.tournament_id}/pregame/${encounter.id}`,
+                  returnTo
+                )}
+                className={LINK}
+              >
+                {t("bracket.pregameRoom")}
+              </HoverPrefetchLink>
+            )}
+          </span>
         </div>
       </div>
     </details>

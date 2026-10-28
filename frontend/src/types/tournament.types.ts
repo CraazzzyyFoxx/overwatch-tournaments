@@ -5,6 +5,7 @@ import type { RosterShape } from "@/lib/roster/shape";
 import type { TournamentLink } from "@/types/stream.types";
 import type { DraftFormatSettings } from "@/types/draft.types";
 import type { RoleRef } from "@/lib/roster/role-ref";
+import type { Schema } from "@/types/api";
 
 // ─── Enums ──────────────────────────────────────────────────────────────────
 
@@ -19,11 +20,7 @@ export type TournamentStatus =
   | "archived";
 
 export type StageType =
-  | "round_robin"
-  | "single_elimination"
-  | "double_elimination"
-  | "swiss"
-  | "ffa_league";
+  "round_robin" | "single_elimination" | "double_elimination" | "swiss" | "ffa_league";
 
 export type StageItemType = "group" | "bracket_upper" | "bracket_lower" | "single_bracket";
 
@@ -33,7 +30,6 @@ export type EncounterResultStatus = "none" | "pending_confirmation" | "confirmed
 
 /** Which writer decided an encounter's standing; only a reopen changes anything but `games`. */
 export type EncounterResultSource = "games" | "series_claim" | "admin" | "import";
-
 
 // ─── Team group ─────────────────────────────────────────────────────────────
 
@@ -298,10 +294,8 @@ export interface TournamentFacets {
 
 // ─── Shared pick-ban vocabulary ─────────────────────────────────────────────
 
-
 type MapVetoSessionStatus = "active" | "completed" | "cancelled";
 type VetoSeedSource = "bracket_slot" | "standings" | "fallback_first_slot" | "admin";
-
 
 /**
  * Reason the room has no session yet (state responses with `session: null`).
@@ -327,7 +321,6 @@ export type VetoUnavailableReason =
 
 /** Which pool shape a pick-ban config uses. Mirrors the backend `MapVetoMode`. */
 export type MapVetoMode = "pool" | "slots";
-
 
 export interface Standings {
   id: number;
@@ -368,6 +361,22 @@ export interface Standings {
   stage_item: StageItem | null;
   matches_history: Encounter[];
 }
+
+/** The stats `GET /tournaments/{id}/player-stats` ranks: per-map averages over the tournament's logged maps. */
+export type TournamentPlayerStatKey =
+  | "performance"
+  | "kda"
+  | "eliminations"
+  | "deaths"
+  | "assists"
+  | "hero_damage_dealt"
+  | "damage_delta";
+
+/** `GET /tournaments/{id}/player-stats`: every player's value and rank (1 = best) per stat they have data for. */
+export type TournamentPlayerStatsResponse = Schema<"stats.TournamentPlayerStats">;
+
+/** `GET /tournaments/{id}/pick-ban/outcomes`: every public hero ban and every struck or chosen map. */
+export type PickBanOutcomesResponse = Schema<"tournament.TournamentPickBanOutcomes">;
 
 // ─── Generic pick-ban engine (map + hero), ruleset v2 ───────────────────────
 //
@@ -615,11 +624,7 @@ export interface PickBanSession {
  * accepted score, and only the admin correction command may change it.
  */
 export type EncounterGameState =
-  | "planned"
-  | "awaiting_result"
-  | "disputed"
-  | "confirmed"
-  | "cancelled";
+  "planned" | "awaiting_result" | "disputed" | "confirmed" | "cancelled";
 
 /** Who put the accepted score on a game. A Match score is never one of them. */
 type GameResultSource = "captain_agreement" | "admin" | "admin_log";

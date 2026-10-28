@@ -17,6 +17,7 @@ import {
   AlertDialogTitle
 } from "@/components/ui/alert-dialog";
 import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Eyebrow } from "@/components/ui/eyebrow";
@@ -72,7 +73,6 @@ import VirtualParticipantsList from "./VirtualParticipantsList";
 import { TournamentParticipantsSkeleton } from "../../_components/TournamentSkeletons";
 import { TournamentPageState } from "../../_components/TournamentPageState";
 import { ViewSegment } from "../../_components/ViewSegment";
-import styles from "../../TournamentDetail.module.css";
 import { MyRegistrationCard } from "./MyRegistrationCard";
 import {
   ADMIN_ONLY_COLUMN_IDS,
@@ -617,7 +617,7 @@ function TournamentParticipantsView({ tournament }: Readonly<{ tournament: Tourn
                 checkInMutation.mutate();
               }}
               disabled={checkInMutation.isPending}
-              className="border border-[color:color-mix(in_srgb,var(--aqt-emerald)_30%,transparent)] bg-[color:var(--aqt-emerald)] text-[color:var(--aqt-bg)] hover:brightness-110"
+              variant="positive"
             >
               {checkInMutation.isPending ? t("common.checkingIn") : t("common.checkIn")}
             </AlertDialogAction>
@@ -653,11 +653,11 @@ function TournamentParticipantsView({ tournament }: Readonly<{ tournament: Tourn
           clusters, and a second one would scatter the controls across the bar.
           Below `sm` the chips take their own line and scroll sideways instead
           of wrapping into a third and fourth row; from `sm` up their wrapper is
-          `display: contents`, so the desktop bar stays one flex row. */}
+          `display: contents`, so the desktop bar stays one flex row. Below `sm`
+          every control is 40px: the 32px toolbar row is under the touch minimum. */}
       {!listHidden && !trueEmpty && (
         <Card
-          variant="flat"
-          className="filters"
+          className="flex flex-wrap items-center gap-2 p-2.5"
           role="group"
           aria-label={t("common.filters")}
           ref={resultsHeadingRef}
@@ -688,7 +688,7 @@ function TournamentParticipantsView({ tournament }: Readonly<{ tournament: Tourn
             <div className="-my-1 -ml-1 -mr-2.5 flex min-w-0 shrink-0 basis-[calc(100%+0.875rem)] gap-2 overflow-x-auto py-1 pl-1 pr-2.5 [scrollbar-width:none] sm:contents [&::-webkit-scrollbar]:hidden">
               <FilterChip
                 active={statusFilter === "all"}
-                className="shrink-0"
+                className="shrink-0 max-sm:h-10"
                 count={registrations.length}
                 onClick={() => navigateParticipantUrl({ type: "status", value: "all" })}
               >
@@ -700,7 +700,7 @@ function TournamentParticipantsView({ tournament }: Readonly<{ tournament: Tourn
                   <FilterChip
                     key={status}
                     active={statusFilter === status}
-                    className="shrink-0"
+                    className="shrink-0 max-sm:h-10"
                     count={statusCounts[status] ?? 0}
                     dotColor={meta?.dot ?? "var(--aqt-fg-dim)"}
                     onClick={() =>
@@ -731,6 +731,7 @@ function TournamentParticipantsView({ tournament }: Readonly<{ tournament: Tourn
                 : t("common.searchParticipants")
             }
             ref={participantSearchInputRef}
+            className="max-sm:h-10"
             containerClassName="min-w-0 flex-1 sm:ml-auto sm:min-w-[200px] sm:max-w-[300px]"
           />
           {view === "pool" && divisionOptions.length > 0 && (
@@ -746,7 +747,7 @@ function TournamentParticipantsView({ tournament }: Readonly<{ tournament: Tourn
               <SelectTrigger
                 aria-label={t("tournamentDetail.participantsPool.divisionFilterLabel")}
                 size="sm"
-                className="w-[10.5rem]"
+                className="w-[10.5rem] max-sm:h-10"
               >
                 <SelectValue />
               </SelectTrigger>
@@ -832,7 +833,7 @@ function TournamentParticipantsView({ tournament }: Readonly<{ tournament: Tourn
       )}
 
       {listQuery.isError && listQuery.data !== undefined ? (
-        <div className={styles.refreshMessage} role="alert">
+        <Alert tone="warning" role="alert" className="flex items-center justify-between gap-3">
           <span>
             <strong>{t("tournamentDetail.pageState.refreshError.title")}</strong>
             {" — "}
@@ -841,7 +842,7 @@ function TournamentParticipantsView({ tournament }: Readonly<{ tournament: Tourn
           <Button type="button" variant="outline" size="sm" onClick={() => void listQuery.refetch()}>
             {t("tournamentDetail.pageState.retry")}
           </Button>
-        </div>
+        </Alert>
       ) : null}
     </div>
   );

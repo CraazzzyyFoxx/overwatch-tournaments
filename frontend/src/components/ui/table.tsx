@@ -1,15 +1,22 @@
 import * as React from "react";
 
+import { eyebrowClass } from "@/components/ui/eyebrow";
 import { cn } from "@/lib/utils";
 
 type TableProps = React.HTMLAttributes<HTMLTableElement> & {
   wrapperClassName?: string;
 };
 
+/**
+ * The table primitive. Cells read as `text-caption`, heads in the eyebrow
+ * voice, rows over `--aqt-border` hairlines with the `RowButton` recipe: hover
+ * `--aqt-overlay-2`, the current row (`aria-current="true"`) `--aqt-overlay-3`.
+ * Header rows never hover.
+ */
 const Table = React.forwardRef<HTMLTableElement, TableProps>(
   ({ className, wrapperClassName, ...props }, ref) => (
     <div className={cn("relative w-full overflow-auto", wrapperClassName)}>
-      <table ref={ref} className={cn("w-full caption-bottom text-sm", className)} {...props} />
+      <table ref={ref} className={cn("w-full caption-bottom text-caption", className)} {...props} />
     </div>
   )
 );
@@ -19,7 +26,11 @@ const TableHeader = React.forwardRef<
   HTMLTableSectionElement,
   React.HTMLAttributes<HTMLTableSectionElement>
 >(({ className, ...props }, ref) => (
-  <thead ref={ref} className={cn("[&_tr]:border-b", className)} {...props} />
+  <thead
+    ref={ref}
+    className={cn("[&_tr]:border-b [&_tr:hover]:bg-transparent", className)}
+    {...props}
+  />
 ));
 TableHeader.displayName = "TableHeader";
 
@@ -36,7 +47,7 @@ const TableRow = React.forwardRef<HTMLTableRowElement, React.HTMLAttributes<HTML
     <tr
       ref={ref}
       className={cn(
-        "border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted",
+        "border-b border-[color:var(--aqt-border)] transition-colors hover:bg-[color:var(--aqt-overlay-2)] aria-[current=true]:bg-[color:var(--aqt-overlay-3)]",
         className
       )}
       {...props}
@@ -52,7 +63,8 @@ const TableHead = React.forwardRef<
   <th
     ref={ref}
     className={cn(
-      "h-10 px-2 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
+      eyebrowClass(),
+      "h-10 px-2 text-left align-middle [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
       className
     )}
     {...props}

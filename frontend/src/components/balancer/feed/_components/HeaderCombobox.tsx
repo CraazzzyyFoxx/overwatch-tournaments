@@ -35,8 +35,8 @@ export function HeaderCombobox({
     <Combobox
       open={open}
       onOpenChange={setOpen}
-      label={value ?? <span className="text-muted-foreground">{resolvedPlaceholder}</span>}
-      labelTitle={value ?? resolvedPlaceholder}
+      label={value}
+      placeholder={resolvedPlaceholder}
       disabled={disabled || options.length === 0}
       searchPlaceholder={t("searchColumns")}
       emptyMessage={t("noColumns")}

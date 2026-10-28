@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronRight, RefreshCcw } from "lucide-react";
+import { ChevronDown, RefreshCcw } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useFormatter } from "@/lib/datetime/client";
 
@@ -11,6 +11,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { disclosureChevronClass } from "@/components/ui/chevron";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -19,6 +20,7 @@ import type {
   AdminGoogleSheetFeedSyncResponse,
 } from "@/types/balancer-admin.types";
 import { Spinner } from "@/components/ui/spinner";
+import { cn } from "@/lib/utils";
 
 interface SourceSyncTabProps {
   feed: AdminGoogleSheetFeed | null | undefined;
@@ -168,9 +170,9 @@ export function SourceSyncTab({
         {feed?.last_error ? <p className="text-sm text-danger">{feed.last_error}</p> : null}
 
         {headers.length > 0 ? (
-          <details className="group">
+          <details className="group/disclosure">
             <summary className={`${eyebrowClass("muted")} inline-flex cursor-pointer list-none items-center gap-1 rounded focus-visible:outline-2 focus-visible:outline-offset-2`}>
-              <ChevronRight className="size-3 transition-transform group-open:rotate-90" aria-hidden />
+              <ChevronDown className={cn(disclosureChevronClass, "size-3")} aria-hidden />
               {t("detectedHeaders", { count: headers.length })}
             </summary>
             <div className="mt-2 flex flex-wrap gap-1.5">
@@ -200,7 +202,7 @@ export function SourceSyncTab({
               ))}
             </dl>
             {syncResult.errors.length > 0 ? (
-              <Alert variant="destructive">
+              <Alert tone="danger">
                 <AlertTitle>
                   {t("rowErrors", { count: syncResult.errors.length })}
                 </AlertTitle>

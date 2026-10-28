@@ -138,11 +138,11 @@ async function mount(standings: Standings[], stages: Stage[]) {
 /** The 1-based row the dashed cut-line sits under, or 0 when there is none. */
 function cutAfterRow() {
   const rows = [...container.querySelectorAll("tbody tr")];
-  return rows.findIndex((row) => row.querySelector(".st-cut") != null);
+  return rows.findIndex((row) => row.querySelector("[data-cut='advance']") != null);
 }
 
 function advancingRanks() {
-  return [...container.querySelectorAll("tbody tr.advance .st-rank")].map((node) =>
+  return [...container.querySelectorAll("tbody tr[data-advance] [data-rank]")].map((node) =>
     Number(node.textContent)
   );
 }
@@ -204,9 +204,9 @@ describe("standings form", () => {
 
     await mount([standing(1, group, groups, { matches_history: history })], [groups]);
 
-    const chips = [...container.querySelectorAll(".form-chips .fc")].map((chip) => chip.textContent);
+    const chips = [...container.querySelectorAll("[data-form] > *")].map((chip) => chip.textContent);
     expect(chips).toEqual(["W", "T"]);
-    expect(container.querySelector(".st-diff")?.textContent).toBe("+2");
+    expect(container.querySelector("[data-diff]")?.textContent).toBe("+2");
   });
 });
 
@@ -227,7 +227,7 @@ describe("standings tie visibility", () => {
     // Buchholz is the 6th cell: #, team, W·D·L, Pts, H2H, Buchholz. Only the
     // team rows carry a rank — the cut-line and its warning are single-cell.
     const cells = [...container.querySelectorAll("tbody tr")]
-      .filter((row) => row.querySelector(".st-rank") != null)
+      .filter((row) => row.querySelector("[data-rank]") != null)
       .map((row) => row.children[5]?.textContent ?? "");
 
     expect(cells).toEqual(["9.0 · 15.0", "9.0", "—"]);
@@ -249,10 +249,10 @@ describe("standings tie visibility", () => {
       [groups]
     );
 
-    const ranks = [...container.querySelectorAll("tbody .st-rank")].map((node) => node.textContent);
+    const ranks = [...container.querySelectorAll("tbody [data-rank]")].map((node) => node.textContent);
 
     expect(ranks).toEqual(["1", "2", "2", "4", "5"]);
-    expect(container.querySelector("tbody tr.tie")).toBeNull();
+    expect(container.querySelector("tbody tr[data-tie]")).toBeNull();
   });
 
   it("marks the rows a cut-line splits as TIE instead of promising them through", async () => {
@@ -271,15 +271,15 @@ describe("standings tie visibility", () => {
       [groups]
     );
 
-    const tied = [...container.querySelectorAll("tbody tr.tie")];
+    const tied = [...container.querySelectorAll("tbody tr[data-tie]")];
     expect(tied).toHaveLength(2);
     // The row above the line would have said "Adv" — a promise the results
     // never made, since the assigned order is what puts it there.
-    expect(tied.map((row) => row.querySelector(".st-status")?.textContent)).toEqual([
+    expect(tied.map((row) => row.querySelector("[data-status]")?.textContent)).toEqual([
       en.standings.tieStatus,
       en.standings.tieStatus
     ]);
-    expect(tied[0].querySelector(".st-status")?.getAttribute("title")).toBe(
+    expect(tied[0].querySelector("[data-status]")?.getAttribute("title")).toBe(
       en.standings.tieDecidesAdvance
     );
   });
@@ -304,11 +304,11 @@ describe("upper vs lower bracket boundary", () => {
       [groups]
     );
 
-    const upper = container.querySelector(".st-upper-cut");
+    const upper = container.querySelector("[data-cut='upper']");
     expect(upper?.getAttribute("data-label")).toBe("Top 2 → upper bracket");
-    const tied = [...container.querySelectorAll("tbody tr.tie")];
+    const tied = [...container.querySelectorAll("tbody tr[data-tie]")];
     expect(tied).toHaveLength(2);
-    expect(tied[0].querySelector(".st-status")?.getAttribute("title")).toBe(
+    expect(tied[0].querySelector("[data-status]")?.getAttribute("title")).toBe(
       en.standings.tieDecidesUpper
     );
   });
@@ -322,7 +322,7 @@ describe("upper vs lower bracket boundary", () => {
       [groups]
     );
 
-    expect(container.querySelector(".st-upper-cut")?.getAttribute("data-label")).toBe(
+    expect(container.querySelector("[data-cut='upper']")?.getAttribute("data-label")).toBe(
       "Top 2 → upper bracket"
     );
   });
@@ -336,7 +336,7 @@ describe("upper vs lower bracket boundary", () => {
       [groups]
     );
 
-    expect(container.querySelector(".st-upper-cut")).toBeNull();
+    expect(container.querySelector("[data-cut='upper']")).toBeNull();
   });
 
   it("stays silent when the whole advancing block starts upper", async () => {
@@ -348,7 +348,7 @@ describe("upper vs lower bracket boundary", () => {
       [groups]
     );
 
-    expect(container.querySelector(".st-upper-cut")).toBeNull();
+    expect(container.querySelector("[data-cut='upper']")).toBeNull();
   });
 
   it("lets one group set its own share, over the stage's", async () => {
@@ -360,7 +360,7 @@ describe("upper vs lower bracket boundary", () => {
       [groups]
     );
 
-    expect(container.querySelector(".st-upper-cut")?.getAttribute("data-label")).toBe(
+    expect(container.querySelector("[data-cut='upper']")?.getAttribute("data-label")).toBe(
       "Top 4 → upper bracket"
     );
   });

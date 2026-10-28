@@ -2,71 +2,48 @@
 
 import * as React from "react";
 import * as AlertDialogPrimitive from "@radix-ui/react-alert-dialog";
+import { type VariantProps } from "class-variance-authority";
 
 import { cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button";
+import {
+  DialogFooter,
+  MODAL_CONTENT_CLASS,
+  MODAL_DESCRIPTION_CLASS,
+  MODAL_HEADER_CLASS,
+  MODAL_OVERLAY_CLASS,
+  MODAL_TITLE_CLASS
+} from "@/components/ui/dialog";
 
+// The `Dialog` chrome (overlay, box, header, footer); Radix's alert dialog
+// scopes its own Title/Description context, so those two stay its own parts.
 const AlertDialog = AlertDialogPrimitive.Root;
-
-const AlertDialogPortal = AlertDialogPrimitive.Portal;
-
-const AlertDialogOverlay = React.forwardRef<
-  React.ElementRef<typeof AlertDialogPrimitive.Overlay>,
-  React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Overlay>
->(({ className, ...props }, ref) => (
-  <AlertDialogPrimitive.Overlay
-    className={cn(
-      "fixed inset-0 z-50 bg-black/80  data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
-      className
-    )}
-    {...props}
-    ref={ref}
-  />
-));
-AlertDialogOverlay.displayName = AlertDialogPrimitive.Overlay.displayName;
 
 const AlertDialogContent = React.forwardRef<
   React.ElementRef<typeof AlertDialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Content>
 >(({ className, ...props }, ref) => (
-  <AlertDialogPortal>
-    <AlertDialogOverlay />
-      <AlertDialogPrimitive.Content
-        ref={ref}
-        className={cn(
-          // Same height cap as `DialogContent`: long confirmations (wizards,
-          // destructive summaries) scroll instead of overflowing the viewport.
-          "fixed left-[50%] top-[50%] z-50 grid max-h-[calc(100dvh-2rem)] w-full max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 overflow-auto overscroll-contain rounded-2xl border border-border/70 bg-card/95 p-6 shadow-xl transition-all duration-200 ease-out data-[state=closed]:pointer-events-none data-[state=closed]:opacity-0 data-[state=closed]:scale-95 data-[state=open]:opacity-100 data-[state=open]:scale-100",
-          className
-        )}
-        {...props}
-      />
-  </AlertDialogPortal>
+  <AlertDialogPrimitive.Portal>
+    <AlertDialogPrimitive.Overlay className={MODAL_OVERLAY_CLASS} />
+    <AlertDialogPrimitive.Content
+      ref={ref}
+      className={cn(MODAL_CONTENT_CLASS, className)}
+      {...props}
+    />
+  </AlertDialogPrimitive.Portal>
 ));
 AlertDialogContent.displayName = AlertDialogPrimitive.Content.displayName;
 
+/** `DialogHeader` without its close-button clearance: an alert dialog has no close button. */
 const AlertDialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn("flex flex-col space-y-2 text-center sm:text-left", className)} {...props} />
+  <div className={cn(MODAL_HEADER_CLASS, className)} {...props} />
 );
-AlertDialogHeader.displayName = "AlertDialogHeader";
-
-const AlertDialogFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div
-    className={cn("flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2", className)}
-    {...props}
-  />
-);
-AlertDialogFooter.displayName = "AlertDialogFooter";
 
 const AlertDialogTitle = React.forwardRef<
   React.ElementRef<typeof AlertDialogPrimitive.Title>,
   React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Title>
 >(({ className, ...props }, ref) => (
-  <AlertDialogPrimitive.Title
-    ref={ref}
-    className={cn("text-lg font-semibold", className)}
-    {...props}
-  />
+  <AlertDialogPrimitive.Title ref={ref} className={cn(MODAL_TITLE_CLASS, className)} {...props} />
 ));
 AlertDialogTitle.displayName = AlertDialogPrimitive.Title.displayName;
 
@@ -76,19 +53,21 @@ const AlertDialogDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <AlertDialogPrimitive.Description
     ref={ref}
-    className={cn("text-sm text-muted-foreground", className)}
+    className={cn(MODAL_DESCRIPTION_CLASS, className)}
     {...props}
   />
 ));
 AlertDialogDescription.displayName = AlertDialogPrimitive.Description.displayName;
 
+/** `variant="destructive"` for a confirmation that deletes or cannot be undone. */
 const AlertDialogAction = React.forwardRef<
   React.ElementRef<typeof AlertDialogPrimitive.Action>,
-  React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Action>
->(({ className, ...props }, ref) => (
+  React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Action> &
+    Pick<VariantProps<typeof buttonVariants>, "variant">
+>(({ className, variant, ...props }, ref) => (
   <AlertDialogPrimitive.Action
     ref={ref}
-    className={cn(buttonVariants(), className)}
+    className={cn(buttonVariants({ variant }), className)}
     {...props}
   />
 ));
@@ -100,7 +79,7 @@ const AlertDialogCancel = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <AlertDialogPrimitive.Cancel
     ref={ref}
-    className={cn(buttonVariants({ variant: "outline" }), "mt-2 sm:mt-0", className)}
+    className={cn(buttonVariants({ variant: "outline" }), className)}
     {...props}
   />
 ));
@@ -110,7 +89,7 @@ export {
   AlertDialog,
   AlertDialogContent,
   AlertDialogHeader,
-  AlertDialogFooter,
+  DialogFooter as AlertDialogFooter,
   AlertDialogTitle,
   AlertDialogDescription,
   AlertDialogAction,

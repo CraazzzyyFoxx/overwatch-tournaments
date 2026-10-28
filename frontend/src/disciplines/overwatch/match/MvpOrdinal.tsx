@@ -2,11 +2,11 @@
 
 import type { ReactElement } from "react";
 import { useTranslations } from "next-intl";
+import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { SlotProps } from "@/disciplines/types";
 import { observedScore } from "@/lib/encounter/detail";
-import { cn } from "@/lib/utils";
-import { formatOverperformance, mvpRank, ordinal, overperformanceBadge, resolveMvpPlacement } from "./mvp";
+import { formatOverperformance, ordinal, overperformanceBadge, resolveMvpPlacement } from "./mvp";
 
 /** Gold only for 1st, every other placement neutral (design-book MVP rule). */
 const RankLine = ({ label, rank }: { label: string; rank: number | null | undefined }) => (
@@ -76,9 +76,9 @@ export function MvpTooltip({
 }
 
 /**
- * Profile-local MVP placement: a square medal chip (`.aqt-mvp-pill`) that opens the `MvpTooltip`
- * breakdown, headed by the map and its score. Reads the viewer's whole-match facts. Must be rendered
- * inside a `TooltipProvider`.
+ * Profile-local MVP placement: a square chip that opens the `MvpTooltip` breakdown, headed by the map
+ * and its score. Gold for 1st only, every other placement neutral (DESIGN §6). Reads the viewer's
+ * whole-match facts. Must be rendered inside a `TooltipProvider`.
  */
 export default function MvpOrdinal({ match }: Readonly<SlotProps["matchRowBadge"]>) {
   const facts = match.viewer?.facts;
@@ -86,7 +86,6 @@ export default function MvpOrdinal({ match }: Readonly<SlotProps["matchRowBadge"
   if (placement == null) return null;
 
   const scores = match.participants.map((participant) => observedScore(participant) ?? "—");
-  const medal = mvpRank(placement);
 
   return (
     <MvpTooltip
@@ -95,9 +94,13 @@ export default function MvpOrdinal({ match }: Readonly<SlotProps["matchRowBadge"
       badge={overperformanceBadge(match)}
       header={{ title: match.map.name, aside: scores.join(" – ") }}
     >
-      <span className={cn("aqt-mvp-pill cursor-default", medal !== "default" && medal)}>
+      <Badge
+        tone={placement === 1 ? undefined : "neutral"}
+        hue={placement === 1 ? "var(--aqt-medal-gold)" : undefined}
+        className="aqt-tnum min-w-9.5 cursor-default justify-center font-semibold"
+      >
         {ordinal(placement)}
-      </span>
+      </Badge>
     </MvpTooltip>
   );
 }

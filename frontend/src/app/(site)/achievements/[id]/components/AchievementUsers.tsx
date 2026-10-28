@@ -18,6 +18,11 @@ import type { StatsScope } from "@/lib/site/stats-scope";
 
 const PER_PAGE = 30;
 
+const ROW =
+  "grid grid-cols-[34px_1fr_auto] items-center gap-3.5 border-b border-[color:var(--aqt-border)] px-4.5 py-2.75 transition-colors last:border-b-0 hover:bg-[color:var(--aqt-overlay-2)]";
+const META_LINK =
+  "inline-flex items-center gap-1.5 text-[color:var(--aqt-fg-muted)] transition-colors hover:text-[color:var(--aqt-teal)] [&_svg]:shrink-0 [&_svg]:opacity-65";
+
 const AchievementUsers = ({ achievement, scope }: { achievement: Achievement; scope: StatsScope }) => {
   const t = useTranslations();
   const [page, setPage] = useState(1);
@@ -45,7 +50,7 @@ const AchievementUsers = ({ achievement, scope }: { achievement: Achievement; sc
       ) : isLoading ? (
         <div>
           {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="aqt-earner-row">
+            <div key={i} className={ROW}>
               <Skeleton className="h-4 w-5 justify-self-end" />
               <Skeleton className="h-5 w-40" />
               <Skeleton className="h-4 w-8 justify-self-end" />
@@ -57,26 +62,20 @@ const AchievementUsers = ({ achievement, scope }: { achievement: Achievement; sc
       ) : (
         <div>
           {earners.map((earned, i) => (
-            <div key={`${earned.user.id}-${i}`} className="aqt-earner-row">
-              <span className="aqt-earner-rank tabular-nums">{firstRank + i}</span>
+            <div key={`${earned.user.id}-${i}`} className={ROW}>
+              <span className="aqt-tnum text-right text-label font-bold text-[color:var(--aqt-fg-faint)]">{firstRank + i}</span>
               <div className="min-w-0">
                 <PlayerName player={earned.user} includeSpecialization={false} />
                 {(earned.last_tournament || earned.last_match) && (
-                  <div className="aqt-earner-meta">
+                  <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-label text-[color:var(--aqt-fg-dim)]">
                     {earned.last_tournament ? (
-                      <Link
-                        href={`/tournaments/${earned.last_tournament.id}`}
-                        className="inline-flex items-center gap-1.5"
-                      >
+                      <Link href={`/tournaments/${earned.last_tournament.id}`} className={META_LINK}>
                         <Trophy size={12} aria-hidden />
                         <span className="truncate">{earned.last_tournament.name}</span>
                       </Link>
                     ) : null}
                     {earned.last_match ? (
-                      <Link
-                        href={`/matches/${earned.last_match.id}`}
-                        className="inline-flex items-center gap-1.5"
-                      >
+                      <Link href={`/matches/${earned.last_match.id}`} className={META_LINK}>
                         <Swords size={12} aria-hidden />
                         <span className="inline-flex min-w-0 items-center gap-1 truncate">
                           {earned.last_match.participants.map((participant, index) => (
@@ -91,7 +90,7 @@ const AchievementUsers = ({ achievement, scope }: { achievement: Achievement; sc
                   </div>
                 )}
               </div>
-              <span className="aqt-earner-count tabular-nums">×{earned.count}</span>
+              <span className="aqt-tnum font-bold text-[color:var(--aqt-teal)]">×{earned.count}</span>
             </div>
           ))}
 

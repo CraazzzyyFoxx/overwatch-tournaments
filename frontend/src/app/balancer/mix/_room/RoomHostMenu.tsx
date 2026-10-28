@@ -141,7 +141,7 @@ export function RoomHostMenu({
           </DropdownMenuItem>
         ) : null}
         <DropdownMenuSeparator />
-        <DropdownMenuItem className="text-danger focus:text-danger" onSelect={() => setConfirm("cancelDraft")}>
+        <DropdownMenuItem variant="destructive" onSelect={() => setConfirm("cancelDraft")}>
           {tDraft("cancelDraft")}
         </DropdownMenuItem>
       </>
@@ -165,14 +165,14 @@ export function RoomHostMenu({
           {t("banControls")}
         </DropdownMenuCheckboxItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem className="text-danger focus:text-danger" onSelect={() => setConfirm("cancelMatch")}>
+        <DropdownMenuItem variant="destructive" onSelect={() => setConfirm("cancelMatch")}>
           {tRoom("cancelMatch")}
         </DropdownMenuItem>
       </>
     );
   } else if (phase === "live") {
     items = (
-      <DropdownMenuItem className="text-danger focus:text-danger" onSelect={() => setConfirm("cancelMatch")}>
+      <DropdownMenuItem variant="destructive" onSelect={() => setConfirm("cancelMatch")}>
         {tRoom("cancelMatch")}
       </DropdownMenuItem>
     );

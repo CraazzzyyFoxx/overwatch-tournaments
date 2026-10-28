@@ -220,7 +220,7 @@ export function PermissionPicker({
         onCheckedChange={(checked) => setKeys([entry.key], checked === true)}
         className={cn(
           "inline-flex h-7 items-center gap-1 rounded-md border px-2.5 text-xs font-medium transition-colors",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring",
           "data-[state=unchecked]:border-border data-[state=unchecked]:text-muted-foreground",
           "enabled:data-[state=unchecked]:hover:border-foreground/30 enabled:data-[state=unchecked]:hover:text-foreground",
           "data-[state=checked]:border-primary/40 data-[state=checked]:bg-primary/10 data-[state=checked]:text-primary",

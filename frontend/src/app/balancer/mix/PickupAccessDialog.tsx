@@ -57,9 +57,9 @@ function MemberSearchCombobox({
   return (
     <ServerSearchCombobox<LinkedMember>
       queryKey={["workspace-players-search", workspaceId]}
-      fetch={({ query }) =>
+      fetch={({ query, signal }) =>
         workspacePlayerService
-          .list(workspaceId, { query, perPage: 20 })
+          .list(workspaceId, { query, perPage: 20 }, { signal })
           .then((page) =>
             // Host and co-host are both addressed by `auth.user.id`, so a member
             // with no linked account (never signed in) cannot be picked here at

@@ -77,13 +77,10 @@ export function WorkspacePlayerSheet({
 
   return (
     <Sheet open={member != null} onOpenChange={onOpenChange}>
-      <SheetContent
-        side="right"
-        className="flex w-full flex-col gap-0 overflow-y-auto p-0 sm:max-w-[560px]"
-      >
-        <SheetHeader className="space-y-0 border-b border-[color:var(--aqt-border)] px-5 pb-4 pt-5 text-left">
+      <SheetContent side="right" variant="panel" className="w-full overflow-y-auto sm:max-w-[560px]">
+        <SheetHeader variant="panel">
           <Eyebrow tone="dim">{t("eyebrow")}</Eyebrow>
-          <SheetTitle className="flex items-baseline gap-1.5 pt-1.5 font-display text-xl">
+          <SheetTitle className="flex items-baseline gap-1.5">
             <HandleLabel handle={label} tagClassName="text-caption" />
             {member?.identity?.handle ? (
               <HandleCopyButton handle={member.identity.handle} className="ml-0.5 shrink-0" />
@@ -92,9 +89,7 @@ export function WorkspacePlayerSheet({
           {/* The panel that mounts this sheet only ever reads/writes the workspace
               canon (`WorkspacePlayersSidebar`'s sole caller is the tournament balancer
               page); the per-mix "author" layer has its own sheet (`PickupPlayerSheet`). */}
-          <SheetDescription className="pt-1 text-caption text-[color:var(--aqt-fg-dim)]">
-            {t("scopeHint")}
-          </SheetDescription>
+          <SheetDescription>{t("scopeHint")}</SheetDescription>
         </SheetHeader>
 
         {member == null ? null : (

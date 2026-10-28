@@ -18,18 +18,18 @@ import type { Edge, Node } from "@xyflow/react";
 /**
  * React Flow paints edge strokes, minimap swatches and node borders straight
  * onto a canvas that Tailwind classes cannot reach, so the operator identities
- * resolve the tone tokens through `hsl(var(--…))` rather than hard-coding the
+ * resolve the tone tokens through `var(--aqt-…)` rather than hard-coding the
  * palette. Inline styles also outrank React Flow's own stylesheet, which is
  * why none of these need an `!important` class.
  */
 export const LOGICAL_COLORS: Record<string, string> = {
-  AND: "hsl(var(--info))",
-  OR: "hsl(var(--warning))",
-  NOT: "hsl(var(--danger))",
+  AND: "var(--aqt-blue)",
+  OR: "var(--aqt-amber)",
+  NOT: "var(--aqt-rose)",
 };
 
 /** Leaf conditions are the satisfied/valid end of the tree → success tone. */
-export const LEAF_COLOR = "hsl(var(--success))";
+export const LEAF_COLOR = "var(--aqt-emerald)";
 export const HANDLE_COLOR = "hsl(var(--muted-foreground))";
 
 export const LOGICAL_OPS = ["AND", "OR", "NOT"] as const;

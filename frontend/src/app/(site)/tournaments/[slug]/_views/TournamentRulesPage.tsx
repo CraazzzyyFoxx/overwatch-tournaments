@@ -10,7 +10,6 @@ import { cn } from "@/lib/utils";
 import { RulesToc, useActiveSection } from "../_components/RulesToc";
 import { TournamentPageState } from "../_components/TournamentPageState";
 import { useTournamentQuery } from "@/hooks/useTournamentClientData";
-import styles from "../TournamentDetail.module.css";
 
 /**
  * The organizer's published regulations — format, code of conduct, tiebreakers.
@@ -44,7 +43,7 @@ export default function TournamentRulesPage({ slug }: Readonly<{ slug: string }>
   if (!tournament) return null;
 
   return (
-    <section className={styles.publicDataPage} aria-label={t("common.rules")}>
+    <section className="grid w-full min-w-0 max-w-full gap-4 *:min-w-0" aria-label={t("common.rules")}>
       {rules ? (
         // No card: a regulation is a page of prose, and boxing it adds a border
         // around text that nothing else on the page is competing with. Tables

@@ -63,7 +63,7 @@ export function PickBanTargetBoard({
   return (
     <Card data-pick-ban-targets>
       <CardHeader className="pb-3">
-        <CardTitle className="text-base">{t("target.title")}</CardTitle>
+        <CardTitle>{t("target.title")}</CardTitle>
         <p className="text-sm text-[color:var(--aqt-fg-muted)]">
           {t("target.hint", { team: teamName })}
         </p>

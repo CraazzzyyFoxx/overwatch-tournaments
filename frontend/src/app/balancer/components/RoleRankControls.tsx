@@ -59,13 +59,7 @@ export function AccentBadge({
   children
 }: Readonly<{ accent: RoleRankAccent; className?: string; children: ReactNode }>) {
   return (
-    <Badge
-      palette="aqt"
-      tone={accent.color ? undefined : "neutral"}
-      size="sm"
-      className={className}
-      style={accent.color ? ({ "--badge-hue": accent.color } as CSSProperties) : undefined}
-    >
+    <Badge hue={accent.color ?? undefined} tone="neutral" size="sm" className={className}>
       {children}
     </Badge>
   );
@@ -227,14 +221,12 @@ export function RoleRankControls({
           max={bounds.max}
           disabled={disabled}
           size="sm"
-          className={cn(
-            "h-7 border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] px-2 text-[color:var(--aqt-fg)] shadow-none focus-visible:ring-1 focus-visible:ring-primary/40",
-            !active && "text-[color:var(--aqt-fg-dim)]"
-          )}
+          className={cn("h-7", !active && "text-[color:var(--aqt-fg-dim)]")}
           value={rankValue}
           onValueChange={(next) => onChange(next, resolveDivisionFromRank(grid, next))}
         />
         <Slider
+          aria-label={t("rank")}
           accent={sliderColor}
           min={0}
           max={Math.max(tiers.length - 1, 0)}

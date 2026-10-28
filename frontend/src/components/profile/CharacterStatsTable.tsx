@@ -5,13 +5,12 @@ import { useTranslations } from "next-intl";
 
 import CatalogEntityImage from "@/components/catalog/CatalogEntityImage";
 import { CardSurface } from "@/components/profile/atoms";
-import { eyebrowClass } from "@/components/ui/eyebrow";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";
 import { useFormatter } from "@/lib/datetime/client";
 import { formatStat } from "@/lib/stats/format";
 import type { WorkspaceAxis } from "@/lib/site/discipline-scope";
 import type { CharacterSummary } from "@/types/user.types";
-import { cn } from "@/lib/utils";
 
 /**
  * A player's characters as a plain definition-driven table: one column per active stat the game declares and the
@@ -49,39 +48,37 @@ export default function CharacterStatsTable({
       {rows.length === 0 ? (
         <div className="py-10 text-center text-caption text-[color:var(--aqt-fg-dim)]">{t("users.heroes.noStats")}</div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-caption">
-            <thead>
-              <tr>
-                <th scope="col" className={cn(eyebrowClass(), "aqt-tnum border-b border-[color:var(--aqt-border)] px-3 py-2.5 text-left")}>
-                  {t("common.characters")}
-                </th>
-                {columns.map((def) => (
-                  <th key={def.code} scope="col" className={cn(eyebrowClass(), "aqt-tnum border-b border-[color:var(--aqt-border)] px-3 py-2.5 whitespace-nowrap text-right")}>
-                    {def.name}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={row.character.id} className="border-b border-[color:var(--aqt-border)] last:border-b-0">
-                  <th scope="row" className="px-3 py-2.5 text-left font-normal">
-                    <span className="flex items-center gap-2.5">
-                      <CatalogEntityImage entity={row.character} size="sm" decorative />
-                      <span className="truncate font-bold text-[color:var(--aqt-fg)]">{row.character.name}</span>
-                    </span>
-                  </th>
-                  {columns.map((def) => (
-                    <td key={def.code} className="aqt-tnum px-3 py-2.5 text-right text-[color:var(--aqt-fg-muted)]">
-                      {formatStat(def, row.stats.find((stat) => stat.name === def.code)?.overall, format)}
-                    </td>
-                  ))}
-                </tr>
+        <Table className="border-collapse">
+          <TableHeader>
+            <TableRow>
+              <TableHead scope="col" className="aqt-tnum px-3 py-2.5">
+                {t("common.characters")}
+              </TableHead>
+              {columns.map((def) => (
+                <TableHead key={def.code} scope="col" className="aqt-tnum whitespace-nowrap px-3 py-2.5 text-right">
+                  {def.name}
+                </TableHead>
               ))}
-            </tbody>
-          </table>
-        </div>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map((row) => (
+              <TableRow key={row.character.id}>
+                <TableHead scope="row" className="px-3 py-2.5 text-caption font-normal normal-case tracking-normal">
+                  <span className="flex items-center gap-2.5">
+                    <CatalogEntityImage entity={row.character} size="sm" decorative />
+                    <span className="truncate font-bold text-[color:var(--aqt-fg)]">{row.character.name}</span>
+                  </span>
+                </TableHead>
+                {columns.map((def) => (
+                  <TableCell key={def.code} className="aqt-tnum px-3 py-2.5 text-right text-[color:var(--aqt-fg-muted)]">
+                    {formatStat(def, row.stats.find((stat) => stat.name === def.code)?.overall, format)}
+                  </TableCell>
+                ))}
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       )}
     </CardSurface>
   );

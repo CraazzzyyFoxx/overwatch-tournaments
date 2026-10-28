@@ -32,7 +32,9 @@ describe("PageStateCard", () => {
   });
 
   it("keeps the public empty copy for the default title only", () => {
-    expect(render(<PageStateCard state="empty" />)).toContain(en.common.pageState.empty.description);
+    expect(render(<PageStateCard state="empty" />)).toContain(
+      en.common.pageState.empty.description
+    );
 
     const own = render(<PageStateCard state="empty" title="Select a workspace" />);
     expect(own).toContain("Select a workspace");

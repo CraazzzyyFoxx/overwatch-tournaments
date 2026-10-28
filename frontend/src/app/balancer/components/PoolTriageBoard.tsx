@@ -176,7 +176,7 @@ function TriageLaneColumn({
           <div className="text-sm font-semibold text-[color:var(--aqt-fg)]">{t(`view.${lane}`)}</div>
           <div className="mt-0.5 text-label text-[color:var(--aqt-fg-dim)]">{t(`triage.laneHint.${lane}`)}</div>
         </div>
-        <Badge palette="aqt" tone="neutral" shape="pill" size="sm" className="tabular-nums">
+        <Badge tone="neutral" shape="pill" size="sm" className="tabular-nums">
           {states.length}
         </Badge>
       </div>
@@ -275,10 +275,8 @@ export function PoolTriageBoard({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent variant="panel" className="h-[min(760px,calc(100vh-3rem))] w-[min(1180px,calc(100vw-2rem))] max-w-none">
         <DialogHeader variant="panel">
-          <DialogTitle className="text-base text-[color:var(--aqt-fg)]">{t("title")}</DialogTitle>
-          <DialogDescription className="text-xs text-[color:var(--aqt-fg-dim)]">
-            {t("description")}
-          </DialogDescription>
+          <DialogTitle>{t("title")}</DialogTitle>
+          <DialogDescription>{t("description")}</DialogDescription>
         </DialogHeader>
         <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
           <div className="grid min-h-0 flex-1 gap-3 p-4 lg:grid-cols-3">

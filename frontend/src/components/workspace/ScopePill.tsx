@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Eyebrow } from "@/components/ui/eyebrow";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { RowButton } from "@/components/ui/row-button";
+import { Separator } from "@/components/ui/separator";
 import { GameMark } from "@/components/workspace/GameMark";
 import { useScopePillOpen } from "@/components/workspace/scope-pill-store";
 import { WorkspaceAvatar } from "@/components/workspace/WorkspaceAvatar";
@@ -45,7 +46,7 @@ const MENU_ROW_CLASS =
   "disabled:cursor-not-allowed disabled:hover:bg-transparent";
 const MENU_LINK_CLASS = cn(
   MENU_ROW_CLASS,
-  "w-full outline-none transition-colors focus-visible:bg-[color:var(--aqt-overlay-3)] focus-visible:shadow-[inset_0_0_0_2px_var(--aqt-teal)]"
+  "w-full outline-hidden transition-colors focus-visible:bg-[color:var(--aqt-overlay-3)] focus-visible:shadow-[inset_0_0_0_2px_var(--aqt-teal)]"
 );
 const NOTE_CLASS = "px-2.5 py-1.5 text-caption text-[color:var(--aqt-fg-dim)]";
 
@@ -291,7 +292,7 @@ export function ScopePill() {
           </div>
           {tenant ? null : (
             <>
-              <div className="my-1.5 h-px bg-[color:var(--aqt-border)]" />
+              <Separator className="my-1.5" />
               {workspace ? (
                 <Link
                   href={`/workspace/${workspace.slug}`}

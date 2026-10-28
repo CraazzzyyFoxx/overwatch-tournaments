@@ -125,7 +125,7 @@ export function Inspector({
         <h2
           ref={headingRef}
           tabIndex={-1}
-          className="truncate font-display text-base font-semibold text-foreground outline-none"
+          className="truncate font-display text-base font-semibold text-foreground outline-hidden"
         >
           {title}
         </h2>
@@ -175,10 +175,7 @@ export function Inspector({
   if (!isWide) {
     return (
       <Sheet open onOpenChange={(next) => (next ? undefined : onClose())}>
-        <SheetContent
-          side="right"
-          className="flex w-full max-w-none flex-col gap-0 p-0 sm:max-w-none"
-        >
+        <SheetContent side="right" variant="panel" className="w-full max-w-none sm:max-w-none">
           <SheetTitle className="sr-only">{typeof title === "string" ? title : t("details")}</SheetTitle>
           <SheetDescription className="sr-only">
             {t("detailsSelectedRow")}
@@ -191,7 +188,7 @@ export function Inspector({
   }
 
   return (
-    <Card asChild variant="flat" className="sticky top-16 flex max-h-[calc(100dvh-6rem)] flex-col overflow-hidden">
+    <Card asChild className="sticky top-16 flex max-h-[calc(100dvh-6rem)] flex-col overflow-hidden">
       <aside aria-label={t("rowInspector")} data-inspector-mode="panel">
         {renderHeader(true)}
         {body}

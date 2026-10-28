@@ -395,20 +395,20 @@ export function StageFormatDialog({
     <Dialog>
       <DialogTrigger
         aria-label={showLabel ? undefined : name}
-        className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-2)] px-2 py-0.5 text-caption font-medium text-[color:var(--aqt-fg-muted)] transition-colors hover:border-[color:var(--aqt-border-3)] hover:text-[color:var(--aqt-fg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)] motion-reduce:transition-none"
+        className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-2)] px-2 py-0.5 text-caption font-medium text-[color:var(--aqt-fg-muted)] transition-colors hover:border-[color:var(--aqt-border-3)] hover:text-[color:var(--aqt-fg)] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)] motion-reduce:transition-none"
       >
         {showLabel ? name : null}
         <Info aria-hidden className="size-3.5 shrink-0" />
       </DialogTrigger>
-      <DialogContent className="border-[color:var(--aqt-border)] bg-[color:var(--aqt-card)]">
-        <DialogHeader className="pr-6 text-left">
+      <DialogContent>
+        <DialogHeader>
           <Eyebrow>{stageName}</Eyebrow>
-          <DialogTitle className="text-[color:var(--aqt-fg)]">{name}</DialogTitle>
+          <DialogTitle>{name}</DialogTitle>
         </DialogHeader>
         <div className="rounded-xl border border-[color:var(--aqt-border)] bg-[color:var(--aqt-bg-2)] p-3">
           <FormatSchema />
         </div>
-        <DialogDescription className="text-body leading-relaxed text-[color:var(--aqt-fg-muted)]">
+        <DialogDescription>
           {t(`types.${format}.description`)}
         </DialogDescription>
         <p>

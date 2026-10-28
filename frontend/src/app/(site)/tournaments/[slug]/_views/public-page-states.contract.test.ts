@@ -20,14 +20,6 @@ type GetQueryPresentation = (input: {
   isFetching: boolean;
 }) => QueryPresentation;
 
-const heroesModule =
-  (await import("./TournamentStatsPage")) as typeof import("./TournamentStatsPage") & {
-    getHeroesQueryPresentation?: GetQueryPresentation;
-    getHeroPlaytimeMetric?: (playtime: number, leaderPlaytime: number) => {
-      sharePercent: number;
-      barWidthPercent: number;
-    };
-  };
 const standingsTableModule =
   (await import("../../../../../components/StandingsTable")) as typeof import("../../../../../components/StandingsTable") & {
     getStandingsStagesQueryOptions?: (
@@ -53,8 +45,7 @@ describe("public tournament page query states", () => {
   // Teams used to ship its own near-identical `getTeamsQueryPresentation`
   // (content state named "teams", count named `teamCount`); it now shares this
   // one helper, so it is covered by exactly the same table.
-  const presentations: Array<[string, GetQueryPresentation | undefined]> = [
-    ["heroes", heroesModule.getHeroesQueryPresentation],
+  const presentations: Array<[string, GetQueryPresentation]> = [
     ["teams", getPublicPageQueryPresentation]
   ];
 
@@ -142,29 +133,6 @@ describe("public tournament page query states", () => {
   }
 });
 
-describe("public tournament data interactions", () => {
-  it("scales a hero's bar against its column's leader, keeping the exact share finite", () => {
-    const metric = heroesModule.getHeroPlaytimeMetric;
-    const cases: Array<[number, number, number, number]> = [
-      // playtime, leader, share %, bar %
-      [0.16, 0.16, 16, 100],
-      [0.04, 0.16, 4, 25],
-      [0, 0.16, 0, 0],
-      [-0.5, 0.16, 0, 0],
-      [Number.NaN, 0.16, 0, 0],
-      [Number.POSITIVE_INFINITY, 0.16, 0, 0],
-      [0.1, 0, 10, 0],
-      [1.5, 1.5, 100, 100]
-    ];
-
-    for (const [playtime, leader, share, bar] of cases) {
-      const result = metric?.(playtime, leader);
-      expect(result).toEqual({ sharePercent: share, barWidthPercent: bar });
-      expect(Number.isFinite(result?.barWidthPercent)).toBe(true);
-    }
-  });
-});
-
 describe("public tournament data page contracts", () => {
   it("does not execute the table fallback stages request when stages are supplied", async () => {
     let fallbackRequests = 0;
@@ -181,7 +149,7 @@ describe("public tournament data page contracts", () => {
   it("keeps pages headerless with an accessible section label and exact state components", () => {
     const contracts = [
       ["TournamentEncountersPage.tsx", "TournamentMatchesSkeleton"],
-      ["TournamentStatsPage.tsx", "TournamentHeroesSkeleton"],
+      ["TournamentStatsPage.tsx", "TournamentHeroesSkeleton"]
     ];
 
     for (const [fileName, skeleton] of contracts) {
@@ -189,14 +157,13 @@ describe("public tournament data page contracts", () => {
       // The section nav already names the page; no in-page heading remains,
       // but the landmark keeps an accessible name.
       expect(source).toContain("aria-label={t(");
-      expect(source).not.toContain('className="section-head"');
-      expect(source).not.toContain("styles.pageHeading");
       expect(source).toContain(skeleton);
       expect(source).toContain('state="initial-error"');
-      expect(source).toContain('state="refresh-error"');
       expect(source).toContain('state="empty"');
       expect(source).toContain("onRetry={() => void");
     }
+    // Statistics has no page-wide query to refresh: each tab owns its own reads.
+    expect(pageSource("TournamentEncountersPage.tsx")).toContain('state="refresh-error"');
   });
 
   it("keeps the standings table contained, sticky and semantic", () => {
@@ -204,9 +171,7 @@ describe("public tournament data page contracts", () => {
 
     expect(table).toContain("matches_history");
     expect(table).toContain("team?.group?.name");
-    expect(table).toContain("styles.standingsViewport");
-    expect(table).toContain("styles.stickyTeamColumn");
-    expect(table).toContain('<th scope="col"');
+    expect(table).toContain('scope="col"');
   });
 
   it("keeps every route file thin and free from generic loading gates", () => {
@@ -223,32 +188,12 @@ describe("public tournament data page contracts", () => {
     }
   });
 
-  it("contains page width and horizontal table overflow at 360px", () => {
-    const css = readFileSync(join(tournamentRoot, "TournamentDetail.module.css"), "utf8");
-    // The standings table owns its CSS module, so its horizontal overflow
-    // boundary is asserted where it lives rather than in the route's module —
-    // which no longer defines (or needs) that class.
-    const standingsCss = readFileSync(join(componentsRoot, "StandingsTable.module.css"), "utf8");
-
-    expect(css).toMatch(/\.publicDataPage\s*\{[\s\S]*?min-width:\s*0/);
-    expect(css).toContain("@media (max-width: 640px)");
-    expect(css).not.toContain("tableViewport{");
-    expect(standingsCss).toMatch(/\.standingsViewport[\s\S]*?\{[\s\S]*?overflow-x:\s*auto/);
-    expect(standingsCss).toMatch(/\.stickyTeamColumn\s*\{[\s\S]*?position:\s*sticky/);
-  });
-
   it("gives the bracket its own labelled horizontal scroll owner", () => {
-    const css = readFileSync(join(tournamentRoot, "TournamentDetail.module.css"), "utf8");
     const page = [
       readFileSync(join(tournamentRoot, "bracket", "TournamentBracketPage.tsx"), "utf8"),
       readFileSync(join(tournamentRoot, "bracket", "BracketScroller.tsx"), "utf8")
     ].join("\n");
 
-    // A grid item defaults to `min-width: auto`, so without this the bracket's
-    // intrinsic width grew the page and the whole document scrolled sideways.
-    expect(css).toMatch(/\.publicDataPage > \*\s*\{[\s\S]*?min-width:\s*0/);
-    expect(css).toMatch(/\.bracketScroller\s*\{[\s\S]*?overflow-x:\s*auto/);
-    expect(page).toContain("styles.bracketScroller");
     // <section> + an accessible name is the region; no explicit role needed.
     expect(page).toContain("<section");
     expect(page).not.toContain('role="region"');
@@ -259,19 +204,13 @@ describe("public tournament data page contracts", () => {
   it("defines the background-refresh badge exactly once", () => {
     const views = [
       pageSource("TournamentEncountersPage.tsx"),
-      pageSource("TournamentStatsPage.tsx"),
       pageSource("TournamentTeamsPage.tsx"),
       readFileSync(join(tournamentRoot, "bracket", "TournamentBracketPage.tsx"), "utf8")
     ];
 
     for (const source of views) {
       expect(source).toContain("<UpdatingBadge />");
-      expect(source).not.toContain("styles.updatingBadge");
     }
-
-    expect(
-      readFileSync(join(tournamentRoot, "_components", "UpdatingBadge.tsx"), "utf8")
-    ).toContain("styles.updatingBadge");
   });
 
   it("scopes every workspace-aware query with the hydrated tournament workspace", () => {
@@ -292,9 +231,7 @@ describe("public tournament data page contracts", () => {
       readFileSync(join(process.cwd(), "src/lib/tournament/teams-query.ts"), "utf8")
     ].join("\n");
 
-    expect(source).toContain(
-      "tournamentQueryKeys.teams(tournament.id, tournament.workspace_id)"
-    );
+    expect(source).toContain("tournamentQueryKeys.teams(tournament.id, tournament.workspace_id)");
     expect(source).toContain("teamService.getAll({");
     expect(source).toContain("tournamentId: tournament.id");
     expect(source).toContain("workspaceId: tournament.workspace_id");

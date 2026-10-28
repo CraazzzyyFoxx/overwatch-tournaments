@@ -86,7 +86,7 @@ export function ActiveMixes({
   }
   if (loading) {
     return (
-      <Card variant="flat" role="status" className="flex flex-col gap-3 p-5">
+      <Card role="status" className="flex flex-col gap-3 p-5">
         <span className="sr-only">{t("loading")}</span>
         <Skeleton className="h-6 w-1/3 motion-reduce:animate-none" />
         <Skeleton className="h-4 w-1/2 motion-reduce:animate-none" />
@@ -263,7 +263,7 @@ export function MixHistory({
     );
   } else if (loading) {
     body = (
-      <Card variant="flat" role="status" className="w-full min-w-0 divide-y divide-[color:var(--aqt-border)]">
+      <Card role="status" className="w-full min-w-0 divide-y divide-[color:var(--aqt-border)]">
         <span className="sr-only">{mixes("loading")}</span>
         {[0, 1, 2, 3].map((row) => (
           <div key={row} aria-hidden="true" className="flex items-center gap-4 px-4 py-3.5">
@@ -309,7 +309,7 @@ export function MixHistory({
             {group.label ? (
               <h3 className="mb-2 text-caption font-semibold text-[color:var(--aqt-fg-muted)]">{group.label}</h3>
             ) : null}
-            <Card variant="flat" asChild>
+            <Card asChild>
               <ul className="flex min-w-0 flex-col divide-y divide-[color:var(--aqt-border)]">
                 {group.items.map((game) => (
                   <HistoryRow

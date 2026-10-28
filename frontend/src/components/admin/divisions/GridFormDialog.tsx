@@ -176,7 +176,7 @@ export function GridFormDialog({
                   />
                   <FieldContent>
                     <FieldTitle id={`${id}-title`}>{title}</FieldTitle>
-                    <FieldDescription id={`${id}-hint`} className="text-xs">
+                    <FieldDescription id={`${id}-hint`} size="sm">
                       {hint}
                     </FieldDescription>
                   </FieldContent>

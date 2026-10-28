@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { CheckCircle } from "lucide-react";
 
 import { StatusIcon } from "@/components/admin/StatusIcon";
-import SearchableImageSelect from "@/components/ui/searchable-image-select";
+import { SearchableImageSelect } from "@/components/ui/searchable-image-select";
 import { useDisciplines } from "@/hooks/useDisciplineMetadata";
 import { useKindLabel } from "@/hooks/useKindLabel";
 import { catalogQueryKeys } from "@/lib/catalog/query-keys";
@@ -63,7 +63,6 @@ function MissTargetPicker({
       searchPlaceholder={t("catalog.search")}
       isLoading={targets.isLoading}
       disabled={targets.isLoading || disabled}
-      size="default"
     />
   );
 }

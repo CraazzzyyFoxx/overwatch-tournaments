@@ -141,7 +141,7 @@ export function RankHealthDashboard({ discipline }: Readonly<{ discipline: strin
           collector stalled, every tile below reads healthy-but-stale, because
           the numbers describe fetches that stopped happening. */}
       {outage && (
-        <Alert variant="destructive">
+        <Alert tone="danger">
           <AlertTriangle aria-hidden className="h-4 w-4" />
           <AlertTitle>{t("outage.title")}</AlertTitle>
           <AlertDescription>

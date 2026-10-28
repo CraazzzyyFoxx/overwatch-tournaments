@@ -8,6 +8,7 @@ import { useTranslations } from "next-intl";
 import RosterSlotGlyph from "@/components/registration/RosterSlotGlyph";
 import type { RoleOntology } from "@/lib/roster/ontology";
 import { Button } from "@/components/ui/button";
+import { triggerChevronClass } from "@/components/ui/chevron";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -66,10 +67,10 @@ export function TeamInviteHistory({
           type="button"
           variant="ghost"
           size="sm"
-          className="h-6 gap-1 px-1.5 text-muted-foreground"
+          className="group/trigger h-6 gap-1 px-1.5 text-muted-foreground"
         >
           {t("history.toggle")}
-          <ChevronDown aria-hidden className={cn("size-3.5", open && "rotate-180")} />
+          <ChevronDown aria-hidden className={cn(triggerChevronClass, "size-3.5")} />
         </Button>
       </CollapsibleTrigger>
       <CollapsibleContent className="space-y-1 pt-2">

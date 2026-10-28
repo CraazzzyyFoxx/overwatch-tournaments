@@ -6,7 +6,6 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { Copy } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { eyebrowClass } from "@/components/ui/eyebrow";
 import { Input } from "@/components/ui/input";
 import {
   InputGroup,
@@ -14,6 +13,7 @@ import {
   InputGroupInput,
   InputGroupText
 } from "@/components/ui/input-group";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import { PhaseStrip, type PhaseState } from "@/components/kit/PhaseStrip";
@@ -397,42 +397,42 @@ function DnsRecords({
 }: Readonly<{ records: readonly DnsRecord[]; onCopy: (value: string) => void }>) {
   const t = useTranslations("adminWorkspace.workspaceSettings.domain");
   return (
-    <table className="w-full table-fixed text-left text-xs">
-      <thead className={eyebrowClass("muted")}>
-        <tr>
-          <th scope="col" className="w-16 pb-1.5 font-semibold">
+    <Table className="table-fixed" wrapperClassName="overflow-visible">
+      <TableHeader>
+        <TableRow className="border-border/60">
+          <TableHead scope="col" className="h-auto w-16 px-0 pb-1.5">
             {t("dnsType")}
-          </th>
-          <th scope="col" className="pb-1.5 pr-3 font-semibold">
+          </TableHead>
+          <TableHead scope="col" className="h-auto pb-1.5 pl-0 pr-3">
             {t("dnsHost")}
-          </th>
-          <th scope="col" className="pb-1.5 font-semibold">
+          </TableHead>
+          <TableHead scope="col" className="h-auto px-0 pb-1.5">
             {t("dnsValue")}
-          </th>
-        </tr>
-      </thead>
-      <tbody className="divide-y divide-border/60 border-t border-border/60 font-mono">
+          </TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody className="font-mono">
         {records.map((record) => (
-          <tr key={record.type}>
-            <td className="py-2 align-top text-muted-foreground">{record.type}</td>
-            <td className="py-2 pr-3 align-top">
+          <TableRow key={record.type} className="border-border/60 hover:bg-transparent">
+            <TableCell className="px-0 py-2 align-top text-muted-foreground">{record.type}</TableCell>
+            <TableCell className="py-2 pl-0 pr-3 align-top">
               <CopyableValue
                 value={record.host}
                 label={t("copyHost", { type: record.type })}
                 onCopy={onCopy}
               />
-            </td>
-            <td className="py-2 align-top">
+            </TableCell>
+            <TableCell className="px-0 py-2 align-top">
               <CopyableValue
                 value={record.value}
                 label={t("copyValue", { type: record.type })}
                 onCopy={onCopy}
               />
-            </td>
-          </tr>
+            </TableCell>
+          </TableRow>
         ))}
-      </tbody>
-    </table>
+      </TableBody>
+    </Table>
   );
 }
 

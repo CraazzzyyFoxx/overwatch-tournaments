@@ -127,7 +127,7 @@ export function PreGameEditor({
       <div className="flex flex-col gap-1">
         <h2 className="font-display text-base font-semibold">{scopeLabel}</h2>
         {draft.inheritedFrom != null ? (
-          <FieldDescription className="text-xs">
+          <FieldDescription size="sm">
             {t("inheritedPrefill", {
               scope: describeScope({
                 stage_id: draft.inheritedFrom.stageId,
@@ -140,7 +140,7 @@ export function PreGameEditor({
             nothing. Said up here because the save that stores it can be
             pressed from any of the three steps. */}
         {isRulesTemplate(draft) ? (
-          <FieldDescription className="text-xs">{t("rulesTemplate")}</FieldDescription>
+          <FieldDescription size="sm">{t("rulesTemplate")}</FieldDescription>
         ) : null}
       </div>
 
@@ -214,7 +214,7 @@ export function PreGameEditor({
           rejections summarised outside the Rules step so the reason a save
           does nothing is on screen wherever it was pressed. */}
       {form.issues.length > 0 || (validation.errors.length > 0 && step !== "rules") ? (
-        <Alert variant="destructive">
+        <Alert tone="danger">
           <AlertTriangle aria-hidden className="size-4" />
           <AlertDescription>
             <p className="font-medium">{t("validationTitle")}</p>

@@ -5,6 +5,7 @@ import { useId } from "react";
 import { ArrowUpRight, ChevronDown, Clock3, TimerReset } from "lucide-react";
 import { useTranslations } from "next-intl";
 
+import { disclosureChevronClass } from "@/components/ui/chevron";
 import { NumberInput } from "@/components/ui/number-input";
 import { Label } from "@/components/ui/label";
 import {
@@ -138,7 +139,6 @@ export function DraftConfigStep({
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <ToggleGroup
-            type="single"
             variant="pill"
             size="sm"
             aria-labelledby={pickTimeLabelId}
@@ -163,7 +163,7 @@ export function DraftConfigStep({
               disabled={locked}
               value={value.pickTimeSeconds}
               onValueChange={(next) => patch({ pickTimeSeconds: next ?? 45 })}
-              className="w-20 tabular-nums"
+              className="w-20"
             />
           </div>
         </div>
@@ -178,7 +178,6 @@ export function DraftConfigStep({
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <ToggleGroup
-            type="single"
             variant="pill"
             size="sm"
             aria-labelledby={overtimeLabelId}
@@ -203,7 +202,7 @@ export function DraftConfigStep({
               disabled={locked}
               value={value.overtimeSeconds}
               onValueChange={(next) => patch({ overtimeSeconds: next ?? 0 })}
-              className="w-20 tabular-nums"
+              className="w-20"
             />
           </div>
         </div>
@@ -231,10 +230,10 @@ export function DraftConfigStep({
         </p>
       </div>
 
-      <details className="group rounded-xl border border-border">
+      <details className="group/disclosure rounded-xl border border-border">
         <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 text-sm font-medium">
           {t("advanced")}
-          <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" aria-hidden />
+          <ChevronDown className={disclosureChevronClass} aria-hidden />
         </summary>
         <div className="space-y-4 border-t border-border px-4 py-4">
           <div className="flex items-start justify-between gap-4">

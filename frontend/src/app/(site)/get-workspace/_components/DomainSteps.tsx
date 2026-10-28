@@ -250,7 +250,7 @@ function Stepper({
         </MoreLink>
       </div>
 
-      <TabsContent value={STEPS[index]} className="mt-0" {...holdProps}>
+      <TabsContent value={STEPS[index]} {...holdProps}>
         {/* The browser is an illustration: each step's text carries the facts, the DNS table below reads out. */}
         <div aria-hidden style={{ "--glow": own ? brandAccent : "var(--aqt-teal)" } as CSSProperties}>
           <div className={WINDOW_CLASS}>
@@ -260,7 +260,7 @@ function Stepper({
                   <i key={dot} className="size-[9px] rounded-full bg-[color:var(--aqt-border-3)]" />
                 ))}
               </span>
-              <span className="flex h-[26px] min-w-0 flex-1 items-center gap-2 overflow-hidden whitespace-nowrap rounded-full bg-[color:var(--aqt-overlay-3)] px-2.5 font-mono text-[12px] leading-none text-[color:var(--aqt-fg-muted)]">
+              <span className="flex h-[26px] min-w-0 flex-1 items-center gap-2 overflow-hidden whitespace-nowrap rounded-full bg-[color:var(--aqt-overlay-3)] px-2.5 font-mono text-label leading-none text-[color:var(--aqt-fg-muted)]">
                 <Lock className="size-3.5 shrink-0" aria-hidden />
                 <span ref={urlRef} className="truncate">
                   {url(index)}
@@ -274,7 +274,7 @@ function Stepper({
               <div className="grid h-12 border-b border-[color:var(--aqt-border)] bg-[color:var(--aqt-card)]">
                 <div className={cn(SITE_HEADER, own && "invisible opacity-0")}>
                   <Image src="/brand-mark.svg" alt="" width={22} height={22} />
-                  <b className="font-display text-[14px] font-extrabold leading-none">OWT</b>
+                  <b className="font-display text-body font-extrabold leading-none">OWT</b>
                   <WorkspaceAvatar workspace={example.workspace} size={20} className="max-sm:hidden" />
                   <span className="truncate text-label text-[color:var(--aqt-fg-muted)] max-sm:hidden">
                     {example.workspace.name}
@@ -283,14 +283,14 @@ function Stepper({
                 </div>
                 <div className={cn(SITE_HEADER, !own && "invisible opacity-0")}>
                   <WorkspaceAvatar workspace={example.workspace} size={22} />
-                  <b className="truncate font-display text-[14px] font-extrabold leading-none">{example.workspace.name}</b>
+                  <b className="truncate font-display text-body font-extrabold leading-none">{example.workspace.name}</b>
                   <span className="ml-2 max-sm:ml-auto">{nav}</span>
                 </div>
               </div>
               <div className="relative grid gap-3 px-5 pb-6 pt-[22px]">
                 <span className="absolute inset-x-0 top-0 h-0.5 bg-[color:var(--aqt-teal)]" />
                 {example.firstYear ? <Eyebrow>{t("preview.since", { year: example.firstYear })}</Eyebrow> : null}
-                <div className="flex items-center gap-3 font-display text-[26px] font-semibold leading-[1.1]">
+                <div className="flex items-center gap-3 font-display text-title font-semibold leading-[1.1]">
                   <WorkspaceAvatar workspace={example.workspace} size={40} />
                   {example.workspace.name}
                 </div>

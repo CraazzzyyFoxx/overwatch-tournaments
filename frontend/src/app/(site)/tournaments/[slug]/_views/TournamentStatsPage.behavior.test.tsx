@@ -1,21 +1,20 @@
 // @vitest-environment happy-dom
 //
-// Statistics is what only exists once matches have been played: which characters
-// were played, and which maps were played. The pool itself is not here — it has
-// its own `maps` section, open before the tournament starts.
+// Statistics is what only exists once matches have been played: the players'
+// ranked numbers, the bans, which heroes were played and which maps were played.
 //
 // What is pinned here:
-//  1. `?tab=` is the whole tab state — no `?tab=` means heroes, `?tab=maps`
-//     means the map table, and choosing a tab writes the URL (never the
-//     default, so the canonical link stays clean);
-//  2. every map of the pool is a row, INCLUDING one nobody played: the pool is
+//  1. `?tab=` is the whole tab state — no `?tab=` means players, and choosing a
+//     tab writes the URL (never the default, so the canonical link stays clean);
+//  2. the players table is ordered by average place, prints each stat with its
+//     own precision, and keeps a rostered player with no stats as a dash row;
+//  3. heroes: one card per role, in the role order;
+//  4. every map of the pool is a row, INCLUDING one nobody played: the pool is
 //     the regulation, so a map missing from it is a different statement from a
-//     map that went unpicked, and a table built from match logs alone could not
-//     tell them apart. Rows are ordered by plays;
-//  3. counts and mean duration come from the tournament's own series, and
-//     "matches →" leads to the matches section filtered by that map;
-//  4. an empty pool, a failed read and no character data are different cards, all
-//     from `TournamentPageState`.
+//     map that went unpicked. Rows are ordered by plays, counted from completed
+//     series only, with picks and bans from the pick-ban outcomes;
+//  5. an empty pool, a failed read, no hero data and no bans are different
+//     cards, all from `TournamentPageState`.
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { NextIntlClientProvider } from "next-intl";
 import { act, type ReactNode } from "react";
@@ -26,6 +25,7 @@ import en from "@/i18n/messages/en.json";
 import type { Encounter, Match } from "@/types/encounter.types";
 import { catalogEntity, catalogMap, catalogMode } from "@/test/catalog";
 import type { CatalogEntityRead } from "@/types/catalog.types";
+import type { Team } from "@/types/team.types";
 import type { PickBanConfig, Stage, Tournament } from "@/types/tournament.types";
 
 import TournamentStatsPage, { buildMapPlayedCounts } from "./TournamentStatsPage";
@@ -43,15 +43,17 @@ const getEncounters = vi.fn();
 const listPublicConfigs = vi.fn();
 const getAllMaps = vi.fn();
 const getStages = vi.fn();
+const getPlayerStats = vi.fn();
+const getPickBanOutcomes = vi.fn();
+const getTeams = vi.fn();
 
 vi.mock("@/services/statistics.service", () => ({
   default: { getCharacterPlaytime: (...args: unknown[]) => getCharacterPlaytime(...args) }
 }));
-vi.mock("@/services/discipline.service", () => ({
-  default: {
-    metadata: async () => ({ discipline: { code: "overwatch", character_classes: ["tank", "damage", "support"] } })
-  }
-}));
+vi.mock(
+  "@/services/discipline.service",
+  async () => (await import("@/test/discipline-metadata")).disciplineServiceMock
+);
 vi.mock("@/services/encounter.service", () => ({
   default: { getAll: (...args: unknown[]) => getEncounters(...args) }
 }));
@@ -62,7 +64,17 @@ vi.mock("@/services/catalog.service", () => ({
   default: { list: (...args: unknown[]) => getAllMaps(...args) }
 }));
 vi.mock("@/services/tournament.service", () => ({
-  default: { getStages: (...args: unknown[]) => getStages(...args) }
+  default: {
+    getStages: (...args: unknown[]) => getStages(...args),
+    getPlayerStats: (...args: unknown[]) => getPlayerStats(...args),
+    getPickBanOutcomes: (...args: unknown[]) => getPickBanOutcomes(...args)
+  }
+}));
+vi.mock("@/services/team.service", () => ({
+  default: { getAll: (...args: unknown[]) => getTeams(...args) }
+}));
+vi.mock("@/services/draft.service", () => ({
+  default: { getTournamentBoard: async () => null }
 }));
 
 /**
@@ -158,10 +170,14 @@ function makeTournament(): Tournament {
 }
 
 function map(id: number, name: string, gamemode: string, gamemodeId: number): CatalogEntityRead {
-  return catalogMap(id, { ...catalogMode(gamemodeId, gamemode), image_path: `/gamemodes/${gamemodeId}.jpg` }, {
-    name,
-    image_path: `/maps/${id}.jpg`
-  });
+  return catalogMap(
+    id,
+    { ...catalogMode(gamemodeId, gamemode), image_path: `/gamemodes/${gamemodeId}.jpg` },
+    {
+      name,
+      image_path: `/maps/${id}.jpg`
+    }
+  );
 }
 
 /**
@@ -201,8 +217,24 @@ function match(id: number, mapId: number, time: number | null): Match {
     discipline: "overwatch",
     encounter_game_id: null,
     participants: [
-      { encounter_team_id: 11, slot: 1, source_position: 0, tournament_team_id: 1, name: "A", result: null, team_facts: { score: 2 } },
-      { encounter_team_id: 12, slot: 2, source_position: 1, tournament_team_id: 2, name: "B", result: null, team_facts: { score: 1 } }
+      {
+        encounter_team_id: 11,
+        slot: 1,
+        source_position: 0,
+        tournament_team_id: 1,
+        name: "A",
+        result: null,
+        team_facts: { score: 2 }
+      },
+      {
+        encounter_team_id: 12,
+        slot: 2,
+        source_position: 1,
+        tournament_team_id: 2,
+        name: "B",
+        result: null,
+        team_facts: { score: 1 }
+      }
     ],
     duration_s: time,
     encounter_id: 500,
@@ -221,7 +253,7 @@ function match(id: number, mapId: number, time: number | null): Match {
  * are the shape the wire has. `matches` is the whole point — the default
  * entity set of the encounters endpoint omits it.
  */
-function encounter(matches: Match[]): Encounter {
+function encounter(matches: Match[], overrides: Partial<Encounter> = {}): Encounter {
   return {
     id: 500,
     created_at: new Date("2025-02-02T00:00:00Z"),
@@ -251,14 +283,70 @@ function encounter(matches: Match[]): Encounter {
     matches,
     games: [],
     teams: [
-      { id: 11, slot: 1, team_id: 1, name: "A", seed: null, score: 2, placement: null, active: true },
-      { id: 12, slot: 2, team_id: 2, name: "B", seed: null, score: 1, placement: null, active: true }
+      {
+        id: 11,
+        slot: 1,
+        team_id: 1,
+        name: "A",
+        seed: null,
+        score: 2,
+        placement: null,
+        active: true
+      },
+      {
+        id: 12,
+        slot: 2,
+        team_id: 2,
+        name: "B",
+        seed: null,
+        score: 1,
+        placement: null,
+        active: true
+      }
     ],
-    tournament: makeTournament()
+    tournament: makeTournament(),
+    ...overrides
   };
 }
 
 const STAGE: Stage = { id: 188, name: "Playoff", order: 1 } as Stage;
+
+function makeTeam(id: number, name: string, players: string[]): Team {
+  return {
+    id,
+    created_at: new Date(0),
+    updated_at: null,
+    name,
+    image_url: null,
+    avg_sr: 3500,
+    total_sr: 17_500,
+    captain_id: id * 10,
+    tournament_id: TOURNAMENT_ID,
+    players: players.map((playerName, index) => ({
+      id: id * 100 + index,
+      created_at: new Date(0),
+      updated_at: null,
+      name: playerName,
+      rank: 3500,
+      division: 3,
+      role: { dimension: "player_role", role: "damage" },
+      tournament_id: TOURNAMENT_ID,
+      user_id: id * 1000 + index,
+      team_id: id,
+      is_newcomer: false,
+      is_newcomer_role: false,
+      is_substitution: false,
+      related_player_id: null,
+      user: null
+    })),
+    tournament: null,
+    placement: null,
+    group: null
+  };
+}
+
+/** Users 1000 and 1001 play for Alpha, 2000 for Beta. */
+const TEAMS = [makeTeam(1, "Alpha", ["Kenny", "Lucky"]), makeTeam(2, "Beta", ["Mira"])];
 
 let container: HTMLDivElement;
 let root: Root;
@@ -284,7 +372,13 @@ beforeEach(() => {
         playtime: 0.42
       },
       {
-        entity: catalogEntity({ id: 9, kind: "character", name: "Ana", slug: "ana", attrs: { class: "support" } }),
+        entity: catalogEntity({
+          id: 9,
+          kind: "character",
+          name: "Ana",
+          slug: "ana",
+          attrs: { class: "support" }
+        }),
         playtime: 0.5
       }
     ],
@@ -311,6 +405,22 @@ beforeEach(() => {
     .mockReset()
     .mockResolvedValue({ results: MAPS, total: MAPS.length, page: 1, per_page: -1 });
   getStages.mockReset().mockResolvedValue([STAGE]);
+  getTeams.mockReset().mockResolvedValue({ results: TEAMS, total: 2, page: 1, per_page: -1 });
+  // Kenny and Lucky have ranked numbers, Mira none; Lucky leads.
+  getPlayerStats.mockReset().mockResolvedValue({
+    total_players: 2,
+    players: [
+      {
+        player_id: 1000,
+        stats: { performance: { value: 2.4, rank: 2 }, kda: { value: 2.456, rank: 2 } }
+      },
+      {
+        player_id: 1001,
+        stats: { performance: { value: 1.8, rank: 1 }, kda: { value: 3.1, rank: 1 } }
+      }
+    ]
+  });
+  getPickBanOutcomes.mockReset().mockResolvedValue({ hero_bans: [], map_outcomes: [] });
 
   client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
   container = document.createElement("div");
@@ -356,67 +466,70 @@ function tabButtons() {
   }));
 }
 
-/** One row of the map table, flattened to what the reader sees. */
+/** The table a tab renders, by its accessible name. */
+function table(label: string) {
+  return container.querySelector(`table[aria-label="${label}"]`);
+}
+
+/** One row of the map table, flattened to what the reader sees. Column 0 is the place. */
 function mapRows() {
-  return [...container.querySelectorAll("tbody tr")].map((row) => {
-    const cells = [...row.querySelectorAll("td")];
-    return {
-      map: row.querySelector("[data-map-name]")?.textContent ?? "",
-      thumb: cells[0]?.querySelector("img")?.getAttribute("src") ?? null,
-      mode: row.querySelector("[data-map-mode]")?.textContent ?? "",
-      played: cells[1]?.textContent ?? "",
-      duration: cells[2]?.textContent ?? "",
-      matchesHref: row.querySelector("a")?.getAttribute("href") ?? null
-    };
+  return [...(table(en.tournamentDetail.stats.maps.table)?.querySelectorAll("tbody tr") ?? [])].map(
+    (row) => {
+      const cells = [...row.querySelectorAll("td")];
+      const [name, mode] = [...(cells[1]?.querySelectorAll(".flex-col > *") ?? [])];
+      return {
+        map: name?.textContent ?? "",
+        thumb: cells[1]?.querySelector("img")?.getAttribute("src") ?? null,
+        mode: mode?.textContent ?? "",
+        played: cells[2]?.textContent ?? "",
+        picked: cells[3]?.textContent ?? "",
+        banned: cells[4]?.textContent ?? "",
+        duration: cells[5]?.textContent ?? "",
+        matchesHref: row.querySelector("a")?.getAttribute("href") ?? null
+      };
+    }
+  );
+}
+
+function clickTab(index: number) {
+  const tab = [...container.querySelectorAll('[role="radio"]')][index] as HTMLButtonElement;
+  return act(async () => {
+    tab.click();
   });
 }
 
 describe("the tab is the URL", () => {
-  it("opens on characters when no tab is named", async () => {
+  it("opens on players when no tab is named, without reading the other tabs", async () => {
     await render();
 
+    const tabs = en.tournamentDetail.stats.tabs;
     expect(tabButtons()).toEqual([
-      { label: en.common.characters, selected: true },
-      { label: en.common.maps, selected: false }
+      { label: tabs.players, selected: true },
+      { label: tabs.bans, selected: false },
+      { label: tabs.heroes, selected: false },
+      { label: tabs.maps, selected: false }
     ]);
-    expect(container.textContent).toContain("Reinhardt");
-    // The tournament's own game and workspace, the whole tournament.
-    expect(getCharacterPlaytime).toHaveBeenCalledWith(
-      "overwatch",
-      expect.objectContaining({ axis: WORKSPACE_ID, tournamentId: TOURNAMENT_ID, perPage: -1 })
-    );
-    // One column per character class, in the game's declared order (tank before support).
-    const columns = [...container.querySelectorAll("[aria-label]")]
-      .map((node) => node.getAttribute("aria-label"))
-      .filter((label) => label === en.common.roles.tank || label === en.common.roles.support);
-    expect(columns).toEqual([en.common.roles.tank, en.common.roles.support]);
-    expect(container.querySelector("tbody")).toBeNull();
+    expect(table(en.tournamentDetail.stats.players.table)).not.toBeNull();
+    expect(getCharacterPlaytime).not.toHaveBeenCalled();
     expect(getEncounters).not.toHaveBeenCalled();
   });
 
   it("renders the map table when the URL names it", async () => {
     await render("tab=maps");
 
-    expect(tabButtons()[1]?.selected).toBe(true);
-    expect(container.textContent).not.toContain("Reinhardt");
-    expect(container.querySelector("tbody")).not.toBeNull();
+    expect(tabButtons()[3]?.selected).toBe(true);
+    expect(table(en.tournamentDetail.stats.maps.table)).not.toBeNull();
+    expect(table(en.tournamentDetail.stats.players.table)).toBeNull();
   });
 
   it("writes the chosen tab, and clears the parameter for the default", async () => {
     await render();
-
-    const maps = [...container.querySelectorAll('[role="radio"]')][1] as HTMLButtonElement;
-    await act(async () => {
-      maps.click();
-    });
+    await clickTab(3);
     expect(replaced.at(-1)).toBe(`/tournaments/${TOURNAMENT_ID}/stats?tab=maps`);
 
     await render("tab=maps");
-    const heroes = [...container.querySelectorAll('[role="radio"]')][0] as HTMLButtonElement;
-    await act(async () => {
-      heroes.click();
-    });
-    // The default is never written: no `?tab=heroes` in the canonical URL.
+    await clickTab(0);
+    // The default is never written: no `?tab=players` in the canonical URL.
     expect(replaced.at(-1)).toBe(`/tournaments/${TOURNAMENT_ID}/stats`);
   });
 
@@ -430,17 +543,45 @@ describe("the tab is the URL", () => {
   });
 });
 
+describe("players", () => {
+  it("ranks by average place, with each stat at its precision and a dash where there is none", async () => {
+    await render();
+
+    const rows = [
+      ...(table(en.tournamentDetail.stats.players.table)?.querySelectorAll("tbody tr") ?? [])
+    ].map((row) => [...row.querySelectorAll("td")].map((cell) => cell.textContent));
+    // Columns: place, player (name + team), avg place, KDA, …
+    expect(rows.map((cells) => cells.slice(1, 4))).toEqual([
+      ["LuckyAlpha", "1.80", "3.10"],
+      ["KennyAlpha", "2.40", "2.46"],
+      // Rostered, never logged: still a row, sorted after everyone ranked.
+      ["MiraBeta", "—", "—"]
+    ]);
+  });
+});
+
+describe("heroes", () => {
+  it("gives each role its own card, in the role order", async () => {
+    await render("tab=heroes");
+
+    const cards = [...container.querySelectorAll("h2")].map((heading) => heading.textContent);
+    expect(cards).toEqual([en.tournamentDetail.roles.tank, en.tournamentDetail.roles.support]);
+    expect(container.textContent).toContain("Reinhardt");
+    // The tournament's own game and workspace, the whole tournament.
+    expect(getCharacterPlaytime).toHaveBeenCalledWith(
+      "overwatch",
+      expect.objectContaining({ axis: WORKSPACE_ID, tournamentId: TOURNAMENT_ID, perPage: -1 })
+    );
+  });
+});
+
 describe("every map of the pool is a row", () => {
   it("orders by plays and keeps an unplayed pool map, with no matches link", async () => {
     await render("tab=maps");
 
     const rows = mapRows();
     // King's Row twice, Ilios once, Suravasa never.
-    expect(rows.map((row) => row.map.trim())).toEqual([
-      KINGS_ROW.name,
-      ILIOS.name,
-      SURAVASA.name
-    ]);
+    expect(rows.map((row) => row.map)).toEqual([KINGS_ROW.name, ILIOS.name, SURAVASA.name]);
     // The picture rides along, so a row is recognisable the way a pool card is.
     expect(rows[0]?.thumb).toBe(`/maps/${KINGS_ROW.id}.jpg`);
 
@@ -465,6 +606,53 @@ describe("every map of the pool is a row", () => {
     expect(ilios?.duration).toBe("—");
   });
 
+  it("counts only completed series", async () => {
+    getEncounters.mockResolvedValue({
+      results: [
+        encounter([match(1, KINGS_ROW.id, 820)]),
+        // Still being played: its maps are not results yet.
+        encounter([match(2, SURAVASA.id, 500), match(3, SURAVASA.id, 500)], {
+          id: 501,
+          status: "open",
+          is_live: true
+        })
+      ],
+      total: 2,
+      page: 1,
+      per_page: -1
+    });
+
+    await render("tab=maps");
+
+    const rows = mapRows();
+    expect(rows.map((row) => [row.map, row.played])).toEqual([
+      [KINGS_ROW.name, "1"],
+      [ILIOS.name, "0"],
+      [SURAVASA.name, "0"]
+    ]);
+  });
+
+  it("shows how often teams picked and struck each map", async () => {
+    getPickBanOutcomes.mockResolvedValue({
+      hero_bans: [],
+      map_outcomes: [
+        { encounter_id: 500, map_id: KINGS_ROW.id, picked: true },
+        { encounter_id: 501, map_id: KINGS_ROW.id, picked: true },
+        { encounter_id: 500, map_id: SURAVASA.id, picked: false },
+        { encounter_id: 501, map_id: SURAVASA.id, picked: false },
+        { encounter_id: 502, map_id: SURAVASA.id, picked: false }
+      ]
+    });
+
+    await render("tab=maps");
+
+    expect(mapRows().map((row) => [row.map, row.picked, row.banned])).toEqual([
+      [KINGS_ROW.name, "2", "0"],
+      [ILIOS.name, "0", "0"],
+      [SURAVASA.name, "0", "3"]
+    ]);
+  });
+
   it("leads to the matches section filtered by the map", async () => {
     await render("tab=maps");
 
@@ -479,7 +667,16 @@ describe("every map of the pool is a row", () => {
     // named. Sharing that entry is what keeps this table from fetching every
     // encounter a second time.
     const [page, query, tournamentId, perPage, , , workspaceId, filters] = getEncounters.mock
-      .calls[0] as [number, string, number, number, unknown, unknown, number, { entities: string[] }];
+      .calls[0] as [
+      number,
+      string,
+      number,
+      number,
+      unknown,
+      unknown,
+      number,
+      { entities: string[] }
+    ];
     expect([page, query, tournamentId, perPage, workspaceId]).toEqual([
       1,
       "",
@@ -490,11 +687,15 @@ describe("every map of the pool is a row", () => {
     expect(filters.entities).toContain("matches");
   });
 
-  it("averages only the timed maps", () => {
-    expect(buildMapPlayedCounts([encounter([match(1, KINGS_ROW.id, 600)])])[KINGS_ROW.id]).toEqual({
-      played: 1,
-      avgDurationSec: 600
-    });
+  it("averages only the timed maps, across series", () => {
+    const counts = buildMapPlayedCounts([
+      encounter([match(1, KINGS_ROW.id, 600), match(2, ILIOS.id, null)]),
+      encounter([match(3, KINGS_ROW.id, 900), match(4, KINGS_ROW.id, null)], { id: 501 })
+    ]);
+
+    expect(counts[KINGS_ROW.id]).toEqual({ played: 3, avgDurationSec: 750 });
+    expect(counts[ILIOS.id]).toEqual({ played: 1, avgDurationSec: null });
+    expect(counts[SURAVASA.id]).toBeUndefined();
   });
 });
 
@@ -526,11 +727,19 @@ describe("nothing to show", () => {
     expect(container.querySelector("tbody")).toBeNull();
   });
 
-  it("says there is no character data yet", async () => {
+  it("says there is no hero data yet", async () => {
     getCharacterPlaytime.mockResolvedValue({ results: [], total: 0, page: 1, per_page: -1 });
 
-    await render();
+    await render("tab=heroes");
 
     expect(container.textContent).toContain(en.tournamentDetail.stats.heroes.emptyTitle);
+  });
+
+  it("says there were no bans when the outcomes cannot be read", async () => {
+    getPickBanOutcomes.mockRejectedValue(new Error("boom"));
+
+    await render("tab=bans");
+
+    expect(container.textContent).toContain(en.tournamentDetail.stats.bans.emptyTitle);
   });
 });

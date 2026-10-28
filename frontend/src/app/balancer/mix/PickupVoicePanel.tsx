@@ -263,7 +263,7 @@ export function PickupVoicePanel({
   const reportAt = report == null ? undefined : multi ? (reportLobby ?? null) : 0;
 
   return (
-    <Card variant="flat" asChild>
+    <Card asChild>
       <section className="flex flex-col gap-3 px-4 py-3.5">
       <div className="flex min-h-8 items-center justify-between gap-3">
         <h2 className={CARD_TITLE_CLASS}>{t("title")}</h2>

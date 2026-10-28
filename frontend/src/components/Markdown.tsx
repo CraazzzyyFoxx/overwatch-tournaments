@@ -2,7 +2,7 @@ import ReactMarkdown, { type Components } from "react-markdown";
 import remarkBreaks from "remark-breaks";
 import remarkGfm from "remark-gfm";
 
-import { eyebrowClass } from "@/components/ui/eyebrow";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { headingText, slugifyHeading } from "@/lib/markdown-toc";
 import { cn } from "@/lib/utils";
 
@@ -126,22 +126,27 @@ const MARKDOWN_COMPONENTS: Components = {
       className="overflow-x-auto rounded-lg border border-border bg-muted/40 p-3 text-ui"
     />
   ),
-  // Tables get the scroll region the design system requires of every table, so
-  // a wide tiebreaker grid scrolls instead of stretching the page on a phone.
+  // Tables get the scroll region the design system requires of every table
+  // (the primitive's own wrapper), so a wide tiebreaker grid scrolls instead of
+  // stretching the page on a phone. Read at `text-ui`, one rung under the prose.
   table: ({ node: _node, ...props }) => (
-    <div className="overflow-x-auto rounded-lg border border-border">
-      <table {...props} className="w-full border-collapse text-ui" />
-    </div>
-  ),
-  th: ({ node: _node, ...props }) => (
-    <th
+    <Table
       {...props}
-      className={cn(eyebrowClass("muted"), "border-b border-border bg-muted/40 px-3 py-2 text-left")}
+      wrapperClassName="rounded-lg border border-border"
+      className="border-collapse text-ui"
     />
   ),
-  td: ({ node: _node, ...props }) => (
-    <td {...props} className="border-b border-border/60 px-3 py-2 align-top" />
+  thead: ({ node: _node, ...props }) => <TableHeader {...props} />,
+  tbody: ({ node: _node, ...props }) => <TableBody {...props} />,
+  tr: ({ node: _node, ...props }) => <TableRow {...props} />,
+  // The author's own words: no uppercase, no label tracking.
+  th: ({ node: _node, ...props }) => (
+    <TableHead
+      {...props}
+      className="bg-muted/40 px-3 py-2 normal-case tracking-normal text-[color:var(--aqt-fg-muted)]"
+    />
   ),
+  td: ({ node: _node, ...props }) => <TableCell {...props} className="px-3 py-2 align-top" />,
   img: ({ node: _node, ...props }) => (
     // Author-supplied URL of unknown size and host: `next/image` needs
     // intrinsic dimensions or a sized parent, and only optimizes the hosts in

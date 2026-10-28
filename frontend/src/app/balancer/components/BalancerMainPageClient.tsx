@@ -469,7 +469,6 @@ export function BalancerMainPageClient() {
 
   const {
     updatePlayerMutation,
-    removePlayerMutation,
     setPlayerPoolMembershipMutation,
     setBalancerStatusMutation,
     bulkPoolMembershipMutation,
@@ -853,7 +852,6 @@ export function BalancerMainPageClient() {
           }}
           saving={updatePlayerMutation.isPending}
           onSave={(playerId, payload) => updatePlayerMutation.mutate({ playerId, payload })}
-          onRemove={(playerId) => removePlayerMutation.mutate(playerId)}
         />
       ) : null}
 

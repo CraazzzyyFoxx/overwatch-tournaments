@@ -106,8 +106,8 @@ export default function AccountCombobox({
           id={controlId}
           open={open}
           onOpenChange={setOpen}
-          label={value || <span className="text-[color:var(--aqt-fg-dim)]">{placeholder}</span>}
-          labelTitle={value || placeholder}
+          label={value}
+          placeholder={placeholder}
           variant="surface"
           aria-invalid={Boolean(shownError)}
           aria-describedby={shownError ? errorId : undefined}
@@ -140,7 +140,6 @@ export default function AccountCombobox({
         <Input
           id={controlId}
           type="text"
-          variant="surface"
           placeholder={placeholder}
           value={inputValue}
           onChange={(e) => handleInputChange(e.target.value)}

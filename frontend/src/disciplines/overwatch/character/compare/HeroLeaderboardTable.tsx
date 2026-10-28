@@ -6,9 +6,9 @@ import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { eyebrowClass } from "@/components/ui/eyebrow";
 import { SearchField } from "@/components/ui/search-field";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import type { DivisionGrid, DivisionGridVersion } from "@/types/workspace.types";
 
@@ -20,7 +20,8 @@ import StatColumnHeader from "./StatColumnHeader";
 const SKELETON_ROWS = 15;
 const TITLE_ID = "hero-leaderboard-title";
 
-const HEAD_CELL = "border-b border-[color:var(--aqt-border)] bg-[color:var(--aqt-card)] px-3 py-2.5 align-middle";
+/** The cells carry the hairline: rows draw no border under `border-separate`, which the sticky columns need. */
+const HEAD_CELL = "border-b border-[color:var(--aqt-border)] bg-[color:var(--aqt-card)] px-3 py-2.5";
 /** The legend's swatches: the heat map's three tinted tiers, palest first. */
 const LEGEND = [
   { label: "50%", swatch: "bg-[color:color-mix(in_srgb,var(--aqt-teal)_8%,transparent)]" },
@@ -107,7 +108,7 @@ const HeroLeaderboardTable = ({
         : t("users.heroesCompare.table.noData");
 
   return (
-    <Card variant="flat" asChild><section aria-labelledby={TITLE_ID} className="overflow-hidden">
+    <Card asChild><section aria-labelledby={TITLE_ID} className="overflow-hidden">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-[color:var(--aqt-border)] px-4 py-3">
         <h2 id={TITLE_ID} className="font-onest text-lg font-semibold text-[color:var(--aqt-fg)]">
           {t("users.heroesCompare.table.allPlayers")}
@@ -147,89 +148,88 @@ const HeroLeaderboardTable = ({
         </Button>
       </div>
 
-      {/* One table, one row order: column k and column k+1 describe the same player. */}
-      <div className="overflow-x-auto">
-        <table
-          aria-labelledby={TITLE_ID}
-          aria-busy={isLoading}
-          className="w-full min-w-[960px] table-fixed border-separate border-spacing-0"
-        >
-          <colgroup>
-            <col className="w-[52px]" />
-            {/* Narrower on a phone: the sticky rank + player pair must leave room for the column scrolling past. */}
-            <col className="w-[156px] sm:w-[230px]" />
-            <col className="w-[88px]" />
+      {/* One table, one row order: column k and column k+1 describe the same player. The table's own wrapper is
+          the horizontal scroll box the sticky rank + player columns pin to. */}
+      <Table
+        aria-labelledby={TITLE_ID}
+        aria-busy={isLoading}
+        className="min-w-[960px] table-fixed border-separate border-spacing-0"
+      >
+        <colgroup>
+          <col className="w-[52px]" />
+          {/* Narrower on a phone: the sticky rank + player pair must leave room for the column scrolling past. */}
+          <col className="w-[156px] sm:w-[230px]" />
+          <col className="w-[88px]" />
+          {columnKeys.map((key, i) => (
+            <col key={`${key}-${i}`} />
+          ))}
+        </colgroup>
+        <TableHeader>
+          <TableRow>
+            <TableHead scope="col" className={cn(HEAD_CELL, STICKY_RANK)}>
+              <span className="sr-only">{t("users.heroesCompare.table.rank")}</span>
+            </TableHead>
+            <TableHead scope="col" className={cn(HEAD_CELL, STICKY_PLAYER)}>
+              {t("users.heroesCompare.table.player")}
+            </TableHead>
+            <TableHead scope="col" className={cn(HEAD_CELL, "text-right")}>
+              {t("users.heroesCompare.table.games")}
+            </TableHead>
             {columnKeys.map((key, i) => (
-              <col key={`${key}-${i}`} />
+              <StatColumnHeader
+                key={`${key}-${i}`}
+                def={COL[key]}
+                options={ALL_STAT_OPTIONS}
+                isActive={i === sortIndex}
+                sortDir={sortDir}
+                onSort={() => onSortChange(i)}
+                onSelect={(k) => onColumnSelect(i, k)}
+              />
             ))}
-          </colgroup>
-          <thead>
-            <tr>
-              <th scope="col" className={cn(HEAD_CELL, STICKY_RANK)}>
-                <span className="sr-only">{t("users.heroesCompare.table.rank")}</span>
-              </th>
-              <th scope="col" className={cn(HEAD_CELL, STICKY_PLAYER, eyebrowClass(), "text-left")}>
-                {t("users.heroesCompare.table.player")}
-              </th>
-              <th scope="col" className={cn(HEAD_CELL, eyebrowClass(), "text-right")}>
-                {t("users.heroesCompare.table.games")}
-              </th>
-              {columnKeys.map((key, i) => (
-                <StatColumnHeader
-                  key={`${key}-${i}`}
-                  def={COL[key]}
-                  options={ALL_STAT_OPTIONS}
-                  isActive={i === sortIndex}
-                  sortDir={sortDir}
-                  onSort={() => onSortChange(i)}
-                  onSelect={(k) => onColumnSelect(i, k)}
-                />
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {isLoading ? (
-              Array.from({ length: SKELETON_ROWS }).map((_, r) => (
-                <tr key={r}>
-                  {Array.from({ length: columnKeys.length + 3 }).map((__, c) => (
-                    <td key={c} className={CELL}>
-                      <Skeleton className="h-4 w-full" />
-                    </td>
-                  ))}
-                </tr>
-              ))
-            ) : rows.length === 0 ? (
-              <tr>
-                <td
-                  colSpan={columnKeys.length + 3}
-                  className="py-[90px] text-center text-sm text-[color:var(--aqt-fg-dim)]"
-                >
-                  <span className="inline-flex items-center gap-2">
-                    <Sword aria-hidden className="h-4 w-4 opacity-40" />
-                    {emptyMessage}
-                  </span>
-                </td>
-              </tr>
-            ) : (
-              rows.map((entry) => (
-                <LeaderboardRow
-                  key={entry.entry.user_id}
-                  ranked={entry}
-                  cells={cells}
-                  grid={
-                    (entry.entry.division_grid_version_id == null
-                      ? undefined
-                      : gridById.get(entry.entry.division_grid_version_id)) ?? divisionGrid
-                  }
-                  discipline={discipline}
-                  isHighlighted={entry.entry.user_id === hoveredUserId}
-                  onHoverUser={setHoveredUserId}
-                />
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {isLoading ? (
+            Array.from({ length: SKELETON_ROWS }).map((_, r) => (
+              <TableRow key={r} className="hover:bg-transparent">
+                {Array.from({ length: columnKeys.length + 3 }).map((__, c) => (
+                  <TableCell key={c} className={CELL}>
+                    <Skeleton className="h-4 w-full" />
+                  </TableCell>
+                ))}
+              </TableRow>
+            ))
+          ) : rows.length === 0 ? (
+            <TableRow className="hover:bg-transparent">
+              <TableCell
+                colSpan={columnKeys.length + 3}
+                className="py-[90px] text-center text-sm text-[color:var(--aqt-fg-dim)]"
+              >
+                <span className="inline-flex items-center gap-2">
+                  <Sword aria-hidden className="h-4 w-4 opacity-40" />
+                  {emptyMessage}
+                </span>
+              </TableCell>
+            </TableRow>
+          ) : (
+            rows.map((entry) => (
+              <LeaderboardRow
+                key={entry.entry.user_id}
+                ranked={entry}
+                cells={cells}
+                grid={
+                  (entry.entry.division_grid_version_id == null
+                    ? undefined
+                    : gridById.get(entry.entry.division_grid_version_id)) ?? divisionGrid
+                }
+                discipline={discipline}
+                isHighlighted={entry.entry.user_id === hoveredUserId}
+                onHoverUser={setHoveredUserId}
+              />
+            ))
+          )}
+        </TableBody>
+      </Table>
 
       {!isLoading && (rows.length > 0 || hiddenCount > 0) ? (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3 text-caption text-[color:var(--aqt-fg-dim)]">

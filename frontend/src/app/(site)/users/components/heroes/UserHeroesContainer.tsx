@@ -76,7 +76,7 @@ const UserHeroesContainer = ({ userId, tournaments, scope, discipline, axis }: U
 
   const filterSlot = (
     <div className="w-full sm:w-60">
-      <TournamentCombobox tournaments={tournaments} value={tournamentId} onValueChange={setTournamentId} />
+      <TournamentCombobox tournaments={tournaments} value={tournamentId} onValueChange={setTournamentId} size="sm" />
     </div>
   );
 

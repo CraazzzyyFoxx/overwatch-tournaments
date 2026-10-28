@@ -11,7 +11,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
-import { cn } from "@/lib/utils";
 import type { DivisionGridEntity } from "@/types/workspace.types";
 
 /** One menu row: `null` handlers and a missing grant drop it; `disabled` keeps it with the menu's reason line. */
@@ -95,7 +94,7 @@ export function GridMenu({
         key={action.key}
         disabled={pending || action.disabled}
         onSelect={action.onSelect}
-        className={cn("gap-2", action.destructive && "text-danger focus:text-danger")}
+        variant={action.destructive ? "destructive" : "default"}
       >
         <Icon aria-hidden className="size-3.5" />
         {action.label}

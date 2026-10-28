@@ -163,16 +163,17 @@ function ScoreStepper({ id, label, value, onChange }: Readonly<ScoreStepperProps
       <Label htmlFor={id} className="text-xs font-semibold text-foreground">
         {label}
       </Label>
-      <div className="flex h-10 overflow-hidden rounded-lg border border-border/60 bg-muted/10 shadow-sm transition-colors focus-within:border-ring focus-within:ring-0">
+      <div className="flex gap-1.5">
         <Button
           type="button"
-          variant="ghost"
-          className="h-full w-12 shrink-0 rounded-r-none border-r border-border/60 px-0 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+          variant="outline"
+          size="icon"
+          className="shrink-0"
           aria-label={t("lowerScore", { label })}
           onClick={decrement}
           disabled={value <= 0}
         >
-          <Minus className="size-4" aria-hidden />
+          <Minus aria-hidden />
         </Button>
         <Input
           id={id}
@@ -181,17 +182,18 @@ function ScoreStepper({ id, label, value, onChange }: Readonly<ScoreStepperProps
           pattern="[0-9]*"
           value={value}
           onChange={(event) => onChange(event.target.value)}
-          className="h-full rounded-none border-0 bg-transparent text-center tabular-nums text-foreground shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
+          className="text-center tabular-nums"
           aria-label={t("scoreFor", { label })}
         />
         <Button
           type="button"
-          variant="ghost"
-          className="h-full w-12 shrink-0 rounded-l-none border-l border-border/60 px-0 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+          variant="outline"
+          size="icon"
+          className="shrink-0"
           aria-label={t("raiseScore", { label })}
           onClick={increment}
         >
-          <Plus className="size-4" aria-hidden />
+          <Plus aria-hidden />
         </Button>
       </div>
     </div>

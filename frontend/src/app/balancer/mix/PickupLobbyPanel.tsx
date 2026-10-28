@@ -142,7 +142,7 @@ export function PickupLobbyPanel({
   };
 
   return (
-    <Card variant="flat" className="flex min-w-0 flex-col">
+    <Card className="flex min-w-0 flex-col">
       <div className="flex items-center gap-2.5 border-b border-[color:var(--aqt-border)] px-4 py-3.5">
         <h2 className={CARD_TITLE_CLASS}>{t("title")}</h2>
         <span className={CAPTION_CLASS}>

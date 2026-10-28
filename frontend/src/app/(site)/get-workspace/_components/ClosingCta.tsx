@@ -57,7 +57,6 @@ export function ClosingCta() {
               <Input
                 id="gw-cta-name"
                 name="name"
-                variant="surface"
                 value={name}
                 onChange={(event) => setName(event.target.value)}
                 placeholder={create("namePlaceholder")}

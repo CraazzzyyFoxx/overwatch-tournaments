@@ -41,7 +41,6 @@ export function ThresholdPopover({
       <PopoverContent align={align} className="w-64 space-y-2">
         <Eyebrow as="p">{label}</Eyebrow>
         <ToggleGroup
-          type="single"
           variant="pill"
           size="sm"
           value={String(value)}

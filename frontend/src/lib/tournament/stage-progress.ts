@@ -15,7 +15,8 @@ export type Translate = ReturnType<typeof useTranslations<never>>;
 export interface StageProgress {
   label: string;
   pct: number;
-  fill: "teal" | "amber" | "muted";
+  /** The bar's `Tone` (`components/ui/tone.ts`), handed to `Progress` as is. */
+  tone: "accent" | "warning" | "neutral";
 }
 
 // Apart from `stages.ts` on purpose: the admin zone imports that module's
@@ -36,11 +37,11 @@ export function stageProgress(
 ): StageProgress {
   switch (getTournamentStatusMeta(status).variant) {
     case "finished":
-      return { label: t("tournamentsList.stage.final"), pct: 100, fill: "teal" };
+      return { label: t("tournamentsList.stage.final"), pct: 100, tone: "accent" };
     case "upcoming":
-      return { label: t("tournamentsList.stage.signups"), pct: 30, fill: "amber" };
+      return { label: t("tournamentsList.stage.signups"), pct: 30, tone: "warning" };
     case "draft":
-      return { label: t("tournamentsList.stage.setup"), pct: 20, fill: "muted" };
+      return { label: t("tournamentsList.stage.setup"), pct: 20, tone: "neutral" };
   }
 
   const stages = tournament.stages ?? [];
@@ -48,5 +49,5 @@ export function stageProgress(
   const completed = stages.filter((stage) => stage.is_completed).length;
   const current = pickCurrentStage(stages, status);
   const pct = total > 0 ? Math.min(95, Math.max(10, Math.round((completed / total) * 100))) : 50;
-  return { label: current?.name ?? t("common.live"), pct, fill: "teal" };
+  return { label: current?.name ?? t("common.live"), pct, tone: "accent" };
 }

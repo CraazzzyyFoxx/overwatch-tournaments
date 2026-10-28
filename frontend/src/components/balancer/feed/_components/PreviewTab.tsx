@@ -73,26 +73,26 @@ export function PreviewTab({
             <>
               <Button
                 variant="outline"
-                size="icon"
-                className="size-8"
+                size="icon-toolbar"
                 disabled={safeIndex <= 0}
                 onClick={() => onChangeRow(safeIndex - 1)}
+                aria-label={t("previousRow")}
                 title={t("previousRow")}
               >
-                <ChevronLeft className="size-4" />
+                <ChevronLeft aria-hidden />
               </Button>
-              <span className="text-xs tabular-nums text-muted-foreground">
+              <span className="text-caption tabular-nums text-muted-foreground">
                 {safeIndex + 1} / {rowCount}
               </span>
               <Button
                 variant="outline"
-                size="icon"
-                className="size-8"
+                size="icon-toolbar"
                 disabled={safeIndex >= rowCount - 1}
                 onClick={() => onChangeRow(safeIndex + 1)}
+                aria-label={t("nextRow")}
                 title={t("nextRow")}
               >
-                <ChevronRight className="size-4" />
+                <ChevronRight aria-hidden />
               </Button>
             </>
           ) : null}
@@ -125,7 +125,7 @@ export function PreviewTab({
               </Badge>
             </div>
             {activeRow.warnings.length > 0 ? (
-              <Alert>
+              <Alert tone="warning">
                 <AlertTitle>
                   {t("warnings", { count: activeRow.warnings.length })}
                 </AlertTitle>

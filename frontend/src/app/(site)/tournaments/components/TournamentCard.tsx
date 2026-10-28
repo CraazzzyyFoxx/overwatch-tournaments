@@ -12,9 +12,10 @@ import { getTournamentStatusMeta } from "@/lib/tournament/status";
 import { tournamentHref } from "@/lib/tournament/url";
 import { formatDateRange } from "@/lib/datetime";
 import { useFormatter } from "@/lib/datetime/client";
-import { cn } from "@/lib/utils";
 import encounterService from "@/services/encounter.service";
+import { TournamentStatusPill } from "@/components/tournaments/StatusPill";
 import { TournamentCover } from "@/components/tournaments/TournamentCover";
+import { Progress } from "@/components/ui/progress";
 import { GameLabel } from "@/components/workspace/GameLabel";
 import type { DisciplineDescriptor } from "@/types/discipline.types";
 import type { TeamFormation, Tournament } from "@/types/tournament.types";
@@ -67,7 +68,7 @@ const TournamentCard = ({
   return (
     <Link
       href={tournamentHref(tournament)}
-      className="group flex h-full w-full flex-col overflow-hidden rounded-xl border border-[color:var(--aqt-border)] bg-[color:var(--aqt-card)] outline-none transition-colors hover:border-[color:var(--aqt-teal)] focus-visible:border-[color:var(--aqt-teal)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--aqt-teal)]"
+      className="group flex h-full w-full flex-col overflow-hidden rounded-xl border border-[color:var(--aqt-border)] bg-[color:var(--aqt-card)] transition-colors hover:border-[color:var(--aqt-teal)] focus-visible:border-[color:var(--aqt-teal)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--aqt-teal)]"
     >
       <TournamentCover tournament={tournament} picture={picture} sizes="(max-width: 768px) 100vw, 33vw">
         {/* Status rides the cover's corner so the title keeps the card's full
@@ -78,10 +79,9 @@ const TournamentCard = ({
             translucent chip tint needs over artwork we do not control. */}
         {isFinished ? null : (
           <span className="absolute right-2 top-2 z-[2] flex rounded-md bg-[color:var(--aqt-bg)]">
-            <span className={cn("tn-status", variant)}>
-              <span aria-hidden className="dot" />
+            <TournamentStatusPill status={variant}>
               {t(`common.statusBadge.${tournament.status}`)}
-            </span>
+            </TournamentStatusPill>
           </span>
         )}
       </TournamentCover>
@@ -142,21 +142,8 @@ const TournamentCard = ({
             </span>
           </div>
           {isFinished ? null : (
-            /* `tn-stage` only for the fill palette; its 80px track is a
-               table-column measure, so the width is forced inline (a
-               `.aqt-tn`-scoped selector outranks any utility class). */
-            <div className="tn-stage w-full">
-              <div className="progress" style={{ width: "100%", height: 4 }}>
-                <div
-                  className={cn(
-                    "fill",
-                    stage.fill === "amber" && "amber",
-                    stage.fill === "muted" && "muted"
-                  )}
-                  style={{ width: `${stage.pct}%` }}
-                />
-              </div>
-            </div>
+            /* The label beside it carries the stage; the bar only pictures it. */
+            <Progress aria-hidden size="sm" tone={stage.tone} value={stage.pct} />
           )}
         </div>
       </div>
