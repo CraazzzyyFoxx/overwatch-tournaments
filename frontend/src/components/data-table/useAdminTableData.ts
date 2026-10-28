@@ -14,6 +14,8 @@ export interface AdminTableDataOptions<TData>
   page: number;
   search: string;
   pageSize: number;
+  /** Server mode: the page size is final; a fitted table holds its first request until it has measured. */
+  pageSizeReady: boolean;
   sortField: string | null;
   sortDir: SortDir;
   filters: AdminTableFilters;
@@ -36,6 +38,7 @@ export function useAdminTableData<TData>({
   page,
   search,
   pageSize,
+  pageSizeReady,
   sortField,
   sortDir,
   filters
@@ -47,7 +50,7 @@ export function useAdminTableData<TData>({
     queryFn: queryFn
       ? () => queryFn(page, search, pageSize, sortField, sortDir, filters)
       : () => Promise.resolve({ results: [] as TData[], total: 0, page: 1, per_page: pageSize }),
-    enabled: !isClientMode,
+    enabled: !isClientMode && pageSizeReady,
     placeholderData: (previousData) => previousData,
   });
 
@@ -76,8 +79,8 @@ export function useAdminTableData<TData>({
   return {
     data,
     clientRows,
-    /** No rows have ever been shown: the body draws a skeleton, not the empty state. */
-    isInitialLoading: isClientMode ? isLoading : dataQuery.isLoading,
+    /** No rows have ever been shown: the body draws a skeleton, not the empty state. Pending covers a request still held for the page size. */
+    isInitialLoading: isClientMode ? isLoading : dataQuery.isPending,
     /** A refetch behind an already-rendered page, or the caller's own client-mode fetch. */
     isRefreshing: isClientMode ? isLoading : dataQuery.isFetching && !dataQuery.isLoading
   };

@@ -22,7 +22,8 @@ import {
 export interface AdminTableStateOptions<TData> {
   columns: ColumnDef<TData>[];
   pathname: string;
-  initialPageSize: number;
+  /** `null`: no size until the reader picks one — the table fits its page to the viewport ("Auto"), and `?per_page=` is only written for a pick. */
+  initialPageSize: number | null;
   initialSort?: { field: string; dir: SortDir };
   filterKey?: string;
   filters?: AdminTableFilters;
@@ -47,7 +48,7 @@ export function useAdminTableState<TData>({
   const [searchValue, setSearchValue] = useState("");
   const [debouncedSearchValue] = useDebounce(searchValue, 300);
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState<number>(initialPageSize);
+  const [pageSize, setPageSize] = useState<number | null>(initialPageSize);
   const [sorting, setSorting] = useState<SortingState>(
     initialSort ? [{ id: initialSort.field, desc: initialSort.dir === "desc" }] : []
   );
@@ -88,8 +89,10 @@ export function useAdminTableState<TData>({
    * exactly one render and cannot be wedged by a caller.
    */
   const pendingUrlFiltersRef = useRef<string | null>(null);
+  /** The next page change is the table refitting its page, not the reader paging: it replaces the history entry. */
+  const replaceHistoryRef = useRef(false);
   const safeCurrentPage = Number.isFinite(currentPage) && currentPage > 0 ? currentPage : 1;
-  const safePageSize = Number.isFinite(pageSize) && pageSize > 0 ? pageSize : initialPageSize;
+  const safePageSize = pageSize !== null && Number.isFinite(pageSize) && pageSize > 0 ? pageSize : initialPageSize;
 
   /* eslint-disable react-hooks/set-state-in-effect -- Narrowing the result set (a new search, page size, sort, caller filter key or column filter) must land the user back on page 1; the change is only observable once the new value has rendered, so the reset is a follow-up commit by design. */
   useEffect(() => {
@@ -170,6 +173,8 @@ export function useAdminTableState<TData>({
       if (pendingUrlFiltersRef.current !== serializedFilters) return;
       pendingUrlFiltersRef.current = null;
     }
+    const replaceHistory = replaceHistoryRef.current;
+    replaceHistoryRef.current = false;
 
     const params = new URLSearchParams(window.location.search);
     const prev = previousUrlStateRef.current;
@@ -207,7 +212,7 @@ export function useAdminTableState<TData>({
     const query = params.toString();
     const nextUrl = query ? `${pathname}?${query}` : pathname;
 
-    if (searchChanged || pageSizeChanged || sortChanged || filtersChanged) {
+    if (replaceHistory || searchChanged || pageSizeChanged || sortChanged || filtersChanged) {
       window.history.replaceState(null, "", nextUrl);
     } else {
       window.history.pushState(null, "", nextUrl);
@@ -215,6 +220,17 @@ export function useAdminTableState<TData>({
 
     previousUrlStateRef.current = { page: safeCurrentPage, search: debouncedSearchValue, pageSize: safePageSize, sortKey, filters: serializedFilters };
   }, [safeCurrentPage, debouncedSearchValue, initialPageSize, safePageSize, pathname, sorting, sortKey, filters, serializedFilters]);
+
+  /**
+   * The fitted page size went from `from` rows to `to` (the viewport was
+   * resized): move to the page that holds the first row on screen now.
+   */
+  const refitPage = (from: number, to: number) => {
+    const nextPage = Math.floor(((safeCurrentPage - 1) * from) / to) + 1;
+    if (nextPage === safeCurrentPage) return;
+    replaceHistoryRef.current = true;
+    setCurrentPage(nextPage);
+  };
 
   return {
     searchValue,
@@ -224,6 +240,7 @@ export function useAdminTableState<TData>({
     setCurrentPage,
     pageSize: safePageSize,
     setPageSize,
+    refitPage,
     sorting,
     setSorting,
     sortField,

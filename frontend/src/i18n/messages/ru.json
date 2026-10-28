@@ -13889,7 +13889,8 @@
       "copy": "Копировать «{value}»",
       "rows": "Строки",
       "range": "{start}–{end} из {total}",
-      "rowsPerPage": "Строк на странице"
+      "rowsPerPage": "Строк на странице",
+      "rowsAuto": "Авто"
     },
     "dataTableExtra": {
       "noRecords": "Пока пусто.",

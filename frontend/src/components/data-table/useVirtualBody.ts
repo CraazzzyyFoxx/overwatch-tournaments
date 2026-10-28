@@ -12,7 +12,8 @@ import type { AdminTableDensity } from "@/components/data-table/useTablePreferen
  * an infinite list of a few hundred `<tr>`s starts stuttering on scroll.
  */
 const VIRTUALIZE_FROM = 100;
-const ROW_HEIGHT_ESTIMATE: Record<AdminTableDensity, number> = { comfortable: 41, compact: 33 };
+/** A one-line row as rendered (the kebab button sets it), so a fitted table's first request already asks for the right page size. */
+export const ROW_HEIGHT_ESTIMATE: Record<AdminTableDensity, number> = { comfortable: 48, compact: 36 };
 
 /** One flat list of everything the body renders, so the virtualiser can measure group headers and expanded details like any other row. */
 export type BodyItem<TData> =

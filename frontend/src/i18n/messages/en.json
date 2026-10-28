@@ -13889,7 +13889,8 @@
       "copy": "Copy “{value}”",
       "rows": "Rows",
       "range": "{start}–{end} of {total}",
-      "rowsPerPage": "Rows per page"
+      "rowsPerPage": "Rows per page",
+      "rowsAuto": "Auto"
     },
     "dataTableExtra": {
       "noRecords": "Nothing here yet.",

@@ -10,6 +10,10 @@ project, satisfy `host.ts`, and it works.
 - **URL is the state.** Page, search, page size, sort (`?sort=a,b&dir=asc,desc`) and
   column filters are mirrored into the query string and restored from it; back/forward
   works.
+- **Auto page size.** A `pages` table without `initialPageSize` fits its page to the
+  viewport (5–100 rows, refitted on resize, the first row on screen kept) and its card
+  ends at the viewport's bottom. "Auto" leads the rows-per-page list; only a picked
+  number goes into `?per_page=`.
 - **Selection.** Checkbox column with paint-select (press and sweep), Shift+click range,
   Ctrl/Cmd+click toggle, sweep on the row body, Shift+arrow keyboard range, Space,
   Ctrl+A, Escape. Server-mode selection survives paging; `bulkActions` receives every
@@ -101,7 +105,7 @@ next to it.
 | `useAdminTable.ts` | The TanStack table instance — row models, controlled state, manual vs local paging/sorting/filtering; memoised column filters keep row objects stable. |
 | `useTablePreferences.ts` | Density, column widths and column order in localStorage; rebuilds the order around columns added since it was saved, memoised so TanStack's column list keeps its identity. |
 | `useColumnVisibility.ts` | Persisted column visibility behind the View menu's "Columns". |
-| `useTableScrollBox.ts` | The scroll box the header sticks in, capped to the height left in the viewport. |
+| `useTableScrollBox.ts` | The scroll box the header sticks in, capped to the height left in the viewport — filled, and the page's row count fitted to it, under "Auto". |
 | `useVirtualBody.ts` | Rows, group headers and expanded details as one flat list, virtualised past 100 items. |
 | `useRowSelectionGestures.ts` | Paint-select, Shift/Ctrl ranges, keyboard selection. |
 | `column-layout.tsx` | Column widths, the sticky prefix and suffix, and the filler column, shared by header and body; memoised in `DataTable` on the visible columns, sizing and density. |

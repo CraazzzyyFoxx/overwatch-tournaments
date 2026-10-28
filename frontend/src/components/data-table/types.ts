@@ -91,6 +91,10 @@ export interface DataTableProps<TData> {
    */
   searchPlaceholder?: string;
   emptyMessage?: string;
+  /**
+   * Rows per page. Omit it on a `pages` table to fit the page to the viewport
+   * ("Auto" in the rows-per-page list); the phone's card list then gets 15.
+   */
   initialPageSize?: number;
   pageSizeOptions?: number[];
 
