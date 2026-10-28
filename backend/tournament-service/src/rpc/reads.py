@@ -30,6 +30,7 @@ from src.services import visibility_resolvers
 from src.services.admin.stage import stage_service as admin_stage_service
 from src.services.encounter import flows as encounter_flows
 from src.services.encounter import pick_ban_config
+from src.services.encounter.pick_ban_outcomes import pick_ban_outcomes_service
 from src.services.standings import flows as standings_flows
 from src.services.team import flows as team_flows
 from src.services.tournament import flows as tournament_flows
@@ -359,6 +360,17 @@ def register(broker: Any, logger: Any) -> None:
                 session, tournament_id=tournament_id, kind=PickBanKind.MAP
             )
             return {"configs": [pick_ban_config.serialize_pick_ban_config(config) for config in configs]}
+
+        return await _read(logger, op)
+
+    @broker.subscriber("rpc.tournament.pick_ban_outcomes")
+    async def _pick_ban_outcomes(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            viewer = rehydrate_user_optional(data.get("identity"))
+            tournament_id = _require_id(data)
+            # Gate BEFORE the cached read (cache is keyed without the viewer).
+            await ensure_tournament_viewable(session, viewer, tournament_id)
+            return await pick_ban_outcomes_service.get_by_tournament(session, tournament_id)
 
         return await _read(logger, op)
 

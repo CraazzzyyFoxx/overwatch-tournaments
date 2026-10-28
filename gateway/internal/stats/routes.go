@@ -23,6 +23,9 @@ var PublicReadRoutes = []edge.RouteSpec{
 	{Method: "GET", Pattern: "/api/v1/statistics/{discipline}/characters/playtime", Queue: "rpc.stats.statistics.character_playtime", Path: []string{"discipline"}, AllQuery: true, Auth: edge.AuthOptional},
 	{Method: "GET", Pattern: "/api/v1/statistics/{discipline}/characters/{entity_id}/leaderboard", Queue: "rpc.stats.statistics.character_leaderboard", IDParam: "entity_id", Path: []string{"discipline"}, AllQuery: true, Auth: edge.AuthOptional},
 	{Method: "GET", Pattern: "/api/v1/statistics/{discipline}/maps", Queue: "rpc.stats.statistics.maps", Path: []string{"discipline"}, Query: []string{"workspace_id"}, Auth: edge.AuthNone},
+	// --- one tournament's per-player stat ranks (the tournament page); no clash with tournament-service's
+	// literal /api/v1/tournaments/{id}/* reads. AuthOptional: the worker 404s a hidden tournament. ---
+	{Method: "GET", Pattern: "/api/v1/tournaments/{id}/player-stats", Queue: "rpc.stats.statistics.tournament_player_stats", IDParam: "id", Auth: edge.AuthOptional},
 	// --- achievements (list only; get surface is the subtree) ---------------
 	{Method: "GET", Pattern: "/api/v1/achievements", Queue: "rpc.stats.achievements.list", AllQuery: true, Auth: edge.AuthNone},
 	// --- statistics ---------------------------------------------------------

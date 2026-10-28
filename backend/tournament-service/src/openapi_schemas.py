@@ -32,6 +32,7 @@ from src.rpc import pick_ban_admin
 from src.schemas import captain as captain_schemas
 from src.schemas import encounter_report_form as report_form_schemas
 from src.schemas import ffa as ffa_schemas
+from src.schemas import pick_ban_outcomes as pick_ban_outcomes_schemas
 from src.schemas import pregame_rooms as pregame_rooms_schemas
 from src.schemas import registration as reg_schemas
 from src.schemas import registration_form as reg_form_schemas
@@ -65,6 +66,7 @@ OPERATIONS: dict[str, Op] = {
         response=schemas.EncounterInsightsRead, query=schemas.EncounterSearchQueryParams
     ),
     "rpc.tournament.statistics_overall": Op(response=schemas.OverallStatistics, query_params=(_WS_ANY,)),
+    "rpc.tournament.pick_ban_outcomes": Op(response=pick_ban_outcomes_schemas.TournamentPickBanOutcomes),
     # ── public reads (arrays) ──────────────────────────────────────────────
     "rpc.tournament.lookup_tournaments": Op(
         response=schemas.LookupItem,

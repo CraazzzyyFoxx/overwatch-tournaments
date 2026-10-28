@@ -413,6 +413,10 @@ func TestApiV1_MigratedReadsHitDispatcher(t *testing.T) {
 		"/api/v1/statistics/players",
 		"/api/v1/statistics/records",
 		"/api/v1/statistics/overwatch/maps",
+		// one tournament's per-player stat ranks and pick-ban outcomes (tournament-service), beside the other
+		// /tournaments/{id}/* reads
+		"/api/v1/tournaments/9/player-stats",
+		"/api/v1/tournaments/9/pick-ban/outcomes",
 		// stats-service (was /api/parser), folded into /api/v1
 		"/api/v1/users/5/rank-history",
 		"/api/v1/users/5/current-ranks",

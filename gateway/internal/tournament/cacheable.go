@@ -42,6 +42,10 @@ var PublicCacheableReads = map[string]respcache.Rule{
 	},
 	"/api/v1/tournaments/{id}/stages":    {Extract: respcache.FromPathValue("id"), AuthedRead: true},
 	"/api/v1/tournaments/{id}/standings": {Extract: respcache.FromPathValue("id"), AuthedRead: true},
+	// A pick-ban write publishes no tournament resource (realtime_commit.py),
+	// so only a structure change drops this entry: a live room's newest bans
+	// lag by at most this TTL on top of the backend's own 30s cache.
+	"/api/v1/tournaments/{id}/pick-ban/outcomes": {Extract: respcache.FromPathValue("id"), AuthedRead: true},
 	// An ffa stage's lobby tables: same shape of read as stages/standings —
 	// the body does not depend on the viewer (identity is used only in the
 	// visibility gate) and every result write enqueues the tournament

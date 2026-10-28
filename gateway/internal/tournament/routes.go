@@ -33,6 +33,10 @@ var PublicReadRoutes = []edge.RouteSpec{
 	{Method: "GET", Pattern: "/api/v1/tournaments/{id}", Queue: "rpc.tournament.get_tournament", IDParam: "id", Query: []string{"entities"}, Auth: edge.AuthOptional, Timeout: publicReadTimeout},
 	{Method: "GET", Pattern: "/api/v1/tournaments/{id}/stages", Queue: "rpc.tournament.get_stages", IDParam: "id", Auth: edge.AuthOptional, Timeout: publicReadTimeout},
 	{Method: "GET", Pattern: "/api/v1/tournaments/{id}/standings", Queue: "rpc.tournament.get_standings", IDParam: "id", Query: []string{"entities"}, Auth: edge.AuthOptional, Timeout: publicReadTimeout},
+	// Every hero ban a spectator may see and every picked/banned map of the
+	// tournament's pick-ban rooms, in one read (the tournament page's ban and
+	// map tables). Same gating as standings.
+	{Method: "GET", Pattern: "/api/v1/tournaments/{id}/pick-ban/outcomes", Queue: "rpc.tournament.pick_ban_outcomes", IDParam: "id", Auth: edge.AuthOptional, Timeout: publicReadTimeout},
 	// FFA league: one stage's lobby tables, and one lobby's own. AuthOptional
 	// like the reads above — the worker 404s a hidden tournament for an
 	// ineligible viewer and computes the body viewer-agnostically.

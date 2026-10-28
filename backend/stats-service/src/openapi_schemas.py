@@ -194,6 +194,7 @@ OPERATIONS: dict[str, Op] = {
     "rpc.stats.statistics.character_leaderboard": Op(
         response=schemas.CharacterLeaderboardResponse, query=schemas.CharacterLeaderboardQueryParams
     ),
+    "rpc.stats.statistics.tournament_player_stats": Op(response=schemas.TournamentPlayerStats),
     "rpc.stats.statistics.champion": Op(
         response=Paginated[schemas.PlayerStatistics],
         query=PaginationSortQueryParams[_STAT_SORT],

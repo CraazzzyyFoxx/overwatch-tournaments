@@ -6004,6 +6004,14 @@
       },
       "summary": "All-time records"
     },
+    "rpc.stats.statistics.tournament_player_stats": {
+      "description": "Permission: public; no authentication required, though a hidden tournament 404s unless the optional identity may view it (404 too for an unknown tournament). Returns every player's tournament average and rank for `performance` (MVP placement), `kda`, `eliminations`, `deaths`, `assists`, `hero_damage_dealt` and `damage_delta` \u2014 the same values and ranks as the per-stat tournament leaderboard, pivoted by player (`player_id` is the user id); a player carries only the stats they have data for. Rank 1 is best: Deaths and the MVP placement rank ascending. `total_players` is the largest ranked population across those stats.",
+      "response": {
+        "array": false,
+        "ref": "stats.TournamentPlayerStats"
+      },
+      "summary": "Tournament player stats"
+    },
     "rpc.stats.statistics.winrate": {
       "description": "Permission: public; no authentication required. Returns paginated, sortable players ranked by win rate (players with more than three tournaments), across every game or only the optional `discipline` (404 `discipline_not_installed` for an unknown code), optionally workspace-scoped.",
       "query_params": [
@@ -10739,6 +10747,14 @@
         "ref": "tournament.LookupItem"
       },
       "summary": "Lookup tournaments"
+    },
+    "rpc.tournament.pick_ban_outcomes": {
+      "description": "Permission: public; no authentication required \u2014 a hidden tournament is visible only to its workspace's admins and users on its preview allowlist (404 otherwise, and for an unknown tournament). Returns every hero ban of the tournament's encounters an anonymous spectator may see in the room (`hero_bans`: one row per banned hero of a current-attempt submission to a ban step that is revealed or not blind; `first_map` when the step plays round 1, `target_player_id` the opponent roster player a per-player ban is spent on) and every map its map rooms picked or banned (`map_outcomes`). Cached up to 30 seconds: a live room's newest bans may lag that long.",
+      "response": {
+        "array": false,
+        "ref": "tournament.TournamentPickBanOutcomes"
+      },
+      "summary": "List the tournament's pick-ban outcomes"
     },
     "rpc.tournament.pick_ban_rules_catalog": {
       "description": "Permission: public; no authentication required \u2014 the catalog describes the rules ENGINE (which condition leaves and constraints exist, what parameters they take) plus ONE discipline's vocabulary: its item groups per kind (character classes declared by its module, mode slugs for maps) and its presets (the module's own plus the generic map presets; a preset's `first_ban_rotation`, when set, is the rotation the preset needs; `mix_eligible` says whether a pickup mix may play it -- a hero preset that bans no player on map 1 of a Bo1). `discipline` is required: 422 when absent, 404 `discipline_not_installed` for a code no module declares, never another game's presets. The pick-ban constructor loads it before a config exists to attach it to.",
@@ -36097,6 +36113,68 @@
       "title": "SubscriptionUserCollectionRead",
       "type": "object"
     },
+    "stats.TournamentPlayerStat": {
+      "description": "One player's tournament average of one stat and its rank in the lobby (lower is better).",
+      "properties": {
+        "rank": {
+          "title": "Rank",
+          "type": "integer"
+        },
+        "value": {
+          "title": "Value",
+          "type": "number"
+        }
+      },
+      "required": [
+        "value",
+        "rank"
+      ],
+      "title": "TournamentPlayerStat",
+      "type": "object"
+    },
+    "stats.TournamentPlayerStats": {
+      "description": "Every player's ``LobbyLeaderboard`` value and rank for the tournament page's stats, in one read.",
+      "properties": {
+        "players": {
+          "items": {
+            "$ref": "#/components/schemas/stats.TournamentPlayerStatsRow"
+          },
+          "title": "Players",
+          "type": "array"
+        },
+        "total_players": {
+          "title": "Total Players",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "total_players",
+        "players"
+      ],
+      "title": "TournamentPlayerStats",
+      "type": "object"
+    },
+    "stats.TournamentPlayerStatsRow": {
+      "properties": {
+        "player_id": {
+          "title": "Player Id",
+          "type": "integer"
+        },
+        "stats": {
+          "additionalProperties": {
+            "$ref": "#/components/schemas/stats.TournamentPlayerStat"
+          },
+          "title": "Stats",
+          "type": "object"
+        }
+      },
+      "required": [
+        "player_id",
+        "stats"
+      ],
+      "title": "TournamentPlayerStatsRow",
+      "type": "object"
+    },
     "stats.TournamentStatus": {
       "enum": [
         "announcement",
@@ -51469,6 +51547,42 @@
       "title": "PickBanConfigUpsert",
       "type": "object"
     },
+    "tournament.PickBanHeroBan": {
+      "description": "One banned hero of one ban submission.",
+      "properties": {
+        "encounter_id": {
+          "title": "Encounter Id",
+          "type": "integer"
+        },
+        "first_map": {
+          "title": "First Map",
+          "type": "boolean"
+        },
+        "hero_id": {
+          "title": "Hero Id",
+          "type": "integer"
+        },
+        "target_player_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Target Player Id"
+        }
+      },
+      "required": [
+        "encounter_id",
+        "hero_id",
+        "first_map",
+        "target_player_id"
+      ],
+      "title": "PickBanHeroBan",
+      "type": "object"
+    },
     "tournament.PickBanKind": {
       "description": "Which catalog a :class:`PickBanConfig`/session pool draws from.",
       "enum": [
@@ -51477,6 +51591,30 @@
       ],
       "title": "PickBanKind",
       "type": "string"
+    },
+    "tournament.PickBanMapOutcome": {
+      "description": "One map the map room picked or banned.",
+      "properties": {
+        "encounter_id": {
+          "title": "Encounter Id",
+          "type": "integer"
+        },
+        "map_id": {
+          "title": "Map Id",
+          "type": "integer"
+        },
+        "picked": {
+          "title": "Picked",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "encounter_id",
+        "map_id",
+        "picked"
+      ],
+      "title": "PickBanMapOutcome",
+      "type": "object"
     },
     "tournament.PickBanRulesPreviewInput": {
       "description": "Body for the constructor's series preview: the rules plus the pool they\nwould be played out of, since \"how many supports survive map 5\" is only\nanswerable against real items.",
@@ -59429,6 +59567,30 @@
         "starts_at"
       ],
       "title": "TournamentPhaseScheduleRead",
+      "type": "object"
+    },
+    "tournament.TournamentPickBanOutcomes": {
+      "properties": {
+        "hero_bans": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.PickBanHeroBan"
+          },
+          "title": "Hero Bans",
+          "type": "array"
+        },
+        "map_outcomes": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.PickBanMapOutcome"
+          },
+          "title": "Map Outcomes",
+          "type": "array"
+        }
+      },
+      "required": [
+        "hero_bans",
+        "map_outcomes"
+      ],
+      "title": "TournamentPickBanOutcomes",
       "type": "object"
     },
     "tournament.TournamentRead": {
