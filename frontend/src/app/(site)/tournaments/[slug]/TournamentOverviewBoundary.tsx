@@ -3,12 +3,19 @@ import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { getTournamentOverviewState } from "./_data";
-import { tournamentStreamsQueryOptions, tournamentVodsQueryOptions } from "./_queries/tournamentStreams";
+import {
+  tournamentStreamsQueryOptions,
+  tournamentVodsQueryOptions
+} from "./_queries/tournamentStreams";
+import { createBracketQueryPlan } from "./bracket/bracketData";
+import { FFA_STAGE_TYPES } from "@/lib/bracket/projection";
+import { ffaStageQueryOptions } from "@/lib/tournament/ffa-stage-query";
 import { mapPoolConfigsQueryOptions } from "@/lib/tournament/map-pool-query";
 import { tournamentOverviewQueryOptions } from "@/lib/tournament/overview-query";
 import { tournamentRegistrationFormQueryOptions } from "@/lib/tournament/registrations-query";
 import {
   areStreamsVisible,
+  getTournamentStatusMeta,
   isTournamentStatusEnded,
   mayHavePastBroadcasts
 } from "@/lib/tournament/status";
@@ -58,6 +65,10 @@ export default async function TournamentOverviewBoundary({
   const overview = overviewState.overview;
   const queryClient = new QueryClient();
   queryClient.setQueryData(tournamentOverviewQueryOptions(slug).queryKey, overview);
+  // The hero's played count (`HeroPhaseFact`), read while the tournament is played — the overview's own encounters
+  // and FFA lobbies, under the same gates as `useTournamentPlayedCount`.
+  const isLive = getTournamentStatusMeta(overview.status).variant === "live";
+  const bracketPlan = createBracketQueryPlan(overview, null);
   // A failed read is just left out (`prefetchQuery` swallows it, `dehydrate`
   // drops it) and the shell retries it client-side.
   await Promise.all([
@@ -74,7 +85,13 @@ export default async function TournamentOverviewBoundary({
     // The Stream tab's other gate, and the Stream page's past broadcasts.
     mayHavePastBroadcasts(overview.status)
       ? queryClient.prefetchQuery(tournamentVodsQueryOptions(overview.id))
-      : null
+      : null,
+    isLive && bracketPlan.initialStageId !== null
+      ? queryClient.prefetchQuery(bracketPlan.encounters)
+      : null,
+    ...(isLive ? overview.stages : [])
+      .filter((stage) => FFA_STAGE_TYPES.includes(stage.stage_type))
+      .map((stage) => queryClient.prefetchQuery(ffaStageQueryOptions(overview.id, stage.id)))
   ]);
 
   return <HydrationBoundary state={dehydrate(queryClient)}>{children}</HydrationBoundary>;
