@@ -78,7 +78,9 @@ export function BansCard({
 }>) {
   const t = useTranslations("tournamentDetail");
   const top = bans.heroes.slice(0, limit);
-  const leader = top[0]?.bans ?? 1;
+  // Map pick-ban outcomes alone make `bans` too, but this card lists heroes: with none, it would be a bare heading.
+  if (top.length === 0) return null;
+  const leader = top[0].bans;
   const oneTrick = oneTricks(bans)[0];
   const oneTrickEntry = oneTrick ? roster.byPlayer.get(oneTrick.playerId) : undefined;
   const oneTrickHero = oneTrick ? (heroes.get(oneTrick.heroId) ?? null) : null;

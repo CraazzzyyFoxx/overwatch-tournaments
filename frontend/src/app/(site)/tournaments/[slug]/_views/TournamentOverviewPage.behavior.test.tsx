@@ -1029,6 +1029,17 @@ describe("once it is over", () => {
     expect(numbers).toContain(`${COPY.numbers.heroBans}4in 2 series`);
   });
 
+  it("draws no bans card when the series struck only maps", async () => {
+    getPickBanOutcomes.mockResolvedValue({
+      hero_bans: [],
+      map_outcomes: [{ encounter_id: 1, map_id: 4, picked: false }]
+    } satisfies PickBanOutcomesResponse);
+    await mount();
+
+    expect(headings()).toContain(COPY.result.title);
+    expect(card(COPY.bans.title)).toBeNull();
+  });
+
   it("still draws the result when every insights read fails", async () => {
     getPlayerStats.mockRejectedValue(new Error("stats down"));
     getPickBanOutcomes.mockRejectedValue(new Error("bans down"));
