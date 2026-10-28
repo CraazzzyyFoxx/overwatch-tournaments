@@ -2,7 +2,7 @@
 
 import { CalendarClock, ListOrdered } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 
 import { Combobox } from "@/components/ui/combobox";
 import { CommandGroup, CommandItem } from "@/components/ui/command";
@@ -27,6 +27,8 @@ type MatchesToolbarProps = {
   mapFilter: number | null;
   mapName: string | null;
   setParams: (params: Record<string, string | null>) => void;
+  /** Extra chips between the stage chips and the team picker (a "my team" shortcut). */
+  children?: ReactNode;
 };
 
 /**
@@ -45,7 +47,8 @@ export function MatchesToolbar({
   teamOptions,
   mapFilter,
   mapName,
-  setParams
+  setParams,
+  children
 }: Readonly<MatchesToolbarProps>) {
   const t = useTranslations();
   const [teamPickerOpen, setTeamPickerOpen] = useState(false);
@@ -98,6 +101,7 @@ export function MatchesToolbar({
           ))}
         </>
       ) : null}
+      {children}
       {teamFilter !== null ? (
         <FilterChip
           active

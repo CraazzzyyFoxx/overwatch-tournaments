@@ -2,16 +2,14 @@
 
 import { useTranslations } from "next-intl";
 
-import { useMinuteClock } from "@/hooks/useMinuteClock";
-
 import { visibleTournamentLinks } from "../_components/TournamentLinkChips";
 import { TournamentPageState } from "../_components/TournamentPageState";
 import { TournamentOverviewSkeleton } from "../_components/TournamentSkeletons";
 import { UpdatingBadge } from "../_components/UpdatingBadge";
 import { OverviewCompletedView } from "./_components/OverviewCompletedView";
+import { OverviewDraftView } from "./_components/OverviewDraftView";
 import { OverviewLiveView } from "./_components/OverviewLiveView";
-import { OverviewMatchBlock } from "./_components/OverviewMatchBlock";
-import { OverviewRegistrationView } from "./_components/OverviewRegistrationView";
+import { OverviewPreStartView } from "./_components/OverviewPreStartView";
 import {
   OverviewAboutCard,
   OverviewFormatCard,
@@ -32,22 +30,21 @@ type TournamentOverviewPageProps = {
 };
 
 /**
- * The tournament's landing section — one component, three compositions keyed on
- * `status` (wireframes §3 A/B/C). The retired Schedule tab lives here as the
- * phase timeline (`#phases`); Maps is its own section.
+ * The tournament's landing section — one component, one composition per phase:
+ * before the start, during the draft, while matches are played, once it is
+ * over. The phase timeline lives here (`#phases`); Maps is its own section.
  *
- * Everything below is assembly: the reads live in `useTournamentOverviewData`,
- * the per-encounter copy in `useOverviewMatchPresenter`, and each block in its
- * own file under `_components`. What stays here is the order the cards are
- * built in and which branch receives them, because that IS the page.
+ * Everything below is assembly: the reads live in `useTournamentOverviewData`
+ * and `useTournamentInsights`, the per-encounter copy in
+ * `useOverviewMatchPresenter`, and each block in its own file under
+ * `_components`. What stays here is which composition receives the shared
+ * cards, because that IS the page.
  */
 export default function TournamentOverviewPage({
   tournamentId,
   slug
 }: Readonly<TournamentOverviewPageProps>) {
   const t = useTranslations();
-  // Null until hydration — recency text waits rather than disagree with SSR.
-  const clockNow = useMinuteClock();
 
   const data = useTournamentOverviewData(tournamentId, slug);
   const presenter = useOverviewMatchPresenter({
@@ -128,43 +125,47 @@ export default function TournamentOverviewPage({
       <OverviewFfaTable stage={stage} lobbies={data.ffaLobbies} overviewHref={overviewHref} />
     ) : null;
 
-  // An FFA stage with no duels has its lobby tables in place of matches; the
-  // duel block's "nothing published" would contradict them.
-  const nowBlock =
-    data.encounters.length === 0 && data.hasFfaTable ? null : (
-      <OverviewMatchBlock
-        encounters={data.encounters}
-        clockNow={clockNow}
-        overviewHref={overviewHref}
-        presenter={presenter}
-      />
-    );
-
   const branch =
     variant === "registration" ? (
-      <OverviewRegistrationView
-        tournament={tournament}
-        registrationList={data.registrationList}
-        registrations={data.registrations}
-        overviewHref={overviewHref}
-        clockNow={clockNow}
-        aboutCard={aboutCard}
-        formatCard={formatCard}
-        linksCard={linksCard}
-      />
+      tournament.status === "draft" ? (
+        <OverviewDraftView
+          tournament={tournament}
+          slug={slug}
+          aboutCard={aboutCard}
+          formatCard={formatCard}
+          linksCard={linksCard}
+        />
+      ) : (
+        <OverviewPreStartView
+          tournament={tournament}
+          slug={slug}
+          registrationList={data.registrationList}
+          aboutCard={aboutCard}
+          formatCard={formatCard}
+          linksCard={linksCard}
+          phasesCard={phasesCard}
+        />
+      )
     ) : variant === "live" ? (
       <OverviewLiveView
-        nowBlock={nowBlock}
+        tournament={tournament}
+        slug={slug}
+        encounters={data.encounters}
+        stage={stage}
+        stageEncounters={data.stageEncounters}
+        stageStandings={data.stageStandings}
         miniBracket={miniBracket}
-        groupTable={groupTable}
+        ffaTable={data.hasFfaTable ? groupTable : null}
+        presenter={presenter}
         aboutCard={aboutCard}
-        phasesCard={phasesCard}
         formatCard={formatCard}
         linksCard={linksCard}
+        phasesCard={phasesCard}
       />
     ) : (
       <OverviewCompletedView
         tournament={tournament}
+        slug={slug}
         encounters={data.encounters}
         standings={data.standings}
         teams={data.teams}
@@ -173,8 +174,6 @@ export default function TournamentOverviewPage({
         stageId={data.stageId}
         roundShape={data.roundShape}
         podiumNeedsStandings={data.podiumNeedsStandings}
-        overviewHref={overviewHref}
-        nowBlock={nowBlock}
         miniBracket={miniBracket}
         groupTable={groupTable}
         aboutCard={aboutCard}
@@ -184,7 +183,10 @@ export default function TournamentOverviewPage({
     );
 
   const content = (
-    <section className="grid w-full min-w-0 max-w-full gap-4 *:min-w-0" aria-label={t("common.overview")}>
+    <section
+      className="grid w-full min-w-0 max-w-full gap-4 *:min-w-0"
+      aria-label={t("common.overview")}
+    >
       {presentation.showUpdating ? <UpdatingBadge /> : null}
       {branch}
     </section>

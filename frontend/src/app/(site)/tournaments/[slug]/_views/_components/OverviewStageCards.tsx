@@ -5,7 +5,14 @@ import { useTranslations } from "next-intl";
 import TeamName from "@/components/TeamName";
 import { Badge } from "@/components/ui/badge";
 import { Eyebrow, eyebrowClass } from "@/components/ui/eyebrow";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
+} from "@/components/ui/table";
 import { useBracketRoundLabel } from "@/hooks/useBracketRoundLabel";
 import type { BracketRoundShape } from "@/lib/bracket/round-name";
 import type { RoundGroup } from "@/lib/bracket/view";
@@ -16,7 +23,11 @@ import type { FfaLobby } from "@/types/ffa.types";
 import type { StageSummary, Standings } from "@/types/tournament.types";
 
 import { MatchCard } from "../../_components/MatchCard";
-import { currentRoundOf, pickRoundWindow, splitStandingsByGroup } from "../tournamentOverview.model";
+import {
+  currentRoundOf,
+  pickRoundWindow,
+  splitStandingsByGroup
+} from "../tournamentOverview.model";
 import type { OverviewMatchPresenter } from "../useOverviewMatchPresenter";
 import { OverviewSection, SectionLink } from "./OverviewCards";
 
@@ -108,7 +119,6 @@ export function OverviewGroupTable({
           {t("tournamentDetail.overview.groupTable.open")}
         </SectionLink>
       }
-      framed
     >
       {/* Two groups sit side by side rather than stacking: it halves the card
           and pulls the record back next to the name instead of stranding it
@@ -119,9 +129,7 @@ export function OverviewGroupTable({
             <caption
               className={cn(
                 "text-left",
-                group.name === null
-                  ? "sr-only"
-                  : cn(eyebrowClass(), "pb-1.5")
+                group.name === null ? "sr-only" : cn(eyebrowClass(), "pb-1.5")
               )}
             >
               {group.name === null
@@ -150,8 +158,13 @@ export function OverviewGroupTable({
             <TableBody>
               {group.rows.map((row) => (
                 // A team a Swiss threshold eliminated keeps its place, read as done.
-                <TableRow key={row.id} className={cn(row.swiss_status === "eliminated" && "opacity-60")}>
-                  <TableCell className={cn(LADDER_CELL, "aqt-tnum pr-2 text-[color:var(--aqt-fg-muted)]")}>
+                <TableRow
+                  key={row.id}
+                  className={cn(row.swiss_status === "eliminated" && "opacity-60")}
+                >
+                  <TableCell
+                    className={cn(LADDER_CELL, "aqt-tnum pr-2 text-[color:var(--aqt-fg-muted)]")}
+                  >
                     {row.position}
                   </TableCell>
                   <TableCell className={cn(LADDER_CELL, "pr-2")}>
@@ -224,7 +237,6 @@ export function OverviewFfaTable({
           {t("tournamentDetail.overview.groupTable.open")}
         </SectionLink>
       }
-      framed
     >
       <div className={cn("grid gap-x-8 gap-y-5", seated.length > 1 && "sm:grid-cols-2")}>
         {seated.map((lobby) => (
@@ -232,9 +244,7 @@ export function OverviewFfaTable({
             <caption
               className={cn(
                 "text-left",
-                seated.length > 1
-                  ? cn(eyebrowClass(), "pb-1.5")
-                  : "sr-only"
+                seated.length > 1 ? cn(eyebrowClass(), "pb-1.5") : "sr-only"
               )}
             >
               {lobby.name}
@@ -269,7 +279,9 @@ export function OverviewFfaTable({
                 )
                 .map((row) => (
                   <TableRow key={row.team_id}>
-                    <TableCell className={cn(LADDER_CELL, "aqt-tnum pr-2 text-[color:var(--aqt-fg-muted)]")}>
+                    <TableCell
+                      className={cn(LADDER_CELL, "aqt-tnum pr-2 text-[color:var(--aqt-fg-muted)]")}
+                    >
                       {row.position ?? "—"}
                     </TableCell>
                     <TableCell className={cn(LADDER_CELL, "pr-2")}>
@@ -278,7 +290,9 @@ export function OverviewFfaTable({
                         size="xs"
                       />
                     </TableCell>
-                    <TableCell className={cn(LADDER_CELL, "aqt-tnum pr-2 text-right")}>{row.games_played}</TableCell>
+                    <TableCell className={cn(LADDER_CELL, "aqt-tnum pr-2 text-right")}>
+                      {row.games_played}
+                    </TableCell>
                     <TableCell className={cn(LADDER_CELL, "aqt-tnum text-right font-semibold")}>
                       {formatPoints(row.points)}
                     </TableCell>

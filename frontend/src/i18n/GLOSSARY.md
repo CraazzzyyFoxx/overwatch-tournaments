@@ -44,6 +44,10 @@ appears, use exactly this translation for consistency across the app.
 | Slot | Слот | a single map of a series |
 | Candidate | Кандидат | «карты-кандидаты» |
 | Reserve map | Резервная карта | reserve used on a tie |
+| One-trick | Вантрик | a player who lives on one hero; «Вантрики» |
+| Blind ban / per-player ban | Бан вслепую / бан по игроку | first-map ban vs a ban aimed at one opponent |
+| Autopick | Автопик | a draft pick the clock made |
+| Form | Форма | a team's last results (W/D/L) |
 
 ## Admin console terms
 
@@ -63,7 +67,7 @@ appears, use exactly this translation for consistency across the app.
 | On call | На подмену | registration flag: ready to step in as a substitute |
 | Best-of | Best-of | not translated |
 | Stats | | the public site's `matches.stat.*` wording |
-| Roles, tournament statuses | | reuse `common.roles` and `common.statusBadge` rather than new keys |
+| Roles, tournament statuses | | reuse `common.roles` and `common.statusBadge` rather than new keys; plurals and the genitive (`tournamentDetail.roles`, `tournamentDetail.roleOf`) are the only role words outside them |
 
 ## Style rules
 

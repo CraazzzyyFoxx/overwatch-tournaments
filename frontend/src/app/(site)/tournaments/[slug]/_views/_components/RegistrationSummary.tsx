@@ -9,7 +9,7 @@ import { useSlotLabel } from "@/hooks/useSlotLabel";
 import { roleColor, slotCodeOrder, slotRank } from "@/lib/roster/ontology";
 
 /** A figure with its advisory capacity as a quiet inline `/ N` suffix. */
-export function CapacityValue({ value, max }: Readonly<{ value: number; max?: number | null }>) {
+function CapacityValue({ value, max }: Readonly<{ value: number; max?: number | null }>) {
   return (
     <>
       {value}

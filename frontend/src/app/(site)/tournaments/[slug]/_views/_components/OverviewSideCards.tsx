@@ -23,8 +23,8 @@ import { StageFormatDialog } from "./StageFormatDialog";
 export function OverviewPhasesCard({ tournament }: Readonly<{ tournament: Tournament }>) {
   const t = useTranslations();
   return (
-    <OverviewSection title={t("tournamentDetail.overview.phases.title")} id="phases" size="heading">
-      <PhaseTimeline tournament={tournament} orientation="vertical" />
+    <OverviewSection title={t("tournamentDetail.overview.phases.title")} id="phases">
+      <PhaseTimeline tournament={tournament} />
     </OverviewSection>
   );
 }
@@ -41,7 +41,8 @@ export function OverviewPhasesCard({ tournament }: Readonly<{ tournament: Tourna
 export function OverviewFormatCard({ tournament }: Readonly<{ tournament: Tournament }>) {
   const t = useTranslations();
   // The tournament's own game names and draws its roster slots.
-  const ontology = useDisciplineMetadata(tournament.workspace_id, tournament.discipline).data ?? null;
+  const ontology =
+    useDisciplineMetadata(tournament.workspace_id, tournament.discipline).data ?? null;
   const slotLabel = useSlotLabel(ontology);
 
   const waves = groupTournamentStageFlow(tournament.stages);
@@ -80,7 +81,7 @@ export function OverviewFormatCard({ tournament }: Readonly<{ tournament: Tourna
   };
 
   return (
-    <OverviewSection title={t("tournamentDetail.overview.format.title")} size="heading">
+    <OverviewSection title={t("tournamentDetail.overview.format.title")}>
       {waves.length > 0 ? (
         <ol>
           {waves.map((wave, waveIndex) => {
@@ -94,9 +95,16 @@ export function OverviewFormatCard({ tournament }: Readonly<{ tournament: Tourna
                   <span className="aqt-tnum grid size-6 shrink-0 place-items-center rounded-full border border-[color:var(--aqt-border-2)] text-label text-[color:var(--aqt-fg-muted)]">
                     {waveIndex + 1}
                   </span>
-                  {isLast ? null : <Separator orientation="vertical" className="mt-1 h-auto flex-1" />}
+                  {isLast ? null : (
+                    <Separator orientation="vertical" className="mt-1 h-auto flex-1" />
+                  )}
                 </div>
-                <div className={cn("grid min-w-0 content-start gap-2 pt-0.5", isLast ? "pb-0" : "pb-4")}>
+                <div
+                  className={cn(
+                    "grid min-w-0 content-start gap-2 pt-0.5",
+                    isLast ? "pb-0" : "pb-4"
+                  )}
+                >
                   {wave.map((stage) => {
                     const format = stageFormatOf(stage.stage_type);
                     const typeLabel = format
@@ -152,7 +160,9 @@ export function OverviewFormatCard({ tournament }: Readonly<{ tournament: Tourna
                   title={`${slotLabel(code)} ×${count}`}
                 >
                   <RosterSlotGlyph code={code} ontology={ontology} size={14} />
-                  <span className="aqt-tnum text-caption text-[color:var(--aqt-fg-faint)]">×{count}</span>
+                  <span className="aqt-tnum text-caption text-[color:var(--aqt-fg-faint)]">
+                    ×{count}
+                  </span>
                 </span>
               ))}
             </span>
@@ -190,7 +200,7 @@ export function OverviewAboutCard({ description }: Readonly<{ description: strin
 export function OverviewLinksCard({ tournament }: Readonly<{ tournament: Tournament }>) {
   const t = useTranslations();
   return (
-    <OverviewSection title={t("tournamentDetail.links.heading")} size="heading">
+    <OverviewSection title={t("tournamentDetail.links.heading")}>
       <TournamentLinkChips links={tournament.links} />
     </OverviewSection>
   );

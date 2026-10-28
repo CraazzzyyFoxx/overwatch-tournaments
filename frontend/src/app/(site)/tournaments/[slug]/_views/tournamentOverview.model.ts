@@ -1,10 +1,15 @@
 import type { RoundGroup } from "@/lib/bracket/view";
-import { isEncounterCompleted, isEncounterLive } from "@/lib/encounter/status";
+import { getEncounterWinner, isEncounterCompleted } from "@/lib/encounter/status";
 import { splitHandle } from "@/lib/player";
 import { reachedAtLeast } from "@/lib/tournament/lifecycle";
 import type { Encounter } from "@/types/encounter.types";
 import type { Team } from "@/types/team.types";
-import type { StageSummary, Standings, Tournament, TournamentStatus } from "@/types/tournament.types";
+import type {
+  StageSummary,
+  Standings,
+  Tournament,
+  TournamentStatus
+} from "@/types/tournament.types";
 
 // ---------------------------------------------------------------------------
 // Which of the three compositions a tournament gets
@@ -65,7 +70,9 @@ const STAGE_FORMATS = [
 export type StageFormat = (typeof STAGE_FORMATS)[number];
 
 export function stageFormatOf(stageType: string): StageFormat | null {
-  return (STAGE_FORMATS as readonly string[]).includes(stageType) ? (stageType as StageFormat) : null;
+  return (STAGE_FORMATS as readonly string[]).includes(stageType)
+    ? (stageType as StageFormat)
+    : null;
 }
 
 /** One regulation fact of a stage, as the overview's "How it's played" words it. */
@@ -99,7 +106,8 @@ export function stageFacts(stage: StageSummary, hasNextWave: boolean): StageFact
     facts.push({ kind: "finalBestOf", n: stage.best_of.final });
   }
   if (stage.stage_type === "swiss") {
-    if (stage.swiss_qualify_wins != null) facts.push({ kind: "qualify", count: stage.swiss_qualify_wins });
+    if (stage.swiss_qualify_wins != null)
+      facts.push({ kind: "qualify", count: stage.swiss_qualify_wins });
     if (stage.swiss_eliminate_losses != null) {
       facts.push({ kind: "eliminate", count: stage.swiss_eliminate_losses });
     }
@@ -236,59 +244,66 @@ export function splitStandingsByGroup(
     }));
 }
 
+export type GroupResult = "w" | "l" | "d";
+
+/** One team's line in its group's live table. */
+export interface GroupRow {
+  teamId: number;
+  team: Team | null;
+  groupKey: string;
+  groupName: string | null;
+  /** How many of this group go through: the group's own count, else the stage's. */
+  advance: number | null;
+  position: number;
+  points: number;
+  /** Maps won minus maps lost over the finished series. */
+  mapDiff: number;
+  /** Finished series, oldest round first. */
+  form: GroupResult[];
+}
+
 /**
- * The four match lists the "now" block chooses between (⑤): what is being
- * played, what is next on the clock, what was last decided, and what has been
- * drawn but never scheduled.
+ * The live group tables: places, order and points are the official standings' (tiebreakers included); the form and
+ * the map difference come from the stage's finished series.
  */
-export type OverviewMatchLists = {
-  live: Encounter[];
-  upcoming: Encounter[];
-  recent: Encounter[];
-  pending: Encounter[];
-};
-
-export function selectOverviewMatchLists(
-  encounters: readonly Encounter[],
-  clockNow: number | null
-): OverviewMatchLists {
-  const live = encounters.filter(isEncounterLive);
-  const upcoming = encounters
-    .filter((encounter) => {
-      if (isEncounterCompleted(encounter) || isEncounterLive(encounter)) return false;
-      if (encounter.scheduled_at === null) return false;
-      const at = new Date(encounter.scheduled_at).getTime();
-      if (!Number.isFinite(at)) return false;
-      // `clockNow` is null until hydration. Reading the wall clock here instead
-      // would be a different instant on the server than in the browser, so the
-      // pre-hydration pass keeps every scheduled match and the first client
-      // render drops the ones that have already come round.
-      return clockNow === null || at > clockNow;
+export function buildGroupRows(
+  stage: Pick<StageSummary, "advance_count">,
+  stageStandings: readonly Standings[],
+  stageEncounters: readonly Encounter[]
+): GroupRow[] {
+  const tally = new Map<
+    number,
+    { mapDiff: number; results: { round: number; result: GroupResult }[] }
+  >();
+  for (const encounter of stageEncounters) {
+    if (!isEncounterCompleted(encounter)) continue;
+    const winner = getEncounterWinner(encounter);
+    for (const seat of encounter.teams) {
+      const other = encounter.teams.find((item) => item !== seat);
+      if (seat.team_id == null || !other) continue;
+      const row = tally.get(seat.team_id) ?? { mapDiff: 0, results: [] };
+      row.mapDiff += seat.score - other.score;
+      row.results.push({
+        round: encounter.round,
+        result: winner == null ? "d" : winner === seat.slot ? "w" : "l"
+      });
+      tally.set(seat.team_id, row);
+    }
+  }
+  return splitStandingsByGroup(stageStandings).flatMap((group) =>
+    group.rows.map((row) => {
+      const own = tally.get(row.team_id);
+      return {
+        teamId: row.team_id,
+        team: row.team,
+        groupKey: group.key,
+        groupName: group.name,
+        advance: row.stage_item?.advance_count ?? stage.advance_count,
+        position: row.position,
+        points: row.points,
+        mapDiff: own?.mapDiff ?? 0,
+        form: [...(own?.results ?? [])].sort((a, b) => a.round - b.round).map((item) => item.result)
+      };
     })
-    .sort(
-      (left, right) =>
-        new Date(left.scheduled_at ?? 0).getTime() - new Date(right.scheduled_at ?? 0).getTime()
-    )
-    .slice(0, 4);
-  const recent = encounters
-    .filter(isEncounterCompleted)
-    .sort((left, right) => {
-      const leftAt = new Date(left.ended_at ?? left.scheduled_at ?? left.created_at).getTime();
-      const rightAt = new Date(right.ended_at ?? right.scheduled_at ?? right.created_at).getTime();
-      if (leftAt !== rightAt) return rightAt - leftAt;
-      return right.id - left.id;
-    })
-    .slice(0, 4);
-  // Drawn, but nobody has given it a time yet: a generated round sits here
-  // until it is scheduled or played. Without this rung the overview claims
-  // nothing is published while the bracket page shows a full grid.
-  const pending = encounters
-    .filter((encounter) => !isEncounterCompleted(encounter) && !isEncounterLive(encounter))
-    .sort((left, right) => {
-      if (left.round !== right.round) return Math.abs(left.round) - Math.abs(right.round);
-      return left.id - right.id;
-    })
-    .slice(0, 4);
-
-  return { live, upcoming, recent, pending };
+  );
 }

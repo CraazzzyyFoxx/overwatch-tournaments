@@ -15,7 +15,7 @@ import {
   areStreamsVisible,
   getTournamentStatusMeta,
   isTournamentStatusEnded,
-  mayHavePastBroadcasts,
+  mayHavePastBroadcasts
 } from "@/lib/tournament/status";
 import { reachedAtLeast } from "@/lib/tournament/lifecycle";
 import { formatDateRange } from "@/lib/datetime";
@@ -29,7 +29,11 @@ import type { Tournament } from "@/types/tournament.types";
 
 import { useTranslations } from "next-intl";
 import TournamentSectionNav from "./TournamentSectionNav";
-import { collapsedRailTitle, hasStreamSection, isTournamentOverviewPath } from "./tournament-section-nav";
+import {
+  collapsedRailTitle,
+  hasStreamSection,
+  isTournamentOverviewPath
+} from "./tournament-section-nav";
 import { TournamentShellSkeleton } from "./TournamentSkeletons";
 import TournamentShellError from "../TournamentShellError";
 import { PageHero, HeroCoord } from "@/components/site/PageHero";
@@ -116,7 +120,7 @@ export default function TournamentClientLayout({
     scopeKind: "tournament",
     scopeId: tournamentId,
     workspaceId: tournament?.workspace_id,
-    detailRef: slug,
+    detailRef: slug
   });
 
   // Object-local queries and actions must not change the saved viewing filter.
@@ -205,7 +209,6 @@ export default function TournamentClientLayout({
   ) : null;
 
   const registerButton = !isEnded ? <TournamentRegisterButton tournament={tournament} /> : null;
-  const nextPhaseChip = <NextPhaseChip tournament={tournament} href={`${overviewHref}#phases`} />;
 
   // While the tournament is played, the overview's main action is the
   // broadcast. The hero only: every other section has the Stream tab under it.
@@ -372,13 +375,11 @@ export default function TournamentClientLayout({
         hasRules={Boolean(tournament.rules?.trim())}
         hasMapPool={hasMapPool}
         collapsed={heroScrolledPast}
-        collapsedTitle={
-          <span title={tournament.name}>{collapsedRailTitle(tournament.name)}</span>
-        }
+        collapsedTitle={<span title={tournament.name}>{collapsedRailTitle(tournament.name)}</span>}
         collapsedActions={
           <>
-            {nextPhaseChip}
-            {registerButton}
+            <NextPhaseChip tournament={tournament} href={`${overviewHref}#phases`} />
+            {!isEnded ? <TournamentRegisterButton tournament={tournament} size="sm" /> : null}
           </>
         }
       />

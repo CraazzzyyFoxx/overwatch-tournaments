@@ -20,14 +20,6 @@ type GetQueryPresentation = (input: {
   isFetching: boolean;
 }) => QueryPresentation;
 
-const heroesModule =
-  (await import("./TournamentStatsPage")) as typeof import("./TournamentStatsPage") & {
-    getHeroesQueryPresentation?: GetQueryPresentation;
-    getHeroPlaytimeMetric?: (playtime: number, leaderPlaytime: number) => {
-      sharePercent: number;
-      barWidthPercent: number;
-    };
-  };
 const standingsTableModule =
   (await import("../../../../../components/StandingsTable")) as typeof import("../../../../../components/StandingsTable") & {
     getStandingsStagesQueryOptions?: (
@@ -53,8 +45,7 @@ describe("public tournament page query states", () => {
   // Teams used to ship its own near-identical `getTeamsQueryPresentation`
   // (content state named "teams", count named `teamCount`); it now shares this
   // one helper, so it is covered by exactly the same table.
-  const presentations: Array<[string, GetQueryPresentation | undefined]> = [
-    ["heroes", heroesModule.getHeroesQueryPresentation],
+  const presentations: Array<[string, GetQueryPresentation]> = [
     ["teams", getPublicPageQueryPresentation]
   ];
 
@@ -142,29 +133,6 @@ describe("public tournament page query states", () => {
   }
 });
 
-describe("public tournament data interactions", () => {
-  it("scales a hero's bar against its column's leader, keeping the exact share finite", () => {
-    const metric = heroesModule.getHeroPlaytimeMetric;
-    const cases: Array<[number, number, number, number]> = [
-      // playtime, leader, share %, bar %
-      [0.16, 0.16, 16, 100],
-      [0.04, 0.16, 4, 25],
-      [0, 0.16, 0, 0],
-      [-0.5, 0.16, 0, 0],
-      [Number.NaN, 0.16, 0, 0],
-      [Number.POSITIVE_INFINITY, 0.16, 0, 0],
-      [0.1, 0, 10, 0],
-      [1.5, 1.5, 100, 100]
-    ];
-
-    for (const [playtime, leader, share, bar] of cases) {
-      const result = metric?.(playtime, leader);
-      expect(result).toEqual({ sharePercent: share, barWidthPercent: bar });
-      expect(Number.isFinite(result?.barWidthPercent)).toBe(true);
-    }
-  });
-});
-
 describe("public tournament data page contracts", () => {
   it("does not execute the table fallback stages request when stages are supplied", async () => {
     let fallbackRequests = 0;
@@ -181,7 +149,7 @@ describe("public tournament data page contracts", () => {
   it("keeps pages headerless with an accessible section label and exact state components", () => {
     const contracts = [
       ["TournamentEncountersPage.tsx", "TournamentMatchesSkeleton"],
-      ["TournamentStatsPage.tsx", "TournamentHeroesSkeleton"],
+      ["TournamentStatsPage.tsx", "TournamentHeroesSkeleton"]
     ];
 
     for (const [fileName, skeleton] of contracts) {
@@ -191,10 +159,11 @@ describe("public tournament data page contracts", () => {
       expect(source).toContain("aria-label={t(");
       expect(source).toContain(skeleton);
       expect(source).toContain('state="initial-error"');
-      expect(source).toContain('state="refresh-error"');
       expect(source).toContain('state="empty"');
       expect(source).toContain("onRetry={() => void");
     }
+    // Statistics has no page-wide query to refresh: each tab owns its own reads.
+    expect(pageSource("TournamentEncountersPage.tsx")).toContain('state="refresh-error"');
   });
 
   it("keeps the standings table contained, sticky and semantic", () => {
@@ -235,7 +204,6 @@ describe("public tournament data page contracts", () => {
   it("defines the background-refresh badge exactly once", () => {
     const views = [
       pageSource("TournamentEncountersPage.tsx"),
-      pageSource("TournamentStatsPage.tsx"),
       pageSource("TournamentTeamsPage.tsx"),
       readFileSync(join(tournamentRoot, "bracket", "TournamentBracketPage.tsx"), "utf8")
     ];
@@ -263,9 +231,7 @@ describe("public tournament data page contracts", () => {
       readFileSync(join(process.cwd(), "src/lib/tournament/teams-query.ts"), "utf8")
     ].join("\n");
 
-    expect(source).toContain(
-      "tournamentQueryKeys.teams(tournament.id, tournament.workspace_id)"
-    );
+    expect(source).toContain("tournamentQueryKeys.teams(tournament.id, tournament.workspace_id)");
     expect(source).toContain("teamService.getAll({");
     expect(source).toContain("tournamentId: tournament.id");
     expect(source).toContain("workspaceId: tournament.workspace_id");

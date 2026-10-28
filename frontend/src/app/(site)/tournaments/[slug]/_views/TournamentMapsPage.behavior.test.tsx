@@ -1,15 +1,16 @@
 // @vitest-environment happy-dom
 //
-// Maps is its own section, it holds the POOL only, and it answers in pictures.
+// Maps is its own section: the POOL, in pictures, and how it was played.
 // What is pinned:
 //
-//  1. every map the pool names is a card with its picture, and nothing about
-//     play counts is here — those are a statistic and live in Statistics;
-//  2. the per-round pools are a matrix of cards — one row per round, one column
-//     per map of the series — because that is how organizers author them;
-//  3. `?stage=` narrows BOTH blocks to one stage, and the chips only appear
-//     when there is more than one stage to choose between;
-//  4. an empty pool and a failed read are different cards, both from
+//  1. a single tournament-wide pool is a mode-grouped grid of map cards;
+//  2. per-round pools are one card per round, one row per map of the series,
+//     each row naming its mode and showing only its own candidates as strips;
+//  3. once maps are played, each strip says how often it came up in THAT slot —
+//     counted from completed series only — and a round nobody played says nothing;
+//  4. `?stage=` narrows the pool to one stage, and the chips only appear when
+//     there is more than one stage to choose between;
+//  5. an empty pool and a failed read are different cards, both from
 //     `TournamentPageState`.
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { NextIntlClientProvider } from "next-intl";
@@ -20,7 +21,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import en from "@/i18n/messages/en.json";
 import { catalogMap, catalogMode } from "@/test/catalog";
 import type { CatalogEntityRead } from "@/types/catalog.types";
-import type { PickBanConfig, Stage } from "@/types/tournament.types";
+import type { Encounter } from "@/types/encounter.types";
+import type { PickBanConfig, Stage, Tournament } from "@/types/tournament.types";
 
 import TournamentMapsPage from "./TournamentMapsPage";
 
@@ -30,11 +32,13 @@ declare global {
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 const TOURNAMENT_ID = 88;
-const SLUG = "anak-open";
+/** Only what the page reads: the pool by id and discipline, the encounters by id and workspace. */
+const TOURNAMENT = { id: TOURNAMENT_ID, workspace_id: 3, discipline: "overwatch" } as Tournament;
 
 const listPublicConfigs = vi.fn();
 const getAllMaps = vi.fn();
 const getStages = vi.fn();
+const getEncounters = vi.fn();
 
 vi.mock("@/services/pickBan.service", () => ({
   default: { listPublicConfigs: (...args: unknown[]) => listPublicConfigs(...args) }
@@ -44,6 +48,9 @@ vi.mock("@/services/catalog.service", () => ({
 }));
 vi.mock("@/services/tournament.service", () => ({
   default: { getStages: (...args: unknown[]) => getStages(...args) }
+}));
+vi.mock("@/services/encounter.service", () => ({
+  default: { getAll: (...args: unknown[]) => getEncounters(...args) }
 }));
 
 /**
@@ -89,10 +96,14 @@ vi.mock("next/image", () => ({
 }));
 
 function map(id: number, name: string, gamemode: string, gamemodeId: number): CatalogEntityRead {
-  return catalogMap(id, { ...catalogMode(gamemodeId, gamemode), image_path: `/gamemodes/${gamemodeId}.jpg` }, {
-    name,
-    image_path: `/maps/${id}.jpg`
-  });
+  return catalogMap(
+    id,
+    { ...catalogMode(gamemodeId, gamemode), image_path: `/gamemodes/${gamemodeId}.jpg` },
+    {
+      name,
+      image_path: `/maps/${id}.jpg`
+    }
+  );
 }
 
 /**
@@ -125,12 +136,7 @@ function config(overrides: Partial<PickBanConfig>): PickBanConfig {
 }
 
 /** A round's own pool: slot mode, one candidate list per map of the series. */
-function roundConfig(
-  id: number,
-  stageId: number,
-  round: number,
-  slots: number[][]
-): PickBanConfig {
+function roundConfig(id: number, stageId: number, round: number, slots: number[][]): PickBanConfig {
   return config({
     id,
     stage_id: stageId,
@@ -157,6 +163,38 @@ const TWO_STAGE_CONFIGS = [
   roundConfig(12, PLAYOFF_ID, 1, [[KINGS_ROW.id], [SURAVASA.id]])
 ];
 
+/**
+ * A series and the maps it played, `[map id, position in the series]` each —
+ * only what the play counts read.
+ */
+function encounter(
+  id: number,
+  stageId: number,
+  round: number,
+  status: string,
+  played: [number, number][]
+): Encounter {
+  return {
+    id,
+    stage_id: stageId,
+    round,
+    status,
+    matches: played.map(([mapId, mapIndex], index) => ({
+      id: id * 10 + index,
+      map_id: mapId,
+      map_index: mapIndex
+    }))
+  } as unknown as Encounter;
+}
+
+/** The encounters read, as the list endpoint answers it. */
+const encounterPage = (results: Encounter[]) => ({
+  results,
+  total: results.length,
+  page: 1,
+  per_page: -1
+});
+
 let container: HTMLDivElement;
 let root: Root;
 let client: QueryClient;
@@ -172,6 +210,7 @@ beforeEach(() => {
     .mockReset()
     .mockResolvedValue({ results: MAPS, total: MAPS.length, page: 1, per_page: -1 });
   getStages.mockReset().mockResolvedValue(STAGES);
+  getEncounters.mockReset().mockResolvedValue(encounterPage([]));
 
   client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
   container = document.createElement("div");
@@ -202,7 +241,7 @@ async function render(query?: string) {
     root.render(
       <QueryClientProvider client={client}>
         <NextIntlClientProvider locale="en" messages={en}>
-          <TournamentMapsPage tournamentId={TOURNAMENT_ID} slug={SLUG} discipline="overwatch" />
+          <TournamentMapsPage tournament={TOURNAMENT} />
         </NextIntlClientProvider>
       </QueryClientProvider>
     );
@@ -210,11 +249,30 @@ async function render(query?: string) {
   await settle();
 }
 
-/** One pool card, flattened to what the reader sees. */
+/** Every map picture on the page, flattened to what the reader sees. */
 function poolCards() {
-  return [...container.querySelectorAll("#map-pool figure")].map((card) => ({
-    name: card.querySelector("figcaption")?.textContent ?? "",
+  return [...container.querySelectorAll("figure")].map((card) => ({
+    name: card.getAttribute("title") ?? "",
     thumb: card.querySelector("img")?.getAttribute("src") ?? null
+  }));
+}
+
+function roundCards() {
+  return [...container.querySelectorAll("[data-map-pool-round]")];
+}
+
+/**
+ * A round card's rows, one per map of the series: the label beside the strips
+ * ("Map 1" + mode) and each strip's whole text — its count badge, its name and
+ * the screen-reader line saying how often it was played.
+ */
+function slotRows(card: Element | undefined) {
+  const rows = new Set(
+    [...(card?.querySelectorAll("figure") ?? [])].map((figure) => figure.parentElement)
+  );
+  return [...rows].map((row) => ({
+    label: row?.previousElementSibling?.textContent ?? "",
+    strips: [...(row?.children ?? [])].map((strip) => strip.textContent ?? "")
   }));
 }
 
@@ -224,6 +282,8 @@ function stageChips() {
     pressed: chip.getAttribute("aria-pressed") === "true"
   }));
 }
+
+const slotLabel = (n: number) => en.tournamentDetail.mapPool.slot.replace("{n}", String(n));
 
 describe("the pool, in pictures", () => {
   it("falls back to a mode-grouped grid when there are no rounds to lay out", async () => {
@@ -236,7 +296,7 @@ describe("the pool, in pictures", () => {
     // Control · Flashpoint · Hybrid.
     expect(cards.map((card) => card.name)).toEqual([ILIOS.name, SURAVASA.name, KINGS_ROW.name]);
     expect(cards[0]?.thumb).toBe(`/maps/${ILIOS.id}.jpg`);
-    expect(container.querySelector("[data-map-pool-round]")).toBeNull();
+    expect(roundCards()).toHaveLength(0);
   });
 
   it("shows the rounds only, with no merged list above them", async () => {
@@ -244,50 +304,98 @@ describe("the pool, in pictures", () => {
 
     await render();
 
-    // Four cards, one per candidate of the four slots the rounds declare. A
+    // Four strips, one per candidate of the four slots the rounds declare. A
     // merged pool list would add three more nobody plays from.
     expect(poolCards()).toHaveLength(4);
-    expect(container.querySelectorAll("[data-map-pool-round]")).toHaveLength(3);
+    expect(roundCards()).toHaveLength(3);
   });
 
-  it("says nothing about play counts — those are a statistic", async () => {
-    await render();
-
-    expect(container.textContent).not.toContain("×");
-    expect(container.textContent).not.toContain(en.tournamentDetail.mapPool.col.played);
-    // No link into the matches section either: this is the regulation, not a log.
-    expect(container.querySelector("a")).toBeNull();
-  });
-
-  it("puts one row per round, with a column per map of the series", async () => {
+  it("gives each round a card with one row per map of the series", async () => {
     listPublicConfigs.mockResolvedValue({
       configs: [
         config({ item_ids: MAPS.map((m) => m.id) }),
         roundConfig(11, PLAYOFF_ID, -1, [[SURAVASA.id]]),
-        roundConfig(12, PLAYOFF_ID, 1, [[ILIOS.id], [KINGS_ROW.id]])
+        roundConfig(12, PLAYOFF_ID, 1, [[ILIOS.id], [KINGS_ROW.id, SURAVASA.id]])
       ]
     });
 
     await render();
 
-    const rows = [...container.querySelectorAll("[data-map-pool-round]")];
-    expect(rows).toHaveLength(2);
+    const [upper, lower] = roundCards();
+    expect(roundCards()).toHaveLength(2);
     // Upper bracket first, lower after — the order the bracket reads in.
-    expect(rows[0]?.textContent).toContain("Round 1");
-    expect(rows[0]?.textContent).toContain("Bo2");
-    expect(rows[0]?.textContent).toContain(en.tournamentDetail.mapPool.slot.replace("{n}", "1"));
-    // Only its own candidates: round 1 cannot play Suravasa.
-    expect(rows[0]?.textContent).toContain(ILIOS.name);
-    expect(rows[0]?.textContent).not.toContain(SURAVASA.name);
+    expect(upper?.textContent).toContain("Round 1");
+    expect(upper?.textContent).toContain("Bo2");
+    // Each row names its slot and mode and holds only its own candidates; a
+    // slot whose candidates disagree on the mode says so.
+    expect(slotRows(upper)).toEqual([
+      { label: `${slotLabel(1)}Control`, strips: [ILIOS.name] },
+      {
+        label: `${slotLabel(2)}${en.tournamentDetail.maps.mixedModes}`,
+        strips: [KINGS_ROW.name, SURAVASA.name]
+      }
+    ]);
 
-    expect(rows[1]?.textContent).toContain("LB Round 1");
-    expect(rows[1]?.textContent).toContain(SURAVASA.name);
+    expect(lower?.textContent).toContain("LB Round 1");
+    expect(slotRows(lower)).toEqual([
+      { label: `${slotLabel(1)}Flashpoint`, strips: [SURAVASA.name] }
+    ]);
+  });
+});
+
+describe("how the pool was played", () => {
+  beforeEach(() => {
+    listPublicConfigs.mockResolvedValue({
+      configs: [
+        config({ item_ids: MAPS.map((m) => m.id) }),
+        roundConfig(11, PLAYOFF_ID, -1, [[SURAVASA.id]]),
+        roundConfig(12, PLAYOFF_ID, 1, [
+          [KINGS_ROW.id, ILIOS.id],
+          [SURAVASA.id, ILIOS.id]
+        ])
+      ]
+    });
   });
 
-  it("stays without a round block when a single pool decides the tournament", async () => {
+  it("says nothing about counts while no series is completed", async () => {
+    getEncounters.mockResolvedValue(
+      encounterPage([encounter(1, PLAYOFF_ID, 1, "in_progress", [[ILIOS.id, 1]])])
+    );
+
     await render();
 
-    expect(container.querySelector("[data-map-pool-round]")).toBeNull();
+    expect(container.textContent).not.toContain("×");
+    expect(container.textContent).toContain(en.tournamentDetail.mapPool.rounds.lede);
+    expect(container.textContent).not.toContain(en.tournamentDetail.maps.playedLede);
+  });
+
+  it("counts each map per slot from completed series, and says which never came up", async () => {
+    getEncounters.mockResolvedValue(
+      encounterPage([
+        encounter(1, PLAYOFF_ID, 1, "completed", [
+          [KINGS_ROW.id, 1],
+          [SURAVASA.id, 2]
+        ]),
+        encounter(2, PLAYOFF_ID, 1, "completed", [
+          [KINGS_ROW.id, 1],
+          [ILIOS.id, 2]
+        ]),
+        // Still running: its Ilios on map 1 is not a play yet.
+        encounter(3, PLAYOFF_ID, 1, "in_progress", [[ILIOS.id, 1]])
+      ])
+    );
+
+    await render();
+
+    expect(container.textContent).toContain(en.tournamentDetail.maps.playedLede);
+    const [upper, lower] = roundCards();
+    // Ilios is a candidate of both slots and is counted in each on its own.
+    expect(slotRows(upper).map((row) => row.strips)).toEqual([
+      [`×2${KINGS_ROW.name}played 2 times`, `${ILIOS.name}not played`],
+      [`×1${SURAVASA.name}played once`, `×1${ILIOS.name}played once`]
+    ]);
+    // Nobody played the lower round, so it carries no verdict at all.
+    expect(slotRows(lower).map((row) => row.strips)).toEqual([[SURAVASA.name]]);
   });
 });
 
@@ -317,7 +425,7 @@ describe("the stage switcher", () => {
     ]);
   });
 
-  it("narrows the pool and the rounds to the chosen stage, through the URL", async () => {
+  it("narrows the rounds to the chosen stage, through the URL", async () => {
     listPublicConfigs.mockResolvedValue({ configs: TWO_STAGE_CONFIGS });
 
     await render();
@@ -331,10 +439,9 @@ describe("the stage switcher", () => {
     await render(`stage=${GROUP_ID}`);
 
     expect(poolCards().map((card) => card.name)).toEqual([ILIOS.name]);
-    const rows = [...container.querySelectorAll("[data-map-pool-round]")];
-    expect(rows).toHaveLength(1);
-    expect(rows[0]?.textContent).toContain(ILIOS.name);
+    expect(roundCards()).toHaveLength(1);
     expect(container.textContent).not.toContain(SURAVASA.name);
+    expect(stageChips().find((chip) => chip.pressed)?.label).toBe("Group stage1");
   });
 
   it("ignores a stage that carries no pool", async () => {
@@ -344,7 +451,7 @@ describe("the stage switcher", () => {
 
     // Falls back to the whole tournament rather than an empty section: every
     // stage's rounds are laid out again.
-    expect(container.querySelectorAll("[data-map-pool-round]")).toHaveLength(3);
+    expect(roundCards()).toHaveLength(3);
   });
 });
 

@@ -3,11 +3,7 @@
 import { useMemo } from "react";
 import { skipToken, useQuery } from "@tanstack/react-query";
 
-import {
-  bracketRoundShape,
-  buildRoundGroups,
-  orderEliminationRounds
-} from "@/lib/bracket/view";
+import { bracketRoundShape, buildRoundGroups, orderEliminationRounds } from "@/lib/bracket/view";
 import { useTournamentQuery } from "@/hooks/useTournamentClientData";
 import { FFA_STAGE_TYPES } from "@/lib/bracket/projection";
 import { UNKNOWN_ROUND_SHAPE, type BracketRoundShape } from "@/lib/bracket/round-name";
@@ -60,16 +56,13 @@ export function useTournamentOverviewData(tournamentId: number, slug: string) {
     variant === "completed" &&
     !(tournament?.stages ?? []).some((item) => ELIMINATION_TYPES[item.stage_type] === true);
   const needsStandings = showsGroupTable || podiumNeedsStandings;
-  // Team registration counts teams, not players, so it never reads the roster.
-  const needsRegistrations =
-    variant === "registration" && tournament?.team_formation !== "registration";
 
   // Same key and fetcher as `TournamentParticipantsPage`, so the two sections
   // share one cache entry instead of each paying for the roster.
   const registrationsQuery = useQuery({
     queryKey: tournamentQueryKeys.registrationsList(workspaceId ?? 0, tournamentId),
     queryFn: () => registrationService.listRegistrations(tournamentId),
-    enabled: tournament !== undefined && needsRegistrations
+    enabled: tournament !== undefined && variant === "registration"
   });
 
   // Same key as the bracket's own plan (`bracketData.createBracketQueryPlan`).
@@ -178,23 +171,18 @@ export function useTournamentOverviewData(tournamentId: number, slug: string) {
     : [];
 
   // The primary query per branch: what the page cannot be drawn without.
-  const primary =
-    variant === "registration" ? (needsRegistrations ? registrationsQuery : null) : encountersQuery;
+  const primary = variant === "registration" ? registrationsQuery : encountersQuery;
   const presentation = getPublicPageQueryPresentation({
-    // Nothing to wait for when the branch has no primary query: the overview
-    // itself is already resolved by the time this runs.
-    data: primary === null ? tournament : primary.data,
+    data: primary.data,
     itemCount:
-      primary === null
-        ? 1
-        : variant === "registration"
-          ? // The count, not the rows: a hidden list ships zero rows and a real
-            // total, and an empty state over "48 registered" would be a lie.
-            (registrationList?.total ?? registrations.length)
-          : encounters.length,
-    isPending: primary?.isPending ?? false,
-    isError: primary?.isError ?? false,
-    isFetching: primary?.isFetching ?? false
+      variant === "registration"
+        ? // The count, not the rows: a hidden list ships zero rows and a real
+          // total, and an empty state over "48 registered" would be a lie.
+          (registrationList?.total ?? registrations.length)
+        : encounters.length,
+    isPending: primary.isPending,
+    isError: primary.isError,
+    isFetching: primary.isFetching
   });
 
   return {

@@ -6,7 +6,6 @@ import { useFormatter } from "@/lib/datetime/client";
 
 import { useMinuteClock } from "@/hooks/useMinuteClock";
 import { Button } from "@/components/ui/button";
-import { eyebrowClass } from "@/components/ui/eyebrow";
 import type { Tournament } from "@/types/tournament.types";
 
 import { nextPhaseBoundary } from "../_views/tournamentSchedule.model";
@@ -56,10 +55,19 @@ export function useNextPhase(tournament: PhaseInput): NextPhase | null {
   // close the end — "Live starts" would read as a status, not as an event.
   const label =
     next.status === "live"
-      ? t(next.kind === "close" ? "tournamentDetail.phaseFact.ends" : "tournamentDetail.phaseFact.kickoff")
-      : t(next.kind === "close" ? "tournamentDetail.phaseFact.closes" : "tournamentDetail.phaseFact.starts", {
-          phase
-        });
+      ? t(
+          next.kind === "close"
+            ? "tournamentDetail.phaseFact.ends"
+            : "tournamentDetail.phaseFact.kickoff"
+        )
+      : t(
+          next.kind === "close"
+            ? "tournamentDetail.phaseFact.closes"
+            : "tournamentDetail.phaseFact.starts",
+          {
+            phase
+          }
+        );
 
   return {
     label,
@@ -70,28 +78,26 @@ export function useNextPhase(tournament: PhaseInput): NextPhase | null {
 }
 
 /**
- * The next boundary as a pill in the collapsed rail, beside the title and the
- * register button — the widest thing in a row that has none to spare. It keeps
- * the answer ("in 13 hours") and the event; the absolute stamp rides in
+ * The next boundary as a plain sentence in the collapsed rail, beside the title
+ * and the register button, at the rail's 32px control height — "Team formation
+ * closes in 1 hour", the event dropped below `xl`. The absolute stamp rides in
  * `title`, since the hero and the timeline it links to both print it.
  */
 export function NextPhaseChip({
   tournament,
-  href,
-  className
+  href
 }: Readonly<{
   tournament: PhaseInput;
   /** Where the chip leads — the overview's phase timeline. */
   href: string;
-  className?: string;
 }>) {
   const next = useNextPhase(tournament);
   if (!next) return null;
 
   return (
-    <Button asChild variant="outline" size="xs" className={className}>
+    <Button asChild variant="ghost" size="sm" className="font-normal">
       <Link href={href} title={`${next.label} · ${next.stamp}`}>
-        <span className={eyebrowClass()}>{next.label}</span>
+        <span className="text-[color:var(--aqt-fg-muted)] max-xl:hidden">{next.label}</span>
         <span className="aqt-tnum font-semibold text-[color:var(--aqt-fg)]">{next.relative}</span>
       </Link>
     </Button>
