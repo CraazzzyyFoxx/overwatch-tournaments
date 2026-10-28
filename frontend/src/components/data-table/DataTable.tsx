@@ -34,10 +34,13 @@ import { useAdminTableData } from "@/components/data-table/useAdminTableData";
 import { useAdminTable } from "@/components/data-table/useAdminTable";
 import { useTablePreferences } from "@/components/data-table/useTablePreferences";
 import { useTableScrollBox } from "@/components/data-table/useTableScrollBox";
-import { useVirtualBody } from "@/components/data-table/useVirtualBody";
+import { ROW_HEIGHT_ESTIMATE, useVirtualBody } from "@/components/data-table/useVirtualBody";
 import { cn } from "@/lib/utils";
 
-const DEFAULT_PAGE_SIZE_OPTIONS = [10, 15, 25, 50, 100];
+const DEFAULT_PAGE_SIZE = 15;
+const DEFAULT_PAGE_SIZE_OPTIONS = [10, DEFAULT_PAGE_SIZE, 25, 50, 100];
+/** The rows-per-page choice that fits the page to the viewport. */
+const AUTO_PAGE_SIZE = "auto";
 
 /**
  * `remembered` with this page's selected rows added (or their data refreshed)
@@ -84,7 +87,7 @@ export function DataTable<TData>({
   onRowClick,
   onRowDoubleClick,
   commands,
-  initialPageSize = 15,
+  initialPageSize,
   pageSizeOptions = DEFAULT_PAGE_SIZE_OPTIONS,
   filterKey,
   initialSort,
@@ -115,6 +118,8 @@ export function DataTable<TData>({
   // Every row at once: the caller already holds the whole pool and wants no
   // batching UI over it.
   const showAll = isClientMode && paging === "all";
+  // A screen that fixed no page size gets one fitted to the viewport ("Auto").
+  const fitsViewport = initialPageSize === undefined && !isInfinite && !showAll;
   const pathname = usePathname();
   const isMobile = useIsMobile();
   const searchInputId = useId();
@@ -126,8 +131,9 @@ export function DataTable<TData>({
     debouncedSearchValue,
     currentPage,
     setCurrentPage,
-    pageSize,
+    pageSize: chosenPageSize,
     setPageSize,
+    refitPage,
     sorting,
     setSorting,
     sortField,
@@ -138,7 +144,7 @@ export function DataTable<TData>({
   } = useAdminTableState({
     columns,
     pathname,
-    initialPageSize,
+    initialPageSize: fitsViewport ? null : (initialPageSize ?? DEFAULT_PAGE_SIZE),
     initialSort,
     filterKey,
     filters: controlledFilters,
@@ -151,7 +157,14 @@ export function DataTable<TData>({
   const prefsKey = columnsStorageKey ?? `admin-table:${pathname}`;
   const { density, setDensity, columnSizing, setColumnSizing, columnOrder, setColumnOrder } =
     useTablePreferences(prefsKey, columns);
-  const { scrollElement, tableRef, cardRef } = useTableScrollBox();
+  // Only the desktop table is fitted: a phone's card list has no box to fill.
+  const autoFit = chosenPageSize === null && !isMobile;
+  const { scrollElement, tableRef, cardRef, fittedRows } = useTableScrollBox({
+    fill: autoFit,
+    rowEstimate: ROW_HEIGHT_ESTIMATE[density],
+    onRefit: refitPage
+  });
+  const pageSize = chosenPageSize ?? (autoFit ? fittedRows : null) ?? initialPageSize ?? DEFAULT_PAGE_SIZE;
   const [toolbarRef, narrowToolbar] = useNarrowToolbar();
 
   const { data, clientRows, isInitialLoading, isRefreshing } = useAdminTableData({
@@ -164,6 +177,7 @@ export function DataTable<TData>({
     page: currentPage,
     search: debouncedSearchValue,
     pageSize,
+    pageSizeReady: !autoFit || fittedRows !== undefined,
     sortField,
     sortDir,
     filters
@@ -226,7 +240,10 @@ export function DataTable<TData>({
       : 0;
   const responsePageSize = !isClientMode && Number.isFinite(data.per_page) ? data.per_page : undefined;
   const effectivePageSize = responsePageSize && responsePageSize > 0 ? responsePageSize : pageSize;
-  const availablePageSizeOptions = Array.from(new Set([...pageSizeOptions, effectivePageSize])).sort((a, b) => a - b);
+  // A fitted size is not a choice: it stays out of the list, under "Auto".
+  const availablePageSizeOptions = Array.from(
+    new Set(chosenPageSize === null ? pageSizeOptions : [...pageSizeOptions, effectivePageSize])
+  ).sort((a, b) => a - b);
   const totalPageCount = Math.max(1, Math.ceil(safeTotal / effectivePageSize));
   const rangeStart = safeTotal > 0 ? (currentPage - 1) * effectivePageSize + 1 : 0;
   const rangeEnd = safeTotal > 0 ? Math.min(currentPage * effectivePageSize, safeTotal) : 0;
@@ -245,10 +262,11 @@ export function DataTable<TData>({
   const selectableRows = enableRowSelection ? pageRows.filter((row) => row.getCanSelect()) : [];
 
   useEffect(() => {
-    if (currentPage > totalPageCount) {
+    // Not before the first page: with no total yet a deep link's `?page=4` would be clamped to 1.
+    if (!isInitialLoading && currentPage > totalPageCount) {
       setCurrentPage(totalPageCount);
     }
-  }, [currentPage, totalPageCount]);
+  }, [isInitialLoading, currentPage, totalPageCount]);
 
   const rowClickTimeoutRef = useRef<number | null>(null);
   useEffect(() => {
@@ -573,7 +591,8 @@ export function DataTable<TData>({
         )}
       </div>
 
-      {safeTotal > 0 && !isInfinite && !showAll ? (
+      {/* A fitted table keeps its footer while the first page loads: the fit measures it before the first request. */}
+      {(safeTotal > 0 || (autoFit && isInitialLoading)) && !isInfinite && !showAll ? (
         <DataPagination
           page={currentPage}
           totalPages={totalPageCount}
@@ -583,20 +602,23 @@ export function DataTable<TData>({
           // reader gets back a split list); only the pager goes.
           leading={
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <span className="tabular-nums">{tTable("range", { start: rangeStart, end: rangeEnd, total: safeTotal })}</span>
+              {safeTotal > 0 ? (
+                <span className="tabular-nums">{tTable("range", { start: rangeStart, end: rangeEnd, total: safeTotal })}</span>
+              ) : null}
               <div className="flex items-center gap-1.5">
                 <span>{tTable("rows")}</span>
                 <Select
-                  value={String(effectivePageSize)}
+                  value={chosenPageSize === null ? AUTO_PAGE_SIZE : String(effectivePageSize)}
                   onValueChange={(value) => {
                     setCurrentPage(1);
-                    setPageSize(Number(value));
+                    setPageSize(value === AUTO_PAGE_SIZE ? null : Number(value));
                   }}
                 >
                   <SelectTrigger aria-label={tTable("rowsPerPage")} size="sm" className="w-auto gap-1 px-2.5 tabular-nums">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
+                    {fitsViewport ? <SelectItem value={AUTO_PAGE_SIZE}>{tTable("rowsAuto")}</SelectItem> : null}
                     {availablePageSizeOptions.map((option) => (
                       <SelectItem key={option} value={String(option)} className="tabular-nums">
                         {option}

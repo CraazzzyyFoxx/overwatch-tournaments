@@ -9,7 +9,7 @@ import type { SortingState } from "@tanstack/react-table";
 
 import type { SortDir } from "@/components/data-table/types";
 
-export function parsePositiveInt(value: string | null, fallback: number) {
+export function parsePositiveInt<T extends number | null>(value: string | null, fallback: T): number | T {
   const parsed = Number.parseInt(value ?? "", 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
