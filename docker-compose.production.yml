@@ -152,7 +152,7 @@ services:
       - app-network
 
   redis:
-    image: 'redis/redis-stack:latest'
+    image: 'dockerhub.timeweb.cloud/redis/redis-stack:latest'
     logging: *log-rotate
     # maxmemory must be set explicitly: redis-server ignores the container's
     # cgroup limit below, so INFO memory reports maxmemory=0 (unlimited) and
@@ -218,7 +218,7 @@ services:
       - app-network
 
   proxy:
-    image: teddysun/xray:latest
+    image: dockerhub.timeweb.cloud/teddysun/xray:latest
     logging: *log-rotate
     deploy:
       resources:
