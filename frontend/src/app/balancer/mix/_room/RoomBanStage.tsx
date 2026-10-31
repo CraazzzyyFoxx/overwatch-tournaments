@@ -3,27 +3,33 @@
 import { useEffect, useEffectEvent, useId, useMemo } from "react";
 import { useTranslations } from "next-intl";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Clock } from "lucide-react";
+import { Ban, Check, Clock, Flag, Lock, Pause, Shield, Shuffle, Users, type LucideIcon } from "lucide-react";
 
 import { useTurnAlert } from "@/app/balancer/mix/_hooks/useTurnAlert";
+import { teamAccent } from "@/app/balancer/mix/pickup-chrome";
 import { ElectOpenerDialog } from "@/components/pick-ban/ElectOpenerDialog";
 import { PickBanCommandBar } from "@/components/pick-ban/PickBanCommandBar";
 import { PickBanDraftTray } from "@/components/pick-ban/PickBanDraftTray";
 import { PickBanGrid, type PickBanItemLike } from "@/components/pick-ban/PickBanGrid";
 import { PickBanAssignBoard } from "@/components/pick-ban/PickBanMemberTurn";
 import { PickBanRevealPanel } from "@/components/pick-ban/PickBanRevealPanel";
+import { PickBanCountdown } from "@/components/pick-ban/PickBanCountdown";
+import { PickBanItemThumb } from "@/components/pick-ban/PickBanItemThumb";
 import { PickBanSideChoice } from "@/components/pick-ban/PickBanSideChoice";
 import { PickBanUndoControl } from "@/components/pick-ban/PickBanUndoControl";
 import { PregameAdminControls } from "@/components/pick-ban/PregameAdminControls";
 import {
   CHARACTER_PICK_BAN_KIND,
   isSessionActive,
+  memberName,
   pickBanReserveMap,
+  stepDeadlineMs,
   stepSubmissions,
   type PickBanSeat
 } from "@/components/pick-ban/pick-ban-model";
 import { usePickBanController } from "@/components/pick-ban/usePickBanController";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { eyebrowClass } from "@/components/ui/eyebrow";
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";
 import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";
@@ -146,13 +152,20 @@ export function RoomBanStage({
   const sideActor = room.captainAction === "side_pick" || hostAction === "side_pick";
   const canSelect = room.canSelect || hostAction != null;
   const title = tRoom(state.sequence.some((candidate) => candidate.action === "pick") ? "picksTitle" : "bansTitle");
+  const draftOpen = room.isBlindStep && state.viewer_can_act && !room.draftLocked && !state.is_complete;
+  // The viewer's own turn, as the command bar reads it -- without a host standing in for a team.
+  const mine = session.paused_at == null && (room.captainAction != null || draftOpen);
+  const turnOutline = !mine
+    ? undefined
+    : step?.action === "ban"
+      ? "border-[color:var(--aqt-rose)]/60 ring-2 ring-[color:var(--aqt-rose)]/25"
+      : "border-[color:var(--aqt-teal)]/60 ring-2 ring-[color:var(--aqt-teal)]/25";
 
   const header = (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="font-display text-heading font-semibold text-[color:var(--aqt-fg)]">{title}</h2>
-      </div>
-      <StepStrip state={state} seats={seats} />
+      <h2 className="font-display text-heading font-semibold text-[color:var(--aqt-fg)]">{title}</h2>
+      <StepStrip state={state} seats={seats} heroesById={heroesById} teamName={room.teamName} />
+      <TurnBanner state={state} seats={seats} mine={mine} teamName={room.teamName} />
     </div>
   );
 
@@ -182,7 +195,7 @@ export function RoomBanStage({
       ) : null}
 
       {room.isSideStep ? (
-        <Card>
+        <Card className={turnOutline}>
           <CardHeader className="flex flex-col gap-4 pb-3">
             {header}
             <CardTitle id={sideHintId} className="border-t border-[color:var(--aqt-border)] pt-4">
@@ -229,6 +242,7 @@ export function RoomBanStage({
           itemTransitionName={(entry) =>
             entry.status === "available" ? heroTransitionName(entry.item_id) : undefined
           }
+          className={turnOutline}
         />
       )}
 
@@ -289,7 +303,7 @@ export function RoomBanStage({
               />
             ) : null
           }
-          draftOpen={room.isBlindStep && state.viewer_can_act && !room.draftLocked && !state.is_complete}
+          draftOpen={draftOpen}
           kind={CHARACTER_PICK_BAN_KIND}
           selectedItemId={room.isSideStep ? room.selectedSide : room.selectedItemId}
           selectedItemName={
@@ -342,42 +356,284 @@ const STEP_LABEL: Record<
   assign: "assign"
 };
 
+const STEP_ICON: Record<PickBanResolvedStep["action"], LucideIcon> = {
+  ban: Ban,
+  pick: Check,
+  protect: Shield,
+  side_pick: Flag,
+  decider: Shuffle,
+  assign: Users
+};
+
+/** Steps that land a hero in their slot; the others (a side, an assignment, a decider) show their icon. */
+const HERO_STEP: Partial<Record<PickBanResolvedStep["action"], true>> = { ban: true, pick: true, protect: true };
+
 /**
- * The room's steps in order, one chip each: what it is and whose (A, B or both), how many when more than one, the
- * one in play outlined and the ones behind it faded.
+ * The room's order as a draft track: one slot per hero a step takes, in the colour of the team that takes it, runs
+ * of the same action under one label. A slot shows the hero once it is chosen (a blind one only after the reveal,
+ * a lock until then); the step in play is lifted and its empty slots pulse.
  */
-function StepStrip({ state, seats }: Readonly<{ state: PickBanState; seats: readonly PickBanSeat[] }>) {
+function StepStrip({
+  state,
+  seats,
+  heroesById,
+  teamName
+}: Readonly<{
+  state: PickBanState;
+  seats: readonly PickBanSeat[];
+  heroesById: Record<number, PickBanItemLike | undefined>;
+  teamName: (teamId: number) => string;
+}>) {
   const t = useTranslations("mixes.arena.bans");
   const order = [...seats].sort((left, right) => left.slot - right.slot).map((seat) => seat.id);
-  const letter = (actor: number | null) => {
-    const index = actor == null ? -1 : order.indexOf(actor);
-    return index < 0 ? null : String.fromCharCode(65 + index);
-  };
   const current = state.is_complete ? state.sequence.length : (state.current_step_index ?? -1);
-  return (
-    <ol aria-label={t("steps")} className="flex flex-wrap gap-1">
-      {state.sequence.map((step) => {
-        const who = step.actors.map(letter).filter((value): value is string => value != null);
-        const now = step.index === current;
+  const runs = state.sequence.reduce<PickBanResolvedStep[][]>((acc, step) => {
+    const last = acc.at(-1);
+    if (last != null && last[0].action === step.action) last.push(step);
+    else acc.push([step]);
+    return acc;
+  }, []);
+
+  const stepItem = (step: PickBanResolvedStep) => {
+    const now = step.index === current;
+    const past = step.index < current;
+    const label = STEP_LABEL[step.action];
+    const Icon = STEP_ICON[step.action];
+    const rows = stepSubmissions(state.submissions, step.index).filter((row) => row.state !== "draft");
+    // `[null]` is the engine's own step, `[]` a side actor still unresolved: one neutral slot either way.
+    const actors: (number | null)[] = step.actors.length > 0 ? step.actors : [null];
+    const who = actors.flatMap((actor) => {
+      const index = actor == null ? -1 : order.indexOf(actor);
+      return index < 0 ? [] : [String.fromCharCode(65 + index)];
+    });
+
+    const slots = actors.flatMap((teamId) => {
+      const index = teamId == null ? -1 : order.indexOf(teamId);
+      const accent = index < 0 ? null : teamAccent(index);
+      const players = teamId == null ? 0 : (step.member_seats?.filter(([team]) => team === teamId).length ?? 0);
+      const count = teamId == null || !HERO_STEP[step.action] ? 1 : Math.max(players, 1) * step.count;
+      const heroes = HERO_STEP[step.action]
+        ? rows
+            .filter((row) => row.encounter_team_id === teamId)
+            .flatMap((row) => row.items.map((item) => item.item_id))
+        : [];
+      const hidden = now && step.blind && teamId != null ? (state.step_progress?.[teamId]?.filled ?? 0) : 0;
+      const actorName = teamId != null ? teamName(teamId) : "";
+
+      return Array.from({ length: count }, (_, slot) => {
+        const heroId = heroes[slot] ?? null;
+        const heroName = heroId != null ? (heroesById[heroId]?.name ?? `#${heroId}`) : null;
+        const locked = heroId == null && slot < hidden;
+        const answered = !HERO_STEP[step.action] && rows.some((row) => row.encounter_team_id === teamId);
+        const filled = heroId != null || locked || answered || past;
+        const name = [actorName, t(`step.${label}`), heroName ?? (locked ? t("hidden") : null)]
+          .filter(Boolean)
+          .join(" · ");
         return (
-          <li
-            key={`${step.round}:${step.index}`}
-            aria-current={now ? "step" : undefined}
+          <span
+            key={`${teamId ?? "system"}:${slot}`}
+            role="img"
+            aria-label={name}
+            title={name}
             className={cn(
-              "flex h-6 items-center gap-1 rounded-md border px-1.5 text-label font-semibold",
-              now
-                ? "border-[color:var(--aqt-teal)] text-[color:var(--aqt-teal)]"
-                : "border-[color:var(--aqt-border)]",
-              step.index < current ? "text-[color:var(--aqt-fg-faint)]" : now ? null : "text-[color:var(--aqt-fg-muted)]"
+              "relative grid size-9 shrink-0 place-items-center overflow-hidden rounded-lg border-2 transition-colors",
+              accent == null
+                ? "border-[color:var(--aqt-border)]"
+                : filled || now
+                  ? accent.border
+                  : accent.crestBorder,
+              !filled && !now ? "border-dashed" : null,
+              now && !filled ? cn(accent?.crestPanel, "animate-pulse motion-reduce:animate-none") : null
             )}
           >
-            {t(`step.${STEP_LABEL[step.action]}`)}
-            {who.length > 0 ? <span className="tabular-nums">{who.join("·")}</span> : null}
-            {step.member === "each" ? <span>{t("everyone")}</span> : null}
-            {step.count > 1 ? <span className="tabular-nums">×{step.count}</span> : null}
-          </li>
+            {heroId != null ? (
+              <>
+                <PickBanItemThumb
+                  kind={CHARACTER_PICK_BAN_KIND}
+                  item={heroesById[heroId]}
+                  name={heroName ?? ""}
+                  size={32}
+                  muted={step.action === "ban"}
+                />
+                {step.action === "ban" ? (
+                  <Ban aria-hidden className="absolute size-6 text-[color:var(--aqt-rose)]" strokeWidth={1.75} />
+                ) : step.action === "protect" ? (
+                  <Shield
+                    aria-hidden
+                    className="absolute bottom-0.5 right-0.5 size-3 text-[color:var(--aqt-amber)]"
+                  />
+                ) : null}
+              </>
+            ) : locked ? (
+              <Lock aria-hidden className="size-3.5 text-[color:var(--aqt-fg-muted)]" />
+            ) : (
+              <Icon
+                aria-hidden
+                className={cn(
+                  "size-3.5",
+                  now ? "text-[color:var(--aqt-fg)]" : "text-[color:var(--aqt-fg-faint)]",
+                  step.action === "ban" && now ? "text-[color:var(--aqt-rose)]" : null
+                )}
+              />
+            )}
+          </span>
         );
-      })}
+      });
+    });
+
+    return (
+      <li
+        key={`${step.round}:${step.index}`}
+        aria-current={now ? "step" : undefined}
+        className={cn(
+          "flex gap-1 rounded-xl p-1 transition-colors",
+          now ? "bg-[color:var(--aqt-card-2)] ring-1 ring-[color:var(--aqt-fg-faint)]/40" : null
+        )}
+      >
+        <span className="sr-only">
+          {[
+            t(`step.${label}`),
+            who.join("·"),
+            step.member === "each" ? t("everyone") : "",
+            step.count > 1 ? `×${step.count}` : ""
+          ]
+            .filter(Boolean)
+            .join(" ")}
+        </span>
+        {slots}
+      </li>
+    );
+  };
+
+  return (
+    <ol aria-label={t("steps")} className="flex flex-wrap gap-x-4 gap-y-3">
+      {runs.map((run) => (
+        <li key={`${run[0].round}:${run[0].index}`} className="flex flex-col gap-1">
+          <span aria-hidden className={eyebrowClass("dim")}>
+            {t(`phase.${STEP_LABEL[run[0].action]}`)}
+          </span>
+          <ol className="flex flex-wrap items-center gap-0.5">{run.map(stepItem)}</ol>
+        </li>
+      ))}
     </ol>
+  );
+}
+
+/**
+ * What the room waits for, above the pool: the viewer's own turn in the action's colour (rose for a ban) with what
+ * to do, else whose turn it is in that team's colour; the step's clock and place in the order beside it.
+ */
+function TurnBanner({
+  state,
+  seats,
+  mine,
+  teamName
+}: Readonly<{
+  state: PickBanState;
+  seats: readonly PickBanSeat[];
+  mine: boolean;
+  teamName: (teamId: number) => string;
+}>) {
+  const t = useTranslations("mixes.arena.bans");
+  const tPickBan = useTranslations("pickBan.room");
+  const step = state.current_step;
+  const paused = state.session?.paused_at != null;
+  if (step == null && !state.is_complete && !paused) return null;
+
+  const ban = step?.action === "ban";
+  const acting = state.acting_team_ids;
+  const order = [...seats].sort((left, right) => left.slot - right.slot).map((seat) => seat.id);
+  const turnIndex = acting.length === 1 ? order.indexOf(acting[0]) : -1;
+  const pickers =
+    step?.member != null && step.member !== "any"
+      ? state.acting_member_ids.map((id) => memberName(state.members, id))
+      : [];
+  const headline = paused
+    ? tPickBan("pausedBanner")
+    : state.is_complete || step == null
+      ? tPickBan("completedBanner")
+      : mine
+        ? t(`yours.${STEP_LABEL[step.action]}`)
+        : step.actors.every((actor) => actor == null)
+          ? tPickBan(`step.system.${step.action}`)
+          : pickers.length > 0
+            ? tPickBan("turnMembers", { names: pickers.join(", ") })
+            : acting.length === 0
+              ? tPickBan("turnRevealing")
+              : acting.length > 1
+                ? tPickBan(`step.both.${step.action}`)
+                : tPickBan(`step.side.${step.action}`, { team: teamName(acting[0]) });
+  const hint =
+    !mine || step == null
+      ? null
+      : [
+          t(
+            `yoursHint.${step.action === "side_pick" ? "side" : step.action === "assign" ? "assign" : "hero"}`
+          ),
+          step.blind ? t("blindHint") : null
+        ]
+          .filter(Boolean)
+          .join(". ");
+  const deadline = stepDeadlineMs(state);
+  const live = step != null && !state.is_complete && !paused;
+
+  return (
+    <div
+      className={cn(
+        "flex items-center gap-3 rounded-xl border px-3.5 py-3",
+        !mine
+          ? "border-[color:var(--aqt-border)] bg-[color:var(--aqt-card-2)]/40"
+          : ban
+            ? "border-[color:var(--aqt-rose)]/60 bg-[color:color-mix(in_srgb,var(--aqt-rose)_10%,transparent)]"
+            : "border-[color:var(--aqt-teal)]/60 bg-[color:color-mix(in_srgb,var(--aqt-teal)_10%,transparent)]"
+      )}
+    >
+      {paused ? (
+        <Pause aria-hidden className="size-5 shrink-0 text-[color:var(--aqt-amber)]" />
+      ) : mine ? (
+        <span aria-hidden className="relative flex size-3 shrink-0">
+          <span
+            className={cn(
+              "absolute inline-flex size-full animate-ping rounded-full opacity-60 motion-reduce:animate-none",
+              ban ? "bg-[color:var(--aqt-rose)]" : "bg-[color:var(--aqt-teal)]"
+            )}
+          />
+          <span
+            className={cn(
+              "relative inline-flex size-3 rounded-full",
+              ban ? "bg-[color:var(--aqt-rose)]" : "bg-[color:var(--aqt-teal)]"
+            )}
+          />
+        </span>
+      ) : live && turnIndex >= 0 ? (
+        <span aria-hidden className={cn("h-9 w-1 shrink-0 rounded-full", teamAccent(turnIndex).bar)} />
+      ) : null}
+      <div className="min-w-0 flex-1">
+        <p
+          aria-live="polite"
+          className={cn(
+            "font-display font-semibold",
+            mine ? "text-title" : "text-ui text-[color:var(--aqt-fg)]",
+            mine ? (ban ? "text-[color:var(--aqt-rose)]" : "text-[color:var(--aqt-teal)]") : null
+          )}
+        >
+          {headline}
+          {mine && step != null && step.count > 1 ? (
+            <span className="ml-1.5 tabular-nums opacity-80">{tPickBan("step.count", { n: step.count })}</span>
+          ) : null}
+        </p>
+        {hint != null ? <p className="text-caption text-[color:var(--aqt-fg-muted)]">{hint}</p> : null}
+      </div>
+      {live ? (
+        <div className="flex shrink-0 flex-col items-end gap-0.5">
+          {deadline != null && step.timer_seconds != null ? (
+            <PickBanCountdown deadline={deadline} totalSeconds={step.timer_seconds} compact />
+          ) : null}
+          <span className="text-label tabular-nums text-[color:var(--aqt-fg-faint)]">
+            {t("stepOf", { n: step.index + 1, total: state.sequence.length })}
+          </span>
+        </div>
+      ) : null}
+    </div>
   );
 }

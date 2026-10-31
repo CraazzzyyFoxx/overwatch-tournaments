@@ -8,6 +8,7 @@ import { useTranslations } from "next-intl";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FilterChip, FilterChipGroup } from "@/components/ui/filter-chip";
 import { RowButton } from "@/components/ui/row-button";
+import { SearchField } from "@/components/ui/search-field";
 import { StatusDot } from "@/components/ui/status-dot";
 import { cn } from "@/lib/utils";
 import { catalogInitials } from "@/lib/catalog/initials";
@@ -77,6 +78,8 @@ interface PickBanGridProps {
    * available tile so a ban or a pick can fly from it); unset, no tile is named.
    */
   itemTransitionName?: (entry: PickBanEntry) => string | undefined;
+  /** Extra classes on the card: the room outlines it while the viewer is on the clock. */
+  className?: string;
 }
 
 /** A map tile's status as coloured text: the same hue and glyph the step timeline uses per action. */
@@ -105,10 +108,13 @@ export function PickBanGrid({
   header,
   characterClasses = [],
   itemTransitionName,
+  className,
 }: Readonly<PickBanGridProps>) {
   const t = useTranslations("pickBan.room");
   const tCommon = useTranslations("common");
   const [classFilter, setClassFilter] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const needle = query.trim().toLocaleLowerCase();
   const roundGroups = poolRoundGroups(pool);
   // The round whose bans bind the lobby: the one in play, or the last once
   // nothing is. Hero only — a map ban stops mattering once its slot is decided.
@@ -148,9 +154,20 @@ export function PickBanGrid({
       )
     : [];
   const visibleEntries = (entries: PickBanEntry[]) =>
-    kind === "hero" && classFilter !== null
-      ? entries.filter((entry) => classOf(entry.item_id) === classFilter)
+    kind === "hero" && (classFilter !== null || needle !== "")
+      ? entries.filter(
+          (entry) =>
+            (classFilter === null || classOf(entry.item_id) === classFilter) &&
+            itemName(entry.item_id).toLocaleLowerCase().includes(needle)
+        )
       : entries;
+  // Enter takes the one hero the search leaves selectable: typing a name is then the whole pick.
+  const selectSoleMatch = () => {
+    const matches = visibleEntries(pool).filter(
+      (entry) => tileStatus(entry, { canSelect, currentRound, eligibleIds, draftItemIds }).selectable
+    );
+    if (needle !== "" && matches.length === 1) onSelect(matches[0].item_id);
+  };
   const poolLayoutClass =
     kind === "hero"
       ? "flex flex-wrap gap-2"
@@ -370,7 +387,7 @@ export function PickBanGrid({
   const renderTile = kind === "hero" ? heroTile : tile;
 
   return (
-    <Card>
+    <Card className={className}>
       <CardHeader className="flex flex-col gap-4 pb-3">
         {header}
         <div className="flex flex-row items-center justify-between gap-2 border-t border-[color:var(--aqt-border)] pt-4">
@@ -383,31 +400,55 @@ export function PickBanGrid({
         </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-5">
-        {classChips.length > 0 ? (
-          <FilterChipGroup label={tCommon("filters")}>
-            <FilterChip
-              active={classFilter === null}
-              count={pool.length}
-              onClick={() => setClassFilter(null)}
-            >
-              {tCommon("all")}
-            </FilterChip>
-            {classChips.map(([code, count]) => {
-              // A class code is catalog data; only a code that happens to have a localized word gets one.
-              const key = `roles.${code}` as "roles.tank";
-              return (
+        {kind === "hero" ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <SearchField
+              label={t("hero.search")}
+              placeholder={t("hero.search")}
+              value={query}
+              onValueChange={setQuery}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  selectSoleMatch();
+                } else if (event.key === "Escape" && query !== "") {
+                  event.preventDefault();
+                  setQuery("");
+                }
+              }}
+              containerClassName="w-full sm:w-56"
+            />
+            {classChips.length > 0 ? (
+              <FilterChipGroup label={tCommon("filters")}>
                 <FilterChip
-                  key={code}
-                  className="capitalize"
-                  active={classFilter === code}
-                  count={count}
-                  onClick={() => setClassFilter(code)}
+                  active={classFilter === null}
+                  count={pool.length}
+                  onClick={() => setClassFilter(null)}
                 >
-                  {tCommon.has(key) ? tCommon(key) : code}
+                  {tCommon("all")}
                 </FilterChip>
-              );
-            })}
-          </FilterChipGroup>
+                {classChips.map(([code, count]) => {
+                  // A class code is catalog data; only a code that happens to have a localized word gets one.
+                  const key = `roles.${code}` as "roles.tank";
+                  return (
+                    <FilterChip
+                      key={code}
+                      className="capitalize"
+                      active={classFilter === code}
+                      count={count}
+                      onClick={() => setClassFilter(code)}
+                    >
+                      {tCommon.has(key) ? tCommon(key) : code}
+                    </FilterChip>
+                  );
+                })}
+              </FilterChipGroup>
+            ) : null}
+          </div>
+        ) : null}
+
+        {needle !== "" && visibleEntries(pool).length === 0 ? (
+          <p className="text-sm text-[color:var(--aqt-fg-muted)]">{t("hero.noMatches", { query: query.trim() })}</p>
         ) : null}
 
         {roundGroups === null ? (
