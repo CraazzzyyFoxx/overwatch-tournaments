@@ -384,6 +384,7 @@ def lineup_card(
     lobby_code: str | None = None,
     mentions: Sequence[str] = (),
     voice_target: str | None = None,
+    map_choice: bool = True,
 ) -> DiscordCard:
     """The matchup one lobby is about to play.
 
@@ -395,7 +396,8 @@ def lineup_card(
     rolled one yet -- posting a lineup before the roll is normal, so that reads
     as "not chosen yet" rather than omitting the line. ``lobby_label`` names the
     lobby when the mix runs two of them: both post into the same channel, and
-    "game 3" of one is not "game 3" of the other.
+    "game 3" of one is not "game 3" of the other. ``map_choice`` is false for a game with one competitive map:
+    there is nothing to choose, so the card names no map at all.
 
     ``mentions`` are the Discord ids of seated players whose account is linked;
     they ping, which is the point of posting a lineup at all.
@@ -408,14 +410,17 @@ def lineup_card(
     """
     title = " · ".join([_escape(mix_name), *([f"Лобби {lobby_label}"] if lobby_label else []), f"Игра {match_number}"])
     map_line = _map_line(next_map)
-    where = f"{emoji('map')} " + (_escape(map_line) if map_line else "Карта ещё не выбрана")
+    where_parts = (
+        [f"{emoji('map')} " + (_escape(map_line) if map_line else "Карта ещё не выбрана")] if map_choice else []
+    )
     if points_per_win:
-        where += f" · {emoji('points')} Победа: +{points_per_win}"
+        where_parts.append(f"{emoji('points')} Победа: +{points_per_win}")
+    where = [" · ".join(where_parts)] if where_parts else []
     code_line = [f"Код лобби: `{lobby_code.replace('`', "'")}`"] if lobby_code else []
 
     return DiscordCard(
         accent_color=TEAL,
-        text="\n".join([f"## {emoji('vs')} {title}", where, *code_line]),
+        text="\n".join([f"## {emoji('vs')} {title}", *where, *code_line]),
         details=f"-# {emoji('players')} " + " ".join(f"<@{discord_id}>" for discord_id in mentions)
         if mentions
         else None,
