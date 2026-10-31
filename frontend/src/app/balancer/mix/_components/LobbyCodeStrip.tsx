@@ -79,7 +79,7 @@ export function LobbyCodeStrip({
         <KeyRound className="size-4 text-[color:var(--aqt-fg-faint)]" aria-hidden="true" />
       </span>
       <div className="min-w-0 flex-1">
-        <Eyebrow>{t("lobbyCodeLabel")}</Eyebrow>
+        <Eyebrow className="mr-2">{t("lobbyCodeLabel")}</Eyebrow>
         {editing ? (
           <form
             className="mt-1 flex flex-wrap items-center gap-1.5"
