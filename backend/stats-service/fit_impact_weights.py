@@ -10,7 +10,7 @@ winsorised z-scores (map baselines from the training split); a ridge-regularised
 ``home − away`` exposure predicts the home win of decisive maps and is shrunk towards the v1 weights. The ridge λ is
 the smallest one on the grid that leaves every v1 weight's sign intact (R4.Q1): the contributions the tooltip shows
 keep their meaning. The last 20 % of maps (by time) are held out for the acceptance checks; ``--write`` rewrites
-``shared/core/impact_weights.py`` only when every check passes.
+``shared/disciplines/overwatch/impact_weights.py`` only when every check passes.
 """
 
 from __future__ import annotations
@@ -35,7 +35,9 @@ ROLE_SHARE_TOLERANCE = 0.05
 HERO_FIT_TOLERANCE = 0.05
 DEFAULT_MAX_MAPS = 3000
 STATEMENT_TIMEOUT = "120s"
-WEIGHTS_FILE = pathlib.Path(__file__).resolve().parents[1] / "shared" / "core" / "impact_weights.py"
+WEIGHTS_FILE = (
+    pathlib.Path(__file__).resolve().parents[1] / "shared" / "disciplines" / "overwatch" / "impact_weights.py"
+)
 _UNIT = {role: dict.fromkeys(IMPACT_FEATURES, 1.0) for role in IMPACT_ROLES}
 _COLUMNS = [(role, feature) for role in IMPACT_ROLES for feature in IMPACT_FEATURES]
 
@@ -381,7 +383,9 @@ def _parse_args() -> argparse.Namespace:
         "--max-maps", type=int, default=DEFAULT_MAX_MAPS, help=f"Most recent maps to read (default {DEFAULT_MAX_MAPS})."
     )
     parser.add_argument(
-        "--write", action="store_true", help="Rewrite shared/core/impact_weights.py if every check passes."
+        "--write",
+        action="store_true",
+        help="Rewrite shared/disciplines/overwatch/impact_weights.py if every check passes.",
     )
     return parser.parse_args()
 

@@ -1,5 +1,6 @@
 # backend/stats-service/tests/test_impact_constants.py
-from shared.core import enums, impact, impact_weights
+from shared.core import enums, impact
+from shared.disciplines.overwatch import impact_weights
 
 
 def test_new_log_stats_members_exist():

@@ -15,10 +15,10 @@ import sqlalchemy as sa
 from loguru import logger
 
 from shared import models
-from shared.core import enums, impact_weights
+from shared.core import enums
 from shared.core.impact import EVENT_STATS
 from shared.disciplines.overwatch import baselines as baselines_service
-from shared.disciplines.overwatch import impact
+from shared.disciplines.overwatch import impact, impact_weights
 from shared.disciplines.overwatch.impact_backfill import NEW_STAT_MEMBERS
 from shared.disciplines.overwatch.rank_quintiles import match_quintiles
 from shared.repository.stats import StatDefRepository, StatsMatchRepository

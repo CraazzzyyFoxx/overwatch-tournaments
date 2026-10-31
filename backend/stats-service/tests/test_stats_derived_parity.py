@@ -28,11 +28,11 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from shared import models
-from shared.core import enums, impact_weights
+from shared.core import enums
 from shared.core.impact import CONTRIBUTION_STATS, FORMULA_VERSION, IMPACT_FEATURES, RANK_QUINTILES
 from shared.disciplines import discipline
 from shared.disciplines.overwatch import baselines as baseline_module
-from shared.disciplines.overwatch import rank_quintiles
+from shared.disciplines.overwatch import impact_weights, rank_quintiles
 from shared.disciplines.overwatch.backfill import BackfillService
 from shared.models import AuditLog
 from shared.repository.baselines import StatBaselineRepository

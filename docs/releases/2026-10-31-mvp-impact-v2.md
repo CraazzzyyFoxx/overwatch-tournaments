@@ -21,7 +21,7 @@ Design: `docs/superpowers/specs/2026-10-31-mvp-impact-v2-design.md` (decisions R
 * Scored per **hero stint**: per-10-minute rate → winsorised z against the hero's baseline (≥ 30 stints) or the role's.
 * Kill-feed stats are attributed to the hero: first picks, ultimate and support kills to the killer's, first deaths to
   the victim's.
-* Per-role weights (`shared/core/impact_weights.py`, fitted offline) over 20 features: v1's 17 plus damage taken,
+* Per-role weights (`shared/disciplines/overwatch/impact_weights.py`, fitted offline) over 20 features: v1's 17 plus damage taken,
   barrier damage and ultimates earned. Each role's composite is standardised, so the MVP chance per slot is role-neutral.
 * Quality = time-weighted stint mean; `impact_points` = quality × `M/(M + 3 min)` × time share.
 * `impact_rank` = competition rank (ties share a place) over scored players only. Under 60 s of classed play, or no
@@ -83,7 +83,7 @@ Design: `docs/superpowers/specs/2026-10-31-mvp-impact-v2-design.md` (decisions R
 ## Rollout
 
 1. The weights in this release were fitted on the dev snapshot (`owt_dev`, 2,956 decisive maps since 2024-10-31; see
-   the docstring of `shared/core/impact_weights.py`). Refit against production before its rollout:
+   the docstring of `shared/disciplines/overwatch/impact_weights.py`). Refit against production before its rollout:
    `cd backend/stats-service && uv run python fit_impact_weights.py --since-days 730 --write` (read-only, ≤ 3000 maps).
 2. `make migrate` (`impactv201`, `impactv202`).
 3. `rpc.stats.impact.recompute_baselines`, then `uv run python backfill_impact.py`.

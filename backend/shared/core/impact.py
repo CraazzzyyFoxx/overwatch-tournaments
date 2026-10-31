@@ -3,7 +3,7 @@
 The formula and its storage are specified in ``docs/superpowers/specs/2026-10-31-mvp-impact-v2-design.md``. Feature
 keys are ``LogStatsName`` member NAMES. Bump ``FORMULA_VERSION`` whenever weights or baseline semantics change:
 baselines are versioned by it and stored scores keep the version they were computed with until a full backfill.
-The fitted weights live in ``shared.core.impact_weights`` (written by ``stats-service/fit_impact_weights.py``).
+The fitted weights live in ``shared.disciplines.overwatch.impact_weights`` (written by ``stats-service/fit_impact_weights.py``).
 """
 
 from typing import Final

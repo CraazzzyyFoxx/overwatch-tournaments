@@ -13,11 +13,10 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from shared.core import impact_weights
 from shared.core.enums import HeroClass
 from shared.core.impact import CONTRIBUTION_STATS, FORMULA_VERSION, IMPACT_ROLES, PRIOR_WEIGHTS
 from shared.disciplines.ingest import BoundMatch, BoundParticipant
-from shared.disciplines.overwatch import baselines, impact, ingest
+from shared.disciplines.overwatch import baselines, impact, impact_weights, ingest
 from shared.schemas.match_doc import MatchDoc
 
 CONTRIBUTIONS = {stat.value for stat in CONTRIBUTION_STATS.values()}

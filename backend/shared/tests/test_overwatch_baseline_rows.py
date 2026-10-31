@@ -11,8 +11,8 @@ from shared.core.impact import (
     IMPACT_FEATURES,
     RANK_QUINTILES,
 )
-from shared.core.impact_weights import IMPACT_WEIGHTS
 from shared.disciplines.overwatch.baseline_rows import build_baseline_rows
+from shared.disciplines.overwatch.impact_weights import IMPACT_WEIGHTS
 
 
 def _stints(n: int = 90, *, hero=lambda i: 1, killfeed=lambda i: True, seconds: float = 900.0) -> pd.DataFrame:

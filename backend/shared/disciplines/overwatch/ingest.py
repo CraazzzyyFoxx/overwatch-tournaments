@@ -26,11 +26,10 @@ from loguru import logger
 from pydantic import ValidationError
 
 from shared.core import impact as impact_consts
-from shared.core import impact_weights
 from shared.core.enums import HeroClass, LogStatsName, MatchEvent
 from shared.core.social import SocialProvider
 from shared.disciplines.ingest import BoundMatch, DecodeContext, DecodeError
-from shared.disciplines.overwatch import PLAYER_ROLE, baselines, impact
+from shared.disciplines.overwatch import PLAYER_ROLE, baselines, impact, impact_weights
 from shared.disciplines.overwatch.enums import LogEventType
 from shared.disciplines.overwatch.event_models import KillEvent, MatchEventRow, PlayerStatRow
 from shared.disciplines.overwatch.rank_quintiles import match_quintiles

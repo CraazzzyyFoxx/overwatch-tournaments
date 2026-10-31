@@ -17,7 +17,7 @@ from cashews import cache
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
-from shared.core import enums, impact_weights
+from shared.core import enums
 from shared.core.impact import (
     BASELINE_MAX_MATCHES,
     BASELINE_WINDOW_DAYS,
@@ -25,7 +25,7 @@ from shared.core.impact import (
     FORMULA_VERSION,
     IMPACT_FEATURES,
 )
-from shared.disciplines.overwatch import impact
+from shared.disciplines.overwatch import impact, impact_weights
 from shared.disciplines.overwatch.baseline_rows import build_baseline_rows
 from shared.disciplines.overwatch.rank_quintiles import match_quintiles
 from shared.repository.baselines import StatBaselineRepository
@@ -284,7 +284,7 @@ class BaselineService:
         if not impact_weights.FITTED:
             raise RuntimeError(
                 "impact weights are not fitted — run stats-service/fit_impact_weights.py and commit "
-                "shared/core/impact_weights.py before recomputing baselines"
+                "shared/disciplines/overwatch/impact_weights.py before recomputing baselines"
             )
         scopes = owner_scopes("baseline", (discipline, FORMULA_VERSION))
         before = await capture_stats_evidence(session, scopes=scopes)
