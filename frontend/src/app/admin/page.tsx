@@ -158,7 +158,10 @@ export default function AdminDashboard() {
         </div>
 
         {hasRail ? (
-          <div className="contents xl:flex xl:flex-col xl:gap-4">
+          // `contain: size`: the rail adds no height to the row, so the main
+          // column alone sets it; `self-stretch` then fills it and the
+          // activity feed scrolls inside instead of lengthening the page.
+          <div className="contents xl:flex xl:flex-col xl:gap-4 xl:self-stretch xl:[contain:size]">
             {showQueue ? (
               <WorkQueue
                 issues={data?.issues}

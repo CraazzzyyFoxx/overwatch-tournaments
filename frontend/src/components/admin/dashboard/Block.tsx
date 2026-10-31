@@ -23,6 +23,7 @@ export function Block({
   action,
   framed = true,
   className,
+  contentClassName,
   children
 }: Readonly<{
   title: string;
@@ -31,6 +32,8 @@ export function Block({
   action?: ReactNode;
   framed?: boolean;
   className?: string;
+  /** Framed only: the rows' box, e.g. to scroll them under a fixed header. */
+  contentClassName?: string;
   children?: ReactNode;
 }>) {
   if (!framed) {
@@ -55,7 +58,7 @@ export function Block({
           </div>
           {description ? <CardDescription>{description}</CardDescription> : null}
         </CardHeader>
-        {children ? <CardContent>{children}</CardContent> : null}
+        {children ? <CardContent className={contentClassName}>{children}</CardContent> : null}
       </section>
     </Card>
   );

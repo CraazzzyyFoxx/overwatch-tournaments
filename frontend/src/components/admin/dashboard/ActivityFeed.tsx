@@ -22,6 +22,7 @@ import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { adminQueryKeys } from "@/lib/admin/query-keys";
 import { useFormatter } from "@/lib/datetime/client";
 import adminService from "@/services/admin.service";
+import { cn } from "@/lib/utils";
 import { Block, BlockError } from "./Block";
 import { auditEntityHref, dayLabel, groupAuditActivity, groupByDay } from "./model";
 
@@ -64,7 +65,9 @@ export function ActivityFeed({ workspaceId, className }: Readonly<{ workspaceId:
   return (
     <Block
       title={title}
-      className={className}
+      // In the xl rail the card shrinks to the room the main column leaves; the rows scroll, the header stays.
+      className={cn("xl:flex xl:min-h-0 xl:flex-col", className)}
+      contentClassName="xl:min-h-0 xl:overflow-y-auto"
       description={t("activityDescription")}
       action={
         <div className="flex shrink-0 items-center gap-2">
