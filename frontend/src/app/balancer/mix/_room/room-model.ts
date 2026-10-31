@@ -145,9 +145,40 @@ export function lineupRoomTeams(variant: PickupVariant): RoomTeam[] {
 }
 
 /**
+ * The live match's participations in lineup order. Slot 1 is the ban opener, which may be either lineup team, so a
+ * seat goes to the lineup team its players sit in (by workspace member, by name where the room does not say); slot
+ * order only when the players do not settle it.
+ */
+export function liveLineupOrder(
+  teams: readonly RoomTeam[],
+  state: PickBanState | null,
+  liveSeats: readonly PickBanSeat[]
+): number[] {
+  const bySlot = [...liveSeats].sort((left, right) => left.slot - right.slot).map((seat) => seat.id);
+  if (state == null) return bySlot;
+  const byWorkspace = new Map<number, number>();
+  const byName = new Map<string, number>();
+  for (const member of state.members) {
+    if (member.workspace_member_id != null) byWorkspace.set(member.workspace_member_id, member.encounter_team_id);
+    else byName.set(member.name, member.encounter_team_id);
+  }
+  const order = teams.map((team) =>
+    team.slots
+      .map((slot) =>
+        slot.seat == null
+          ? undefined
+          : ((slot.seat.memberId != null ? byWorkspace.get(slot.seat.memberId) : undefined) ?? byName.get(slot.seat.name))
+      )
+      .find((id) => id != null)
+  );
+  const settled = order.filter((id): id is number => id != null && bySlot.includes(id));
+  return settled.length === bySlot.length && new Set(settled).size === settled.length ? settled : bySlot;
+}
+
+/**
  * The hero room laid over the teams: each team's bans in the order they landed, each player's hero and seat in the
  * room, a captain's picks not yet assigned, and the side a team starts on. A live seat is matched to a lineup team by
- * slot order; a player to the room's seat by workspace member, by name where the room does not say.
+ * `liveLineupOrder`; a player to the room's seat by workspace member, by name where the room does not say.
  */
 export function withHeroRoom(
   teams: readonly RoomTeam[],
@@ -155,7 +186,7 @@ export function withHeroRoom(
   liveSeats: readonly PickBanSeat[]
 ): RoomTeam[] {
   if (state == null) return [...teams];
-  const order = [...liveSeats].sort((left, right) => left.slot - right.slot).map((seat) => seat.id);
+  const order = liveLineupOrder(teams, state, liveSeats);
   const teamIndex = (encounterTeamId: number | null) =>
     encounterTeamId == null ? -1 : order.indexOf(encounterTeamId);
   const members = new Map(state.members.map((member) => [member.id, member]));

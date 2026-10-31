@@ -42,7 +42,7 @@ import { RoomDraftStage } from "./RoomDraftStage";
 import { RoomHostMenu } from "./RoomHostMenu";
 import { RoomMatchStage } from "./RoomMatchStage";
 import { RoomTeamColumn } from "./RoomTeamColumn";
-import { draftPlayerName, draftRoomTeams, lineupRoomTeams, roomPhase, withHeroRoom, type RoomTeam } from "./room-model";
+import { draftPlayerName, draftRoomTeams, lineupRoomTeams, liveLineupOrder, roomPhase, withHeroRoom, type RoomTeam } from "./room-model";
 import { useRoomLinkClick } from "./room-navigation";
 import { useViewTransitionState } from "./useViewTransitionState";
 import "./room-transitions.css";
@@ -170,7 +170,7 @@ export function MixRoom({ initialGame, lobbyIndex }: Readonly<{ initialGame: Cus
   // Who is on the clock: the drafting team, or the teams a ban/pick step waits for.
   const board = shown.board;
   const draftOrder = board != null ? [...board.teams].sort((left, right) => left.draft_position - right.draft_position) : [];
-  const liveOrder = [...(shownLobby.live_seats ?? [])].sort((left, right) => left.slot - right.slot).map((seat) => seat.id);
+  const liveOrder = liveLineupOrder(baseTeams, shown.heroState, shownLobby.live_seats ?? []);
   const active = teams.map((_, index) => {
     if (shown.phase === "draft" && board?.session.status === "live") {
       return draftOrder[index]?.id === board.current_pick?.draft_team_id;
@@ -249,6 +249,7 @@ export function MixRoom({ initialGame, lobbyIndex }: Readonly<{ initialGame: Cus
           workspaceId={workspaceId}
           discipline={discipline}
           seats={shownLobby.live_seats ?? []}
+          lineupOrder={liveOrder}
           state={{ ...shown.heroState, session: shown.heroState.session }}
           queryKey={heroQueryKey}
           heroesById={heroesById}

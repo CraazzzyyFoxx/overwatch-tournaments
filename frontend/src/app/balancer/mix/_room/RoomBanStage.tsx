@@ -51,6 +51,7 @@ export function RoomBanStage({
   workspaceId,
   discipline,
   seats,
+  lineupOrder,
   state,
   queryKey,
   heroesById,
@@ -64,6 +65,8 @@ export function RoomBanStage({
   discipline: string;
   /** The live match's participations in slot order. */
   seats: readonly PickBanSeat[];
+  /** The participations' ids in lineup order: index i wears the colour of the room's column i. */
+  lineupOrder: readonly number[];
   state: PickBanState & { session: NonNullable<PickBanState["session"]> };
   queryKey: unknown[];
   heroesById: Record<number, PickBanItemLike | undefined>;
@@ -164,8 +167,8 @@ export function RoomBanStage({
   const header = (
     <div className="flex flex-col gap-3">
       <h2 className="font-display text-heading font-semibold text-[color:var(--aqt-fg)]">{title}</h2>
-      <StepStrip state={state} seats={seats} heroesById={heroesById} teamName={room.teamName} />
-      <TurnBanner state={state} seats={seats} mine={mine} teamName={room.teamName} />
+      <StepStrip state={state} order={lineupOrder} heroesById={heroesById} teamName={room.teamName} />
+      <TurnBanner state={state} order={lineupOrder} mine={mine} teamName={room.teamName} />
     </div>
   );
 
@@ -375,17 +378,16 @@ const HERO_STEP: Partial<Record<PickBanResolvedStep["action"], true>> = { ban: t
  */
 function StepStrip({
   state,
-  seats,
+  order,
   heroesById,
   teamName
 }: Readonly<{
   state: PickBanState;
-  seats: readonly PickBanSeat[];
+  order: readonly number[];
   heroesById: Record<number, PickBanItemLike | undefined>;
   teamName: (teamId: number) => string;
 }>) {
   const t = useTranslations("mixes.arena.bans");
-  const order = [...seats].sort((left, right) => left.slot - right.slot).map((seat) => seat.id);
   const current = state.is_complete ? state.sequence.length : (state.current_step_index ?? -1);
   const runs = state.sequence.reduce<PickBanResolvedStep[][]>((acc, step) => {
     const last = acc.at(-1);
@@ -525,12 +527,12 @@ function StepStrip({
  */
 function TurnBanner({
   state,
-  seats,
+  order,
   mine,
   teamName
 }: Readonly<{
   state: PickBanState;
-  seats: readonly PickBanSeat[];
+  order: readonly number[];
   mine: boolean;
   teamName: (teamId: number) => string;
 }>) {
@@ -542,7 +544,6 @@ function TurnBanner({
 
   const ban = step?.action === "ban";
   const acting = state.acting_team_ids;
-  const order = [...seats].sort((left, right) => left.slot - right.slot).map((seat) => seat.id);
   const turnIndex = acting.length === 1 ? order.indexOf(acting[0]) : -1;
   const pickers =
     step?.member != null && step.member !== "any"

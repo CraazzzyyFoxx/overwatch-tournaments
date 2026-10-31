@@ -411,6 +411,7 @@ function Stage({
       workspaceId={7}
       discipline="overwatch"
       seats={SEATS}
+      lineupOrder={SEATS.map((seat) => seat.id)}
       state={{ ...room.state, session: room.state.session }}
       queryKey={room.queryKey}
       heroesById={room.heroesById}
