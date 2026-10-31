@@ -25,6 +25,8 @@ export function formatDeviceLabel(
   return userAgent.length > 64 ? `${userAgent.slice(0, 64)}…` : userAgent;
 }
 
+/** The Accounts list searched down to the session's account, with its inspector open. */
 export function accountsHref(session: AdminAuthSession): string {
-  return `/admin/access/accounts?search=${encodeURIComponent(session.email ?? session.username ?? "")}`;
+  const needle = encodeURIComponent(session.email ?? session.username ?? "");
+  return `/admin/access/accounts?search=${needle}&id=${session.user_id}`;
 }

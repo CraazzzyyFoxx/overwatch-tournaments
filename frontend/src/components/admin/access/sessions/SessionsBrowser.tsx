@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
+import { useRouter } from "next/navigation";
 
 import { DataTable } from "@/components/data-table";
 import { FilterBar } from "@/components/kit/FilterBar";
@@ -32,6 +33,7 @@ export function SessionsBrowser() {
   const t = useTranslations("adminAccess.common");
   const ts = useTranslations("adminAccess.sessionsUi");
   const format = useFormatter();
+  const router = useRouter();
   const { searchParams, setParams } = useQueryParams({ resetOnChange: [], shallow: true });
   const openId = searchParams?.get("id") ?? null;
 
@@ -60,6 +62,7 @@ export function SessionsBrowser() {
           toolbar={<FilterBar defs={defs} filters={filters} />}
           emptyMessage={ts("noMatches")}
           onRowClick={(row) => setParams({ id: row.original.session_id })}
+          onRowDoubleClick={(row) => router.push(accountsHref(row.original))}
           renderMobileCard={(row) => (
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium">

@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { useTranslations } from "next-intl";
+import Link from "next/link";
 import type { ColumnDef } from "@tanstack/react-table";
 import { EyeOff, Pencil, Trash2, XCircle } from "lucide-react";
 
@@ -42,9 +43,19 @@ export function useWorkspaceColumns({
         cell: ({ row }) => (
           <div className="flex min-w-0 items-center gap-2">
             <WorkspaceIcon workspace={row.original} />
-            <span className="truncate font-medium" title={row.original.name}>
-              {row.original.name}
-            </span>
+            {isSuperuser || isWorkspaceAdmin(row.original.id) ? (
+              <Link
+                href={workspaceHref(row.original.id)}
+                className="truncate font-medium underline-offset-2 hover:underline"
+                title={row.original.name}
+              >
+                {row.original.name}
+              </Link>
+            ) : (
+              <span className="truncate font-medium" title={row.original.name}>
+                {row.original.name}
+              </span>
+            )}
             <WorkspaceVerificationIcon status={row.original.verification_status} />
           </div>
         )
@@ -84,9 +95,7 @@ export function useWorkspaceColumns({
             label: t("editWorkspace"),
             icon: Pencil,
             hidden: !(isSuperuser || isWorkspaceAdmin(row.id)),
-            // The one place a workspace is edited: the settings sections under
-            // `[id]/`, which are the same ones `/admin/settings` mounts.
-            href: `/admin/workspaces/${row.id}/general`
+            href: workspaceHref(row.id)
           },
           {
             label: t("deleteWorkspace"),
@@ -102,3 +111,6 @@ export function useWorkspaceColumns({
     [isSuperuser, isWorkspaceAdmin, onDelete, t]
   );
 }
+
+/** The one place a workspace is edited: the settings sections under `[id]/`, the same ones `/admin/settings` mounts. */
+export const workspaceHref = (workspaceId: number) => `/admin/workspaces/${workspaceId}/general`;

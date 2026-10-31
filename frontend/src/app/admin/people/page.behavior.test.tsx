@@ -8,7 +8,7 @@
 //     list (`has_account` / `unlinked` / `tournament_id`) — the table is
 //     server-mode, so narrowing is the server's job;
 //  3. `?id=` opens the inspector, is written by a row click, and survives a
-//     reload as a deep link;
+//     reload as a deep link; a double click opens the person's page instead;
 //  4. one action end to end: create identity → POST.
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, useEffect, useState } from "react";
@@ -313,15 +313,35 @@ describe("People", () => {
 
     await click(row);
 
-    expect(new URLSearchParams(window.location.search).get("id")).toBe("11");
+    // A single click waits out the double-click window before it opens the inspector.
+    await waitFor(() => new URLSearchParams(window.location.search).get("id") === "11", "?id=11");
     const inspector = await waitFor(
       () => document.querySelector('aside[aria-label="Row inspector"], [role="dialog"]'),
       "the inspector"
     );
     expect(inspector.textContent).toContain("#11");
-    expect(
-      document.querySelector('a[href="/admin/people/11"]')?.textContent
-    ).toContain("Open page");
+    expect(inspector.querySelector('a[href="/admin/people/11"]')?.textContent).toContain("Open page");
+  });
+
+  it("opens the person's page on a double click, without the inspector", async () => {
+    const container = await mount();
+    const row = await waitFor(
+      () => container.querySelector("tbody tr[tabindex]"),
+      "the first data row"
+    );
+
+    await act(async () => {
+      row!.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 1 }));
+      row!.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 2 }));
+      row!.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+    });
+    // Past the single-click window: a pending click would have written `?id=` by now.
+    const { promise, resolve } = Promise.withResolvers<void>();
+    setTimeout(resolve, 300);
+    await act(() => promise);
+
+    expect(window.location.pathname).toBe("/admin/people/11");
+    expect(new URLSearchParams(window.location.search).get("id")).toBeNull();
   });
 
   it("opens the inspector straight from a deep link", async () => {

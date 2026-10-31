@@ -279,8 +279,9 @@ describe("/admin/workspaces", () => {
 
     await click(row);
 
-    expect(new URLSearchParams(window.location.search).get("id")).toBe("8");
-    expect(document.querySelector('aside[aria-label="Row inspector"]')).not.toBeNull();
+    // A single click waits out the double-click window before it opens the inspector.
+    await waitFor(() => new URLSearchParams(window.location.search).get("id") === "8", "?id=8");
+    await waitFor(() => document.querySelector('aside[aria-label="Row inspector"]'), "the inspector");
   });
 
   it("edits through the kebab, which leaves for the settings sections", async () => {

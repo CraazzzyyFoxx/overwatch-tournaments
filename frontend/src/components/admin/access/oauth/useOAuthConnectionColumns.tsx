@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { useTranslations } from "next-intl";
+import Link from "next/link";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Clock, Trash2, UserCog } from "lucide-react";
 
@@ -73,7 +74,12 @@ export function useOAuthConnectionColumns({
         enableSorting: false,
         cell: ({ row }) => (
           <div className="min-w-0">
-            <p className="truncate text-sm font-medium">{row.original.auth_user_username}</p>
+            <Link
+              href={accountsHref(row.original)}
+              className="block truncate text-sm font-medium underline-offset-2 hover:underline"
+            >
+              {row.original.auth_user_username}
+            </Link>
             <p className="truncate text-xs text-muted-foreground">
               {row.original.auth_user_email}
             </p>

@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { useTranslations } from "next-intl";
+import Link from "next/link";
 import type { ColumnDef } from "@tanstack/react-table";
 import { BadgeAlert, ShieldAlert, Trash2, UserRound, XCircle } from "lucide-react";
 
@@ -42,7 +43,17 @@ export function useAccountColumns({
         enableSorting: false,
         cell: ({ row }) => {
           const linked = getSingleLinkedPlayer(row.original.linked_players);
-          return linked ? <span className="truncate text-sm">{linked.player_name}</span> : null;
+          if (!linked) return null;
+          return canReadPeople ? (
+            <Link
+              href={`/admin/people/${linked.player_id}`}
+              className="block truncate text-sm underline-offset-2 hover:underline"
+            >
+              {linked.player_name}
+            </Link>
+          ) : (
+            <span className="truncate text-sm">{linked.player_name}</span>
+          );
         }
       },
       {

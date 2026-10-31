@@ -440,12 +440,15 @@ describe("Access › Accounts · chips are the URL", () => {
 
     await click(row);
 
-    expect(new URLSearchParams(window.location.search).get("id")).toBe("90");
+    // A single click waits out the double-click window before it opens the inspector.
+    await waitFor(() => new URLSearchParams(window.location.search).get("id") === "90", "?id=90");
     const inspector = await waitFor(
-      () => document.querySelector('aside[aria-label="Row inspector"], [role="dialog"]'),
-      "the inspector"
+      () => {
+        const panel = document.querySelector('aside[aria-label="Row inspector"], [role="dialog"]');
+        return panel?.textContent?.includes("caster") ? panel : null;
+      },
+      "the loaded inspector"
     );
-    expect(inspector.textContent).toContain("caster");
     expect(
       Array.from(inspector.querySelectorAll("a")).some(
         (link) => link.getAttribute("href") === "/admin/people/11"

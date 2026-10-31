@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { useTranslations } from "next-intl";
+import Link from "next/link";
 import type { ColumnDef } from "@tanstack/react-table";
 import { ArrowRightLeft, Pencil, Trash2, UserCog } from "lucide-react";
 
@@ -53,7 +54,12 @@ export function usePeopleColumns({
               </AvatarFallback>
             </Avatar>
             <div className="min-w-0">
-              <p className="truncate font-medium text-foreground">{row.original.name}</p>
+              <Link
+                href={`/admin/people/${row.original.id}`}
+                className="block truncate font-medium text-foreground underline-offset-2 hover:underline"
+              >
+                {row.original.name}
+              </Link>
               <p className="font-mono text-xs tabular-nums text-muted-foreground">
                 #{row.original.id}
               </p>

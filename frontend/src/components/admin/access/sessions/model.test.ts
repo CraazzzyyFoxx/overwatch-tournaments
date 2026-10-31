@@ -22,9 +22,9 @@ describe("formatDeviceLabel", () => {
 });
 
 describe("accountsHref", () => {
-  it("searches accounts by email, then by username", () => {
-    const session = { email: "a+b@x.io", username: "ab" } as AdminAuthSession;
-    expect(accountsHref(session)).toBe("/admin/access/accounts?search=a%2Bb%40x.io");
-    expect(accountsHref({ ...session, email: null })).toBe("/admin/access/accounts?search=ab");
+  it("searches accounts by email, then by username, and opens the account", () => {
+    const session = { email: "a+b@x.io", username: "ab", user_id: 7 } as AdminAuthSession;
+    expect(accountsHref(session)).toBe("/admin/access/accounts?search=a%2Bb%40x.io&id=7");
+    expect(accountsHref({ ...session, email: null })).toBe("/admin/access/accounts?search=ab&id=7");
   });
 });

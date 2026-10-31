@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from "react";
 import { useTranslations } from "next-intl";
+import { useRouter } from "next/navigation";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { DataTable } from "@/components/data-table";
@@ -38,6 +39,7 @@ export function OAuthConnectionsBrowser() {
   const t = useTranslations("adminAccess.common");
   const to = useTranslations("adminAccess.oauthUi");
   const queryClient = useQueryClient();
+  const router = useRouter();
   const { hasPermission } = usePermissions();
   const { searchParams, setParams } = useQueryParams({ resetOnChange: [], shallow: true });
   const openId = searchParams?.get("id") ?? null;
@@ -89,6 +91,7 @@ export function OAuthConnectionsBrowser() {
           toolbar={<FilterBar defs={defs} filters={filters} />}
           emptyMessage={to("noMatches")}
           onRowClick={(row) => setParams({ id: String(row.original.id) })}
+          onRowDoubleClick={(row) => router.push(accountsHref(row.original))}
           renderMobileCard={(row) => (
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium">
