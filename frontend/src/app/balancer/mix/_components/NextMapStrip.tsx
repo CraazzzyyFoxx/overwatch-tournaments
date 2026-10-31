@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 
 import { Dices } from "lucide-react";
 
-import { rollNextMap, rollableModes } from "@/app/balancer/mix/pickup-map-roll";
+import { hasMapChoice, rollNextMap, rollableModes } from "@/app/balancer/mix/pickup-map-roll";
 import { CAPTION_CLASS } from "@/app/balancer/mix/pickup-chrome";
 import CatalogEntityImage from "@/components/catalog/CatalogEntityImage";
 import { Button } from "@/components/ui/button";
@@ -48,7 +48,7 @@ export function NextMapStrip({
   const t = useTranslations("mixes.room");
   const nextMap = nextMapId == null ? null : (maps.find((map) => map.id === nextMapId) ?? null);
 
-  if (!canWrite && nextMap == null) return null;
+  if (!hasMapChoice(maps) || (!canWrite && nextMap == null)) return null;
 
   return (
     <div

@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, type CSSProperties, type ReactNode } from "react";
+import { Fragment, useEffect, type CSSProperties, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { skipToken, useQuery } from "@tanstack/react-query";
@@ -26,7 +26,8 @@ import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/s
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageStateCard } from "@/components/ui/page-state-card";
-import { usePermissions } from "@/hooks/usePermissions";
+import { hasAdminPanelAccessForProfile, usePermissions } from "@/hooks/usePermissions";
+import { useAuthProfileStore } from "@/stores/auth-profile.store";
 import { SIDEBAR_COOKIE_NAMES } from "@/lib/site/sidebar-cookies";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 
@@ -158,9 +159,26 @@ export function AdminLayoutClient({ children, defaultSidebarOpen }: Readonly<Adm
   const t = useTranslations("adminShell.layout");
   const pathname = usePathname();
   const currentWorkspaceId = useWorkspaceStore((s) => s.currentWorkspaceId);
-  const { isLoaded, canAccessAdminRoute } = usePermissions();
+  const hostLocked = useWorkspaceStore((s) => s.hostLockedWorkspaceId != null);
+  const setCurrentWorkspace = useWorkspaceStore((s) => s.setCurrentWorkspace);
+  const user = useAuthProfileStore((s) => s.user);
+  const { isLoaded, canAccessAdminRoute, getAdminWorkspaceIds } = usePermissions();
 
-  if (!isLoaded) {
+  // The workspace cookie is shared with the public site, where any community
+  // can be picked (and `fetchWorkspaces` falls back to the first of ALL of
+  // them). A workspace-scoped operator landing here with one they do not
+  // administer would be denied every scoped screen, so the panel moves to the
+  // first workspace they do administer instead.
+  const fallbackWorkspaceId =
+    isLoaded && !hostLocked && currentWorkspaceId != null && !hasAdminPanelAccessForProfile(user, currentWorkspaceId)
+      ? (getAdminWorkspaceIds()[0] ?? null)
+      : null;
+
+  useEffect(() => {
+    if (fallbackWorkspaceId != null) setCurrentWorkspace(fallbackWorkspaceId);
+  }, [fallbackWorkspaceId, setCurrentWorkspace]);
+
+  if (!isLoaded || fallbackWorkspaceId != null) {
     return <LoadingState />;
   }
 

@@ -271,6 +271,7 @@ async def _lineup(session: AsyncSession, row: models.DiscordMessage, broker: Any
         lobby_code=lineup.get("lobby_code"),
         mentions=lineup.get("mention_user_ids") or (),
         voice_target=lineup["voice_target"] if newest else None,
+        map_choice=lineup.get("map_choice", True),
     )
     # The file name hashes everything drawn: the same name is the same picture,
     # already on the message -- nothing to fetch, draw or upload.

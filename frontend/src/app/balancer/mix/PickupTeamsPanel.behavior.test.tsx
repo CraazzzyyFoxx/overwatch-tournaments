@@ -706,6 +706,15 @@ describe("PickupTeamsPanel", () => {
     expect(byName(rolled, "Hybrid")).toBeNull();
   });
 
+  it("offers no next map at all in a game with a single competitive map", async () => {
+    const singleMap = [CATALOGUE[0], catalogMap(6, CONTROL, { name: "Ilios", attrs: { in_competitive: false } })];
+    const scope = await mount(game({ lobbies: [lobbyRow({ next_map_id: 5 })] }), { maps: singleMap });
+
+    expect(scope.textContent).not.toContain("Next map");
+    expect(scope.textContent).not.toContain("King's Row");
+    expect(byName(scope, "Roll")).toBeNull();
+  });
+
   it("lets the host pick the next map by hand through the combobox", async () => {
     const scope = await mount(game(), { maps: CATALOGUE });
 

@@ -10,7 +10,7 @@ Every service shares one PostgreSQL database, and the domain boundaries are draw
 | `tournament` | Tournament structure, bracket, encounters, pick/ban, reports | tournament-service |
 | `catalog` | Each game's catalog — characters, maps, modes — and its role ontology | app-service / stats-service |
 | `rank` | Native rank telemetry of every game (`discipline` per row): Overwatch from OverFast, League of Legends from the Riot API, Deadlock from deadlock-api.com | stats-service |
-| `stats` | Parsed matches, observed statistics, match-log ingestion jobs and matches fetched by id (`match_fetch`) | stats-service / discord-service |
+| `stats` | Parsed matches, observed statistics, match-log ingestion jobs, matches fetched by id (`match_fetch`) and each tournament's match-log Discord channel (`discord_channel`, written by discord-service) | stats-service / discord-service |
 | `balancer` | Balancing runs and their teams, balancer settings, member ranks | balancer-service |
 | `registration` | Registration forms, statuses, applications, team registration | tournament-service |
 | `mix` | Workspace pickup mixes and their recorded rounds | balancer-service |

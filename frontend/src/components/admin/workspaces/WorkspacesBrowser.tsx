@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
+import { useRouter } from "next/navigation";
 
 import { DataTable } from "@/components/data-table";
 import { Inspector } from "@/components/kit/Inspector";
@@ -19,7 +20,7 @@ import { adminQueryKeys } from "@/lib/admin/query-keys";
 
 import { WorkspaceIcon } from "./WorkspaceCells";
 import { WorkspaceInspectorActions, WorkspaceInspectorPanel } from "./WorkspaceInspectorPanel";
-import { useWorkspaceColumns } from "./useWorkspaceColumns";
+import { useWorkspaceColumns, workspaceHref } from "./useWorkspaceColumns";
 
 const PAGE_SIZE = 15;
 
@@ -36,6 +37,7 @@ export function WorkspacesBrowser() {
   const tw = useTranslations("adminAccess.workspace");
   const { isSuperuser, isWorkspaceAdmin } = usePermissions();
   const queryClient = useQueryClient();
+  const router = useRouter();
   const fetchWorkspaces = useWorkspaceStore((s) => s.fetchWorkspaces);
   // `id` is the inspector, not a filter: opening a row must not drop the page
   // the row sits on, so nothing resets here.
@@ -88,6 +90,9 @@ export function WorkspacesBrowser() {
             getRowId={(row) => String(row.id)}
             emptyMessage={tw("noWorkspaces")}
             onRowClick={(row) => setParams({ id: String(row.original.id) })}
+            onRowDoubleClick={(row) => {
+              if (isSuperuser || isWorkspaceAdmin(row.original.id)) router.push(workspaceHref(row.original.id));
+            }}
             renderMobileCard={(row) => (
               <div className="flex min-w-0 flex-1 items-center gap-2">
                 <WorkspaceIcon workspace={row.original} />

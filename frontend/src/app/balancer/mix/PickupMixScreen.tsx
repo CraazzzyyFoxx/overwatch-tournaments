@@ -17,6 +17,7 @@ import { MatchHistoryList } from "@/app/balancer/mix/_components/MatchHistoryLis
 import { useRoomAutoOpen } from "@/app/balancer/mix/_hooks/useRoomAutoOpen";
 import { lobbyIndexFromLetter, lobbyLetter, mixRoomHref, playsInRoom } from "@/app/balancer/mix/pickup-chrome";
 import { navigateRoom } from "@/app/balancer/mix/_room/room-navigation";
+import { hasMapChoice } from "@/app/balancer/mix/pickup-map-roll";
 import {
   canWriteMix,
   buildMixOwner,
@@ -241,10 +242,11 @@ function PickupMixDetail({ initialGame }: Readonly<{ initialGame: CustomGame }>)
   const myTeam = myLobbyTeam(game, myMemberId, slotCodeOrder(owner.ontology), (team) =>
     tVoice("team", { n: team + 1 }),
   );
+  const maps = mapsQuery.data ?? [];
   const nextMapName =
-    myTeam?.nextMapId == null
+    myTeam?.nextMapId == null || !hasMapChoice(maps)
       ? null
-      : ((mapsQuery.data ?? []).find((map) => map.id === myTeam.nextMapId)?.name ?? null);
+      : (maps.find((map) => map.id === myTeam.nextMapId)?.name ?? null);
   const selectLobby = (index: number | null) => {
     const params = new URLSearchParams(searchParams.toString());
     if (index == null) params.delete("lobby");

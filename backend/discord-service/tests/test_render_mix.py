@@ -334,6 +334,12 @@ def test_the_lineup_says_so_before_anyone_rolled_a_map() -> None:
     assert ":owt_map: Карта ещё не выбрана" in _lineup().text
 
 
+def test_a_single_map_game_names_no_map_but_keeps_the_points() -> None:
+    assert _lineup(map_choice=False, points_per_win=25).text.splitlines()[1] == ":owt_points: Победа: +25"
+    assert ":owt_map:" not in _lineup(map_choice=False).text
+    assert len(_lineup(map_choice=False).text.splitlines()) == 1
+
+
 def test_the_lineup_carries_the_lobby_code_ready_to_copy_and_no_line_without_one() -> None:
     assert "Код лобби: `ABC 123`" in _lineup(lobby_code="ABC 123").text.splitlines()
     # A backtick would close the code span early.

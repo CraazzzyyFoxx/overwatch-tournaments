@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { useTranslations } from "next-intl";
+import Link from "next/link";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Trash2 } from "lucide-react";
 
@@ -24,7 +25,11 @@ export function useTeamColumns({
       {
         accessorKey: "name",
         header: t("name"),
-        cell: ({ row }) => <TeamName team={row.original} size="xs" nameClassName="font-medium" />
+        cell: ({ row }) => (
+          <Link href={`/admin/teams/${row.original.id}`} className="block min-w-0 underline-offset-2 hover:underline">
+            <TeamName team={row.original} size="xs" nameClassName="font-medium" />
+          </Link>
+        )
       },
       {
         accessorKey: "avg_sr",

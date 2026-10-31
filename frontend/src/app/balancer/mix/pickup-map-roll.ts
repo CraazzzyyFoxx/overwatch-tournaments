@@ -33,6 +33,11 @@ export function rollableModes(maps: readonly CatalogEntityRead[]): RollableMode[
   return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
+/** More than one competitive map: a game with one (or none) has nothing to roll, pick or announce. */
+export function hasMapChoice(maps: readonly CatalogEntityRead[]): boolean {
+  return maps.filter(IN_POOL).length > 1;
+}
+
 function pickOne<T>(items: readonly T[], random: () => number): T {
   return items[Math.min(items.length - 1, Math.floor(random() * items.length))];
 }

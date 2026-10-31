@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { MonitorSmartphone, UserCog } from "lucide-react";
 import { useTranslations } from "next-intl";
+import Link from "next/link";
 
 import { AccessStatusCell } from "@/components/admin/access/AccessStatusCell";
 import { columnMeta, createKebabColumn } from "@/components/data-table";
@@ -25,12 +26,15 @@ export function useSessionColumns() {
         accessorFn: (row) => row.email ?? row.username ?? t("accountFallback", { id: row.user_id }),
         cell: ({ row }) => (
           <div className="min-w-0">
-            <p className="truncate text-sm font-medium">
+            <Link
+              href={accountsHref(row.original)}
+              className="block truncate text-sm font-medium underline-offset-2 hover:underline"
+            >
               {row.original.email ??
                 (row.original.username
                   ? `@${row.original.username}`
                   : t("accountFallback", { id: row.original.user_id }))}
-            </p>
+            </Link>
             {row.original.email && row.original.username ? (
               <p className="truncate text-caption text-muted-foreground">@{row.original.username}</p>
             ) : null}

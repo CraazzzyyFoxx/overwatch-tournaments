@@ -266,7 +266,7 @@ export function FieldEditor({
         {isBuiltin ? (
           <p className="text-xs text-muted-foreground">{t("builtinCopyHint")}</p>
         ) : (
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid items-start gap-3 sm:grid-cols-2">
             <div className="grid gap-1.5">
               <Label htmlFor={`${ids}-label`} className="text-xs">
                 {t("label")}
@@ -403,7 +403,7 @@ export function FieldEditor({
         ) : null}
 
         {supportsValidation(field) ? (
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid items-start gap-3 sm:grid-cols-2">
             <div className="grid gap-1.5">
               <Label htmlFor={`${ids}-regex`} className="text-xs">
                 {t("regex")}
@@ -525,7 +525,7 @@ export function FieldEditor({
         </div>
 
         {condition ? (
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid items-start gap-3 sm:grid-cols-2">
             <div className="grid gap-1.5">
               <Label htmlFor={`${ids}-op`} className="text-xs">
                 {t("visibleWhenOp")}

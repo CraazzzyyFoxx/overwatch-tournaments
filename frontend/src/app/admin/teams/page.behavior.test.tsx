@@ -301,8 +301,8 @@ describe("/admin/teams", () => {
 
     await click(row);
 
-    // The row opens the inspector; it no longer navigates to the team page.
-    expect(new URLSearchParams(window.location.search).get("id")).toBe("42");
+    // The row opens the inspector once the double-click window passes; a double click navigates.
+    await waitFor(() => new URLSearchParams(window.location.search).get("id") === "42", "?id=42");
     const inspector = await waitFor(
       () => document.querySelector('aside[aria-label="Row inspector"], [role="dialog"]'),
       "the inspector"

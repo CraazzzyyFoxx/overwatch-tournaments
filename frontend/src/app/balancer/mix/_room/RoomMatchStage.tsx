@@ -6,6 +6,7 @@ import { Dices, Headphones, Shuffle, Users } from "lucide-react";
 
 import { MatchHistoryList } from "@/app/balancer/mix/_components/MatchHistoryList";
 import { NextMapRoll } from "@/app/balancer/mix/_components/NextMapStrip";
+import { hasMapChoice } from "@/app/balancer/mix/pickup-map-roll";
 import { StartMatchButton } from "@/app/balancer/mix/_components/StartMatchButton";
 import { PickupResultControls } from "@/app/balancer/mix/PickupResultControls";
 import { CAPTION_CLASS, CARD_TITLE_CLASS } from "@/app/balancer/mix/pickup-chrome";
@@ -151,20 +152,28 @@ export function RoomMatchStage({
 
   const opener = lobby.opener_index != null ? (teamNames[lobby.opener_index] ?? null) : null;
   const history = mixMatches.filter((match) => match.lobby_index === lobby.lobby_index).slice(0, 3);
+  // A game with one competitive map has nothing to roll or announce: no banner, no roll, only the voice link.
+  const mapChoice = hasMapChoice(maps);
+  const voiceButton =
+    phase === "live" && voiceUrl != null ? (
+      <Button asChild variant="outline" size="sm">
+        <a href={voiceUrl} target="_blank" rel="noreferrer">
+          <Headphones aria-hidden="true" />
+          {tRoom("voice")}
+        </a>
+      </Button>
+    ) : null;
 
   return (
     <Card className="flex flex-1 flex-col gap-0 overflow-hidden">
-      <MapBanner map={map} label={phase === "ready" ? tRoom("nextMapLabel") : t("map")} emptyName={t("noMap")}>
-        {phase === "live" && voiceUrl != null ? (
-          <Button asChild variant="outline" size="sm">
-            <a href={voiceUrl} target="_blank" rel="noreferrer">
-              <Headphones aria-hidden="true" />
-              {tRoom("voice")}
-            </a>
-          </Button>
-        ) : null}
-      </MapBanner>
-      {phase === "ready" && canWrite ? (
+      {mapChoice ? (
+        <MapBanner map={map} label={phase === "ready" ? tRoom("nextMapLabel") : t("map")} emptyName={t("noMap")}>
+          {voiceButton}
+        </MapBanner>
+      ) : voiceButton != null ? (
+        <div className="flex justify-end px-5 py-3">{voiceButton}</div>
+      ) : null}
+      {phase === "ready" && canWrite && mapChoice ? (
         <NextMapRoll
           nextMapId={lobby.next_map_id}
           maps={maps}
@@ -181,10 +190,10 @@ export function RoomMatchStage({
           canWrite={false}
           undoingMatchId={null}
           discipline={game.discipline}
-          className="border-t border-[color:var(--aqt-border)] px-5 pb-1 pt-3"
+          className="border-t border-[color:var(--aqt-border)] px-5 pb-1 pt-3 first:border-t-0"
         />
       ) : null}
-      <div className="border-t border-[color:var(--aqt-border)] px-5 py-4">
+      <div className="border-t border-[color:var(--aqt-border)] px-5 py-4 first:border-t-0">
         {phase === "live" ? (
           canWrite ? (
             <PickupResultControls

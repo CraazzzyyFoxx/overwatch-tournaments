@@ -4528,7 +4528,9 @@
       },
       "hero": {
         "title": "Hero Pool",
-        "itemNumber": "Hero #{id}"
+        "itemNumber": "Hero #{id}",
+        "search": "Search heroes",
+        "noMatches": "No heroes match “{query}”"
       },
       "title": "Pre-game Room",
       "metaTitle": "Pick-ban: {first} vs {second}",
@@ -8653,7 +8655,32 @@
         },
         "everyone": "all",
         "choosePlayer": "Tap a player, then pick their hero",
-        "captainsPick": "The captains pick the heroes"
+        "captainsPick": "The captains pick the heroes",
+        "yours": {
+          "ban": "Your ban",
+          "pick": "Your pick",
+          "protect": "Your protect",
+          "side": "Choose your side",
+          "decider": "Decider",
+          "assign": "Assign your heroes"
+        },
+        "yoursHint": {
+          "hero": "Choose a hero in the pool, then confirm below",
+          "side": "Choose a side below, then confirm",
+          "assign": "Give each player a hero below"
+        },
+        "blindHint": "Blind: the other team sees it after the reveal",
+        "stepOf": "Step {n} of {total}",
+        "clock": "Time left for this step",
+        "phase": {
+          "ban": "Bans",
+          "pick": "Picks",
+          "protect": "Protects",
+          "side": "Sides",
+          "decider": "Decider",
+          "assign": "Assignment"
+        },
+        "hidden": "Hidden until the reveal"
       },
       "match": {
         "idleTitle": "No teams yet",
@@ -9059,6 +9086,7 @@
       "zoomIn": "Zoom in",
       "zoomOut": "Zoom out",
       "zoomReset": "Reset zoom",
+      "zoomFit": "Fit to view",
       "rendering": "Rendering the diagram…",
       "renderError": "The diagram failed to render: {message}"
     }

@@ -14,6 +14,8 @@ interface PickBanCountdownProps {
   /** Epoch-ms deadline of the current turn. */
   deadline: number;
   totalSeconds: number;
+  /** A bare `m:ss` readout, for a banner that already says whose turn it is. */
+  compact?: boolean;
 }
 
 /**
@@ -21,7 +23,7 @@ interface PickBanCountdownProps {
  * `pickBan.room` translation namespace and renders the deadline as a shrinking
  * bar plus a mm:ss readout.
  */
-export function PickBanCountdown({ deadline, totalSeconds }: Readonly<PickBanCountdownProps>) {
+export function PickBanCountdown({ deadline, totalSeconds, compact = false }: Readonly<PickBanCountdownProps>) {
   const t = useTranslations("pickBan.room");
   const [now, setNow] = useState<number | null>(null);
 
@@ -39,6 +41,19 @@ export function PickBanCountdown({ deadline, totalSeconds }: Readonly<PickBanCou
   const seconds = ms == null ? null : Math.max(0, Math.ceil(ms / 1000));
   const frac = ms == null || totalSeconds <= 0 ? 0 : Math.min(1, Math.max(0, ms) / (totalSeconds * 1000));
   const color = expired ? "var(--aqt-amber)" : "var(--aqt-teal)";
+
+  if (compact) {
+    return (
+      <span
+        role="timer"
+        aria-label={t("timer.label")}
+        className="font-display text-title font-bold tabular-nums"
+        style={{ color }}
+      >
+        {seconds == null ? "--:--" : `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`}
+      </span>
+    );
+  }
 
   return (
     <div className="flex items-center gap-3">

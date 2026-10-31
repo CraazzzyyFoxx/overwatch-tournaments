@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
+import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { DataTable } from "@/components/data-table";
@@ -13,6 +14,7 @@ import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import { useFilters } from "@/components/kit/useFilters";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useQueryParams } from "@/hooks/useQueryParams";
+import { getSingleLinkedPlayer } from "@/lib/auth/profile-links";
 import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";
 import { rbacService } from "@/services/rbac.service";
@@ -37,6 +39,7 @@ export function AccountsBrowser() {
   const t = useTranslations("adminAccess.common");
   const ta = useTranslations("adminAccess.accounts");
   const queryClient = useQueryClient();
+  const router = useRouter();
   const { hasPermission, isSuperuser, canAccessPermission } = usePermissions();
   // `id` is the inspector, not a filter: opening a row must not drop the page
   // the row is on, so nothing resets here.
@@ -100,6 +103,14 @@ export function AccountsBrowser() {
           toolbar={<FilterBar defs={defs} filters={filters} />}
           emptyMessage={ta("noAuthMatches")}
           onRowClick={(row) => setParams({ id: String(row.original.id) })}
+          onRowDoubleClick={
+            canReadPeople
+              ? (row) => {
+                  const linked = getSingleLinkedPlayer(row.original.linked_players);
+                  if (linked) router.push(`/admin/people/${linked.player_id}`);
+                }
+              : undefined
+          }
           renderMobileCard={(row) => (
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium">{row.original.email}</p>

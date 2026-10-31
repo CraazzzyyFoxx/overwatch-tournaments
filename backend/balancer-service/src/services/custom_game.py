@@ -2862,6 +2862,7 @@ class CustomGameService:
             "team_names": None,
             "next_map": None,
             "map_image": None,
+            "map_choice": True,
             "lobby_code": None,
             "points_per_win": None,
             "lobby_label": None,
@@ -2879,9 +2880,21 @@ class CustomGameService:
             or not isinstance(variants[index], Mapping)
         ):
             return out
+        # A game with one competitive map (or none) has nothing to choose: the card does not name a map at all.
+        map_choice = (
+            await self.maps.count(
+                session,
+                filters=[
+                    models.CatalogEntity.discipline == game.discipline,
+                    models.CatalogEntity.active.is_(True),
+                    ~models.CatalogEntity.attrs.contains({"in_competitive": False}),
+                ],
+            )
+            > 1
+        )
         next_map: list[str | None] | None = None
         map_image: str | None = None
-        if lobby.next_map_id is not None:
+        if map_choice and lobby.next_map_id is not None:
             # The card names the mode next to the map.
             row = await self.maps.get_map_with_mode(session, lobby.next_map_id, discipline=game.discipline)
             if row is not None:
@@ -2896,6 +2909,7 @@ class CustomGameService:
             "team_names": {str(team): name for team, name in team_names.items()},
             "next_map": next_map,
             "map_image": map_image,
+            "map_choice": map_choice,
             "lobby_code": lobby.lobby_code,
             "points_per_win": points_per_win,
             # Every lobby posts into the same channel, so a multi-lobby mix says

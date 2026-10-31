@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
+import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 
@@ -63,6 +64,7 @@ export function TeamsBrowser({
   const tGame = useTranslations("common.discipline");
   const { canAccessPermission } = usePermissions();
   const queryClient = useQueryClient();
+  const router = useRouter();
   // `id` is the inspector, not a filter: opening a row must not drop the page
   // the row sits on, so nothing resets here.
   const { searchParams, setParams } = useQueryParams({ resetOnChange: [], shallow: true });
@@ -160,6 +162,7 @@ export function TeamsBrowser({
                 : t("empty")
             }
             onRowClick={(row) => setParams({ id: String(row.original.id) })}
+            onRowDoubleClick={(row) => router.push(`/admin/teams/${row.original.id}`)}
             renderMobileCard={(row) => (
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium">{row.original.name}</p>

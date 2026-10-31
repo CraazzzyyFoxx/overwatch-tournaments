@@ -2,6 +2,7 @@
 
 import { useId, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
+import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 
@@ -47,6 +48,7 @@ const PAGE_SIZE = 20;
 export function PeopleBrowser({ workspaceId }: Readonly<{ workspaceId: number | null }>) {
   const t = useTranslations("adminPeople.people");
   const queryClient = useQueryClient();
+  const router = useRouter();
   const { canAccessPermission, hasPermission, isSuperuser } = usePermissions();
   const formId = useId();
   const nameFieldId = `${formId}-name`;
@@ -232,6 +234,7 @@ export function PeopleBrowser({ workspaceId }: Readonly<{ workspaceId: number | 
             searchPlaceholder={t("search")}
             emptyMessage={t("empty")}
             onRowClick={(row) => setParams({ id: String(row.original.id) })}
+            onRowDoubleClick={(row) => router.push(`/admin/people/${row.original.id}`)}
           />
         </div>
 
