@@ -9086,6 +9086,7 @@
       "zoomIn": "Zoom in",
       "zoomOut": "Zoom out",
       "zoomReset": "Reset zoom",
+      "zoomFit": "Fit to view",
       "rendering": "Rendering the diagram…",
       "renderError": "The diagram failed to render: {message}"
     }

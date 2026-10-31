@@ -1,6 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import { Maximize2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -98,9 +99,24 @@ async function getMermaid(): Promise<MermaidApi> {
   return mermaid;
 }
 
-const ZOOM_MIN = 0.4;
+const ZOOM_MIN = 0.1;
 const ZOOM_MAX = 2.5;
-const ZOOM_STEP = 0.15;
+const ZOOM_STEP = 1.2;
+// Initial offset clears the floating toolbar.
+const ORIGIN = { x: 16, y: 48 };
+
+interface View {
+  x: number;
+  y: number;
+  k: number;
+}
+
+/** Rescales `view` to `k`, keeping the viewport point (px, py) fixed under the cursor. */
+function zoomAt(view: View, k: number, px: number, py: number): View {
+  const next = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, k));
+  const r = next / view.k;
+  return { k: next, x: px - (px - view.x) * r, y: py - (py - view.y) * r };
+}
 
 interface MermaidDiagramProps {
   /** Verbatim Mermaid source. */
@@ -111,10 +127,13 @@ interface MermaidDiagramProps {
 
 export function MermaidDiagram({ code, diagramKey }: Readonly<MermaidDiagramProps>) {
   const t = useTranslations("docs.schema");
+  const viewportRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<{ id: number; x: number; y: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [zoom, setZoom] = useState(1);
+  const [contentHeight, setContentHeight] = useState<number | null>(null);
+  const [view, setView] = useState<View>({ ...ORIGIN, k: 1 });
 
   // No synchronous state reset here: callers pass a `key` so switching diagrams
   // remounts the component with fresh initial state (loading=true, zoom=1). The
@@ -130,7 +149,10 @@ export function MermaidDiagram({ code, diagramKey }: Readonly<MermaidDiagramProp
         const renderId = `mermaid-${diagramKey}-${Math.random().toString(36).slice(2, 9)}`;
         const { svg } = await mermaid.render(renderId, code);
         if (cancelled) return;
-        if (containerRef.current) containerRef.current.innerHTML = svg;
+        if (containerRef.current) {
+          containerRef.current.innerHTML = svg;
+          setContentHeight(containerRef.current.offsetHeight);
+        }
         setLoading(false);
       } catch (err) {
         if (cancelled) return;
@@ -144,8 +166,56 @@ export function MermaidDiagram({ code, diagramKey }: Readonly<MermaidDiagramProp
     };
   }, [code, diagramKey]);
 
-  const zoomIn = () => setZoom((z) => Math.min(ZOOM_MAX, Math.round((z + ZOOM_STEP) * 100) / 100));
-  const zoomOut = () => setZoom((z) => Math.max(ZOOM_MIN, Math.round((z - ZOOM_STEP) * 100) / 100));
+  // React's onWheel is passive, so preventDefault (stop the page scrolling) needs a native listener.
+  useEffect(() => {
+    const el = viewportRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const rect = el.getBoundingClientRect();
+      const px = e.clientX - rect.left;
+      const py = e.clientY - rect.top;
+      setView((v) => zoomAt(v, v.k * Math.exp(-e.deltaY * 0.0015), px, py));
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, []);
+
+  const zoomCentered = (factor: number) => {
+    const el = viewportRef.current;
+    if (!el) return;
+    setView((v) => zoomAt(v, v.k * factor, el.clientWidth / 2, el.clientHeight / 2));
+  };
+
+  const fit = () => {
+    const vp = viewportRef.current;
+    const content = containerRef.current;
+    if (!vp || !content) return;
+    const w = content.offsetWidth;
+    const h = content.offsetHeight;
+    const fitK = Math.min(1, (vp.clientWidth - 32) / w, (vp.clientHeight - ORIGIN.y - 16) / h);
+    const k = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, fitK));
+    setView({ k, x: (vp.clientWidth - w * k) / 2, y: ORIGIN.y + (vp.clientHeight - ORIGIN.y - h * k) / 2 });
+  };
+
+  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    dragRef.current = { id: e.pointerId, x: e.clientX, y: e.clientY };
+  };
+  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current;
+    if (!drag || drag.id !== e.pointerId) return;
+    const dx = e.clientX - drag.x;
+    const dy = e.clientY - drag.y;
+    dragRef.current = { ...drag, x: e.clientX, y: e.clientY };
+    setView((v) => ({ ...v, x: v.x + dx, y: v.y + dy }));
+  };
+  const endDrag = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (dragRef.current?.id === e.pointerId) dragRef.current = null;
+  };
+
+  const zoom = view.k;
 
   return (
     <div className="relative mt-3 rounded-lg border border-[color:var(--aqt-border)] bg-[color:var(--aqt-bg)]">
@@ -153,7 +223,7 @@ export function MermaidDiagram({ code, diagramKey }: Readonly<MermaidDiagramProp
         <Button
           variant="outline"
           size="icon-sm"
-          onClick={zoomOut}
+          onClick={() => zoomCentered(1 / ZOOM_STEP)}
           aria-label={t("zoomOut")}
           disabled={zoom <= ZOOM_MIN}
         >
@@ -165,23 +235,43 @@ export function MermaidDiagram({ code, diagramKey }: Readonly<MermaidDiagramProp
         <Button
           variant="outline"
           size="icon-sm"
-          onClick={zoomIn}
+          onClick={() => zoomCentered(ZOOM_STEP)}
           aria-label={t("zoomIn")}
           disabled={zoom >= ZOOM_MAX}
         >
           +
         </Button>
-        <Button variant="outline" size="icon-sm" onClick={() => setZoom(1)} aria-label={t("zoomReset")}>
+        <Button variant="outline" size="icon-sm" onClick={fit} aria-label={t("zoomFit")}>
+          <Maximize2 className="size-3.5" />
+        </Button>
+        <Button
+          variant="outline"
+          size="icon-sm"
+          onClick={() => setView({ ...ORIGIN, k: 1 })}
+          aria-label={t("zoomReset")}
+        >
           1:1
         </Button>
       </div>
 
-      <div className="max-h-[75vh] min-h-35 overflow-auto px-4 pb-4 pt-12">
+      {/* Wheel zooms at the cursor, drag pans. Height hugs small diagrams, caps big ones. */}
+      <div
+        ref={viewportRef}
+        className="relative cursor-grab touch-none select-none overflow-hidden active:cursor-grabbing"
+        style={{
+          height: contentHeight === null ? "35vh" : `min(75vh, ${contentHeight + ORIGIN.y + 16}px)`,
+          minHeight: 140
+        }}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
+      >
         {/* Mermaid writes an inline `max-width` on its svg; zoom needs the natural size. */}
         <div
           ref={containerRef}
-          className="w-max origin-top-left transition-transform duration-80 ease-out [&_svg]:h-auto [&_svg]:max-w-none!"
-          style={{ transform: `scale(${zoom})` }}
+          className="absolute left-0 top-0 w-max origin-top-left [&_svg]:h-auto [&_svg]:max-w-none!"
+          style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.k})` }}
         />
       </div>
 
