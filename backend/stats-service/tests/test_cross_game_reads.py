@@ -167,14 +167,14 @@ def test_profile_encounters_without_a_game_list_every_games_rows(
             assert every.total == only_ow.total + 1
             league = next(row for row in every.results if row.id == ids["encounter_lol"])
             assert league.discipline == LOL
-            # The match reads its own game's facts: the viewer's League totals. League ranks no member totals.
+            # The match reads its own game's facts: the viewer's League totals. No game ranks member totals.
             (match,) = league.matches
             assert match.viewer is not None
             assert match.viewer.facts["hero_damage_dealt"] == 1_000_000.0
             assert match.member_totals == []
-            # Overwatch ships every member's ranked stat and nothing else.
-            ow_totals = [fact for row in only_ow.results for match in row.matches for fact in match.member_totals]
-            assert ow_totals and {fact.stat_code for fact in ow_totals} == {"overperformance_score"}
+            # Overwatch's badge is a stored fact on the viewer: it ranks no member totals either.
+            ow_matches = [match for row in only_ow.results for match in row.matches]
+            assert ow_matches and all(match.member_totals == [] for match in ow_matches)
             await session.rollback()
 
     asyncio.run(run())

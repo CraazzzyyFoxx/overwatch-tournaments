@@ -65,12 +65,10 @@ def test_lol_declares_blue_red_sides_and_only_its_minimal_vocabulary():
     assert spec.analytics is None
 
 
-def test_member_total_stats_are_declared_stats_and_only_overwatch_ranks_one():
+def test_member_total_stats_are_declared_stats_and_no_discipline_ranks_one():
     for spec in DISCIPLINES.values():
         assert set(spec.member_total_stats) <= {stat.code for stat in spec.stat_defs}, spec.code
-    assert {code: spec.member_total_stats for code, spec in DISCIPLINES.items() if spec.member_total_stats} == {
-        "overwatch": ("overperformance_score",)
-    }
+    assert {code: spec.member_total_stats for code, spec in DISCIPLINES.items() if spec.member_total_stats} == {}
     assert discipline("chess").member_total_stats == ()
 
 

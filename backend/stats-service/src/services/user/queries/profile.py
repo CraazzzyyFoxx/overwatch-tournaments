@@ -538,7 +538,7 @@ class UserProfileQueries(DisciplineQueries):
         workspace_id: int | None = None,
     ) -> tuple[typing.Sequence[tuple[models.User, float, int, int, float | None, float | None]], int]:
         """A user's best teammates as ``(teammate, win rate together, tournaments together,
-        distinct maps together, average performance, average KDA)`` rows, plus the total count.
+        distinct maps together, average impact rank, average KDA)`` rows, plus the total count.
         """
         self_player = sa.orm.aliased(models.Player, name="self_player")
         teammate_player = sa.orm.aliased(models.Player, name="teammate_player")
@@ -598,14 +598,11 @@ class UserProfileQueries(DisciplineQueries):
             .having(sa.func.count(sa.distinct(teammate_encounters.c.tournament_id)) > 1)
         ).cte("teammates_query")
 
-        # Teammate "MVP" column spans two LogStatsName columns: ImpactRank when the
-        # impact-scoring pipeline computed it for a match, legacy Performance
-        # otherwise — same COALESCE(ImpactRank, Performance) per-match average as
-        # services.user.queries.encounters.get_roster_avg_mvp_bulk. First collapse each
-        # match's rows into one (impact_rank, performance, kda) tuple via an
-        # outer join (keeps a teammate with zero stat rows in the result with
+        # Teammate "MVP" column is the per-match ImpactRank average (a match without one does not count), same as
+        # services.user.queries.encounters.get_roster_avg_mvp_bulk. First collapse each match's rows into one
+        # (impact_rank, kda) pair via an outer join (keeps a teammate with zero stat rows in the result with
         # NULLs), THEN average per teammate.
-        teammate_codes = [enums.LogStatsName.ImpactRank, enums.LogStatsName.Performance, enums.LogStatsName.KDA]
+        teammate_codes = [enums.LogStatsName.ImpactRank, enums.LogStatsName.KDA]
         stats_per_match = (
             sa.select(
                 shared_teams.c.teammate_id.label("user_id"),
@@ -613,9 +610,6 @@ class UserProfileQueries(DisciplineQueries):
                 sa.func.max(
                     sa.case((self._facts.c.stat_code == enums.LogStatsName.ImpactRank, self._facts.c.value))
                 ).label("impact_rank"),
-                sa.func.max(
-                    sa.case((self._facts.c.stat_code == enums.LogStatsName.Performance, self._facts.c.value))
-                ).label("performance"),
                 sa.func.max(sa.case((self._facts.c.stat_code == enums.LogStatsName.KDA, self._facts.c.value))).label(
                     "kda"
                 ),
@@ -642,14 +636,14 @@ class UserProfileQueries(DisciplineQueries):
             .group_by(shared_teams.c.teammate_id, self._facts.c.match_id)
         ).cte("teammate_stats_per_match")
 
-        mvp_placement = sa.func.coalesce(stats_per_match.c.impact_rank, stats_per_match.c.performance)
+        mvp_placement = stats_per_match.c.impact_rank
         # MATERIALIZED (and maps_query below): under pgBouncer the statement is a reused server-side prepared
         # statement, and its generic plan estimates teammates_query at one row and re-runs an inlined aggregate once
         # per teammate (1.1s instead of 70ms).
         stats_query = (
             sa.select(
                 stats_per_match.c.user_id,
-                sa.func.avg(aggregate_order_by(mvp_placement, stats_per_match.c.match_id)).label("performance"),
+                sa.func.avg(aggregate_order_by(mvp_placement, stats_per_match.c.match_id)).label("impact_rank"),
                 sa.func.avg(aggregate_order_by(stats_per_match.c.kda, stats_per_match.c.match_id)).label("kda"),
             )
             .group_by(stats_per_match.c.user_id)
@@ -692,7 +686,7 @@ class UserProfileQueries(DisciplineQueries):
                 teammates_query.c.winrate,
                 teammates_query.c.tournaments,
                 maps_query.c.maps,
-                stats_query.c.performance,
+                stats_query.c.impact_rank,
                 stats_query.c.kda,
             )
             .select_from(teammates_query)

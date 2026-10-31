@@ -4,129 +4,107 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from shared.core.impact import IMPACT_WEIGHTS
+from shared.core.impact import (
+    BASELINE_MIN_MINUTES,
+    EVENT_STATS,
+    HERO_BASELINE_MIN_ROWS,
+    IMPACT_FEATURES,
+    RANK_QUINTILES,
+)
+from shared.core.impact_weights import IMPACT_WEIGHTS
 from shared.disciplines.overwatch.baseline_rows import build_baseline_rows
 
 
-def _stats_frame(n=90):
+def _stints(n: int = 90, *, hero=lambda i: 1, killfeed=lambda i: True, seconds: float = 900.0) -> pd.DataFrame:
+    """One damage stint per match (match i, player i), raw counts ~ N(10, 3) per ten minutes."""
     rng = np.random.default_rng(42)
-    df = pd.DataFrame(
+    frame = pd.DataFrame(
         {
-            "role": ["damage"] * n,
-            "rank": np.concatenate(
-                [
-                    rng.integers(100, 400, n // 3),
-                    rng.integers(600, 900, n // 3),
-                    rng.integers(1200, 2000, n - 2 * (n // 3)),
-                ]
-            ),
-            "minutes": 15.0,
-            "has_killfeed": [True] * (n // 2) + [False] * (n - n // 2),
+            "match_id": range(n),
+            "player_id": range(n),
+            "segment": 0,
+            "hero": [hero(i) for i in range(n)],
+            "role": "damage",
+            "seconds": seconds,
+            "killfeed": [killfeed(i) for i in range(n)],
         }
     )
-    for stat in IMPACT_WEIGHTS:
-        df[f"{stat}_rate"] = rng.normal(10.0, 3.0, n)
-    return df
+    for feature in IMPACT_FEATURES:
+        frame[feature] = rng.normal(10.0, 3.0, n).clip(min=0.0) * seconds / 600.0
+    return frame
 
 
-def _frame_with_elimination_rates(ranks, elimination_rates, has_killfeed=True):
-    """Small deterministic frame: one role ("damage"), given ranks/rates.
-
-    All other ``IMPACT_WEIGHTS`` stats get a constant filler rate — only
-    ``Eliminations_rate`` (not an ``EVENT_STATS`` member, so it is never
-    killfeed-filtered) carries the values under test.
-    """
-    n = len(ranks)
-    df = pd.DataFrame(
-        {
-            "role": ["damage"] * n,
-            "rank": ranks,
-            "minutes": [15.0] * n,
-            "has_killfeed": [has_killfeed] * n,
-        }
+def _row(rows, stat, *, role="damage", hero=None, bucket=-1):
+    return next(
+        (r for r in rows if (r["role"], r["hero"], r["rank_bucket"], r["stat"]) == (role, hero, bucket, stat)), None
     )
-    for stat in IMPACT_WEIGHTS:
-        df[f"{stat}_rate"] = 5.0
-    df["Eliminations_rate"] = elimination_rates
-    return df
 
 
-def test_rows_cover_all_buckets_and_role_wide():
-    rows = build_baseline_rows(_stats_frame())
-    buckets = {(r["role"], r["rank_bucket"]) for r in rows}
-    assert ("damage", -1) in buckets
-    assert {("damage", 0), ("damage", 1), ("damage", 2)} <= buckets
+def test_a_hero_gets_its_own_row_only_from_the_minimum_row_count():
+    stints = _stints(2 * HERO_BASELINE_MIN_ROWS, hero=lambda i: 1 if i < HERO_BASELINE_MIN_ROWS else 2)
+    rows, _ = build_baseline_rows(stints, {}, IMPACT_WEIGHTS)
+    assert _row(rows, "Eliminations", hero=1)["n"] == HERO_BASELINE_MIN_ROWS
+    assert _row(rows, "Eliminations", hero=2)["n"] == HERO_BASELINE_MIN_ROWS
+
+    stints = _stints(2 * HERO_BASELINE_MIN_ROWS - 1, hero=lambda i: 1 if i < HERO_BASELINE_MIN_ROWS else 2)
+    rows, _ = build_baseline_rows(stints, {}, IMPACT_WEIGHTS)
+    assert _row(rows, "Eliminations", hero=1) is not None
+    assert _row(rows, "Eliminations", hero=2) is None
+    assert _row(rows, "Eliminations")["n"] == 2 * HERO_BASELINE_MIN_ROWS - 1  # the role row sees every stint
 
 
-def test_event_stats_use_only_killfeed_rows():
-    df = _stats_frame()
-    df.loc[df.has_killfeed, "FirstPicks_rate"] = 5.0
-    df.loc[~df.has_killfeed, "FirstPicks_rate"] = 100.0  # must be ignored
-    rows = build_baseline_rows(df)
-    fp = next(r for r in rows if r["stat"] == "FirstPicks" and r["rank_bucket"] == -1)
-    assert fp["mean"] == 5.0
+def test_event_features_use_only_killfeed_stints():
+    stints = _stints(killfeed=lambda i: i % 2 == 0)
+    odd = ~stints["killfeed"]
+    stints.loc[stints["killfeed"], "FirstPicks"] = 7.5  # 5 per ten minutes
+    stints.loc[odd, "FirstPicks"] = 150.0
+    rows, _ = build_baseline_rows(stints, {}, IMPACT_WEIGHTS)
+    first_picks = _row(rows, "FirstPicks")
+    assert first_picks["mean"] == pytest.approx(5.0)
+    assert first_picks["n"] == int(stints["killfeed"].sum())
+    assert _row(rows, "Eliminations")["n"] == len(stints)  # non-event features take every stint
 
 
-def test_short_playtime_rows_excluded():
-    df = _stats_frame()
-    df["Eliminations_rate"] = 10.0
-    extra = df.iloc[[0]].copy()
-    extra["minutes"] = 1.0
-    extra["Eliminations_rate"] = 10_000.0
-    rows = build_baseline_rows(pd.concat([df, extra], ignore_index=True))
-    el = next(r for r in rows if r["stat"] == "Eliminations" and r["rank_bucket"] == -1)
-    assert el["mean"] == 10.0
+def test_a_stint_under_the_minimum_playtime_is_excluded():
+    stints = _stints()
+    short = stints.iloc[[0]].assign(
+        match_id=1000, player_id=1000, seconds=BASELINE_MIN_MINUTES * 60.0 - 1.0, Eliminations=10_000.0
+    )
+    rows, _ = build_baseline_rows(pd.concat([stints, short], ignore_index=True), {}, IMPACT_WEIGHTS)
+    reference, _ = build_baseline_rows(stints, {}, IMPACT_WEIGHTS)
+    assert _row(rows, "Eliminations") == _row(reference, "Eliminations")
 
 
-def test_bucket_bounds_frozen_in_meta():
-    rows = build_baseline_rows(_stats_frame())
-    bounds = rows[0]["meta"]["bucket_bounds"]
-    assert len(bounds) == 2 and bounds[0] < bounds[1]
+def test_role_scale_expectation_and_badge_threshold_rows():
+    n = 100
+    stints = _stints(n)
+    quintiles = {(i, i): i % RANK_QUINTILES for i in range(n)}
+    rows, threshold = build_baseline_rows(stints, quintiles, IMPACT_WEIGHTS)
+
+    scale = _row(rows, "ImpactPoints")
+    assert scale["n"] == n and scale["std"] > 0.0
+    assert _row(rows, "OverperformanceScore") is not None  # the all-quintile fallback
+    for quintile in range(RANK_QUINTILES):
+        cell = _row(rows, "OverperformanceScore", bucket=quintile)
+        assert cell["n"] == n // RANK_QUINTILES
+    assert threshold is not None
+    assert {r["role"] for r in rows} == {"damage"}
 
 
-def test_std_is_sample_stdev_ddof1():
-    """bucket=-1 (role-wide) aggregates every row for the role, so with a
-    known-constant rate series the emitted mean/std must match the ddof=1
-    (sample) stdev formula exactly — not population stdev (ddof=0)."""
-    rates = [8.0, 10.0, 12.0]
-    df = _frame_with_elimination_rates(ranks=[100, 700, 1500], elimination_rates=rates)
-
-    rows = build_baseline_rows(df)
-    row = next(r for r in rows if r["stat"] == "Eliminations" and r["rank_bucket"] == -1)
-
-    expected_mean = sum(rates) / len(rates)  # 10.0
-    variance_ddof1 = sum((x - expected_mean) ** 2 for x in rates) / (len(rates) - 1)  # (4+0+4)/2 = 4.0
-    expected_std = variance_ddof1**0.5  # 2.0
-
-    assert expected_mean == pytest.approx(10.0)
-    assert expected_std == pytest.approx(2.0)
-    assert row["mean"] == pytest.approx(expected_mean)
-    assert row["std"] == pytest.approx(expected_std)
+def test_without_quintiles_there_is_an_empty_expectation_and_no_threshold():
+    rows, threshold = build_baseline_rows(_stints(), {}, IMPACT_WEIGHTS)
+    assert _row(rows, "ImpactPoints") is not None
+    assert _row(rows, "OverperformanceScore")["n"] == 0
+    assert threshold is None
 
 
-def test_single_row_bucket_std_is_zero_not_nan():
-    """Ranks [100, 500, 1500] split into exactly one row per tercile bucket
-    (verified via numpy.quantile below), so bucket 0's sample variance is
-    undefined (n=1). The NaN guard must emit 0.0, never NaN."""
-    ranks = [100, 500, 1500]
-    bucket_bounds = np.quantile(np.array(ranks, dtype=float), [1 / 3, 2 / 3])
-    assert ranks[0] <= bucket_bounds[0] < ranks[1] <= bucket_bounds[1] < ranks[2]
-
-    df = _frame_with_elimination_rates(ranks=ranks, elimination_rates=[8.0, 10.0, 12.0])
-    rows = build_baseline_rows(df)
-    bucket0 = next(r for r in rows if r["stat"] == "Eliminations" and r["rank_bucket"] == 0)
-
-    assert bucket0["mean"] == pytest.approx(8.0)
-    assert bucket0["std"] == 0.0
-    assert not pd.isna(bucket0["std"])
+def test_no_qualifying_stint_yields_no_rows():
+    rows, threshold = build_baseline_rows(_stints(seconds=60.0), {}, IMPACT_WEIGHTS)
+    assert rows == [] and threshold is None
 
 
-def test_unranked_rows_feed_role_wide_only():
-    """An unranked (NaN) row joins the role-wide baseline but neither a cut point nor a rank bucket."""
-    df = _frame_with_elimination_rates(ranks=[100, 500, 1500, None], elimination_rates=[8.0, 10.0, 12.0, 30.0])
-    rows = build_baseline_rows(df)
-    eliminations = {r["rank_bucket"]: r for r in rows if r["stat"] == "Eliminations"}
-
-    assert rows[0]["meta"]["bucket_bounds"] == pytest.approx(np.quantile([100.0, 500.0, 1500.0], [1 / 3, 2 / 3]))
-    assert eliminations[-1]["mean"] == pytest.approx(15.0)
-    assert [eliminations[bucket]["mean"] for bucket in range(3)] == pytest.approx([8.0, 10.0, 12.0])
+def test_features_are_the_event_stats_plus_raw_ones():
+    rows, _ = build_baseline_rows(_stints(), {}, IMPACT_WEIGHTS)
+    stats = {r["stat"] for r in rows if r["hero"] is None and r["rank_bucket"] == -1}
+    assert set(IMPACT_FEATURES) <= stats
+    assert set(EVENT_STATS) <= stats

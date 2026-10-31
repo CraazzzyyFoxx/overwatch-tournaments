@@ -71,7 +71,7 @@ def _analytics_rows(ids: tuple[int, int, int]) -> list[dict]:
             "match_count": wins + losses,
             "overall_position": None,
             "team_count": None,
-            "performance_points": None,
+            "impact_points": None,
         }
         for tid, (started, rank, wins, losses) in zip(ids, history, strict=True)
     ]

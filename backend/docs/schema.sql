@@ -2913,14 +2913,16 @@ CREATE TABLE stats.stat_baseline (
 	role_id BIGINT NOT NULL,
 	rank_bucket SMALLINT DEFAULT '-1' NOT NULL,
 	stat_id SMALLINT NOT NULL,
+	entity_id BIGINT,
 	mean DOUBLE PRECISION NOT NULL,
 	std DOUBLE PRECISION NOT NULL,
 	meta JSONB,
 	computed_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
 	PRIMARY KEY (id),
-	CONSTRAINT uq_stat_baseline UNIQUE (formula_version, role_id, rank_bucket, stat_id),
+	CONSTRAINT uq_stat_baseline UNIQUE NULLS NOT DISTINCT (formula_version, role_id, rank_bucket, stat_id, entity_id),
 	CONSTRAINT fk_stat_baseline_role FOREIGN KEY(role_id) REFERENCES catalog.role (id) DEFERRABLE INITIALLY DEFERRED,
-	CONSTRAINT fk_stat_baseline_stat FOREIGN KEY(stat_id) REFERENCES stats.stat_def (id)
+	CONSTRAINT fk_stat_baseline_stat FOREIGN KEY(stat_id) REFERENCES stats.stat_def (id),
+	CONSTRAINT fk_stat_baseline_entity FOREIGN KEY(entity_id) REFERENCES catalog.entity (id) DEFERRABLE INITIALLY DEFERRED
 );
 
 CREATE INDEX ix_stat_baseline_role ON stats.stat_baseline (role_id);

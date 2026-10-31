@@ -3,45 +3,78 @@ from __future__ import annotations
 import pandas as pd
 
 from shared.core import enums
-from shared.disciplines.overwatch import impact_backfill
+from shared.core.impact import CONTRIBUTION_STATS, EVENT_STATS
+from shared.disciplines.overwatch.backfill import BackfillService
+from shared.disciplines.overwatch.impact_backfill import NEW_STAT_MEMBERS
 
 
-def _stat_rows():
+def test_the_derived_codes_are_the_event_counts_and_every_impact_fact():
+    assert set(NEW_STAT_MEMBERS) == {
+        *(enums.LogStatsName[name] for name in EVENT_STATS),
+        enums.LogStatsName.ImpactPoints,
+        enums.LogStatsName.ImpactRank,
+        enums.LogStatsName.OverperformanceScore,
+        enums.LogStatsName.OverperformanceBadge,
+        *CONTRIBUTION_STATS.values(),
+    }
+    assert len(NEW_STAT_MEMBERS) == len(set(NEW_STAT_MEMBERS))
+
+
+def _events() -> pd.DataFrame:
+    # Per-hero counts as ``build_event_counts`` returns them: two heroes of member 1 in round 1.
     return pd.DataFrame(
         [
-            # round rows (hero NULL)
-            {"user_id": 10, "round": 1, "hero_id": None, "name": enums.LogStatsName.Eliminations, "value": 5.0},
-            {"user_id": 10, "round": 1, "hero_id": None, "name": enums.LogStatsName.HeroTimePlayed, "value": 300.0},
-            # match totals
-            {"user_id": 10, "round": 0, "hero_id": None, "name": enums.LogStatsName.Eliminations, "value": 5.0},
-            {"user_id": 10, "round": 0, "hero_id": None, "name": enums.LogStatsName.HeroTimePlayed, "value": 300.0},
-            # per-hero row must be ignored by pivots — value deliberately
-            # distinct from the hero-NULL round-0 Eliminations row (5.0) so a
-            # regression that let this leak into the pivot's mean would
-            # change the asserted value and fail the test.
-            {"user_id": 10, "round": 0, "hero_id": 3, "name": enums.LogStatsName.Eliminations, "value": 999.0},
+            {
+                "player_id": 1,
+                "segment": 1,
+                "hero": 10,
+                "FirstPicks": 1,
+                "FirstDeaths": 0,
+                "UltimateKills": 0,
+                "SupportKills": 1,
+            },
+            {
+                "player_id": 1,
+                "segment": 1,
+                "hero": 11,
+                "FirstPicks": 0,
+                "FirstDeaths": 1,
+                "UltimateKills": 2,
+                "SupportKills": 0,
+            },
+            {
+                "player_id": 1,
+                "segment": 2,
+                "hero": 10,
+                "FirstPicks": 1,
+                "FirstDeaths": 0,
+                "UltimateKills": 0,
+                "SupportKills": 0,
+            },
         ]
     )
 
 
-def test_rebuild_frames_pivots_round_and_match():
-    round_df, match_df = impact_backfill.rebuild_frames(_stat_rows())
-    assert list(round_df["round"].unique()) == [1]
-    assert round_df[enums.LogStatsName.Eliminations].iloc[0] == 5.0
-    assert match_df["round"].iloc[0] == 0
-    assert match_df[enums.LogStatsName.HeroTimePlayed].iloc[0] == 300.0
-
-
-def test_rebuild_frames_drops_already_derived_new_stats():
-    rows = _stat_rows()
-    rows = pd.concat(
-        [
-            rows,
-            pd.DataFrame(
-                [{"user_id": 10, "round": 0, "hero_id": None, "name": enums.LogStatsName.ImpactPoints, "value": 9.9}]
-            ),
-        ],
-        ignore_index=True,
+def _raw(*cells: tuple[int, int, int | None]) -> pd.DataFrame:
+    return pd.DataFrame(
+        [(member, segment, hero, "Eliminations", 1.0) for member, segment, hero in cells],
+        columns=["player_id", "segment", "hero", "name", "value"],
     )
-    _, match_df = impact_backfill.rebuild_frames(rows)
-    assert enums.LogStatsName.ImpactPoints not in match_df.columns
+
+
+def _by_key(facts):
+    return {(member, segment, stat.name): value for member, segment, stat, value in facts}
+
+
+def test_event_facts_are_written_per_round_and_total_for_every_hero_less_segment():
+    stat_rows = _raw((1, 1, None), (1, 2, None), (1, 0, None), (2, 1, None), (2, 0, None), (1, 1, 10))
+    facts = _by_key(BackfillService._event_facts(stat_rows, _events()))
+    assert len(facts) == 5 * len(EVENT_STATS)  # (1,1) (1,2) (1,0) (2,1) (2,0); the per-hero row opens nothing
+    assert facts[(1, 1, "UltimateKills")] == 2.0 and facts[(1, 1, "FirstPicks")] == 1.0
+    assert facts[(1, 0, "FirstPicks")] == 2.0 and facts[(1, 0, "SupportKills")] == 1.0
+    assert facts[(2, 1, "FirstPicks")] == 0.0 and facts[(2, 0, "FirstDeaths")] == 0.0  # no event: dense zeros
+
+
+def test_event_facts_without_a_kill_feed_are_all_zero():
+    facts = BackfillService._event_facts(_raw((1, 1, None), (1, 0, None)), pd.DataFrame())
+    assert len(facts) == 2 * len(EVENT_STATS) and {value for *_, value in facts} == {0.0}

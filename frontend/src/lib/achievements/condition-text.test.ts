@@ -40,7 +40,7 @@ const SAMPLES: Record<string, Record<string, unknown>> = {
   hero_pickrate: { op: "<", value: 0.001 },
   match_win: {},
   match_criteria: { field: "match_time", op: "<=", value: 300 },
-  match_mvp_check: { stat: "Performance", top_n: 3, op: "==", value: 0 },
+  match_mvp_check: { stat: "ImpactRank", top_n: 3, op: "==", value: 0 },
   match_event_count: { event: "HeroSwap", op: ">=", value: 5, hero_slug: "echo" },
   fight_multikill: { min_kills: 4, op: ">=", value: 2 },
   encounter_score: { scores: [[3, 0]], round_type: "final", side: "winner" },

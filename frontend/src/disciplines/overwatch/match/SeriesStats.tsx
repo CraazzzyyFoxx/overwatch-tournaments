@@ -191,7 +191,7 @@ function SeriesPlayerRow({
   mapsPlayed: number;
 }>) {
   const heroes = player.heroes?.[round] ?? [];
-  const placement = player.stats?.[round]?.[LogStatsName.Performance];
+  const placement = player.stats?.[round]?.[LogStatsName.ImpactRank];
 
   return (
     <TableRow className="group">
@@ -217,7 +217,7 @@ function SeriesPlayerRow({
       <TableCell className={CELL}>{mapsPlayed > 0 ? mapsPlayed : "—"}</TableCell>
       <TableCell className={cn(CELL, "font-semibold text-[color:var(--aqt-teal)]")}>
         <span className="inline-flex items-center justify-end gap-1.5">
-          <PerformanceBadge performance={placement ?? null} />
+          <PerformanceBadge place={placement ?? null} />
         </span>
       </TableCell>
       {columns.map((name) => (

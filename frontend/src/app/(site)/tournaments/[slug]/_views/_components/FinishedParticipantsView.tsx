@@ -34,8 +34,8 @@ type TeamDelta = { team: Team; srRank: number; delta: number };
 type ParticipantRow = {
   entry: RosterEntry;
   slot: DraftSlot;
-  performance: PlayerStat | undefined;
-  /** Positive: played better than the pick slot promised (pick percentile minus performance percentile). */
+  impactRank: PlayerStat | undefined;
+  /** Positive: played better than the pick slot promised (pick percentile minus MVP-place percentile). */
   value: number | null;
 };
 
@@ -64,12 +64,12 @@ export function FinishedParticipantsView({ tournament }: Readonly<{ tournament: 
         : pick
           ? { kind: "pick", pick }
           : { kind: "sub" };
-      const performance = insights.players[userId]?.performance;
+      const impactRank = insights.players[userId]?.impact_rank;
       const value =
-        pick && performance && picked > 0 && insights.playersTotal > 0
-          ? pick.overall / picked - performance.rank / insights.playersTotal
+        pick && impactRank && picked > 0 && insights.playersTotal > 0
+          ? pick.overall / picked - impactRank.rank / insights.playersTotal
           : null;
-      return { entry, slot, performance, value };
+      return { entry, slot, impactRank, value };
     });
   }, [roster.byUser, draft, insights.players, insights.playersTotal]);
 
@@ -160,18 +160,18 @@ export function FinishedParticipantsView({ tournament }: Readonly<{ tournament: 
       )
     },
     {
-      key: "performance",
-      label: t("stats.metrics.performance.short"),
+      key: "impact_rank",
+      label: t("stats.metrics.impact_rank.short"),
       title: t("stats.performanceHint"),
       numeric: true,
       ascendingFirst: true,
-      sortValue: (row) => row.performance?.value ?? null,
+      sortValue: (row) => row.impactRank?.value ?? null,
       cell: (row) =>
-        row.performance ? (
+        row.impactRank ? (
           <span>
-            {two(row.performance.value)}
+            {two(row.impactRank.value)}
             <span className="block text-label text-[color:var(--aqt-fg-dim)]">
-              #{row.performance.rank}
+              #{row.impactRank.rank}
             </span>
           </span>
         ) : (
@@ -309,8 +309,8 @@ function DraftSummary({
   const srOf = (value: number) => format.number(Math.round(value));
   const bestOf = (predicate: (row: ParticipantRow) => boolean) =>
     rows
-      .filter((row) => predicate(row) && row.performance)
-      .sort((a, b) => (a.performance?.value ?? 99) - (b.performance?.value ?? 99))[0];
+      .filter((row) => predicate(row) && row.impactRank)
+      .sort((a, b) => (a.impactRank?.value ?? 99) - (b.impactRank?.value ?? 99))[0];
   const steals = [
     {
       label: t("participants.results.captains"),
@@ -406,7 +406,7 @@ function DraftSummary({
                   </span>
                 </span>
                 <span className="aqt-tnum text-caption font-semibold">
-                  {row.performance ? two(row.performance.value) : "—"}
+                  {row.impactRank ? two(row.impactRank.value) : "—"}
                 </span>
               </li>
             ) : null

@@ -247,9 +247,7 @@ class UserEncounterQueries(DisciplineQueries):
                     q = q.where(sa.or_(stage_name.ilike("%group%"), stage_name.op("~*")("^[a-h]$")))
 
             if mvp1:
-                # MVP placement spans two LogStatsName columns: ImpactRank when the
-                # impact-scoring pipeline computed it for a match, legacy Performance
-                # otherwise — same COALESCE(ImpactRank, Performance) == 1 (best) the
+                # MVP placement is the ImpactRank fact == 1 (best), the same placement the
                 # dossier/leaderboard use (see get_roster_avg_mvp_bulk).
                 mvp_placement_cte = (
                     sa.select(
@@ -262,18 +260,10 @@ class UserEncounterQueries(DisciplineQueries):
                                 )
                             )
                         ).label("impact_rank"),
-                        sa.func.max(
-                            sa.case(
-                                (
-                                    self._facts.c.stat_code == enums.LogStatsName.Performance,
-                                    self._facts.c.value,
-                                )
-                            )
-                        ).label("performance"),
                     )
                     .where(
                         self._facts.c.player_id == user_id,
-                        self._facts.c.stat_code.in_([enums.LogStatsName.ImpactRank, enums.LogStatsName.Performance]),
+                        self._facts.c.stat_code == enums.LogStatsName.ImpactRank,
                         self._facts.c.entity_id.is_(None),
                         self._facts.c.segment == 0,
                     )
@@ -283,7 +273,7 @@ class UserEncounterQueries(DisciplineQueries):
                 mvp_subq = (
                     sa.select(self._matches.c.encounter_id)
                     .join(mvp_placement_cte, mvp_placement_cte.c.match_id == self._matches.c.id)
-                    .where(sa.func.coalesce(mvp_placement_cte.c.impact_rank, mvp_placement_cte.c.performance) == 1)
+                    .where(mvp_placement_cte.c.impact_rank == 1)
                 )
                 q = q.where(models.Encounter.id.in_(mvp_subq))
 
@@ -367,8 +357,8 @@ class UserEncounterQueries(DisciplineQueries):
         """The viewer's seat and totals, and every observed member's ranked whole-match totals, for a batch of matches.
 
         Three reads for any number of matches: the observed members, the segment-0 NULL-entity facts (one query: the
-        viewer's every stat, and every member's of the game's ``member_total_stats`` -- the badge ranks the viewer
-        against the whole match), and the characters the viewer played. A match the viewer was not observed in has
+        viewer's every stat, and every member's of the game's ``member_total_stats``, empty for Overwatch whose badge
+        is a stored viewer fact), and the characters the viewer played. A match the viewer was not observed in has
         totals but no ``viewer``.
         """
         ids = [read.match.id for read in reads]
@@ -651,10 +641,8 @@ class UserEncounterQueries(DisciplineQueries):
         """Average MVP placement per (tournament_id, user_id) for a set of roster players.
 
         Mirrors the dossier "Avg MVP" summary metric: for each match the player
-        played, take ``COALESCE(ImpactRank, Performance)`` (1 = best; ImpactRank is
-        the newer impact-scoring rank, Performance the legacy fallback — same
-        preference the frontend applies), then average across the player's matches in
-        that tournament.
+        played, take the ``ImpactRank`` fact (1 = best; a match without one does not count), then
+        average across the player's matches in that tournament.
 
         ONE bulk query keyed by (tournament_id, user_id) — no per-roster-player
         round-trips. Scoped to ``tournament_ids`` (which are already
@@ -672,7 +660,6 @@ class UserEncounterQueries(DisciplineQueries):
                 wm.player_id.label("user_id"),
                 f.match_id.label("match_id"),
                 sa.func.max(sa.case((d.code == enums.LogStatsName.ImpactRank, f.value))).label("impact_rank"),
-                sa.func.max(sa.case((d.code == enums.LogStatsName.Performance, f.value))).label("performance"),
             )
             .select_from(f)
             .join(mc, mc.c.id == f.match_id)
@@ -680,7 +667,7 @@ class UserEncounterQueries(DisciplineQueries):
             .join(wm, sa.and_(wm.id == f.workspace_member_id, wm.workspace_id == mc.c.workspace_id))
             .where(
                 wm.player_id.in_(user_ids),
-                d.code.in_([enums.LogStatsName.ImpactRank, enums.LogStatsName.Performance]),
+                d.code == enums.LogStatsName.ImpactRank,
                 f.entity_id.is_(None),
                 f.segment == 0,
                 mc.c.tournament_id.in_(tournament_ids),
@@ -689,7 +676,7 @@ class UserEncounterQueries(DisciplineQueries):
             .cte("roster_mvp_per_match")
         )
 
-        placement = sa.func.coalesce(per_match.c.impact_rank, per_match.c.performance)
+        placement = per_match.c.impact_rank
 
         query = (
             sa.select(
@@ -901,28 +888,15 @@ class UserEncounterQueries(DisciplineQueries):
         """Maps the user topped the lobby's MVP placement on.
 
         Same placement the dossier's "Avg MVP" averages (see
-        ``get_roster_avg_mvp_bulk``): ``COALESCE(ImpactRank, Performance)`` per
-        match, 1 = best. This counts the maps where that placement is 1.
+        ``get_roster_avg_mvp_bulk``): the ``ImpactRank`` fact per match, 1 = best. This counts the maps where
+        that placement is 1.
         """
         per_match = (
             sa.select(
                 self._facts.c.match_id.label("match_id"),
                 sa.func.max(
-                    sa.case(
-                        (
-                            self._facts.c.stat_code == enums.LogStatsName.ImpactRank,
-                            self._facts.c.value,
-                        )
-                    )
+                    sa.case((self._facts.c.stat_code == enums.LogStatsName.ImpactRank, self._facts.c.value))
                 ).label("impact_rank"),
-                sa.func.max(
-                    sa.case(
-                        (
-                            self._facts.c.stat_code == enums.LogStatsName.Performance,
-                            self._facts.c.value,
-                        )
-                    )
-                ).label("performance"),
             )
             .select_from(self._facts)
             .join(self._matches, self._matches.c.id == self._facts.c.match_id)
@@ -930,7 +904,7 @@ class UserEncounterQueries(DisciplineQueries):
             .where(
                 sa.and_(
                     self._facts.c.player_id == user_id,
-                    self._facts.c.stat_code.in_([enums.LogStatsName.ImpactRank, enums.LogStatsName.Performance]),
+                    self._facts.c.stat_code == enums.LogStatsName.ImpactRank,
                     self._facts.c.entity_id.is_(None),
                     self._facts.c.segment == 0,
                 )
@@ -942,11 +916,7 @@ class UserEncounterQueries(DisciplineQueries):
             )
 
         per_match = per_match.group_by(self._facts.c.match_id).cte("draft_card_mvp_per_match")
-        query = (
-            sa.select(sa.func.count())
-            .select_from(per_match)
-            .where(sa.func.coalesce(per_match.c.impact_rank, per_match.c.performance) == 1)
-        )
+        query = sa.select(sa.func.count()).select_from(per_match).where(per_match.c.impact_rank == 1)
         result = await session.execute(query)
         return int(result.scalar_one() or 0)
 

@@ -32,7 +32,6 @@ const LOWER_IS_BETTER = new Set<string>([
   LogStatsName.EnvironmentalDeaths,
   LogStatsName.ShotsMissed,
   LogStatsName.DamageFB,
-  LogStatsName.Performance,
   LogStatsName.FirstDeaths,
   LogStatsName.ImpactRank
 ]);

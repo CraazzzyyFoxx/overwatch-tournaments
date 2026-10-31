@@ -75,9 +75,13 @@ export const useUserCompareData = ({
     [scope, metadata, workspaceGrid]
   );
   // A character comparison compares per-character observations: the game's active stats, without its team-level
-  // (`group: "team"`) ones, which no character carries. No vocabulary → no comparison is requested.
+  // (`group: "team"`) ones, which no character carries, and the internal impact breakdown (`group: "impact"`). No
+  // vocabulary → no comparison is requested.
   const stats = useMemo(
-    () => (metadata?.stat_defs ?? []).filter((def) => def.active && def.group !== "team").map((def) => def.code),
+    () =>
+      (metadata?.stat_defs ?? [])
+        .filter((def) => def.active && def.group !== "team" && def.group !== "impact")
+        .map((def) => def.code),
     [metadata]
   );
 

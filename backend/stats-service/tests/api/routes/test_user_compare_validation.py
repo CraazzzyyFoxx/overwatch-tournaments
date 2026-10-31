@@ -12,14 +12,9 @@ status-derived ``error.code``:
 
 import pytest
 
-from shared.core import enums
 from tests.conftest import RpcHarness, build_query
 
 pytestmark = pytest.mark.validation
-
-
-def test_performance_stat_is_treated_as_ascending() -> None:
-    assert enums.is_ascending_stat(enums.LogStatsName.Performance) is True
 
 
 def _query(params: dict) -> dict:

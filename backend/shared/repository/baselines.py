@@ -39,13 +39,18 @@ class StatBaselineRepository(BaseRepository[models.StatsBaseline]):
             )
         )
         stat_ids = sa.select(stat.id).where(stat.discipline == discipline)
+        hero_ids = sa.select(models.CatalogEntity.id).where(
+            models.CatalogEntity.discipline == discipline, models.CatalogEntity.kind == "character"
+        )
         with session.no_autoflush:
             allowed_roles = set(await session.scalars(role_ids))
             allowed_stats = set(await session.scalars(stat_ids))
+            allowed_heroes = set(await session.scalars(hero_ids))
             if any(
                 row.formula_version != formula_version
                 or row.role_id not in allowed_roles
                 or row.stat_id not in allowed_stats
+                or (row.entity_id is not None and row.entity_id not in allowed_heroes)
                 for row in rows
             ):
                 raise ValueError("baseline rows must belong to the named discipline, rated dimension and version")

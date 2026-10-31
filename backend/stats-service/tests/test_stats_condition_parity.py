@@ -7,6 +7,7 @@ only read that immutable oracle; they never regenerate expected values.
 from __future__ import annotations
 
 import asyncio
+import json
 from pathlib import Path
 
 import sqlalchemy as sa
@@ -33,6 +34,14 @@ from src.services.achievement.engine.runner import AchievementEvaluationRunnerSe
 from src.services.achievement.rule_service import AchievementRuleService
 
 GOLDEN = Path(__file__).parent / "fixtures" / "stats_condition_parity.json"
+# The golden is the frozen legacy implementation's output: it proves only the cases whose semantics did not change.
+# Stats the legacy implementation never knew (``overperformance_badge``, ``contrib_*``) are not in it; retired ones
+# (``performance``, ``performance_points``) are no longer in ``LogStatsName``.
+_GOLDEN_STAT_CODES = frozenset(
+    name.removeprefix("threshold/code/")
+    for name in json.loads(GOLDEN.read_text(encoding="utf-8"))["trees"]
+    if name.startswith("threshold/code/")
+)
 # Triggers use native storage names; the frozen semantic outputs stay unchanged.
 _EVENT_TABLES = ["stats.event"]
 _STAT_TABLES = ["stats.fact"]
@@ -67,7 +76,6 @@ def _trees(hero: models.CatalogEntity, support: models.CatalogEntity, map_: mode
         "rank/fraction_ties": _leaf("log_stat_rank", stat="WeaponAccuracy", normalize_by_time=True, limit=100),
         "rank/weighted_rate": _leaf("log_stat_rank", stat="KD", order="asc", limit=2),
         "rank/impact": _leaf("log_stat_rank", stat="ImpactPoints", limit=2),
-        "mvp/ascending": _leaf("match_mvp_check", stat="Performance", top_n=1, op=">=", value=1),
         "mvp/descending": _leaf("match_mvp_check", stat="Eliminations", top_n=1, op=">=", value=1),
         "mvp/no_top_player": _leaf("match_mvp_check", stat="Eliminations", top_n=1, op="==", value=0),
         "kill/fights": _leaf("fight_multikill", min_kills=1, op=">=", value=1),
@@ -94,7 +102,8 @@ def _trees(hero: models.CatalogEntity, support: models.CatalogEntity, map_: mode
         "threshold/strict": _leaf("stat_threshold", stat="HeroDamageDealt", op=">", value=18000),
     }
     for stat in LogStatsName:
-        trees[f"threshold/code/{stat.value}"] = _leaf("stat_threshold", stat=stat.value, op=">=", value=0)
+        if stat.value in _GOLDEN_STAT_CODES:
+            trees[f"threshold/code/{stat.value}"] = _leaf("stat_threshold", stat=stat.value, op=">=", value=0)
     for field in ("hero", "match", "role"):
         for scope in ("global", "tournament"):
             params = {"field": field, "scope": scope, "op": ">=", "value": 1}
@@ -360,6 +369,57 @@ def test_native_conditions_preserve_frozen_keys_values_and_overrides(stats_parit
             await engine.dispose()
 
     asyncio.run(compare())
+
+
+def test_match_mvp_check_defaults_to_impact_rank_ascending(stats_parity_database):
+    """The MVP is the map's ``impact_rank`` 1 (ascending); a player without ``impact_rank`` is not ranked at all."""
+    url, ids = stats_parity_database
+
+    async def run() -> None:
+        engine = create_async_engine(make_url(url).set(drivername="postgresql+asyncpg"))
+        try:
+            async with async_sessionmaker(engine, expire_on_commit=False)() as session:
+                context = EvalContext(workspace_id=ids["workspace"], discipline="overwatch")
+
+                async def mvp(**params: object) -> dict:
+                    return await _evaluate(
+                        session, _leaf("match_mvp_check", top_n=1, op=">=", value=1, **params), context
+                    )
+
+                def awarded(result: dict) -> set[int]:
+                    return {player for player, _, match in result["keys"] if match == ids["match_otp_1"]}
+
+                # In match_otp_1 the home player has the better (lower) seeded impact_rank than the away player.
+                default = await mvp()
+                assert default["keys"]
+                assert default == await mvp(stat="ImpactRank")
+                assert default != await mvp(sort_order="desc")
+                assert ids["player"] in awarded(default) and ids["player_away"] not in awarded(default)
+
+                # Without the home player's impact_rank, only the away player is ranked: their team is the MVP team
+                # and the home team is not in the match at all.
+                member = await session.scalar(
+                    sa.select(models.WorkspaceMember.id).where(
+                        models.WorkspaceMember.workspace_id == ids["workspace"],
+                        models.WorkspaceMember.player_id == ids["player"],
+                    )
+                )
+                stat_id = sa.select(models.StatDef.id).where(
+                    models.StatDef.discipline == "overwatch", models.StatDef.code == "impact_rank"
+                )
+                await session.execute(
+                    sa.delete(models.StatsFact).where(
+                        models.StatsFact.match_id == ids["match_otp_1"],
+                        models.StatsFact.workspace_member_id == member,
+                        models.StatsFact.stat_id.in_(stat_id),
+                    )
+                )
+                unranked = awarded(await mvp())
+                assert ids["player_away"] in unranked and ids["player"] not in unranked
+        finally:
+            await engine.dispose()
+
+    asyncio.run(run())
 
 
 def test_overwatch_conditions_ignore_same_code_native_lol_rows(stats_parity_database):

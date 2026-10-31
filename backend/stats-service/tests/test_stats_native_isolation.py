@@ -161,6 +161,8 @@ def test_native_baseline_backfill_and_scores_preserve_full_outputs_and_evidence(
                 session.expire_all()
                 assert await capture_stats_evidence(session, scopes=scopes) == before
                 assert await _audit_ids(session) == before_audits
+                # The backfill cached its hand-built baselines process-wide; the next test must not derive from them.
+                await derived_parity.baseline_module.baseline_service.invalidate_cache(discipline="overwatch")
 
     asyncio.run(exercise())
 

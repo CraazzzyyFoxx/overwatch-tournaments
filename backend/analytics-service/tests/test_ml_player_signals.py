@@ -301,7 +301,7 @@ class PlayerAnomalyTests(TestCase):
                         "source_round": source_round,
                         "player_id": player_id,
                         "team_id": 20,
-                        "performance_points": value,
+                        "impact_points": value,
                     }
                 )
 
@@ -322,7 +322,7 @@ class PlayerAnomalyTests(TestCase):
                         "source_round": source_round,
                         "player_id": player_id,
                         "team_id": 20,
-                        "performance_points": value,
+                        "impact_points": value,
                     }
                 )
 

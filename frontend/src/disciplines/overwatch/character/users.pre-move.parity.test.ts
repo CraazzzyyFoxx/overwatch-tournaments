@@ -21,9 +21,10 @@ type HeroesParity = {
 };
 
 // Fixed after the move: lower-is-better follows the backend's directions, so damage per final blow, shots missed,
-// first deaths, performance and impact rank joined deaths, damage taken and environmental deaths. hero-stats.test.ts
-// pins the corrected sign; the captured direction and deltas of these stats are no longer the contract.
-const REDIRECTED = new Set(["damage_fb", "shots_missed", "first_deaths", "performance", "impact_rank"]);
+// first deaths and impact rank joined deaths, damage taken and environmental deaths. hero-stats.test.ts pins the
+// corrected sign; the captured direction and deltas of these stats are no longer the contract. `performance` and
+// `performance_points` are the removed legacy MVP stats (impact_v2): their captured rows are not the contract either.
+const REDIRECTED = new Set(["damage_fb", "shots_missed", "first_deaths", "performance", "performance_points", "impact_rank"]);
 // Fixed after the move too: accuracy prints through the locale's percent format ("48,4 %" in Russian), not a
 // hard-coded "48.40%", so its captured text is no longer the contract.
 const withoutAccuracyText = ({ formatted_overall: _overall, formatted_avg10: _avg10, ...stat }: ParityStat) => stat;
@@ -71,7 +72,13 @@ describe("users/components/heroes/utils.ts → disciplines/overwatch/character/u
         }));
       }
     }
-    const reverted = Object.fromEntries(Object.values(LogStatsName).map((n) => [n, characterUtils.isRevertedStat(n)]));
+    // The stats impact_v2 added (`overperformance_badge`, `contrib_*`) have no captured direction; compare the captured names.
+    const captured = (fixture.output as HeroesParity).isRevertedStat_by_LogStatsName;
+    const reverted = Object.fromEntries(
+      Object.values(LogStatsName)
+        .filter((n) => n in captured)
+        .map((n) => [n, characterUtils.isRevertedStat(n)])
+    );
     expect(Object.keys(perResponse).length).toBe(18);
     const actual = norm({ per_response: perResponse, isRevertedStat_by_LogStatsName: reverted }) as HeroesParity;
     expect(comparable(actual)).toEqual(comparable(fixture.output as HeroesParity));

@@ -229,8 +229,6 @@ _REDUCTIONS = {
         "scoped_accuracy",
         "scoped_critical_hit_accuracy",
         "ult_economy",
-        "performance_points",
-        "performance",
         "kd",
         "kda",
         "log_coverage",
@@ -248,6 +246,9 @@ _RESEEDED = {"enriched": _RESEEDED_MU, "predictor_inputs": _RESEEDED_MU}
 # The profile history window is now the latest tournaments by start date, not an id range (ids are not chronological):
 # it reaches tournaments the frozen id window missed, which stays its chronologically latest part.
 _CHRONOLOGICAL_HISTORY = {"profile": {"raw_value_history", "local_residual_history", "local_zscore_history"}}
+# The throw detector's residual now reads per-round ``impact_points`` (impact_v2) instead of ``performance_points``. The
+# seed's two stats differ by a per-row constant the within-player z-score cancels, but not to the last bits.
+_SWITCHED_INPUT_TOLERANCE = {"round": {"y_perf": 1e-9}}
 
 
 def _assert_equal(actual: Any, expected: Any, path: tuple = ()) -> None:
@@ -270,7 +271,8 @@ def _assert_equal(actual: Any, expected: Any, path: tuple = ()) -> None:
                         _assert_equal(value[len(value) - len(old_value) :], old_value, cell)
                         continue
                     if column in reductions and type(value) is float and type(old_value) is float:
-                        assert math.isclose(value, old_value, rel_tol=0.0, abs_tol=1e-12), cell
+                        tolerance = _SWITCHED_INPUT_TOLERANCE.get(path[0], {}).get(column, 1e-12)
+                        assert math.isclose(value, old_value, rel_tol=0.0, abs_tol=tolerance), cell
                     else:
                         _assert_equal(value, old_value, cell)
             return
@@ -364,7 +366,7 @@ async def _native_scores_roster_attribution_and_analytics_reads(stats_parity_dat
             rows = await analytics_service.get_analytics(session, workspace_id=ids["workspace"], discipline="overwatch")
             row = next(row for row in rows if row["player_id"] == ids["roster_player"])
             assert row["user_id"] == ids["player"] and row["rank"] == 3500 and row["role"] == "damage"
-            assert math.isclose(row["performance_points"], 50.00078333333333, rel_tol=0, abs_tol=1e-12)
+            assert math.isclose(row["impact_points"], 24.00078333333333, rel_tol=0, abs_tol=1e-12)
             assert not any(row["tournament_id"] == ids["tournament_other"] for row in rows)
             # Postgres sums bigint counts to numeric; Decimal broke ``compute_points_shifts`` (Decimal / float).
             assert all(type(r["wins"]) is int and type(r["losses"]) is int for r in rows)

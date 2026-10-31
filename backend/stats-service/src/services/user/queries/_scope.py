@@ -414,5 +414,5 @@ def _hero_compare_stat_visibility_condition(
 
     return sa.or_(
         hero_id_column.isnot(None),
-        name_column == enums.LogStatsName.Performance,
+        name_column == enums.LogStatsName.ImpactRank,
     )

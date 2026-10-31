@@ -53,12 +53,12 @@ tournament_stats = [
     enums.LogStatsName.KDA,
     enums.LogStatsName.DamageDelta,
     enums.LogStatsName.Deaths,
-    enums.LogStatsName.Performance,
+    enums.LogStatsName.ImpactRank,
 ]
 
 #: The stats ``get_tournament_player_stats`` ships: what the tournament page shows, a subset of ``tournament_stats``.
 tournament_player_stats = [
-    enums.LogStatsName.Performance,
+    enums.LogStatsName.ImpactRank,
     enums.LogStatsName.KDA,
     enums.LogStatsName.Eliminations,
     enums.LogStatsName.Deaths,
@@ -683,7 +683,7 @@ class UserService(DisciplineQueries):
         generations=COMPARE_GENERATIONS,
         ttl=config.settings.users_cache_ttl,
         key=(
-            "backend:user_compare:v4:{id}:{self.discipline}:{baseline}:{target_user_id}:{role}:{div_min}:{div_max}:"
+            "backend:user_compare:v5:{id}:{self.discipline}:{baseline}:{target_user_id}:{role}:{div_min}:{div_max}:"
             "{tournament_id}:{workspace_id}:{grid_version}"
         ),
         lock=True,
@@ -942,7 +942,7 @@ class UserService(DisciplineQueries):
         generations=COMPARE_GENERATIONS,
         ttl=config.settings.users_cache_ttl,
         key=(
-            "backend:user_character_compare:v4:{id}:{self.discipline}:{baseline}:{target_user_id}:{left_hero_id}:"
+            "backend:user_character_compare:v5:{id}:{self.discipline}:{baseline}:{target_user_id}:{left_hero_id}:"
             "{right_hero_id}:{map_id}:{role}:{div_min}:{div_max}:{tournament_id}:{workspace_id}:"
             "{stats_key}:{grid_version}"
         ),
@@ -1415,7 +1415,7 @@ class UserService(DisciplineQueries):
     @versioned(
         generations=user_generations("{id}"),
         ttl=config.settings.users_cache_ttl,
-        key="backend:user_tournaments:v2:{id}:{self._discipline}:{workspace_id}:native",
+        key="backend:user_tournaments:v3:{id}:{self._discipline}:{workspace_id}:native",
     )
     async def get_tournaments(
         self, session: AsyncSession, id: int, workspace_id: int | None = None, *, grid: DivisionGrid | None
@@ -1621,12 +1621,12 @@ class UserService(DisciplineQueries):
 
     # ``grid`` is a pure function of ``tournament_id`` (a tournament pins its own
     # division_grid_version), so it stays out of the key; a tournament write that
-    # moves a user aggregate misses every ``user_tournament_stats:v2`` key
+    # moves a user aggregate misses every ``user_tournament_stats:v3`` key
     # (``user_cache.TOURNAMENT_DATA``).
     @versioned(
         generations=user_generations("{id}"),
         ttl=config.settings.users_cache_ttl,
-        key="backend:user_tournament_stats:v2:{id}:{self.discipline}:{tournament_id}:native",
+        key="backend:user_tournament_stats:v3:{id}:{self.discipline}:{tournament_id}:native",
         lock=True,
     )
     async def get_tournament_with_stats(
@@ -1663,16 +1663,16 @@ class UserService(DisciplineQueries):
             session,
             team.tournament,
             user.id,
-            [name for name in tournament_stats if name != enums.LogStatsName.Performance],
+            [name for name in tournament_stats if name != enums.LogStatsName.ImpactRank],
         )
         for stat, _user_id, value, rank_desc, rank_asc, total in stat_rows:
             rank = rank_asc if enums.is_ascending_stat(stat) else rank_desc
             stats[stat] = schemas.UserTournamentStat(value=value, rank=rank, total=total)
 
-        # MVP placement spans two LogStatsName columns (COALESCE(ImpactRank, Performance)), so it can't ride the
-        # generic single-name ranking above. Slots into the same "performance" key the frontend already reads.
+        # MVP placement ranks per match first (a player's best row per match), so it can't ride the generic
+        # single-name ranking above; it lands in the same "impact_rank" key.
         if mvp_row:
-            stats[enums.LogStatsName.Performance] = schemas.UserTournamentStat(
+            stats[enums.LogStatsName.ImpactRank] = schemas.UserTournamentStat(
                 value=mvp_row.value, rank=mvp_row.rank, total=mvp_row.total
             )
 
@@ -1712,12 +1712,12 @@ class UserService(DisciplineQueries):
 
         Exposes the full ranked population that backs a single user's
         ``UserTournamentWithStats.stats[stat].{rank,total}`` on the tournament-stats
-        page. For every stat except ``Performance`` it reuses the exact ranking
+        page. For every stat except ``ImpactRank`` it reuses the exact ranking
         scheme (``statistics_service.get_tournament_stat_leaderboard``, a
         generalization of ``get_tournament_avg_match_stat_for_user_bulk``) — same
         AVG + dense_rank window and same inverse-stat direction handling — so an
-        entry's rank/value here matches that user's row. ``Performance`` is the MVP
-        placement stat and spans two ``LogStatsName`` columns (see
+        entry's rank/value here matches that user's row. ``ImpactRank`` is the MVP
+        placement stat, ranked per match first (see
         ``get_tournament_mvp_stat_leaderboard`` / ``get_tournament_mvp_stat_for_user``),
         so it routes to its own query instead.
 
@@ -1735,7 +1735,7 @@ class UserService(DisciplineQueries):
                 ],
             )
 
-        if stat == enums.LogStatsName.Performance:
+        if stat == enums.LogStatsName.ImpactRank:
             rows = await self.statistics_queries.get_tournament_mvp_stat_leaderboard(session, tournament_id)
         else:
             rows = await self.statistics_queries.get_tournament_stat_leaderboard(session, tournament_id, stat)
@@ -1748,7 +1748,7 @@ class UserService(DisciplineQueries):
     @versioned(
         generations=_TOURNAMENT_STATS_GENERATIONS,
         ttl=config.settings.users_cache_ttl,
-        key="backend:tournament_player_stats:{self.discipline}:{tournament_id}",
+        key="backend:tournament_player_stats:v2:{self.discipline}:{tournament_id}",
     )
     async def get_tournament_player_stats(
         self, session: AsyncSession, tournament_id: int
@@ -1933,7 +1933,7 @@ class UserService(DisciplineQueries):
     @versioned(
         generations=user_generations("{id}"),
         ttl=config.settings.users_cache_ttl,
-        key="backend:user_teammates:{id}:{self.discipline}:{workspace_id}:{params.page}:{params.per_page}:{params.sort}:{params.order}",
+        key="backend:user_teammates:v2:{id}:{self.discipline}:{workspace_id}:{params.page}:{params.per_page}:{params.sort}:{params.order}",
     )
     async def get_best_teammates(
         self,
@@ -1943,7 +1943,7 @@ class UserService(DisciplineQueries):
         workspace_id: int | None = None,
     ) -> pagination.Paginated[schemas.UserBestTeammate]:
         """Paginated best teammates for a user with their shared win rate, tournaments
-        and performance statistics.
+        and impact rank statistics.
         """
         user = await self.get(session, id, [])
         teammates, total = await self.profile.get_best_teammates(session, user.id, params, workspace_id=workspace_id)
@@ -1958,11 +1958,11 @@ class UserService(DisciplineQueries):
                     tournaments=tournaments,
                     maps=maps or 0,
                     stats={
-                        enums.LogStatsName.Performance: (round(performance, 2) if performance else 0),
+                        enums.LogStatsName.ImpactRank: round(impact_rank, 2) if impact_rank is not None else None,
                         enums.LogStatsName.KDA: round(kda, 2) if kda else 0,
                     },
                 )
-                for teammate, winrate, tournaments, maps, performance, kda in teammates
+                for teammate, winrate, tournaments, maps, impact_rank, kda in teammates
             ],
         )
 

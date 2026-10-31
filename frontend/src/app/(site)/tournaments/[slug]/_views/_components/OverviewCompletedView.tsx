@@ -394,10 +394,10 @@ function MyTournamentCard({
   // The viewer's place among players of their own role, by the same MVP measure.
   const sameRole = [...roster.byUser.values()]
     .filter(({ player: other }) => baseRole(other.role?.role) === role)
-    .map(({ player: other }) => insights.players[other.user_id]?.performance?.value)
+    .map(({ player: other }) => insights.players[other.user_id]?.impact_rank?.value)
     .filter((value): value is number => value != null)
     .sort((a, b) => a - b);
-  const roleRank = stats.performance ? sameRole.indexOf(stats.performance.value) + 1 : null;
+  const roleRank = stats.impact_rank ? sameRole.indexOf(stats.impact_rank.value) + 1 : null;
 
   const series = encounters
     .map((encounter) => ({ encounter, seat: seriesFor(encounter, team.id) }))
@@ -450,13 +450,13 @@ function MyTournamentCard({
           </div>
           <div className="grid grid-cols-2 gap-x-6 gap-y-5 md:grid-cols-4 lg:grid-cols-2">
             <ProfileStat
-              label={t("stats.metrics.performance.label")}
+              label={t("stats.metrics.impact_rank.label")}
               title={t("stats.performanceHint")}
-              value={stats.performance ? number(stats.performance.value, 2) : "—"}
+              value={stats.impact_rank ? number(stats.impact_rank.value, 2) : "—"}
               sub={
-                stats.performance
+                stats.impact_rank
                   ? t("common.rankOf", {
-                      rank: stats.performance.rank,
+                      rank: stats.impact_rank.rank,
                       total: insights.playersTotal
                     })
                   : t("common.noLogs")
@@ -528,12 +528,12 @@ function RoleLeadersCard({
     const rows = [...roster.byUser.values()]
       .filter(
         ({ player }) =>
-          baseRole(player.role?.role) === role && insights.players[player.user_id]?.performance
+          baseRole(player.role?.role) === role && insights.players[player.user_id]?.impact_rank
       )
       .sort(
         (a, b) =>
-          (insights.players[a.player.user_id]?.performance?.value ?? 0) -
-          (insights.players[b.player.user_id]?.performance?.value ?? 0)
+          (insights.players[a.player.user_id]?.impact_rank?.value ?? 0) -
+          (insights.players[b.player.user_id]?.impact_rank?.value ?? 0)
       )
       .slice(0, 3);
     return { role, rows };
@@ -580,7 +580,7 @@ function RoleLeadersCard({
                       index === 0 && "text-[color:var(--aqt-teal)]"
                     )}
                   >
-                    {format.number(insights.players[player.user_id]?.performance?.value ?? 0, {
+                    {format.number(insights.players[player.user_id]?.impact_rank?.value ?? 0, {
                       minimumFractionDigits: 2,
                       maximumFractionDigits: 2
                     })}
@@ -668,15 +668,15 @@ function DraftCard({
   const steal = draft.picks
     .filter(
       (pick) =>
-        pick.round >= lateFrom && pick.userId != null && insights.players[pick.userId]?.performance
+        pick.round >= lateFrom && pick.userId != null && insights.players[pick.userId]?.impact_rank
     )
     .sort(
       (a, b) =>
-        (insights.players[a.userId as number]?.performance?.value ?? 99) -
-        (insights.players[b.userId as number]?.performance?.value ?? 99)
+        (insights.players[a.userId as number]?.impact_rank?.value ?? 99) -
+        (insights.players[b.userId as number]?.impact_rank?.value ?? 99)
     )[0];
   const stealTeam = steal?.teamId != null ? roster.byTeam.get(steal.teamId) : undefined;
-  const stealStat = steal?.userId != null ? insights.players[steal.userId]?.performance : undefined;
+  const stealStat = steal?.userId != null ? insights.players[steal.userId]?.impact_rank : undefined;
 
   return (
     <OverviewSection

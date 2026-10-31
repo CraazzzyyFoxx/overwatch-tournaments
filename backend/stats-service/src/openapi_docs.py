@@ -50,7 +50,7 @@ DOCS: dict[str, dict] = {
     # ── impact baselines ──────────────────────────────────────────────────────
     "rpc.stats.impact.recompute_baselines": {
         "summary": "Recompute impact baselines",
-        "description": "Permission: superuser. Rebuilds the native Overwatch baselines used for MVP-impact scoring (`stats.stat_baseline`) for the active formula version, aggregating a mean/standard deviation per (role id, rank bucket, stat code) from whole-match player facts across workspaces. Returns the row count and formula version. Each run atomically replaces that discipline/version's rows and aborts rather than wiping them when aggregation yields nothing. Repeated runs are safe but scan the historical facts and clear the 10-minute baseline cache.",
+        "description": "Permission: superuser. Rebuilds the native Overwatch baselines used for MVP-impact scoring (`stats.stat_baseline`) for the active formula version (`impact_v2`): per-role and per-hero mean/standard deviation of each impact feature's rate, the role scale, and the rank-quintile expectation and badge threshold, from the per-hero player facts and kill feeds of the most recent maps within the last 365 days (at most 5000 maps) across workspaces. Fails while the impact weights are not fitted. Returns the row count and formula version. Each run atomically replaces that discipline/version's rows and aborts rather than wiping them when aggregation yields nothing. Repeated runs are safe but scan the historical facts and clear the 10-minute baseline cache.",
     },
     # ── native rank collection ───────────────────────────────────────────────
     "rpc.stats.rank.user_history": {
@@ -229,7 +229,7 @@ DOCS: dict[str, dict] = {
     },
     "rpc.stats.statistics.tournament_player_stats": {
         "summary": "Tournament player stats",
-        "description": "Permission: public; no authentication required, though a hidden tournament 404s unless the optional identity may view it (404 too for an unknown tournament). Returns every player's tournament average and rank for `performance` (MVP placement), `kda`, `eliminations`, `deaths`, `assists`, `hero_damage_dealt` and `damage_delta` — the same values and ranks as the per-stat tournament leaderboard, pivoted by player (`player_id` is the user id); a player carries only the stats they have data for. Rank 1 is best: Deaths and the MVP placement rank ascending. `total_players` is the largest ranked population across those stats.",
+        "description": "Permission: public; no authentication required, though a hidden tournament 404s unless the optional identity may view it (404 too for an unknown tournament). Returns every player's tournament average and rank for `impact_rank` (MVP placement), `kda`, `eliminations`, `deaths`, `assists`, `hero_damage_dealt` and `damage_delta` — the same values and ranks as the per-stat tournament leaderboard, pivoted by player (`player_id` is the user id); a player carries only the stats they have data for. Rank 1 is best: Deaths and the MVP placement rank ascending. `total_players` is the largest ranked population across those stats.",
     },
     "rpc.stats.statistics.champion": {
         "summary": "Most-champion players",

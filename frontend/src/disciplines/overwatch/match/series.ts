@@ -78,8 +78,8 @@ const ACCURACY_STATS: readonly { name: LogStatsName; hit: LogStatsName; fired: L
 
 /**
  * Stats no honest series value exists for, so they are left absent (rendered as
- * `—`) rather than guessed: `impact_points`/`impact_rank`/`overperformance_score`
- * come out of the analytics model, and `scoped_critical_hit_accuracy` needs a
+ * `—`) rather than guessed: the per-map `impact_*`/`overperformance_*`/contribution facts do not add up across
+ * maps (the series placement is derived separately from them), and `scoped_critical_hit_accuracy` needs a
  * scoped-critical-HITS counter the API does not expose.
  */
 const SERIES_UNAVAILABLE_STATS: readonly LogStatsName[] = [
@@ -102,22 +102,6 @@ function readStat(row: StatRow, name: LogStatsName): number {
 /** `stats-service` divides by `denominator.replace(0, 1)`. */
 function ratio(numerator: number, denominator: number): number {
   return numerator / (denominator === 0 ? 1 : denominator);
-}
-
-/**
- * `PerformancePoints` uses the parser's exact weights, so the series MVP order
- * is computed the same way each map's is rather than averaged from ranks.
- */
-function performancePoints(row: StatRow): number {
-  return (
-    readStat(row, LogStatsName.Eliminations) * 500 +
-    readStat(row, LogStatsName.FinalBlows) * 250 +
-    readStat(row, LogStatsName.Assists) * 50 +
-    readStat(row, LogStatsName.HeroDamageDealt) +
-    readStat(row, LogStatsName.HealingDealt) -
-    readStat(row, LogStatsName.Deaths) * 750 +
-    readStat(row, LogStatsName.DamageBlocked) * 0.1
-  );
 }
 
 function foldStatRow(target: StatRow, source: StatRow): void {
@@ -165,8 +149,6 @@ function deriveStatRow(row: StatRow): void {
     row[name] = readStat(row, hit) / shots;
   }
 
-  row[LogStatsName.PerformancePoints] = performancePoints(row);
-
   for (const name of SERIES_UNAVAILABLE_STATS) {
     delete row[name];
   }
@@ -175,7 +157,7 @@ function deriveStatRow(row: StatRow): void {
 interface SeriesPlayerMeta {
   /** Observations this participation's player appears in, even without a hero fact. */
   mapsPlayed: number;
-  /** 1-based series MVP placement by summed performance points. */
+  /** 1-based series MVP placement (competition rank of the playtime-weighted mean of map `impact_points`). */
   seriesPlacement: number | null;
 }
 
@@ -197,6 +179,10 @@ interface Entry {
   stats: StatRow;
   heroes: Map<number, CatalogEntityRead>;
   maps: number;
+  /** Σ map `impact_points` × seconds played, over the maps that scored the player. */
+  weightedPoints: number;
+  /** Σ seconds played over those maps. */
+  seconds: number;
 }
 
 function foldPlayer(accumulator: Map<number, Entry>, player: OwPlayer): void {
@@ -206,10 +192,19 @@ function foldPlayer(accumulator: Map<number, Entry>, player: OwPlayer): void {
     player,
     stats: {} as StatRow,
     heroes: new Map<number, CatalogEntityRead>(),
-    maps: 0
+    maps: 0,
+    weightedPoints: 0,
+    seconds: 0
   };
 
-  foldStatRow(entry.stats, player.stats?.[WHOLE_MAP_ROUND] ?? {});
+  const mapRow = player.stats?.[WHOLE_MAP_ROUND] ?? {};
+  foldStatRow(entry.stats, mapRow);
+  const points = mapRow[LogStatsName.ImpactPoints];
+  const seconds = readStat(mapRow, LogStatsName.HeroTimePlayed);
+  if (typeof points === "number" && Number.isFinite(points) && seconds > 0) {
+    entry.weightedPoints += points * seconds;
+    entry.seconds += seconds;
+  }
   for (const hero of heroesThisMap) {
     if (!entry.heroes.has(hero.id)) entry.heroes.set(hero.id, hero);
   }
@@ -223,14 +218,13 @@ function buildParticipation(
   accumulator: Map<number, Entry>
 ): {
   participation: SeriesParticipation;
-  rows: { id: number; points: number; maps: number; hasStats: boolean }[];
+  rows: { id: number; mean: number | null; maps: number }[];
 } {
   const players: OwPlayer[] = [];
-  const rows: { id: number; points: number; maps: number; hasStats: boolean }[] = [];
+  const rows: { id: number; mean: number | null; maps: number }[] = [];
 
   for (const entry of accumulator.values()) {
-    const hasStats = Object.keys(entry.stats).length > 0;
-    if (hasStats) deriveStatRow(entry.stats);
+    if (Object.keys(entry.stats).length > 0) deriveStatRow(entry.stats);
     players.push({
       ...entry.player,
       stats: { [WHOLE_MAP_ROUND]: entry.stats },
@@ -238,9 +232,8 @@ function buildParticipation(
     });
     rows.push({
       id: entry.player.workspace_member_id,
-      points: entry.stats[LogStatsName.PerformancePoints] ?? 0,
-      maps: entry.maps,
-      hasStats
+      mean: entry.seconds > 0 ? entry.weightedPoints / entry.seconds : null,
+      maps: entry.maps
     });
   }
 
@@ -274,24 +267,20 @@ export function aggregateSeriesStats(matches: MatchWithStats[]): SeriesAggregate
   const folded = Array.from(groups.values(), ({ base, players }) =>
     buildParticipation(base, players)
   );
-  const ranked = folded
-    .flatMap(({ rows }) => rows)
-    .filter((row) => row.hasStats)
-    .sort((a, b) => b.points - a.points);
+  const means = folded.flatMap(({ rows }) => rows.flatMap((row) => (row.mean == null ? [] : [row.mean])));
 
   for (const { participation, rows } of folded) {
-    for (const row of rows) {
-      const position = ranked.indexOf(row);
-      participation.meta[row.id] = {
-        mapsPlayed: row.maps,
-        seriesPlacement: position >= 0 ? position + 1 : null
+    for (const { id, maps, mean } of rows) {
+      participation.meta[id] = {
+        mapsPlayed: maps,
+        // Competition rank: ties share a place.
+        seriesPlacement: mean == null ? null : 1 + means.filter((other) => other > mean).length
       };
     }
     for (const player of participation.players) {
       const placement = participation.meta[player.workspace_member_id]?.seriesPlacement;
       const row = player.stats[WHOLE_MAP_ROUND];
-      if (placement != null) row[LogStatsName.Performance] = placement;
-      else delete row[LogStatsName.Performance];
+      if (placement != null) row[LogStatsName.ImpactRank] = placement;
     }
   }
 

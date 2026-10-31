@@ -183,10 +183,8 @@ class StatisticsQueries(DisciplineQueries):
     def _mvp_placement_stats_cte(self, tournament_id: int, *, cte_prefix: str) -> sa.CTE:
         """Per-user average MVP placement, dense-ranked ascending (1 = best).
 
-        The MVP placement stat spans two ``LogStatsName`` columns instead of one:
-        ``ImpactRank`` (the newer impact-scoring rank) when the impact pipeline
-        computed it for a match, the legacy ``Performance`` rank otherwise — same
-        ``COALESCE(ImpactRank, Performance)`` per-match average as
+        The placement is the ``ImpactRank`` fact (competition rank, 1 = best); a player or match without one
+        simply does not count, same per-match average as
         ``services.user.queries.encounters.get_roster_avg_mvp_bulk``.
         """
         tournament_matches = self._tournament_match_ids_cte(tournament_id, cte_name=f"{cte_prefix}matches")
@@ -197,15 +195,12 @@ class StatisticsQueries(DisciplineQueries):
                 sa.func.max(
                     sa.case((self._facts.c.stat_code == enums.LogStatsName.ImpactRank, self._facts.c.value))
                 ).label("impact_rank"),
-                sa.func.max(
-                    sa.case((self._facts.c.stat_code == enums.LogStatsName.Performance, self._facts.c.value))
-                ).label("performance"),
             )
             .select_from(self._facts)
             .join(tournament_matches, tournament_matches.c.match_id == self._facts.c.match_id)
             .where(
                 sa.and_(
-                    self._facts.c.stat_code.in_([enums.LogStatsName.ImpactRank, enums.LogStatsName.Performance]),
+                    self._facts.c.stat_code == enums.LogStatsName.ImpactRank,
                     self._facts.c.entity_id.is_(None),
                     self._facts.c.segment == 0,
                 )
@@ -213,7 +208,7 @@ class StatisticsQueries(DisciplineQueries):
             .group_by(self._facts.c.player_id, self._facts.c.match_id)
             .cte(f"{cte_prefix}per_match")
         )
-        placement = sa.func.coalesce(per_match.c.impact_rank, per_match.c.performance)
+        placement = per_match.c.impact_rank
         average = sa.func.avg(aggregate_order_by(placement, per_match.c.match_id))
 
         return (
@@ -840,7 +835,7 @@ class StatisticsQueries(DisciplineQueries):
         Mirrors the ``(value, rank, total)`` shape
         ``get_tournament_avg_match_stat_for_user_bulk`` returns for the other
         ranked tournament stats, so ``get_tournament_with_stats`` can slot it
-        into that same ``stats[LogStatsName.Performance]`` entry.
+        into that same ``stats[LogStatsName.ImpactRank]`` entry.
 
         Ranked ascending (1 = best, dense-ranked so ties share a rank) among every
         player with an MVP placement in this tournament. Returns ``None`` when the
@@ -870,7 +865,7 @@ class StatisticsQueries(DisciplineQueries):
         aggregate that. Returns ``(stat rows, mvp row)`` in those two functions' shapes.
         """
         f, d, m, wm = models.StatsFact, models.StatDef, models.StatsMatch, models.WorkspaceMember
-        mvp_codes = [enums.LogStatsName.ImpactRank, enums.LogStatsName.Performance]
+        mvp_codes = [enums.LogStatsName.ImpactRank]
         matches = self._tournament_match_ids_cte(tournament.id, cte_name="tournament_rank_matches")
         facts = (
             sa.select(
@@ -904,14 +899,11 @@ class StatisticsQueries(DisciplineQueries):
                 sa.func.max(sa.case((facts.c.stat_code == enums.LogStatsName.ImpactRank, facts.c.value))).label(
                     "impact_rank"
                 ),
-                sa.func.max(sa.case((facts.c.stat_code == enums.LogStatsName.Performance, facts.c.value))).label(
-                    "performance"
-                ),
             )
             .where(facts.c.stat_code.in_(mvp_codes))
             .group_by(facts.c.user_id, facts.c.match_id)
         ).cte("tournament_rank_mvp_per_match")
-        placement = sa.func.coalesce(per_match.c.impact_rank, per_match.c.performance)
+        placement = per_match.c.impact_rank
         average = sa.func.avg(aggregate_order_by(placement, per_match.c.match_id))
         mvp = (
             sa.select(

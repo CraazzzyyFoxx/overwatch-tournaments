@@ -189,8 +189,6 @@ class LogStatsName(StrEnum):
     UltimateKills = "ultimate_kills"
     SupportKills = "support_kills"
 
-    Performance = "performance"  # self calculated
-    PerformancePoints = "performance_points"  # self calculated
     KD = "kd"  # self calculated
     KDA = "kda"  # self calculated
     DamageDelta = "damage_delta"  # self calculated
@@ -198,8 +196,31 @@ class LogStatsName(StrEnum):
     DamageFB = "damage_fb"  # self calculated
     Assists = "assists"  # self calculated
     ImpactPoints = "impact_points"  # self calculated (impact formula)
-    ImpactRank = "impact_rank"  # self calculated (1 = MVP)
-    OverperformanceScore = "overperformance_score"  # self calculated (role x rank baseline)
+    ImpactRank = "impact_rank"  # self calculated (1 = MVP; absent for an unscored player)
+    OverperformanceScore = "overperformance_score"  # self calculated (role x rank-quintile expectation)
+    OverperformanceBadge = "overperformance_badge"  # self calculated (1 = above expectations, top of the map)
+
+    # Per-feature impact contributions (segment 0 only): one per ``shared.core.impact.IMPACT_FEATURES`` entry.
+    ContribEliminations = "contrib_eliminations"
+    ContribFinalBlows = "contrib_final_blows"
+    ContribDeaths = "contrib_deaths"
+    ContribHeroDamageDealt = "contrib_hero_damage_dealt"
+    ContribHealingDealt = "contrib_healing_dealt"
+    ContribDamageBlocked = "contrib_damage_blocked"
+    ContribDamageTaken = "contrib_damage_taken"
+    ContribBarrierDamageDealt = "contrib_barrier_damage_dealt"
+    ContribOffensiveAssists = "contrib_offensive_assists"
+    ContribDefensiveAssists = "contrib_defensive_assists"
+    ContribUltimatesEarned = "contrib_ultimates_earned"
+    ContribUltimatesUsed = "contrib_ultimates_used"
+    ContribMultikills = "contrib_multikills"
+    ContribSoloKills = "contrib_solo_kills"
+    ContribObjectiveKills = "contrib_objective_kills"
+    ContribEnvironmentalKills = "contrib_environmental_kills"
+    ContribFirstPicks = "contrib_first_picks"
+    ContribFirstDeaths = "contrib_first_deaths"
+    ContribUltimateKills = "contrib_ultimate_kills"
+    ContribSupportKills = "contrib_support_kills"
 
 
 StatDirection = Literal["asc", "desc"]
@@ -213,7 +234,6 @@ _log_stats_default_direction.update(
         LogStatsName.EnvironmentalDeaths: "asc",
         LogStatsName.ShotsMissed: "asc",
         LogStatsName.DamageFB: "asc",
-        LogStatsName.Performance: "asc",
         LogStatsName.FirstDeaths: "asc",
         LogStatsName.ImpactRank: "asc",
     }

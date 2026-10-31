@@ -1,13 +1,13 @@
-"""CLI entrypoint for the idempotent MVP impact-scoring backfill (spec 2026-07-10).
+"""CLI entrypoint for the idempotent MVP impact backfill (``impact_v2``).
 
 Usage::
 
     cd backend/stats-service && uv run python backfill_impact.py [--tournament-id N]
 
-Recomputes the 7 MVP-derived stats (event stats + ImpactPoints / ImpactRank /
-OverperformanceScore) for every Overwatch match with player facts, using the
-discipline-scoped active baseline set. Replaces all non-character segments;
-preserves raw/character facts and audits each per-match commit. Safe to rerun.
+Recomputes the kill-feed event stats and every ``impact_v2`` fact (impact points / rank, overperformance score and
+badge, per-feature contributions) for every Overwatch match with player facts, using the active baseline set.
+Replaces all non-character segments; preserves raw/character facts and audits each per-match commit. Safe to rerun.
+Run it after ``rpc.stats.impact.recompute_baselines`` (design 2026-10-31 §8).
 """
 
 import argparse

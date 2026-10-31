@@ -19,6 +19,7 @@ from typing import Any
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.core.impact import CONTRIBUTION_STATS
 from shared.models.identity.auth_user import AuthUser
 from shared.models.platform.audit import AuditLog
 from shared.services.audit import AuditSource, record_audit
@@ -34,6 +35,8 @@ DERIVED_CODES = (
     "impact_points",
     "impact_rank",
     "overperformance_score",
+    "overperformance_badge",
+    *(stat.value for stat in CONTRIBUTION_STATS.values()),
 )
 PARTITIONS = {
     "match": (
@@ -408,7 +411,7 @@ def projection(scope: Scope, identity_map: Sequence[dict] = ()) -> tuple[Project
             "stats.stat_baseline r JOIN stats.stat_def d ON d.id=r.stat_id JOIN catalog.role role ON role.id=r.role_id JOIN catalog.role_dimension dim ON dim.id=role.dimension_id",
             "d.discipline=:k0 AND r.formula_version=:k1",
             _cols(
-                "r.id r.formula_version r.role_id dim.discipline dim.code r.rank_bucket r.stat_id d.discipline r.mean r.std r.meta r.computed_at",
+                "r.id r.formula_version r.role_id dim.discipline dim.code r.rank_bucket r.stat_id r.entity_id d.discipline r.mean r.std r.meta r.computed_at",
                 text=("r.formula_version", "dim.discipline", "dim.code", "d.discipline"),
                 jsons=("r.meta",),
             )

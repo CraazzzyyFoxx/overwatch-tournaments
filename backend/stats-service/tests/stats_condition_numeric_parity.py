@@ -141,6 +141,16 @@ async def assert_condition_golden(session, ids, actual):
     actual = json.loads(json.dumps(actual, default=_json_default, allow_nan=False))
     golden_bytes = (_FIXTURES / "stats_condition_parity.json").read_bytes()
     expected = json.loads(golden_bytes)
+    # The golden is the frozen legacy implementation's output and stays untouched; compare only the cases that still
+    # exist. A case drops out for a changed semantics: a retired stat (``threshold/code/<code>`` of a code no longer
+    # in ``LogStatsName``) or the MVP rank, now ``impact_rank`` (``mvp/ascending``, tested in
+    # ``test_stats_condition_parity``). Any other missing case is a real regression and still fails ``_strict``.
+    dropped = expected["trees"].keys() - actual["trees"].keys()
+    assert all(name == "mvp/ascending" or name.startswith("threshold/code/") for name in dropped), dropped
+    for name in dropped:
+        del expected["trees"][name]
+        for scope in expected["scopes"].values():
+            del scope["conditions"][name]
     witness = json.loads((_FIXTURES / "stats_condition_weighted_operands.json").read_text(encoding="utf-8"))
     assert witness["format"] == 1
     provenance = witness["provenance"]

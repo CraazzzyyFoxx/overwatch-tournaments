@@ -70,8 +70,6 @@ class BoundParticipant:
     member_id: int
     user_id: int
     encounter_team_id: int
-    #: The current-registration rank the discipline's baselines bucket on; ``None`` when unranked.
-    rank: int | None
     #: The roster role code the seat was filled as; the fallback when a log shows no playtime to observe one.
     role: str | None
 

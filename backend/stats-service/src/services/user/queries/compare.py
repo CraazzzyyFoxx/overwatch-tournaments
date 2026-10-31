@@ -46,9 +46,10 @@ class UserCompareQueries(DisciplineQueries):
 
     @property
     def comparable_stats(self) -> tuple[enums.LogStatsName, ...]:
-        """The game's declared non-team character stats, playtime aside: what a character comparison reports when the
-        caller names none. ``()`` for a game that declares none (LoL) — never another game's vocabulary."""
-        declared = {d.code for d in DISCIPLINES[self.discipline].stat_defs if d.group != "team"}
+        """The game's declared character stats outside the hidden ``team`` and ``impact`` groups, playtime aside: what a
+        character comparison reports when the caller names none. ``()`` for a game that declares none (LoL) — never
+        another game's vocabulary."""
+        declared = {d.code for d in DISCIPLINES[self.discipline].stat_defs if d.group not in ("team", "impact")}
         return tuple(
             stat for stat in enums.LogStatsName if stat.value in declared and stat != enums.LogStatsName.HeroTimePlayed
         )
@@ -473,12 +474,9 @@ class UserCompareQueries(DisciplineQueries):
             ).where(models.Encounter.tournament_id == tournament_id)
         per_10_stats = per_10_stats.group_by(hero_match_stats.c.user_id).cte("compare_match_stats")
 
-        # MVP placement spans two LogStatsName columns: ImpactRank when the
-        # impact-scoring pipeline computed it for a match, legacy Performance
-        # otherwise — same COALESCE(ImpactRank, Performance) per-match average as
-        # services.user.queries.encounters.get_roster_avg_mvp_bulk. First collapse each
-        # match's two candidate rows into one (impact_rank, performance) pair, THEN
-        # average the coalesced placement per user.
+        # MVP placement is the ImpactRank fact (a match without one does not count), the same per-match average as
+        # services.user.queries.encounters.get_roster_avg_mvp_bulk. First collapse each match's rows into one
+        # placement, THEN average it per user.
         mvp_per_match = (
             sa.select(
                 self._facts.c.player_id.label("user_id"),
@@ -486,9 +484,6 @@ class UserCompareQueries(DisciplineQueries):
                 sa.func.max(
                     sa.case((self._facts.c.stat_code == enums.LogStatsName.ImpactRank, self._facts.c.value))
                 ).label("impact_rank"),
-                sa.func.max(
-                    sa.case((self._facts.c.stat_code == enums.LogStatsName.Performance, self._facts.c.value))
-                ).label("performance"),
             )
             .select_from(self._facts)
             .join(self._matches, self._matches.c.id == self._facts.c.match_id)
@@ -496,7 +491,7 @@ class UserCompareQueries(DisciplineQueries):
             .where(
                 self._facts.c.segment == 0,
                 self._facts.c.entity_id.is_(None),
-                self._facts.c.stat_code.in_([enums.LogStatsName.ImpactRank, enums.LogStatsName.Performance]),
+                self._facts.c.stat_code == enums.LogStatsName.ImpactRank,
             )
         )
         if has_roster_filter:
@@ -516,7 +511,7 @@ class UserCompareQueries(DisciplineQueries):
             "compare_mvp_per_match"
         )
 
-        mvp_placement = sa.func.coalesce(mvp_per_match.c.impact_rank, mvp_per_match.c.performance)
+        mvp_placement = mvp_per_match.c.impact_rank
         mvp_stats = (
             sa.select(
                 mvp_per_match.c.user_id,

@@ -20,12 +20,12 @@ import type { LobbyLeaderboard } from "@/types/user.types";
 
 // Stats where a lower value is better (rank 1 = lowest). Mirrors the backend's
 // `is_ascending_stat`, restricted to the stats the tiles can open.
-const INVERSE_STATS = new Set(["deaths", "performance"]);
+const INVERSE_STATS = new Set(["deaths", "impact_rank"]);
 
 interface Props {
   userId: number;
   tournamentId: number;
-  /** Backend LogStatsName value, e.g. "kda" / "performance". Null = closed. */
+  /** Backend LogStatsName value, e.g. "kda" / "impact_rank". Null = closed. */
   stat: string | null;
   statLabel: string;
   onClose: () => void;

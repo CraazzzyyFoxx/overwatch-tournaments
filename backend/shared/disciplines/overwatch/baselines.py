@@ -1,12 +1,15 @@
-"""Native, discipline-scoped impact baselines and atomic audited recomputation.
+"""Native, discipline-scoped impact baselines: loading the inputs, the cached read and the atomic audited recompute.
 
-The OW formula boundary deliberately retains current-registration rank.
+``impact_v2`` (design §4): the aggregation itself is pure (``baseline_rows.build_baseline_rows``); this module reads
+the last year's per-hero segment-0 facts, kill feeds and rank quintiles, and replaces a formula version's rows.
 Observation ownership and encounter snapshots are not rewritten.
 """
 
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 
 import pandas as pd
 import sqlalchemy as sa
@@ -14,21 +17,197 @@ from cashews import cache
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
-from shared.core import enums
-from shared.core.impact import FORMULA_VERSION, IMPACT_WEIGHTS
+from shared.core import enums, impact_weights
+from shared.core.impact import (
+    BASELINE_MAX_MATCHES,
+    BASELINE_WINDOW_DAYS,
+    EVENT_STATS,
+    FORMULA_VERSION,
+    IMPACT_FEATURES,
+)
 from shared.disciplines.overwatch import impact
 from shared.disciplines.overwatch.baseline_rows import build_baseline_rows
+from shared.disciplines.overwatch.rank_quintiles import match_quintiles
 from shared.repository.baselines import StatBaselineRepository
 from shared.repository.roles import CatalogRoleRepository
 from shared.repository.stats import StatDefRepository
-from shared.repository.stats_queries import player_facts
 from shared.services.stats_evidence import capture_stats_evidence, owner_scopes, stage_stats_evidence
 
-__all__ = ("BaselineService", "baseline_service", "get_active", "invalidate_cache", "recompute")
+__all__ = (
+    "BaselineInputs",
+    "BaselineService",
+    "baseline_service",
+    "get_active",
+    "hero_catalog",
+    "invalidate_cache",
+    "load_baseline_inputs",
+    "recompute",
+)
 
 logger = logging.getLogger(__name__)
-_STAT_NAMES = tuple(IMPACT_WEIGHTS)
 _CACHE_TTL = "10m"
+#: Features read from the per-hero facts; the event features come from the kill feed.
+_FACT_FEATURES = tuple(feature for feature in IMPACT_FEATURES if feature not in EVENT_STATS)
+_FACT_CODES = {enums.LogStatsName[name].value: name for name in (*_FACT_FEATURES, "HeroTimePlayed")}
+_STINT_COLUMNS = [
+    "player_id",
+    "segment",
+    "hero",
+    "role",
+    "seconds",
+    *IMPACT_FEATURES,
+    "match_id",
+    "team_id",
+    "killfeed",
+    "played_at",
+]
+#: Fight ids are numbered per match; ``match_id * _MAX_FIGHTS + fight`` keeps matches apart in one kill-feed frame.
+_MAX_FIGHTS = 1_000_000
+
+
+@dataclass
+class BaselineInputs:
+    """What ``build_baseline_rows`` aggregates (and the weight fit reads): one stint per player, hero and match."""
+
+    #: Segment-0 :func:`impact.build_stints` rows with ``match_id``, ``team_id`` (``encounter.team`` id), ``killfeed``
+    #: (bool: the match has a stored kill feed) and ``played_at``; ``player_id`` is the workspace member id.
+    stints: pd.DataFrame
+    #: ``(match_id, player_id) -> rank quintile`` of the player's dominant role on the map; absent = unknown.
+    quintiles: dict[tuple[int, int], int]
+
+
+async def hero_catalog(session: AsyncSession, *, discipline: str) -> dict[str, tuple[int, enums.HeroClass | None]]:
+    """Character slug -> ``(catalog id, class)``; the class is ``None`` for a hero without one."""
+    entity = models.CatalogEntity
+    rows = await session.execute(
+        sa.select(entity.slug, entity.id, entity.attrs["class"].astext).where(
+            entity.discipline == discipline, entity.kind == "character"
+        )
+    )
+    return {slug: (hero_id, enums.HeroClass.__members__.get(hero_class)) for slug, hero_id, hero_class in rows}
+
+
+async def load_baseline_inputs(
+    session: AsyncSession, *, discipline: str, since: datetime | None, max_matches: int | None = None
+) -> BaselineInputs:
+    """Every match of the discipline played at/after ``since`` (``coalesce(played_at, created_at)``; ``None`` = all),
+    or the most recent ``max_matches`` of them."""
+    catalog = await hero_catalog(session, discipline=discipline)
+    hero_types = {hero_id: hero_class for hero_id, hero_class in catalog.values() if hero_class is not None}
+
+    match = models.StatsMatch
+    window = [match.discipline == discipline]
+    if since is not None:
+        window.append(sa.func.coalesce(match.played_at, match.created_at) >= since)
+    played = sa.func.coalesce(match.played_at, match.created_at)
+    query = sa.select(match.id, match.encounter_id, played).where(*window).order_by(played.desc(), match.id.desc())
+    if max_matches is not None:
+        query = query.limit(max_matches)
+    matches = {
+        match_id: (encounter_id, played_at) for match_id, encounter_id, played_at in await session.execute(query)
+    }
+    if max_matches is not None:
+        window = [match.id.in_(list(matches))]
+    empty = BaselineInputs(pd.DataFrame(columns=_STINT_COLUMNS), {})
+    if not matches:
+        return empty
+
+    # ponytail: the window's per-hero facts are held in memory (a few million rows for a year of a busy deployment);
+    # chunk by match id when that stops fitting.
+    fact, stat = models.StatsFact, models.StatDef
+    facts = (
+        await session.execute(
+            sa.select(
+                fact.match_id, fact.workspace_member_id, fact.encounter_team_id, fact.entity_id, stat.code, fact.value
+            )
+            .join(match, match.id == fact.match_id)
+            .join(stat, sa.and_(stat.id == fact.stat_id, stat.discipline == match.discipline))
+            .where(
+                *window,
+                fact.segment == 0,
+                fact.entity_id.is_not(None),
+                fact.workspace_member_id.is_not(None),
+                stat.code.in_(_FACT_CODES),
+            )
+            # Float reductions must not depend on the plan: immutable keys define the input order.
+            .order_by(fact.match_id, fact.workspace_member_id, fact.entity_id, stat.code)
+        )
+    ).all()
+    if not facts:
+        return empty
+
+    event, kind = models.StatsEvent, models.EventType
+    kills = (
+        await session.execute(
+            sa.select(
+                event.match_id,
+                event.segment,
+                event.t,
+                event.actor_member_id,
+                event.target_member_id,
+                event.entity_id,
+                event.related_entity_id,
+                event.data,
+            )
+            .join(match, match.id == event.match_id)
+            .join(kind, sa.and_(kind.id == event.type_id, kind.discipline == match.discipline))
+            .where(*window, kind.code == "kill", event.data.has_key("fight"))
+            .order_by(event.match_id, event.t, event.id)
+        )
+    ).all()
+
+    # One synthetic player per (match, member): the stint and kill-feed builders then run once for every match, and
+    # fights (numbered per match) stay apart because the fight key carries the match.
+    pids: dict[tuple[int, int], int] = {}
+    team_of: dict[int, int] = {}
+    for match_id, member_id, team_id, *_ in facts:
+        team_of[pids.setdefault((match_id, member_id), len(pids))] = team_id
+    feed = []
+    for match_id, segment, t, actor, target, hero, victim_hero, data in kills:
+        feed.append(
+            impact.KillRow(
+                t=t,
+                segment=segment,
+                actor_member_id=None if actor is None else pids.setdefault((match_id, actor), len(pids)),
+                target_member_id=None if target is None else pids.setdefault((match_id, target), len(pids)),
+                related_entity_id=victim_hero,
+                data={**data, "fight": match_id * _MAX_FIGHTS + data["fight"]},
+                entity_id=hero,
+            )
+        )
+    events = impact.build_event_counts(feed, hero_types, member_user_ids={pid: pid for pid in pids.values()})
+    stat_rows = pd.DataFrame(
+        [
+            (pids[(match_id, member_id)], 0, hero, _FACT_CODES[code], value)
+            for match_id, member_id, _, hero, code, value in facts
+        ],
+        columns=["player_id", "segment", "hero", "name", "value"],
+    )
+    stints = impact.build_stints(stat_rows, events, hero_types)
+    if stints.empty:
+        return empty
+
+    keys = list(pids)
+    match_ids = [keys[pid][0] for pid in stints["player_id"]]
+    killfeed_matches = {match_id for match_id, *_ in kills}
+    stints = stints.assign(
+        match_id=match_ids,
+        team_id=[team_of.get(pid) for pid in stints["player_id"]],
+        killfeed=[match_id in killfeed_matches for match_id in match_ids],
+        played_at=[matches[match_id][1] for match_id in match_ids],
+        player_id=[keys[pid][1] for pid in stints["player_id"]],
+    )
+
+    roles = impact.dominant_roles(stints, ("match_id",))
+    by_encounter = await match_quintiles(
+        session, [(matches[match_id][0], member_id, role) for (match_id, member_id), role in roles.items()]
+    )
+    quintiles = {
+        (match_id, member_id): by_encounter[(matches[match_id][0], member_id)]
+        for (match_id, member_id) in roles
+        if (matches[match_id][0], member_id) in by_encounter
+    }
+    return BaselineInputs(stints, quintiles)
 
 
 class BaselineService:
@@ -66,12 +245,23 @@ class BaselineService:
         if not rows:
             return None
 
-        bounds = tuple(rows[0][0].meta["bucket_bounds"]) if rows[0][0].meta else ()
-        values = {
-            (role_code.lower(), row.rank_bucket, enums.LogStatsName(stat_code).name): (row.mean, row.std)
-            for row, role_code, stat_code in rows
-        }
-        baseline_set = impact.BaselineSet(FORMULA_VERSION, bounds, values)
+        threshold = next(
+            (row.meta["badge_threshold"] for row, _, _ in rows if row.meta and "badge_threshold" in row.meta), None
+        )
+        baseline_set = impact.baseline_set(
+            [
+                {
+                    "role": role_code,
+                    "hero": row.entity_id,
+                    "rank_bucket": row.rank_bucket,
+                    "stat": enums.LogStatsName(stat_code).name,
+                    "mean": row.mean,
+                    "std": row.std,
+                }
+                for row, role_code, stat_code in rows
+            ],
+            threshold,
+        )
         if cache.is_setup():
             try:
                 await cache.set(key, baseline_set, expire=_CACHE_TTL)
@@ -91,10 +281,18 @@ class BaselineService:
         """Replace OW formula rows, sealing evidence before the existing commit."""
         if discipline != "overwatch":
             raise ValueError("impact baseline computation is only defined for overwatch")
+        if not impact_weights.FITTED:
+            raise RuntimeError(
+                "impact weights are not fitted — run stats-service/fit_impact_weights.py and commit "
+                "shared/core/impact_weights.py before recomputing baselines"
+            )
         scopes = owner_scopes("baseline", (discipline, FORMULA_VERSION))
         before = await capture_stats_evidence(session, scopes=scopes)
-        stats = await self._load_stats_frame(session, discipline=discipline)
-        rows = build_baseline_rows(stats)
+        since = datetime.now(UTC) - timedelta(days=BASELINE_WINDOW_DAYS)
+        inputs = await load_baseline_inputs(
+            session, discipline=discipline, since=since, max_matches=BASELINE_MAX_MATCHES
+        )
+        rows, threshold = build_baseline_rows(inputs.stints, inputs.quintiles, impact_weights.IMPACT_WEIGHTS)
         if not rows:
             raise RuntimeError("impact baseline recompute produced 0 rows; refusing to wipe existing baselines")
         roles = await CatalogRoleRepository().rated_rows(session, discipline=discipline, workspace_id=None)
@@ -105,9 +303,15 @@ class BaselineService:
                 role_id=roles[row["role"]].id,
                 rank_bucket=row["rank_bucket"],
                 stat_id=stat_ids[enums.LogStatsName[row["stat"]].value],
+                entity_id=row["hero"],
                 mean=row["mean"],
                 std=row["std"],
-                meta=row["meta"],
+                meta={
+                    "n": row["n"],
+                    "badge_threshold": threshold,
+                    "window_days": BASELINE_WINDOW_DAYS,
+                    "max_matches": BASELINE_MAX_MATCHES,
+                },
             )
             for row in rows
         ]
@@ -126,168 +330,6 @@ class BaselineService:
         await session.commit()
         await self.invalidate_cache(discipline=discipline)
         return len(rows)
-
-    async def _load_stats_frame(self, session: AsyncSession, *, discipline: str) -> pd.DataFrame:
-        """Global historical OW rates, preserving total/character grains and current-registration rank inputs."""
-        f = player_facts(discipline=discipline).c
-        totals = (
-            sa.select(
-                f.match_id,
-                f.player_id.label("user_id"),
-                f.workspace_member_id,
-                f.tournament_team_id.label("team_id"),
-                sa.func.max(f.value).filter(f.stat_code == enums.LogStatsName.HeroTimePlayed.value).label("seconds"),
-                *[
-                    sa.func.max(f.value).filter(f.stat_code == enums.LogStatsName[name].value).label(name)
-                    for name in _STAT_NAMES
-                ],
-            )
-            .where(f.segment == 0, f.entity_id.is_(None))
-            .group_by(
-                f.match_id,
-                f.player_id,
-                f.workspace_member_id,
-                f.tournament_team_id,
-            )
-            .cte("impact_baseline_totals")
-        )
-
-        # Project JSON extraction once; grouping by this column avoids distinct
-        # asyncpg bind positions for repeated attrs['class'] expressions.
-        character_times = (
-            sa.select(
-                f.match_id,
-                f.player_id.label("user_id"),
-                models.CatalogEntity.attrs["class"].astext.label("hero_type"),
-                f.value,
-            )
-            .join(models.CatalogEntity, models.CatalogEntity.id == f.entity_id)
-            .where(
-                models.CatalogEntity.kind == "character",
-                models.CatalogEntity.discipline == discipline,
-                f.segment == 0,
-                f.entity_id.is_not(None),
-                f.stat_code == enums.LogStatsName.HeroTimePlayed.value,
-            )
-            .cte("impact_baseline_character_times")
-        )
-        hero_playtime = (
-            sa.select(
-                character_times.c.match_id,
-                character_times.c.user_id,
-                character_times.c.hero_type,
-                sa.func.sum(character_times.c.value).label("seconds"),
-            )
-            .group_by(character_times.c.match_id, character_times.c.user_id, character_times.c.hero_type)
-            .cte("impact_baseline_hero_playtime")
-        )
-        ranked = sa.select(
-            hero_playtime.c.match_id,
-            hero_playtime.c.user_id,
-            hero_playtime.c.hero_type,
-            sa.func.row_number()
-            .over(
-                partition_by=(hero_playtime.c.match_id, hero_playtime.c.user_id),
-                order_by=hero_playtime.c.seconds.desc(),
-            )
-            .label("role_rank"),
-        ).subquery("impact_baseline_hero_playtime_ranked")
-        dominant_role = (
-            sa.select(ranked.c.match_id, ranked.c.user_id, ranked.c.hero_type)
-            .where(
-                ranked.c.role_rank == 1,
-            )
-            .cte("impact_baseline_dominant_role")
-        )
-
-        roster_ranked = (
-            sa.select(
-                models.Player.team_id,
-                models.Player.workspace_member_id,
-                models.Player.rank,
-                sa.func.row_number()
-                .over(
-                    partition_by=(models.Player.team_id, models.Player.workspace_member_id),
-                    order_by=(models.Player.is_substitution.asc(), models.Player.id.desc()),
-                )
-                .label("roster_rank"),
-            )
-            .join(models.Tournament, models.Tournament.id == models.Player.tournament_id)
-            .where(
-                models.Tournament.discipline == discipline,
-            )
-            .subquery("impact_baseline_roster_ranked")
-        )
-        roster = (
-            sa.select(roster_ranked.c.team_id, roster_ranked.c.workspace_member_id, roster_ranked.c.rank)
-            .where(
-                roster_ranked.c.roster_rank == 1,
-            )
-            .cte("impact_baseline_roster")
-        )
-        event = models.StatsEvent
-        killfeed_matches = (
-            sa.select(event.match_id)
-            .join(
-                models.StatsMatch,
-                models.StatsMatch.id == event.match_id,
-            )
-            .join(models.EventType, models.EventType.id == event.type_id)
-            .where(
-                models.StatsMatch.discipline == discipline,
-                models.EventType.discipline == discipline,
-                models.EventType.code == "kill",
-            )
-            .distinct()
-            .cte("impact_baseline_killfeed_matches")
-        )
-        query = (
-            sa.select(
-                dominant_role.c.hero_type,
-                roster.c.rank,
-                totals.c.seconds,
-                killfeed_matches.c.match_id.is_not(None).label("has_killfeed"),
-                *[totals.c[name] for name in _STAT_NAMES],
-            )
-            .select_from(totals)
-            .join(
-                dominant_role,
-                sa.and_(
-                    dominant_role.c.match_id == totals.c.match_id,
-                    dominant_role.c.user_id == totals.c.user_id,
-                ),
-            )
-            .join(
-                roster,
-                sa.and_(
-                    roster.c.team_id == totals.c.team_id,
-                    roster.c.workspace_member_id == totals.c.workspace_member_id,
-                ),
-            )
-            .outerjoin(killfeed_matches, killfeed_matches.c.match_id == totals.c.match_id)
-            .where(
-                totals.c.seconds.is_not(None),
-            )
-            # Float reductions must not depend on PostgreSQL's aggregate/join
-            # plan. Immutable match/global-player keys define the input order.
-            .order_by(totals.c.match_id, totals.c.user_id)
-        )
-        result = await session.execute(query)
-        df = pd.DataFrame(result.mappings().all())
-        if df.empty:
-            return pd.DataFrame(
-                columns=["role", "rank", "minutes", "has_killfeed", *(f"{s}_rate" for s in _STAT_NAMES)]
-            )
-        df["minutes"] = df.pop("seconds").astype(float) / 60.0
-        df["role"] = df.pop("hero_type").map(lambda t: str(getattr(t, "value", t)).lower())
-        df["has_killfeed"] = df["has_killfeed"].fillna(False).astype(bool)
-        df["rank"] = pd.to_numeric(df["rank"])  # int64 when every row is ranked; NaN (float) marks an unranked row
-        df = df[df["minutes"] > 0].copy()
-        ten_minute_units = df["minutes"] / 10.0
-        for name in _STAT_NAMES:
-            value = df.pop(name).fillna(0.0).astype(float)
-            df[f"{name}_rate"] = value / ten_minute_units
-        return df
 
 
 baseline_service = BaselineService()

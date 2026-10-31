@@ -364,7 +364,7 @@ export interface Standings {
 
 /** The stats `GET /tournaments/{id}/player-stats` ranks: per-map averages over the tournament's logged maps. */
 export type TournamentPlayerStatKey =
-  | "performance"
+  | "impact_rank"
   | "kda"
   | "eliminations"
   | "deaths"

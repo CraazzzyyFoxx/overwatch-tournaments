@@ -208,6 +208,9 @@ Settings that change behaviour:
   `SHIFT_PLACEMENT_FLOOR`, `SHIFT_CLAMP_TOP_GRID_REF`) and `STANDINGS_PROB_SHARPENING`.
   Each carries a comment saying whether it applies at read time or needs a retrain to take
   effect — most need a retrain.
+  `SHIFT_DOMINANCE_*` keep their meaning after `impact_v2`: dominance is now derived from
+  `impact_rank`. Performance v2 / Shift v2 artifacts must be retrained once, and the new
+  artifacts apply to active and future tournaments only (historical shifts are not recomputed).
 - `LINEAR_SHIFT_SCALE` and `SMURF_STRONG_LOCAL_Z` / `SMURF_MVP_DOMINANCE` — v1 linear scale
   (applied at read time; recompute v1 shifts to refresh stored rows) and the smurf flag
   thresholds.

@@ -17,23 +17,18 @@ const formatterFor = (locale: string): StatFormatter => ({
 });
 
 describe("resolveMatchMvpPlacement", () => {
-  it("prefers impact_rank over legacy performance", () => {
-    const player = playerWith({ [LogStatsName.ImpactRank]: 2, [LogStatsName.Performance]: 1 });
+  it("reads impact_rank", () => {
+    const player = playerWith({ [LogStatsName.ImpactRank]: 2 });
     expect(resolveMatchMvpPlacement(player, 0)).toBe(2);
   });
 
-  it("falls back to performance when impact_rank is absent (legacy match)", () => {
-    const player = playerWith({ [LogStatsName.Performance]: 3 });
-    expect(resolveMatchMvpPlacement(player, 0)).toBe(3);
-  });
-
-  it("returns null when neither stat exists for the round", () => {
+  it("returns null when impact_rank is absent (unscored player)", () => {
     const player = playerWith({});
     expect(resolveMatchMvpPlacement(player, 0)).toBeNull();
   });
 
   it("returns null for a round the player has no stats row for", () => {
-    const player = playerWith({ [LogStatsName.Performance]: 1 });
+    const player = playerWith({ [LogStatsName.ImpactRank]: 1 });
     expect(resolveMatchMvpPlacement(player, 1)).toBeNull();
   });
 });

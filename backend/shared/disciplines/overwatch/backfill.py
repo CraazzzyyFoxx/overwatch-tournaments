@@ -1,14 +1,13 @@
 """Idempotent native OW backfill at every non-character segment.
 
-Raw and character facts remain untouched. The existing pandas formula and
-current-registration rank/role boundary are frozen; ownership always
-comes from match_player, even after a roster change or removal. Each caller's
-per-match commit includes complete evidence and tracked JSON fight updates.
+Raw and character facts remain untouched. The kill-feed event counts and every ``impact_v2`` fact are recomputed from
+the stored per-hero facts, the stored kill feed (fights are re-assigned deterministically) and the active baselines;
+ownership always comes from match_player, even after a roster change or removal. Each caller's per-match commit
+includes complete evidence and tracked JSON fight updates.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from typing import TYPE_CHECKING
 
 import pandas as pd
@@ -16,17 +15,13 @@ import sqlalchemy as sa
 from loguru import logger
 
 from shared import models
-from shared.core import enums
+from shared.core import enums, impact_weights
+from shared.core.impact import EVENT_STATS
 from shared.disciplines.overwatch import baselines as baselines_service
 from shared.disciplines.overwatch import impact
-from shared.disciplines.overwatch.impact_backfill import (
-    NEW_STAT_MEMBERS,
-    _merge_events,
-    _rank_by_impact,
-    rebuild_frames,
-)
+from shared.disciplines.overwatch.impact_backfill import NEW_STAT_MEMBERS
+from shared.disciplines.overwatch.rank_quintiles import match_quintiles
 from shared.repository.stats import StatDefRepository, StatsMatchRepository
-from shared.repository.stats_queries import player_facts
 from shared.services.stats_evidence import capture_stats_evidence, owner_scopes, stage_stats_evidence
 
 if TYPE_CHECKING:
@@ -54,86 +49,53 @@ class BackfillService:
         self._stats_repo = stats_repo
         self._hero_types_cache: dict[int, enums.HeroClass] = {}
 
-    def _stat_objects(
+    def _fact_objects(
         self,
         match_id: int,
-        ownership: Mapping[int, tuple[int, int]],
-        stat_ids: Mapping[str, int],
-        round_df: pd.DataFrame,
-        match_df: pd.DataFrame,
+        ownership: dict[int, int],
+        stat_ids: dict[str, int],
+        facts: list[tuple[int, int, enums.LogStatsName, float]],
     ) -> list[dict]:
-        """Build native facts using actual member/participant ownership, never roster teams."""
-        objects = []
-        for df in (round_df, match_df):
-            for _, row in df.iterrows():
-                member_id, team_id = ownership[int(row["user_id"])]
-                for member in NEW_STAT_MEMBERS:
-                    raw = row.get(member, 0.0)
-                    objects.append(
-                        {
-                            "match_id": match_id,
-                            "segment": int(row["round"]),
-                            "encounter_team_id": team_id,
-                            "workspace_member_id": member_id,
-                            "entity_id": None,
-                            "stat_id": stat_ids[member.value],
-                            "value": 0.0 if pd.isna(raw) else float(raw),
-                        }
-                    )
-        return objects
+        """Native facts of ``(member, segment, stat, value)`` using actual participant ownership, never roster teams."""
+        return [
+            {
+                "match_id": match_id,
+                "segment": segment,
+                "encounter_team_id": ownership[member_id],
+                "workspace_member_id": member_id,
+                "entity_id": None,
+                "stat_id": stat_ids[stat.value],
+                "value": float(value),
+            }
+            for member_id, segment, stat, value in facts
+        ]
 
     async def _load_stat_rows(self, session: AsyncSession, match_id: int) -> pd.DataFrame:
-        f = player_facts(discipline="overwatch").c
-        result = await session.execute(
-            sa.select(
-                f.player_id.label("user_id"),
-                f.segment.label("round"),
-                f.entity_id.label("hero_id"),
-                f.stat_code.label("name"),
-                f.value,
-            ).where(f.match_id == match_id, f.stat_code.not_in([member.value for member in NEW_STAT_MEMBERS]))
-        )
-        rows = result.mappings().all()
-        if not rows:
-            return pd.DataFrame(columns=["user_id", "round", "hero_id", "name", "value"])
-        df = pd.DataFrame(rows)
-        df["name"] = df["name"].map(enums.LogStatsName)
-        return df
-
-    async def _load_players(self, session: AsyncSession, match_id: int):
-        """All observed players, including event-only and no-longer-rostered members."""
-        player, match, member = models.StatsMatchPlayer, models.StatsMatch, models.WorkspaceMember
-        team, game, encounter = models.EncounterTeam, models.EncounterGame, models.Encounter
-        return (
+        """Every stored fact of a member that is not one of the derived codes (segment, hero, name, value)."""
+        fact, stat = models.StatsFact, models.StatDef
+        rows = (
             await session.execute(
-                sa.select(
-                    member.player_id.label("user_id"),
-                    player.workspace_member_id,
-                    player.encounter_team_id,
-                    team.team_id,
-                )
-                .select_from(player)
-                .join(match, match.id == player.match_id)
-                .join(
-                    member,
-                    sa.and_(member.id == player.workspace_member_id, member.workspace_id == match.workspace_id),
-                )
-                .join(game, game.id == match.encounter_game_id)
-                .join(
-                    encounter,
-                    sa.and_(
-                        encounter.id == game.encounter_id,
-                        encounter.workspace_id == match.workspace_id,
-                        encounter.discipline == match.discipline,
-                    ),
-                )
-                .join(team, sa.and_(team.id == player.encounter_team_id, team.encounter_id == encounter.id))
+                sa.select(fact.workspace_member_id, fact.segment, fact.entity_id, stat.code, fact.value)
+                .join(stat, stat.id == fact.stat_id)
                 .where(
-                    match.id == match_id,
-                    match.discipline == "overwatch",
+                    fact.match_id == match_id,
+                    stat.discipline == "overwatch",
+                    fact.workspace_member_id.is_not(None),
+                    stat.code.not_in([member.value for member in NEW_STAT_MEMBERS]),
                 )
             )
         ).all()
+        df = pd.DataFrame(rows, columns=["player_id", "segment", "hero", "name", "value"])
+        df["name"] = df["name"].map({stat.value: stat.name for stat in enums.LogStatsName})
+        return df[df["name"].notna()]
+
+    async def _load_ownership(self, session: AsyncSession, match_id: int) -> dict[int, int]:
+        """Every observed player (including event-only and no-longer-rostered members) -> encounter team id."""
+        player = models.StatsMatchPlayer
+        rows = await session.execute(
+            sa.select(player.workspace_member_id, player.encounter_team_id).where(player.match_id == match_id)
+        )
+        return dict(rows.all())
 
     async def _load_kills(self, session: AsyncSession, match_id: int) -> list[models.StatsEvent]:
         event, match, kind = models.StatsEvent, models.StatsMatch, models.EventType
@@ -157,91 +119,14 @@ class BackfillService:
 
     async def _load_hero_types(self, session: AsyncSession) -> dict[int, enums.HeroClass]:
         if not self._hero_types_cache:
-            rows = (
-                await session.execute(
-                    sa.select(
-                        models.CatalogEntity.id,
-                        models.CatalogEntity.attrs["class"].astext.label("hero_class"),
-                    ).where(models.CatalogEntity.discipline == "overwatch", models.CatalogEntity.kind == "character")
-                )
-            ).all()
-            self._hero_types_cache.update({row.id: enums.HeroClass[row.hero_class] for row in rows})
+            catalog = await baselines_service.hero_catalog(session, discipline="overwatch")
+            self._hero_types_cache.update(
+                {hero_id: hero_class for hero_id, hero_class in catalog.values() if hero_class is not None}
+            )
         return self._hero_types_cache
 
-    async def _load_player_refs(self, session: AsyncSession, match_id: int) -> dict[int, impact.PlayerRef]:
-        """Frozen current-registration scoring inputs, anchored to historical ownership."""
-        f = player_facts(discipline="overwatch").c
-        fact_users = set(await session.scalars(sa.select(f.player_id).where(f.match_id == match_id).distinct()))
-        owners = [row for row in await self._load_players(session, match_id) if row.user_id in fact_users]
-        if not owners:
-            return {}
-        hero_types = await self._load_hero_types(session)
-        playtime_rows = (
-            await session.execute(
-                sa.select(
-                    f.player_id.label("user_id"),
-                    f.entity_id.label("hero_id"),
-                    f.value,
-                ).where(
-                    f.match_id == match_id,
-                    f.segment == 0,
-                    f.entity_id.is_not(None),
-                    f.stat_code == enums.LogStatsName.HeroTimePlayed.value,
-                )
-            )
-        ).all()
-        playtime_df = pd.DataFrame(
-            {
-                "player_id": [r.user_id for r in playtime_rows],
-                "hero_id": [r.hero_id for r in playtime_rows],
-                "seconds": [r.value for r in playtime_rows],
-            }
-        )
-        dominant_roles = impact.dominant_roles(playtime_df, hero_types)
-        roster_ranked = (
-            sa.select(
-                models.Player.team_id,
-                models.Player.workspace_member_id,
-                models.Player.role.label("role"),
-                models.Player.rank,
-                sa.func.row_number()
-                .over(
-                    partition_by=(models.Player.team_id, models.Player.workspace_member_id),
-                    order_by=(models.Player.is_substitution.asc(), models.Player.id.desc()),
-                )
-                .label("roster_rank"),
-            )
-            .join(models.Tournament, models.Tournament.id == models.Player.tournament_id)
-            .where(
-                models.Player.team_id.in_({row.team_id for row in owners}),
-                models.Tournament.discipline == "overwatch",
-            )
-            .subquery("backfill_roster_ranked")
-        )
-        roster_rows = (await session.execute(sa.select(roster_ranked).where(roster_ranked.c.roster_rank == 1))).all()
-        roster_by_key = {
-            (row.team_id, row.workspace_member_id): (
-                enums.HeroClass[row.role] if row.role else None,
-                row.rank,
-            )
-            for row in roster_rows
-        }
-        refs = {}
-        for owner in owners:
-            entry = roster_by_key.get((owner.team_id, owner.workspace_member_id))
-            declared_role, rank = entry if entry is not None else (None, None)
-            role = (dominant_roles.get(owner.user_id) or declared_role) if entry is not None else None
-            refs[owner.user_id] = impact.PlayerRef(
-                player_id=owner.user_id,
-                user_id=owner.user_id,
-                team_id=owner.team_id,
-                role=role,
-                rank=rank,
-            )
-        return refs
-
     async def backfill_match(self, session: AsyncSession, match_id: int) -> bool:
-        """Recompute seven codes and fights; flush/evidence here, commit in the caller."""
+        """Recompute the event counts, impact facts and fights; flush/evidence here, commit in the caller."""
         match = await session.scalar(
             sa.select(models.StatsMatch)
             .where(
@@ -259,26 +144,29 @@ class BackfillService:
         before = await capture_stats_evidence(session, scopes=scopes)
         kill_feed = await self._load_kills(session, match_id)
         impact.assign_fights(kill_feed)
-        players = await self._load_players(session, match_id)
-        member_user_ids = {row.workspace_member_id: row.user_id for row in players}
-        ownership = {row.user_id: (row.workspace_member_id, row.encounter_team_id) for row in players}
-        refs = await self._load_player_refs(session, match_id)
+        ownership = await self._load_ownership(session, match_id)
         hero_types = await self._load_hero_types(session)
         baselines = await baselines_service.get_active(session, discipline="overwatch")
         if baselines is None:
             raise RuntimeError("Impact baselines are not computed — run recompute first")
-        round_df, match_df = rebuild_frames(stat_rows)
-        has_killfeed = bool(kill_feed)
-        events_df = impact.build_event_counts(kill_feed, hero_types, member_user_ids=member_user_ids)
-        round_df, match_df = _merge_events(round_df, match_df, events_df)
-        round_scored = _rank_by_impact(
-            impact.add_impact_scores(round_df, players=refs, baselines=baselines, has_killfeed=has_killfeed)
+
+        events = impact.build_event_counts(kill_feed, hero_types, member_user_ids={m: m for m in ownership})
+        stints = impact.build_stints(stat_rows, events, hero_types)
+        roles = impact.dominant_roles(stints[stints["segment"] == 0])
+        by_encounter = await match_quintiles(session, [(match.encounter_id, m, role) for m, role in roles.items()])
+        scored = impact.score_match(
+            stints,
+            baselines,
+            impact_weights.IMPACT_WEIGHTS,
+            has_killfeed=bool(kill_feed),
+            roles=roles,
+            quintiles={m: quintile for (_, m), quintile in by_encounter.items()},
         )
-        match_scored = _rank_by_impact(
-            impact.add_impact_scores(match_df, players=refs, baselines=baselines, has_killfeed=has_killfeed)
-        )
+        facts = [
+            (int(row.player_id), int(row.segment), row.stat, row.value) for row in scored.itertuples(index=False)
+        ] + self._event_facts(stat_rows, events)
         stat_ids = await StatDefRepository().ids(session, discipline="overwatch")
-        objects = self._stat_objects(match_id, ownership, stat_ids, round_scored, match_scored)
+        objects = self._fact_objects(match_id, ownership, stat_ids, facts)
         await self._stats_repo.replace_fact_codes(
             session,
             match_id=match_id,
@@ -299,6 +187,27 @@ class BackfillService:
                 entity_id=match_id,
             )
         return True
+
+    @staticmethod
+    def _event_facts(stat_rows: pd.DataFrame, events: pd.DataFrame) -> list[tuple[int, int, enums.LogStatsName, float]]:
+        """The kill-feed counts of every ``(member, segment)`` that has hero-less facts: per round, and the total at 0
+        (the sum of the rounds); 0 where the player has no event."""
+        cols = list(EVENT_STATS)
+        rounds = (
+            events[events["segment"] > 0].groupby(["player_id", "segment"])[cols].sum()
+            if not events.empty
+            else pd.DataFrame(columns=cols)
+        )
+        totals = rounds.groupby(level="player_id").sum() if not rounds.empty else rounds
+        out = []
+        hero_less = stat_rows[stat_rows["hero"].isna()]
+        for member, segment in sorted(set(zip(hero_less["player_id"], hero_less["segment"], strict=True))):
+            source = totals if segment == 0 else rounds
+            key = member if segment == 0 else (member, segment)
+            for name in EVENT_STATS:
+                value = float(source.at[key, name]) if key in source.index else 0.0
+                out.append((int(member), int(segment), enums.LogStatsName[name], value))
+        return out
 
     async def backfill_all(
         self,

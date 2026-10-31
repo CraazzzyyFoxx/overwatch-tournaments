@@ -3,9 +3,7 @@ import { describe, expect, it } from "vitest";
 import * as compareUtils from "@/app/(site)/users/compare/utils";
 import * as perspective from "@/app/(site)/users/components/shared/encounter-perspective";
 import * as history from "@/app/(site)/users/components/tournaments/tournaments-history.helpers";
-import { avgMvpPlacement } from "@/disciplines/overwatch/character/AvgMvpCell";
 import { toFraction } from "@/disciplines/overwatch/character/utils";
-import { overperformanceBadge } from "@/disciplines/overwatch/match/mvp";
 import { native, norm, ok, PLAYERS, PRE, read, type Captures } from "@/test/users-parity";
 import type { CatalogEntityRead } from "@/types/catalog.types";
 import type {
@@ -18,12 +16,18 @@ import type {
 
 /**
  * §10.2 users rows, the users route's half (fixtures, renames and dropped fields: `@/test/users-parity`). The
- * captured outputs that include Overwatch figures (compare `subject_fraction`, a group's MVP average, a match's
- * overperformance badge) are reproduced with the Overwatch module's own functions.
+ * captured outputs that include Overwatch figures (compare `subject_fraction`) are reproduced with the Overwatch
+ * module's own functions.
  */
 const UNITS = { h: "h", m: "m", s: "s" };
 const COMPARE_PLAYERS = ["player", "player_away", "player_other"];
 const SCOPES = ["workspace", "workspace_other", "all"];
+
+/**
+ * Legacy MVP outputs the impact_v2 cutover removed (the `performance` fact, a group's average of the old placement,
+ * the badge ranked client-side): dropped from the captured side, not re-pinned.
+ */
+const LEGACY_MVP_OUTPUTS = new Set(["performance", "avg_mvp", "overperformance_badge"]);
 
 /** The removed-field filter of the header, applied to the captured side only. */
 const HERO_COLORS = new Set<unknown>();
@@ -38,7 +42,12 @@ const removedFields = (value: unknown): unknown => {
       Object.entries(record)
         .filter(([key]) => {
           if (isHero && key === "color") HERO_COLORS.add(record[key]);
-          return !((isHero && key === "color") || (isMap && key === "in_competitive") || (isMode && key === "description"));
+          return !(
+            (isHero && key === "color") ||
+            (isMap && key === "in_competitive") ||
+            (isMode && key === "description") ||
+            LEGACY_MVP_OUTPUTS.has(key)
+          );
         })
         .map(([key, item]) => [key, removedFields(item)])
     );
@@ -143,11 +152,9 @@ const oldUserMatch = (match: MatchWithUserStats) => {
         : {}),
       aliases: map.aliases
     },
-    performance: facts.performance ?? null,
     impact_rank: facts.impact_rank ?? null,
     impact_points: facts.impact_points ?? null,
     overperformance_score: facts.overperformance_score ?? null,
-    overperformance_badge: overperformanceBadge(match),
     heroes: (match.viewer?.characters ?? []).map((character) => ({
       id: character.id,
       slug: character.slug,
@@ -189,7 +196,7 @@ describe("users/components/shared/encounter-perspective.ts", () => {
   });
 });
 
-describe("users/components/tournaments/tournaments-history.helpers.ts (+ OW avgMvpPlacement)", () => {
+describe("users/components/tournaments/tournaments-history.helpers.ts", () => {
   it("reproduces every captured grouping, aggregate, medal and stage record from the real native wire", () => {
     const fixture = read(PRE, "tournaments-history-helpers.json");
     const selfIds: Record<string, { self_user_id: number }> = fixture.input_old_wire;
@@ -214,8 +221,7 @@ describe("users/components/tournaments/tournaments-history.helpers.ts (+ OW avgM
               tournament_ids: history.groupTournamentIds(group),
               display_name: history.groupDisplayName(group),
               best_placement: history.groupBestPlacement(group),
-              aggregate: history.groupAggregate(group),
-              avg_mvp: avgMvpPlacement(history.groupEntries(group))
+              aggregate: history.groupAggregate(group)
             })),
             tournaments: tournaments.map((t) => {
               const pct = history.mapsWinratePct(t.maps_won, t.maps_lost);

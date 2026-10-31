@@ -412,11 +412,11 @@ beforeEach(() => {
     players: [
       {
         player_id: 1000,
-        stats: { performance: { value: 2.4, rank: 2 }, kda: { value: 2.456, rank: 2 } }
+        stats: { impact_rank: { value: 2.4, rank: 2 }, kda: { value: 2.456, rank: 2 } }
       },
       {
         player_id: 1001,
-        stats: { performance: { value: 1.8, rank: 1 }, kda: { value: 3.1, rank: 1 } }
+        stats: { impact_rank: { value: 1.8, rank: 1 }, kda: { value: 3.1, rank: 1 } }
       }
     ]
   });

@@ -332,7 +332,7 @@ export function ConditionLeafFields({
       {conditionType === "match_mvp_check" && (
         <>
           <div className="flex gap-1">
-            <Select value={(params.stat as string) ?? "Performance"} onValueChange={(v) => setParam("stat", v)}>
+            <Select value={(params.stat as string) ?? "ImpactRank"} onValueChange={(v) => setParam("stat", v)}>
               <SelectTrigger aria-label={controlName(t("fields.stat"))}><SelectValue placeholder={t("fields.stat")} /></SelectTrigger>
               <SelectContent>{STATS.map((s) => <SelectItem key={s} value={s}>{t(STAT_LABEL_KEYS[s])}</SelectItem>)}</SelectContent>
             </Select>

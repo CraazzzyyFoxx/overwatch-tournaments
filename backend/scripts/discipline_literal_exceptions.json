@@ -22,56 +22,6 @@
       "remove_when": "analytics artifacts are converted"
     },
     {
-      "path": "backend/analytics-service/src/services/analytics/flows.py",
-      "rule": "stat-code",
-      "token": "performance_points",
-      "context": "\"performance_points\": row[\"performance_points\"],",
-      "count": 2,
-      "reason": "OW-only stats/analytics code P5/P6 kept in core (LogStatsName/MatchEvent/HeroClass, MVP/impact SQL, OW-only services; C21)",
-      "owner": "P9",
-      "remove_when": "P9 relocates it into shared.disciplines.overwatch"
-    },
-    {
-      "path": "backend/analytics-service/src/services/analytics/flows.py",
-      "rule": "stat-code",
-      "token": "performance_points",
-      "context": "\"log_available\": 1.0 if row[\"performance_points\"] is not None else 0.0,",
-      "count": 1,
-      "reason": "OW-only stats/analytics code P5/P6 kept in core (LogStatsName/MatchEvent/HeroClass, MVP/impact SQL, OW-only services; C21)",
-      "owner": "P9",
-      "remove_when": "P9 relocates it into shared.disciplines.overwatch"
-    },
-    {
-      "path": "backend/analytics-service/src/services/analytics/service.py",
-      "rule": "stat-code",
-      "token": "performance_points",
-      "context": "sa.func.avg(facts.c.value).label(\"performance_points\"),",
-      "count": 1,
-      "reason": "OW-only stats/analytics code P5/P6 kept in core (LogStatsName/MatchEvent/HeroClass, MVP/impact SQL, OW-only services; C21)",
-      "owner": "P9",
-      "remove_when": "P9 relocates it into shared.disciplines.overwatch"
-    },
-    {
-      "path": "backend/analytics-service/src/services/analytics/service.py",
-      "rule": "stat-code",
-      "token": "performance_points",
-      "context": ").cte(\"performance_points\")",
-      "count": 1,
-      "reason": "OW-only stats/analytics code P5/P6 kept in core (LogStatsName/MatchEvent/HeroClass, MVP/impact SQL, OW-only services; C21)",
-      "owner": "P9",
-      "remove_when": "P9 relocates it into shared.disciplines.overwatch"
-    },
-    {
-      "path": "backend/analytics-service/src/services/analytics/service.py",
-      "rule": "stat-code",
-      "token": "performance_points",
-      "context": "performance_points.c.performance_points.label(\"performance_points\"),",
-      "count": 1,
-      "reason": "OW-only stats/analytics code P5/P6 kept in core (LogStatsName/MatchEvent/HeroClass, MVP/impact SQL, OW-only services; C21)",
-      "owner": "P9",
-      "remove_when": "P9 relocates it into shared.disciplines.overwatch"
-    },
-    {
       "path": "backend/analytics-service/src/services/ml/training/drift.py",
       "rule": "catalog-label",
       "token": "hero_id",
@@ -336,7 +286,7 @@
       "rule": "stat-code",
       "token": "impact_rank",
       "context": ").label(\"impact_rank\"),",
-      "count": 1,
+      "count": 2,
       "reason": "OW-only stats/analytics code P5/P6 kept in core (LogStatsName/MatchEvent/HeroClass, MVP/impact SQL, OW-only services; C21)",
       "owner": "P9",
       "remove_when": "P9 relocates it into shared.disciplines.overwatch"
@@ -1074,16 +1024,6 @@
     {
       "path": "backend/shared/core/enums.py",
       "rule": "stat-code",
-      "token": "performance_points",
-      "context": "PerformancePoints = \"performance_points\"  # self calculated",
-      "count": 1,
-      "reason": "OW-only stats/analytics code P5/P6 kept in core (LogStatsName/MatchEvent/HeroClass, MVP/impact SQL, OW-only services; C21)",
-      "owner": "P9",
-      "remove_when": "P9 relocates it into shared.disciplines.overwatch"
-    },
-    {
-      "path": "backend/shared/core/enums.py",
-      "rule": "stat-code",
       "token": "damage_delta",
       "context": "DamageDelta = \"damage_delta\"  # self calculated",
       "count": 1,
@@ -1116,26 +1056,6 @@
       "rule": "stat-code",
       "token": "impact_points",
       "context": "ImpactPoints = \"impact_points\"  # self calculated (impact formula)",
-      "count": 1,
-      "reason": "OW-only stats/analytics code P5/P6 kept in core (LogStatsName/MatchEvent/HeroClass, MVP/impact SQL, OW-only services; C21)",
-      "owner": "P9",
-      "remove_when": "P9 relocates it into shared.disciplines.overwatch"
-    },
-    {
-      "path": "backend/shared/core/enums.py",
-      "rule": "stat-code",
-      "token": "impact_rank",
-      "context": "ImpactRank = \"impact_rank\"  # self calculated (1 = MVP)",
-      "count": 1,
-      "reason": "OW-only stats/analytics code P5/P6 kept in core (LogStatsName/MatchEvent/HeroClass, MVP/impact SQL, OW-only services; C21)",
-      "owner": "P9",
-      "remove_when": "P9 relocates it into shared.disciplines.overwatch"
-    },
-    {
-      "path": "backend/shared/core/enums.py",
-      "rule": "stat-code",
-      "token": "overperformance_score",
-      "context": "OverperformanceScore = \"overperformance_score\"  # self calculated (role x rank baseline)",
       "count": 1,
       "reason": "OW-only stats/analytics code P5/P6 kept in core (LogStatsName/MatchEvent/HeroClass, MVP/impact SQL, OW-only services; C21)",
       "owner": "P9",
@@ -1236,6 +1156,236 @@
       "rule": "stat-code",
       "token": "echo_duplicate_end",
       "context": "EchoDuplicateEnd = \"echo_duplicate_end\"",
+      "count": 1,
+      "reason": "OW-only stats/analytics code P5/P6 kept in core (LogStatsName/MatchEvent/HeroClass, MVP/impact SQL, OW-only services; C21)",
+      "owner": "P9",
+      "remove_when": "P9 relocates it into shared.disciplines.overwatch"
+    },
+    {
+      "path": "backend/shared/core/enums.py",
+      "rule": "stat-code",
+      "token": "contrib_barrier_damage_dealt",
+      "context": "ContribBarrierDamageDealt = \"contrib_barrier_damage_dealt\"",
+      "count": 1,
+      "reason": "OW-only stats/analytics code P5/P6 kept in core (LogStatsName/MatchEvent/HeroClass, MVP/impact SQL, OW-only services; C21)",
+      "owner": "P9",
+      "remove_when": "P9 relocates it into shared.disciplines.overwatch"
+    },
+    {
+      "path": "backend/shared/core/enums.py",
+      "rule": "stat-code",
+      "token": "contrib_damage_blocked",
+      "context": "ContribDamageBlocked = \"contrib_damage_blocked\"",
+      "count": 1,
+      "reason": "OW-only stats/analytics code P5/P6 kept in core (LogStatsName/MatchEvent/HeroClass, MVP/impact SQL, OW-only services; C21)",
+      "owner": "P9",
+      "remove_when": "P9 relocates it into shared.disciplines.overwatch"
+    },
+    {
+      "path": "backend/shared/core/enums.py",
+      "rule": "stat-code",
+      "token": "contrib_damage_taken",
+      "context": "ContribDamageTaken = \"contrib_damage_taken\"",
+      "count": 1,
+      "reason": "OW-only stats/analytics code P5/P6 kept in core (LogStatsName/MatchEvent/HeroClass, MVP/impact SQL, OW-only services; C21)",
+      "owner": "P9",
+      "remove_when": "P9 relocates it into shared.disciplines.overwatch"
+    },
+    {
+      "path": "backend/shared/core/enums.py",
+      "rule": "stat-code",
+      "token": "contrib_deaths",
+      "context": "ContribDeaths = \"contrib_deaths\"",
+      "count": 1,
+      "reason": "OW-only stats/analytics code P5/P6 kept in core (LogStatsName/MatchEvent/HeroClass, MVP/impact SQL, OW-only services; C21)",
+      "owner": "P9",
+      "remove_when": "P9 relocates it into shared.disciplines.overwatch"
+    },
+    {
+      "path": "backend/shared/core/enums.py",
+      "rule": "stat-code",
+      "token": "contrib_defensive_assists",
+      "context": "ContribDefensiveAssists = \"contrib_defensive_assists\"",
+      "count": 1,
+      "reason": "OW-only stats/analytics code P5/P6 kept in core (LogStatsName/MatchEvent/HeroClass, MVP/impact SQL, OW-only services; C21)",
+      "owner": "P9",
+      "remove_when": "P9 relocates it into shared.disciplines.overwatch"
+    },
+    {
+      "path": "backend/shared/core/enums.py",
+      "rule": "stat-code",
+      "token": "contrib_eliminations",
+      "context": "ContribEliminations = \"contrib_eliminations\"",
+      "count": 1,
+      "reason": "OW-only stats/analytics code P5/P6 kept in core (LogStatsName/MatchEvent/HeroClass, MVP/impact SQL, OW-only services; C21)",
+      "owner": "P9",
+      "remove_when": "P9 relocates it into shared.disciplines.overwatch"
+    },
+    {
+      "path": "backend/shared/core/enums.py",
+      "rule": "stat-code",
+      "token": "contrib_environmental_kills",
+      "context": "ContribEnvironmentalKills = \"contrib_environmental_kills\"",
+      "count": 1,
+      "reason": "OW-only stats/analytics code P5/P6 kept in core (LogStatsName/MatchEvent/HeroClass, MVP/impact SQL, OW-only services; C21)",
+      "owner": "P9",
+      "remove_when": "P9 relocates it into shared.disciplines.overwatch"
+    },
+    {
+      "path": "backend/shared/core/enums.py",
+      "rule": "stat-code",
+      "token": "contrib_final_blows",
+      "context": "ContribFinalBlows = \"contrib_final_blows\"",
+      "count": 1,
+      "reason": "OW-only stats/analytics code P5/P6 kept in core (LogStatsName/MatchEvent/HeroClass, MVP/impact SQL, OW-only services; C21)",
+      "owner": "P9",
+      "remove_when": "P9 relocates it into shared.disciplines.overwatch"
+    },
+    {
+      "path": "backend/shared/core/enums.py",
+      "rule": "stat-code",
+      "token": "contrib_first_deaths",
+      "context": "ContribFirstDeaths = \"contrib_first_deaths\"",
+      "count": 1,
+      "reason": "OW-only stats/analytics code P5/P6 kept in core (LogStatsName/MatchEvent/HeroClass, MVP/impact SQL, OW-only services; C21)",
+      "owner": "P9",
+      "remove_when": "P9 relocates it into shared.disciplines.overwatch"
+    },
+    {
+      "path": "backend/shared/core/enums.py",
+      "rule": "stat-code",
+      "token": "contrib_first_picks",
+      "context": "ContribFirstPicks = \"contrib_first_picks\"",
+      "count": 1,
+      "reason": "OW-only stats/analytics code P5/P6 kept in core (LogStatsName/MatchEvent/HeroClass, MVP/impact SQL, OW-only services; C21)",
+      "owner": "P9",
+      "remove_when": "P9 relocates it into shared.disciplines.overwatch"
+    },
+    {
+      "path": "backend/shared/core/enums.py",
+      "rule": "stat-code",
+      "token": "contrib_healing_dealt",
+      "context": "ContribHealingDealt = \"contrib_healing_dealt\"",
+      "count": 1,
+      "reason": "OW-only stats/analytics code P5/P6 kept in core (LogStatsName/MatchEvent/HeroClass, MVP/impact SQL, OW-only services; C21)",
+      "owner": "P9",
+      "remove_when": "P9 relocates it into shared.disciplines.overwatch"
+    },
+    {
+      "path": "backend/shared/core/enums.py",
+      "rule": "stat-code",
+      "token": "contrib_hero_damage_dealt",
+      "context": "ContribHeroDamageDealt = \"contrib_hero_damage_dealt\"",
+      "count": 1,
+      "reason": "OW-only stats/analytics code P5/P6 kept in core (LogStatsName/MatchEvent/HeroClass, MVP/impact SQL, OW-only services; C21)",
+      "owner": "P9",
+      "remove_when": "P9 relocates it into shared.disciplines.overwatch"
+    },
+    {
+      "path": "backend/shared/core/enums.py",
+      "rule": "stat-code",
+      "token": "contrib_multikills",
+      "context": "ContribMultikills = \"contrib_multikills\"",
+      "count": 1,
+      "reason": "OW-only stats/analytics code P5/P6 kept in core (LogStatsName/MatchEvent/HeroClass, MVP/impact SQL, OW-only services; C21)",
+      "owner": "P9",
+      "remove_when": "P9 relocates it into shared.disciplines.overwatch"
+    },
+    {
+      "path": "backend/shared/core/enums.py",
+      "rule": "stat-code",
+      "token": "contrib_objective_kills",
+      "context": "ContribObjectiveKills = \"contrib_objective_kills\"",
+      "count": 1,
+      "reason": "OW-only stats/analytics code P5/P6 kept in core (LogStatsName/MatchEvent/HeroClass, MVP/impact SQL, OW-only services; C21)",
+      "owner": "P9",
+      "remove_when": "P9 relocates it into shared.disciplines.overwatch"
+    },
+    {
+      "path": "backend/shared/core/enums.py",
+      "rule": "stat-code",
+      "token": "contrib_offensive_assists",
+      "context": "ContribOffensiveAssists = \"contrib_offensive_assists\"",
+      "count": 1,
+      "reason": "OW-only stats/analytics code P5/P6 kept in core (LogStatsName/MatchEvent/HeroClass, MVP/impact SQL, OW-only services; C21)",
+      "owner": "P9",
+      "remove_when": "P9 relocates it into shared.disciplines.overwatch"
+    },
+    {
+      "path": "backend/shared/core/enums.py",
+      "rule": "stat-code",
+      "token": "contrib_solo_kills",
+      "context": "ContribSoloKills = \"contrib_solo_kills\"",
+      "count": 1,
+      "reason": "OW-only stats/analytics code P5/P6 kept in core (LogStatsName/MatchEvent/HeroClass, MVP/impact SQL, OW-only services; C21)",
+      "owner": "P9",
+      "remove_when": "P9 relocates it into shared.disciplines.overwatch"
+    },
+    {
+      "path": "backend/shared/core/enums.py",
+      "rule": "stat-code",
+      "token": "contrib_support_kills",
+      "context": "ContribSupportKills = \"contrib_support_kills\"",
+      "count": 1,
+      "reason": "OW-only stats/analytics code P5/P6 kept in core (LogStatsName/MatchEvent/HeroClass, MVP/impact SQL, OW-only services; C21)",
+      "owner": "P9",
+      "remove_when": "P9 relocates it into shared.disciplines.overwatch"
+    },
+    {
+      "path": "backend/shared/core/enums.py",
+      "rule": "stat-code",
+      "token": "contrib_ultimate_kills",
+      "context": "ContribUltimateKills = \"contrib_ultimate_kills\"",
+      "count": 1,
+      "reason": "OW-only stats/analytics code P5/P6 kept in core (LogStatsName/MatchEvent/HeroClass, MVP/impact SQL, OW-only services; C21)",
+      "owner": "P9",
+      "remove_when": "P9 relocates it into shared.disciplines.overwatch"
+    },
+    {
+      "path": "backend/shared/core/enums.py",
+      "rule": "stat-code",
+      "token": "contrib_ultimates_earned",
+      "context": "ContribUltimatesEarned = \"contrib_ultimates_earned\"",
+      "count": 1,
+      "reason": "OW-only stats/analytics code P5/P6 kept in core (LogStatsName/MatchEvent/HeroClass, MVP/impact SQL, OW-only services; C21)",
+      "owner": "P9",
+      "remove_when": "P9 relocates it into shared.disciplines.overwatch"
+    },
+    {
+      "path": "backend/shared/core/enums.py",
+      "rule": "stat-code",
+      "token": "contrib_ultimates_used",
+      "context": "ContribUltimatesUsed = \"contrib_ultimates_used\"",
+      "count": 1,
+      "reason": "OW-only stats/analytics code P5/P6 kept in core (LogStatsName/MatchEvent/HeroClass, MVP/impact SQL, OW-only services; C21)",
+      "owner": "P9",
+      "remove_when": "P9 relocates it into shared.disciplines.overwatch"
+    },
+    {
+      "path": "backend/shared/core/enums.py",
+      "rule": "stat-code",
+      "token": "impact_rank",
+      "context": "ImpactRank = \"impact_rank\"  # self calculated (1 = MVP; absent for an unscored player)",
+      "count": 1,
+      "reason": "OW-only stats/analytics code P5/P6 kept in core (LogStatsName/MatchEvent/HeroClass, MVP/impact SQL, OW-only services; C21)",
+      "owner": "P9",
+      "remove_when": "P9 relocates it into shared.disciplines.overwatch"
+    },
+    {
+      "path": "backend/shared/core/enums.py",
+      "rule": "stat-code",
+      "token": "overperformance_badge",
+      "context": "OverperformanceBadge = \"overperformance_badge\"  # self calculated (1 = above expectations, top of the map)",
+      "count": 1,
+      "reason": "OW-only stats/analytics code P5/P6 kept in core (LogStatsName/MatchEvent/HeroClass, MVP/impact SQL, OW-only services; C21)",
+      "owner": "P9",
+      "remove_when": "P9 relocates it into shared.disciplines.overwatch"
+    },
+    {
+      "path": "backend/shared/core/enums.py",
+      "rule": "stat-code",
+      "token": "overperformance_score",
+      "context": "OverperformanceScore = \"overperformance_score\"  # self calculated (role x rank-quintile expectation)",
       "count": 1,
       "reason": "OW-only stats/analytics code P5/P6 kept in core (LogStatsName/MatchEvent/HeroClass, MVP/impact SQL, OW-only services; C21)",
       "owner": "P9",
@@ -1626,6 +1776,16 @@
       "rule": "stat-code",
       "token": "overperformance_score",
       "context": "\"overperformance_score\",",
+      "count": 1,
+      "reason": "OW-only stats/analytics code P5/P6 kept in core (LogStatsName/MatchEvent/HeroClass, MVP/impact SQL, OW-only services; C21)",
+      "owner": "P9",
+      "remove_when": "P9 relocates it into shared.disciplines.overwatch"
+    },
+    {
+      "path": "backend/shared/services/stats_evidence.py",
+      "rule": "stat-code",
+      "token": "overperformance_badge",
+      "context": "\"overperformance_badge\",",
       "count": 1,
       "reason": "OW-only stats/analytics code P5/P6 kept in core (LogStatsName/MatchEvent/HeroClass, MVP/impact SQL, OW-only services; C21)",
       "owner": "P9",
@@ -3232,6 +3392,16 @@
       "remove_when": "tournament stats columns read their stat definitions from the discipline metadata"
     },
     {
+      "path": "frontend/src/types/tournament.types.ts",
+      "rule": "stat-code",
+      "token": "impact_rank",
+      "context": "| \"impact_rank\"",
+      "count": 1,
+      "reason": "MVP placement API key (impact_rank) of the tournament/profile stat boards; C4 of the impact_v2 design",
+      "owner": "P9",
+      "remove_when": "the stat boards read the MVP stat code from the discipline's metadata"
+    },
+    {
       "path": "frontend/src/types/user.types.ts",
       "rule": "identity",
       "token": "battlenet",
@@ -3382,6 +3552,46 @@
       "remove_when": "tournament stats columns read their stat definitions from the discipline metadata"
     },
     {
+      "path": "frontend/src/app/(site)/tournaments/[slug]/_views/TournamentStatsPage.tsx",
+      "rule": "stat-code",
+      "token": "impact_rank",
+      "context": "\"impact_rank\",",
+      "count": 1,
+      "reason": "MVP placement API key (impact_rank) of the tournament/profile stat boards; C4 of the impact_v2 design",
+      "owner": "P9",
+      "remove_when": "the stat boards read the MVP stat code from the discipline's metadata"
+    },
+    {
+      "path": "frontend/src/app/(site)/tournaments/[slug]/_views/TournamentStatsPage.tsx",
+      "rule": "stat-code",
+      "token": "impact_rank",
+      "context": "defaultSort={{ key: \"impact_rank\", ascending: true }}",
+      "count": 1,
+      "reason": "MVP placement API key (impact_rank) of the tournament/profile stat boards; C4 of the impact_v2 design",
+      "owner": "P9",
+      "remove_when": "the stat boards read the MVP stat code from the discipline's metadata"
+    },
+    {
+      "path": "frontend/src/app/(site)/tournaments/[slug]/_views/TournamentStatsPage.tsx",
+      "rule": "stat-code",
+      "token": "impact_rank",
+      "context": "statColumn(\"impact_rank\"),",
+      "count": 1,
+      "reason": "MVP placement API key (impact_rank) of the tournament/profile stat boards; C4 of the impact_v2 design",
+      "owner": "P9",
+      "remove_when": "the stat boards read the MVP stat code from the discipline's metadata"
+    },
+    {
+      "path": "frontend/src/app/(site)/tournaments/[slug]/_views/TournamentStatsPage.tsx",
+      "rule": "stat-code",
+      "token": "impact_rank",
+      "context": "title: stat === \"impact_rank\" ? t(\"stats.performanceHint\") : t(`stats.metrics.${stat}.label`),",
+      "count": 1,
+      "reason": "MVP placement API key (impact_rank) of the tournament/profile stat boards; C4 of the impact_v2 design",
+      "owner": "P9",
+      "remove_when": "the stat boards read the MVP stat code from the discipline's metadata"
+    },
+    {
       "path": "frontend/src/app/(site)/tournaments/[slug]/_views/tournamentInsights.model.ts",
       "rule": "role-vocabulary",
       "token": "damage",
@@ -3440,6 +3650,86 @@
       "reason": "wire identifier: a stats-service tournament player-stat rank code (API sort key), not a stat definition",
       "owner": "P9",
       "remove_when": "tournament stats columns read their stat definitions from the discipline metadata"
+    },
+    {
+      "path": "frontend/src/lib/tournament/insights-query.ts",
+      "rule": "stat-code",
+      "token": "impact_rank",
+      "context": "\"impact_rank\",",
+      "count": 1,
+      "reason": "MVP placement API key (impact_rank) of the tournament/profile stat boards; C4 of the impact_v2 design",
+      "owner": "P9",
+      "remove_when": "the stat boards read the MVP stat code from the discipline's metadata"
+    },
+    {
+      "path": "backend/analytics-service/src/services/analytics/flows.py",
+      "rule": "stat-code",
+      "token": "impact_points",
+      "context": "\"impact_points\": row[\"impact_points\"],",
+      "count": 2,
+      "reason": "OW-only stats/analytics code P5/P6 kept in core (LogStatsName/MatchEvent/HeroClass, MVP/impact SQL, OW-only services; C21)",
+      "owner": "P9",
+      "remove_when": "P9 relocates it into shared.disciplines.overwatch"
+    },
+    {
+      "path": "backend/analytics-service/src/services/analytics/flows.py",
+      "rule": "stat-code",
+      "token": "impact_points",
+      "context": "\"log_available\": 1.0 if row[\"impact_points\"] is not None else 0.0,",
+      "count": 1,
+      "reason": "OW-only stats/analytics code P5/P6 kept in core (LogStatsName/MatchEvent/HeroClass, MVP/impact SQL, OW-only services; C21)",
+      "owner": "P9",
+      "remove_when": "P9 relocates it into shared.disciplines.overwatch"
+    },
+    {
+      "path": "backend/analytics-service/src/services/analytics/service.py",
+      "rule": "stat-code",
+      "token": "impact_points",
+      "context": ").cte(\"impact_points\")",
+      "count": 1,
+      "reason": "OW-only stats/analytics code P5/P6 kept in core (LogStatsName/MatchEvent/HeroClass, MVP/impact SQL, OW-only services; C21)",
+      "owner": "P9",
+      "remove_when": "P9 relocates it into shared.disciplines.overwatch"
+    },
+    {
+      "path": "backend/analytics-service/src/services/analytics/service.py",
+      "rule": "stat-code",
+      "token": "impact_points",
+      "context": "impact_points.c.impact_points.label(\"impact_points\"),",
+      "count": 1,
+      "reason": "OW-only stats/analytics code P5/P6 kept in core (LogStatsName/MatchEvent/HeroClass, MVP/impact SQL, OW-only services; C21)",
+      "owner": "P9",
+      "remove_when": "P9 relocates it into shared.disciplines.overwatch"
+    },
+    {
+      "path": "backend/analytics-service/src/services/analytics/service.py",
+      "rule": "stat-code",
+      "token": "impact_points",
+      "context": "sa.func.avg(facts.c.value).label(\"impact_points\"),",
+      "count": 1,
+      "reason": "OW-only stats/analytics code P5/P6 kept in core (LogStatsName/MatchEvent/HeroClass, MVP/impact SQL, OW-only services; C21)",
+      "owner": "P9",
+      "remove_when": "P9 relocates it into shared.disciplines.overwatch"
+    },
+    {
+      "path": "frontend/src/app/(site)/tournaments/[slug]/_views/_components/FinishedParticipantsView.tsx",
+      "rule": "stat-code",
+      "token": "impact_rank",
+      "context": "key: \"impact_rank\",",
+      "count": 1,
+      "reason": "MVP placement API key (impact_rank) of the tournament/profile stat boards; C4 of the impact_v2 design",
+      "owner": "P9",
+      "remove_when": "the stat boards read the MVP stat code from the discipline's metadata"
+    },
+    {
+      "path": "frontend/src/app/(site)/users/components/overview/LobbyLeaderboardModal.tsx",
+      "rule": "stat-code",
+      "token": "impact_rank",
+      "context": "const INVERSE_STATS = new Set([\"deaths\", \"impact_rank\"]);",
+      "count": 1,
+      "reason": "MVP placement API key (impact_rank) of the tournament/profile stat boards; C4 of the impact_v2 design",
+      "owner": "P9",
+      "remove_when": "the stat boards read the MVP stat code from the discipline's metadata"
     }
   ]
 }

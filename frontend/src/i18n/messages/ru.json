@@ -2832,7 +2832,7 @@
         "CriticalHits": "Критические попадания",
         "HeroTimePlayed": "Время на герое",
         "UltimatesEarned": "Набранные ультимейты",
-        "Performance": "Перформанс",
+        "ImpactRank": "Место по импакту (MVP)",
         "KD": "K/D",
         "KDA": "KDA"
       },
@@ -3149,7 +3149,7 @@
       },
       "performanceHint": "Среднее место по вкладу среди десяти игроков карты, 1 — лучший.",
       "metrics": {
-        "performance": {
+        "impact_rank": {
           "label": "Среднее место на карте",
           "short": "Ср. место"
         },
@@ -5833,8 +5833,7 @@
       "mapLabel": "Карта {number}",
       "overperformanceBadge": "Сверх ожиданий",
       "mvp": {
-        "newRank": "Новый ранг",
-        "oldRank": "Старый ранг"
+        "place": "Место"
       },
       "colTournament": "Турнир",
       "colStage": "Этап",
@@ -11379,7 +11378,7 @@
       "CriticalHits": "Криты",
       "HeroTimePlayed": "Время на герое",
       "UltimatesEarned": "Заряжено ультов",
-      "Performance": "Перформанс",
+      "ImpactRank": "Место по импакту (MVP)",
       "KD": "K/D",
       "KDA": "KDA"
     },

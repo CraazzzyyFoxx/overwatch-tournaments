@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { SlotProps } from "@/disciplines/types";
 import { observedScore } from "@/lib/encounter/detail";
+import { STAT_META } from "./stats";
 import { formatOverperformance, ordinal, overperformanceBadge, resolveMvpPlacement } from "./mvp";
 
 /** Gold only for 1st, every other placement neutral (design-book MVP rule). */
@@ -21,10 +22,55 @@ const RankLine = ({ label, rank }: { label: string; rank: number | null | undefi
   </div>
 );
 
+const CONTRIB_PREFIX = "contrib_";
+const TOP_POSITIVE = 3;
+const TOP_NEGATIVE = 2;
+/** Contributions are small (a map's impact spans about ±1): two decimals, and a row that would read 0.00 is noise. */
+const CONTRIB_DIGITS = 2;
+const CONTRIB_FLOOR = 0.005;
+
+/** A signed value row (positive / negative colour, optional bold label); nothing for an absent score. */
+const SignedLine = ({
+  label,
+  score,
+  strong = false,
+  digits = 1
+}: {
+  label: string;
+  score: number | null | undefined;
+  strong?: boolean;
+  digits?: number;
+}) => {
+  const value = formatOverperformance(score, digits);
+  return value ? (
+    <div className="flex items-center justify-between gap-3">
+      <span className={strong ? "font-semibold text-foreground" : "text-muted-foreground"}>{label}</span>
+      <span
+        className="aqt-tnum font-semibold"
+        style={{ color: value.raised ? "var(--aqt-emerald)" : "var(--aqt-rose)" }}
+      >
+        {value.text}
+      </span>
+    </div>
+  ) : null;
+};
+
+/** Strongest per-feature impact contributions of a map's facts: the top positive ones, then the top negative ones. */
+export const topContributions = (facts: Readonly<Record<string, number>> | undefined) => {
+  const entries = Object.entries(facts ?? {}).flatMap(([code, value]) => {
+    const meta = code.startsWith(CONTRIB_PREFIX) ? STAT_META[code.slice(CONTRIB_PREFIX.length)] : undefined;
+    return meta && Number.isFinite(value) && Math.abs(value) >= CONTRIB_FLOOR ? [{ labelKey: meta.labelKey, value }] : [];
+  });
+  return [
+    ...entries.filter((e) => e.value > 0).sort((a, b) => b.value - a.value).slice(0, TOP_POSITIVE),
+    ...entries.filter((e) => e.value < 0).sort((a, b) => a.value - b.value).slice(0, TOP_NEGATIVE)
+  ];
+};
+
 /**
- * The MVP breakdown card a placement chip (`children`) opens on hover: new impact rank, legacy rank,
- * overperformance, read from one member's facts. `header` titles the card; `badge` marks the
- * overperformance badge as earned. Must be rendered inside a `TooltipProvider`.
+ * The MVP breakdown card a placement chip (`children`) opens on hover: the place, the strongest per-stat
+ * contributions (map-level facts only) and the overperformance, read from one member's facts. `header` titles the
+ * card; `badge` marks the overperformance badge as earned. Must be rendered inside a `TooltipProvider`.
  */
 export function MvpTooltip({
   facts,
@@ -38,7 +84,8 @@ export function MvpTooltip({
   children: ReactElement;
 }>) {
   const t = useTranslations();
-  const over = formatOverperformance(facts?.overperformance_score);
+  const place = resolveMvpPlacement(facts);
+  const contributions = topContributions(facts);
 
   return (
     <Tooltip>
@@ -54,21 +101,20 @@ export function MvpTooltip({
           </div>
         ) : null}
         <div className="flex flex-col gap-2 px-3 py-2.5 text-caption">
-          <RankLine label={t("users.matches.mvp.newRank")} rank={facts?.impact_rank} />
-          <RankLine label={t("users.matches.mvp.oldRank")} rank={facts?.performance} />
-          {over ? (
-            <div className="flex items-center justify-between gap-3">
-              <span className={badge ? "font-semibold text-foreground" : "text-muted-foreground"}>
-                {t("users.matches.overperformanceBadge")}
-              </span>
-              <span
-                className="aqt-tnum font-semibold"
-                style={{ color: over.raised ? "var(--aqt-emerald)" : "var(--aqt-rose)" }}
-              >
-                {over.text}
-              </span>
-            </div>
-          ) : null}
+          <RankLine label={t("users.matches.mvp.place")} rank={place} />
+          {contributions.map(({ labelKey, value }) => (
+            <SignedLine
+              key={labelKey}
+              label={t(labelKey as Parameters<typeof t>[0])}
+              score={value}
+              digits={CONTRIB_DIGITS}
+            />
+          ))}
+          <SignedLine
+            label={t("users.matches.overperformanceBadge")}
+            score={facts?.overperformance_score}
+            strong={badge}
+          />
         </div>
       </TooltipContent>
     </Tooltip>
@@ -90,7 +136,7 @@ export default function MvpOrdinal({ match }: Readonly<SlotProps["matchRowBadge"
   return (
     <MvpTooltip
       facts={facts}
-      // Top of the match by overperformance and past the threshold: the "above expectations" row is the badge.
+      // The stored `overperformance_badge` fact: the "above expectations" row is the badge.
       badge={overperformanceBadge(match)}
       header={{ title: match.map.name, aside: scores.join(" – ") }}
     >

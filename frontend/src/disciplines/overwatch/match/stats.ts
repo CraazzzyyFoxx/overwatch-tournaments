@@ -261,16 +261,11 @@ export function playerStat(player: Pick<MatchStatsPlayer, "stats">, round: numbe
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
 
-/** Official per-map MVP placement: impact rank when the impact-scoring pipeline
- * computed it for this map, legacy performance rank otherwise. Mirrors
- * `resolveMvpPlacement` in `./mvp` (used by the Users → Matches tab for the
- * same two stat codes) so a player's MVP badge agrees everywhere it appears. */
+/** Official per-map MVP placement: the `impact_rank` fact, absent for unscored players (never a placement).
+ * Mirrors `resolveMvpPlacement` in `./mvp` so a player's MVP badge agrees everywhere it appears. */
 export function resolveMatchMvpPlacement(player: Pick<MatchStatsPlayer, "stats">, round: number): number | null {
-  const row = player.stats?.[round];
-  const impactRank = row?.[LogStatsName.ImpactRank];
-  if (typeof impactRank === "number" && Number.isFinite(impactRank)) return impactRank;
-  const performance = row?.[LogStatsName.Performance];
-  return typeof performance === "number" && Number.isFinite(performance) ? performance : null;
+  const rank = player.stats?.[round]?.[LogStatsName.ImpactRank];
+  return typeof rank === "number" && Number.isFinite(rank) ? rank : null;
 }
 
 /** Native observed players, including stat-only rows with no resolved hero. */

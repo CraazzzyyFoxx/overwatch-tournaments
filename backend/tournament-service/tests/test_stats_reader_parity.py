@@ -645,6 +645,9 @@ async def collect_outputs(session: AsyncSession, ids: dict[str, int]) -> dict:
 
 
 def assert_tournament_golden(actual: dict) -> None:
+    # The MVP surface (impact/performance stats, placements, badges) is replaced by impact_v2 and compared nowhere.
+    from shared.testing.stats_parity import without_mvp
+
     def without_post_capture_fields(value):
         """Fields added after the frozen P4 capture are not reader output: ``TournamentRead.logs_official`` (P5) and
         ``pov_stream_delay_s``, the owner context (``workspace_id``/``discipline``) P7 added to ``EncounterRead`` and
@@ -667,12 +670,16 @@ def assert_tournament_golden(actual: dict) -> None:
         return value
 
     def comparable(payload):
-        payload = without_post_capture_fields(deepcopy(payload))
+        payload = without_mvp(without_post_capture_fields(deepcopy(payload)))
         # The removed roster/user-batch API's empty-input shape has no facts.
         payload.pop("empty_user_batch", None)
         # The encounters overview was redesigned after the capture (the browse's counts and live strip, its
         # analytics moved to the insights read); ``test_encounter_board_db.py`` pins the new numbers.
         payload.pop("encounter_overviews", None)
+        # A match's fact total counted the legacy ``performance``/``performance_points`` rows impact_v2 deleted.
+        for detail in payload.get("admin_details", {}).values():
+            if isinstance(detail, dict):
+                detail.pop("statistics_count", None)
         page = payload["match_pages"]["duration_desc"]
         # SQL orders only by duration. Preserve every group and its position;
         # incidental order inside equal-duration groups is not a reader contract.
@@ -1242,6 +1249,7 @@ def test_native_owner_delete_and_evidence_roll_back_together(stats_parity_databa
 def test_native_nullable_events_and_historical_source_teams_are_not_dropped(stats_parity_database):
     async def exercise():
         from shared.models import EncounterTeam, StatsEvent, StatsMatchPlayer, Team
+        from shared.testing.stats_parity import without_mvp
 
         url, ids = stats_parity_database
         engine = create_async_engine(make_url(url).set(drivername="postgresql+asyncpg"))
@@ -1321,8 +1329,10 @@ def test_native_nullable_events_and_historical_source_teams_are_not_dropped(stat
                         if player["user_id"] is None:
                             continue
                         expected = golden[str(player["user_id"])]
-                        assert _normalize(player["stats"]) == expected["statistics"]
-                        assert _normalize({"heroes": player["heroes"]})["heroes"] == expected["heroes"]
+                        assert without_mvp(_normalize(player["stats"])) == without_mvp(expected["statistics"])
+                        assert without_mvp(_normalize({"heroes": player["heroes"]}))["heroes"] == without_mvp(
+                            expected["heroes"]
+                        )
                 members = {m.workspace_member_id: m for m in detail.statistics.members}
                 assert members[ids["member"]].handle_snapshot == "HistoricalHandle#1234"
                 assert {"id", "rank", "role", "team_id"}.isdisjoint(members[ids["member"]].model_dump())
