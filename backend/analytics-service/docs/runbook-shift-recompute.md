@@ -8,6 +8,9 @@ The final methodology (after reverting the merit rewrite):
 - **The smurf flag** additionally catches a strong outlier within the cohort (`local_zscore ≥ SMURF_STRONG_LOCAL_Z`) at any rank; its MVP-dominance rule needs ≥ 5 logged matches.
 - **The forecast division is read-time and probabilistic** (`src/domain/forecast.py`): the player's mis-rating is taken as N(`shift`, `shift_sd`²) in canonical divisions; the shown move is the largest k ≤ 3 with P(m ≥ k − 0.5) ≥ `FORECAST_CONFIDENCE_THRESHOLD` (promote), else the same for a drop, else hold. The API `confidence` is the probability of the shown outcome (for hold P(−0.5 < m < 0.5)); a row without `shift_sd` holds with confidence 0. The move is applied on the canonical ladder and maps back to the nearest tier of the tournament's grid (never outside it).
 
+## After `impact_v2` (MVP rewrite)
+`mvp_dominance` (smurf flag, Shift v2 lift) now reads `impact_rank` (segment 0) instead of the removed `Performance` rank; its lobby is the players that have a rank in the match (unscored players carry none). `SHIFT_DOMINANCE_*` and `SMURF_MVP_DOMINANCE` keep their meaning. The throw detector reads per-round `impact_points` and the v1 log-coverage weight reads segment-0 `impact_points`. Performance v2 / Shift v2 artifacts trained before the change must be retrained (steps 1a/1b below); the retrained artifacts apply to active and future tournaments only, historical shifts are not recomputed.
+
 ## env knobs (`backend/env/analytics.env`)
 | env | what | when it applies |
 |---|---|---|
@@ -19,7 +22,7 @@ The final methodology (after reverting the merit rewrite):
 | `SHIFT_DOMINANCE_GAIN` (6.0), `SHIFT_DOMINANCE_CAP` (3.0) | raw MVP-dominance lift (≥ 5 logged matches): `(mvp_dominance−0.5)·gain` clamped to `cap`, max-blended with the local term (without a lift the local term applies alone, both signs), limited ONLY by the output clamp (bypassing the soft individual clamp) → an obvious hard carry reaches the rank ceiling | snapshotted at train → retrain shift |
 | `SHIFT_PLACEMENT_FLOOR` (0.0) | gates the POSITIVE individual lift by the team's final placement: factor ∈[floor,1] (1.0 champion → floor last place); 0.0 = no + at all for last place, even with excellent personal play | snapshotted at train → retrain shift |
 | `SMURF_STRONG_LOCAL_Z` (1.5) | strong-outlier threshold for the flag | read at infer → backfill anomalies |
-| `SMURF_MVP_DOMINANCE` (0.75) | raw MVP-dominance threshold (average MVP place across the match log, ≥ 5 logged matches) for the `raw_mvp_dominance` smurf flag | read at infer → backfill anomalies |
+| `SMURF_MVP_DOMINANCE` (0.75) | raw MVP-dominance threshold (average `impact_rank` place across the match log, ≥ 5 logged matches) for the `raw_mvp_dominance` smurf flag | read at infer → backfill anomalies |
 | `STANDINGS_PROB_SHARPENING` (1.5) | spread of predicted placements | snapshotted at train standings |
 | `FORECAST_CONFIDENCE_THRESHOLD` (0.8) | certainty a shown climb/drop needs | read-time (no recompute) |
 

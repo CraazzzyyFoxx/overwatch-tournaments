@@ -14,11 +14,12 @@ import path from "node:path";
  * are their shared fixture readers.
  *
  * Renames, compared through an explicit mapping (never dropped): `hero` → `character` (§4.1), `left_/right_hero_id`
- * → `left_/right_entity_id` (§4.3), a user match's `performance`/`impact_*`/`overperformance_score` → `viewer.facts`
- * and `heroes` → `viewer.characters` (§6.5 8b row), its badge → `overperformanceBadge` over `member_totals` (C22),
+ * → `left_/right_entity_id` (§4.3), a user match's `impact_*`/`overperformance_score` → `viewer.facts`
+ * and `heroes` → `viewer.characters` (§6.5 8b row),
  * `home/away` team ids and `score` → `participants` by encounter slot (§6.1), `time` → `duration_s`, a map's
  * `gamemode_id/gamemode` → `parent_id/parent` (§4.1). The request's added `discipline` param is not a compare query
- * int (it did not exist in the pre-move request).
+ * int (it did not exist in the pre-move request). The legacy MVP outputs (`performance`, a group's `avg_mvp`, the
+ * match `overperformance_badge`) are not the contract after impact_v2 and are dropped from the captured side.
  *
  * Output fields that cannot be produced, dropped from the captured side only (each by its reference):
  *  - `Hero.color` (every captured hero; seed default `#ffffff`, asserted): §4.1 `HeroRead` → `CatalogEntityRead`.

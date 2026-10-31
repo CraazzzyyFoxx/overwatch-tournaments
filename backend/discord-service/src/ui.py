@@ -18,6 +18,7 @@ from __future__ import annotations
 import re
 from pathlib import PurePosixPath
 
+from shared.disciplines import DISCIPLINES
 from shared.division_grid import DEFAULT_GRID, ladder_grid
 
 __all__ = (
@@ -34,6 +35,7 @@ __all__ = (
     "badge_name",
     "division_emoji",
     "emoji",
+    "game_emoji",
 )
 
 GREEN = 0x10B981
@@ -86,6 +88,8 @@ EMOJI: dict[str, str] = {
     "edit": "✏️",
     "link": "🔗",
     "bell_off": "🔕",
+    # a game's own icon, ``assets/emoji/game_<code>.png``
+    **{f"game_{code}": "🎮" for code in DISCIPLINES},
 }
 
 #: Role code -> emoji name: Overwatch's three roles, and Full flex in any game that has it.
@@ -126,6 +130,12 @@ def division_emoji(discipline: str, rank: int | None) -> str:
     if ladder is None or rank is None:
         return ""
     return emoji(badge_name(discipline, ladder.resolve_division(rank).icon_url))
+
+
+def game_emoji(discipline: str) -> str:
+    """The shortcode of ``discipline``'s icon; a game with no module of its own gets the plain gamepad."""
+    name = f"game_{discipline}"
+    return emoji(name) if name in EMOJI else "🎮"
 
 
 def art_drawn_for(discipline: str) -> bool:

@@ -23,10 +23,10 @@ class DominanceFromPerfRanksTests(TestCase):
             {
                 "match_id": [1, 1, 1, 1, 2, 2, 2, 2],
                 "player_id": [10, 11, 12, 13, 10, 11, 12, 13],
-                "perf_rank": [1, 2, 3, 4, 1, 2, 3, 4],
+                "impact_rank": [1, 2, 3, 4, 1, 2, 3, 4],
             }
         )
-        out = mvp.dominance_from_perf_ranks(df).set_index("player_id")
+        out = mvp.dominance_from_impact_ranks(df).set_index("player_id")
         # rank 1 → (4-1)/(4-1)=1.0 ; rank 2 → 2/3 ; rank 4 → 0.0
         self.assertAlmostEqual(1.0, float(out.loc[10, "mvp_dominance"]), places=6)
         self.assertAlmostEqual(2 / 3, float(out.loc[11, "mvp_dominance"]), places=6)
@@ -39,13 +39,13 @@ class DominanceFromPerfRanksTests(TestCase):
             {
                 "match_id": [1, 1, 1, 1, 2, 2, 2, 2],
                 "player_id": [10, 11, 12, 13, 10, 11, 12, 13],
-                "perf_rank": [1, 2, 3, 4, 4, 3, 2, 1],
+                "impact_rank": [1, 2, 3, 4, 4, 3, 2, 1],
             }
         )
-        out = mvp.dominance_from_perf_ranks(df).set_index("player_id")
+        out = mvp.dominance_from_impact_ranks(df).set_index("player_id")
         self.assertAlmostEqual(0.5, float(out.loc[10, "mvp_dominance"]), places=6)
 
     def test_empty_frame_returns_empty(self) -> None:
-        out = mvp.dominance_from_perf_ranks(pd.DataFrame())
+        out = mvp.dominance_from_impact_ranks(pd.DataFrame())
         self.assertTrue(out.empty)
         self.assertEqual(["player_id", "mvp_dominance", "mvp_matches"], list(out.columns))

@@ -394,18 +394,17 @@ async def bound_participants(
     game: GameSeats,
     members: Mapping[str, models.WorkspaceMember],
 ) -> dict[str, BoundParticipant]:
-    """Every participant as the discipline's derivation needs it: member, global player, seat, roster rank and role.
+    """Every participant as the discipline's derivation needs it: member, global player, seat and roster role.
 
     A player (substitutes registered on the team included) on the tournament roster of the seat's source team keeps
-    the current tournament-player registration rank and rated role (the baselines bucket on that boundary). Only a
-    participant the tournament roster does not have (substitute, virtual player) falls back to the encounter roster
-    snapshot, and without any row carries no rank and no role.
+    the rated role of that roster row. Only a participant the tournament roster does not have (substitute, virtual
+    player) falls back to the encounter roster snapshot, and without any row carries no role.
     """
-    tournament_roster: dict[tuple[int, int], tuple[int | None, str | None]] = {}
+    tournament_roster: dict[tuple[int, int], str | None] = {}
     if game.seats:
         player, seat_row = models.Player, models.EncounterTeam
-        for seat_id, member_id, rank, role in await session.execute(
-            sa.select(seat_row.id, player.workspace_member_id, player.rank, player.role)
+        for seat_id, member_id, role in await session.execute(
+            sa.select(seat_row.id, player.workspace_member_id, player.role)
             .join(player, sa.and_(player.team_id == seat_row.team_id, player.tournament_id == seat_row.tournament_id))
             .where(
                 seat_row.id.in_(game.seats),
@@ -414,19 +413,19 @@ async def bound_participants(
             # Every roster Player of the team matches, registered substitutes included; the regular row wins.
             .order_by(player.is_substitution, player.id)
         ):
-            tournament_roster.setdefault((seat_id, member_id), (rank, role))
+            tournament_roster.setdefault((seat_id, member_id), role)
     member = models.EncounterTeamMember
-    roster: dict[tuple[int, int], tuple[int, int | None]] = {}
+    roster: dict[tuple[int, int], int] = {}
     role_of: dict[int, int] = {}
     if game.seats:
         rows = (
             await session.execute(
-                sa.select(member.id, member.encounter_team_id, member.workspace_member_id, member.rank).where(
+                sa.select(member.id, member.encounter_team_id, member.workspace_member_id).where(
                     member.encounter_team_id.in_(game.seats)
                 )
             )
         ).all()
-        roster = {(row.encounter_team_id, row.workspace_member_id): (row.id, row.rank) for row in rows}
+        roster = {(row.encounter_team_id, row.workspace_member_id): row.id for row in rows}
         if rows:
             for team_member_id, role_id in await session.execute(
                 sa.select(models.EncounterTeamMemberRole.team_member_id, models.EncounterTeamMemberRole.role_id)
@@ -446,20 +445,18 @@ async def bound_participants(
     for person in doc.participants:
         anchor = members[person.key]
         seat = binding.team_ids[person.team]
-        row_id, rank = roster.get((seat, anchor.id), (None, None))
+        row_id = roster.get((seat, anchor.id))
         role_code = None
         if row_id is not None and row_id in role_of and ontology is not None:
             node = ontology.by_id(role_of[row_id])
             if node.dimension == rated:
                 role_code = ontology.root(node).code
-        registered = tournament_roster.get((seat, anchor.id))
-        if registered is not None:
-            rank, role_code = registered[0], registered[1] or role_code
+        if (seat, anchor.id) in tournament_roster:
+            role_code = tournament_roster[(seat, anchor.id)] or role_code
         out[person.key] = BoundParticipant(
             member_id=anchor.id,
             user_id=anchor.player_id,
             encounter_team_id=seat,
-            rank=rank,
             role=role_code,
         )
     return out

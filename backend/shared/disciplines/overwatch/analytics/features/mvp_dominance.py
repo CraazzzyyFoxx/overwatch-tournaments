@@ -4,19 +4,22 @@ Performance v2 ``impact`` measures *outperformance vs the pre-match win
 expectation* — it deliberately gives little credit to a strong player who wins
 "as expected" on a favoured team. That misses a textbook under-ranked profile:
 a player who consistently tops the raw per-match scoreboard (the match log's
-``Performance`` rank, i.e. "MVP place") well above their division.
+``impact_rank``, i.e. "MVP place") well above their division.
 
 This module derives that raw-dominance signal straight from the match log:
 
     mvp_dominance = mean over the player's tournament matches of
-                    (lobby_size - performance_rank) / (lobby_size - 1)
+                    (lobby_size - impact_rank) / (lobby_size - 1)
 
-``performance_rank`` is the parser's per-match MVP position (1 = best); so the
+``impact_rank`` is the match MVP position (1 = best, ties share a place); so the
 score is 1.0 for a player who is always match MVP, ~0.5 for a median player and
-0.0 for a player who is always last. It is consumed by the smurf detector (flag
-a consistent raw dominator) and as a secondary lift for the Shift v2 individual
-modifier (so such a player actually moves, not only gets flagged) — both only
-once the player has :data:`MVP_MIN_MATCHES` logged matches.
+0.0 for a player who is always last. ``lobby_size`` counts the players that have
+a rank in that match: unscored players (no hero class, too little playtime, no
+baselines) carry no ``impact_rank`` fact and are not part of the lobby. It is
+consumed by the smurf detector (flag a consistent raw dominator) and as a
+secondary lift for the Shift v2 individual modifier (so such a player actually
+moves, not only gets flagged) — both only once the player has
+:data:`MVP_MIN_MATCHES` logged matches.
 """
 
 from __future__ import annotations
@@ -30,16 +33,16 @@ from shared import models
 from shared.core.enums import LogStatsName
 from shared.repository.stats_queries import player_facts
 
-__all__ = ("MVP_MIN_MATCHES", "compute_mvp_dominance", "dominance_from_perf_ranks")
+__all__ = ("MVP_MIN_MATCHES", "compute_mvp_dominance", "dominance_from_impact_ranks")
 
 # A dominance mean over fewer logged matches is noise: both consumers treat it as neutral below this count.
 MVP_MIN_MATCHES: int = 5
 
 
-def dominance_from_perf_ranks(df: pd.DataFrame) -> pd.DataFrame:
+def dominance_from_impact_ranks(df: pd.DataFrame) -> pd.DataFrame:
     """Reduce per-match MVP ranks to per-player dominance.
 
-    Input columns: ``player_id``, ``match_id``, ``perf_rank`` (1 = match MVP).
+    Input columns: ``player_id``, ``match_id``, ``impact_rank`` (1 = match MVP).
     Returns ``player_id``, ``mvp_dominance`` (∈ [0, 1]), ``mvp_matches``.
     """
     cols = ["player_id", "mvp_dominance", "mvp_matches"]
@@ -47,8 +50,8 @@ def dominance_from_perf_ranks(df: pd.DataFrame) -> pd.DataFrame:
         return pd.DataFrame(columns=cols)
 
     frame = df.copy()
-    frame["perf_rank"] = pd.to_numeric(frame["perf_rank"], errors="coerce")
-    frame = frame.dropna(subset=["player_id", "match_id", "perf_rank"])
+    frame["impact_rank"] = pd.to_numeric(frame["impact_rank"], errors="coerce")
+    frame = frame.dropna(subset=["player_id", "match_id", "impact_rank"])
     if frame.empty:
         return pd.DataFrame(columns=cols)
 
@@ -56,7 +59,7 @@ def dominance_from_perf_ranks(df: pd.DataFrame) -> pd.DataFrame:
     # 1.0 at rank 1 (MVP), 0.0 at the bottom; single-player lobbies are neutral.
     frame["dominance"] = np.where(
         lobby_n > 1,
-        ((lobby_n - frame["perf_rank"]) / (lobby_n - 1)).clip(0.0, 1.0),
+        ((lobby_n - frame["impact_rank"]) / (lobby_n - 1)).clip(0.0, 1.0),
         0.5,
     )
     out = (
@@ -74,16 +77,17 @@ async def compute_mvp_dominance(
 ) -> pd.DataFrame:
     """Per-player raw MVP dominance for one tournament (keyed by ``player_id``).
 
-    Reads the parser's per-match ``Performance`` rank (round 0, hero-agnostic),
-    scoped to the tournament via the encounter, and maps each match participant
-    back to their tournament ``player_id``. Empty when no match log exists.
+    Reads the per-match ``ImpactRank`` (segment 0, hero-agnostic), scoped to the
+    tournament via the encounter, and maps each match participant back to their
+    tournament ``player_id``. The lobby of a match is the players that have a
+    rank in it. Empty when no match log exists.
     """
     facts = player_facts(discipline="overwatch")
     query = (
         sa.select(
             models.Player.id.label("player_id"),
             facts.c.match_id.label("match_id"),
-            facts.c.value.label("perf_rank"),
+            facts.c.value.label("impact_rank"),
         )
         .select_from(facts)
         .join(
@@ -96,10 +100,10 @@ async def compute_mvp_dominance(
         .where(
             facts.c.tournament_id == tournament_id,
             models.Player.is_substitution.is_(False),
-            facts.c.stat_code == LogStatsName.Performance.value,
+            facts.c.stat_code == LogStatsName.ImpactRank.value,
             facts.c.segment == 0,
             facts.c.entity_id.is_(None),
         )
     )
     df = pd.DataFrame((await session.execute(query)).mappings().all())
-    return dominance_from_perf_ranks(df)
+    return dominance_from_impact_ranks(df)

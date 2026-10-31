@@ -18,7 +18,7 @@ export const STATS = [
   "Eliminations", "FinalBlows", "Deaths", "AllDamageDealt", "HeroDamageDealt",
   "HealingDealt", "DamageTaken", "DamageBlocked", "EnvironmentalKills",
   "EnvironmentalDeaths", "ScopedCriticalHitKills", "SoloKills", "CriticalHits",
-  "HeroTimePlayed", "UltimatesEarned", "Performance", "KD", "KDA",
+  "HeroTimePlayed", "UltimatesEarned", "ImpactRank", "KD", "KDA",
 ] as const;
 export type AchievementStat = (typeof STATS)[number];
 export const STAT_LABEL_KEYS: Record<AchievementStat, `stats.${AchievementStat}`> = Object.fromEntries(

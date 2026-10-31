@@ -25,7 +25,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from shared import models
 from shared.core import enums, pagination
 from shared.core.errors import ApiHTTPException
-from shared.core.impact import BADGE_THRESHOLD
 from shared.division_grid import DEFAULT_GRID
 from shared.schemas.role import RoleRef
 from shared.testing import configure_test_cache
@@ -45,7 +44,15 @@ statistics_queries = StatisticsQueries.of(OW)
 hero_queries = HeroQueries.of(OW)
 
 GOLDEN = Path(__file__).parent / "fixtures" / "stats_reader_parity.json"
-ALL_STATS = list(enums.LogStatsName)
+#: The stats the frozen capture requested and the proof still compares: the readers' ``count / len(stats)`` ranked
+#: population divides by the request, so the MVP stats (``shared.testing.stats_parity.MVP_STATS``, spelled out because
+#: the frozen capture imports this module) are not requested.
+ALL_STATS = [
+    stat
+    for stat in enums.LogStatsName
+    if stat.value not in {"impact_points", "impact_rank", "overperformance_score", "overperformance_badge"}
+    and not stat.value.startswith("contrib_")
+]
 DAMAGE = RoleRef(dimension="player_role", role="damage")
 #: Every expansion of a user encounter read: the frozen capture shipped them all.
 ALL_ENCOUNTERS = ["tournament", "stage", "stage_item", "teams", "teams.players", "matches"]
@@ -201,9 +208,8 @@ def _frozen_map(entity: dict[str, Any] | None) -> dict[str, Any] | None:
 def _frozen_match(match: dict[str, Any]) -> dict[str, Any]:
     """A native match row in the frozen per-participant representation (projection only, never a recomputation).
 
-    The frozen user row carried the viewer's performance/impact/overperformance values, a badge and their heroes. They
-    are the viewer's whole-match facts, and the badge is the old rule over the match's members' totals: top competition
-    rank (ties share it) by ``overperformance_score`` and at least ``BADGE_THRESHOLD``.
+    The frozen user row carried the viewer's impact/overperformance values, a badge and their heroes. The MVP values
+    are not projected (``without_mvp`` drops them from both sides of the proof); the heroes are the viewer's.
     """
     participants = sorted(
         (
@@ -232,18 +238,9 @@ def _frozen_match(match: dict[str, Any]) -> dict[str, Any]:
     if "member_totals" not in match:
         return row
     viewer = match["viewer"]
-    facts = viewer["facts"] if viewer is not None else {}
-    score = facts.get("overperformance_score")
-    scores = [fact["value"] for fact in match["member_totals"] if fact["stat_code"] == "overperformance_score"]
-    position = None if score is None else 1 + sum(value > score for value in scores)
     row.update(
         map_index=match["map_index"],
         map=_frozen_map(match["map"]),
-        performance=None if "performance" not in facts else int(facts["performance"]),
-        impact_rank=None if "impact_rank" not in facts else int(facts["impact_rank"]),
-        impact_points=facts.get("impact_points"),
-        overperformance_score=score,
-        overperformance_badge=position == 1 and score >= BADGE_THRESHOLD,
         heroes=[] if viewer is None else [_frozen_hero(entity) for entity in viewer["characters"]],
     )
     return row
@@ -861,7 +858,7 @@ def test_native_hero_thresholds_and_distinct_denominators(
     asyncio.run(run())
 
 
-def test_native_mvp_prefers_impact_then_falls_back_to_performance(
+def test_native_mvp_reads_impact_rank_only(
     stats_parity_database: tuple[str, dict[str, int]],
 ) -> None:
     from shared.models.stats.defs import StatDef
@@ -872,34 +869,24 @@ def test_native_mvp_prefers_impact_then_falls_back_to_performance(
     async def run() -> None:
         configure_test_cache()
         async with _database_session(url) as session:
-            codes = (enums.LogStatsName.ImpactRank.value, enums.LogStatsName.Performance.value)
-            stat_ids = dict(
-                (
-                    await session.execute(
-                        sa.select(StatDef.code, StatDef.id).where(
-                            StatDef.discipline == "overwatch",
-                            StatDef.code.in_(codes),
-                        )
-                    )
-                ).all()
+            impact_id = await session.scalar(
+                sa.select(StatDef.id).where(
+                    StatDef.discipline == "overwatch", StatDef.code == enums.LogStatsName.ImpactRank.value
+                )
             )
-            impact_id, performance_id = (stat_ids[code] for code in codes)
             facts = StatsFact.__table__
             whole = (
                 facts.c.workspace_member_id == ids["member"],
                 facts.c.segment == 0,
                 facts.c.entity_id.is_(None),
-                facts.c.stat_id.in_([impact_id, performance_id]),
+                facts.c.stat_id == impact_id,
             )
-            # One subject match isolates the preference from unrelated career history.
+            # One subject match isolates the placement from unrelated career history.
             await session.execute(sa.delete(facts).where(*whole, facts.c.match_id != ids["match"]))
-            await session.execute(sa.update(facts).where(*whole, facts.c.stat_id == impact_id).values(value=2))
-            await session.execute(sa.update(facts).where(*whole, facts.c.stat_id == performance_id).values(value=1))
             tournament = await session.get(models.Tournament, ids["tournament"])
             assert tournament is not None
-            for expected, remove_impact in ((2, False), (1, True)):
-                if remove_impact:
-                    await session.execute(sa.delete(facts).where(*whole, facts.c.stat_id == impact_id))
+            for expected in (2, 1):
+                await session.execute(sa.update(facts).where(*whole).values(value=expected))
                 row = await statistics_queries.get_tournament_mvp_stat_for_user(session, tournament, ids["player"])
                 assert row is not None and row.value == expected
                 _, merged = await statistics_queries.get_tournament_user_ranks(
@@ -913,7 +900,7 @@ def test_native_mvp_prefers_impact_then_falls_back_to_performance(
                 leaderboard = await statistics_queries.get_tournament_mvp_stat_leaderboard(session, tournament.id)
                 assert next(item.value for item in leaderboard if item.user_id == ids["player"]) == expected
                 assert await users.encounters.count_user_mvp_maps(session, ids["player"], ids["workspace"]) == int(
-                    remove_impact
+                    expected == 1
                 )
                 page = await _uncached(
                     users.get_encounters_by_user,
@@ -923,7 +910,8 @@ def test_native_mvp_prefers_impact_then_falls_back_to_performance(
                     workspace_id=ids["workspace"],
                     mvp1=True,
                 )
-                assert [encounter.id for encounter in page.results] == ([ids["encounter"]] if remove_impact else [])
+                assert [encounter.id for encounter in page.results] == ([ids["encounter"]] if expected == 1 else [])
+            # No rank fact: no placement, never a zero.
             await session.execute(sa.delete(facts).where(*whole))
             assert await statistics_queries.get_tournament_mvp_stat_for_user(session, tournament, ids["player"]) is None
             await session.rollback()

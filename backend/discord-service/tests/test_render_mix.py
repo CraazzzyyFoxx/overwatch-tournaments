@@ -95,6 +95,7 @@ def test_an_open_signup_card_names_the_mix_its_host_and_where_a_joiner_lands() -
 
     assert card.text.startswith("## :owt_live: Запись на микс «Friday Scrim»")
     assert ":owt_host: Foxx" in card.text
+    assert ":owt_game_overwatch: Overwatch · " in card.text
     assert ":owt_pool: сразу в пул" in card.text
     assert "2 лобби" not in card.text
     assert card.accent_color == 0x14B8A6

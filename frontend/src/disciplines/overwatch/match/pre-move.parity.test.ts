@@ -13,7 +13,7 @@ import {
   getSeriesVerdict
 } from "@/lib/encounter/detail";
 import type { CatalogEntityRead } from "@/types/catalog.types";
-import type { Encounter, Match, MatchWithStats, NativeFact } from "@/types/encounter.types";
+import type { Encounter, Match, MatchWithStats } from "@/types/encounter.types";
 import type { EncounterWithUserStats } from "@/types/user.types";
 import { LogStatsName } from "../stat-names";
 
@@ -30,16 +30,9 @@ import {
   findLeader,
   formatStat,
   playerStat,
-  resolveMatchMvpPlacement,
   teamTotal
 } from "./stats";
-import {
-  formatOverperformance,
-  mvpRank,
-  ordinal,
-  overperformanceBadge,
-  resolveMvpPlacement
-} from "./mvp";
+import { formatOverperformance } from "./mvp";
 import { aggregateSeriesStats } from "./series";
 import { owMatchView, type OwPlayer } from "./view";
 
@@ -182,6 +175,22 @@ const withoutHeroColor = (value: unknown): unknown => {
   return value;
 };
 
+/** Legacy-MVP outputs the v2 cutover removed (`performance`, `performance_points`, the `mvp` place read from them). */
+const LEGACY_MVP_KEYS = ["mvp", "performance", "performance_points"];
+/** A series' placement is now the weighted impact rank: the captured placement and the new `impact_rank` row are not comparable. */
+const LEGACY_SERIES_KEYS = [...LEGACY_MVP_KEYS, "seriesPlacement", "impact_rank"];
+const withoutKeys = (value: unknown, keys: readonly string[]): unknown => {
+  if (Array.isArray(value)) return value.map((item) => withoutKeys(item, keys));
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([key]) => !keys.includes(key))
+        .map(([key, item]) => [key, withoutKeys(item, keys)])
+    );
+  }
+  return value;
+};
+
 describe("lib/match-stats.ts → disciplines/overwatch/match/stats", () => {
   const names = Object.keys(STAT_META) as LogStatsName[];
 
@@ -213,7 +222,6 @@ describe("lib/match-stats.ts → disciplines/overwatch/match/stats", () => {
       const rows = (team: typeof home) =>
         activePlayers(team, round).map((player) => ({
           workspace_member_id: player.workspace_member_id,
-          mvp: resolveMatchMvpPlacement(player, round),
           stats: Object.fromEntries(
             names.map((name) => {
               const value = playerStat(player, round, name);
@@ -249,8 +257,8 @@ describe("lib/match-stats.ts → disciplines/overwatch/match/stats", () => {
         ]
       };
     }
-    expect(norm({ [label]: { available_rounds: rounds, by_round: byRound } })).toEqual(
-      withoutHeroColor(expected)
+    expect(withoutKeys(norm({ [label]: { available_rounds: rounds, by_round: byRound } }), LEGACY_MVP_KEYS)).toEqual(
+      withoutHeroColor(withoutKeys(expected, LEGACY_MVP_KEYS))
     );
   };
 
@@ -286,9 +294,13 @@ describe("lib/match-stats.ts → disciplines/overwatch/match/stats", () => {
 });
 
 describe("components/match mvp-rank → disciplines/overwatch/match/mvp", () => {
-  it("reproduces every captured user-match placement, medal, formatting and badge from the real native wire", () => {
+  // The captured `performance`, its medal, the `placement` (impact rank, else legacy performance), the badge
+  // (ranked client-side from member totals) and the ordinals of those placements are legacy-derived: impact_v2 reads
+  // `impact_rank` only and the badge is a stored fact, so they are not part of the contract any more.
+  const LEGACY = ["performance", "rank", "overperformance_badge", "placement", "rank_of_placement", "ordinals"];
+
+  it("reproduces every captured user-match impact fact and its formatting from the real native wire", () => {
     const fixture = read(PRE, "mvp-rank.json");
-    const placements = new Set<number>();
     const rows = PLAYER_LABELS.flatMap((player) => {
       const { input_native_wire } = read(POST, `mvp-rank.${player}.json`) as {
         input_native_wire: Record<string, { status: number; body: { results: EncounterWithUserStats[] } }>;
@@ -298,58 +310,20 @@ describe("components/match mvp-rank → disciplines/overwatch/match/mvp", () => 
         return input_native_wire[source].body.results.flatMap((encounter) =>
           encounter.matches.map((match) => {
             const facts = match.viewer?.facts ?? {};
-            const placement = resolveMvpPlacement(match.viewer?.facts);
-            if (placement != null) placements.add(placement);
             return {
               source,
               match_id: match.id,
-              performance: facts.performance ?? null,
               impact_rank: facts.impact_rank ?? null,
               impact_points: facts.impact_points ?? null,
               overperformance_score: facts.overperformance_score ?? null,
-              overperformance_badge: overperformanceBadge(match),
-              placement,
-              rank: mvpRank(facts.performance ?? null),
-              rank_of_placement: mvpRank(placement),
               overperformance: formatOverperformance(facts.overperformance_score)
             };
           })
         );
       });
     });
-    const ordinals = Object.fromEntries(
-      [...placements].sort((a, b) => a - b).map((n) => [n, ordinal(n)])
-    );
     expect(rows.length).toBe(76);
-    expect(norm({ rows, ordinals })).toEqual(fixture.output);
-  });
-
-  it("ranks the badge over every member, not only the viewer", () => {
-    const total = (member: number, value: number): NativeFact => ({
-      encounter_team_id: 1,
-      workspace_member_id: member,
-      entity_id: null,
-      segment: 0,
-      stat_code: "overperformance_score",
-      value
-    });
-    const viewer = {
-      encounter_team_id: 1,
-      workspace_member_id: 1,
-      characters: [],
-      facts: { overperformance_score: 3 }
-    };
-    expect(overperformanceBadge({ viewer, member_totals: [total(1, 3), total(2, 3)] })).toBe(true); // ties share rank 1
-    expect(overperformanceBadge({ viewer, member_totals: [total(1, 3), total(2, 3.5)] })).toBe(
-      false
-    );
-    expect(
-      overperformanceBadge({
-        viewer: { ...viewer, facts: { overperformance_score: 1.9 } },
-        member_totals: [total(1, 1.9)]
-      })
-    ).toBe(false);
-    expect(overperformanceBadge({ viewer: null, member_totals: [] })).toBe(false);
+    expect(norm({ rows })).toEqual(withoutKeys(fixture.output, LEGACY));
   });
 });
 
@@ -503,6 +477,8 @@ describe("lib/encounter/detail.ts → generic detail + overwatch series", () => 
         })
       }
     };
-    expect(norm(actual)).toEqual(withoutHeroColor(norm(captured)));
+    expect(withoutKeys(norm(actual), LEGACY_SERIES_KEYS)).toEqual(
+      withoutHeroColor(withoutKeys(norm(captured), LEGACY_SERIES_KEYS))
+    );
   });
 });

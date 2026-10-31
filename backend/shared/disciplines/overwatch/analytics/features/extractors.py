@@ -85,8 +85,6 @@ STAT_COLUMNS: tuple[tuple[LogStatsName, str], ...] = (
     (LogStatsName.WeaponAccuracy, "weapon_accuracy"),
     (LogStatsName.HeroTimePlayed, "hero_time_played"),
     # Pre-computed derived stats (kept as features, not as residual targets).
-    (LogStatsName.Performance, "performance"),
-    (LogStatsName.PerformancePoints, "performance_points"),
     (LogStatsName.KD, "kd"),
     (LogStatsName.KDA, "kda"),
     (LogStatsName.DamageDelta, "damage_delta"),
@@ -278,8 +276,6 @@ _WEIGHTED_MEAN_COLS = tuple(f"{c}_p10" for c in RATE_COLUMNS) + (
     "scoped_accuracy",
     "scoped_critical_hit_accuracy",
     "ult_economy",
-    "performance_points",
-    "performance",
     "kd",
     "kda",
 )
@@ -511,7 +507,7 @@ async def extract_encounter_features(
 def _normalise_round_residuals(df: pd.DataFrame) -> pd.DataFrame:
     """Attach peer-centred round residuals used by the throw detector.
 
-    ``performance_points`` often move together for an entire team or match.
+    ``impact_points`` often move together for an entire team or match.
     A raw within-player z-score would therefore mark every player in a normal
     team-wide collapse as ``throw``. We first z-score each player's own series
     inside the encounter, then subtract the same-team same-round median. The
@@ -522,19 +518,19 @@ def _normalise_round_residuals(df: pd.DataFrame) -> pd.DataFrame:
         return df
 
     df = df.copy()
-    df["performance_points"] = pd.to_numeric(
-        df["performance_points"],
+    df["impact_points"] = pd.to_numeric(
+        df["impact_points"],
         errors="coerce",
     ).astype(float)
     df = df.sort_values(["player_id", "encounter_id", "match_id", "source_round"]).reset_index(drop=True)
     df["round"] = df.groupby(["player_id", "encounter_id"], sort=False).cumcount() + 1
 
-    player_group = df.groupby(["player_id", "encounter_id"], sort=False)["performance_points"]
+    player_group = df.groupby(["player_id", "encounter_id"], sort=False)["impact_points"]
     player_mean = player_group.transform("mean")
     player_std = player_group.transform(lambda values: values.std(ddof=0))
     df["_player_z"] = np.where(
         np.isfinite(player_std) & (player_std > 1e-9),
-        (df["performance_points"] - player_mean) / player_std,
+        (df["impact_points"] - player_mean) / player_std,
         0.0,
     ).astype(float)
 
@@ -561,10 +557,11 @@ async def extract_round_residuals(
 ) -> pd.DataFrame:
     """Return per-player round residual series for ``detect_throws``.
 
-    The parser already materialises ``performance_points`` for every round.
+    The impact pipeline materialises ``impact_points`` for every scored round;
+    players without a round impact fact drop out of that round.
     We standardise each player's within-encounter round series to z-scores so
     the detector can compare early vs late rounds on a stable scale even when
-    absolute performance-point magnitudes differ sharply by role.
+    absolute impact-point magnitudes differ sharply by role.
     """
     facts = player_facts(discipline="overwatch")
     query = (
@@ -574,7 +571,7 @@ async def extract_round_residuals(
             facts.c.segment.label("source_round"),
             models.Player.id.label("player_id"),
             models.Player.team_id.label("team_id"),
-            facts.c.value.label("performance_points"),
+            facts.c.value.label("impact_points"),
         )
         .select_from(facts)
         .join(models.Tournament, models.Tournament.id == facts.c.tournament_id)
@@ -590,7 +587,7 @@ async def extract_round_residuals(
             facts.c.tournament_id == tournament_id,
             facts.c.segment > 0,
             facts.c.entity_id.is_(None),
-            facts.c.stat_code == LogStatsName.PerformancePoints.value,
+            facts.c.stat_code == LogStatsName.ImpactPoints.value,
             models.Player.is_substitution.is_(False),
             *workspace_scope_filter(workspace_id, workspace_ids),
         )

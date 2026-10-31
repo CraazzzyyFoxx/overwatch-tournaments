@@ -58,8 +58,8 @@ System overview: [`../../docs/architecture.md`](../../docs/architecture.md). Cod
   accounts per request) and keeps the per-account collection state, snapshot series and fetch log.
 - **Achievement evaluation** — owns the condition-tree engine, the rules admin surface, the
   evaluation runs and the manual grant/revoke overlay.
-- **MVP impact scoring** — derived stats (`PerformancePoints`, `Performance`, `ImpactPoints`,
-  `ImpactRank`, `OverperformanceScore`), the versioned baselines they are scored against, and the
+- **MVP impact scoring** — derived stats (`ImpactPoints`, `ImpactRank`, `OverperformanceScore`,
+  `OverperformanceBadge`, the `Contrib*` feature contributions), the versioned baselines they are scored against, and the
   idempotent historical backfill. The Workshop decoder and these formulas are the Overwatch module's (`shared/disciplines/overwatch/`: `ingest`, `impact`, `baselines`, `backfill`); stats-service reaches them through `shared.disciplines`.
 - **Subscription entitlement collection** — periodic and on-demand re-checks of Boosty (Discord
   roles, asked of discord-service over RabbitMQ) and Twitch subscription entitlements used as a
@@ -126,7 +126,7 @@ per-user maps read filters by `mode_id` and expands `parent` / `character_stats`
 home/away means slots 1/2, never ingestion source order or today's active seats. `map_index` is the game's position.
 Hidden-tournament policies, strict >60-second character qualification, the 600-second leaderboard threshold, rank
 ties and null handling are preserved. Profile/comparison per-10 denominators are match duration; character
-leaderboards use character playtime. MVP placement prefers ImpactRank over Performance. See
+leaderboards use character playtime. MVP placement is `ImpactRank` (absent for an unscored player, never 0). See
 [player statistics semantics](../../docs/users-identity.md#93-public-player-app-service-identity-stats-service-statistics).
 Native floating-point reductions have a fixed observation order: match and historical workspace member, then
 character/stat identity when a group spans them; rolled-up character totals use character identity order. A last-bit
@@ -575,7 +575,7 @@ uv run python backfill_impact.py [--tournament-id N]
 ```
 
 The backfill enumerates Overwatch matches through game → encounter ownership, replaces only the
-seven derived non-character fact codes across all segments, and preserves character/raw facts.
+derived non-character fact codes (kill-feed event counts and every `impact_v2` fact) across all segments, and preserves character/raw facts. Run it after `rpc.stats.impact.recompute_baselines`, which itself needs fitted weights.
 Fight metadata is reassigned as complete JSON values. Each match has its own flush/evidence/commit
 boundary. Objectiveless resolution adjusts native score facts, not accepted live-game results.
 

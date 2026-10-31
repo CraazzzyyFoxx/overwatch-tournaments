@@ -29,12 +29,13 @@ from typing import Any
 from urllib.parse import urljoin
 
 from shared.core.social import PROVIDERS
+from shared.disciplines import discipline as discipline_spec
 from shared.disciplines import identity_provider
 from shared.division_grid import DivisionGrid, ladder_grid
 from shared.domain.mix_lobby import LOBBY_LETTERS
 from src.render.card import DISCORD_CARD_TEXT_LIMIT, DiscordActionButton, DiscordCard, DiscordLinkButton
 from src.render.mix_lineup_image import LineupPicture, LineupSeat, LineupTeam
-from src.ui import BLUE, ROLE_EMOJI, SHORTCODE, TEAL, art_drawn_for, division_emoji, emoji
+from src.ui import BLUE, ROLE_EMOJI, SHORTCODE, TEAL, art_drawn_for, division_emoji, emoji, game_emoji
 
 __all__ = ("SignupLobby", "SignupPlayer", "lineup_card", "lineup_picture", "signup_card")
 
@@ -226,7 +227,10 @@ def signup_card(
     else:
         headline = f"## {emoji('live')} Запись на микс «{name}»"
 
-    facts = [f"{emoji('host')} {_escape(host_name) if host_name else '—'}"]
+    facts = [
+        f"{game_emoji(discipline)} {discipline_spec(discipline).name}",
+        f"{emoji('host')} {_escape(host_name) if host_name else '—'}",
+    ]
     if lobby_count > 1:
         marks = "".join(emoji(f"lobby_{LOBBY_LETTERS[index].lower()}") for index in range(lobby_count))
         facts.append(f"{marks} {lobby_count} лобби")

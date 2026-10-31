@@ -80,7 +80,7 @@ def _row(
         "match_count": wins + losses if match_count is None else match_count,
         "overall_position": position,
         "team_count": teams,
-        "performance_points": None,
+        "impact_points": None,
         "is_newcomer": newcomer,
         "is_newcomer_role": newcomer,
     }

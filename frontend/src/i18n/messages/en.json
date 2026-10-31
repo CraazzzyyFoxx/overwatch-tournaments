@@ -2832,7 +2832,7 @@
         "CriticalHits": "Critical hits",
         "HeroTimePlayed": "Time played on the hero",
         "UltimatesEarned": "Ultimates earned",
-        "Performance": "Performance",
+        "ImpactRank": "Impact rank (MVP place)",
         "KD": "K/D",
         "KDA": "KDA"
       },
@@ -3149,7 +3149,7 @@
       },
       "performanceHint": "Average place by impact among the map's ten players, 1 is the best.",
       "metrics": {
-        "performance": {
+        "impact_rank": {
           "label": "Average place on a map",
           "short": "Avg place"
         },
@@ -5833,8 +5833,7 @@
       "mapLabel": "Map {number}",
       "overperformanceBadge": "Above expectations",
       "mvp": {
-        "newRank": "New rank",
-        "oldRank": "Old rank"
+        "place": "Place"
       },
       "colTournament": "Tournament",
       "colStage": "Stage",
@@ -11379,7 +11378,7 @@
       "CriticalHits": "Critical hits",
       "HeroTimePlayed": "Hero time played",
       "UltimatesEarned": "Ultimates earned",
-      "Performance": "Performance",
+      "ImpactRank": "Impact rank (MVP place)",
       "KD": "KD",
       "KDA": "KDA"
     },

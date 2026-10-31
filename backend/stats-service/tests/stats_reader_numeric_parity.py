@@ -31,6 +31,7 @@ from shared.core import enums
 from shared.division_grid import DEFAULT_GRID, ladder_grid
 from shared.models.stats import StatDef, StatsFact, StatsMatch, StatsMatchPlayer
 from shared.schemas.role import RoleRef
+from shared.testing.stats_parity import is_mvp_stat, without_mvp
 from src.services.user.queries import UserCompareQueries, UserProfileQueries
 
 compare_queries = UserCompareQueries.of("overwatch")
@@ -137,6 +138,11 @@ async def _all_native_operands(session):
     return await _operands(session, query)
 
 
+def _without_mvp_operands(rows):
+    """Operand rows (stat code at index 4) of the stats the parity proof still compares."""
+    return [row for row in rows if not is_mvp_stat(row[4])]
+
+
 def _prove(group, pool, native_sum, native_time, native_avg):
     """Exact operand/denominator checks plus a data-derived binary64 error bound."""
     _identity, _stat, indices, old_sum_hex, old_time_hex, old_avg_hex = group
@@ -193,9 +199,14 @@ def _strict(expected, actual, path=()):
 
 
 async def assert_app_golden(session, ids, actual):
-    """Prove the named numerical exceptions, then compare every remaining leaf exactly."""
+    """Prove the named numerical exceptions, then compare every remaining leaf exactly.
+
+    The MVP surface (``without_mvp``: impact/performance stats, placements, badges, MVP columns) is excluded on both
+    sides: the frozen legacy golden cannot produce impact_v2, so it is neither compared nor proven here.
+    """
+    actual = without_mvp(actual)
     golden_bytes = (_FIXTURES / "stats_reader_parity.json").read_bytes()
-    expected = json.loads(golden_bytes)
+    expected = without_mvp(json.loads(golden_bytes))
     witness_bytes = (_FIXTURES / "stats_reader_operands.json").read_bytes()
     witness = json.loads(witness_bytes)
     population_witness = json.loads((_FIXTURES / "stats_reader_population_operands.json").read_bytes())
@@ -225,7 +236,9 @@ async def assert_app_golden(session, ids, actual):
         member, participant = owners[(row[0], row[2])]
         assert row[1] == member
         pool.append((*row, participant))
-    assert Counter(await _all_native_operands(session)) == Counter(pool), "Frozen/native operand bits or owners changed"
+    assert Counter(_without_mvp_operands(await _all_native_operands(session))) == Counter(
+        _without_mvp_operands(pool)
+    ), "Frozen/native operand bits or owners changed"
 
     # The fact/match subqueries are the OW-bound instances' own (built once per discipline), so the operand columns
     # below are the very objects the readers' statements embed.
@@ -262,8 +275,10 @@ async def assert_app_golden(session, ids, actual):
                 maintain_column_froms=True,
             ).group_by(None),
         )
-        groups = witness["scopes"][scope]
-        assert Counter(observed) == Counter(pool[index] for group in groups for index in group[2]), scope
+        groups = [group for group in witness["scopes"][scope] if not is_mvp_stat(group[1])]
+        assert Counter(_without_mvp_operands(observed)) == Counter(
+            pool[index] for group in groups for index in group[2]
+        ), scope
         # Extract the actual SUM expressions; a changed denominator/expression cannot hide behind a ratio.
         terms = {}
         for node in visitors.iterate(aggregate.element.selected_columns.avg_10):
@@ -280,6 +295,7 @@ async def assert_app_golden(session, ids, actual):
         reductions = {
             (row.user_id, row.name): row
             for row in (await session.execute(aggregate.element.add_columns(terms["sum"], terms["time"]))).all()
+            if not is_mvp_stat(row.name)
         }
         old_rows = {(row[0], row[1]): row for row in expected[scope]["hero_compare_raw"]["values"]}
         new_rows = {(row[0], row[1]): row for row in actual[scope]["hero_compare_raw"]["values"]}
@@ -331,10 +347,14 @@ async def assert_app_golden(session, ids, actual):
                 ),
             ),
         )
-        groups = witness["profiles"][case]
-        assert Counter(observed) == Counter(pool[index] for group in groups for index in group[2]), case
+        groups = [group for group in witness["profiles"][case] if not is_mvp_stat(group[1])]
+        assert Counter(_without_mvp_operands(observed)) == Counter(
+            pool[index] for group in groups for index in group[2]
+        ), case
         reductions = {
-            (row.entity_id, row.stat_code): row for row in (await session.execute(sa.select(aggregate))).all()
+            (row.entity_id, row.stat_code): row
+            for row in (await session.execute(sa.select(aggregate))).all()
+            if not is_mvp_stat(row.stat_code)
         }
         old_parent, new_parent = _at(expected, path), _at(actual, path)
         old_rows = {(row[1]["id"], row[0]): row for row in old_parent["hero_statistics"]}
@@ -366,7 +386,7 @@ async def assert_app_golden(session, ids, actual):
 
     # Existing MV-only exception: <=1e-12 cross-model average, exact native derivation.
     mv_operands = defaultdict(list)
-    for row in pool:
+    for row in _without_mvp_operands(pool):
         mv_operands[(row[4], row[3])].append(row)
     old_records = {(row[0], row[1]): row for row in expected["global_hero_records"]}
     new_records = {(row[0], row[1]): row for row in actual["global_hero_records"]}
@@ -546,7 +566,7 @@ async def _prove_comparison_population(session, ids, expected, actual, module, p
     for scope, label, workspace, user_ids, role, allowed in cases:
         name = f"{scope}.{label}"
         case = witness["cases"][name]
-        old_population = {row["id"]: row for row in case["population"]}
+        old_population = {row["id"]: without_mvp(row) for row in case["population"]}
         params = {
             "user_ids": user_ids,
             "role": role,
@@ -558,7 +578,7 @@ async def _prove_comparison_population(session, ids, expected, actual, module, p
         }
         statement = compare_queries._compare_metrics_query_v2(**params)
         native_population = await compare_queries.get_compare_population(session, **params)
-        population = {row["id"]: row for row in native_population}
+        population = {row["id"]: without_mvp(row) for row in native_population}
         assert len(population) == len(native_population) == len(old_population)
         assert population.keys() == old_population.keys(), name
         inner, aggregate = _cte(statement, "compare_hero_match_stats"), _cte(statement, "compare_match_stats")

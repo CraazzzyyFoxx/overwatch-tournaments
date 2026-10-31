@@ -446,14 +446,13 @@ Ingest (upload / gateway base64 / Discord): strict UTF-8, no path traversal, S3 
 
 Dedup: `(tournament_id, filename, content_hash)` — identical bytes skipped. Same filename pending/failed → reuse, `attempts=0`.
 
-Impact (pure, `stats-service/src/domain/match_logs/impact.py`):
+Impact `impact_v2` (pure, `shared/disciplines/overwatch/impact.py`; design `docs/superpowers/specs/2026-10-31-mvp-impact-v2-design.md`):
 
-- A fight starts on round change or a gap > 15s.
-- FirstPick / FirstDeath from fight boundaries.
-- Dominant role = max hero-seconds.
-- Z-score vs role / role+rank baselines, winsorized, × time share.
-- Flex and sub-`MIN_SECONDS` rows are not scored.
-- `ImpactPoints` = role-only baseline; `OverperformanceScore` = role+rank.
+- A fight starts on round change or a gap > 15s; FirstPick / FirstDeath from fight boundaries, counted on the killer's (victim's) hero.
+- Scored per hero stint: winsorized z vs the hero's baseline (≥ 30 stints) else the role's, × per-role fitted weights, standardised per role.
+- Quality = time-weighted stint mean, × `M/(M+3 min)` shrinkage × time share = `ImpactPoints`; `ImpactRank` = competition rank, scored players only (< 60 s or no hero class: no impact facts).
+- `OverperformanceScore` = quality vs the expectation for the dominant role's rank quintile within the tournament/mix; the `overperformance_badge` fact marks the map's top one past the baseline p95.
+- Per-feature `contrib_*` facts (map only) explain `ImpactPoints`; baselines are frozen per formula version (last 365 days, ≤ 5000 maps); recompute refuses unfitted weights.
 
 Achievements: JSON condition tree (AND ∩, OR ∪, NOT complements the eligible universe at the inferred leaf grain). ~22 leaf types: stats, standings, bracket path (UB/LB, min LB wins, lost-in-round), MVP, newcomer, captain, revenge, streaks, OTP, teammate recurrence, …
 

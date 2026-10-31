@@ -15,6 +15,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import aggregate_order_by
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.core.impact import CONTRIBUTION_STATS
 from shared.domain.achievements.context import EvalContext
 from shared.models.achievements.achievement import AchievementGrain
 from shared.repository.stats_queries import player_facts
@@ -41,8 +42,8 @@ _NO_TIME_NORMALIZE = frozenset(
         "impact_points",
         "impact_rank",
         "overperformance_score",
-        "performance",
-        "performance_points",
+        "overperformance_badge",
+        *(stat.value for stat in CONTRIBUTION_STATS.values()),
     }
 )
 

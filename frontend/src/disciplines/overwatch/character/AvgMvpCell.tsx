@@ -6,19 +6,16 @@ import { SummaryCellBox } from "@/components/profile/atoms";
 import type { SlotProps } from "@/disciplines/types";
 import type { UserTournamentEntry } from "@/types/user.types";
 
-import { LogStatsName } from "../stat-names";
+import { resolveMvpPlacement } from "../match/mvp";
 
-/** Mean MVP placement across the user's matches in the entries (impact rank → legacy performance), or null when
- *  nothing is recorded. */
+/** Mean MVP placement across the user's matches in the entries (`impact_rank`), or null when nothing is recorded. */
 export const avgMvpPlacement = (entries: Pick<UserTournamentEntry, "encounters">[]): number | null => {
   let sum = 0;
   let count = 0;
   for (const t of entries) {
     for (const enc of t.encounters) {
       for (const match of enc.matches ?? []) {
-        // The viewer's whole-match placement facts: impact rank when computed, legacy performance otherwise.
-        const facts = match.viewer?.facts;
-        const placement = facts?.[LogStatsName.ImpactRank] ?? facts?.[LogStatsName.Performance] ?? null;
+        const placement = resolveMvpPlacement(match.viewer?.facts);
         if (placement != null) {
           sum += placement;
           count += 1;

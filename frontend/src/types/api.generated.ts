@@ -3693,7 +3693,7 @@ export interface paths {
         };
         /**
          * Tournament player stats
-         * @description Permission: public; no authentication required, though a hidden tournament 404s unless the optional identity may view it (404 too for an unknown tournament). Returns every player's tournament average and rank for `performance` (MVP placement), `kda`, `eliminations`, `deaths`, `assists`, `hero_damage_dealt` and `damage_delta` — the same values and ranks as the per-stat tournament leaderboard, pivoted by player (`player_id` is the user id); a player carries only the stats they have data for. Rank 1 is best: Deaths and the MVP placement rank ascending. `total_players` is the largest ranked population across those stats.
+         * @description Permission: public; no authentication required, though a hidden tournament 404s unless the optional identity may view it (404 too for an unknown tournament). Returns every player's tournament average and rank for `impact_rank` (MVP placement), `kda`, `eliminations`, `deaths`, `assists`, `hero_damage_dealt` and `damage_delta` — the same values and ranks as the per-stat tournament leaderboard, pivoted by player (`player_id` is the user id); a player carries only the stats they have data for. Rank 1 is best: Deaths and the MVP placement rank ascending. `total_players` is the largest ranked population across those stats.
          *
          *     RPC subject: `rpc.stats.statistics.tournament_player_stats`
          */
@@ -16932,10 +16932,11 @@ export interface components {
          * MatchReadWithUserStats
          * @description Match within a user-scoped encounter: the native header, the viewer's totals and the members' ranked totals.
          *
-         *     A discipline's renderer derives its per-match badges from ``viewer.facts`` against ``member_totals``; no derived
-         *     value rides on the wire. ``member_totals`` carries every observed member's segment-0, NULL-entity facts of the
-         *     game's ``DisciplineSpec.member_total_stats`` only (empty for a game that ranks none). ``viewer`` is ``None`` for a
-         *     match the viewer's seat was a participant of without being observed.
+         *     A discipline's renderer derives its per-match badges from ``viewer.facts`` (Overwatch's ``overperformance_badge`` is
+         *     a stored fact there); no derived value rides on the wire. ``member_totals`` carries every observed member's
+         *     segment-0, NULL-entity facts of the game's ``DisciplineSpec.member_total_stats`` only (empty for a game that ranks
+         *     none, Overwatch included). ``viewer`` is ``None`` for a match the viewer's seat was a participant of without being
+         *     observed.
          */
         "stats.MatchReadWithUserStats": {
             /**
@@ -82046,8 +82047,6 @@ export enum StatsLogStatsName {
     first_deaths = "first_deaths",
     ultimate_kills = "ultimate_kills",
     support_kills = "support_kills",
-    performance = "performance",
-    performance_points = "performance_points",
     kd = "kd",
     kda = "kda",
     damage_delta = "damage_delta",
@@ -82056,7 +82055,28 @@ export enum StatsLogStatsName {
     assists = "assists",
     impact_points = "impact_points",
     impact_rank = "impact_rank",
-    overperformance_score = "overperformance_score"
+    overperformance_score = "overperformance_score",
+    overperformance_badge = "overperformance_badge",
+    contrib_eliminations = "contrib_eliminations",
+    contrib_final_blows = "contrib_final_blows",
+    contrib_deaths = "contrib_deaths",
+    contrib_hero_damage_dealt = "contrib_hero_damage_dealt",
+    contrib_healing_dealt = "contrib_healing_dealt",
+    contrib_damage_blocked = "contrib_damage_blocked",
+    contrib_damage_taken = "contrib_damage_taken",
+    contrib_barrier_damage_dealt = "contrib_barrier_damage_dealt",
+    contrib_offensive_assists = "contrib_offensive_assists",
+    contrib_defensive_assists = "contrib_defensive_assists",
+    contrib_ultimates_earned = "contrib_ultimates_earned",
+    contrib_ultimates_used = "contrib_ultimates_used",
+    contrib_multikills = "contrib_multikills",
+    contrib_solo_kills = "contrib_solo_kills",
+    contrib_objective_kills = "contrib_objective_kills",
+    contrib_environmental_kills = "contrib_environmental_kills",
+    contrib_first_picks = "contrib_first_picks",
+    contrib_first_deaths = "contrib_first_deaths",
+    contrib_ultimate_kills = "contrib_ultimate_kills",
+    contrib_support_kills = "contrib_support_kills"
 }
 export enum StatsRawSourceStatus {
     available = "available",

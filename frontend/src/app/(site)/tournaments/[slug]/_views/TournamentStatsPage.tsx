@@ -144,7 +144,7 @@ type PlayerRow = {
 };
 
 const LEADER_STATS: TournamentPlayerStatKey[] = [
-  "performance",
+  "impact_rank",
   "kda",
   "eliminations",
   "hero_damage_dealt",
@@ -209,7 +209,7 @@ function PlayersTab({ tournament }: Readonly<{ tournament: Tournament }>) {
   const statColumn = (stat: TournamentPlayerStatKey): SortableColumn<PlayerRow> => ({
     key: stat,
     label: t(`stats.metrics.${stat}.short`),
-    title: stat === "performance" ? t("stats.performanceHint") : t(`stats.metrics.${stat}.label`),
+    title: stat === "impact_rank" ? t("stats.performanceHint") : t(`stats.metrics.${stat}.label`),
     numeric: true,
     ascendingFirst: STAT_META[stat].lowerIsBetter,
     sortValue: (row) => row.stats[stat]?.value ?? null,
@@ -237,7 +237,7 @@ function PlayersTab({ tournament }: Readonly<{ tournament: Tournament }>) {
       ascendingFirst: true,
       cell: (row) => <PlayerCell row={row} ontology={ontology} />
     },
-    statColumn("performance"),
+    statColumn("impact_rank"),
     statColumn("kda"),
     statColumn("eliminations"),
     statColumn("deaths"),
@@ -321,7 +321,7 @@ function PlayersTab({ tournament }: Readonly<{ tournament: Tournament }>) {
           rows={visible}
           columns={columns}
           rowKey={(row) => row.entry.player.id}
-          defaultSort={{ key: "performance", ascending: true }}
+          defaultSort={{ key: "impact_rank", ascending: true }}
           label={t("stats.players.table")}
           empty={t("stats.players.empty")}
           pageSize={25}

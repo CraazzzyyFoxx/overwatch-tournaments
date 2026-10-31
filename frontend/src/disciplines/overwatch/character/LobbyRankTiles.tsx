@@ -8,7 +8,7 @@ import type { SlotProps } from "@/disciplines/types";
 /** Overwatch's lobby-ranked tournament stats in their render order (design-book §3), each with its own label. */
 const STAT_ORDER: { key: string; labelKey: string }[] = [
   { key: "kda", labelKey: "users.overview.lastTournament.stat.kda" },
-  { key: "performance", labelKey: "users.overview.lastTournament.stat.mvpScore" },
+  { key: "impact_rank", labelKey: "users.overview.lastTournament.stat.mvpScore" },
   { key: "hero_damage_dealt", labelKey: "users.overview.lastTournament.stat.dmgPerMap" },
   { key: "eliminations", labelKey: "users.overview.lastTournament.stat.elims" },
   { key: "deaths", labelKey: "users.overview.lastTournament.stat.deaths" },

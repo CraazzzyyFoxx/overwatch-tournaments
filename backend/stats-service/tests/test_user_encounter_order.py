@@ -119,7 +119,7 @@ def test_match_mapper_uses_historical_game_context():
         ),
     )
     stats = UserMatchStats(
-        viewer=UserMatchViewer(encounter_team_id=21, workspace_member_id=5, facts={"performance": 1.0}),
+        viewer=UserMatchViewer(encounter_team_id=21, workspace_member_id=5, facts={"impact_rank": 1.0}),
         member_totals=[
             NativeFact(
                 encounter_team_id=21, workspace_member_id=5, entity_id=None, segment=0, stat_code="score", value=3.0
@@ -138,7 +138,7 @@ def test_match_mapper_uses_historical_game_context():
     assert (result.encounter_id, result.map_index, result.duration_s) == (9, 2, 600)
     assert result.log_name == "observed-match.txt"
     assert result.map.name == "Ilios"
-    assert (result.viewer.workspace_member_id, result.viewer.facts) == (5, {"performance": 1.0})
+    assert (result.viewer.workspace_member_id, result.viewer.facts) == (5, {"impact_rank": 1.0})
     assert [(f.stat_code, f.value) for f in result.member_totals] == [("score", 3.0)]
-    assert {"code", "score", "home_team_id", "performance", "heroes"}.isdisjoint(result.model_dump())
+    assert {"code", "score", "home_team_id", "impact_rank", "heroes"}.isdisjoint(result.model_dump())
     assert to_match_with_user_stats(context).viewer is None

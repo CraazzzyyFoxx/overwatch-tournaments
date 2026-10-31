@@ -120,7 +120,7 @@ class AnalyticsWorkspaceScopeTests(IsolatedAsyncioTestCase):
                 "match_count": 3,
                 "overall_position": None,
                 "team_count": None,
-                "performance_points": None,
+                "impact_points": None,
             }
             for tid, rank in ((1, 2500), (2, None), (3, 2600))
         ]

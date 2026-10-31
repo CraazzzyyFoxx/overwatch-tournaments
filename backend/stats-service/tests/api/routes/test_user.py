@@ -341,7 +341,7 @@ def _ensure_compare_division_fixture(db: Session) -> dict[str, int | str]:
         seats=[(ids["baseline_cohort_team"], 2), (ids["baseline_cohort_enemy_team"], 1)],
         closeness=0.65,
     )
-    for prefix, member, eliminations, performance in (
+    for prefix, member, eliminations, impact_rank in (
         ("subject_cohort", ids["subject_member"], 20, 10),
         ("subject_other", ids["subject_member"], 100, None),
         ("baseline_cohort", ids["baseline_member"], 40, 20),
@@ -350,8 +350,8 @@ def _ensure_compare_division_fixture(db: Session) -> dict[str, int | str]:
             (member, 1, hero_id, enums.LogStatsName.HeroTimePlayed, 600),
             (member, 1, hero_id, enums.LogStatsName.Eliminations, eliminations),
         ]
-        if performance is not None:
-            observations.append((member, 1, None, enums.LogStatsName.Performance, performance))
+        if impact_rank is not None:
+            observations.append((member, 1, None, enums.LogStatsName.ImpactRank, impact_rank))
         add_observed_game(
             db,
             match_id=ids[f"{prefix}_match"],
@@ -642,11 +642,11 @@ def test_get_user_character_compare_cohort_scopes_stats_to_matching_division(rpc
     strict=True,
     reason=(
         "Known gap: a character compare reads only facts of a character played > 60 s, so the player-total "
-        "performance rank -- the only one native ingest writes -- never reaches a compare without a character. "
+        "impact rank -- the only one native ingest writes -- never reaches a compare without a character. "
         "test_stats_reader_parity's frozen P3 golden pins that operand pool; a fix re-baselines it."
     ),
 )
-def test_get_user_character_compare_includes_performance_without_character_filter(rpc: RpcHarness, db: Session) -> None:
+def test_get_user_character_compare_includes_impact_rank_without_character_filter(rpc: RpcHarness, db: Session) -> None:
     fixture = _ensure_compare_division_fixture(db)
 
     env = rpc.call_sync(
@@ -660,7 +660,7 @@ def test_get_user_character_compare_includes_performance_without_character_filte
                     "role": fixture["role"],
                     "div_min": fixture["division"],
                     "div_max": fixture["division"],
-                    "stats": ["performance"],
+                    "stats": ["impact_rank"],
                 }
             ),
         },
@@ -671,7 +671,7 @@ def test_get_user_character_compare_includes_performance_without_character_filte
     assert len(content["metrics"]) == 1
     metric = content["metrics"][0]
 
-    assert metric["stat"] == "performance"
+    assert metric["stat"] == "impact_rank"
     assert metric["left_value"] == pytest.approx(10.0)
     assert metric["right_value"] == pytest.approx(15.0)
 

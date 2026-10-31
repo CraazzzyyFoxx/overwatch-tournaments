@@ -149,9 +149,8 @@ class UserTournamentPlayer(BaseModel):
     related_player_id: int | None = None
     relative_player: int | None = None
     # Average MVP placement (1 = best) across this player's matches in THIS
-    # tournament. Mirrors the dossier "Avg MVP" metric: per match take
-    # COALESCE(ImpactRank, Performance). `None` when the player has no such stat
-    # rows.
+    # tournament. Mirrors the dossier "Avg MVP" metric: per match take the
+    # ImpactRank fact. `None` when the player has no such stat rows.
     avg_mvp: float | None = None
     # This player's top characters by playtime in THIS tournament, named and drawn. Empty when none recorded.
     characters: list[CatalogEntityRef] = Field(default_factory=list)
@@ -227,10 +226,11 @@ class UserMatchViewer(BaseModel):
 class MatchReadWithUserStats(MatchRead):
     """Match within a user-scoped encounter: the native header, the viewer's totals and the members' ranked totals.
 
-    A discipline's renderer derives its per-match badges from ``viewer.facts`` against ``member_totals``; no derived
-    value rides on the wire. ``member_totals`` carries every observed member's segment-0, NULL-entity facts of the
-    game's ``DisciplineSpec.member_total_stats`` only (empty for a game that ranks none). ``viewer`` is ``None`` for a
-    match the viewer's seat was a participant of without being observed.
+    A discipline's renderer derives its per-match badges from ``viewer.facts`` (Overwatch's ``overperformance_badge`` is
+    a stored fact there); no derived value rides on the wire. ``member_totals`` carries every observed member's
+    segment-0, NULL-entity facts of the game's ``DisciplineSpec.member_total_stats`` only (empty for a game that ranks
+    none, Overwatch included). ``viewer`` is ``None`` for a match the viewer's seat was a participant of without being
+    observed.
     """
 
     #: Always expanded with its catalog ``parent``; the match's own mode is ``mode``.
@@ -496,8 +496,8 @@ class UserDraftCard(BaseModel):
     maps_won: int
     maps_lost: int
     #: Maps the player finished first on the lobby's MVP placement
-    #: (``COALESCE(ImpactRank, Performance) == 1``); ``None`` only if that
-    #: placement can never be computed.
+    #: (``ImpactRank == 1``); ``None`` only if that placement can never be
+    #: computed.
     mvp_maps: int | None = None
     best_placement: int | None = None
     avg_placement: float | None = None

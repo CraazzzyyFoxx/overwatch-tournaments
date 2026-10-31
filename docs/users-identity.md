@@ -746,7 +746,7 @@ explicitly global over its scoped candidate players.
 
 Hero qualification remains strictly over 60 seconds per match/member/character. Profile and comparison per-10
 rates use match duration, while hero leaderboards use character playtime and require at least 600 seconds.
-MVP placement prefers ImpactRank and falls back to Performance. Global hero records read
+MVP placement is the `ImpactRank` fact (absent for an unscored player, never 0); the API key is `impact_rank`. Global hero records read
 `stats.mv_entity_global_stats`; an unpopulated view is an operational error, not an empty profile.
 
 Public profile and achievement match expansions derive home/away teams and observed scores from the historical

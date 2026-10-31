@@ -83,7 +83,7 @@ TABLES = (
 )
 
 WORKSPACE_ID = 1
-PERFORMANCE_POINTS = enums.LogStatsName.PerformancePoints
+IMPACT_POINTS = enums.LogStatsName.ImpactPoints
 
 # ``get_analytics``'s ``team_standings`` CTE uses ``DISTINCT ON``, which SQLite
 # ignores with a deprecation notice. Harmless here: the CTE is LEFT-joined, so
@@ -160,8 +160,8 @@ class _Fixture:
             models.StatDef.__table__,
             id=1,
             discipline="overwatch",
-            code=PERFORMANCE_POINTS.value,
-            name="Performance points",
+            code=IMPACT_POINTS.value,
+            name="Impact points",
             value_format="decimal",
             aggregation="avg",
         )
@@ -294,7 +294,7 @@ class _Fixture:
             )
         return match_id
 
-    def performance_points(self, match_id: int, team_id: int, user_id: int, value: float) -> None:
+    def impact_points(self, match_id: int, team_id: int, user_id: int, value: float) -> None:
         member_id = self.session.scalar(
             sa.select(models.WorkspaceMember.id).where(
                 models.WorkspaceMember.player_id == user_id,
@@ -336,7 +336,7 @@ class _Fixture:
         self.player(tournament_id, away, away_member, name=f"{label} away player")
         encounter = self.encounter(tournament_id, home, away)
         match = self.match(encounter, home, away)
-        self.performance_points(match, home, user_id, 42.0)
+        self.impact_points(match, home, user_id, 42.0)
         return {"home": home, "away": away, "player": player, "encounter": encounter}
 
     def scrim_room(self, tournament_id: int, label: str = "scrim") -> dict[str, int]:
@@ -435,7 +435,7 @@ class ScrimAggregateIsolationTests(_DatabaseTestCase):
         # counters are byte-for-byte unchanged.
         self.db.tournament(1)
         self.db.roster(1, user_id=100, label="real")
-        counters = ("wins", "losses", "match_count", "performance_points", "team_count")
+        counters = ("wins", "losses", "match_count", "impact_points", "team_count")
         before = [
             {key: row[key] for key in counters}
             for row in await analytics_service.get_analytics(self.db.shim, discipline="overwatch")

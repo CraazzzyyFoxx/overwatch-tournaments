@@ -141,10 +141,10 @@ const AllTeammatesTable = ({
   onSearchChange: (value: string) => void;
 }) => {
   const t = useTranslations();
-  // The teammate read's per-match averages (`kda`, MVP `performance`) exist only for games that record them: a
+  // The teammate read's per-match averages (`kda`, MVP `impact_rank`) exist only for games that record them: a
   // column shows when some teammate has a value, never as a column of dashes for a game without that vocabulary.
   const hasKda = teammates.some((tm) => tm.stats?.kda != null);
-  const hasMvp = teammates.some((tm) => tm.stats?.performance != null);
+  const hasMvp = teammates.some((tm) => tm.stats?.impact_rank != null);
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     const rows = [...teammates].sort((a, b) => b.tournaments - a.tournaments);
@@ -224,7 +224,7 @@ const AllTeammatesTable = ({
               ) : null}
               {hasMvp ? (
                 <TableCell className="aqt-tnum px-3 py-2 text-right text-[color:var(--aqt-fg-muted)]">
-                  {formatStat(tm.stats?.performance, 1)}
+                  {formatStat(tm.stats?.impact_rank, 1)}
                 </TableCell>
               ) : null}
             </TableRow>

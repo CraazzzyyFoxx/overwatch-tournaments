@@ -42,8 +42,6 @@ STAT_DEFS: tuple[StatDefSpec, ...] = (
     StatDefSpec("first_deaths", "First deaths"),
     StatDefSpec("ultimate_kills", "Ultimate kills"),
     StatDefSpec("support_kills", "Support kills"),
-    StatDefSpec("performance", "Performance rank", "integer", "avg"),
-    StatDefSpec("performance_points", "Performance points", "decimal", "avg"),
     StatDefSpec("kd", "Kills / deaths", "decimal", "avg"),
     StatDefSpec("kda", "Kills and assists / deaths", "decimal", "avg"),
     StatDefSpec("damage_delta", "Damage delta", "decimal"),
@@ -54,6 +52,29 @@ STAT_DEFS: tuple[StatDefSpec, ...] = (
     StatDefSpec("impact_rank", "Impact rank", "integer", "avg"),
     StatDefSpec("overperformance_score", "Overperformance score", "decimal", "avg"),
     StatDefSpec("score", "Score", "integer", "sum", "team"),
+    StatDefSpec("overperformance_badge", "Overperformance badge", "integer", "sum"),
+    # The MVP breakdown: what each impact feature added to ``impact_points`` (segment 0 only). Group ``impact`` keeps
+    # them out of the generic stat lists.
+    StatDefSpec("contrib_eliminations", "Impact: eliminations", "decimal", "avg", "impact"),
+    StatDefSpec("contrib_final_blows", "Impact: final blows", "decimal", "avg", "impact"),
+    StatDefSpec("contrib_deaths", "Impact: deaths", "decimal", "avg", "impact"),
+    StatDefSpec("contrib_hero_damage_dealt", "Impact: hero damage dealt", "decimal", "avg", "impact"),
+    StatDefSpec("contrib_healing_dealt", "Impact: healing dealt", "decimal", "avg", "impact"),
+    StatDefSpec("contrib_damage_blocked", "Impact: damage blocked", "decimal", "avg", "impact"),
+    StatDefSpec("contrib_damage_taken", "Impact: damage taken", "decimal", "avg", "impact"),
+    StatDefSpec("contrib_barrier_damage_dealt", "Impact: barrier damage dealt", "decimal", "avg", "impact"),
+    StatDefSpec("contrib_offensive_assists", "Impact: offensive assists", "decimal", "avg", "impact"),
+    StatDefSpec("contrib_defensive_assists", "Impact: defensive assists", "decimal", "avg", "impact"),
+    StatDefSpec("contrib_ultimates_earned", "Impact: ultimates earned", "decimal", "avg", "impact"),
+    StatDefSpec("contrib_ultimates_used", "Impact: ultimates used", "decimal", "avg", "impact"),
+    StatDefSpec("contrib_multikills", "Impact: multikills", "decimal", "avg", "impact"),
+    StatDefSpec("contrib_solo_kills", "Impact: solo kills", "decimal", "avg", "impact"),
+    StatDefSpec("contrib_objective_kills", "Impact: objective kills", "decimal", "avg", "impact"),
+    StatDefSpec("contrib_environmental_kills", "Impact: environmental kills", "decimal", "avg", "impact"),
+    StatDefSpec("contrib_first_picks", "Impact: first picks", "decimal", "avg", "impact"),
+    StatDefSpec("contrib_first_deaths", "Impact: first deaths", "decimal", "avg", "impact"),
+    StatDefSpec("contrib_ultimate_kills", "Impact: ultimate kills", "decimal", "avg", "impact"),
+    StatDefSpec("contrib_support_kills", "Impact: support kills", "decimal", "avg", "impact"),
 )
 
 EVENT_TYPES: tuple[EventTypeSpec, ...] = (

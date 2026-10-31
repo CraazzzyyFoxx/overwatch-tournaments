@@ -147,7 +147,7 @@ class CharacterLeaderboardQueryParams(pagination.PaginationQueryParams):
 @dataclass
 class CharacterLeaderboardParams(pagination.PaginationParams):
     tournament_id: int | None = None
-    stat: enums.LogStatsName = enums.LogStatsName.Performance
+    stat: enums.LogStatsName = enums.LogStatsName.Eliminations
 
     @classmethod
     def from_query_params(cls, query_params: CharacterLeaderboardQueryParams) -> CharacterLeaderboardParams:  # type: ignore[override]

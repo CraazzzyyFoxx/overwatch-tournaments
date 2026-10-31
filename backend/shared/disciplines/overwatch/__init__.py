@@ -213,8 +213,8 @@ SPEC = DisciplineSpec(
     identity_provider=SocialProvider.BATTLENET,
     stat_defs=STAT_DEFS,
     event_types=EVENT_TYPES,
-    # The MVP badge ranks the viewer's overperformance against every member's (frontend ``overwatch/match/mvp.ts``).
-    member_total_stats=("overperformance_score",),
+    # The MVP badge is a stored fact (``overperformance_badge``): no member totals are ranked at read time.
+    member_total_stats=(),
     configure_runtime=_configure_runtime,
     register_jobs=_register_jobs,
     start_jobs=_start_jobs,

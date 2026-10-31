@@ -6,6 +6,10 @@ completed-P4 parser path (`flows.process_match_log` -> `MatchLogProcessor.start`
 `manifest.json` binding both to a SHA-256 and the source HEAD.
 
 * `test_reference_is_intact` runs in the normal suite and needs no database.
+
+The reference is frozen legacy output (``impact_v1`` + the legacy ``performance`` MVP): the capture harnesses below can
+no longer be run against the repository (the P4 path they drive is gone) and are kept as the record of how the files
+were made. The decoder parity test compares everything but the MVP facts.
 * `test_capture_p4_reference` is a recapture harness and is skipped unless `P5_CAPTURE_OW_REFERENCE=1`. It must
   only be run against the P4 parser (the P5 decoder replaces it); never regenerate expected output with a decoder
   under test. Task 3's parity test reads `expected.json`; it never calls this module.
@@ -31,7 +35,7 @@ import sqlalchemy as sa
 
 from shared import models
 from shared.core.enums import LogStatsName
-from shared.core.impact import FORMULA_VERSION, IMPACT_WEIGHTS
+from shared.core.impact import IMPACT_FEATURES
 from shared.repository.baselines import StatBaselineRepository
 from shared.repository.roles import CatalogRoleRepository
 from shared.repository.stats import StatDefRepository
@@ -102,8 +106,9 @@ def baseline_spec() -> dict:
                         "std": 0.0 if zero else std * (1 + 0.05 * (bucket + 2)) * (1 + 0.03 * role_index),
                     }
                 )
-    assert set(_BASELINE_SCALE) == set(IMPACT_WEIGHTS)
-    return {"formula_version": FORMULA_VERSION, "bucket_bounds": [700.0, 900.0], "rows": rows}
+    assert set(_BASELINE_SCALE) <= set(IMPACT_FEATURES)
+    # The frozen legacy reference: ``impact_v1`` seeded through the P4 path, never the current formula version.
+    return {"formula_version": "impact_v1", "bucket_bounds": [700.0, 900.0], "rows": rows}
 
 
 async def seed_baselines(session, spec: dict) -> None:

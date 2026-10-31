@@ -14,7 +14,7 @@ import type {
 
 /** The ranked stats, in the order the statistics table shows them. */
 export const PLAYER_STATS: readonly TournamentPlayerStatKey[] = [
-  "performance",
+  "impact_rank",
   "kda",
   "eliminations",
   "deaths",

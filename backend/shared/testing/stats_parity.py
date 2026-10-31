@@ -78,8 +78,6 @@ LEGACY_STATS = (
     "FirstDeaths",
     "UltimateKills",
     "SupportKills",
-    "Performance",
-    "PerformancePoints",
     "KD",
     "KDA",
     "DamageDelta",
@@ -107,8 +105,6 @@ _AVERAGES = frozenset(
         "ScopedAccuracy",
         "ScopedCriticalHitAccuracy",
         "WeaponAccuracy",
-        "Performance",
-        "PerformancePoints",
         "KD",
         "KDA",
         "FBE",
@@ -142,8 +138,6 @@ _VALUES.update(
     ScopedShotsHit=200.0,
     WeaponAccuracy=0.5,
     HeroTimePlayed=7_200.0,
-    Performance=0.5,
-    PerformancePoints=50.0,
     KD=3.0,
     KDA=4.0,
     DamageDelta=6_000.0,
@@ -153,6 +147,48 @@ _VALUES.update(
     ImpactRank=1.0,
     OverperformanceScore=8.0,
 )
+
+#: The MVP surface the frozen legacy golden cannot reproduce (impact_v2 replaced it): stat codes, and the API keys
+#: that carry a placement or a per-match MVP value. The parity proofs compare everything else exactly.
+MVP_STATS = frozenset(
+    {
+        "performance",
+        "performance_points",
+        "impact_points",
+        "impact_rank",
+        "overperformance_score",
+        "overperformance_badge",
+    }
+)
+_MVP_KEYS = MVP_STATS | {"avg_mvp", "mvp_maps", "mvp_score_avg", "mvp", "mvp_no_stats"}
+
+
+def is_mvp_stat(code: object) -> bool:
+    """Whether ``code`` is an MVP stat code (``contrib_*`` included)."""
+    return isinstance(code, str) and (code in MVP_STATS or code.startswith("contrib_"))
+
+
+def without_mvp(node: Any) -> Any:
+    """A copy of a decoded reader output without its MVP surface, applied to golden and native alike.
+
+    Drops the MVP keys of any mapping (match rows, stat maps, tournament leaderboards/profile stats, ``avg_mvp``,
+    ``mvp_maps``, ``mvp_score_avg``, the tournament ``mvp`` reads and the ``mvp1`` encounter page), and the list rows
+    that are one MVP stat: ``{"stat"|"name": code}``, ``{"key": "mvp_score_avg"}`` and ``[code, ...]`` /
+    ``[id, code, ...]`` tuples.
+    """
+    if isinstance(node, dict):
+        return {key: without_mvp(value) for key, value in node.items() if key not in _MVP_KEYS and not is_mvp_stat(key)}
+    if isinstance(node, list):
+        return [without_mvp(row) for row in node if not _is_mvp_row(row)]
+    return node
+
+
+def _is_mvp_row(row: Any) -> bool:
+    if isinstance(row, dict):
+        return is_mvp_stat(row.get("stat")) or is_mvp_stat(row.get("name")) or row.get("key") == "mvp_score_avg"
+    return isinstance(row, list) and any(is_mvp_stat(item) for item in row[:2])
+
+
 # Actual, nonempty UTF-8 objects; the seed hashes these bytes, never row ids.
 _RAW_BYTES = {
     "main.csv": b"event,time,team,player\nmatch_start,0,Alpha,P4Alpha#1234\nmatch_end,7200,Alpha,P4Alpha#1234\n",
@@ -889,7 +925,7 @@ def seed_legacy(conn: Connection) -> dict[str, int]:
                                 continue
                             if player == "player":
                                 value = 0.0
-                    elif stat in {"Performance", "ImpactRank"}:
+                    elif stat == "ImpactRank":
                         # These ranks cross an integer public DTO boundary.
                         value = 1.0 + sum(
                             other_match == match and other_strength < strength

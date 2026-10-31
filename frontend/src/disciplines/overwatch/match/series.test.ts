@@ -275,21 +275,31 @@ describe("aggregateSeriesStats", () => {
     expect(row[LogStatsName.ImpactRank]).toBeUndefined();
   });
 
-  it("ranks series MVPs across both rosters by summed performance points", () => {
-    const strong = player(11, { [LogStatsName.Eliminations]: 30 }, [100]);
-    const weak = player(12, { [LogStatsName.Eliminations]: 1 }, [110]);
-    const middle = player(21, { [LogStatsName.Eliminations]: 10 }, [200]);
-    const result = aggregateSeriesStats([
-      statMatch(1, team(1, "A", [strong, weak]), team(2, "B", [middle]))
-    ]);
-    expect(result!.participations[0].meta[11].seriesPlacement).toBe(1);
-    expect(result!.participations[1].meta[21].seriesPlacement).toBe(2);
-    expect(result!.participations[0].meta[12].seriesPlacement).toBe(3);
-    expect(
-      result!.participations[0].players.find((entry) => entry.workspace_member_id === 11)!.stats[0][
-        LogStatsName.Performance
-      ]
-    ).toBe(1);
+  it("ranks series MVPs across both rosters by the playtime-weighted mean of map impact points", () => {
+    const stat = (points: number, seconds: number) => ({
+      [LogStatsName.ImpactPoints]: points,
+      [LogStatsName.HeroTimePlayed]: seconds
+    });
+    // 11: (1.0·600 − 1.0·400) / 1000 = 0.2 (an unweighted mean would be 0); 12 and 21 both average 0.5.
+    const mapOne = statMatch(
+      1,
+      team(1, "A", [player(11, stat(1, 600), [100]), player(12, stat(0.5, 600), [110])]),
+      team(2, "B", [player(21, stat(0.5, 600), [200]), player(22, { [LogStatsName.Eliminations]: 9 }, [210])])
+    );
+    const mapTwo = statMatch(
+      2,
+      team(1, "A", [player(11, stat(-1, 400), [100]), player(12, stat(0.5, 100), [110])]),
+      team(2, "B", [player(21, stat(0.5, 600), [200]), player(22, { [LogStatsName.Eliminations]: 9 }, [210])])
+    );
+    const result = aggregateSeriesStats([mapOne, mapTwo]);
+    expect(result!.participations[0].meta[12].seriesPlacement).toBe(1);
+    expect(result!.participations[1].meta[21].seriesPlacement).toBe(1); // ties share a place
+    expect(result!.participations[0].meta[11].seriesPlacement).toBe(3);
+    expect(result!.participations[1].meta[22].seriesPlacement).toBeNull(); // no impact on any map
+    const row = (id: number) =>
+      result!.participations[0].players.find((entry) => entry.workspace_member_id === id)!.stats[0];
+    expect(row(11)[LogStatsName.ImpactRank]).toBe(3);
+    expect(row(11)[LogStatsName.ImpactPoints]).toBeUndefined();
   });
 
   it("groups by observed participation even when a map records the sides flipped", () => {
@@ -346,7 +356,12 @@ describe("aggregateSeriesStats", () => {
         team(101, "Old A", [
           player(
             11,
-            { [LogStatsName.Eliminations]: 7, [LogStatsName.HeroDamageDealt]: 10.25 },
+            {
+              [LogStatsName.Eliminations]: 7,
+              [LogStatsName.HeroDamageDealt]: 10.25,
+              [LogStatsName.ImpactPoints]: 2,
+              [LogStatsName.HeroTimePlayed]: 600
+            },
             [100]
           )
         ]),
@@ -356,7 +371,16 @@ describe("aggregateSeriesStats", () => {
     const current = statMatch(
       4,
       team(201, "Current A", [
-        player(11, { [LogStatsName.Eliminations]: 2, [LogStatsName.HeroDamageDealt]: 1.5 }, [100])
+        player(
+          11,
+          {
+            [LogStatsName.Eliminations]: 2,
+            [LogStatsName.HeroDamageDealt]: 1.5,
+            [LogStatsName.ImpactPoints]: 1,
+            [LogStatsName.HeroTimePlayed]: 600
+          },
+          [100]
+        )
       ]),
       team(202, "Current B", [player(21, { [LogStatsName.Eliminations]: 3 }, [200])]),
       [201, 202]
@@ -379,7 +403,7 @@ describe("aggregateSeriesStats", () => {
     expect(currentA.players[0].stats[0][LogStatsName.HeroDamageDealt]).toBe(1.5);
     expect(oldA.meta[11].mapsPlayed).toBe(2);
     expect(currentA.meta[11].mapsPlayed).toBe(1);
-    expect(oldA.meta[11].seriesPlacement).not.toBe(currentA.meta[11].seriesPlacement);
+    expect([oldA.meta[11].seriesPlacement, currentA.meta[11].seriesPlacement]).toEqual([1, 2]);
     expect(result!.mapsCounted).toBe(3);
     expect({ a: historical(70), current }).toEqual(before);
   });

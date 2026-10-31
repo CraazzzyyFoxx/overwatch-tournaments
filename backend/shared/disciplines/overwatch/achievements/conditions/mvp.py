@@ -37,7 +37,7 @@ async def execute(
     Grain: user_match. Awards all players on qualifying teams.
 
     params:
-        stat: LogStatsName (e.g. "Performance", "Eliminations")
+        stat: LogStatsName (e.g. "ImpactRank", "Eliminations")
         top_n: int (default 3) — top N players in the match
         op: operator for team_count_in_top comparison (default "==")
         value: int (default 0) — how many team players in top N
@@ -45,11 +45,11 @@ async def execute(
             e.g. op=">=" value=2 → at least 2 team players in top N
 
     Example: team won but 0 players in top-3 MVP:
-        AND: [match_win, match_mvp_check(stat=Performance, top_n=3, op===, value=0)]
+        AND: [match_win, match_mvp_check(stat=ImpactRank, top_n=3, op===, value=0)]
     """
     from . import resolve_stat_name
 
-    stat = resolve_stat_name(params.get("stat", "performance"))
+    stat = resolve_stat_name(params.get("stat", "impact_rank"))
     top_n = params.get("top_n", 3)
     op = params.get("op", "==")
     value = params.get("value", 0)
@@ -84,7 +84,7 @@ async def execute(
     ps = player_stats.subquery("ps")
 
     # Step 2: Rank players within each match by stat_value.
-    # "auto" detects sort direction from enum config (Performance=asc, most others=desc).
+    # "auto" detects sort direction from enum config (ImpactRank=asc, most others=desc).
     if sort_order == "auto":
         from shared.core.enums import LogStatsName as _LSN
         from shared.core.enums import is_ascending_stat

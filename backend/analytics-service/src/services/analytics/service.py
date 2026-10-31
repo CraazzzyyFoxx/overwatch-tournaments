@@ -110,10 +110,10 @@ class AnalyticsService:
         ).cte("team_standings")
 
         facts = player_facts(discipline=discipline)
-        performance_points = (
+        impact_points = (
             sa.select(
                 models.Player.id.label("player_id"),
-                sa.func.avg(facts.c.value).label("performance_points"),
+                sa.func.avg(facts.c.value).label("impact_points"),
             )
             .select_from(models.Player)
             .join(facts, facts.c.workspace_member_id == models.Player.workspace_member_id)
@@ -122,12 +122,12 @@ class AnalyticsService:
                 facts.c.tournament_team_id == models.Player.team_id,
                 facts.c.segment == 0,
                 facts.c.entity_id.is_(None),
-                facts.c.stat_code == enums.LogStatsName.PerformancePoints.value,
+                facts.c.stat_code == enums.LogStatsName.ImpactPoints.value,
                 models.Player.tournament_id == facts.c.tournament_id,
                 *workspace_scope_filter(workspace_id, workspace_ids),
             )
             .group_by(models.Player.id)
-        ).cte("performance_points")
+        ).cte("impact_points")
 
         query = (
             sa.select(
@@ -145,7 +145,7 @@ class AnalyticsService:
                 sa.func.coalesce(matches.c.match_count, 0).label("match_count"),
                 standings.c.overall_position.label("overall_position"),
                 team_counts.c.team_count.label("team_count"),
-                performance_points.c.performance_points.label("performance_points"),
+                impact_points.c.impact_points.label("impact_points"),
             )
             .select_from(models.Team)
             .join(models.Player, models.Team.id == models.Player.team_id)
@@ -173,7 +173,7 @@ class AnalyticsService:
                 isouter=True,
             )
             .join(team_counts, team_counts.c.tournament_id == models.Tournament.id, isouter=True)
-            .join(performance_points, performance_points.c.player_id == models.Player.id, isouter=True)
+            .join(impact_points, impact_points.c.player_id == models.Player.id, isouter=True)
             .where(
                 models.Tournament.id >= 1,
                 models.Player.is_substitution.is_(False),

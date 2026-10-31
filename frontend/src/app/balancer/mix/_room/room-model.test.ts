@@ -4,7 +4,7 @@ import type { PickupVariant } from "@/app/balancer/mix/pickup-lineup";
 import type { DraftBoard, DraftPickOptionsResponse, DraftPlayer } from "@/types/draft.types";
 import type { PickBanEntry, PickBanState } from "@/types/tournament.types";
 
-import { draftRoomTeams, lineupRoomTeams, poolPlayers, withHeroRoom } from "./room-model";
+import { draftRoomTeams, liveLineupOrder, lineupRoomTeams, poolPlayers, withHeroRoom } from "./room-model";
 
 const DIM = "player_role";
 
@@ -131,7 +131,6 @@ describe("withHeroRoom", () => {
       ],
       starting_sides: [{ game_id: 1, position: 1, sides: { "71": "blue", "72": "red" } }]
     }) as unknown as PickBanState;
-  // Out of slot order on purpose: the first live seat is the left lineup team.
   const seats = [
     { id: 72, slot: 2, name: "Quiet Foxes" },
     { id: 71, slot: 1, name: "Bright Wolves" }
@@ -167,6 +166,25 @@ describe("withHeroRoom", () => {
     expect(teams.map((team) => team.slots[0].seat?.teamMemberId)).toEqual([501, 601]);
     expect(teams.map((team) => team.unassignedPicks)).toEqual([[], [6]]);
     expect(teams.map((team) => team.side)).toEqual(["blue", "red"]);
+  });
+
+  it("matches a live seat to the lineup team its players sit in, whichever slot the ban opener took", () => {
+    // The second lineup team opens the bans: it sits in slot 1.
+    const flipped = [
+      { id: 71, slot: 2, name: "Bright Wolves" },
+      { id: 72, slot: 1, name: "Quiet Foxes" }
+    ];
+    const room = state([
+      entry(1, { status: "banned", picked_by_team_id: 72, action_index: 0 }),
+      entry(2, { status: "banned", picked_by_team_id: 71, action_index: 1 })
+    ]);
+
+    expect(liveLineupOrder(lineup, room, flipped)).toEqual([71, 72]);
+    expect(withHeroRoom(lineup, room, flipped).map((team) => team.bans)).toEqual([[2], [1]]);
+  });
+
+  it("falls back to slot order when the players do not settle the seats", () => {
+    expect(liveLineupOrder(lineup, null, seats)).toEqual([71, 72]);
   });
 
   it("leaves the teams as they are without a hero room", () => {

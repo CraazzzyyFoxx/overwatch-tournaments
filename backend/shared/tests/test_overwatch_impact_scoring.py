@@ -5,20 +5,27 @@ import pytest
 
 from shared import models
 from shared.core import enums
-from shared.core.impact import IMPACT_WEIGHTS
+from shared.core.impact import IMPACT_FEATURES, SHRINK_MINUTES
 from shared.disciplines.overwatch import impact
 from shared.disciplines.overwatch.enums import AbilityEvent
 
 TANK = enums.HeroClass.tank
 DAMAGE = enums.HeroClass.damage
 SUPPORT = enums.HeroClass.support
+L = enums.LogStatsName
+
+#: hero 4 is a damage hero with its own baseline; hero 9 has no class.
+HERO_TYPES = {1: DAMAGE, 2: SUPPORT, 3: TANK, 4: DAMAGE}
+WEIGHTS = {
+    "damage": {"Eliminations": 1.0, "FirstPicks": 1.0},
+    "support": {"Eliminations": 1.0},
+    "tank": {"Eliminations": 1.0},
+}
 
 
-def _kill(
-    match_id=1, time=0.0, rnd=1, fight=1, killer=10, victim=20, killer_hero=1, victim_hero=2, ability=None, env=False
-):
+def _kill(time=0.0, rnd=1, fight=1, killer=10, victim=20, killer_hero=1, victim_hero=2, ability=None, env=False):
     return models.StatsEvent(
-        match_id=match_id,
+        match_id=1,
         t=time,
         segment=rnd,
         type_id=1,
@@ -38,227 +45,257 @@ def _kill(
     )
 
 
-HERO_TYPES = {1: DAMAGE, 2: SUPPORT, 3: TANK}
 MEMBER_USERS = {1010: 10, 1020: 20}
+
+
+def _stints(*rows: dict) -> pd.DataFrame:
+    """Stint rows: ``player_id``, ``hero``, ``seconds`` (+ ``segment`` default 0, feature counts default 0)."""
+    out = []
+    for row in rows:
+        stint = {"segment": 0, **dict.fromkeys(IMPACT_FEATURES, 0.0), **row}
+        stint["role"] = HERO_TYPES[stint["hero"]].name if stint["hero"] in HERO_TYPES else None
+        out.append(stint)
+    return pd.DataFrame(out)
+
+
+STATS = {
+    ("damage", None, "Eliminations"): (10.0, 5.0),
+    ("damage", 4, "Eliminations"): (20.0, 5.0),
+    ("support", None, "Eliminations"): (10.0, 5.0),
+    ("tank", None, "Eliminations"): (10.0, 5.0),
+}
+
+
+def _baselines(**overrides) -> impact.BaselineSet:
+    fields = {
+        "formula_version": "impact_v2",
+        "stats": STATS,
+        "role_scale": {"damage": (0.0, 1.0), "support": (0.0, 1.0), "tank": (0.0, 1.0)},
+        "expectation": {("damage", 2): (0.5, 1.0), ("damage", -1): (0.0, 2.0)},
+        "badge_threshold": 1.0,
+    }
+    return impact.BaselineSet(**{**fields, **overrides})
+
+
+def _facts(stints, baselines=None, *, killfeed=True, roles=None, quintiles=None) -> dict:
+    out = impact.score_match(
+        stints,
+        baselines or _baselines(),
+        WEIGHTS,
+        has_killfeed=killfeed,
+        roles=roles if roles is not None else impact.dominant_roles(stints[stints["segment"] == 0]),
+        quintiles=quintiles or {},
+    )
+    return {(int(r.player_id), int(r.segment), r.stat): r.value for r in out.itertuples(index=False)}
+
+
+def _factor(seconds: float, longest: float) -> float:
+    minutes = seconds / 60.0
+    return seconds / longest * minutes / (minutes + SHRINK_MINUTES)
 
 
 class TestAssignFights:
     def test_new_fight_on_gap_and_round_change(self):
-        feed = [
-            _kill(time=1.0, rnd=1),
-            _kill(time=5.0, rnd=1),  # same fight: 4s gap, same round
-            _kill(time=25.0, rnd=1),  # new fight: 20s gap (>15) same round
-            _kill(time=30.0, rnd=2),  # new fight: round change (even though 5s gap)
-            _kill(time=31.0, rnd=2),  # same fight
-        ]
+        feed = [_kill(time=1.0), _kill(time=5.0), _kill(time=25.0), _kill(time=30.0, rnd=2), _kill(time=31.0, rnd=2)]
         impact.assign_fights(feed)
         assert [k.data["fight"] for k in feed] == [1, 1, 2, 3, 3]
 
-    def test_round_change_within_gap_still_splits(self):
-        # <15s apart but different rounds → still a hard fight boundary.
-        feed = [_kill(time=100.0, rnd=1), _kill(time=105.0, rnd=2)]
-        impact.assign_fights(feed)
-        assert [k.data["fight"] for k in feed] == [1, 2]
-
     def test_orders_by_time_before_assigning(self):
-        later = _kill(time=30.0, rnd=1)
-        earlier = _kill(time=1.0, rnd=1)
-        impact.assign_fights([later, earlier])  # unsorted input
+        later, earlier = _kill(time=30.0), _kill(time=1.0)
+        impact.assign_fights([later, earlier])
         assert earlier.data["fight"] == 1 and later.data["fight"] == 2
-
-    def test_empty_feed_is_noop(self):
-        impact.assign_fights([])  # must not raise
 
     def test_fight_assignment_replaces_json_without_changing_event_body(self):
         kill = _kill(fight=99, env=True)
         original = kill.data
         impact.assign_fights([kill])
-        assert kill.data is not original
-        assert kill.data == {**original, "fight": 1}
-        assert original["fight"] == 99
+        assert kill.data == {**original, "fight": 1} and original["fight"] == 99
 
 
 class TestBuildEventCounts:
-    def test_first_kill_of_each_fight_is_first_pick_and_first_death(self):
-        feed = [
-            _kill(time=1.0, fight=1, killer=10, victim=20),
-            _kill(time=3.0, fight=1, killer=20, victim=10),  # not first
-            _kill(time=40.0, fight=2, killer=20, victim=10),
-        ]
+    def _counts(self, feed):
         df = impact.build_event_counts(feed, HERO_TYPES, member_user_ids=MEMBER_USERS)
-        row10 = df[df.user_id == 10].iloc[0]
-        row20 = df[df.user_id == 20].iloc[0]
-        assert row10.FirstPicks == 1 and row10.FirstDeaths == 1
-        assert row20.FirstPicks == 1 and row20.FirstDeaths == 1
+        return {(r.player_id, r.hero): r for r in df.itertuples(index=False)}
 
-    def test_self_kill_gives_first_death_but_not_first_pick(self):
-        feed = [_kill(time=1.0, fight=1, killer=10, victim=10)]
-        df = impact.build_event_counts(feed, HERO_TYPES, member_user_ids=MEMBER_USERS)
-        row = df[df.user_id == 10].iloc[0]
-        assert row.FirstPicks == 0 and row.FirstDeaths == 1
+    def test_first_pick_on_killer_hero_and_first_death_on_victim_hero(self):
+        rows = self._counts([_kill(time=1.0, killer_hero=4, victim_hero=2), _kill(time=3.0, killer=20, victim=10)])
+        assert rows[(10, 4)].FirstPicks == 1 and rows[(10, 4)].FirstDeaths == 0
+        assert rows[(20, 2)].FirstDeaths == 1 and rows[(20, 2)].FirstPicks == 0
 
-    def test_ultimate_and_support_kills(self):
-        feed = [
-            _kill(time=1.0, killer=10, victim=20, victim_hero=2, ability=AbilityEvent.Ultimate),
-            _kill(time=2.0, killer=10, victim=20, victim_hero=3),  # tank victim
-        ]
-        df = impact.build_event_counts(feed, HERO_TYPES, member_user_ids=MEMBER_USERS)
-        row = df[df.user_id == 10].iloc[0]
-        assert row.UltimateKills == 1
-        assert row.SupportKills == 1  # only the hero-2 (support) victim
+    def test_self_kill_is_a_first_death_only(self):
+        rows = self._counts([_kill(killer=10, victim=10, killer_hero=1, victim_hero=1)])
+        assert rows[(10, 1)].FirstPicks == 0 and rows[(10, 1)].FirstDeaths == 1
+
+    def test_ultimate_and_support_kills_follow_the_victim_class(self):
+        rows = self._counts(
+            [
+                _kill(time=1.0, victim_hero=2, ability=AbilityEvent.Ultimate),
+                _kill(time=2.0, victim_hero=3),  # tank victim
+            ]
+        )
+        assert rows[(10, 1)].UltimateKills == 1 and rows[(10, 1)].SupportKills == 1
 
     def test_empty_feed_returns_empty_frame(self):
-        df = impact.build_event_counts([], HERO_TYPES, member_user_ids=MEMBER_USERS)
-        assert df.empty
+        assert impact.build_event_counts([], HERO_TYPES, member_user_ids=MEMBER_USERS).empty
 
 
-class TestBaselineSet:
-    def _bs(self, mean=10.0, std=2.0):
-        return impact.BaselineSet(
-            formula_version="impact_v1",
-            bucket_bounds=(500.0, 1000.0),
-            values={("damage", -1, "Eliminations"): (mean, std)},
+class TestBuildStints:
+    def test_map_event_counts_sum_rounds_and_unplayed_heroes_drop(self):
+        stat_rows = pd.DataFrame(
+            [
+                (10, 1, 1, "HeroTimePlayed", 120.0),
+                (10, 2, 1, "HeroTimePlayed", 180.0),
+                (10, 0, 1, "HeroTimePlayed", 300.0),
+                (10, 0, 1, "Eliminations", 7.0),
+                (10, 0, None, "Eliminations", 7.0),  # all-heroes row: ignored
+            ],
+            columns=["player_id", "segment", "hero", "name", "value"],
         )
-
-    def test_z_and_winsorize(self):
-        bs = self._bs()
-        assert bs.z("damage", -1, "Eliminations", 12.0) == pytest.approx(1.0)
-        assert bs.z("damage", -1, "Eliminations", 1000.0) == pytest.approx(3.0)  # clipped
-
-    def test_missing_baseline_or_zero_std_is_zero(self):
-        bs = self._bs(std=0.0)
-        assert bs.z("damage", -1, "Eliminations", 12.0) == 0.0
-        assert bs.z("tank", -1, "Eliminations", 12.0) == 0.0
-
-    def test_bucket_for(self):
-        bs = self._bs()
-        assert bs.bucket_for(100) == 0
-        assert bs.bucket_for(700) == 1
-        assert bs.bucket_for(5000) == 2
-        assert bs.bucket_for(None) is None
-
-
-class TestAddImpactScores:
-    def _frame(self, elims=20.0, seconds=600.0, first_picks=3.0):
-        cols = {
-            "player_id": [1],
-            "round": [0],
-            enums.LogStatsName.Eliminations: [elims],
-            enums.LogStatsName.HeroTimePlayed: [seconds],
-            enums.LogStatsName.FirstPicks: [first_picks],
-        }
-        return pd.DataFrame(cols)
-
-    def _players(self, role=DAMAGE, rank=800):
-        return {1: impact.PlayerRef(player_id=1, user_id=10, team_id=1, role=role, rank=rank)}
-
-    def _baselines(self):
-        return impact.BaselineSet(
-            formula_version="impact_v1",
-            bucket_bounds=(500.0, 1000.0),
-            values={
-                ("damage", -1, "Eliminations"): (10.0, 5.0),
-                ("damage", -1, "FirstPicks"): (1.0, 1.0),
-                ("damage", 1, "Eliminations"): (12.0, 5.0),
-                ("damage", 1, "FirstPicks"): (1.5, 1.0),
-            },
+        events = pd.DataFrame(
+            [
+                {
+                    "player_id": 10,
+                    "segment": 1,
+                    "hero": 1,
+                    "FirstPicks": 1,
+                    "FirstDeaths": 0,
+                    "UltimateKills": 0,
+                    "SupportKills": 0,
+                },
+                {
+                    "player_id": 10,
+                    "segment": 2,
+                    "hero": 1,
+                    "FirstPicks": 2,
+                    "FirstDeaths": 1,
+                    "UltimateKills": 0,
+                    "SupportKills": 0,
+                },
+                {
+                    "player_id": 10,
+                    "segment": 2,
+                    "hero": 3,
+                    "FirstPicks": 5,
+                    "FirstDeaths": 0,
+                    "UltimateKills": 0,
+                    "SupportKills": 0,
+                },
+            ]
         )
+        stints = impact.build_stints(stat_rows, events, HERO_TYPES).set_index(["segment", "hero"])
+        assert stints.loc[(0, 1), "FirstPicks"] == 3 and stints.loc[(0, 1), "FirstDeaths"] == 1
+        assert stints.loc[(0, 1), "Eliminations"] == 7.0 and stints.loc[(0, 1), "role"] == "damage"
+        assert (2, 3) not in stints.index  # kills on a hero without playtime are dropped
 
-    def test_composite_uses_weights_and_events(self):
-        out = impact.add_impact_scores(
-            self._frame(),
-            players=self._players(),
-            baselines=self._baselines(),
-            has_killfeed=True,
+    def test_unclassed_hero_has_no_role(self):
+        stat_rows = pd.DataFrame(
+            [(10, 0, 9, "HeroTimePlayed", 300.0)], columns=["player_id", "segment", "hero", "name", "value"]
         )
-        # elims rate 20/10min -> z=2; first_picks rate 3 -> z=2; time_share=1
-        expected = IMPACT_WEIGHTS["Eliminations"] * 2.0 + IMPACT_WEIGHTS["FirstPicks"] * 2.0
-        assert out[enums.LogStatsName.ImpactPoints].iloc[0] == pytest.approx(expected)
+        empty = impact.build_event_counts([], HERO_TYPES, member_user_ids={})
+        assert impact.build_stints(stat_rows, empty, HERO_TYPES)["role"].iat[0] is None
 
-    def test_no_killfeed_zeroes_event_z_only(self):
-        out = impact.add_impact_scores(
-            self._frame(),
-            players=self._players(),
-            baselines=self._baselines(),
-            has_killfeed=False,
-        )
-        expected = IMPACT_WEIGHTS["Eliminations"] * 2.0
-        assert out[enums.LogStatsName.ImpactPoints].iloc[0] == pytest.approx(expected)
 
-    def test_short_playtime_scores_zero(self):
-        out = impact.add_impact_scores(
-            self._frame(seconds=30.0),
-            players=self._players(),
-            baselines=self._baselines(),
-            has_killfeed=True,
+class TestScoreMatch:
+    def test_hero_baseline_wins_over_role_baseline(self):
+        facts = _facts(
+            _stints(
+                {"player_id": 1, "hero": 4, "seconds": 600.0, "Eliminations": 20.0},
+                {"player_id": 2, "hero": 1, "seconds": 600.0, "Eliminations": 20.0},
+            )
         )
-        assert out[enums.LogStatsName.ImpactPoints].iloc[0] == 0.0
-        assert out[enums.LogStatsName.OverperformanceScore].iloc[0] == 0.0
+        factor = _factor(600.0, 600.0)
+        assert facts[(1, 0, L.ImpactPoints)] == pytest.approx(0.0)  # z vs hero 4 (20, 5)
+        assert facts[(2, 0, L.ImpactPoints)] == pytest.approx(2.0 * factor)  # z vs role (10, 5)
 
-    def test_overperformance_uses_rank_bucket_baseline(self):
-        out = impact.add_impact_scores(
-            self._frame(),
-            players=self._players(rank=700),
-            baselines=self._baselines(),
-            has_killfeed=True,
+    def test_time_share_and_shrinkage_scale_quality(self):
+        facts = _facts(
+            _stints(
+                {"player_id": 1, "hero": 1, "seconds": 600.0, "Eliminations": 20.0},
+                {"player_id": 2, "hero": 1, "seconds": 300.0, "Eliminations": 10.0},
+            )
         )
-        # bucket 1: elims z=(20-12)/5=1.6, fp z=(3-1.5)/1=1.5
-        expected = IMPACT_WEIGHTS["Eliminations"] * 1.6 + IMPACT_WEIGHTS["FirstPicks"] * 1.5
-        assert out[enums.LogStatsName.OverperformanceScore].iloc[0] == pytest.approx(expected)
+        assert facts[(2, 0, L.ImpactPoints)] == pytest.approx(2.0 * _factor(300.0, 600.0))
 
-    def test_unranked_scores_impact_but_no_overperformance(self):
-        out = impact.add_impact_scores(
-            self._frame(),
-            players=self._players(rank=None),
-            baselines=self._baselines(),
-            has_killfeed=True,
+    def test_unscored_player_has_no_facts_and_takes_no_place(self):
+        facts = _facts(
+            _stints(
+                {"player_id": 1, "hero": 1, "seconds": 600.0, "Eliminations": 5.0},
+                {"player_id": 2, "hero": 1, "seconds": 30.0, "Eliminations": 30.0},
+                {"player_id": 3, "hero": 9, "seconds": 600.0, "Eliminations": 30.0},
+            )
         )
-        expected = IMPACT_WEIGHTS["Eliminations"] * 2.0 + IMPACT_WEIGHTS["FirstPicks"] * 2.0
-        assert out[enums.LogStatsName.ImpactPoints].iloc[0] == pytest.approx(expected)
-        assert out[enums.LogStatsName.OverperformanceScore].iloc[0] == 0.0
+        assert {player for player, _, _ in facts} == {1}
+        assert facts[(1, 0, L.ImpactRank)] == 1.0
 
-    def test_unknown_role_scores_zero(self):
-        out = impact.add_impact_scores(
-            self._frame(),
-            players=self._players(role=None),
-            baselines=self._baselines(),
-            has_killfeed=True,
+    def test_ties_share_a_place(self):
+        facts = _facts(
+            _stints(
+                {"player_id": 1, "hero": 1, "seconds": 600.0, "Eliminations": 20.0},
+                {"player_id": 2, "hero": 1, "seconds": 600.0, "Eliminations": 20.0},
+                {"player_id": 3, "hero": 1, "seconds": 600.0, "Eliminations": 10.0},
+            )
         )
-        assert out[enums.LogStatsName.ImpactPoints].iloc[0] == 0.0
+        assert [facts[(p, 0, L.ImpactRank)] for p in (1, 2, 3)] == [1.0, 1.0, 3.0]
 
-    def test_nan_stat_cell_contributes_zero(self):
-        # Eliminations baseline mean is 0 so a correctly-zeroed NaN cell
-        # contributes exactly 0 to ImpactPoints (rate=0 -> z=(0-0)/std=0).
-        # On the buggy code the NaN cell survives into `rate`/`z` and the
-        # winsorize clamp silently resolves it to +WINSOR_LIMIT instead.
-        baselines = impact.BaselineSet(
-            formula_version="impact_v1",
-            bucket_bounds=(500.0, 1000.0),
-            values={
-                ("damage", -1, "Eliminations"): (0.0, 5.0),
-                ("damage", -1, "FirstPicks"): (1.0, 1.0),
-            },
+    def test_event_features_count_only_with_a_kill_feed(self):
+        stints = _stints({"player_id": 1, "hero": 1, "seconds": 600.0, "Eliminations": 10.0, "FirstPicks": 3.0})
+        baselines = _baselines(stats={**STATS, ("damage", None, "FirstPicks"): (1.0, 1.0)})
+        factor = _factor(600.0, 600.0)
+        assert _facts(stints, baselines)[(1, 0, L.ImpactPoints)] == pytest.approx(2.0 * factor)
+        assert _facts(stints, baselines, killfeed=False)[(1, 0, L.ImpactPoints)] == pytest.approx(0.0)
+
+    def test_role_scale_standardises_the_composite(self):
+        stints = _stints({"player_id": 1, "hero": 2, "seconds": 600.0, "Eliminations": 20.0})
+        scaled = _baselines(role_scale={"support": (1.0, 4.0)})
+        assert _facts(stints, scaled)[(1, 0, L.ImpactPoints)] == pytest.approx((2.0 - 1.0) / 4.0 * _factor(600, 600))
+
+    def test_overperformance_needs_a_quintile_and_falls_back_to_the_role_expectation(self):
+        stints = _stints({"player_id": 1, "hero": 1, "seconds": 600.0, "Eliminations": 20.0})
+        factor = _factor(600.0, 600.0)
+        assert (1, 0, L.OverperformanceScore) not in _facts(stints)
+        cell = _facts(stints, quintiles={1: 2})[(1, 0, L.OverperformanceScore)]
+        fallback = _facts(stints, quintiles={1: 4})[(1, 0, L.OverperformanceScore)]
+        assert cell == pytest.approx(factor * (2.0 - 0.5) / 1.0)
+        assert fallback == pytest.approx(factor * (2.0 - 0.0) / 2.0)
+
+    def test_badge_goes_to_the_top_overperformer_past_the_threshold(self):
+        stints = _stints(
+            {"player_id": 1, "hero": 1, "seconds": 600.0, "Eliminations": 25.0},
+            {"player_id": 2, "hero": 1, "seconds": 600.0, "Eliminations": 15.0},
+            {"player_id": 3, "hero": 1, "seconds": 600.0, "Eliminations": 30.0},  # best, but no quintile
         )
-        out = impact.add_impact_scores(
-            self._frame(elims=float("nan")),
-            players=self._players(),
-            baselines=baselines,
-            has_killfeed=True,
+        quintiles = {1: 2, 2: 2}
+        facts = _facts(stints, quintiles=quintiles)
+        assert facts[(1, 0, L.OverperformanceBadge)] == 1.0
+        assert facts[(2, 0, L.OverperformanceBadge)] == 0.0
+        assert (3, 0, L.OverperformanceBadge) not in facts
+        out_of_reach = _facts(stints, _baselines(badge_threshold=100.0), quintiles=quintiles)
+        assert out_of_reach[(1, 0, L.OverperformanceBadge)] == 0.0
+
+    def test_contributions_add_up_to_impact_plus_the_role_offset(self):
+        stints = _stints({"player_id": 1, "hero": 1, "seconds": 600.0, "Eliminations": 20.0, "FirstPicks": 3.0})
+        baselines = _baselines(role_scale={"damage": (1.0, 2.0)})
+        facts = _facts(stints, baselines)
+        contributions = sum(v for (_, _, stat), v in facts.items() if stat.value.startswith("contrib_"))
+        offset = _factor(600.0, 600.0) * 1.0 / 2.0
+        assert contributions == pytest.approx(facts[(1, 0, L.ImpactPoints)] + offset)
+        assert facts[(1, 0, L.ContribEliminations)] == pytest.approx(_factor(600.0, 600.0) * 2.0 / 2.0)
+
+    def test_rounds_carry_rank_and_points_but_no_breakdown_or_badge(self):
+        stints = _stints(
+            {"player_id": 1, "hero": 1, "seconds": 600.0, "Eliminations": 20.0},
+            {"player_id": 1, "hero": 1, "seconds": 300.0, "Eliminations": 10.0, "segment": 1},
         )
-        # first_picks rate 3 -> z=2; NaN Eliminations term must drop to 0,
-        # NOT IMPACT_WEIGHTS["Eliminations"] * WINSOR_LIMIT.
-        expected = IMPACT_WEIGHTS["FirstPicks"] * 2.0
-        assert out[enums.LogStatsName.ImpactPoints].iloc[0] == pytest.approx(expected)
+        round_stats = {stat for _, segment, stat in _facts(stints, quintiles={1: 2}) if segment == 1}
+        assert round_stats == {L.ImpactPoints, L.ImpactRank, L.OverperformanceScore}
 
 
 class TestDominantRoles:
     def test_picks_role_with_most_playtime(self):
-        df = pd.DataFrame(
-            {
-                "player_id": [1, 1, 2],
-                "hero_id": [1, 3, 2],
-                "seconds": [100.0, 400.0, 300.0],
-            }
+        stints = _stints(
+            {"player_id": 1, "hero": 3, "seconds": 400.0},
+            {"player_id": 1, "hero": 1, "seconds": 100.0},
+            {"player_id": 2, "hero": 2, "seconds": 300.0},
+            {"player_id": 3, "hero": 9, "seconds": 300.0},
         )
-        roles = impact.dominant_roles(df, HERO_TYPES)
-        assert roles == {1: TANK, 2: SUPPORT}
+        assert impact.dominant_roles(stints) == {1: "tank", 2: "support"}

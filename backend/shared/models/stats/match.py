@@ -341,7 +341,15 @@ class StatsEvent(db.Base):
 class StatsBaseline(db.Base):
     __tablename__ = "stat_baseline"
     __table_args__ = (
-        sa.UniqueConstraint("formula_version", "role_id", "rank_bucket", "stat_id", name="uq_stat_baseline"),
+        sa.UniqueConstraint(
+            "formula_version",
+            "role_id",
+            "rank_bucket",
+            "stat_id",
+            "entity_id",
+            name="uq_stat_baseline",
+            postgresql_nulls_not_distinct=True,
+        ),
         sa.Index("ix_stat_baseline_role", "role_id"),
         {"schema": "stats"},
     )
@@ -354,6 +362,11 @@ class StatsBaseline(db.Base):
     rank_bucket: Mapped[int] = mapped_column(sa.SmallInteger(), default=-1, server_default="-1")
     stat_id: Mapped[int] = mapped_column(
         sa.SmallInteger(), sa.ForeignKey("stats.stat_def.id", name="fk_stat_baseline_stat")
+    )
+    #: A hero's own baseline row; ``NULL`` = the role's.
+    entity_id: Mapped[int | None] = mapped_column(
+        sa.ForeignKey("catalog.entity.id", name="fk_stat_baseline_entity", deferrable=True, initially="DEFERRED"),
+        nullable=True,
     )
     mean: Mapped[float] = mapped_column(sa.Double())
     std: Mapped[float] = mapped_column(sa.Double())

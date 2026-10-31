@@ -109,7 +109,7 @@ const TeamTable = ({ team, isHome, matchRound, columns, columnMax }: TeamTablePr
       {players.map((player) => {
         const heroes = player.heroes[matchRound] ?? [];
         const placement = resolveMatchMvpPlacement(player, matchRound);
-        const mvp = <PerformanceBadge performance={placement} />;
+        const mvp = <PerformanceBadge place={placement} />;
         return (
           <TableRow key={player.workspace_member_id}>
             <TableCell

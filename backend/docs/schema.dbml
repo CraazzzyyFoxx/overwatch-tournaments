@@ -2644,12 +2644,13 @@ Table stats.stat_baseline {
   role_id bigint [not null]
   rank_bucket smallint [not null, default: -1]
   stat_id smallint [not null]
+  entity_id bigint
   mean float8 [not null]
   std float8 [not null]
   meta jsonb
   computed_at timestamptz [not null, default: `now()`]
   indexes {
-    (formula_version, role_id, rank_bucket, stat_id) [unique, name: "uq_stat_baseline"]
+    (formula_version, role_id, rank_bucket, stat_id, entity_id) [unique, name: "uq_stat_baseline"]
     (role_id) [name: "ix_stat_baseline_role"]
   }
 }
@@ -3712,6 +3713,7 @@ Ref: stats.match_team.encounter_team_id > encounter.team.id [delete: cascade]
 Ref: stats.segment.match_id > stats.match.id [delete: cascade]
 Ref: stats.stat_baseline.role_id > catalog.role.id
 Ref: stats.stat_baseline.stat_id > stats.stat_def.id
+Ref: stats.stat_baseline.entity_id > catalog.entity.id
 Ref: stats.stat_def.discipline > catalog.discipline.code
 Ref: subscriptions.check_log.workspace_id > workspace.id [delete: set null]
 Ref: subscriptions.check_log.auth_user_id > auth.user.id [delete: set null]

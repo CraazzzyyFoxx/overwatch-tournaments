@@ -5,13 +5,13 @@ import type { TournamentPlayerStatKey } from "@/types/tournament.types";
 
 /**
  * Values are each player's per-map average over the tournament's logged maps, ranked across every player who has
- * one; `performance` is the MVP place on a map, 1 = best of ten.
+ * one; `impact_rank` is the MVP place on a map, 1 = best of ten.
  */
 export const STAT_META: Record<
   TournamentPlayerStatKey,
   { lowerIsBetter: boolean; digits: number }
 > = {
-  performance: { lowerIsBetter: true, digits: 2 },
+  impact_rank: { lowerIsBetter: true, digits: 2 },
   kda: { lowerIsBetter: false, digits: 2 },
   eliminations: { lowerIsBetter: false, digits: 1 },
   deaths: { lowerIsBetter: true, digits: 1 },

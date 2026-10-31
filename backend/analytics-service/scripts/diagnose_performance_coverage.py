@@ -9,7 +9,7 @@ printed — only host/db, never the password). Run:
 Why: the Linear shift signal (and the v2 merit target) use Performance v2
 ``local_zscore`` (per-role, division-band normalised via DivisionGrid). Where a
 tournament has NO ``analytics.performance`` rows, ``perf_merit`` silently falls
-back to a division-BLIND ``performance_points`` z-score over the whole
+back to a division-BLIND ``impact_points`` z-score over the whole
 (tournament, role) cohort — which biases against low divisions. This reports how
 much of the recent field is on that fallback.
 """

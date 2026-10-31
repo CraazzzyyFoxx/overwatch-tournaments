@@ -140,8 +140,8 @@ function amount(o: ConditionTextOptions, op: unknown, value: unknown, asPercent 
 
 function statName(o: ConditionTextOptions, raw: unknown): string {
   const name = text(raw);
-  if (!name) return msg(o, "stat.Performance");
-  // The engine accepts "performance" for "Performance"; messages key on the latter.
+  if (!name) return msg(o, "stat.ImpactRank");
+  // The engine also accepts a code ("eliminations"); a one-word code matches its capitalized name, any other is humanized.
   const capitalized = name.charAt(0).toUpperCase() + name.slice(1);
   return optional(o, `stat.${name}`) ?? optional(o, `stat.${capitalized}`) ?? humanize(name);
 }
@@ -206,7 +206,7 @@ const BUILDERS: Record<string, Builder> = {
   match_mvp_check: (p, o) => ({
     text: msg(o, "leaf.match_mvp_check", {
       top: int(p.top_n, 3),
-      stat: statName(o, p.stat ?? "Performance"),
+      stat: statName(o, p.stat ?? "ImpactRank"),
       amount: amount(o, p.op ?? "==", p.value ?? 0),
     }),
     details: [

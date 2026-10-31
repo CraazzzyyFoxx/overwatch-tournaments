@@ -13,7 +13,7 @@ baselines and Discord channels live in `stats/`. `catalog/` writes only to `cata
 > `--check` and fails on drift, so the diagrams cannot fall behind the models again.
 
 <!-- ERD:auto _alembic_head -->
-Alembic head: **`tidx01`** (158 revisions in `backend/migrations/versions/`).
+Alembic head: **`impactv202`** (160 revisions in `backend/migrations/versions/`).
 <!-- /ERD:auto -->
 
 **Reading the diagrams**
@@ -2709,6 +2709,7 @@ erDiagram
         bigint role_id FK
         smallint rank_bucket
         smallint stat_id FK
+        bigint entity_id FK "nullable"
         float8 mean
         float8 std
         jsonb meta "nullable"
@@ -2736,6 +2737,7 @@ erDiagram
     CATALOG_ENTITY |o--o{ STATS_EVENT : "related_entity_id"
     CATALOG_ENTITY |o--o{ STATS_FACT : "entity_id"
     CATALOG_ENTITY |o--o{ STATS_MATCH : "mode_entity_id"
+    CATALOG_ENTITY |o--o{ STATS_STAT_BASELINE : "entity_id"
     CATALOG_ENTITY ||--o{ STATS_EVENT : "entity_kind"
     CATALOG_ENTITY ||--o{ STATS_FACT : "entity_kind"
     CATALOG_ENTITY ||--o{ STATS_MATCH : "discipline"
@@ -2790,7 +2792,7 @@ Composite unique keys:
 - `STATS_MATCH` unique on (`id`, `encounter_id`)
 - `STATS_MATCH_FETCH` unique on (`source_kind`, `external_id`, `hint_encounter_game_id`)
 - `STATS_MATCH_TEAM` unique on (`match_id`, `source_position`)
-- `STATS_STAT_BASELINE` unique on (`formula_version`, `role_id`, `rank_bucket`, `stat_id`)
+- `STATS_STAT_BASELINE` unique on (`formula_version`, `role_id`, `rank_bucket`, `stat_id`, `entity_id`)
 - `STATS_STAT_DEF` unique on (`discipline`, `code`)
 <!-- /ERD:auto -->
 

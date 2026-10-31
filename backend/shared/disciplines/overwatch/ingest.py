@@ -5,13 +5,13 @@ events. It is pure CPU (no session, S3 client or roster callback) and
 creates no alias, player or row: a hero it cannot resolve is handed on under its log spelling so the one semantic
 validator reports every miss, and an unresolvable map/mode raises ``DecodeError`` carrying both misses.
 
-``derive_match`` adds the facts that need what only binding knows -- the active baselines and each seat's registration
-rank: ``impact_points``, ``overperformance_score`` and ``impact_rank`` -- and the ``performance`` rank, whose ties break by user id. It runs on decoded documents only; a producer's
-own document is never derived twice.
+``derive_match`` adds the facts that need what only binding knows -- the active baselines and each seat's rank
+quintile (``rank_quintiles``): the ``impact_v2`` facts ``impact_points``, ``impact_rank``, ``overperformance_score``
+and, for the whole map, ``overperformance_badge`` and ``contrib_*`` (design 2026-10-31). It runs on decoded documents
+only; a producer's own document is never derived twice.
 
 The pandas numerics are frozen. Participants are numbered in the order the document lists them and heroes in catalog
-id order, so every reduction sums in a fixed order; every rank (performance, impact) is computed in ``derive_match``,
-where ties break by user id.
+id order, so every reduction sums in a fixed order; every rank is computed in ``derive_match``'s scorer.
 """
 
 from __future__ import annotations
@@ -29,10 +29,10 @@ from shared.core import impact as impact_consts
 from shared.core.enums import HeroClass, LogStatsName, MatchEvent
 from shared.core.social import SocialProvider
 from shared.disciplines.ingest import BoundMatch, DecodeContext, DecodeError
-from shared.disciplines.overwatch import PLAYER_ROLE, baselines, impact
-from shared.disciplines.overwatch.enums import LogEventType, log_stats_index_map
+from shared.disciplines.overwatch import PLAYER_ROLE, baselines, impact, impact_weights
+from shared.disciplines.overwatch.enums import LogEventType
 from shared.disciplines.overwatch.event_models import KillEvent, MatchEventRow, PlayerStatRow
-from shared.disciplines.overwatch.impact_backfill import _pivot, _rank_by_impact
+from shared.disciplines.overwatch.rank_quintiles import match_quintiles
 from shared.disciplines.overwatch.settings import settings
 from shared.schemas.match_doc import IngestIssue, MatchDoc, MatchDocError
 
@@ -56,15 +56,15 @@ _TEAMED_EVENTS = frozenset(
         LogEventType.EchoDuplicateEnd,
     }
 )
-_RAW_STATS = frozenset(stat.value for stat in log_stats_index_map)
 _STAT_BY_CODE = {stat.value: stat for stat in LogStatsName}
 _DERIVED_AFTER_BINDING = frozenset(
     stat.value
     for stat in (
-        LogStatsName.Performance,
         LogStatsName.ImpactPoints,
         LogStatsName.ImpactRank,
         LogStatsName.OverperformanceScore,
+        LogStatsName.OverperformanceBadge,
+        *impact_consts.CONTRIBUTION_STATS.values(),
     )
 )
 _HOME, _AWAY = "home", "away"
@@ -235,6 +235,7 @@ def _kills(log: _Log, pid_of: dict[str, int], heroes: _Heroes) -> list[tuple[imp
                     actor_member_id=pid_of[kill.attacker],
                     target_member_id=pid_of[kill.victim],
                     related_entity_id=heroes.index(victim_hero),
+                    entity_id=heroes.index(attacker_hero),
                     data={
                         "fight": 0,
                         "ability": kill.ability.value if kill.ability is not None else None,
@@ -254,11 +255,8 @@ def _kills(log: _Log, pid_of: dict[str, int], heroes: _Heroes) -> list[tuple[imp
 Emit = Callable[[LogStatsName, int, int, int | None, float], None]
 
 
-def _derived(df: pd.DataFrame, emit: Emit, *, mvp: bool) -> None:
-    """KD/KDA/... for a pivot (and performance points for the player-level ones); adds its columns to ``df``.
-
-    The ``performance`` rank is not emitted here: ties break by user id, which only binding knows.
-    """
+def _derived(df: pd.DataFrame, emit: Emit) -> None:
+    """KD/KDA/... for a pivot; adds its columns to ``df``."""
     for stat_col in (
         LogStatsName.Eliminations,
         LogStatsName.Deaths,
@@ -294,18 +292,6 @@ def _derived(df: pd.DataFrame, emit: Emit, *, mvp: bool) -> None:
     ):
         emit_column(column, stat, df)
 
-    if mvp:
-        df["PerformancePoints"] = (
-            df[LogStatsName.Eliminations] * 500
-            + df[LogStatsName.FinalBlows] * 250
-            + df["Assists"] * 50
-            + df[LogStatsName.HeroDamageDealt]
-            + df[LogStatsName.HealingDealt] * 1
-            - df[LogStatsName.Deaths] * 750
-            + df[LogStatsName.DamageBlocked] * 0.1
-        )
-        emit_column("PerformancePoints", LogStatsName.PerformancePoints, df)
-
 
 def _stat_rows(log: _Log, pid_of: dict[str, int], heroes: _Heroes) -> pd.DataFrame:
     records = []
@@ -327,8 +313,8 @@ def _stat_rows(log: _Log, pid_of: dict[str, int], heroes: _Heroes) -> pd.DataFra
 
 def _facts(
     log: _Log, pid_of: dict[str, int], heroes: _Heroes, kills: list[impact.KillRow], emit: Emit
-) -> dict[int, HeroClass]:
-    """Every player/hero/round fact except the baseline-dependent ones; returns observed roles."""
+) -> dict[int, str]:
+    """Every player/hero/round fact except the baseline-dependent ones; returns observed roles (role codes)."""
     cumulative = _stat_rows(log, pid_of, heroes)
     if cumulative.empty:
         logger.info("No PlayerStat events found. Skipping stat creation.")
@@ -375,46 +361,36 @@ def _facts(
     match_derived["round"] = 0
     match_derived["hero_id"] = None
 
-    # Kill-feed counts (first picks, ...) cross into the pivots keyed by participant; round 0 is the match-total
-    # sentinel, so the per-round rows are the only input and the match total is their sum.
+    # Kill-feed counts (first picks, ...) are emitted per participant and round without a hero; round 0 is the
+    # match-total sentinel, so the per-round rows are the only input and the match total is their sum.
     events = impact.build_event_counts(kills, heroes.types, member_user_ids={pid: pid for pid in pid_of.values()})
     if not events.empty:
-        events = events[events["user_id"].isin(set(pid_of.values()))].assign(player_id=lambda frame: frame["user_id"])
-        events = events[events["round"] > 0]
+        stat_cols = list(impact_consts.EVENT_STATS)
+        events = events[events["segment"] > 0].groupby(["player_id", "segment"], as_index=False)[stat_cols].sum()
     if not events.empty:
+        totals = events.groupby("player_id", as_index=False)[stat_cols].sum()
         for stat_name in impact_consts.EVENT_STATS:
             member = LogStatsName[stat_name]
             for r in events.itertuples(index=False):
-                emit(member, r.user_id, int(r.round), None, float(getattr(r, stat_name)))
-        totals = events.groupby(["player_id", "user_id"], as_index=False)[list(impact_consts.EVENT_STATS)].sum()
+                emit(member, r.player_id, int(r.segment), None, float(getattr(r, stat_name)))
         for stat_name in impact_consts.EVENT_STATS:
             member = LogStatsName[stat_name]
             for r in totals.itertuples(index=False):
-                emit(member, r.user_id, 0, None, float(getattr(r, stat_name)))
-        event_cols = ["player_id", "round", *impact_consts.EVENT_STATS]
-        renamed = {name: LogStatsName[name] for name in impact_consts.EVENT_STATS}
-        round_derived = round_derived.merge(
-            events[event_cols].rename(columns=renamed), on=["player_id", "round"], how="left"
-        )
-        match_derived = match_derived.merge(
-            totals.assign(round=0)[event_cols].rename(columns=renamed), on=["player_id", "round"], how="left"
-        )
-    for frame in (round_derived, match_derived):
-        for name in impact_consts.EVENT_STATS:
-            member = LogStatsName[name]
-            if member not in frame.columns:
-                frame[member] = 0.0
-            frame[member] = frame[member].fillna(0.0)
+                emit(member, r.player_id, 0, None, float(getattr(r, stat_name)))
 
     playtime = final_cumulative[final_cumulative["stat_name"] == LogStatsName.HeroTimePlayed][
         ["player_id", "hero_id", "value"]
     ].rename(columns={"value": "seconds"})
-    roles = impact.dominant_roles(playtime, heroes.types)
+    playtime["role"] = [
+        hero_class.name if hero_class is not None and hero_class is not HeroClass.flex else None
+        for hero_class in map(heroes.types.get, playtime["hero_id"])
+    ]
+    roles = impact.dominant_roles(playtime)
 
-    _derived(hero_derived, emit, mvp=False)
-    _derived(round_derived, emit, mvp=True)
-    _derived(match_hero_derived, emit, mvp=False)
-    _derived(match_derived, emit, mvp=True)
+    _derived(hero_derived, emit)
+    _derived(round_derived, emit)
+    _derived(match_hero_derived, emit)
+    _derived(match_derived, emit)
     return roles
 
 
@@ -513,9 +489,7 @@ def decode(raw: bytes, ctx: DecodeContext) -> MatchDoc:
                 "team": team,
                 "identity": {"provider": str(SocialProvider.BATTLENET), "id": name},
                 "role": (
-                    {"dimension": PLAYER_ROLE.code, "role": roles[pid_of[name]].slot_code}
-                    if pid_of[name] in roles
-                    else None
+                    {"dimension": PLAYER_ROLE.code, "role": roles[pid_of[name]]} if pid_of[name] in roles else None
                 ),
             }
             for name, team in handles
@@ -537,90 +511,89 @@ def _validated(document: dict) -> MatchDoc:
 
 
 async def derive_match(session, doc: MatchDoc, binding: BoundMatch) -> MatchDoc:  # noqa: ANN001
-    """Add ``performance``, ``impact_points``, ``overperformance_score`` and ``impact_rank`` (replacing any present)."""
-    baseline_set = await baselines.get_active(session, discipline=doc.discipline)
-    return await asyncio.to_thread(_derive, doc, binding, baseline_set)
-
-
-def _derive(doc: MatchDoc, binding: BoundMatch, baseline_set: impact.BaselineSet | None) -> MatchDoc:
+    """Add the impact facts (``impact_points``, ``impact_rank``, ``overperformance_score``/``_badge``, ``contrib_*``),
+    replacing any present. Unscored players get none; no baselines, no impact facts at all."""
     kept = [fact for fact in doc.facts if fact.stat not in _DERIVED_AFTER_BINDING]
-    try:
-        user_of = {key: binding.participants[key].user_id for key in {f.participant for f in kept if f.participant}}
-    except KeyError as exc:
-        raise ValueError(f"participant {exc.args[0]!r} is not bound") from None
-    derived = _performance_facts(kept, user_of)
+    unbound = {f.participant for f in kept if f.participant} - binding.participants.keys()
+    if unbound:
+        raise ValueError(f"participant {min(unbound)!r} is not bound")
+    baseline_set = await baselines.get_active(session, discipline=doc.discipline)
+    derived: list[dict] = []
     if baseline_set is None:
         logger.warning(f"Impact baselines missing for {doc.discipline} -- skipping impact stats")
     else:
-        derived += _impact_facts(doc, kept, user_of, binding, baseline_set)
+        catalog = await baselines.hero_catalog(session, discipline=doc.discipline)
+        stints, roles = await asyncio.to_thread(_stints, doc, kept, binding, catalog)
+        quintiles = await match_quintiles(
+            session, [(binding.encounter_id, member, role) for member, role in roles.items()]
+        )
+        derived = await asyncio.to_thread(
+            _impact_facts,
+            doc,
+            binding,
+            baseline_set,
+            stints,
+            roles,
+            {member: quintile for (_, member), quintile in quintiles.items()},
+        )
     return _validated({**doc.model_dump(), "facts": [fact.model_dump() for fact in kept] + derived})
 
 
-def _performance_facts(kept: list, user_of: dict[str, int]) -> list[dict]:
-    """Rank each segment's players by performance points; equal points keep user-id order."""
-    rows = [
-        (user_of[fact.participant], fact.segment, fact.value)
-        for fact in kept
-        if fact.stat == LogStatsName.PerformancePoints.value and fact.participant is not None and fact.entity is None
+def _stints(
+    doc: MatchDoc, kept: list, binding: BoundMatch, catalog: dict[str, tuple[int, HeroClass | None]]
+) -> tuple[pd.DataFrame, dict[int, str]]:
+    """Hero stints of every segment (player = workspace member id) and each player's dominant role on the map."""
+    hero_types = {hero_id: hero_class for hero_id, hero_class in catalog.values() if hero_class is not None}
+    member = {key: seat.member_id for key, seat in binding.participants.items()}
+    stat_rows = pd.DataFrame(
+        [
+            (member[fact.participant], fact.segment, catalog[fact.entity][0], _STAT_BY_CODE[fact.stat].name, fact.value)
+            for fact in kept
+            if fact.participant is not None and fact.entity in catalog and fact.stat in _STAT_BY_CODE
+        ],
+        columns=["player_id", "segment", "hero", "name", "value"],
+    )
+    feed = [
+        impact.KillRow(
+            t=event.t,
+            segment=event.segment,
+            actor_member_id=None if event.actor is None else member[event.actor],
+            target_member_id=None if event.target is None else member[event.target],
+            related_entity_id=catalog[event.related_entity][0] if event.related_entity in catalog else None,
+            data=dict(event.data or {}),
+            entity_id=catalog[event.entity][0] if event.entity in catalog else None,
+        )
+        for event in doc.events
+        if event.type == "kill"
     ]
-    if not rows:
-        return []
-    frame = pd.DataFrame(rows, columns=["player_id", "round", "PerformancePoints"]).sort_values(["player_id", "round"])
-    ranked = frame.sort_values(by=["round", "PerformancePoints"], ascending=[True, False])
-    ranked["Performance"] = ranked.groupby("round").cumcount() + 1
-    key_of = {user: key for key, user in user_of.items()}
-    return [
-        {
-            "participant": key_of[int(row["player_id"])],
-            "stat": LogStatsName.Performance.value,
-            "value": float(row["Performance"]),
-            "segment": int(row["round"]),
-        }
-        for row in ranked.to_dict(orient="records")
-    ]
+    events = impact.build_event_counts(feed, hero_types, member_user_ids={m: m for m in member.values()})
+    stints = impact.build_stints(stat_rows, events, hero_types)
+    return stints, impact.dominant_roles(stints[stints["segment"] == 0])
 
 
 def _impact_facts(
-    doc: MatchDoc, kept: list, user_of: dict[str, int], binding: BoundMatch, baseline_set: impact.BaselineSet
+    doc: MatchDoc,
+    binding: BoundMatch,
+    baseline_set: impact.BaselineSet,
+    stints: pd.DataFrame,
+    roles: dict[int, str],
+    quintiles: dict[int, int],
 ) -> list[dict]:
-    key_of = {user: key for key, user in user_of.items()}
-
-    cells = [
-        (user_of[fact.participant], fact.segment, _STAT_BY_CODE[fact.stat], fact.value)
-        for fact in kept
-        if fact.participant is not None and fact.entity is None and fact.stat in _STAT_BY_CODE
+    key_of = {seat.member_id: key for key, seat in binding.participants.items()}
+    scored = impact.score_match(
+        stints,
+        baseline_set,
+        impact_weights.IMPACT_WEIGHTS,
+        has_killfeed=any(event.type == "kill" for event in doc.events),
+        roles=roles,
+        quintiles=quintiles,
+    )
+    return [
+        {
+            "participant": key_of[int(row.player_id)],
+            "stat": row.stat.value,
+            "value": float(row.value),
+            "segment": int(row.segment),
+        }
+        for row in scored.itertuples(index=False)
     ]
-    # A pivot row is a player's PlayerStat row of a segment: event-count facts alone never open one.
-    present = {(user, segment) for user, segment, stat, _ in cells if stat.value in _RAW_STATS}
-    frame = pd.DataFrame([cell for cell in cells if cell[:2] in present], columns=["user_id", "round", "name", "value"])
-
-    observed = {p.key: p.role for p in doc.participants}
-    players = {}
-    for key, seat in binding.participants.items():
-        ref = observed.get(key)
-        role = HeroClass.__members__.get(ref.role) if ref is not None else None
-        if role is None and seat.role:
-            role = HeroClass[seat.role]
-        players[seat.user_id] = impact.PlayerRef(
-            player_id=seat.user_id, user_id=seat.user_id, team_id=seat.encounter_team_id, role=role, rank=seat.rank
-        )
-    has_killfeed = any(event.type == "kill" for event in doc.events)
-
-    out: list[dict] = []
-    for pivot in (_pivot(frame[frame["round"] > 0]), _pivot(frame[frame["round"] == 0])):
-        if pivot.empty:
-            continue
-        scored = _rank_by_impact(
-            impact.add_impact_scores(pivot, players=players, baselines=baseline_set, has_killfeed=has_killfeed)
-        )
-        for row in scored.to_dict(orient="records"):
-            for stat in (LogStatsName.ImpactPoints, LogStatsName.OverperformanceScore, LogStatsName.ImpactRank):
-                out.append(
-                    {
-                        "participant": key_of[int(row["player_id"])],
-                        "stat": stat.value,
-                        "value": float(row[stat]),
-                        "segment": int(row["round"]),
-                    }
-                )
-    return out

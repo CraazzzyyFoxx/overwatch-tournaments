@@ -111,9 +111,10 @@ const OverviewLastTournamentCard = ({ tournament, metadata, tournaments, userId,
   const ranked = Object.values(stats).filter(isRankedEntry);
   const lobbySize = ranked[0]?.total ?? null;
   // The generic tiles: the game's declared stats the player is ranked on, in declared order, named and formatted by
-  // their declaration. A game module draws its own selection and presentation instead (the `lobbyRankTiles` slot).
+  // their declaration, without the internal impact breakdown (`group: "impact"`). A game module draws its own
+  // selection and presentation instead (the `lobbyRankTiles` slot).
   const genericTiles: LobbyStatTile[] = (ontology?.stat_defs ?? [])
-    .filter((def) => def.active)
+    .filter((def) => def.active && def.group !== "impact")
     .sort((left, right) => left.sort_order - right.sort_order || left.code.localeCompare(right.code))
     .flatMap((def) => {
       const entry = stats[def.code];
