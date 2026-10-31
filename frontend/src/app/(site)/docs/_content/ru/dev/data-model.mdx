@@ -10,7 +10,7 @@
 | `tournament` | Структура турнира, сетка, встречи, pick/ban, отчёты | tournament-service |
 | `catalog` | Каталог каждой игры — персонажи, карты, режимы — и её онтология ролей | app-service / stats-service |
 | `rank` | Телеметрия собственных рангов каждой игры (`discipline` в каждой строке): Overwatch из OverFast, League of Legends из Riot API, Deadlock из deadlock-api.com | stats-service |
-| `stats` | Разобранные матчи, наблюдаемая статистика, задания загрузки логов и матчи, загружаемые по ID (`match_fetch`) | stats-service / discord-service |
+| `stats` | Разобранные матчи, наблюдаемая статистика, задания загрузки логов, матчи, загружаемые по ID (`match_fetch`), и Discord-канал match-логов каждого турнира (`discord_channel`, пишет discord-service) | stats-service / discord-service |
 | `balancer` | Запуски балансировки и их команды, настройки балансировщика, ранги участников | balancer-service |
 | `registration` | Формы регистрации, статусы, заявки, регистрация команд | tournament-service |
 | `mix` | Миксы воркспейса и их сыгранные раунды | balancer-service |
