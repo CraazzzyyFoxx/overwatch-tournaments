@@ -22,12 +22,29 @@ vi.mock("next/navigation", () => ({
   usePathname: () => "/admin/teams",
   useRouter: () => ({ push: vi.fn() })
 }));
+// Default: an operator allowed everywhere. The stray-workspace test narrows it.
+const access = vi.hoisted(() => ({
+  administers: (_workspaceId: number) => true,
+  adminWorkspaceIds: [] as number[],
+  currentWorkspaceId: 1,
+  setCurrentWorkspace: (_id: number) => {}
+}));
 vi.mock("@/hooks/usePermissions", () => ({
-  usePermissions: () => ({ isLoaded: true, canAccessAdminRoute: () => true })
+  hasAdminPanelAccessForProfile: (_user: unknown, workspaceId: number) => access.administers(workspaceId),
+  usePermissions: () => ({
+    isLoaded: true,
+    canAccessAdminRoute: ({ workspaceId }: { workspaceId: number | null }) =>
+      workspaceId == null || access.administers(workspaceId),
+    getAdminWorkspaceIds: () => access.adminWorkspaceIds
+  })
 }));
 vi.mock("@/stores/workspace.store", () => ({
-  useWorkspaceStore: (selector: (state: { currentWorkspaceId: number | null }) => unknown) =>
-    selector({ currentWorkspaceId: 1 })
+  useWorkspaceStore: (selector: (state: object) => unknown) =>
+    selector({
+      currentWorkspaceId: access.currentWorkspaceId,
+      hostLockedWorkspaceId: null,
+      setCurrentWorkspace: access.setCurrentWorkspace
+    })
 }));
 vi.mock("@/components/HoverPrefetchLink", () => ({
   HoverPrefetchLink: ({ href, children }: { href: string; children: ReactNode }) => <a href={href}>{children}</a>
@@ -87,6 +104,22 @@ describe("AdminLayoutClient", () => {
 
     press(document.body);
     expect(document.cookie).toContain(cookie);
+
+    unmount();
+  });
+
+  it("moves a workspace operator off a workspace they do not administer instead of denying the panel", async () => {
+    const setCurrentWorkspace = vi.fn();
+    Object.assign(access, {
+      administers: (workspaceId: number) => workspaceId === 2,
+      adminWorkspaceIds: [2],
+      currentWorkspaceId: 1,
+      setCurrentWorkspace
+    });
+    const { container, unmount } = await mount();
+
+    expect(setCurrentWorkspace).toHaveBeenCalledWith(2);
+    expect(container.textContent).not.toContain(en.adminShell.layout.unauthorized);
 
     unmount();
   });
