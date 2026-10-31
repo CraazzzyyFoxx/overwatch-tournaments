@@ -2876,7 +2876,7 @@
       "rule": "catalog-label",
       "token": "hero",
       "context": "kind === \"hero\"",
-      "count": 2,
+      "count": 3,
       "reason": "persisted identifier: PickBanKind 'hero' (DB enum value, realtime domain pick-ban:hero, pregame wire)",
       "owner": "P9",
       "remove_when": "pick-ban kind is migrated to 'character'"
@@ -2885,7 +2885,7 @@
       "path": "frontend/src/components/pick-ban/PickBanGrid.tsx",
       "rule": "catalog-label",
       "token": "hero",
-      "context": "kind === \"hero\" && classFilter !== null",
+      "context": "kind === \"hero\" && (classFilter !== null || needle !== \"\")",
       "count": 1,
       "reason": "persisted identifier: PickBanKind 'hero' (DB enum value, realtime domain pick-ban:hero, pregame wire)",
       "owner": "P9",

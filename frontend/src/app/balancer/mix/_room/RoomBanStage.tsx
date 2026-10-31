@@ -568,7 +568,7 @@ function TurnBanner({
       ? null
       : [
           t(
-            `yoursHint.${step.action === "side_pick" ? "side" : step.action === "assign" ? "assign" : "hero"}`
+            `yoursHint.${step.action === "side_pick" ? "side" : step.action === "assign" ? "assign" : "character"}`
           ),
           step.blind ? t("blindHint") : null
         ]

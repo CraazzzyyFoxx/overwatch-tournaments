@@ -8665,7 +8665,7 @@
           "assign": "Assign your heroes"
         },
         "yoursHint": {
-          "hero": "Choose a hero in the pool, then confirm below",
+          "character": "Choose a hero in the pool, then confirm below",
           "side": "Choose a side below, then confirm",
           "assign": "Give each player a hero below"
         },
