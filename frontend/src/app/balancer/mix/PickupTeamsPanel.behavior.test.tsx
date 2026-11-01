@@ -708,13 +708,17 @@ describe("PickupTeamsPanel", () => {
     expect(byName(rolled, "Hybrid")).toBeNull();
   });
 
-  it("offers no next map at all in a game with a single competitive map", async () => {
+  it("always shows the only competitive map of a single-map game, with nothing to roll", async () => {
     const singleMap = [CATALOGUE[0], catalogMap(6, CONTROL, { name: "Ilios", attrs: { in_competitive: false } })];
-    const scope = await mount(game({ lobbies: [lobbyRow({ next_map_id: 5 })] }), { maps: singleMap });
+    const unrolled = await mount(game(), { maps: singleMap, canWrite: false });
+    expect(unrolled.textContent).toContain("Next map");
+    expect(unrolled.textContent).toContain("King's Row");
 
-    expect(scope.textContent).not.toContain("Next map");
-    expect(scope.textContent).not.toContain("King's Row");
-    expect(byName(scope, "Roll")).toBeNull();
+    document.body.innerHTML = "";
+    const host = await mount(game({ lobbies: [lobbyRow({ next_map_id: 6 })] }), { maps: singleMap });
+    expect(host.textContent).toContain("King's Row");
+    expect(host.textContent).not.toContain("Ilios");
+    expect(byName(host, "Roll")).toBeNull();
   });
 
   it("lets the host pick the next map by hand through the combobox", async () => {

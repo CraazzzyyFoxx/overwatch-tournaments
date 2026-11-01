@@ -387,7 +387,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         self.maps = MagicMock()
         self.maps.exists = AsyncMock(return_value=True)
         self.maps.get_map_with_mode = AsyncMock(return_value=None)
-        self.maps.count = AsyncMock(return_value=2)
+        self.maps.sole_competitive_map = AsyncMock(return_value=None)
         self.roster.list_for_game = AsyncMock(return_value=[])
         self.roster.get_by = AsyncMock(return_value=None)
         self.roster.delete = AsyncMock()
@@ -2999,7 +2999,6 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
                     "team_names": {"0": "Blue"},
                     "next_map": ["Busan", "Control"],
                     "map_image": "https://s3.example/busan.jpg",
-                    "map_choice": True,
                     "lobby_code": "ABC123",
                     "points_per_win": 25,
                     "lobby_label": None,
@@ -3009,20 +3008,20 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
             ],
         )
 
-    async def test_discord_view_names_no_map_for_a_single_map_game(self) -> None:
-        """One competitive map leaves nothing to choose: the card carries no map, even one set before."""
+    async def test_discord_view_names_the_only_map_of_a_single_map_game(self) -> None:
+        """One competitive map is every match's map: the card names it, even unrolled or over a map set before."""
         self.games.get.return_value = _game()
         self.lobby_rows[0] = _lobby(0, next_map_id=42, balance_result_json=lobby_document([{"teams": []}]))
         self.mix_rounds.activity_for_lobbies = AsyncMock(return_value={0: (0, datetime(2026, 1, 1, 20, 0))})
-        self.maps.count.return_value = 1
-        self.maps.get_map_with_mode.return_value = _row(id=42, name="Busan", parent=None, image_path="x")
+        self.maps.sole_competitive_map.return_value = _row(id=7, name="Summoner's Rift", parent=None, image_path="x")
+        self.maps.get_map_with_mode.return_value = _row(id=42, name="Busan", parent=None, image_path="y")
 
         view = await self.service.discord_view(self.session, 11, [(0, 1)], board_url_base="https://owt.example")
 
         [lineup] = view["lineups"]
         self.assertEqual(
-            (True, False, None, None),
-            (lineup["current"], lineup["map_choice"], lineup["next_map"], lineup["map_image"]),
+            (True, ["Summoner's Rift", None], "x"),
+            (lineup["current"], lineup["next_map"], lineup["map_image"]),
         )
 
     async def test_discord_view_leaves_a_recorded_match_a_gone_option_and_a_finished_mix_alone(self) -> None:
@@ -3053,7 +3052,6 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
                     "team_names": None,
                     "next_map": None,
                     "map_image": None,
-                    "map_choice": True,
                     "lobby_code": None,
                     "points_per_win": None,
                     "lobby_label": None,

@@ -7,7 +7,7 @@ import { Dices, Headphones, Shuffle, Users } from "lucide-react";
 import { MatchHistoryList } from "@/app/balancer/mix/_components/MatchHistoryList";
 import type { MixLogUpload } from "@/app/balancer/mix/useMixLogUpload";
 import { NextMapRoll } from "@/app/balancer/mix/_components/NextMapStrip";
-import { hasMapChoice } from "@/app/balancer/mix/pickup-map-roll";
+import { soleMap } from "@/app/balancer/mix/pickup-map-roll";
 import { StartMatchButton } from "@/app/balancer/mix/_components/StartMatchButton";
 import { PickupResultControls } from "@/app/balancer/mix/PickupResultControls";
 import { CAPTION_CLASS, CARD_TITLE_CLASS } from "@/app/balancer/mix/pickup-chrome";
@@ -84,7 +84,10 @@ export function RoomMatchStage({
   const tLobbies = useTranslations("mixes.lobbies");
   const [reformOpen, setReformOpen] = useState<"draft" | "balance" | null>(null);
   const draftMode = game.team_formation === "draft";
-  const map = lobby.next_map_id == null ? null : (maps.find((row) => row.id === lobby.next_map_id) ?? null);
+  // A game with one competitive map plays every match on it: the banner always names it and there is no roll.
+  const fixedMap = soleMap(maps);
+  const map =
+    fixedMap ?? (lobby.next_map_id == null ? null : (maps.find((row) => row.id === lobby.next_map_id) ?? null));
   // Re-forming replaces a lineup nobody recorded: that result would be lost, so the button asks first.
   const atRisk = lobby.lineup_recorded === false;
   const reform = (kind: "draft" | "balance") =>
@@ -156,8 +159,6 @@ export function RoomMatchStage({
 
   const opener = lobby.opener_index != null ? (teamNames[lobby.opener_index] ?? null) : null;
   const history = mixMatches.filter((match) => match.lobby_index === lobby.lobby_index).slice(0, 3);
-  // A game with one competitive map has nothing to roll or announce: no banner, no roll, only the voice link.
-  const mapChoice = hasMapChoice(maps);
   const voiceButton =
     phase === "live" && voiceUrl != null ? (
       <Button asChild variant="outline" size="sm">
@@ -170,14 +171,10 @@ export function RoomMatchStage({
 
   return (
     <Card className="flex flex-1 flex-col gap-0 overflow-hidden">
-      {mapChoice ? (
-        <MapBanner map={map} label={phase === "ready" ? tRoom("nextMapLabel") : t("map")} emptyName={t("noMap")}>
-          {voiceButton}
-        </MapBanner>
-      ) : voiceButton != null ? (
-        <div className="flex justify-end px-5 py-3">{voiceButton}</div>
-      ) : null}
-      {phase === "ready" && canWrite && mapChoice ? (
+      <MapBanner map={map} label={phase === "ready" ? tRoom("nextMapLabel") : t("map")} emptyName={t("noMap")}>
+        {voiceButton}
+      </MapBanner>
+      {phase === "ready" && canWrite && fixedMap == null ? (
         <NextMapRoll
           nextMapId={lobby.next_map_id}
           maps={maps}
@@ -195,10 +192,10 @@ export function RoomMatchStage({
           undoingMatchId={null}
           discipline={game.discipline}
           logUpload={logUpload}
-          className="border-t border-[color:var(--aqt-border)] px-5 pb-1 pt-3 first:border-t-0"
+          className="border-t border-[color:var(--aqt-border)] px-5 pb-1 pt-3"
         />
       ) : null}
-      <div className="border-t border-[color:var(--aqt-border)] px-5 py-4 first:border-t-0">
+      <div className="border-t border-[color:var(--aqt-border)] px-5 py-4">
         {phase === "live" ? (
           canWrite ? (
             <PickupResultControls

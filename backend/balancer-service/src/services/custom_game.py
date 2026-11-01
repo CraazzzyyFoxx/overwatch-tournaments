@@ -2862,7 +2862,6 @@ class CustomGameService:
             "team_names": None,
             "next_map": None,
             "map_image": None,
-            "map_choice": True,
             "lobby_code": None,
             "points_per_win": None,
             "lobby_label": None,
@@ -2880,26 +2879,16 @@ class CustomGameService:
             or not isinstance(variants[index], Mapping)
         ):
             return out
-        # A game with one competitive map (or none) has nothing to choose: the card does not name a map at all.
-        map_choice = (
-            await self.maps.count(
-                session,
-                filters=[
-                    models.CatalogEntity.discipline == game.discipline,
-                    models.CatalogEntity.active.is_(True),
-                    ~models.CatalogEntity.attrs.contains({"in_competitive": False}),
-                ],
-            )
-            > 1
-        )
-        next_map: list[str | None] | None = None
-        map_image: str | None = None
-        if map_choice and lobby.next_map_id is not None:
+        # A game with one competitive map plays every match on it; otherwise the card names the rolled map.
+        row = await self.maps.sole_competitive_map(session, discipline=game.discipline)
+        if row is None and lobby.next_map_id is not None:
             # The card names the mode next to the map.
             row = await self.maps.get_map_with_mode(session, lobby.next_map_id, discipline=game.discipline)
-            if row is not None:
-                next_map = [row.name, row.parent.name if row.parent is not None else None]
-                map_image = row.image_path or None
+        next_map: list[str | None] | None = None
+        map_image: str | None = None
+        if row is not None:
+            next_map = [row.name, row.parent.name if row.parent is not None else None]
+            map_image = row.image_path or None
         team_names = await self._lobby_team_names(session, game.id, lobby_index)
         return {
             **out,
@@ -2909,7 +2898,6 @@ class CustomGameService:
             "team_names": {str(team): name for team, name in team_names.items()},
             "next_map": next_map,
             "map_image": map_image,
-            "map_choice": map_choice,
             "lobby_code": lobby.lobby_code,
             "points_per_win": points_per_win,
             # Every lobby posts into the same channel, so a multi-lobby mix says
@@ -3277,6 +3265,8 @@ class CustomGameService:
         opener = await self.ban_opener(session, game, lobby)
         first = 0 if opener is None else opener ^ int(flip_opener)
         order = (first, 1 - first)
+        # A game with one competitive map plays every match on it, rolled or not.
+        sole_map = await self.maps.sole_competitive_map(session, discipline=game.discipline)
         encounter = await self.open_match(
             session,
             MixMatchDraft(
@@ -3284,7 +3274,7 @@ class CustomGameService:
                 workspace_id=game.workspace_id,
                 discipline=game.discipline,
                 scoring_rule_id=game.scoring_rule_id,
-                map_id=lobby.next_map_id,
+                map_id=sole_map.id if sole_map is not None else lobby.next_map_id,
                 names=(lineup_names[order[0]], lineup_names[order[1]]),
                 seats=(tuple(team_seats[order[0]]), tuple(team_seats[order[1]])),
                 bans=opener is not None,
