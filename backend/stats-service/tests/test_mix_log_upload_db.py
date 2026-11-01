@@ -1,6 +1,7 @@
 """Match logs for pickup mixes against migrated PostgreSQL (C1/C2/D8/D11): upload by encounter or lobby, the
 tournament path still refusing a mix encounter, an orphaned DONE job revived after a mix Undo/Cancel, retry of a mix
-job and the mix name on the history row. Same ``environment`` harness as ``test_stats_ingest_db.py``."""
+job, the mix name on the history row, and a round's match imported by its external id. Same ``environment`` harness
+as ``test_stats_ingest_db.py``."""
 
 from __future__ import annotations
 
@@ -17,6 +18,9 @@ from shared import models
 from shared.core import enums
 from shared.core.errors import BaseAPIException
 from shared.models.platform.audit import AuditLog
+from shared.repository import CustomGameRoundRepository
+from shared.rpc.identity import rehydrate_user
+from src.services.ingest import fetch
 from src.services.match_logs import admin_reads, uploads
 from src.services.match_logs.log_records import log_records_service
 from tests.encounter_seed import seed_scoring_rule
@@ -325,8 +329,11 @@ def test_a_done_mix_job_that_still_has_its_match_is_not_revived(stats_parity_dat
             second = await _round(env, mix, live=True)
             async with env.sf() as session:
                 with patch.object(session, "scalar", AsyncMock(return_value=True)):
-                    revived = await uploads.upload_service._revive_mix_job(
-                        session, await session.get(models.IngestJob, job_id), second
+                    revived = await log_records_service.revive_orphan(
+                        session,
+                        await session.get(models.IngestJob, job_id),
+                        encounter_id=second,
+                        encounter_game_id=None,
                     )
             assert revived is False
             job = await job_of(env, job_id)
@@ -488,5 +495,177 @@ def test_a_real_log_binds_to_a_mix_encounter_and_never_decides_its_result(target
                     enums.EncounterStatus.OPEN,
                     enums.EncounterResultStatus.NONE,
                 )
+
+    asyncio.run(run())
+
+
+GUEST = rehydrate_user({"sub": 99, "username": "guest", "is_superuser": False, "roles": [], "workspaces": []})
+
+
+async def mix_import(env, mix, encounter_id, external_id="4242", *, user=ADMIN):
+    async with env.sf() as session:
+        target = await fetch.mix_round_target(session, user, custom_game_id=mix.id, encounter_id=encounter_id)
+        return await fetch.submit_fetch(session, data={**target, "external_id": external_id}, requested_by_user_id=None)
+
+
+async def store_fetched(env, fetch_id, raw):
+    """What the worker tick does once the game's source serves the match."""
+    async with env.sf() as session:
+        row = await session.get(models.MatchFetch, fetch_id)
+        job_id = await fetch._store(session, row, raw, env.raw)
+        await session.commit()
+        return job_id
+
+
+async def game_of(env, encounter_id):
+    async with env.sf() as session:
+        return await session.scalar(
+            sa.select(models.EncounterGame.id).where(models.EncounterGame.encounter_id == encounter_id)
+        )
+
+
+async def round_log(env, encounter_id):
+    async with env.sf() as session:
+        return (await CustomGameRoundRepository().match_logs(session, [encounter_id]))[encounter_id]
+
+
+@pytest.fixture
+def fetchable(monkeypatch):
+    # The harness seeds an Overwatch mix; the source kind is all the request needs of a game with a fetcher.
+    monkeypatch.setattr(fetch, "source_kind_of", lambda discipline: "deadlock_api")
+
+
+def test_a_mix_round_import_is_hinted_at_the_round_and_stored_under_the_mix(
+    stats_parity_database, monkeypatch, fetchable
+):
+    async def run():
+        async with environment(stats_parity_database, monkeypatch) as env:
+            mix = await _mix(env)
+            encounter = await _round(env, mix, staffed=True)
+            game = await game_of(env, encounter)
+
+            read = await mix_import(env, mix, encounter)
+
+            assert (read["status"], read["external_id"]) == ("pending", "4242")
+            async with env.sf() as session:
+                row = await session.get(models.MatchFetch, read["id"])
+            assert (row.hint_tournament_id, row.hint_encounter_id, row.hint_encounter_game_id) == (
+                None,
+                encounter,
+                game,
+            )
+            # The history chip speaks while the source does not serve the match yet.
+            assert await round_log(env, encounter) == (None, "processing")
+
+            job = await job_of(env, await store_fetched(env, read["id"], b'{"match_info": "first answer"}'))
+
+            assert job.raw_ref == f"logs/mix/{mix.id}/{job.content_hash}"
+            assert env.raw.objects[job.raw_ref] == b'{"match_info": "first answer"}'
+            assert (job.status, job.source_kind, job.external_id) == (STATUS.PENDING, "deadlock_api", "4242")
+            assert (job.hint_tournament_id, job.hint_encounter_id, job.hint_encounter_game_id) == (
+                None,
+                encounter,
+                game,
+            )
+
+    asyncio.run(run())
+
+
+def test_an_import_orphaned_by_undo_follows_the_round_it_is_filed_for_again(
+    stats_parity_database, monkeypatch, fetchable
+):
+    async def run():
+        async with environment(stats_parity_database, monkeypatch) as env:
+            mix = await _mix(env)
+            first = await _round(env, mix, staffed=True)
+            first_fetch = (await mix_import(env, mix, first))["id"]
+            job_id = await store_fetched(env, first_fetch, b'{"match_info": "first answer"}')
+            await settle(env, job_id, STATUS.DONE)
+            await _undo(env, first)
+            async with env.sf() as session:
+                assert await session.get(models.MatchFetch, first_fetch) is None
+
+            second = await _round(env, mix, staffed=True)
+            again = await mix_import(env, mix, second)
+            requests_before = await ingest_requests(env, job_id)
+            # The source answers other bytes now (it enriches a match later): still the match's one job.
+            reused = await store_fetched(env, again["id"], b'{"match_info": "enriched answer"}')
+
+            assert reused == job_id
+            job = await job_of(env, job_id)
+            assert (job.status, job.hint_encounter_id, job.hint_encounter_game_id) == (
+                STATUS.PENDING,
+                second,
+                await game_of(env, second),
+            )
+            assert await ingest_requests(env, job_id) == requests_before + 1
+
+    asyncio.run(run())
+
+
+def test_a_mix_import_is_for_the_log_upload_audience_and_the_mixs_own_rounds(
+    stats_parity_database, monkeypatch, fetchable
+):
+    async def run():
+        async with environment(stats_parity_database, monkeypatch) as env:
+            mix, other = await _mix(env), await _mix(env)
+            mine = await _round(env, mix, staffed=True)
+            theirs = await _round(env, other, staffed=True)
+
+            with pytest.raises(BaseAPIException) as refused:
+                await mix_import(env, mix, mine, user=GUEST)
+            assert refused.value.status_code == 403
+            for wrong in (theirs, env.encounter):
+                with pytest.raises(BaseAPIException) as refused:
+                    await mix_import(env, mix, wrong)
+                assert (refused.value.status_code, refused.value.detail) == (404, "Encounter not found")
+
+    asyncio.run(run())
+
+
+def test_a_mix_import_warns_about_seats_its_match_does_not_show(stats_parity_database, monkeypatch):
+    async def run():
+        async with environment(stats_parity_database, monkeypatch) as env:
+            mix = await _mix(env)
+            encounter = await _round(env, mix, live=True, staffed=True)
+            job_id = (await mix_upload(env, mix, workshop(), encounter_id=encounter)).uploaded[0].record_id
+            assert await process(env, job_id) == STATUS.DONE
+            game = await game_of(env, encounter)
+            async with env.sf() as session:
+                away = await session.scalar(
+                    sa.select(models.EncounterTeam.id).where(
+                        models.EncounterTeam.encounter_id == encounter, models.EncounterTeam.slot == 2
+                    )
+                )
+                # A fourth player seated on the away side whom the match does not show (a private profile).
+                session.add(
+                    models.EncounterTeamMember(
+                        encounter_id=encounter,
+                        encounter_team_id=away,
+                        active=True,
+                        workspace_member_id=env.members["IngestEventOnly"],
+                        display_name_snapshot="IngestEventOnly",
+                        rank=800,
+                    )
+                )
+                session.add(
+                    models.MatchFetch(
+                        workspace_id=env.workspace,
+                        discipline="overwatch",
+                        source_kind="deadlock_api",
+                        external_id="4242",
+                        hint_tournament_id=None,
+                        hint_encounter_id=encounter,
+                        hint_encounter_game_id=game,
+                        status=models.MatchFetchStatus.DONE,
+                        ingest_job_id=job_id,
+                    )
+                )
+                await session.commit()
+
+            async with env.sf() as session:
+                [read] = await fetch.list_fetches(session, encounter_game_id=game, with_warnings=True)
+
+            assert read["warnings"] == [{"code": "participants_dropped", "count": 1, "characters": []}]
 
     asyncio.run(run())

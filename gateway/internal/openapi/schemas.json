@@ -2437,7 +2437,7 @@
       "summary": "List custom games"
     },
     "rpc.balancer.custom.match_history": {
-      "description": "Permission: public; no authentication required. Returns every round recorded for the mix, newest first: its two teams by slot (slot 1 banned first) with name and score, its hero bans {slot, item_id} in order, whose hero each pick was {slot, member_id, name, item_id} in pick order, the winning slot (null for a draw), lobby, map, recorder and the rank points it applied, plus the uploaded match log: stats_match_id (the bound stats match, null when none) and log_state (\"processing\" or \"failed\" while there is no stats match and the newest upload for the match is pending/processing or failed/awaiting a link, else null).",
+      "description": "Permission: public; no authentication required. Returns every round recorded for the mix, newest first: its two teams by slot (slot 1 banned first) with name and score, its hero bans {slot, item_id} in order, whose hero each pick was {slot, member_id, name, item_id} in pick order, the winning slot (null for a draw), lobby, map, recorder and the rank points it applied, plus its statistics: stats_match_id (the bound stats match, null when none) and log_state (\"processing\" while there is no stats match and the newest uploaded log is pending/processing or the newest match import waits for the game's source; else \"failed\" when that log failed/awaits a link or that import gave up; else null).",
       "summary": "List custom game matches"
     },
     "rpc.balancer.custom.post_discord": {
@@ -5167,6 +5167,26 @@
         "ref": "stats.IngestJobRead"
       },
       "summary": "Read a canonical ingest job"
+    },
+    "rpc.stats.ingest.mix_fetch": {
+      "description": "Permission: the mix's host, a co-host or a superuser, or workspace `log.create` in the mix's workspace (the log upload's audience; the mix's status is not checked). Body `{external_id}`: the round's match as its discipline's source names it (422 `invalid_external_id` for another shape, 422 `unsupported_ingestor` for a game without a match fetcher). The worker fetches it, retrying with backoff for 24 h while the source does not serve it yet, then stores it like an uploaded log and ingests it as statistics of the round: the round's result is never touched, and the statistics stay inside the mix. Idempotent per `(external_id, round)`; a failed request is reset to pending. Another id for the same round replaces its statistics once ingested. One match id serves one game of a workspace: 409 `match_already_imported` while another game holds it. 404 for a round of another mix. Returns the request `{id, status (pending|done|failed), attempts, last_error, external_id, created_at, warnings}`.",
+      "request": {
+        "array": false,
+        "ref": "stats.MatchImportInput"
+      },
+      "response": {
+        "array": false,
+        "ref": "stats.MatchImportRead"
+      },
+      "summary": "Import a mix round's match by its external id"
+    },
+    "rpc.stats.ingest.mix_fetch_list": {
+      "description": "Permission: same as the submit. The round's import requests, newest first, shaped like the submit's answer, with the organizer warnings: `fetch_failed`, `participants_dropped` (`count` players the round seated but the match does not show, e.g. private profiles) and `banned_character_played`.",
+      "response": {
+        "array": true,
+        "ref": "stats.MatchImportRead"
+      },
+      "summary": "List a mix round's match imports"
     },
     "rpc.stats.ingest.submit": {
       "description": "Permission: a workspace API key whose `stats.ingest` scope is backed by the owner's effective `stats.ingest` permission; sessions, service tokens and owner privilege alone are refused (403 `api_key_required` / `scope_required`). The request body is the bare `owt.match/1` document (Content-Type `application/json`, up to 25 MiB); the workspace is always the key's own. Idempotent per `(source.kind, source.external_id)` when an external id is present, otherwise per the SHA-256 of the exact request bytes: the same bytes return the existing job, changed bytes or discipline under one external id answer 409 `idempotency_conflict`. Answers 202 with the job while it is `pending`/`processing`, and 200 with the actual job when it already finished (`done`, `awaiting_link`, `failed`; a failed duplicate is never retried implicitly). A structurally valid document whose codes do not resolve is persisted as a failed job with diagnostics and answers 422 with `ingest_job_id`; malformed JSON answers 400, a non-JSON content type 415, an oversized body 413.",
@@ -33590,6 +33610,119 @@
       "title": "MatchIdentity",
       "type": "object"
     },
+    "stats.MatchImportInput": {
+      "description": "The game's match as its discipline's source names it (a match id); the stats service checks the shape.",
+      "properties": {
+        "external_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "External Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "external_id"
+      ],
+      "title": "MatchImportInput",
+      "type": "object"
+    },
+    "stats.MatchImportRead": {
+      "description": "One request to import a game's match by external id (``stats.match_fetch``).",
+      "properties": {
+        "attempts": {
+          "title": "Attempts",
+          "type": "integer"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "external_id": {
+          "title": "External Id",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "integer"
+        },
+        "last_error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Last Error"
+        },
+        "status": {
+          "enum": [
+            "pending",
+            "done",
+            "failed"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "warnings": {
+          "items": {
+            "$ref": "#/components/schemas/stats.MatchImportWarningRead"
+          },
+          "title": "Warnings",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "status",
+        "attempts",
+        "external_id",
+        "created_at"
+      ],
+      "title": "MatchImportRead",
+      "type": "object"
+    },
+    "stats.MatchImportWarningRead": {
+      "description": "An organizer warning about an import: ``fetch_failed``, ``participants_dropped`` (``count`` players fewer than\nthe tournament format's starters -- a mix round's own seats -- were observed) or ``banned_character_played``\n(``characters`` the game's hero room banned).",
+      "properties": {
+        "characters": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Characters",
+          "type": "array"
+        },
+        "code": {
+          "enum": [
+            "fetch_failed",
+            "participants_dropped",
+            "banned_character_played"
+          ],
+          "title": "Code",
+          "type": "string"
+        },
+        "count": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Count"
+        }
+      },
+      "required": [
+        "code"
+      ],
+      "title": "MatchImportWarningRead",
+      "type": "object"
+    },
     "stats.MatchParticipantDoc": {
       "additionalProperties": false,
       "properties": {
@@ -50022,7 +50155,7 @@
       "type": "object"
     },
     "tournament.MatchImportWarningRead": {
-      "description": "An organizer warning about an import: ``fetch_failed``, ``participants_dropped`` (``count`` players fewer than\nthe format's starters were observed) or ``banned_character_played`` (``characters`` the game's hero room banned).",
+      "description": "An organizer warning about an import: ``fetch_failed``, ``participants_dropped`` (``count`` players fewer than\nthe tournament format's starters -- a mix round's own seats -- were observed) or ``banned_character_played``\n(``characters`` the game's hero room banned).",
       "properties": {
         "characters": {
           "items": {

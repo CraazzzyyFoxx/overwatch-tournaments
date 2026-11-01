@@ -4,7 +4,7 @@ import { useState } from "react";
 
 import { useTranslations } from "next-intl";
 
-import { BarChart3, FileUp, History, Undo2 } from "lucide-react";
+import { BarChart3, FileDown, FileUp, History, Undo2 } from "lucide-react";
 
 import { CARD_TITLE_CLASS, lobbyLetter, teamAccent } from "@/app/balancer/mix/pickup-chrome";
 import type { MixLogUpload } from "@/app/balancer/mix/useMixLogUpload";
@@ -13,8 +13,17 @@ import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import { formatRelative } from "@/components/kit/format-time";
 import { LogUploadDialog } from "@/components/logs/LogUploadDialog";
 import MatchStatsDialog from "@/components/match/MatchStatsDialog";
+import { MatchImport } from "@/components/pick-ban/MatchImport";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger
+} from "@/components/ui/dialog";
 import { Eyebrow } from "@/components/ui/eyebrow";
 import { IconTooltip } from "@/components/ui/icon-tooltip";
 import { Spinner } from "@/components/ui/spinner";
@@ -212,6 +221,25 @@ function MatchHistoryRow({
             </Button>
           }
         />
+      ) : null}
+      {logUpload?.matchFetch ? (
+        // Statistics only: the round's recorded result is never touched.
+        <Dialog>
+          <DialogTrigger asChild>
+            <Button type="button" variant="ghost" size="icon-sm" aria-label={tHistory("importMatch")}>
+              <FileDown aria-hidden="true" />
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>{tHistory("importMatchTitle")}</DialogTitle>
+              <DialogDescription>{tHistory("importMatchDescription")}</DialogDescription>
+            </DialogHeader>
+            <MatchImport
+              scope={{ customGameId: logUpload.customGameId, encounterId: match.id, onSubmitted: logUpload.onUploaded }}
+            />
+          </DialogContent>
+        </Dialog>
       ) : null}
       {canUndo ? (
         <>

@@ -340,8 +340,8 @@ Full entity diagrams are in [`docs/database_erd.md`](./database_erd.md).
   raw bytes relayed by the gateway), the Overwatch Workshop decoder is a module that emits the same document, and
   `stats-worker` binds it to a game, replaces observations atomically and publishes `match.ingested`. A module with a
   `match_fetchers` entry (Deadlock's `deadlock_api`) also lets a captain or organizer import a tournament game's match
-  by its external id: `stats.match_fetch` holds the request, and the worker retries the module's fetcher for up to
-  24 h, then stores and queues the bytes exactly like an upload. The
+  by its external id, and a mix host a recorded round's (statistics only): `stats.match_fetch` holds the request, and
+  the worker retries the module's fetcher for up to 24 h, then stores and queues the bytes exactly like an upload. The
   tournament process alone decides whether that evidence becomes an official result (`logs_official`, owner
   policy, receipts on the encounter journal). `stats-svc` (RPC) and `stats-worker` (one ingest queue per selected
   discipline) are separate processes of one image. See the

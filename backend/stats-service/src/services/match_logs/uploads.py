@@ -5,7 +5,7 @@ import base64
 from typing import Any
 
 from loguru import logger
-from sqlalchemy import exists, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models, quota
@@ -164,7 +164,9 @@ class UploadService:
                 # another mix come back here too; its raw_ref names that mix. Its host's job is not ours to re-point.
                 if job.raw_ref != raw_ref:
                     raise HTTPException(status_code=409, detail="stats_upload_scope_conflict")
-                revived = await self._revive_mix_job(session, job, attached_encounter_id)
+                revived = attached_encounter_id is not None and await log_records_service.revive_orphan(
+                    session, job, encounter_id=attached_encounter_id, encounter_game_id=None
+                )
             # A reused job is requested too: its uploader still gets the job's result (claim fencing makes the extra
             # delivery of a live job a no-op). A revived one was re-pended (and requested) by its transition.
             if not revived:
@@ -181,23 +183,6 @@ class UploadService:
         except Exception:
             await session.rollback()
             raise
-
-    async def _revive_mix_job(self, session: AsyncSession, job: models.IngestJob, encounter_id: int | None) -> bool:
-        """Re-upload of the same bytes for a mix: a job with no ``stats.match`` is re-pointed at this encounter and
-        re-pended -- DONE-orphaned (Undo/Cancel deletes the encounter and its match with it), FAILED or AWAITING_LINK
-        (it was first uploaded to the wrong match). PENDING/PROCESSING is left alone: no re-point mid-flight."""
-        if encounter_id is None or job.status not in (
-            models.IngestJobStatus.DONE,
-            models.IngestJobStatus.FAILED,
-            models.IngestJobStatus.AWAITING_LINK,
-        ):
-            return False
-        if await session.scalar(select(exists().where(models.StatsMatch.ingest_job_id == job.id))):
-            return False
-        if job.hint_encounter_id != encounter_id:
-            await log_records_service.set_hints(session, job, encounter_id=encounter_id, encounter_game_id=None)
-        await log_records_service.transition(session, job, models.IngestJobStatus.PENDING, reset_attempts=True)
-        return True
 
     async def _resolve_lobby_encounter(self, session: AsyncSession, custom_game_id: int, lobby_index: int) -> int:
         """The lobby's live encounter, else its newest recorded one (Record clears the live pointer while the log is

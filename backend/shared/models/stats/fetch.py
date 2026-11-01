@@ -1,8 +1,9 @@
 """Matches stats core pulls from a discipline's producer by external id, before any bytes exist.
 
-A row is one request "fetch ``external_id`` from ``source_kind`` for this tournament game". The stats worker retries a
-``pending`` row (``next_attempt_at``) until the producer serves it - then the bytes are stored like an upload and
-``ingest_job_id`` names the normal ingest job - or until it gives up (``failed``, ``last_error``).
+A row is one request "fetch ``external_id`` from ``source_kind`` for this game" -- a tournament game, or a pickup mix
+round's (``hint_tournament_id`` NULL). The stats worker retries a ``pending`` row (``next_attempt_at``) until the
+producer serves it - then the bytes are stored like an upload and ``ingest_job_id`` names the normal ingest job - or
+until it gives up (``failed``, ``last_error``).
 """
 
 from datetime import datetime
@@ -28,6 +29,7 @@ class MatchFetch(db.TimeStampIntegerMixin):
         sa.UniqueConstraint("source_kind", "external_id", "hint_encounter_game_id", name="uq_match_fetch_game"),
         sa.Index("ix_match_fetch_due", "status", "next_attempt_at"),
         sa.Index("ix_match_fetch_workspace_external", "workspace_id", "source_kind", "external_id"),
+        sa.Index("ix_match_fetch_encounter", "hint_encounter_id"),
         {"schema": "stats"},
     )
 
@@ -39,8 +41,10 @@ class MatchFetch(db.TimeStampIntegerMixin):
     )
     source_kind: Mapped[str] = mapped_column(sa.String(32))
     external_id: Mapped[str] = mapped_column(sa.String(128))
-    hint_tournament_id: Mapped[int] = mapped_column(
-        sa.ForeignKey("tournament.tournament.id", name="fk_match_fetch_tournament", ondelete="CASCADE")
+    #: ``None``: a mix round (the encounter's ``custom_game_id`` names the mix).
+    hint_tournament_id: Mapped[int | None] = mapped_column(
+        sa.ForeignKey("tournament.tournament.id", name="fk_match_fetch_tournament", ondelete="CASCADE"),
+        nullable=True,
     )
     hint_encounter_id: Mapped[int] = mapped_column(
         sa.ForeignKey("encounter.encounter.id", name="fk_match_fetch_encounter", ondelete="CASCADE")

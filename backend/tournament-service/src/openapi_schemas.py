@@ -14,6 +14,7 @@ from __future__ import annotations
 from shared.core.pagination import Paginated
 from shared.rpc.openapi import Op, QueryParam
 from shared.schemas.match import MatchEventsRead
+from shared.schemas.match_import import MatchImportInput, MatchImportRead
 from shared.schemas.team_format import TeamFormatRead, TeamFormatWrite
 from shared.services.chat import (
     HISTORY_DEFAULT,
@@ -509,14 +510,10 @@ OPERATIONS: dict[str, Op] = {
     "rpc.tournament.captain_select_game_map": Op(request=captain_schemas.GameMapSelectInput),
     "rpc.tournament.admin_game_result": Op(request=pick_ban_admin.AdminGameResultInput),
     # ── a game's match imported by external id (src/rpc/match_import.py) ──
-    "rpc.tournament.captain_match_import": Op(
-        request=captain_schemas.MatchImportInput, response=captain_schemas.MatchImportRead
-    ),
-    "rpc.tournament.captain_match_imports": Op(response=captain_schemas.MatchImportRead, response_array=True),
-    "rpc.tournament.admin_match_import": Op(
-        request=captain_schemas.MatchImportInput, response=captain_schemas.MatchImportRead
-    ),
-    "rpc.tournament.admin_match_imports": Op(response=captain_schemas.MatchImportRead, response_array=True),
+    "rpc.tournament.captain_match_import": Op(request=MatchImportInput, response=MatchImportRead),
+    "rpc.tournament.captain_match_imports": Op(response=MatchImportRead, response_array=True),
+    "rpc.tournament.admin_match_import": Op(request=MatchImportInput, response=MatchImportRead),
+    "rpc.tournament.admin_match_imports": Op(response=MatchImportRead, response_array=True),
     # ── organizer pick-ban: config CRUD, the constructor, live overrides ───
     # Same rationale: the config upsert answers a serialized config dict and the
     # live-session ops answer the room state, so only the bodies are mapped.

@@ -9,6 +9,7 @@ import { NextIntlClientProvider } from "next-intl";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import en from "@/i18n/messages/en.json";
+import type { MixLogUpload } from "@/app/balancer/mix/useMixLogUpload";
 import type { CustomGameMatch } from "@/services/custom-game.service";
 
 import { MatchHistoryList } from "./MatchHistoryList";
@@ -60,7 +61,7 @@ function match(overrides: Partial<CustomGameMatch> = {}): CustomGameMatch {
   };
 }
 
-async function mount(matches: CustomGameMatch[], logUpload: { customGameId: number; onUploaded: () => void } | null = null) {
+async function mount(matches: CustomGameMatch[], logUpload: MixLogUpload | null = null) {
   const container = document.createElement("div");
   document.body.appendChild(container);
   await act(async () => {
@@ -119,7 +120,11 @@ describe("MatchHistoryList log actions", () => {
   });
 
   it("gives an uploader a per-round upload scoped to that round's encounter", async () => {
-    const scope = await mount([match({ id: 21 }), match({ id: 20 })], { customGameId: 4, onUploaded: vi.fn() });
+    const scope = await mount([match({ id: 21 }), match({ id: 20 })], {
+      customGameId: 4,
+      onUploaded: vi.fn(),
+      matchFetch: false,
+    });
 
     const scopes = [...scope.querySelectorAll('[data-testid="upload-dialog"]')].map((node) =>
       JSON.parse(node.getAttribute("data-scope") ?? "null"),
@@ -135,5 +140,16 @@ describe("MatchHistoryList log actions", () => {
     const scope = await mount([match()]);
 
     expect(scope.querySelector('[data-testid="upload-dialog"]')).toBeNull();
+  });
+
+  it("offers a per-round import by match ID only to a viewer who files logs for a game that fetches matches", async () => {
+    const fetching = await mount([match()], { customGameId: 4, onUploaded: vi.fn(), matchFetch: true });
+    expect(fetching.querySelector('button[aria-label="Import statistics by match ID"]')).not.toBeNull();
+
+    const notFetching = await mount([match()], { customGameId: 4, onUploaded: vi.fn(), matchFetch: false });
+    expect(notFetching.querySelector('button[aria-label="Import statistics by match ID"]')).toBeNull();
+
+    const viewer = await mount([match()]);
+    expect(viewer.querySelector('button[aria-label="Import statistics by match ID"]')).toBeNull();
   });
 });

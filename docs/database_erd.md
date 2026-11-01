@@ -13,7 +13,7 @@ baselines and Discord channels live in `stats/`. `catalog/` writes only to `cata
 > `--check` and fails on drift, so the diagrams cannot fall behind the models again.
 
 <!-- ERD:auto _alembic_head -->
-Alembic head: **`mixstatsmv01`** (161 revisions in `backend/migrations/versions/`).
+Alembic head: **`mixfetch01`** (162 revisions in `backend/migrations/versions/`).
 <!-- /ERD:auto -->
 
 **Reading the diagrams**
@@ -2574,10 +2574,11 @@ newest message the bot has already walked past, so a reconnect rescans from ther
 manual backfill) walks the history.
 
 `match_fetch` is a pending "import this match by its external id" request, one per
-`(source_kind, external_id, hint_encounter_game_id)`: the stats worker retries it (`pending`,
-`attempts`, `next_attempt_at`, `last_error`) until the discipline's fetcher serves the bytes, then
-stores them like an upload and points `ingest_job_id` at the normal ingest job (`done`), or gives
-up 24 h after the request (`failed`).
+`(source_kind, external_id, hint_encounter_game_id)`, for a tournament game or a pickup mix round's
+(`hint_tournament_id` NULL): the stats worker retries it (`pending`, `attempts`, `next_attempt_at`,
+`last_error`) until the discipline's fetcher serves the bytes, then stores them like an upload and
+points `ingest_job_id` at the normal ingest job (`done`), or gives up 24 h after the request
+(`failed`).
 
 <!-- ERD:auto stats -->
 ```mermaid
@@ -2674,7 +2675,7 @@ erDiagram
         varchar(32) discipline FK
         varchar(32) source_kind
         varchar(128) external_id
-        bigint hint_tournament_id FK
+        bigint hint_tournament_id FK "nullable"
         bigint hint_encounter_id FK
         bigint hint_encounter_game_id FK
         bigint requested_by_user_id FK "nullable"
@@ -2781,7 +2782,7 @@ erDiagram
     STATS_STAT_DEF ||--o{ STATS_FACT : "stat_id"
     STATS_STAT_DEF ||--o{ STATS_STAT_BASELINE : "stat_id"
     TOURNAMENT_TOURNAMENT |o--o{ STATS_INGEST_JOB : "hint_tournament_id"
-    TOURNAMENT_TOURNAMENT ||--o{ STATS_MATCH_FETCH : "hint_tournament_id"
+    TOURNAMENT_TOURNAMENT |o--o{ STATS_MATCH_FETCH : "hint_tournament_id"
     TOURNAMENT_TOURNAMENT ||--o| STATS_DISCORD_CHANNEL : "tournament_id"
 ```
 

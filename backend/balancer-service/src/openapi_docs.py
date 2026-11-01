@@ -668,10 +668,11 @@ DOCS: dict[str, dict] = {
             "Permission: public; no authentication required. Returns every round recorded for the mix, newest first: "
             "its two teams by slot (slot 1 banned first) with name and score, its hero bans {slot, item_id} in order, "
             "whose hero each pick was {slot, member_id, name, item_id} in pick order, "
-            "the winning slot (null for a draw), lobby, map, recorder and the rank points it applied, plus the uploaded "
-            'match log: stats_match_id (the bound stats match, null when none) and log_state ("processing" or '
-            '"failed" while there is no stats match and the newest upload for the match is pending/processing or '
-            "failed/awaiting a link, else null)."
+            "the winning slot (null for a draw), lobby, map, recorder and the rank points it applied, plus its "
+            'statistics: stats_match_id (the bound stats match, null when none) and log_state ("processing" while '
+            "there is no stats match and the newest uploaded log is pending/processing or the newest match import "
+            'waits for the game\'s source; else "failed" when that log failed/awaits a link or that import gave up; '
+            "else null)."
         ),
     },
     "rpc.balancer.custom.undo_match": {

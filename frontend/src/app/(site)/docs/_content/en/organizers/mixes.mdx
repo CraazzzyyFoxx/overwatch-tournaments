@@ -176,6 +176,12 @@ While a log is being parsed, the match row says **Log processing**; if it did no
 
 **Cancel match** and undoing a recorded match delete its statistics too. If you record the match again after an undo, upload the same file once more from its history row — it is parsed for the new match.
 
+### Statistics by match ID
+
+For a game whose matches the site fetches by ID (Deadlock today), each history row also has an **Import statistics by match ID** button, for the same people who may upload logs. Enter the match ID from the game's match history. The site fetches the match once the game's servers publish it — that can take a while, and it keeps trying for 24 hours — and the row says **Log processing** meanwhile. The window lists every ID filed for the match with its status, and warns when the match shows fewer players than the round seated: a player with a private game profile is left out of the statistics. As with a log, only statistics come in; the result is the one you recorded.
+
+A wrong ID is fixed by filing the right one: its statistics replace the previous ones. One match ID serves one match of the workspace. After an undo, file the same ID again from the re-recorded match's row.
+
 ## Mix statuses
 
 | Status | What it means |
@@ -213,6 +219,8 @@ Deleting a mix erases it completely and is available only to a workspace admin. 
 | The lobby stays in **Pre-game** and the room never shows the hero grid | The ban room did not open. Press **Cancel match** and start again. |
 | A log uploaded but there are no statistics and the row says **Log failed to bind** | The log did not match the match's lineup — it went to the wrong lobby, for example. Upload it from the right match's history row. |
 | The statistics are gone after a match was undone | That is by design. Record the match again and upload the same log from its history row. |
+| Filing a match ID says the match is already sent for another game | That ID is filed for another match of the workspace. Check which round it was played as. |
+| The row says **Log failed to bind** after a match ID | The game did not publish the match within 24 hours, or its players are not this round's. Check the ID in the import window and file it again. |
 
 ## See also
 

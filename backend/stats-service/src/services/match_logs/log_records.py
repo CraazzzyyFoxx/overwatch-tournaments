@@ -183,6 +183,25 @@ class LogRecordsService:
         job.hint_encounter_id = encounter_id
         job.hint_encounter_game_id = encounter_game_id
 
+    async def revive_orphan(
+        self, session: AsyncSession, job: models.IngestJob, *, encounter_id: int, encounter_game_id: int | None
+    ) -> bool:
+        """Re-point a locked job that has no ``stats.match`` at this encounter (and game) and re-pend it: DONE-orphaned
+        (a mix Undo/Cancel deletes the encounter and its match with it), FAILED or AWAITING_LINK (it was first filed
+        for the wrong match). PENDING/PROCESSING is left alone: no re-point mid-flight. The caller owns the commit."""
+        if job.status not in (
+            models.IngestJobStatus.DONE,
+            models.IngestJobStatus.FAILED,
+            models.IngestJobStatus.AWAITING_LINK,
+        ):
+            return False
+        if await session.scalar(sa.select(sa.exists().where(models.StatsMatch.ingest_job_id == job.id))):
+            return False
+        if (job.hint_encounter_id, job.hint_encounter_game_id) != (encounter_id, encounter_game_id):
+            await self.set_hints(session, job, encounter_id=encounter_id, encounter_game_id=encounter_game_id)
+        await self.transition(session, job, models.IngestJobStatus.PENDING, reset_attempts=True)
+        return True
+
     async def retry(
         self,
         session: AsyncSession,

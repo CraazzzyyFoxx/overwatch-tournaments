@@ -19,6 +19,7 @@ from sqlalchemy.orm import aliased, selectinload
 
 from shared import models
 from shared.core.enums import MapPoolEntryStatus, PickBanKind
+from shared.models.stats.fetch import MatchFetchStatus
 from shared.models.stats.ingest import IngestJobStatus
 from shared.repository.base import BaseRepository
 
@@ -30,6 +31,14 @@ _LOG_STATE = {
     IngestJobStatus.FAILED: "failed",
     IngestJobStatus.AWAITING_LINK: "failed",
 }
+#: A match imported by id is pending until the game's source serves it, then speaks through its ingest job.
+_FETCH_STATE = {MatchFetchStatus.PENDING: "processing", MatchFetchStatus.FAILED: "failed"}
+
+
+def _log_state(job_status: IngestJobStatus | None, fetch_status: MatchFetchStatus | None) -> str | None:
+    """Something still coming wins over something that failed."""
+    states = {_LOG_STATE.get(job_status), _FETCH_STATE.get(fetch_status)}
+    return "processing" if "processing" in states else "failed" if "failed" in states else None
 
 
 class CustomGameRoundRepository(BaseRepository[models.CustomGameRound]):
@@ -320,8 +329,9 @@ class CustomGameRoundRepository(BaseRepository[models.CustomGameRound]):
         self, session: AsyncSession, encounter_ids: Sequence[int]
     ) -> dict[int, tuple[int | None, str | None]]:
         """``encounter_id -> (stats_match_id, log_state)`` for every id, in ONE read. The match is the newest
-        ``stats.match`` bound to the encounter. Only while there is none does the newest ``stats.ingest_job`` hinted at
-        it speak: pending/processing -> ``"processing"``, failed/awaiting_link -> ``"failed"``, else ``None``. No ids,
+        ``stats.match`` bound to the encounter. Only while there is none do the newest ``stats.ingest_job`` and the
+        newest ``stats.match_fetch`` hinted at it speak: a pending/processing job or a pending import ->
+        ``"processing"``, else a failed/awaiting_link job or a failed import -> ``"failed"``, else ``None``. No ids,
         no query."""
         if not encounter_ids:
             return {}
@@ -337,12 +347,21 @@ class CustomGameRoundRepository(BaseRepository[models.CustomGameRound]):
             .limit(1)
             .scalar_subquery()
         )
+        fetch_status = (
+            sa.select(models.MatchFetch.status)
+            .where(models.MatchFetch.hint_encounter_id == models.Encounter.id)
+            .order_by(models.MatchFetch.created_at.desc(), models.MatchFetch.id.desc())
+            .limit(1)
+            .scalar_subquery()
+        )
         rows = await session.execute(
-            sa.select(models.Encounter.id, match_id, job_status).where(models.Encounter.id.in_(encounter_ids))
+            sa.select(models.Encounter.id, match_id, job_status, fetch_status).where(
+                models.Encounter.id.in_(encounter_ids)
+            )
         )
         return {
-            encounter_id: (matched, None if matched is not None else _LOG_STATE.get(status))
-            for encounter_id, matched, status in rows
+            encounter_id: (matched, None if matched is not None else _log_state(job, fetch))
+            for encounter_id, matched, job, fetch in rows
         }
 
     async def delete_round(self, session: AsyncSession, encounter_id: int) -> None:

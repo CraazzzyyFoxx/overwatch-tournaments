@@ -3,6 +3,7 @@ import type { RosterShape } from "@/lib/roster/shape";
 import type { RoleRef } from "@/lib/roster/team-format";
 import type { DiscordVoicePermission } from "@/types/discord.types";
 import type { PlayerIdentity } from "@/types/identity.types";
+import type { MatchImport, MatchImportInput } from "@/types/encounter.types";
 
 /** Where an effective rank came from, strongest first. */
 export type RankSource = "author" | "workspace" | "native";
@@ -378,7 +379,7 @@ export type CustomGameMatch = {
   picks: { slot: number; member_id: number; name: string; item_id: number }[];
   /** The parsed log's stats match bound to this round (newest if several); null while there is none. */
   stats_match_id: number | null;
-  /** Why a round with no stats yet shows a chip: its newest log is still being parsed, or could not be bound. */
+  /** Why a round with no stats yet shows a chip: its newest log or match import is still coming, or could not be bound. */
   log_state: "processing" | "failed" | null;
 };
 
@@ -586,6 +587,8 @@ export const customGameKeys = {
   one: (workspaceId: number, gameId: number) => ["custom-games", workspaceId, gameId] as const,
   byId: (gameId: number, workspaceId: number | null) =>
     ["custom-game-entity", gameId, workspaceId] as const,
+  /** One round's match imports (`matchId` = the round's encounter id). */
+  matchImports: (gameId: number, matchId: number) => ["custom-game-match-imports", gameId, matchId] as const,
   matches: (workspaceId: number, gameId: number) => ["custom-games", workspaceId, gameId, "matches"] as const,
   /**
    * Every lobby's rotation queue for one mix — the prefix the per-lobby keys
@@ -1212,6 +1215,19 @@ export const customGameService = {
       skipWorkspace: true,
       method: "POST",
       body: { lobby_index: lobbyIndex },
+    }).then((r) => r.json());
+  },
+
+  /** One round's match imports, newest first, warnings filled; the host (or a `log.create` holder) is the organizer. */
+  listMatchImports(gameId: number, matchId: number): Promise<MatchImport[]> {
+    return apiFetch(`/api/v1/custom-games/${gameId}/matches/${matchId}/match-import`).then((r) => r.json());
+  },
+
+  /** Files the game's own match id under a recorded round: only its statistics are imported, never its result. */
+  importMatch(gameId: number, matchId: number, externalId: string): Promise<MatchImport> {
+    return apiFetch(`/api/v1/custom-games/${gameId}/matches/${matchId}/match-import`, {
+      method: "POST",
+      body: { external_id: externalId } satisfies MatchImportInput,
     }).then((r) => r.json());
   },
 };

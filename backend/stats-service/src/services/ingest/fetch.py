@@ -1,16 +1,19 @@
 """Import a match by its external id: the pending request, the worker tick that pulls it, and its admin warnings.
 
-tournament-service authorizes the caller (a captain of the encounter, or ``match.result``) and names the game; this
-module resolves the encounter discipline's single ``match_fetchers`` kind and keeps one ``stats.match_fetch`` row per
-``(kind, external id, game)``. The worker tick calls the module's fetcher for due rows, retrying with backoff while it
-raises ``MatchFetchNotReady`` until :data:`FETCH_WINDOW` after the request, then gives up (``failed``). Fetched bytes
-are stored and queued exactly like an uploaded log (``logs/{tournament}/{sha256}``, the normal ingest job carrying the
-game hint), so the module's decoder, binding, ``logs_official`` and evidence rules apply unchanged.
+A tournament game's request comes from tournament-service, which authorizes the caller (a captain of the encounter,
+or ``match.result``) and names the game; a pickup mix round's comes from this service's own route, authorized here
+(:func:`mix_round_target`: the mix's host, a co-host, a superuser or workspace ``log.create``, the log upload's
+audience). This module resolves the encounter discipline's single ``match_fetchers`` kind and keeps one
+``stats.match_fetch`` row per ``(kind, external id, game)``. The worker tick calls the module's fetcher for due rows,
+retrying with backoff while it raises ``MatchFetchNotReady`` until :data:`FETCH_WINDOW` after the request, then gives
+up (``failed``). Fetched bytes are stored and queued exactly like an uploaded log (``logs/{tournament}/{sha256}`` or
+``logs/mix/{mix}/{sha256}``, the normal ingest job carrying the game hint), so the module's decoder, binding,
+``logs_official`` and evidence rules apply unchanged -- a mix round gets statistics, never a result.
 
 Warnings are derived when an admin reads the game's requests, never stored: ``fetch_failed`` (the row gave up),
-``participants_dropped`` (the bound observation seats fewer players on a team than the tournament's format starts -
-what a decoder dropping anonymous participants leaves behind) and ``banned_character_played`` (a character of the
-observation that the game's hero room banned).
+``participants_dropped`` (the bound observation seats fewer players on a team than the tournament's format starts,
+or than the mix round seated - what a decoder dropping anonymous participants leaves behind) and
+``banned_character_played`` (a character of the observation that the game's hero room banned).
 """
 
 from __future__ import annotations
@@ -35,11 +38,13 @@ from shared.messaging.config import ACHIEVEMENT_EVALUATE_QUEUE
 from shared.messaging.outbox import enqueue_outbox_event
 from shared.models import MatchFetch, MatchFetchStatus
 from shared.observability import observe_scheduled_job
+from shared.repository import CustomGameRepository
 from shared.repository.encounter import EncounterGameRepository
 from shared.repository.identity import UserRepository
 from shared.repository.match_fetch import MatchFetchRepository
 from shared.repository.stats import IngestJobRepository
 from shared.repository.tournament import TournamentRepository
+from shared.rpc.identity import ensure_workspace_permission
 from shared.schemas.events import AchievementEvaluateEvent
 from shared.services.distributed_lock import (
     DistributedLockUnavailable,
@@ -47,17 +52,20 @@ from shared.services.distributed_lock import (
     release_distributed_lock,
     renew_distributed_lock,
 )
+from shared.services.mix_hosts import is_mix_host
 from shared.services.scheduler import IntervalScheduler
 from shared.services.team_format import tournament_format
 from src.core import db
 from src.core.config import settings
 from src.services.ingest.jobs import lock_object, provenance_classifier
-from src.services.match_logs.log_records import compute_content_hash, enqueue_ingest_request
+from src.services.match_logs.admin_reads import _validate_attached_encounter
+from src.services.match_logs.log_records import compute_content_hash, enqueue_ingest_request, log_records_service
 from src.services.match_logs.realtime import emit_logs_updated
 
 __all__ = (
     "FETCH_WINDOW",
     "list_fetches",
+    "mix_round_target",
     "next_delay",
     "run_fetch_tick",
     "shutdown_scheduler",
@@ -81,6 +89,7 @@ _REASON_LIMIT = 500
 _fetches = MatchFetchRepository()
 _games = EncounterGameRepository()
 _jobs = IngestJobRepository()
+_mixes = CustomGameRepository()
 _tournaments = TournamentRepository()
 _users = UserRepository()
 _scheduler = IntervalScheduler(job_id="match_fetch_tick", label="Match fetch tick")
@@ -116,12 +125,37 @@ def _read(row: MatchFetch, warnings: list[dict[str, Any]] | None = None) -> dict
     }
 
 
+async def mix_round_target(
+    session: AsyncSession, user: models.AuthUser, *, custom_game_id: int, encounter_id: int
+) -> dict[str, Any]:
+    """A mix round's game as :func:`submit_fetch` / :func:`list_fetches` name it, for the log upload's audience: the
+    mix's host, a co-host or a superuser, else workspace ``log.create``. The mix's status is not checked: a closed mix
+    still takes imports. 404 for a round of another mix, or one without a live game."""
+    mix = await _mixes.get(session, custom_game_id)
+    if mix is None:
+        raise HTTPException(status_code=404, detail="Mix not found")
+    if not await is_mix_host(session, user, custom_game_id):
+        ensure_workspace_permission(user, mix.workspace_id, "log", "create")
+    encounter = await _validate_attached_encounter(session, custom_game_id=custom_game_id, encounter_id=encounter_id)
+    games = await _games.list_for_encounter(session, encounter.id)
+    if not games:
+        raise HTTPException(status_code=404, detail="Game not found")
+    return {
+        "workspace_id": encounter.workspace_id,
+        "discipline": encounter.discipline,
+        "tournament_id": None,
+        "encounter_id": encounter.id,
+        # A mix round is a Bo1.
+        "encounter_game_id": games[0].id,
+    }
+
+
 async def submit_fetch(session: AsyncSession, *, data: dict[str, Any], requested_by_user_id: int | None) -> dict:
     """Request (or re-request) one game's match; idempotent per ``(kind, external id, game)``.
 
-    ``data`` comes from tournament-service, which already authorized the caller for this encounter: ``workspace_id``,
-    ``discipline``, ``tournament_id``, ``encounter_id``, ``encounter_game_id`` and the caller's ``external_id``. A
-    failed request is reset (a fresh 24 h window); a live or done one is returned as it is.
+    ``data`` names a game its caller already authorized: ``workspace_id``, ``discipline``, ``tournament_id`` (``None``
+    for a mix round), ``encounter_id``, ``encounter_game_id`` and the caller's ``external_id``. A failed request is
+    reset (a fresh 24 h window); a live or done one is returned as it is.
     """
     kind = source_kind_of(data["discipline"])
     external_id = data.get("external_id")
@@ -129,6 +163,7 @@ async def submit_fetch(session: AsyncSession, *, data: dict[str, Any], requested
         raise _refuse(422, "invalid_external_id", "external_id must be 1-128 letters, digits or _.:-")
     game_id = int(data["encounter_game_id"])
     workspace_id = int(data["workspace_id"])
+    tournament_id = data.get("tournament_id")
     # Held through the insert/reset and the commit below: a concurrent request of another game waits here and then
     # sees this one's committed row.
     await _fetches.lock_match(session, workspace_id=workspace_id, source_kind=kind, external_id=external_id)
@@ -146,7 +181,7 @@ async def submit_fetch(session: AsyncSession, *, data: dict[str, Any], requested
         discipline=data["discipline"],
         source_kind=kind,
         external_id=external_id,
-        hint_tournament_id=int(data["tournament_id"]),
+        hint_tournament_id=None if tournament_id is None else int(tournament_id),
         hint_encounter_id=int(data["encounter_id"]),
         hint_encounter_game_id=game_id,
         requested_by_user_id=requested_by_user_id,
@@ -173,20 +208,36 @@ async def _warnings(session: AsyncSession, row: MatchFetch) -> list[dict[str, An
         return []
     warnings: list[dict[str, Any]] = []
     team, player = models.StatsMatchTeam, models.StatsMatchPlayer
-    seated = (
-        await session.execute(
-            sa.select(sa.func.count(player.workspace_member_id))
-            .select_from(team)
-            .outerjoin(
-                player, sa.and_(player.match_id == team.match_id, player.encounter_team_id == team.encounter_team_id)
+    seated = dict(
+        (
+            await session.execute(
+                sa.select(team.encounter_team_id, sa.func.count(player.workspace_member_id))
+                .select_from(team)
+                .outerjoin(
+                    player,
+                    sa.and_(player.match_id == team.match_id, player.encounter_team_id == team.encounter_team_id),
+                )
+                .where(team.match_id == match.id)
+                .group_by(team.encounter_team_id)
             )
-            .where(team.match_id == match.id)
-            .group_by(team.encounter_team_id)
+        ).all()
+    )
+    if row.hint_tournament_id is None:
+        # A mix has no format: the round's own seats are what the match should show.
+        member = models.EncounterTeamMember
+        expected = dict(
+            (
+                await session.execute(
+                    sa.select(member.encounter_team_id, sa.func.count())
+                    .where(member.encounter_id == match.encounter_id, member.active.is_(True))
+                    .group_by(member.encounter_team_id)
+                )
+            ).all()
         )
-    ).scalars()
-    tournament = await _tournaments.get(session, row.hint_tournament_id)
-    starters = (await tournament_format(session, tournament))[0].starter_min
-    if dropped := sum(max(0, starters - count) for count in seated):
+    else:
+        tournament = await _tournaments.get(session, row.hint_tournament_id)
+        expected = dict.fromkeys(seated, (await tournament_format(session, tournament))[0].starter_min)
+    if dropped := sum(max(0, expected.get(team_id, 0) - count) for team_id, count in seated.items()):
         warnings.append({"code": "participants_dropped", "count": dropped, "characters": []})
     game = await _games.get(session, match.encounter_game_id)
     entry, room, entity = models.PickBanEntry, models.PickBanSession, models.CatalogEntity
@@ -228,8 +279,32 @@ def _reason(exc: BaseException, default: str) -> str:
 
 async def _store(session: AsyncSession, row: MatchFetch, raw: bytes, s3: S3Client) -> int:
     """The upload path's store and queue (``UploadService.store_uploaded_log_bytes``) for fetched bytes."""
+    # One job per workspace's match: an existing one is the match's, whatever the producer answers now (it may
+    # enrich a match later). Orphaned by a mix Undo (the round and its match deleted), it follows this request.
+    job = await session.scalar(
+        sa.select(models.IngestJob)
+        .where(
+            models.IngestJob.workspace_id == row.workspace_id,
+            models.IngestJob.source_kind == row.source_kind,
+            models.IngestJob.external_id == row.external_id,
+        )
+        .with_for_update()
+    )
+    if job is not None:
+        if job.hint_tournament_id != row.hint_tournament_id or not await log_records_service.revive_orphan(
+            session, job, encounter_id=row.hint_encounter_id, encounter_game_id=row.hint_encounter_game_id
+        ):
+            await enqueue_ingest_request(session, job.id, discipline=job.discipline)
+        return job.id
     content_hash = compute_content_hash(raw)
-    raw_ref = f"logs/{row.hint_tournament_id}/{content_hash}"
+    if row.hint_tournament_id is not None:
+        owner = str(row.hint_tournament_id)
+    else:
+        mix = await session.scalar(
+            sa.select(models.Encounter.custom_game_id).where(models.Encounter.id == row.hint_encounter_id)
+        )
+        owner = f"mix/{mix}"
+    raw_ref = f"logs/{owner}/{content_hash}"
     await lock_object(session, raw_ref)
     if not await s3.put_object(raw_ref, raw):
         raise MatchFetchNotReady("raw_storage_unavailable")

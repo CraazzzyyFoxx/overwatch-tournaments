@@ -18,11 +18,11 @@ from shared.core.errors import ApiExc
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.messaging.rpc import request_dict
 from shared.rpc.identity import ensure_workspace_permission
+from shared.schemas.match_import import MatchImportInput
 from shared.schemas.rpc import rpc_error
 from shared.services.scrim_scope import is_scrim_container
 from src.core import auth
 from src.rpc._helpers import _identity, _path_int, _payload, _require_id, _run
-from src.schemas.captain import MatchImportInput
 from src.services.encounter.captain import captain_service
 from src.services.encounter.games import encounter_game_service
 

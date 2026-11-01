@@ -12,6 +12,7 @@ import typing
 from shared.core.pagination import Paginated, PaginationQueryParams, PaginationSortQueryParams
 from shared.rpc.openapi import Op, QueryParam
 from shared.schemas.match_doc import MatchDoc
+from shared.schemas.match_import import MatchImportInput, MatchImportRead
 from src import schemas
 
 # Sort-field whitelists of the public reads mirror the handlers' Literal constraints. Drift only affects the `sort`
@@ -35,6 +36,8 @@ OPERATIONS: dict[str, Op] = {
     "rpc.stats.ingest.get": Op(response=schemas.IngestJobRead),
     "rpc.stats.ingest.game_observation": Op(response=schemas.GameObservationRead),
     "rpc.stats.ingest.bind": Op(request=schemas.BindIngestRequest, response=schemas.IngestJobRead),
+    "rpc.stats.ingest.mix_fetch": Op(request=MatchImportInput, response=MatchImportRead),
+    "rpc.stats.ingest.mix_fetch_list": Op(response=MatchImportRead, response_array=True),
     # ── match-log admin ────────────────────────────────────────────────────
     "rpc.stats.logs.queue_status": Op(response=schemas.QueueDepth, response_array=True),
     "rpc.stats.logs.history": Op(

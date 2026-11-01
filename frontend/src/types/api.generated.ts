@@ -6661,7 +6661,7 @@ export interface paths {
         put?: never;
         /**
          * Upload match logs
-         * @description Permission: workspace `log.create` in the tournament's workspace. Multipart (base64) upload of one or more log files for a tournament, storing each to S3 and enqueueing processing, with per-file errors collected. Metered: over quota the call answers 429 with `code=rate_limited` and the exceeded limit in `details.limit_name`.
+         * @description Permission: workspace `log.create` in the tournament's workspace (tournament variant: `tournament_id`, optional `encounter_id`), or — for a pickup mix (`custom_game_id` plus exactly one of `encounter_id` / `lobby_index`) — the mix's host, a co-host or a superuser, or workspace `log.create` in the mix's workspace (the mix's status is not checked). A mix `lobby_index` (0-based) resolves server-side to the lobby's live encounter, else its newest recorded one (422 `no_mix_match` when neither exists); a mix `encounter_id` that is not that mix's is 404. Giving both or neither of `tournament_id` / `custom_game_id` is 422. Multipart (base64) upload of one or more log files, storing each to S3 and enqueueing processing, with per-file errors collected. Re-uploading the same file for a mix revives a job whose match was removed by a mix Undo/Cancel. Metered: over quota the call answers 429 with `code=rate_limited` and the exceeded limit in `details.limit_name`.
          *
          *     RPC subject: `rpc.stats.logs.upload`
          */
@@ -10571,7 +10571,7 @@ export interface paths {
         };
         /**
          * List custom game matches
-         * @description Permission: public; no authentication required. Returns every round recorded for the mix, newest first: its two teams by slot (slot 1 banned first) with name and score, its hero bans {slot, item_id} in order, whose hero each pick was {slot, member_id, name, item_id} in pick order, the winning slot (null for a draw), lobby, map, recorder and the rank points it applied.
+         * @description Permission: public; no authentication required. Returns every round recorded for the mix, newest first: its two teams by slot (slot 1 banned first) with name and score, its hero bans {slot, item_id} in order, whose hero each pick was {slot, member_id, name, item_id} in pick order, the winning slot (null for a draw), lobby, map, recorder and the rank points it applied, plus its statistics: stats_match_id (the bound stats match, null when none) and log_state ("processing" while there is no stats match and the newest uploaded log is pending/processing or the newest match import waits for the game's source; else "failed" when that log failed/awaits a link or that import gave up; else null).
          *
          *     RPC subject: `rpc.balancer.custom.match_history`
          */
@@ -11152,6 +11152,34 @@ export interface paths {
         get: operations["get__api_v1_balancer_workspaces__workspace_id__ranks"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/custom-games/{custom_game_id}/matches/{match_id}/match-import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a mix round's match imports
+         * @description Permission: same as the submit. The round's import requests, newest first, shaped like the submit's answer, with the organizer warnings: `fetch_failed`, `participants_dropped` (`count` players the round seated but the match does not show, e.g. private profiles) and `banned_character_played`.
+         *
+         *     RPC subject: `rpc.stats.ingest.mix_fetch_list`
+         */
+        get: operations["get__api_v1_custom_games__custom_game_id__matches__match_id__match_import"];
+        put?: never;
+        /**
+         * Import a mix round's match by its external id
+         * @description Permission: the mix's host, a co-host or a superuser, or workspace `log.create` in the mix's workspace (the log upload's audience; the mix's status is not checked). Body `{external_id}`: the round's match as its discipline's source names it (422 `invalid_external_id` for another shape, 422 `unsupported_ingestor` for a game without a match fetcher). The worker fetches it, retrying with backoff for 24 h while the source does not serve it yet, then stores it like an uploaded log and ingests it as statistics of the round: the round's result is never touched, and the statistics stay inside the mix. Idempotent per `(external_id, round)`; a failed request is reset to pending. Another id for the same round replaces its statistics once ingested. One match id serves one game of a workspace: 409 `match_already_imported` while another game holds it. 404 for a round of another mix. Returns the request `{id, status (pending|done|failed), attempts, last_error, external_id, created_at, warnings}`.
+         *
+         *     RPC subject: `rpc.stats.ingest.mix_fetch`
+         */
+        post: operations["post__api_v1_custom_games__custom_game_id__matches__match_id__match_import"];
         delete?: never;
         options?: never;
         head?: never;
@@ -19089,8 +19117,11 @@ export interface components {
              */
             teams: components["schemas"]["tournament.EncounterTeamRead"][];
             tournament: components["schemas"]["tournament.TournamentRead"] | null;
-            /** Tournament Id */
-            tournament_id: number;
+            /**
+             * Tournament Id
+             * @default null
+             */
+            tournament_id: number | null;
             /** Workspace Id */
             workspace_id: number;
         };
@@ -19467,7 +19498,8 @@ export interface components {
         /**
          * MatchImportWarningRead
          * @description An organizer warning about an import: ``fetch_failed``, ``participants_dropped`` (``count`` players fewer than
-         *     the format's starters were observed) or ``banned_character_played`` (``characters`` the game's hero room banned).
+         *     the tournament format's starters -- a mix round's own seats -- were observed) or ``banned_character_played``
+         *     (``characters`` the game's hero room banned).
          */
         "tournament.MatchImportWarningRead": {
             /** Characters */
@@ -25825,6 +25857,16 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /**
+             * Custom Game Id
+             * @default null
+             */
+            custom_game_id: number | null;
+            /**
+             * Custom Game Name
+             * @default null
+             */
+            custom_game_name: string | null;
             /** @default null */
             error: components["schemas"]["stats.IngestError"] | null;
             /** Error Message */
@@ -25933,6 +25975,63 @@ export interface components {
             errors: components["schemas"]["stats.LogUploadError"][];
             /** Uploaded */
             uploaded: components["schemas"]["stats.LogUploadItem"][];
+        };
+        /**
+         * MatchImportInput
+         * @description The game's match as its discipline's source names it (a match id); the stats service checks the shape.
+         */
+        "stats.MatchImportInput": {
+            /** External Id */
+            external_id: string;
+        };
+        /**
+         * MatchImportRead
+         * @description One request to import a game's match by external id (``stats.match_fetch``).
+         */
+        "stats.MatchImportRead": {
+            /** Attempts */
+            attempts: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** External Id */
+            external_id: string;
+            /** Id */
+            id: number;
+            /**
+             * Last Error
+             * @default null
+             */
+            last_error: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: StatsMatchImportReadStatus;
+            /** Warnings */
+            warnings?: components["schemas"]["stats.MatchImportWarningRead"][];
+        };
+        /**
+         * MatchImportWarningRead
+         * @description An organizer warning about an import: ``fetch_failed``, ``participants_dropped`` (``count`` players fewer than
+         *     the tournament format's starters -- a mix round's own seats -- were observed) or ``banned_character_played``
+         *     (``characters`` the game's hero room banned).
+         */
+        "stats.MatchImportWarningRead": {
+            /** Characters */
+            characters?: string[];
+            /**
+             * Code
+             * @enum {string}
+             */
+            code: StatsMatchImportWarningReadCode;
+            /**
+             * Count
+             * @default null
+             */
+            count: number | null;
         };
         /** OverrideCreate */
         "stats.OverrideCreate": {
@@ -56695,8 +56794,10 @@ export interface operations {
         requestBody: {
             content: {
                 "multipart/form-data": {
+                    custom_game_id?: string;
                     encounter_id?: string;
                     "files[]": string[];
+                    lobby_index?: string;
                     tournament_id?: string;
                 };
             };
@@ -76443,6 +76544,168 @@ export interface operations {
             };
         };
     };
+    get__api_v1_custom_games__custom_game_id__matches__match_id__match_import: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                custom_game_id: string;
+                match_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["stats.MatchImportRead"][];
+                };
+            };
+            /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not authorized (`forbidden`). Authenticated, but the credential lacks the permission, workspace, or scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post__api_v1_custom_games__custom_game_id__matches__match_id__match_import: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                custom_game_id: string;
+                match_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["stats.MatchImportInput"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["stats.MatchImportRead"];
+                };
+            };
+            /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not authorized (`forbidden`). Authenticated, but the credential lacks the permission, workspace, or scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     get__api_v1_division_grids_by_workspace__workspace_id_: {
         parameters: {
             query?: never;
@@ -82481,6 +82744,16 @@ export enum StatsCatalogSyncStateStatus {
     running = "running",
     done = "done",
     failed = "failed"
+}
+export enum StatsMatchImportReadStatus {
+    pending = "pending",
+    done = "done",
+    failed = "failed"
+}
+export enum StatsMatchImportWarningReadCode {
+    fetch_failed = "fetch_failed",
+    participants_dropped = "participants_dropped",
+    banned_character_played = "banned_character_played"
 }
 export enum StreamStreamPollHealthReadStatusAnyOf0 {
     ok = "ok",
