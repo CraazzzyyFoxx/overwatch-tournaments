@@ -376,6 +376,10 @@ export type CustomGameMatch = {
   bans: { slot: number; item_id: number }[];
   /** Each player's hero, in pick order (spec §11.6). */
   picks: { slot: number; member_id: number; name: string; item_id: number }[];
+  /** The parsed log's stats match bound to this round (newest if several); null while there is none. */
+  stats_match_id: number | null;
+  /** Why a round with no stats yet shows a chip: its newest log is still being parsed, or could not be bound. */
+  log_state: "processing" | "failed" | null;
 };
 
 /** Patch semantics: an omitted key is left untouched on the server. */

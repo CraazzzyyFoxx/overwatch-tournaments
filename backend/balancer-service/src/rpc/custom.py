@@ -609,9 +609,11 @@ def _dump_round(
     map_info: dict[int, tuple[str, str | None]],
     bans: list[dict[str, int]],
     picks: list[dict[str, int | str]],
+    log: tuple[int | None, str | None],
 ) -> dict[str, Any]:
     """One recorded round as the history wire spells it: the two seats by slot, the winning slot, the hero bans and
     whose hero each pick was."""
+    stats_match_id, log_state = log
     encounter = round_.encounter
     teams = sorted(encounter.teams, key=lambda team: team.slot)
     map_id = encounter.games[0].map_id if encounter.games else None
@@ -638,18 +640,30 @@ def _dump_round(
         "recorded_by": encounter.result_audit[0].actor_user_id if encounter.result_audit else None,
         # Confirmed, not created: a round's encounter is created when its match starts (Decision 7).
         "recorded_at": encounter.confirmed_at.isoformat() if encounter.confirmed_at else None,
+        # The uploaded match log: the bound stats match, else (while there is none) whether the newest upload for this
+        # encounter is still being parsed or could not be bound.
+        "stats_match_id": stats_match_id,
+        "log_state": log_state,
     }
 
 
 async def _dump_rounds(session: Any, rounds: list[Any]) -> list[dict[str, Any]]:
-    """Dump match history, resolving every round's map name and thumbnail and its hero bans and picks in one read
-    each."""
+    """Dump match history, resolving every round's map name and thumbnail, its hero bans and picks and its match log
+    in one read each."""
+    encounter_ids = [round_.encounter.id for round_ in rounds]
     map_ids = {round_.encounter.games[0].map_id for round_ in rounds if round_.encounter.games} - {None}
     map_info = await custom_game_service.round_map_info(session, map_ids)
-    bans = await custom_game_service.mix_rounds.hero_bans(session, [round_.encounter.id for round_ in rounds])
-    picks = await custom_game_service.mix_rounds.hero_picks(session, [round_.encounter.id for round_ in rounds])
+    bans = await custom_game_service.mix_rounds.hero_bans(session, encounter_ids)
+    picks = await custom_game_service.mix_rounds.hero_picks(session, encounter_ids)
+    logs = await custom_game_service.mix_rounds.match_logs(session, encounter_ids)
     return [
-        _dump_round(round_, map_info, bans.get(round_.encounter.id, []), picks.get(round_.encounter.id, []))
+        _dump_round(
+            round_,
+            map_info,
+            bans.get(round_.encounter.id, []),
+            picks.get(round_.encounter.id, []),
+            logs.get(round_.encounter.id, (None, None)),
+        )
         for round_ in rounds
     ]
 

@@ -39,6 +39,15 @@ def register(broker: Any, logger: Any) -> None:
 
         return await c.envelope(logger, "logs.queue_status", op, session_factory=_SF)
 
+    def _optional_int(data: dict, key: str) -> int | None:
+        raw = data.get(key)
+        if raw in (None, ""):
+            return None
+        try:
+            return int(raw)
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=422, detail=f"{key} is invalid") from exc
+
     async def _authorize_scope(
         session: Any,
         data: dict,
@@ -149,18 +158,41 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             user = c.actor(data)
             c.require_active(user)
-            tournament_id = c.require_path_int(data, "tournament_id")
-            await auth.require_tournament_id_permission(
-                session, user, tournament_id=tournament_id, resource="log", action="create"
-            )
-            raw_encounter = data.get("encounter_id")
+            raw_tournament, raw_mix = (data.get(k) not in (None, "") for k in ("tournament_id", "custom_game_id"))
+            if raw_tournament == raw_mix:
+                raise HTTPException(
+                    status_code=422, detail="Exactly one of tournament_id or custom_game_id is required"
+                )
+            encounter_id = _optional_int(data, "encounter_id")
+            if not raw_mix:
+                tournament_id = c.require_path_int(data, "tournament_id")
+                await auth.require_tournament_id_permission(
+                    session, user, tournament_id=tournament_id, resource="log", action="create"
+                )
+                return await upload_service.upload_batch(
+                    session,
+                    _clients.s3_client,
+                    user=user,
+                    data=data,
+                    tournament_id=tournament_id,
+                    encounter_id=encounter_id,
+                    files=data.get("files") or [],
+                )
+            lobby_index = _optional_int(data, "lobby_index")
+            if (encounter_id is None) == (lobby_index is None) or (lobby_index is not None and lobby_index < 0):
+                raise HTTPException(
+                    status_code=422,
+                    detail="A mix upload needs exactly one of encounter_id or a non-negative lobby_index",
+                )
+            # The mix host / `log.create` permission needs the mix row, so the service checks it (D1).
             return await upload_service.upload_batch(
                 session,
                 _clients.s3_client,
                 user=user,
                 data=data,
-                tournament_id=tournament_id,
-                encounter_id=int(raw_encounter) if raw_encounter not in (None, "") else None,
+                custom_game_id=c.require_path_int(data, "custom_game_id"),
+                encounter_id=encounter_id,
+                lobby_index=lobby_index,
                 files=data.get("files") or [],
             )
 

@@ -26,9 +26,9 @@ import { getApiErrorMessage } from "@/lib/api/error";
 import type { LogBindRequest, LogProcessingRecord } from "@/types/admin.types";
 import type { Encounter } from "@/types/encounter.types";
 import {
-  TournamentLogUploadDialog,
-  type TournamentLogUploadHandle
-} from "@/components/logs/TournamentLogUploadDialog";
+  LogUploadDialog,
+  type LogUploadHandle
+} from "@/components/logs/LogUploadDialog";
 import {
   getTournamentWorkspaceQueryKeys,
   invalidateTournamentWorkspace
@@ -223,7 +223,7 @@ export function TournamentLogsTab({
     onAttach: setAttachTarget
   });
 
-  const uploadRef = useRef<TournamentLogUploadHandle>(null);
+  const uploadRef = useRef<LogUploadHandle>(null);
   const commands: TableCommand[] = [
     {
       id: "upload",
@@ -338,9 +338,9 @@ export function TournamentLogsTab({
         />
       </div>
       {canUploadLogs && tournamentId != null ? (
-        <TournamentLogUploadDialog
+        <LogUploadDialog
           ref={uploadRef}
-          tournamentId={tournamentId}
+          scope={{ tournamentId }}
           encounters={encounters}
           onUploaded={() => {
             invalidateTournamentWorkspace(queryClient, tournamentId);

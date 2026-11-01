@@ -75,6 +75,40 @@ func TestAdminLogsUploadMessageIsByteIdenticalToTheOldEncoding(t *testing.T) {
 	}
 }
 
+// The mix variant carries custom_game_id + lobby_index (and no tournament_id); empty fields are dropped.
+func TestAdminLogsUploadForwardsTheMixFields(t *testing.T) {
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	fw, _ := mw.CreateFormFile("files[]", "a.log")
+	_, _ = fw.Write([]byte("line"))
+	_ = mw.WriteField("custom_game_id", "77")
+	_ = mw.WriteField("lobby_index", "0")
+	_ = mw.WriteField("tournament_id", "")
+	_ = mw.Close()
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/admin/logs/upload", &buf)
+	r.Header.Set("Content-Type", mw.FormDataContentType())
+
+	f := &fakeCaller{reply: envelope(`{}`)}
+	w := httptest.NewRecorder()
+	logsBinary(f).AdminLogsUpload(w, r)
+	if w.Code != http.StatusOK {
+		t.Fatalf("code=%d body=%s", w.Code, w.Body)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(f.body, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got["custom_game_id"] != "77" || got["lobby_index"] != "0" {
+		t.Fatalf("mix fields not forwarded: %s", f.body)
+	}
+	if _, ok := got["tournament_id"]; ok {
+		t.Fatalf("empty tournament_id must be dropped: %s", f.body)
+	}
+	if _, ok := got["encounter_id"]; ok {
+		t.Fatalf("absent encounter_id must be dropped: %s", f.body)
+	}
+}
+
 // Admission runs before the body is parsed: with the budget held elsewhere the
 // upload and the ingest are both shed with 503 + Retry-After, never relayed.
 func TestUploadsAreShedWhenTheMemoryBudgetIsSpent(t *testing.T) {

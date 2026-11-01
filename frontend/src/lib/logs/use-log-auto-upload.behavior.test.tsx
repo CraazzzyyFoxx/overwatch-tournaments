@@ -43,7 +43,7 @@ it("ignores existing files, waits for quiet, uploads once, retries a rejected fi
   files.set("old.log", { lastModified: 1, body: "old" });
 
   function Probe() {
-    useLogAutoUpload({ enabled: true, tournamentId: 42, encounterId: 7 });
+    useLogAutoUpload({ enabled: true, scope: { tournamentId: 42, encounterId: 7 } });
     return null;
   }
   const root = createRoot(document.createElement("div"));
@@ -81,7 +81,7 @@ it("never watches on a page that did not opt in, even with the account setting o
   vi.useFakeTimers();
   upload.mockClear();
   function AdminProbe() {
-    useLogAutoUpload({ enabled: false, tournamentId: 42, encounterId: null });
+    useLogAutoUpload({ enabled: false, scope: { tournamentId: 42, encounterId: null } });
     return null;
   }
   const root = createRoot(document.createElement("div"));
@@ -89,5 +89,30 @@ it("never watches on a page that did not opt in, even with the account setting o
   files.set("admin-page.log", { lastModified: Date.now(), body: "0,match_end,1" });
   await act(async () => { await vi.advanceTimersByTimeAsync(120_000); });
   expect(upload).not.toHaveBeenCalled();
+  act(() => root.unmount());
+});
+
+it("targets a mix lobby and keeps watching when the host re-renders with an equal scope object", async () => {
+  vi.useFakeTimers();
+  upload.mockReset();
+  files.clear();
+  const baseline = Date.now();
+  files.set("old.log", { lastModified: baseline, body: "old" });
+  function LobbyProbe() {
+    // A fresh object each render, as the lobby room builds it: only its value may restart the watcher.
+    useLogAutoUpload({ enabled: true, scope: { customGameId: 5, lobbyIndex: 1 } });
+    return null;
+  }
+  const root = createRoot(document.createElement("div"));
+  await act(async () => root.render(<LobbyProbe />));
+  const tick = async (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
+  await tick(5_000);
+  await act(async () => root.render(<LobbyProbe />));
+  files.set("mix.log", { lastModified: Date.now(), body: "0,match_start,0\n0,match_end,9" });
+  upload.mockResolvedValue({ uploaded: [{ filename: "mix.log" }], errors: [] });
+  await tick(40_000);
+  expect(upload).toHaveBeenCalledTimes(1);
+  expect(upload.mock.calls[0][0]).toMatchObject({ customGameId: 5, lobbyIndex: 1 });
+  expect(upload.mock.calls[0][0]).not.toHaveProperty("encounterId");
   act(() => root.unmount());
 });

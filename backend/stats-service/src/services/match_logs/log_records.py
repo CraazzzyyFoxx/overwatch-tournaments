@@ -162,6 +162,27 @@ class LogRecordsService:
                 routing_key=ACHIEVEMENT_EVALUATE_QUEUE.name,
             )
 
+    async def set_hints(
+        self, session: AsyncSession, job: models.IngestJob, *, encounter_id: int, encounter_game_id: int | None
+    ) -> None:
+        """Re-point a locked job's encounter hints with its evidence row; the caller owns validation and the commit."""
+        scopes = owner_scopes("job", (job.id,))
+        before = await capture_stats_evidence(session, scopes=scopes)
+        await self._repo.update_hints(session, job, encounter_id=encounter_id, encounter_game_id=encounter_game_id)
+        after = await capture_stats_evidence(session, scopes=scopes)
+        await stage_stats_evidence(
+            session,
+            operation="stats.job_hint",
+            before=before,
+            after=after,
+            workspace_id=job.workspace_id,
+            entity_type="ingest_job",
+            entity_id=job.id,
+        )
+        # ``update_hints`` is a statement update: keep the loaded row (and what the caller reports) in step.
+        job.hint_encounter_id = encounter_id
+        job.hint_encounter_game_id = encounter_game_id
+
     async def retry(
         self,
         session: AsyncSession,
@@ -196,7 +217,7 @@ class LogRecordsService:
                 .where(
                     models.Encounter.id == target,
                     models.Encounter.workspace_id == workspace_id,
-                    models.Encounter.tournament_id == scope.hint_tournament_id,
+                    models.Encounter.tournament_id.is_not_distinct_from(scope.hint_tournament_id),
                     models.Encounter.discipline == scope.discipline,
                 )
                 .with_for_update(read=True)
@@ -246,7 +267,9 @@ class LogRecordsService:
         if (next_encounter, next_game) != (job.hint_encounter_id, job.hint_encounter_game_id):
             if linked is not None:
                 raise BaseAPIException(status_code=409, detail="A linked log cannot be re-attached")
-            encounter = await EncounterRepository().get(session, next_encounter)
+            # Owner-explicit read: a mix job (NULL tournament) re-attaches to a mix encounter, which the
+            # tournament-only ``get`` would hide; the owner comparison below keeps the two worlds apart.
+            encounter = await EncounterRepository().get_any_owner(session, next_encounter)
             if (
                 encounter is None
                 or encounter.tournament_id != job.hint_tournament_id
@@ -254,19 +277,7 @@ class LogRecordsService:
                 or encounter.discipline != job.discipline
             ):
                 raise BaseAPIException(status_code=422, detail="stats_upload_hint_conflict")
-            scopes = owner_scopes("job", (job.id,))
-            before = await capture_stats_evidence(session, scopes=scopes)
-            await self._repo.update_hints(session, job, encounter_id=next_encounter, encounter_game_id=next_game)
-            after = await capture_stats_evidence(session, scopes=scopes)
-            await stage_stats_evidence(
-                session,
-                operation="stats.job_hint",
-                before=before,
-                after=after,
-                workspace_id=workspace_id,
-                entity_type="ingest_job",
-                entity_id=job.id,
-            )
+            await self.set_hints(session, job, encounter_id=next_encounter, encounter_game_id=next_game)
         await self.transition(session, job, models.IngestJobStatus.PENDING, reset_attempts=True)
         await session.commit()
         return job

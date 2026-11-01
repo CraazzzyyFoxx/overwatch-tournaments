@@ -1,6 +1,6 @@
 {
   "_generated_by": "backend/scripts/export_erd.py -- do not edit by hand",
-  "alembic_head": "impactv202",
+  "alembic_head": "mixstatsmv01",
   "packages": [
     {
       "key": "achievements",

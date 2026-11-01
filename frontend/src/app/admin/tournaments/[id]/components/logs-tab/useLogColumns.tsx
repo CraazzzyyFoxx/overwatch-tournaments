@@ -69,12 +69,16 @@ export function useLogColumns({
       {
         id: "encounter",
         header: t("encounter"),
-        accessorFn: (record) => record.attached_encounter_name ?? "",
+        accessorFn: (record) => [record.custom_game_name ? tx("mixJob", { name: record.custom_game_name }) : "", record.attached_encounter_name ?? ""].join(" "),
         enableSorting: false,
         cell: ({ row }) => (
-          <p className="max-w-[16rem] truncate text-xs text-muted-foreground">
-            {row.original.attached_encounter_name}
-          </p>
+          <div className="max-w-[16rem] space-y-0.5 text-xs text-muted-foreground">
+            {/* The workspace console lists mix jobs too; they have no tournament to name. */}
+            {row.original.custom_game_name ? (
+              <p className="truncate">{tx("mixJob", { name: row.original.custom_game_name })}</p>
+            ) : null}
+            <p className="truncate">{row.original.attached_encounter_name}</p>
+          </div>
         )
       },
       {

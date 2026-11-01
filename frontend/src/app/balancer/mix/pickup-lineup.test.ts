@@ -8,8 +8,10 @@ import { TEST_LADDER_TIERS } from "@/test/native-ladder";
 import {
   averageRank,
   buildMixOwner,
+  canWriteMix,
   computeRotationHintPatches,
   getLineupIssue,
+  isMixHost,
   lobbyCandidateCount,
   myLobbyTeam,
   parseVariants as parseVariantsOrdered,
@@ -830,5 +832,23 @@ describe("myLobbyTeam", () => {
       ],
     });
     expect(myLobbyTeam(game, 99, OW_ORDER, teamN)).toBeNull();
+  });
+});
+
+describe("isMixHost", () => {
+  const closed = { host_user_id: 1, co_hosts: [{ user_id: 2 }], status: "completed" } as unknown as CustomGame;
+
+  it("counts the host, a co-host and a superuser, and nobody else", () => {
+    expect(isMixHost(closed, 1, false)).toBe(true);
+    expect(isMixHost(closed, 2, false)).toBe(true);
+    expect(isMixHost(closed, 3, true)).toBe(true);
+    expect(isMixHost(closed, 3, false)).toBe(false);
+    expect(isMixHost(closed, null, false)).toBe(false);
+    expect(isMixHost(undefined, 1, true)).toBe(false);
+  });
+
+  it("ignores the mix's status, which canWriteMix does not: a closed mix still takes logs", () => {
+    expect(isMixHost(closed, 1, false)).toBe(true);
+    expect(canWriteMix(closed, 1, false)).toBe(false);
   });
 });

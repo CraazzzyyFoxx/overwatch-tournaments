@@ -19,9 +19,17 @@ from sqlalchemy.orm import aliased, selectinload
 
 from shared import models
 from shared.core.enums import MapPoolEntryStatus, PickBanKind
+from shared.models.stats.ingest import IngestJobStatus
 from shared.repository.base import BaseRepository
 
 __all__ = ("CustomGameRoundRepository",)
+
+_LOG_STATE = {
+    IngestJobStatus.PENDING: "processing",
+    IngestJobStatus.PROCESSING: "processing",
+    IngestJobStatus.FAILED: "failed",
+    IngestJobStatus.AWAITING_LINK: "failed",
+}
 
 
 class CustomGameRoundRepository(BaseRepository[models.CustomGameRound]):
@@ -307,6 +315,35 @@ class CustomGameRoundRepository(BaseRepository[models.CustomGameRound]):
                 }
             )
         return picks
+
+    async def match_logs(
+        self, session: AsyncSession, encounter_ids: Sequence[int]
+    ) -> dict[int, tuple[int | None, str | None]]:
+        """``encounter_id -> (stats_match_id, log_state)`` for every id, in ONE read. The match is the newest
+        ``stats.match`` bound to the encounter. Only while there is none does the newest ``stats.ingest_job`` hinted at
+        it speak: pending/processing -> ``"processing"``, failed/awaiting_link -> ``"failed"``, else ``None``. No ids,
+        no query."""
+        if not encounter_ids:
+            return {}
+        match_id = (
+            sa.select(sa.func.max(models.StatsMatch.id))
+            .where(models.StatsMatch.encounter_id == models.Encounter.id)
+            .scalar_subquery()
+        )
+        job_status = (
+            sa.select(models.IngestJob.status)
+            .where(models.IngestJob.hint_encounter_id == models.Encounter.id)
+            .order_by(models.IngestJob.id.desc())
+            .limit(1)
+            .scalar_subquery()
+        )
+        rows = await session.execute(
+            sa.select(models.Encounter.id, match_id, job_status).where(models.Encounter.id.in_(encounter_ids))
+        )
+        return {
+            encounter_id: (matched, None if matched is not None else _LOG_STATE.get(status))
+            for encounter_id, matched, status in rows
+        }
 
     async def delete_round(self, session: AsyncSession, encounter_id: int) -> None:
         """Undo, or Cancel match: the encounter goes, and seats, game, journal and ``mix.round*`` cascade with it."""

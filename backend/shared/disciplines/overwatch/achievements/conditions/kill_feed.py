@@ -64,6 +64,8 @@ def _scoped_kills(
         )
         .where(
             _MATCHES.c.workspace_id == context.workspace_id,
+            # Mix stats live only inside the mix (mix encounters have no tournament).
+            _MATCHES.c.tournament_id.is_not(None),
             models.EventType.code == "kill",
             models.StatsEvent.actor_member_id != models.StatsEvent.target_member_id,
         )

@@ -38,7 +38,8 @@ func NewBinary(caller edge.RPCCaller, identity edge.IdentityResolver, log *slog.
 }
 
 // AdminLogsUpload: POST /api/v1/admin/logs/upload. Reads the multipart form
-// (tournament_id, optional encounter_id, one or more files[]) and base64-encodes
+// (tournament_id, optional encounter_id, one or more files[]; or the mix variant
+// custom_game_id plus encounter_id or lobby_index) and base64-encodes
 // each file into the RPC body for rpc.stats.logs.upload.
 func (b *Binary) AdminLogsUpload(w http.ResponseWriter, r *http.Request) {
 	if b.identity == nil {
@@ -73,6 +74,12 @@ func (b *Binary) AdminLogsUpload(w http.ResponseWriter, r *http.Request) {
 	}
 	if v := r.FormValue("encounter_id"); v != "" {
 		fields["encounter_id"] = v
+	}
+	if v := r.FormValue("custom_game_id"); v != "" {
+		fields["custom_game_id"] = v
+	}
+	if v := r.FormValue("lobby_index"); v != "" {
+		fields["lobby_index"] = v
 	}
 
 	// "files" is [{"content_b64","filename"}, ...] (keys in json.Marshal order),

@@ -2437,7 +2437,7 @@
       "summary": "List custom games"
     },
     "rpc.balancer.custom.match_history": {
-      "description": "Permission: public; no authentication required. Returns every round recorded for the mix, newest first: its two teams by slot (slot 1 banned first) with name and score, its hero bans {slot, item_id} in order, whose hero each pick was {slot, member_id, name, item_id} in pick order, the winning slot (null for a draw), lobby, map, recorder and the rank points it applied.",
+      "description": "Permission: public; no authentication required. Returns every round recorded for the mix, newest first: its two teams by slot (slot 1 banned first) with name and score, its hero bans {slot, item_id} in order, whose hero each pick was {slot, member_id, name, item_id} in pick order, the winning slot (null for a draw), lobby, map, recorder and the rank points it applied, plus the uploaded match log: stats_match_id (the bound stats match, null when none) and log_state (\"processing\" or \"failed\" while there is no stats match and the newest upload for the match is pending/processing or failed/awaiting a link, else null).",
       "summary": "List custom game matches"
     },
     "rpc.balancer.custom.post_discord": {
@@ -5295,7 +5295,7 @@
       "summary": "Log processing stats"
     },
     "rpc.stats.logs.upload": {
-      "description": "Permission: workspace `log.create` in the tournament's workspace. Multipart (base64) upload of one or more log files for a tournament, storing each to S3 and enqueueing processing, with per-file errors collected. Metered: over quota the call answers 429 with `code=rate_limited` and the exceeded limit in `details.limit_name`.",
+      "description": "Permission: workspace `log.create` in the tournament's workspace (tournament variant: `tournament_id`, optional `encounter_id`), or \u2014 for a pickup mix (`custom_game_id` plus exactly one of `encounter_id` / `lobby_index`) \u2014 the mix's host, a co-host or a superuser, or workspace `log.create` in the mix's workspace (the mix's status is not checked). A mix `lobby_index` (0-based) resolves server-side to the lobby's live encounter, else its newest recorded one (422 `no_mix_match` when neither exists); a mix `encounter_id` that is not that mix's is 404. Giving both or neither of `tournament_id` / `custom_game_id` is 422. Multipart (base64) upload of one or more log files, storing each to S3 and enqueueing processing, with per-file errors collected. Re-uploading the same file for a mix revives a job whose match was removed by a mix Undo/Cancel. Metered: over quota the call answers 429 with `code=rate_limited` and the exceeded limit in `details.limit_name`.",
       "response": {
         "array": false,
         "ref": "stats.LogUploadResponse"
@@ -32699,6 +32699,30 @@
           "title": "Created At",
           "type": "string"
         },
+        "custom_game_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Custom Game Id"
+        },
+        "custom_game_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Custom Game Name"
+        },
         "error": {
           "anyOf": [
             {
@@ -47171,8 +47195,16 @@
           ]
         },
         "tournament_id": {
-          "title": "Tournament Id",
-          "type": "integer"
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tournament Id"
         },
         "workspace_id": {
           "title": "Workspace Id",
@@ -47185,7 +47217,6 @@
         "discipline",
         "name",
         "round",
-        "tournament_id",
         "challonge_id",
         "closeness",
         "has_logs",

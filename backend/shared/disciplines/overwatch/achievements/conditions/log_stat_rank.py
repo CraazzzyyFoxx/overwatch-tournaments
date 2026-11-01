@@ -125,6 +125,8 @@ def _count_query(stat: str, context: EvalContext, *, normalize_by_time: bool) ->
             facts.c.segment == 0,
             facts.c.entity_id.is_(None),
             facts.c.workspace_id == context.workspace_id,
+            # Mix stats live only inside the mix (mix encounters have no tournament).
+            facts.c.tournament_id.is_not(None),
         )
         .group_by(facts.c.player_id, facts.c.tournament_id)
     )
@@ -149,6 +151,8 @@ def _fraction_query(stat: str, context: EvalContext) -> sa.Select:
             facts.c.segment == 0,
             facts.c.entity_id.is_(None),
             facts.c.workspace_id == context.workspace_id,
+            # Mix stats live only inside the mix (mix encounters have no tournament).
+            facts.c.tournament_id.is_not(None),
         )
         .group_by(facts.c.player_id, facts.c.tournament_id)
     )
@@ -190,6 +194,8 @@ def _time_weighted_rate_query(stat: str, context: EvalContext) -> sa.Select:
             rate_row.c.segment == 0,
             rate_row.c.entity_id.is_(None),
             rate_row.c.workspace_id == context.workspace_id,
+            # Mix stats live only inside the mix (mix encounters have no tournament).
+            rate_row.c.tournament_id.is_not(None),
         )
         .group_by(rate_row.c.player_id, rate_row.c.tournament_id)
     )

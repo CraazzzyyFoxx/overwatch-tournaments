@@ -19,8 +19,8 @@ from shared.models.stats import mv_entity_global_stats
 from src.services.hero_stats_refresh import _ADVISORY_LOCK_KEY, HeroStatsRefresher
 
 _spec = importlib.util.spec_from_file_location(
-    "stats01_mv_runtime_revision",
-    Path(__file__).resolve().parents[2] / "migrations/versions/stats01_stats.py",
+    "mixstatsmv01_mv_runtime_revision",
+    Path(__file__).resolve().parents[2] / "migrations/versions/mixstatsmv01_mv_tournament_only.py",
 )
 assert _spec is not None and _spec.loader is not None
 _revision = importlib.util.module_from_spec(_spec)
@@ -94,7 +94,7 @@ async def _rows(session):
 async def _assert_exact_derivation(session):
     # Compare both directions, including IEEE float bits, to a fresh native derivation.
     projection = "discipline,stat_id,entity_id,float8send(best_value),float8send(avg),metadata"
-    expected = f"SELECT {projection} FROM ({_revision.NATIVE_MV_SELECT}) expected"
+    expected = f"SELECT {projection} FROM ({_revision._TOURNAMENT_ONLY_SELECT}) expected"
     actual = f"SELECT {projection} FROM {_MV}"
     differences = await session.execute(
         sa.text(f"({expected} EXCEPT ALL {actual}) UNION ALL ({actual} EXCEPT ALL {expected})")

@@ -24,7 +24,7 @@ DOCS: dict[str, dict] = {
     },
     "rpc.stats.logs.upload": {
         "summary": "Upload match logs",
-        "description": "Permission: workspace `log.create` in the tournament's workspace. Multipart (base64) upload of one or more log files for a tournament, storing each to S3 and enqueueing processing, with per-file errors collected. Metered: over quota the call answers 429 with `code=rate_limited` and the exceeded limit in `details.limit_name`.",
+        "description": "Permission: workspace `log.create` in the tournament's workspace (tournament variant: `tournament_id`, optional `encounter_id`), or — for a pickup mix (`custom_game_id` plus exactly one of `encounter_id` / `lobby_index`) — the mix's host, a co-host or a superuser, or workspace `log.create` in the mix's workspace (the mix's status is not checked). A mix `lobby_index` (0-based) resolves server-side to the lobby's live encounter, else its newest recorded one (422 `no_mix_match` when neither exists); a mix `encounter_id` that is not that mix's is 404. Giving both or neither of `tournament_id` / `custom_game_id` is 422. Multipart (base64) upload of one or more log files, storing each to S3 and enqueueing processing, with per-file errors collected. Re-uploading the same file for a mix revives a job whose match was removed by a mix Undo/Cancel. Metered: over quota the call answers 429 with `code=rate_limited` and the exceeded limit in `details.limit_name`.",
     },
     "rpc.stats.logs.process_tournament": {
         "summary": "Process tournament logs",

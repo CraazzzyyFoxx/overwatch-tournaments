@@ -227,6 +227,8 @@ function match(overrides: Partial<CustomGameMatch> = {}): CustomGameMatch {
     lobby_index: 0,
     bans: [],
     picks: [],
+    stats_match_id: null,
+    log_state: null,
     ...overrides,
   };
 }

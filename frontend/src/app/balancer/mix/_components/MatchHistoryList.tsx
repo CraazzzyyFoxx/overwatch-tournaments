@@ -4,12 +4,16 @@ import { useState } from "react";
 
 import { useTranslations } from "next-intl";
 
-import { History, Undo2 } from "lucide-react";
+import { BarChart3, FileUp, History, Undo2 } from "lucide-react";
 
 import { CARD_TITLE_CLASS, lobbyLetter, teamAccent } from "@/app/balancer/mix/pickup-chrome";
+import type { MixLogUpload } from "@/app/balancer/mix/useMixLogUpload";
 import CatalogEntityImage from "@/components/catalog/CatalogEntityImage";
 import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import { formatRelative } from "@/components/kit/format-time";
+import { LogUploadDialog } from "@/components/logs/LogUploadDialog";
+import MatchStatsDialog from "@/components/match/MatchStatsDialog";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Eyebrow } from "@/components/ui/eyebrow";
 import { IconTooltip } from "@/components/ui/icon-tooltip";
@@ -30,7 +34,8 @@ export function MatchHistoryList({
   onUndoMatch,
   discipline,
   standalone = false,
-  className
+  className,
+  logUpload = null
 }: Readonly<{
   matches: CustomGameMatch[];
   lobbyCount: number;
@@ -43,6 +48,8 @@ export function MatchHistoryList({
   standalone?: boolean;
   /** The caller separates it from what comes before (a hairline), since only the caller knows whether anything does. */
   className?: string;
+  /** Present when the viewer may file a log under a round (host or `log.create`): each row then offers an upload. */
+  logUpload?: MixLogUpload | null;
 }>) {
   const t = useTranslations("mixes.matchHistory");
   // The heroes are read only once a round has bans or picks to show (spec §8.4, §11.6).
@@ -85,6 +92,7 @@ export function MatchHistoryList({
             undoing={undoingMatchId === match.id}
             onUndoMatch={onUndoMatch}
             heroById={heroById}
+            logUpload={logUpload}
           />
         ))}
       </ul>
@@ -98,7 +106,8 @@ function MatchHistoryRow({
   canUndo,
   undoing,
   onUndoMatch,
-  heroById
+  heroById,
+  logUpload
 }: Readonly<{
   match: CustomGameMatch;
   /** More than one lobby now, or one past the first somewhere in the log: say which one played it. */
@@ -107,6 +116,7 @@ function MatchHistoryRow({
   undoing: boolean;
   onUndoMatch?: (matchId: number) => void;
   heroById: Map<number, CatalogEntityRead>;
+  logUpload: MixLogUpload | null;
 }>) {
   const t = useTranslations("mixes.lobbies");
   const tHistory = useTranslations("mixes.matchHistory");
@@ -174,6 +184,35 @@ function MatchHistoryRow({
         {match.bans.length > 0 ? <HeroBanStrip bans={match.bans} heroById={heroById} className="mt-1" /> : null}
         {match.picks.length > 0 ? <HeroPickList picks={match.picks} heroById={heroById} className="mt-1" /> : null}
       </div>
+      {match.stats_match_id == null && match.log_state != null ? (
+        <Badge shape="pill" tone={match.log_state === "failed" ? "danger" : "info"} className="shrink-0">
+          {tHistory(match.log_state === "failed" ? "logFailed" : "logProcessing")}
+        </Badge>
+      ) : null}
+      {match.stats_match_id != null ? (
+        // A mix match lives only inside its mix: no `/matches/{id}` page to link to.
+        <MatchStatsDialog
+          matchId={match.stats_match_id}
+          showMatchLink={false}
+          trigger={
+            <Button type="button" variant="ghost" size="sm" aria-label={tHistory("statistics")}>
+              <BarChart3 aria-hidden="true" />
+              <span className="hidden md:inline">{tHistory("statistics")}</span>
+            </Button>
+          }
+        />
+      ) : null}
+      {logUpload != null ? (
+        <LogUploadDialog
+          scope={{ customGameId: logUpload.customGameId, encounterId: match.id }}
+          onUploaded={logUpload.onUploaded}
+          trigger={
+            <Button type="button" variant="ghost" size="icon-sm" aria-label={tHistory("uploadLog")}>
+              <FileUp aria-hidden="true" />
+            </Button>
+          }
+        />
+      ) : null}
       {canUndo ? (
         <>
           <IconTooltip control label={tHistory("undo")} hint={tHistory("undoHint")}>

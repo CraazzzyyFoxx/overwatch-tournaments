@@ -107,6 +107,8 @@ class HeroQueries(DisciplineQueries):
                     self._facts.c.segment == 0,
                     self._facts.c.player_id == user_id,
                     self._matches.c.map_entity_id.in_(maps_ids),
+                    # Mix stats live only inside the mix (mix encounters have no tournament).
+                    models.Encounter.tournament_id.is_not(None),
                 )
             )
         )
@@ -154,6 +156,8 @@ class HeroQueries(DisciplineQueries):
                 self._matches.c.map_entity_id.in_(maps_ids),
                 models.CatalogEntity.kind == "character",
                 models.CatalogEntity.discipline == self.discipline,
+                # Mix stats live only inside the mix (mix encounters have no tournament).
+                models.Encounter.tournament_id.is_not(None),
             )
         )
 
@@ -216,6 +220,8 @@ class HeroQueries(DisciplineQueries):
                     self._facts.c.player_id == user_id,
                     self._facts.c.entity_id.isnot(None),
                     self._matches.c.map_entity_id.in_(maps_ids),
+                    # Mix stats live only inside the mix (mix encounters have no tournament).
+                    self._matches.c.tournament_id.is_not(None),
                 )
             )
         )

@@ -90,6 +90,8 @@ function record(id: number, overrides: Partial<LogProcessingRecord> = {}): LogPr
     tournament_name: "OWT 78",
     attached_encounter_id: null,
     attached_encounter_name: null,
+    custom_game_id: null,
+    custom_game_name: null,
     attached_encounter_game_id: null,
     filename: `logs/round_${id}.txt`,
     status: "done",

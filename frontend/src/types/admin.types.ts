@@ -1512,6 +1512,9 @@ export interface LogProcessingRecord {
   id: number;
   tournament_id: number | null;
   tournament_name: string | null;
+  /** The mix owning the job's match or hinted encounter; null for tournament jobs. */
+  custom_game_id: number | null;
+  custom_game_name: string | null;
   attached_encounter_id: number | null;
   attached_encounter_game_id: number | null;
   attached_encounter_name: string | null;
@@ -1637,6 +1640,12 @@ export interface LogUploadResponse {
   uploaded: LogUploadItem[];
   errors: LogUploadError[];
 }
+
+/** Mirrors the upload contract: a tournament, a mix encounter, or a mix lobby the server resolves to its live/last match. */
+export type LogUploadScope =
+  | { tournamentId: number; encounterId?: number | null }
+  | { customGameId: number; encounterId: number }
+  | { customGameId: number; lobbyIndex: number };
 
 // ─── Bulk Operations ─────────────────────────────────────────────────────────
 

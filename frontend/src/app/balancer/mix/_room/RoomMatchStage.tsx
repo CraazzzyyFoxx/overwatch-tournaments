@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { Dices, Headphones, Shuffle, Users } from "lucide-react";
 
 import { MatchHistoryList } from "@/app/balancer/mix/_components/MatchHistoryList";
+import type { MixLogUpload } from "@/app/balancer/mix/useMixLogUpload";
 import { NextMapRoll } from "@/app/balancer/mix/_components/NextMapStrip";
 import { hasMapChoice } from "@/app/balancer/mix/pickup-map-roll";
 import { StartMatchButton } from "@/app/balancer/mix/_components/StartMatchButton";
@@ -56,6 +57,7 @@ export function RoomMatchStage({
   maps,
   mixMatches,
   voiceUrl,
+  logUpload,
   actions
 }: Readonly<{
   phase: "idle" | "ready" | "live";
@@ -72,6 +74,8 @@ export function RoomMatchStage({
   mixMatches: CustomGameMatch[];
   /** The viewer's own team voice channel while they play here. */
   voiceUrl: string | null;
+  /** Present when the viewer may file a match log under this mix: the history rows then offer an upload. */
+  logUpload: MixLogUpload | null;
   actions: RoomMatchActions;
 }>) {
   const t = useTranslations("mixes.arena.match");
@@ -190,6 +194,7 @@ export function RoomMatchStage({
           canWrite={false}
           undoingMatchId={null}
           discipline={game.discipline}
+          logUpload={logUpload}
           className="border-t border-[color:var(--aqt-border)] px-5 pb-1 pt-3 first:border-t-0"
         />
       ) : null}

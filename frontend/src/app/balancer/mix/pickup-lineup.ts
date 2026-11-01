@@ -41,14 +41,20 @@ export function roleRefsOf(order: readonly string[], dimension: string): RoleRef
 /** A terminal mix is read-only server-side, so its write controls are hidden. */
 export const PICKUP_TERMINAL_STATUSES: Record<string, true> = { completed: true, cancelled: true };
 
+/** The host, a co-host or a superuser, whatever the mix's status (mirrors `shared.services.mix_hosts.is_mix_host`). */
+export function isMixHost(game: CustomGame | undefined, userId: number | null, isSuperuser: boolean): boolean {
+  if (game == null) return false;
+  if (isSuperuser) return true;
+  return userId != null && (game.host_user_id === userId || game.co_hosts.some((coHost) => coHost.user_id === userId));
+}
+
 /**
  * Whoever passes the server's `CustomGameService._writable`: the host, a co-host or a superuser, while the mix is
  * still open (a completed or cancelled one is read-only, so its controls are hidden rather than left to 409).
  */
 export function canWriteMix(game: CustomGame | undefined, userId: number | null, isSuperuser: boolean): boolean {
   if (game == null || PICKUP_TERMINAL_STATUSES[game.status]) return false;
-  if (isSuperuser) return true;
-  return userId != null && (game.host_user_id === userId || game.co_hosts.some((coHost) => coHost.user_id === userId));
+  return isMixHost(game, userId, isSuperuser);
 }
 
 /**

@@ -446,6 +446,8 @@ Ingest (upload / gateway base64 / Discord): strict UTF-8, no path traversal, S3 
 
 Dedup: `(tournament_id, filename, content_hash)` — identical bytes skipped. Same filename pending/failed → reuse, `attempts=0`.
 
+Mix logs: the upload takes `custom_game_id` + exactly one of `encounter_id` / `lobby_index` instead of `tournament_id` (lobby → its live match, else its newest recorded one; neither → 422 `no_mix_match`). Gate: mix host / co-host / superuser **or** workspace `log.create`; the mix's status is not checked. Job `hint_tournament_id = NULL`, S3 `logs/mix/{custom_game_id}/{hash}`. A re-upload of the same bytes to the same mix re-points a job left without a `stats.match` (DONE after a mix Undo/Cancel cascaded the match away, FAILED, AWAITING_LINK) and re-parses it; the same bytes under another mix (or across tournament ↔ mix) → 409 `stats_upload_scope_conflict`. Mix stats are read only inside the mix (public `GET /matches/{id}`, history row `stats_match_id`/`log_state`); every other stats reader — profile, compare, encounter history, achievements, hero/map stats, `mv_entity_global_stats` (`mixstatsmv01`) — requires `encounter.tournament_id IS NOT NULL`.
+
 Impact `impact_v2` (pure, `shared/disciplines/overwatch/impact.py`; design `docs/superpowers/specs/2026-10-31-mvp-impact-v2-design.md`):
 
 - A fight starts on round change or a gap > 15s; FirstPick / FirstDeath from fight boundaries, counted on the killer's (victim's) hero.

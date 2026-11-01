@@ -165,6 +165,17 @@ Turn on **Fearless** next to **Hero bans** in the mix header: from the next **St
 
 The room names the player on each pick step and, once the match is **Live**, shows every player's hero; the match history lists them too.
 
+## Match logs and statistics
+
+An Overwatch match log can be uploaded to a mix too — the match's history row then gets player statistics with MVP places, like a tournament map. The mix's host and co-hosts can upload, and so can anyone with the permission to upload logs in the workspace — after the mix is closed as well.
+
+- In a lobby room, **Upload logs** in the header opens the usual upload dialog. A log is attached to that lobby's match: the live one, or, once it has been recorded, the latest recorded one. Automatic upload from the log folder works there too, as in a tournament encounter room: turn it on in account settings and keep the room open while you play.
+- In the match history, each row has an upload button for that very match — for a log that comes later.
+
+While a log is being parsed, the match row says **Log processing**; if it did not fit the match's lineups, **Log failed to bind**. Once it is parsed, a **Statistics** button opens the match's player table in a window, as on a tournament encounter page. Everyone who sees the mix's history sees the statistics, but they stay inside the mix: player profiles, comparisons, records, achievements and analytics do not count mix matches. You still record the match's result — a log does not change it and adds nobody to a lineup.
+
+**Cancel match** and undoing a recorded match delete its statistics too. If you record the match again after an undo, upload the same file once more from its history row — it is parsed for the new match.
+
 ## Mix statuses
 
 | Status | What it means |
@@ -200,6 +211,8 @@ Deleting a mix erases it completely and is available only to a workspace admin. 
 | Somebody went for a break | Mark them **Away** on their card; they are skipped until they come back. |
 | Someone always sits out | Press **Apply rotation hints** — the queue is built from who has waited longest. |
 | The lobby stays in **Pre-game** and the room never shows the hero grid | The ban room did not open. Press **Cancel match** and start again. |
+| A log uploaded but there are no statistics and the row says **Log failed to bind** | The log did not match the match's lineup — it went to the wrong lobby, for example. Upload it from the right match's history row. |
+| The statistics are gone after a match was undone | That is by design. Record the match again and upload the same log from its history row. |
 
 ## See also
 

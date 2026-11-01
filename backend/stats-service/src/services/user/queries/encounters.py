@@ -90,7 +90,8 @@ def _user_history_seats(user_id: int, matches: sa.Subquery) -> sa.CompoundSelect
                 models.WorkspaceMember.workspace_id == matches.c.workspace_id,
             ),
         )
-        .where(models.WorkspaceMember.player_id == user_id)
+        # Mix stats live only inside the mix (mix participations have no tournament).
+        .where(models.WorkspaceMember.player_id == user_id, models.EncounterTeam.tournament_id.is_not(None))
     )
     return live.union(observed)
 
@@ -819,6 +820,8 @@ class UserEncounterQueries(DisciplineQueries):
                     self._facts.c.entity_id.isnot(None),
                     self._facts.c.value > min_seconds,
                     self._facts.c.segment == 0,
+                    # Mix stats live only inside the mix (mix encounters have no tournament).
+                    models.Encounter.tournament_id.is_not(None),
                 )
             )
         )
@@ -907,6 +910,8 @@ class UserEncounterQueries(DisciplineQueries):
                     self._facts.c.stat_code == enums.LogStatsName.ImpactRank,
                     self._facts.c.entity_id.is_(None),
                     self._facts.c.segment == 0,
+                    # Mix stats live only inside the mix (mix encounters have no tournament).
+                    models.Encounter.tournament_id.is_not(None),
                 )
             )
         )

@@ -16,7 +16,7 @@ import { Eyebrow } from "@/components/ui/eyebrow";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EncounterRostersModal } from "@/components/EncounterRostersModal";
 import { MatchImport } from "@/components/pick-ban/MatchImport";
-import { TournamentLogUploadDialog } from "@/components/logs/TournamentLogUploadDialog";
+import { LogUploadDialog } from "@/components/logs/LogUploadDialog";
 import { usePermissions } from "@/hooks/usePermissions";
 import { RETURN_TO_PARAM, safeReturnPath } from "@/lib/auth/return-to";
 import encounterService from "@/services/encounter.service";
@@ -263,10 +263,9 @@ function PregameRoomBody({ encounterId, seriesReport = true }: Readonly<PregameR
             />
           ) : null}
           {canUploadLog ? (
-            <TournamentLogUploadDialog
-              tournamentId={encounter.tournament_id}
+            <LogUploadDialog
+              scope={{ tournamentId: encounter.tournament_id, encounterId }}
               encounters={[encounter]}
-              initialEncounterId={encounterId}
               autoUpload
               onUploaded={room.invalidateRoom}
               trigger={

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, FileUp } from "lucide-react";
 
 import { LobbyStage } from "@/app/balancer/mix/_components/LobbyStage";
 import { LobbyCodeStrip } from "@/app/balancer/mix/_components/LobbyCodeStrip";
@@ -10,6 +10,7 @@ import { useMixBanRoom } from "@/app/balancer/mix/_hooks/useMixBanRoom";
 import { lobbyCandidateCount, buildMixOwner, canWriteMix, parseVariants, teamNamesByIndex } from "@/app/balancer/mix/pickup-lineup";
 import { lobbyLetter } from "@/app/balancer/mix/pickup-chrome";
 import { usePickupMix } from "@/app/balancer/mix/usePickupMix";
+import { useMixLogUpload } from "@/app/balancer/mix/useMixLogUpload";
 import { RoomChat } from "@/components/chat/RoomChat";
 import { memberChoice } from "@/components/pick-ban/pick-ban-model";
 import { useSideLabel } from "@/components/pick-ban/useSideLabel";
@@ -33,6 +34,7 @@ import { slotCodeOrder } from "@/lib/roster/ontology";
 import { OPEN_SLOT_CODE, slotCodesOf } from "@/lib/roster/shape";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import { cn } from "@/lib/utils";
+import { LogUploadDialog } from "@/components/logs/LogUploadDialog";
 import type { CustomGame } from "@/services/custom-game.service";
 import { useAuthProfileStore } from "@/stores/auth-profile.store";
 import type { DraftBoard, DraftTeam } from "@/types/draft.types";
@@ -64,6 +66,7 @@ export function MixRoom({ initialGame, lobbyIndex }: Readonly<{ initialGame: Cus
   const tVoice = useTranslations("mixes.voice");
   const tDraft = useTranslations("mixes.draft");
   const tMixes = useTranslations("mixes");
+  const tLog = useTranslations("accountSettings.logDirectory");
   const workspaceId = initialGame.workspace_id;
   useEntityWorkspace(workspaceId, initialGame.discipline);
   const currentUserId = useAuthProfileStore((state) => state.user?.id ?? null);
@@ -82,6 +85,7 @@ export function MixRoom({ initialGame, lobbyIndex }: Readonly<{ initialGame: Cus
   });
   const game = mix.gameQuery.data ?? initialGame;
   const canWrite = canWriteMix(game, currentUserId, isSuperuser);
+  const logUpload = useMixLogUpload(game);
   const discipline = game.discipline;
   const metadataQuery = useDisciplineMetadata(workspaceId, discipline);
   const workspaceGrid = useDivisionGrid(discipline);
@@ -273,6 +277,7 @@ export function MixRoom({ initialGame, lobbyIndex }: Readonly<{ initialGame: Cus
         maps={mapsQuery.data ?? []}
         mixMatches={mix.matchesQuery.data ?? []}
         voiceUrl={mySeat != null && !mySeat.away && mySeat.current_lobby === lobbyIndex ? (mySeat.voice_url ?? null) : null}
+        logUpload={logUpload}
         actions={{
           onBalance: () => mix.balance.mutate({ scope: "lobby", lobbyIndex }),
           balancing: mix.balance.isPending,
@@ -298,20 +303,36 @@ export function MixRoom({ initialGame, lobbyIndex }: Readonly<{ initialGame: Cus
           {`${game.name} · ${tLobbies("tab", { letter: lobbyLetter(lobbyIndex) })}`}
         </h1>
         <LobbyStage state={lobby.state ?? "idle"} startedAt={lobby.live_started_at} />
-        {canWrite ? (
-          <div className="ml-auto">
-            <RoomHostMenu
-              phase={phase}
-              board={liveBoard}
-              draftMutations={draftMutations}
-              heroEncounterId={heroEncounterId}
-              heroState={heroRoom.state}
-              heroQueryKey={heroQueryKey}
-              adminOpen={adminOpen}
-              onAdminOpenChange={setAdminOpen}
-              cancellingMatch={mix.cancelMatch.isPending}
-              onCancelMatch={() => mix.cancelMatch.mutate(lobbyIndex)}
-            />
+        {canWrite || logUpload != null ? (
+          <div className="ml-auto flex items-center gap-2">
+            {logUpload != null ? (
+              // The lobby, not its live encounter: Record clears that while the log is still in its quiet window.
+              <LogUploadDialog
+                scope={{ customGameId: logUpload.customGameId, lobbyIndex }}
+                autoUpload
+                onUploaded={logUpload.onUploaded}
+                trigger={
+                  <Button type="button" variant="outline" size="sm">
+                    <FileUp className="h-4 w-4" aria-hidden />
+                    {tLog("uploadAction")}
+                  </Button>
+                }
+              />
+            ) : null}
+            {canWrite ? (
+              <RoomHostMenu
+                phase={phase}
+                board={liveBoard}
+                draftMutations={draftMutations}
+                heroEncounterId={heroEncounterId}
+                heroState={heroRoom.state}
+                heroQueryKey={heroQueryKey}
+                adminOpen={adminOpen}
+                onAdminOpenChange={setAdminOpen}
+                cancellingMatch={mix.cancelMatch.isPending}
+                onCancelMatch={() => mix.cancelMatch.mutate(lobbyIndex)}
+              />
+            ) : null}
           </div>
         ) : null}
       </header>

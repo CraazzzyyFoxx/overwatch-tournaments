@@ -275,7 +275,7 @@ class EncounterFlowsService:
             missing = {
                 encounter.tournament_id: encounter.tournament
                 for encounter in encounters
-                if encounter.tournament_id not in tournaments
+                if encounter.tournament_id is not None and encounter.tournament_id not in tournaments
             }
             refs = await resolve_tournament_challonge(session, list(missing)) if page and missing else {}
             for tournament_id, tournament in missing.items():
