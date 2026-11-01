@@ -111,6 +111,7 @@ async def match_statistics_read(session: AsyncSession, match_id: int) -> NativeM
                     canonical=row.player_name,
                     provider=identity_provider(row.discipline),
                     handle=row.game_handle,
+                    handle_verified=bool(row.game_handle_verified),
                     workspace_name=row.workspace_name,
                     snapshot=row.handle_snapshot,
                 ),

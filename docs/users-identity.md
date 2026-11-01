@@ -320,17 +320,23 @@ profile's tournament history, platform-wide leaderboards, search results).
 
 A surface owned by one game (a tournament, its encounters and matches, a mix lobby, a draft, that game's stats and
 leaderboards) shows `display: PersonDisplayRead` (`backend/shared/schemas/identity.py`), built by
-`PersonDisplayRead.build`. The first non-empty of:
+`PersonDisplayRead.build`. Every game works the same way with its own `identity_provider` (Overwatch `battlenet`,
+League of Legends and Valorant `riot`, Deadlock `steam`). The game handle is the account of that provider that is
+**visible** in the surface's scope (a `social_account_visibility` row with `workspace_id IS NULL` or the surface's
+workspace), ordered `is_verified DESC, is_primary DESC, id ASC`; a Steam account shows its persona `display_name`,
+never the account id, and an account with nothing to show is skipped (`backend/shared/services/person_display.py`:
+`game_handle` for Core selects, `pick_game_handle` over loaded accounts). The first non-empty of:
 
-1. the row's `workspace_member.display_name` (an organizer's deliberate override);
-2. the game handle: the primary account of the game's `identity_provider` that is **visible** in the surface's scope
-   (a `social_account_visibility` row with `workspace_id IS NULL` or the surface's workspace), `is_primary DESC, id
-   ASC`; a Steam account shows its persona `display_name`, never the account id
-   (`backend/shared/services/person_display.py`: `game_handle` for Core selects, `pick_game_handle` over loaded
-   accounts);
-3. the event's snapshot (roster `tournament.player.name`, `display_name_snapshot`, stats `handle_snapshot`,
+1. the game handle **when its account is verified** (ownership proven by OAuth): it outranks everything, the
+   organizer's name included;
+2. the row's `workspace_member.display_name` (an organizer's deliberate override);
+3. the game handle of an unverified account;
+4. the event's snapshot (roster `tournament.player.name`, `display_name_snapshot`, stats `handle_snapshot`,
    registration `primary_handle`);
-4. `players.user.name`.
+5. `players.user.name`.
+
+A hidden account counts as absent, verified or not. The profile header's per-game handle line picks its account the
+same way (verified first, then the primary).
 
 The shown text is split at its last `#` into `name` + `tag` (a Steam persona is never split). `canonical` is
 `players.user.name` and is the only thing a profile link is built from; `snapshot` is set only when it differs from

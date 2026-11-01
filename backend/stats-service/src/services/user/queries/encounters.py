@@ -489,7 +489,7 @@ class UserEncounterQueries(DisciplineQueries):
                 )
             ).all():
                 roles[member_id] = RoleRef.of(dimension, role, sub_role)
-            for member, user_id, canonical, workspace_name, discipline_code, handle in (
+            for member, user_id, canonical, workspace_name, discipline_code, handle, verified in (
                 await session.execute(
                     sa.select(
                         models.EncounterTeamMember,
@@ -497,7 +497,7 @@ class UserEncounterQueries(DisciplineQueries):
                         models.User.name,
                         models.WorkspaceMember.display_name,
                         models.Encounter.discipline,
-                        game_handle_of(
+                        *game_handle_of(
                             models.WorkspaceMember.player_id, models.Encounter.discipline, models.Encounter.workspace_id
                         ),
                     )
@@ -520,6 +520,7 @@ class UserEncounterQueries(DisciplineQueries):
                             canonical=canonical,
                             provider=identity_provider(discipline_code),
                             handle=handle,
+                            handle_verified=bool(verified),
                             workspace_name=workspace_name,
                             snapshot=member.display_name_snapshot,
                         ),

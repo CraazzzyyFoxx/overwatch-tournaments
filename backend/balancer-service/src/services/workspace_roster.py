@@ -147,10 +147,10 @@ def _identity_column(provider: str | None) -> sa.ColumnElement[str | None]:
     return main_handle(provider) if provider is not None else sa.cast(sa.null(), sa.String)
 
 
-def _shown_handle_column(provider: str | None, workspace_id: int) -> sa.ColumnElement[str | None]:
+def _shown_handle_columns(provider: str | None, workspace_id: int) -> tuple[sa.ColumnElement, sa.ColumnElement]:
     if provider is None:
-        return sa.cast(sa.null(), sa.String)
-    return game_handle(models.User.id, provider, workspace_id)
+        return sa.cast(sa.null(), sa.String), sa.cast(sa.null(), sa.Boolean)
+    return tuple(game_handle(models.User.id, provider, workspace_id))
 
 
 def _roster_member(
@@ -162,6 +162,7 @@ def _roster_member(
     auth_user_id: int | None,
     handle: str | None,
     shown_handle: str | None,
+    shown_verified: bool | None,
 ) -> RosterMember:
     return RosterMember(
         member_id=member_id,
@@ -169,7 +170,11 @@ def _roster_member(
         identity=PlayerIdentityRead.of(provider, handle),
         display_name=display_name or player_name,
         display=PersonDisplayRead.build(
-            canonical=player_name, provider=provider, handle=shown_handle, workspace_name=display_name
+            canonical=player_name,
+            provider=provider,
+            handle=shown_handle,
+            handle_verified=bool(shown_verified),
+            workspace_name=display_name,
         ),
         auth_user_id=auth_user_id,
         player_name=player_name,
@@ -203,7 +208,7 @@ async def roster_page(
             models.User.name,
             models.User.auth_user_id,
             _identity_column(provider),
-            _shown_handle_column(provider, workspace_id),
+            *_shown_handle_columns(provider, workspace_id),
         )
         .join(models.User, models.User.id == models.WorkspaceMember.player_id)
         .where(*filters)
@@ -263,7 +268,7 @@ async def list_roster(
             models.User.name,
             models.User.auth_user_id,
             _identity_column(provider),
-            _shown_handle_column(provider, workspace_id),
+            *_shown_handle_columns(provider, workspace_id),
         )
         .join(models.User, models.User.id == models.WorkspaceMember.player_id)
         .where(

@@ -47,21 +47,24 @@ async def player_displays(session: AsyncSession, players: Iterable[models.Player
         group = by_tournament[tournament_id]
         provider = _provider(discipline)
         handle = (
-            game_handle(models.WorkspaceMember.player_id, provider, workspace_id) if provider is not None else sa.null()
+            game_handle(models.WorkspaceMember.player_id, provider, workspace_id)
+            if provider is not None
+            else (sa.null(), sa.null())
         )
         rows = await session.execute(
-            sa.select(models.Player.id, models.User.name, models.WorkspaceMember.display_name, handle)
+            sa.select(models.Player.id, models.User.name, models.WorkspaceMember.display_name, *handle)
             .select_from(models.Player)
             .join(models.WorkspaceMember, models.WorkspaceMember.id == models.Player.workspace_member_id)
             .join(models.User, models.User.id == models.WorkspaceMember.player_id)
             .where(models.Player.id.in_([player.id for player in group]))
         )
         snapshots = {player.id: player.name for player in group}
-        for player_id, canonical, workspace_name, shown in rows:
+        for player_id, canonical, workspace_name, shown, verified in rows:
             displays[player_id] = PersonDisplayRead.build(
                 canonical=canonical,
                 provider=provider,
                 handle=shown,
+                handle_verified=bool(verified),
                 workspace_name=workspace_name,
                 snapshot=snapshots[player_id],
             )
@@ -85,10 +88,14 @@ def registration_display(
     handle (the snapshot); a row with no member (manual) is unlinked. Rows must carry ``registration_person_loader``."""
     member = registration.workspace_member
     user = member.player if member is not None else None
+    shown, verified = (
+        pick_game_handle(user.social_accounts, provider, workspace_id) if user is not None else (None, False)
+    )
     return PersonDisplayRead.build(
         canonical=user.name if user is not None else None,
         provider=provider,
-        handle=pick_game_handle(user.social_accounts, provider, workspace_id) if user is not None else None,
+        handle=shown,
+        handle_verified=verified,
         workspace_name=member.display_name if member is not None else None,
         snapshot=handle or registration.display_name,
     )

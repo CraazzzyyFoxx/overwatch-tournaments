@@ -230,10 +230,11 @@ async def get_match_members(session: AsyncSession, *, match_ids: Sequence[int]) 
     """Every ``stats.match_player`` row, event-only members included, ordered by ``(match, team, member)``.
 
     Columns: ``match_id, encounter_team_id, workspace_member_id, player_id, player_name, handle_snapshot,
-    discipline, workspace_name, game_handle, role_dimension, role_code, role_parent_code``. ``player_name`` is the
-    global player's canonical, unique ``players.user.name``; ``handle_snapshot`` is what the observation recorded;
-    ``workspace_name`` the member's ``display_name``; ``game_handle`` the match game's identity-provider handle the
-    match's workspace may show (``person_display.game_handle``); ``match_reads`` folds them into the shown name. A
+    discipline, workspace_name, game_handle, game_handle_verified, role_dimension, role_code, role_parent_code``.
+    ``player_name`` is the global player's canonical, unique ``players.user.name``; ``handle_snapshot`` is what the
+    observation recorded; ``workspace_name`` the member's ``display_name``; ``game_handle``/``game_handle_verified``
+    the match game's identity-provider handle the match's workspace may show and whether its account is verified
+    (``person_display.game_handle``); ``match_reads`` folds them into the shown name. A
     member of another workspace is not a participant of this match and is dropped; an observed role outside the
     owner's ontology reads as no role.
     """
@@ -252,7 +253,14 @@ async def get_match_members(session: AsyncSession, *, match_ids: Sequence[int]) 
                 p.handle_snapshot,
                 m.discipline,
                 wm.display_name.label("workspace_name"),
-                game_handle_of(wm.player_id, m.discipline, m.workspace_id).label("game_handle"),
+                *(
+                    column.label(name)
+                    for column, name in zip(
+                        game_handle_of(wm.player_id, m.discipline, m.workspace_id),
+                        ("game_handle", "game_handle_verified"),
+                        strict=True,
+                    )
+                ),
                 dimension.code.label("role_dimension"),
                 role.code.label("role_code"),
                 parent.code.label("role_parent_code"),

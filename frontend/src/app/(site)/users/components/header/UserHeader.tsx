@@ -115,7 +115,9 @@ const UserHeader = async ({ profile, user, scope, discipline, axis }: UserHeader
   // A single-game profile also names the person by their handle in that game (visible accounts only: the payload
   // already drops hidden ones); "all games" shows the canonical name alone.
   const identityProvider = metadata?.discipline.identity_provider ?? null;
-  const gameHandle = identityProvider ? (socialAccountsForProvider(user.social_accounts, identityProvider)[0] ?? null) : null;
+  // The same account the game's pages name the person by: a verified one first, then the primary.
+  const gameAccounts = identityProvider ? socialAccountsForProvider(user.social_accounts, identityProvider) : [];
+  const gameHandle = gameAccounts.find((account) => account.is_verified) ?? gameAccounts[0] ?? null;
 
   return (
     <HeroFrame className="aqt-player" variant="profile" tint={roleColor ?? undefined} spectrum={spectrum}>

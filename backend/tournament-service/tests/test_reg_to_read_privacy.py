@@ -83,6 +83,7 @@ def _reg_stub(extra: tuple[SimpleNamespace, ...] = ()) -> SimpleNamespace:
                         username="Faker#KR1",
                         display_name=None,
                         is_primary=True,
+                        is_verified=False,
                         visibilities=[SimpleNamespace(workspace_id=None)],
                     )
                 ],

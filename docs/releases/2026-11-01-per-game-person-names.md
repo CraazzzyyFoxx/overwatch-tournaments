@@ -10,10 +10,12 @@ Rules: `docs/users-identity.md` §3.6.
 - **One game's surfaces:** tournament rosters, teams, overview, participants, registrations, encounter pick-ban targets
   and mix pick-ban members, match pages (scoreboards, kill feed, breakdowns), tournament analytics standings, the
   lobby and character leaderboards, the statistics page with a game selected, drafts, and the mix
-  roster/lobby/room/leaderboard. Shown name, first found: the workspace `display_name`, then the game handle (the
-  game's identity provider's primary account visible in that workspace or globally; Steam shows the persona name, never
-  the id), then the event's snapshot, then `players.user.name`. The `#tag` is muted, and hidden in drafts, dense cells
-  and the encounter OG image. Hovering shows the canonical name, plus the name used at the event when it differs.
+  roster/lobby/room/leaderboard. Shown name, first found: the game handle of a **verified** account, then the
+  workspace `display_name`, then the game handle of an unverified account, then the event's snapshot, then
+  `players.user.name`. The game handle is the account of the game's own identity provider (Overwatch Battle.net,
+  LoL/Valorant Riot, Deadlock Steam) visible in that workspace or globally, verified first, then primary; Steam shows
+  the persona name, never the id. The `#tag` is muted, and hidden in drafts, dense cells and the encounter OG image.
+  Hovering shows the canonical name, plus the name used at the event when it differs.
 - **Cross-game surfaces stay canonical:** the profile header with "all games", teammates, achievements, the players
   index, platform leaders on the home page, favorites, and search results. With one game selected, the profile header
   adds a muted line with the person's handle in that game.

@@ -37,10 +37,10 @@ def _split_tag(text: str) -> tuple[str, str | None]:
 class PersonDisplayRead(BaseModel):
     """How a person is named on a surface owned by one game (docs/users-identity.md §3.6).
 
-    ``name`` + ``tag`` is the first of: the workspace's ``display_name``, the person's game handle (the game's
-    identity provider's primary account visible in scope; Steam: the persona name), the event's snapshot, the
-    canonical ``players.user.name``. ``canonical`` builds the profile link (``None``: nobody to link to);
-    ``snapshot`` is set only when it names the person differently from what is shown.
+    ``name`` + ``tag`` is the first of: the person's VERIFIED game handle, the workspace's ``display_name``, an
+    unverified game handle, the event's snapshot, the canonical ``players.user.name``. The game handle is the game's
+    identity provider's account visible in scope (Steam: the persona name). ``canonical`` builds the profile link
+    (``None``: nobody to link to); ``snapshot`` is set only when it names the person differently from what is shown.
     """
 
     # Every field is always serialized: the frontend type has no optional keys.
@@ -58,17 +58,21 @@ class PersonDisplayRead(BaseModel):
         canonical: str | None,
         provider: str | None = None,
         handle: str | None = None,
+        handle_verified: bool = False,
         workspace_name: str | None = None,
         snapshot: str | None = None,
     ) -> PersonDisplayRead:
-        """``handle`` is the game handle as shown (``game_handle`` / ``pick_game_handle``), already visibility-checked."""
+        """``handle`` is the game handle as shown and ``handle_verified`` its account's ``is_verified``
+        (``game_handle`` / ``pick_game_handle``), already visibility-checked."""
         workspace_name, handle, snapshot = (
             (value or "").strip() or None for value in (workspace_name, handle, snapshot)
         )
+        # A proven account names its owner over anything an organizer typed; an unproven one only fills in for it.
+        shows_handle = handle is not None and (handle_verified or workspace_name is None)
+        text = (handle if shows_handle else None) or workspace_name or snapshot or canonical or ""
         spec = PROVIDERS.get(provider or "")
         # A Steam persona is free text: a '#' in it is part of the name, not a discriminator.
-        persona = handle is not None and spec is not None and spec.normalize == "steam_id"
-        text = workspace_name or handle or snapshot or canonical or ""
-        name, tag = (text, None) if persona and not workspace_name else _split_tag(text)
+        persona = shows_handle and spec is not None and spec.normalize == "steam_id"
+        name, tag = (text, None) if persona else _split_tag(text)
         shown_snapshot = snapshot if snapshot is not None and snapshot.casefold() != text.casefold() else None
         return cls(name=name, tag=tag, canonical=canonical, snapshot=shown_snapshot)

@@ -350,7 +350,7 @@ async def load_member_seats(session: AsyncSession, encounter: Encounter) -> list
     handle = (
         game_handle(WorkspaceMember.player_id, provider, WorkspaceMember.workspace_id)
         if provider is not None
-        else sa.null()
+        else (sa.null(), sa.null())
     )
     rows = await session.execute(
         select(
@@ -362,7 +362,7 @@ async def load_member_seats(session: AsyncSession, encounter: Encounter) -> list
             CatalogRole.code,
             WorkspaceMember.display_name,
             User.name,
-            handle,
+            *handle,
         )
         .outerjoin(EncounterTeamMemberRole, EncounterTeamMemberRole.team_member_id == EncounterTeamMember.id)
         .outerjoin(CatalogRole, CatalogRole.id == EncounterTeamMemberRole.role_id)
@@ -371,11 +371,16 @@ async def load_member_seats(session: AsyncSession, encounter: Encounter) -> list
         .where(EncounterTeamMember.encounter_id == encounter.id, EncounterTeamMember.active.is_(True))
     )
     best: dict[int, tuple[int, MemberSeat]] = {}
-    for member_id, team_id, name, wm_id, is_captain, role, workspace_name, canonical, shown in rows.all():
+    for member_id, team_id, name, wm_id, is_captain, role, workspace_name, canonical, shown, verified in rows.all():
         order = role_order.get(role, len(role_order))
         if member_id not in best or order < best[member_id][0]:
             display = PersonDisplayRead.build(
-                canonical=canonical, provider=provider, handle=shown, workspace_name=workspace_name, snapshot=name
+                canonical=canonical,
+                provider=provider,
+                handle=shown,
+                handle_verified=bool(verified),
+                workspace_name=workspace_name,
+                snapshot=name,
             )
             best[member_id] = (order, MemberSeat(member_id, team_id, name, wm_id, bool(is_captain), display))
     return [seat for _member_id, (_order, seat) in sorted(best.items(), key=lambda item: (item[1][0], item[0]))]
