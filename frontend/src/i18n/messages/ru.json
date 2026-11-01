@@ -2546,6 +2546,195 @@
         "empty": "Для этого матча события не записаны."
       }
     },
+    "deadlock": {
+      "tab": {
+        "lanes": "Линии",
+        "rosters": "Составы",
+        "table": "Таблица"
+      },
+      "build": "Сборка",
+      "noPurchases": "Покупки не записаны",
+      "soldAt": "Продан в {time}",
+      "imbuedOn": "Усиливает: {ability}",
+      "itemsError": "Не удалось загрузить данные предметов с deadlock-api. Сборки и источники урона не показаны.",
+      "expand": "Показать подробности: {name}",
+      "collapse": "Скрыть подробности: {name}",
+      "invested": "{souls} souls в предметах",
+      "side": {
+        "hidden_king": "Hidden King",
+        "archmother": "Archmother"
+      },
+      "slot": {
+        "weapon": "Оружие",
+        "vitality": "Живучесть",
+        "spirit": "Дух"
+      },
+      "ribbon": {
+        "title": "Ход матча",
+        "time": "Время матча",
+        "end": "Конец матча",
+        "of": "из {time}",
+        "hint": "Это таймлайн матча: потяните по нему или нажмите на момент, и все вкладки ниже покажут матч на эту минуту. Правый край — конец матча.",
+        "legend": {
+          "title": "Обозначения",
+          "fight": "Бой",
+          "colour": "Цвет — команда, которая это сделала; наведите на значок, чтобы увидеть что и когда.",
+          "open": "Легенда и подсказка"
+        },
+        "tip": {
+          "destroyed": "разрушила строение команды {owner}",
+          "objectiveNo": "Объект №{n} команды {team}",
+          "bossNo": "Мид-босс №{n} в матче",
+          "jump": "Нажмите, чтобы перейти сюда"
+        }
+      },
+      "scoreboard": {
+        "final": "Итоги матча",
+        "at": "На {time}: убийства, смерти и предметы точно, остальное по снимку игры на {sample}",
+        "endOnly": "Записывается только в конце матча"
+      },
+      "preset": {
+        "overview": "Обзор",
+        "combat": "Бой",
+        "economy": "Экономика",
+        "support": "Поддержка"
+      },
+      "col": {
+        "kills": "K",
+        "deaths": "D",
+        "assists": "A",
+        "net_worth": "Souls",
+        "souls_per_min": "Souls/мин",
+        "last_hits": "LH",
+        "denies": "Denies",
+        "player_damage": "Урон",
+        "boss_damage": "По объектам",
+        "player_healing": "Лечение",
+        "damage_per_min": "Урон/мин",
+        "damage_per_life": "Урон/жизнь",
+        "player_damage_taken": "Получено",
+        "taken_per_life": "Получено/жизнь",
+        "accuracy": "Точн.",
+        "headshot_rate": "В голову",
+        "kill_participation": "Участие",
+        "creep_kills": "Крипы",
+        "neutral_kills": "Нейтралы",
+        "souls_players": "За убийства",
+        "souls_lost": "Потеряно",
+        "self_healing": "Себе",
+        "teammate_healing": "Союзникам",
+        "player_barriering": "Барьеры",
+        "damage_absorbed": "Поглощено",
+        "damage_mitigated": "Снижено",
+        "heal_prevented": "Срезано"
+      },
+      "colTitle": {
+        "kills": "Убийства",
+        "deaths": "Смерти",
+        "assists": "Помощь",
+        "net_worth": "Souls",
+        "souls_per_min": "Souls в минуту",
+        "last_hits": "Добито крипов",
+        "denies": "Denies",
+        "player_damage": "Урон по героям",
+        "boss_damage": "Урон по объектам",
+        "player_healing": "Лечение",
+        "damage_per_min": "Урон по героям в минуту",
+        "damage_per_life": "Урон по героям за жизнь",
+        "player_damage_taken": "Полученный урон",
+        "taken_per_life": "Полученный урон за жизнь",
+        "accuracy": "Точность стрельбы",
+        "headshot_rate": "Попадания в голову среди попаданий по героям",
+        "kill_participation": "Участие в убийствах",
+        "creep_kills": "Убито крипов на линии",
+        "neutral_kills": "Убито нейтралов",
+        "souls_players": "Souls за убийства",
+        "souls_lost": "Потеряно souls при смертях",
+        "self_healing": "Лечение себя",
+        "teammate_healing": "Лечение союзников",
+        "player_barriering": "Выданные барьеры",
+        "damage_absorbed": "Поглощённый урон",
+        "damage_mitigated": "Сниженный урон",
+        "heal_prevented": "Срезанное лечение"
+      },
+      "panel": {
+        "buildPath": "Путь сборки",
+        "damageTo": "Урон по героям",
+        "damageBySource": "Урон по источникам",
+        "otherSource": "Прочее",
+        "rest": "Остальное",
+        "rivals": "Соперники",
+        "nemesis": "Чаще всего убивал его",
+        "victim": "Чаще всего убивал он",
+        "firsts": "Первый в матче",
+        "times": "{count, plural, one {# раз} few {# раза} many {# раз} other {# раза}}"
+      },
+      "breakdown": {
+        "objectives": "Объекты",
+        "midBoss": "Мид-босс",
+        "soulsTitle": "Перевес по souls",
+        "turningTitle": "Переломы",
+        "turningHint": "Нажмите на время, чтобы показать его на ленте",
+        "soulsAria": "{team} впереди на {lead} souls к концу",
+        "soulsEven": "Souls поровну к концу",
+        "biggestLead": "Наибольший перевес",
+        "neverLed": "ни разу не вела",
+        "leadChanges": "Смены лидера",
+        "firstObjective": "Первый объект",
+        "stolen": "украден",
+        "graphTitle": "Игроки по времени",
+        "graphHint": "Наведите на игрока, чтобы выделить линию",
+        "graphSeries": "Что показывают линии",
+        "graphAria": "{series} каждого игрока по времени",
+        "sourcesTitle": "Откуда souls",
+        "sourcesHint": "Souls каждого игрока по источникам",
+        "source": {
+          "laneCreeps": "Крипы на линии",
+          "neutrals": "Нейтралы",
+          "heroes": "Убийства и помощь",
+          "bosses": "Боссы",
+          "other": "Прочее"
+        }
+      },
+      "lanes": {
+        "name": {
+          "yellow": "Жёлтая линия",
+          "green": "Зелёная линия",
+          "blue": "Синяя линия",
+          "unknown": "Линия"
+        },
+        "pick": "Выбор линии",
+        "won": "выиграла линию",
+        "even": "Линия вничью",
+        "leadAt": "больше souls на {time}",
+        "cutoff": "Линии на {time}.",
+        "empty": "В этом матче нет данных о линиях.",
+        "showOnRibbon": "Показать на ленте",
+        "laning": "Лайнинг",
+        "chartTitle": "Линия на протяжении матча",
+        "chartHint": "Перевес souls этих игроков; ромбы — падения строений линии",
+        "chartAria": "Перевес souls игроков линии по ходу матча: {lead} к концу",
+        "structures": "Строения линии",
+        "structuresHint": "Когда пало строение каждой стороны на этой линии. Нажмите на время, чтобы показать его на ленте.",
+        "standing": "Стоит",
+        "fellAt": "{what} команды {team} пал в {time}, показать на ленте"
+      },
+      "timeline": {
+        "show": "Показать {time} на ленте",
+        "midBossTaken": "взяла мид-босса",
+        "midBossStolen": "украла мид-босса",
+        "destroyed": "разрушила: {what}",
+        "picks": "Одиночные убийства",
+        "objective": {
+          "core": "Patron",
+          "guardian": "Guardian",
+          "walker": "Walker",
+          "patron": "Щит Patron",
+          "shrine": "Shrine",
+          "baseGuardian": "Base Guardian"
+        }
+      }
+    },
     "meta": {
       "matchTitle": "{home} vs {away}",
       "matchDescription": "Обзор матча {home} vs {away} на {siteName}."

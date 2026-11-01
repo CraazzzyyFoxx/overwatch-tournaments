@@ -1,0 +1,23 @@
+/* Deadlock's own hues. Core has no side or item-slot colours; this module paints the two in-game sides (Hidden King
+   amber, Archmother sapphire) and the three shop columns (weapon, vitality, spirit) the way the game does, so the
+   tokens live here and load with the module's chunks. A match view maps its two participations onto the sides it
+   played (`--dl-home` / `--dl-away`, set on the view's root). */
+:root {
+  --dl-hidden-king: hsl(40 88% 62%);
+  --dl-archmother: hsl(228 84% 72%);
+  --dl-weapon: hsl(29 86% 58%);
+  --dl-vitality: hsl(96 46% 52%);
+  --dl-spirit: hsl(281 60% 70%);
+}
+
+/* An item that just entered the inventory while the reader moves through the match. */
+@keyframes dl-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
