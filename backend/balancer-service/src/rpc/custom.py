@@ -609,11 +609,11 @@ def _dump_round(
     map_info: dict[int, tuple[str, str | None]],
     bans: list[dict[str, int]],
     picks: list[dict[str, int | str]],
-    log: tuple[int | None, str | None],
+    log: tuple[int | None, str | None, str | None],
 ) -> dict[str, Any]:
     """One recorded round as the history wire spells it: the two seats by slot, the winning slot, the hero bans and
     whose hero each pick was."""
-    stats_match_id, log_state = log
+    stats_match_id, log_state, match_search = log
     encounter = round_.encounter
     teams = sorted(encounter.teams, key=lambda team: team.slot)
     map_id = encounter.games[0].map_id if encounter.games else None
@@ -640,10 +640,11 @@ def _dump_round(
         "recorded_by": encounter.result_audit[0].actor_user_id if encounter.result_audit else None,
         # Confirmed, not created: a round's encounter is created when its match starts (Decision 7).
         "recorded_at": encounter.confirmed_at.isoformat() if encounter.confirmed_at else None,
-        # The uploaded match log: the bound stats match, else (while there is none) whether the newest upload for this
-        # encounter is still being parsed or could not be bound.
+        # Its statistics: the bound stats match, else (while there is none) whether the newest uploaded log or match
+        # import is still coming or could not be bound, and whether the match is still being looked up by its players.
         "stats_match_id": stats_match_id,
         "log_state": log_state,
+        "match_search": match_search,
     }
 
 
@@ -662,7 +663,7 @@ async def _dump_rounds(session: Any, rounds: list[Any]) -> list[dict[str, Any]]:
             map_info,
             bans.get(round_.encounter.id, []),
             picks.get(round_.encounter.id, []),
-            logs.get(round_.encounter.id, (None, None)),
+            logs.get(round_.encounter.id, (None, None, None)),
         )
         for round_ in rounds
     ]

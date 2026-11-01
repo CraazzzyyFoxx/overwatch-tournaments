@@ -1124,7 +1124,12 @@ class CustomGameRoundStoreTests(EncounterWriterCase):
             s.add(oasis)
             await s.commit()
         self.addAsyncCleanup(self._drop_maps, [oasis.id])
-        bound, failed, pending, done, bare = [await self._record(self._draft()) for _ in range(5)]
+        bound, failed, pending, done, bare, searching, gave_up = [await self._record(self._draft()) for _ in range(7)]
+
+        def search(encounter_id: int, status: models.MatchSearchStatus) -> models.MatchSearch:
+            return models.MatchSearch(
+                workspace_id=self.ids["ws"], discipline="overwatch", encounter_id=encounter_id, status=status
+            )
 
         def job(encounter_id: int, status: IngestJobStatus, n: int) -> models.IngestJob:
             return models.IngestJob(
@@ -1149,6 +1154,12 @@ class CustomGameRoundStoreTests(EncounterWriterCase):
                     job(failed, IngestJobStatus.PENDING, 0),
                     job(pending, IngestJobStatus.PENDING, 0),
                     job(done, IngestJobStatus.DONE, 0),
+                    # A bound match wins over a search too.
+                    search(bound, models.MatchSearchStatus.PENDING),
+                    # A search still looking is something still coming, even over a failed job.
+                    search(searching, models.MatchSearchStatus.PENDING),
+                    job(searching, IngestJobStatus.FAILED, 0),
+                    search(gave_up, models.MatchSearchStatus.NOT_FOUND),
                 ]
             )
             await s.flush()
@@ -1163,13 +1174,15 @@ class CustomGameRoundStoreTests(EncounterWriterCase):
 
         self.assertEqual(
             {
-                bound: (match_id, None),
-                failed: (None, "failed"),
-                pending: (None, "processing"),
-                done: (None, None),
-                bare: (None, None),
+                bound: (match_id, None, None),
+                failed: (None, "failed", None),
+                pending: (None, "processing", None),
+                done: (None, None, None),
+                bare: (None, None, None),
+                searching: (None, "processing", "searching"),
+                gave_up: (None, None, "not_found"),
             },
-            {row["id"]: (row["stats_match_id"], row["log_state"]) for row in rows},
+            {row["id"]: (row["stats_match_id"], row["log_state"], row["match_search"]) for row in rows},
         )
 
     async def test_the_history_lists_whose_hero_each_pick_was(self) -> None:

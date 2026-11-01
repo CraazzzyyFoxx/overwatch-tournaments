@@ -34,11 +34,17 @@ const PENDING_POLL_MS = 30_000;
  * Where a match id is filed: a tournament encounter's games (`games` are the positions it may be filed for: one,
  * a captain's report, hides the picker; `admin` uses the organizer routes, whose rows carry the warnings) or a
  * recorded round of a mix (one game by construction, always the organizer read; `onSubmitted` runs after a filed
- * id, so the caller can refresh what the import changes).
+ * id, so the caller can refresh what the import changes; `search` is the round's match being looked up by its
+ * players, or given up on).
  */
 export type MatchImportScope =
   | { encounterId: number; games: ReadonlyArray<{ id: number; position: number }>; admin?: boolean }
-  | { customGameId: number; encounterId: number; onSubmitted: () => void };
+  | {
+      customGameId: number;
+      encounterId: number;
+      onSubmitted: () => void;
+      search?: "searching" | "not_found" | null;
+    };
 
 /**
  * Files a game's match by its id in the game's own records, and lists what was filed: the stats worker fetches it
@@ -139,6 +145,11 @@ export function MatchImport({ scope }: Readonly<{ scope: MatchImportScope }>) {
         </div>
         <p className="text-caption text-[color:var(--aqt-fg-muted)]">{t(mix ? "hintMix" : "hint")}</p>
       </form>
+      {mix?.search ? (
+        <p className="text-caption text-[color:var(--aqt-fg-muted)]">
+          {t(mix.search === "searching" ? "autoSearch.searching" : "autoSearch.notFound")}
+        </p>
+      ) : null}
 
       {imports.isError ? (
         <p className="text-caption text-[color:var(--aqt-fg-muted)]">{t("loadFailed")}</p>

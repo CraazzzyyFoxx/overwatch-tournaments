@@ -17,10 +17,11 @@ import sqlalchemy as sa
 from shared import models
 from shared.core import enums
 from shared.core.errors import BaseAPIException
+from shared.disciplines.ingest import MatchCandidate
 from shared.models.platform.audit import AuditLog
 from shared.repository import CustomGameRoundRepository
 from shared.rpc.identity import rehydrate_user
-from src.services.ingest import fetch
+from src.services.ingest import fetch, search
 from src.services.match_logs import admin_reads, uploads
 from src.services.match_logs.log_records import log_records_service
 from tests.encounter_seed import seed_scoring_rule
@@ -555,7 +556,7 @@ def test_a_mix_round_import_is_hinted_at_the_round_and_stored_under_the_mix(
                 game,
             )
             # The history chip speaks while the source does not serve the match yet.
-            assert await round_log(env, encounter) == (None, "processing")
+            assert await round_log(env, encounter) == (None, "processing", None)
 
             job = await job_of(env, await store_fetched(env, read["id"], b'{"match_info": "first answer"}'))
 
@@ -667,5 +668,187 @@ def test_a_mix_import_warns_about_seats_its_match_does_not_show(stats_parity_dat
                 [read] = await fetch.list_fetches(session, encounter_game_id=game, with_warnings=True)
 
             assert read["warnings"] == [{"code": "participants_dropped", "count": 1, "characters": []}]
+
+    asyncio.run(run())
+
+
+STEAM = {f"Ingest{prefix}{index}": f"{base + index}" for prefix, base in (("H", 101), ("A", 201)) for index in range(3)}
+
+
+def candidate(external_id, *sides):
+    return MatchCandidate(external_id=external_id, teams=tuple(frozenset(side) for side in sides))
+
+
+async def _played(env, mix):
+    """A recorded round of the six seated players, every one of them with a linked Steam account, started 40 min ago."""
+    encounter = await _round(env, mix, staffed=True)
+    async with env.sf() as session:
+        await session.execute(
+            sa.update(models.Encounter)
+            .where(models.Encounter.id == encounter)
+            .values(started_at=datetime.now(UTC) - timedelta(minutes=40))
+        )
+        linked = set(
+            await session.scalars(
+                sa.select(models.SocialAccount.user_id).where(models.SocialAccount.provider == "steam")
+            )
+        )
+        session.add_all(
+            models.SocialAccount(
+                user_id=env.users[name], provider="steam", username=account, username_normalized=account
+            )
+            for name, account in STEAM.items()
+            if env.users[name] not in linked
+        )
+        await session.commit()
+    return encounter
+
+
+def searchable(monkeypatch, answer):
+    """The mix's game searches with ``answer`` (a list of candidates); returns the queries it was asked."""
+    queries = []
+
+    async def searcher(query):
+        queries.append(query)
+        return answer
+
+    monkeypatch.setattr(search, "searcher_of", lambda discipline: ("deadlock_api", searcher, "steam"))
+    return queries
+
+
+async def search_tick(env, now=None):
+    """The worker tick's pass, without its lease: enroll the recorded rounds, then try every due search."""
+    moment = now or datetime.now(UTC)
+    async with env.sf() as session:
+        await search._enroll(session, "overwatch", moment)
+        await session.commit()
+        due = await search._due_ids(session, "overwatch", moment)
+    for search_id in due:
+        await search._attempt(search_id, session_factory=env.sf, now=moment)
+
+
+async def search_of(env, encounter_id):
+    async with env.sf() as session:
+        return await session.scalar(
+            sa.select(models.MatchSearch)
+            .where(models.MatchSearch.encounter_id == encounter_id)
+            .execution_options(populate_existing=True)
+        )
+
+
+async def fetches_of(env, encounter_id):
+    async with env.sf() as session:
+        return list(
+            await session.scalars(
+                sa.select(models.MatchFetch).where(models.MatchFetch.hint_encounter_id == encounter_id)
+            )
+        )
+
+
+HOME, AWAY = {"101", "102", "103"}, {"201", "202", "203"}
+
+
+def test_a_recorded_round_files_the_one_match_its_sides_played(stats_parity_database, monkeypatch, fetchable):
+    async def run():
+        async with environment(stats_parity_database, monkeypatch) as env:
+            mix = await _mix(env)
+            encounter = await _played(env, mix)
+            async with env.sf() as session:
+                played = await session.get(models.Encounter, encounter)
+            queries = searchable(
+                monkeypatch,
+                [
+                    # The same six split otherwise: another round of theirs.
+                    candidate("8", {"101", "102", "201"}, {"103", "202", "203"}),
+                    # Ours, sides swapped, one private profile on each side.
+                    candidate("7", AWAY - {"203"}, HOME - {"103"}),
+                ],
+            )
+            async with env.sf() as session:
+                await search._enroll(session, "overwatch", datetime.now(UTC))
+                await session.commit()
+            assert await round_log(env, encounter) == (None, "processing", "searching")
+
+            await search_tick(env)
+
+            [query] = queries
+            assert query.identities == HOME | AWAY
+            assert (query.started_from, query.started_until) == (
+                played.started_at - search.START_SLACK,
+                played.confirmed_at,
+            )
+            row = await search_of(env, encounter)
+            assert (row.status, row.external_id, row.attempts) == (models.MatchSearchStatus.FOUND, "7", 1)
+            [filed] = await fetches_of(env, encounter)
+            assert (filed.external_id, filed.status, filed.requested_by_user_id, filed.hint_tournament_id) == (
+                "7",
+                models.MatchFetchStatus.PENDING,
+                None,
+                None,
+            )
+            assert filed.hint_encounter_game_id == await game_of(env, encounter)
+            assert await round_log(env, encounter) == (None, "processing", None)
+
+    asyncio.run(run())
+
+
+def test_a_match_two_rounds_could_be_or_another_round_holds_is_left_to_the_host(
+    stats_parity_database, monkeypatch, fetchable
+):
+    async def run():
+        async with environment(stats_parity_database, monkeypatch) as env:
+            mix = await _mix(env)
+            earlier, later = await _played(env, mix), await _played(env, mix)
+            # The earlier round already has match 7.
+            await mix_import(env, mix, earlier, "7")
+            searchable(
+                monkeypatch, [candidate("7", HOME, AWAY), candidate("9", HOME, AWAY), candidate("10", HOME, AWAY)]
+            )
+
+            await search_tick(env)
+
+            assert (await search_of(env, earlier)).status == models.MatchSearchStatus.STOPPED
+            row = await search_of(env, later)
+            assert (row.status, row.last_error) == (models.MatchSearchStatus.NOT_FOUND, "ambiguous: 9, 10")
+            assert await fetches_of(env, later) == []
+            assert await round_log(env, later) == (None, None, "not_found")
+
+    asyncio.run(run())
+
+
+def test_no_match_yet_backs_off_until_the_window_closes(stats_parity_database, monkeypatch, fetchable):
+    async def run():
+        async with environment(stats_parity_database, monkeypatch) as env:
+            mix = await _mix(env)
+            encounter = await _played(env, mix)
+            searchable(monkeypatch, [])
+            now = datetime.now(UTC)
+
+            await search_tick(env, now)
+
+            row = await search_of(env, encounter)
+            assert (row.status, row.attempts, row.last_error) == (models.MatchSearchStatus.PENDING, 1, "no_match_yet")
+            assert row.next_attempt_at == now + fetch.next_delay(1)
+
+            await search._attempt(row.id, session_factory=env.sf, now=row.created_at + fetch.FETCH_WINDOW)
+
+            row = await search_of(env, encounter)
+            assert (row.status, row.last_error) == (models.MatchSearchStatus.NOT_FOUND, "not_found_in_window")
+
+    asyncio.run(run())
+
+
+def test_a_host_filing_the_id_stops_the_search_at_once(stats_parity_database, monkeypatch, fetchable):
+    async def run():
+        async with environment(stats_parity_database, monkeypatch) as env:
+            mix = await _mix(env)
+            encounter = await _played(env, mix)
+            searchable(monkeypatch, [])
+            await search_tick(env)
+
+            await mix_import(env, mix, encounter, "7")
+
+            assert (await search_of(env, encounter)).status == models.MatchSearchStatus.STOPPED
+            assert await round_log(env, encounter) == (None, "processing", None)
 
     asyncio.run(run())

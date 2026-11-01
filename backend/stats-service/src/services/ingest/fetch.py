@@ -155,7 +155,8 @@ async def submit_fetch(session: AsyncSession, *, data: dict[str, Any], requested
 
     ``data`` names a game its caller already authorized: ``workspace_id``, ``discipline``, ``tournament_id`` (``None``
     for a mix round), ``encounter_id``, ``encounter_game_id`` and the caller's ``external_id``. A failed request is
-    reset (a fresh 24 h window); a live or done one is returned as it is.
+    reset (a fresh 24 h window); a live or done one is returned as it is. A mix round's pending match search stops: the
+    round has its id.
     """
     kind = source_kind_of(data["discipline"])
     external_id = data.get("external_id")
@@ -191,6 +192,15 @@ async def submit_fetch(session: AsyncSession, *, data: dict[str, Any], requested
         row.status, row.attempts, row.last_error, row.ingest_job_id = MatchFetchStatus.PENDING, 0, None, None
         row.created_at = row.next_attempt_at = now
         row.requested_by_user_id = requested_by_user_id
+    if tournament_id is None:
+        await session.execute(
+            sa.update(models.MatchSearch)
+            .where(
+                models.MatchSearch.encounter_id == int(data["encounter_id"]),
+                models.MatchSearch.status == models.MatchSearchStatus.PENDING,
+            )
+            .values(status=models.MatchSearchStatus.STOPPED)
+        )
     read = _read(row)
     await session.commit()
     return read

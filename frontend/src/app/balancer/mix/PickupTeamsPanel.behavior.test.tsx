@@ -229,6 +229,7 @@ function match(overrides: Partial<CustomGameMatch> = {}): CustomGameMatch {
     picks: [],
     stats_match_id: null,
     log_state: null,
+    match_search: null,
     ...overrides,
   };
 }

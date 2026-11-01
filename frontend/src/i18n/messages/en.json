@@ -4879,6 +4879,10 @@
         "label": "Match ID",
         "hint": "The match ID from the game's match history. Its result and statistics are imported once the game's servers publish the match, which can take a while.",
         "hintMix": "The match ID from the game's match history. Its statistics are imported once the game's servers publish the match, which can take a while.",
+        "autoSearch": {
+          "searching": "Looking this match up among the players' private lobby games. The ID is filed on its own once the match is found.",
+          "notFound": "The match was not found by its players. Enter its ID above."
+        },
         "gameLabel": "Game",
         "game": "Game {position}",
         "submit": "Import",

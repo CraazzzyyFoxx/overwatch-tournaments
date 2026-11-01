@@ -11,12 +11,14 @@ pairs) and rejects a duplicate pair; an unknown pair is the caller's ``unsupport
 
 A ``MatchFetcher`` is the only IO a module offers ingest: ``fetch(external_id) -> raw bytes`` for a source kind its
 decoder reads. Stats core owns the pending row, the retries and the job; the fetcher raises ``MatchFetchNotReady``
-while the source does not serve the match yet and ``MatchFetchFailed`` when it never will.
+while the source does not serve the match yet and ``MatchFetchFailed`` when it never will. A ``MatchSearcher`` of the
+same kind answers the source's matches a pickup mix round's players played in a time window (``MatchCandidate``);
+stats core decides which one is the round's and fetches it by its id. It raises the same two exceptions.
 """
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable, Iterable, Mapping
+from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
@@ -35,9 +37,12 @@ __all__ = (
     "DecodeError",
     "Decoder",
     "DeriveMatch",
+    "MatchCandidate",
     "MatchFetchFailed",
     "MatchFetchNotReady",
     "MatchFetcher",
+    "MatchQuery",
+    "MatchSearcher",
     "assemble_ingestors",
 )
 
@@ -110,6 +115,28 @@ Decoder = Callable[[bytes, DecodeContext], "MatchDoc"]
 DeriveMatch = Callable[["AsyncSession", "MatchDoc", BoundMatch], Awaitable["MatchDoc"]]
 #: ``fetch(external_id) -> raw bytes`` of one match from the source kind's producer (the bytes an upload would carry).
 MatchFetcher = Callable[[str], Awaitable[bytes]]
+
+
+@dataclass(frozen=True, slots=True)
+class MatchQuery:
+    """What a pickup mix round tells a source about its match: its seated players' identities (the discipline's
+    ``identity_provider`` ids) and when the match must have started."""
+
+    identities: frozenset[str]
+    started_from: datetime
+    started_until: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class MatchCandidate:
+    """One match a source found: its external id and each side's participant identities, anonymous ones left out."""
+
+    external_id: str
+    teams: tuple[frozenset[str], ...]
+
+
+#: ``search(query) -> candidates``: every match the source knows any of the identities played in the window.
+MatchSearcher = Callable[[MatchQuery], Awaitable[Sequence[MatchCandidate]]]
 
 
 class MatchFetchNotReady(Exception):

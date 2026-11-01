@@ -236,7 +236,12 @@ function MatchHistoryRow({
               <DialogDescription>{tHistory("importMatchDescription")}</DialogDescription>
             </DialogHeader>
             <MatchImport
-              scope={{ customGameId: logUpload.customGameId, encounterId: match.id, onSubmitted: logUpload.onUploaded }}
+              scope={{
+                customGameId: logUpload.customGameId,
+                encounterId: match.id,
+                onSubmitted: logUpload.onUploaded,
+                search: match.match_search
+              }}
             />
           </DialogContent>
         </Dialog>

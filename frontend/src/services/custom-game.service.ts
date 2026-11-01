@@ -381,6 +381,11 @@ export type CustomGameMatch = {
   stats_match_id: number | null;
   /** Why a round with no stats yet shows a chip: its newest log or match import is still coming, or could not be bound. */
   log_state: "processing" | "failed" | null;
+  /**
+   * The round's match looked up by its players (a game whose matches can be found that way): still looking, or given
+   * up so the host files the id by hand. Null otherwise, and once there are stats.
+   */
+  match_search: "searching" | "not_found" | null;
 };
 
 /** Patch semantics: an omitted key is left untouched on the server. */

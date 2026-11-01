@@ -669,10 +669,12 @@ DOCS: dict[str, dict] = {
             "its two teams by slot (slot 1 banned first) with name and score, its hero bans {slot, item_id} in order, "
             "whose hero each pick was {slot, member_id, name, item_id} in pick order, "
             "the winning slot (null for a draw), lobby, map, recorder and the rank points it applied, plus its "
-            'statistics: stats_match_id (the bound stats match, null when none) and log_state ("processing" while '
-            "there is no stats match and the newest uploaded log is pending/processing or the newest match import "
-            'waits for the game\'s source; else "failed" when that log failed/awaits a link or that import gave up; '
-            "else null)."
+            'statistics: stats_match_id (the bound stats match, null when none), log_state ("processing" while '
+            "there is no stats match and the newest uploaded log is pending/processing, the newest match import "
+            'waits for the game\'s source or the match is still being looked up by its players; else "failed" when '
+            'that log failed/awaits a link or that import gave up; else null) and match_search ("searching" while '
+            'the match of a game that can be found by its players is still being looked up, "not_found" once the '
+            "search gave up and the host files the id by hand; else null)."
         ),
     },
     "rpc.balancer.custom.undo_match": {

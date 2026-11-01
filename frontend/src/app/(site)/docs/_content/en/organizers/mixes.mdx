@@ -182,6 +182,8 @@ For a game whose matches the site fetches by ID (Deadlock today), each history r
 
 A wrong ID is fixed by filing the right one: its statistics replace the previous ones. One match ID serves one match of the workspace. After an undo, file the same ID again from the re-recorded match's row.
 
+You often do not need to type the ID at all. Once the result is recorded, the site looks the match up by its players: a private lobby match that started between **Start match** and the recorded result and has each team of the round on one side — at least half of each team, since private profiles are hidden, and nobody of a team on the other side. While it is looking, the row says **Log processing** and the import window says so too; when it finds exactly one such match, it files its ID itself. If it finds several, or nothing within 24 hours, the window says the match was not found by its players, and you enter the ID by hand. Filing an ID yourself stops the search. It only knows players who linked Steam.
+
 ## Mix statuses
 
 | Status | What it means |

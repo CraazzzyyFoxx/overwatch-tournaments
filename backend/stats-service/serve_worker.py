@@ -45,6 +45,7 @@ from src.services.achievement.engine.consumer import (
 )
 from src.services.ingest import consumers as ingest_consumers
 from src.services.ingest import fetch as match_fetch
+from src.services.ingest import search as match_search
 from src.services.match_logs import consumers as match_log_consumers
 from src.services.match_logs import reaper as logs_reaper
 from src.services.match_logs import retention as logs_retention
@@ -137,6 +138,8 @@ async def start_worker() -> None:
     logs_retention.start_scheduler(redis=realtime_redis, s3=s3_client)
     # Pull the selected disciplines' matches requested by external id (a no-op without a module fetcher).
     match_fetch.start_scheduler(redis=realtime_redis, s3=s3_client, disciplines=[spec.code for spec in SELECTED])
+    # Look up the selected disciplines' mix round matches by their players (a no-op without a module searcher).
+    match_search.start_scheduler(redis=realtime_redis, disciplines=[spec.code for spec in SELECTED])
     subscription_scheduler.start_scheduler()
     # Initial build of the hero global-stats materialized view: a debounced background task that never blocks startup.
     hero_stats_refresh.hero_stats_refresh_service.request_refresh(db.async_session_maker, logger)
@@ -157,6 +160,7 @@ async def stop_worker() -> None:
     logs_reaper.shutdown_scheduler()
     logs_retention.shutdown_scheduler()
     match_fetch.shutdown_scheduler()
+    match_search.shutdown_scheduler()
     subscription_scheduler.shutdown_scheduler()
     _outbox_scheduler.shutdown()
 
