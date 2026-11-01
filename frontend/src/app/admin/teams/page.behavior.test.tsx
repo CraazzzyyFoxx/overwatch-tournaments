@@ -91,6 +91,7 @@ function player(overrides: Partial<Player> = {}): Player {
     created_at: new Date("2026-01-01T00:00:00Z"),
     updated_at: null,
     name: "Nova",
+    display: { name: "Nova", tag: null, canonical: "Nova", snapshot: null },
     rank: 3400,
     division: 4,
     role: { dimension: "player_role", role: "damage" },
@@ -117,7 +118,17 @@ function team(overrides: Partial<Team> = {}): Team {
     total_sr: 16752,
     captain_id: 91,
     tournament_id: 7,
-    players: [player(), player({ id: 502, name: "Echo", user_id: 92, is_substitution: true, user: { id: 92, name: "Echo" } as Player["user"] })],
+    players: [
+      player(),
+      player({
+        id: 502,
+        name: "Echo",
+        display: { name: "Echo", tag: null, canonical: "Echo", snapshot: null },
+        user_id: 92,
+        is_substitution: true,
+        user: { id: 92, name: "Echo" } as Player["user"]
+      })
+    ],
     tournament: { id: 7, name: "MoonRise Mix Vol.4", discipline: "overwatch" } as Team["tournament"],
     placement: 3,
     group: null,

@@ -233,6 +233,7 @@ describe("mix directory browsing game", () => {
     const aria: MixMemberStats = {
       workspace_member_id: 3,
       display_name: "Aria",
+      display: { name: "Aria", tag: null, canonical: null, snapshot: null },
       identity: null,
       games: 9,
       wins: 6,

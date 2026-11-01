@@ -114,6 +114,34 @@ class RiotSearchResolutionTests(IsolatedAsyncioTestCase):
         for query in (f"bst{unlisted}", f"hid{unlisted}"):
             assert await users.search_by_name(self.session, query) == [], query
 
+    async def test_search_reaches_a_public_steam_persona_but_not_a_hidden_one(self) -> None:
+        marker = uuid4().hex[:8]
+        unlisted = uuid4().hex[:8]  # own marker: sharing one would trigram-match the owner's profile name
+        player = models.User(name=f"Plain{marker}#2222")
+        hidden_owner = models.User(name=f"Quiet{uuid4().hex[:8]}#3333")
+        self.session.add_all([player, hidden_owner])
+        await self.session.flush()
+        # The Steam handle is the numeric account id; the persona is the only searchable text.
+        await social_identity_service.upsert(
+            self.session,
+            user_id=player.id,
+            provider="steam",
+            username=str(200_000_000 + int(marker, 16) % 10**8),
+            display_name=f"Persona {marker}",
+        )
+        await social_identity_service.upsert(
+            self.session,
+            user_id=hidden_owner.id,
+            provider="steam",
+            username=str(300_000_000 + int(unlisted, 16) % 10**8),
+            display_name=f"Ghost {unlisted}",
+            ensure_global_visibility=False,
+        )
+
+        found = await users.search_by_name(self.session, f"Persona {marker}")
+        assert [(row.id, row.name) for row in found] == [(player.id, player.name)]
+        assert await users.search_by_name(self.session, f"Ghost {unlisted}") == []
+
     async def test_canonical_name_wins_over_a_game_handle_and_handles_only_back_old_links(self) -> None:
         marker = uuid4().hex[:6]
         # B's canonical name has a hyphen; A's Riot handle is the same text with the tag separator.

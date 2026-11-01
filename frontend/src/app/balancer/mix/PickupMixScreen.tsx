@@ -22,7 +22,6 @@ import {
   canWriteMix,
   buildMixOwner,
   myLobbyTeam,
-  playerLabel,
   summarizeLineup,
 } from "@/app/balancer/mix/pickup-lineup";
 import { usePickupMix } from "@/app/balancer/mix/usePickupMix";
@@ -275,7 +274,7 @@ function PickupMixDetail({ initialGame }: Readonly<{ initialGame: CustomGame }>)
   const copyHandles = () => {
     const handles = rows
       .filter((row) => row.participation !== "benched")
-      .map((row) => row.identity?.handle ?? playerLabel(row));
+      .map((row) => row.identity?.handle ?? row.display.name);
     if (handles.length === 0) {
       notify.error(tTeams("copyEmpty"));
       return;

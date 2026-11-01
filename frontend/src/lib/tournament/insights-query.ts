@@ -4,6 +4,7 @@ import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import draftService from "@/services/draft.service";
 import tournamentService from "@/services/tournament.service";
 import type { DraftBoard } from "@/types/draft.types";
+import type { PersonDisplay } from "@/types/user.types";
 import type {
   PickBanOutcomesResponse,
   Tournament,
@@ -48,7 +49,7 @@ export type DraftSlot = {
 /** A made pick. */
 export type DraftEntry = DraftSlot & {
   userId: number | null;
-  name: string;
+  display: PersonDisplay;
   rank: number | null;
   autopick: boolean;
   /** When the pick was made: the next pick's clock start (the last pick: its own). ISO. */
@@ -57,7 +58,7 @@ export type DraftEntry = DraftSlot & {
 
 export type DraftPlayer = {
   userId: number | null;
-  name: string;
+  display: PersonDisplay;
   role: string | null;
   rank: number | null;
 };
@@ -110,6 +111,11 @@ export function mapPickBanOutcomes(
   };
 }
 
+const UNKNOWN_PERSON: PersonDisplay = { name: "—", tag: null, canonical: null, snapshot: null };
+
+/** A captain the board has no seat for is shown by their team's name, which is no profile to link to. */
+const teamFallbackDisplay = (name: string): PersonDisplay => ({ name, tag: null, canonical: null, snapshot: null });
+
 /** The draft board as the tournament pages read it; `null` when there is no draft or no pick to show. */
 export function mapDraftBoard(board: DraftBoard | null): TournamentDraft | null {
   if (!board || board.picks.length === 0) return null;
@@ -129,7 +135,7 @@ export function mapDraftBoard(board: DraftBoard | null): TournamentDraft | null 
     return {
       ...slot(pick),
       userId: player?.user_id ?? null,
-      name: player?.player_name ?? player?.identity?.handle ?? "—",
+      display: player?.display ?? UNKNOWN_PERSON,
       role: pick.target_role?.role ?? player?.primary_role?.role ?? null,
       rank: player?.effective_rank ?? null,
       autopick: pick.is_autopick,
@@ -143,7 +149,7 @@ export function mapDraftBoard(board: DraftBoard | null): TournamentDraft | null 
         position: team.draft_position,
         teamId: team.exported_team_id,
         userId: team.captain_user_id,
-        name: player?.player_name ?? team.name,
+        display: player?.display ?? teamFallbackDisplay(team.name),
         role: player?.captain_role?.role ?? player?.primary_role?.role ?? null,
         rank: player?.effective_rank ?? null
       };
@@ -153,7 +159,7 @@ export function mapDraftBoard(board: DraftBoard | null): TournamentDraft | null 
     .filter((player) => !player.is_captain)
     .map((player) => ({
       userId: player.user_id,
-      name: player.player_name ?? player.identity?.handle ?? "—",
+      display: player.display,
       role: player.primary_role?.role ?? null,
       rank: player.effective_rank
     }));

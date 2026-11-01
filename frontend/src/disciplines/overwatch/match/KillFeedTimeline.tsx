@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { Eyebrow } from "@/components/ui/eyebrow";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
-import { splitHandle } from "@/lib/player";
 import { cn } from "@/lib/utils";
 import type { FightFocus } from "./MatchStats";
 import {
@@ -133,7 +132,7 @@ const KillFeedTimeline = ({ matchId, members, home, away, round, focus }: KillFe
   const { status, refetch, timeline } = useMatchTimeline(matchId);
 
   const nameByMemberId = useMemo(
-    () => new Map(members.map((member) => [member.workspace_member_id, splitHandle(member.handle_snapshot).name])),
+    () => new Map(members.map((member) => [member.workspace_member_id, member.display.name])),
     [members]
   );
   const nameOf = (memberId: number | null) => (memberId == null ? "—" : (nameByMemberId.get(memberId) ?? "—"));

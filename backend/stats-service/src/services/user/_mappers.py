@@ -16,6 +16,7 @@ from shared import models
 from shared.division_grid import DivisionGrid
 from shared.repository.stats_reads import MatchReadContext
 from shared.schemas.catalog import CatalogEntityRef
+from shared.schemas.identity import PersonDisplayRead
 from shared.schemas.match import NativeFact
 from shared.schemas.role import RoleRef
 from shared.services.division_grid.resolution import resolve_tournament_division
@@ -184,6 +185,7 @@ class RosterEntry:
     member: models.EncounterTeamMember
     user_id: int
     role: RoleRef | None
+    display: PersonDisplayRead
 
 
 @dataclass(frozen=True, slots=True)
@@ -207,6 +209,7 @@ def _to_encounter_team_player_ref(entry: RosterEntry) -> schemas.UserEncounterTe
         user_id=entry.user_id,
         role=entry.role,
         name=entry.member.display_name_snapshot,
+        display=entry.display,
     )
 
 

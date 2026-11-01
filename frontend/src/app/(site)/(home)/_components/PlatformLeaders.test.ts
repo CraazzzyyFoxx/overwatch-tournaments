@@ -98,7 +98,7 @@ const RECORDS = [
   record({
     code: "eliminations",
     value: 58,
-    player: { id: 1, name: "Askhay#21578" },
+    player: { id: 1, display: { name: "Askhay", tag: "#21578", canonical: "Askhay#21578", snapshot: null } },
     map: { id: 5, name: "Ilios", slug: "ilios", image_path: "/maps/ilios.png" },
     match_id: 900
   })

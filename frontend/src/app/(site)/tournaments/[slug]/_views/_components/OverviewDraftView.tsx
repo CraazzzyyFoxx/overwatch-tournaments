@@ -5,7 +5,7 @@ import { Crown } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
-import PlayerName from "@/components/PlayerName";
+import PlayerName, { PersonLabel } from "@/components/PlayerName";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { ProfileStat } from "@/components/profile/atoms";
 import { Badge } from "@/components/ui/badge";
@@ -16,7 +16,6 @@ import { RankCrest } from "@/components/RankCrest";
 import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";
 import { useFormatter } from "@/lib/datetime/client";
-import { splitHandle } from "@/lib/player";
 import type { RoleOntology } from "@/lib/roster/ontology";
 import type { DraftEntry, TournamentDraft } from "@/lib/tournament/insights-query";
 import type { Tournament } from "@/types/tournament.types";
@@ -115,7 +114,7 @@ function DraftBody({
   const onClockCaptain = onClock ? captainOf.get(onClock.teamId) : undefined;
   const autopicks = made.filter((pick) => pick.autopick).length;
   const teamLabel = (teamId: number | null) =>
-    t("overview.draft.teamOf", { captain: splitHandle(captainOf.get(teamId)?.name ?? "—").name });
+    t("overview.draft.teamOf", { captain: captainOf.get(teamId)?.display.name ?? "—" });
 
   return (
     <div className="grid min-w-0 gap-4">
@@ -154,7 +153,7 @@ function DraftBody({
                 />
                 <ProfileStat
                   label={t("overview.draft.onClock")}
-                  value={onClockCaptain ? splitHandle(onClockCaptain.name).name : "—"}
+                  value={onClockCaptain ? onClockCaptain.display.name : "—"}
                   sub={
                     onClock && isTournamentRole(baseRole(onClock.role))
                       ? t("overview.draft.needs", {
@@ -194,7 +193,7 @@ function DraftBody({
                           decorative
                         />
                         <span className="min-w-0">
-                          <PlayerName player={{ name: pick.name }} className="text-caption" />
+                          <PlayerName display={pick.display} tag="hidden" className="text-caption" />
                           <span className="block truncate text-label text-[color:var(--aqt-fg-dim)]">
                             {teamLabel(pick.teamId)}
                           </span>
@@ -303,7 +302,7 @@ function MyDraftCard({
                     size={14}
                     decorative
                   />
-                  {splitHandle(captain.name).name}
+                  <PersonLabel display={captain.display} tag="hidden" />
                   <Crown
                     aria-label={t("participants.results.captain")}
                     className="size-3 text-[color:var(--aqt-amber)]"
@@ -318,7 +317,7 @@ function MyDraftCard({
                     size={14}
                     decorative
                   />
-                  {splitHandle(mate.name).name}
+                  <PersonLabel display={mate.display} tag="hidden" />
                 </li>
               ))}
             </ul>
@@ -352,7 +351,7 @@ function TeamsForming({
               </span>
               <span className="min-w-0">
                 <span className="flex items-center gap-1.5 text-caption font-semibold">
-                  {splitHandle(captain.name).name}
+                  <PersonLabel display={captain.display} tag="hidden" />
                   <Crown
                     aria-label={t("participants.results.captain")}
                     className="size-3 text-[color:var(--aqt-amber)]"
@@ -377,7 +376,7 @@ function TeamsForming({
                           size={12}
                           decorative
                         />
-                        {splitHandle(pick.name).name}
+                        <PersonLabel display={pick.display} tag="hidden" />
                       </span>
                     ))
                   )}
@@ -420,10 +419,10 @@ function PoolCard({
               <ol className="grid gap-1.5">
                 {left.slice(0, 3).map((player) => (
                   <li
-                    key={`${player.userId}-${player.name}`}
+                    key={`${player.userId}-${player.display.name}`}
                     className="flex items-center justify-between gap-3"
                   >
-                    <PlayerName player={{ name: player.name }} className="text-caption" />
+                    <PlayerName display={player.display} tag="hidden" className="text-caption" />
                     <span className="flex items-center gap-2">
                       <RankCrest rank={player.rank} grid={grid} size={20} />
                       <span className="aqt-tnum text-label text-[color:var(--aqt-fg-muted)]">

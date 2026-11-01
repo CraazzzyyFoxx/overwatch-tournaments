@@ -58,6 +58,7 @@ function player(overrides: Partial<Player> & { id: number; name: string }): Play
   return {
     created_at: new Date(0),
     updated_at: null,
+    display: { name: overrides.name, tag: null, canonical: null, snapshot: null },
     rank: 3000,
     division: 20,
     role: { dimension: "player_role", role: "damage" },

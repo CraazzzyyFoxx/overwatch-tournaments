@@ -5,6 +5,7 @@ import { useId, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 
+import { PersonLabel } from "@/components/PlayerName";
 import { Combobox, ComboboxCheck } from "@/components/ui/combobox";
 import { EntityFormDialog } from "@/components/kit/EntityFormDialog";
 import RosterSlotGlyph from "@/components/registration/RosterSlotGlyph";
@@ -134,7 +135,7 @@ export function PlaceMemberDialog({
           id={fieldId}
           open={open}
           onOpenChange={setOpen}
-          label={selectedAgent?.primary_handle}
+          label={selectedAgent ? selectedAgent.display.name + (selectedAgent.display.tag ?? "") : undefined}
           placeholder={t("admin.placePlayerPick")}
           disabled={actions.isPlacing}
           searchValue={search}
@@ -158,13 +159,15 @@ export function PlaceMemberDialog({
             {(freeAgentsQuery.data?.items ?? []).map((agent) => (
               <CommandItem
                 key={agent.registration_id}
-                value={agent.primary_handle}
+                value={[agent.display.name + (agent.display.tag ?? ""), agent.primary_handle, agent.display.canonical]
+                  .filter(Boolean)
+                  .join(" ")}
                 onSelect={() => {
                   setRegistrationId(agent.registration_id);
                   setOpen(false);
                 }}
               >
-                <span className="truncate">{agent.primary_handle}</span>
+                <PersonLabel display={agent.display} showCanonical />
                 {/* The roles the player registered for, as glyphs: the
                     organizer is filling one specific slot. */}
                 <span className="ml-auto flex items-center gap-1">

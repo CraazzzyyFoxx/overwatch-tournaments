@@ -86,3 +86,45 @@ it("names and tints a workspace sub-role from the viewed workspace's ontology", 
   // A sub-role without its own colour wears its parent's.
   expect(reads.card?.roleColor).toBe(damage.attrs.color);
 });
+
+it("shows the game's handle under the canonical name on a single-game profile only", async () => {
+  const profile = {
+    roles: [],
+    tournaments: [],
+    maps_total: 0,
+    maps_won: 0,
+    tournaments_count: 0,
+    tournaments_won: 0,
+    avg_placement: null,
+    avg_playoff_placement: null,
+    most_played_character: null
+  } as unknown as UserProfile;
+  const account = (id: number, provider: string, username: string) => ({
+    id,
+    user_id: 1,
+    provider,
+    username,
+    display_name: null,
+    url: null,
+    is_verified: false,
+    is_primary: true
+  });
+  const user = {
+    id: 1,
+    name: "Canon#1234",
+    avatar_url: null,
+    social_accounts: [account(1, "riot", "RiotHandle#EUW"), account(2, "battlenet", "InGame#9999")]
+  } as unknown as User;
+  const render = async (discipline: string | null) =>
+    renderToStaticMarkup(
+      <NextIntlClientProvider locale="en" messages={messages}>
+        {await UserHeader({ profile, user, scope: "workspace", discipline, axis: WORKSPACE_ID })}
+      </NextIntlClientProvider>
+    );
+
+  const single = await render("overwatch");
+  expect(single).toContain("<p");
+  expect(single).toMatch(/<p[^>]*>InGame#9999<\/p>/);
+  // "All games" adds no handle line: the accounts stay in the chip list alone.
+  expect(await render(null)).not.toMatch(/<p[^>]*>InGame#9999<\/p>/);
+});

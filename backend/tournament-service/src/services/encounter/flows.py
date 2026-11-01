@@ -38,7 +38,8 @@ from src.services.tournament.flows import flows_service as tournament_flows_serv
 # the dumped wire dicts in a persistent Redis that outlives a deploy, and cashews returns a value as it was stored, so
 # a wire change to those models needs a new namespace (``native_``, then ``:v2``, ``:v3`` for ``played_at`` and
 # ``is_live``, ``:v4`` for ``is_final`` and the overview's counts, ``:v5``/insights ``:v2`` for storing the wire dict
-# instead of the pickled model), not a TTL wait. The key names EVERY query param that changes the SQL: one without the
+# instead of the pickled model, ``:v6``/insights ``:v3`` for a roster player's ``display``), not a TTL wait. The key
+# names EVERY query param that changes the SQL: one without the
 # game served the first game's page to every other game for the whole TTL. The viewer is in it for ``scope=my_team``
 # only: every other scope is passed ``None`` (``scope_viewer``), so logged-in readers share one entry.
 # ``ENCOUNTERS`` (``tournament/cache_resources.py``) names the writes that miss all three;
@@ -49,9 +50,9 @@ _ENCOUNTER_QUERY_KEY = (
     "{params.best_of}:{params.status}:{params.has_logs}:{params.is_final}:{params.is_upset}:{params.closeness_min}:"
     "{params.closeness_max}:{params.scope}:{params.discipline}:{params.slot_count}:{viewer_auth_user_id}"
 )
-ENCOUNTERS_CACHE_KEY = f"native_encounters:v5:{_ENCOUNTER_QUERY_KEY}"
-ENCOUNTERS_OVERVIEW_CACHE_KEY = f"native_encounters_overview:v5:{_ENCOUNTER_QUERY_KEY}"
-ENCOUNTERS_INSIGHTS_CACHE_KEY = f"native_encounters_insights:v2:{_ENCOUNTER_QUERY_KEY}"
+ENCOUNTERS_CACHE_KEY = f"native_encounters:v6:{_ENCOUNTER_QUERY_KEY}"
+ENCOUNTERS_OVERVIEW_CACHE_KEY = f"native_encounters_overview:v6:{_ENCOUNTER_QUERY_KEY}"
+ENCOUNTERS_INSIGHTS_CACHE_KEY = f"native_encounters_insights:v3:{_ENCOUNTER_QUERY_KEY}"
 
 #: The entities an encounter read honours: all a cached read's key keeps of the client's list (``canonical_entities``).
 READ_ENTITIES = frozenset({"tournament", "teams", "matches", "stage", "stage_item"})
@@ -711,7 +712,7 @@ class EncounterFlowsService:
         # No tournament_id in the args, so this key can't carry a tournament's
         # cache generations — staleness is bounded by the short TTL.
         # ``native_`` namespaces the participant/fact document shape: a cached value of another shape is never read.
-        key="native_match_stats:v2:{match_id}:{entities}:{workspace_id}",
+        key="native_match_stats:v3:{match_id}:{entities}:{workspace_id}",
         prefix="fastapi:",
     )
     async def get_match_with_stats(

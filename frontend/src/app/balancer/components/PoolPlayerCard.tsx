@@ -4,7 +4,7 @@ import { forwardRef, type CSSProperties, type ReactNode } from "react";
 import { Pencil, ShieldX } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { HandleLabel } from "@/components/HandleLabel";
+import { PersonLabel } from "@/components/PlayerName";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { RankCrest } from "@/components/RankCrest";
 import { Badge } from "@/components/ui/badge";
@@ -23,6 +23,7 @@ import {
   isRoleEntryActive,
   type PlayerValidationIssue
 } from "@/components/balancer/workspace-helpers";
+import { canonicalDisplay } from "@/lib/player";
 import { roleTint, type RoleOntology } from "@/lib/roster/ontology";
 import { cn } from "@/lib/utils";
 import type { AdminRegistration, BalancerPlayerRecord } from "@/types/balancer-admin.types";
@@ -194,8 +195,9 @@ export const PoolPlayerCard = forwardRef<HTMLDivElement, PoolPlayerCardProps>(
                       title={t("edit", { name: player.identity })}
                       className="min-w-0 justify-start"
                     >
-                      <HandleLabel
-                        handle={player.identity}
+                      <PersonLabel
+                        display={canonicalDisplay(player.identity)}
+                        showCanonical
                         className="text-caption font-medium text-[color:var(--aqt-fg)]"
                         tagClassName="text-label"
                       />

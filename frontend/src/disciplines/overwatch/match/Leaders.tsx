@@ -1,13 +1,12 @@
 "use client";
 
-import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useFormatter } from "@/lib/datetime/client";
 import { LEADER_STATS, STAT_META, findLeader, formatStat, type MatchStatsTeam } from "./stats";
 import { CatalogEntityStrip } from "@/components/catalog/CatalogEntityImage";
 import { Card } from "@/components/ui/card";
 import { Eyebrow } from "@/components/ui/eyebrow";
-import { getPlayerSlug, splitHandle } from "@/lib/player";
+import PlayerName from "@/components/PlayerName";
 import { cn } from "@/lib/utils";
 
 interface LeadersProps {
@@ -36,7 +35,6 @@ const Leaders = ({ home, away, round, gridClassName }: LeadersProps) => {
         {cards.map(({ name, leader }) => {
           if (!leader) return null;
           const accent = leader.side === "home" ? "var(--aqt-teal)" : "var(--aqt-rose)";
-          const displayName = splitHandle(leader.player.name).name;
           const heroes = leader.player.heroes[round] ?? [];
           return (
             <Card
@@ -50,24 +48,9 @@ const Leaders = ({ home, away, round, gridClassName }: LeadersProps) => {
               </span>
               <div className="mt-auto flex items-center gap-2">
                 <CatalogEntityStrip entities={heroes} size="sm" limit={2} />
-                {leader.player.profile_name ? (
-                  <Link
-                    href={`/users/${getPlayerSlug(leader.player.profile_name)}`}
-                    className="truncate text-label font-semibold hover:underline"
-                    style={{ color: accent }}
-                    title={displayName}
-                  >
-                    {displayName}
-                  </Link>
-                ) : (
-                  <span
-                    className="truncate text-label font-semibold"
-                    style={{ color: accent }}
-                    title={displayName}
-                  >
-                    {displayName}
-                  </span>
-                )}
+                <div className="min-w-0" style={{ color: accent }}>
+                  <PlayerName display={leader.player.display} tag="hidden" className="text-label" />
+                </div>
               </div>
             </Card>
           );

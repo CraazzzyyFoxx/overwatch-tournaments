@@ -238,6 +238,24 @@ class RosterIdentityTests(IsolatedAsyncioTestCase):
         )
         assert all(r.identity.provider == SocialProvider.BATTLENET for r in rows.values())
 
+    async def test_roster_display_names_the_member_in_its_game_and_honours_visibility(self):
+        marker = uuid4().hex[:6]
+        shown, hidden, named = [await self._player(name) for name in ("shown", "hidden", "named")]
+        await self._account(shown, "riot", f"Shown {marker}#EUW")
+        await self._account(hidden, "riot", f"Hidden {marker}#EUW", ensure_global_visibility=False)
+        await self._account(named, "riot", f"Named {marker}#EUW")
+        for person, display_name in ((shown, None), (hidden, None), (named, "Org Pick")):
+            self.session.add(
+                models.WorkspaceMember(workspace_id=self.workspace.id, player_id=person.id, display_name=display_name)
+            )
+        await self.session.flush()
+        rows, _ = await workspace_roster.roster_page(self.session, workspace_id=self.workspace.id, provider="riot")
+        by_player = {row.player_id: row.display for row in rows}
+        assert (by_player[shown.id].name, by_player[shown.id].tag) == (f"Shown {marker}", "#EUW")
+        # A hidden handle is neither shown nor a fallback: the canonical name stands in.
+        assert by_player[hidden.id].name == hidden.name and by_player[hidden.id].canonical == hidden.name
+        assert by_player[named.id].name == "Org Pick" and by_player[named.id].canonical == named.name
+
     async def test_rank_write_names_its_game_and_reads_default_to_the_first_enabled(self):
         player = await self._player("ranked")
         member = models.WorkspaceMember(workspace_id=self.workspace.id, player_id=player.id)

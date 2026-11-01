@@ -57,6 +57,17 @@ const capture = (name: string) =>
   JSON.parse(fs.readFileSync(path.join(FIXTURES, name), "utf8")) as Capture;
 const MAIN = capture("analytics.tournament.linear.json");
 const OTHER = capture("analytics.tournament_other.linear.json");
+/** The frozen capture predates `display`: with no game override a roster row is shown under its own name. */
+const withDisplay = (body: TournamentAnalytics): TournamentAnalytics => ({
+  ...body,
+  teams: body.teams.map((team) => ({
+    ...team,
+    players: team.players.map((player) => ({
+      ...player,
+      display: { name: player.name, tag: null, canonical: player.name, snapshot: null }
+    }))
+  }))
+});
 const TOURNAMENT = 910_000;
 const OTHER_TOURNAMENT = 910_001;
 
@@ -116,7 +127,7 @@ beforeEach(() => {
   document.body.appendChild(container);
   for (const fn of [...Object.values(api), nav.replace, nav.push]) fn.mockReset();
   api.getAnalytics.mockImplementation(async (tournamentId: number) =>
-    (tournamentId === TOURNAMENT ? MAIN : OTHER).input_old_wire.analytics.body
+    withDisplay((tournamentId === TOURNAMENT ? MAIN : OTHER).input_old_wire.analytics.body)
   );
 });
 

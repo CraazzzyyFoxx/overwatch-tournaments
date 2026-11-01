@@ -5,11 +5,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from shared import models
 from shared.core import enums, errors, pagination, utils
 from shared.division_grid import DivisionGrid
+from shared.schemas.identity import PersonDisplayRead
 from shared.services.cache_generations import versioned
 from shared.services.division_grid.resolution import resolve_tournament_division
 from src import schemas
 from src.core import config
 from src.core.workspace import get_division_grid
+from src.services.person_names import player_displays
 from src.services.tournament.cache_resources import TEAMS, tournament_generations
 from src.services.tournament.flows import flows_service as tournament_flows_service
 from src.services.user.flows import flows_service as user_flows_service
@@ -42,8 +44,11 @@ class TeamFlowsService:
         entities: list[str],
         *,
         grid: DivisionGrid | None = None,
+        displays: typing.Mapping[int, PersonDisplayRead] | None = None,
     ) -> schemas.TeamRead:
-        """Convert a team to ``TeamRead`` with the requested ``entities`` (e.g. tournament, players, captain)."""
+        """Convert a team to ``TeamRead`` with the requested ``entities`` (e.g. tournament, players, captain).
+
+        ``displays`` are the roster rows' names by player id when the caller resolved a page of teams at once."""
         tournament: schemas.TournamentRead | None = None
         players_read: list[schemas.PlayerRead] = []
         captain: schemas.UserRead | None = None
@@ -55,14 +60,21 @@ class TeamFlowsService:
         if "players" in entities:
             if grid is None:
                 grid = await get_division_grid(session, None, tournament_id=team.tournament_id)
+            if displays is None:
+                displays = await player_displays(session, team.players)
             players_entities = utils.prepare_entities(entities, "players")
             if "tournament" in players_entities or "team" in players_entities:
                 players_read = [
-                    await self.to_pydantic_player(session, player, players_entities, grid=grid)
+                    await self.to_pydantic_player(
+                        session, player, players_entities, grid=grid, display=displays[player.id]
+                    )
                     for player in team.players
                 ]
             else:
-                players_read = [self.player_to_read(player, players_entities, grid=grid) for player in team.players]
+                players_read = [
+                    self.player_to_read(player, players_entities, grid=grid, display=displays[player.id])
+                    for player in team.players
+                ]
         # ``Team.captain_id`` is nullable in practice: ``SET NULL`` on the captain's player
         # row, and a scrim room's away side has no captain until someone claims it.
         if "captain" in entities and team.captain is not None:
@@ -99,6 +111,7 @@ class TeamFlowsService:
         entities: list[str],
         *,
         grid: DivisionGrid,
+        display: PersonDisplayRead,
         tournament: schemas.TournamentRead | None = None,
         team: schemas.TeamRead | None = None,
     ) -> schemas.PlayerRead:
@@ -115,6 +128,7 @@ class TeamFlowsService:
 
         return schemas.PlayerRead(
             **player_dict,
+            display=display,
             division=resolve_tournament_division(
                 player.rank,
                 tournament_grid=grid,
@@ -125,16 +139,24 @@ class TeamFlowsService:
         )
 
     async def to_pydantic_player(
-        self, session: AsyncSession, player: models.Player, entities: list[str], *, grid: DivisionGrid
+        self,
+        session: AsyncSession,
+        player: models.Player,
+        entities: list[str],
+        *,
+        grid: DivisionGrid,
+        display: PersonDisplayRead | None = None,
     ) -> schemas.PlayerRead:
         """Converts a Player model instance to PlayerRead, including related entities."""
         tournament: schemas.TournamentRead | None = None
         team: schemas.TeamRead | None = None
+        if display is None:
+            display = (await player_displays(session, [player]))[player.id]
         if "tournament" in entities:
             tournament = await tournament_flows_service.to_pydantic(session, player.tournament, entities=[])
         if "team" in entities:
             team = await self.to_pydantic(session, player.team, entities=[])
-        return self.player_to_read(player, entities, grid=grid, tournament=tournament, team=team)
+        return self.player_to_read(player, entities, grid=grid, display=display, tournament=tournament, team=team)
 
     async def get(self, session: AsyncSession, id: int, entities: list[str]) -> models.Team:
         """Return the team by id with ``entities`` loaded; 404 when missing."""
@@ -211,21 +233,29 @@ class TeamFlowsService:
         self, session: AsyncSession, teams: typing.Iterable[models.Team], entities: list[str]
     ) -> list[schemas.TeamRead]:
         """``to_pydantic`` for each team, resolving the division grid once per tournament rather than once per team
-        (one SQL statement and two Redis round trips each)."""
+        (one SQL statement and two Redis round trips each), and the roster's names once for the page."""
+        teams = list(teams)
         grids: dict[int, DivisionGrid] = {}
+        displays = (
+            await player_displays(session, [player for team in teams for player in team.players])
+            if "players" in entities
+            else None
+        )
         reads = []
         for team in teams:
             if "players" in entities and team.tournament_id not in grids:
                 grids[team.tournament_id] = await get_division_grid(session, None, tournament_id=team.tournament_id)
-            reads.append(await self.to_pydantic(session, team, entities, grid=grids.get(team.tournament_id)))
+            reads.append(
+                await self.to_pydantic(session, team, entities, grid=grids.get(team.tournament_id), displays=displays)
+            )
         return reads
 
-    # Values are the dumped wire dict (``v3``), not a pickled ``Paginated[TeamRead]``: Redis keeps values across a
+    # Values are the dumped wire dict (``v4``), not a pickled ``Paginated[TeamRead]``: Redis keeps values across a
     # deploy and cashews returns them unvalidated, so a wire change must bump the version.
     @versioned(
         generations=tournament_generations("{params.tournament_id}", TEAMS),
         ttl=config.settings.teams_cache_ttl,
-        key="teams:v3:{workspace_id}:{params.tournament_id}:{params.page}:{params.per_page}:{params.sort}:{params.order}:{params.entities}:{params.search}:{params.discipline}:{params.only_count}",
+        key="teams:v4:{workspace_id}:{params.tournament_id}:{params.page}:{params.per_page}:{params.sort}:{params.order}:{params.entities}:{params.search}:{params.discipline}:{params.only_count}",
         prefix="fastapi:",
     )
     async def get_all(

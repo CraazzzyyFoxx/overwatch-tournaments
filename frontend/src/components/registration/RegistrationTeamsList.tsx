@@ -5,6 +5,7 @@ import { Crown, LifeBuoy } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useId } from "react";
 
+import { PersonLabel } from "@/components/PlayerName";
 import RosterSlotGlyph from "@/components/registration/RosterSlotGlyph";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -36,7 +37,7 @@ function RosterRow({
           drifted to the far edge of the card and read as a column of its own. */}
       <span className="flex min-w-0 items-center gap-1.5">
         <span className="truncate text-[color:var(--aqt-fg)]">
-          {member.display_name ?? member.primary_handle ?? "—"}
+          {member.display.name ? <PersonLabel display={member.display} /> : "—"}
         </span>
         {member.is_captain ? (
           <span

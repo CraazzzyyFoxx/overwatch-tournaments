@@ -590,7 +590,6 @@ class HeroQueries(DisciplineQueries):
         ranked_cte = (
             sa.select(
                 stats_agg_cte.c.user_id,
-                models.User.name.label("username"),
                 player_latest_subq.c.name.label("player_name"),
                 player_latest_subq.c.role,
                 player_latest_subq.c.sub_role,
@@ -625,7 +624,6 @@ class HeroQueries(DisciplineQueries):
                 rank_expr,
             )
             .select_from(stats_agg_cte)
-            .join(models.User, models.User.id == stats_agg_cte.c.user_id)
             .join(player_latest_subq, player_latest_subq.c.user_id == stats_agg_cte.c.user_id)
         ).cte("ranked")
 

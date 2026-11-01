@@ -161,6 +161,7 @@
     "tbd": "TBD",
     "prev": "Назад",
     "close": "Закрыть",
+    "personSnapshot": "Во время события: {name}",
     "search": "Поиск",
     "add": "Добавить",
     "remove": "Убрать",

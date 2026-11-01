@@ -1,13 +1,11 @@
 import { memo } from "react";
-import Link from "next/link";
 import { useTranslations } from "next-intl";
 
 import DivisionIcon from "@/components/DivisionIcon";
-import { HandleLabel } from "@/components/HandleLabel";
+import PlayerName from "@/components/PlayerName";
 import { TableCell, TableRow } from "@/components/ui/table";
 import { getDivisionLabel } from "@/lib/divisions/grid";
 import { formatSeconds } from "@/lib/format";
-import { getPlayerSlug } from "@/lib/player";
 import { cn } from "@/lib/utils";
 import type { DivisionGrid, DivisionGridVersion } from "@/types/workspace.types";
 
@@ -87,15 +85,10 @@ const LeaderboardRow = ({
       <TableCell className={cn(CELL, STICKY_PLAYER, bg)}>
         <div className="flex min-w-0 items-center gap-2">
           <DivisionCrest division={entry.div} grid={grid} discipline={discipline} />
-          <Link
-            href={`/users/${getPlayerSlug(entry.username)}`}
-            title={entry.team ? `${entry.username} · ${entry.team}` : entry.username}
-            onFocus={() => onHoverUser(entry.user_id)}
-            onBlur={() => onHoverUser(null)}
-            className="min-w-0 truncate rounded-sm text-caption font-semibold text-[color:var(--aqt-fg)] outline-hidden hover:text-[color:var(--aqt-teal)] focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]"
-          >
-            <HandleLabel handle={entry.username} />
-          </Link>
+          {/* Focus bubbles from the profile link, so keyboard users light the row like hover does. */}
+          <div className="min-w-0" onFocus={() => onHoverUser(entry.user_id)} onBlur={() => onHoverUser(null)}>
+            <PlayerName display={entry.display} className="text-caption text-[color:var(--aqt-fg)]" />
+          </div>
         </div>
       </TableCell>
       <TableCell className={cn(CELL, "text-right leading-tight", bg)}>

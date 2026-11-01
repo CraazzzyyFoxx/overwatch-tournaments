@@ -32,11 +32,13 @@ export function rankEntries(
     .map((entry, index) => ({ entry, rank: index + 1 }));
 }
 
-/** The ranked rows whose name holds `query`, case-insensitively, each keeping its rank. */
+/** The ranked rows whose shown name (with its tag) or canonical name holds `query`, case-insensitively, each keeping its rank. */
 export function searchEntries(ranked: readonly RankedEntry[], query: string): readonly RankedEntry[] {
   const needle = query.trim().toLocaleLowerCase();
   if (!needle) return ranked;
-  return ranked.filter(({ entry }) => entry.username.toLocaleLowerCase().includes(needle));
+  return ranked.filter(({ entry: { display } }) =>
+    [display.name + (display.tag ?? ""), display.canonical ?? ""].some((text) => text.toLocaleLowerCase().includes(needle))
+  );
 }
 
 /** Count of `sorted` values below `value` (`strict`) or at most `value`; `sorted` is ascending. */

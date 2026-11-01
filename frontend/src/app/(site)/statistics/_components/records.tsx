@@ -2,10 +2,9 @@ import { Fragment, type ReactNode } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 
-import { HandleLabel } from "@/components/HandleLabel";
+import PlayerName from "@/components/PlayerName";
 import { formatCloseness } from "@/lib/encounter/detail";
 import type { Formatter } from "@/lib/datetime";
-import { getPlayerSlug } from "@/lib/player";
 import { tournamentHref } from "@/lib/tournament/url";
 import { cn } from "@/lib/utils";
 import type { StatRecord } from "@/types/statistics.types";
@@ -65,20 +64,7 @@ export function RecordFigure({ record, format, size }: Readonly<{ record: StatRe
 
 /** Who holds it: a player (linked to the profile), else the team. */
 export function RecordHolder({ record, className }: Readonly<{ record: StatRecord; className: string }>) {
-  if (record.player) {
-    return (
-      <p className={className}>
-        <Link
-          href={`/users/${getPlayerSlug(record.player.name)}`}
-          prefetch={false}
-          title={record.player.name}
-          className={LINK_CLASS}
-        >
-          <HandleLabel handle={record.player.name} />
-        </Link>
-      </p>
-    );
-  }
+  if (record.player) return <PlayerName display={record.player.display} className={className} />;
   return record.team ? (
     <p className={className} title={record.team.name}>
       {record.team.name}

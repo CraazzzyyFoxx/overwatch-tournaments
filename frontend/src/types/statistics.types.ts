@@ -60,4 +60,6 @@ export type CharacterLeaderboardEntry = Schema<"stats.CharacterLeaderboardEntry"
  * A leaderboard page plus every division grid its rows' `div` is a number on (`division_grid_version_id`). Across
  * workspaces none: `div` is then a number on the game's native ladder (`null` for a game without one).
  */
-export type CharacterLeaderboardResponse = Schema<"stats.CharacterLeaderboardResponse">;
+export type CharacterLeaderboardResponse = Omit<Schema<"stats.CharacterLeaderboardResponse">, "results"> & {
+  results: CharacterLeaderboardEntry[];
+};

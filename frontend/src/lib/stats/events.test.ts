@@ -15,8 +15,8 @@ const match = {
   ],
   statistics: {
     members: [
-      { encounter_team_id: 1, workspace_member_id: 10, handle_snapshot: "Ann#1" },
-      { encounter_team_id: 3, workspace_member_id: 30, handle_snapshot: "Cy#3" }
+      { encounter_team_id: 1, workspace_member_id: 10, display: { name: "Ann", tag: "#1", canonical: null, snapshot: null } },
+      { encounter_team_id: 3, workspace_member_id: 30, display: { name: "Cy", tag: "#3", canonical: null, snapshot: null } }
     ]
   }
 } as unknown as Pick<MatchWithStats, "participants" | "statistics">;
@@ -70,7 +70,7 @@ describe("buildEventRows", () => {
     expect(rows.map((row) => row.id)).toEqual([1, 2, 3]);
     expect(rows[1]).toMatchObject({
       type: "Kill",
-      actor: { member: "Ann#1", team: "Alpha" },
+      actor: { member: "Ann", team: "Alpha" },
       target: { member: null, team: "Bravo" },
       entity: ASHE
     });
@@ -80,7 +80,7 @@ describe("buildEventRows", () => {
     expect(rows[2]).toMatchObject({
       type: "ultimate_start",
       segment: 1,
-      actor: { member: "Cy#3", team: "Charlie" }
+      actor: { member: "Cy", team: "Charlie" }
     });
   });
 

@@ -55,7 +55,7 @@ export function RoomBanner({ board, gating, autopickPreview }: Readonly<RoomBann
     if (isMyTurn) {
       const player =
         autopickPreview != null ? board.players.find((entry) => entry.id === autopickPreview.player_id) : undefined;
-      const tag = player ? (player.identity?.handle ?? `#${player.id}`) : null;
+      const tag = player ? player.display.name : null;
       text =
         tag == null
           ? t("shell.banner.overtimeMine", { time })

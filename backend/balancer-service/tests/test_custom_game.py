@@ -35,7 +35,7 @@ from shared.domain.member_rank import ResolvedRank  # noqa: E402
 from shared.domain.roles import UnknownRole  # noqa: E402
 from shared.domain.roster_shape import RosterShape  # noqa: E402
 from shared.domain.team_format import TeamFormat, slot_shape  # noqa: E402
-from shared.schemas.identity import PlayerIdentityRead  # noqa: E402
+from shared.schemas.identity import PersonDisplayRead, PlayerIdentityRead  # noqa: E402
 from shared.schemas.role import RoleRef  # noqa: E402
 from shared.schemas.roster_slots import RosterShapeRead  # noqa: E402
 from shared.services import (
@@ -239,6 +239,7 @@ def _members(*member_ids: int) -> dict[int, RosterMember]:
             player_id=member_id * 10,
             identity=PlayerIdentityRead.of(SocialProvider.BATTLENET, f"P{member_id}#1"),
             display_name=f"P{member_id}",
+            display=PersonDisplayRead(name=f"P{member_id}"),
         )
         for member_id in member_ids
     }
@@ -849,8 +850,11 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
                 player_id=70,
                 identity=PlayerIdentityRead.of(SocialProvider.BATTLENET, "Ana#1"),
                 display_name=None,
+                display=PersonDisplayRead(name="Ana", tag="#1"),
             ),
-            8: RosterMember(member_id=8, player_id=80, identity=None, display_name=None),
+            8: RosterMember(
+                member_id=8, player_id=80, identity=None, display_name=None, display=PersonDisplayRead(name="#8")
+            ),
         }
         self.ranks.resolve.return_value = _ranks(7, 8)
         self.run_balance.return_value = {"teams": []}
@@ -2715,6 +2719,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
                         "player_id": 70,
                         "display_name": "P7",
                         "identity": {"provider": "battlenet", "handle": "P7#1"},
+                        "display": {"name": "P7", "tag": None, "canonical": None, "snapshot": None},
                         "games": 1,
                         "wins": 1,
                         "losses": 0,
@@ -2738,6 +2743,8 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
                         "player_id": None,
                         "display_name": None,
                         "identity": None,
+                        # Left the workspace since: the record stays, named by member id.
+                        "display": {"name": "#8", "tag": None, "canonical": None, "snapshot": None},
                         "games": 1,
                         "wins": 0,
                         "losses": 1,

@@ -7,7 +7,7 @@ import { useDraggable } from "@dnd-kit/core";
 import { Armchair, GripVertical, RotateCw, X } from "lucide-react";
 
 import { AWAY_CHIP_CLASS, lobbyLetter, teamAccent } from "@/app/balancer/mix/pickup-chrome";
-import { HandleLabel } from "@/components/HandleLabel";
+import { PersonLabel } from "@/components/PlayerName";
 import { RankCrest } from "@/components/RankCrest";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -19,7 +19,7 @@ import type {
   RotationRecommendation
 } from "@/services/custom-game.service";
 
-import { averageRank, getLineupIssue, playerLabel, type MixOwner } from "../pickup-lineup";
+import { averageRank, getLineupIssue, type MixOwner } from "../pickup-lineup";
 import { RolePriorityRail } from "./RolePriorityRail";
 
 /**
@@ -162,7 +162,7 @@ export function LineupRow({
   const t = useTranslations("mixes.lineup");
   const tRoom = useTranslations("mixes.room");
   const { grid } = owner;
-  const label = playerLabel(row);
+  const label = row.display.name;
   const issue = getLineupIssue(row, owner.roles);
   const rank = averageRank(row, owner.roles);
   const canDrag = canWrite && !saving;
@@ -215,15 +215,15 @@ export function LineupRow({
           onClick={onOpen}
           className="mr-auto min-w-0 justify-start"
         >
-          <HandleLabel
-            handle={label}
+          <PersonLabel
+            display={row.display}
             className="text-caption font-semibold text-[color:var(--aqt-fg)]"
             tagClassName="text-label"
           />
         </Button>
       ) : (
-        <HandleLabel
-          handle={label}
+        <PersonLabel
+          display={row.display}
           className="flex-1 text-caption font-semibold text-[color:var(--aqt-fg)]"
           tagClassName="text-label"
         />
@@ -275,7 +275,6 @@ export function LineupRow({
 
 /** The dragged row's own card, detached from its column, following the pointer. */
 export function LineupDragPreview({ row, owner }: Readonly<{ row: CustomGamePlayer; owner: MixOwner }>) {
-  const label = playerLabel(row);
   const rank = averageRank(row, owner.roles);
 
   return (
@@ -286,8 +285,8 @@ export function LineupDragPreview({ row, owner }: Readonly<{ row: CustomGamePlay
         className="size-3.5 shrink-0 text-[color:var(--aqt-fg-faint)]"
         aria-hidden="true"
       />
-      <HandleLabel
-        handle={label}
+      <PersonLabel
+        display={row.display}
         className="flex-1 text-caption font-semibold text-[color:var(--aqt-fg)]"
         tagClassName="text-label"
       />

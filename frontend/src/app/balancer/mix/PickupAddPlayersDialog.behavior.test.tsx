@@ -114,6 +114,7 @@ function member(
     player_id: memberId * 10,
     identity: { provider: "battlenet", handle: battleTag },
     display_name: null,
+    display: { name: battleTag, tag: null, canonical: battleTag, snapshot: null },
     ranks: {},
     author_ranks: {},
     ...overrides,
@@ -125,6 +126,7 @@ function seated(memberId: number, battleTag: string, overrides: Partial<CustomGa
     id: memberId,
     workspace_member_id: memberId,
     display_name: null,
+    display: { name: battleTag, tag: null, canonical: battleTag, snapshot: null },
     identity: { provider: "battlenet", handle: battleTag },
     sort_order: memberId,
     participation: "pool",
@@ -410,7 +412,7 @@ describe("PickupAddPlayersDialog", () => {
 
     // The name text sits well outside the small checkbox glyph -- the whole
     // row is the button now, so a click here still bubbles to it.
-    await click(scope.querySelector('[title="Aria#1111"]'));
+    await click([...scope.querySelectorAll("bdi")].find((node) => node.textContent === "Aria#1111") ?? null);
 
     expect(onTogglePlayer).toHaveBeenCalledWith(1);
   });

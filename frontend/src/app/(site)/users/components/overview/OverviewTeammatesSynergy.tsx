@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { HandleLabel } from "@/components/HandleLabel";
+import { PersonLabel } from "@/components/PlayerName";
 import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
 import { useTranslations } from "next-intl";
@@ -10,7 +10,7 @@ import { UserBestTeammate } from "@/types/user.types";
 import { CardSurface } from "@/components/profile/atoms";
 import { winrateColor } from "@/lib/colors";
 import { cn } from "@/lib/utils";
-import { getPlayerSlug } from "@/lib/player";
+import { canonicalDisplay, getPlayerSlug } from "@/lib/player";
 import { Button } from "@/components/ui/button";
 import { DataPagination } from "@/components/ui/data-pagination";
 import { SearchField } from "@/components/ui/search-field";
@@ -99,8 +99,8 @@ const TeammateRows = ({
           >
             <PlayerAvatar user={tm.user} size={26} />
             <div className="min-w-0">
-              <HandleLabel
-                handle={tm.user.name}
+              <PersonLabel
+                display={canonicalDisplay(tm.user.name)}
                 className="block text-caption font-semibold text-[color:var(--aqt-fg)] group-hover:text-[color:var(--aqt-teal)]"
                 tagClassName="aqt-tnum text-label"
               />
@@ -202,8 +202,8 @@ const AllTeammatesTable = ({
             <TableRow key={tm.user.id}>
               <TableCell className="px-3 py-2">
                 <HoverPrefetchLink href={`/users/${getPlayerSlug(tm.user.name)}`} className="hover:text-[color:var(--aqt-teal)]">
-                  <HandleLabel
-                    handle={tm.user.name}
+                  <PersonLabel
+                    display={canonicalDisplay(tm.user.name)}
                     className="font-semibold text-[color:var(--aqt-fg)]"
                     tagClassName="aqt-tnum text-label"
                   />

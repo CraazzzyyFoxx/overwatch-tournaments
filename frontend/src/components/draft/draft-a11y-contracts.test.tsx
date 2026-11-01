@@ -33,7 +33,7 @@ function makePlayer(id: number, patch: Partial<DraftPlayer> = {}): DraftPlayer {
     session_id: 1,
     registration_id: id * 10,
     user_id: null,
-    identity: { provider: "battlenet", handle: `P${id}#1` }, player_name: null,
+    identity: { provider: "battlenet", handle: `P${id}#1` }, display: { name: `P${id}`, tag: "#1", canonical: null, snapshot: null },
     status: "available",
     primary_role: { dimension: "player_role", role: "damage" },
     is_flex: false,
@@ -53,7 +53,7 @@ function makePlayer(id: number, patch: Partial<DraftPlayer> = {}): DraftPlayer {
 }
 
 const ana = makePlayer(7, {
-  identity: { provider: "battlenet", handle: "Ana#1234" }, player_name: null,
+  identity: { provider: "battlenet", handle: "Ana#1234" }, display: { name: "Ana", tag: "#1234", canonical: null, snapshot: null },
   primary_role: { dimension: "player_role", role: "support" },
   effective_rank: 3000,
   secondary_roles: [{ dimension: "player_role", role: "damage" }],
@@ -161,12 +161,12 @@ describe("draft accessibility contracts", () => {
     const html = renderPool({ queue: QUEUE });
 
     expect(html).not.toContain('role="button"');
-    expect(html).toContain(pickAs("Ana#1234", "support"));
-    expect(html).toContain(pickAs("Ana#1234", "damage"));
+    expect(html).toContain(pickAs("Ana", "support"));
+    expect(html).toContain(pickAs("Ana", "damage"));
     // The role's OWN rank, not the player's effective one.
     expect(html).toContain("2800");
     // The name opens the profile; it is not the pick target.
-    expect(html).toContain('aria-label="openProfile:{&quot;player&quot;:&quot;Ana#1234&quot;}"');
+    expect(html).toContain('aria-label="openProfile:{&quot;player&quot;:&quot;Ana&quot;}"');
     expect(html).toContain('aria-label="pool.queueAdd"');
     expect(html).toContain("pool.tab.shortlist");
     expect(html).toContain("pool.col.fit");
@@ -215,7 +215,7 @@ describe("draft accessibility contracts", () => {
   test("an admin without a team acts for the clock but has no list", () => {
     const html = renderPool({ acting: 3, queue: null });
 
-    expect(html).toContain(pickAs("Ana#1234", "support"));
+    expect(html).toContain(pickAs("Ana", "support"));
     expect(html).not.toContain("pool.queueAdd");
     expect(html).not.toContain("pool.tab.shortlist");
   });
@@ -225,7 +225,7 @@ describe("draft accessibility contracts", () => {
     const ow = renderPool();
 
     expect(flex).not.toMatch(poolRole("tank"));
-    expect(flex).toContain(pickAs("Ana#1234", "damage"));
+    expect(flex).toContain(pickAs("Ana", "damage"));
     expect(flex).not.toContain("pool.market.label");
     expect(ow).toMatch(poolRole("tank"));
     expect(ow).toContain("pool.market.label");
@@ -234,8 +234,8 @@ describe("draft accessibility contracts", () => {
   test("a one-slot roster offers only the role its slot seats", () => {
     const html = renderPool({ slots: { damage: 1 } });
 
-    expect(html).toContain(pickAs("Ana#1234", "damage"));
-    expect(html).not.toContain(pickAs("Ana#1234", "support"));
+    expect(html).toContain(pickAs("Ana", "damage"));
+    expect(html).not.toContain(pickAs("Ana", "support"));
   });
 
   test("a team that cannot seat any of the player's roles says so and dims every role", () => {
@@ -249,8 +249,8 @@ describe("draft accessibility contracts", () => {
     const html = renderPool({ players: [ana, ...rostered], slots: { tank: 1, damage: 2, flex: 2 } });
 
     expect(html).toContain("pool.note.noSlot:");
-    expect(html).toContain(pickAs("Ana#1234", "support"));
-    expect(html).toMatch(new RegExp(`${pickAs("Ana#1234", "support")}[^>]*aria-disabled="true"`));
+    expect(html).toContain(pickAs("Ana", "support"));
+    expect(html).toMatch(new RegExp(`${pickAs("Ana", "support")}[^>]*aria-disabled="true"`));
     expect(html).toContain("pool.reason.noSlot:");
   });
 

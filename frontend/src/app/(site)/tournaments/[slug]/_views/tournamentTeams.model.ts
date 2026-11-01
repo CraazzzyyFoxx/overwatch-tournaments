@@ -23,11 +23,17 @@ export const MARK_CLASS =
 /** A team's settled series record. `null` when encounters are unavailable. */
 export type TeamRecord = { won: number; lost: number };
 
-/** Battletags and the team name, lowercased once per team for the search. */
+/** Whether the search names this person: by the name shown, or the canonical / event-time one they may be known by. */
+export function playerMatches(player: Player, needle: string): boolean {
+  const { name, tag, canonical, snapshot } = player.display;
+  return [name + (tag ?? ""), canonical, snapshot].some((text) => text?.toLowerCase().includes(needle));
+}
+
+/** Player names and the team name, lowercased once per team for the search. */
 export function matchesSearch(team: Team, needle: string): boolean {
   if (needle === "") return true;
   if (team.name.toLowerCase().includes(needle)) return true;
-  return team.players.some((player) => player.name.toLowerCase().includes(needle));
+  return team.players.some((player) => playerMatches(player, needle));
 }
 
 export function compareTeams(a: Team, b: Team, sortBy: TeamsSortBy): number {

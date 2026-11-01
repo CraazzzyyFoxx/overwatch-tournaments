@@ -239,6 +239,7 @@ function player(overrides: Partial<CustomGamePlayer> = {}): CustomGamePlayer {
     id: 1,
     workspace_member_id: 7,
     display_name: null,
+    display: { name: "#7", tag: null, canonical: null, snapshot: null },
     identity: null,
     sort_order: 0,
     participation: "pool",

@@ -29,7 +29,7 @@ from shared.core.enums import MixParticipation, MixRoleSelectionMode  # noqa: E4
 from shared.core.social import SocialProvider  # noqa: E402
 from shared.domain.member_rank import ResolvedRank  # noqa: E402
 from shared.domain.roster_shape import RosterShape  # noqa: E402
-from shared.schemas.identity import PlayerIdentityRead  # noqa: E402
+from shared.schemas.identity import PersonDisplayRead, PlayerIdentityRead  # noqa: E402
 from shared.services import ontology  # noqa: E402
 from shared.tests.test_team_format import OW_5V5, _module_ontology  # noqa: E402
 from src.services.custom_game import CustomGameService  # noqa: E402
@@ -309,6 +309,7 @@ class MixFlowTests(IsolatedAsyncioTestCase):
                         player_id=member_id * 10,
                         identity=PlayerIdentityRead.of(SocialProvider.BATTLENET, f"P{member_id}#1"),
                         display_name=f"P{member_id}",
+                        display=PersonDisplayRead(name=f"P{member_id}"),
                         auth_user_id=member_id * 100,
                     )
                     for member_id in member_ids

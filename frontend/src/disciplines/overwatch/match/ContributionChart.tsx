@@ -16,7 +16,6 @@ import {
 import { Card } from "@/components/ui/card";
 import { Eyebrow } from "@/components/ui/eyebrow";
 import { FilterChip, FilterChipGroup } from "@/components/ui/filter-chip";
-import { splitHandle } from "@/lib/player";
 import { LogStatsName } from "../stat-names";
 import { STAT_META, activePlayers, formatStat, playerStat, type MatchStatsTeam } from "./stats";
 
@@ -52,13 +51,13 @@ const ContributionChart = ({ home, away, round }: ContributionChartProps) => {
   const data: Datum[] = [
     ...activePlayers(home, round).map((player) => ({
       id: `${home.id}:${player.workspace_member_id}`,
-      name: splitHandle(player.name).name,
+      name: player.display.name,
       value: playerStat(player, round, metric),
       side: "home" as const
     })),
     ...activePlayers(away, round).map((player) => ({
       id: `${away.id}:${player.workspace_member_id}`,
-      name: splitHandle(player.name).name,
+      name: player.display.name,
       value: playerStat(player, round, metric),
       side: "away" as const
     }))

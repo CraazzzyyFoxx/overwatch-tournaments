@@ -312,6 +312,36 @@ Tournament entry point: `RosterEngine` (`backend/shared/services/roster.py`) cal
 
 OW is pulled in only where the cheaper layers left a hole. Snapshots collapse into the best rank per role on `players.user`, then (if a grid was passed) are normalized into the DivisionGrid.
 
+### 3.6. The name a surface shows
+
+`players.user.name` stays the one canonical, unique name: profile URLs (`/users/<slug>`), `users.by_name` and search
+key on it, and cross-game surfaces show it (the profile header with "all games", mixed lists such as teammates or a
+profile's tournament history, platform-wide leaderboards, search results).
+
+A surface owned by one game (a tournament, its encounters and matches, a mix lobby, a draft, that game's stats and
+leaderboards) shows `display: PersonDisplayRead` (`backend/shared/schemas/identity.py`), built by
+`PersonDisplayRead.build`. The first non-empty of:
+
+1. the row's `workspace_member.display_name` (an organizer's deliberate override);
+2. the game handle: the primary account of the game's `identity_provider` that is **visible** in the surface's scope
+   (a `social_account_visibility` row with `workspace_id IS NULL` or the surface's workspace), `is_primary DESC, id
+   ASC`; a Steam account shows its persona `display_name`, never the account id
+   (`backend/shared/services/person_display.py`: `game_handle` for Core selects, `pick_game_handle` over loaded
+   accounts);
+3. the event's snapshot (roster `tournament.player.name`, `display_name_snapshot`, stats `handle_snapshot`,
+   registration `primary_handle`);
+4. `players.user.name`.
+
+The shown text is split at its last `#` into `name` + `tag` (a Steam persona is never split). `canonical` is
+`players.user.name` and is the only thing a profile link is built from; `snapshot` is set only when it differs from
+the shown text. The handle is display only: identity resolution (rank lookups, log matching, `main_handle`) keeps
+using the unfiltered primary handle. Frontend: `PlayerName` / `PersonLabel` (`frontend/src/components/PlayerName.tsx`)
+render a `display` (tag muted, hidden in dense cells and OG images; admin adds the canonical name), and
+`canonicalDisplay(name)` renders a canonical name on cross-game surfaces.
+
+Names inside cached reads follow the existing rule for other people's cosmetic data: a changed account or
+`display_name` reaches them when the cache TTL runs out.
+
 
 ## 4. Design decisions
 

@@ -16,7 +16,6 @@ import {
   myLobbyTeam,
   parseVariants as parseVariantsOrdered,
   participationEntries,
-  playerLabel,
   rankSourceLabel,
   resolveRoleOrder,
   sortLineup,
@@ -43,6 +42,7 @@ function row(overrides: Partial<CustomGamePlayer> = {}): CustomGamePlayer {
     id: 1,
     workspace_member_id: 7,
     display_name: null,
+    display: { name: "Aria#1111", tag: null, canonical: "Aria#1111", snapshot: null },
     identity: { provider: "battlenet", handle: "Aria#1111" },
     sort_order: 0,
     participation: "pool",
@@ -615,11 +615,17 @@ describe("parseVariants", () => {
   });
 });
 
-describe("playerLabel", () => {
-  it("prefers a display name, then the tag, then the id", () => {
-    expect(playerLabel(row({ display_name: "Aria" }))).toBe("Aria");
-    expect(playerLabel(row({ display_name: null }))).toBe("Aria#1111");
-    expect(playerLabel(row({ display_name: null, identity: null }))).toBe("#7");
+describe("parseVariants seat display", () => {
+  const seatOf = (player: Record<string, unknown>) =>
+    parseVariants({ players: { "7": player }, variants: [{ teams: [{ roster: { Tank: ["7"] } }] }] })[0].teams[0].seats[0];
+
+  it("shows the resolved per-game display the server stored next to the name", () => {
+    const display = { name: "Karin", tag: "#2222", canonical: "karin#1111", snapshot: null };
+    expect(seatOf({ name: "karin#1111", display }).display).toEqual(display);
+  });
+
+  it("builds a display from the stored name once the member left the roster", () => {
+    expect(seatOf({ name: "karin#1111" }).display).toEqual({ name: "karin", tag: "#1111", canonical: null, snapshot: null });
   });
 });
 
@@ -827,8 +833,8 @@ describe("myLobbyTeam", () => {
       teamName: "Owls",
       nextMapId: 42,
       members: [
-        { uuid: "9", name: "Egor", role: "tank", isCaptain: true, isMe: false },
-        { uuid: "8", name: "Tolgrn", role: "damage", isCaptain: false, isMe: true },
+        { uuid: "9", display: { name: "Egor", tag: null, canonical: null, snapshot: null }, role: "tank", isCaptain: true, isMe: false },
+        { uuid: "8", display: { name: "Tolgrn", tag: null, canonical: null, snapshot: null }, role: "damage", isCaptain: false, isMe: true },
       ],
     });
     expect(myLobbyTeam(game, 99, OW_ORDER, teamN)).toBeNull();

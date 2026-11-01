@@ -12,14 +12,22 @@ from __future__ import annotations
 import importlib
 from types import SimpleNamespace
 from unittest import IsolatedAsyncioTestCase
+from unittest.mock import patch
 
+from shared.schemas.identity import PersonDisplayRead
 from shared.schemas.role import RoleRef
 
 team_flows = importlib.import_module("src.services.team.flows")
 
 
+async def _displays(_session, players):
+    return {p.id: PersonDisplayRead.build(canonical="Canon#1", snapshot=p.name) for p in players}
+
+
 def _player(*, workspace_member_player_id: int) -> SimpleNamespace:
     return SimpleNamespace(
+        id=1,
+        name="Roster Player",
         to_dict=lambda: {
             "id": 1,
             "created_at": None,
@@ -42,6 +50,7 @@ def _player(*, workspace_member_player_id: int) -> SimpleNamespace:
     )
 
 
+@patch.object(team_flows, "player_displays", _displays)
 class ToPydanticPlayerWorkspaceMemberTests(IsolatedAsyncioTestCase):
     async def test_user_id_resolved_from_workspace_member_without_user_entity(self) -> None:
         """No "user" entity requested: workspace_member is still loaded and
@@ -54,6 +63,8 @@ class ToPydanticPlayerWorkspaceMemberTests(IsolatedAsyncioTestCase):
 
         self.assertEqual(42, result.user_id)
         self.assertIsNone(result.user)
+        shown = result.display
+        self.assertEqual(("Roster Player", None, "Canon#1"), (shown.name, shown.tag, shown.canonical))
 
     async def test_user_id_resolved_from_workspace_member_with_user_entity(self) -> None:
         session = object()

@@ -1,4 +1,5 @@
 import type { MixMemberStats, MixOutcome, MixRoleTally, MixStatsResponse } from "@/services/custom-game.service";
+import type { PersonDisplay } from "@/types/user.types";
 
 /**
  * The scoreboard's own arithmetic, apart from the components that render it:
@@ -38,8 +39,8 @@ export type RatedPlayer = {
   /** `p:<player id>`, or `m:<workspace>:<member>` for a member who can no longer be resolved to a player. */
   key: string;
   playerId: number | null;
-  /** Their game handle where any community knows it, else the nickname of the community they played most in. */
-  name: string;
+  /** The name from the community they played most in: the game name on a single-game read, canonical on "all games". */
+  display: PersonDisplay;
   games: number;
   wins: number;
   losses: number;
@@ -131,10 +132,7 @@ export function mergeMixStats(sources: readonly StatsSource[]): RatedPlayer[] {
     players.push({
       key,
       playerId: members[0].player_id,
-      name:
-        byGames.find((member) => member.identity?.handle)?.identity?.handle ??
-        byGames.find((member) => member.display_name)?.display_name ??
-        `#${byGames[0].workspace_member_id}`,
+      display: byGames[0].display,
       games,
       wins,
       losses: members.reduce((sum, member) => sum + member.losses, 0),

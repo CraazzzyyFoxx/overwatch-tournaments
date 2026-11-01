@@ -23,6 +23,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import en from "@/i18n/messages/en.json";
+import { canonicalDisplay } from "@/lib/player";
 import { catalogEntity } from "@/test/catalog";
 import type { CatalogEntityRead } from "@/types/catalog.types";
 import type { DraftBoard, DraftPick, DraftPlayer, DraftTeam } from "@/types/draft.types";
@@ -252,6 +253,7 @@ function makeTeam(id: number, name: string, players: string[] = []): Team {
       created_at: new Date(0),
       updated_at: null,
       name: playerName,
+      display: canonicalDisplay(playerName),
       rank: 3500,
       division: 3,
       role: { dimension: "player_role", role: "damage" },
@@ -361,6 +363,7 @@ function makeRegistration(
     workspace_id: WORKSPACE_ID,
     user_id: id,
     primary_handle: battleTag,
+    display: canonicalDisplay(battleTag),
     roles: [
       {
         role: { dimension: "player_role", role },
@@ -477,7 +480,7 @@ function draftPlayer(id: number, name: string, role: string, isCaptain = false):
     registration_id: id,
     user_id: 500 + id,
     identity: null,
-    player_name: name,
+    display: { name, tag: null, canonical: name, snapshot: null },
     primary_role: { dimension: "player_role", role },
     is_flex: false,
     effective_rank: 3000 + id * 100,

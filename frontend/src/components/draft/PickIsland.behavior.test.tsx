@@ -81,7 +81,7 @@ function player(overrides: Partial<DraftPlayer> = {}): DraftPlayer {
     session_id: 1,
     registration_id: 70,
     user_id: null,
-    identity: { provider: "battlenet", handle: "Ana#1234" }, player_name: null,
+    identity: { provider: "battlenet", handle: "Ana#1234" }, display: { name: "Ana", tag: "#1234", canonical: null, snapshot: null },
     primary_role: { dimension: "player_role", role: "support" },
     is_flex: false,
     effective_rank: 3000,
@@ -309,7 +309,7 @@ describe("spectator", () => {
     const dialog = body.querySelector("[role='dialog']");
     const titleId = dialog?.getAttribute("aria-labelledby");
     expect(titleId).toBeTruthy();
-    expect(body.querySelector(`#${titleId}`)?.textContent).toContain("Ana#1234");
+    expect(body.querySelector(`#${titleId}`)?.textContent).toBe("Ana");
     expect(buttonStartingWith("island.action")).toBeUndefined();
     expect(body.querySelector("[aria-label='island.queue.add']")).toBeNull();
     expect(body.querySelector("[role='radiogroup']")).toBeNull();
@@ -320,17 +320,17 @@ describe("spectator", () => {
     const { body } = await open({
       subject: player({
         identity: { provider: "riot", handle: "Mid#Lane" },
-        player_name: "Legacy Owner#7"
+        display: { name: "Mid", tag: "#Lane", canonical: "Legacy Owner#7", snapshot: null }
       })
     });
 
     const link = body.querySelector<HTMLAnchorElement>("#pick-island-title a");
-    expect(link?.textContent).toBe("Mid#Lane");
+    expect(link?.textContent).toBe("Mid");
     expect(link?.getAttribute("href")).toBe("/users/Legacy Owner-7");
   });
 
   it("renders no profile link for a player without a canonical name", async () => {
-    const { body } = await open({ subject: player({ player_name: null }) });
+    const { body } = await open({ subject: player({}) });
 
     expect(body.querySelector("#pick-island-title a")).toBeNull();
   });
@@ -359,9 +359,9 @@ describe("captain", () => {
       expect.anything()
     );
     await act(async () => m.makePick.mutate.mock.calls[0][1].onSuccess());
-    expect(notifySuccess).toHaveBeenCalledWith('pickSuccess:{"player":"Ana#1234"}');
+    expect(notifySuccess).toHaveBeenCalledWith('pickSuccess:{"player":"Ana"}');
     expect(onPicked).toHaveBeenCalled();
-    expect(body.querySelector("[aria-live='polite']")?.textContent).toBe('pickSuccess:{"player":"Ana#1234"}');
+    expect(body.querySelector("[aria-live='polite']")?.textContent).toBe('pickSuccess:{"player":"Ana"}');
   });
 
   it("toasts an api error instead of closing the card", async () => {
@@ -575,6 +575,6 @@ describe("PickIsland in a one-role game", () => {
     expect(body.textContent).not.toContain("Agent");
     expect(body.querySelector('[aria-label^="island.tile.select:"]')).toBeNull();
     expect(body.querySelector('[aria-label^="island.tile.selectPlayer"]')).not.toBeNull();
-    expect(body.textContent).toContain('island.action.pickPlayer:{"player":"Ana#1234"}');
+    expect(body.textContent).toContain('island.action.pickPlayer:{"player":"Ana"}');
   });
 });

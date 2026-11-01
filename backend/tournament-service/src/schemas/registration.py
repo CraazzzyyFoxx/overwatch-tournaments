@@ -7,6 +7,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from shared.schemas.identity import PersonDisplayRead
 from shared.schemas.role import RoleRef
 from shared.services.subscriptions import VERIFICATION_METHODS, VerificationMethod, parse_requirement
 from src.schemas.admission import AdmissionRead
@@ -82,6 +83,9 @@ class RegistrationRead(BaseModel):
     #: tournament's identity provider, position zero -- the name every surface renders
     #: this row by.
     primary_handle: str | None = None
+    #: The name the tournament's surfaces show (``primary_handle`` is its snapshot); ``canonical`` builds the profile
+    #: link and is ``None`` for a row with no account.
+    display: PersonDisplayRead
     #: Every answer this registration carries that the READER may see: the
     #: public participants list passes the form version's ``public_keys()``, an
     #: organizer context passes nothing and gets everything. ``primary_handle``

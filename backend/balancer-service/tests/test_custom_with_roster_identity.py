@@ -20,7 +20,7 @@ for candidate in (str(ROOT), str(SERVICE)):
 
 from shared.core.enums import MixParticipation, MixRoleSelectionMode  # noqa: E402
 from shared.core.errors import BaseAPIException  # noqa: E402
-from shared.schemas.identity import PlayerIdentityRead  # noqa: E402
+from shared.schemas.identity import PersonDisplayRead, PlayerIdentityRead  # noqa: E402
 from src.rpc import custom  # noqa: E402
 from src.services.custom_game import CustomGameService  # noqa: E402
 from src.services.workspace_roster import RosterMember  # noqa: E402
@@ -36,6 +36,7 @@ def _service(provider_seen: list) -> CustomGameService:
                 player_id=member_id * 10,
                 identity=PlayerIdentityRead.of(provider, handle),
                 display_name=None,
+                display=PersonDisplayRead.build(canonical=None, provider=provider, handle=handle),
             )
             for member_id in member_ids
         }

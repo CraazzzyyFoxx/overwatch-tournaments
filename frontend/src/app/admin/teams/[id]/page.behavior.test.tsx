@@ -70,6 +70,7 @@ function team(overrides: Partial<Team> = {}): Team {
         created_at: new Date("2026-01-01T00:00:00Z"),
         updated_at: null,
         name: "Nova",
+        display: { name: "Nova", tag: null, canonical: "Nova", snapshot: null },
         rank: 3400,
         division: 4,
         role: { dimension: "player_role", role: "damage" },

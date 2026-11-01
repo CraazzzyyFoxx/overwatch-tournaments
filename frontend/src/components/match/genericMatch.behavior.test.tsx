@@ -104,14 +104,17 @@ const fact = (
   stat_code,
   value
 });
-const member = (team: number, id: number, player: number, handle: string, name: string | null) => ({
-  encounter_team_id: team,
-  workspace_member_id: id,
-  player_id: player,
-  player_name: name,
-  handle_snapshot: handle,
-  observed_role: null
-});
+const member = (team: number, id: number, player: number, handle: string, canonical: string | null) => {
+  const at = handle.lastIndexOf("#");
+  return {
+    encounter_team_id: team,
+    workspace_member_id: id,
+    player_id: player,
+    display: { name: at > 0 ? handle.slice(0, at) : handle, tag: at > 0 ? handle.slice(at) : null, canonical, snapshot: null },
+    handle_snapshot: handle,
+    observed_role: null
+  };
+};
 
 /** Three participants; the only member facts are Ashe's (entity grain); team 1 has a percent and a duration team fact. */
 function lobby(): MatchWithStats {
@@ -303,10 +306,10 @@ describe("the generic statistics view", () => {
     const rows = [...container.querySelectorAll("ol li")].map((row) => row.textContent);
     expect(rows[0]).toContain("0:05");
     expect(rows[0]).toContain("Kill");
-    expect(rows[0]).toContain("Ann#1 (Team 1)");
+    expect(rows[0]).toContain("Ann (Team 1)");
     expect(rows[0]).toContain("Team 2");
     expect(rows[1]).toContain("1:05");
-    expect(rows[1]).toContain("Cy#3 (Team 3)");
+    expect(rows[1]).toContain("Cy (Team 3)");
     expect(rows[1]).toContain("Ashe");
   });
 

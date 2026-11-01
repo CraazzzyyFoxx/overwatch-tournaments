@@ -6,7 +6,7 @@ import { ArrowRight } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { CARD_TITLE_CLASS } from "@/app/balancer/mix/pickup-chrome";
-import { HandleLabel } from "@/components/HandleLabel";
+import { PersonLabel } from "@/components/PlayerName";
 import { formatRelative } from "@/components/kit/format-time";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { FormStreak } from "@/components/profile/atoms";
@@ -100,7 +100,7 @@ function PlayerName({
   return (
     <span className="flex min-w-0 items-center gap-2">
       {role ? <PlayerRoleIcon role={role} ontology={ontology} size={16} /> : null}
-      <HandleLabel handle={player.name} title={player.name} className="font-medium text-[color:var(--aqt-fg)]" />
+      <PersonLabel display={player.display} className="font-medium text-[color:var(--aqt-fg)]" />
       {you ? (
         <span className="shrink-0 text-caption font-semibold text-[color:var(--aqt-teal)]">{t("you")}</span>
       ) : null}
@@ -386,7 +386,7 @@ export function PickupRatingTable({
   const [page, setPage] = useState(1);
   const needle = search.trim().toLocaleLowerCase();
   const ranks = new Map(ranked.map((player, index) => [player.key, index + 1]));
-  const shown = needle ? ranked.filter((player) => player.name.toLocaleLowerCase().includes(needle)) : ranked;
+  const shown = needle ? ranked.filter((player) => player.display.name.toLocaleLowerCase().includes(needle)) : ranked;
   const totalPages = Math.max(1, Math.ceil(shown.length / TABLE_PAGE_SIZE));
   const current = Math.min(page, totalPages);
   const rows = shown.slice((current - 1) * TABLE_PAGE_SIZE, current * TABLE_PAGE_SIZE);

@@ -18,7 +18,7 @@ export interface EventRow {
   relatedEntity: CatalogEntityRead | null;
 }
 
-/** Who an event acts or targets: a member's recorded handle and/or a participation's name; never invented. */
+/** Who an event acts or targets: a member's name in the match's game and/or a participation's name; never invented. */
 export interface EventParty {
   member: string | null;
   team: string | null;
@@ -36,7 +36,7 @@ export function buildEventRows(
 ): EventRow[] {
   const typeName = new Map(eventTypes.map((definition) => [definition.code, definition.name]));
   const memberName = new Map(
-    match.statistics.members.map((member) => [member.workspace_member_id, member.handle_snapshot])
+    match.statistics.members.map((member) => [member.workspace_member_id, member.display.name])
   );
   const teamName = new Map(
     match.participants.map((participant) => [participant.encounter_team_id, participant.name])

@@ -26,7 +26,7 @@ for candidate in (str(REPO_BACKEND_ROOT), str(BALANCER_SERVICE_ROOT)):
         sys.path.insert(0, candidate)
 
 
-from shared.schemas.identity import PlayerIdentityRead  # noqa: E402
+from shared.schemas.identity import PersonDisplayRead, PlayerIdentityRead  # noqa: E402
 from src.rpc import players  # noqa: E402
 from src.services import players as players_service  # noqa: E402
 
@@ -102,6 +102,7 @@ class _GateTests(IsolatedAsyncioTestCase):
             player_id=1,
             identity=PlayerIdentityRead(provider="battlenet", handle="Newbie#1234"),
             display_name=None,
+            display=PersonDisplayRead(name="Newbie", tag="#1234"),
             auth_user_id=None,
         )
         with (

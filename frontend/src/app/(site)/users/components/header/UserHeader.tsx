@@ -2,11 +2,17 @@ import Image from "@/components/ui/image";
 import { getTranslations } from "next-intl/server";
 import { ArrowDown, ArrowUp, Check } from "lucide-react";
 import { User, UserProfile } from "@/types/user.types";
-import { getSocialProviderConfig, socialAccountLabel, socialProfileUrl, sortSocialAccounts } from "@/lib/social/providers";
+import {
+  getSocialProviderConfig,
+  socialAccountLabel,
+  socialAccountsForProvider,
+  socialProfileUrl,
+  sortSocialAccounts
+} from "@/lib/social/providers";
 import { findRole, registrationRoles, roleName, rolePresentation } from "@/lib/roster/ontology";
 import disciplineService from "@/services/discipline.service";
 import { SocialIcon } from "@/components/social/SocialIcon";
-import { getPlayerImage, splitHandle } from "@/lib/player";
+import { canonicalDisplay, getPlayerImage } from "@/lib/player";
 import DivisionIcon from "@/components/DivisionIcon";
 import { FormStreak, ProfileStat, type FormResult } from "@/components/profile/atoms";
 import ProfileToolbar from "@/app/(site)/users/components/header/ProfileToolbar";
@@ -68,7 +74,7 @@ const primaryRoleOf = (profile: UserProfile) => {
 
 const UserHeader = async ({ profile, user, scope, discipline, axis }: UserHeaderProps) => {
   const [t, tRoles] = await Promise.all([getTranslations(), getTranslations("common.roles")]);
-  const { name, suffix: tag } = splitHandle(user.name);
+  const { name, tag } = canonicalDisplay(user.name);
   const primaryRole = primaryRoleOf(profile);
   const avatarSrc = getPlayerImage(profile, user);
 
@@ -106,6 +112,10 @@ const UserHeader = async ({ profile, user, scope, discipline, axis }: UserHeader
         .map((role) => rolePresentation(metadata.roles, role.id).color)
         .filter((color): color is string => color !== null)
     : [];
+  // A single-game profile also names the person by their handle in that game (visible accounts only: the payload
+  // already drops hidden ones); "all games" shows the canonical name alone.
+  const identityProvider = metadata?.discipline.identity_provider ?? null;
+  const gameHandle = identityProvider ? (socialAccountsForProvider(user.social_accounts, identityProvider)[0] ?? null) : null;
 
   return (
     <HeroFrame className="aqt-player" variant="profile" tint={roleColor ?? undefined} spectrum={spectrum}>
@@ -143,6 +153,16 @@ const UserHeader = async ({ profile, user, scope, discipline, axis }: UserHeader
               </span>
             ) : null}
           </h1>
+          {gameHandle ? (
+            <p
+              className="m-0 truncate text-body text-[color:var(--aqt-fg-faint)]"
+              title={[getSocialProviderConfig(gameHandle.provider).label, gameHandle.display_name ? gameHandle.username : null]
+                .filter(Boolean)
+                .join(" · ")}
+            >
+              {socialAccountLabel(gameHandle)}
+            </p>
+          ) : null}
           {user.social_accounts.length > 0 ? (
             <ul className="m-0 mt-1 flex list-none flex-wrap gap-1.5 p-0">
               {sortSocialAccounts(user.social_accounts).map((account) => {

@@ -31,7 +31,9 @@ interface Capture {
 const FIXTURE = path.join(__dirname, "..", "..", "..", "__fixtures__", "pre-move", "analytics.tournament.linear.json");
 // A frozen analytics-service response, never edited: its body is the wire type.
 const CAPTURE = JSON.parse(fs.readFileSync(FIXTURE, "utf8")) as Capture;
-const BASE = CAPTURE.input_old_wire.analytics.body.teams[0].players[0];
+const CAPTURED = CAPTURE.input_old_wire.analytics.body.teams[0].players[0];
+// The capture predates `display`: with no game override a roster row is shown under its own name.
+const BASE = { ...CAPTURED, display: { name: CAPTURED.name, tag: null, canonical: CAPTURED.name, snapshot: null } };
 
 const WHY = messages.analytics.community.why;
 /** The fixed text of a `why` message up to its first placeholder. */

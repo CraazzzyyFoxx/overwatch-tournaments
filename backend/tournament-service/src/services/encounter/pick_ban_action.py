@@ -53,6 +53,7 @@ from shared.repository import (
     PickBanEntryRepository,
     PickBanSubmissionRepository,
 )
+from shared.schemas.identity import PersonDisplayRead
 from shared.services.division_grid.resolution import resolve_tournament_division
 from src.core.workspace import get_division_grid
 from src.services.bracket.usability import is_encounter_live
@@ -72,6 +73,7 @@ from src.services.encounter.pick_ban_session import (
 from src.services.encounter.realtime_commit import emit_pick_ban_update
 from src.services.encounter.room_journal import record_room_event
 from src.services.encounter.veto_session import side_codes
+from src.services.person_names import player_displays
 
 #: ``viewer`` default meaning "the participation that is acting". A plain
 #: ``None`` default could not tell an admin acting FOR a participation (who
@@ -162,10 +164,10 @@ def serialize_submission(row: pbr.SubmissionLike) -> dict[str, Any]:
     }
 
 
-def serialize_target(player: Player, grid: DivisionGrid) -> dict[str, Any]:
+def serialize_target(player: Player, grid: DivisionGrid, display: PersonDisplayRead) -> dict[str, Any]:
     return {
         "player_id": player.id,
-        "name": player.name,
+        "display": display.model_dump(),
         "role": player.role_ref.model_dump() if player.role_ref is not None else None,
         "is_substitution": bool(player.is_substitution),
         # Against the tournament's own grid, exactly as `PlayerRead.division`.
@@ -1575,8 +1577,9 @@ class PickBanActionService:
         targets: dict[str, list[dict[str, Any]]] | None = None
         if any(candidate.target is not None for candidate in rt.steps):
             grid = await get_division_grid(session, None, tournament_id=rt.encounter.tournament_id)
+            displays = await player_displays(session, [player for players in rt.rosters.values() for player in players])
             targets = {
-                str(team_id): [serialize_target(player, grid) for player in players]
+                str(team_id): [serialize_target(player, grid, displays[player.id]) for player in players]
                 for team_id, players in rt.rosters.items()
             }
 
@@ -1602,6 +1605,7 @@ class PickBanActionService:
                     "id": seat.id,
                     "encounter_team_id": seat.team_id,
                     "name": seat.name,
+                    "display": seat.display.model_dump() if seat.display is not None else None,
                     "workspace_member_id": seat.workspace_member_id,
                 }
                 for seat in rt.seats

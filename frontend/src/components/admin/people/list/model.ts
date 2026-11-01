@@ -1,9 +1,9 @@
-import { splitHandle } from "@/lib/player";
+import { canonicalDisplay } from "@/lib/player";
 import type { AuthAdminUser } from "@/types/rbac.types";
 
 /** Access searches accounts by text, so the link carries the handle without its `#tag`. */
 export function accessAccountsHref(name: string): string {
-  return `/admin/access/accounts?q=${encodeURIComponent(splitHandle(name).name)}`;
+  return `/admin/access/accounts?q=${encodeURIComponent(canonicalDisplay(name).name)}`;
 }
 
 /**

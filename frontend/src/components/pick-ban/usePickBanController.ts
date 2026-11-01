@@ -280,7 +280,7 @@ export function usePickBanController({
   const targetName = (playerId: number) =>
     Object.values(targets ?? {})
       .flat()
-      .find((player) => player.player_id === playerId)?.name ?? null;
+      .find((player) => player.player_id === playerId)?.display.name ?? null;
 
   const isBlindStep = step?.blind === true;
   // A member step picks for the chosen player; an assignment is answered by submit, never by an act (spec §11.6 R4-1).

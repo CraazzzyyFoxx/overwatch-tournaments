@@ -4,14 +4,13 @@ import { useTranslations } from "next-intl";
 import { getTranslations } from "next-intl/server";
 import { ArrowDown } from "lucide-react";
 
-import { HandleLabel } from "@/components/HandleLabel";
+import PlayerName from "@/components/PlayerName";
 import { OpenEmptyRow, OpenLoadError, Section, SectionHead } from "@/components/site/open-layout";
 import { PlaceBadge } from "@/components/ui/place-badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { winrateColor } from "@/lib/colors";
 import { getFormatter } from "@/lib/datetime/server";
-import { getPlayerSlug } from "@/lib/player";
 import { isTenantHost } from "@/lib/site/tenant-host";
 import { cn } from "@/lib/utils";
 import statisticsService from "@/services/statistics.service";
@@ -150,14 +149,7 @@ export async function PlayersSection({
                     )}
                   </TableCell>
                   <TableCell className="w-full max-w-0 py-2 pl-0 pr-3">
-                    <Link
-                      href={`/users/${getPlayerSlug(row.name)}`}
-                      prefetch={false}
-                      title={row.name}
-                      className="block truncate rounded-sm text-body font-semibold text-[color:var(--aqt-fg)] transition-colors hover:text-[color:var(--aqt-teal)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--aqt-teal)]"
-                    >
-                      <HandleLabel handle={row.name} />
-                    </Link>
+                    <PlayerName display={row.display} className="text-body text-[color:var(--aqt-fg)]" />
                   </TableCell>
                   <TableCell
                     className={cn(

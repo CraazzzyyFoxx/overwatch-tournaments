@@ -44,7 +44,7 @@ import { RoomDraftStage } from "./RoomDraftStage";
 import { RoomHostMenu } from "./RoomHostMenu";
 import { RoomMatchStage } from "./RoomMatchStage";
 import { RoomTeamColumn } from "./RoomTeamColumn";
-import { draftPlayerName, draftRoomTeams, lineupRoomTeams, liveLineupOrder, roomPhase, withHeroRoom, type RoomTeam } from "./room-model";
+import { draftRoomTeams, lineupRoomTeams, liveLineupOrder, roomPhase, withHeroRoom, type RoomTeam } from "./room-model";
 import { useRoomLinkClick } from "./room-navigation";
 import { useViewTransitionState } from "./useViewTransitionState";
 import "./room-transitions.css";
@@ -169,7 +169,7 @@ export function MixRoom({ initialGame, lobbyIndex }: Readonly<{ initialGame: Cus
   const awayIds = new Set((game.players ?? []).filter((row) => row.away).map((row) => row.workspace_member_id));
   const awayNames = teams
     .flatMap((team) => team.slots)
-    .flatMap((slot) => (slot.seat != null && slot.seat.memberId != null && awayIds.has(slot.seat.memberId) ? [slot.seat.name] : []));
+    .flatMap((slot) => (slot.seat != null && slot.seat.memberId != null && awayIds.has(slot.seat.memberId) ? [slot.seat.display.name] : []));
 
   // Who is on the clock: the drafting team, or the teams a ban/pick step waits for.
   const board = shown.board;
@@ -460,7 +460,7 @@ function CaptainPicker({
         {current ? null : <SelectItem value={NONE}>{label}</SelectItem>}
         {options.map((player) => (
           <SelectItem key={player.id} value={String(player.id)}>
-            {draftPlayerName(player)}
+            {player.display.name}
           </SelectItem>
         ))}
       </SelectContent>

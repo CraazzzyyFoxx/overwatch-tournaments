@@ -12,6 +12,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict
 
+from shared.schemas.identity import PersonDisplayRead
 from shared.schemas.role import RoleRef
 
 __all__ = (
@@ -62,6 +63,8 @@ class TournamentMin(BaseRead):
 
 class PlayerRead(BaseRead):
     name: str | None = None
+    #: How the tournament's game names the player (``name`` is the roster snapshot).
+    display: PersonDisplayRead
     rank: int | None
     division: int | None = None
     role: RoleRef | None = None

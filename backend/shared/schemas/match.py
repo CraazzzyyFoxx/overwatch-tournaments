@@ -19,6 +19,7 @@ from pydantic import BaseModel
 from shared.models.stats.ingest import RawSourceStatus
 from shared.schemas.base import BaseRead
 from shared.schemas.catalog import CatalogEntityRead
+from shared.schemas.identity import PersonDisplayRead
 from shared.schemas.role import RoleRef
 
 __all__ = (
@@ -93,9 +94,10 @@ class NativeMatchMember(BaseModel):
     workspace_member_id: int
     #: The workspace member's global player; a member outside the match's workspace is never listed.
     player_id: int
-    #: The player's canonical, unique ``players.user.name``: what a profile link is built from.
-    player_name: str
-    #: The exact handle the observation recorded; display only, never a link target.
+    #: The name this match's game shows: the workspace's name, the game handle, then the observed handle, then the
+    #: canonical ``players.user.name`` (``display.canonical``: what a profile link is built from).
+    display: PersonDisplayRead
+    #: The exact handle the observation recorded; data, never a link target.
     handle_snapshot: str
     #: From ``observed_role_id`` through the owner ontology.
     observed_role: RoleRef | None

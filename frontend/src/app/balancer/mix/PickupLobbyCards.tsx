@@ -172,7 +172,7 @@ function LobbyCard({
   const awayNames = (variant?.teams ?? [])
     .flatMap((team) => team.seats)
     .filter((seat) => away.has(seat.uuid))
-    .map((seat) => seat.name);
+    .map((seat) => seat.display.name);
   const teamNames: [string, string] = [
     variant?.teams[0]?.name ?? defaultName(0),
     variant?.teams[1]?.name ?? defaultName(1),

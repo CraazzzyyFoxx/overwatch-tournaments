@@ -16,6 +16,7 @@ import type * as MatchCharactersModule from "@/disciplines/overwatch/match/Match
 import { loadMatchUI } from "@/disciplines/registry/match";
 import en from "@/i18n/messages/en.json";
 import { ApiError } from "@/lib/api/error";
+import { canonicalDisplay } from "@/lib/player";
 import { notify } from "@/lib/notify";
 import { useAuthProfileStore } from "@/stores/auth-profile.store";
 import type { Encounter } from "@/types/encounter.types";
@@ -966,7 +967,7 @@ describe("phase selection", () => {
         eligible: { item_ids: [201, 202], by_target: { "55": [201, 202] } },
         targets: {
           [HOME]: [],
-          [AWAY]: [{ player_id: 55, name: "Foxy", role: { dimension: "player_role", role: "tank" }, is_substitution: false, division: 7 }]
+          [AWAY]: [{ player_id: 55, display: canonicalDisplay("Foxy"), role: { dimension: "player_role", role: "tank" }, is_substitution: false, division: 7 }]
         }
       })
     );
@@ -998,14 +999,14 @@ describe("phase selection", () => {
           [AWAY]: [
             {
               player_id: 55,
-              name: "Foxy",
+              display: canonicalDisplay("Foxy"),
               role: { dimension: "player_role", role: "tank" },
               is_substitution: false,
               division: 7
             },
             {
               player_id: 56,
-              name: "Vixen",
+              display: canonicalDisplay("Vixen"),
               role: { dimension: "player_role", role: "tank" },
               is_substitution: true,
               division: 12
@@ -3051,14 +3052,14 @@ describe("admin controls", () => {
           [AWAY]: [
             {
               player_id: 55,
-              name: "Foxy",
+              display: canonicalDisplay("Foxy"),
               role: { dimension: "player_role", role: "tank" },
               is_substitution: false,
               division: 7
             },
             {
               player_id: 56,
-              name: "Vixen",
+              display: canonicalDisplay("Vixen"),
               role: { dimension: "player_role", role: "tank" },
               is_substitution: true,
               division: 12

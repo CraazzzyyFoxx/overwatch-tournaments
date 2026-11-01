@@ -443,7 +443,7 @@ describe("owner-grid nested crests", () => {
         targets={[
           {
             player_id: 7,
-            name: "Support",
+            display: { name: "Support", tag: null, canonical: null, snapshot: null },
             role: { dimension: "position", role: "support" },
             division: 2,
             is_substitution: false

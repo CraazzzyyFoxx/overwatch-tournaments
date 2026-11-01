@@ -23,7 +23,7 @@ import {
   type TeamView
 } from "@/lib/draft/room-model";
 import { slotRankForPlayer } from "@/lib/draft/workspace-model";
-import { splitHandle } from "@/lib/player";
+import { PersonLabel } from "@/components/PlayerName";
 import { useSlotLabel } from "@/hooks/useSlotLabel";
 import { roleTint, showsRoles, type RoleOntology } from "@/lib/roster/ontology";
 import { isRoleSlot, OPEN_SLOT_CODE, slotCodesOf, type SlotCode } from "@/lib/roster/shape";
@@ -393,7 +393,7 @@ function RosterCell({
   }
 
   const { player } = cell;
-  const tag = player.identity?.handle ?? `#${player.id}`;
+  const tag = player.display.name;
   const rank = slotRankForPlayer(player, cell.role, { has_role_slots: hasRoleSlots });
   const division = resolveDivisionFromRank(divisionGrid, rank);
   const divisionLabel = division == null ? null : getDivisionLabel(divisionGrid, division);
@@ -433,7 +433,7 @@ function RosterCell({
       }
     >
       <RankCrest division={division} grid={divisionGrid} size={18} tooltip={false} />
-      <span className="min-w-0 truncate">{splitHandle(tag).name}</span>
+      <PersonLabel display={player.display} tag="hidden" />
     </RowButton>
   );
 }

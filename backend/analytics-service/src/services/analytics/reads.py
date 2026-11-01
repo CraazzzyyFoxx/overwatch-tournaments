@@ -24,8 +24,10 @@ from shared.repository import (
     AnalyticsStandingsDistributionRepository,
     MLModelArtifactRepository,
 )
+from shared.schemas.identity import PersonDisplayRead
 from shared.schemas.role import RoleRef
 from shared.services.division_grid.resolution import resolve_tournament_division
+from shared.services.person_display import load_person_displays
 from shared.services.workspace_scope import get_division_grid
 from src import schemas
 from src.core.analytics_exports import supports_analytics, tournament_discipline
@@ -113,7 +115,7 @@ def _team_to_pydantic(team: models.Team, *, include_tournament: bool = True) -> 
     )
 
 
-def _player_to_pydantic(player: models.Player, *, grid: DivisionGrid) -> schemas.PlayerRead:
+def _player_to_pydantic(player: models.Player, *, grid: DivisionGrid, display: PersonDisplayRead) -> schemas.PlayerRead:
     # ``user`` is intentionally left as ``None``: the frontend analytics surface
     # reads ``player.name`` directly, and accessing ``player.user`` (or any of its
     # ``battle_tag``/``discord``/``twitch`` relationships) would trip
@@ -123,6 +125,7 @@ def _player_to_pydantic(player: models.Player, *, grid: DivisionGrid) -> schemas
         created_at=player.created_at,
         updated_at=player.updated_at,
         name=getattr(player, "name", None),
+        display=display,
         rank=player.rank,
         division=resolve_tournament_division(player.rank, tournament_grid=grid),
         role=player.role_ref,
@@ -322,6 +325,21 @@ class AnalyticsReadFlowsService:
                 canonical_means[team_id] = sum(ranked) / len(ranked)
         field_mean = sum(canonical_means.values()) / len(canonical_means) if canonical_means else 0.0
 
+        # The tournament's own game and workspace name its players: the rows are the tournament's roster.
+        tournament = next(iter(cache_teams.values())).tournament if cache_teams else None
+        roster = [player for players in cache_players.values() for player, _, _ in players]
+        displays = (
+            await load_person_displays(
+                session,
+                {player.workspace_member.player_id for player in roster},
+                discipline=discipline_code,
+                workspace_id=tournament.workspace_id,
+                snapshots={player.workspace_member.player_id: player.name for player in roster},
+            )
+            if tournament is not None and discipline_code is not None
+            else {}
+        )
+
         for team_id, team in cache_teams.items():
             players = cache_players[team_id]
             team_read = _team_to_pydantic(team)
@@ -332,7 +350,10 @@ class AnalyticsReadFlowsService:
             team_players: list[schemas.PlayerAnalytics] = []
 
             for player, analytics, shift in players:
-                player_read = _player_to_pydantic(player, grid=grid)
+                display = displays.get(player.workspace_member.player_id) or PersonDisplayRead.build(
+                    canonical=None, snapshot=player.name
+                )
+                player_read = _player_to_pydantic(player, grid=grid, display=display)
                 predicted_division, predicted_direction, predicted_delta, confidence = predict_player_division(
                     player.rank, grid, shift.shift, shift.shift_sd, threshold=threshold
                 )

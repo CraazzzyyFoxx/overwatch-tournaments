@@ -39,12 +39,14 @@ from shared import models  # noqa: E402
 from shared.core import enums  # noqa: E402
 from shared.division_grid import DEFAULT_GRID  # noqa: E402
 from shared.domain.roster_shape import RosterShape  # noqa: E402
+from shared.schemas.identity import PersonDisplayRead  # noqa: E402
 from shared.schemas.role import RoleRef  # noqa: E402
 from shared.schemas.roster_slots import RosterShapeRead  # noqa: E402
 
 
 def _player() -> SimpleNamespace:
     return SimpleNamespace(
+        id=1,
         to_dict=lambda: {
             "id": 1,
             "created_at": None,
@@ -82,6 +84,9 @@ class SerPlayerGridTests(IsolatedAsyncioTestCase):
         with (
             patch.object(registry, "get_division_grid", get_grid),
             patch.object(team_flows.tournament_flows_service, "to_pydantic", AsyncMock(return_value=None)),
+            patch.object(
+                team_flows, "player_displays", AsyncMock(return_value={1: PersonDisplayRead(name="Roster Player")})
+            ),
         ):
             result = await registry.registry_service._ser_player(session, player)
 

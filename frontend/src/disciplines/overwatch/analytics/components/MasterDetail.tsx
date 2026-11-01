@@ -72,7 +72,7 @@ export default function MasterDetail({
   const selection = useMasterDetailSelection(teams[0]?.id ?? null);
   const teamById = (id: number | null) => (id == null ? null : (teams.find((team) => team.id === id) ?? null));
   const playerNames = useMemo(
-    () => new Map(teams.flatMap((team) => team.players.map((player) => [player.id, player.name] as const))),
+    () => new Map(teams.flatMap((team) => team.players.map((player) => [player.id, player.display.name] as const))),
     [teams]
   );
 

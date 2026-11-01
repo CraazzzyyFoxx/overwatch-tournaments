@@ -18,6 +18,7 @@ function member(overrides: Partial<MixMemberStats> = {}): MixMemberStats {
   return {
     workspace_member_id: 1,
     display_name: "Aria",
+    display: { name: "Aria", tag: "#1111", canonical: "Aria#1111", snapshot: null },
     identity: { provider: "battlenet", handle: "Aria#1111" },
     games: 10,
     wins: 6,
@@ -70,18 +71,13 @@ describe("mergeMixStats", () => {
     expect(players.map((player) => player.key).sort()).toEqual(["m:1:5", "m:2:5"]);
   });
 
-  it("names a player by their handle, else by the nickname of the community they played most in", () => {
-    const [tagged] = mergeMixStats([
-      source(1, [member({ games: 9, identity: null, display_name: "big" })]),
-      source(2, [member({ games: 2, identity: { provider: "battlenet", handle: "Aria#1111" }, display_name: "x" })]),
+  it("names a player by the display of the community they played most in", () => {
+    const shown = (name: string) => ({ name, tag: null, canonical: "Aria#1111", snapshot: null });
+    const [most] = mergeMixStats([
+      source(1, [member({ games: 2, display: shown("small") })]),
+      source(2, [member({ games: 9, display: shown("big") })]),
     ]);
-    expect(tagged.name).toBe("Aria#1111");
-
-    const [nicknamed] = mergeMixStats([
-      source(1, [member({ games: 2, identity: null, display_name: "small" })]),
-      source(2, [member({ games: 9, identity: null, display_name: "big" })]),
-    ]);
-    expect(nicknamed.name).toBe("big");
+    expect(most.display).toEqual(shown("big"));
   });
 
   it("ranks by wins, then win rate, then games", () => {

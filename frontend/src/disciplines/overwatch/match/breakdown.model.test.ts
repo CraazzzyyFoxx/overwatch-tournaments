@@ -15,8 +15,7 @@ const hero = (id: number, cls: string) => ({ id, name: `Hero ${id}`, attrs: { cl
 const player = (id: number, cls: string, stats: Partial<Record<LogStatsName, number>>): OwPlayer => ({
   workspace_member_id: id,
   user_id: id,
-  name: `P${id}#1`,
-  profile_name: null,
+  display: { name: `P${id}`, tag: "#1", canonical: null, snapshot: null },
   stats: { 0: stats as Record<string, number> },
   heroes: {},
   heroTimes: { 0: [{ entity: hero(id, cls), seconds: 300 }] }

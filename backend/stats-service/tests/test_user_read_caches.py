@@ -30,6 +30,7 @@ user_cache = importlib.import_module("shared.services.user_cache")
 users = flows.UserService.of("overwatch")
 
 from shared.schemas.events import CacheInvalidatedEvent  # noqa: E402
+from shared.schemas.identity import PersonDisplayRead  # noqa: E402
 from shared.services.realtime import Resource  # noqa: E402
 from shared.services.realtime.consumer import invalidate_from_event  # noqa: E402
 from shared.testing.cache import configure_test_cache  # noqa: E402
@@ -101,6 +102,15 @@ class UserCacheInvalidationTests(_SummaryReads):
 
 
 class CharactersCacheTests(_CacheTestBase):
+    async def asyncSetUp(self) -> None:
+        await super().asyncSetUp()
+        # The reads under test cache whole payloads; naming the user is a database read these tests do not have.
+        patcher = patch.object(
+            flows, "load_person_displays", AsyncMock(return_value={101: PersonDisplayRead(name="Player")})
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def _patch_deps(self):
         user = SimpleNamespace(id=101, name="Player")
         get_user = patch.object(users, "get", AsyncMock(return_value=user))
@@ -124,7 +134,7 @@ class CharactersCacheTests(_CacheTestBase):
         compute.assert_awaited_once()
         # Versioned (rows gained fields).
         self.assertTrue(stored)
-        self.assertTrue(all(key.startswith("backend:user_characters:v2:101:") for key in stored), stored)
+        self.assertTrue(all(key.startswith("backend:user_characters:v3:101:") for key in stored), stored)
 
     async def test_stats_order_and_duplicates_share_one_key(self) -> None:
         get_user, svc, compute, records = self._patch_deps()
@@ -195,7 +205,7 @@ class VersionedEncounterFamiliesTests(_CacheTestBase):
             await read()
             stored = sorted([key async for key in cache.scan("backend:*")])
             self.assertEqual(
-                ["backend:user_encounters:v8:404:", "backend:user_tournament_encounters:v8:404:"],
+                ["backend:user_encounters:v9:404:", "backend:user_tournament_encounters:v9:404:"],
                 [key[: key.index("404:") + 4] for key in stored],
             )
             await read()

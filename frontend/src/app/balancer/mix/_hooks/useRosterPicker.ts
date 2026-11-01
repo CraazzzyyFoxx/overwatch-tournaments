@@ -4,6 +4,7 @@ import { useCallback, useDeferredValue, useMemo, useRef, useState } from "react"
 import { useQuery } from "@tanstack/react-query";
 
 import type { CustomGamePlayer } from "@/services/custom-game.service";
+import type { PersonDisplay } from "@/types/user.types";
 import {
   workspacePlayerKeys,
   workspacePlayerService,
@@ -26,7 +27,7 @@ const VISIBLE_AUTHOR_CHIPS = 4;
 export type RosterRow = {
   memberId: number;
   handle: string | null;
-  displayName: string | null;
+  display: PersonDisplay;
   ranks: Record<string, number>;
   authorRanks: Record<string, number>;
 };
@@ -132,7 +133,7 @@ export function useRosterPicker({
       (pageData?.results ?? []).map((member: RosterMember) => ({
         memberId: member.member_id,
         handle: member.identity?.handle ?? null,
-        displayName: member.display_name,
+        display: member.display,
         // Effective = canon overridden by this host's own book, the same
         // precedence the balancer applies.
         ranks: { ...member.ranks, ...member.author_ranks },

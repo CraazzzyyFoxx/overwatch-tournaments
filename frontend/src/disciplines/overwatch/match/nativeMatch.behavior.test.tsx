@@ -76,8 +76,13 @@ function match(
         encounter_team_id: side.id,
         workspace_member_id: side.id * 10,
         player_id: side.id * 10,
-        // Side 102's player has no canonical name on the wire: its handle must stay unlinked.
-        player_name: side.id === 102 ? null : `Canonical ${side.id}`,
+        // Side 102's player has no canonical name on the wire: its name must stay unlinked.
+        display: {
+          name: `Observed ${side.id}`,
+          tag: "#1",
+          canonical: side.id === 102 ? null : `Canonical ${side.id}`,
+          snapshot: null
+        },
         handle_snapshot: `Observed ${side.id}#1`,
         observed_role: null
       })),

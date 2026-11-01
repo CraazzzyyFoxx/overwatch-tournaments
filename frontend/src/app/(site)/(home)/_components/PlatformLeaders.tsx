@@ -5,7 +5,7 @@ import { getTranslations } from "next-intl/server";
 import { Crosshair, Crown, Flame, Timer, Zap, type LucideIcon } from "lucide-react";
 
 import { RecordContext, RecordHolder, useRecordFigure } from "@/app/(site)/statistics/_components/records";
-import { HandleLabel } from "@/components/HandleLabel";
+import { PersonLabel } from "@/components/PlayerName";
 import { MoreLink, OpenEmptyRow, OpenLoadError, Section, SectionHead } from "@/components/site/open-layout";
 import { Eyebrow } from "@/components/ui/eyebrow";
 import Image from "@/components/ui/image";
@@ -13,7 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ServerGameScopeNotice } from "@/components/workspace/ServerGameScopeNotice";
 import type { Formatter } from "@/lib/datetime";
 import { getFormatter } from "@/lib/datetime/server";
-import { getPlayerSlug, splitHandle } from "@/lib/player";
+import { canonicalDisplay, getPlayerSlug } from "@/lib/player";
 import { resolveServerPageGame } from "@/lib/site/discipline-server";
 import { cn, initials } from "@/lib/utils";
 import statisticsService from "@/services/statistics.service";
@@ -159,7 +159,7 @@ function Podium({
         {players.slice(0, PODIUM).map((player, index) => {
           const profile = profiles[index] ?? null;
           const portrait = profile?.most_played_character ?? null;
-          const { name, suffix } = splitHandle(player.name);
+          const { name, tag: suffix } = canonicalDisplay(player.name);
           return (
             <li key={player.id} className={cn(PLACE_CLASS[index], "min-w-0")}>
               <Link
@@ -240,7 +240,7 @@ function Podium({
                   {PODIUM + 1 + index}
                 </span>
                 <Avatar name={player.name} portrait={null} className="size-[30px] text-caption" />
-                <HandleLabel handle={player.name} className="font-semibold text-[color:var(--aqt-fg)]" />
+                <PersonLabel display={canonicalDisplay(player.name)} className="font-semibold text-[color:var(--aqt-fg)]" />
                 <span aria-hidden className="block h-1 overflow-hidden rounded-full bg-[color:var(--aqt-overlay-3)]">
                   <span
                     className={cn(styles.bar, "block h-full rounded-full bg-[color:var(--aqt-teal)]")}

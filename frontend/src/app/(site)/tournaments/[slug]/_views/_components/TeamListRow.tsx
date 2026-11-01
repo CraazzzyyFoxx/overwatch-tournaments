@@ -16,11 +16,12 @@ import {
   TeamPlacement,
   TournamentTeamTable
 } from "@/components/TournamentTeamCard";
+import { PersonLabel } from "@/components/PlayerName";
 import TeamName from "@/components/TeamName";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { disclosureChevronClass } from "@/components/ui/chevron";
-import { sortTeamPlayers, splitHandle } from "@/lib/player";
+import { sortTeamPlayers } from "@/lib/player";
 import { groupDisplayName, groupHue } from "@/lib/tournament/group";
 import { cn } from "@/lib/utils";
 import type { CatalogEntityChip } from "@/types/catalog.types";
@@ -28,7 +29,7 @@ import type { Registration } from "@/types/registration.types";
 import type { Team } from "@/types/team.types";
 import type { Tournament } from "@/types/tournament.types";
 
-import { declaredHeroes, MARK_CLASS, type TeamRecord } from "../tournamentTeams.model";
+import { declaredHeroes, MARK_CLASS, playerMatches, type TeamRecord } from "../tournamentTeams.model";
 import { overviewVariant } from "../tournamentOverview.model";
 
 /**
@@ -120,7 +121,7 @@ export const TeamListRow = ({
                   searched battletag shows in full, marked. */}
               <span className="truncate text-caption text-[color:var(--aqt-fg-muted)]">
                 {players.map((player) => {
-                  const matched = needle !== "" && player.name.toLowerCase().includes(needle);
+                  const matched = needle !== "" && playerMatches(player, needle);
                   return (
                     <span
                       key={player.id}
@@ -132,9 +133,11 @@ export const TeamListRow = ({
                         <PlayerRoleIcon role={player.role} ontology={ontology} size={13} decorative />
                       </span>
                       {matched ? (
-                        <mark className={MARK_CLASS}>{player.name}</mark>
+                        <mark className={MARK_CLASS}>
+                          <PersonLabel display={player.display} className="inline" />
+                        </mark>
                       ) : (
-                        splitHandle(player.name).name
+                        <PersonLabel display={player.display} tag="hidden" className="inline" />
                       )}
                       {player.user_id === team.captain_id ? (
                         <Crown

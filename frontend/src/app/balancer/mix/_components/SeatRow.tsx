@@ -6,6 +6,7 @@ import { AlertCircle, Crown } from "lucide-react";
 
 import { lineupSeatKey, playerTransitionName } from "@/app/balancer/mix/_room/room-model";
 import { AWAY_CHIP_CLASS } from "@/app/balancer/mix/pickup-chrome";
+import { PersonLabel } from "@/components/PlayerName";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { RankCrest } from "@/components/RankCrest";
 import { Button } from "@/components/ui/button";
@@ -88,12 +89,7 @@ export function SeatRow({
         </IconTooltip>
       ) : null}
       <RankCrest rank={seat.rating} grid={grid} size={32} />
-      <span
-        className="min-w-0 flex-1 truncate text-base font-semibold text-[color:var(--aqt-fg)]"
-        title={seat.name}
-      >
-        {seat.name}
-      </span>
+      <PersonLabel display={seat.display} className="flex-1 text-base font-semibold text-[color:var(--aqt-fg)]" />
       {seat.isCaptain ? (
         <IconTooltip label={tRoom("captain")} className="flex shrink-0 items-center">
           <Crown aria-hidden className="size-3.5 text-[color:var(--aqt-amber)]" />
@@ -140,9 +136,7 @@ export function SeatDragPreview({ seat, owner }: Readonly<{ seat: PickupSeat; ow
           <PlayerRoleIcon role={seat.role} ontology={owner.ontology} size={24} label={slotLabel(seat.role)} decorative />
         </span>
       ) : null}
-      <span className="min-w-0 flex-1 truncate text-base font-semibold text-[color:var(--aqt-fg)]">
-        {seat.name}
-      </span>
+      <PersonLabel display={seat.display} className="flex-1 text-base font-semibold text-[color:var(--aqt-fg)]" />
       {/* No tooltip: the pointer sits on this ghost for the whole drag. */}
       {seat.isCaptain ? (
         <span role="img" aria-label={tRoom("captain")} className="flex shrink-0 items-center">

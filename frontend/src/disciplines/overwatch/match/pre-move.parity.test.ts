@@ -149,7 +149,7 @@ const oldHero = (entity: CatalogEntityRead) => ({
 const oldPlayer = (player: OwPlayer) => ({
   workspace_member_id: player.workspace_member_id,
   user_id: player.user_id,
-  name: player.name,
+  name: player.display.name + (player.display.tag ?? ""),
   stats: player.stats,
   heroes: Object.fromEntries(
     Object.entries(player.heroes).map(([segment, heroes]) => [segment, heroes.map(oldHero)])

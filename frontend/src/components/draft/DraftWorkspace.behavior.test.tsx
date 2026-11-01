@@ -39,7 +39,7 @@ const player = (id: number, overrides: Partial<DraftPlayer> = {}): DraftPlayer =
   session_id: 1,
   registration_id: id * 10,
   user_id: null,
-  identity: { provider: "battlenet", handle: `P${id}#1` }, player_name: null,
+  identity: { provider: "battlenet", handle: `P${id}#1` }, display: { name: `P${id}`, tag: "#1", canonical: null, snapshot: null },
   primary_role: { dimension: "player_role", role: "support" },
   is_flex: false,
   effective_rank: 3000,

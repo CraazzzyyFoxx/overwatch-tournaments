@@ -1,7 +1,7 @@
 import { useTranslations } from "next-intl";
 import { X } from "lucide-react";
 
-import { HandleLabel } from "@/components/HandleLabel";
+import { PersonLabel } from "@/components/PlayerName";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { Button } from "@/components/ui/button";
 import { Eyebrow } from "@/components/ui/eyebrow";
@@ -12,7 +12,6 @@ import type { CustomGamePlayer } from "@/services/custom-game.service";
 
 import {
   averageRank,
-  playerLabel,
   resolveRoleOrder,
   sortLineup,
   summarizeLineup,
@@ -178,7 +177,7 @@ function LineupChip({
   const t = useTranslations("mixes.aside");
   const tLineup = useTranslations("mixes.lineup");
   const slotLabel = useSlotLabel(owner.ontology);
-  const label = playerLabel(row);
+  const label = row.display.name;
   const order = resolveRoleOrder(row, owner.roles);
   const rank = averageRank(row, owner.roles);
 
@@ -189,9 +188,8 @@ function LineupChip({
         row.participation === "benched" && "opacity-55"
       )}
     >
-      <HandleLabel
-        handle={label}
-        title={label}
+      <PersonLabel
+        display={row.display}
         className="flex-1 text-caption font-semibold text-[color:var(--aqt-fg)]"
         tagClassName="text-label"
       />

@@ -24,6 +24,7 @@ from src.schemas.registration_team import (
     serialize_invite,
     serialize_registration_team,
 )
+from src.services.person_names import registration_display, registration_person_loader
 from src.services.registration.service import _owned_by
 from src.services.registration.teams._core import TeamServiceBase
 from src.services.registration.teams._shared import (
@@ -37,6 +38,11 @@ from src.services.registration.teams._shared import (
     _occupancy_of,
 )
 from src.services.registration.windows import is_registration_open
+
+
+def _primary_handle(registration: models.Registration, provider: str) -> str | None:
+    identity = registration.primary_game_identity(provider=provider)
+    return identity.handle if identity is not None else None
 
 
 class ReadsMixin(TeamServiceBase):
@@ -65,21 +71,26 @@ class ReadsMixin(TeamServiceBase):
         Roles ride along because the captain is filling a specific slot; a list of bare
         names would make them open every profile to find a tank.
         """
-        provider = await self._owner_provider(session, tournament_id)
+        tournament = await self.tournament_repo.get(session, tournament_id)
+        if tournament is None:
+            raise _fail(404, "tournament_not_found", "Tournament not found")
+        provider = identity_provider(tournament.discipline)
         rows = await session.scalars(
             self.registration_repo.select()
             .where(*_free_agent_clause(tournament_id))
             .options(
                 selectinload(models.Registration.roles),
                 selectinload(models.Registration.identities),
+                registration_person_loader(),
             )
             .order_by(models.Registration.submitted_at.asc())
         )
         return [
             RegistrationFreeAgentRead(
                 registration_id=row.id,
-                primary_handle=(
-                    identity.handle if (identity := row.primary_game_identity(provider=provider)) else None
+                primary_handle=(handle := _primary_handle(row, provider)),
+                display=registration_display(
+                    row, provider=provider, workspace_id=tournament.workspace_id, handle=handle
                 ),
                 # Primary first: it is the role they actually want, and the captain
                 # scanning for one reads the first chip.
@@ -189,7 +200,7 @@ class ReadsMixin(TeamServiceBase):
                 models.Registration.deleted_at.is_(None),
                 models.Registration.status.notin_(_SLOT_RELEASING_STATUSES),
             )
-            .options(selectinload(models.Registration.identities))
+            .options(selectinload(models.Registration.identities), registration_person_loader())
         ):
             rosters[registration.registration_team_id].append(registration)
         pending: dict[int, list[models.RegistrationTeamInvite]] = {team_id: [] for team_id in team_ids}
@@ -240,10 +251,9 @@ class ReadsMixin(TeamServiceBase):
                         RegistrationTeamMemberRead(
                             registration_id=registration.id,
                             display_name=registration.display_name,
-                            primary_handle=(
-                                identity.handle
-                                if (identity := registration.primary_game_identity(provider=provider))
-                                else None
+                            primary_handle=(handle := _primary_handle(registration, provider)),
+                            display=registration_display(
+                                registration, provider=provider, workspace_id=tournament.workspace_id, handle=handle
                             ),
                             slot_code=registration.team_slot_code,
                             is_substitute=bool(registration.is_substitute),

@@ -1,11 +1,10 @@
 "use client";
 
 import { useId, useMemo, type ReactNode } from "react";
-import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { Repeat } from "lucide-react";
 import CatalogEntityImage from "@/components/catalog/CatalogEntityImage";
-import { HandleLabel } from "@/components/HandleLabel";
+import PlayerName from "@/components/PlayerName";
 import { LoadErrorNote } from "@/components/kit/EmptyNote";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -14,7 +13,6 @@ import Image from "@/components/ui/image";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useHeroClass } from "@/disciplines/overwatch/character/classes";
 import { useFormatter } from "@/lib/datetime/client";
-import { getPlayerSlug, splitHandle } from "@/lib/player";
 import { cn } from "@/lib/utils";
 import type { DisciplineMetadata } from "@/types/discipline.types";
 import type { MatchWithStats } from "@/types/encounter.types";
@@ -93,26 +91,9 @@ interface HeroClassView {
   icon: (cls: string | null | undefined, size: number) => ReactNode;
 }
 
-/** A player's name, linked to his profile only through `profile_name`; the handle's `#tag` only on request. */
-function PlayerLabel({ player, tag = false, className }: Readonly<{ player: MatchStatsPlayer; tag?: boolean; className?: string }>) {
-  const label = tag ? (
-    <HandleLabel handle={player.name} className="block" />
-  ) : (
-    <span className="block min-w-0 truncate">{splitHandle(player.name).name}</span>
-  );
-  return player.profile_name ? (
-    <Link
-      href={`/users/${getPlayerSlug(player.profile_name)}`}
-      title={player.name}
-      className={cn("min-w-0 hover:underline", className)}
-    >
-      {label}
-    </Link>
-  ) : (
-    <span title={player.name} className={cn("min-w-0", className)}>
-      {label}
-    </span>
-  );
+/** A player's name in this game, linked to his profile through `display.canonical`; sized by its parent. */
+function PlayerLabel({ player, tag }: Readonly<{ player: MatchStatsPlayer; tag?: "muted" | "hidden" }>) {
+  return <PlayerName display={player.display} tag={tag} className="text-[length:inherit]" />;
 }
 
 /** `h : a`, the side with less dimmed. */
@@ -189,7 +170,7 @@ function MvpCard({
 
   return (
     <Card asChild className="relative isolate grid grid-cols-[72px_minmax(0,1fr)] gap-x-4 overflow-hidden p-4 sm:grid-cols-[112px_minmax(0,1fr)]">
-      <article aria-label={`${scope}: ${splitHandle(player.name).name}`}>
+      <article aria-label={`${scope}: ${player.display.name}`}>
         <span
           aria-hidden
           className="pointer-events-none absolute inset-0 -z-10"
@@ -205,7 +186,7 @@ function MvpCard({
         <div className="min-w-0">
           <Eyebrow title={t("matches.breakdown.impactFirst")}>{scope}</Eyebrow>
           <div className="my-1.5 flex items-baseline gap-1 font-display text-heading font-semibold sm:text-title">
-            <PlayerLabel player={player} tag className="block" />
+            <PlayerLabel player={player} />
           </div>
           <div className={cn("flex flex-wrap items-center gap-x-2 gap-y-0.5 text-caption", DIM)}>
             {cls ? (
@@ -247,7 +228,7 @@ function MvpCard({
         <div className={cn("col-span-full mt-3.5 flex flex-wrap gap-x-4 gap-y-1 border-t pt-3 text-caption", HAIRLINE, DIM)}>
           {duel ? (
             <span>
-              {t("matches.breakdown.duelWith", { name: splitHandle(duel.opponent.name).name })}{" "}
+              {t("matches.breakdown.duelWith", { name: duel.opponent.display.name })}{" "}
               <PairScore
                 home={duel.mine}
                 away={duel.theirs}
@@ -259,7 +240,7 @@ function MvpCard({
           {rival ? (
             <span>
               {t.rich("matches.breakdown.rivalBest", {
-                name: splitHandle(rival.player.name).name,
+                name: rival.player.display.name,
                 who: (chunks) => (
                   <span className="font-semibold" style={{ color: SEAT[rivalSide] }}>
                     {chunks}
@@ -459,7 +440,7 @@ function Lineup({
         return [
           <div key={`${player.workspace_member_id}-p`} className={cn(cell, HAIRLINE, "flex items-center gap-2 text-caption font-medium")}>
             {cls ? <span style={{ color: heroClass.color(cls) }}>{heroClass.icon(cls, 15)}</span> : null}
-            <PlayerLabel player={player} />
+            <PlayerLabel player={player} tag="hidden" />
           </div>,
           ...lineupRow(player, columns).map((entry, index) => {
             const key = `${player.workspace_member_id}-${columns[index]}`;
@@ -545,7 +526,7 @@ function DuelPerson({
   return (
     <div className={cn(placement, won ? "font-semibold text-[color:var(--aqt-fg)]" : cn("font-medium", MUTED))}>
       {side === "home" ? image : null}
-      <PlayerLabel player={player} />
+      <PlayerLabel player={player} tag="hidden" />
       {side === "away" ? image : null}
     </div>
   );
@@ -554,7 +535,7 @@ function DuelPerson({
 function DuelRow({ duel, round }: Readonly<{ duel: Duel; round: number }>) {
   const t = useTranslations();
   const format = useFormatter();
-  const who = (player: MatchStatsPlayer | null) => (player ? splitHandle(player.name).name : "\u2014");
+  const who = (player: MatchStatsPlayer | null) => (player ? player.display.name : "\u2014");
   return (
     <div className={cn("grid grid-cols-2 items-center gap-x-4 gap-y-2.5 border-t py-2.5 sm:grid-cols-[minmax(140px,190px)_repeat(3,minmax(0,1fr))_minmax(140px,190px)] sm:gap-x-6", HAIRLINE)}>
       <DuelPerson player={duel.home} side="home" won={duel.wins.home > duel.wins.away} round={round} />
@@ -600,7 +581,7 @@ function CarryRow({
   const format = useFormatter();
   const { shares, total } = carryShares(team, round, name);
   const pct = (share: number) => Math.round(share * 100);
-  const nameOf = (player: MatchStatsPlayer) => splitHandle(player.name).name;
+  const nameOf = (player: MatchStatsPlayer) => player.display.name;
   const summary = shares.map(({ player, share }) => `${nameOf(player)} ${pct(share)}%`);
   return (
     <div
@@ -670,7 +651,7 @@ export default function Breakdown({ match, home, away, round, metadata, onGotoFi
   const members = useMemo(() => {
     const map = new Map<number, { name: string; side: Side }>();
     for (const [team, side] of [[home, "home"], [away, "away"]] as const) {
-      for (const player of team.players) map.set(player.workspace_member_id, { name: splitHandle(player.name).name, side });
+      for (const player of team.players) map.set(player.workspace_member_id, { name: player.display.name, side });
     }
     return map;
   }, [home, away]);

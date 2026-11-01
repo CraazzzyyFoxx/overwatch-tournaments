@@ -21,7 +21,7 @@ vi.mock("@/lib/datetime/client", () => ({
 
 const board = {
   teams: [{ id: 1, name: "Team Rocket" }],
-  players: [{ id: 7, identity: { provider: "steam", handle: "Ana#1234" } }]
+  players: [{ id: 7, identity: { provider: "steam", handle: "Ana#1234" }, display: { name: "Ana#1234", tag: null, canonical: null, snapshot: null } }]
 } as unknown as DraftBoard;
 
 function entry(id: number, action: DraftJournalEntry["action"], dimension: string, role: string): DraftJournalEntry {

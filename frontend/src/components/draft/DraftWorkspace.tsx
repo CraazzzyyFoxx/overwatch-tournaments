@@ -228,7 +228,7 @@ export function DraftWorkspace({
     // Not when I am the one who just drafted them: that is a success, and it
     // already said so.
     if (takenPlayer && takenPlayer.drafted_by_team_id !== gating.myTeamId) {
-      notify.info(t("selectionTaken", { player: takenPlayer.identity?.handle ?? `#${takenPlayer.id}` }));
+      notify.info(t("selectionTaken", { player: takenPlayer.display.name }));
     }
   }, [takenPlayer, gating.myTeamId, t]);
 

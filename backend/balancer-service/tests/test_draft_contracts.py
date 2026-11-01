@@ -26,7 +26,7 @@ from shared.core.enums import (  # noqa: E402
 from shared.core.errors import ApiHTTPException  # noqa: E402
 from shared.domain.roster_shape import RosterShape  # noqa: E402
 from shared.models.catalog import CatalogRole  # noqa: E402
-from shared.schemas.identity import PlayerIdentityRead  # noqa: E402
+from shared.schemas.identity import PersonDisplayRead, PlayerIdentityRead  # noqa: E402
 from shared.schemas.role import RoleRef  # noqa: E402
 
 DEFAULT_ROSTER_SHAPE = RosterShape(entries=(("tank", 1), ("damage", 2), ("support", 2)))
@@ -44,6 +44,18 @@ from src.services.draft import feasibility as draft_feasibility  # noqa: E402
 from src.services.draft.feasibility import feasibility_service  # noqa: E402
 from src.services.draft.journal import journal_service  # noqa: E402
 from tests.factories import roster  # noqa: E402
+
+_DISPLAY = PersonDisplayRead.build(canonical=None, snapshot="Ana#1")
+
+
+@pytest.fixture(autouse=True)
+def _no_person_lookup(monkeypatch) -> None:
+    """The board's name lookup needs a database; ``seat_displays`` falls back to the roster's own names."""
+
+    async def _none(*_args, **_kwargs) -> dict:
+        return {}
+
+    monkeypatch.setattr(board, "load_person_displays", _none)
 
 
 class _FakeBroker:
@@ -198,6 +210,7 @@ def test_player_read_carries_registration_notes_and_never_the_organizer_ones() -
         ),
         shape=DEFAULT_ROSTER_SHAPE,
         custom_fields=[],
+        display=_DISPLAY,
         dimension="player_role",
     )
 
@@ -218,6 +231,7 @@ def test_player_read_of_a_seat_with_no_roster_states_no_role_instead_of_guessing
         None,
         shape=DEFAULT_ROSTER_SHAPE,
         custom_fields=[board.VisibleCustomField(key="vk", label="VK profile", type="url")],
+        display=_DISPLAY,
         dimension="player_role",
     )
 
@@ -250,6 +264,7 @@ def test_player_read_carries_a_sub_role_per_playable_role_not_just_the_lead_one(
         ),
         shape=DEFAULT_ROSTER_SHAPE,
         custom_fields=[],
+        display=_DISPLAY,
         dimension="player_role",
     )
 
@@ -287,7 +302,7 @@ def test_a_pinned_captain_reads_and_counts_on_the_pinned_role() -> None:
     tank_lead = roster(120, ranks={"tank": 2600, "damage": 3900})
 
     read = schemas.DraftPlayerRead.from_seat(
-        captain, tank_lead, shape=DEFAULT_ROSTER_SHAPE, custom_fields=[], dimension="player_role"
+        captain, tank_lead, shape=DEFAULT_ROSTER_SHAPE, custom_fields=[], display=_DISPLAY, dimension="player_role"
     )
     assert (read.primary_role.role, read.captain_role.role, read.effective_rank) == ("tank", "damage", 3900)
 
@@ -734,7 +749,7 @@ def test_board_projects_public_answers_and_never_ships_the_rest(monkeypatch) -> 
         ("vk", "VK profile", "url", "vk.com/ana")
     ]
     assert read.identity == PlayerIdentityRead(provider="battlenet", handle="Ana#1")
-    assert read.player_name == "Canonical Ana"
+    assert (read.display.name, read.display.tag, read.display.canonical) == ("Ana", "#1", "Canonical Ana")
     assert read.notes == "prefers Ana"
     # The organizers-only answer leaves the service in NO shape — the public
     # board carries every PUBLIC question and nothing else.

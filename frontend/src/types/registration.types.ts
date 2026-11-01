@@ -1,4 +1,5 @@
 import type { Answers, FormSchema } from "@/types/forms.types";
+import type { PersonDisplay } from "@/types/user.types";
 import type { DivisionGridVersion } from "@/types/workspace.types";
 import type { RoleRef } from "@/lib/roster/role-ref";
 
@@ -308,6 +309,8 @@ export interface Registration {
    *  `answers.identity_<provider>[0]` server-side, and the key the Google-Sheets
    *  feed matches on. */
   primary_handle: string | null;
+  /** The name this tournament's surfaces show; `primary_handle` is its snapshot. `canonical` builds the profile link. */
+  display: PersonDisplay;
   /** Stays top-level: normalized rows with ranks and heroes, not a JSON answer. */
   roles: RegistrationRole[];
   /** Every other answer, keyed by field key. `organizers`-only fields are

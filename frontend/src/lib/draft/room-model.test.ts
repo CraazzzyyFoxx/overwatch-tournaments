@@ -21,7 +21,7 @@ const shape = (slots: RosterShape["slots"]): RosterShape => {
 };
 
 const player = (id: number, patch: Partial<DraftPlayer>): DraftPlayer => ({
-  id, session_id: 1, registration_id: id, user_id: id, identity: { provider: "battlenet", handle: `P${id}` }, player_name: null,
+  id, session_id: 1, registration_id: id, user_id: id, identity: { provider: "battlenet", handle: `P${id}` }, display: { name: `P${id}`, tag: null, canonical: null, snapshot: null },
   primary_role: { dimension: "player_role", role: "damage" }, is_flex: false, effective_rank: 3000,
   status: "available", is_captain: false, drafted_by_team_id: null,
   secondary_roles: [], role_ranks: { damage: 3000 }, role_sources: {}, role_top_characters: {}, role_sub_roles: {},

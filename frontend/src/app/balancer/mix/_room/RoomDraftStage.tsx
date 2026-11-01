@@ -6,8 +6,8 @@ import { Pause, Play } from "lucide-react";
 
 import { useTurnAlert } from "@/app/balancer/mix/_hooks/useTurnAlert";
 import { teamAccent } from "@/app/balancer/mix/pickup-chrome";
-import { playerLabel, type MixOwner } from "@/app/balancer/mix/pickup-lineup";
-import { HandleLabel } from "@/components/HandleLabel";
+import type { MixOwner } from "@/app/balancer/mix/pickup-lineup";
+import { PersonLabel } from "@/components/PlayerName";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { RankCrest } from "@/components/RankCrest";
 import { Button } from "@/components/ui/button";
@@ -27,7 +27,7 @@ import type { CustomGamePlayer } from "@/services/custom-game.service";
 import type { DraftBoard, DraftPickOptionsResponse } from "@/types/draft.types";
 import type { RealtimeConnectionState } from "@/types/realtime.types";
 
-import { draftPlayerName, playerTransitionName, poolPlayers, type PoolPlayer } from "./room-model";
+import { playerTransitionName, poolPlayers, type PoolPlayer } from "./room-model";
 
 const NONE = "none";
 const ALL = "all";
@@ -210,7 +210,7 @@ export function RoomDraftStage({
               <SelectItem value={NONE}>{tDraft("addPlayer")}</SelectItem>
               {waiting.map((row) => (
                 <SelectItem key={row.workspace_member_id} value={String(row.workspace_member_id)}>
-                  {playerLabel(row)}
+                  {row.display.name}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -322,7 +322,7 @@ export function RoomDraftStage({
               >
                 {mutations.makePick.isPending ? <Spinner className="mr-2" /> : null}
                 <span className="min-w-0 truncate">
-                  {chosen != null ? t("pick", { player: draftPlayerName(chosen.player) }) : t("pickHint")}
+                  {chosen != null ? t("pick", { player: chosen.player.display.name }) : t("pickHint")}
                 </span>
               </Button>
             ) : null}
@@ -360,10 +360,10 @@ function PoolCard({
     <>
       <RankCrest rank={player.effective_rank} grid={owner.grid} size={30} className="shrink-0" />
       <span className="flex min-w-0 flex-1 flex-col">
-        <HandleLabel
-          handle={draftPlayerName(player)}
+        <PersonLabel
+          display={player.display}
+          tag="hidden"
           className="min-w-0 truncate text-body font-semibold text-[color:var(--aqt-fg)]"
-          tagClassName="text-label"
         />
         {refused ? (
           <span className="truncate text-label text-[color:var(--aqt-fg-dim)]">

@@ -3,6 +3,7 @@ import { Window } from "happy-dom";
 import { act, useState } from "react";
 import type { Root } from "react-dom/client";
 
+import { canonicalDisplay } from "@/lib/player";
 import type { Registration } from "@/types/registration.types";
 
 import type { ColumnDefinition } from "./participantsColumns.model";
@@ -164,6 +165,7 @@ function registration(id: number): Registration {
     workspace_id: 1,
     user_id: id,
     primary_handle: `Player${id}#1234`,
+    display: canonicalDisplay(`Player${id}#1234`),
     roles: [],
     answers: { stream_pov: false, identity_battlenet: [`Player${id}#1234`] },
     form_version_id: 1,

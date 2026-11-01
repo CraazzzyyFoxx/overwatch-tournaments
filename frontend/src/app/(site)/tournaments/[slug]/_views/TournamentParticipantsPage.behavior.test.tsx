@@ -21,6 +21,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import en from "@/i18n/messages/en.json";
 import ru from "@/i18n/messages/ru.json";
 import { ApiError } from "@/lib/api/error";
+import { canonicalDisplay } from "@/lib/player";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import { useAuthProfileStore } from "@/stores/auth-profile.store";
 import type {
@@ -156,6 +157,7 @@ function makeRegistration(overrides: Partial<Registration> = {}): Registration {
     workspace_id: 3,
     user_id: 5,
     primary_handle: "Anak#2100",
+    display: canonicalDisplay("Anak#2100"),
     roles: [{ role: {dimension: "player_role", role: "damage"}, is_primary: true, priority: 0, top_characters: [] }],
     answers: { stream_pov: false, identity_battlenet: ["Anak#2100"] },
     form_version_id: 4,
@@ -915,6 +917,7 @@ describe("on-call players", () => {
     id: 402,
     user_id: 9,
     primary_handle: "Sub#1000",
+    display: canonicalDisplay("Sub#1000"),
     answers: { reserve: true, identity_battlenet: ["Sub#1000"] }
   });
 

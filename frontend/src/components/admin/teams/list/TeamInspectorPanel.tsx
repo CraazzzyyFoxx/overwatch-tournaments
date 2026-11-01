@@ -3,6 +3,7 @@
 import { useTranslations } from "next-intl";
 
 import { InspectorField, InspectorSection } from "@/components/kit/InspectorField";
+import { PersonLabel } from "@/components/PlayerName";
 import { roleOf } from "@/lib/roster/role-ref";
 import type { Player, Team } from "@/types/team.types";
 
@@ -11,7 +12,7 @@ function RosterList({ players }: Readonly<{ players: Player[] }>) {
     <ul className="space-y-1 text-sm">
       {players.map((player) => (
         <li key={player.id} className="flex items-center justify-between gap-2">
-          <span className="truncate">{player.user?.name ?? player.name}</span>
+          <PersonLabel display={player.display} showCanonical />
           <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
             {roleOf(player.role)}
             {" · "}
@@ -29,11 +30,14 @@ export function TeamInspectorPanel({ team }: Readonly<{ team: Team }>) {
   const players = team.players ?? [];
   const starters = players.filter((player) => !player.is_substitution);
   const substitutes = players.filter((player) => player.is_substitution);
-  // The captain is a roster row, so their name comes from the linked identity;
-  // a captain inherited from before that rule can sit off the roster.
+  // The captain is a roster row, so their name comes from it; a captain inherited from before that rule can sit
+  // off the roster.
   const captain = players.find((player) => player.user_id === team.captain_id);
-  const captainName =
-    captain?.user?.name ?? captain?.name ?? (team.captain_id > 0 ? t("userId", { id: team.captain_id }) : null);
+  const captainName = captain ? (
+    <PersonLabel display={captain.display} showCanonical />
+  ) : team.captain_id > 0 ? (
+    t("userId", { id: team.captain_id })
+  ) : null;
 
   return (
     <div className="space-y-4">

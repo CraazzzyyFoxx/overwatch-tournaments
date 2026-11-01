@@ -13,6 +13,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import en from "@/i18n/messages/en.json";
+import { canonicalDisplay } from "@/lib/player";
 import type { Encounter } from "@/types/encounter.types";
 import type { Player, Team } from "@/types/team.types";
 
@@ -42,6 +43,7 @@ function player(id: number, name: string, overrides: Partial<Player> = {}): Play
     user_id: id,
     team_id: 1,
     is_newcomer: false,
+    display: canonicalDisplay(name),
     is_newcomer_role: false,
     is_substitution: false,
     related_player_id: null,

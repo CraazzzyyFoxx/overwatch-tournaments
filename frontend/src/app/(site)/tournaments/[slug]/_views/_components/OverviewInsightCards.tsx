@@ -126,7 +126,7 @@ export function BansCard({
           <div className="mt-2 flex items-center gap-3">
             <CatalogEntityImage entity={oneTrickHero} size={32} decorative />
             <span className="min-w-0">
-              <PlayerName player={oneTrickEntry.player} className="text-caption" />
+              <PlayerName display={oneTrickEntry.player.display} className="text-caption" />
               <span className="block truncate text-label text-[color:var(--aqt-fg-dim)]">
                 {t("overview.bans.oneTrickLine", {
                   hero: oneTrickHero?.name ?? "—",

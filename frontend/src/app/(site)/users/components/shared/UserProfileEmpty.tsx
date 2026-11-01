@@ -5,7 +5,7 @@ import { CalendarSearch, Medal, Sparkles, Swords, Trophy, Users } from "lucide-r
 import { HeroFrame } from "@/components/site/PageHero";
 import { Button } from "@/components/ui/button";
 import { Eyebrow } from "@/components/ui/eyebrow";
-import { splitHandle } from "@/lib/player";
+import { canonicalDisplay } from "@/lib/player";
 
 /**
  * Shown in place of the profile tab strip when a player has never entered a
@@ -27,7 +27,7 @@ const UNLOCKS = [
 /** `name` is the raw `BattleTag#1234`; the copy reads better without the tag. */
 const UserProfileEmpty = async ({ name }: { name: string }) => {
   const t = await getTranslations();
-  const displayName = splitHandle(name).name;
+  const displayName = canonicalDisplay(name).name;
 
   return (
     <HeroFrame variant="profile">

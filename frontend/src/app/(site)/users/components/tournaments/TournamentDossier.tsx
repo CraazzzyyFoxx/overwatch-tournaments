@@ -5,6 +5,7 @@ import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { tournamentHref } from "@/lib/tournament/url";
 import { Trophy } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { canonicalDisplay } from "@/lib/player";
 import type { UserTournamentEntry } from "@/types/user.types";
 import { TournamentTeamTable } from "@/components/TournamentTeamCard";
 import ProfileWidget from "@/components/profile/ProfileWidget";
@@ -150,7 +151,7 @@ const EventBody = ({
       <div>
         <SectionLabel>{tr("users.tournaments.roster.title")}</SectionLabel>
         <TournamentTeamTable
-          players={t.players ?? []}
+          players={(t.players ?? []).map((player) => ({ ...player, display: canonicalDisplay(player.name) }))}
           tournamentGrid={t.division_grid_version}
           discipline={t.discipline}
           ontology={ontology}

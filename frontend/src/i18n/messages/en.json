@@ -161,6 +161,7 @@
     "tbd": "TBD",
     "prev": "Prev",
     "close": "Close",
+    "personSnapshot": "At the time: {name}",
     "search": "Search",
     "add": "Add",
     "remove": "Remove",

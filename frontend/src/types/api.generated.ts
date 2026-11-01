@@ -12653,6 +12653,34 @@ export interface components {
             /** Tournament Id */
             tournament_id: number;
         };
+        /**
+         * PersonDisplayRead
+         * @description How a person is named on a surface owned by one game (docs/users-identity.md §3.6).
+         *
+         *     ``name`` + ``tag`` is the first of: the workspace's ``display_name``, the person's game handle (the game's
+         *     identity provider's primary account visible in scope; Steam: the persona name), the event's snapshot, the
+         *     canonical ``players.user.name``. ``canonical`` builds the profile link (``None``: nobody to link to);
+         *     ``snapshot`` is set only when it names the person differently from what is shown.
+         */
+        "analytics.PersonDisplayRead": {
+            /**
+             * Canonical
+             * @default null
+             */
+            canonical: string | null;
+            /** Name */
+            name: string;
+            /**
+             * Snapshot
+             * @default null
+             */
+            snapshot: string | null;
+            /**
+             * Tag
+             * @default null
+             */
+            tag: string | null;
+        };
         /** PlayerAnalytics */
         "analytics.PlayerAnalytics": {
             /** Anomalies */
@@ -12664,6 +12692,7 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            display: components["schemas"]["analytics.PersonDisplayRead"];
             /**
              * Division
              * @default null
@@ -14714,6 +14743,7 @@ export interface components {
             captain_role: components["schemas"]["balancer.RoleRef"] | null;
             /** Custom Fields */
             custom_fields?: components["schemas"]["balancer.DraftPlayerCustomFieldRead"][];
+            display: components["schemas"]["balancer.PersonDisplayRead"];
             /** Drafted By Team Id */
             drafted_by_team_id: number | null;
             /**
@@ -14733,8 +14763,6 @@ export interface components {
              * @default null
              */
             notes: string | null;
-            /** Player Name */
-            player_name: string | null;
             primary_role: components["schemas"]["balancer.RoleRef"] | null;
             /** Registration Id */
             registration_id: number | null;
@@ -15187,6 +15215,34 @@ export interface components {
              * @default null
              */
             tournament_id: number | null;
+        };
+        /**
+         * PersonDisplayRead
+         * @description How a person is named on a surface owned by one game (docs/users-identity.md §3.6).
+         *
+         *     ``name`` + ``tag`` is the first of: the workspace's ``display_name``, the person's game handle (the game's
+         *     identity provider's primary account visible in scope; Steam: the persona name), the event's snapshot, the
+         *     canonical ``players.user.name``. ``canonical`` builds the profile link (``None``: nobody to link to);
+         *     ``snapshot`` is set only when it names the person differently from what is shown.
+         */
+        "balancer.PersonDisplayRead": {
+            /**
+             * Canonical
+             * @default null
+             */
+            canonical: string | null;
+            /** Name */
+            name: string;
+            /**
+             * Snapshot
+             * @default null
+             */
+            snapshot: string | null;
+            /**
+             * Tag
+             * @default null
+             */
+            tag: string | null;
         };
         /** PlayerData */
         "balancer.PlayerData": {
@@ -16323,6 +16379,7 @@ export interface components {
             avg_crit_accuracy: number;
             /** Avg Weapon Accuracy */
             avg_weapon_accuracy: number;
+            display: components["schemas"]["stats.PersonDisplayRead"];
             /** Div */
             div: number | null;
             /**
@@ -16370,8 +16427,6 @@ export interface components {
             per10_solo_kills: number;
             /** Per10 Ultimates Used */
             per10_ultimates_used: number;
-            /** Player Name */
-            player_name: string;
             /** Playtime Seconds */
             playtime_seconds: number;
             /** Rank */
@@ -16390,8 +16445,6 @@ export interface components {
             team_id: number | null;
             /** User Id */
             user_id: number;
-            /** Username */
-            username: string;
         };
         /**
          * CharacterLeaderboardResponse
@@ -16450,14 +16503,13 @@ export interface components {
         };
         /** CharacterStatBest */
         "stats.CharacterStatBest": {
+            display: components["schemas"]["stats.PersonDisplayRead"];
             /** Encounter Id */
             encounter_id: number;
             /** Map Image Path */
             map_image_path: string;
             /** Map Name */
             map_name: string;
-            /** Player Name */
-            player_name: string;
             /** Tournament Name */
             tournament_name: string;
             /** Value */
@@ -16754,8 +16806,7 @@ export interface components {
          * @description One player's ranked value for a single stat inside a tournament lobby.
          */
         "stats.LobbyLeaderboardEntry": {
-            /** Name */
-            name: string;
+            display: components["schemas"]["stats.PersonDisplayRead"];
             /** Player Id */
             player_id: number;
             /** Rank */
@@ -17169,8 +17220,37 @@ export interface components {
             /** Total */
             total: number;
         };
+        /**
+         * PersonDisplayRead
+         * @description How a person is named on a surface owned by one game (docs/users-identity.md §3.6).
+         *
+         *     ``name`` + ``tag`` is the first of: the workspace's ``display_name``, the person's game handle (the game's
+         *     identity provider's primary account visible in scope; Steam: the persona name), the event's snapshot, the
+         *     canonical ``players.user.name``. ``canonical`` builds the profile link (``None``: nobody to link to);
+         *     ``snapshot`` is set only when it names the person differently from what is shown.
+         */
+        "stats.PersonDisplayRead": {
+            /**
+             * Canonical
+             * @default null
+             */
+            canonical: string | null;
+            /** Name */
+            name: string;
+            /**
+             * Snapshot
+             * @default null
+             */
+            snapshot: string | null;
+            /**
+             * Tag
+             * @default null
+             */
+            tag: string | null;
+        };
         /** PlayerLeaderboardRow */
         "stats.PlayerLeaderboardRow": {
+            display: components["schemas"]["stats.PersonDisplayRead"];
             /** Id */
             id: number;
             /** Low Sample */
@@ -17179,8 +17259,6 @@ export interface components {
             maps_lost: number;
             /** Maps Won */
             maps_won: number;
-            /** Name */
-            name: string;
             /** Rank */
             rank: number;
             /** Titles */
@@ -17347,6 +17425,12 @@ export interface components {
             /** Slug */
             slug: string;
         };
+        /** StatPlayerRef */
+        "stats.StatPlayerRef": {
+            display: components["schemas"]["stats.PersonDisplayRead"];
+            /** Id */
+            id: number;
+        };
         /** StatRecord */
         "stats.StatRecord": {
             /**
@@ -17384,7 +17468,7 @@ export interface components {
             /** @default null */
             opponent: components["schemas"]["stats.StatRef"] | null;
             /** @default null */
-            player: components["schemas"]["stats.StatRef"] | null;
+            player: components["schemas"]["stats.StatPlayerRef"] | null;
             /**
              * Relative
              * @default null
@@ -17778,6 +17862,7 @@ export interface components {
          *     roster snapshot row, not a tournament player.
          */
         "stats.UserEncounterTeamPlayerRef": {
+            display: components["schemas"]["stats.PersonDisplayRead"];
             /** Id */
             id: number;
             /** Name */
@@ -19688,6 +19773,7 @@ export interface components {
         };
         /** NativeMatchMember */
         "tournament.NativeMatchMember": {
+            display: components["schemas"]["tournament.PersonDisplayRead"];
             /** Encounter Team Id */
             encounter_team_id: number;
             /** Handle Snapshot */
@@ -19695,8 +19781,6 @@ export interface components {
             observed_role: components["schemas"]["tournament.RoleRef"] | null;
             /** Player Id */
             player_id: number;
-            /** Player Name */
-            player_name: string;
             /** Workspace Member Id */
             workspace_member_id: number;
         };
@@ -19784,6 +19868,34 @@ export interface components {
             results: components["schemas"]["tournament.TournamentRead"][];
             /** Total */
             total: number;
+        };
+        /**
+         * PersonDisplayRead
+         * @description How a person is named on a surface owned by one game (docs/users-identity.md §3.6).
+         *
+         *     ``name`` + ``tag`` is the first of: the workspace's ``display_name``, the person's game handle (the game's
+         *     identity provider's primary account visible in scope; Steam: the persona name), the event's snapshot, the
+         *     canonical ``players.user.name``. ``canonical`` builds the profile link (``None``: nobody to link to);
+         *     ``snapshot`` is set only when it names the person differently from what is shown.
+         */
+        "tournament.PersonDisplayRead": {
+            /**
+             * Canonical
+             * @default null
+             */
+            canonical: string | null;
+            /** Name */
+            name: string;
+            /**
+             * Snapshot
+             * @default null
+             */
+            snapshot: string | null;
+            /**
+             * Tag
+             * @default null
+             */
+            tag: string | null;
         };
         /**
          * PickBanActionInput
@@ -19887,6 +19999,7 @@ export interface components {
         };
         /** PlayerRead */
         "tournament.PlayerRead": {
+            display: components["schemas"]["tournament.PersonDisplayRead"];
             /** Division */
             division: number | null;
             /** Id */
@@ -19941,6 +20054,7 @@ export interface components {
          *     global account search.
          */
         "tournament.RegistrationFreeAgentRead": {
+            display: components["schemas"]["tournament.PersonDisplayRead"];
             /**
              * Primary Handle
              * @default null
@@ -19980,6 +20094,7 @@ export interface components {
              * @default false
              */
             checked_in: boolean;
+            display: components["schemas"]["tournament.PersonDisplayRead"];
             /**
              * Edit Locked Reason
              * @default null
@@ -20475,6 +20590,7 @@ export interface components {
              * @default false
              */
             checked_in: boolean;
+            display: components["schemas"]["tournament.PersonDisplayRead"];
             /**
              * Display Name
              * @default null
@@ -24437,6 +24553,8 @@ export interface components {
             author_ranks: {
                 [key: string]: number;
             };
+            /** @description How the member is named in this workspace's game. */
+            display: components["schemas"]["balancer.PersonDisplayRead"];
             /** Display Name */
             display_name: string | null;
             /** @description Primary account of the requested discipline's identity provider; null when the player has none. */

@@ -14,6 +14,7 @@ import { createRoot } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import en from "@/i18n/messages/en.json";
+import { canonicalDisplay } from "@/lib/player";
 import type { RegistrationTeam } from "@/types/registration-team.types";
 
 import MyTeamPanel from "./MyTeamPanel";
@@ -51,6 +52,7 @@ const member = (registration_id: number, slot_code: string, is_captain = false) 
   registration_id,
   display_name: `P${registration_id}`,
   primary_handle: `P${registration_id}#1000`,
+  display: canonicalDisplay(`P${registration_id}`),
   slot_code,
   is_substitute: false,
   is_captain,

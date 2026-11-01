@@ -239,7 +239,7 @@ export function PickupTeamsPanel({
   const awayNames = (variant?.teams ?? [])
     .flatMap((team) => team.seats)
     .filter((seat) => awayUuids.has(seat.uuid))
-    .map((seat) => seat.name);
+    .map((seat) => seat.display.name);
 
   // A lobby with no teams yet: Balance (or Draft) is the host's next step, so it is the solid button. Once teams
   // exist it is a re-balance and Start match takes the solid slot.

@@ -18,6 +18,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import en from "@/i18n/messages/en.json";
 import { ApiError } from "@/lib/api/error";
+import { canonicalDisplay } from "@/lib/player";
 import type { RegistrationTeam } from "@/types/registration-team.types";
 
 import MyTeamPanel from "./MyTeamPanel";
@@ -65,6 +66,7 @@ const TEAM: RegistrationTeam = {
       registration_id: 100,
       display_name: "Nyx",
       primary_handle: "Nyx#2100",
+      display: canonicalDisplay("Nyx"),
       slot_code: "tank",
       is_substitute: false,
       is_captain: true,
@@ -79,8 +81,8 @@ const TEAM: RegistrationTeam = {
 } as unknown as RegistrationTeam;
 
 const AGENTS = [
-  { registration_id: 900, primary_handle: "Ana#1111", roles: [{ dimension: "player_role", role: "support" }] },
-  { registration_id: 901, primary_handle: "Zen#2222", roles: [{ dimension: "player_role", role: "damage" }, { dimension: "player_role", role: "tank" }] }
+  { registration_id: 900, primary_handle: "Ana#1111", display: canonicalDisplay("Ana#1111"), roles: [{ dimension: "player_role", role: "support" }] },
+  { registration_id: 901, primary_handle: "Zen#2222", display: canonicalDisplay("Zen#2222"), roles: [{ dimension: "player_role", role: "damage" }, { dimension: "player_role", role: "tank" }] }
 ];
 
 async function openDialog(discipline = "overwatch", team: RegistrationTeam = TEAM): Promise<HTMLElement> {
@@ -334,7 +336,7 @@ describe("inviting in a one-role game", () => {
 
   it("tags no free agent with the game's one role", async () => {
     listFreeAgents.mockResolvedValue({
-      items: [{ registration_id: 900, primary_handle: "Ana#1111", roles: [{ dimension: "agent", role: "agent" }] }],
+      items: [{ registration_id: 900, primary_handle: "Ana#1111", display: canonicalDisplay("Ana#1111"), roles: [{ dimension: "agent", role: "agent" }] }],
       total: 1
     });
     await openDialog("deadlock", ONE_ROLE_TEAM);

@@ -1,6 +1,7 @@
 import type { CatalogEntityRead } from "@/types/catalog.types";
 import type { StatDefinition } from "@/types/discipline.types";
 import type { MatchWithStats } from "@/types/encounter.types";
+import type { PersonDisplay } from "@/types/user.types";
 
 import { aggregateFacts, selectFacts, type FactGrain, type Observation } from "./facts";
 
@@ -9,10 +10,8 @@ interface StatsTableRow {
   key: string;
   workspaceMemberId: number;
   playerId: number;
-  /** The player's canonical name: what a profile link is built from. */
-  playerName: string;
-  /** The exact handle the observation recorded; display only. */
-  name: string;
+  /** How the match's game names the member; `display.canonical` builds the profile link. */
+  display: PersonDisplay;
   /** stat code → value at the table's grain; an unobserved stat has no key. */
   values: Record<string, number>;
   /** Series tables: how many of the folded matches observed the member at the table's grain. */
@@ -131,8 +130,7 @@ export function buildMatchTable(
           key: `${member.encounter_team_id}:${member.workspace_member_id}`,
           workspaceMemberId: member.workspace_member_id,
           playerId: member.player_id,
-          playerName: member.player_name,
-          name: member.handle_snapshot,
+          display: member.display,
           values
         };
       })
@@ -208,8 +206,7 @@ export function buildSeriesTable(
               key: `${member.encounter_team_id}:${member.workspace_member_id}`,
               workspaceMemberId: member.workspace_member_id,
               playerId: member.player_id,
-              playerName: member.player_name,
-              name: member.handle_snapshot
+              display: member.display
             },
             observations: new Map(),
             maps: 0

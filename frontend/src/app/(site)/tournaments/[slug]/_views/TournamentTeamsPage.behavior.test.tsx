@@ -18,6 +18,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import en from "@/i18n/messages/en.json";
+import { canonicalDisplay } from "@/lib/player";
 import type { RosterShape } from "@/lib/roster/shape";
 import type { Encounter } from "@/types/encounter.types";
 import type { Player, Team } from "@/types/team.types";
@@ -134,6 +135,7 @@ function player(id: number, name: string, role: string, division: number): Playe
     created_at: new Date(0),
     updated_at: null,
     name,
+    display: canonicalDisplay(name),
     rank: 4,
     division,
     role: role === "Tank"

@@ -19,6 +19,7 @@ NOW = datetime(2026, 1, 1, tzinfo=UTC)
 def _tournament() -> SimpleNamespace:
     return SimpleNamespace(
         id=7,
+        workspace_id=5,
         created_at=NOW,
         updated_at=None,
         name="Tournament 7",
@@ -116,6 +117,10 @@ class AnalyticsFlowsTests(IsolatedAsyncioTestCase):
         patcher = patch.object(analytics_flows, "tournament_discipline", AsyncMock(return_value="overwatch"))
         patcher.start()
         self.addCleanup(patcher.stop)
+        # The roster's display names are a DB read; these rows fall back to their snapshot names.
+        displays = patch.object(analytics_flows, "load_person_displays", AsyncMock(return_value={}))
+        displays.start()
+        self.addCleanup(displays.stop)
 
     async def test_stored_predictions_are_not_served_to_a_discipline_without_analytics(self) -> None:
         reader = AsyncMock(return_value=SimpleNamespace(id=11))

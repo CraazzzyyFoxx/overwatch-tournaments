@@ -57,6 +57,7 @@ from shared.repository.draft import (
 from shared.repository.roles import CatalogRoleRepository
 from shared.repository.workspace import get_or_create_workspace_member
 from shared.schemas.events import DiscordCommandEvent
+from shared.schemas.identity import PersonDisplayRead
 from shared.schemas.role import RoleRef
 from shared.schemas.roster_slots import RosterShapeRead
 from shared.services import discord_messages
@@ -201,6 +202,14 @@ def _uniq(ids: Sequence[int]) -> list[int]:
         seen.add(item)
         out.append(item)
     return out
+
+
+def _stats_display(member_id: int, member: RosterMember | None, discipline: str | None) -> PersonDisplayRead:
+    """A scoreboard row's name: the game's own for one game's board, canonical for the cross-game tally; a member
+    who has since left keeps their record and is named by id."""
+    if member is None:
+        return PersonDisplayRead(name=f"#{member_id}")
+    return member.display if discipline is not None else PersonDisplayRead.build(canonical=member.player_name)
 
 
 def _discipline_facts(code: str) -> dict[str, Any]:
@@ -3597,6 +3606,8 @@ class CustomGameService:
                 "player_id": member.player_id if member is not None else None,
                 "display_name": member.display_name if member is not None else None,
                 "identity": member.identity.model_dump() if member is not None and member.identity else None,
+                # One game's board names people in that game; the cross-game tally keeps the canonical name.
+                "display": _stats_display(entry.member_id, member, discipline).model_dump(),
                 "games": entry.games,
                 "wins": entry.wins,
                 "losses": entry.losses,

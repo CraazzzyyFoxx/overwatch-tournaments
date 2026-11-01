@@ -14,6 +14,7 @@ import type { CatalogEntityChip } from "@/types/catalog.types";
 import type { DivisionGrid } from "@/types/workspace.types";
 import { identityKey } from "@/lib/forms/builtin-keys";
 import { getPlayerSlug } from "@/lib/player";
+import { PersonLabel } from "@/components/PlayerName";
 
 import { RolesCell, SmurfTagsCell, TopHeroesCell } from "./participantsCells";
 import {
@@ -60,22 +61,29 @@ export function identityColumnDef(label: string): BuiltInFieldDef {
     defaultVisible: true,
     responsive: "always",
     render: (reg) => (
-      <span className="font-medium text-[color:var(--aqt-fg)]">
-        {reg.primary_handle ? (
-          <a
-            href={`/users/${getPlayerSlug(reg.primary_handle)}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="transition hover:text-[color:var(--aqt-teal)] hover:underline"
-          >
-            {reg.primary_handle}
-          </a>
+      <span className="flex min-w-0 font-medium text-[color:var(--aqt-fg)]">
+        {reg.display.name ? (
+          reg.display.canonical ? (
+            <a
+              href={`/users/${getPlayerSlug(reg.display.canonical)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex min-w-0 transition hover:text-[color:var(--aqt-teal)] hover:underline"
+            >
+              <PersonLabel display={reg.display} />
+            </a>
+          ) : (
+            <PersonLabel display={reg.display} />
+          )
         ) : (
           "\u2014"
         )}
       </span>
     ),
-    searchValue: (reg) => reg.primary_handle,
+    searchValue: (reg) =>
+      [...new Set([reg.display.name + (reg.display.tag ?? ""), reg.display.canonical, reg.primary_handle])]
+        .filter(Boolean)
+        .join(" ") || null,
   };
 }
 

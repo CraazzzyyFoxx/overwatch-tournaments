@@ -78,9 +78,7 @@ const PlayerCell = ({ player, heroClass }: { player: MatchStatsPlayer; heroClass
         <span aria-hidden className="w-4.5 shrink-0" />
       )}
       <PlayerName
-        player={player}
-        profileName={player.profile_name}
-        includeSpecialization={false}
+        display={player.display}
         className="text-body text-[color:var(--aqt-fg)] max-sm:[&_bdi+span]:hidden"
       />
     </div>

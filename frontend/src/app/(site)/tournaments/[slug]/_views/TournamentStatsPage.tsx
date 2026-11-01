@@ -53,6 +53,7 @@ import {
   ROLE_ORDER,
   STAT_META
 } from "./tournamentInsights.model";
+import { playerMatches } from "./tournamentTeams.model";
 import { useTournamentRoster, type RosterEntry } from "./useTournamentRoster";
 
 const TABS = ["players", "bans", "heroes", "maps"] as const;
@@ -169,7 +170,7 @@ function PlayerCell({
     <span className="flex min-w-0 items-center gap-2.5">
       <PlayerRoleIcon role={row.entry.player.role} ontology={ontology} size={16} decorative />
       <span className="min-w-0">
-        <PlayerName player={row.entry.player} className="max-w-[14rem] text-caption" />
+        <PlayerName display={row.entry.player.display} className="max-w-[14rem] text-caption" />
         <span className="block truncate text-label text-[color:var(--aqt-fg-dim)]">
           {row.entry.team.name}
         </span>
@@ -202,7 +203,7 @@ function PlayersTab({ tournament }: Readonly<{ tournament: Tournament }>) {
     (row) =>
       (role === "all" || row.role === role) &&
       (needle === "" ||
-        row.entry.player.name.toLowerCase().includes(needle) ||
+        playerMatches(row.entry.player, needle) ||
         row.entry.team.name.toLowerCase().includes(needle))
   );
 
@@ -233,7 +234,7 @@ function PlayersTab({ tournament }: Readonly<{ tournament: Tournament }>) {
     {
       key: "name",
       label: t("stats.players.player"),
-      sortValue: (row) => row.entry.player.name.toLowerCase(),
+      sortValue: (row) => row.entry.player.display.name.toLowerCase(),
       ascendingFirst: true,
       cell: (row) => <PlayerCell row={row} ontology={ontology} />
     },
@@ -281,7 +282,7 @@ function PlayersTab({ tournament }: Readonly<{ tournament: Tournament }>) {
                       >
                         {index + 2}
                       </span>
-                      <PlayerName player={row.entry.player} className="text-caption" />
+                      <PlayerName display={row.entry.player.display} className="text-caption" />
                       <span className="aqt-tnum text-caption text-[color:var(--aqt-fg-muted)]">
                         {show(stat, row.stats[stat]?.value ?? 0)}
                       </span>
@@ -509,7 +510,7 @@ function BansTab({ tournament }: Readonly<{ tournament: Tournament }>) {
                           {rankLabel(index)}
                         </span>
                         <span className="min-w-0">
-                          <PlayerName player={entry.player} className="text-caption" />
+                          <PlayerName display={entry.player.display} className="text-caption" />
                           <span className="block truncate text-label text-[color:var(--aqt-fg-dim)]">
                             {entry.team.name}
                           </span>

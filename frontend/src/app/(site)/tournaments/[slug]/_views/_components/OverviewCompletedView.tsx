@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { useTranslations } from "next-intl";
 
 import CatalogEntityImage from "@/components/catalog/CatalogEntityImage";
-import PlayerName from "@/components/PlayerName";
+import PlayerName, { PersonLabel } from "@/components/PlayerName";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { ProfileStat } from "@/components/profile/atoms";
 import { TeamLogo } from "@/components/TeamName";
@@ -17,7 +17,7 @@ import type { BracketRoundShape } from "@/lib/bracket/round-name";
 import { useFormatter } from "@/lib/datetime/client";
 import { seatAt } from "@/lib/encounter/seats";
 import { getEncounterWinner } from "@/lib/encounter/status";
-import { getPlayerSlug, splitHandle } from "@/lib/player";
+import { getPlayerSlug } from "@/lib/player";
 import type { RoleOntology } from "@/lib/roster/ontology";
 import type { TournamentInsights } from "@/lib/tournament/insights-query";
 import { cn } from "@/lib/utils";
@@ -41,7 +41,7 @@ import {
   ELIMINATION_TYPES,
   findGrandFinal,
   findLowerFinal,
-  rosterBattletags,
+  rosterNames,
   tournamentDaySpan
 } from "../tournamentOverview.model";
 import {
@@ -168,7 +168,7 @@ function useCompletedPodium({
     const championScore = champion?.score ?? 0;
     const runnerUpScore = runnerUp?.score ?? 0;
     // The roster comes off the teams read; the encounters read carries no players.
-    const roster = rosterBattletags(teamById.get(champion?.team_id ?? -1) ?? champion?.team);
+    const roster = rosterNames(teamById.get(champion?.team_id ?? -1) ?? champion?.team);
     const first = podiumTeam(champion, roster.length > 0 ? roster : null);
     const second = podiumTeam(
       runnerUp,
@@ -202,7 +202,7 @@ function useCompletedPodium({
     const note = (row: Standings | undefined, roster: boolean) => {
       if (!row) return null;
       if (roster) {
-        const tags = rosterBattletags(teamById.get(row.team_id) ?? row.team);
+        const tags = rosterNames(teamById.get(row.team_id) ?? row.team);
         if (tags.length > 0) return tags;
       }
       return t("tournamentDetail.overview.result.record", { wins: row.win, losses: row.lose });
@@ -419,7 +419,7 @@ function MyTournamentCard({
     <OverviewSection
       title={t("overview.my.title")}
       action={
-        <SectionLink href={`/users/${getPlayerSlug(player.name)}`}>
+        <SectionLink href={`/users/${getPlayerSlug(player.display.canonical)}`}>
           {t("overview.my.profile")}
         </SectionLink>
       }
@@ -435,7 +435,7 @@ function MyTournamentCard({
                 </p>
                 <p className="mt-0.5 flex items-center gap-1.5 text-caption text-[color:var(--aqt-fg-muted)]">
                   <PlayerRoleIcon role={player.role} ontology={ontology} size={14} decorative />
-                  {splitHandle(player.name).name}
+                  <PersonLabel display={player.display} tag="hidden" />
                 </p>
               </div>
             </div>
@@ -569,7 +569,7 @@ function RoleLeadersCard({
                     {rankLabel(index)}
                   </span>
                   <span className="min-w-0">
-                    <PlayerName player={player} className="text-caption" />
+                    <PlayerName display={player.display} className="text-caption" />
                     <span className="block truncate text-label text-[color:var(--aqt-fg-dim)]">
                       {team.name}
                     </span>
@@ -703,7 +703,7 @@ function DraftCard({
               <Eyebrow className="block">{t("overview.draftCard.latePick")}</Eyebrow>
               <div className="mt-2 flex items-center justify-between gap-3">
                 <span className="min-w-0">
-                  <PlayerName player={{ name: steal.name }} className="text-caption" />
+                  <PlayerName display={steal.display} className="text-caption" />
                   <span className="block truncate text-label text-[color:var(--aqt-fg-dim)]">
                     {t("overview.draftCard.pickLine", {
                       round: steal.round,

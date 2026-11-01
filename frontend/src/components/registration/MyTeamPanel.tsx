@@ -164,7 +164,7 @@ export default function MyTeamPanel({
   // pending action names. Only the two member-scoped rows interpolate a name.
   const confirmName =
     confirming && "member" in confirming
-      ? (confirming.member.display_name ?? confirming.member.primary_handle ?? "")
+      ? confirming.member.display.name
       : "";
   const CONFIRM_INTENTS: Record<ConfirmKind, ConfirmIntent> = {
     transfer: {
@@ -448,7 +448,7 @@ export default function MyTeamPanel({
                         }}
                       />
                       {t("checkIn.exclude", {
-                        name: member.display_name ?? member.primary_handle ?? "",
+                        name: member.display.name,
                       })}
                     </Label>
                   </li>

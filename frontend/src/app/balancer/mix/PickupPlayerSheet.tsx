@@ -6,7 +6,7 @@ import { Pin, Save, UserMinus } from "lucide-react";
 
 import { HandleCopyButton } from "@/app/balancer/components/HandleCopyControls";
 import { PickupRoleOrderEditor } from "@/app/balancer/mix/PickupRoleOrderEditor";
-import { HandleLabel } from "@/components/HandleLabel";
+import { PersonLabel } from "@/components/PlayerName";
 import { CAPTION_CLASS, lobbyLetter } from "@/app/balancer/mix/pickup-chrome";
 import RankHistory from "@/components/RankHistory";
 import { Button } from "@/components/ui/button";
@@ -33,7 +33,6 @@ import {
 
 import {
   getLineupIssue,
-  playerLabel,
   rankSourceLabel,
   resolveRoleOrder,
   roleRefsOf,
@@ -132,7 +131,7 @@ export function PickupPlayerSheet({
   mixStats = null,
   lobbyCount = 1,
 }: Readonly<PickupPlayerSheetProps>) {
-  const label = row ? playerLabel(row) : "";
+  const label = row?.display.name ?? "";
   const t = useTranslations("mixes.lobbies");
   const tRoom = useTranslations("mixes.room");
   const tSheet = useTranslations("mixes.sheet");
@@ -211,7 +210,7 @@ export function PickupPlayerSheet({
         <SheetHeader variant="panel">
           <Eyebrow>{tLineup("advanced")}</Eyebrow>
           <SheetTitle className="flex items-baseline gap-1.5">
-            <HandleLabel handle={label} tagClassName="text-caption" />
+            {row ? <PersonLabel display={row.display} showCanonical tagClassName="text-caption" /> : null}
             {row?.identity?.handle ? (
               <HandleCopyButton handle={row.identity.handle} className="ml-0.5 shrink-0" />
             ) : null}

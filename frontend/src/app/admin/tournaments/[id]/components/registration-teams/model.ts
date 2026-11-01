@@ -48,8 +48,9 @@ export const ADMISSION_TONE: Partial<Record<string, Tone>> = {
   waitlisted: "neutral"
 };
 
+/** A member's plain-text name: what the tournament's game shows for them, `#tag` included. */
 export function memberName(member: RegistrationTeamMember): string {
-  return member.display_name ?? member.primary_handle ?? `#${member.registration_id}`;
+  return member.display.name + (member.display.tag ?? "") || `#${member.registration_id}`;
 }
 
 /** The one member every organizer view identifies a team by. */

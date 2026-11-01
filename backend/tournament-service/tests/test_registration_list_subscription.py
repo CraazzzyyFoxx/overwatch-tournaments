@@ -9,6 +9,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from shared.schemas.identity import PersonDisplayRead  # noqa: E402
 from shared.services.subscriptions import SubscriptionState, SubscriptionVerdict  # noqa: E402
 from src.schemas.registration import RegistrationRead  # noqa: E402
 from src.services.admission.requirements.subscription import serialize_verdicts  # noqa: E402
@@ -66,7 +67,9 @@ class TestSerializeVerdicts:
 class TestReadSchema:
     @staticmethod
     def _read(**overrides):
-        return RegistrationRead(id=1, tournament_id=10, workspace_id=7, **overrides)
+        return RegistrationRead(
+            id=1, tournament_id=10, workspace_id=7, display=PersonDisplayRead(name="Player"), **overrides
+        )
 
     def test_defaults_to_absent(self):
         read = self._read()

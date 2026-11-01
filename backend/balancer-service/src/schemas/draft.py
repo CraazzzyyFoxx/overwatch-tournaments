@@ -24,7 +24,7 @@ from shared.core.enums import (
 from shared.domain.player_sub_roles import workspace_sub_role_slug
 from shared.domain.roster_shape import RosterShape
 from shared.schemas.base import BaseRead
-from shared.schemas.identity import PlayerIdentityRead
+from shared.schemas.identity import PersonDisplayRead, PlayerIdentityRead
 from shared.schemas.role import RoleRef
 from shared.schemas.roster_slots import RosterShapeRead
 from src.domain.draft.ranks import seat_role, slot_rank
@@ -243,8 +243,9 @@ class DraftPlayerRead(BaseRead):
     workspace_member_id: int | None
     #: The seat's primary handle for the tournament's identity provider; null when the registrant gave none.
     identity: PlayerIdentityRead | None
-    #: The player's canonical ``players.user.name``: what a ``/users/<name>`` profile link is built from.
-    player_name: str | None
+    #: How the seat is named in the owner's game; its ``canonical`` builds the profile link. The workspace's name
+    #: for the member, else their visible game handle, else the registration's own handle, else the canonical name.
+    display: PersonDisplayRead
     #: The role this player leads with, over their PLAYABLE roles. ``None`` when
     #: the balancer ranks them on no role at all -- possible mid-draft if an
     #: organizer clears their ranks. Clients must render that as "no role", not
@@ -296,6 +297,7 @@ class DraftPlayerRead(BaseRead):
         shape: Any,
         custom_fields: list[Any],
         dimension: str,
+        display: PersonDisplayRead,
         crowned: bool | None = None,
     ) -> DraftPlayerRead:
         """``crowned`` is the crown the board shows -- whether this seat is its team's current captain -- when the
@@ -313,7 +315,7 @@ class DraftPlayerRead(BaseRead):
             user_id=player.user_id,
             workspace_member_id=player.workspace_member_id,
             identity=roster.identity if roster is not None else None,
-            player_name=roster.player_name if roster is not None else None,
+            display=display,
             primary_role=RoleRef.of(dimension, lead.role, lead.subrole) if lead is not None else None,
             is_flex=bool(roster.is_full_flex) if roster is not None else False,
             status=player.status,

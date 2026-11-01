@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 
 import { HandleCopyButton } from "@/app/balancer/components/HandleCopyControls";
-import { HandleLabel } from "@/components/HandleLabel";
+import { PersonLabel } from "@/components/PlayerName";
 import {
   RoleRankControls,
   accentRowStyle,
@@ -70,7 +70,6 @@ export function WorkspacePlayerSheet({
   onSaveRank,
 }: Readonly<WorkspacePlayerSheetProps>) {
   const t = useTranslations("balancerTool.pool.sheet");
-  const label = member ? member.display_name || member.identity?.handle || `#${member.member_id}` : "";
   // Only a game that collects native ranks has a live rank to show.
   const nativeRankName = ontology?.discipline.capabilities.native_rank_collection ? ontology.discipline.name : null;
   const roles = registrationRoles(ontology).map((role) => role.code);
@@ -81,7 +80,7 @@ export function WorkspacePlayerSheet({
         <SheetHeader variant="panel">
           <Eyebrow tone="dim">{t("eyebrow")}</Eyebrow>
           <SheetTitle className="flex items-baseline gap-1.5">
-            <HandleLabel handle={label} tagClassName="text-caption" />
+            {member ? <PersonLabel display={member.display} showCanonical tagClassName="text-caption" /> : null}
             {member?.identity?.handle ? (
               <HandleCopyButton handle={member.identity.handle} className="ml-0.5 shrink-0" />
             ) : null}

@@ -3,13 +3,13 @@
 import { Shuffle, Sprout } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { HandleLabel } from "@/components/HandleLabel";
+import { PersonLabel } from "@/components/PlayerName";
 import { IconTooltip } from "@/components/ui/icon-tooltip";
 import { cn } from "@/lib/utils";
 import type { PlayerVM } from "@/disciplines/overwatch/analytics/useAnalyticsViewModel";
 
 interface PlayerNickProps {
-  player: Pick<PlayerVM, "name" | "role" | "is_newcomer" | "is_newcomer_role">;
+  player: Pick<PlayerVM, "display" | "role" | "is_newcomer" | "is_newcomer_role">;
   /** Size and weight of the nick (a type role); the `#tag` keeps the faint colour. */
   className?: string;
 }
@@ -22,11 +22,7 @@ export default function PlayerNick({ player, className }: Readonly<PlayerNickPro
   const t = useTranslations();
   return (
     <span className="flex min-w-0 items-center gap-1.5">
-      <HandleLabel
-        handle={player.name}
-        title={player.name}
-        className={cn("text-[color:var(--aqt-fg)]", className)}
-      />
+      <PersonLabel display={player.display} className={cn("text-[color:var(--aqt-fg)]", className)} />
       {player.is_newcomer ? (
         <IconTooltip label={t("teams.roster.newcomer")} hint={t("teams.roster.newcomerHint")} className="shrink-0">
           <Sprout aria-hidden className="size-4 text-[color:var(--aqt-rose)]" />

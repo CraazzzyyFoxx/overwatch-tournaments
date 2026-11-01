@@ -20,6 +20,7 @@ from sqlalchemy.orm import aliased, selectinload
 
 from shared import models
 from shared.repository.stats_queries import match_context, team_scores
+from shared.services.person_display import game_handle_of
 
 __all__ = (
     "MatchReadContext",
@@ -229,10 +230,12 @@ async def get_match_members(session: AsyncSession, *, match_ids: Sequence[int]) 
     """Every ``stats.match_player`` row, event-only members included, ordered by ``(match, team, member)``.
 
     Columns: ``match_id, encounter_team_id, workspace_member_id, player_id, player_name, handle_snapshot,
-    role_dimension, role_code, role_parent_code``. ``player_name`` is the global player's canonical, unique
-    ``players.user.name`` (what a profile link is built from); ``handle_snapshot`` is only what the observation
-    recorded. A member of another workspace is not a participant of this match and is dropped; an observed role
-    outside the owner's ontology reads as no role.
+    discipline, workspace_name, game_handle, role_dimension, role_code, role_parent_code``. ``player_name`` is the
+    global player's canonical, unique ``players.user.name``; ``handle_snapshot`` is what the observation recorded;
+    ``workspace_name`` the member's ``display_name``; ``game_handle`` the match game's identity-provider handle the
+    match's workspace may show (``person_display.game_handle``); ``match_reads`` folds them into the shown name. A
+    member of another workspace is not a participant of this match and is dropped; an observed role outside the
+    owner's ontology reads as no role.
     """
     if not match_ids:
         return []
@@ -247,6 +250,9 @@ async def get_match_members(session: AsyncSession, *, match_ids: Sequence[int]) 
                 wm.player_id,
                 user.name.label("player_name"),
                 p.handle_snapshot,
+                m.discipline,
+                wm.display_name.label("workspace_name"),
+                game_handle_of(wm.player_id, m.discipline, m.workspace_id).label("game_handle"),
                 dimension.code.label("role_dimension"),
                 role.code.label("role_code"),
                 parent.code.label("role_parent_code"),

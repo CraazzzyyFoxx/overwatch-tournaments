@@ -3,6 +3,7 @@ import type { RosterShape } from "@/lib/roster/shape";
 import type { RoleRef } from "@/lib/roster/team-format";
 import type { DiscordVoicePermission } from "@/types/discord.types";
 import type { PlayerIdentity } from "@/types/identity.types";
+import type { PersonDisplay } from "@/types/user.types";
 import type { MatchImport, MatchImportInput } from "@/types/encounter.types";
 
 /** Where an effective rank came from, strongest first. */
@@ -36,6 +37,8 @@ export type CustomGamePlayer = {
   /** `players.user.id`: rank history reads the player by it, never by a handle lookup. */
   player_id: number | null;
   display_name: string | null;
+  /** The name to show: this mix's game name for the person (the server resolves it). `display_name`/`identity` stay data. */
+  display: PersonDisplay;
   identity: PlayerIdentity | null;
   sort_order: number;
   participation: MixParticipation;
@@ -531,6 +534,8 @@ export type MixRoleTally = {
 export type MixMemberStats = {
   workspace_member_id: number;
   display_name: string | null;
+  /** A single-game read names the person in that game; an all-games read (discipline null) is canonical-based. */
+  display: PersonDisplay;
   identity: PlayerIdentity | null;
   games: number;
   wins: number;

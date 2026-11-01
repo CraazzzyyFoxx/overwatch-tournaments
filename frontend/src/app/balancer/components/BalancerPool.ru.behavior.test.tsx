@@ -42,7 +42,7 @@ vi.mock("@/services/workspace-player.service", () => ({
   workspacePlayerService: {
     list: () =>
       Promise.resolve({
-        results: [{ member_id: 1, player_id: 10, identity: { provider: "battlenet", handle: "Aria#1111" }, display_name: null, ranks: {}, author_ranks: {} }],
+        results: [{ member_id: 1, player_id: 10, identity: { provider: "battlenet", handle: "Aria#1111" }, display_name: null, display: { name: "Aria#1111", tag: null, canonical: "Aria#1111", snapshot: null }, ranks: {}, author_ranks: {} }],
         total: 1,
         page: 1,
         per_page: 30,

@@ -1,8 +1,8 @@
 import type { RoundGroup } from "@/lib/bracket/view";
 import { getEncounterWinner, isEncounterCompleted } from "@/lib/encounter/status";
-import { splitHandle } from "@/lib/player";
 import { reachedAtLeast } from "@/lib/tournament/lifecycle";
 import type { Encounter } from "@/types/encounter.types";
+import type { Registration } from "@/types/registration.types";
 import type { Team } from "@/types/team.types";
 import type {
   StageSummary,
@@ -10,6 +10,7 @@ import type {
   Tournament,
   TournamentStatus
 } from "@/types/tournament.types";
+import type { PersonDisplay } from "@/types/user.types";
 
 // ---------------------------------------------------------------------------
 // Which of the three compositions a tournament gets
@@ -202,13 +203,16 @@ export function tournamentDaySpan(start: Date | string, end: Date | string): num
   return days > 0 ? days : null;
 }
 
+/** A registration's name for a list row: "—" for one with no game handle and no account. */
+export function registrationDisplay({ display }: Pick<Registration, "display">): PersonDisplay {
+  return display.name ? display : { ...display, name: "—" };
+}
+
 /** The champion's roster as one line — names only, the `#1234` is noise here (§3C). */
-export function rosterBattletags(team: Team | null | undefined): string {
-  const players = team?.players ?? [];
-  return players
-    .map((player) => player.name)
-    .filter((name): name is string => typeof name === "string" && name.length > 0)
-    .map((name) => splitHandle(name).name)
+export function rosterNames(team: Team | null | undefined): string {
+  return (team?.players ?? [])
+    .map((player) => player.display.name)
+    .filter((name) => name.length > 0)
     .join(" · ");
 }
 

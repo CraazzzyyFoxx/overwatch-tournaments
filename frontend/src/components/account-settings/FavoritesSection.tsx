@@ -4,12 +4,12 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 
 import FavoriteStarButton from "@/components/FavoriteStarButton";
-import { HandleLabel } from "@/components/HandleLabel";
+import { PersonLabel } from "@/components/PlayerName";
 import { Card } from "@/components/ui/card";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useFavoritePlayers } from "@/hooks/useFavoritePlayers";
-import { getPlayerSlug } from "@/lib/player";
+import { canonicalDisplay, getPlayerSlug } from "@/lib/player";
 
 /** One player per row, at least 44px tall: a touch target for the name and the star. */
 const ROW_CLASS = "flex min-h-11 items-center gap-2 py-1 pl-4 pr-2";
@@ -52,7 +52,7 @@ export default function FavoritesSection() {
               title={player.name}
               className="min-w-0 flex-1 rounded-sm py-1.5 text-body text-[color:var(--aqt-fg)] underline-offset-4 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
             >
-              <HandleLabel handle={player.name} className="block" />
+              <PersonLabel display={canonicalDisplay(player.name)} className="block" />
             </Link>
             <FavoriteStarButton playerId={player.id} size="sm" />
           </li>
