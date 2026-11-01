@@ -25,6 +25,7 @@ def _dump(member: Any, ranks: dict[str, int], author_ranks: dict[str, int]) -> W
         player_id=member.player_id,
         identity=member.identity,
         display_name=member.display_name,
+        display=member.display,
         # Whether this member has a linked login identity -- a mix's host/
         # co-host picker excludes anyone without one, since both grants are
         # addressed by `auth.user.id` and a member who has never signed in

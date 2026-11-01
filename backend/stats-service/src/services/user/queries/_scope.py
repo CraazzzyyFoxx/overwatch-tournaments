@@ -108,7 +108,8 @@ def _build_eligible_hero_stats_cte(
                 qualified_combos.c.entity_id == facts.c.entity_id,
             ),
         )
-        .where(facts.c.segment == 0, facts.c.entity_id.isnot(None))
+        # Mix stats live only inside the mix (mix encounters have no tournament).
+        .where(facts.c.segment == 0, facts.c.entity_id.isnot(None), facts.c.tournament_id.is_not(None))
     )
     if user_id is not None:
         base_select = base_select.where(facts.c.player_id == user_id)
@@ -255,7 +256,7 @@ def user_has_logs(user_id: typing.Any, *, discipline: str | None) -> sa.Exists:
     probing totals per member rides the partial ``ix_fact_member_stat_total``. A bare ``player_facts`` EXISTS has no
     member index to use and hash-joins every fact: 47 s on the dev dataset against 20 ms here.
     """
-    f, m, wm = models.StatsFact, models.StatsMatch, models.WorkspaceMember
+    f, m, wm, e = models.StatsFact, models.StatsMatch, models.WorkspaceMember, models.Encounter
     return sa.exists().where(
         wm.player_id == user_id,
         f.workspace_member_id == wm.id,
@@ -263,6 +264,9 @@ def user_has_logs(user_id: typing.Any, *, discipline: str | None) -> sa.Exists:
         f.entity_id.is_(None),
         m.id == f.match_id,
         m.workspace_id == wm.workspace_id,
+        # Mix stats live only inside the mix (mix encounters have no tournament).
+        e.id == m.encounter_id,
+        e.tournament_id.is_not(None),
         *([m.discipline == discipline] if discipline is not None else []),
     )
 

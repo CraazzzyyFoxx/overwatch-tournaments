@@ -59,9 +59,10 @@ export function seatName(seats: readonly PickBanSeat[], teamId: number | null | 
   return seats.find((seat) => seat.id === teamId)?.name ?? "";
 }
 
-/** A mix player's name (`state.members`); empty string for one the room does not know. */
+/** A mix player's shown name (`state.members`): their name in the match's game; empty for one the room does not know. */
 export function memberName(members: readonly PickBanMember[], memberId: number): string {
-  return members.find((member) => member.id === memberId)?.name ?? "";
+  const member = members.find((candidate) => candidate.id === memberId);
+  return member == null ? "" : (member.display?.name ?? member.name);
 }
 
 /**

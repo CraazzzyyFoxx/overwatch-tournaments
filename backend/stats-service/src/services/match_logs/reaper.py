@@ -78,7 +78,7 @@ class _Stalled:
     """A record claimed for requeue, flattened before the session closes."""
 
     record_id: int
-    tournament_id: int
+    tournament_id: int | None
     filename: str
     workspace_id: int | None
 

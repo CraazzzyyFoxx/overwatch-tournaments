@@ -12,11 +12,14 @@ export interface CharacterPlaytime {
   playtime: number;
 }
 
-/** A stat's best single-match value, with where it happened. */
-export type CharacterStatBest = Schema<"stats.CharacterStatBest">;
+/** A stat's best single-match value, with where it happened and who played it (named as their game names them). */
+export type CharacterStatBest = Omit<Schema<"stats.CharacterStatBest">, "player_name"> & { display: PersonDisplay };
 
 /** One stat of one character for a player: career total, best match and per-10 averages (player and everyone). */
-type CharacterStat = Schema<"stats.CharacterStat">;
+type CharacterStat = Omit<Schema<"stats.CharacterStat">, "best" | "best_all"> & {
+  best: CharacterStatBest;
+  best_all: CharacterStatBest | null;
+};
 
 /** A character's career-best game in its class's headline stat (tank: blocked, damage: hero damage, support: healing). */
 type CharacterRecord = Schema<"stats.CharacterRecord">;
@@ -70,6 +73,18 @@ export interface User {
    *  because responses cached before the field existed simply omit it —
    *  `undefined` means the backend default, which is "allowed". */
   stream_visible?: boolean;
+}
+
+/**
+ * How a person is named on a surface owned by one game, resolved by the backend (`PersonDisplayRead`): the workspace
+ * display name, else the game handle visible in scope (Steam: the persona), else the event snapshot, else the canonical
+ * name. `canonical` builds the profile link (`null`: nobody to link to); `snapshot` is set only when it differs.
+ */
+export interface PersonDisplay {
+  name: string;
+  tag: string | null;
+  canonical: string | null;
+  snapshot: string | null;
 }
 
 /** A role's record in one game: maps, tournaments and the division it was last rated at (`null`: never rated). */
@@ -172,6 +187,7 @@ interface UserEncounterTeamPlayerRef {
   user_id: number;
   role: RoleRef | null;
   name: string;
+  display: PersonDisplay;
 }
 
 /** One live seat of an encounter: `id` is the participation, `team_id` the source team (null once deleted). */
@@ -395,7 +411,8 @@ interface LobbyLeaderboardEntry {
   rank: number;
   /** The player's user id (matches the profile route id). */
   player_id: number;
-  name: string;
+  /** The lobby game's name for the player; `display.canonical` builds the profile link. */
+  display: PersonDisplay;
   value: number;
 }
 

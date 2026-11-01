@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from shared import models
 from shared.domain.team_roster import RosterOccupancy
+from shared.schemas.identity import PersonDisplayRead
 from shared.schemas.role import RoleRef
 from src.schemas.registration import RegistrationSubmit
 
@@ -198,6 +199,7 @@ class RegistrationTeamMemberRead(BaseModel):
     registration_id: int
     display_name: str | None = None
     primary_handle: str | None = None
+    display: PersonDisplayRead
     slot_code: str | None = None
     is_substitute: bool = False
     is_captain: bool = False
@@ -303,6 +305,7 @@ class RegistrationFreeAgentRead(BaseModel):
 
     registration_id: int
     primary_handle: str | None = None
+    display: PersonDisplayRead
     #: Role codes, primary first. The captain is filling one slot; a list of bare
     #: names would make them open every profile to find a tank.
     roles: list[RoleRef] = Field(default_factory=list)

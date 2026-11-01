@@ -82,6 +82,10 @@ var Routes = []edge.RouteSpec{
 	// The target game's authoritative current observation (the bind's expected_revision), src/rpc/ingest.py.
 	{Method: "GET", Pattern: "/api/v1/admin/logs/games/{id}/observation", Queue: "rpc.stats.ingest.game_observation", IDParam: "id", Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/v1/admin/logs/{id}/bind", Queue: "rpc.stats.ingest.bind", IDParam: "id", Body: true, Auth: edge.AuthRequired},
+	// A pickup mix round's match imported by its external id (src/rpc/ingest.py); the mix's host, a co-host or
+	// workspace log.create, checked in the handler. {match_id} is the round's encounter.
+	{Method: "POST", Pattern: "/api/v1/custom-games/{custom_game_id}/matches/{match_id}/match-import", Queue: "rpc.stats.ingest.mix_fetch", IDParam: "custom_game_id", Path: []string{"match_id"}, Body: true, Auth: edge.AuthRequired},
+	{Method: "GET", Pattern: "/api/v1/custom-games/{custom_game_id}/matches/{match_id}/match-import", Queue: "rpc.stats.ingest.mix_fetch_list", IDParam: "custom_game_id", Path: []string{"match_id"}, Auth: edge.AuthRequired},
 	// match-log enqueue (src/routes/match_logs.py); admin-role gated in the handler.
 	{Method: "POST", Pattern: "/api/v1/logs/{id}", Queue: "rpc.stats.logs.process_tournament", IDParam: "id", Auth: edge.AuthRequired},
 

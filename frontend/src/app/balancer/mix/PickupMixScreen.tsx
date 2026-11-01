@@ -17,15 +17,15 @@ import { MatchHistoryList } from "@/app/balancer/mix/_components/MatchHistoryLis
 import { useRoomAutoOpen } from "@/app/balancer/mix/_hooks/useRoomAutoOpen";
 import { lobbyIndexFromLetter, lobbyLetter, mixRoomHref, playsInRoom } from "@/app/balancer/mix/pickup-chrome";
 import { navigateRoom } from "@/app/balancer/mix/_room/room-navigation";
-import { hasMapChoice } from "@/app/balancer/mix/pickup-map-roll";
+import { soleMap } from "@/app/balancer/mix/pickup-map-roll";
 import {
   canWriteMix,
   buildMixOwner,
   myLobbyTeam,
-  playerLabel,
   summarizeLineup,
 } from "@/app/balancer/mix/pickup-lineup";
 import { usePickupMix } from "@/app/balancer/mix/usePickupMix";
+import { useMixLogUpload } from "@/app/balancer/mix/useMixLogUpload";
 import { Card } from "@/components/ui/card";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -218,6 +218,7 @@ function PickupMixDetail({ initialGame }: Readonly<{ initialGame: CustomGame }>)
   const rosterIds = rows.map((row) => row.workspace_member_id);
   const isHost = game != null && currentUserId != null && game.host_user_id === currentUserId;
   const canWrite = canWriteMix(game, currentUserId, isSuperuser);
+  const logUpload = useMixLogUpload(game);
   // State reset during render: the voice read is a writer's, and that is only knowable once the mix has loaded.
   if (voiceEnabled !== canWrite) {
     setVoiceEnabled(canWrite);
@@ -244,9 +245,10 @@ function PickupMixDetail({ initialGame }: Readonly<{ initialGame: CustomGame }>)
   );
   const maps = mapsQuery.data ?? [];
   const nextMapName =
-    myTeam?.nextMapId == null || !hasMapChoice(maps)
+    myTeam == null
       ? null
-      : (maps.find((map) => map.id === myTeam.nextMapId)?.name ?? null);
+      : (soleMap(maps)?.name ??
+        (myTeam.nextMapId == null ? null : (maps.find((map) => map.id === myTeam.nextMapId)?.name ?? null)));
   const selectLobby = (index: number | null) => {
     const params = new URLSearchParams(searchParams.toString());
     if (index == null) params.delete("lobby");
@@ -272,7 +274,7 @@ function PickupMixDetail({ initialGame }: Readonly<{ initialGame: CustomGame }>)
   const copyHandles = () => {
     const handles = rows
       .filter((row) => row.participation !== "benched")
-      .map((row) => row.identity?.handle ?? playerLabel(row));
+      .map((row) => row.identity?.handle ?? row.display.name);
     if (handles.length === 0) {
       notify.error(tTeams("copyEmpty"));
       return;
@@ -320,6 +322,7 @@ function PickupMixDetail({ initialGame }: Readonly<{ initialGame: CustomGame }>)
         mixMatches={matches}
         undoingMatchId={undoMatch.isPending ? (undoMatch.variables ?? null) : null}
         onUndoMatch={(matchId) => undoMatch.mutate(matchId)}
+        logUpload={logUpload}
         settingNextMap={setNextMap.isPending}
         onNextMapChange={(mapId) => setNextMap.mutate({ lobbyIndex: shownLobby, mapId })}
         settingLobbyCode={setLobbyCode.isPending}
@@ -562,6 +565,7 @@ function PickupMixDetail({ initialGame }: Readonly<{ initialGame: CustomGame }>)
                       undoingMatchId={undoMatch.isPending ? (undoMatch.variables ?? null) : null}
                       onUndoMatch={(matchId) => undoMatch.mutate(matchId)}
                       discipline={discipline}
+                      logUpload={logUpload}
                       standalone
                     />
                   </Card>

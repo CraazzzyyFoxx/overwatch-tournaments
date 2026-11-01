@@ -21,7 +21,7 @@ import type { StatDefinition } from "@/types/discipline.types";
  * member, one column per declared stat that was observed. Cells format by the stat's `value_format`; a stat the
  * member has no value for is an em dash, never a zero. A participation's team facts resolve their definitions
  * from the discipline's full `definitions`, not from the member columns, so a team-only stat keeps its name and
- * format. A handle links to its player's profile only through the canonical name (`playerName`).
+ * format. A member's name is the match's game's (`display`); it links to the profile through `display.canonical`.
  */
 export default function StatsTableView({
   table,
@@ -109,11 +109,7 @@ export default function StatsTableView({
                 section.rows.map((row) => (
                   <TableRow key={row.key}>
                     <TableCell>
-                      <PlayerName
-                        player={{ name: row.name }}
-                        profileName={row.playerName || null}
-                        includeSpecialization={false}
-                      />
+                      <PlayerName display={row.display} />
                     </TableCell>
                     {withMaps ? (
                       <TableCell className="aqt-tnum text-center">

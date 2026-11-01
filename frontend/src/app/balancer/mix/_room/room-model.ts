@@ -4,6 +4,7 @@ import { slotRankForPlayer } from "@/lib/draft/workspace-model";
 import { OPEN_SLOT_CODE } from "@/lib/roster/shape";
 import type { MixLobbyState } from "@/services/custom-game.service";
 import type { DraftBoard, DraftPickOptionsResponse, DraftPlayer } from "@/types/draft.types";
+import type { PersonDisplay } from "@/types/user.types";
 import type { PickBanState } from "@/types/tournament.types";
 import { roleOf } from "@/lib/roster/role-ref";
 
@@ -21,7 +22,10 @@ export interface RoomSeat {
   /** React key and view-transition identity: the workspace member when known, so a pick morphs pool → slot. */
   key: string;
   memberId: number | null;
+  /** What live-room matching reads: the seat's game handle where known, else its canonical name. Never shown. */
   name: string;
+  /** How the seat is shown (its name in this mix's game); `display.canonical` links the profile. */
+  display: PersonDisplay;
   /** The role code the seat plays; the open slot (`flex`) or null where the game names none. */
   role: string | null;
   rank: number | null;
@@ -49,11 +53,6 @@ export interface RoomTeam {
   unassignedPicks: number[];
   /** The side code this team starts on, once a side step chose it. */
   side: string | null;
-}
-
-/** A draft seat's name: its game handle, else the canonical player name, else its number. */
-export function draftPlayerName(player: DraftPlayer): string {
-  return player.identity?.handle ?? player.player_name ?? `#${player.id}`;
 }
 
 function memberSeatKey(memberId: number | null, fallback: string): string {
@@ -100,7 +99,8 @@ export function draftRoomTeams(board: DraftBoard, teamNames: readonly string[]):
               : {
                   key: memberSeatKey(cell.player.workspace_member_id ?? null, `d${cell.player.id}`),
                   memberId: cell.player.workspace_member_id ?? null,
-                  name: draftPlayerName(cell.player),
+                  name: cell.player.identity?.handle ?? cell.player.display.canonical ?? cell.player.display.name,
+                  display: cell.player.display,
                   role: cell.role,
                   rank: slotRankForPlayer(cell.player, cell.role, shape),
                   isCaptain: cell.player.is_captain,
@@ -130,6 +130,7 @@ export function lineupRoomTeams(variant: PickupVariant): RoomTeam[] {
           key: lineupSeatKey(seat.uuid),
           memberId: known,
           name: seat.name,
+          display: seat.display,
           role: seat.role,
           rank: seat.rating,
           isCaptain: seat.isCaptain,
@@ -256,7 +257,7 @@ export function poolPlayers(board: DraftBoard, options: DraftPickOptionsResponse
     .filter((player) => player.status === "available")
     .sort(
       (left, right) =>
-        (right.effective_rank ?? -1) - (left.effective_rank ?? -1) || draftPlayerName(left).localeCompare(draftPlayerName(right))
+        (right.effective_rank ?? -1) - (left.effective_rank ?? -1) || left.display.name.localeCompare(right.display.name)
     )
     .map((player) => {
       if (current == null) return { player, roles: [], reason: null };

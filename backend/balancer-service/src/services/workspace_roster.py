@@ -34,8 +34,9 @@ from shared.repository import (
     WorkspaceMemberRepository,
     get_or_create_workspace_member,
 )
-from shared.schemas.identity import PlayerIdentityRead
+from shared.schemas.identity import PersonDisplayRead, PlayerIdentityRead
 from shared.services.ontology import workspace_discipline
+from shared.services.person_display import game_handle
 from shared.services.social_identity import social_identity_service
 
 __all__ = (
@@ -59,6 +60,9 @@ class RosterMember:
     #: The player's primary account of the requested discipline's identity provider.
     identity: PlayerIdentityRead | None
     display_name: str | None
+    #: What a surface of this workspace's game shows for the member (workspace name, else the visible game handle,
+    #: else the canonical name). Unlike ``identity`` -- matching data -- it honours handle visibility.
+    display: PersonDisplayRead
     #: The player's linked login identity (``players.user.auth_user_id``), or
     #: ``None`` if they have never signed in. ``auth.user.id`` is the space a
     #: mix's ``host_user_id`` and its co-host grants are addressed in -- a member
@@ -143,6 +147,12 @@ def _identity_column(provider: str | None) -> sa.ColumnElement[str | None]:
     return main_handle(provider) if provider is not None else sa.cast(sa.null(), sa.String)
 
 
+def _shown_handle_columns(provider: str | None, workspace_id: int) -> tuple[sa.ColumnElement, sa.ColumnElement]:
+    if provider is None:
+        return sa.cast(sa.null(), sa.String), sa.cast(sa.null(), sa.Boolean)
+    return tuple(game_handle(models.User.id, provider, workspace_id))
+
+
 def _roster_member(
     provider: str | None,
     member_id: int,
@@ -151,12 +161,21 @@ def _roster_member(
     player_name: str,
     auth_user_id: int | None,
     handle: str | None,
+    shown_handle: str | None,
+    shown_verified: bool | None,
 ) -> RosterMember:
     return RosterMember(
         member_id=member_id,
         player_id=player_id,
         identity=PlayerIdentityRead.of(provider, handle),
         display_name=display_name or player_name,
+        display=PersonDisplayRead.build(
+            canonical=player_name,
+            provider=provider,
+            handle=shown_handle,
+            handle_verified=bool(shown_verified),
+            workspace_name=display_name,
+        ),
         auth_user_id=auth_user_id,
         player_name=player_name,
     )
@@ -189,6 +208,7 @@ async def roster_page(
             models.User.name,
             models.User.auth_user_id,
             _identity_column(provider),
+            *_shown_handle_columns(provider, workspace_id),
         )
         .join(models.User, models.User.id == models.WorkspaceMember.player_id)
         .where(*filters)
@@ -248,6 +268,7 @@ async def list_roster(
             models.User.name,
             models.User.auth_user_id,
             _identity_column(provider),
+            *_shown_handle_columns(provider, workspace_id),
         )
         .join(models.User, models.User.id == models.WorkspaceMember.player_id)
         .where(

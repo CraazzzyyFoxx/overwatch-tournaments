@@ -359,7 +359,7 @@ export function PregameAdminControls({
                       label={t("admin.submitTargetLabel")}
                       options={targetRoster.map((player) => ({
                         value: String(player.player_id),
-                        label: player.name
+                        label: player.display.name + (player.display.tag ?? "")
                       }))}
                       value={String(blind?.targetPlayerId ?? "")}
                       onChange={(value) => blind?.setTargetPlayerId(Number(value))}
@@ -382,7 +382,7 @@ export function PregameAdminControls({
                               ? `${itemName(item.item_id)} → ${
                                   targetRoster.find(
                                     (player) => player.player_id === item.target_player_id
-                                  )?.name ?? `#${item.target_player_id}`
+                                  )?.display.name ?? `#${item.target_player_id}`
                                 }`
                               : itemName(item.item_id)}
                             <span aria-hidden className="ml-2">

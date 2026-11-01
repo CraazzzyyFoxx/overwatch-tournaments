@@ -16,6 +16,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import en from "@/i18n/messages/en.json";
 import ru from "@/i18n/messages/ru.json";
+import { canonicalDisplay } from "@/lib/player";
 import type { RegistrationTeam } from "@/types/registration-team.types";
 
 import MyTeamPanel from "./MyTeamPanel";
@@ -58,6 +59,7 @@ const TEAM: RegistrationTeam = {
       registration_id: 100,
       display_name: "Cap",
       primary_handle: "Cap#1111",
+      display: canonicalDisplay("Cap"),
       slot_code: "tank",
       is_substitute: false,
       is_captain: true,
@@ -67,6 +69,7 @@ const TEAM: RegistrationTeam = {
       registration_id: 101,
       display_name: "Mate",
       primary_handle: "Mate#2222",
+      display: canonicalDisplay("Mate"),
       slot_code: "damage",
       is_substitute: false,
       is_captain: false,
@@ -76,6 +79,7 @@ const TEAM: RegistrationTeam = {
       registration_id: 102,
       display_name: "Bench",
       primary_handle: "Bench#3333",
+      display: canonicalDisplay("Bench"),
       slot_code: "damage",
       is_substitute: true,
       is_captain: false,

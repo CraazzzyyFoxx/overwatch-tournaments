@@ -85,3 +85,71 @@ export function readTimeline(
   }
   return { kills, marks };
 }
+
+/**
+ * The round a timeline row belongs to. The feed's segment 0 is the lead-up before the first round marker, not a
+ * whole-match aggregate: it folds into round 1 so no phantom round is drawn.
+ */
+export const timelineRound = (segment: number): number => Math.max(segment, 1);
+
+export type TimelineSide = "home" | "away";
+
+/** One fight: the kills sharing a fight id, numbered 1..K inside its round by when it started. */
+export interface TimelineFight {
+  round: number;
+  /** The feed's match-wide fight id. */
+  id: number;
+  /** 1-based position among the round's fights. */
+  no: number;
+  kills: TimelineKill[];
+  from: number;
+  to: number;
+  /** Kills per side; both `null` once a kill's side is unknown (an unknown killer is never anyone's). */
+  home: number | null;
+  away: number | null;
+  /** The side of the fight's first kill. */
+  first: TimelineSide | null;
+  /** More kills wins; a tie or an unknown tally has no winner. */
+  winner: TimelineSide | null;
+}
+
+/**
+ * The fights of a duel's kills (`kills` in feed order). A kill without a fight id belongs to no fight — it is
+ * never fight zero. The timeline and the breakdown both read fights from here, so "Fight 3" is the same fight on
+ * both tabs.
+ */
+export function readFights(kills: readonly TimelineKill[], homeId: number, awayId: number): TimelineFight[] {
+  const sideOf = (teamId: number | null): TimelineSide | null =>
+    teamId === homeId ? "home" : teamId === awayId ? "away" : null;
+  const byId = new Map<number, TimelineKill[]>();
+  for (const kill of kills) {
+    if (kill.fight == null) continue;
+    byId.set(kill.fight, [...(byId.get(kill.fight) ?? []), kill]);
+  }
+  const fights: TimelineFight[] = [...byId.entries()].map(([id, list]) => {
+    const sorted = [...list].sort((a, b) => a.time - b.time);
+    const sides = sorted.map((kill) => sideOf(kill.killer_team_id));
+    const known = sides.every((side) => side != null);
+    const home = known ? sides.filter((side) => side === "home").length : null;
+    const away = known ? sides.filter((side) => side === "away").length : null;
+    return {
+      round: timelineRound(sorted[0].round),
+      id,
+      no: 0,
+      kills: sorted,
+      from: sorted[0].time,
+      to: sorted[sorted.length - 1].time,
+      home,
+      away,
+      first: sides[0] ?? null,
+      winner: home == null || away == null || home === away ? null : home > away ? "home" : "away"
+    };
+  });
+  fights.sort((a, b) => a.round - b.round || a.from - b.from);
+  const counters = new Map<number, number>();
+  for (const fight of fights) {
+    fight.no = (counters.get(fight.round) ?? 0) + 1;
+    counters.set(fight.round, fight.no);
+  }
+  return fights;
+}

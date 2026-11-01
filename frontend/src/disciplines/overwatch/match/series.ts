@@ -228,7 +228,9 @@ function buildParticipation(
     players.push({
       ...entry.player,
       stats: { [WHOLE_MAP_ROUND]: entry.stats },
-      heroes: { [WHOLE_MAP_ROUND]: Array.from(entry.heroes.values()) }
+      heroes: { [WHOLE_MAP_ROUND]: Array.from(entry.heroes.values()) },
+      // Per-map stints do not add up into one series stint: the series view draws `heroes` only.
+      heroTimes: {}
     });
     rows.push({
       id: entry.player.workspace_member_id,

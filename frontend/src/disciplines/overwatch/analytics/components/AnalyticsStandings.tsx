@@ -14,7 +14,7 @@ import {
 import { useTranslations } from "next-intl";
 
 import DivisionIcon from "@/components/DivisionIcon";
-import { HandleLabel } from "@/components/HandleLabel";
+import { PersonLabel } from "@/components/PlayerName";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import TeamName from "@/components/TeamName";
 import { TeamPlacement } from "@/components/TournamentTeamCard";
@@ -34,7 +34,7 @@ import {
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useFormatter } from "@/lib/datetime/client";
-import { sortTeamPlayers, splitHandle } from "@/lib/player";
+import { sortTeamPlayers } from "@/lib/player";
 import type { RoleOntology } from "@/lib/roster/ontology";
 import { groupDisplayName, groupHue } from "@/lib/tournament/group";
 import { cn } from "@/lib/utils";
@@ -139,7 +139,7 @@ function PlayerIdentity({ player }: Readonly<{ player: PlayerAnalytics }>) {
 
   return (
     <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
-      <HandleLabel handle={player.name} className="font-medium text-[color:var(--aqt-fg)]" />
+      <PersonLabel display={player.display} className="font-medium text-[color:var(--aqt-fg)]" />
       {player.is_newcomer ? (
         <IconTooltip label={t("teams.roster.newcomer")} hint={t("teams.roster.newcomerHint")}>
           <Sprout aria-hidden className="size-3.5 text-[color:var(--aqt-rose)]" />
@@ -261,7 +261,7 @@ function TeamRows({
               {/* The roster at a glance: role glyph + nick, as the Teams list draws it. */}
               <span
                 className="block max-w-[24rem] truncate text-caption text-[color:var(--aqt-fg-muted)]"
-                title={players.map((player) => splitHandle(player.name).name).join(", ")}
+                title={players.map((player) => player.display.name).join(", ")}
               >
                 {players.map((player) => (
                   <span key={player.id} className="mr-3 last:mr-0">
@@ -269,7 +269,7 @@ function TeamRows({
                     <span className="mr-1 inline-block align-[-2px]">
                       <PlayerRoleIcon role={player.role} ontology={ontology} size={13} decorative />
                     </span>
-                    {splitHandle(player.name).name}
+                    {player.display.name}
                   </span>
                 ))}
               </span>

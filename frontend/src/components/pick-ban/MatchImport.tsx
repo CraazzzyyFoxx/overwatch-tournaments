@@ -13,6 +13,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { ApiError } from "@/lib/api/error";
 import { encounterQueryKeys } from "@/lib/encounters/query-keys";
 import { notify } from "@/lib/notify";
+import { customGameKeys, customGameService } from "@/services/custom-game.service";
 import pickBanService from "@/services/pickBan.service";
 import type { MatchImport as MatchImportRow } from "@/types/encounter.types";
 
@@ -30,38 +31,63 @@ const STATUS_ICON = { pending: Hourglass, done: CheckCircle2, failed: AlertTrian
 const PENDING_POLL_MS = 30_000;
 
 /**
- * Files a game's match by its id in the game's own records, and lists what was filed: the stats worker fetches it
- * (retrying until the game's API has it) and imports it like an uploaded log. Rendered only for a tournament game of
- * a discipline that declares a match fetcher (`capabilities.match_fetch`). `games` are the positions it may be filed
- * for: one (a captain's report) hides the picker. `admin` uses the organizer routes, whose rows carry the warnings
- * (anonymous participants dropped, a banned character played).
+ * Where a match id is filed: a tournament encounter's games (`games` are the positions it may be filed for: one,
+ * a captain's report, hides the picker; `admin` uses the organizer routes, whose rows carry the warnings) or a
+ * recorded round of a mix (one game by construction, always the organizer read; `onSubmitted` runs after a filed
+ * id, so the caller can refresh what the import changes; `search` is the round's match being looked up by its
+ * players, or given up on).
  */
-export function MatchImport({
-  encounterId,
-  games,
-  admin = false
-}: Readonly<{ encounterId: number; games: ReadonlyArray<{ id: number; position: number }>; admin?: boolean }>) {
+export type MatchImportScope =
+  | { encounterId: number; games: ReadonlyArray<{ id: number; position: number }>; admin?: boolean }
+  | {
+      customGameId: number;
+      encounterId: number;
+      onSubmitted: () => void;
+      search?: "searching" | "not_found" | null;
+    };
+
+/**
+ * Files a game's match by its id in the game's own records, and lists what was filed: the stats worker fetches it
+ * (retrying until the game's API has it) and imports it like an uploaded log. Rendered only for a game of a
+ * discipline that declares a match fetcher (`capabilities.match_fetch`). Organizer rows carry the warnings
+ * (anonymous participants dropped, a banned character played). A mix round takes statistics only: its result is
+ * never touched.
+ */
+export function MatchImport({ scope }: Readonly<{ scope: MatchImportScope }>) {
   const t = useTranslations("pickBan.room.matchImport");
   const inputId = useId();
   const queryClient = useQueryClient();
   const [picked, setPicked] = useState<number | null>(null);
   const [externalId, setExternalId] = useState("");
+  const { encounterId } = scope;
+  const mix = "customGameId" in scope ? scope : null;
+  const games = "games" in scope ? scope.games : [];
+  const admin = mix != null || ("admin" in scope && scope.admin === true);
   const gameId = games.find((game) => game.id === picked)?.id ?? games[0]?.id ?? null;
-  const key = encounterQueryKeys.matchImports(encounterId, gameId, admin);
+  const key = mix
+    ? customGameKeys.matchImports(mix.customGameId, encounterId)
+    : encounterQueryKeys.matchImports(encounterId, gameId, admin);
 
   const imports = useQuery({
     queryKey: key,
-    queryFn: () => pickBanService.listMatchImports(encounterId, gameId as number, admin),
-    enabled: gameId != null,
+    queryFn: () =>
+      mix
+        ? customGameService.listMatchImports(mix.customGameId, encounterId)
+        : pickBanService.listMatchImports(encounterId, gameId as number, admin),
+    enabled: mix != null || gameId != null,
     refetchInterval: (query) =>
       query.state.data?.some((row) => row.status === "pending") ? PENDING_POLL_MS : false
   });
 
   const submit = useMutation({
-    mutationFn: () => pickBanService.importMatch(encounterId, gameId as number, externalId.trim(), admin),
+    mutationFn: () =>
+      mix
+        ? customGameService.importMatch(mix.customGameId, encounterId, externalId.trim())
+        : pickBanService.importMatch(encounterId, gameId as number, externalId.trim(), admin),
     onSuccess: () => {
       setExternalId("");
       notify.success(t("submitted"));
+      mix?.onSubmitted();
     },
     onError: (error) => {
       const code =
@@ -76,7 +102,7 @@ export function MatchImport({
     onSettled: () => void queryClient.invalidateQueries({ queryKey: key })
   });
 
-  if (gameId == null) return null;
+  if (mix == null && gameId == null) return null;
   const rows = imports.data ?? [];
 
   return (
@@ -117,8 +143,13 @@ export function MatchImport({
             {t("submit")}
           </Button>
         </div>
-        <p className="text-caption text-[color:var(--aqt-fg-muted)]">{t("hint")}</p>
+        <p className="text-caption text-[color:var(--aqt-fg-muted)]">{t(mix ? "hintMix" : "hint")}</p>
       </form>
+      {mix?.search ? (
+        <p className="text-caption text-[color:var(--aqt-fg-muted)]">
+          {t(mix.search === "searching" ? "autoSearch.searching" : "autoSearch.notFound")}
+        </p>
+      ) : null}
 
       {imports.isError ? (
         <p className="text-caption text-[color:var(--aqt-fg-muted)]">{t("loadFailed")}</p>

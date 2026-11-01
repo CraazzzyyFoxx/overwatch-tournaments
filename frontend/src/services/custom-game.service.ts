@@ -3,6 +3,8 @@ import type { RosterShape } from "@/lib/roster/shape";
 import type { RoleRef } from "@/lib/roster/team-format";
 import type { DiscordVoicePermission } from "@/types/discord.types";
 import type { PlayerIdentity } from "@/types/identity.types";
+import type { PersonDisplay } from "@/types/user.types";
+import type { MatchImport, MatchImportInput } from "@/types/encounter.types";
 
 /** Where an effective rank came from, strongest first. */
 export type RankSource = "author" | "workspace" | "native";
@@ -35,6 +37,8 @@ export type CustomGamePlayer = {
   /** `players.user.id`: rank history reads the player by it, never by a handle lookup. */
   player_id: number | null;
   display_name: string | null;
+  /** The name to show: this mix's game name for the person (the server resolves it). `display_name`/`identity` stay data. */
+  display: PersonDisplay;
   identity: PlayerIdentity | null;
   sort_order: number;
   participation: MixParticipation;
@@ -376,6 +380,15 @@ export type CustomGameMatch = {
   bans: { slot: number; item_id: number }[];
   /** Each player's hero, in pick order (spec §11.6). */
   picks: { slot: number; member_id: number; name: string; item_id: number }[];
+  /** The parsed log's stats match bound to this round (newest if several); null while there is none. */
+  stats_match_id: number | null;
+  /** Why a round with no stats yet shows a chip: its newest log or match import is still coming, or could not be bound. */
+  log_state: "processing" | "failed" | null;
+  /**
+   * The round's match looked up by its players (a game whose matches can be found that way): still looking, or given
+   * up so the host files the id by hand. Null otherwise, and once there are stats.
+   */
+  match_search: "searching" | "not_found" | null;
 };
 
 /** Patch semantics: an omitted key is left untouched on the server. */
@@ -521,6 +534,8 @@ export type MixRoleTally = {
 export type MixMemberStats = {
   workspace_member_id: number;
   display_name: string | null;
+  /** A single-game read names the person in that game; an all-games read (discipline null) is canonical-based. */
+  display: PersonDisplay;
   identity: PlayerIdentity | null;
   games: number;
   wins: number;
@@ -582,6 +597,8 @@ export const customGameKeys = {
   one: (workspaceId: number, gameId: number) => ["custom-games", workspaceId, gameId] as const,
   byId: (gameId: number, workspaceId: number | null) =>
     ["custom-game-entity", gameId, workspaceId] as const,
+  /** One round's match imports (`matchId` = the round's encounter id). */
+  matchImports: (gameId: number, matchId: number) => ["custom-game-match-imports", gameId, matchId] as const,
   matches: (workspaceId: number, gameId: number) => ["custom-games", workspaceId, gameId, "matches"] as const,
   /**
    * Every lobby's rotation queue for one mix — the prefix the per-lobby keys
@@ -1208,6 +1225,19 @@ export const customGameService = {
       skipWorkspace: true,
       method: "POST",
       body: { lobby_index: lobbyIndex },
+    }).then((r) => r.json());
+  },
+
+  /** One round's match imports, newest first, warnings filled; the host (or a `log.create` holder) is the organizer. */
+  listMatchImports(gameId: number, matchId: number): Promise<MatchImport[]> {
+    return apiFetch(`/api/v1/custom-games/${gameId}/matches/${matchId}/match-import`).then((r) => r.json());
+  },
+
+  /** Files the game's own match id under a recorded round: only its statistics are imported, never its result. */
+  importMatch(gameId: number, matchId: number, externalId: string): Promise<MatchImport> {
+    return apiFetch(`/api/v1/custom-games/${gameId}/matches/${matchId}/match-import`, {
+      method: "POST",
+      body: { external_id: externalId } satisfies MatchImportInput,
     }).then((r) => r.json());
   },
 };

@@ -183,10 +183,11 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             viewer = rehydrate_user_optional(data.get("identity"))
             match_id = _require_id(data)
-            tournament_id = await visibility_resolvers.visibility_resolvers_service.tournament_id_for_match(
+            tournament_id = await visibility_resolvers.visibility_resolvers_service.owner_tournament_id_for_match(
                 session, match_id
             )
-            await ensure_tournament_viewable(session, viewer, tournament_id)
+            if tournament_id is not None:  # a mix's match log is public (D6)
+                await ensure_tournament_viewable(session, viewer, tournament_id)
             return await encounter_flows.flows_service.get_match_with_stats(
                 session, match_id, _q(data, "entities") or [], workspace_id=q_workspace_id(data)
             )
@@ -198,10 +199,11 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             viewer = rehydrate_user_optional(data.get("identity"))
             match_id = _require_id(data)
-            tournament_id = await visibility_resolvers.visibility_resolvers_service.tournament_id_for_match(
+            tournament_id = await visibility_resolvers.visibility_resolvers_service.owner_tournament_id_for_match(
                 session, match_id
             )
-            await ensure_tournament_viewable(session, viewer, tournament_id)
+            if tournament_id is not None:  # a mix's match log is public (D6)
+                await ensure_tournament_viewable(session, viewer, tournament_id)
             return await encounter_flows.flows_service.get_match_kill_feed(
                 session, match_id, workspace_id=q_workspace_id(data)
             )

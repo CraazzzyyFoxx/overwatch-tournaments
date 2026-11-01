@@ -54,28 +54,28 @@ class UserIdentityQueries:
     async def search_by_name(self, session: AsyncSession, query: str) -> typing.Sequence[sa.Row[tuple[int, str]]]:
         """Players matching ``query`` (autocomplete) as ``(id, name)`` rows, one per player.
 
-        Matches the canonical ``players.user.name`` and the handle of every publicly visible game,
-        Discord or Twitch account. Returns up to 10 players ranked by their best exact / prefix /
-        trigram-similarity match.
+        Matches the canonical ``players.user.name``, the handle of every publicly visible game, Discord or Twitch
+        account, and the provider display name (Steam persona) of any publicly visible account. Returns up to 10
+        players ranked by their best exact / prefix / trigram-similarity match.
         """
         query = query.strip().replace("-", "#")
         if not query or len(query) < 2:
             return []
 
         account = models.SocialAccount
+        # Accounts hidden from the public profile (no global visibility row) must not surface in search either.
+        public = (
+            sa.select(models.SocialAccountVisibility.id)
+            .where(
+                models.SocialAccountVisibility.account_id == account.id,
+                models.SocialAccountVisibility.workspace_id.is_(None),
+            )
+            .exists()
+        )
         handles = sa.union_all(
             sa.select(models.User.id.label("user_id"), models.User.name.label("handle")),
-            sa.select(account.user_id, account.username).where(
-                account.provider.in_(_SEARCH_PROVIDERS),
-                # Accounts hidden from the public profile (no global visibility row)
-                # must not surface in search either.
-                sa.select(models.SocialAccountVisibility.id)
-                .where(
-                    models.SocialAccountVisibility.account_id == account.id,
-                    models.SocialAccountVisibility.workspace_id.is_(None),
-                )
-                .exists(),
-            ),
+            sa.select(account.user_id, account.username).where(account.provider.in_(_SEARCH_PROVIDERS), public),
+            sa.select(account.user_id, account.display_name).where(account.display_name.is_not(None), public),
         ).subquery()
 
         column = handles.c.handle

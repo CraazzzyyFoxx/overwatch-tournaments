@@ -79,8 +79,8 @@ class RegistrationAndTeamCacheNamespaceTests(IsolatedAsyncioTestCase):
 
     async def test_each_family_writes_its_v2_key_and_never_reads_the_pre_bump_one(self) -> None:
         for read, upstream, prefix in (
-            (self._registration_list, self.build, "fastapi::registration_list:v2:7:"),
-            (self._teams_page, self.page, "fastapi::teams:v3:5:7:"),
+            (self._registration_list, self.build, "fastapi::registration_list:v3:7:"),
+            (self._teams_page, self.page, "fastapi::teams:v4:5:7:"),
         ):
             fresh = await read(7)
             (key,) = await _stored()

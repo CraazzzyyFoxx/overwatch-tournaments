@@ -13,7 +13,7 @@ baselines and Discord channels live in `stats/`. `catalog/` writes only to `cata
 > `--check` and fails on drift, so the diagrams cannot fall behind the models again.
 
 <!-- ERD:auto _alembic_head -->
-Alembic head: **`impactv202`** (160 revisions in `backend/migrations/versions/`).
+Alembic head: **`mixsearch01`** (163 revisions in `backend/migrations/versions/`).
 <!-- /ERD:auto -->
 
 **Reading the diagrams**
@@ -2574,10 +2574,16 @@ newest message the bot has already walked past, so a reconnect rescans from ther
 manual backfill) walks the history.
 
 `match_fetch` is a pending "import this match by its external id" request, one per
-`(source_kind, external_id, hint_encounter_game_id)`: the stats worker retries it (`pending`,
-`attempts`, `next_attempt_at`, `last_error`) until the discipline's fetcher serves the bytes, then
-stores them like an upload and points `ingest_job_id` at the normal ingest job (`done`), or gives
-up 24 h after the request (`failed`).
+`(source_kind, external_id, hint_encounter_game_id)`, for a tournament game or a pickup mix round's
+(`hint_tournament_id` NULL): the stats worker retries it (`pending`, `attempts`, `next_attempt_at`,
+`last_error`) until the discipline's fetcher serves the bytes, then stores them like an upload and
+points `ingest_job_id` at the normal ingest job (`done`), or gives up 24 h after the request
+(`failed`).
+
+`match_search` is one pickup mix round's match looked up by its players (`encounter_id` unique, cascading with
+the round): the stats worker retries it (`pending`, `attempts`, `next_attempt_at`, `last_error`) until exactly one
+match fits the round's sides (`found`, `external_id`, filed as a `match_fetch`), several fit or none did within
+24 h (`not_found`), or the round got its statistics or id another way (`stopped`).
 
 <!-- ERD:auto stats -->
 ```mermaid
@@ -2674,7 +2680,7 @@ erDiagram
         varchar(32) discipline FK
         varchar(32) source_kind
         varchar(128) external_id
-        bigint hint_tournament_id FK
+        bigint hint_tournament_id FK "nullable"
         bigint hint_encounter_id FK
         bigint hint_encounter_game_id FK
         bigint requested_by_user_id FK "nullable"
@@ -2690,6 +2696,19 @@ erDiagram
         bigint workspace_member_id PK,FK
         varchar(255) handle_snapshot
         bigint observed_role_id FK "nullable"
+    }
+    STATS_MATCH_SEARCH {
+        bigint id PK
+        timestamptz created_at
+        timestamptz updated_at "nullable"
+        bigint workspace_id FK
+        varchar(32) discipline FK
+        bigint encounter_id FK,UK
+        ck_match_search_status status
+        int attempts
+        timestamptz next_attempt_at
+        text last_error "nullable"
+        varchar(128) external_id "nullable"
     }
     STATS_MATCH_TEAM {
         bigint match_id PK,FK
@@ -2732,6 +2751,7 @@ erDiagram
     CATALOG_DISCIPLINE ||--o{ STATS_EVENT_TYPE : "discipline"
     CATALOG_DISCIPLINE ||--o{ STATS_INGEST_JOB : "discipline"
     CATALOG_DISCIPLINE ||--o{ STATS_MATCH_FETCH : "discipline"
+    CATALOG_DISCIPLINE ||--o{ STATS_MATCH_SEARCH : "discipline"
     CATALOG_DISCIPLINE ||--o{ STATS_STAT_DEF : "discipline"
     CATALOG_ENTITY |o--o{ STATS_EVENT : "entity_id"
     CATALOG_ENTITY |o--o{ STATS_EVENT : "related_entity_id"
@@ -2749,6 +2769,7 @@ erDiagram
     ENCOUNTER_ENCOUNTER |o--o{ STATS_INGEST_JOB : "hint_encounter_id"
     ENCOUNTER_ENCOUNTER ||--o{ STATS_MATCH : "encounter_id"
     ENCOUNTER_ENCOUNTER ||--o{ STATS_MATCH_FETCH : "hint_encounter_id"
+    ENCOUNTER_ENCOUNTER ||--o| STATS_MATCH_SEARCH : "encounter_id"
     ENCOUNTER_GAME |o--o{ STATS_INGEST_JOB : "hint_encounter_game_id"
     ENCOUNTER_GAME |o--o| STATS_MATCH : "encounter_game_id"
     ENCOUNTER_GAME ||--o{ STATS_MATCH_FETCH : "hint_encounter_game_id"
@@ -2758,6 +2779,7 @@ erDiagram
     PUBLIC_WORKSPACE ||--o{ STATS_INGEST_JOB : "workspace_id"
     PUBLIC_WORKSPACE ||--o{ STATS_MATCH : "workspace_id"
     PUBLIC_WORKSPACE ||--o{ STATS_MATCH_FETCH : "workspace_id"
+    PUBLIC_WORKSPACE ||--o{ STATS_MATCH_SEARCH : "workspace_id"
     PUBLIC_WORKSPACE_MEMBER ||--o| STATS_MATCH_PLAYER : "workspace_member_id"
     STATS_EVENT_TYPE ||--o{ STATS_EVENT : "type_id"
     STATS_INGEST_JOB |o--o{ STATS_MATCH : "ingest_job_id"
@@ -2781,7 +2803,7 @@ erDiagram
     STATS_STAT_DEF ||--o{ STATS_FACT : "stat_id"
     STATS_STAT_DEF ||--o{ STATS_STAT_BASELINE : "stat_id"
     TOURNAMENT_TOURNAMENT |o--o{ STATS_INGEST_JOB : "hint_tournament_id"
-    TOURNAMENT_TOURNAMENT ||--o{ STATS_MATCH_FETCH : "hint_tournament_id"
+    TOURNAMENT_TOURNAMENT |o--o{ STATS_MATCH_FETCH : "hint_tournament_id"
     TOURNAMENT_TOURNAMENT ||--o| STATS_DISCORD_CHANNEL : "tournament_id"
 ```
 

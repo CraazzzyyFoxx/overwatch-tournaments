@@ -215,7 +215,7 @@ export function MapReportDialog({
 
         {matchImport ? (
           <div className="border-t border-[color:var(--aqt-border)] pt-4">
-            <MatchImport encounterId={encounterId} games={[game]} />
+            <MatchImport scope={{ encounterId, games: [game] }} />
           </div>
         ) : null}
 

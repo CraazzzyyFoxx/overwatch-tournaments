@@ -6,6 +6,7 @@ import { create } from "zustand";
 import { notify } from "@/lib/notify";
 import adminService from "@/services/admin.service";
 import { useAuthProfileStore } from "@/stores/auth-profile.store";
+import type { LogUploadScope } from "@/types/admin.types";
 import { directoryErrorCode, listLogFiles, type LogDirectoryHandle } from "./browser-directory";
 import { useLogDirectory } from "./use-log-directory";
 
@@ -24,7 +25,7 @@ interface AutoUploadState {
   holder: string | null;
   status: "watching" | "permission" | "error";
   error: unknown;
-  target: { tournamentId: number; encounterId: number | null } | null;
+  target: LogUploadScope | null;
   entries: AutoUploadEntry[];
   /** Set while waiting for folder access; call from a click so the browser may prompt. */
   grant: (() => void) | null;
@@ -83,7 +84,7 @@ async function ensurePermission(handle: LogDirectoryHandle, signal: AbortSignal)
 }
 
 /**
- * Watches the saved log folder while an encounter room is open and uploads each
+ * Watches the saved log folder while an encounter or lobby room is open and uploads each
  * log that appears or changes after watching began, once it has been quiet.
  * Files already in the folder are never sent. One watcher per browser: the Web
  * Lock makes other tabs wait their turn. `enabled` is the page's opt-in; the
@@ -91,18 +92,19 @@ async function ensurePermission(handle: LogDirectoryHandle, signal: AbortSignal)
  */
 export function useLogAutoUpload({
   enabled,
-  tournamentId,
-  encounterId,
+  scope,
   onUploaded
-}: Readonly<{ enabled: boolean; tournamentId: number; encounterId: number | null; onUploaded?: () => void }>) {
+}: Readonly<{ enabled: boolean; scope: LogUploadScope; onUploaded?: () => void }>) {
   const t = useTranslations("accountSettings.logDirectory.auto");
   const directory = useLogDirectory();
   const instance = useId();
   const handle = enabled && directory.autoUpload ? directory.handle : null;
   const accountId = directory.accountId;
-  const latest = useRef({ t, onUploaded });
+  // Callers build `scope` inline: the effect restarts on its value, not its identity.
+  const scopeKey = JSON.stringify(scope);
+  const latest = useRef({ t, onUploaded, scope });
   useEffect(() => {
-    latest.current = { t, onUploaded };
+    latest.current = { t, onUploaded, scope };
   });
 
   useEffect(() => {
@@ -113,7 +115,7 @@ export function useLogAutoUpload({
 
     async function upload(file: File) {
       if (useAuthProfileStore.getState().user?.id !== accountId) throw new Error("account changed");
-      return adminService.uploadMatchLogs({ tournamentId, encounterId, files: [file] });
+      return adminService.uploadMatchLogs({ ...latest.current.scope, files: [file] });
     }
 
     async function watch(folder: LogDirectoryHandle) {
@@ -170,7 +172,7 @@ export function useLogAutoUpload({
 
     navigator.locks
       .request(LOCK_NAME, { signal }, async () => {
-        store.setState({ holder: instance, status: "watching", error: null, entries: [], target: { tournamentId, encounterId } });
+        store.setState({ holder: instance, status: "watching", error: null, entries: [], target: latest.current.scope });
         try {
           await watch(handle);
         } finally {
@@ -180,5 +182,5 @@ export function useLogAutoUpload({
       // AbortError: unmounted while another tab held the lock.
       .catch(() => undefined);
     return () => controller.abort();
-  }, [handle, accountId, tournamentId, encounterId, instance]);
+  }, [handle, accountId, scopeKey, instance]);
 }

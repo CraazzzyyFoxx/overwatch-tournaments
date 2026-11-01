@@ -4,7 +4,7 @@ import { useRef } from "react";
 import { ArrowRight } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { HandleLabel } from "@/components/HandleLabel";
+import { PersonLabel } from "@/components/PlayerName";
 import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { Eyebrow } from "@/components/ui/eyebrow";
 import Image from "@/components/ui/image";
@@ -61,7 +61,7 @@ export default function StatGameLink({
         >
           <span className="aqt-tnum font-semibold text-[color:var(--aqt-fg)]">{value}</span>
           {holder ? (
-            <HandleLabel handle={game.player_name} className="block max-w-full text-label text-[color:var(--aqt-fg-dim)]" />
+            <PersonLabel display={game.display} tag="hidden" className="block max-w-full text-label text-[color:var(--aqt-fg-dim)]" />
           ) : (
             <span className="block max-w-full truncate text-label text-[color:var(--aqt-fg-dim)]">{game.map_name}</span>
           )}
@@ -95,7 +95,7 @@ export default function StatGameLink({
           {holder ? (
             <span className="flex min-w-0 items-baseline gap-2">
               <Eyebrow>{t("recordHolder")}</Eyebrow>
-              <HandleLabel handle={game.player_name} className="text-caption font-semibold text-[color:var(--aqt-fg)]" />
+              <PersonLabel display={game.display} className="text-caption font-semibold text-[color:var(--aqt-fg)]" />
             </span>
           ) : null}
           <HoverPrefetchLink

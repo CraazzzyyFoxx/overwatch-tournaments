@@ -71,6 +71,26 @@ class CatalogEntityRepository(BaseRepository[models.CatalogEntity]):
             )
         )
 
+    async def sole_competitive_map(self, session: AsyncSession, *, discipline: str) -> models.CatalogEntity | None:
+        """The discipline's only active competitive map, its mode eager-loaded; ``None`` when it has none or several.
+
+        A game with one competitive map has nothing to roll: every mix match is played on that map.
+        """
+        rows = (
+            await session.scalars(
+                sa.select(models.CatalogEntity)
+                .options(selectinload(models.CatalogEntity.parent))
+                .where(
+                    models.CatalogEntity.kind == "map",
+                    models.CatalogEntity.discipline == discipline,
+                    models.CatalogEntity.active.is_(True),
+                    ~models.CatalogEntity.attrs.contains({"in_competitive": False}),
+                )
+                .limit(2)
+            )
+        ).all()
+        return rows[0] if len(rows) == 1 else None
+
     async def names_and_images(
         self, session: AsyncSession, ids: typing.Iterable[int]
     ) -> Sequence[sa.Row[tuple[int, str, str | None]]]:

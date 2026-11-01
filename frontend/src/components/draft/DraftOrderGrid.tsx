@@ -4,13 +4,13 @@ import { ArrowRight, Hourglass, Shuffle, Star } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useMemo, useRef } from "react";
 
+import { PersonLabel } from "@/components/PlayerName";
 import { Eyebrow } from "@/components/ui/eyebrow";
 import { useDraftLayerPad } from "@/hooks/useDraftLayerPad";
 import { useSlotLabel } from "@/hooks/useSlotLabel";
 import { currentRound, orderGrid, pickState, picksAway, type RoundDirection } from "@/lib/draft/room-model";
 import { showsRoles, type RoleOntology } from "@/lib/roster/ontology";
 import { roleOf } from "@/lib/roster/role-ref";
-import { splitHandle } from "@/lib/player";
 import { cn } from "@/lib/utils";
 import type { DraftBoard } from "@/types/draft.types";
 
@@ -144,20 +144,23 @@ export function DraftOrderGrid({
               const state = pickState(pick);
               const player =
                 state === "done" && pick.picked_player_id != null ? playerById.get(pick.picked_player_id) : null;
-              const tag = player ? (player.identity?.handle ?? `#${player.id}`) : null;
               const away = picksAway(board, pick);
               const sub =
-                state === "done"
-                  ? tag != null
-                    ? splitHandle(tag).name
-                    : "—"
-                  : state === "current"
-                    ? t("teams.order.now")
-                    : state === "skipped"
-                      ? t("teams.order.skipped")
-                      : away != null
-                        ? t("teams.order.in", { n: away })
-                        : "—";
+                state === "done" ? (
+                  player ? (
+                    <PersonLabel display={player.display} tag="hidden" />
+                  ) : (
+                    "—"
+                  )
+                ) : state === "current" ? (
+                  t("teams.order.now")
+                ) : state === "skipped" ? (
+                  t("teams.order.skipped")
+                ) : away != null ? (
+                  t("teams.order.in", { n: away })
+                ) : (
+                  "—"
+                );
               const current = state === "current";
               const done = state === "done";
               return (
@@ -165,7 +168,7 @@ export function DraftOrderGrid({
                   key={pick.id}
                   title={[
                     t("teams.order.cellTitle", { round: pick.round_no, n: pick.overall_no }),
-                    tag,
+                    player?.display.name,
                     done && pick.target_role && showsRoles(ontology) ? slotLabel(roleOf(pick.target_role)) : null
                   ]
                     .filter(Boolean)

@@ -5,6 +5,7 @@ import type { RosterShape } from "@/lib/roster/shape";
 import type { TournamentLink } from "@/types/stream.types";
 import type { DraftFormatSettings } from "@/types/draft.types";
 import type { RoleRef } from "@/lib/roster/role-ref";
+import type { PersonDisplay } from "@/types/user.types";
 import type { Schema } from "@/types/api";
 
 // ─── Enums ──────────────────────────────────────────────────────────────────
@@ -399,7 +400,10 @@ export type PickBanMemberMode = "next" | "each" | "any";
 export interface PickBanMember {
   id: number;
   encounter_team_id: number;
+  /** The lineup snapshot's name: what the room's lineup seats are matched on. */
   name: string;
+  /** How the room shows the player: their name in the match's game; `null` falls back to `name`. */
+  display: PersonDisplay | null;
   /** The workspace member in this seat: ties it to the lineup seat and the viewer. */
   workspace_member_id?: number;
 }
@@ -562,7 +566,8 @@ export interface PickBanSubmission {
 /** An opponent roster player a target step bans "for". */
 export interface PickBanTarget {
   player_id: number;
-  name: string;
+  /** The name this game's surfaces show for the roster player; `name` (the roster snapshot) is not on the wire. */
+  display: PersonDisplay;
   role: RoleRef | null;
   is_substitution: boolean;
   /** Resolved against the tournament's grid, like `Player.division`; `null` when unranked. */

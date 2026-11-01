@@ -50,6 +50,8 @@ async def execute_global_stat_sum(
             facts.c.segment == 0,
             facts.c.entity_id.is_(None),
             facts.c.workspace_id == context.workspace_id,
+            # Mix stats live only inside the mix (mix encounters have no tournament).
+            facts.c.tournament_id.is_not(None),
         )
         .group_by(facts.c.player_id)
         .having(op_fn(sa.func.sum(facts.c.value), value))
@@ -199,6 +201,8 @@ async def execute_distinct_count(
     query = sa.select(*group_cols).where(
         facts.c.workspace_id == context.workspace_id,
         facts.c.segment == 0,
+        # Mix stats live only inside the mix (mix encounters have no tournament).
+        facts.c.tournament_id.is_not(None),
     )
     if field == "hero":
         query = query.where(

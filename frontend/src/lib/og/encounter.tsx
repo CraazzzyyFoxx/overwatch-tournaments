@@ -16,7 +16,7 @@ import {
 } from "@/lib/divisions/grid";
 import { duelSeats, isLobby } from "@/lib/encounter/seats";
 import { getEncounterState, isEncounterCompleted } from "@/lib/encounter/status";
-import { sortTeamPlayers, splitHandle } from "@/lib/player";
+import { sortTeamPlayers } from "@/lib/player";
 import encounterService from "@/services/encounter.service";
 import type { Encounter } from "@/types/encounter.types";
 import type { Player, Team } from "@/types/team.types";
@@ -151,8 +151,8 @@ function RosterRow({
           maxWidth: 240
         }}
       >
-        {/* The BattleTag discriminator is noise at this size. */}
-        {splitHandle(player.name).name}
+        {/* The tag is noise at this size. */}
+        {player.display.name}
       </div>
       {isCaptain ? (
         <div style={{ display: "flex", fontSize: 20, color: ACCENT, fontWeight: 700 }}>C</div>

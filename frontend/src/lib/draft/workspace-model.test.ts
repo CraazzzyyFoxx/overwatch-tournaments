@@ -15,8 +15,8 @@ import {
 } from "./workspace-model";
 
 const players = [
-  { id: 1, identity: { provider: "battlenet", handle: "Zeta#1" }, player_name: null, primary_role: { dimension: "player_role", role: "support" }, secondary_roles: [], effective_rank: 2700 },
-  { id: 2, identity: { provider: "battlenet", handle: "Alpha#2" }, player_name: null, primary_role: { dimension: "player_role", role: "tank" }, secondary_roles: [{ dimension: "player_role", role: "damage" }], effective_rank: 3100 }
+  { id: 1, identity: { provider: "battlenet", handle: "Zeta#1" }, display: { name: "Zeta", tag: "#1", canonical: null, snapshot: null }, primary_role: { dimension: "player_role", role: "support" }, secondary_roles: [], effective_rank: 2700 },
+  { id: 2, identity: { provider: "battlenet", handle: "Alpha#2" }, display: { name: "Alpha", tag: "#2", canonical: null, snapshot: null }, primary_role: { dimension: "player_role", role: "tank" }, secondary_roles: [{ dimension: "player_role", role: "damage" }], effective_rank: 3100 }
 ] as DraftPlayer[];
 
 const ROLES = ["tank", "damage", "support"];
@@ -99,7 +99,7 @@ describe("draft workspace model", () => {
 });
 
 const mkPlayer = (p: Partial<DraftPlayer>): DraftPlayer => ({
-  id: 1, session_id: 1, registration_id: 10, user_id: null, identity: { provider: "battlenet", handle: "Ana#1" }, player_name: null,
+  id: 1, session_id: 1, registration_id: 10, user_id: null, identity: { provider: "battlenet", handle: "Ana#1" }, display: { name: "Ana", tag: "#1", canonical: null, snapshot: null },
   primary_role: { dimension: "player_role", role: "support" }, is_flex: false, effective_rank: 3000,
   status: "available", is_captain: false, drafted_by_team_id: null,
   secondary_roles: [], role_ranks: {}, role_sources: {}, role_top_characters: {}, role_sub_roles: {}, notes: null,
@@ -108,7 +108,7 @@ const mkPlayer = (p: Partial<DraftPlayer>): DraftPlayer => ({
 
 describe("extended filterDraftPlayers search", () => {
   it("matches on sub_role", () => {
-    const players = [mkPlayer({ id: 1, identity: { provider: "battlenet", handle: "Zed" }, player_name: null, primary_role: { dimension: "player_role", role: "damage_hitscan", parent: "damage" } }), mkPlayer({ id: 2, identity: { provider: "battlenet", handle: "Boo" }, player_name: null, primary_role: { dimension: "player_role", role: "support_flex", parent: "support" } })];
+    const players = [mkPlayer({ id: 1, identity: { provider: "battlenet", handle: "Zed" }, display: { name: "Zed", tag: null, canonical: null, snapshot: null }, primary_role: { dimension: "player_role", role: "damage_hitscan", parent: "damage" } }), mkPlayer({ id: 2, identity: { provider: "battlenet", handle: "Boo" }, display: { name: "Boo", tag: null, canonical: null, snapshot: null }, primary_role: { dimension: "player_role", role: "support_flex", parent: "support" } })];
     const out = filterDraftPlayers(players, { role: "all", sort: "rank", query: "hitscan" });
     expect(out.map((p) => p.id)).toEqual([1]);
   });

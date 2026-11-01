@@ -113,10 +113,14 @@ def history_query():
             game_id,
             linked.c.revision,
             linked.c.observations,
+            models.CustomGame.id,
+            models.CustomGame.name,
         )
         .outerjoin(linked, linked.c.ingest_job_id == job.id)
         .outerjoin(models.Tournament, models.Tournament.id == tournament_id)
         .outerjoin(encounter, encounter.id == encounter_id)
+        # The owning mix of the same encounter the row reports (linked match first, hint otherwise).
+        .outerjoin(models.CustomGame, models.CustomGame.id == encounter.custom_game_id)
         .outerjoin(models.User, models.User.id == job.uploader_user_id)
     )
 
@@ -131,6 +135,8 @@ def _record_to_dict(
     game_id,
     revision=None,
     observations=None,
+    custom_game_id=None,
+    custom_game_name=None,
 ) -> dict:
     # Imported here: the ingest package imports this module's siblings.
     from src.services.ingest.jobs import decode_error
@@ -141,6 +147,8 @@ def _record_to_dict(
         "tournament_id": tournament_id,
         "tournament_name": tournament_name,
         "attached_encounter_id": encounter_id,
+        "custom_game_id": custom_game_id,
+        "custom_game_name": custom_game_name,
         "attached_encounter_game_id": game_id,
         "attached_encounter_name": encounter_name,
         "filename": record.filename,
@@ -355,11 +363,20 @@ async def record_read(session: AsyncSession, record_id: int) -> schemas.LogRecor
 async def _validate_attached_encounter(
     session: AsyncSession,
     *,
-    tournament_id: int,
+    tournament_id: int | None = None,
+    custom_game_id: int | None = None,
     encounter_id: int | None,
 ) -> models.Encounter | None:
+    """The tournament path (``tournament_id``) refuses a mix encounter; the mix path (``custom_game_id``) accepts only
+    that mix's own. Exactly one owner is given."""
     if encounter_id is None:
         return None
+
+    if custom_game_id is not None:
+        encounter = await EncounterRepository().get_any_owner(session, encounter_id)
+        if encounter is None or encounter.custom_game_id != custom_game_id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Encounter not found")
+        return encounter
 
     result = await session.execute(EncounterRepository().select().where(models.Encounter.id == encounter_id).limit(1))
     encounter = result.scalar_one_or_none()

@@ -204,9 +204,7 @@ function SeriesPlayerRow({
         )}
       >
         <PlayerName
-          player={player}
-          profileName={player.profile_name}
-          includeSpecialization={false}
+          display={player.display}
         />
       </TableCell>
       <TableCell className={CELL}>

@@ -165,6 +165,12 @@ const EncounterPage = async (props: {
   // other empty position is one line under the list, not a ghost row each.
   const listedSlots = slots.filter((slot) => playedSlots.includes(slot) || slot.isLive);
   const unplayedCount = slots.length - listedSlots.length;
+  // Every parsed map in order: each row's scoreboard dialog switches between them.
+  const series = slots.flatMap((slot) =>
+    slot.match == null
+      ? []
+      : [{ index: slot.index, matchId: slot.match.id, summary: slot.match, game: slot.game, score: slot.parsedScore }]
+  );
   const mapWins = countMapWins(encounter);
   const state = getEncounterState(encounter);
   const clockUnits = {
@@ -341,6 +347,7 @@ const EncounterPage = async (props: {
                     slot={slot}
                     names={names}
                     teams={encounter.teams}
+                    series={series}
                     clockUnits={clockUnits}
                   />
                 ))}

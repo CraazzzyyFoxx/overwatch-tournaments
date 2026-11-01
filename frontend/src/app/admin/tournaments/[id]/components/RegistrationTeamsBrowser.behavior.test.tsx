@@ -111,6 +111,7 @@ function team(overrides: Partial<RegistrationTeam> = {}): RegistrationTeam {
         registration_id: 11,
         display_name: "Nyx",
         primary_handle: "Nyx#2100",
+        display: { name: "Nyx", tag: null, canonical: "Nyx#2100", snapshot: null },
         slot_code: "tank",
         is_substitute: false,
         is_captain: true,
@@ -284,8 +285,18 @@ beforeEach(() => {
   // Only read once the place dialog opens.
   listFreeAgents.mockReset().mockResolvedValue({
     items: [
-      { registration_id: 41, primary_handle: "Ana#1111", roles: ["support"] },
-      { registration_id: 42, primary_handle: "Rein#2222", roles: ["tank"] }
+      {
+        registration_id: 41,
+        primary_handle: "Ana#1111",
+        display: { name: "Ana", tag: "#1111", canonical: "Ana#1111", snapshot: null },
+        roles: ["support"]
+      },
+      {
+        registration_id: 42,
+        primary_handle: "Rein#2222",
+        display: { name: "Rein", tag: "#2222", canonical: "Rein#2222", snapshot: null },
+        roles: ["tank"]
+      }
     ],
     total: 2
   });

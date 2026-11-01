@@ -43,6 +43,9 @@ class LogRecordRead(BaseModel):
     id: int
     tournament_id: int | None
     tournament_name: str | None
+    # The mix owning the linked match's encounter (else the hinted one); ``None`` for tournament jobs.
+    custom_game_id: int | None = None
+    custom_game_name: str | None = None
     attached_encounter_id: int | None
     attached_encounter_game_id: int | None
     attached_encounter_name: str | None

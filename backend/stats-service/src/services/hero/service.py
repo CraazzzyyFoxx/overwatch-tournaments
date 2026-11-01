@@ -10,6 +10,7 @@ from shared.repository import CatalogEntityRepository
 from shared.schemas.catalog import CatalogEntityRead
 from shared.schemas.role import RoleRef
 from shared.services.division_grid.access import load_division_grid_version_read_payloads
+from shared.services.person_display import load_person_displays
 from src import schemas
 
 from .queries import HeroQueries
@@ -51,6 +52,13 @@ class HeroService:
             workspace_id=workspace_id,
             grid=grid,
         )
+        displays = await load_person_displays(
+            session,
+            {row.user_id for row in rows},
+            discipline=discipline,
+            workspace_id=workspace_id,
+            snapshots={row.user_id: row.player_name for row in rows},
+        )
         # Every grid the page's divisions are numbers on, once each (cached reads, one query for the misses); none in
         # the all-workspaces read, whose divisions are on the in-code native ladder.
         grid_payloads = await load_division_grid_version_read_payloads(
@@ -69,8 +77,7 @@ class HeroService:
                 schemas.CharacterLeaderboardEntry(
                     rank=row.rank,
                     user_id=row.user_id,
-                    username=row.username,
-                    player_name=row.player_name,
+                    display=displays[row.user_id],
                     role=RoleRef.of(discipline_spec(row.discipline).rated_dimension.code, row.role, row.sub_role),
                     div=row.div,
                     division_grid_version_id=row.division_grid_version_id,

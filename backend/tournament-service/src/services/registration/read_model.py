@@ -42,6 +42,7 @@ from src.schemas.registration import (
 from src.services.admission.requirements.open_profile import KEY as OPEN_PROFILE_KEY
 from src.services.admission.requirements.subscription import KEY as SUBSCRIPTION_KEY
 from src.services.admission.types import AdmissionEvaluation
+from src.services.person_names import registration_display, registration_person_loader
 from src.services.registration.answers import answer_service
 
 
@@ -106,6 +107,7 @@ def registration_read_loaders() -> tuple[Any, ...]:
     """
     return (
         *registration_load_options(),
+        registration_person_loader(),
         selectinload(models.Registration.registration_team),
         selectinload(models.Registration.tournament),
     )
@@ -312,6 +314,7 @@ def _reg_to_read(
     )
 
     answers = answer_service.answers_of(reg)
+    primary_handle = identity.handle if (identity := reg.primary_game_identity(provider=provider)) else None
     if public_keys is not None:
         answers = {key: value for key, value in answers.items() if key in public_keys}
 
@@ -321,7 +324,8 @@ def _reg_to_read(
         workspace_id=workspace_id,
         # Derived from the workspace_member anchor (callers eager-load it; see helper).
         user_id=_registration_player_id(reg),
-        primary_handle=(identity.handle if (identity := reg.primary_game_identity(provider=provider)) else None),
+        primary_handle=primary_handle,
+        display=registration_display(reg, provider=provider, workspace_id=workspace_id, handle=primary_handle),
         answers=answers,
         roles=roles,
         form_version_id=reg.form_version_id,

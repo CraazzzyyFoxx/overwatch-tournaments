@@ -23,8 +23,7 @@ type MemberOption = { authUserId: number; label: string };
 /** A roster member who has signed in at least once, so has an account to grant. */
 type LinkedMember = RosterMember & { auth_user_id: number };
 
-const memberLabel = (member: LinkedMember) =>
-  member.display_name || member.identity?.handle || `#${member.auth_user_id}`;
+const memberLabel = (member: LinkedMember) => member.display.name;
 
 interface PickupAccessDialogProps {
   open: boolean;

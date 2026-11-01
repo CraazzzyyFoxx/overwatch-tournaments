@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl";
 
-import { HandleLabel } from "@/components/HandleLabel";
+import { PersonLabel } from "@/components/PlayerName";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -57,11 +57,7 @@ export default function TopChart({
                 className="grid grid-cols-[26px_minmax(0,1fr)_64px] items-center gap-x-3 gap-y-1 py-1 text-caption md:grid-cols-[26px_minmax(0,11rem)_minmax(0,1fr)_64px_72px]"
               >
                 <RankBadge rank={rank} />
-                <HandleLabel
-                  handle={entry.username}
-                  title={entry.username}
-                  className="font-semibold text-[color:var(--aqt-fg)]"
-                />
+                <PersonLabel display={entry.display} tag="hidden" className="font-semibold text-[color:var(--aqt-fg)]" />
                 <span
                   aria-hidden
                   className="relative col-span-2 col-start-2 row-start-2 h-1.5 rounded-full md:col-span-1 md:col-start-auto md:row-start-auto md:h-3.5"

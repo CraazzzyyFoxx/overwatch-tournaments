@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { LayoutGrid, List } from "lucide-react";
 import { useTranslations } from "next-intl";
 
+import { PersonLabel } from "@/components/PlayerName";
 import { TournamentTeamCard } from "@/components/TournamentTeamCard";
 import { FilterChip } from "@/components/ui/filter-chip";
 import { Eyebrow } from "@/components/ui/eyebrow";
@@ -33,6 +34,7 @@ import {
   compareTeams,
   MARK_CLASS,
   matchesSearch,
+  playerMatches,
   TEAMS_SORTS,
   TEAMS_VIEWS,
   type TeamsSortBy
@@ -211,7 +213,7 @@ const TournamentTeamsView = ({ tournament, slug }: { tournament: Tournament; slu
                 const matched =
                   needle === ""
                     ? []
-                    : team.players.filter((player) => player.name.toLowerCase().includes(needle));
+                    : team.players.filter((player) => playerMatches(player, needle));
                 return (
                   <div key={team.id} className="space-y-1">
                     {/* Wireframe §5 ⑤ keeps this card byte-for-byte; the matched
@@ -225,7 +227,9 @@ const TournamentTeamsView = ({ tournament, slug }: { tournament: Tournament; slu
                         {matched.map((player, index) => (
                           <span key={player.id}>
                             {index > 0 ? ", " : null}
-                            <mark className={MARK_CLASS}>{player.name}</mark>
+                            <mark className={MARK_CLASS}>
+                              <PersonLabel display={player.display} className="inline" />
+                            </mark>
                           </span>
                         ))}
                       </p>

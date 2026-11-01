@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 
 import { ICON_BUTTON_CLASS } from "@/components/balancer/balancer-page-helpers";
-import { HandleLabel } from "@/components/HandleLabel";
+import { PersonLabel } from "@/components/PlayerName";
 import {
   HandleContextMenuItems,
   HandleCopyButton,
@@ -62,10 +62,6 @@ type WorkspacePlayersSidebarProps = {
   onToggleCollapsed?: () => void;
 };
 
-function memberLabel(member: RosterMember): string {
-  return member.display_name || member.identity?.handle || `#${member.member_id}`;
-}
-
 type RosterMemberRowProps = {
   member: RosterMember;
   /** The owner game's role dictionary (names, glyphs, tints); `null` while it loads. */
@@ -102,7 +98,7 @@ type RosterMemberRowProps = {
 const RosterMemberRow = memo(function RosterMemberRow({ member, ontology, grid, onOpen }: RosterMemberRowProps) {
   const t = useTranslations("balancerTool.pool");
   const slotLabel = useSlotLabel(ontology);
-  const label = memberLabel(member);
+  const label = member.display.name;
   const effective = member.ranks;
 
   // The owner game's rated roles, in declared order, that the member has a rank for.
@@ -157,7 +153,7 @@ const RosterMemberRow = memo(function RosterMemberRow({ member, ontology, grid, 
                   title={t("edit", { name: label })}
                   className="min-w-0 justify-start"
                 >
-                  <HandleLabel handle={label} className="text-caption font-medium text-[color:var(--aqt-fg)]" />
+                  <PersonLabel display={member.display} showCanonical className="text-caption font-medium text-[color:var(--aqt-fg)]" />
                 </Button>
               </div>
 

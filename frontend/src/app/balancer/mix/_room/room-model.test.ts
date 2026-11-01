@@ -16,7 +16,7 @@ function player(id: number, overrides: Partial<DraftPlayer> = {}): DraftPlayer {
     user_id: null,
     workspace_member_id: 100 + id,
     identity: null,
-    player_name: `p${id}`,
+    display: { name: `p${id}`, tag: null, canonical: null, snapshot: null },
     primary_role: { dimension: DIM, role: "damage" },
     is_flex: false,
     effective_rank: 1000 + id,
@@ -64,6 +64,7 @@ const variant = (seats: [string, string][][]): PickupVariant =>
       seats: team.map(([uuid, name]) => ({
         uuid,
         name,
+        display: { name, tag: null, canonical: null, snapshot: null },
         role: "damage",
         rating: 1000,
         openRating: null,

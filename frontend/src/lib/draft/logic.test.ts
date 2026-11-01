@@ -37,7 +37,7 @@ function player(id: number): DraftPlayer {
     session_id: 1,
     registration_id: id * 10,
     user_id: id,
-    identity: { provider: "battlenet", handle: `P${id}` }, player_name: null,
+    identity: { provider: "battlenet", handle: `P${id}` }, display: { name: `P${id}`, tag: null, canonical: null, snapshot: null },
     primary_role: { dimension: "player_role", role: "damage" },
     is_flex: false,
     effective_rank: 3000,

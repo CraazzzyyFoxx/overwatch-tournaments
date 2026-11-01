@@ -5,8 +5,10 @@ import type { CharacterLeaderboardEntry } from "@/types/statistics.types";
 import { beatsShare, rankEntries, searchEntries, shareOfBest } from "./board";
 import { COL } from "./stat-columns";
 
-const row = (username: string, games: number, elims: number, deaths: number): CharacterLeaderboardEntry => ({
-  rank: 0, user_id: username.length * 100 + games, username, player_name: username, role: null, div: 1, team: null,
+const row = (handle: string, games: number, elims: number, deaths: number): CharacterLeaderboardEntry => ({
+  rank: 0, user_id: handle.length * 100 + games,
+  display: { name: handle.slice(0, handle.lastIndexOf("#")), tag: handle.slice(handle.lastIndexOf("#")), canonical: handle, snapshot: null },
+  role: null, div: 1, team: null,
   team_id: null, games_played: games, playtime_seconds: games * 600, per10_eliminations: elims, per10_healing: 0,
   per10_deaths: deaths, per10_damage: 0, per10_final_blows: 0, per10_damage_blocked: 0, per10_solo_kills: 0,
   per10_obj_kills: 0, per10_defensive_assists: 0, per10_offensive_assists: 0, per10_all_damage: 0,
@@ -24,21 +26,23 @@ const ROWS = [
 describe("the hero board", () => {
   it("leaves players under the sample floor off, then ranks the rest by the column", () => {
     const board = rankEntries(ROWS, 5, COL.per10_eliminations, "desc");
-    expect(board.map(({ entry, rank }) => [rank, entry.username])).toEqual([
-      [1, "Solid#3"],
-      [2, "Steady#2"],
-      [3, "Grinder#4"]
+    expect(board.map(({ entry, rank }) => [rank, entry.display.name])).toEqual([
+      [1, "Solid"],
+      [2, "Steady"],
+      [3, "Grinder"]
     ]);
   });
 
   it("ranks a lower-is-better column from its lowest value", () => {
     const board = rankEntries(ROWS, 1, COL.per10_deaths, "asc");
-    expect(board.map(({ entry }) => entry.username)).toEqual(["Grinder#4", "Steady#2", "Solid#3", "Lucky#1"]);
+    expect(board.map(({ entry }) => entry.display.name)).toEqual(["Grinder", "Steady", "Solid", "Lucky"]);
   });
 
   it("keeps each match's rank on the whole board when a search narrows it", () => {
     const board = rankEntries(ROWS, 5, COL.per10_eliminations, "desc");
-    expect(searchEntries(board, "  GRIND ").map(({ entry, rank }) => [rank, entry.username])).toEqual([[3, "Grinder#4"]]);
+    expect(searchEntries(board, "  GRIND ").map(({ entry, rank }) => [rank, entry.display.name])).toEqual([[3, "Grinder"]]);
+    // The canonical name finds a player their game names otherwise.
+    expect(searchEntries(board, "solid#3").map(({ entry }) => entry.display.name)).toEqual(["Solid"]);
     expect(searchEntries(board, "")).toBe(board);
   });
 });

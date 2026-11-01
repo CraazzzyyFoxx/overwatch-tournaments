@@ -147,7 +147,8 @@ class EncounterRead(BaseRead):
     scoring_preset: Literal["wins", "points"] = "wins"
     round: int
     best_of: int = 3
-    tournament_id: int
+    #: ``None`` for a mix's round: its owner is the mix, not a tournament.
+    tournament_id: int | None = None
     stage_id: int | None = None
     stage_item_id: int | None = None
     challonge_id: int | None

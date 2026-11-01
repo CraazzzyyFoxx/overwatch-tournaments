@@ -6,7 +6,7 @@ import { Ban, Crown, WifiOff } from "lucide-react";
 
 import { AWAY_CHIP_CLASS, teamAccent } from "@/app/balancer/mix/pickup-chrome";
 import type { MixOwner } from "@/app/balancer/mix/pickup-lineup";
-import { HandleLabel } from "@/components/HandleLabel";
+import { PersonLabel } from "@/components/PlayerName";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { RankCrest } from "@/components/RankCrest";
 import type { PickBanItemLike } from "@/components/pick-ban/PickBanGrid";
@@ -203,10 +203,10 @@ function SeatLine({
         </IconTooltip>
       ) : null}
       <RankCrest rank={seat.rank} grid={owner.grid} size={wide ? 28 : 22} className="shrink-0" />
-      <HandleLabel
-        handle={seat.name}
+      <PersonLabel
+        display={seat.display}
+        tag="hidden"
         className="min-w-0 flex-1 truncate text-caption font-semibold text-[color:var(--aqt-fg)] lg:text-body"
-        tagClassName="text-label"
       />
       {seat.isCaptain ? (
         <IconTooltip label={tRoom("captain")} className="flex shrink-0 items-center">

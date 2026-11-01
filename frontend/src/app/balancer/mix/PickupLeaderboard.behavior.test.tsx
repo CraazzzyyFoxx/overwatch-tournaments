@@ -19,7 +19,7 @@ function player(index: number, overrides: Partial<RatedPlayer> = {}): RatedPlaye
   return {
     key: `p:${index}`,
     playerId: index,
-    name: `Player${index}#${1000 + index}`,
+    display: { name: `Player${index}`, tag: `#${1000 + index}`, canonical: `Player${index}#${1000 + index}`, snapshot: null },
     games: 20,
     wins: 40 - index,
     losses: index - 20,

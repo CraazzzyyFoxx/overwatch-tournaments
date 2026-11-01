@@ -68,14 +68,17 @@ function lobby(overrides: Partial<MatchWithStats> = {}): MatchWithStats {
     result: null,
     team_facts: id === 3 ? {} : { score: id }
   });
-  const member = (team: number, id: number, player: number, handle: string) => ({
-    encounter_team_id: team,
-    workspace_member_id: id,
-    player_id: player,
-    player_name: `Canonical ${player}`,
-    handle_snapshot: handle,
-    observed_role: null
-  });
+  const member = (team: number, id: number, player: number, handle: string) => {
+    const at = handle.lastIndexOf("#");
+    return {
+      encounter_team_id: team,
+      workspace_member_id: id,
+      player_id: player,
+      display: { name: handle.slice(0, at), tag: handle.slice(at), canonical: `Canonical ${player}`, snapshot: null },
+      handle_snapshot: handle,
+      observed_role: null
+    };
+  };
   return {
     id: 5,
     created_at: "2026-01-01T00:00:00Z",
@@ -113,11 +116,11 @@ describe("buildMatchTable", () => {
   it("lists every participant and member (event-only included) with exactly the member-grain whole-match facts", () => {
     const table = buildMatchTable(lobby(), DEFS, MEMBER_TOTALS);
     expect(
-      table.sections.map((section) => [section.name, section.rows.map((row) => row.name)])
+      table.sections.map((section) => [section.name, section.rows.map((row) => row.display.name)])
     ).toEqual([
-      ["T1", ["Ann#1"]],
-      ["T2", ["Bob#2"]],
-      ["T3", ["Cy#3", "Event only#4"]]
+      ["T1", ["Ann"]],
+      ["T2", ["Bob"]],
+      ["T3", ["Cy", "Event only"]]
     ]);
     expect(table.sections[0].rows[0].values).toEqual({ kills: 7 });
     expect(table.sections[1].rows[0].values).toEqual({ kills: 0 });
@@ -128,7 +131,7 @@ describe("buildMatchTable", () => {
 
   it("carries the canonical player name apart from the observed handle", () => {
     const row = buildMatchTable(lobby(), DEFS, MEMBER_TOTALS).sections[0].rows[0];
-    expect([row.name, row.playerName, row.playerId]).toEqual(["Ann#1", "Canonical 1", 1]);
+    expect([row.display.name, row.display.canonical, row.playerId]).toEqual(["Ann", "Canonical 1", 1]);
   });
 
   it("columns are the declared stats someone observed, in declared order, retired ones included", () => {
@@ -152,8 +155,8 @@ describe("buildMatchTable", () => {
     const match = lobby();
     const ashe = buildMatchTable(match, DEFS, { segment: 0, entity: ASHE.id });
     expect(
-      ashe.sections.map((section) => section.rows.map((row) => [row.name, row.values]))
-    ).toEqual([[["Ann#1", { kills: 99 }]], [["Bob#2", { kills: 8 }]], []]);
+      ashe.sections.map((section) => section.rows.map((row) => [row.display.name, row.values]))
+    ).toEqual([[["Ann", { kills: 99 }]], [["Bob", { kills: 8 }]], []]);
     const brand = buildMatchTable(match, DEFS, { segment: 0, entity: BRAND.id });
     expect(brand.sections[0].rows[0].values).toEqual({ kills: 5 });
     // The totals still read 7 and 0: neither character's rows were added.
@@ -229,11 +232,11 @@ describe("buildSeriesTable", () => {
   it("keeps participations apart by encounter_team_id and members that observed nothing as rows", () => {
     const table = buildSeriesTable([at(1, null, "2026-01-01T00:00:00Z", 1, 1)], DEFS);
     expect(table.sections.map((section) => section.encounterTeamId)).toEqual([1, 2, 3]);
-    expect(table.sections[2].rows.map((row) => [row.name, row.values])).toEqual([
-      ["Cy#3", {}],
-      ["Event only#4", {}]
+    expect(table.sections[2].rows.map((row) => [row.display.name, row.values])).toEqual([
+      ["Cy", {}],
+      ["Event only", {}]
     ]);
-    expect(table.sections[0].rows[0].playerName).toBe("Canonical 1");
+    expect(table.sections[0].rows[0].display.canonical).toBe("Canonical 1");
   });
 
   it("folds one character's rows across the maps without the totals, counting only maps that have them", () => {
@@ -252,8 +255,8 @@ describe("buildSeriesTable", () => {
     };
     const matches = [withAshe(1, 4, 40), withAshe(2, 6, 60), noAshe as MatchWithStats];
     const ashe = buildSeriesTable(matches, DEFS, ASHE.id).sections[0].rows;
-    expect(ashe.map((row) => [row.name, row.values, row.mapsPlayed])).toEqual([
-      ["Ann#1", { kills: 10 }, 2]
+    expect(ashe.map((row) => [row.display.name, row.values, row.mapsPlayed])).toEqual([
+      ["Ann", { kills: 10 }, 2]
     ]);
     expect(buildSeriesTable(matches, DEFS).sections[0].rows[0].values).toEqual({ kills: 150 });
   });

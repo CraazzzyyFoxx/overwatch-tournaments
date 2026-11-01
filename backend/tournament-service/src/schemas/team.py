@@ -4,6 +4,7 @@ from pydantic import UUID4, BaseModel, Field
 
 from shared.core import pagination
 from shared.schemas.discipline_filter import InstalledDisciplineFilter
+from shared.schemas.identity import PersonDisplayRead
 from shared.schemas.role import RoleRef
 from src.schemas import BaseRead
 from src.schemas.tournament import TournamentRead
@@ -38,6 +39,8 @@ class BalancerTeam(BaseModel):
 
 class PlayerRead(BaseRead):
     name: str
+    #: The name this game's surfaces show (``name`` is the roster snapshot). ``canonical`` builds the profile link.
+    display: PersonDisplayRead
     #: ``None`` = rank not specified (e.g. a 1v1 duel); then there is no division either.
     rank: int | None
     division: int | None

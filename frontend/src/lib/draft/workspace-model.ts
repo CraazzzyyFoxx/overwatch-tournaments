@@ -64,7 +64,7 @@ export function filterDraftPlayers(
   const matches = players.filter((player) => {
     const roles = playerRoles(player);
     const haystack = [
-      player.identity?.handle ?? `#${player.id}`,
+      `${player.display.name}${player.display.tag ?? ""}`,
       subRoleSlugOf(player.primary_role) ?? "",
       ...Object.values(player.role_sub_roles ?? {}),
       ...roles.flatMap((role) => (roleName ? [role, roleName(role)] : [role])),
@@ -80,7 +80,7 @@ export function filterDraftPlayers(
   const role = filters.role;
   return matches.sort((left, right) => {
     if (filters.sort === "name") {
-      return (left.identity?.handle ?? "").localeCompare(right.identity?.handle ?? "");
+      return left.display.name.localeCompare(right.display.name);
     }
     // Filtered to one role, the rank ON that role is the one being compared.
     const rankOf = (player: DraftPlayer) =>

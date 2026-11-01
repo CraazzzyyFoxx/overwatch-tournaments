@@ -37,7 +37,13 @@ def _round(scores: tuple[float, float]) -> SimpleNamespace:
 
 
 def test_a_decided_round_names_its_winning_slot() -> None:
-    assert custom._dump_round(_round((1.0, 0.0)), {3: ("Busan", "/busan.png")}, [{"slot": 1, "item_id": 40}], []) == {
+    assert custom._dump_round(
+        _round((1.0, 0.0)),
+        {3: ("Busan", "/busan.png")},
+        [{"slot": 1, "item_id": 40}],
+        [],
+        (None, "processing", "searching"),
+    ) == {
         "id": 501,
         "lobby_index": 1,
         "teams": [{"slot": 1, "name": "Alpha", "score": 1}, {"slot": 2, "name": "Bravo", "score": 0}],
@@ -50,8 +56,18 @@ def test_a_decided_round_names_its_winning_slot() -> None:
         "points_per_win_applied": 25,
         "recorded_by": 70,
         "recorded_at": AT.isoformat(),
+        "stats_match_id": None,
+        "log_state": "processing",
+        "match_search": "searching",
     }
 
 
 def test_a_draw_has_no_winning_slot() -> None:
-    assert custom._dump_round(_round((0.0, 0.0)), {}, [], [])["winner_slot"] is None
+    assert custom._dump_round(_round((0.0, 0.0)), {}, [], [], (None, None, None))["winner_slot"] is None
+
+
+def test_a_round_carries_its_match_log() -> None:
+    row = custom._dump_round(_round((1.0, 0.0)), {}, [], [], (9, None, None))
+    assert (row["stats_match_id"], row["log_state"]) == (9, None)
+    row = custom._dump_round(_round((1.0, 0.0)), {}, [], [], (None, "failed", "not_found"))
+    assert (row["stats_match_id"], row["log_state"], row["match_search"]) == (None, "failed", "not_found")

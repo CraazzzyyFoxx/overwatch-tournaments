@@ -283,14 +283,29 @@ def test_members_are_this_matchs_observed_players_and_never_another_workspaces(s
             await _uncached(encounters.get_match_with_stats, session, UNBOUND, [], workspace_id=ids["workspace"])
         ).statistics
         # Event-only members stay; the other workspace's member of the same global player is not a participant.
-        # ``player_name`` is the canonical ``players.user.name``, never the observation's handle.
+        # ``display.canonical`` is the canonical ``players.user.name``, never the observation's handle; the shown name
+        # is the observed handle here (no workspace name, no visible game account).
         assert [
-            (m.encounter_team_id, m.workspace_member_id, m.player_id, m.player_name, m.handle_snapshot)
+            (
+                m.encounter_team_id,
+                m.workspace_member_id,
+                m.player_id,
+                m.display.canonical,
+                m.display.name,
+                m.handle_snapshot,
+            )
             for m in statistics.members
         ] == [
-            (SEATS[0], ids["member"], ids["player"], "P4 Alpha", "Alpha#1"),
-            (SEATS[1], ids["member_away"], ids["player_away"], "P4 Bravo", "Bravo#1"),
-            (SEATS[2], ids["member_event_only"], ids["player_event_only"], "P4 Substitute", "Substitute#1"),
+            (SEATS[0], ids["member"], ids["player"], "P4 Alpha", "Alpha", "Alpha#1"),
+            (SEATS[1], ids["member_away"], ids["player_away"], "P4 Bravo", "Bravo", "Bravo#1"),
+            (
+                SEATS[2],
+                ids["member_event_only"],
+                ids["player_event_only"],
+                "P4 Substitute",
+                "Substitute",
+                "Substitute#1",
+            ),
         ]
         assert all(fact.workspace_member_id != ids["member_other"] for fact in statistics.facts)
         assert 999999.0 not in {fact.value for fact in statistics.facts}

@@ -3,6 +3,7 @@ import typing
 from collections import Counter
 from statistics import mean
 
+import sqlalchemy as sa
 from cashews import cache
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,6 +13,7 @@ from shared.core.errors import BaseAPIException
 from shared.disciplines import DISCIPLINES
 from shared.division_grid import DivisionGrid
 from shared.repository import TournamentRepository
+from shared.schemas.identity import PersonDisplayRead
 from shared.schemas.role import RoleRef
 from shared.services.cache_generations import versioned
 from shared.services.division_grid.access import (
@@ -28,6 +30,7 @@ from shared.services.division_grid.resolution import (
     resolve_tournament_division,
     resolve_workspace_division,
 )
+from shared.services.person_display import load_person_displays
 from shared.services.realtime import Resource, resource_generation
 from shared.services.user_cache import COMPARE_GENERATIONS, user_generations
 from src import schemas
@@ -1551,7 +1554,7 @@ class UserService(DisciplineQueries):
     @versioned(
         generations=user_generations("{id}"),
         ttl=config.settings.users_cache_ttl,
-        key="backend:user_tournament_encounters:v8:{id}:{self.discipline}:{tournament_id}",
+        key="backend:user_tournament_encounters:v9:{id}:{self.discipline}:{tournament_id}",
     )
     async def get_tournament_encounters(
         self, session: AsyncSession, id: int, tournament_id: int
@@ -1702,27 +1705,19 @@ class UserService(DisciplineQueries):
             stats=stats,
         )
 
-    async def get_tournament_leaderboard(
-        self,
-        session: AsyncSession,
-        tournament_id: int,
-        stat: enums.LogStatsName,
-    ) -> schemas.LobbyLeaderboard:
-        """Per-stat lobby leaderboard: every player in a tournament ranked by one stat.
+    async def _tournament_board(
+        self, session: AsyncSession, tournament_id: int, stat: enums.LogStatsName
+    ) -> typing.Sequence[typing.Any]:
+        """The ranked ``(user_id, name, value, rank)`` rows of one stat's lobby board; 400 for an unranked stat.
 
-        Exposes the full ranked population that backs a single user's
-        ``UserTournamentWithStats.stats[stat].{rank,total}`` on the tournament-stats
-        page. For every stat except ``ImpactRank`` it reuses the exact ranking
+        For every stat except ``ImpactRank`` it reuses the exact ranking
         scheme (``statistics_service.get_tournament_stat_leaderboard``, a
         generalization of ``get_tournament_avg_match_stat_for_user_bulk``) — same
-        AVG + dense_rank window and same inverse-stat direction handling — so an
-        entry's rank/value here matches that user's row. ``ImpactRank`` is the MVP
+        AVG + dense_rank window and same inverse-stat direction handling — so a
+        row's rank/value matches that user's. ``ImpactRank`` is the MVP
         placement stat, ranked per match first (see
         ``get_tournament_mvp_stat_leaderboard`` / ``get_tournament_mvp_stat_for_user``),
         so it routes to its own query instead.
-
-        ``stat`` must be one of the tournament-stats feature's ranked stats
-        (``tournament_stats``); any other stat raises 400.
         """
         if stat not in tournament_stats:
             raise errors.ApiHTTPException(
@@ -1736,14 +1731,57 @@ class UserService(DisciplineQueries):
             )
 
         if stat == enums.LogStatsName.ImpactRank:
-            rows = await self.statistics_queries.get_tournament_mvp_stat_leaderboard(session, tournament_id)
-        else:
-            rows = await self.statistics_queries.get_tournament_stat_leaderboard(session, tournament_id, stat)
+            return await self.statistics_queries.get_tournament_mvp_stat_leaderboard(session, tournament_id)
+        return await self.statistics_queries.get_tournament_stat_leaderboard(session, tournament_id, stat)
+
+    async def get_tournament_leaderboard(
+        self,
+        session: AsyncSession,
+        tournament_id: int,
+        stat: enums.LogStatsName,
+    ) -> schemas.LobbyLeaderboard:
+        """Per-stat lobby leaderboard: every player in a tournament ranked by one stat, named as the tournament's
+        game names them (``_tournament_displays``).
+
+        Exposes the full ranked population that backs a single user's
+        ``UserTournamentWithStats.stats[stat].{rank,total}`` on the tournament-stats
+        page.
+
+        ``stat`` must be one of the tournament-stats feature's ranked stats
+        (``tournament_stats``); any other stat raises 400.
+        """
+        rows = await self._tournament_board(session, tournament_id, stat)
+        displays = await self._tournament_displays(session, tournament_id, [row.user_id for row in rows])
         entries = [
-            schemas.LobbyLeaderboardEntry(rank=row.rank, player_id=row.user_id, name=row.name, value=row.value)
+            schemas.LobbyLeaderboardEntry(
+                rank=row.rank, player_id=row.user_id, display=displays[row.user_id], value=row.value
+            )
             for row in rows
         ]
         return schemas.LobbyLeaderboard(stat=stat, total_players=len(entries), entries=entries)
+
+    async def _tournament_displays(
+        self, session: AsyncSession, tournament_id: int, user_ids: typing.Iterable[int]
+    ) -> dict[int, PersonDisplayRead]:
+        """How each player is named on this tournament's surfaces: the workspace's name, the game handle the
+        workspace may show, the name the tournament's roster holds (newest row), then the canonical name."""
+        workspace_id = await session.scalar(
+            sa.select(models.Tournament.workspace_id).where(models.Tournament.id == tournament_id)
+        )
+        roster = models.Player
+        snapshots = dict(
+            (
+                await session.execute(
+                    sa.select(models.WorkspaceMember.player_id, roster.name)
+                    .join(models.WorkspaceMember, models.WorkspaceMember.id == roster.workspace_member_id)
+                    .where(roster.tournament_id == tournament_id)
+                    .order_by(roster.id)
+                )
+            ).all()
+        )
+        return await load_person_displays(
+            session, user_ids, discipline=self.discipline, workspace_id=workspace_id, snapshots=snapshots
+        )
 
     @versioned(
         generations=_TOURNAMENT_STATS_GENERATIONS,
@@ -1758,11 +1796,11 @@ class UserService(DisciplineQueries):
         players: dict[int, dict[str, schemas.TournamentPlayerStat]] = {}
         total = 0
         for stat in tournament_player_stats:
-            board = await self.get_tournament_leaderboard(session, tournament_id, stat)
-            total = max(total, board.total_players)
-            for entry in board.entries:
-                players.setdefault(entry.player_id, {})[stat.value] = schemas.TournamentPlayerStat(
-                    value=entry.value, rank=entry.rank
+            board = await self._tournament_board(session, tournament_id, stat)
+            total = max(total, len(board))
+            for row in board:
+                players.setdefault(row.user_id, {})[stat.value] = schemas.TournamentPlayerStat(
+                    value=row.value, rank=row.rank
                 )
         return schemas.TournamentPlayerStats(
             total_players=total,
@@ -1798,7 +1836,7 @@ class UserService(DisciplineQueries):
     @versioned(
         generations=user_generations("{id}"),
         ttl=config.settings.users_cache_ttl,
-        key="backend:user_characters:v2:{id}:{self.discipline}:{workspace_id}:{tournament_id}:{stats_key}:{params.page}:{params.per_page}",
+        key="backend:user_characters:v3:{id}:{self.discipline}:{workspace_id}:{tournament_id}:{stats_key}:{params.page}:{params.per_page}",
         lock=True,
     )
     async def _get_heroes_cached(
@@ -1825,6 +1863,10 @@ class UserService(DisciplineQueries):
         )
         all_stats = await self.profile.get_statistics_by_heroes_all_values(session, stats_filter)
         payload: list[schemas.CharacterWithUserStats] = []
+        own_display = (
+            await load_person_displays(session, [user.id], discipline=self.discipline, workspace_id=workspace_id)
+        )[user.id]
+        record_holders = await self._record_holder_displays(session, {meta["username"] for *_, meta in all_stats})
 
         stats_by_hero: dict[int, dict[enums.LogStatsName, schemas.CharacterStat]] = {}
         cache_hero: dict[int, schemas.CatalogEntityRead] = {}
@@ -1845,7 +1887,7 @@ class UserService(DisciplineQueries):
                     value=round(value_best, 2),
                     map_image_path=best_meta["map_image_path"],
                     tournament_name=best_meta["tournament_name"],
-                    player_name=user.name,
+                    display=own_display,
                 ),
                 avg_10=round(value_avg_10, 2),
                 best_all=None,
@@ -1862,7 +1904,8 @@ class UserService(DisciplineQueries):
                     value=round(value_best, 2),
                     map_image_path=best_meta["map_image_path"],
                     tournament_name=best_meta["tournament_name"],
-                    player_name=best_meta["username"],
+                    display=record_holders.get(best_meta["username"])
+                    or PersonDisplayRead.build(canonical=best_meta["username"]),
                 )
                 stats_by_hero[hero_id][name].avg_10_all = round(value_avg_10, 2)
 
@@ -1917,6 +1960,19 @@ class UserService(DisciplineQueries):
             results=params.paginate_data(payload),
         )
 
+    async def _record_holder_displays(self, session: AsyncSession, names: set[str]) -> dict[str, PersonDisplayRead]:
+        """The discipline-wide record holders (``stats.mv_entity_global_stats`` names them by canonical name) as
+        every workspace may see them: global handle visibility only, no workspace override."""
+        if not names:
+            return {}
+        ids = dict(
+            (
+                await session.execute(sa.select(models.User.name, models.User.id).where(models.User.name.in_(names)))
+            ).all()
+        )
+        displays = await load_person_displays(session, ids.values(), discipline=self.discipline, workspace_id=None)
+        return {name: displays[user_id] for name, user_id in ids.items()}
+
     @cache(
         ttl=config.settings.users_cache_ttl,
         key="backend:hero_win_rates_all:{self.discipline}",
@@ -1970,7 +2026,7 @@ class UserService(DisciplineQueries):
         generations=user_generations("{user_id}"),
         ttl=config.settings.users_cache_ttl,
         key=(
-            "backend:user_encounters:v8:{user_id}:{self._discipline}:{workspace_id}:{params.page}:{params.per_page}:"
+            "backend:user_encounters:v9:{user_id}:{self._discipline}:{workspace_id}:{params.page}:{params.per_page}:"
             "{params.sort}:{params.order}:{params.entities}:{result_filter}:{stage}:{mvp1}:{has_logs}:{opponent}"
         ),
         lock=True,

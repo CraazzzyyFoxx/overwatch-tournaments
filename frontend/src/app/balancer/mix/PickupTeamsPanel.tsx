@@ -40,6 +40,7 @@ import type { CatalogEntityRead } from "@/types/catalog.types";
 import { Spinner } from "@/components/ui/spinner";
 
 import { MatchHistoryList } from "./_components/MatchHistoryList";
+import type { MixLogUpload } from "./useMixLogUpload";
 import { NextMapStrip } from "./_components/NextMapStrip";
 import { LobbyCodeStrip } from "./_components/LobbyCodeStrip";
 import { StartMatchButton } from "./_components/StartMatchButton";
@@ -107,6 +108,8 @@ type PickupTeamsPanelProps = {
   undoingMatchId?: number | null;
   /** Omitted -- the history renders read-only, matching a page that offers no undo. */
   onUndoMatch?: (matchId: number) => void;
+  /** Present when the viewer may file a match log under a round: its history rows then offer an upload. */
+  logUpload?: MixLogUpload | null;
   /** The mix game's map catalogue, each map with its mode as `parent` -- the roll pool and the manual picker. */
   maps: CatalogEntityRead[];
   settingNextMap: boolean;
@@ -180,6 +183,7 @@ export function PickupTeamsPanel({
   mixMatches,
   undoingMatchId = null,
   onUndoMatch,
+  logUpload,
   maps,
   settingNextMap,
   onNextMapChange,
@@ -235,7 +239,7 @@ export function PickupTeamsPanel({
   const awayNames = (variant?.teams ?? [])
     .flatMap((team) => team.seats)
     .filter((seat) => awayUuids.has(seat.uuid))
-    .map((seat) => seat.name);
+    .map((seat) => seat.display.name);
 
   // A lobby with no teams yet: Balance (or Draft) is the host's next step, so it is the solid button. Once teams
   // exist it is a re-balance and Start match takes the solid slot.
@@ -672,6 +676,7 @@ export function PickupTeamsPanel({
                   undoingMatchId={undoingMatchId}
                   onUndoMatch={onUndoMatch}
                   discipline={game?.discipline ?? null}
+                  logUpload={logUpload}
                   className={cn(
                     (onFloor || showStart || toolsRow) && "border-t border-[color:var(--aqt-border)] pt-3"
                   )}

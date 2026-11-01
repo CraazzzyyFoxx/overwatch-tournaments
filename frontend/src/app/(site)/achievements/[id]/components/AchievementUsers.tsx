@@ -14,6 +14,7 @@ import { DataPagination } from "@/components/ui/data-pagination";
 import { CardSurface } from "@/components/profile/atoms";
 import { Skeleton } from "@/components/ui/skeleton";
 import { achievementQueryKeys } from "@/lib/achievements/query-keys";
+import { canonicalDisplay } from "@/lib/player";
 import type { StatsScope } from "@/lib/site/stats-scope";
 
 const PER_PAGE = 30;
@@ -65,7 +66,7 @@ const AchievementUsers = ({ achievement, scope }: { achievement: Achievement; sc
             <div key={`${earned.user.id}-${i}`} className={ROW}>
               <span className="aqt-tnum text-right text-label font-bold text-[color:var(--aqt-fg-faint)]">{firstRank + i}</span>
               <div className="min-w-0">
-                <PlayerName player={earned.user} includeSpecialization={false} />
+                <PlayerName display={canonicalDisplay(earned.user.name)} />
                 {(earned.last_tournament || earned.last_match) && (
                   <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-label text-[color:var(--aqt-fg-dim)]">
                     {earned.last_tournament ? (

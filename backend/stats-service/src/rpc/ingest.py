@@ -5,6 +5,7 @@ nothing in the body can overwrite the identity, and workspace/key come only from
 
 ``rpc.stats.ingest.fetch`` and ``rpc.stats.ingest.fetch_list`` are internal: no gateway route reaches them, only
 tournament-service, which authorized the caller for the encounter and names the game (``services.ingest.fetch``).
+``rpc.stats.ingest.mix_fetch`` / ``mix_fetch_list`` are their pickup-mix twins, routed and authorized here.
 """
 
 from __future__ import annotations
@@ -113,3 +114,33 @@ def register(broker: Any, logger: Any) -> None:
             )
 
         return await c.envelope(logger, "ingest.fetch_list", op, session_factory=_SF)
+
+    @broker.subscriber("rpc.stats.ingest.mix_fetch")
+    async def _mix_fetch(data: dict, msg: RabbitMessage) -> dict:
+        # POST /custom-games/{custom_game_id}/matches/{match_id}/match-import -- the mix log upload's audience.
+        async def op(session: Any) -> Any:
+            user = c.actor(data)
+            c.require_active(user)
+            target = await fetch.mix_round_target(
+                session, user, custom_game_id=c.require_id(data), encounter_id=c.require_path_int(data, "match_id")
+            )
+            return await fetch.submit_fetch(
+                session,
+                data={**target, "external_id": c.payload(data).get("external_id")},
+                requested_by_user_id=user.id,
+            )
+
+        return await c.envelope(logger, "ingest.mix_fetch", op, session_factory=_SF)
+
+    @broker.subscriber("rpc.stats.ingest.mix_fetch_list")
+    async def _mix_fetch_list(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = c.actor(data)
+            c.require_active(user)
+            target = await fetch.mix_round_target(
+                session, user, custom_game_id=c.require_id(data), encounter_id=c.require_path_int(data, "match_id")
+            )
+            # The host is the mix's organizer: the read carries the warnings.
+            return await fetch.list_fetches(session, encounter_game_id=target["encounter_game_id"], with_warnings=True)
+
+        return await c.envelope(logger, "ingest.mix_fetch_list", op, session_factory=_SF)

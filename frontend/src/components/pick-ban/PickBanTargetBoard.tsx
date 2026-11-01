@@ -3,6 +3,7 @@
 import { Ban, Repeat2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 
+import { PersonLabel } from "@/components/PlayerName";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { RankCrest } from "@/components/RankCrest";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -103,7 +104,7 @@ export function PickBanTargetBoard({
                 >
                   <RankCrest division={target.division} grid={divisionGrid} size={30} />
                   <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                    <span className="truncate text-sm font-semibold">{target.name}</span>
+                    <PersonLabel display={target.display} className="block text-sm font-semibold" />
                     <span className="flex min-w-0 items-center gap-2.5 text-xs text-[color:var(--aqt-fg-muted)]">
                       {roleText != null ? (
                         <span className="flex min-w-0 items-center gap-1">

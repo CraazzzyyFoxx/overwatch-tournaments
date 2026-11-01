@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
+import PlayerName from "@/components/PlayerName";
 import { useTranslations } from "next-intl";
 
 import {
@@ -15,7 +15,6 @@ import { Eyebrow } from "@/components/ui/eyebrow";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import userService from "@/services/user.service";
-import { getPlayerSlug } from "@/lib/player";
 import type { LobbyLeaderboard } from "@/types/user.types";
 
 // Stats where a lower value is better (rank 1 = lowest). Mirrors the backend's
@@ -136,17 +135,14 @@ const LobbyLeaderboardModal = ({ userId, tournamentId, stat, statLabel, onClose 
                       </span>
                     </TableCell>
                     <TableCell className="px-3 py-2">
-                      <HoverPrefetchLink
-                        href={`/users/${getPlayerSlug(e.name)}`}
-                        className="font-semibold text-[color:var(--aqt-fg)] hover:text-[color:var(--aqt-teal)]"
-                      >
-                        {e.name}
-                      </HoverPrefetchLink>
-                      {isYou ? (
-                        <Eyebrow className="aqt-tnum ml-2 text-[color:var(--aqt-teal)]">
-                          {t("users.overview.leaderboard.you")}
-                        </Eyebrow>
-                      ) : null}
+                      <div className="flex min-w-0 items-center gap-2">
+                        <PlayerName display={e.display} className="max-w-[16rem] text-[color:var(--aqt-fg)]" />
+                        {isYou ? (
+                          <Eyebrow className="aqt-tnum shrink-0 text-[color:var(--aqt-teal)]">
+                            {t("users.overview.leaderboard.you")}
+                          </Eyebrow>
+                        ) : null}
+                      </div>
                     </TableCell>
                     <TableCell className="px-3 py-2" style={{ width: 160 }}>
                       <div className="flex items-center gap-2">

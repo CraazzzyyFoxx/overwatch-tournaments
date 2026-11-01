@@ -21,13 +21,12 @@ import InfoDot from "@/disciplines/overwatch/analytics/components/InfoDot";
 import { analyticsQueryKeys } from "@/lib/analytics/query-keys";
 import { encounterQueryKeys } from "@/lib/encounters/query-keys";
 import { duelSeats } from "@/lib/encounter/seats";
-import { splitHandle } from "@/lib/player";
 
 interface MatchQualityCardProps {
   tournamentId: number;
   /** Opens the match-quality glossary entry (the tap path for the explainer). */
   onExplain?: (term: GlossaryTerm) => void;
-  /** The bracket's players by id, so a flag (and its review) says whose it is. */
+  /** The bracket's players by id (their name in this game), so a flag (and its review) says whose it is. */
   playerNames?: ReadonlyMap<number, string>;
 }
 
@@ -245,7 +244,7 @@ export default function MatchQualityCard({ tournamentId, onExplain, playerNames 
                             <AnomalyFlag kind={flag.kind} reasons={flag.reasons} label="short" />
                             {playerNames?.get(flag.player_id) ? (
                               <span className="text-caption text-[color:var(--aqt-fg-muted)]">
-                                {splitHandle(playerNames.get(flag.player_id)!).name}
+                                {playerNames.get(flag.player_id)}
                               </span>
                             ) : null}
                             {canReview ? (

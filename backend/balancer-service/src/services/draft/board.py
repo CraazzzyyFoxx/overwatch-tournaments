@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from typing import Any, NamedTuple
 from uuid import uuid4
 
@@ -14,13 +14,16 @@ from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import Session
 
-from shared.models.draft import DraftSession
+from shared.domain.roster import PlayerRoster
+from shared.models.draft import DraftPlayer, DraftSession
 from shared.repository.draft import (
     DraftPickRepository,
     DraftSessionRepository,
     DraftTeamRepository,
 )
 from shared.repository.registration import RegistrationFormVersionRepository
+from shared.schemas.identity import PersonDisplayRead
+from shared.services.person_display import load_person_displays
 from src import schemas
 from src.services.draft import loaders
 from src.services.draft import realtime as draft_rt
@@ -36,7 +39,7 @@ _BOARD_CACHE_TTL_SECONDS = 5
 def _board_cache_key(session_id: int, last_event_id: int | None) -> str:
     # The "backend:" prefix routes the key to the backend configured by
     # cache.setup() (cashews routes strictly by key prefix).
-    return f"backend:balancer:draft_board:{session_id}:{last_event_id or 0}"
+    return f"backend:balancer:draft_board:v2:{session_id}:{last_event_id or 0}"
 
 
 # Same safety net as the board, stretched over the gateway's 15s read deadline:
@@ -118,6 +121,44 @@ async def _compute_once[T](key: str, compute: Callable[[], Awaitable[T]], expire
             except Exception:  # noqa: BLE001 — cache is best-effort
                 pass
     return result
+
+
+async def seat_displays(
+    session: AsyncSession,
+    draft_session: DraftSession,
+    players: Sequence[DraftPlayer],
+    rosters: Mapping[int, PlayerRoster],
+) -> dict[int, PersonDisplayRead]:
+    """``{draft_player.id: how the seat is named}`` in the owner's game and workspace.
+
+    A tournament seat's snapshot is the handle its registration named at signup; a mix seat has none (its roster
+    handle is the live one, which may be hidden here).
+    """
+    is_mix = draft_session.custom_game_id is not None
+    user_of: dict[int, int | None] = {}
+    snapshots: dict[int, str | None] = {}
+    for player in players:
+        roster = rosters.get(player.id)
+        user_id = roster.player_id if roster is not None and roster.player_id is not None else player.user_id
+        user_of[player.id] = user_id
+        if user_id is not None and not is_mix and roster is not None:
+            snapshots[user_id] = roster.handle
+    loaded = await load_person_displays(
+        session,
+        {user_id for user_id in user_of.values() if user_id is not None},
+        discipline=draft_session.discipline,
+        workspace_id=draft_session.workspace_id,
+        snapshots=snapshots,
+    )
+    out: dict[int, PersonDisplayRead] = {}
+    for player in players:
+        user_id = user_of[player.id]
+        roster = rosters.get(player.id)
+        out[player.id] = (loaded.get(user_id) if user_id is not None else None) or PersonDisplayRead.build(
+            canonical=roster.player_name if roster is not None else None,
+            snapshot=(roster.handle if roster is not None and not is_mix else None) or f"#{player.id}",
+        )
+    return out
 
 
 class VisibleCustomField(NamedTuple):
@@ -287,6 +328,7 @@ class DraftBoardService:
         # The crown a seat shows is its team's current captain (a mix host may hand a team over mid-draft); a team
         # whose captain has no member falls back to the seed flag.
         crowns = {team.id: team.captain_workspace_member_id for team in teams}
+        displays = await seat_displays(session, draft_session, players, rosters)
         snapshot = schemas.DraftBoardSnapshot(
             session=await self.session_read(session, draft_session),
             teams=[schemas.DraftTeamRead.model_validate(t) for t in teams],
@@ -297,6 +339,7 @@ class DraftBoardService:
                     rosters.get(p.id),
                     shape=shape,
                     custom_fields=custom_field_defs,
+                    display=displays[p.id],
                     dimension=dimension,
                     crowned=None
                     if crowns.get(p.drafted_by_team_id) is None

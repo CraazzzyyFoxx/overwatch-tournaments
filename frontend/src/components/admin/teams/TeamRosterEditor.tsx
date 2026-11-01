@@ -14,6 +14,7 @@ import { EmptyNote } from "@/components/kit/EmptyNote";
 import { UserSearchCombobox } from "@/components/kit/ServerSearchCombobox";
 import DivisionIcon from "@/components/DivisionIcon";
 import { Button } from "@/components/ui/button";
+import { PersonLabel } from "@/components/PlayerName";
 import { Input } from "@/components/ui/input";
 import {
   Table,
@@ -325,7 +326,11 @@ export function TeamRosterEditor({
                         }}
                       />
                       <p className="truncate px-2 text-xs text-muted-foreground">
-                        {player.user?.name ?? t("userId", { id: player.user_id })}
+                        {player.display.canonical ? (
+                          <PersonLabel display={player.display} showCanonical />
+                        ) : (
+                          t("userId", { id: player.user_id })
+                        )}
                       </p>
                     </div>
                   </TableCell>

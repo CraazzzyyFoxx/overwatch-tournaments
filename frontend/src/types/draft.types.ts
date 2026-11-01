@@ -4,6 +4,7 @@ import type { RosterShape, SlotCode } from "@/lib/roster/shape";
 import type { FormField } from "@/types/forms.types";
 import type { RoleRef } from "@/lib/roster/role-ref";
 import type { PlayerIdentity } from "@/types/identity.types";
+import type { PersonDisplay } from "@/types/user.types";
 
 export type DraftStatus = "setup" | "ready" | "live" | "paused" | "completed" | "cancelled";
 
@@ -100,8 +101,11 @@ export interface DraftPlayer {
   /** The workspace member this seat is: set on every mix seat (the room ties it to its lineup seat), null otherwise. */
   workspace_member_id?: number | null;
   identity: PlayerIdentity | null;
-  /** The player's canonical unique name: every `/users/<name>` link is built from it, never from a game handle. */
-  player_name: string | null;
+  /**
+   * How the seat is named in the owner's game (`PersonDisplayRead`): `display.canonical` builds every `/users/<name>`
+   * link, never a game handle; `display.name` is plain text for labels, aria and chart text.
+   */
+  display: PersonDisplay;
   /**
    * `null` when the player has no playable role left — an organizer can strip
    * every rank mid-draft. Render that as "no role", never as a default one.

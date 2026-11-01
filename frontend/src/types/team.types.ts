@@ -1,12 +1,15 @@
 import type { RoleRef } from "@/lib/roster/role-ref";
-import { User } from "@/types/user.types";
+import { PersonDisplay, User } from "@/types/user.types";
 import { Tournament, TeamGroup } from "@/types/tournament.types";
 
 export interface Player {
   id: number;
   created_at: Date;
   updated_at: Date | null;
+  /** The roster snapshot; render `display` instead. */
   name: string;
+  /** What this game's surfaces show; `display.canonical` builds the profile link. */
+  display: PersonDisplay;
   /** `null` when the tournament recorded no rank for this player. */
   rank: number | null;
   division: number | null;

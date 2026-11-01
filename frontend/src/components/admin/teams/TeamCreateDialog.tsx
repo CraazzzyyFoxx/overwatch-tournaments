@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { hasUnsavedChanges } from "@/lib/form-change";
 import { notify } from "@/lib/notify";
-import { splitHandle } from "@/lib/player";
+import { canonicalDisplay } from "@/lib/player";
 import adminService from "@/services/admin.service";
 import { adminQueryKeys } from "@/lib/admin/query-keys";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
@@ -46,7 +46,7 @@ export function TeamCreateDialog({ open, onOpenChange, tournamentId }: Readonly<
   const [error, setError] = useState<string | undefined>();
   // Same convention as the balancer export: a team without its own name is known
   // by its captain's handle, battletag suffix dropped.
-  const captainHandle = splitHandle(form.captainName).name;
+  const captainHandle = canonicalDisplay(form.captainName).name;
   const teamName = form.name.trim() || captainHandle;
 
   const createTeam = useMutation({

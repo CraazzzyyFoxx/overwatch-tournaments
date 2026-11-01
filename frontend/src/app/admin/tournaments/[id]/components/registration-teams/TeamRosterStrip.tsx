@@ -3,6 +3,7 @@
 import { Crown, LifeBuoy, X, type LucideIcon } from "lucide-react";
 import { useTranslations } from "next-intl";
 
+import { PersonLabel } from "@/components/PlayerName";
 import RosterSlotGlyph from "@/components/registration/RosterSlotGlyph";
 import type { RoleOntology } from "@/lib/roster/ontology";
 import { Button } from "@/components/ui/button";
@@ -10,7 +11,7 @@ import { useFormatter } from "@/lib/datetime/client";
 import { cn } from "@/lib/utils";
 import type { RegistrationTeam } from "@/types/registration-team.types";
 
-import { EXPIRY_STAMP, isLiveInvite, isTeamLive, memberName } from "./model";
+import { EXPIRY_STAMP, isLiveInvite, isTeamLive } from "./model";
 
 /**
  * Captain / substitute marker.
@@ -65,7 +66,7 @@ export function TeamRosterStrip({
       {team.members.map((member) => (
         <li key={member.registration_id} className="flex items-center gap-2 py-1.5">
           <RosterSlotGlyph code={member.slot_code} ontology={ontology} size={14} />
-          <span className="min-w-0 truncate">{memberName(member)}</span>
+          <PersonLabel display={member.display} showCanonical />
           {member.is_captain && (
             <RosterMark icon={Crown} label={t("member.captain")} className="text-warning" />
           )}

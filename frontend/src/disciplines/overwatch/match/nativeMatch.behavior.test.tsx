@@ -4,6 +4,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { setTimeout as sleep } from "node:timers/promises";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import MatchStats from "./MatchStats";
 import SeriesStats from "./SeriesStats";
 import KillFeedTimeline from "./KillFeedTimeline";
@@ -16,7 +18,7 @@ import type { OwTeam } from "./view";
 
 const { getMatchKillFeed } = vi.hoisted(() => ({ getMatchKillFeed: vi.fn() }));
 
-// The comparison tab's chart is lazy. Left lazy, recharts finished loading in
+// The series panel's contribution chart is lazy. Left lazy, recharts finished loading in
 // whichever test ran next and billed that test its import time (seconds under a
 // loaded runner). Every `dynamic()` here is that chart: resolve it up front
 // (imported inside the factory because `vi.mock` is hoisted above static imports).
@@ -35,7 +37,8 @@ declare global {
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 let root: Root | null = null;
-const metadata = {} as DisciplineMetadata;
+// An ontology with no rated dimension: classes stay neutral, no glyphs.
+const metadata = { dimensions: [], roles: [] } as unknown as DisciplineMetadata;
 
 /** A duel of two participations whose source teams are gone (`tournament_team_id: null`); one observed member each. */
 function match(
@@ -73,20 +76,35 @@ function match(
         encounter_team_id: side.id,
         workspace_member_id: side.id * 10,
         player_id: side.id * 10,
-        // Side 102's player has no canonical name on the wire: its handle must stay unlinked.
-        player_name: side.id === 102 ? null : `Canonical ${side.id}`,
+        // Side 102's player has no canonical name on the wire: its name must stay unlinked.
+        display: {
+          name: `Observed ${side.id}`,
+          tag: "#1",
+          canonical: side.id === 102 ? null : `Canonical ${side.id}`,
+          snapshot: null
+        },
         handle_snapshot: `Observed ${side.id}#1`,
         observed_role: null
       })),
       segments: [],
-      facts: sides.map((side) => ({
-        encounter_team_id: side.id,
-        workspace_member_id: side.id * 10,
-        entity_id: null,
-        segment: 0,
-        stat_code: LogStatsName.Eliminations,
-        value: side.eliminations
-      })),
+      facts: sides.flatMap((side, index) => [
+        {
+          encounter_team_id: side.id,
+          workspace_member_id: side.id * 10,
+          entity_id: null,
+          segment: 0,
+          stat_code: LogStatsName.Eliminations,
+          value: side.eliminations
+        },
+        {
+          encounter_team_id: side.id,
+          workspace_member_id: side.id * 10,
+          entity_id: null,
+          segment: 0,
+          stat_code: LogStatsName.ImpactRank,
+          value: index + 1
+        }
+      ]),
       entities: []
     },
     ...overrides
@@ -140,10 +158,50 @@ async function mount(node: ReactNode) {
   return container;
 }
 
+/** The scoreboard inside its query client, with an empty kill feed for the tabs that read one. */
+async function mountStats(value: MatchWithStats) {
+  getMatchKillFeed.mockResolvedValue({ match_id: value.id, discipline: "overwatch", events: [], entities: [] });
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return mount(
+    <QueryClientProvider client={client}>
+      <MatchStats match={value} metadata={metadata} />
+    </QueryClientProvider>
+  );
+}
+
+/** Radix tabs activate on mousedown; the panel that answers is the active one. */
+async function openTab(container: HTMLElement, label: string) {
+  const tab = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="tab"]')).find(
+    (button) => button.textContent === label
+  )!;
+  await act(async () => {
+    tab.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
+    tab.click();
+  });
+  for (let turn = 0; turn < 20 && container.querySelector('[role="tabpanel"][data-state="active"] [role="status"]'); turn++) {
+    await act(async () => {
+      await sleep(10);
+    });
+  }
+  return container.querySelector<HTMLElement>('[role="tabpanel"][data-state="active"]')!;
+}
+
 async function timeline(events: MatchEvent[], home = side(1, "Home"), away = side(2, "Away")) {
   const feed: MatchEvents = { match_id: 7, discipline: "overwatch", events, entities: [] };
   getMatchKillFeed.mockResolvedValue(feed);
-  return mount(<KillFeedTimeline matchId={7} members={[]} home={home} away={away} />);
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const container = await mount(
+    <QueryClientProvider client={client}>
+      <KillFeedTimeline matchId={7} members={[]} home={home} away={away} round={0} focus={null} />
+    </QueryClientProvider>
+  );
+  // The query settles on a timer outside React: give it turns until the loading skeleton is gone.
+  for (let turn = 0; turn < 20 && container.querySelector('[role="status"]'); turn++) {
+    await act(async () => {
+      await sleep(10);
+    });
+  }
+  return container;
 }
 
 const timestamps = (container: HTMLElement): string[] =>
@@ -190,54 +248,33 @@ describe("historical observed participations", () => {
   });
 
   it("compares observed totals when the source teams and hero metadata are unavailable", async () => {
-    const container = await mount(<MatchStats match={historical()} metadata={metadata} />);
-    const extended = Array.from(container.querySelectorAll("button")).find(
-      (button) => button.textContent === messages.matches.view.extended
-    )!;
-    await act(async () => extended.click());
-    const comparison = Array.from(
-      container.querySelectorAll<HTMLButtonElement>('[role="tab"]')
-    ).find((button) => button.textContent === messages.matches.tab.comparison)!;
-    await act(async () => {
-      comparison.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
-      comparison.click();
-    });
-    const panel = container.querySelector('[role="tabpanel"][data-state="active"]');
-    expect(panel?.textContent).toContain("Archived A");
-    expect(panel?.textContent).toContain("Archived B");
-    expect(panel?.textContent).toContain("12");
-    expect(panel?.textContent).toContain("5");
+    const container = await mountStats(historical());
+    const panel = await openTab(container, messages.matches.tab.breakdown);
+    const totals = panel.querySelector(`[aria-label="${messages.matches.breakdown.totals}"]`)!;
+    // Each total reads home : away, from the observed members of each participation.
+    expect(totals.textContent).toContain("12");
+    expect(totals.textContent).toContain("5");
+    expect(totals.textContent!.indexOf("12")).toBeLessThan(totals.textContent!.indexOf("5"));
+    expect(panel.textContent).toContain("Archived A");
+    expect(panel.textContent).toContain("Archived B");
   });
 
   it("links observed handles through the canonical player name, never the handle, and leaves a nameless one unlinked", async () => {
-    const container = await mount(<MatchStats match={historical()} metadata={metadata} />);
-    const links = () =>
-      Array.from(container.querySelectorAll<HTMLAnchorElement>('a[href^="/users/"]')).map(
+    const container = await mountStats(historical());
+    const links = (scope: ParentNode) =>
+      Array.from(scope.querySelectorAll<HTMLAnchorElement>('a[href^="/users/"]')).map(
         (link) => [link.textContent, link.getAttribute("href")]
       );
     // The scoreboard: Archived B's member is shown, not linked.
     // The whole handle is the link; its `#tag` renders as faint text inside it.
-    expect(links()).toEqual([["Observed 101#1", "/users/Canonical 101"]]);
+    expect(links(container)).toEqual([["Observed 101#1", "/users/Canonical 101"]]);
     expect(container.textContent).toContain("Observed 102");
 
-    const extended = Array.from(container.querySelectorAll("button")).find(
-      (button) => button.textContent === messages.matches.view.extended
-    )!;
-    await act(async () => extended.click());
-    const comparison = Array.from(
-      container.querySelectorAll<HTMLButtonElement>('[role="tab"]')
-    ).find((button) => button.textContent === messages.matches.tab.comparison)!;
-    await act(async () => {
-      comparison.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
-      comparison.click();
-    });
-    // The leader cards: the top eliminator (Archived A's) links the same way; B's leaders (if any) never link.
-    const panel = container.querySelector('[role="tabpanel"][data-state="active"]')!;
-    const leaderLinks = Array.from(panel.querySelectorAll<HTMLAnchorElement>('a[href^="/users/"]'));
-    expect(leaderLinks.length).toBeGreaterThan(0);
-    expect(new Set(leaderLinks.map((link) => link.getAttribute("href")))).toEqual(
-      new Set(["/users/Canonical 101"])
-    );
+    // The breakdown names its player of the map (Archived A's, first by impact) through the same canonical name.
+    const panel = await openTab(container, messages.matches.tab.breakdown);
+    const hrefs = new Set(links(panel).map(([, href]) => href));
+    expect(hrefs).toEqual(new Set(["/users/Canonical 101"]));
+    expect(panel.textContent).toContain(messages.matches.breakdown.playerOfMap);
   });
 
   it("renders nothing for a match that is not a duel", () => {
@@ -302,6 +339,16 @@ describe("encounter participation statistics", () => {
 });
 
 describe("native nullable timeline", () => {
+  const critical = messages.matches.timeline.critical;
+  const environmental = messages.matches.timeline.environmental;
+
+  /** The kill/mark row that carries a clock reading (the clock is the row's first cell). */
+  const rowAt = (container: HTMLElement, clock: string) =>
+    Array.from(container.querySelectorAll("span")).find((element) => element.textContent === clock)!.parentElement!;
+  /** The row's actor: the first name cell, in whatever colour the row paints it. */
+  const actorOf = (row: HTMLElement) =>
+    Array.from(row.querySelectorAll("span")).find((element) => element.textContent === "—" && element.children.length === 0)!;
+
   it("preserves duplicate observations and chronological order with missing actors, entities and JSON", async () => {
     const container = await timeline([
       event({ t: 22 }),
@@ -313,8 +360,8 @@ describe("native nullable timeline", () => {
     ]);
     expect(timestamps(container)).toEqual(["0:11", "0:17", "0:17", "0:17", "0:17", "0:22"]);
     expect(container.querySelectorAll("img")).toHaveLength(0);
-    expect(container.querySelector('[aria-label="critical"]')).toBeNull();
-    expect(container.querySelector('[aria-label="environmental"]')).toBeNull();
+    expect(container.querySelector(`[aria-label="${critical}"]`)).toBeNull();
+    expect(container.querySelector(`[aria-label="${environmental}"]`)).toBeNull();
   });
 
   it("renders event-only history rather than treating it as an empty kill feed", async () => {
@@ -323,28 +370,31 @@ describe("native nullable timeline", () => {
       event({ type: "ultimate_start" })
     ]);
     expect(timestamps(container)).toEqual(["0:17", "0:17"]);
+    expect(container.textContent).not.toContain(messages.matches.timeline.empty);
   });
 
   it("does not assign an unknown actor to the away team or invent a fight", async () => {
     const container = await timeline([event()]);
-    const clock = Array.from(container.querySelectorAll("span")).find(
-      (span) => span.textContent === "0:17"
-    )!;
-    const row = clock.parentElement!;
-    expect(row.style.borderLeft).toContain("var(--aqt-fg-muted)");
-    expect(row.parentElement!.previousElementSibling!.textContent).toBe("—");
+    const actor = actorOf(rowAt(container, "0:17"));
+    expect(actor.className).toContain("--aqt-fg-muted");
+    expect(actor.className).not.toContain("--aqt-rose");
+    expect(actor.className).not.toContain("--aqt-teal");
     expect(timestamps(container)).toEqual(["0:17"]);
+    // No fight id: no numbered fight, no fight band to jump to.
+    expect(container.textContent).not.toMatch(/Fight \d/);
+    expect(container.querySelector('button[aria-label^="Fight"]')).toBeNull();
   });
 
   it("keeps known participation ownership and explicit flags", async () => {
     const container = await timeline([
       event({ actor_team_id: 2, data: { fight: 0, is_critical_hit: true, is_environmental: true } })
     ]);
-    const clock = Array.from(container.querySelectorAll("span")).find(
-      (span) => span.textContent === "0:17"
-    )!;
-    expect(clock.parentElement!.style.borderLeft).toContain("var(--aqt-rose)");
-    expect(container.querySelector('[aria-label="critical"]')).not.toBeNull();
-    expect(container.querySelector('[aria-label="environmental"]')).not.toBeNull();
+    const actor = actorOf(rowAt(container, "0:17"));
+    expect(actor.className).toContain("--aqt-rose");
+    expect(container.querySelector(`[aria-label="${critical}"]`)).not.toBeNull();
+    expect(container.querySelector(`[aria-label="${environmental}"]`)).not.toBeNull();
+    // The kill belongs to a fight: its block and its band are both there.
+    expect(container.textContent).toContain("Fight 1");
+    expect(container.querySelectorAll('button[aria-label^="Fight"]')).toHaveLength(1);
   });
 });

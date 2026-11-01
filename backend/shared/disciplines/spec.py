@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
     from shared.catalog_sync import CatalogImageMirror, CatalogSyncProgress
     from shared.disciplines.analytics import AnalyticsExports
-    from shared.disciplines.ingest import Decoder, DeriveMatch, MatchFetcher
+    from shared.disciplines.ingest import Decoder, DeriveMatch, MatchFetcher, MatchSearcher
     from shared.domain.achievements.context import EvalContext
     from shared.domain.pick_ban_rules.presets import Preset
     from shared.models.achievements.achievement import AchievementGrain, AchievementRule
@@ -261,6 +261,9 @@ class DisciplineSpec:
     #: Producers stats core can pull a match from by external id: source kind -> ``fetch(external_id) -> bytes``, the
     #: bytes ``ingestors[kind]`` decodes. A kind not listed here cannot be imported by id (``unsupported_ingestor``).
     match_fetchers: dict[str, MatchFetcher] = field(default_factory=dict, compare=False, hash=False)
+    #: Producers stats core can find a pickup mix round's match in by its players: source kind (one of
+    #: ``match_fetchers``) -> ``search(query) -> candidates``. The id it settles on is fetched by that kind.
+    match_searchers: dict[str, MatchSearcher] = field(default_factory=dict, compare=False, hash=False)
     #: Facts that need the bound match (baselines, registration ranks); ``None`` when nothing derives after binding.
     derive_match: DeriveMatch | None = field(default=None, compare=False)
     #: Achievement kernel hooks, all lazy and all ``None`` for a game with no conditions (LoL): a missing hook is

@@ -4,9 +4,10 @@ import React from "react";
 import { useTranslations } from "next-intl";
 import { useFormatter } from "@/lib/datetime/client";
 import { Crown, Shuffle, Sprout } from "lucide-react";
-import { sortTeamPlayers, splitHandle, type SortableRosterPlayer, type TeamRosterPlayer } from "@/lib/player";
+import { sortTeamPlayers, type SortableRosterPlayer, type TeamRosterPlayer } from "@/lib/player";
 import PlayerName from "@/components/PlayerName";
 import { Team } from "@/types/team.types";
+import type { PersonDisplay } from "@/types/user.types";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import DivisionIcon from "@/components/DivisionIcon";
 import { CatalogEntityStrip } from "@/components/catalog/CatalogEntityImage";
@@ -83,7 +84,7 @@ export function RosterRole({
   ontology = null
 }: Readonly<{
   role: RoleRef | null;
-  position?: RosterSlotPosition<SortableRosterPlayer & { name: string }>;
+  position?: RosterSlotPosition<SortableRosterPlayer & { display: PersonDisplay }>;
   inline?: boolean;
   /** The roster's own game's scoped ontology. Absent, the role renders neutral — never another game's glyph. */
   ontology?: RoleOntology | null;
@@ -107,7 +108,7 @@ export function RosterRole({
           label={t("teams.roster.substitution")}
           hint={
             original
-              ? t("teams.roster.substituteFor", { name: splitHandle(original.name).name })
+              ? t("teams.roster.substituteFor", { name: original.display.name })
               : undefined
           }
           className={cn(
@@ -148,7 +149,7 @@ export function RosterPlayer({
   highlightUserId,
   dimmed
 }: Readonly<{
-  player: Pick<TeamRosterPlayer, "name" | "role" | "user_id" | "is_newcomer" | "is_newcomer_role">;
+  player: Pick<TeamRosterPlayer, "display" | "role" | "user_id" | "is_newcomer" | "is_newcomer_role">;
   captainUserId?: number | null;
   /** When the row belongs to this user id, it gets a "you" tag. */
   highlightUserId?: number;
@@ -157,7 +158,7 @@ export function RosterPlayer({
   const t = useTranslations();
   return (
     <div className={cn("flex min-w-0 items-start gap-2", dimmed && "opacity-50")}>
-      <PlayerName player={player} includeSpecialization={true} />
+      <PlayerName display={player.display} role={player.role} includeSpecialization={true} />
       {captainUserId != null && player.user_id === captainUserId ? (
         <IconTooltip label={t("teams.roster.captain")} className={ICON_SLOT}>
           <Crown aria-hidden className="size-3.5 text-[color:var(--aqt-amber)]" />

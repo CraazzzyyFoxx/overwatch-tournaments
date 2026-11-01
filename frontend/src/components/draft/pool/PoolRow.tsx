@@ -5,6 +5,7 @@ import { Check, ChevronDown, ChevronUp, Crown, Heart } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import CatalogEntityImage from "@/components/catalog/CatalogEntityImage";
+import { PersonLabel } from "@/components/PlayerName";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { RankCrest } from "@/components/RankCrest";
 import { Button } from "@/components/ui/button";
@@ -94,7 +95,7 @@ export function PoolRow({
 }: Readonly<PoolRowProps>) {
   const t = useTranslations("draftRedesign");
   const slotLabel = useSlotLabel(ontology);
-  const name = player.identity?.handle ?? `#${player.id}`;
+  const name = player.display.name;
   const roles = playerRoles(player);
   const available = player.status === "available";
   // The team this row selects for; `null` → every role is a read-only chip.
@@ -167,7 +168,7 @@ export function PoolRow({
             title={name}
             className="min-w-0 font-semibold text-[color:var(--aqt-fg)] hover:text-[color:var(--aqt-teal)]"
           >
-            <span className="truncate">{name}</span>
+            <PersonLabel display={player.display} tag="hidden" />
           </Button>
           {player.is_captain && (
             <Crown className="h-[15px] w-[15px] shrink-0 text-[color:var(--aqt-warm)]" role="img" aria-label={t("captain")} />

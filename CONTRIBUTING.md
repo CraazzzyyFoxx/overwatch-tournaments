@@ -17,9 +17,22 @@ otherwise their existing server connections can relaunch removed containers.
 
 - `develop` is the working branch. Feature work branches off it.
 - `master` is the release source. CI runs on every pull request and on pushes to `master`.
-- Publishing a GitHub **release** triggers [`deploy-production.yml`](./.github/workflows/deploy-production.yml),
+- Pushing a `v*` tag triggers [`deploy-production.yml`](./.github/workflows/deploy-production.yml),
   which re-runs the backend lint, backend test, gateway and frontend workflows as gates before
-  deploying. A red gate blocks the deploy; nothing else does.
+  deploying, then publishes the GitHub Release with notes from the commit log. A red gate blocks
+  the deploy; nothing else does.
+
+### Version numbers
+
+Tags are `vMAJOR.MINOR.PATCH`. The number tells a reader what kind of release it is; what changed
+is in the release notes, so a `feat` commit alone does not move the minor.
+
+- **Major** — a new era of the platform or a change that breaks how people use it (`v2.0.0`: four
+  games).
+- **Minor** — a release that gets a [`/changelog`](./frontend/src/lib/changelog/releases.ts) entry:
+  a feature announced to players or organizers. Bump the minor and write the entry (`RELEASES` plus
+  `_content/{ru,en}/<version>.mdx`) together; a minor without an entry is a patch.
+- **Patch** — every other release, small `feat`s included.
 
 ## Commit messages
 

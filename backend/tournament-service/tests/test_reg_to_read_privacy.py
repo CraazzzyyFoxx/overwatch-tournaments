@@ -70,7 +70,25 @@ def _reg_stub(extra: tuple[SimpleNamespace, ...] = ()) -> SimpleNamespace:
         id=1,
         tournament_id=78,
         tournament=SimpleNamespace(discipline="overwatch"),
-        workspace_member=SimpleNamespace(player_id=42),
+        display_name=None,
+        workspace_member=SimpleNamespace(
+            player_id=42,
+            display_name=None,
+            player=SimpleNamespace(
+                name="Canon#9",
+                social_accounts=[
+                    SimpleNamespace(
+                        id=1,
+                        provider="riot",
+                        username="Faker#KR1",
+                        display_name=None,
+                        is_primary=True,
+                        is_verified=False,
+                        visibilities=[SimpleNamespace(workspace_id=None)],
+                    )
+                ],
+            ),
+        ),
         identities=identities,
         stream_pov=False,
         roles=[],
@@ -196,3 +214,17 @@ def test_the_primary_handle_is_the_owner_providers_never_another_games():
 def test_a_missing_owner_provider_handle_reads_null_even_with_another_games_handle():
     # A League registration whose only game handle is a BattleTag: no Riot ID, no handle.
     assert _reg_to_read(_reg_stub(), workspace_id=1, provider="riot").primary_handle is None
+
+
+def test_the_read_names_the_person_by_the_games_visible_handle_and_links_the_canonical_name():
+    read = _reg_to_read(_reg_stub((_identity("riot", "Snap#EUW"),)), workspace_id=1, provider="riot")
+
+    assert (read.display.name, read.display.tag) == ("Faker", "#KR1")
+    assert (read.display.canonical, read.display.snapshot) == ("Canon#9", "Snap#EUW")
+
+
+def test_without_a_visible_game_account_the_registration_handle_names_the_person():
+    read = _reg_to_read(_reg_stub(), workspace_id=1, provider="battlenet")
+
+    assert (read.display.name, read.display.tag, read.display.snapshot) == ("Player", "#1234", None)
+    assert read.display.canonical == "Canon#9"

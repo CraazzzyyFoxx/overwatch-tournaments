@@ -107,6 +107,8 @@ class HeroQueries(DisciplineQueries):
                     self._facts.c.segment == 0,
                     self._facts.c.player_id == user_id,
                     self._matches.c.map_entity_id.in_(maps_ids),
+                    # Mix stats live only inside the mix (mix encounters have no tournament).
+                    models.Encounter.tournament_id.is_not(None),
                 )
             )
         )
@@ -154,6 +156,8 @@ class HeroQueries(DisciplineQueries):
                 self._matches.c.map_entity_id.in_(maps_ids),
                 models.CatalogEntity.kind == "character",
                 models.CatalogEntity.discipline == self.discipline,
+                # Mix stats live only inside the mix (mix encounters have no tournament).
+                models.Encounter.tournament_id.is_not(None),
             )
         )
 
@@ -216,6 +220,8 @@ class HeroQueries(DisciplineQueries):
                     self._facts.c.player_id == user_id,
                     self._facts.c.entity_id.isnot(None),
                     self._matches.c.map_entity_id.in_(maps_ids),
+                    # Mix stats live only inside the mix (mix encounters have no tournament).
+                    self._matches.c.tournament_id.is_not(None),
                 )
             )
         )
@@ -584,7 +590,6 @@ class HeroQueries(DisciplineQueries):
         ranked_cte = (
             sa.select(
                 stats_agg_cte.c.user_id,
-                models.User.name.label("username"),
                 player_latest_subq.c.name.label("player_name"),
                 player_latest_subq.c.role,
                 player_latest_subq.c.sub_role,
@@ -619,7 +624,6 @@ class HeroQueries(DisciplineQueries):
                 rank_expr,
             )
             .select_from(stats_agg_cte)
-            .join(models.User, models.User.id == stats_agg_cte.c.user_id)
             .join(player_latest_subq, player_latest_subq.c.user_id == stats_agg_cte.c.user_id)
         ).cte("ranked")
 

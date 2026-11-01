@@ -21,7 +21,7 @@ __all__ = ("build_registration_list", "coalesced_registration_list")
 @versioned(
     generations=tournament_generations("{tournament_id}", REGISTRATION_LIST),
     ttl=settings.tournaments_cache_ttl,
-    key="registration_list:v2:{tournament_id}:",
+    key="registration_list:v3:{tournament_id}:",
     prefix="fastapi:",
 )
 async def build_registration_list(session_maker: async_sessionmaker[AsyncSession], tournament_id: int) -> Any:

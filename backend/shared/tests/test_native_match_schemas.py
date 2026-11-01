@@ -76,7 +76,7 @@ def _match() -> dict:
                     "encounter_team_id": 12,
                     "workspace_member_id": 7,
                     "player_id": 3,
-                    "player_name": "Canonical Name",
+                    "display": {"name": "Event", "tag": "#1", "canonical": "Canonical Name", "snapshot": None},
                     "handle_snapshot": "Event#1",
                     "observed_role": None,
                 }
@@ -108,7 +108,8 @@ def test_wire_round_trip_keeps_null_source_missing_facts_and_played_at() -> None
     assert wire["participants"][1]["team_facts"] == {}
     assert wire["played_at"] is None and wire["duration_s"] == 612.5
     assert wire["statistics"]["members"][0]["workspace_member_id"] == 7
-    assert wire["statistics"]["members"][0]["player_name"] == "Canonical Name"
+    assert wire["statistics"]["members"][0]["display"]["canonical"] == "Canonical Name"
+    assert "player_name" not in wire["statistics"]["members"][0]
     assert "home_participation" not in wire and "rounds" not in wire and "score" not in wire
 
 

@@ -14,6 +14,7 @@ from pydantic import BaseModel
 
 from shared.core import enums, pagination
 from shared.schemas.base import BaseRead
+from shared.schemas.identity import PersonDisplayRead
 from shared.schemas.role import RoleRef
 
 __all__ = (
@@ -103,8 +104,9 @@ class CharacterPlaytimePaginationParams(pagination.PaginationSortParams):
 class CharacterLeaderboardEntry(BaseModel):
     rank: int
     user_id: int
-    username: str
-    player_name: str
+    #: How the leaderboard's game names the player: the scope workspace's name, the game handle, the player's latest
+    #: roster name, the canonical name (``display.canonical`` builds the profile link).
+    display: PersonDisplayRead
     role: RoleRef | None = None
     #: The workspace grid's tier number in a scoped read; in the all-workspaces read the canonical number on the
     #: game's native ladder (``None`` for a game without one).

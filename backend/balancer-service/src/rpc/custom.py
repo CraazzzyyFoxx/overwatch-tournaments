@@ -55,6 +55,7 @@ from shared.disciplines import DISCIPLINES, rated_role_codes
 from shared.domain.custom_game_round import winner_slot
 from shared.rpc.identity import ensure_workspace_permission
 from shared.rpc.query import build_query_model
+from shared.schemas.identity import PersonDisplayRead
 from shared.schemas.role import RoleRef
 from shared.services import discord_messages
 from shared.services.discord_client import DiscordClient
@@ -208,6 +209,9 @@ def _dump_row(
         # slug (a Steam account id never resolves by name).
         "player_id": getattr(member, "player_id", None),
         "display_name": getattr(member, "display_name", None),
+        "display": (
+            member.display if member is not None else PersonDisplayRead(name=f"#{row.workspace_member_id}")
+        ).model_dump(),
         "identity": identity.model_dump() if (identity := getattr(member, "identity", None)) is not None else None,
         "sort_order": row.sort_order,
         # One field for the whole lineup state: must_play | pool | benched.
@@ -268,6 +272,17 @@ def _dump_settings(
     }
 
 
+def _with_displays(document: Any, members: dict[int, Any]) -> Any:
+    """Name each seat of a lineup document the way the mix's game does now: the solver stored ``name`` at balance
+    time, and a handle's visibility may have changed since. Seat uuids are workspace member ids."""
+    seats = document.get("players") if isinstance(document, dict) else None
+    for uuid, seat in (seats or {}).items():
+        member = members.get(int(uuid)) if str(uuid).isdigit() else None
+        if member is not None and isinstance(seat, dict):
+            seat["display"] = member.display.model_dump()
+    return document
+
+
 def _dump_lobby(
     lobby: Any,
     *,
@@ -278,6 +293,7 @@ def _dump_lobby(
     live_seats: list[dict[str, Any]] | None = None,
     opener_index: int | None = None,
     draft: tuple[int, str, frozenset[int]] | None = None,
+    members: dict[int, Any] | None = None,
 ) -> dict[str, Any]:
     """One lobby: its pager, its rolled map, its live match, when it was last balanced, its match count whenever the
     read counted them (the list and the detail read do) -- and, in the detail read, its own matchup and stage.
@@ -310,7 +326,9 @@ def _dump_lobby(
         last_match_at = activity[1] if activity is not None else None
         # Crowned on a copy: a lineup stored before captains existed reads back captained, and a read never
         # writes into the ORM's JSON.
-        out["balance_result"] = with_captains(copy.deepcopy(as_lobby_document(lobby.balance_result_json)))
+        out["balance_result"] = _with_displays(
+            with_captains(copy.deepcopy(as_lobby_document(lobby.balance_result_json))), members or {}
+        )
         out["lineup_recorded"] = lobby.balanced_at is None or (
             last_match_at is not None and last_match_at >= lobby.balanced_at
         )
@@ -413,6 +431,7 @@ def _dump_game(
                 live_seats=(live_seats or {}).get(lobby.live_encounter_id),
                 opener_index=(openers or {}).get(lobby.lobby_index),
                 draft=(draft_lobbies or {}).get(lobby.lobby_index),
+                members=members,
             )
             for lobby in (lobbies or [])
         ],
@@ -609,9 +628,11 @@ def _dump_round(
     map_info: dict[int, tuple[str, str | None]],
     bans: list[dict[str, int]],
     picks: list[dict[str, int | str]],
+    log: tuple[int | None, str | None, str | None],
 ) -> dict[str, Any]:
     """One recorded round as the history wire spells it: the two seats by slot, the winning slot, the hero bans and
     whose hero each pick was."""
+    stats_match_id, log_state, match_search = log
     encounter = round_.encounter
     teams = sorted(encounter.teams, key=lambda team: team.slot)
     map_id = encounter.games[0].map_id if encounter.games else None
@@ -638,18 +659,31 @@ def _dump_round(
         "recorded_by": encounter.result_audit[0].actor_user_id if encounter.result_audit else None,
         # Confirmed, not created: a round's encounter is created when its match starts (Decision 7).
         "recorded_at": encounter.confirmed_at.isoformat() if encounter.confirmed_at else None,
+        # Its statistics: the bound stats match, else (while there is none) whether the newest uploaded log or match
+        # import is still coming or could not be bound, and whether the match is still being looked up by its players.
+        "stats_match_id": stats_match_id,
+        "log_state": log_state,
+        "match_search": match_search,
     }
 
 
 async def _dump_rounds(session: Any, rounds: list[Any]) -> list[dict[str, Any]]:
-    """Dump match history, resolving every round's map name and thumbnail and its hero bans and picks in one read
-    each."""
+    """Dump match history, resolving every round's map name and thumbnail, its hero bans and picks and its match log
+    in one read each."""
+    encounter_ids = [round_.encounter.id for round_ in rounds]
     map_ids = {round_.encounter.games[0].map_id for round_ in rounds if round_.encounter.games} - {None}
     map_info = await custom_game_service.round_map_info(session, map_ids)
-    bans = await custom_game_service.mix_rounds.hero_bans(session, [round_.encounter.id for round_ in rounds])
-    picks = await custom_game_service.mix_rounds.hero_picks(session, [round_.encounter.id for round_ in rounds])
+    bans = await custom_game_service.mix_rounds.hero_bans(session, encounter_ids)
+    picks = await custom_game_service.mix_rounds.hero_picks(session, encounter_ids)
+    logs = await custom_game_service.mix_rounds.match_logs(session, encounter_ids)
     return [
-        _dump_round(round_, map_info, bans.get(round_.encounter.id, []), picks.get(round_.encounter.id, []))
+        _dump_round(
+            round_,
+            map_info,
+            bans.get(round_.encounter.id, []),
+            picks.get(round_.encounter.id, []),
+            logs.get(round_.encounter.id, (None, None, None)),
+        )
         for round_ in rounds
     ]
 

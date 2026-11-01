@@ -2,7 +2,7 @@ import { useTranslations } from "next-intl";
 import { Check, CornerDownLeft, Plus } from "lucide-react";
 
 import DivisionIcon from "@/components/DivisionIcon";
-import { HandleLabel } from "@/components/HandleLabel";
+import { PersonLabel } from "@/components/PlayerName";
 import { IconTooltip } from "@/components/ui/icon-tooltip";
 import { RowButton } from "@/components/ui/row-button";
 import { useSlotLabel } from "@/hooks/useSlotLabel";
@@ -40,7 +40,7 @@ export function RosterRowItem({
   const t = useTranslations("mixes.addPlayers.row");
   const tLineup = useTranslations("mixes.lineup");
   const slotLabel = useSlotLabel(owner.ontology);
-  const label = row.displayName || row.handle || `#${row.memberId}`;
+  const label = row.display.name;
   const { grid } = owner;
 
   return (
@@ -74,9 +74,8 @@ export function RosterRowItem({
         </span>
 
         <span className="flex min-w-0 flex-1 items-baseline gap-1.5">
-          <HandleLabel
-            handle={label}
-            title={label}
+          <PersonLabel
+            display={row.display}
             className="text-caption font-semibold text-[color:var(--aqt-fg)]"
             tagClassName="text-label"
           />

@@ -4,11 +4,13 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 from shared.core.pagination import SortOrder
+from shared.schemas.identity import PersonDisplayRead
 
 __all__ = (
     "PlayerStatistics",
     "PlayerLeaderboardQueryParams",
     "PlayerLeaderboardRow",
+    "StatPlayerRef",
     "StatRef",
     "StatMapRef",
     "StatRecordCode",
@@ -39,7 +41,9 @@ class PlayerLeaderboardRow(BaseModel):
     #: Competition rank (1, 2, 2, 4) by the sort metric over the whole population.
     rank: int
     id: int
-    name: str
+    #: How the page's game names the player (``display.canonical`` builds the profile link); every game's
+    #: board carries the canonical name.
+    display: PersonDisplayRead
     titles: int
     tournaments: int
     maps_won: int
@@ -53,6 +57,12 @@ class PlayerLeaderboardRow(BaseModel):
 class StatRef(BaseModel):
     id: int
     name: str
+
+
+class StatPlayerRef(BaseModel):
+    id: int
+    #: How the record's game names the player; the cross-game read carries the canonical name.
+    display: PersonDisplayRead
 
 
 class StatMapRef(BaseModel):
@@ -80,7 +90,7 @@ StatRecordCode = typing.Literal[
 class StatRecord(BaseModel):
     code: StatRecordCode
     value: float
-    player: StatRef | None = None
+    player: StatPlayerRef | None = None
     team: StatRef | None = None
     opponent: StatRef | None = None
     tournament: StatRef | None = None

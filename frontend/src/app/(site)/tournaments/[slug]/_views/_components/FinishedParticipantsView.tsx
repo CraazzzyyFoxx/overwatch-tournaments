@@ -22,6 +22,7 @@ import type { Tournament } from "@/types/tournament.types";
 
 import { useTournamentInsights } from "../../_hooks/useTournamentInsights";
 import { useTournamentRoster, type RosterEntry } from "../useTournamentRoster";
+import { playerMatches } from "../tournamentTeams.model";
 import { wideOnly } from "./OverviewCards";
 import { SortableTable, type SortableColumn } from "./SortableTable";
 
@@ -83,7 +84,7 @@ export function FinishedParticipantsView({ tournament }: Readonly<{ tournament: 
     return (
       matches &&
       (needle === "" ||
-        row.entry.player.name.toLowerCase().includes(needle) ||
+        playerMatches(row.entry.player, needle) ||
         row.entry.team.name.toLowerCase().includes(needle))
     );
   });
@@ -120,11 +121,11 @@ export function FinishedParticipantsView({ tournament }: Readonly<{ tournament: 
       key: "player",
       label: t("stats.players.player"),
       ascendingFirst: true,
-      sortValue: (row) => row.entry.player.name.toLowerCase(),
+      sortValue: (row) => row.entry.player.display.name.toLowerCase(),
       cell: (row) => (
         <span className="flex min-w-0 items-center gap-2.5">
           <PlayerRoleIcon role={row.entry.player.role} ontology={ontology} size={16} decorative />
-          <PlayerName player={row.entry.player} className="max-w-[14rem] text-caption" />
+          <PlayerName display={row.entry.player.display} className="max-w-[14rem] text-caption" />
         </span>
       )
     },
@@ -400,7 +401,7 @@ function DraftSummary({
               >
                 <span className="text-label text-[color:var(--aqt-fg-muted)]">{label}</span>
                 <span className="min-w-0">
-                  <PlayerName player={row.entry.player} className="text-caption" />
+                  <PlayerName display={row.entry.player.display} className="text-caption" />
                   <span className="block truncate text-label text-[color:var(--aqt-fg-dim)]">
                     {row.entry.team.name}
                   </span>

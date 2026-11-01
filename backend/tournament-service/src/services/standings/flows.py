@@ -176,7 +176,7 @@ class StandingsFlowsService:
     @versioned(
         generations=tournament_generations("{tournament_id}", STANDINGS),
         ttl=config.settings.standings_cache_ttl,
-        key="standings_by_tournament:v2:{tournament_id}:{entities}",
+        key="standings_by_tournament:v3:{tournament_id}:{entities}",
         prefix="fastapi:",
     )
     async def get_by_tournament(

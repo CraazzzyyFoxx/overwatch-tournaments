@@ -91,11 +91,14 @@ const onRemovePlayer = vi.fn();
 const onOpenPlayer = vi.fn();
 const onApplyRotationHints = vi.fn();
 
+const handleDisplay = (handle: string) => ({ name: handle, tag: null, canonical: handle, snapshot: null });
+
 function row(overrides: Partial<CustomGamePlayer> = {}): CustomGamePlayer {
   return {
     id: 1,
     workspace_member_id: 7,
     display_name: null,
+    display: handleDisplay(overrides.identity?.handle ?? "Aria#1111"),
     identity: { provider: "battlenet", handle: "Aria#1111" },
     sort_order: 0,
     participation: "pool",

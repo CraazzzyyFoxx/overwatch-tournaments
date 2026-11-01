@@ -8,7 +8,7 @@ import { PickupRoleOrderEditor } from "@/app/balancer/mix/PickupRoleOrderEditor"
 import { RoomLink } from "@/app/balancer/mix/_room/room-navigation";
 import { LobbyCode } from "@/app/balancer/mix/_components/LobbyCodeStrip";
 import { CAPTION_CLASS, CARD_TITLE_CLASS, lobbyLetter } from "@/app/balancer/mix/pickup-chrome";
-import { HandleLabel } from "@/components/HandleLabel";
+import { PersonLabel } from "@/components/PlayerName";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -296,8 +296,8 @@ export function PickupMySeatPanel({
                 {index > 0 ? dot : null}
                 <span className="flex min-w-0 items-center gap-1">
                   <PlayerRoleIcon role={member.role} ontology={owner.ontology} size={14} />
-                  <HandleLabel
-                    handle={member.name}
+                  <PersonLabel
+                    display={member.display}
                     className={member.isMe ? "font-semibold text-[color:var(--aqt-teal)]" : undefined}
                   />
                   {member.isCaptain ? (

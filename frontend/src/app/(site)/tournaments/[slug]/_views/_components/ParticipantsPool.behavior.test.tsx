@@ -17,6 +17,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import en from "@/i18n/messages/en.json";
+import { canonicalDisplay } from "@/lib/player";
 import type { RosterShape } from "@/lib/roster/shape";
 import type { FormField } from "@/types/forms.types";
 import type { Registration, RegistrationForm, RegistrationRole } from "@/types/registration.types";
@@ -190,6 +191,7 @@ function makeRegistration(
     workspace_id: 3,
     user_id: null,
     primary_handle: battleTag,
+    display: canonicalDisplay(battleTag),
     roles,
     answers: { stream_pov: false, identity_battlenet: [battleTag] },
     form_version_id: 7,

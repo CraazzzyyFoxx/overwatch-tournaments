@@ -219,6 +219,7 @@ export interface Match extends Omit<Schema<"tournament.MatchRead">, "map" | "enc
 
 /** One native observation of a stat: `workspace_member_id` null is a team fact, `entity_id` null has no entity grain. */
 export type NativeFact = Schema<"tournament.NativeFact">;
+/** `display` is how the match's game names the member (`display.canonical` builds the profile link); `handle_snapshot` is data. */
 type NativeMatchMember = Schema<"tournament.NativeMatchMember">;
 /** A child segment (a round); segment 0 is the whole match and has no row. */
 type NativeSegment = Schema<"tournament.NativeSegment">;

@@ -1,5 +1,5 @@
 import type { CatalogEntityChip } from "@/types/catalog.types";
-import { User, UserProfile } from "@/types/user.types";
+import { PersonDisplay, User, UserProfile } from "@/types/user.types";
 import { rosterRoleRank, type RoleOntology } from "@/lib/roster/ontology";
 import { subRoleOf, type RoleRef } from "@/lib/roster/role-ref";
 
@@ -19,6 +19,8 @@ export interface SortableRosterPlayer {
 /** Minimal shape required for `sortTeamPlayers` / TournamentTeamTable rendering. */
 export interface TeamRosterPlayer extends SortableRosterPlayer {
   name: string;
+  /** What the roster's surface shows for this person; `display.canonical` builds the profile link. */
+  display: PersonDisplay;
   division: number | null;
   is_newcomer: boolean;
   is_newcomer_role: boolean;
@@ -131,6 +133,12 @@ export const splitHandle = (handle: string): { name: string; suffix: string | nu
   const index = handle.lastIndexOf("#");
   if (index <= 0) return { name: handle, suffix: null };
   return { name: handle.slice(0, index), suffix: handle.slice(index) };
+};
+
+/** A canonical `players.user.name` as a `PersonDisplay`: what cross-game surfaces (profile, mixed lists) show. */
+export const canonicalDisplay = (name: string): PersonDisplay => {
+  const { name: shown, suffix } = splitHandle(name);
+  return { name: shown, tag: suffix, canonical: name, snapshot: null };
 };
 
 /** Reverse of getPlayerSlug: converts a URL slug back to the stored player name.

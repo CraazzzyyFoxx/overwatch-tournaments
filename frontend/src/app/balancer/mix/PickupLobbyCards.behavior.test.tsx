@@ -86,6 +86,7 @@ function player(memberId: number, overrides: Partial<CustomGamePlayer> = {}): Cu
     id: memberId,
     workspace_member_id: memberId,
     display_name: `P${memberId}`,
+    display: { name: `P${memberId}`, tag: null, canonical: null, snapshot: null },
     identity: null,
     sort_order: memberId,
     participation: "pool",

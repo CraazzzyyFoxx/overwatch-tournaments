@@ -77,6 +77,8 @@ async def execute_match_event_count(
         .where(
             models.EventType.code == event.value,
             match.c.workspace_id == context.workspace_id,
+            # Mix stats live only inside the mix (mix encounters have no tournament).
+            match.c.tournament_id.is_not(None),
         )
         .group_by(
             models.WorkspaceMember.player_id,

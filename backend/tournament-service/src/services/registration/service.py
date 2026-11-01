@@ -1206,7 +1206,7 @@ class RegistrationService:
         """Anonymous participants-list read model.
 
         ``public_list.build_registration_list`` caches this payload
-        (``registration_list:v2:{id}:``, same TTL as other tournament reads) and
+        (``registration_list:v3:{id}:``, same TTL as other tournament reads) and
         coalesces concurrent misses. ``registration_changed`` invalidates it; TTL
         bounds admin writes that only hit the balancer WS topic.
 
@@ -1229,7 +1229,7 @@ class RegistrationService:
 
         # The organizer publishes the shape of the field, not the field. Enforced
         # HERE and not in the client because this payload is cached per tournament
-        # with no viewer in the key (``registration_list:v2:{id}:``) -- a per-viewer
+        # with no viewer in the key (``registration_list:v3:{id}:``) -- a per-viewer
         # branch would serve one reader's answer to the next. Organizers read the
         # full roster through the admin registrations table.
         if form is not None and form.hide_registrations:

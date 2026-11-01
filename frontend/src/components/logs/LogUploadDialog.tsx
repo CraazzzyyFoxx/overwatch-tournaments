@@ -29,25 +29,27 @@ import { cn } from "@/lib/utils";
 import adminService from "@/services/admin.service";
 import { useAccountSettingsModalStore } from "@/stores/account-settings-modal.store";
 import { useAuthProfileStore } from "@/stores/auth-profile.store";
+import type { LogUploadScope } from "@/types/admin.types";
 import type { Encounter } from "@/types/encounter.types";
 import { AutoUploadStatus } from "./AutoUploadStatus";
 
 const LOG_FILE_ACCEPT = ".log,.txt,.csv";
 
 /** Opens the dialog without a trigger, e.g. from a table command. */
-export interface TournamentLogUploadHandle {
+export interface LogUploadHandle {
   open: () => void;
 }
 
-interface TournamentLogUploadDialogProps {
-  tournamentId: number;
-  encounters: Encounter[];
+interface LogUploadDialogProps {
+  /** Tournament scope may pin one encounter; a mix scope is already fixed, so no encounter is offered. */
+  scope: LogUploadScope;
+  /** Tournament encounters to pick from; unused for a mix. */
+  encounters?: Encounter[];
   /** Omitted when the dialog is opened through `ref` instead. */
   trigger?: ReactNode;
-  ref?: Ref<TournamentLogUploadHandle>;
-  initialEncounterId?: number | null;
+  ref?: Ref<LogUploadHandle>;
   onUploaded?: () => void;
-  /** Watch the folder and offer the automatic tab. Only the encounter room opts in. */
+  /** Watch the folder and offer the automatic tab. Only the encounter and lobby rooms opt in. */
   autoUpload?: boolean;
 }
 
@@ -63,20 +65,20 @@ const ENTRY_TONE: Record<AutoUploadEntryState, Tone> = {
   failed: "danger"
 };
 
-export function TournamentLogUploadDialog(props: Readonly<TournamentLogUploadDialogProps>) {
+export function LogUploadDialog(props: Readonly<LogUploadDialogProps>) {
   const accountId = useAuthProfileStore((state) => state.user?.id);
   // A different account must never inherit an open folder listing or selection.
   return <DirectoryUploadDialog key={accountId ?? "anonymous"} {...props} />;
 }
 
 function DirectoryUploadDialog({
-  tournamentId, encounters, trigger, ref, initialEncounterId = null, onUploaded, autoUpload = false
-}: Readonly<TournamentLogUploadDialogProps>) {
+  scope, encounters = [], trigger, ref, onUploaded, autoUpload = false
+}: Readonly<LogUploadDialogProps>) {
   const t = useTranslations("accountSettings.logDirectory");
   const format = useFormatter();
   const directory = useLogDirectory();
   // Mounted with the trigger, not the open dialog: watching outlives the modal.
-  useLogAutoUpload({ enabled: autoUpload, tournamentId, encounterId: initialEncounterId, onUploaded });
+  useLogAutoUpload({ enabled: autoUpload, scope, onUploaded });
   const watcher = useLogAutoUploadStore();
   const encounterInputId = useId();
   const scanId = useRef(0);
@@ -88,6 +90,7 @@ function DirectoryUploadDialog({
   // Files chosen one by one from any folder, beside the saved folder's listing.
   const [picked, setPicked] = useState<{ files: File[]; at: number }>({ files: [], at: 0 });
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
+  const initialEncounterId = "tournamentId" in scope ? scope.encounterId ?? null : null;
   const [selectedEncounterId, setSelectedEncounterId] = useState(
     initialEncounterId != null ? initialEncounterId.toString() : NO_ENCOUNTER_VALUE
   );
@@ -99,11 +102,15 @@ function DirectoryUploadDialog({
   const selectedRows = rows.filter((row) => selectedKeys.has(row.key));
   // A picked file may share its name with a folder file; one upload cannot carry both.
   const duplicateNames = [...new Set(selectedRows.map((row) => row.name).filter((name, index, names) => names.indexOf(name) !== index))];
+  const isMix = "customGameId" in scope;
   // The pregame room passes its own encounter only: nothing to choose.
   const fixedEncounter = initialEncounterId != null && encounters.length === 1 ? encounters[0] : null;
   const watching = watcher.holder != null && watcher.status === "watching";
-  const watcherEncounterId = watcher.target?.encounterId ?? null;
-  const autoTarget = watcherEncounterId == null
+  const watcherTarget = watcher.target;
+  const watcherEncounterId = watcherTarget && "tournamentId" in watcherTarget ? watcherTarget.encounterId ?? null : null;
+  const autoTarget = watcherTarget && "customGameId" in watcherTarget
+    ? t("auto.targetMix")
+    : watcherEncounterId == null
     ? t("auto.targetTournament")
     : t("auto.targetEncounter", {
       encounter: encounters.find((encounter) => encounter.id === watcherEncounterId)?.name ?? `#${watcherEncounterId}`
@@ -118,9 +125,10 @@ function DirectoryUploadDialog({
       const files = await Promise.all(selectedRows.map((row) => row.read()));
       if (useAuthProfileStore.getState().user?.id !== accountId) throw new LogDirectoryError("account");
       return adminService.uploadMatchLogs({
-        tournamentId,
-        files,
-        encounterId: selectedEncounterId === NO_ENCOUNTER_VALUE ? null : Number(selectedEncounterId)
+        ...("tournamentId" in scope
+          ? { tournamentId: scope.tournamentId, encounterId: selectedEncounterId === NO_ENCOUNTER_VALUE ? null : Number(selectedEncounterId) }
+          : scope),
+        files
       });
     },
     onSuccess: (result) => {
@@ -228,7 +236,11 @@ function DirectoryUploadDialog({
         <DialogHeader>
           <DialogTitle>{t("uploadTitle")}</DialogTitle>
           <DialogDescription>
-            {fixedEncounter ? t("uploadHintEncounter", { encounter: fixedEncounter.name }) : t("uploadHintTournament")}
+            {isMix
+              ? t("encounterId" in scope ? "uploadHintMixMatch" : "uploadHintMix")
+              : fixedEncounter
+              ? t("uploadHintEncounter", { encounter: fixedEncounter.name })
+              : t("uploadHintTournament")}
           </DialogDescription>
         </DialogHeader>
         <Tabs value={tab} onValueChange={setTab} className="min-w-0 space-y-4">
@@ -336,7 +348,7 @@ function DirectoryUploadDialog({
                 {uploadMutation.data.errors.map((failure, index) => <li key={index} className="break-all">{failure.filename ? `${failure.filename}: ` : ""}{failure.error}</li>)}
               </ul>
             ) : null}
-            {fixedEncounter ? null : (
+            {fixedEncounter || isMix ? null : (
               <div className="space-y-2">
                 <Label htmlFor={encounterInputId}>{t("encounter")}</Label>
                 <Select value={selectedEncounterId} onValueChange={setSelectedEncounterId} disabled={locked}>

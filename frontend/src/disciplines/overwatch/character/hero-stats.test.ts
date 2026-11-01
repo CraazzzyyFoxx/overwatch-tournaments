@@ -26,7 +26,7 @@ const game = (value: number, player = "Me#1"): CharacterStatBest => ({
   encounter_id: 7,
   map_image_path: "",
   map_name: "King's Row",
-  player_name: player,
+  display: { name: player.slice(0, player.lastIndexOf("#")), tag: player.slice(player.lastIndexOf("#")), canonical: player, snapshot: null },
   tournament_name: "Cup #1",
   value
 });
@@ -99,7 +99,7 @@ describe("a hero's stat rows", () => {
       ])
     );
     expect(row(rows, LogStatsName.Deaths)).toMatchObject({ best: null, record: null, holdsRecord: false });
-    expect(row(rows, LogStatsName.Eliminations)).toMatchObject({ holdsRecord: false, record: { player_name: "Mioto#1" } });
+    expect(row(rows, LogStatsName.Eliminations)).toMatchObject({ holdsRecord: false, record: { display: { name: "Mioto" } } });
     expect(row(rows, LogStatsName.HeroDamageDealt)?.holdsRecord).toBe(true);
     expect(row(rows, LogStatsName.SoloKills)).toMatchObject({ best: null, holdsRecord: false });
     expect(row(rows, LogStatsName.WeaponAccuracy)).toMatchObject({ best: null, record: null, holdsRecord: false });

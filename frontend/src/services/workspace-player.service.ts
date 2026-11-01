@@ -1,5 +1,6 @@
 import { apiFetch } from "@/lib/api/fetch";
 import type { PlayerIdentity } from "@/types/identity.types";
+import type { PersonDisplay } from "@/types/user.types";
 import type { PaginatedResponse } from "@/types/pagination.types";
 
 /**
@@ -23,6 +24,8 @@ export type RosterMember = {
   auth_user_id: number | null;
   identity: PlayerIdentity | null;
   display_name: string | null;
+  /** The name to show: the person's name in the roster's game (the server resolves it). */
+  display: PersonDisplay;
   ranks: Record<string, number>;
   author_ranks: Record<string, number>;
 };

@@ -29,6 +29,7 @@ from shared.core.errors import BaseAPIException as HTTPException  # noqa: E402
 from shared.disciplines import DISCIPLINES  # noqa: E402
 from shared.domain.custom_game_round import winner_slot  # noqa: E402
 from shared.models.platform.notification import Notification  # noqa: E402
+from shared.models.stats.ingest import IngestJobStatus  # noqa: E402
 from shared.repository import CatalogRoleRepository, CustomGamePlayerRepository, CustomGameRoundRepository  # noqa: E402
 from shared.services.discord_messages import mix_subject  # noqa: E402
 from shared.tests.encounter_writer_case import EncounterWriterCase  # noqa: E402
@@ -1114,6 +1115,75 @@ class CustomGameRoundStoreTests(EncounterWriterCase):
             [played] = await custom._dump_rounds(s, list(await self.rounds.list_for_custom_game(s, self.cg.id)))
 
         self.assertEqual([{"slot": 1, "item_id": 42}, {"slot": 2, "item_id": 40}], played["bans"])
+
+    async def test_the_history_lists_each_rounds_match_log_in_one_read(self) -> None:
+        async with self.Session() as s:
+            oasis = models.CatalogEntity(
+                discipline="overwatch", kind="map", slug=f"cgr-log-{self.ids['ws']}", name="log map", image_path="x.png"
+            )
+            s.add(oasis)
+            await s.commit()
+        self.addAsyncCleanup(self._drop_maps, [oasis.id])
+        bound, failed, pending, done, bare, searching, gave_up = [await self._record(self._draft()) for _ in range(7)]
+
+        def search(encounter_id: int, status: models.MatchSearchStatus) -> models.MatchSearch:
+            return models.MatchSearch(
+                workspace_id=self.ids["ws"], discipline="overwatch", encounter_id=encounter_id, status=status
+            )
+
+        def job(encounter_id: int, status: IngestJobStatus, n: int) -> models.IngestJob:
+            return models.IngestJob(
+                workspace_id=self.ids["ws"],
+                discipline="overwatch",
+                source_kind="upload",
+                # ``available`` needs a hash, and (workspace, hash) is unique per job.
+                content_hash=f"{encounter_id:032x}{n:032x}",
+                raw_ref=f"logs/mix/{self.cg.id}/{encounter_id}-{n}",
+                hint_encounter_id=encounter_id,
+                status=status,
+            )
+
+        async with self.Session() as s:
+            s.add_all(
+                [
+                    models.StatsMatch(
+                        workspace_id=self.ids["ws"], discipline="overwatch", encounter_id=bound, map_entity_id=oasis.id
+                    ),
+                    # A bound match wins over any job.
+                    job(bound, IngestJobStatus.FAILED, 0),
+                    job(failed, IngestJobStatus.PENDING, 0),
+                    job(pending, IngestJobStatus.PENDING, 0),
+                    job(done, IngestJobStatus.DONE, 0),
+                    # A bound match wins over a search too.
+                    search(bound, models.MatchSearchStatus.PENDING),
+                    # A search still looking is something still coming, even over a failed job.
+                    search(searching, models.MatchSearchStatus.PENDING),
+                    job(searching, IngestJobStatus.FAILED, 0),
+                    search(gave_up, models.MatchSearchStatus.NOT_FOUND),
+                ]
+            )
+            await s.flush()
+            # The NEWEST job of an encounter speaks: this one supersedes the pending one above.
+            s.add(job(failed, IngestJobStatus.AWAITING_LINK, 1))
+            await s.commit()
+        [(match_id,)] = await self._rows("SELECT id FROM stats.match WHERE encounter_id = :id", id=bound)
+
+        async with self.Session() as s:
+            rows = await custom._dump_rounds(s, list(await self.rounds.list_for_custom_game(s, self.cg.id)))
+            self.assertEqual({}, await self.rounds.match_logs(s, []))
+
+        self.assertEqual(
+            {
+                bound: (match_id, None, None),
+                failed: (None, "failed", None),
+                pending: (None, "processing", None),
+                done: (None, None, None),
+                bare: (None, None, None),
+                searching: (None, "processing", "searching"),
+                gave_up: (None, None, "not_found"),
+            },
+            {row["id"]: (row["stats_match_id"], row["log_state"], row["match_search"]) for row in rows},
+        )
 
     async def test_the_history_lists_whose_hero_each_pick_was(self) -> None:
         encounter_id = await self._record(self._draft())

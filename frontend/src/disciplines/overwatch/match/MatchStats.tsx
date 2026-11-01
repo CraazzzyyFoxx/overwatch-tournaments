@@ -1,190 +1,128 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useTranslations } from "next-intl";
-import dynamic from "next/dynamic";
 import type { SlotProps } from "@/disciplines/types";
-import { Card } from "@/components/ui/card";
+import type { DisciplineMetadata } from "@/types/discipline.types";
+import type { MatchWithStats } from "@/types/encounter.types";
 import { Eyebrow } from "@/components/ui/eyebrow";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from "@/components/ui/select";
-import {
-  COLUMN_PRESETS,
-  PRESET_ORDER,
-  PresetKey,
-  availableRounds,
-  columnMaxima
-} from "./stats";
+import { availableRounds } from "./stats";
 import { owMatchView, type OwTeam } from "./view";
-import TeamTable from "./TeamTable";
-import TeamComparison from "./TeamComparison";
-import Leaders from "./Leaders";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Table } from "@/components/ui/table";
+import Scoreboard from "./Scoreboard";
+import Breakdown from "./Breakdown";
 import KillFeedTimeline from "./KillFeedTimeline";
-import type { MatchWithStats } from "@/types/encounter.types";
 
-// recharts is ~100 kB of the client bundle and only the "comparison" tab ever
-// renders it, so it loads on demand. The placeholder matches the chart's own
-// minimum height (220px + the stat toggles) so the tab does not jump.
-const ContributionChart = dynamic(
-  () => import("./ContributionChart"),
-  { ssr: false, loading: () => <Skeleton className="h-70 w-full rounded-lg" /> }
-);
+type Tab = "tables" | "breakdown" | "timeline";
+
+/** A fight by its place in the timeline: the round and its 1-based number inside the round (`readFights`). */
+export interface FightRef {
+  round: number;
+  fight: number;
+}
+
+/** A request to bring a fight into view; `nonce` repeats a jump to the fight already focused. */
+export interface FightFocus extends FightRef {
+  nonce: number;
+}
 
 interface MatchStatsViewProps {
   match: MatchWithStats;
+  metadata: DisciplineMetadata;
   home: OwTeam;
   away: OwTeam;
 }
 
-type ViewMode = "simple" | "extended";
-type ExtendedTab = "tables" | "comparison" | "timeline";
+const MatchStatsView = ({ match, metadata, home, away }: MatchStatsViewProps) => {
+  const t = useTranslations();
+  const [tab, setTab] = useState<Tab>("tables");
+  const [round, setRound] = useState(0);
+  const [focus, setFocus] = useState<FightFocus | null>(null);
 
-const MatchStatsView = ({ match, home, away }: MatchStatsViewProps) => {
-  const t = useTranslations<never>();
-
-  const rounds = useMemo(() => availableRounds(home, away), [home, away]);
-  const [mode, setMode] = useState<ViewMode>("simple");
-  const [round, setRound] = useState<number>(0);
-  const [preset, setPreset] = useState<PresetKey>("overview");
-  const [tab, setTab] = useState<ExtendedTab>("tables");
-
+  const rounds = availableRounds(home, away).filter((value) => value > 0);
+  // A round picked on one map stays meaningful only while this map has it.
   const activeRound = rounds.includes(round) ? round : 0;
-  // Simple view is a fixed scoreboard (overview columns); extended follows the preset.
-  const columns = mode === "simple" ? COLUMN_PRESETS.overview : COLUMN_PRESETS[preset];
-  const columnMax = useMemo(
-    () => columnMaxima(home, away, activeRound, columns),
-    [home, away, activeRound, columns]
-  );
 
-  const roundLabel = (value: number) =>
-    value === 0 ? t("matches.allMatch") : t("matches.round", { round: value });
-
-  // Round is relevant everywhere except the timeline (which spans the whole match).
-  const showRound = rounds.length > 1 && (mode === "simple" || tab !== "timeline");
-  const roundControl = showRound ? (
-    <div className="flex items-center gap-2">
-      <Eyebrow className="aqt-tnum">{t("matches.roundLabel")}</Eyebrow>
-      <Select value={String(activeRound)} onValueChange={(value) => setRound(Number(value))}>
-        <SelectTrigger size="sm" className="w-[150px]">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {rounds.map((value) => (
-            <SelectItem key={value} value={String(value)}>
-              {roundLabel(value)}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
-  ) : null;
-
-  // ONE table, ONE horizontal scroll container (the table's own wrapper), two
-  // `<tbody>` sections. Two sibling tables each scrolled independently, so
-  // reaching a right-hand stat column on one team desynced it from the other —
-  // the exact comparison this panel exists to make.
-  const tables = (
-    <Card className="overflow-hidden">
-      {/* The rating column's MVP cards: one provider, so moving between badges skips the open delay. */}
-      <TooltipProvider>
-        <Table>
-          <TeamTable
-            team={home}
-            isHome={true}
-            matchRound={activeRound}
-            columns={columns}
-            columnMax={columnMax}
-          />
-          <TeamTable
-            team={away}
-            isHome={false}
-            matchRound={activeRound}
-            columns={columns}
-            columnMax={columnMax}
-          />
-        </Table>
-      </TooltipProvider>
-    </Card>
-  );
+  const gotoFight = (fight: FightRef) => {
+    setFocus((previous) => ({ ...fight, nonce: (previous?.nonce ?? 0) + 1 }));
+    setTab("timeline");
+  };
 
   return (
-    <div className="flex flex-col gap-4">
-      {/* Single control bar: view mode + (contextual) round */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <ToggleGroup
-          value={mode}
-          onValueChange={(value) => value && setMode(value as ViewMode)}
-          variant="pill"
-          size="sm"
-        >
-          <ToggleGroupItem value="simple">{t("matches.view.simple")}</ToggleGroupItem>
-          <ToggleGroupItem value="extended">{t("matches.view.extended")}</ToggleGroupItem>
-        </ToggleGroup>
-        {roundControl}
+    <Tabs
+      value={tab}
+      onValueChange={(value) => {
+        setTab(value as Tab);
+        // A jump is a one-off: coming back to the timeline later must not scroll to it again.
+        setFocus(null);
+      }}
+      className="flex flex-col gap-4"
+    >
+      {/* The row carries the tabs' baseline so the round toggle can share it on the right; on a phone the
+          toggle goes above and the tabs keep the baseline. */}
+      <div className="flex flex-wrap items-end justify-between gap-x-4 border-b border-[color:var(--aqt-border)]">
+        <TabsList className="shadow-none max-sm:w-full sm:w-auto">
+          <TabsTrigger value="tables">{t("matches.tab.tables")}</TabsTrigger>
+          <TabsTrigger value="breakdown">{t("matches.tab.breakdown")}</TabsTrigger>
+          <TabsTrigger value="timeline">{t("matches.tab.timeline")}</TabsTrigger>
+        </TabsList>
+        {/* One round is the whole map: a choice between them only exists from two. */}
+        {rounds.length > 1 ? (
+          <div className="flex items-center gap-2 py-1.5 max-sm:order-first">
+            <Eyebrow>{t("matches.roundLabel")}</Eyebrow>
+            <ToggleGroup
+              value={String(activeRound)}
+              onValueChange={(value) => value && setRound(Number(value))}
+              variant="pill"
+              size="sm"
+              aria-label={t("matches.roundLabel")}
+            >
+              <ToggleGroupItem value="0">{t("matches.allMatch")}</ToggleGroupItem>
+              {rounds.map((value) => (
+                <ToggleGroupItem key={value} value={String(value)} aria-label={t("matches.round", { round: value })}>
+                  {t("matches.roundShort", { round: value })}
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
+          </div>
+        ) : null}
       </div>
 
-      {mode === "simple" ? (
-        tables
-      ) : (
-        <Tabs value={tab} onValueChange={(value) => setTab(value as ExtendedTab)}>
-          <TabsList>
-            <TabsTrigger value="tables">{t("matches.tab.tables")}</TabsTrigger>
-            <TabsTrigger value="comparison">{t("matches.tab.comparison")}</TabsTrigger>
-            <TabsTrigger value="timeline">{t("matches.tab.timeline")}</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="tables" className="flex flex-col gap-3">
-            <div className="flex items-center gap-2">
-              <Eyebrow className="aqt-tnum">{t("matches.tableView")}</Eyebrow>
-              <Select value={preset} onValueChange={(value) => setPreset(value as PresetKey)}>
-                <SelectTrigger size="sm" className="w-[160px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {PRESET_ORDER.map((key) => (
-                    <SelectItem key={key} value={key}>
-                      {t(`matches.preset.${key}`)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            {tables}
-          </TabsContent>
-
-          <TabsContent value="comparison" className="flex flex-col gap-5">
-            <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-              <TeamComparison home={home} away={away} round={activeRound} />
-              <ContributionChart home={home} away={away} round={activeRound} />
-            </div>
-            <Leaders home={home} away={away} round={activeRound} />
-          </TabsContent>
-
-          <TabsContent value="timeline">
-            <KillFeedTimeline matchId={match.id} members={match.statistics.members} home={home} away={away} />
-          </TabsContent>
-        </Tabs>
-      )}
-    </div>
+      <TabsContent value="tables">
+        <Scoreboard home={home} away={away} round={activeRound} metadata={metadata} />
+      </TabsContent>
+      <TabsContent value="breakdown">
+        <Breakdown
+          match={match}
+          home={home}
+          away={away}
+          round={activeRound}
+          metadata={metadata}
+          onGotoFight={gotoFight}
+        />
+      </TabsContent>
+      <TabsContent value="timeline">
+        <KillFeedTimeline
+          matchId={match.id}
+          members={match.statistics.members}
+          home={home}
+          away={away}
+          round={activeRound}
+          focus={focus}
+        />
+      </TabsContent>
+    </Tabs>
   );
 };
 
 /**
- * The Overwatch scoreboard of a duel: summary and extended tables, team comparison, contribution chart, leaders
- * and the kill timeline. The host renders it only for a match with exactly two participants.
+ * The Overwatch scoreboard of a duel: the per-player table, the breakdown (team totals, player of the map, map
+ * flow, lineups, role duels, shares) and the kill timeline, all read for the whole map or one round. The host renders
+ * it only for a match with exactly two participants.
  */
-export default function MatchStats({ match }: Readonly<SlotProps["matchStats"]>) {
-  const view = useMemo(() => owMatchView(match), [match]);
+export default function MatchStats({ match, metadata }: Readonly<SlotProps["matchStats"]>) {
+  const view = owMatchView(match);
   if (!view) return null;
-  return <MatchStatsView match={match} home={view.home} away={view.away} />;
+  return <MatchStatsView match={match} metadata={metadata} home={view.home} away={view.away} />;
 }

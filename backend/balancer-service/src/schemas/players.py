@@ -6,7 +6,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from shared.schemas.identity import PlayerIdentityRead
+from shared.schemas.identity import PersonDisplayRead, PlayerIdentityRead
 
 __all__ = ("WorkspacePlayerRanksWrite", "WorkspacePlayerRead", "WorkspacePlayerUpsert")
 
@@ -56,6 +56,7 @@ class WorkspacePlayerRead(BaseModel):
         description="Primary account of the requested discipline's identity provider; null when the player has none."
     )
     display_name: str | None
+    display: PersonDisplayRead = Field(description="How the member is named in this workspace's game.")
     auth_user_id: int | None = Field(description="Linked login (auth.user.id); null if the player never signed in.")
     ranks: dict[str, int] = Field(description="The workspace canon, by rated role code.")
     author_ranks: dict[str, int] = Field(description="The read author's own book, by rated role code.")

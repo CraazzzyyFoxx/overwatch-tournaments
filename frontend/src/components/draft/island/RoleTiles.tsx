@@ -61,7 +61,7 @@ export function RoleTiles({
   const roles = playerRoles(player);
   // A one-role game's tile is the player, not a role: no role name, no priority.
   const named = showsRoles(ontology);
-  const displayName = player.identity?.handle ?? `#${player.id}`;
+  const displayName = player.display.name;
   // The team a tile selects for; tiles are read-only chips without one.
   const team = player.status === "available" ? actingTeam : null;
   const interactive = team != null;

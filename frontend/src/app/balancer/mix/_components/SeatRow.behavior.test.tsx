@@ -24,6 +24,7 @@ function seat(overrides: Partial<PickupSeat> = {}): PickupSeat {
   return {
     uuid: "8",
     name: "DemonDimon",
+    display: { name: "DemonDimon", tag: null, canonical: null, snapshot: null },
     role: "tank",
     rating: 3900,
     openRating: null,

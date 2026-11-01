@@ -74,6 +74,7 @@ function row(overrides: Partial<CustomGamePlayer> = {}): CustomGamePlayer {
     id: 1,
     workspace_member_id: 7,
     display_name: null,
+    display: { name: "Aria#1111", tag: null, canonical: "Aria#1111", snapshot: null },
     identity: { provider: "battlenet", handle: "Aria#1111" },
     sort_order: 0,
     participation: "pool",
@@ -423,6 +424,7 @@ describe("PickupPlayerSheet mix record", () => {
     return {
       workspace_member_id: 7,
       display_name: null,
+      display: { name: "Aria#1111", tag: null, canonical: "Aria#1111", snapshot: null },
       identity: { provider: "battlenet", handle: "Aria#1111" },
       games: 20,
       wins: 12,

@@ -41,7 +41,7 @@ const text = (root: HTMLElement) => (root.textContent ?? "").replace(/[\u00a0\u2
 const row = (patch: Partial<PlayerLeaderboardRow>): PlayerLeaderboardRow => ({
   rank: 1,
   id: 1,
-  name: "Fox#2130",
+  display: { name: "Fox", tag: "#2130", canonical: "Fox#2130", snapshot: null },
   titles: 4,
   tournaments: 20,
   maps_won: 120,
@@ -80,7 +80,10 @@ describe("statistics almanac sections", () => {
       page: 1,
       per_page: 20,
       total: 2,
-      results: [row({}), row({ rank: 4, id: 2, name: "Newbie", titles: 0, tournaments: 2, low_sample: true })]
+      results: [
+        row({}),
+        row({ rank: 4, id: 2, display: { name: "Newbie", tag: null, canonical: "Newbie", snapshot: null }, titles: 0, tournaments: 2, low_sample: true })
+      ]
     });
     const root = await render(
       await PlayersSection({
@@ -124,7 +127,7 @@ describe("statistics almanac sections", () => {
         record({
           code: "hero_damage",
           value: 18532.4,
-          player: { id: 3, name: "Fox#2130" },
+          player: { id: 3, display: { name: "Fox", tag: "#2130", canonical: "Fox#2130", snapshot: null } },
           team: { id: 1, name: "Underdogs" },
           opponent: { id: 2, name: "Favourites" },
           map: { id: 8, name: "Ilios", slug: "ilios", image_path: null },
@@ -141,6 +144,7 @@ describe("statistics almanac sections", () => {
     expect(root.querySelector('a[href="/tournaments/5"]')).not.toBeNull();
     expect(text(root)).toContain("18 532");
     expect(root.querySelector('a[href="/matches/9"]')?.textContent).toBe("Ilios");
+    expect(root.querySelector('a[href="/users/Fox-2130"]')?.textContent).toBe("Fox#2130");
     expect(text(root)).toContain("21:03");
   });
 

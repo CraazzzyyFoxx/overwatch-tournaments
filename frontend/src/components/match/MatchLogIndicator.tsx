@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { ScrollText, FileDown, FileX } from "lucide-react";
+import { CircleAlert, CircleCheck, ScrollText, FileDown, FileX } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -26,7 +26,7 @@ interface MatchLogIndicatorProps {
 }
 
 /** Direct, browser-navigable download URL for a match's parsed log. */
-const matchLogDownloadUrl = (matchId: number) => `/api/v1/matches/${matchId}/log`;
+export const matchLogDownloadUrl = (matchId: number) => `/api/v1/matches/${matchId}/log`;
 
 const BASE =
   "inline-flex h-7 w-7 items-center justify-center rounded-[7px] border transition-colors " +
@@ -40,11 +40,27 @@ const stop = (e: React.MouseEvent) => e.stopPropagation();
 
 export function RawLogStatus({
   raw_status,
-  raw_available
-}: Readonly<{ raw_status: RawSourceStatus | null; raw_available: boolean }>) {
+  raw_available,
+  variant = "text"
+}: Readonly<{ raw_status: RawSourceStatus | null; raw_available: boolean; variant?: "text" | "icon" }>) {
   const t = useTranslations("common.rawLog");
   const status = raw_available ? "available" : raw_status === "available" ? "unverified" : raw_status ?? "none";
-  return <span>{t(status)}</span>;
+  if (variant === "text") return <span>{t(status)}</span>;
+  // A line of facts has no room for the sentence: the state is an icon, the sentence its name.
+  const Icon = status === "available" ? CircleCheck : CircleAlert;
+  return (
+    <span
+      role="img"
+      aria-label={t(status)}
+      title={t(status)}
+      className={cn(
+        "inline-flex shrink-0",
+        status === "available" ? "text-[color:var(--aqt-up)]" : "text-[color:var(--aqt-amber)]"
+      )}
+    >
+      <Icon aria-hidden className="size-3.5" />
+    </span>
+  );
 }
 
 /**

@@ -13,7 +13,7 @@ import adminService from "@/services/admin.service";
 import pickBanService from "@/services/pickBan.service";
 import type { PickBanKind, PickBanState, PickBanSubmissionItem } from "@/types/tournament.types";
 
-import { DRAFT_SAVE_DELAY_MS, stepSubmissions } from "./pick-ban-model";
+import { DRAFT_SAVE_DELAY_MS, memberName, stepSubmissions } from "./pick-ban-model";
 import type { PickBanItemLike } from "./PickBanGrid";
 
 /** Whom a member pick is made for, when the viewer may pick for more than one player (spec §11.6 R4-3, R4-9). */
@@ -205,7 +205,7 @@ export function PickBanAssignBoard({
               <Eyebrow>{teamName(teamId)}</Eyebrow>
               {members.map((member) => (
                 <div key={member.id} className="flex flex-wrap items-center gap-1">
-                  <span className="w-32 truncate text-sm">{member.name}</span>
+                  <span className="w-32 truncate text-sm">{memberName(state.members, member.id)}</span>
                   {(state.member_eligible?.[String(member.id)] ?? []).map((heroId) => (
                     <Button
                       key={heroId}
@@ -214,7 +214,7 @@ export function PickBanAssignBoard({
                       disabled={teamLocking}
                       variant={picks[member.id] === heroId ? "accent" : "outline"}
                       aria-pressed={picks[member.id] === heroId}
-                      aria-label={t("assign.give", { hero: heroName(heroId), member: member.name })}
+                      aria-label={t("assign.give", { hero: heroName(heroId), member: memberName(state.members, member.id) })}
                       onClick={() =>
                         choose(teamId, {
                           ...Object.fromEntries(Object.entries(picks).filter(([, hero]) => hero !== heroId)),

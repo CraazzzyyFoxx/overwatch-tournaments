@@ -201,16 +201,17 @@ describe("hero leaderboard selection", () => {
     expect(mocks.leaderboard).not.toHaveBeenCalled();
   });
 
+  const ownDisplay = (name: string) => ({ name, tag: null, canonical: name, snapshot: null });
   /** One Overwatch row with enough games on the hero to clear the all-time sample floor (5). */
   const OW_ROW = {
-    rank: 1, user_id: 1, username: "ow-ranked", player_name: "ow-ranked", role: null, div: 1, team: null, team_id: null,
+    rank: 1, user_id: 1, display: ownDisplay("ow-ranked"), role: null, div: 1, team: null, team_id: null,
     games_played: 12, playtime_seconds: 900, per10_eliminations: 10, per10_healing: 0, per10_deaths: 4,
     per10_damage: 1, per10_final_blows: 1, per10_damage_blocked: 0, per10_solo_kills: 0, per10_obj_kills: 0,
     per10_defensive_assists: 0, per10_offensive_assists: 0, per10_all_damage: 1, per10_damage_taken: 1,
     per10_self_healing: 0, per10_ultimates_used: 0, per10_multikills: 0, per10_env_kills: 0, per10_crit_hits: 0,
     avg_weapon_accuracy: 0.5, avg_crit_accuracy: 0.1, kd: 2, kda: 3
   };
-  const ROOKIE = { ...OW_ROW, user_id: 2, username: "ow-rookie", player_name: "ow-rookie", games_played: 2 };
+  const ROOKIE = { ...OW_ROW, user_id: 2, display: ownDisplay("ow-rookie"), games_played: 2 };
 
   describe("the sample floor", () => {
     beforeEach(() => {

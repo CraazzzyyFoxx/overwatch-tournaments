@@ -24,7 +24,7 @@ DOCS: dict[str, dict] = {
     },
     "rpc.stats.logs.upload": {
         "summary": "Upload match logs",
-        "description": "Permission: workspace `log.create` in the tournament's workspace. Multipart (base64) upload of one or more log files for a tournament, storing each to S3 and enqueueing processing, with per-file errors collected. Metered: over quota the call answers 429 with `code=rate_limited` and the exceeded limit in `details.limit_name`.",
+        "description": "Permission: workspace `log.create` in the tournament's workspace (tournament variant: `tournament_id`, optional `encounter_id`), or — for a pickup mix (`custom_game_id` plus exactly one of `encounter_id` / `lobby_index`) — the mix's host, a co-host or a superuser, or workspace `log.create` in the mix's workspace (the mix's status is not checked). A mix `lobby_index` (0-based) resolves server-side to the lobby's live encounter, else its newest recorded one (422 `no_mix_match` when neither exists); a mix `encounter_id` that is not that mix's is 404. Giving both or neither of `tournament_id` / `custom_game_id` is 422. Multipart (base64) upload of one or more log files, storing each to S3 and enqueueing processing, with per-file errors collected. Re-uploading the same file for a mix revives a job whose match was removed by a mix Undo/Cancel. Metered: over quota the call answers 429 with `code=rate_limited` and the exceeded limit in `details.limit_name`.",
     },
     "rpc.stats.logs.process_tournament": {
         "summary": "Process tournament logs",
@@ -46,6 +46,14 @@ DOCS: dict[str, dict] = {
     "rpc.stats.ingest.bind": {
         "summary": "Bind an unlinked ingest job to a game",
         "description": "Permission: workspace `log.update` in the job's workspace. Binds an `awaiting_link` (or `failed`) job's stored document or raw source to `encounter_game_id` with the operator's complete `teams` map (`document team key -> encounter.team id`, a bijection onto the game's participating teams; a participant contradicting the chosen team is refused, zero overlap is allowed) and publishes it in the same transaction, returning the committed job. The client never sends the document. When the target game already has an observation `expected_revision` is required (`0` = none, `n` = replace exactly revision `n`) and is compared again under the final lock: 409 `stale_revision` / `expected_revision_required`. A `done` job is replayed only by retry with `reparse=true`; a busy job answers 409 `ingest_busy`. Refusals roll back and leave the job as it was: 404 `binding_target_not_found`, 409 `binding_mismatch` / `identity_conflict`, 422 `invalid_team_map`.",
+    },
+    "rpc.stats.ingest.mix_fetch": {
+        "summary": "Import a mix round's match by its external id",
+        "description": "Permission: the mix's host, a co-host or a superuser, or workspace `log.create` in the mix's workspace (the log upload's audience; the mix's status is not checked). Body `{external_id}`: the round's match as its discipline's source names it (422 `invalid_external_id` for another shape, 422 `unsupported_ingestor` for a game without a match fetcher). The worker fetches it, retrying with backoff for 24 h while the source does not serve it yet, then stores it like an uploaded log and ingests it as statistics of the round: the round's result is never touched, and the statistics stay inside the mix. Idempotent per `(external_id, round)`; a failed request is reset to pending. Another id for the same round replaces its statistics once ingested. One match id serves one game of a workspace: 409 `match_already_imported` while another game holds it. 404 for a round of another mix. Returns the request `{id, status (pending|done|failed), attempts, last_error, external_id, created_at, warnings}`.",
+    },
+    "rpc.stats.ingest.mix_fetch_list": {
+        "summary": "List a mix round's match imports",
+        "description": "Permission: same as the submit. The round's import requests, newest first, shaped like the submit's answer, with the organizer warnings: `fetch_failed`, `participants_dropped` (`count` players the round seated but the match does not show, e.g. private profiles) and `banned_character_played`.",
     },
     # ── impact baselines ──────────────────────────────────────────────────────
     "rpc.stats.impact.recompute_baselines": {

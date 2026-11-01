@@ -15,6 +15,7 @@ import type { Tournament } from "@/types/tournament.types";
 
 import { POOL_TEAM_FORMATIONS } from "../participants.model";
 import { baseRole, isTournamentRole, ROLE_ORDER } from "../tournamentInsights.model";
+import { registrationDisplay } from "../tournamentOverview.model";
 import { AboutTournamentCard, CardColumns, OverviewSection, SectionLink } from "./OverviewCards";
 
 const OUT = new Set(["withdrawn", "rejected", "declined", "cancelled"]);
@@ -320,10 +321,7 @@ function RegistrationRows({
           >
             <PlayerRoleIcon role={role} ontology={ontology} size={16} decorative />
             <span className="min-w-0">
-              <PlayerName
-                player={{ name: registration.primary_handle ?? "—" }}
-                className="text-caption"
-              />
+              <PlayerName display={registrationDisplay(registration)} className="text-caption" />
               {isTournamentRole(base) ? (
                 <span className="block truncate text-label text-[color:var(--aqt-fg-dim)]">
                   {tCommon(`roles.${base}`)}

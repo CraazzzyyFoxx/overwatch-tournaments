@@ -41,6 +41,8 @@ vi.mock("@/lib/notify", () => ({ notify: { success: vi.fn(), apiError: vi.fn() }
 
 const VIEWER = { id: 70, playerIds: [7] };
 
+const shown = (name: string) => ({ name, tag: null, canonical: null, snapshot: null });
+
 function player(id: number, overrides: Partial<DraftPlayer>): DraftPlayer {
   return {
     id,
@@ -49,7 +51,7 @@ function player(id: number, overrides: Partial<DraftPlayer>): DraftPlayer {
     user_id: null,
     workspace_member_id: 100 + id,
     identity: null,
-    player_name: `p${id}`,
+    display: shown(`p${id}`),
     primary_role: { dimension: OW_SHAPE.dimension ?? "player_role", role: "damage" },
     is_flex: false,
     effective_rank: 2000 + id,
@@ -104,10 +106,10 @@ function draft(status: "ready" | "live", mine: boolean): DraftBoard {
     ],
     picks: [pick],
     players: [
-      player(1, { player_name: "bravo", is_captain: true, drafted_by_team_id: 10, status: "picked" }),
-      player(2, { player_name: "alpha", is_captain: true, drafted_by_team_id: 11, status: "picked" }),
-      player(3, { player_name: "charlie" }),
-      player(4, { player_name: "delta", primary_role: { dimension: OW_SHAPE.dimension ?? "player_role", role: "tank" }, role_ranks: { tank: 2400 } }),
+      player(1, { display: shown("bravo"), is_captain: true, drafted_by_team_id: 10, status: "picked" }),
+      player(2, { display: shown("alpha"), is_captain: true, drafted_by_team_id: 11, status: "picked" }),
+      player(3, { display: shown("charlie") }),
+      player(4, { display: shown("delta"), primary_role: { dimension: OW_SHAPE.dimension ?? "player_role", role: "tank" }, role_ranks: { tank: 2400 } }),
     ],
     current_pick: status === "live" ? pick : null,
     last_event_id: 0,

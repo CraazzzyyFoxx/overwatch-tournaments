@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import en from "@/i18n/messages/en.json";
+import { canonicalDisplay } from "@/lib/player";
 import type { FormField } from "@/types/forms.types";
 import type { RegistrationForm } from "@/types/registration.types";
 
@@ -95,6 +96,7 @@ describe("participant column model", () => {
     const extras = columns.find((column) => column.id === "_identity_extras");
     const registration = {
       primary_handle: "Main#1111",
+      display: canonicalDisplay("Main#1111"),
       answers: { identity_battlenet: ["Main#1111", "Alt#2222", "Alt#3333"] },
     } as never;
 
@@ -236,11 +238,18 @@ describe("participant column model", () => {
     expect(columns.filter((column) => column.id === "_identity")).toHaveLength(1);
     expect(columns.some((column) => column.id === "identity_riot")).toBe(false);
     expect(columns.some((column) => column.id === "identity_battlenet")).toBe(true);
-    expect(
-      renderToStaticMarkup(
-        <>{identity?.render({ primary_handle: "Faker#KR1", answers: {} } as never, 0)}</>
-      )
-    ).toContain("Faker#KR1");
+    const markup = renderToStaticMarkup(
+      <NextIntlClientProvider locale="en" messages={en}>
+        {identity?.render(
+          { primary_handle: "Faker#KR1", display: canonicalDisplay("Faker#KR1"), answers: {} } as never,
+          0
+        )}
+      </NextIntlClientProvider>
+    );
+    // The name and its muted tag, linked by the canonical name.
+    expect(markup).toContain("Faker");
+    expect(markup).toContain("#KR1");
+    expect(markup).toContain('href="/users/Faker-KR1"');
   });
 
   it("builds no identity column while the owner provider is unresolved", () => {

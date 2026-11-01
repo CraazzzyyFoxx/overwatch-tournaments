@@ -12,6 +12,7 @@ import { Eyebrow } from "@/components/ui/eyebrow";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { PlaceBadge } from "@/components/ui/place-badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { canonicalDisplay } from "@/lib/player";
 import { cn } from "@/lib/utils";
 import type { UserCatalogEntry, UserOverviewRow } from "@/types/user.types";
 import type { DivisionGrid, DivisionGridVersion } from "@/types/workspace.types";
@@ -55,7 +56,7 @@ export function PlayerCard({
         <div className="flex items-start gap-2.5">
           <PlayerAvatar user={user} size={40} />
           <div className="min-w-0 flex-1">
-            <PlayerName player={{ name: user.name }} />
+            <PlayerName display={canonicalDisplay(user.name)} />
             <LastActive at={user.last_active_at} className="mt-0.5" />
           </div>
           <CompareCheckbox

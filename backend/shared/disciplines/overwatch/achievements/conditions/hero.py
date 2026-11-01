@@ -59,6 +59,8 @@ async def execute_hero_stat(
             facts.c.segment == 0,
             models.CatalogEntity.slug == hero_slug,
             facts.c.workspace_id == context.workspace_id,
+            # Mix stats live only inside the mix (mix encounters have no tournament).
+            facts.c.tournament_id.is_not(None),
         )
         .group_by(
             facts.c.player_id,
@@ -142,6 +144,8 @@ async def _hero_kd_best_by_slug(
             facts.c.entity_id.is_not(None),
             facts.c.stat_code.in_(("eliminations", "deaths", "hero_time_played")),
             facts.c.workspace_id == context.workspace_id,
+            # Mix stats live only inside the mix (mix encounters have no tournament).
+            facts.c.tournament_id.is_not(None),
         )
         .group_by(
             facts.c.player_id,

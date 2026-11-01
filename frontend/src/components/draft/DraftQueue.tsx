@@ -10,7 +10,7 @@ import { useDraftLayerPad } from "@/hooks/useDraftLayerPad";
 import { usePickCountdown } from "@/hooks/usePickCountdown";
 import { useSlotLabel } from "@/hooks/useSlotLabel";
 import { pickHistory, type TeamView } from "@/lib/draft/room-model";
-import { splitHandle } from "@/lib/player";
+import { PersonLabel } from "@/components/PlayerName";
 import { showsRoles, type RoleOntology } from "@/lib/roster/ontology";
 import { roleOf } from "@/lib/roster/role-ref";
 import type { DraftBoard, DraftPick } from "@/types/draft.types";
@@ -114,7 +114,7 @@ export function DraftQueue({ board, teamViews, remaining, myTeamId, clockColor, 
       <ol>
         {shownHistory.map((pick) => {
           const player = pick.picked_player_id == null ? null : playerById.get(pick.picked_player_id);
-          const tag = player?.identity?.handle ?? (player ? `#${player.id}` : "—");
+          const label = player ? <PersonLabel display={player.display} tag="hidden" /> : "—";
           return (
             <li
               key={pick.id}
@@ -128,9 +128,7 @@ export function DraftQueue({ board, teamViews, remaining, myTeamId, clockColor, 
                   {teamViews.get(pick.draft_team_id)?.team.name ?? t("unknownTeam")}
                 </span>
                 <ArrowRight aria-hidden className="h-[13px] w-[13px] flex-none text-[color:var(--aqt-fg-faint)]" />
-                <span className="truncate font-semibold" title={tag}>
-                  {splitHandle(tag).name}
-                </span>
+                <span className="min-w-0 truncate font-semibold">{label}</span>
                 {pick.target_role && named && (
                   <span className="flex-none" title={slotLabel(roleOf(pick.target_role))}>
                     <PlayerRoleIcon role={roleOf(pick.target_role)} ontology={ontology} size={18} />

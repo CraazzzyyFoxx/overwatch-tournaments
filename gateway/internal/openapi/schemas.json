@@ -2437,7 +2437,7 @@
       "summary": "List custom games"
     },
     "rpc.balancer.custom.match_history": {
-      "description": "Permission: public; no authentication required. Returns every round recorded for the mix, newest first: its two teams by slot (slot 1 banned first) with name and score, its hero bans {slot, item_id} in order, whose hero each pick was {slot, member_id, name, item_id} in pick order, the winning slot (null for a draw), lobby, map, recorder and the rank points it applied.",
+      "description": "Permission: public; no authentication required. Returns every round recorded for the mix, newest first: its two teams by slot (slot 1 banned first) with name and score, its hero bans {slot, item_id} in order, whose hero each pick was {slot, member_id, name, item_id} in pick order, the winning slot (null for a draw), lobby, map, recorder and the rank points it applied, plus its statistics: stats_match_id (the bound stats match, null when none), log_state (\"processing\" while there is no stats match and the newest uploaded log is pending/processing, the newest match import waits for the game's source or the match is still being looked up by its players; else \"failed\" when that log failed/awaits a link or that import gave up; else null) and match_search (\"searching\" while the match of a game that can be found by its players is still being looked up, \"not_found\" once the search gave up and the host files the id by hand; else null).",
       "summary": "List custom game matches"
     },
     "rpc.balancer.custom.post_discord": {
@@ -5168,6 +5168,26 @@
       },
       "summary": "Read a canonical ingest job"
     },
+    "rpc.stats.ingest.mix_fetch": {
+      "description": "Permission: the mix's host, a co-host or a superuser, or workspace `log.create` in the mix's workspace (the log upload's audience; the mix's status is not checked). Body `{external_id}`: the round's match as its discipline's source names it (422 `invalid_external_id` for another shape, 422 `unsupported_ingestor` for a game without a match fetcher). The worker fetches it, retrying with backoff for 24 h while the source does not serve it yet, then stores it like an uploaded log and ingests it as statistics of the round: the round's result is never touched, and the statistics stay inside the mix. Idempotent per `(external_id, round)`; a failed request is reset to pending. Another id for the same round replaces its statistics once ingested. One match id serves one game of a workspace: 409 `match_already_imported` while another game holds it. 404 for a round of another mix. Returns the request `{id, status (pending|done|failed), attempts, last_error, external_id, created_at, warnings}`.",
+      "request": {
+        "array": false,
+        "ref": "stats.MatchImportInput"
+      },
+      "response": {
+        "array": false,
+        "ref": "stats.MatchImportRead"
+      },
+      "summary": "Import a mix round's match by its external id"
+    },
+    "rpc.stats.ingest.mix_fetch_list": {
+      "description": "Permission: same as the submit. The round's import requests, newest first, shaped like the submit's answer, with the organizer warnings: `fetch_failed`, `participants_dropped` (`count` players the round seated but the match does not show, e.g. private profiles) and `banned_character_played`.",
+      "response": {
+        "array": true,
+        "ref": "stats.MatchImportRead"
+      },
+      "summary": "List a mix round's match imports"
+    },
     "rpc.stats.ingest.submit": {
       "description": "Permission: a workspace API key whose `stats.ingest` scope is backed by the owner's effective `stats.ingest` permission; sessions, service tokens and owner privilege alone are refused (403 `api_key_required` / `scope_required`). The request body is the bare `owt.match/1` document (Content-Type `application/json`, up to 25 MiB); the workspace is always the key's own. Idempotent per `(source.kind, source.external_id)` when an external id is present, otherwise per the SHA-256 of the exact request bytes: the same bytes return the existing job, changed bytes or discipline under one external id answer 409 `idempotency_conflict`. Answers 202 with the job while it is `pending`/`processing`, and 200 with the actual job when it already finished (`done`, `awaiting_link`, `failed`; a failed duplicate is never retried implicitly). A structurally valid document whose codes do not resolve is persisted as a failed job with diagnostics and answers 422 with `ingest_job_id`; malformed JSON answers 400, a non-JSON content type 415, an oversized body 413.",
       "request": {
@@ -5295,7 +5315,7 @@
       "summary": "Log processing stats"
     },
     "rpc.stats.logs.upload": {
-      "description": "Permission: workspace `log.create` in the tournament's workspace. Multipart (base64) upload of one or more log files for a tournament, storing each to S3 and enqueueing processing, with per-file errors collected. Metered: over quota the call answers 429 with `code=rate_limited` and the exceeded limit in `details.limit_name`.",
+      "description": "Permission: workspace `log.create` in the tournament's workspace (tournament variant: `tournament_id`, optional `encounter_id`), or \u2014 for a pickup mix (`custom_game_id` plus exactly one of `encounter_id` / `lobby_index`) \u2014 the mix's host, a co-host or a superuser, or workspace `log.create` in the mix's workspace (the mix's status is not checked). A mix `lobby_index` (0-based) resolves server-side to the lobby's live encounter, else its newest recorded one (422 `no_mix_match` when neither exists); a mix `encounter_id` that is not that mix's is 404. Giving both or neither of `tournament_id` / `custom_game_id` is 422. Multipart (base64) upload of one or more log files, storing each to S3 and enqueueing processing, with per-file errors collected. Re-uploading the same file for a mix revives a job whose match was removed by a mix Undo/Cancel. Metered: over quota the call answers 429 with `code=rate_limited` and the exceeded limit in `details.limit_name`.",
       "response": {
         "array": false,
         "ref": "stats.LogUploadResponse"
@@ -12863,6 +12883,59 @@
       "title": "PerformanceRow",
       "type": "object"
     },
+    "analytics.PersonDisplayRead": {
+      "description": "How a person is named on a surface owned by one game (docs/users-identity.md \u00a73.6).\n\n``name`` + ``tag`` is the first of: the workspace's ``display_name``, the person's game handle (the game's\nidentity provider's primary account visible in scope; Steam: the persona name), the event's snapshot, the\ncanonical ``players.user.name``. ``canonical`` builds the profile link (``None``: nobody to link to);\n``snapshot`` is set only when it names the person differently from what is shown.",
+      "properties": {
+        "canonical": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Canonical"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "snapshot": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Snapshot"
+        },
+        "tag": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tag"
+        }
+      },
+      "required": [
+        "name",
+        "tag",
+        "canonical",
+        "snapshot"
+      ],
+      "title": "PersonDisplayRead",
+      "type": "object"
+    },
     "analytics.PlayerAnalytics": {
       "properties": {
         "anomalies": {
@@ -12880,6 +12953,9 @@
           "format": "date-time",
           "title": "Created At",
           "type": "string"
+        },
+        "display": {
+          "$ref": "#/components/schemas/analytics.PersonDisplayRead"
         },
         "division": {
           "anyOf": [
@@ -13075,6 +13151,7 @@
       "required": [
         "id",
         "created_at",
+        "display",
         "rank",
         "tournament_id",
         "user_id",
@@ -23081,6 +23158,9 @@
           "title": "Custom Fields",
           "type": "array"
         },
+        "display": {
+          "$ref": "#/components/schemas/balancer.PersonDisplayRead"
+        },
         "drafted_by_team_id": {
           "anyOf": [
             {
@@ -23137,17 +23217,6 @@
           ],
           "default": null,
           "title": "Notes"
-        },
-        "player_name": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "title": "Player Name"
         },
         "primary_role": {
           "anyOf": [
@@ -23250,7 +23319,7 @@
         "user_id",
         "workspace_member_id",
         "identity",
-        "player_name",
+        "display",
         "primary_role",
         "is_flex",
         "status",
@@ -24401,6 +24470,59 @@
         "results"
       ],
       "title": "Paginated[WorkspacePlayerRead]",
+      "type": "object"
+    },
+    "balancer.PersonDisplayRead": {
+      "description": "How a person is named on a surface owned by one game (docs/users-identity.md \u00a73.6).\n\n``name`` + ``tag`` is the first of: the workspace's ``display_name``, the person's game handle (the game's\nidentity provider's primary account visible in scope; Steam: the persona name), the event's snapshot, the\ncanonical ``players.user.name``. ``canonical`` builds the profile link (``None``: nobody to link to);\n``snapshot`` is set only when it names the person differently from what is shown.",
+      "properties": {
+        "canonical": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Canonical"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "snapshot": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Snapshot"
+        },
+        "tag": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tag"
+        }
+      },
+      "required": [
+        "name",
+        "tag",
+        "canonical",
+        "snapshot"
+      ],
+      "title": "PersonDisplayRead",
       "type": "object"
     },
     "balancer.PlayerData": {
@@ -25739,6 +25861,10 @@
           "title": "Author Ranks",
           "type": "object"
         },
+        "display": {
+          "$ref": "#/components/schemas/balancer.PersonDisplayRead",
+          "description": "How the member is named in this workspace's game."
+        },
         "display_name": {
           "anyOf": [
             {
@@ -25783,6 +25909,7 @@
         "player_id",
         "identity",
         "display_name",
+        "display",
         "auth_user_id",
         "ranks",
         "author_ranks"
@@ -30799,6 +30926,9 @@
           "title": "Avg Weapon Accuracy",
           "type": "number"
         },
+        "display": {
+          "$ref": "#/components/schemas/stats.PersonDisplayRead"
+        },
         "div": {
           "anyOf": [
             {
@@ -30902,10 +31032,6 @@
           "title": "Per10 Ultimates Used",
           "type": "number"
         },
-        "player_name": {
-          "title": "Player Name",
-          "type": "string"
-        },
         "playtime_seconds": {
           "title": "Playtime Seconds",
           "type": "number"
@@ -30952,17 +31078,12 @@
         "user_id": {
           "title": "User Id",
           "type": "integer"
-        },
-        "username": {
-          "title": "Username",
-          "type": "string"
         }
       },
       "required": [
         "rank",
         "user_id",
-        "username",
-        "player_name",
+        "display",
         "div",
         "games_played",
         "playtime_seconds",
@@ -31245,6 +31366,9 @@
     },
     "stats.CharacterStatBest": {
       "properties": {
+        "display": {
+          "$ref": "#/components/schemas/stats.PersonDisplayRead"
+        },
         "encounter_id": {
           "title": "Encounter Id",
           "type": "integer"
@@ -31255,10 +31379,6 @@
         },
         "map_name": {
           "title": "Map Name",
-          "type": "string"
-        },
-        "player_name": {
-          "title": "Player Name",
           "type": "string"
         },
         "tournament_name": {
@@ -31276,7 +31396,7 @@
         "map_name",
         "map_image_path",
         "value",
-        "player_name"
+        "display"
       ],
       "title": "CharacterStatBest",
       "type": "object"
@@ -32607,9 +32727,8 @@
     "stats.LobbyLeaderboardEntry": {
       "description": "One player's ranked value for a single stat inside a tournament lobby.",
       "properties": {
-        "name": {
-          "title": "Name",
-          "type": "string"
+        "display": {
+          "$ref": "#/components/schemas/stats.PersonDisplayRead"
         },
         "player_id": {
           "title": "Player Id",
@@ -32627,7 +32746,7 @@
       "required": [
         "rank",
         "player_id",
-        "name",
+        "display",
         "value"
       ],
       "title": "LobbyLeaderboardEntry",
@@ -32698,6 +32817,30 @@
           "format": "date-time",
           "title": "Created At",
           "type": "string"
+        },
+        "custom_game_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Custom Game Id"
+        },
+        "custom_game_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Custom Game Name"
         },
         "error": {
           "anyOf": [
@@ -33564,6 +33707,119 @@
         "id"
       ],
       "title": "MatchIdentity",
+      "type": "object"
+    },
+    "stats.MatchImportInput": {
+      "description": "The game's match as its discipline's source names it (a match id); the stats service checks the shape.",
+      "properties": {
+        "external_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "External Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "external_id"
+      ],
+      "title": "MatchImportInput",
+      "type": "object"
+    },
+    "stats.MatchImportRead": {
+      "description": "One request to import a game's match by external id (``stats.match_fetch``).",
+      "properties": {
+        "attempts": {
+          "title": "Attempts",
+          "type": "integer"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "external_id": {
+          "title": "External Id",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "integer"
+        },
+        "last_error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Last Error"
+        },
+        "status": {
+          "enum": [
+            "pending",
+            "done",
+            "failed"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "warnings": {
+          "items": {
+            "$ref": "#/components/schemas/stats.MatchImportWarningRead"
+          },
+          "title": "Warnings",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "status",
+        "attempts",
+        "external_id",
+        "created_at"
+      ],
+      "title": "MatchImportRead",
+      "type": "object"
+    },
+    "stats.MatchImportWarningRead": {
+      "description": "An organizer warning about an import: ``fetch_failed``, ``participants_dropped`` (``count`` players fewer than\nthe tournament format's starters -- a mix round's own seats -- were observed) or ``banned_character_played``\n(``characters`` the game's hero room banned).",
+      "properties": {
+        "characters": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Characters",
+          "type": "array"
+        },
+        "code": {
+          "enum": [
+            "fetch_failed",
+            "participants_dropped",
+            "banned_character_played"
+          ],
+          "title": "Code",
+          "type": "string"
+        },
+        "count": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Count"
+        }
+      },
+      "required": [
+        "code"
+      ],
+      "title": "MatchImportWarningRead",
       "type": "object"
     },
     "stats.MatchParticipantDoc": {
@@ -34629,6 +34885,59 @@
       "title": "PaginationSortQueryParams[Literal['id', 'name', 'winrate', 'tournaments']]",
       "type": "object"
     },
+    "stats.PersonDisplayRead": {
+      "description": "How a person is named on a surface owned by one game (docs/users-identity.md \u00a73.6).\n\n``name`` + ``tag`` is the first of: the workspace's ``display_name``, the person's game handle (the game's\nidentity provider's primary account visible in scope; Steam: the persona name), the event's snapshot, the\ncanonical ``players.user.name``. ``canonical`` builds the profile link (``None``: nobody to link to);\n``snapshot`` is set only when it names the person differently from what is shown.",
+      "properties": {
+        "canonical": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Canonical"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "snapshot": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Snapshot"
+        },
+        "tag": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tag"
+        }
+      },
+      "required": [
+        "name",
+        "tag",
+        "canonical",
+        "snapshot"
+      ],
+      "title": "PersonDisplayRead",
+      "type": "object"
+    },
     "stats.PlayerLeaderboardQueryParams": {
       "properties": {
         "order": {
@@ -34670,6 +34979,9 @@
     },
     "stats.PlayerLeaderboardRow": {
       "properties": {
+        "display": {
+          "$ref": "#/components/schemas/stats.PersonDisplayRead"
+        },
         "id": {
           "title": "Id",
           "type": "integer"
@@ -34685,10 +34997,6 @@
         "maps_won": {
           "title": "Maps Won",
           "type": "integer"
-        },
-        "name": {
-          "title": "Name",
-          "type": "string"
         },
         "rank": {
           "title": "Rank",
@@ -34717,7 +35025,7 @@
       "required": [
         "rank",
         "id",
-        "name",
+        "display",
         "titles",
         "tournaments",
         "maps_won",
@@ -35466,6 +35774,23 @@
       "title": "StatMapRef",
       "type": "object"
     },
+    "stats.StatPlayerRef": {
+      "properties": {
+        "display": {
+          "$ref": "#/components/schemas/stats.PersonDisplayRead"
+        },
+        "id": {
+          "title": "Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "display"
+      ],
+      "title": "StatPlayerRef",
+      "type": "object"
+    },
     "stats.StatRecord": {
       "properties": {
         "code": {
@@ -35571,7 +35896,7 @@
         "player": {
           "anyOf": [
             {
-              "$ref": "#/components/schemas/stats.StatRef"
+              "$ref": "#/components/schemas/stats.StatPlayerRef"
             },
             {
               "type": "null"
@@ -37470,6 +37795,9 @@
     "stats.UserEncounterTeamPlayerRef": {
       "description": "Roster member inside an encounter seat \u2014 minimal id+user_id+role.\n\nUsed only by the frontend to identify which seat the viewer played in\n(`players.find(p => p.user_id === selfUserId)`). Renders nothing on its\nown \u2014 for the full player card see `UserTournamentPlayer`. ``id`` is the\nroster snapshot row, not a tournament player.",
       "properties": {
+        "display": {
+          "$ref": "#/components/schemas/stats.PersonDisplayRead"
+        },
         "id": {
           "title": "Id",
           "type": "integer"
@@ -37497,7 +37825,8 @@
       "required": [
         "id",
         "user_id",
-        "name"
+        "name",
+        "display"
       ],
       "title": "UserEncounterTeamPlayerRef",
       "type": "object"
@@ -47171,8 +47500,16 @@
           ]
         },
         "tournament_id": {
-          "title": "Tournament Id",
-          "type": "integer"
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tournament Id"
         },
         "workspace_id": {
           "title": "Workspace Id",
@@ -47185,7 +47522,6 @@
         "discipline",
         "name",
         "round",
-        "tournament_id",
         "challonge_id",
         "closeness",
         "has_logs",
@@ -49991,7 +50327,7 @@
       "type": "object"
     },
     "tournament.MatchImportWarningRead": {
-      "description": "An organizer warning about an import: ``fetch_failed``, ``participants_dropped`` (``count`` players fewer than\nthe format's starters were observed) or ``banned_character_played`` (``characters`` the game's hero room banned).",
+      "description": "An organizer warning about an import: ``fetch_failed``, ``participants_dropped`` (``count`` players fewer than\nthe tournament format's starters -- a mix round's own seats -- were observed) or ``banned_character_played``\n(``characters`` the game's hero room banned).",
       "properties": {
         "characters": {
           "items": {
@@ -50895,6 +51231,9 @@
     },
     "tournament.NativeMatchMember": {
       "properties": {
+        "display": {
+          "$ref": "#/components/schemas/tournament.PersonDisplayRead"
+        },
         "encounter_team_id": {
           "title": "Encounter Team Id",
           "type": "integer"
@@ -50917,10 +51256,6 @@
           "title": "Player Id",
           "type": "integer"
         },
-        "player_name": {
-          "title": "Player Name",
-          "type": "string"
-        },
         "workspace_member_id": {
           "title": "Workspace Member Id",
           "type": "integer"
@@ -50930,7 +51265,7 @@
         "encounter_team_id",
         "workspace_member_id",
         "player_id",
-        "player_name",
+        "display",
         "handle_snapshot",
         "observed_role"
       ],
@@ -51233,6 +51568,59 @@
         "results"
       ],
       "title": "Paginated[TournamentRead]",
+      "type": "object"
+    },
+    "tournament.PersonDisplayRead": {
+      "description": "How a person is named on a surface owned by one game (docs/users-identity.md \u00a73.6).\n\n``name`` + ``tag`` is the first of: the workspace's ``display_name``, the person's game handle (the game's\nidentity provider's primary account visible in scope; Steam: the persona name), the event's snapshot, the\ncanonical ``players.user.name``. ``canonical`` builds the profile link (``None``: nobody to link to);\n``snapshot`` is set only when it names the person differently from what is shown.",
+      "properties": {
+        "canonical": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Canonical"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "snapshot": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Snapshot"
+        },
+        "tag": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tag"
+        }
+      },
+      "required": [
+        "name",
+        "tag",
+        "canonical",
+        "snapshot"
+      ],
+      "title": "PersonDisplayRead",
       "type": "object"
     },
     "tournament.PickBanActionInput": {
@@ -51871,6 +52259,9 @@
     },
     "tournament.PlayerRead": {
       "properties": {
+        "display": {
+          "$ref": "#/components/schemas/tournament.PersonDisplayRead"
+        },
         "division": {
           "anyOf": [
             {
@@ -51981,6 +52372,7 @@
       "required": [
         "id",
         "name",
+        "display",
         "rank",
         "division",
         "tournament_id",
@@ -53306,6 +53698,9 @@
     "tournament.RegistrationFreeAgentRead": {
       "description": "A registrant on no team, as a captain sees them in the invite picker.\n\nCarries the registration id rather than an account id: the client never learns\nan ``auth_user_id``, and the server resolves the identity itself. Everything\nhere is already on the public participants list, so the picker opens no new\nprivacy surface \u2014 which is what makes targeted invites possible without a\nglobal account search.",
       "properties": {
+        "display": {
+          "$ref": "#/components/schemas/tournament.PersonDisplayRead"
+        },
         "primary_handle": {
           "anyOf": [
             {
@@ -53331,7 +53726,8 @@
         }
       },
       "required": [
-        "registration_id"
+        "registration_id",
+        "display"
       ],
       "title": "RegistrationFreeAgentRead",
       "type": "object"
@@ -53373,6 +53769,9 @@
           "default": false,
           "title": "Checked In",
           "type": "boolean"
+        },
+        "display": {
+          "$ref": "#/components/schemas/tournament.PersonDisplayRead"
         },
         "edit_locked_reason": {
           "anyOf": [
@@ -53613,7 +54012,8 @@
       "required": [
         "id",
         "tournament_id",
-        "workspace_id"
+        "workspace_id",
+        "display"
       ],
       "title": "RegistrationRead",
       "type": "object"
@@ -54326,6 +54726,9 @@
           "title": "Checked In",
           "type": "boolean"
         },
+        "display": {
+          "$ref": "#/components/schemas/tournament.PersonDisplayRead"
+        },
         "display_name": {
           "anyOf": [
             {
@@ -54388,6 +54791,7 @@
       },
       "required": [
         "registration_id",
+        "display",
         "status"
       ],
       "title": "RegistrationTeamMemberRead",

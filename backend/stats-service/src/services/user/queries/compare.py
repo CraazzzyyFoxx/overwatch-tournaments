@@ -413,6 +413,8 @@ class UserCompareQueries(DisciplineQueries):
                     [*(name.value for name, _label in per_10_metrics), enums.LogStatsName.HeroTimePlayed.value]
                 ),
                 self._facts.c.player_id.in_(sa.select(candidates.c.id)),
+                # Mix stats live only inside the mix (mix encounters have no tournament).
+                self._facts.c.tournament_id.is_not(None),
             )
         )
         if has_roster_filter:
@@ -492,6 +494,8 @@ class UserCompareQueries(DisciplineQueries):
                 self._facts.c.segment == 0,
                 self._facts.c.entity_id.is_(None),
                 self._facts.c.stat_code == enums.LogStatsName.ImpactRank,
+                # Mix stats live only inside the mix (mix encounters have no tournament).
+                self._facts.c.tournament_id.is_not(None),
             )
         )
         if has_roster_filter:
@@ -756,6 +760,8 @@ class UserCompareQueries(DisciplineQueries):
                 self._facts.c.segment == 0,
                 self._facts.c.stat_code == enums.LogStatsName.HeroTimePlayed,
                 self._facts.c.entity_id.isnot(None),
+                # Mix stats live only inside the mix (mix encounters have no tournament).
+                self._facts.c.tournament_id.is_not(None),
                 *player_scope,
             )
         )
@@ -800,6 +806,8 @@ class UserCompareQueries(DisciplineQueries):
                     hero_id=hero_id,
                 ),
                 self._facts.c.stat_code.in_(stats),
+                # Mix stats live only inside the mix (mix encounters have no tournament).
+                self._facts.c.tournament_id.is_not(None),
                 *player_scope,
                 sa.exists(
                     sa.select(1)

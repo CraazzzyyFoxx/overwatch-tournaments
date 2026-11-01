@@ -5,6 +5,8 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.core import pagination
+from shared.schemas.identity import PersonDisplayRead
+from shared.services.person_display import load_person_displays
 from src import schemas
 
 from .queries import MAP_STAT_RECORDS, StatisticsQueries
@@ -16,7 +18,16 @@ __all__ = ("StatisticsService", "statistics")
 _Leaderboard = tuple[Sequence[tuple[Any, float | int]], int]
 
 
-def _record(code: str, row: sa.Row) -> schemas.StatRecord:
+async def _displays(
+    session: AsyncSession, discipline: str | None, workspace_id: int | None, names: dict[int, str]
+) -> dict[int, PersonDisplayRead]:
+    """How the read's game names each player (``user id -> canonical name``); every game's read: the canonical name."""
+    if discipline is None:
+        return {user_id: PersonDisplayRead.build(canonical=name) for user_id, name in names.items()}
+    return await load_person_displays(session, names, discipline=discipline, workspace_id=workspace_id)
+
+
+def _record(code: str, row: sa.Row, displays: dict[int, PersonDisplayRead]) -> schemas.StatRecord:
     """A record from a ``StatisticsQueries`` record row (see the label convention there)."""
     m = row._mapping
 
@@ -24,10 +35,11 @@ def _record(code: str, row: sa.Row) -> schemas.StatRecord:
         ref_id = m.get(f"{key}_id")
         return None if ref_id is None else schemas.StatRef(id=ref_id, name=m[f"{key}_name"])
 
+    player_id = m.get("player_id")
     return schemas.StatRecord(
         code=code,
         value=m["value"],
-        player=ref("player"),
+        player=None if player_id is None else schemas.StatPlayerRef(id=player_id, display=displays[player_id]),
         team=ref("team"),
         opponent=ref("opponent"),
         tournament=ref("tournament"),
@@ -123,11 +135,18 @@ class StatisticsService:
             per_page=params.per_page,
             workspace_id=workspace_id,
         )
+        displays = await _displays(session, discipline, workspace_id, {row.id: row.name for row in rows})
         return pagination.Paginated(
             page=params.page,
             per_page=params.per_page,
             total=total,
-            results=[schemas.PlayerLeaderboardRow(**row._mapping) for row in rows],
+            results=[
+                schemas.PlayerLeaderboardRow(
+                    **{key: value for key, value in row._mapping.items() if key != "name"},
+                    display=displays[row.id],
+                )
+                for row in rows
+            ],
         )
 
     async def get_records(
@@ -150,7 +169,14 @@ class StatisticsService:
                 ("most_mvps", await queries.get_most_mvps(session, workspace_id)),
                 ("longest_map", await queries.get_longest_map(session, workspace_id)),
             ]
-        return schemas.StatRecords(records=[_record(code, row) for code, row in found if row is not None])
+        present = [(code, row) for code, row in found if row is not None]
+        holders = {
+            row._mapping["player_id"]: row._mapping["player_name"]
+            for _, row in present
+            if row._mapping.get("player_id") is not None
+        }
+        displays = await _displays(session, discipline, workspace_id, holders)
+        return schemas.StatRecords(records=[_record(code, row, displays) for code, row in present])
 
     async def get_maps(
         self, session: AsyncSession, *, discipline: str, workspace_id: int | None = None

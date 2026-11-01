@@ -80,7 +80,7 @@ const drafted: DraftPlayer = {
   session_id: 1,
   registration_id: 70,
   user_id: null,
-  identity: { provider: "battlenet", handle: "Ana#1234" }, player_name: null,
+  identity: { provider: "battlenet", handle: "Ana#1234" }, display: { name: "Ana", tag: "#1234", canonical: null, snapshot: null },
   primary_role: { dimension: "player_role", role: "support" },
   is_flex: false,
   effective_rank: 4000,
@@ -194,9 +194,9 @@ function renderRosters(
 describe("roster cells", () => {
   test("a role slot shows the drafted role and that role's rank, crest included", () => {
     const html = renderRosters(makeBoard(ROLE_SHAPE));
-    const cell = html.match(/<button[^>]*aria-label="Ana#1234[^"]*"[^>]*>.*?<\/button>/)?.[0] ?? "";
+    const cell = html.match(/<button[^>]*aria-label="Ana[^"]*"[^>]*>.*?<\/button>/)?.[0] ?? "";
 
-    expect(html).toContain('aria-label="Ana#1234 · Support · 2800 SR');
+    expect(html).toContain('aria-label="Ana · Support · 2800 SR');
     expect(html).not.toContain("4000 SR");
     // The crest is the rank a viewer reads at a glance: the slot's, not the best role's.
     expect(cell).toContain("/low.png");
@@ -208,7 +208,7 @@ describe("roster cells", () => {
     // assignment that was never made, and a role chip a need that does not exist.
     const html = renderRosters(makeBoard(FLEX_SHAPE));
 
-    expect(html).toContain('aria-label="Ana#1234 · flex · 4000 SR');
+    expect(html).toContain('aria-label="Ana · flex · 4000 SR');
     expect(html).not.toContain("2800 SR");
     expect(html).not.toContain("teams.chips.needAria");
   });
@@ -231,7 +231,7 @@ describe("roster cells", () => {
       })
     );
 
-    expect(html).toContain("Ana#1234");
+    expect(html).toContain("Ana");
     expect(html).not.toContain("SR");
   });
 
@@ -396,7 +396,7 @@ describe("a one-role game", () => {
 
     const html = renderRosters(makeBoard(shape, { players: [player], picks: [pick] }), { ontology: DEADLOCK_METADATA });
 
-    expect(html).toContain('aria-label="Ana#1234 · 2800 SR');
+    expect(html).toContain('aria-label="Ana · 2800 SR');
     expect(html).not.toContain("teams.chips.need");
     expect(html).not.toContain("Agent");
     expect(html).toContain("teams.cell.openSeat");

@@ -11,6 +11,7 @@
 import type { SlotCode } from "@/lib/roster/shape";
 import type { RoleRef } from "@/lib/roster/role-ref";
 import type { RegistrationSubmitInput } from "@/types/registration.types";
+import type { PersonDisplay } from "@/types/user.types";
 
 /** A registered team's lifecycle. `complete` is NOT terminal — a captain may
  *  still swap a player before the organizer exports. */
@@ -22,6 +23,7 @@ export interface RegistrationTeamMember {
   registration_id: number;
   display_name: string | null;
   primary_handle: string | null;
+  display: PersonDisplay;
   slot_code: string | null;
   is_substitute: boolean;
   is_captain: boolean;
@@ -176,6 +178,7 @@ export interface RegistrationTeamInvitePreview {
 export interface RegistrationFreeAgent {
   registration_id: number;
   primary_handle: string;
+  display: PersonDisplay;
   /** Leaf role references, primary first: the captain is filling one specific slot. */
   roles: RoleRef[];
 }

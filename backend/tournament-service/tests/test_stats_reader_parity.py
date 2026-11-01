@@ -653,16 +653,24 @@ def assert_tournament_golden(actual: dict) -> None:
         ``pov_stream_delay_s``, the owner context (``workspace_id``/``discipline``) P7 added to ``EncounterRead`` and
         ``MatchRead``, the catalog ``mode_id``/``mode`` a match and an encounter game gained with matchmode01, and the
         browse's ``played_at``/``is_live``/``is_final`` on ``EncounterRead`` (a match's own ``played_at`` was captured
-        and stays). The golden's nested ``tournament`` objects already carried theirs and keep them."""
+        and stays), and the per-game person ``display`` every roster player gained (docs/users-identity.md §3.6). The
+        golden's nested ``tournament`` objects already carried theirs and keep them."""
         if isinstance(value, dict):
             encounter = value.keys() >= {"scoring_preset", "tournament_id"}
             owner = encounter or value.keys() >= {"encounter_id", "map_id"}
+            person = isinstance(value.get("display"), dict) and value["display"].keys() == {
+                "name",
+                "tag",
+                "canonical",
+                "snapshot",
+            }
             dropped = {
                 "logs_official",
                 "pov_stream_delay_s",
                 *(("workspace_id", "discipline") if owner else ()),
                 *(("mode_id", "mode") if "map_id" in value else ()),
                 *(("played_at", "is_live", "is_final") if encounter else ()),
+                *(("display",) if person else ()),
             }
             return {key: without_post_capture_fields(item) for key, item in value.items() if key not in dropped}
         if isinstance(value, list):

@@ -6,7 +6,7 @@ import { useMemo } from "react";
 import type { CSSProperties } from "react";
 import { useTranslations } from "next-intl";
 
-import { HandleLabel } from "@/components/HandleLabel";
+import { PersonLabel } from "@/components/PlayerName";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import DivisionIcon from "@/components/DivisionIcon";
 import { CatalogEntityStrip } from "@/components/catalog/CatalogEntityImage";
@@ -32,6 +32,19 @@ import type { DivisionGrid } from "@/types/workspace.types";
 import { getPlayerSlug } from "@/lib/player";
 
 import { TournamentPageState } from "../../_components/TournamentPageState";
+import { registrationDisplay } from "../tournamentOverview.model";
+
+/** The shown name with its tag, as plain text. */
+const shownName = (registration: Registration): string => {
+  const { name, tag } = registrationDisplay(registration);
+  return name + (tag ?? "");
+};
+
+/** Whether the search names this registrant: by what the row shows, their account, or what they registered with. */
+const nameMatches = (registration: Registration, needle: string): boolean =>
+  [shownName(registration), registration.display.canonical, registration.primary_handle].some((text) =>
+    text?.toLowerCase().includes(needle)
+  );
 
 /** The one status that means "was in, took themselves out" (§6 ④). */
 const WITHDRAWN_STATUS = "withdrawn";
@@ -159,7 +172,6 @@ function PoolRow({
   const { registration, role, division, isFlex } = entry;
   const rank = role.rank_value ?? null;
   const heroes = topHeroes(role, heroesMap, 3);
-  const battleTag = registration.primary_handle ?? "\u2014";
   // A multi-role player is listed in every role column; in the columns of their
   // secondary roles the name is dimmed. That says "also plays this" without a
   // glyph — in a flex tournament nearly every row would carry the glyph and it
@@ -176,7 +188,7 @@ function PoolRow({
   // BattleTags are `Name#1234`; the discriminator is how you tell two Kennys
   // apart and nothing else, so it stays present and stops competing with the
   // name for attention.
-  const label = <HandleLabel handle={battleTag} />;
+  const label = <PersonLabel display={registrationDisplay(registration)} />;
 
   return (
     <li
@@ -198,9 +210,9 @@ function PoolRow({
         {position}
       </span>
       <span className="flex min-w-0 items-baseline text-caption">
-        {registration.primary_handle ? (
+        {registration.display.canonical ? (
           <a
-            href={`/users/${getPlayerSlug(registration.primary_handle)}`}
+            href={`/users/${getPlayerSlug(registration.display.canonical)}`}
             target="_blank"
             rel="noopener noreferrer"
             className={cn(
@@ -209,7 +221,7 @@ function PoolRow({
                 ? "text-[color:var(--aqt-fg-muted)]"
                 : "font-medium text-[color:var(--aqt-fg)]"
             )}
-            title={flexTitle ?? battleTag}
+            title={flexTitle ?? undefined}
           >
             {label}
           </a>
@@ -398,10 +410,7 @@ export default function ParticipantsPool({
     for (const role of roleColumns) grouped.set(role, []);
 
     for (const registration of active) {
-      if (
-        normalizedSearch.length > 0 &&
-        !(registration.primary_handle?.toLowerCase().includes(normalizedSearch) ?? false)
-      ) {
+      if (normalizedSearch.length > 0 && !nameMatches(registration, normalizedSearch)) {
         continue;
       }
       const roles = registration.roles ?? [];
@@ -422,9 +431,7 @@ export default function ParticipantsPool({
         if (leftRank !== rightRank) return rightRank - leftRank;
         // Players who main this role before those who only also play it.
         if (left.role.is_primary !== right.role.is_primary) return left.role.is_primary ? -1 : 1;
-        return (left.registration.primary_handle ?? "").localeCompare(
-          right.registration.primary_handle ?? ""
-        );
+        return shownName(left.registration).localeCompare(shownName(right.registration));
       });
     }
     return grouped;
@@ -435,8 +442,7 @@ export default function ParticipantsPool({
       registrations.filter(
         (registration) =>
           isWithdrawn(registration) &&
-          (normalizedSearch.length === 0 ||
-            (registration.primary_handle?.toLowerCase().includes(normalizedSearch) ?? false))
+          (normalizedSearch.length === 0 || nameMatches(registration, normalizedSearch))
       ),
     [normalizedSearch, registrations]
   );
@@ -451,8 +457,7 @@ export default function ParticipantsPool({
         (registration) =>
           !isWithdrawn(registration) &&
           isReserve(registration) &&
-          (normalizedSearch.length === 0 ||
-            (registration.primary_handle?.toLowerCase().includes(normalizedSearch) ?? false))
+          (normalizedSearch.length === 0 || nameMatches(registration, normalizedSearch))
       ),
     [normalizedSearch, registrations]
   );
@@ -527,7 +532,7 @@ export default function ParticipantsPool({
             <ul className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
               {reserves.map((registration) => (
                 <li key={registration.id} className="text-xs text-[color:var(--aqt-fg-muted)]">
-                  {registration.primary_handle ?? "\u2014"}
+                  {shownName(registration)}
                 </li>
               ))}
             </ul>
@@ -548,7 +553,7 @@ export default function ParticipantsPool({
                   key={registration.id}
                   className="text-xs text-[color:var(--aqt-fg-dim)] line-through"
                 >
-                  {registration.primary_handle ?? "\u2014"}
+                  {shownName(registration)}
                 </li>
               ))}
             </ul>

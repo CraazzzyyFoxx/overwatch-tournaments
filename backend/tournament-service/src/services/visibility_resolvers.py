@@ -40,9 +40,8 @@ class VisibilityResolverService:
             "Team not found",
         )
 
-    async def tournament_id_for_match(self, session: AsyncSession, match_id: int) -> int:
-        return await self._scalar_or_404(
-            session,
+    def _match_owner_stmt(self, match_id: int) -> sa.Select:
+        return (
             sa.select(models.Encounter.tournament_id)
             .join(
                 models.StatsMatch,
@@ -52,9 +51,18 @@ class VisibilityResolverService:
                     models.StatsMatch.discipline == models.Encounter.discipline,
                 ),
             )
-            .where(models.StatsMatch.id == match_id),
-            "Match not found",
+            .where(models.StatsMatch.id == match_id)
         )
+
+    async def tournament_id_for_match(self, session: AsyncSession, match_id: int) -> int:
+        return await self._scalar_or_404(session, self._match_owner_stmt(match_id), "Match not found")
+
+    async def owner_tournament_id_for_match(self, session: AsyncSession, match_id: int) -> int | None:
+        """The match's tournament, or ``None`` for a mix-owned match (public, D6); 404 when the match is absent."""
+        row = (await session.execute(self._match_owner_stmt(match_id))).first()
+        if row is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Match not found")
+        return row[0]
 
 
 visibility_resolvers_service = VisibilityResolverService()

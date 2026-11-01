@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 
 import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { ResTag } from "@/components/match/cells";
+import { PersonLabel } from "@/components/PlayerName";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { ProfileStat } from "@/components/profile/atoms";
 import TeamName, { TeamLogo } from "@/components/TeamName";
@@ -21,7 +22,6 @@ import {
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";
 import { useFormatter } from "@/lib/datetime/client";
 import { isEncounterCompleted, isEncounterLive } from "@/lib/encounter/status";
-import { splitHandle } from "@/lib/player";
 import type { RoleOntology } from "@/lib/roster/ontology";
 import { groupDisplayName } from "@/lib/tournament/group";
 import { cn } from "@/lib/utils";
@@ -447,7 +447,7 @@ function MyLiveCard({
               <p className="truncate font-onest text-heading font-semibold">{team.name}</p>
               <p className="mt-0.5 flex items-center gap-1.5 text-caption text-[color:var(--aqt-fg-muted)]">
                 <PlayerRoleIcon role={player.role} ontology={ontology} size={14} decorative />
-                {splitHandle(player.name).name}
+                <PersonLabel display={player.display} tag="hidden" />
               </p>
             </div>
           </div>

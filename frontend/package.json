@@ -17,6 +17,8 @@
     "gen:api": "node scripts/gen-api.mjs"
   },
   "dependencies": {
+    "@deadlock-api/ui-core": "^1.7.0",
+    "@deadlock-api/ui-react": "^1.7.0",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",

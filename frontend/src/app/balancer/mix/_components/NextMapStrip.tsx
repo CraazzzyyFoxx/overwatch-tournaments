@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 
 import { Dices } from "lucide-react";
 
-import { hasMapChoice, rollNextMap, rollableModes } from "@/app/balancer/mix/pickup-map-roll";
+import { rollNextMap, rollableModes, soleMap } from "@/app/balancer/mix/pickup-map-roll";
 import { CAPTION_CLASS } from "@/app/balancer/mix/pickup-chrome";
 import CatalogEntityImage from "@/components/catalog/CatalogEntityImage";
 import { Button } from "@/components/ui/button";
@@ -46,9 +46,11 @@ export function NextMapStrip({
   onNextMapChange: (mapId: number | null) => void;
 }>) {
   const t = useTranslations("mixes.room");
-  const nextMap = nextMapId == null ? null : (maps.find((map) => map.id === nextMapId) ?? null);
+  // A game with one competitive map plays every match on it: shown always, never rolled.
+  const fixedMap = soleMap(maps);
+  const nextMap = fixedMap ?? (nextMapId == null ? null : (maps.find((map) => map.id === nextMapId) ?? null));
 
-  if (!hasMapChoice(maps) || (!canWrite && nextMap == null)) return null;
+  if (!canWrite && nextMap == null) return null;
 
   return (
     <div
@@ -81,7 +83,7 @@ export function NextMapStrip({
         </div>
       </div>
 
-      {canWrite ? (
+      {canWrite && fixedMap == null ? (
         <NextMapRoll
           nextMapId={nextMapId}
           maps={maps}

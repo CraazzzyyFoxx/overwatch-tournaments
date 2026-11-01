@@ -23,6 +23,23 @@ export interface Release {
 
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.7.0",
+    date: "2026-11-02",
+    title: {
+      ru: "Статистика в миксах, матчи Deadlock и имена игроков по игре",
+      en: "Mix statistics, Deadlock matches and names per game"
+    },
+    games: ["overwatch", "deadlock"]
+  },
+  {
+    version: "2.6.0",
+    date: "2026-11-01",
+    title: {
+      ru: "Новые страницы турниров, новый MVP и главная страница",
+      en: "New tournament pages, a new MVP and a new home page"
+    }
+  },
+  {
     version: "2.0.0",
     date: "2026-10-23",
     title: {

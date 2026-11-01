@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 
 import CatalogEntityImage from "@/components/catalog/CatalogEntityImage";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
+import { PersonLabel } from "@/components/PlayerName";
 import { Eyebrow } from "@/components/ui/eyebrow";
 import { Card } from "@/components/ui/card";
 import { FilterChip } from "@/components/ui/filter-chip";
@@ -121,7 +122,7 @@ export default function HeroCard({
         <Fact
           label={t("users.heroesCompare.hero.bestKd")}
           value={bestKd ? COL.kd.formatValue(bestKd.kd) : "—"}
-          sub={bestKd ? <span title={bestKd.username}>{bestKd.username}</span> : undefined}
+          sub={bestKd ? <PersonLabel display={bestKd.display} className="block" /> : undefined}
         />
       </div>
 

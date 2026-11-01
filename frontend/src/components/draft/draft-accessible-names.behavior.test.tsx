@@ -66,7 +66,7 @@ const ana: DraftPlayer = {
   registration_id: 70,
   user_id: null,
   identity: { provider: "battlenet", handle: "Ana#1234" },
-  player_name: null,
+  display: { name: "Ana", tag: "#1234", canonical: null, snapshot: null },
   primary_role: { dimension: "player_role", role: "support" },
   is_flex: false,
   effective_rank: 3000,
@@ -207,9 +207,9 @@ describe("the player card", () => {
 
     expectDistinct(names);
     if (locale === "en") {
-      expect(names).toContain("Select Ana#1234 as Support");
-      expect(names).toContain("Select Ana#1234 as Damage");
-      expect(names).toContain("Pick Ana#1234 as support");
+      expect(names).toContain("Select Ana as Support");
+      expect(names).toContain("Select Ana as Damage");
+      expect(names).toContain("Pick Ana as support");
     }
   });
 
@@ -219,8 +219,8 @@ describe("the player card", () => {
     const names = await cardButtonNames(en, "en", { shape: ONE_ROLE_SHAPE, player, role: "agent", ontology: DEADLOCK_METADATA });
 
     expectDistinct(names);
-    expect(names).toContain("Select Ana#1234");
-    expect(names).toContain("Pick Ana#1234");
+    expect(names).toContain("Select Ana");
+    expect(names).toContain("Pick Ana");
   });
 });
 

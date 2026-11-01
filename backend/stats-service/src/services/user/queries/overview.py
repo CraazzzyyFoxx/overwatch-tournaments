@@ -841,6 +841,8 @@ class UserOverviewQueries(DisciplineQueries):
                 self._facts.c.segment == 0,
                 self._facts.c.entity_id.isnot(None),
                 self._facts.c.value > 0,
+                # Mix stats live only inside the mix (mix encounters have no tournament).
+                self._facts.c.tournament_id.is_not(None),
             )
             .group_by(self._facts.c.player_id, self._facts.c.entity_id)
         )

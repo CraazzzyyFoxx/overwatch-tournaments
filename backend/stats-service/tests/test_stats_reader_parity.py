@@ -99,6 +99,20 @@ def _json(value: Any) -> Any:
             # The per-game summaries a profile gained for the cross-game profile (spec §6.6); not reader output the
             # frozen capture had.
             del result["games"]
+        display = result.get("display")
+        if isinstance(display, dict) and display.keys() == {"name", "tag", "canonical", "snapshot"}:
+            # The game-scoped person name every game surface gained; the frozen capture named people by their
+            # canonical name, and a leaderboard row by its latest roster name (the seed has no workspace or game
+            # name, so the shown name is that snapshot).
+            del result["display"]
+            shown = display["name"] + (display["tag"] or "")
+            if result.keys() == {"rank", "player_id", "value"}:
+                result["name"] = display["canonical"]
+            elif "games_played" in result:
+                result["username"] = display["canonical"]
+                result["player_name"] = display["snapshot"] or shown
+            elif "map_image_path" in result:
+                result["player_name"] = display["canonical"]
         return result
     if isinstance(value, (list, tuple)):
         return [_json(item) for item in value]

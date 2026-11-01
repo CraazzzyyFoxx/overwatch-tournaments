@@ -8,7 +8,7 @@ import { AuditTrailButton } from "@/components/kit/AuditTrailSheet";
 import { InspectorField, InspectorSection } from "@/components/kit/InspectorField";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { TournamentLogUploadDialog } from "@/components/logs/TournamentLogUploadDialog";
+import { LogUploadDialog } from "@/components/logs/LogUploadDialog";
 import { adminQueryKeys } from "@/lib/admin/query-keys";
 import { encounterQueryKeys } from "@/lib/encounters/query-keys";
 import { pregameRoomHref } from "@/lib/encounter/pregame-room";
@@ -153,10 +153,9 @@ export function EncounterInspectorActions({
         </Button>
       ) : null}
       {canUpdate ? (
-        <TournamentLogUploadDialog
-          tournamentId={encounter.tournament_id}
+        <LogUploadDialog
+          scope={{ tournamentId: encounter.tournament_id, encounterId: encounter.id }}
           encounters={[encounter]}
-          initialEncounterId={encounter.id}
           onUploaded={onUploaded}
           trigger={
             <Button variant="outline" size="sm">

@@ -3,6 +3,7 @@
 import { Crown, UserMinus, UserPlus } from "lucide-react";
 import { useTranslations } from "next-intl";
 
+import { PersonLabel } from "@/components/PlayerName";
 import RosterSlotGlyph from "@/components/registration/RosterSlotGlyph";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -63,7 +64,7 @@ export default function MyTeamRosterList({
           className="flex flex-wrap items-center gap-2 py-2.5 text-sm first:pt-0 last:pb-0"
         >
           <RosterSlotGlyph code={member.slot_code} ontology={ontology} />
-          <span className="font-medium">{member.display_name ?? member.primary_handle}</span>
+          <PersonLabel display={member.display} className="font-medium" />
           {member.is_captain && (
             <span className="inline-flex items-center gap-1 text-xs text-[color:var(--aqt-amber)]">
               <Crown className="size-3.5" aria-hidden />

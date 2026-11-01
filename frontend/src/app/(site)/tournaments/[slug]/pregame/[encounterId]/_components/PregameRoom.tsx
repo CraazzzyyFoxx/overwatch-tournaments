@@ -16,7 +16,7 @@ import { Eyebrow } from "@/components/ui/eyebrow";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EncounterRostersModal } from "@/components/EncounterRostersModal";
 import { MatchImport } from "@/components/pick-ban/MatchImport";
-import { TournamentLogUploadDialog } from "@/components/logs/TournamentLogUploadDialog";
+import { LogUploadDialog } from "@/components/logs/LogUploadDialog";
 import { usePermissions } from "@/hooks/usePermissions";
 import { RETURN_TO_PARAM, safeReturnPath } from "@/lib/auth/return-to";
 import encounterService from "@/services/encounter.service";
@@ -193,7 +193,7 @@ function PregameRoomBody({ encounterId, seriesReport = true }: Readonly<PregameR
               <h1 className="font-display text-title font-semibold">{encounter.name}</h1>
             </div>
             {/* An organizer files through the organizer route, whose rows carry the warnings. */}
-            <MatchImport encounterId={encounterId} games={matchImportGames} admin={importsAsOrganizer} />
+            <MatchImport scope={{ encounterId, games: matchImportGames, admin: importsAsOrganizer }} />
             <div>
               <Button variant="outline" asChild>
                 <Link href={returnTo}>
@@ -263,10 +263,9 @@ function PregameRoomBody({ encounterId, seriesReport = true }: Readonly<PregameR
             />
           ) : null}
           {canUploadLog ? (
-            <TournamentLogUploadDialog
-              tournamentId={encounter.tournament_id}
+            <LogUploadDialog
+              scope={{ tournamentId: encounter.tournament_id, encounterId }}
               encounters={[encounter]}
-              initialEncounterId={encounterId}
               autoUpload
               onUploaded={room.invalidateRoom}
               trigger={

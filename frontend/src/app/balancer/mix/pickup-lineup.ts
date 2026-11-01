@@ -1,3 +1,5 @@
+import { splitHandle } from "@/lib/player";
+import type { PersonDisplay } from "@/types/user.types";
 import type { DivisionGrid } from "@/types/workspace.types";
 import type { DisciplineMetadata } from "@/types/discipline.types";
 import { ratedDimension, registrationRoles, showsRoles, slotRank, type RoleOntology } from "@/lib/roster/ontology";
@@ -41,14 +43,20 @@ export function roleRefsOf(order: readonly string[], dimension: string): RoleRef
 /** A terminal mix is read-only server-side, so its write controls are hidden. */
 export const PICKUP_TERMINAL_STATUSES: Record<string, true> = { completed: true, cancelled: true };
 
+/** The host, a co-host or a superuser, whatever the mix's status (mirrors `shared.services.mix_hosts.is_mix_host`). */
+export function isMixHost(game: CustomGame | undefined, userId: number | null, isSuperuser: boolean): boolean {
+  if (game == null) return false;
+  if (isSuperuser) return true;
+  return userId != null && (game.host_user_id === userId || game.co_hosts.some((coHost) => coHost.user_id === userId));
+}
+
 /**
  * Whoever passes the server's `CustomGameService._writable`: the host, a co-host or a superuser, while the mix is
  * still open (a completed or cancelled one is read-only, so its controls are hidden rather than left to 409).
  */
 export function canWriteMix(game: CustomGame | undefined, userId: number | null, isSuperuser: boolean): boolean {
   if (game == null || PICKUP_TERMINAL_STATUSES[game.status]) return false;
-  if (isSuperuser) return true;
-  return userId != null && (game.host_user_id === userId || game.co_hosts.some((coHost) => coHost.user_id === userId));
+  return isMixHost(game, userId, isSuperuser);
 }
 
 /**
@@ -110,13 +118,6 @@ export function getLineupIssue(row: CustomGamePlayer, roles: readonly string[]):
     return row.roles == null ? "no_rank" : "no_role";
   }
   return order.some((role) => row.ranks[role] != null) ? null : "no_rank";
-}
-
-/** One label rule shared by the lineup, the teams and the sheet. */
-export function playerLabel(
-  row: Pick<CustomGamePlayer, "display_name" | "identity" | "workspace_member_id">,
-): string {
-  return row.display_name || row.identity?.handle || `#${row.workspace_member_id}`;
 }
 
 /** Mean effective rank across the roles the player can actually be assigned. */
@@ -331,7 +332,10 @@ export function participationEntries(
 /** One assigned seat in a balanced team, flattened out of the role buckets. */
 export type PickupSeat = {
   uuid: string;
+  /** The name the balance stored: matching data against the live room, never shown. */
   name: string;
+  /** How the seat is shown: the member's name in this mix's game; built from the stored `name` once they left the roster. */
+  display: PersonDisplay;
   /** A role code of the owner game (lower-cased), or `flex` for an open seat. */
   role: string;
   rating: number | null;
@@ -405,6 +409,14 @@ function asNumber(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
+/** The seat's resolved `display`; absent once the member left the roster, then the stored name stands in (no profile to link). */
+function seatDisplay(player: Record<string, unknown>, storedName: string): PersonDisplay {
+  const shown = asRecord(player.display);
+  if (shown != null && typeof shown.name === "string") return shown as unknown as PersonDisplay;
+  const { name, suffix } = splitHandle(storedName);
+  return { name, tag: suffix, canonical: null, snapshot: null };
+}
+
 /**
  * A host's team-name overrides re-keyed by the position `parseVariants` assigns
  * names by -- which is a position INSIDE one lobby. Team names are stored
@@ -466,9 +478,11 @@ function parseSeats(
       const isFlex = player.is_flex === true;
       const subRole = slotValue(asRecord(player.sub_roles), role);
       const first = typeof preferences[0] === "string" ? solverSlotCode(preferences[0]) : null;
+      const storedName = typeof player.name === "string" ? player.name : uuid;
       seats.push({
         uuid,
-        name: typeof player.name === "string" ? player.name : uuid,
+        name: storedName,
+        display: seatDisplay(player, storedName),
         role,
         // The server's `seat_rating`: the rating for the bucket they sit in, 0 without one.
         rating: asNumber(slotValue(asRecord(player.ratings), role)) ?? 0,
@@ -622,7 +636,7 @@ export type MySeatTeam = {
   /** That lobby's in-game join code, or `null` while the host set none. */
   lobbyCode: string | null;
   /** In seat order; `role` is the slot the option seats them on (the roster line's glyph). */
-  members: { uuid: string; name: string; role: string; isCaptain: boolean; isMe: boolean }[];
+  members: { uuid: string; display: PersonDisplay; role: string; isCaptain: boolean; isMe: boolean }[];
 };
 
 /** The team the lobby's shown option seats this member in, or `null` while no lobby seats them. */
@@ -650,7 +664,7 @@ export function myLobbyTeam(
         lobbyCode: lobby.lobby_code,
         members: team.seats.map((seat) => ({
           uuid: seat.uuid,
-          name: seat.name,
+          display: seat.display,
           role: seat.role,
           isCaptain: seat.isCaptain,
           isMe: seat.uuid === me,

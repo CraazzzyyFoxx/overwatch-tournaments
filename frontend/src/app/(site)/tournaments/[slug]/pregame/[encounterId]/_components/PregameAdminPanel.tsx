@@ -106,7 +106,7 @@ export function PregameAdminPanel({
   const matchImport =
     matchImportGames.length > 0 ? (
       <PregameAdminBox icon={FileDown} title={t("matchImport.title")}>
-        <MatchImport encounterId={encounterId} games={matchImportGames} admin />
+        <MatchImport scope={{ encounterId, games: matchImportGames, admin: true }} />
       </PregameAdminBox>
     ) : null;
 

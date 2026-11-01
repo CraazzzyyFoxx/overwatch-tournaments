@@ -33,9 +33,10 @@ export function rollableModes(maps: readonly CatalogEntityRead[]): RollableMode[
   return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
-/** More than one competitive map: a game with one (or none) has nothing to roll, pick or announce. */
-export function hasMapChoice(maps: readonly CatalogEntityRead[]): boolean {
-  return maps.filter(IN_POOL).length > 1;
+/** The only competitive map, or `null` when there are several (or none): a single-map game plays every match on it, nothing to roll. */
+export function soleMap(maps: readonly CatalogEntityRead[]): CatalogEntityRead | null {
+  const pool = maps.filter(IN_POOL);
+  return pool.length === 1 ? pool[0] : null;
 }
 
 function pickOne<T>(items: readonly T[], random: () => number): T {

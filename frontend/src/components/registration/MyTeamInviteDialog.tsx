@@ -4,6 +4,7 @@ import { Copy } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useId, useRef } from "react";
 
+import { PersonLabel } from "@/components/PlayerName";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -145,7 +146,7 @@ export default function MyTeamInviteDialog({
                 />
                 {invite.targetAgent && (
                   <div className="flex flex-wrap items-center gap-2 text-sm">
-                    <span>{t("picker.selected", { name: invite.targetAgent.primary_handle })}</span>
+                    <span>{t("picker.selected", { name: invite.targetAgent.display.name })}</span>
                     <Button
                       type="button"
                       variant="ghost"
@@ -199,7 +200,7 @@ export default function MyTeamInviteDialog({
                         variant="card"
                         className="flex w-full flex-wrap items-center gap-2"
                       >
-                        <span className="truncate">{agent.primary_handle}</span>
+                        <PersonLabel display={agent.display} />
                         {/* Roles on the row: the captain is filling one specific
                             slot and should spot a tank without opening a profile. */}
                         {showsSlots &&

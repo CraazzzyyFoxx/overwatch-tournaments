@@ -48,7 +48,10 @@ _PLAYER_WON_MAP = sa.exists(
     )
     .correlate(_FACTS)
 )
-_PLAYED_MAP = sa.and_(_FACTS.c.segment == 0, _FACTS.c.stat_code == "hero_time_played")
+# Mix stats live only inside the mix (mix encounters have no tournament).
+_PLAYED_MAP = sa.and_(
+    _FACTS.c.segment == 0, _FACTS.c.stat_code == "hero_time_played", _FACTS.c.tournament_id.is_not(None)
+)
 
 
 @register(

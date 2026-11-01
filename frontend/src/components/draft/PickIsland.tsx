@@ -5,6 +5,7 @@ import { Crown, Heart, WifiOff, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
 
+import { PersonLabel } from "@/components/PlayerName";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { RankCrest } from "@/components/RankCrest";
 import { Button } from "@/components/ui/button";
@@ -94,9 +95,8 @@ export function PickIsland(props: Readonly<PickIslandProps>) {
   );
   if (!player) return liveRegion;
 
-  const displayName = player.identity?.handle ?? `#${player.id}`;
   const available = player.status === "available";
-  const profileSlug = player.player_name ? getPlayerSlug(player.player_name) : null;
+  const profileSlug = player.display.canonical ? getPlayerSlug(player.display.canonical) : null;
   const myTurn = isMyTurnFor(gating, actingTeam);
   const hasAccount = player.user_id != null;
   const cardPending = hasAccount && cardQuery.isPending;
@@ -176,10 +176,10 @@ export function PickIsland(props: Readonly<PickIslandProps>) {
                     href={`/users/${profileSlug}`}
                     className="rounded hover:text-[color:var(--aqt-teal)] hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]"
                   >
-                    {displayName}
+                    <PersonLabel display={player.display} tag="hidden" />
                   </Link>
                 ) : (
-                  displayName
+                  <PersonLabel display={player.display} tag="hidden" />
                 )}
               </h2>
               {player.is_captain && (
@@ -347,7 +347,7 @@ function IslandFooter({
   const current = board.current_pick;
   const countdown = usePickCountdown(current, board.session.status === "paused");
   const isConnected = connectionState === "connected";
-  const displayName = player.identity?.handle ?? `#${player.id}`;
+  const displayName = player.display.name;
   // The action is about the card's player: a selection of somebody else is not confirmable from here.
   const chosen = selection?.playerId === player.id ? selection : null;
   // A one-role game's pick names the player only (its role message would read "flex" for `agent`).
@@ -407,7 +407,7 @@ function IslandFooter({
   let hint: string | null = null;
   if (!overrideMode && gating.myTeamId != null) {
     const previewName = autopickPreview
-      ? (board.players.find((entry) => entry.id === autopickPreview.player_id)?.identity?.handle ?? null)
+      ? (board.players.find((entry) => entry.id === autopickPreview.player_id)?.display.name ?? null)
       : null;
     if (current != null && turnsUntil(board, gating.myTeamId) == null) hint = t("island.hint.noPicksLeft");
     else if (myTurn && chosen)
@@ -420,7 +420,7 @@ function IslandFooter({
         : t("island.hint.chooseRole");
     else hint = queue && queue.ids.length > 0 ? t("island.hint.prepareQueue") : t("island.hint.prepare");
   }
-  const captainTag = actingTeam.roster.find((entry) => entry.is_captain)?.identity?.handle ?? actingTeam.team.name;
+  const captainTag = actingTeam.roster.find((entry) => entry.is_captain)?.display.name ?? actingTeam.team.name;
 
   return (
     <div className="border-t border-[color:var(--aqt-border)] bg-[color:var(--aqt-card)] px-3.5 pb-3 pt-2.5">

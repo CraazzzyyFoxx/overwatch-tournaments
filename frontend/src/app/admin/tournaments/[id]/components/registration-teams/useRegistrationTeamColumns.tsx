@@ -7,6 +7,7 @@ import { useTranslations } from "next-intl";
 
 import { columnMeta, createKebabColumn, type KebabAction } from "@/components/data-table";
 import { StatusIcon } from "@/components/admin/StatusIcon";
+import { PersonLabel } from "@/components/PlayerName";
 import { StatusPill } from "@/components/kit/StatusPill";
 import { formatShortfall } from "@/lib/registration/team-shortfall";
 import { getRegistrationTeamStatus } from "@/lib/registration/team-tone";
@@ -124,7 +125,7 @@ export function useRegistrationTeamColumns({
           // The two things an organizer knows a team by.
           searchValue: (team) => {
             const captain = captainOf(team);
-            return `${team.name} ${captain ? memberName(captain) : ""} ${captain?.primary_handle ?? ""}`;
+            return `${team.name} ${captain ? memberName(captain) : ""} ${captain?.primary_handle ?? ""} ${captain?.display.canonical ?? ""}`;
           }
         })
       },
@@ -156,11 +157,12 @@ export function useRegistrationTeamColumns({
         cell: ({ row }) => {
           const captain = captainOf(row.original);
           if (!captain) return null;
-          const name = memberName(captain);
+          const { display } = captain;
+          const shown = display.name + (display.tag ?? "");
           return (
             <div className="min-w-0">
-              <p className="break-words">{name}</p>
-              {captain.primary_handle && captain.primary_handle !== name ? (
+              <PersonLabel display={display} showCanonical className="block break-words" />
+              {captain.primary_handle && captain.primary_handle !== shown ? (
                 <p className="break-words text-caption text-muted-foreground">
                   {captain.primary_handle}
                 </p>

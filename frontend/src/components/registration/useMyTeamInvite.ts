@@ -107,7 +107,11 @@ export function useMyTeamInvite({
   const freeAgents = freeAgentsQuery.data?.items ?? [];
   const pickerNeedle = pickerSearch.trim().toLowerCase();
   const matchingAgents = pickerNeedle
-    ? freeAgents.filter((agent) => agent.primary_handle.toLowerCase().includes(pickerNeedle))
+    ? freeAgents.filter((agent) =>
+        [agent.display.name + (agent.display.tag ?? ""), agent.display.canonical, agent.primary_handle].some((text) =>
+          text?.toLowerCase().includes(pickerNeedle)
+        )
+      )
     : freeAgents;
   const targetAgent =
     freeAgents.find((agent) => agent.registration_id === targetRegistrationId) ?? null;

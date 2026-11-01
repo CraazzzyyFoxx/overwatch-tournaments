@@ -409,8 +409,8 @@ describe("PickupMySeatPanel on a phone", () => {
           teamName: "Owls",
           nextMapId: 42,
           members: [
-            { uuid: "9", name: "Egor", role: "tank", isCaptain: true, isMe: false },
-            { uuid: "7", name: "karin", role: "damage", isCaptain: false, isMe: true },
+            { uuid: "9", display: { name: "Egor", tag: null, canonical: null, snapshot: null }, role: "tank", isCaptain: true, isMe: false },
+            { uuid: "7", display: { name: "karin", tag: null, canonical: null, snapshot: null }, role: "damage", isCaptain: false, isMe: true },
           ],
         },
         nextMapName: "Busan",

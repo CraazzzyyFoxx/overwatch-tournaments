@@ -12,7 +12,10 @@ for candidate in (str(REPO_BACKEND_ROOT), str(BALANCER_SERVICE_ROOT)):
         sys.path.insert(0, candidate)
 
 
+from shared.schemas.identity import PersonDisplayRead  # noqa: E402
 from src.domain.mix_stats import FORM_LENGTH, SeatOutcome, aggregate_mix_stats, outcome_for  # noqa: E402
+from src.services.custom_game import _stats_display  # noqa: E402
+from src.services.workspace_roster import RosterMember  # noqa: E402
 
 _EPOCH = datetime(2026, 1, 1, 20, 0)
 
@@ -36,6 +39,17 @@ def _only(seats):
     stats = aggregate_mix_stats(seats)
     assert len(stats) == 1
     return stats[0]
+
+
+def test_a_scoreboard_row_is_named_in_its_game_or_canonically_across_games() -> None:
+    game_name = PersonDisplayRead.build(canonical="Canon#1", provider="riot", handle="Mid#EUW")
+    member = RosterMember(
+        member_id=7, player_id=70, identity=None, display_name="Canon#1", display=game_name, player_name="Canon#1"
+    )
+    assert _stats_display(7, member, "lol") == game_name
+    assert _stats_display(7, member, None).name == "Canon" and _stats_display(7, member, None).canonical == "Canon#1"
+    # A member who left keeps their record, named by id and linked to nobody.
+    assert _stats_display(8, None, "lol") == PersonDisplayRead(name="#8")
 
 
 def test_outcome_for_compares_the_two_sides() -> None:

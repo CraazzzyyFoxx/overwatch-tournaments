@@ -52,7 +52,7 @@ export async function getFinishedTournaments({
               team: champion.name,
               players: champion.players
                 .filter((player) => !player.is_substitution)
-                .map((player) => player.name)
+                .map((player) => player.display.name)
             }
           : null
       };

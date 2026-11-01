@@ -14,13 +14,15 @@ from sqlalchemy.orm import joinedload
 
 from shared import models
 from shared.core import enums, pagination
-from shared.disciplines import discipline
+from shared.disciplines import discipline, identity_provider
 from shared.models.catalog.role import leaf_code
 from shared.repository.stats_queries import match_context
 from shared.repository.stats_reads import MatchReadContext, duel_matches, get_match_members, get_match_reads
 from shared.schemas.catalog import CatalogEntityRead
+from shared.schemas.identity import PersonDisplayRead
 from shared.schemas.match import NativeFact
 from shared.schemas.role import RoleRef
+from shared.services.person_display import game_handle_of
 from src.core.workspace import workspace_filter
 from src.schemas.user import UserMatchViewer
 from src.services.discipline_queries import DisciplineQueries
@@ -90,7 +92,8 @@ def _user_history_seats(user_id: int, matches: sa.Subquery) -> sa.CompoundSelect
                 models.WorkspaceMember.workspace_id == matches.c.workspace_id,
             ),
         )
-        .where(models.WorkspaceMember.player_id == user_id)
+        # Mix stats live only inside the mix (mix participations have no tournament).
+        .where(models.WorkspaceMember.player_id == user_id, models.EncounterTeam.tournament_id.is_not(None))
     )
     return live.union(observed)
 
@@ -486,19 +489,42 @@ class UserEncounterQueries(DisciplineQueries):
                 )
             ).all():
                 roles[member_id] = RoleRef.of(dimension, role, sub_role)
-            for member, user_id in (
+            for member, user_id, canonical, workspace_name, discipline_code, handle, verified in (
                 await session.execute(
-                    sa.select(models.EncounterTeamMember, models.WorkspaceMember.player_id)
+                    sa.select(
+                        models.EncounterTeamMember,
+                        models.WorkspaceMember.player_id,
+                        models.User.name,
+                        models.WorkspaceMember.display_name,
+                        models.Encounter.discipline,
+                        *game_handle_of(
+                            models.WorkspaceMember.player_id, models.Encounter.discipline, models.Encounter.workspace_id
+                        ),
+                    )
                     .join(
                         models.WorkspaceMember,
                         models.WorkspaceMember.id == models.EncounterTeamMember.workspace_member_id,
                     )
+                    .join(models.User, models.User.id == models.WorkspaceMember.player_id)
+                    .join(models.Encounter, models.Encounter.id == models.EncounterTeamMember.encounter_id)
                     .where(models.EncounterTeamMember.encounter_id.in_(ids), models.EncounterTeamMember.active)
                     .order_by(models.EncounterTeamMember.id)
                 )
             ).all():
                 rosters.setdefault(member.encounter_team_id, []).append(
-                    _mappers.RosterEntry(member=member, user_id=user_id, role=roles.get(member.id))
+                    _mappers.RosterEntry(
+                        member=member,
+                        user_id=user_id,
+                        role=roles.get(member.id),
+                        display=PersonDisplayRead.build(
+                            canonical=canonical,
+                            provider=identity_provider(discipline_code),
+                            handle=handle,
+                            handle_verified=bool(verified),
+                            workspace_name=workspace_name,
+                            snapshot=member.display_name_snapshot,
+                        ),
+                    )
                 )
 
         # The bracket row always (an encounter's ``round``); its stage and stage item only when asked for.
@@ -819,6 +845,8 @@ class UserEncounterQueries(DisciplineQueries):
                     self._facts.c.entity_id.isnot(None),
                     self._facts.c.value > min_seconds,
                     self._facts.c.segment == 0,
+                    # Mix stats live only inside the mix (mix encounters have no tournament).
+                    models.Encounter.tournament_id.is_not(None),
                 )
             )
         )
@@ -907,6 +935,8 @@ class UserEncounterQueries(DisciplineQueries):
                     self._facts.c.stat_code == enums.LogStatsName.ImpactRank,
                     self._facts.c.entity_id.is_(None),
                     self._facts.c.segment == 0,
+                    # Mix stats live only inside the mix (mix encounters have no tournament).
+                    models.Encounter.tournament_id.is_not(None),
                 )
             )
         )

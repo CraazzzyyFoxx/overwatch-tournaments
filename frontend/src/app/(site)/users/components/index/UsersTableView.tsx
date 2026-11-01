@@ -16,6 +16,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { formatOptional } from "@/app/(site)/users/components/shared/list-utils";
+import { canonicalDisplay } from "@/lib/player";
 import { cn } from "@/lib/utils";
 import type { UserOverviewRow } from "@/types/user.types";
 import type { DivisionGrid, DivisionGridVersion } from "@/types/workspace.types";
@@ -308,7 +309,7 @@ function PlayerRow({
         <div className="flex items-center gap-2.5">
           <PlayerAvatar user={user} size={32} />
           <div className="min-w-0">
-            <PlayerName player={{ name: user.name }} className="max-w-[16rem]" />
+            <PlayerName display={canonicalDisplay(user.name)} className="max-w-[16rem]" />
             <LastActive at={user.last_active_at} />
           </div>
         </div>

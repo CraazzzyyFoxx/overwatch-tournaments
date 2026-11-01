@@ -85,6 +85,7 @@ function member(memberId: number, battleTag: string, overrides: Partial<RosterMe
     player_id: memberId * 10,
     identity: { provider: "battlenet", handle: battleTag },
     display_name: null,
+    display: { name: battleTag, tag: null, canonical: battleTag, snapshot: null },
     ranks: {},
     author_ranks: {},
     ...overrides,

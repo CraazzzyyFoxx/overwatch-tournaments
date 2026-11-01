@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { ArrowRight, Check, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 
+import { PersonLabel } from "@/components/PlayerName";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -110,7 +111,7 @@ export function RoomClockStrip({
     announceParts.push(
       t("shell.strip.announceLast", {
         team: teamName(last.draft_team_id),
-        player: lastPlayer.identity?.handle ?? `#${lastPlayer.id}`
+        player: lastPlayer.display.name
       })
     );
   if (current != null)
@@ -132,8 +133,9 @@ export function RoomClockStrip({
   const whoName = done ? t("shell.strip.picksMade", { count: totalPicks }) : (clockTeam?.name ?? "—");
   // Teams are named after their captain by default: the tag next to the team
   // name only earns its place when it says something the name doesn't.
-  const captainTag = captain ? (captain.identity?.handle ?? `#${captain.id}`) : null;
-  const showCaptainTag = captainTag != null && captainTag !== whoName;
+  const captainTag = captain ? captain.display.name : null;
+  const showCaptainTag =
+    captainTag != null && captainTag !== whoName && `${captainTag}${captain?.display.tag ?? ""}` !== whoName;
 
   const tickTone = (pick: DraftPick) => {
     const state = pickState(pick);
@@ -163,7 +165,7 @@ export function RoomClockStrip({
       ? t("shell.strip.tickPlayer", {
           pick: pick.overall_no,
           team: teamName(pick.draft_team_id),
-          player: player.identity?.handle ?? `#${player.id}`
+          player: player.display.name
         })
       : t("shell.strip.tick", { pick: pick.overall_no, team: teamName(pick.draft_team_id) });
   };
@@ -279,8 +281,8 @@ export function RoomClockStrip({
               <span>{t("shell.strip.lastPick")}</span>
               <span className="truncate">{teamName(last.draft_team_id)}</span>
               <ArrowRight className="h-3.5 w-3.5 shrink-0 text-[color:var(--aqt-fg-faint)]" aria-hidden />
-              <span className="truncate font-semibold text-[color:var(--aqt-fg)]">
-                {lastPlayer.identity?.handle ?? `#${lastPlayer.id}`}
+              <span className="min-w-0 truncate font-semibold text-[color:var(--aqt-fg)]">
+                <PersonLabel display={lastPlayer.display} tag="hidden" />
               </span>
               {last.target_role && showsRoles(ontology) && (
                 <span title={slotLabel(roleOf(last.target_role))} className="inline-flex shrink-0">

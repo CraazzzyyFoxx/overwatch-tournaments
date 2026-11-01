@@ -83,6 +83,7 @@ function statMatch(
         encounter_team_id: side.id,
         workspace_member_id: p.id,
         player_id: p.id,
+        display: { name: `P${p.id}`, tag: "#1", canonical: null, snapshot: null },
         handle_snapshot: `P${p.id}#1`,
         observed_role: null
       };

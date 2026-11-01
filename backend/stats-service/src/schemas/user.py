@@ -8,6 +8,7 @@ from pydantic import BaseModel, BeforeValidator, Field
 
 from shared.core import enums, pagination
 from shared.schemas.catalog import CatalogEntityRead, CatalogEntityRef
+from shared.schemas.identity import PersonDisplayRead
 from shared.schemas.match import MatchRead, NativeFact
 from shared.schemas.role import RoleRef
 from src import schemas
@@ -193,6 +194,7 @@ class UserEncounterTeamPlayerRef(BaseModel):
     user_id: int
     role: RoleRef | None = None
     name: str
+    display: PersonDisplayRead
 
 
 class UserEncounterTeamSummary(BaseModel):
@@ -331,7 +333,7 @@ class LobbyLeaderboardEntry(BaseModel):
 
     rank: int
     player_id: int  # user id (models.User.id)
-    name: str
+    display: PersonDisplayRead
     value: float
 
 
@@ -515,7 +517,7 @@ class CharacterStatBest(BaseModel):
     map_name: str
     map_image_path: str
     value: float
-    player_name: str
+    display: PersonDisplayRead
 
 
 class CharacterStat(BaseModel):

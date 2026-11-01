@@ -119,6 +119,8 @@ export const RESOURCE_QUERY_KEYS: Record<RealtimeResource, KeyBuilder> = {
     // workspace-wide, so the tournament-scoped variant of the same key only
     // exists when a tournament is in context (TournamentLogsTab).
     ...(ctx.tournamentId == null ? [] : [getTournamentWorkspaceQueryKeys(ctx.tournamentId).logHistory]),
+    // A mix match log binds (or fails to bind) a stats match the mix history row shows.
+    customGameKeys.all(id),
   ],
   "workspace.pickup_mix": (id) => [customGameKeys.all(id), workspacePlayerKeys.all(id)],
   "workspace.subscriptions": () => [adminQueryKeys.subscriptions()],

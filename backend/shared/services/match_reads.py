@@ -11,6 +11,7 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.disciplines import identity_provider
 from shared.repository.stats_reads import (
     MatchReadContext,
     get_match_events,
@@ -19,6 +20,7 @@ from shared.repository.stats_reads import (
     get_match_segments,
 )
 from shared.schemas.catalog import CatalogEntityRead
+from shared.schemas.identity import PersonDisplayRead
 from shared.schemas.match import (
     MatchEventsRead,
     MatchParticipantRead,
@@ -105,7 +107,14 @@ async def match_statistics_read(session: AsyncSession, match_id: int) -> NativeM
                 encounter_team_id=row.encounter_team_id,
                 workspace_member_id=row.workspace_member_id,
                 player_id=row.player_id,
-                player_name=row.player_name,
+                display=PersonDisplayRead.build(
+                    canonical=row.player_name,
+                    provider=identity_provider(row.discipline),
+                    handle=row.game_handle,
+                    handle_verified=bool(row.game_handle_verified),
+                    workspace_name=row.workspace_name,
+                    snapshot=row.handle_snapshot,
+                ),
                 handle_snapshot=row.handle_snapshot,
                 observed_role=None
                 if row.role_dimension is None

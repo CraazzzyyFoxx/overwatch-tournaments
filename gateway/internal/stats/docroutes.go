@@ -8,5 +8,5 @@ import "github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/edge"
 // (manifest lookup key); Media is the multipart form. Admin-surface.
 var BinaryDocRoutes = []edge.RouteSpec{
 	{Method: "POST", Pattern: "/api/v1/admin/logs/upload", Queue: "rpc.stats.logs.upload", Auth: edge.AuthRequired,
-		Media: edge.Media{Files: []string{"files[]"}, Fields: []string{"tournament_id", "encounter_id"}}},
+		Media: edge.Media{Files: []string{"files[]"}, Fields: []string{"tournament_id", "encounter_id", "custom_game_id", "lobby_index"}}},
 }

@@ -43,7 +43,7 @@ from shared.core.enums import (
 )
 from shared.core.errors import ApiExc
 from shared.core.errors import BaseAPIException as HTTPException
-from shared.disciplines import rated_role_codes
+from shared.disciplines import discipline, rated_role_codes
 from shared.domain import pick_ban_engine as engine
 from shared.domain import pick_ban_rules as pbr
 from shared.domain.encounter_scoring import GameLine, ScoringRules, resolve_placements
@@ -55,6 +55,8 @@ from shared.models.encounter.game import EncounterGame
 from shared.models.encounter.pick_ban import PickBanEntry, PickBanSession, PickBanSubmission
 from shared.models.encounter.readiness import EncounterReadiness
 from shared.models.encounter.team import EncounterTeam, EncounterTeamMember, EncounterTeamMemberRole
+from shared.models.identity.user import User
+from shared.models.tenancy.workspace import WorkspaceMember
 from shared.models.tournament.pick_ban import PickBanConfig
 from shared.repository import (
     BracketEncounterRepository,
@@ -66,7 +68,9 @@ from shared.repository import (
     PickBanSubmissionRepository,
 )
 from shared.repository.pick_ban import CONFIG_ROOM_LOAD
+from shared.schemas.identity import PersonDisplayRead
 from shared.services.encounter.participants import active_teams
+from shared.services.person_display import game_handle
 from src.services.bracket.usability import is_encounter_live
 from src.services.encounter.games import (
     EncounterGameService,
@@ -326,10 +330,13 @@ class MemberSeat:
 
     id: int
     team_id: int
+    #: The lineup snapshot's name: what the room's lineup seats are matched on.
     name: str
     workspace_member_id: int
     #: The lineup's crown: whom a ``captains_only`` member step lets pick for the team.
     is_captain: bool = False
+    #: How the room shows the member: their name in the match's game (docs/users-identity.md §3.6).
+    display: PersonDisplayRead | None = None
 
 
 async def load_member_seats(session: AsyncSession, encounter: Encounter) -> list[MemberSeat]:
@@ -339,6 +346,12 @@ async def load_member_seats(session: AsyncSession, encounter: Encounter) -> list
     if encounter.custom_game_id is None:
         return []
     role_order = {code: index for index, code in enumerate(rated_role_codes(encounter.discipline))}
+    provider = discipline(encounter.discipline).identity_provider
+    handle = (
+        game_handle(WorkspaceMember.player_id, provider, WorkspaceMember.workspace_id)
+        if provider is not None
+        else (sa.null(), sa.null())
+    )
     rows = await session.execute(
         select(
             EncounterTeamMember.id,
@@ -347,21 +360,30 @@ async def load_member_seats(session: AsyncSession, encounter: Encounter) -> list
             EncounterTeamMember.workspace_member_id,
             EncounterTeamMember.is_captain,
             CatalogRole.code,
+            WorkspaceMember.display_name,
+            User.name,
+            *handle,
         )
         .outerjoin(EncounterTeamMemberRole, EncounterTeamMemberRole.team_member_id == EncounterTeamMember.id)
         .outerjoin(CatalogRole, CatalogRole.id == EncounterTeamMemberRole.role_id)
+        .outerjoin(WorkspaceMember, WorkspaceMember.id == EncounterTeamMember.workspace_member_id)
+        .outerjoin(User, User.id == WorkspaceMember.player_id)
         .where(EncounterTeamMember.encounter_id == encounter.id, EncounterTeamMember.active.is_(True))
     )
-    best: dict[int, tuple[int, int, str, int, bool]] = {}
-    for member_id, team_id, name, workspace_member_id, is_captain, role in rows.all():
+    best: dict[int, tuple[int, MemberSeat]] = {}
+    for member_id, team_id, name, wm_id, is_captain, role, workspace_name, canonical, shown, verified in rows.all():
         order = role_order.get(role, len(role_order))
         if member_id not in best or order < best[member_id][0]:
-            best[member_id] = (order, team_id, name, workspace_member_id, bool(is_captain))
-    ordered = sorted(best.items(), key=lambda item: (item[1][0], item[0]))
-    return [
-        MemberSeat(member_id, team_id, name, wm_id, is_captain)
-        for member_id, (_order, team_id, name, wm_id, is_captain) in ordered
-    ]
+            display = PersonDisplayRead.build(
+                canonical=canonical,
+                provider=provider,
+                handle=shown,
+                handle_verified=bool(verified),
+                workspace_name=workspace_name,
+                snapshot=name,
+            )
+            best[member_id] = (order, MemberSeat(member_id, team_id, name, wm_id, bool(is_captain), display))
+    return [seat for _member_id, (_order, seat) in sorted(best.items(), key=lambda item: (item[1][0], item[0]))]
 
 
 def members_by_team(seats: Sequence[MemberSeat]) -> dict[int, list[int]]:

@@ -93,6 +93,7 @@ import {
   LogProcessingStatus,
   LogRetryRequest,
   LogUploadResponse,
+  LogUploadScope,
   SeedResultRead,
   PlayerSubRole,
   PlayerSubRoleCreateInput,
@@ -1346,15 +1347,18 @@ class AdminService {
     return response.json();
   }
 
-  async uploadMatchLogs(params: {
-    tournamentId: number;
-    files: File[];
-    encounterId?: number | null;
-  }): Promise<LogUploadResponse> {
+  async uploadMatchLogs(params: LogUploadScope & { files: File[] }): Promise<LogUploadResponse> {
     const formData = new FormData();
-    formData.append("tournament_id", params.tournamentId.toString());
-    if (params.encounterId != null) {
-      formData.append("encounter_id", params.encounterId.toString());
+    if ("customGameId" in params) {
+      formData.append("custom_game_id", params.customGameId.toString());
+      // Exactly one of the two: a pinned encounter or the lobby the server resolves at upload time.
+      if ("lobbyIndex" in params) formData.append("lobby_index", params.lobbyIndex.toString());
+      else formData.append("encounter_id", params.encounterId.toString());
+    } else {
+      formData.append("tournament_id", params.tournamentId.toString());
+      if (params.encounterId != null) {
+        formData.append("encounter_id", params.encounterId.toString());
+      }
     }
     for (const file of params.files) {
       formData.append("files[]", file);
