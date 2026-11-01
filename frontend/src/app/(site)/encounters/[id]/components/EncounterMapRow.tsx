@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { StatusDot } from "@/components/ui/status-dot";
 import MatchLogIndicator from "@/components/match/MatchLogIndicator";
-import MatchStatsDialog from "@/components/match/MatchStatsDialog";
+import MatchStatsDialog, { type MatchStatsSeriesEntry } from "@/components/match/MatchStatsDialog";
 import { ScoreCell, type ScoreKind } from "@/components/match/cells";
 import {
   CARD_SUB,
@@ -39,6 +39,8 @@ interface EncounterMapRowProps {
   slot: SeriesSlot;
   names: Duel<string>;
   teams: Encounter["teams"];
+  /** Every played map of the encounter, in order: the scoreboard dialog's map switcher. */
+  series: MatchStatsSeriesEntry[];
   /** Localized duration unit suffixes for the playtime. */
   clockUnits: { h: string; m: string; s: string };
 }
@@ -56,6 +58,7 @@ export default function EncounterMapRow({
   slot,
   names,
   teams,
+  series,
   clockUnits
 }: Readonly<EncounterMapRowProps>) {
   const t = useTranslations();
@@ -190,6 +193,7 @@ export default function EncounterMapRow({
             matchId={match.id}
             summary={match}
             names={names}
+            series={series}
             score={parsed}
             game={game}
             trigger={

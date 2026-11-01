@@ -5,7 +5,13 @@ import type { MatchWithStats } from "@/types/encounter.types";
  * A character counts as played in a segment past this much time on it. The module's long-standing rule: the
  * hero strips and the leaders' portraits never list a one-second swap.
  */
-const HERO_PLAYED_SECONDS = 60;
+export const HERO_PLAYED_SECONDS = 60;
+
+/** Time on one character in one segment. */
+export interface HeroTime {
+  entity: CatalogEntityRead;
+  seconds: number;
+}
 
 /** One observed member as the Overwatch match views read them: segment-keyed values, no entity grain. */
 export interface OwPlayer {
@@ -20,6 +26,8 @@ export interface OwPlayer {
   stats: Record<number, Record<string, number>>;
   /** segment → the characters the member played longer than `HERO_PLAYED_SECONDS` in it. */
   heroes: Record<number, CatalogEntityRead[]>;
+  /** segment → every character the member was observed on, longest first (swaps of any length included). */
+  heroTimes: Record<number, HeroTime[]>;
 }
 
 /** One participant of a duel with its observed members. `id` is the `encounter_team_id`. */
@@ -62,7 +70,8 @@ export function owMatchView(match: MatchWithStats): OwMatchView | null {
       name: member.handle_snapshot,
       profile_name: member.player_name || null,
       stats: {},
-      heroes: {}
+      heroes: {},
+      heroTimes: {}
     };
     players.set(`${member.encounter_team_id}:${member.workspace_member_id}`, player);
     teams.set(member.encounter_team_id, [...(teams.get(member.encounter_team_id) ?? []), player]);
@@ -74,10 +83,15 @@ export function owMatchView(match: MatchWithStats): OwMatchView | null {
     if (!player) continue;
     if (fact.entity_id == null) {
       (player.stats[fact.segment] ??= {})[fact.stat_code] = fact.value;
-    } else if (fact.stat_code === "hero_time_played" && fact.value > HERO_PLAYED_SECONDS) {
+    } else if (fact.stat_code === "hero_time_played" && fact.value > 0) {
       const entity = entityById.get(fact.entity_id);
-      if (entity) (player.heroes[fact.segment] ??= []).push(entity);
+      if (!entity) continue;
+      (player.heroTimes[fact.segment] ??= []).push({ entity, seconds: fact.value });
+      if (fact.value > HERO_PLAYED_SECONDS) (player.heroes[fact.segment] ??= []).push(entity);
     }
+  }
+  for (const player of players.values()) {
+    for (const times of Object.values(player.heroTimes)) times.sort((a, b) => b.seconds - a.seconds);
   }
 
   const seats = match.encounter?.teams;

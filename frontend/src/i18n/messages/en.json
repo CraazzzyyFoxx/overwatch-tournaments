@@ -2388,21 +2388,70 @@
     "contribution": {
       "title": "Player Contribution"
     },
-    "view": {
-      "simple": "Simple",
-      "extended": "Extended"
-    },
     "tab": {
-      "tables": "Tables",
-      "comparison": "Comparison",
+      "tables": "Scoreboard",
+      "breakdown": "Breakdown",
       "timeline": "Timeline"
     },
+    "roundShort": "R{round}",
+    "band": {
+      "combat": "Combat",
+      "output": "Output",
+      "ults": "Ults",
+      "dealt": "Dealt",
+      "tanking": "Tanking"
+    },
+    "group": {
+      "combat": "Combat",
+      "damage": "Damage",
+      "tanking": "Tanking",
+      "healing": "Support",
+      "utility": "Utility",
+      "accuracy": "Accuracy"
+    },
+    "scoreboard": {
+      "player": "Player",
+      "mvp": "MVP",
+      "mvpTitle": "Impact placement",
+      "total": "Total",
+      "hint": "Bold marks the column's best. Click a column to sort.",
+      "sortBy": "Sort by {stat}",
+      "columns": "Column set",
+      "scrollHint": "Players table, scrolls sideways"
+    },
+    "breakdown": {
+      "playerOfMap": "Player of the map",
+      "playerOfRound": "Player of round {round}",
+      "impactFirst": "First by impact",
+      "duelWith": "Duel with {name}:",
+      "rivalBest": "Best on the other side: <who>{name}</who>, #{place}",
+      "totals": "Team totals",
+      "ultimates": "Ults",
+      "flowTitle": "Map flow",
+      "flowHint": "Final-blow lead over time",
+      "flowAria": "{team} leads by {lead} at the end",
+      "flowEven": "Even at the end",
+      "fightsWon": "Fights won",
+      "draws": "{count, plural, one {# draw} other {# draws}}",
+      "firstKill": "First kill in a fight",
+      "conversion": "fights won after the first kill: {home} : {away}",
+      "firstBlood": "First blood",
+      "biggestFight": "Biggest fight",
+      "streak": "Best run",
+      "inARow": "{count} in a row",
+      "lineupsTitle": "Lineups",
+      "lineupsHint": "Each player's main hero per round; the icon marks a swap",
+      "swap": "Swap: {from} → {to}",
+      "duelsTitle": "Role duels",
+      "duelsHint": "Role score: stats won",
+      "carryTitle": "Who carried",
+      "carryHint": "A player's share of the team total",
+      "noData": "No data"
+    },
     "timeline": {
-      "title": "Kill Timeline",
       "loading": "Loading timeline…",
       "error": "Couldn't load the timeline.",
       "empty": "No kill data recorded for this match.",
-      "ultimate": "Ultimate",
       "ultStart": "Ult start",
       "ultKill": "Ult kill",
       "ultEnd": "Ult end",
@@ -2410,10 +2459,15 @@
       "critical": "Critical",
       "environmental": "Environmental",
       "fight": "Fight {n}",
-      "killCount": "{count, plural, one {# kill} other {# kills}}"
+      "finalBlows": "Final blows",
+      "fights": "Fights",
+      "ults": "Ults",
+      "outside": "Outside fights",
+      "legendKills": "{team}: kills",
+      "legendFight": "Fight (click to jump)",
+      "roundAria": "Round {round}: {home} : {away} in final blows"
     },
     "roundLabel": "Round",
-    "tableView": "Columns",
     "preset": {
       "overview": "Overview",
       "combat": "Combat",
@@ -2473,7 +2527,6 @@
     "playtime": "Playtime",
     "logName": "Log name",
     "allMatch": "All Match",
-    "teamLabel": "Team {name}",
     "native": {
       "player": "Player",
       "noMembers": "No observed players",
@@ -4365,6 +4418,14 @@
       "playtime": "Playtime",
       "openNewTab": "Open in New Tab",
       "openStats": "Open the {map} scoreboard",
+      "maps": "Maps",
+      "mapOption": "Map {index}: {map}, {score}",
+      "replayCode": "Replay code",
+      "copyReplay": "Copy replay code",
+      "copied": "Copied",
+      "downloadLog": "Download log",
+      "matchPage": "Match page",
+      "wonBy": "{team} won the map",
       "source": "Source",
       "logName": "Log",
       "nonCompetitive": "Outside the competitive pool"

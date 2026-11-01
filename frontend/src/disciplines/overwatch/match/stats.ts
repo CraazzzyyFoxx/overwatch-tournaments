@@ -1,3 +1,4 @@
+import { characterClass } from "@/lib/catalog/attrs";
 import { formatStat as formatStatValue, type StatFormatter } from "@/lib/stats/format";
 import { LogStatsName } from "../stat-names";
 import type { OwPlayer, OwTeam } from "./view";
@@ -71,8 +72,8 @@ const META: StatMeta[] = [
   { name: LogStatsName.OffensiveAssists, abbr: "OFF A", labelKey: "matches.stat.offensiveAssists", format: "int", group: "healing" },
 
   // ── Utility ─────────────────────────────────────────────────────────────
-  { name: LogStatsName.UltimatesEarned, abbr: "ULT ⚡", labelKey: "matches.stat.ultimatesEarned", format: "int", group: "utility" },
-  { name: LogStatsName.UltimatesUsed, abbr: "ULT ▶", labelKey: "matches.stat.ultimatesUsed", format: "int", group: "utility" },
+  { name: LogStatsName.UltimatesEarned, abbr: "ULT CHG", labelKey: "matches.stat.ultimatesEarned", format: "int", group: "utility" },
+  { name: LogStatsName.UltimatesUsed, abbr: "ULT", labelKey: "matches.stat.ultimatesUsed", format: "int", group: "utility" },
   { name: LogStatsName.HeroTimePlayed, abbr: "TIME", labelKey: "matches.stat.heroTimePlayed", format: "duration", group: "utility" },
 
   // ── Accuracy / precision ────────────────────────────────────────────────
@@ -136,89 +137,118 @@ export const PRESET_ORDER: PresetKey[] = [
   "all"
 ];
 
-const OVERVIEW: LogStatsName[] = [
-  LogStatsName.FinalBlows,
-  LogStatsName.Eliminations,
-  LogStatsName.Deaths,
-  LogStatsName.Assists,
-  LogStatsName.KD,
-  LogStatsName.KDA,
-  LogStatsName.SoloKills,
-  LogStatsName.HeroDamageDealt,
-  LogStatsName.HealingDealt,
-  LogStatsName.DamageBlocked,
-  LogStatsName.DamageDelta,
-  LogStatsName.UltimatesUsed
+/**
+ * A run of a preset's columns under one heading. A preset of one band draws no band row (a heading
+ * over every column says nothing); `labelKey` is then `null`.
+ */
+export interface PresetBand {
+  labelKey: string | null;
+  columns: LogStatsName[];
+}
+
+const band = (labelKey: string | null, columns: LogStatsName[]): PresetBand => ({ labelKey, columns });
+
+const OVERVIEW: PresetBand[] = [
+  band("matches.band.combat", [
+    LogStatsName.FinalBlows,
+    LogStatsName.Eliminations,
+    LogStatsName.Deaths,
+    LogStatsName.Assists,
+    LogStatsName.KD,
+    LogStatsName.KDA,
+    LogStatsName.SoloKills
+  ]),
+  band("matches.band.output", [
+    LogStatsName.HeroDamageDealt,
+    LogStatsName.HealingDealt,
+    LogStatsName.DamageBlocked,
+    LogStatsName.DamageDelta
+  ]),
+  band("matches.band.ults", [LogStatsName.UltimatesUsed])
 ];
 
-const COMBAT: LogStatsName[] = [
-  LogStatsName.Eliminations,
-  LogStatsName.FinalBlows,
-  LogStatsName.Deaths,
-  LogStatsName.Assists,
-  LogStatsName.KD,
-  LogStatsName.KDA,
-  LogStatsName.SoloKills,
-  LogStatsName.ObjectiveKills,
-  LogStatsName.Multikills,
-  LogStatsName.MultikillBest,
-  LogStatsName.FirstPicks,
-  LogStatsName.FirstDeaths,
-  LogStatsName.UltimateKills,
-  LogStatsName.SupportKills,
-  LogStatsName.EnvironmentalKills
+const COMBAT: PresetBand[] = [
+  band(null, [
+    LogStatsName.Eliminations,
+    LogStatsName.FinalBlows,
+    LogStatsName.Deaths,
+    LogStatsName.Assists,
+    LogStatsName.KD,
+    LogStatsName.KDA,
+    LogStatsName.SoloKills,
+    LogStatsName.ObjectiveKills,
+    LogStatsName.Multikills,
+    LogStatsName.MultikillBest,
+    LogStatsName.FirstPicks,
+    LogStatsName.FirstDeaths,
+    LogStatsName.UltimateKills,
+    LogStatsName.SupportKills,
+    LogStatsName.EnvironmentalKills
+  ])
 ];
 
-const DAMAGE: LogStatsName[] = [
-  LogStatsName.HeroDamageDealt,
-  LogStatsName.AllDamageDealt,
-  LogStatsName.BarrierDamageDealt,
-  LogStatsName.DamageFB,
-  LogStatsName.DamageDelta,
-  LogStatsName.DamageTaken,
-  LogStatsName.DamageBlocked,
-  LogStatsName.SelfHealing
+const DAMAGE: PresetBand[] = [
+  band("matches.band.dealt", [
+    LogStatsName.HeroDamageDealt,
+    LogStatsName.AllDamageDealt,
+    LogStatsName.BarrierDamageDealt,
+    LogStatsName.DamageFB,
+    LogStatsName.DamageDelta
+  ]),
+  band("matches.band.tanking", [LogStatsName.DamageTaken, LogStatsName.DamageBlocked, LogStatsName.SelfHealing])
 ];
 
-const HEALING: LogStatsName[] = [
-  LogStatsName.HealingDealt,
-  LogStatsName.HealingReceived,
-  LogStatsName.SelfHealing,
-  LogStatsName.DefensiveAssists,
-  LogStatsName.OffensiveAssists,
-  LogStatsName.DamageBlocked,
-  LogStatsName.DamageTaken
+const HEALING: PresetBand[] = [
+  band(null, [
+    LogStatsName.HealingDealt,
+    LogStatsName.HealingReceived,
+    LogStatsName.SelfHealing,
+    LogStatsName.DefensiveAssists,
+    LogStatsName.OffensiveAssists,
+    LogStatsName.DamageBlocked,
+    LogStatsName.DamageTaken
+  ])
 ];
 
-const ACCURACY: LogStatsName[] = [
-  LogStatsName.WeaponAccuracy,
-  LogStatsName.CriticalHits,
-  LogStatsName.CriticalHitAccuracy,
-  LogStatsName.ScopedAccuracy,
-  LogStatsName.ScopedCriticalHitAccuracy,
-  LogStatsName.ScopedCriticalHitKills,
-  LogStatsName.ShotsFired,
-  LogStatsName.ShotsHit,
-  LogStatsName.ShotsMissed
+const ACCURACY: PresetBand[] = [
+  band(null, [
+    LogStatsName.WeaponAccuracy,
+    LogStatsName.CriticalHits,
+    LogStatsName.CriticalHitAccuracy,
+    LogStatsName.ScopedAccuracy,
+    LogStatsName.ScopedCriticalHitAccuracy,
+    LogStatsName.ScopedCriticalHitKills,
+    LogStatsName.ShotsFired,
+    LogStatsName.ShotsHit,
+    LogStatsName.ShotsMissed
+  ])
 ];
 
-const UTILITY: LogStatsName[] = [
-  LogStatsName.UltimatesEarned,
-  LogStatsName.UltimatesUsed,
-  LogStatsName.ObjectiveKills,
-  LogStatsName.FirstPicks,
-  LogStatsName.FirstDeaths,
-  LogStatsName.UltimateKills,
-  LogStatsName.SupportKills,
-  LogStatsName.EnvironmentalKills,
-  LogStatsName.EnvironmentalDeaths,
-  LogStatsName.HeroTimePlayed
+const UTILITY: PresetBand[] = [
+  band(null, [
+    LogStatsName.UltimatesEarned,
+    LogStatsName.UltimatesUsed,
+    LogStatsName.ObjectiveKills,
+    LogStatsName.FirstPicks,
+    LogStatsName.FirstDeaths,
+    LogStatsName.UltimateKills,
+    LogStatsName.SupportKills,
+    LogStatsName.EnvironmentalKills,
+    LogStatsName.EnvironmentalDeaths,
+    LogStatsName.HeroTimePlayed
+  ])
 ];
 
-// "All" = every catalogued stat, grouped in the catalogue's declared order.
-const ALL: LogStatsName[] = META.map((m) => m.name);
+// "All" = every catalogued stat, one band per group in the catalogue's declared order.
+const ALL: PresetBand[] = META.reduce<PresetBand[]>((bands, meta) => {
+  const last = bands.at(-1);
+  const labelKey = `matches.group.${meta.group}`;
+  if (last?.labelKey === labelKey) last.columns.push(meta.name);
+  else bands.push(band(labelKey, [meta.name]));
+  return bands;
+}, []);
 
-export const COLUMN_PRESETS: Record<PresetKey, LogStatsName[]> = {
+export const PRESET_BANDS: Record<PresetKey, PresetBand[]> = {
   overview: OVERVIEW,
   combat: COMBAT,
   damage: DAMAGE,
@@ -227,6 +257,10 @@ export const COLUMN_PRESETS: Record<PresetKey, LogStatsName[]> = {
   utility: UTILITY,
   all: ALL
 };
+
+export const COLUMN_PRESETS = Object.fromEntries(
+  PRESET_ORDER.map((key) => [key, PRESET_BANDS[key].flatMap((entry) => entry.columns)])
+) as Record<PresetKey, LogStatsName[]>;
 
 // ── Team comparison + leaders ────────────────────────────────────────────────
 
@@ -277,6 +311,58 @@ export function activePlayers(team: Pick<MatchStatsTeam, "players"> | null, roun
 
 export function teamTotal(team: Pick<MatchStatsTeam, "players">, round: number, name: LogStatsName): number {
   return activePlayers(team, round).reduce((sum, player) => sum + playerStat(player, round, name), 0);
+}
+
+/** What a team total of a stat is: a sum, a ratio of sums, the best single value, or nothing that adds up. */
+const TEAM_RATIO: Partial<Record<LogStatsName, { kills: LogStatsName[]; per: LogStatsName }>> = {
+  [LogStatsName.KD]: { kills: [LogStatsName.Eliminations], per: LogStatsName.Deaths },
+  [LogStatsName.KDA]: { kills: [LogStatsName.Eliminations, LogStatsName.Assists], per: LogStatsName.Deaths }
+};
+const TEAM_MAX: Partial<Record<LogStatsName, true>> = { [LogStatsName.MultikillBest]: true };
+/** Per-unit rates: averaging them over a team would invent a number. */
+const TEAM_NONE: Partial<Record<LogStatsName, true>> = { [LogStatsName.DamageFB]: true, [LogStatsName.HeroTimePlayed]: true };
+
+/**
+ * A team's line under a scoreboard column: counts add up, K/D and KA/D are ratios of the summed counts, the best
+ * multikill is the best one, and a percentage, a duration or a per-unit rate has no team value (`null`, drawn as
+ * nothing — a missing total is not a dash).
+ */
+export function teamAggregate(team: Pick<MatchStatsTeam, "players">, round: number, name: LogStatsName): number | null {
+  const ratio = TEAM_RATIO[name];
+  if (ratio) {
+    const per = teamTotal(team, round, ratio.per);
+    return per > 0 ? ratio.kills.reduce((sum, kill) => sum + teamTotal(team, round, kill), 0) / per : null;
+  }
+  if (TEAM_MAX[name]) return Math.max(0, ...activePlayers(team, round).map((player) => playerStat(player, round, name)));
+  const format = STAT_META[name]?.format;
+  if (TEAM_NONE[name] || format === "percent" || format === "duration") return null;
+  return teamTotal(team, round, name);
+}
+
+// ── Character classes (the Overwatch roles a scoreboard orders by) ────────────
+
+/** The catalogue's class codes in the order a team is read: tank, then damage, then support. */
+export const CLASS_ORDER: readonly string[] = ["tank", "damage", "support"];
+
+/**
+ * The class of the character a player spent the most time on in `round` (the whole match when the round has no
+ * stint of its own), lowercased; `null` when the catalogue declares none. Display only: a class is never a role
+ * the player was assigned.
+ */
+export function playerClass(player: Pick<MatchStatsPlayer, "heroTimes">, round: number): string | null {
+  const main = (player.heroTimes[round]?.length ? player.heroTimes[round] : player.heroTimes[0])?.[0]?.entity;
+  return characterClass(main)?.trim().toLowerCase() || null;
+}
+
+/** Tank → damage → support, then by the round's MVP placement (unscored last), then by member id. */
+export function compareByClass(round: number) {
+  const order = (player: MatchStatsPlayer) => {
+    const index = CLASS_ORDER.indexOf(playerClass(player, 0) ?? "");
+    return index < 0 ? CLASS_ORDER.length : index;
+  };
+  const placement = (player: MatchStatsPlayer) => resolveMatchMvpPlacement(player, round) ?? Number.POSITIVE_INFINITY;
+  return (a: MatchStatsPlayer, b: MatchStatsPlayer) =>
+    order(a) - order(b) || placement(a) - placement(b) || a.workspace_member_id - b.workspace_member_id;
 }
 
 /**

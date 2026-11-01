@@ -1,8 +1,9 @@
 "use client";
 
-import type { ReactElement } from "react";
+import type { HTMLAttributes, ReactElement } from "react";
 import { useTranslations } from "next-intl";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { SlotProps } from "@/disciplines/types";
 import { observedScore } from "@/lib/encounter/detail";
@@ -122,6 +123,34 @@ export function MvpTooltip({
 }
 
 /**
+ * The MVP placement chip every list draws (profile rows, the match scoreboard): gold for 1st only, every other
+ * placement neutral (DESIGN §6). `size="sm"` for a dense table. Other props reach the chip, so a tooltip trigger
+ * can wrap it directly.
+ */
+export function MvpPlacementBadge({
+  placement,
+  size,
+  className,
+  ...props
+}: Readonly<{ placement: number; size?: "default" | "sm" } & HTMLAttributes<HTMLSpanElement>>) {
+  return (
+    <Badge
+      tone={placement === 1 ? undefined : "neutral"}
+      hue={placement === 1 ? "var(--aqt-medal-gold)" : undefined}
+      size={size}
+      className={cn(
+        "aqt-tnum cursor-default justify-center font-semibold",
+        size === "sm" ? "h-5.5 min-w-8" : "min-w-9.5",
+        className
+      )}
+      {...props}
+    >
+      {ordinal(placement)}
+    </Badge>
+  );
+}
+
+/**
  * Profile-local MVP placement: a square chip that opens the `MvpTooltip` breakdown, headed by the map
  * and its score. Gold for 1st only, every other placement neutral (DESIGN §6). Reads the viewer's
  * whole-match facts. Must be rendered inside a `TooltipProvider`.
@@ -140,13 +169,7 @@ export default function MvpOrdinal({ match }: Readonly<SlotProps["matchRowBadge"
       badge={overperformanceBadge(match)}
       header={{ title: match.map.name, aside: scores.join(" – ") }}
     >
-      <Badge
-        tone={placement === 1 ? undefined : "neutral"}
-        hue={placement === 1 ? "var(--aqt-medal-gold)" : undefined}
-        className="aqt-tnum min-w-9.5 cursor-default justify-center font-semibold"
-      >
-        {ordinal(placement)}
-      </Badge>
+      <MvpPlacementBadge placement={placement} />
     </MvpTooltip>
   );
 }

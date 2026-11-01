@@ -2388,21 +2388,70 @@
     "contribution": {
       "title": "Вклад игроков"
     },
-    "view": {
-      "simple": "Простой",
-      "extended": "Расширенный"
-    },
     "tab": {
-      "tables": "Таблицы",
-      "comparison": "Сравнение",
+      "tables": "Таблица",
+      "breakdown": "Разбор",
       "timeline": "Хронология"
     },
+    "roundShort": "Р{round}",
+    "band": {
+      "combat": "Бой",
+      "output": "Вклад",
+      "ults": "Ульты",
+      "dealt": "Нанесено",
+      "tanking": "Танкование"
+    },
+    "group": {
+      "combat": "Бой",
+      "damage": "Урон",
+      "tanking": "Танкование",
+      "healing": "Саппорт",
+      "utility": "Утилити",
+      "accuracy": "Точность"
+    },
+    "scoreboard": {
+      "player": "Игрок",
+      "mvp": "MVP",
+      "mvpTitle": "Место по влиянию",
+      "total": "Итого",
+      "hint": "Жирным: лучшее значение столбца. Клик по столбцу сортирует.",
+      "sortBy": "Сортировать: {stat}",
+      "columns": "Набор столбцов",
+      "scrollHint": "Таблица игроков, прокручивается по горизонтали"
+    },
+    "breakdown": {
+      "playerOfMap": "Игрок карты",
+      "playerOfRound": "Игрок раунда {round}",
+      "impactFirst": "Место 1 по влиянию",
+      "duelWith": "Дуэль с {name}:",
+      "rivalBest": "Лучший у соперника: <who>{name}</who>, место {place}",
+      "totals": "Итоги команд",
+      "ultimates": "Ульты",
+      "flowTitle": "Ход карты",
+      "flowHint": "Разница в добиваниях по времени",
+      "flowAria": "{team} к концу впереди на {lead}",
+      "flowEven": "К концу поровну",
+      "fightsWon": "Выиграно боёв",
+      "draws": "ничьих: {count}",
+      "firstKill": "Первое убийство в бою",
+      "conversion": "после первого убийства бой выигран: {home} : {away}",
+      "firstBlood": "Первая кровь",
+      "biggestFight": "Крупнейший бой",
+      "streak": "Лучшая серия",
+      "inARow": "{count} подряд",
+      "lineupsTitle": "Составы",
+      "lineupsHint": "Основной герой игрока в раунде; значком отмечена смена героя",
+      "swap": "Смена: {from} → {to}",
+      "duelsTitle": "Дуэли по ролям",
+      "duelsHint": "Счёт роли: сколько показателей выиграно",
+      "carryTitle": "Кто тащил",
+      "carryHint": "Доля игрока в сумме команды",
+      "noData": "Нет данных"
+    },
     "timeline": {
-      "title": "Хронология убийств",
       "loading": "Загрузка хронологии…",
       "error": "Не удалось загрузить хронологию.",
       "empty": "Для этого матча нет данных об убийствах.",
-      "ultimate": "Ульта",
       "ultStart": "Начало ульты",
       "ultKill": "Убийство с ульты",
       "ultEnd": "Конец ульты",
@@ -2410,10 +2459,15 @@
       "critical": "Крит",
       "environmental": "Окружение",
       "fight": "Бой {n}",
-      "killCount": "{count, plural, one {# убийство} few {# убийства} many {# убийств} other {# убийств}}"
+      "finalBlows": "Добивания",
+      "fights": "Бои",
+      "ults": "Ульты",
+      "outside": "Вне боёв",
+      "legendKills": "{team}: убийства",
+      "legendFight": "Бой (клик — к списку)",
+      "roundAria": "Раунд {round}: {home} : {away} по добиваниям"
     },
     "roundLabel": "Раунд",
-    "tableView": "Столбцы",
     "preset": {
       "overview": "Обзор",
       "combat": "Бой",
@@ -2473,7 +2527,6 @@
     "playtime": "Игровое время",
     "logName": "Имя лога",
     "allMatch": "Весь матч",
-    "teamLabel": "Команда {name}",
     "native": {
       "player": "Игрок",
       "noMembers": "Нет наблюдаемых игроков",
@@ -4365,6 +4418,14 @@
       "playtime": "Время игры",
       "openNewTab": "Открыть в новой вкладке",
       "openStats": "Открыть статистику карты {map}",
+      "maps": "Карты",
+      "mapOption": "Карта {index}: {map}, {score}",
+      "replayCode": "Код реплея",
+      "copyReplay": "Скопировать код реплея",
+      "copied": "Скопировано",
+      "downloadLog": "Скачать лог",
+      "matchPage": "Страница матча",
+      "wonBy": "Карту выиграла команда {team}",
       "source": "Источник",
       "logName": "Лог",
       "nonCompetitive": "Вне соревновательного пула"

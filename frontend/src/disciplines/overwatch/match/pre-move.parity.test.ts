@@ -179,6 +179,8 @@ const withoutHeroColor = (value: unknown): unknown => {
 const LEGACY_MVP_KEYS = ["mvp", "performance", "performance_points"];
 /** A series' placement is now the weighted impact rank: the captured placement and the new `impact_rank` row are not comparable. */
 const LEGACY_SERIES_KEYS = [...LEGACY_MVP_KEYS, "seriesPlacement", "impact_rank"];
+/** Column shorthands are display wording (the scoreboard redesign dropped the ULT glyphs), not catalogue semantics. */
+const DISPLAY_KEYS = ["abbr"];
 const withoutKeys = (value: unknown, keys: readonly string[]): unknown => {
   if (Array.isArray(value)) return value.map((item) => withoutKeys(item, keys));
   if (value && typeof value === "object") {
@@ -196,8 +198,8 @@ describe("lib/match-stats.ts → disciplines/overwatch/match/stats", () => {
 
   it("keeps the catalogue constants", () => {
     expect(
-      norm({ STAT_META, GROUP_COLOR, PRESET_ORDER, COLUMN_PRESETS, COMPARISON_STATS, LEADER_STATS })
-    ).toEqual(read(PRE, "match-stats.constants.json").output);
+      withoutKeys(norm({ STAT_META, GROUP_COLOR, PRESET_ORDER, COLUMN_PRESETS, COMPARISON_STATS, LEADER_STATS }), DISPLAY_KEYS)
+    ).toEqual(withoutKeys(read(PRE, "match-stats.constants.json").output, DISPLAY_KEYS));
   });
 
   it("has every parity-fixture match, with provenance of the same seed", () => {
