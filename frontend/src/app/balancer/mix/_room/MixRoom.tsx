@@ -303,9 +303,9 @@ export function MixRoom({ initialGame, lobbyIndex }: Readonly<{ initialGame: Cus
           {`${game.name} · ${tLobbies("tab", { letter: lobbyLetter(lobbyIndex) })}`}
         </h1>
         <LobbyStage state={lobby.state ?? "idle"} startedAt={lobby.live_started_at} />
-        {canWrite || logUpload != null ? (
+        {canWrite || logUpload?.fileUpload ? (
           <div className="ml-auto flex items-center gap-2">
-            {logUpload != null ? (
+            {logUpload?.fileUpload ? (
               // The lobby, not its live encounter: Record clears that while the log is still in its quiet window.
               <LogUploadDialog
                 scope={{ customGameId: logUpload.customGameId, lobbyIndex }}
