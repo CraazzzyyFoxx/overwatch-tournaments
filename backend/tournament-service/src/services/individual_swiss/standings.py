@@ -164,6 +164,9 @@ async def recalculate_individual_stage(
     captains = set(pick_captains(pool, k))
     position = {member_id: place for ids in order.values() for place, member_id in enumerate(ids, 1)}
 
+    # Once the qualification is locked the pool is frozen: points and places keep following the results, but who is
+    # a qualifier or a captain is what the lock decided.
+    frozen = stage.qualification_locked_at is not None
     changed = False
     for row in rows:
         member_id = row.workspace_member_id
@@ -178,10 +181,11 @@ async def recalculate_individual_stage(
             "maps_lost": total.maps_lost,
             "buchholz": total.buchholz,
             "position": position[member_id],
-            "is_qualified": member_id in qualified,
-            "is_captain": member_id in captains,
             "is_pinned": member_id in pins,
         }
+        if not frozen:
+            wanted["is_qualified"] = member_id in qualified
+            wanted["is_captain"] = member_id in captains
         for attribute, value in wanted.items():
             if getattr(row, attribute) != value:
                 setattr(row, attribute, value)

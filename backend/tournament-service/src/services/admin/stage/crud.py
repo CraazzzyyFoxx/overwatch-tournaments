@@ -21,10 +21,13 @@ from shared.domain.encounter_scoring import (
 )
 from shared.domain.ffa_formula import compile_formula
 from shared.services.stats_owner_delete import capture_owner_delete, stage_owner_delete
+from shared.services.team_format import tournament_slot_shape
 from src import schemas
 from src.domain.bracket import SwissThresholds
+from src.domain.individual_swiss import PoolError, PoolPlayer, check_playoff_team_count, teams_per_round
 from src.domain.stage.lifecycle import stage_lifecycle
 from src.services.admin.stage.base import StageServiceBase
+from src.services.individual_swiss.standings import DEFAULT_PLAYOFF_TEAMS, stage_players
 from src.services.tournament.events import enqueue_tournament_recalculation
 
 
@@ -280,6 +283,7 @@ class StageCrudMixin(StageServiceBase):
             await self._assert_scoring_editable(session, stage, rule_before, rule_after)
 
         thresholds_before = SwissThresholds.of(stage)
+        playoff_count_moved = await self._check_playoff_team_count_edit(session, stage, update_data)
         _apply_stage_fields(stage, update_data)
         _normalize_individual_swiss(stage)
         # The rule row is EDITED, never replaced: every encounter of the stage
@@ -292,11 +296,54 @@ class StageCrudMixin(StageServiceBase):
         # the same signal drops the gateway's cache of the lobby read. A moved
         # Swiss threshold re-decides who is through / out, and whether the
         # scope is over or owes another round.
-        if rule_after != rule_before or SwissThresholds.of(stage) != thresholds_before:
+        if rule_after != rule_before or SwissThresholds.of(stage) != thresholds_before or playoff_count_moved:
             await enqueue_tournament_recalculation(session, tournament_id)
         await self._publish_structure_changed(session, tournament_id)
         await session.commit()
         return await self.get_stage(session, stage.id)
+
+    async def _check_playoff_team_count_edit(
+        self, session: AsyncSession, stage: models.Stage, update_data: dict[str, Any]
+    ) -> bool:
+        """Whether this edit moves an ``individual_swiss`` stage's playoff team count (K), after validating it.
+
+        K sets the per-role cut and the captain count, so a moved one re-runs the standings; it is refused once the
+        qualification is locked (the list is frozen), and against a started stage's frozen pool it may not exceed
+        the teams a round has.
+        """
+        if "playoff_team_count" not in update_data or stage.stage_type != enums.StageType.INDIVIDUAL_SWISS:
+            return False
+        if update_data.get("stage_type", stage.stage_type) != enums.StageType.INDIVIDUAL_SWISS:
+            return False
+        # An explicit null restores the default, like ``_normalize_individual_swiss``.
+        wanted = update_data["playoff_team_count"] or DEFAULT_PLAYOFF_TEAMS
+        if wanted == (stage.playoff_team_count or DEFAULT_PLAYOFF_TEAMS):
+            return False
+        if stage.qualification_locked_at is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Квалификация уже закреплена: число команд плей-офф больше не меняется",
+            )
+        pool = await stage_players(session, stage.id)
+        if pool:
+            shape = (await tournament_slot_shape(session, stage.tournament_id)).slots
+            try:
+                check_playoff_team_count(
+                    wanted,
+                    teams_per_round(
+                        [
+                            PoolPlayer(
+                                row.workspace_member_id, row.registration_id, row.display_name, row.role, row.rank
+                            )
+                            for row in pool
+                        ],
+                        shape,
+                    ),
+                    shape,
+                )
+            except PoolError as exc:
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+        return True
 
     async def _assert_scoring_editable(
         self,

@@ -64,10 +64,15 @@ class IndividualSwissPinsService:
         # Serializes concurrent edits of one stage: each replaces the whole set, so two interleaved replaces would
         # collide on the unique index.
         await session.execute(sa.select(models.Stage.id).where(models.Stage.id == stage.id).with_for_update())
+        locked_at = await session.scalar(
+            sa.select(models.Stage.qualification_locked_at)
+            .where(models.Stage.id == stage.id)
+            .execution_options(populate_existing=True)
+        )
         tournament_status = await session.scalar(
             sa.select(models.Tournament.status).where(models.Tournament.id == stage.tournament_id)
         )
-        if tournament_status in _LOCKED_STATUSES:
+        if locked_at is not None or tournament_status in _LOCKED_STATUSES:
             raise refuse(status.HTTP_409_CONFLICT, "qualification_locked", "Квалификация уже закреплена")
 
         result = await session.execute(

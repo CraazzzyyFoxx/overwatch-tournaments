@@ -73,6 +73,8 @@ class IndividualSwissRoundsService:
         Refuses (409 ``{code, message}``) before writing anything when a registration does not name exactly one
         ranked role or the pool does not split into equal, evenly paired teams.
         """
+        if stage.qualification_locked_at is not None:
+            raise _refuse("qualification_locked", "Квалификация уже закреплена: этап нельзя запустить заново")
         tournament = await session.get_one(models.Tournament, stage.tournament_id)
         shape = (await tournament_slot_shape(session, tournament.id)).slots
         rosters = await roster_engine.for_tournament(session, tournament.id, pool_only=True)

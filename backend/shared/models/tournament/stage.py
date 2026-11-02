@@ -1,4 +1,5 @@
 import typing
+from datetime import datetime
 
 from sqlalchemy import (
     JSON,
@@ -159,6 +160,9 @@ class Stage(db.TimeStampIntegerMixin):
     pairing_mode: Mapped[str | None] = mapped_column(String(16), nullable=True)
     #: ``individual_swiss`` only: how many teams the draft playoff has (K); NULL for every other type.
     playoff_team_count: Mapped[int | None] = mapped_column(Integer(), nullable=True)
+    #: ``individual_swiss`` only: when the qualification was locked. From then on the qualifier and captain flags of the
+    #: personal table no longer move, whatever result is corrected; NULL until the lock.
+    qualification_locked_at: Mapped[datetime | None] = mapped_column(db.DateTime(timezone=True), nullable=True)
 
     tournament: Mapped[Tournament] = relationship(back_populates="stages")
     items: Mapped[list[StageItem]] = relationship(

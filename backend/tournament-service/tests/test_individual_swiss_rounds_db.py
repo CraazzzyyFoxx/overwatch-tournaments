@@ -22,6 +22,7 @@ from shared.services.encounter.result import apply_result
 from src import schemas
 from src.services.admin.stage import stage_service
 from src.services.individual_swiss import individual_swiss_rounds_service
+from src.services.individual_swiss.qualification import qualification_service
 from src.services.standings.service import standings_service
 from tests._encounter_layer import EncounterLayerCase
 
@@ -287,3 +288,102 @@ class IndividualSwissRoundsTests(EncounterLayerCase):
                 )
         self.assertEqual(set(table), set(members))
         self.assertEqual(20, len(members))
+
+    async def test_a_started_stage_starts_again_only_when_its_matches_are_gone(self) -> None:
+        await self._seed_pool(ROLES)
+        stage_id = await self._start()
+        first_round = await self._round(stage_id, 1)
+        self.assertEqual(2, len(first_round))
+
+        async with self.Session() as s:
+            with self.assertRaises(BaseAPIException) as refused:
+                await stage_service.activate_and_generate(
+                    s, stage_id, force=True, notify=False, commit=True, schedule_standings=False
+                )
+        self.assertEqual(409, refused.exception.status_code)
+        self.assertEqual(first_round, await self._round(stage_id, 1))
+
+        # "Regenerate" with the matches deleted: the pool is frozen again instead of tripping the unique index.
+        async with self.Session() as s:
+            await s.execute(sa.delete(models.Encounter).where(models.Encounter.id.in_(first_round)))
+            await s.commit()
+        async with self.Session() as s:
+            await stage_service.activate_and_generate(
+                s, stage_id, force=True, notify=False, commit=True, schedule_standings=False
+            )
+        self.assertEqual(20, len(await self._table(stage_id)))
+        self.assertEqual(2, len(await self._round(stage_id, 1)))
+        self.assertEqual([], await self._round(stage_id, 2))
+
+    async def _lock(self, stage_id: int):
+        async with self.Session() as s:
+            stage = await s.get_one(models.Stage, stage_id)
+            return await qualification_service.lock(s, stage)
+
+    async def _set_playoff_teams(self, stage_id: int, count: int) -> None:
+        async with self.Session() as s:
+            await stage_service.update_stage(s, stage_id, schemas.StageUpdate(playoff_team_count=count))
+        async with self.Session() as s:
+            await standings_service.recalculate_for_tournament(s, self.tournament_id)
+
+    async def _play_both_rounds(self, stage_id: int) -> list[int]:
+        round_one = await self._round(stage_id, 1)
+        await self._confirm(round_one[0], 2, 0)
+        await self._confirm(round_one[1], 2, 1)
+        await self._recalculate_and_generate(stage_id)
+        round_two = await self._round(stage_id, 2)
+        await self._confirm(round_two[0], 2, 0)
+        await self._confirm(round_two[1], 2, 0)
+        await self._recalculate_and_generate(stage_id)
+        return round_two
+
+    async def test_the_playoff_team_count_moves_the_cut_until_the_qualification_is_locked(self) -> None:
+        await self._seed_pool(ROLES)
+        stage_id = await self._start()
+        round_two = await self._play_both_rounds(stage_id)
+        table = await self._table(stage_id)
+        self.assertEqual(
+            (10, 2), (sum(r.is_qualified for r in table.values()), sum(r.is_captain for r in table.values()))
+        )
+
+        # K 2 -> 1: the cut is one team's worth per role (1 tank, 2 damage, 2 support) and one captain.
+        await self._set_playoff_teams(stage_id, 1)
+        table = await self._table(stage_id)
+        self.assertEqual(
+            {"tank": 1, "damage": 2, "support": 2},
+            {role: sum(r.is_qualified for r in table.values() if r.role == role) for role in ROLES},
+        )
+        self.assertEqual(1, sum(r.is_captain for r in table.values()))
+
+        # More teams than a round has is refused, and nothing changes.
+        async with self.Session() as s:
+            with self.assertRaises(BaseAPIException) as too_many:
+                await stage_service.update_stage(s, stage_id, schemas.StageUpdate(playoff_team_count=5))
+        self.assertEqual(409, too_many.exception.status_code)
+        async with self.Session() as s:
+            self.assertEqual(1, (await s.get_one(models.Stage, stage_id)).playoff_team_count)
+
+        locked = await self._lock(stage_id)
+        frozen = {member: (row.is_qualified, row.is_captain) for member, row in (await self._table(stage_id)).items()}
+        self.assertEqual(5, len(locked.qualified))
+        self.assertEqual(1, len(locked.captains))
+        self.assertEqual(5, sum(qualified for qualified, _ in frozen.values()))
+
+        # A result corrected after the lock moves the points, not who is a qualifier or a captain.
+        before = await self._table(stage_id)
+        await self._confirm(round_two[0], 0, 2)
+        await self._confirm(round_two[1], 0, 2)
+        async with self.Session() as s:
+            await standings_service.recalculate_for_tournament(s, self.tournament_id)
+        after = await self._table(stage_id)
+        self.assertNotEqual({m: r.points for m, r in before.items()}, {m: r.points for m, r in after.items()})
+        self.assertEqual(frozen, {m: (r.is_qualified, r.is_captain) for m, r in after.items()})
+
+        # Frozen: the team count, a second lock and a restart are all refused.
+        async with self.Session() as s:
+            with self.assertRaises(BaseAPIException) as locked_count:
+                await stage_service.update_stage(s, stage_id, schemas.StageUpdate(playoff_team_count=2))
+        self.assertEqual(409, locked_count.exception.status_code)
+        with self.assertRaises(BaseAPIException) as twice:
+            await self._lock(stage_id)
+        self.assertEqual(409, twice.exception.status_code)

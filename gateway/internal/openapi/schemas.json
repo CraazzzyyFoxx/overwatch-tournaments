@@ -10036,7 +10036,7 @@
       "summary": "List workspace grids"
     },
     "rpc.tournament.individual_swiss_lock_qualification": {
-      "description": "Permission: workspace `stage.update` and `tournament.update` on the tournament's workspace. Closes the personal Swiss day: every non-qualified player of the completed stage gets balancer status `excluded` with reason `not_qualified`, then the tournament moves LIVE to DRAFT, so the draft pool is exactly the qualifiers. Answers the qualifiers (role, then place) and the playoff captains. 409 when the stage is not an `individual_swiss` stage, is not completed, has no qualifiers, or the tournament is not LIVE (a second lock is refused this way).",
+      "description": "Permission: workspace `stage.update` and `tournament.update` on the tournament's workspace. Closes the personal Swiss day: first recalculates the personal table from the current results and pins, stamps the stage `qualification_locked_at` (the qualifier and captain flags are frozen from then on, and pins and the playoff team count are refused), then every non-qualified player of the completed stage gets balancer status `excluded` with reason `not_qualified`, then the tournament moves LIVE to DRAFT, so the draft pool is exactly the qualifiers. Answers the qualifiers (role, then place) and the playoff captains. 409 when the stage is not an `individual_swiss` stage, is not completed, has no qualifiers, is already locked, the tournament is not LIVE, or the tournament's draft format is not snake (checked before any exclusion).",
       "response": {
         "array": false,
         "ref": "tournament.QualificationLockRead"
@@ -10815,7 +10815,7 @@
       "summary": "Get the pick-ban ruleset catalog"
     },
     "rpc.tournament.player_standing_pins_set": {
-      "description": "Permission: workspace `standing.update` on the tournament's workspace. Replaces every pin of an `individual_swiss` stage's personal table: a pinned player keeps that place inside their role whatever results arrive later, the others fill the free places in computed order. An empty `pins` list unpins everyone. 422 for a player outside the stage's table, a player pinned twice, a place past the role's size or one place given to two players of a role; 409 once the qualification is locked. Schedules the standings recalculation that applies the pins and answers the stored pins.",
+      "description": "Permission: workspace `standing.update` on the tournament's workspace. Replaces every pin of an `individual_swiss` stage's personal table: a pinned player keeps that place inside their role whatever results arrive later, the others fill the free places in computed order. An empty `pins` list unpins everyone. 422 for a player outside the stage's table, a player pinned twice, a place past the role's size or one place given to two players of a role; 409 once the qualification is locked (`qualification_locked_at` on the stage). Schedules the standings recalculation that applies the pins and answers the stored pins.",
       "request": {
         "array": false,
         "ref": "tournament.PlayerStandingPinsUpdate"
