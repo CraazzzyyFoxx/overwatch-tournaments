@@ -13,7 +13,7 @@ baselines and Discord channels live in `stats/`. `catalog/` writes only to `cata
 > `--check` and fails on drift, so the diagrams cannot fall behind the models again.
 
 <!-- ERD:auto _alembic_head -->
-Alembic head: **`mixsearch01`** (163 revisions in `backend/migrations/versions/`).
+Alembic head: **`iswiss02`** (165 revisions in `backend/migrations/versions/`).
 <!-- /ERD:auto -->
 
 **Reading the diagrams**
@@ -1189,6 +1189,38 @@ erDiagram
         bigint dimension_id FK
         bigint role_id PK,FK
     }
+    TOURNAMENT_PLAYER_STANDING {
+        bigint id PK
+        timestamptz created_at
+        timestamptz updated_at "nullable"
+        bigint tournament_id FK
+        bigint stage_id FK
+        bigint registration_id FK "nullable"
+        bigint workspace_member_id FK
+        varchar(255) display_name
+        varchar(32) role
+        int rank
+        float points
+        int wins
+        int draws
+        int losses
+        int matches_played
+        float maps_won
+        float maps_lost
+        float buchholz
+        int position "nullable"
+        boolean is_qualified
+        boolean is_captain
+        boolean is_pinned
+    }
+    TOURNAMENT_PLAYER_STANDING_PIN {
+        bigint id PK
+        timestamptz created_at
+        timestamptz updated_at "nullable"
+        bigint stage_id FK
+        bigint workspace_member_id FK
+        int position
+    }
     TOURNAMENT_RECALCULATION_STATE {
         bigint tournament_id PK,FK
         bigint requested_generation
@@ -1248,6 +1280,9 @@ erDiagram
         int best_of_swiss_eliminate "nullable"
         bigint challonge_group_id "nullable"
         jsonb bracket_template "nullable"
+        varchar(16) pairing_mode "nullable"
+        int playoff_team_count "nullable"
+        timestamptz qualification_locked_at "nullable"
     }
     TOURNAMENT_STAGE_ITEM {
         bigint id PK
@@ -1413,6 +1448,9 @@ erDiagram
     PUBLIC_WORKSPACE ||--o{ TOURNAMENT_SCRIM_ROOM : "workspace_id"
     PUBLIC_WORKSPACE ||--o{ TOURNAMENT_TOURNAMENT : "workspace_id"
     PUBLIC_WORKSPACE_MEMBER ||--o{ TOURNAMENT_PLAYER : "workspace_member_id"
+    PUBLIC_WORKSPACE_MEMBER ||--o{ TOURNAMENT_PLAYER_STANDING : "workspace_member_id"
+    PUBLIC_WORKSPACE_MEMBER ||--o{ TOURNAMENT_PLAYER_STANDING_PIN : "workspace_member_id"
+    REGISTRATION_REGISTRATION |o--o{ TOURNAMENT_PLAYER_STANDING : "registration_id"
     TOURNAMENT_CHALLONGE_SOURCE |o--o{ TOURNAMENT_CHALLONGE_SYNC_LOG : "source_id"
     TOURNAMENT_CHALLONGE_SOURCE ||--o{ TOURNAMENT_CHALLONGE_MATCH_MAPPING : "source_id"
     TOURNAMENT_CHALLONGE_SOURCE ||--o{ TOURNAMENT_CHALLONGE_PARTICIPANT_MAPPING : "source_id"
@@ -1427,6 +1465,8 @@ erDiagram
     TOURNAMENT_STAGE |o--o{ TOURNAMENT_PICK_BAN_CONFIG : "stage_id"
     TOURNAMENT_STAGE |o--o{ TOURNAMENT_STANDING : "stage_id"
     TOURNAMENT_STAGE ||--o{ TOURNAMENT_BRACKET_ENCOUNTER : "tournament_id"
+    TOURNAMENT_STAGE ||--o{ TOURNAMENT_PLAYER_STANDING : "stage_id"
+    TOURNAMENT_STAGE ||--o{ TOURNAMENT_PLAYER_STANDING_PIN : "stage_id"
     TOURNAMENT_STAGE ||--o{ TOURNAMENT_SCRIM_ROOM : "stage_id"
     TOURNAMENT_STAGE ||--o{ TOURNAMENT_STAGE_ITEM : "stage_id"
     TOURNAMENT_STAGE ||--o{ TOURNAMENT_STANDING_PIN : "stage_id"
@@ -1454,6 +1494,7 @@ erDiagram
     TOURNAMENT_TOURNAMENT ||--o{ TOURNAMENT_COMPUTATION_JOB : "tournament_id"
     TOURNAMENT_TOURNAMENT ||--o{ TOURNAMENT_PICK_BAN_CONFIG : "tournament_id"
     TOURNAMENT_TOURNAMENT ||--o{ TOURNAMENT_PLAYER : "tournament_id"
+    TOURNAMENT_TOURNAMENT ||--o{ TOURNAMENT_PLAYER_STANDING : "tournament_id"
     TOURNAMENT_TOURNAMENT ||--o{ TOURNAMENT_SCRIM_ROOM : "tournament_id"
     TOURNAMENT_TOURNAMENT ||--o{ TOURNAMENT_SLUG_REDIRECT : "tournament_id"
     TOURNAMENT_TOURNAMENT ||--o{ TOURNAMENT_STAGE : "tournament_id"
@@ -1478,6 +1519,8 @@ Composite unique keys:
 - `TOURNAMENT_PICK_BAN_CONFIG_ITEM` unique on (`pick_ban_config_id`, `item_id`)
 - `TOURNAMENT_PICK_BAN_CONFIG_SLOT` unique on (`pick_ban_config_id`, `position`)
 - `TOURNAMENT_PICK_BAN_CONFIG_SLOT_ITEM` unique on (`pick_ban_config_slot_id`, `item_id`)
+- `TOURNAMENT_PLAYER_STANDING` unique on (`stage_id`, `workspace_member_id`)
+- `TOURNAMENT_PLAYER_STANDING_PIN` unique on (`stage_id`, `workspace_member_id`)
 - `TOURNAMENT_STAGE` unique on (`id`, `tournament_id`)
 - `TOURNAMENT_STAGE_ITEM` unique on (`id`, `stage_id`)
 - `TOURNAMENT_STAGE_ITEM_INPUT` unique on (`stage_item_id`, `slot`)

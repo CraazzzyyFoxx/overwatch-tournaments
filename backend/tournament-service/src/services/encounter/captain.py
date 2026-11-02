@@ -164,9 +164,10 @@ class CaptainService:
     ) -> tuple[EncounterTeam, int, bool, int | None]:
         """``(seat, player id, is_captain, own seat)`` of this account in the encounter (spec §7.3).
 
-        A tournament seat is found through its team's live ``Team.captain_id`` only, so it is always the captain's. A
-        mix seat is found through the roster snapshot (``encounter.team_member`` -> workspace member -> player) and
-        carries the snapshot's ``is_captain``. 403 without a linked player or a seat.
+        A mix seat -- or a tournament seat with no source team (an individual-Swiss round team) -- is found through
+        the roster snapshot (``encounter.team_member`` -> workspace member -> player) and carries the snapshot's
+        ``is_captain``. A team-backed tournament seat is found through its team's live ``Team.captain_id`` only, so it
+        is always the captain's. 403 without a linked player or a seat.
 
         The own seat is the mix snapshot's ``encounter.team_member`` id (a member step names it, spec §11.6); ``None``
         for a tournament seat.
@@ -178,7 +179,8 @@ class CaptainService:
                 detail="No player profile linked to your account",
             )
         seats = await active_teams(session, encounter.id)
-        if encounter.custom_game_id is not None:
+        is_mix = encounter.custom_game_id is not None
+        if is_mix or any(seat.team_id is None for seat in seats):
             row = (
                 await session.execute(
                     sa.select(
@@ -198,9 +200,10 @@ class CaptainService:
                 )
             ).first()
             for seat in seats:
-                if row is not None and seat.id == row.encounter_team_id:
-                    return seat, player.id, bool(row.is_captain), row.id
-        else:
+                # A team-backed tournament seat is always the live ``Team.captain_id``'s, never its snapshot's.
+                if row is not None and seat.id == row.encounter_team_id and (is_mix or seat.team_id is None):
+                    return seat, player.id, bool(row.is_captain), row.id if is_mix else None
+        if not is_mix:
             team_ids = [seat.team_id for seat in seats if seat.team_id is not None]
             if team_ids:
                 rows = await session.execute(

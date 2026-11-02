@@ -133,6 +133,17 @@ export default function RoleStep({
       // rebalancing below would read the two hidden rows and demote it.
       return next;
     }
+    if (params.max_roles === 1) {
+      // One role only: the role just taken (else the one still taken) is the answer, as main, and the rest go off.
+      const taken =
+        next[changed].priority !== "off"
+          ? changed
+          : roles.find((role) => next[role.code].priority !== "off")?.code;
+      for (const role of roles) {
+        next[role.code] = { ...next[role.code], priority: role.code === taken ? "main" : "off" };
+      }
+      return next;
+    }
     const mains = roles.filter((role) => next[role.code].priority === "main");
     if (mains.length <= 1 || (mains.length === roles.length && flexMode !== "off")) {
       return next;
@@ -240,7 +251,7 @@ export default function RoleStep({
           </p>
         )}
 
-        {!isLocked && named && flexMode === "optional" && (
+        {!isLocked && named && flexMode === "optional" && params.max_roles !== 1 && (
           <Button
             type="button"
             variant="outline"

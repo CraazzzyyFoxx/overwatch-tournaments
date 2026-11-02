@@ -11,6 +11,8 @@ Three layers, all of them here, none of them touching a session:
    - ``avg_sr``: highest ``Team.avg_sr`` is seed 1.
    - ``total_sr``: highest ``Team.total_sr`` is seed 1.
    - ``random``: ``random.Random(stage.id)`` shuffle, stable across processes.
+   - ``captain_rank``: highest captain rank is seed 1. ``seed_teams`` only: the ranks are looked up by the caller,
+     and ``Stage.seed_ranking`` (CHECK-constrained) does not carry it.
 
 2. Group distribution — ``parse_seed_mode`` + ``group_for_index``: the
    ``seed_teams`` vocabulary (``snake_sr``/``by_total_sr``/``random``) and the
@@ -62,6 +64,7 @@ class SeedRanking(StrEnum):
     AVG_SR = "avg_sr"
     TOTAL_SR = "total_sr"
     RANDOM = "random"
+    CAPTAIN_RANK = "captain_rank"
 
 
 class RankableTeam(Protocol):
@@ -76,6 +79,7 @@ SEED_TEAMS_MODES: dict[str, SeedRanking] = {
     "snake_sr": SeedRanking.AVG_SR,
     "by_total_sr": SeedRanking.TOTAL_SR,
     "random": SeedRanking.RANDOM,
+    "captain_rank": SeedRanking.CAPTAIN_RANK,
 }
 
 
@@ -102,8 +106,12 @@ def rank_team_ids(
     ranking: SeedRanking,
     *,
     rng_seed: int,
+    captain_ranks: Mapping[int, int | None] | None = None,
 ) -> list[int]:
-    """Return team ids in engine seed order (index 0 = seed 1)."""
+    """Return team ids in engine seed order (index 0 = seed 1).
+
+    ``captain_ranks`` (team id -> the captain's rank) is read by ``CAPTAIN_RANK`` only; a team without one sorts last.
+    """
     items = list(teams)
     if ranking is SeedRanking.SLOT:
         return [team.id for team in items]
@@ -111,6 +119,9 @@ def rank_team_ids(
         return [team.id for team in sorted(items, key=lambda team: (-(team.avg_sr or 0.0), team.id))]
     if ranking is SeedRanking.TOTAL_SR:
         return [team.id for team in sorted(items, key=lambda team: (-(team.total_sr or 0), team.id))]
+    if ranking is SeedRanking.CAPTAIN_RANK:
+        ranks = captain_ranks or {}
+        return [team.id for team in sorted(items, key=lambda team: (-(ranks.get(team.id) or 0), team.id))]
     if ranking is SeedRanking.RANDOM:
         ids = [team.id for team in items]
         random.Random(rng_seed).shuffle(ids)

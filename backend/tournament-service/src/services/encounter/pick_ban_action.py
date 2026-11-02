@@ -35,6 +35,7 @@ from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from shared.core import http_status as status
 from shared.core.enums import EncounterGameState, EncounterStatus, MapVetoSessionStatus, PickBanKind
@@ -43,10 +44,11 @@ from shared.disciplines import rated_role_codes
 from shared.division_grid import DivisionGrid
 from shared.domain import pick_ban_engine as engine
 from shared.domain import pick_ban_rules as pbr
+from shared.models.catalog.role import CatalogRole, RoleDimension
 from shared.models.encounter.encounter import Encounter
 from shared.models.encounter.game import EncounterGame, EncounterGameTeam
 from shared.models.encounter.pick_ban import PickBanEntry, PickBanSession, PickBanSubmission
-from shared.models.encounter.team import EncounterTeam
+from shared.models.encounter.team import EncounterTeam, EncounterTeamMember, EncounterTeamMemberRole
 from shared.models.tournament.team import Player
 from shared.repository import (
     EncounterRepository,
@@ -54,6 +56,7 @@ from shared.repository import (
     PickBanSubmissionRepository,
 )
 from shared.schemas.identity import PersonDisplayRead
+from shared.schemas.role import RoleRef
 from shared.services.division_grid.resolution import resolve_tournament_division
 from src.core.workspace import get_division_grid
 from src.services.bracket.usability import is_encounter_live
@@ -164,7 +167,9 @@ def serialize_submission(row: pbr.SubmissionLike) -> dict[str, Any]:
     }
 
 
-def serialize_target(player: Player, grid: DivisionGrid, display: PersonDisplayRead) -> dict[str, Any]:
+def serialize_target(
+    player: Player | RosterlessTarget, grid: DivisionGrid, display: PersonDisplayRead
+) -> dict[str, Any]:
     return {
         "player_id": player.id,
         "display": display.model_dump(),
@@ -173,6 +178,21 @@ def serialize_target(player: Player, grid: DivisionGrid, display: PersonDisplayR
         # Against the tournament's own grid, exactly as `PlayerRead.division`.
         "division": resolve_tournament_division(player.rank, tournament_grid=grid),
     }
+
+
+@dataclass(frozen=True, slots=True)
+class RosterlessTarget:
+    """A hero-ban target on a seat with no ``tournament.team`` behind it: one ``encounter.team_member`` snapshot row.
+
+    Shaped like the ``Player`` fields a target reads. ``id`` is the snapshot member's, since no ``tournament.player``
+    row exists for a round team; an encounter never mixes the two kinds of seat."""
+
+    id: int
+    name: str
+    rank: int | None
+    is_substitution: bool
+    role: str | None
+    role_ref: RoleRef | None
 
 
 def build_unavailable_state(reason: str, *, readiness: dict[str, bool]) -> dict[str, Any]:
@@ -228,7 +248,7 @@ class _Runtime:
     groups: dict[int, str | None] = field(default_factory=dict)
     #: ``{participation: its own roster}``. ``RuntimeCtx.targets`` flips it (a
     #: participation names the OPPONENT's players).
-    rosters: dict[int, list[Player]] = field(default_factory=dict)
+    rosters: dict[int, list[Player | RosterlessTarget]] = field(default_factory=dict)
     #: A mix match's seated members in pick order (``load_member_seats``); empty in a tournament.
     seats: list[MemberSeat] = field(default_factory=list)
     #: ``{member: heroes they may not pick}`` -- the session's Fearless snapshot (``pool_json["exclusions"]``).
@@ -281,7 +301,7 @@ class PickBanActionService:
         groups = await load_item_groups(
             session, PickBanKind(pick_ban.kind), [entry.item_id for entry in entries], encounter.discipline
         )
-        rosters: dict[int, list[Player]] = {}
+        rosters: dict[int, list[Player | RosterlessTarget]] = {}
         if any(step.target is not None for step in steps):
             rosters = await self._load_rosters(session, teams, encounter.discipline)
         seats = await load_member_seats(session, encounter)
@@ -302,22 +322,61 @@ class PickBanActionService:
 
     async def _load_rosters(
         self, session: AsyncSession, teams: list[EncounterTeam], discipline: str
-    ) -> dict[int, list[Player]]:
+    ) -> dict[int, list[Player | RosterlessTarget]]:
         """Every seat's roster rows, in the room's reading order: the game's rated roles in declaration order, mains
-        before the substitutes that cover them, then by name. One query: a target step needs them all at once (each
-        seat bans for the others)."""
+        before the substitutes that cover them, then by name. One query per kind of seat: a target step needs them all
+        at once (each seat bans for the others). A seat with no source team (an individual-Swiss round team) lists its
+        roster snapshot."""
         role_order = {code: index for index, code in enumerate(rated_role_codes(discipline))}
         by_source = {team.team_id: team.id for team in teams if team.team_id is not None}
-        rosters: dict[int, list[Player]] = {team.id: [] for team in teams}
-        if not by_source:
-            return rosters
-        rows = (await session.execute(select(Player).where(Player.team_id.in_(tuple(by_source))))).scalars().all()
-        for row in rows:
-            participation = by_source.get(row.team_id)
-            if participation is not None:
-                rosters[participation].append(row)
+        rosterless = {team.id for team in teams if team.team_id is None}
+        rosters: dict[int, list[Player | RosterlessTarget]] = {team.id: [] for team in teams}
+        if by_source:
+            rows = (await session.execute(select(Player).where(Player.team_id.in_(tuple(by_source))))).scalars().all()
+            for row in rows:
+                participation = by_source.get(row.team_id)
+                if participation is not None:
+                    rosters[participation].append(row)
+        if rosterless:
+            members = (
+                await session.execute(
+                    select(
+                        EncounterTeamMember.id,
+                        EncounterTeamMember.encounter_team_id,
+                        EncounterTeamMember.display_name_snapshot,
+                        EncounterTeamMember.rank,
+                        EncounterTeamMember.is_substitute,
+                    ).where(EncounterTeamMember.encounter_team_id.in_(rosterless), EncounterTeamMember.active.is_(True))
+                )
+            ).all()
+            leaf, parent = aliased(CatalogRole, name="leaf"), aliased(CatalogRole, name="parent")
+            # The rated dimension's leaf per member, as ``Player.role``/``role_ref`` read it.
+            roles = {
+                member_id: (dimension, leaf_code, parent_code)
+                for member_id, dimension, leaf_code, parent_code in await session.execute(
+                    select(EncounterTeamMemberRole.team_member_id, RoleDimension.code, leaf.code, parent.code)
+                    .join(leaf, leaf.id == EncounterTeamMemberRole.role_id)
+                    .join(RoleDimension, (RoleDimension.id == leaf.dimension_id) & RoleDimension.rated.is_(True))
+                    .outerjoin(parent, parent.id == leaf.parent_role_id)
+                    .where(EncounterTeamMemberRole.team_member_id.in_([member[0] for member in members]))
+                )
+            }
+            for member_id, seat_id, name, rank, is_sub in members:
+                dimension, leaf_code, parent_code = roles.get(member_id, (None, None, None))
+                rosters[seat_id].append(
+                    RosterlessTarget(
+                        id=member_id,
+                        name=name,
+                        rank=rank,
+                        is_substitution=bool(is_sub),
+                        role=parent_code or leaf_code,
+                        role_ref=None
+                        if leaf_code is None
+                        else RoleRef(dimension=dimension, role=leaf_code, parent=parent_code),
+                    )
+                )
 
-        def key(player: Player) -> tuple[int, int, str]:
+        def key(player: Player | RosterlessTarget) -> tuple[int, int, str]:
             return (role_order.get(player.role, len(role_order)), 1 if player.is_substitution else 0, player.name or "")
 
         return {team_id: sorted(players, key=key) for team_id, players in rosters.items()}
@@ -1577,9 +1636,20 @@ class PickBanActionService:
         targets: dict[str, list[dict[str, Any]]] | None = None
         if any(candidate.target is not None for candidate in rt.steps):
             grid = await get_division_grid(session, None, tournament_id=rt.encounter.tournament_id)
-            displays = await player_displays(session, [player for players in rt.rosters.values() for player in players])
+            displays = await player_displays(
+                session, [player for players in rt.rosters.values() for player in players if isinstance(player, Player)]
+            )
             targets = {
-                str(team_id): [serialize_target(player, grid, displays[player.id]) for player in players]
+                str(team_id): [
+                    serialize_target(
+                        player,
+                        grid,
+                        PersonDisplayRead.build(canonical=None, snapshot=player.name)
+                        if isinstance(player, RosterlessTarget)
+                        else displays[player.id],
+                    )
+                    for player in players
+                ]
                 for team_id, players in rt.rosters.items()
             }
 

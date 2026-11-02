@@ -53,7 +53,24 @@ export function rolesParamsOf(params: Record<string, unknown>): RolesParams {
     flex_allowed: raw.flex_allowed ?? true,
     flex_mode: raw.flex_mode ?? "optional",
     subroles: raw.subroles ?? {},
+    max_roles: raw.max_roles ?? null,
     top_heroes: topHeroes
+  };
+}
+
+/**
+ * The params with the single-role rule switched on or off. One role means no flex, no second role to require and
+ * no all-roles expansion, so turning it on resets exactly those settings; turning it off lifts only the cap
+ * (what was reset stays, the organizer re-enables it).
+ */
+export function withSingleRole(params: RolesParams, single: boolean): RolesParams {
+  if (!single) return { ...params, max_roles: null };
+  return {
+    ...params,
+    max_roles: 1,
+    flex_allowed: false,
+    flex_mode: "optional",
+    additional_required: false
   };
 }
 
@@ -103,13 +120,22 @@ export function RolesParamsEditor({
             <Switch
               id={`${ids}-additional`}
               checked={params.additional_required}
+              disabled={params.max_roles === 1}
               onCheckedChange={(additional_required) => onChange({ ...params, additional_required })}
+            />
+          </SettingRow>
+          <SettingRow htmlFor={`${ids}-single`} label={t("singleRole")} hint={t("singleRoleHint")}>
+            <Switch
+              id={`${ids}-single`}
+              checked={params.max_roles === 1}
+              onCheckedChange={(single) => onChange(withSingleRole(params, single))}
             />
           </SettingRow>
           <SettingRow htmlFor={`${ids}-flex`} label={t("flexAllowed")} hint={t("flexAllowedHint")}>
             <Switch
               id={`${ids}-flex`}
               checked={params.flex_allowed}
+              disabled={params.max_roles === 1}
               onCheckedChange={(flex_allowed) => onChange({ ...params, flex_allowed })}
             />
           </SettingRow>
@@ -119,6 +145,7 @@ export function RolesParamsEditor({
             {t("flexMode")}
           </Label>
           <Select
+            disabled={params.max_roles === 1}
             value={params.flex_mode}
             onValueChange={(value) =>
               onChange({ ...params, flex_mode: value as RolesParams["flex_mode"] })

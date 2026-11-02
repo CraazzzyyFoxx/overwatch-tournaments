@@ -80,6 +80,11 @@ var AdminMiscRoutes = []edge.RouteSpec{
 	// dialog fills in. NOT listed in cacheable.go: the values behind a hidden
 	// column must not sit in a shared response cache.
 	{Method: "GET", Pattern: "/api/v1/admin/tournaments/{id}/stages/{stage_id}/ffa", Queue: "rpc.tournament.ffa_stage_admin", IDParam: "id", Path: []string{"stage_id"}, Auth: edge.AuthRequired},
+	// Individual Swiss: replace the personal table's pins (worker enforces "standing"/"update"), and lock the
+	// qualification (worker enforces "stage"/"update" plus "tournament"/"update"): non-qualifiers leave the balancer
+	// pool and the tournament moves LIVE -> DRAFT.
+	{Method: "PUT", Pattern: "/api/v1/admin/tournaments/{tournament_id}/stages/{stage_id}/player-standing-pins", Queue: "rpc.tournament.player_standing_pins_set", IDParam: "tournament_id", Path: []string{"stage_id"}, Body: true, Auth: edge.AuthRequired},
+	{Method: "POST", Pattern: "/api/v1/admin/tournaments/{tournament_id}/stages/{stage_id}/lock-qualification", Queue: "rpc.tournament.individual_swiss_lock_qualification", IDParam: "tournament_id", Path: []string{"stage_id"}, Auth: edge.AuthRequired},
 	// generic pick-ban config CRUD (map + hero, docs/plans/2026-08-09-generic-pickban-engine.md).
 	// Same cascade key as the veto-configs routes above, additionally partitioned
 	// by `kind` in the body/response.

@@ -11,13 +11,20 @@
  * the server replaces a sent field rather than merging into it.
  */
 import type { StageUpdateInput } from "@/types/admin.types";
-import type { SeedRanking, Stage, StageBestOfConfig, StageType } from "@/types/tournament.types";
+import type {
+  SeedRanking,
+  Stage,
+  StageBestOfConfig,
+  StagePairingMode,
+  StageType
+} from "@/types/tournament.types";
 import type { FfaColumn } from "@/types/ffa.types";
 import { FFA_SCORING_PRESETS } from "@/lib/ffa/scoring-presets";
 
 import {
   BRACKET_STAGE_TYPES,
   FFA_STAGE_TYPES,
+  INDIVIDUAL_SWISS_STAGE_TYPES,
   defaultTiebreakOrder,
   normalizeMaxRounds
 } from "@/lib/bracket/projection";
@@ -31,6 +38,10 @@ export interface StageForm {
   maxRounds: string;
   advanceCount: string;
   deGrandFinalType: "no_reset" | "with_reset";
+  /** `individual_swiss`: how a round forms its lobbies. */
+  pairingMode: StagePairingMode;
+  /** `individual_swiss`: how many teams the playoff takes (each takes its role slots of the table). */
+  playoffTeamCount: number;
   /** How many of each group's advancing teams start upper; `""` — all of them. */
   advanceUpperCount: string;
   seedRanking: SeedRanking;
@@ -68,6 +79,8 @@ export function stageFormFromStage(stage: Stage): StageForm {
     maxRounds: String(stage.max_rounds ?? 5),
     advanceCount: numberOrEmpty(stage.advance_count),
     deGrandFinalType: stage.de_grand_final_type,
+    pairingMode: stage.pairing_mode ?? "score",
+    playoffTeamCount: stage.playoff_team_count ?? 4,
     advanceUpperCount: numberOrEmpty(stage.advance_upper_count),
     seedRanking: stage.seed_ranking,
     rankingPreset: stage.ranking_preset || "default",
@@ -89,6 +102,7 @@ export function stageFormFromStage(stage: Stage): StageForm {
 export function buildStageUpdatePayload(stage: Stage, form: StageForm): StageUpdateInput {
   const isFfa = FFA_STAGE_TYPES.includes(form.stageType);
   const isSwiss = form.stageType === "swiss";
+  const isIndividualSwiss = INDIVIDUAL_SWISS_STAGE_TYPES.includes(form.stageType);
   // A threshold only exists on a Swiss stage, and a decisive match only while
   // its threshold is on: a switched-off one takes its best-of with it.
   const qualifyWins = isSwiss ? form.swissQualifyWins : null;
@@ -107,6 +121,10 @@ export function buildStageUpdatePayload(stage: Stage, form: StageForm): StageUpd
       form.advanceUpperCount !== ""
         ? Math.max(0, Math.floor(Number(form.advanceUpperCount)))
         : null,
+    // Both exist only on an individual Swiss stage; the server clears them elsewhere.
+    ...(isIndividualSwiss
+      ? { pairing_mode: form.pairingMode, playoff_team_count: form.playoffTeamCount }
+      : {}),
     ranking_preset: form.rankingPreset === "default" ? null : form.rankingPreset || null,
     // A metric switched off in the editor is simply absent from the list — that
     // absence IS the "disabled" state the engine reads. `points` is the one
@@ -176,6 +194,8 @@ const FIELD_LABELS: Record<keyof StageForm, string> = {
   maxRounds: "swissRounds",
   advanceCount: "teamsAdvancing",
   deGrandFinalType: "grandFinal",
+  pairingMode: "pairingMode",
+  playoffTeamCount: "playoffTeams",
   advanceUpperCount: "toUpperBracket",
   seedRanking: "bracketSeeds",
   rankingPreset: "standingsPreset",

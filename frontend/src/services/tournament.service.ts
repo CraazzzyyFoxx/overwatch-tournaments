@@ -1,7 +1,9 @@
 import type { StageBracketPreviewMatch } from "@/types/admin.types";
 import { LookupItem, PaginatedResponse } from "@/types/pagination.types";
 import {
+  IndividualRound,
   PickBanOutcomesResponse,
+  PlayerStanding,
   Stage,
   Standings,
   Tournament,
@@ -271,6 +273,20 @@ export default class tournamentService {
   /** Every player's tournament averages and ranks for the stats the statistics section ranks. */
   static async getPlayerStats(id: number): Promise<TournamentPlayerStatsResponse> {
     return apiFetch(`/api/v1/tournaments/${id}/player-stats`).then((response) => response.json());
+  }
+
+  /** The personal table of every `individual_swiss` stage, ordered by stage, role and place. */
+  static async getPlayerStandings(id: number): Promise<PlayerStanding[]> {
+    return apiFetch(`/api/v1/tournaments/${id}/player-standings`).then((response) =>
+      response.json()
+    );
+  }
+
+  /** An `individual_swiss` stage's lobbies grouped by round, each seat with its roster snapshot. */
+  static async getIndividualRounds(id: number, stageId: number): Promise<IndividualRound[]> {
+    return apiFetch(`/api/v1/tournaments/${id}/stages/${stageId}/individual-rounds`).then(
+      (response) => response.json()
+    );
   }
 
   /** Every public hero ban and every map pick or ban of the tournament's series. */

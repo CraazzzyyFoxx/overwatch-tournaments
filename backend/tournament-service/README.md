@@ -37,7 +37,8 @@ layering.
   asks — profile completeness plus subscription entitlement (Discord role / Twitch), resolved through
   the shared admission resolver.
 - **Structure and brackets.** Stages, stage items and stage-item inputs; seeding, wiring and
-  advancement edges; single/double elimination, round-robin and Swiss generation.
+  advancement edges; single/double elimination, round-robin and Swiss generation; the individual Swiss
+  (rosterless round teams, personal table, qualification lock).
 - **Encounters and results.** Games and per-participation game claims, series reports, and the result
   state machine (confirm / reopen / auto-confirm / dispute / import / cascade reset). Every result
   change takes the encounter row `FOR UPDATE`, bumps `result_version` and writes one
@@ -63,7 +64,7 @@ The worker subscribes to two namespaces on RabbitMQ:
 
 | Namespace | What it carries |
 | --- | --- |
-| `rpc.tournament.*` | 241 typed methods, one subscriber per subject |
+| `rpc.tournament.*` | 245 typed methods, one subscriber per subject |
 | `rpc.tournament.admin.*` | Generic admin CRUD (`create` / `update` / `get` / `list` / `delete`) dispatched by entity through the shared admin engine — 246 subjects in all |
 
 Method groups:
@@ -81,6 +82,7 @@ Method groups:
 | Captain surfaces | `captain_*` | A captain's own role, readiness, map reports, report submission, match import by external id (`captain_match_import(s)`), pick-ban state and actions |
 | Pick/ban | `get_pick_ban_configs`, `admin_pick_ban_*` | Config CRUD, admin acting, opener election, session reset |
 | Lifecycle | `tournament_status`, `tournament_finish`, `tournament_schedule_set` | Status transitions and the phase schedule |
+| Individual Swiss | `get_player_standings`, `get_individual_rounds`, `player_standing_pins_set`, `individual_swiss_lock_qualification` | The personal table and round teams (public reads), organizer pins, and the qualification lock |
 | Images | `teams.image_*`, `tournaments.image_*`, `regteam_image_*` | Binary upload/delete (base64 on the wire) to S3 |
 | Scrims | `scrim_*` | Ad-hoc room provisioning, claiming and closing |
 | Preview access | `preview_access_*` | Pre-publication access grants |

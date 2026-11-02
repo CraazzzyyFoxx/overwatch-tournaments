@@ -35,6 +35,7 @@ import { DraftReseedDiff } from "./DraftReseedDiff";
 import { DraftReviewStep } from "./DraftReviewStep";
 import {
   canCancelDraftSetup,
+  captainPrefill,
   derivePoolReadiness,
   effectiveTeamCount,
   MAX_DRAFT_TEAM_COUNT,
@@ -51,6 +52,8 @@ import { configFromSession, createEmptyCaptainSetup, formatFromSession } from ".
 import type { DraftCaptainSetup, DraftSetupConfig } from "./setup-types";
 import { captainSeat, isInDraftPool, poolRegistrationSummary } from "./setup-types";
 import { balancerQueryKeys } from "@/lib/balancer/query-keys";
+import { adminQueryKeys } from "@/lib/admin/query-keys";
+import adminService from "@/services/admin.service";
 
 interface DraftSetupWizardProps {
   tournamentId: number;
@@ -120,6 +123,23 @@ export function DraftSetupWizard({
   });
   const allRegistrations = poolQuery.data ?? [];
   const pool = useMemo(() => allRegistrations.filter(isInDraftPool), [allRegistrations]);
+
+  // A draft that follows an individual Swiss starts from the playoff captains its tables name. Read once,
+  // before any session exists; whatever the organizer then changes is theirs.
+  const standingsQuery = useQuery({
+    queryKey: adminQueryKeys.tournamentPlayerStandings(tournamentId),
+    queryFn: () => adminService.listPlayerStandings(tournamentId),
+    enabled: initialSession == null
+  });
+  const [prefilled, setPrefilled] = useState(false);
+  if (!prefilled && standingsQuery.data && poolQuery.data) {
+    setPrefilled(true);
+    const prefill = captainPrefill(standingsQuery.data, new Set(pool.map((registration) => registration.id)));
+    if (prefill) {
+      setConfig((current) => ({ ...current, teamCount: prefill.teamCount }));
+      setCaptains((current) => ({ ...current, ids: prefill.ids, order: prefill.order }));
+    }
+  }
 
   const hydrateCaptainsFromBoard = () => {
     if (!board || pool.length === 0 || board.teams.length === 0) return;

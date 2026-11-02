@@ -224,6 +224,9 @@ class _StageRegulationRead(BaseModel):
     swiss_eliminate_losses: int | None = None
     de_grand_final_type: GrandFinalType = "no_reset"
     seed_ranking: SeedRankingValue = "slot"
+    #: ``individual_swiss`` only; ``None`` on every other type.
+    pairing_mode: enums.StagePairingMode | None = None
+    playoff_team_count: int | None = None
     best_of: StageBestOf = Field(default_factory=StageBestOf)
 
 

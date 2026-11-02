@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from typing import Literal, NamedTuple
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from shared.core.social import GAME_PROVIDERS, PROVIDERS, SocialProvider
 
@@ -80,7 +80,19 @@ class RolesParams(_Strict):
     flex_mode: Literal["optional", "all_roles", "forced"] = "optional"
     #: Role code -> allowed sub-role slugs; ``{}`` means every catalog slug.
     subroles: dict[str, list[str]] = Field(default_factory=dict)
+    #: Hard cap on how many roles one answer may name (``1`` = a single role, no flex); ``None`` = no cap.
+    max_roles: int | None = Field(default=None, ge=1)
     top_heroes: TopHeroesParams = Field(default_factory=TopHeroesParams)
+
+    @model_validator(mode="after")
+    def _single_role_is_consistent(self) -> RolesParams:
+        """One role per answer cannot also ask for an additional role, or for every role to be playable."""
+        if self.max_roles == 1:
+            if self.additional_required:
+                raise ValueError("max_roles=1 contradicts additional_required")
+            if self.flex_allowed and self.flex_mode != "optional":
+                raise ValueError(f"max_roles=1 contradicts flex_mode={self.flex_mode!r}")
+        return self
 
 
 class BuiltinSpec(NamedTuple):

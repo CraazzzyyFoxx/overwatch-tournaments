@@ -3684,6 +3684,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/tournaments/{id}/player-standings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get individual Swiss player standings
+         * @description Permission: public; no authentication required — a hidden tournament is visible only to its workspace's admins and users on its preview allowlist. Returns the personal table of every `individual_swiss` stage of the tournament, ordered by stage order, role (roster-shape order) and place inside the role; `position` is null until the standings job has ranked the table.
+         *
+         *     RPC subject: `rpc.tournament.get_player_standings`
+         */
+        get: operations["get__api_v1_tournaments__id__player_standings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/tournaments/{id}/player-stats": {
         parameters: {
             query?: never;
@@ -3764,6 +3786,28 @@ export interface paths {
          *     RPC subject: `rpc.tournament.ffa_stage`
          */
         get: operations["get__api_v1_tournaments__id__stages__stage_id__ffa"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tournaments/{id}/stages/{stage_id}/individual-rounds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get individual Swiss rounds
+         * @description Permission: public; no authentication required — a hidden tournament is visible only to its workspace's admins and users on its preview allowlist. Returns an `individual_swiss` stage's encounters grouped by round, each seat with its roster snapshot (role, rank, round captain). 404 for a stage that is not an `individual_swiss` stage of this tournament.
+         *
+         *     RPC subject: `rpc.tournament.get_individual_rounds`
+         */
+        get: operations["get__api_v1_tournaments__id__stages__stage_id__individual_rounds"];
         put?: never;
         post?: never;
         delete?: never;
@@ -8349,6 +8393,50 @@ export interface paths {
          *     RPC subject: `rpc.tournament.tournament_schedule_set`
          */
         put: operations["put__api_v1_admin_tournaments__tournament_id__schedule"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/tournaments/{tournament_id}/stages/{stage_id}/lock-qualification": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Lock individual Swiss qualification
+         * @description Permission: workspace `stage.update` and `tournament.update` on the tournament's workspace. Closes the personal Swiss day: first recalculates the personal table from the current results and pins, stamps the stage `qualification_locked_at` (the qualifier and captain flags are frozen from then on, and pins and the playoff team count are refused), then every non-qualified player of the completed stage gets balancer status `excluded` with reason `not_qualified`, then the tournament moves LIVE to DRAFT, so the draft pool is exactly the qualifiers. Answers the qualifiers (role, then place) and the playoff captains. 409 when the stage is not an `individual_swiss` stage, is not completed, has no qualifiers, is already locked, the tournament is not LIVE, or the tournament's draft format is not snake (checked before any exclusion).
+         *
+         *     RPC subject: `rpc.tournament.individual_swiss_lock_qualification`
+         */
+        post: operations["post__api_v1_admin_tournaments__tournament_id__stages__stage_id__lock_qualification"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/tournaments/{tournament_id}/stages/{stage_id}/player-standing-pins": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set individual Swiss pins
+         * @description Permission: workspace `standing.update` on the tournament's workspace. Replaces every pin of an `individual_swiss` stage's personal table: a pinned player keeps that place inside their role whatever results arrive later, the others fill the free places in computed order. An empty `pins` list unpins everyone. 422 for a player outside the stage's table, a player pinned twice, a place past the role's size or one place given to two players of a role; 409 once the qualification is locked (`qualification_locked_at` on the stage). Schedules the standings recalculation that applies the pins and answers the stored pins.
+         *
+         *     RPC subject: `rpc.tournament.player_standing_pins_set`
+         */
+        put: operations["put__api_v1_admin_tournaments__tournament_id__stages__stage_id__player_standing_pins"];
         post?: never;
         delete?: never;
         options?: never;
@@ -19522,6 +19610,52 @@ export interface components {
             /** Map Id */
             map_id: number;
         };
+        /** IndividualRoundEncounterRead */
+        "tournament.IndividualRoundEncounterRead": {
+            /** Best Of */
+            best_of: number;
+            /** Encounter Id */
+            encounter_id: number;
+            result_status: components["schemas"]["tournament.EncounterResultStatus"];
+            /** Seats */
+            seats: components["schemas"]["tournament.IndividualRoundSeatRead"][];
+            status: components["schemas"]["tournament.EncounterStatus"];
+        };
+        /** IndividualRoundRead */
+        "tournament.IndividualRoundRead": {
+            /** Encounters */
+            encounters: components["schemas"]["tournament.IndividualRoundEncounterRead"][];
+            /** Round */
+            round: number;
+        };
+        /** IndividualRoundSeatMemberRead */
+        "tournament.IndividualRoundSeatMemberRead": {
+            /** Display Name */
+            display_name: string;
+            /** Is Captain */
+            is_captain: boolean;
+            /** Rank */
+            rank: number | null;
+            /** Role */
+            role: string | null;
+            /** Workspace Member Id */
+            workspace_member_id: number;
+        };
+        /** IndividualRoundSeatRead */
+        "tournament.IndividualRoundSeatRead": {
+            /** Members */
+            members: components["schemas"]["tournament.IndividualRoundSeatMemberRead"][];
+            /** Name */
+            name: string;
+            /** Participation Id */
+            participation_id: number;
+            /** Placement */
+            placement: number | null;
+            /** Score */
+            score: number;
+            /** Slot */
+            slot: number;
+        };
         /** LookupItem */
         "tournament.LookupItem": {
             /** Id */
@@ -20029,6 +20163,47 @@ export interface components {
             user: components["schemas"]["tournament.UserRead"] | null;
             /** User Id */
             user_id: number;
+        };
+        /** PlayerStandingRead */
+        "tournament.PlayerStandingRead": {
+            /** Buchholz */
+            buchholz: number;
+            /** Display Name */
+            display_name: string;
+            /** Draws */
+            draws: number;
+            /** Is Captain */
+            is_captain: boolean;
+            /** Is Pinned */
+            is_pinned: boolean;
+            /** Is Qualified */
+            is_qualified: boolean;
+            /** Losses */
+            losses: number;
+            /** Map Diff */
+            map_diff: number;
+            /** Maps Lost */
+            maps_lost: number;
+            /** Maps Won */
+            maps_won: number;
+            /** Matches Played */
+            matches_played: number;
+            /** Points */
+            points: number;
+            /** Position */
+            position: number | null;
+            /** Rank */
+            rank: number;
+            /** Registration Id */
+            registration_id: number | null;
+            /** Role */
+            role: string;
+            /** Stage Id */
+            stage_id: number;
+            /** Wins */
+            wins: number;
+            /** Workspace Member Id */
+            workspace_member_id: number;
         };
         /**
          * RawSourceStatus
@@ -21145,6 +21320,12 @@ export interface components {
          * @enum {string}
          */
         "tournament.StageItemType": TournamentStageItemType;
+        /**
+         * StagePairingMode
+         * @description How an ``individual_swiss`` round forms its lobbies.
+         * @enum {string}
+         */
+        "tournament.StagePairingMode": TournamentStagePairingMode;
         /** StageRead */
         "tournament.StageRead": {
             /**
@@ -21206,6 +21387,13 @@ export interface components {
             name: string;
             /** Order */
             order: number;
+            /** @default null */
+            pairing_mode: components["schemas"]["tournament.StagePairingMode"] | null;
+            /**
+             * Playoff Team Count
+             * @default null
+             */
+            playoff_team_count: number | null;
             /**
              * Ranking Preset
              * @default null
@@ -21342,6 +21530,13 @@ export interface components {
             name: string;
             /** Order */
             order: number;
+            /** @default null */
+            pairing_mode: components["schemas"]["tournament.StagePairingMode"] | null;
+            /**
+             * Playoff Team Count
+             * @default null
+             */
+            playoff_team_count: number | null;
             /**
              * Ranking Preset
              * @default null
@@ -29951,6 +30146,33 @@ export interface components {
             /** Provider */
             provider: string;
         };
+        /** PlayerStandingPinRead */
+        "tournament.PlayerStandingPinRead": {
+            /** Position */
+            position: number;
+            /** Workspace Member Id */
+            workspace_member_id: number;
+        };
+        /** PlayerStandingPinWrite */
+        "tournament.PlayerStandingPinWrite": {
+            /** Position */
+            position: number;
+            /** Workspace Member Id */
+            workspace_member_id: number;
+        };
+        /** PlayerStandingPinsRead */
+        "tournament.PlayerStandingPinsRead": {
+            /** Pins */
+            pins: components["schemas"]["tournament.PlayerStandingPinRead"][];
+        };
+        /**
+         * PlayerStandingPinsUpdate
+         * @description The whole set of pins of the stage; an empty list unpins everyone.
+         */
+        "tournament.PlayerStandingPinsUpdate": {
+            /** Pins */
+            pins: components["schemas"]["tournament.PlayerStandingPinWrite"][];
+        };
         /** PlayerSubRoleCreate */
         "tournament.PlayerSubRoleCreate": {
             /**
@@ -30345,6 +30567,13 @@ export interface components {
             /** Tournament Id */
             tournament_id: number;
         };
+        /** QualificationLockRead */
+        "tournament.QualificationLockRead": {
+            /** Captains */
+            captains: components["schemas"]["tournament.PlayerStandingRead"][];
+            /** Qualified */
+            qualified: components["schemas"]["tournament.PlayerStandingRead"][];
+        };
         /** RegistrationFormRead */
         "tournament.RegistrationFormRead": {
             /**
@@ -30738,6 +30967,7 @@ export interface components {
          *       across groups so each group ends up roughly equally strong.
          *     - ``by_total_sr`` — same but sorts by Team.total_sr (raw sum).
          *     - ``random`` — deterministic shuffle based on team.id (reproducible).
+         *     - ``captain_rank`` — sort by the captain's rank desc (the draft playoff: strongest captain is seed 1).
          */
         "tournament.SeedTeamsRequest": {
             /**
@@ -30845,6 +31075,13 @@ export interface components {
              * @default 0
              */
             order: number;
+            /** @default null */
+            pairing_mode: components["schemas"]["tournament.StagePairingMode"] | null;
+            /**
+             * Playoff Team Count
+             * @default null
+             */
+            playoff_team_count: number | null;
             /**
              * Ranking Preset
              * @default null
@@ -31073,6 +31310,13 @@ export interface components {
              * @default null
              */
             order: number | null;
+            /** @default null */
+            pairing_mode: components["schemas"]["tournament.StagePairingMode"] | null;
+            /**
+             * Playoff Team Count
+             * @default null
+             */
+            playoff_team_count: number | null;
             /**
              * Ranking Preset
              * @default null
@@ -45655,6 +45899,66 @@ export interface operations {
             };
         };
     };
+    get__api_v1_tournaments__id__player_standings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["tournament.PlayerStandingRead"][];
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     get__api_v1_tournaments__id__player_stats: {
         parameters: {
             query?: never;
@@ -45855,6 +46159,67 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["tournament.FfaLobbyRead"][];
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get__api_v1_tournaments__id__stages__stage_id__individual_rounds: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                stage_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["tournament.IndividualRoundRead"][];
                 };
             };
             /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
@@ -64642,6 +65007,168 @@ export interface operations {
             };
         };
     };
+    post__api_v1_admin_tournaments__tournament_id__stages__stage_id__lock_qualification: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+                stage_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["tournament.QualificationLockRead"];
+                };
+            };
+            /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not authorized (`forbidden`). Authenticated, but the credential lacks the permission, workspace, or scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    put__api_v1_admin_tournaments__tournament_id__stages__stage_id__player_standing_pins: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+                stage_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["tournament.PlayerStandingPinsUpdate"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["tournament.PlayerStandingPinsRead"];
+                };
+            };
+            /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not authorized (`forbidden`). Authenticated, but the credential lacks the permission, workspace, or scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     patch__api_v1_admin_tournaments__tournament_id__status: {
         parameters: {
             query?: never;
@@ -82652,6 +83179,10 @@ export enum TournamentStageItemType {
     bracket_lower = "bracket_lower",
     single_bracket = "single_bracket"
 }
+export enum TournamentStagePairingMode {
+    score = "score",
+    balance = "balance"
+}
 export enum TournamentStageReadDe_grand_final_type {
     no_reset = "no_reset",
     with_reset = "with_reset"
@@ -82681,7 +83212,8 @@ export enum TournamentStageType {
     single_elimination = "single_elimination",
     double_elimination = "double_elimination",
     swiss = "swiss",
-    ffa_league = "ffa_league"
+    ffa_league = "ffa_league",
+    individual_swiss = "individual_swiss"
 }
 export enum TournamentStandingReadSwiss_statusAnyOf0 {
     qualified = "qualified",
@@ -83137,7 +83669,8 @@ export enum TournamentScoringColumnSettingsBetter {
 export enum TournamentSeedTeamsRequestMode {
     snake_sr = "snake_sr",
     by_total_sr = "by_total_sr",
-    random = "random"
+    random = "random",
+    captain_rank = "captain_rank"
 }
 export enum TournamentStageCreateDe_grand_final_type {
     no_reset = "no_reset",

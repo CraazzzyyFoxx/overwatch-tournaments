@@ -7,6 +7,7 @@ import { useBracketRoundLabel } from "@/hooks/useBracketRoundLabel";
 import { usePathname, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import {
+  Crown,
   GitMerge,
   MoreHorizontal,
   PlayCircle,
@@ -68,6 +69,7 @@ import { TiebreakersSection } from "./stage-settings/TiebreakersSection";
 import { tabFallback } from "../../hubQueries";
 import { useStageOperations } from "./stage-editor/useStageOperations";
 import { MatchesView } from "../../matches/MatchesView";
+import { PlayerStandingsSection } from "./PlayerStandingsSection";
 
 // The standings table is the heaviest thing the editor can show and only one
 // tab of four needs it, so it is split out of the Bracket tab's bundle.
@@ -272,6 +274,12 @@ export function StageEditor({
   // A lobby is seated the same way a group is filled: teams into the stage's
   // items. Only a bracket takes its slots from a preceding stage instead.
   const canSeed = !isBracket && teams.length > 0 && stage.items.length > 0;
+  // The draft playoff takes its seeds from the captains' ranks; only a tournament that ran an individual Swiss has them.
+  const canSeedByCaptain =
+    teams.length > 0 &&
+    stage.items.length > 0 &&
+    stage.stage_type !== "individual_swiss" &&
+    stages.some((candidate) => candidate.stage_type === "individual_swiss");
   const canDeactivate = (stage.is_active || stage.is_published) && !stage.is_completed;
 
   const tabs: LinkTabItem[] = BRACKET_SECTIONS.map((key) => ({
@@ -385,6 +393,14 @@ export function StageEditor({
                       {t("seed")}
                     </DropdownMenuItem>
                   ) : null}
+                  {canSeedByCaptain ? (
+                    <DropdownMenuItem
+                      onSelect={() => setPendingOp({ kind: "seed", mode: "captain_rank" })}
+                    >
+                      <Crown className="size-4" aria-hidden />
+                      {t("seedCaptain")}
+                    </DropdownMenuItem>
+                  ) : null}
                   {mergeCandidates.length > 0 ? (
                     <DropdownMenuItem onSelect={() => setPendingOp({ kind: "merge" })}>
                       <GitMerge className="size-4" aria-hidden />
@@ -477,7 +493,11 @@ export function StageEditor({
 
         {activeSection === "layout" ? <BracketLayoutSection stage={stage} /> : null}
 
-        {activeSection === "standings" ? (
+        {activeSection === "standings" && stage.stage_type === "individual_swiss" ? (
+          <PlayerStandingsSection stage={stage} tournament={tournament} onChanged={onChanged} />
+        ) : null}
+
+        {activeSection === "standings" && stage.stage_type !== "individual_swiss" ? (
           <MatchesView tournamentId={stage.tournament_id}>
             {({ workspaceId }) => (
               <StandingsBrowser

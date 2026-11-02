@@ -788,7 +788,7 @@ class EncounterService:
             # An FFA league's items are groups too.
             "groups": stage.stage_type.in_([enums.StageType.ROUND_ROBIN, enums.StageType.FFA_LEAGUE]),
             "playoffs": stage.stage_type.in_([enums.StageType.SINGLE_ELIMINATION, enums.StageType.DOUBLE_ELIMINATION]),
-            "swiss": stage.stage_type == enums.StageType.SWISS,
+            "swiss": stage.stage_type.in_([enums.StageType.SWISS, enums.StageType.INDIVIDUAL_SWISS]),
             "unassigned": stage.id.is_(None),
         }
         totals = (

@@ -29,7 +29,7 @@ import {
 import { notify } from "@/lib/notify";
 import { nextStageOrder, phaseOrderForArrangement } from "@/lib/tournament/stages";
 import adminService from "@/services/admin.service";
-import type { Stage, StageType } from "@/types/tournament.types";
+import type { Stage, StagePairingMode, StageType } from "@/types/tournament.types";
 
 import {
   getProgressPercent,
@@ -74,6 +74,8 @@ export function StageList({
   const [stageType, setStageType] = useState<StageType>("round_robin");
   const [maxRounds, setMaxRounds] = useState("5");
   const [grandFinalType, setGrandFinalType] = useState<"no_reset" | "with_reset">("no_reset");
+  const [pairingMode, setPairingMode] = useState<StagePairingMode>("score");
+  const [playoffTeamCount, setPlayoffTeamCount] = useState(4);
   // Applied while the reorder PATCHes are in flight, so the row stays where it
   // was dropped instead of snapping back until the refetch lands.
   const [pendingOrder, setPendingOrder] = useState<number[] | null>(null);
@@ -83,6 +85,8 @@ export function StageList({
     setStageType("round_robin");
     setMaxRounds("5");
     setGrandFinalType("no_reset");
+    setPairingMode("score");
+    setPlayoffTeamCount(4);
   };
 
   const createMutation = useMutation({
@@ -92,7 +96,10 @@ export function StageList({
         stage_type: stageType,
         max_rounds: normalizeMaxRounds(maxRounds),
         order: nextStageOrder(stages),
-        de_grand_final_type: stageType === "double_elimination" ? grandFinalType : "no_reset"
+        de_grand_final_type: stageType === "double_elimination" ? grandFinalType : "no_reset",
+        ...(stageType === "individual_swiss"
+          ? { pairing_mode: pairingMode, playoff_team_count: playoffTeamCount }
+          : {})
       }),
     onSuccess: (stage) => {
       onChanged();
@@ -137,7 +144,9 @@ export function StageList({
     name.trim().length > 0 ||
     stageType !== "round_robin" ||
     maxRounds !== "5" ||
-    grandFinalType !== "no_reset";
+    grandFinalType !== "no_reset" ||
+    pairingMode !== "score" ||
+    playoffTeamCount !== 4;
 
   return (
     <Card>
@@ -226,7 +235,7 @@ export function StageList({
             </Select>
           </div>
 
-          {stageType === "swiss" ? (
+          {stageType === "swiss" || stageType === "individual_swiss" ? (
             <div className="flex flex-col gap-2">
               <Label htmlFor="new-stage-max-rounds">{t("swissRounds")}</Label>
               <NumberInput
@@ -237,6 +246,36 @@ export function StageList({
                 onValueChange={(next) => setMaxRounds(next == null ? "" : String(next))}
               />
             </div>
+          ) : null}
+
+          {stageType === "individual_swiss" ? (
+            <>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="new-stage-pairing">{t("pairingMode")}</Label>
+                <Select
+                  value={pairingMode}
+                  onValueChange={(value) => setPairingMode(value as StagePairingMode)}
+                >
+                  <SelectTrigger id="new-stage-pairing">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="score">{t("pairingScore")}</SelectItem>
+                    <SelectItem value="balance">{t("pairingBalance")}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="new-stage-playoff">{t("playoffTeams")}</Label>
+                <NumberInput
+                  id="new-stage-playoff"
+                  integer
+                  min={1}
+                  value={playoffTeamCount}
+                  onValueChange={(next) => setPlayoffTeamCount(next ?? 4)}
+                />
+              </div>
+            </>
           ) : null}
 
           {stageType === "double_elimination" ? (

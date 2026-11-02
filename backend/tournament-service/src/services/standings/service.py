@@ -23,6 +23,7 @@ from src import schemas
 from src.domain.bracket.swiss import SwissThresholds
 from src.services.bracket.swiss_state import bye_counts_by_scope, stopped_scopes
 from src.services.encounter.ffa import ffa_encounter_service
+from src.services.individual_swiss.standings import recalculate_individual_stage
 
 GROUP_STAGE_TYPES = {StageType.ROUND_ROBIN, StageType.SWISS}
 ELIMINATION_STAGE_TYPES = {
@@ -1452,6 +1453,16 @@ class StandingsService:
                     )
                     for stage_item_id, total, completed, max_round in scopes
                 )
+            elif stage.stage_type == StageType.INDIVIDUAL_SWISS:
+                # Done once its last round exists and every round is closed; a closed round before that waits for
+                # the next one.
+                total = sum(row_total for _, row_total, _, _ in stage_rows)
+                completed = sum(row_completed for _, _, row_completed, _ in stage_rows)
+                should_be_completed = (
+                    total > 0
+                    and completed == total
+                    and max((max_round for _, _, _, max_round in stage_rows), default=0) >= _stage_max_rounds(stage)
+                )
             else:
                 total = sum(row_total for _, row_total, _, _ in stage_rows)
                 completed = sum(row_completed for _, _, row_completed, _ in stage_rows)
@@ -1492,6 +1503,7 @@ class StandingsService:
         byes = await bye_counts_by_scope(session, [stage.id for stage in stages if stage.stage_type == StageType.SWISS])
         all_standings: list[models.Standing] = []
         encounters: dict[int, list[StageEncounter]] = {}
+        personal_changed = False
 
         for stage in stages:
             # Loaded per branch, not up front: an FFA stage ranks from its game
@@ -1550,9 +1562,11 @@ class StandingsService:
                             pins=pins.get((stage.id, stage_item.id), _EMPTY),
                         )
                     )
+            elif stage.stage_type == StageType.INDIVIDUAL_SWISS:
+                personal_changed = await recalculate_individual_stage(session, stage, tournament) or personal_changed
 
         final_standings = calculate_overall_positions(all_standings, stages)
-        changed = await self._write_standings(session, tournament.id, final_standings)
+        changed = await self._write_standings(session, tournament.id, final_standings) or personal_changed
         # Flip Stage.is_completed in the same transaction as the standings write.
         changed = await self._update_stage_completion_flags(session, tournament, final_standings) or changed
         if commit:

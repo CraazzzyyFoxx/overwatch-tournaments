@@ -235,12 +235,12 @@ async function settle(times = 12) {
   }
 }
 
-async function mount() {
-  getStages.mockResolvedValue([playoffStage()]);
+async function mount(stage: Stage = playoffStage(), encounters: Encounter[] = ENCOUNTERS) {
+  getStages.mockResolvedValue([stage]);
   getTournament.mockResolvedValue({ id: 84, name: "Cup" });
   getStagesProgress.mockResolvedValue([{ stage_id: 10, total: 7, completed: 0 }]);
   getTeams.mockResolvedValue({ results: [] });
-  getEncounters.mockResolvedValue({ results: ENCOUNTERS, total: ENCOUNTERS.length });
+  getEncounters.mockResolvedValue({ results: encounters, total: encounters.length });
 
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -370,6 +370,20 @@ beforeEach(() => {
 });
 
 describe("Stage editor round schedule", () => {
+  it("lists the rounds of an individual Swiss stage like a Swiss's", async () => {
+    const stage = {
+      ...playoffStage(),
+      stage_type: "individual_swiss",
+      max_rounds: 5,
+      pairing_mode: "score",
+      playoff_team_count: 4
+    } as unknown as Stage;
+    await mount(stage, [encounter(1, 1, null), encounter(2, 1, null), encounter(3, 2, null)]);
+
+    expect(roundLabels()).toEqual(["Round 1", "Round 2"]);
+    expect(row("Round 1").textContent).toContain("2");
+  });
+
   it("offers one row per round the stage's matches carry, named as the bracket names it", async () => {
     await mount();
 

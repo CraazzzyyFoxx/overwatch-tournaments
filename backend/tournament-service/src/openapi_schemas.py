@@ -33,6 +33,7 @@ from src.rpc import pick_ban_admin
 from src.schemas import captain as captain_schemas
 from src.schemas import encounter_report_form as report_form_schemas
 from src.schemas import ffa as ffa_schemas
+from src.schemas import individual_swiss as individual_swiss_schemas
 from src.schemas import pick_ban_outcomes as pick_ban_outcomes_schemas
 from src.schemas import pregame_rooms as pregame_rooms_schemas
 from src.schemas import registration as reg_schemas
@@ -80,6 +81,12 @@ OPERATIONS: dict[str, Op] = {
     ),
     "rpc.tournament.get_stages": Op(response=schemas.StageRead, response_array=True),
     "rpc.tournament.get_standings": Op(response=schemas.StandingRead, response_array=True, query_params=(_ENTITIES,)),
+    "rpc.tournament.get_player_standings": Op(
+        response=individual_swiss_schemas.PlayerStandingRead, response_array=True
+    ),
+    "rpc.tournament.get_individual_rounds": Op(
+        response=individual_swiss_schemas.IndividualRoundRead, response_array=True
+    ),
     # ── ffa lobbies: one shape for the stage list and the single lobby ────
     "rpc.tournament.ffa_stage": Op(response=ffa_schemas.FfaLobbyRead, response_array=True),
     "rpc.tournament.ffa_lobby": Op(response=ffa_schemas.FfaLobbyRead),
@@ -184,6 +191,11 @@ OPERATIONS: dict[str, Op] = {
     "rpc.tournament.standing_pins_set": Op(
         request=schemas.StandingPinsUpdate, response=schemas.TournamentComputationJobRead
     ),
+    "rpc.tournament.player_standing_pins_set": Op(
+        request=individual_swiss_schemas.PlayerStandingPinsUpdate,
+        response=individual_swiss_schemas.PlayerStandingPinsRead,
+    ),
+    "rpc.tournament.individual_swiss_lock_qualification": Op(response=individual_swiss_schemas.QualificationLockRead),
     # ── bespoke: stage workflow ────────────────────────────────────────────
     "rpc.tournament.stage_merge": Op(request=schemas.MergeGroupStagesRequest, response=schemas.StageRead),
     "rpc.tournament.stage_activate": Op(response=schemas.StageRead),

@@ -1514,6 +1514,21 @@ describe("Settings › Pre-game phase authors every round of a stage at once", (
     expect(text).not.toContain("Round 5");
   });
 
+  it("lists every round an individual Swiss will play, like a Swiss", async () => {
+    getStagePlannedRounds.mockResolvedValue([]);
+    const stage = { ...STAGES[0], stage_type: "individual_swiss", max_rounds: 4 } as unknown as Stage;
+
+    await mount({
+      encounters: [{ stage_id: 10, round: 1, best_of: 3 }],
+      stages: [stage, STAGES[1]],
+      url: "?scope=stage:10&kind=map&step=pool"
+    });
+
+    const text = tree().textContent ?? "";
+    for (const round of [1, 2, 3, 4]) expect(text).toContain(`Round ${round}`);
+    expect(text).not.toContain("Round 5");
+  });
+
   it("falls back to the planned round count when the stage has no teams yet", async () => {
     getStagePlannedRounds.mockResolvedValue([]);
     await mount({
