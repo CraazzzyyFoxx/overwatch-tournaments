@@ -115,7 +115,7 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["tournament_id"], ["tournament.tournament.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["stage_id"], ["tournament.stage.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["registration_id"], ["registration.registration.id"], ondelete="SET NULL"),
-        sa.ForeignKeyConstraint(["workspace_member_id"], ["workspace_member.id"]),
+        sa.ForeignKeyConstraint(["workspace_member_id"], ["workspace_member.id"], ondelete="CASCADE"),
         sa.UniqueConstraint("stage_id", "workspace_member_id", name="uq_player_standing_stage_member"),
         schema="tournament",
     )
@@ -129,7 +129,7 @@ def upgrade() -> None:
         sa.Column("position", sa.Integer(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
         sa.ForeignKeyConstraint(["stage_id"], ["tournament.stage.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["workspace_member_id"], ["workspace_member.id"]),
+        sa.ForeignKeyConstraint(["workspace_member_id"], ["workspace_member.id"], ondelete="CASCADE"),
         sa.CheckConstraint("position >= 1", name="ck_player_standing_pin_position"),
         sa.UniqueConstraint("stage_id", "workspace_member_id", name="uq_player_standing_pin_stage_member"),
         schema="tournament",

@@ -27,7 +27,7 @@ class PlayerStanding(db.TimeStampIntegerMixin):
     registration_id: Mapped[int | None] = mapped_column(
         ForeignKey("registration.registration.id", ondelete="SET NULL"), nullable=True
     )
-    workspace_member_id: Mapped[int] = mapped_column(ForeignKey("workspace_member.id"))
+    workspace_member_id: Mapped[int] = mapped_column(ForeignKey("workspace_member.id", ondelete="CASCADE"))
     display_name: Mapped[str] = mapped_column(String(255))
     #: Role code, e.g. ``tank``.
     role: Mapped[str] = mapped_column(String(32))
@@ -61,5 +61,5 @@ class PlayerStandingPin(db.TimeStampIntegerMixin):
     )
 
     stage_id: Mapped[int] = mapped_column(ForeignKey(Stage.id, ondelete="CASCADE"))
-    workspace_member_id: Mapped[int] = mapped_column(ForeignKey("workspace_member.id"))
+    workspace_member_id: Mapped[int] = mapped_column(ForeignKey("workspace_member.id", ondelete="CASCADE"))
     position: Mapped[int] = mapped_column(Integer())

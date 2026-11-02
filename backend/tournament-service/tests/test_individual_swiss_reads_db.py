@@ -98,12 +98,6 @@ class IndividualSwissReadsCase(EncounterLayerCase):
         return member.id
 
     async def asyncTearDown(self) -> None:
-        # The pool tables reference workspace_member without a cascade, so a workspace delete races their own cascade.
-        async with self.Session() as s:
-            stages = sa.select(models.Stage.id).where(models.Stage.tournament_id == self.tournament_id)
-            for table in (models.PlayerStandingPin, models.PlayerStanding):
-                await s.execute(sa.delete(table).where(table.stage_id.in_(stages)))
-            await s.commit()
         await super().asyncTearDown()
         async with self.Session() as s:
             await s.execute(sa.delete(User).where(User.id.in_(self.user_ids)))
