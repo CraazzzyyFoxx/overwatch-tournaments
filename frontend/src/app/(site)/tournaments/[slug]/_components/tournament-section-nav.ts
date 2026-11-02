@@ -4,7 +4,7 @@ import type { StreamVods, TournamentStreams } from "@/types/stream.types";
 import type { StageSummary, TournamentStatus } from "@/types/tournament.types";
 
 export type TournamentSectionId =
-  | "overview" | "rules" | "bracket" | "teams" | "matches" | "maps" | "stats" | "stream" | "participants";
+  | "overview" | "rules" | "bracket" | "ranking" | "teams" | "matches" | "maps" | "stats" | "stream" | "participants";
 
 type TournamentNavReasonKey =
   | "tournamentDetail.nav.reasons.competitionNotStarted"
@@ -77,6 +77,7 @@ const preCompetitionOrder: TournamentSectionId[] = [
   "maps",
   "teams",
   "bracket",
+  "ranking",
   "matches",
   "stats"
 ];
@@ -85,6 +86,7 @@ const competitionOrder: TournamentSectionId[] = [
   "overview",
   "rules",
   "bracket",
+  "ranking",
   "teams",
   "matches",
   "maps",
@@ -179,9 +181,18 @@ export function buildTournamentSectionNav({
   // `stream`, `rules` and `maps` are present-or-absent rather than open-or-locked,
   // because a locked tab claims the content exists somewhere. They are filtered
   // from their display position so the rail keeps one order in every case.
+  // `ranking` is the same for a different reason: only an individual Swiss stage has a personal table.
+  const individualStages = stages.filter((stage) => stage.stage_type === "individual_swiss");
+  const hasRanking = individualStages.length > 0;
+  // Locking the qualification moves a finished stage's tournament back to `draft`, which
+  // precedes `live`, so a completed personal table keeps its tab open there.
+  const rankingOpen = competitionStarted || individualStages.some((stage) => stage.is_completed);
   const sections = (competitionStarted ? competitionOrder : preCompetitionOrder).filter(
     (id) =>
-      (id !== "stream" || hasStreams) && (id !== "rules" || hasRules) && (id !== "maps" || hasMapPool)
+      (id !== "stream" || hasStreams) &&
+      (id !== "rules" || hasRules) &&
+      (id !== "maps" || hasMapPool) &&
+      (id !== "ranking" || hasRanking)
   );
 
   return sections.map((id) => {
@@ -192,7 +203,9 @@ export function buildTournamentSectionNav({
           ? resolveBracketHref(tournamentId, status, stages)
           : `/tournaments/${tournamentId}/${id}`;
     const canonicalPath = href.split("?", 1)[0];
-    const phaseLocked = competitionOnlySections.has(id) && !competitionStarted;
+    const phaseLocked =
+      (competitionOnlySections.has(id) && !competitionStarted) ||
+      (id === "ranking" && !rankingOpen);
     const stageLocked = id === "bracket" && competitionStarted && stages.length === 0;
     const teamsLocked = id === "teams" && !hasTeams && !competitionStarted;
     const reasonKey = resolveNavLockReason({ phaseLocked, stageLocked, teamsLocked });

@@ -62,6 +62,7 @@
     "stages": "Stages",
     "teams": "Teams",
     "participants": "Participants",
+    "ranking": "Player standings",
     "matches": "Matches",
     "heroes": "Heroes",
     "characters": "Characters",
@@ -3514,6 +3515,29 @@
         "noTeams": "Available once teams are formed."
       }
     },
+    "ranking": {
+      "tableLabel": "{role} standings",
+      "player": "Player",
+      "cutLine": "Playoff cut",
+      "qualified": "Qualified for the playoff",
+      "captain": "Playoff captain",
+      "empty": {
+        "title": "No standings yet",
+        "description": "The table appears once the first round is played."
+      }
+    },
+    "individualRounds": {
+      "roundsLabel": "Rounds",
+      "round": "Round {round}",
+      "match": "Match {number} · Bo{bestOf}",
+      "open": "Open match {number}",
+      "captain": "Captain",
+      "rank": "Rank",
+      "empty": {
+        "title": "No rounds yet",
+        "description": "The teams of the first round appear when the stage starts."
+      }
+    },
     "loading": {
       "pages": {
         "bracket": "Loading tournament bracket",
@@ -3522,6 +3546,7 @@
         "matches": "Loading tournament matches",
         "heroes": "Loading hero statistics",
         "maps": "Loading the tournament map pool",
+        "ranking": "Loading player standings",
         "stream": "Loading tournament streams"
       }
     },

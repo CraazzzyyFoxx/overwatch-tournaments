@@ -176,6 +176,12 @@ export interface StageSummary extends StageRegulation {
   playoff_team_count: number | null;
 }
 
+/** One player's row of an `individual_swiss` stage's personal table. */
+export type PlayerStanding = Schema<"tournament.PlayerStandingRead">;
+
+/** One round of an `individual_swiss` stage: its lobbies, each team with its roster snapshot. */
+export type IndividualRound = Schema<"tournament.IndividualRoundRead">;
+
 export interface Stage extends StageSummary {
   items: StageItem[];
 }

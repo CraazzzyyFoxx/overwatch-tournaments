@@ -12,6 +12,7 @@ import {
   ClipboardList,
   LayoutDashboard,
   LayoutGrid,
+  ListOrdered,
   Map as MapIcon,
   Radio,
   Scale,
@@ -35,6 +36,7 @@ import {
 const icons: Record<TournamentSectionId, React.ComponentType<{ className?: string }>> = {
   overview: LayoutDashboard,
   bracket: LayoutGrid,
+  ranking: ListOrdered,
   teams: Users,
   matches: Calendar,
   maps: MapIcon,

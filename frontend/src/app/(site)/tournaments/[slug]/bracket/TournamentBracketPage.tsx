@@ -11,7 +11,7 @@ import { MatchReportDialog } from "@/components/tournaments/MatchReportDialog";
 import { useTournamentQuery } from "@/hooks/useTournamentClientData";
 import { isTournamentStatusEnded } from "@/lib/tournament/status";
 import { useRealtimeStore } from "@/stores/realtime.store";
-import { FFA_STAGE_TYPES } from "@/lib/bracket/projection";
+import { FFA_STAGE_TYPES, INDIVIDUAL_SWISS_STAGE_TYPES } from "@/lib/bracket/projection";
 import type { Tournament } from "@/types/tournament.types";
 import type { Encounter } from "@/types/encounter.types";
 
@@ -25,6 +25,7 @@ import { buildBracketTabs, buildGroupStagePanels, selectBracketStages } from "./
 import { EliminationStagePanel } from "./EliminationStagePanel";
 import { FfaStagePanel } from "./FfaStagePanel";
 import { GroupStagePanel } from "./GroupStagePanel";
+import { IndividualSwissStagePanel } from "./IndividualSwissStagePanel";
 import { useBracketActions, useBracketViewer } from "./useBracketActions";
 // Re-exported purely so TournamentBracketPage.test.ts's dynamic-import probe
 // (`bracketModule.getBracketRefetchInterval?.(status)`) can assert the
@@ -193,6 +194,13 @@ function TournamentBracketView({ tournament }: Readonly<{ tournament: Tournament
                     <FfaStagePanel
                       key={panel.key}
                       tournamentId={tournament.id}
+                      stage={panel.stage}
+                      bracketTabs={index === 0 ? bracketTabs : undefined}
+                    />
+                  ) : INDIVIDUAL_SWISS_STAGE_TYPES.includes(panel.stage.stage_type) ? (
+                    <IndividualSwissStagePanel
+                      key={panel.key}
+                      tournament={tournament}
                       stage={panel.stage}
                       bracketTabs={index === 0 ? bracketTabs : undefined}
                     />

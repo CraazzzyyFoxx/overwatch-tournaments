@@ -294,6 +294,27 @@ export function TournamentParticipantsSkeleton() {
   );
 }
 
+export function TournamentRankingSkeleton() {
+  const t = useTranslations();
+
+  return (
+    <SkeletonRegion variant="standings" message={t("tournamentDetail.loading.pages.ranking")}>
+      <TournamentPageSkeletonLayout>
+        {[0, 1, 2].map((role) => (
+          <SkeletonSurface key={role}>
+            <div className={TABLE_ROW}>
+              <Skeleton style={{ width: "6rem", height: "0.85rem" }} />
+              <Skeleton style={{ width: "4rem", height: "0.55rem" }} />
+              <Skeleton style={{ width: "3rem", height: "0.55rem", justifySelf: "end" }} />
+            </div>
+            <TableRowsSkeleton count={4} />
+          </SkeletonSurface>
+        ))}
+      </TournamentPageSkeletonLayout>
+    </SkeletonRegion>
+  );
+}
+
 export function TournamentMatchesSkeleton() {
   const t = useTranslations();
 
