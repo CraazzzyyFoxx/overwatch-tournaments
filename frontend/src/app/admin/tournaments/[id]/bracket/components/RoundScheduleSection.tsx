@@ -152,7 +152,11 @@ export function useRoundSchedule({
 }: Readonly<RoundScheduleOptions>) {
   const t = useTranslations("adminBracket.roundSchedule");
   const formatRound = useBracketRoundLabel();
-  const encountersQuery = useHubEncountersQuery(stage.tournament_id);
+  // An individual Swiss pairs its next round by itself when the last one closes, so its rounds appear on their own.
+  const encountersQuery = useHubEncountersQuery(
+    stage.tournament_id,
+    stage.stage_type === "individual_swiss" ? 15_000 : undefined
+  );
   // An FFA stage's lobbies are NOT in that list — `encounterService.getAll`
   // answers duels — so the section read an empty stage and offered no row at
   // all. They come from the stage's own FFA endpoint instead, the same one the

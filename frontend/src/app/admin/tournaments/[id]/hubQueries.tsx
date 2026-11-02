@@ -87,12 +87,15 @@ export function useHubTeamsCountQuery(tournamentId: number, workspaceId: number 
   });
 }
 
-export function useHubEncountersQuery(tournamentId: number) {
+export function useHubEncountersQuery(
+  tournamentId: number,
+  refetchIntervalMs: number = TOURNAMENT_WORKSPACE_REFRESH_INTERVAL_MS
+) {
   return useQuery({
     queryKey: getTournamentWorkspaceQueryKeys(tournamentId).encounters,
     queryFn: () => encounterService.getAll(1, "", tournamentId, -1),
     enabled: Number.isFinite(tournamentId) && tournamentId > 0,
-    refetchInterval: TOURNAMENT_WORKSPACE_REFRESH_INTERVAL_MS,
+    refetchInterval: refetchIntervalMs,
     refetchIntervalInBackground: false
   });
 }
