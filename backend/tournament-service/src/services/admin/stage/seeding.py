@@ -1,5 +1,6 @@
 """Filling a stage with teams: seeding them in directly, or wiring them from group standings."""
 
+import sqlalchemy as sa
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -10,6 +11,7 @@ from shared.core import http_status as status
 from shared.core.errors import BaseAPIException as HTTPException
 from src.domain.stage.seeds import (
     GroupSlice,
+    SeedRanking,
     group_advance_counts,
     group_for_index,
     parse_seed_mode,
@@ -48,6 +50,8 @@ class StageSeedingMixin(StageServiceBase):
           across stage_items. Stable across processes.
         - ``by_total_sr``: same as ``snake_sr`` but ranks by ``total_sr`` (useful
           when ``avg_sr`` can be skewed by player count differences).
+        - ``captain_rank``: rank by the captain's own roster rank descending (the draft playoff: the strongest
+          captain is seed 1); teams without a ranked captain sort last.
 
         Idempotent: any existing FINAL inputs in target stage_items are REMOVED
         before seeding — this is a "reset and reseed" operation. TENTATIVE inputs
@@ -95,7 +99,8 @@ class StageSeedingMixin(StageServiceBase):
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Unknown seeding mode: {mode!r}",
             )
-        ordered_ids = rank_team_ids(teams, ranking, rng_seed=stage.id)
+        captain_ranks = await self._captain_ranks(session, team_ids) if ranking is SeedRanking.CAPTAIN_RANK else None
+        ordered_ids = rank_team_ids(teams, ranking, rng_seed=stage.id, captain_ranks=captain_ranks)
         by_id = {team.id: team for team in teams}
         teams_sorted = [by_id[team_id] for team_id in ordered_ids]
 
@@ -461,3 +466,17 @@ class StageSeedingMixin(StageServiceBase):
         else:
             await session.flush()
         return await self.get_stage(session, stage_id)
+
+    async def _captain_ranks(self, session: AsyncSession, team_ids: list[int]) -> dict[int, int | None]:
+        """Team id -> rank of the captain's own roster row (``Team.captain_id`` is a ``players.user`` id)."""
+        rows = await session.execute(
+            sa.select(models.Player.team_id, models.Player.rank)
+            .join(models.WorkspaceMember, models.WorkspaceMember.id == models.Player.workspace_member_id)
+            .join(models.Team, models.Team.id == models.Player.team_id)
+            .where(
+                models.Player.team_id.in_(team_ids),
+                models.Player.is_substitution.is_(False),
+                models.WorkspaceMember.player_id == models.Team.captain_id,
+            )
+        )
+        return dict(rows.all())

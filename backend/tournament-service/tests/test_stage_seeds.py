@@ -38,6 +38,23 @@ class RankTeamIdsTests(TestCase):
         teams = [_team(9, 1000), _team(2, 4000)]
         self.assertEqual(seeds.rank_team_ids(teams, seeds.SeedRanking.SLOT, rng_seed=0), [9, 2])
 
+    def test_captain_rank_highest_is_seed_one(self) -> None:
+        teams = [_team(1), _team(2), _team(3)]
+        ranks = {1: 10, 2: 30, 3: 20}
+        self.assertEqual(
+            seeds.rank_team_ids(teams, seeds.SeedRanking.CAPTAIN_RANK, rng_seed=0, captain_ranks=ranks), [2, 3, 1]
+        )
+
+    def test_captain_rank_ties_and_missing_captains_sort_last_then_by_id(self) -> None:
+        teams = [_team(4), _team(3), _team(2), _team(1)]
+        ranks = {4: 20, 3: 20, 2: None}
+        self.assertEqual(
+            seeds.rank_team_ids(teams, seeds.SeedRanking.CAPTAIN_RANK, rng_seed=0, captain_ranks=ranks), [3, 4, 1, 2]
+        )
+
+    def test_captain_rank_is_a_seed_teams_mode(self) -> None:
+        self.assertIs(seeds.parse_seed_mode("captain_rank"), seeds.SeedRanking.CAPTAIN_RANK)
+
     def test_random_is_stable_for_the_same_seed(self) -> None:
         teams = [_team(i, float(i)) for i in range(1, 9)]
         first = seeds.rank_team_ids(teams, seeds.SeedRanking.RANDOM, rng_seed=42)
