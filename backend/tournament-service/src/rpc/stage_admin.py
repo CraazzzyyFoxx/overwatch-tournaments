@@ -29,6 +29,9 @@ from typing import Any
 
 from faststream.rabbit.annotations import RabbitMessage
 
+from shared import models
+from shared.core import http_status as status
+from shared.core.errors import BaseAPIException as HTTPException
 from shared.rpc.common import q1
 from shared.rpc.identity import ensure_workspace_permission
 from shared.services.audit import record_admin_audit
@@ -36,9 +39,29 @@ from shared.services.tournament.computation import request_bracket_job
 from src import schemas
 from src.core import auth
 from src.domain.bracket import BracketTemplate
-from src.rpc._helpers import _dump, _identity, _path_int, _payload, _run
+from src.rpc._helpers import _dump, _identity, _path_int, _payload, _require_id, _run
+from src.schemas import individual_swiss as individual_swiss_schemas
 from src.services.admin.stage import stage_service
+from src.services.individual_swiss.pins import pins_service
+from src.services.individual_swiss.qualification import qualification_service
 from src.services.tournament.flows import flows_service as tournament_flows
+
+
+async def _tournament_stage(
+    session: Any, data: dict, user: Any, resource: str, action: str
+) -> tuple[int, models.Stage]:
+    """The path's stage, once the caller holds ``resource.action`` on its tournament's workspace.
+
+    Permission first, so a stranger cannot tell a missing stage from a foreign one; a stage of another tournament
+    is a 404 like a missing one.
+    """
+    tournament_id = _require_id(data)
+    ws_id = await auth.get_tournament_workspace_id(session, tournament_id)
+    ensure_workspace_permission(user, ws_id, resource, action)
+    stage = await stage_service.get_stage(session, _path_int(data, "stage_id"))
+    if stage.tournament_id != tournament_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Stage not found")
+    return ws_id, stage
 
 
 def register(broker: Any, logger: Any) -> None:
@@ -422,5 +445,54 @@ def register(broker: Any, logger: Any) -> None:
                 mode=body.mode,
             )
             return _dump(await tournament_flows.stage_read(session, stage))
+
+        return await _run(logger, op)
+
+    # ── individual swiss: player-standing pins and the qualification lock ──
+
+    @broker.subscriber("rpc.tournament.player_standing_pins_set")
+    async def _player_standing_pins_set(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = _identity(data)
+            ws_id, stage = await _tournament_stage(session, data, user, "standing", "update")
+            body = individual_swiss_schemas.PlayerStandingPinsUpdate.model_validate(_payload(data))
+            before = await pins_service.get_pins(session, stage.id)
+            await record_admin_audit(
+                session,
+                action="standing.player_pins_set",
+                actor=user,
+                data=data,
+                workspace_id=ws_id,
+                entity_type="stage",
+                entity_id=stage.id,
+                entity_label=stage.name,
+                before={"pins": before},
+                after={"pins": {pin.workspace_member_id: pin.position for pin in body.pins}},
+            )
+            # set_pins commits (the audit row with it); a refused write leaves no row behind.
+            return _dump(await pins_service.set_pins(session, stage, body, requested_by_user_id=int(user.id)))
+
+        return await _run(logger, op)
+
+    @broker.subscriber("rpc.tournament.individual_swiss_lock_qualification")
+    async def _individual_swiss_lock_qualification(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = _identity(data)
+            ws_id, stage = await _tournament_stage(session, data, user, "stage", "update")
+            # The lock moves the tournament's status and trims its balancer pool: both need their own permission.
+            ensure_workspace_permission(user, ws_id, "tournament", "update")
+            await record_admin_audit(
+                session,
+                action="stage.lock_qualification",
+                actor=user,
+                data=data,
+                workspace_id=ws_id,
+                entity_type="stage",
+                entity_id=stage.id,
+                entity_label=stage.name,
+                after={},
+            )
+            # lock commits internally, the audit row with the first commit.
+            return _dump(await qualification_service.lock(session, stage, actor_user_id=int(user.id)))
 
         return await _run(logger, op)
