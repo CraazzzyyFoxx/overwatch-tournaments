@@ -65,6 +65,7 @@ const STAGE_FORMATS = [
   "round_robin",
   "swiss",
   "ffa_league",
+  "individual_swiss",
   "single_elimination",
   "double_elimination"
 ] as const;

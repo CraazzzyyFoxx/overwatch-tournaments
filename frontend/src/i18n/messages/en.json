@@ -3155,6 +3155,10 @@
             "name": "Free-for-all (FFA)",
             "description": "Teams are not paired off: the whole group plays in one lobby, several games in a row. Every game gives each team a placement and points, and the points add up into the standings."
           },
+          "individual_swiss": {
+            "name": "Individual Swiss",
+            "description": "Players, not teams, take part. In every round the players are split into new teams and lobbies, and each result counts for every player of the team. Players are ranked in a personal table; the best of each role go on to the draft playoff."
+          },
           "single_elimination": {
             "name": "Single elimination",
             "description": "A knockout bracket: the winner of a match moves on, the loser is out. One loss and the team is done."
@@ -10100,7 +10104,8 @@
         "single_elimination": "Single Elimination",
         "double_elimination": "Double Elimination",
         "swiss": "Swiss",
-        "ffa_league": "FFA"
+        "ffa_league": "FFA",
+        "individual_swiss": "Individual Swiss"
       },
       "itemTypes": {
         "group": "Group",
@@ -10112,7 +10117,8 @@
         "slot": "Slot order (manual / standings)",
         "avg_sr": "Highest team avg SR first",
         "total_sr": "Highest team total SR first",
-        "random": "Random (stable per stage)"
+        "random": "Random (stable per stage)",
+        "captain_rank": "Highest captain rank first"
       },
       "rankingPresets": {
         "default": "System default",

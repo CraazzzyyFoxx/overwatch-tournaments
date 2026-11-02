@@ -47,7 +47,8 @@ export const STAGE_TYPE_LABELS: Record<StageType, string> = {
   single_elimination: "Single Elimination",
   double_elimination: "Double Elimination",
   swiss: "Swiss",
-  ffa_league: "FFA"
+  ffa_league: "FFA",
+  individual_swiss: "Individual Swiss"
 };
 
 export const STAGE_ITEM_TYPE_LABELS: Record<StageItemType, string> = {
@@ -61,13 +62,15 @@ export const SEED_RANKING_LABELS: Record<SeedRanking, string> = {
   slot: "Slot order (manual / standings)",
   avg_sr: "Highest team avg SR first",
   total_sr: "Highest team total SR first",
-  random: "Random (stable per stage)"
+  random: "Random (stable per stage)",
+  captain_rank: "Highest captain rank first"
 };
 export const SEED_RANKING_LABEL_KEYS: Record<SeedRanking, string> = {
   slot: "slot",
   avg_sr: "avg_sr",
   total_sr: "total_sr",
-  random: "random"
+  random: "random",
+  captain_rank: "captain_rank"
 };
 
 const DEFAULT_SWISS_TIEBREAKERS = [

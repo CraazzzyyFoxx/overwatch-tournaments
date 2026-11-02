@@ -21,7 +21,12 @@ export type TournamentStatus =
   | "archived";
 
 export type StageType =
-  "round_robin" | "single_elimination" | "double_elimination" | "swiss" | "ffa_league";
+  | "round_robin"
+  | "single_elimination"
+  | "double_elimination"
+  | "swiss"
+  | "ffa_league"
+  | "individual_swiss";
 
 export type StageItemType = "group" | "bracket_upper" | "bracket_lower" | "single_bracket";
 
@@ -70,7 +75,10 @@ export interface StageItem {
 }
 
 /** How a bracket stage orders its seeds; `slot` keeps the manual/standings order. */
-export type SeedRanking = "slot" | "avg_sr" | "total_sr" | "random";
+export type SeedRanking = "slot" | "avg_sr" | "total_sr" | "random" | "captain_rank";
+
+/** How an `individual_swiss` round forms its lobbies. */
+export type StagePairingMode = "score" | "balance";
 
 /**
  * A stage's series lengths. Precedence: `final` (an elimination stage's last
@@ -163,6 +171,9 @@ export interface StageSummary extends StageRegulation {
   has_custom_bracket: boolean;
   challonge_id: number | null;
   challonge_slug: string | null;
+  /** `individual_swiss` only; `null` on every other stage type. */
+  pairing_mode: StagePairingMode | null;
+  playoff_team_count: number | null;
 }
 
 export interface Stage extends StageSummary {
