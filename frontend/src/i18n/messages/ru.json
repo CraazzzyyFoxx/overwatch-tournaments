@@ -3516,7 +3516,11 @@
       }
     },
     "ranking": {
-      "tableLabel": "Личный зачёт: {role}",
+      "title": "Личный зачёт",
+      "stageFilter": "Этап",
+      "roleFilter": "Роль",
+      "search": "Поиск игроков",
+      "searchPlaceholder": "Ник…",
       "player": "Игрок",
       "cutLine": "Граница плей-офф",
       "qualified": "Проходит в плей-офф",

@@ -76,7 +76,7 @@ const RES_TAG_KIND: Record<ResultKind, ResTagKind> = { w: "w", l: "l", t: "d" };
 /** The row's place against the lines: the crowned winner, a tie a line cuts, the advancing block. */
 type Zone = "crown" | "tie" | "advance";
 
-const ROW_TINT: Record<Zone, string> = {
+export const ROW_TINT: Record<Zone, string> = {
   crown:
     "bg-[color:color-mix(in_srgb,var(--aqt-medal-gold)_6%,transparent)] hover:bg-[color:color-mix(in_srgb,var(--aqt-medal-gold)_10%,transparent)]",
   tie: "bg-[color:color-mix(in_srgb,var(--aqt-amber)_8%,transparent)] hover:bg-[color:color-mix(in_srgb,var(--aqt-amber)_13%,transparent)]",
@@ -132,7 +132,7 @@ function computeMaps(teamId: number, history: Encounter[]) {
   return { won, lost, diff: won - lost };
 }
 
-function MapDiff({ diff }: Readonly<{ diff: number }>) {
+export function MapDiff({ diff }: Readonly<{ diff: number }>) {
   const tone =
     diff > 0
       ? "text-[color:var(--aqt-emerald)]"

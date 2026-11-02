@@ -3516,7 +3516,11 @@
       }
     },
     "ranking": {
-      "tableLabel": "{role} standings",
+      "title": "Personal standings",
+      "stageFilter": "Stage",
+      "roleFilter": "Role",
+      "search": "Search players",
+      "searchPlaceholder": "Nickname…",
       "player": "Player",
       "cutLine": "Playoff cut",
       "qualified": "Qualified for the playoff",
