@@ -3535,8 +3535,13 @@
       "round": "Раунд {round}",
       "match": "Матч {number} · Bo{bestOf}",
       "open": "Открыть матч {number}",
-      "captain": "Капитан",
-      "rank": "Ранг",
+      "avgRank": "Ср. ранг",
+      "versus": "VS",
+      "score": "Счёт {first} : {second}",
+      "expandMatch": "Показать составы матча {number}",
+      "collapseMatch": "Скрыть составы матча {number}",
+      "expandAll": "Развернуть все",
+      "collapseAll": "Свернуть все",
       "empty": {
         "title": "Раундов пока нет",
         "description": "Команды первого раунда появятся, когда этап начнётся."

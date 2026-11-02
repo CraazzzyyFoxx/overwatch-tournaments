@@ -3535,8 +3535,13 @@
       "round": "Round {round}",
       "match": "Match {number} · Bo{bestOf}",
       "open": "Open match {number}",
-      "captain": "Captain",
-      "rank": "Rank",
+      "avgRank": "Avg rank",
+      "versus": "VS",
+      "score": "Score {first} : {second}",
+      "expandMatch": "Show match {number} rosters",
+      "collapseMatch": "Hide match {number} rosters",
+      "expandAll": "Expand all",
+      "collapseAll": "Collapse all",
       "empty": {
         "title": "No rounds yet",
         "description": "The teams of the first round appear when the stage starts."
