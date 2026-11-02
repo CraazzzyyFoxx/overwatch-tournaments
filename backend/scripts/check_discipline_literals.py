@@ -46,8 +46,11 @@ SERVICE_ROOT = re.compile(r"backend/[^/]+-service/(?:src|scripts)/")
 TS_TEST = re.compile(r"\.test\.tsx?$")
 
 ROLE_STOP = frozenset({"top", "mid", "bot", "position", "Top", "Mid", "Bot", "Position"})
-# Generic words before they are a game's stat codes: "level" (log levels), "denies" (access control).
-STAT_STOP = frozenset({"score", "deaths", "assists", "kills", "kill", "kd", "kda", "performance", "level", "denies"})
+# Generic words before they are a game's stat codes: "level" (log levels), "denies" (access control), "damage" (a
+# role, which role-vocabulary already guards), "snapshot" (a function name).
+STAT_STOP = frozenset(
+    {"score", "deaths", "assists", "kills", "kill", "kd", "kda", "performance", "level", "denies", "damage", "snapshot"}
+)
 CATALOG_LABELS = ("hero", "heroes", "hero_id", "hero_ids", "gamemode", "gamemode_id", "gamemodes")
 IDENTITY_TOKENS = (
     "battle_tag",

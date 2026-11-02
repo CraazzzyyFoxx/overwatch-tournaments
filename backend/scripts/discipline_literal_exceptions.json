@@ -3482,6 +3482,36 @@
       "remove_when": "the release entry leaves the changelog"
     },
     {
+      "path": "frontend/src/lib/changelog/releases.ts",
+      "rule": "discipline-code",
+      "token": "overwatch",
+      "context": "games: [\"overwatch\", \"deadlock\"]",
+      "count": 1,
+      "reason": "not a game assumption: a changelog entry records the games its release shipped (release-notes content)",
+      "owner": "P9",
+      "remove_when": "the release entry leaves the changelog"
+    },
+    {
+      "path": "frontend/src/lib/changelog/releases.ts",
+      "rule": "discipline-code",
+      "token": "deadlock",
+      "context": "games: [\"overwatch\", \"deadlock\"]",
+      "count": 1,
+      "reason": "not a game assumption: a changelog entry records the games its release shipped (release-notes content)",
+      "owner": "P9",
+      "remove_when": "the release entry leaves the changelog"
+    },
+    {
+      "path": "frontend/src/lib/encounters/query-keys.ts",
+      "rule": "discipline-code",
+      "token": "deadlock",
+      "context": "deadlockItems: (language: KeyPart) => [\"deadlock-api\", \"items\", language] as const,",
+      "count": 1,
+      "reason": "not a game branch: the cache namespace of deadlock-api's item assets, and query keys must live in the domain factory (no-restricted-syntax)",
+      "owner": "module",
+      "remove_when": "item assets come from another source"
+    },
+    {
       "path": "frontend/src/app/(site)/(home)/_components/home-records.ts",
       "rule": "stat-code",
       "token": "eliminations",

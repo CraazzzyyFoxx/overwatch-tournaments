@@ -42,6 +42,7 @@ from shared.repository import CustomGameRepository
 from shared.repository.encounter import EncounterGameRepository
 from shared.repository.identity import UserRepository
 from shared.repository.match_fetch import MatchFetchRepository
+from shared.repository.match_search import MatchSearchRepository
 from shared.repository.stats import IngestJobRepository
 from shared.repository.tournament import TournamentRepository
 from shared.rpc.identity import ensure_workspace_permission
@@ -89,6 +90,7 @@ _REASON_LIMIT = 500
 _fetches = MatchFetchRepository()
 _games = EncounterGameRepository()
 _jobs = IngestJobRepository()
+_searches = MatchSearchRepository()
 _mixes = CustomGameRepository()
 _tournaments = TournamentRepository()
 _users = UserRepository()
@@ -193,14 +195,7 @@ async def submit_fetch(session: AsyncSession, *, data: dict[str, Any], requested
         row.created_at = row.next_attempt_at = now
         row.requested_by_user_id = requested_by_user_id
     if tournament_id is None:
-        await session.execute(
-            sa.update(models.MatchSearch)
-            .where(
-                models.MatchSearch.encounter_id == int(data["encounter_id"]),
-                models.MatchSearch.status == models.MatchSearchStatus.PENDING,
-            )
-            .values(status=models.MatchSearchStatus.STOPPED)
-        )
+        await _searches.stop_pending(session, int(data["encounter_id"]))
     read = _read(row)
     await session.commit()
     return read
