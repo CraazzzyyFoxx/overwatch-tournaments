@@ -65,6 +65,33 @@ def test_roles_params_validate_against_the_catalog_model():
         _schema(FormField(key="roles", kind="builtin", params={"flex_mode": "sometimes"}))
 
 
+@pytest.mark.parametrize(
+    "params",
+    [
+        {"max_roles": 1, "additional_required": True},
+        {"max_roles": 1, "flex_mode": "all_roles"},
+        {"max_roles": 1, "flex_mode": "forced"},
+    ],
+)
+def test_single_role_form_rejects_contradictory_roles_config(params):
+    with pytest.raises(ValidationError, match="max_roles=1 contradicts"):
+        _schema(FormField(key="roles", kind="builtin", params=params))
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        {"max_roles": 1},
+        {"max_roles": 1, "flex_mode": "optional", "flex_allowed": True},
+        {"max_roles": 1, "flex_allowed": False, "flex_mode": "forced"},
+        {"max_roles": 2, "flex_mode": "all_roles", "additional_required": True},
+        {"flex_mode": "all_roles", "additional_required": True},
+    ],
+)
+def test_roles_config_that_is_consistent_is_accepted(params):
+    _schema(FormField(key="roles", kind="builtin", params=params))
+
+
 def test_public_keys_and_canonical_json_are_order_independent_for_dedupe():
     a = _schema(
         FormField(key="identity_battlenet", kind="builtin"),
