@@ -80,6 +80,8 @@ class RolesParams(_Strict):
     flex_mode: Literal["optional", "all_roles", "forced"] = "optional"
     #: Role code -> allowed sub-role slugs; ``{}`` means every catalog slug.
     subroles: dict[str, list[str]] = Field(default_factory=dict)
+    #: Hard cap on how many roles one answer may name (``1`` = a single role, no flex); ``None`` = no cap.
+    max_roles: int | None = Field(default=None, ge=1)
     top_heroes: TopHeroesParams = Field(default_factory=TopHeroesParams)
 
 

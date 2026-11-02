@@ -221,6 +221,15 @@ def validate_roles(
     if not params.flex_allowed and is_flex_submission(roles):
         errors.append(_err("roles.flex_unavailable", "Flex registration is not available for this tournament."))
 
+    if params.max_roles is not None and len(roles) > params.max_roles:
+        errors.append(
+            _err(
+                "roles.too_many_roles",
+                f"You can select at most {params.max_roles} role(s).",
+                max=params.max_roles,
+            )
+        )
+
     # ``all_roles``: every role is mandatory and the registrant names exactly
     # one priority role, or declares flex (every role primary). Anything in
     # between is a client that lost the choice, not a preference we can guess
