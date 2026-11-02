@@ -84,6 +84,7 @@ export function IndividualSwissStagePanel({
             param="round"
             defaultValue={String(latest)}
             hideOnMobile={false}
+            className="self-start"
             label={t("tournamentDetail.individualRounds.roundsLabel")}
             options={views.map((candidate) => ({
               value: String(candidate.round),
