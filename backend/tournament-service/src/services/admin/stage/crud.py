@@ -70,6 +70,16 @@ def _apply_stage_fields(stage: models.Stage, fields: dict[str, Any]) -> None:
         setattr(stage, field, value)
 
 
+def _normalize_individual_swiss(stage: models.Stage) -> None:
+    """The two ``individual_swiss`` settings exist only on that type: defaults there, NULL elsewhere."""
+    if stage.stage_type == enums.StageType.INDIVIDUAL_SWISS:
+        stage.pairing_mode = stage.pairing_mode or enums.StagePairingMode.SCORE.value
+        stage.playoff_team_count = stage.playoff_team_count or 4
+    else:
+        stage.pairing_mode = None
+        stage.playoff_team_count = None
+
+
 def rule_values(stage_type: enums.StageType, block: dict[str, Any]) -> dict[str, Any]:
     """The ``encounter.scoring_rule`` row a stage's ``scoring`` block means.
 
@@ -209,6 +219,7 @@ class StageCrudMixin(StageServiceBase):
             **rule_values(data.stage_type, payload.get("scoring") or {}),
         )
         _apply_stage_fields(stage, payload)
+        _normalize_individual_swiss(stage)
         await self.stage_repo.create(session, stage)
         if challonge_id is not None:
             session.add(
@@ -270,6 +281,7 @@ class StageCrudMixin(StageServiceBase):
 
         thresholds_before = SwissThresholds.of(stage)
         _apply_stage_fields(stage, update_data)
+        _normalize_individual_swiss(stage)
         # The rule row is EDITED, never replaced: every encounter of the stage
         # points at its id, and a new row would leave the played ones scored by
         # the retired rule.

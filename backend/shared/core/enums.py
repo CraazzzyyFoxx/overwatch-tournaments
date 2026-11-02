@@ -371,6 +371,16 @@ class StageType(StrEnum):
     #: Scored by lobby placement and raw score, not head-to-head: its rules are
     #: the stage's ``ffa_*`` columns (``shared.domain.encounter_scoring``).
     FFA_LEAGUE = "ffa_league"
+    #: Every round reshuffles the pool into new teams (no ``tournament.team``);
+    #: the personal table in ``tournament.player_standing`` decides the playoff.
+    INDIVIDUAL_SWISS = "individual_swiss"
+
+
+class StagePairingMode(StrEnum):
+    """How an ``individual_swiss`` round forms its lobbies."""
+
+    SCORE = "score"
+    BALANCE = "balance"
 
 
 class EncounterResultSource(StrEnum):
