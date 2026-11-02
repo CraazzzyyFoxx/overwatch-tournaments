@@ -13,7 +13,7 @@ type PendingOp =
   | { kind: "delete-stage" }
   | { kind: "delete-item"; item: StageItem }
   | { kind: "remove-input"; inputId: number; label: string }
-  | { kind: "seed" }
+  | { kind: "seed"; mode?: "captain_rank" }
   | { kind: "merge" }
   | { kind: "force-activate" }
   | { kind: "deactivate" }
@@ -141,10 +141,10 @@ export function useStageOperations({
   });
 
   const seedMutation = useMutation({
-    mutationFn: () =>
+    mutationFn: (mode: "snake_sr" | "captain_rank") =>
       adminService.seedTeams(stage.id, {
         team_ids: teams.map((team) => team.id),
-        mode: "snake_sr"
+        mode
       }),
     onSuccess: () => {
       setPendingOp(null);
@@ -196,7 +196,7 @@ export function useStageOperations({
     if (pendingOp.kind === "delete-stage") deleteMutation.mutate();
     else if (pendingOp.kind === "delete-item") deleteItemMutation.mutate(pendingOp.item.id);
     else if (pendingOp.kind === "remove-input") removeInputMutation.mutate(pendingOp.inputId);
-    else if (pendingOp.kind === "seed") seedMutation.mutate();
+    else if (pendingOp.kind === "seed") seedMutation.mutate(pendingOp.mode ?? "snake_sr");
     else if (pendingOp.kind === "merge") mergeMutation.mutate();
     else if (pendingOp.kind === "force-activate") activateAndGenerateMutation.mutate(true);
     else if (pendingOp.kind === "deactivate") deactivateMutation.mutate();
@@ -265,13 +265,22 @@ const INTENTS = (t: (key: string, values?: Record<string, unknown>) => string, t
     tone: "danger",
     cascade: [tRoot("extra.cascadeSeedSlot"), tRoot("extra.cascadeBracketPlace")]
   }),
-  seed: (stage, _op, { teamCount }) => ({
-    title: t("reseedTitle"),
-    description: t("reseedDescription", { teams: teamCount, groups: stage.items.length, name: stage.name }),
-    confirmLabel: t("reseedConfirm"),
-    tone: "warning",
-    cascade: [tRoot("extra.cascadeManualAssignments")]
-  }),
+  seed: (stage, op, { teamCount }) =>
+    op.kind === "seed" && op.mode === "captain_rank"
+      ? {
+          title: t("reseedCaptainTitle"),
+          description: t("reseedCaptainDescription", { teams: teamCount, name: stage.name }),
+          confirmLabel: t("reseedConfirm"),
+          tone: "warning",
+          cascade: [tRoot("extra.cascadeManualAssignments")]
+        }
+      : {
+          title: t("reseedTitle"),
+          description: t("reseedDescription", { teams: teamCount, groups: stage.items.length, name: stage.name }),
+          confirmLabel: t("reseedConfirm"),
+          tone: "warning",
+          cascade: [tRoot("extra.cascadeManualAssignments")]
+        },
   merge: (_stage, _op, { mergedName, mergeCandidates }) => ({
     title: t("mergeTitle"),
     description: t("mergeDescription", { count: mergeCandidates.length, name: mergedName }),

@@ -14,7 +14,7 @@ import {
   SelectValue
 } from "@/components/ui/select";
 import { tiebreakersForStageType } from "@/lib/tournament/tiebreakers";
-import type { StageType } from "@/types/tournament.types";
+import type { StagePairingMode, StageType } from "@/types/tournament.types";
 
 import { defaultTiebreakOrder, STAGE_TYPE_LABELS } from "@/lib/bracket/projection";
 import type { SectionProps } from "./types";
@@ -99,7 +99,7 @@ export function GeneralSection({
         </Select>
       </SettingRow>
 
-      {form.stageType === "swiss" ? (
+      {form.stageType === "swiss" || form.stageType === "individual_swiss" ? (
         <SettingRow htmlFor={`${ids}-rounds`} label={t("swissRounds")}>
           <NumberInput
             id={`${ids}-rounds`}
@@ -111,6 +111,37 @@ export function GeneralSection({
             onValueChange={(next) => onChange({ maxRounds: next == null ? "" : String(next) })}
           />
         </SettingRow>
+      ) : null}
+
+      {form.stageType === "individual_swiss" ? (
+        <>
+          <SettingRow htmlFor={`${ids}-pairing`} label={t("pairingMode")} hint={t("pairingModeHelp")}>
+            <Select
+              value={form.pairingMode}
+              onValueChange={(value) => onChange({ pairingMode: value as StagePairingMode })}
+            >
+              <SelectTrigger id={`${ids}-pairing`}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="score">{t("pairingScore")}</SelectItem>
+                <SelectItem value="balance">{t("pairingBalance")}</SelectItem>
+              </SelectContent>
+            </Select>
+          </SettingRow>
+
+          <SettingRow htmlFor={`${ids}-playoff`} label={t("playoffTeams")} hint={t("playoffTeamsHelp")}>
+            <NumberInput
+              id={`${ids}-playoff`}
+              integer
+              min={1}
+              size="sm"
+              className="w-24"
+              value={form.playoffTeamCount}
+              onValueChange={(next) => onChange({ playoffTeamCount: next ?? 4 })}
+            />
+          </SettingRow>
+        </>
       ) : null}
 
       {form.stageType === "double_elimination" ? (

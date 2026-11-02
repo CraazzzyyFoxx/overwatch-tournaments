@@ -7717,7 +7717,9 @@
       "topHeroesEnabled": "Ask for top heroes",
       "topHeroesHint": "Per role, the heroes the registrant plays best.",
       "topHeroesRequired": "Top heroes are required",
-      "topHeroesMax": "Max heroes per role"
+      "topHeroesMax": "Max heroes per role",
+      "singleRole": "Only one role",
+      "singleRoleHint": "A submission names exactly one role and flex is turned off."
     },
     "subroles": {
       "title": "Subroles",
@@ -9310,7 +9312,8 @@
         "one_priority_or_flex": "Choose one priority role, or Flex.",
         "unknown_role": "This role does not exist.",
         "subrole_not_allowed": "This sub-role is not available for the chosen role.",
-        "too_many_heroes": "Too many heroes selected for one role."
+        "too_many_heroes": "Too many heroes selected for one role.",
+        "too_many_roles": "Too many roles chosen."
       }
     }
   },
@@ -9764,7 +9767,11 @@
       "withReset": "With reset · LB champion can force a rematch",
       "reorder": "Reorder {name}",
       "phase": "Phase {number}",
-      "progress": "{completed} of {total} matches complete"
+      "progress": "{completed} of {total} matches complete",
+      "pairingMode": "Lobby pairing",
+      "pairingScore": "By points",
+      "pairingBalance": "Whole-pool balance",
+      "playoffTeams": "Playoff teams"
     },
     "items": {
       "drag": "Drag {label} to another slot",
@@ -9889,7 +9896,10 @@
       "mergeDescription": "Move the groups, matches and standings of {count} stage(s) into \"{name}\". The merged stages leave the timeline.",
       "forceActivateDescription": "Upstream stages still have pending encounters. Activating \"{name}\" now freezes its seeds from standings that can still change.",
       "revertDescription": "Revert \"{name}\" back to draft. This only works while none of its matches has been played or reported.",
-      "regenerateDescription": "\"{name}\" already has generated matches. Existing matches are left untouched: for a grouped stage, only groups with no matches yet get a new bracket; for a bracket that is still all TBD, the seeded teams are written into it; otherwise this is blocked until you delete its existing matches."
+      "regenerateDescription": "\"{name}\" already has generated matches. Existing matches are left untouched: for a grouped stage, only groups with no matches yet get a new bracket; for a bracket that is still all TBD, the seeded teams are written into it; otherwise this is blocked until you delete its existing matches.",
+      "seedCaptain": "Seed by captain rank",
+      "reseedCaptainTitle": "Reseed stage by captain rank",
+      "reseedCaptainDescription": "Seed {teams} teams of \"{name}\" in the order of their captains' ranks: the strongest captain is seed 1. Every manual assignment in this stage is cleared first."
     },
     "changes": {
       "name": "Name",
@@ -9912,7 +9922,9 @@
       "pointsPerPlace": "Points per place",
       "gameColumns": "Game columns",
       "pointsFormula": "Points formula",
-      "roundSchedule": "Round schedule"
+      "roundSchedule": "Round schedule",
+      "pairingMode": "Lobby pairing",
+      "playoffTeams": "Playoff teams"
     },
     "preview": {
       "swapSuccess": "Teams swapped",
@@ -10076,7 +10088,13 @@
       "grandFinalCap": "Grand Final",
       "final": "Final",
       "sameUpper": "Same as upper bracket",
-      "sameRounds": "Same as rounds"
+      "sameRounds": "Same as rounds",
+      "pairingMode": "Lobby pairing",
+      "pairingModeHelp": "By points: each role is sorted by the personal table and cut into lobbies in order. Whole-pool balance: the balancer splits everyone into equal teams and the pairs are random.",
+      "pairingScore": "By points",
+      "pairingBalance": "Whole-pool balance",
+      "playoffTeams": "Playoff teams",
+      "playoffTeamsHelp": "Each role sends its best players to the draft: this many teams times the role's slots."
     },
     "extra": {
       "matches": "matches",
@@ -10163,6 +10181,29 @@
         "preview": "Preview code (ctrl + 9)",
         "fullscreen": "Toggle fullscreen (ctrl + 0)"
       }
+    },
+    "individual": {
+      "description": "Each role is ranked on its own. Pin a place to keep a player there whatever results arrive; the others fill the free places in computed order. The heavier line marks the playoff cut.",
+      "empty": "The table appears once the first round is generated.",
+      "place": "Place",
+      "player": "Player",
+      "points": "Points",
+      "record": "W–D–L",
+      "mapDiff": "Map diff",
+      "buchholz": "Buchholz",
+      "pin": "Pin",
+      "pinLabel": "Pinned place of {name}",
+      "captain": "Captain",
+      "savePins": "Save pins",
+      "pinsSaved": "Pins saved. The table updates in a moment.",
+      "pinsError": "Could not save the pins",
+      "lock": "Lock the qualification and go to the draft",
+      "lockTitle": "Lock the qualification?",
+      "lockDescription": "Players below the cut are excluded from the pool and the tournament moves to the draft. This cannot be undone.",
+      "lockConfirm": "Lock",
+      "lockHint": "Available once the stage is completed and the tournament is live.",
+      "lockError": "Could not lock the qualification",
+      "locked": "Qualification locked: {qualified} qualifiers, {captains} captains."
     }
   },
   "adminTournament": {

@@ -131,13 +131,14 @@ const CATALOG: SubroleCatalog = {
 };
 
 /** `subroles: {}` offers the whole catalog, which is what these cases assume. */
-function paramsFor(flexMode: FlexMode): RolesParams {
+function paramsFor(flexMode: FlexMode, maxRoles: number | null = null): RolesParams {
   return {
     primary_required: true,
     additional_required: false,
     flex_allowed: flexMode !== "off",
     flex_mode: flexMode === "off" ? "optional" : flexMode,
     subroles: {},
+    max_roles: maxRoles,
     top_heroes: { enabled: true, required: false, max: 5 },
   };
 }
@@ -149,9 +150,11 @@ let latest: RoleSelections = createRoleSelections(ROLE_CODES);
 function Harness({
   flexMode = "optional" as FlexMode,
   initial,
+  maxRoles = null,
 }: {
   flexMode?: FlexMode;
   initial?: RoleSelections;
+  maxRoles?: number | null;
 }) {
   const [selections, setSelections] = useState<RoleSelections>(
     initial ?? createRoleSelections(ROLE_CODES, flexMode),
@@ -162,7 +165,7 @@ function Harness({
   return (
     <RoleStep
       ontology={OW_METADATA}
-      params={paramsFor(flexMode)}
+      params={paramsFor(flexMode, maxRoles)}
       subroleCatalog={CATALOG}
       value={fromRoleSelections(ROLE_CODES, selections)}
       onChange={(next) => {
@@ -176,12 +179,12 @@ function Harness({
 }
 
 /** Each case needs its own root: re-rendering into one keeps the previous state. */
-function mount(flexMode: FlexMode = "optional", initial?: RoleSelections) {
+function mount(flexMode: FlexMode = "optional", initial?: RoleSelections, maxRoles: number | null = null) {
   container = testWindow.document.createElement("div");
   testWindow.document.body.appendChild(container);
   root = createRoot(container as unknown as Element);
   latest = initial ?? createRoleSelections(ROLE_CODES, flexMode);
-  act(() => root.render(<Harness flexMode={flexMode} initial={initial} />));
+  act(() => root.render(<Harness flexMode={flexMode} initial={initial} maxRoles={maxRoles} />));
 }
 
 function surface() {
@@ -493,5 +496,35 @@ describe("RoleStep in a one-role game", () => {
 
     expect(container.querySelectorAll('button[aria-label="registration.roles.specialization"]')).toHaveLength(1);
     expect(container.querySelector('[aria-label="registration.roles.roleSpecialization"]')).toBeNull();
+  });
+});
+
+describe("RoleStep with max_roles 1", () => {
+  it("lets a second role replace the first instead of adding to it", () => {
+    mount("off", undefined, 1);
+
+    click('[role="radio"]', MAIN.damage);
+    expect(latest.damage.priority).toBe("main");
+
+    // A fallback pick on another role is a second role: it takes over, the first goes off.
+    click('[role="radio"]', MAIN.support - 1);
+    expect(latest.support.priority).toBe("main");
+    expect(latest.damage.priority).toBe("off");
+    expect(latest.tank.priority).toBe("off");
+  });
+
+  it("never offers the flex preset", () => {
+    mount("optional", undefined, 1);
+
+    expect(container.querySelector("[aria-pressed]")).toBeNull();
+  });
+
+  it("keeps the usual fallback roles while max_roles is unset", () => {
+    mount("off");
+
+    click('[role="radio"]', MAIN.damage);
+    click('[role="radio"]', MAIN.support - 1);
+    expect(latest.damage.priority).toBe("main");
+    expect(latest.support.priority).toBe("fallback");
   });
 });

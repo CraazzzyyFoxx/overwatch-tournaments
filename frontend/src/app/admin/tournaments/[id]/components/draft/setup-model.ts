@@ -7,6 +7,8 @@ import type {
   DraftStatus
 } from "@/types/draft.types";
 
+import type { PlayerStanding } from "@/types/admin.types";
+
 import type { DraftCaptainSetup } from "./setup-types";
 
 // The backend does not cap team_count (it flows through settings_json);
@@ -335,4 +337,33 @@ export function validateSetupStep(
   if (step === "captains" && state.captainIds.length === 0) errors.push("captains_required");
   if (step === "review" && !state.previewFeasible) errors.push("preview_infeasible");
   return errors;
+}
+
+export interface DraftCaptainPrefill {
+  /** One team per playoff captain, even when a captain's registration is not in the pool. */
+  teamCount: number;
+  /** The captains' registration ids that are in the pool. */
+  ids: number[];
+  order: DraftCaptainOrder;
+}
+
+/**
+ * The draft an individual Swiss feeds: its playoff captains (flagged on the
+ * personal tables) are the draft's captains and set the team count, and the
+ * weakest of them picks first. `null` when no table names a captain.
+ */
+export function captainPrefill(
+  standings: readonly PlayerStanding[],
+  poolRegistrationIds: ReadonlySet<number>
+): DraftCaptainPrefill | null {
+  const captains = new Map(
+    standings
+      .filter((row) => row.is_captain)
+      .map((row) => [row.workspace_member_id, row.registration_id] as const)
+  );
+  if (captains.size === 0) return null;
+  const ids = [...captains.values()].filter(
+    (id): id is number => id != null && poolRegistrationIds.has(id)
+  );
+  return { teamCount: captains.size, ids, order: "weakest_first" };
 }

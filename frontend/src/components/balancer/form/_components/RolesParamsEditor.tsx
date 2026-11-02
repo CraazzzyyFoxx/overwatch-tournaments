@@ -53,6 +53,7 @@ export function rolesParamsOf(params: Record<string, unknown>): RolesParams {
     flex_allowed: raw.flex_allowed ?? true,
     flex_mode: raw.flex_mode ?? "optional",
     subroles: raw.subroles ?? {},
+    max_roles: raw.max_roles ?? null,
     top_heroes: topHeroes
   };
 }
@@ -106,10 +107,25 @@ export function RolesParamsEditor({
               onCheckedChange={(additional_required) => onChange({ ...params, additional_required })}
             />
           </SettingRow>
+          <SettingRow htmlFor={`${ids}-single`} label={t("singleRole")} hint={t("singleRoleHint")}>
+            <Switch
+              id={`${ids}-single`}
+              checked={params.max_roles === 1}
+              // One role means no flex either: the two settings cannot disagree.
+              onCheckedChange={(single) =>
+                onChange({
+                  ...params,
+                  max_roles: single ? 1 : null,
+                  flex_allowed: single ? false : params.flex_allowed
+                })
+              }
+            />
+          </SettingRow>
           <SettingRow htmlFor={`${ids}-flex`} label={t("flexAllowed")} hint={t("flexAllowedHint")}>
             <Switch
               id={`${ids}-flex`}
               checked={params.flex_allowed}
+              disabled={params.max_roles === 1}
               onCheckedChange={(flex_allowed) => onChange({ ...params, flex_allowed })}
             />
           </SettingRow>

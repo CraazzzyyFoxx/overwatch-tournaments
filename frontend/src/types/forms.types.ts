@@ -91,6 +91,8 @@ export interface RolesParams {
   flex_mode: "optional" | "all_roles" | "forced";
   /** Role code → allowed sub-role slugs; `{}` means every catalog slug. */
   subroles: Record<string, string[]>;
+  /** Hard cap on how many roles one answer names (`1` = a single role); `null` = no cap. */
+  max_roles: number | null;
   top_heroes: { enabled: boolean; required: boolean; max: number };
 }
 

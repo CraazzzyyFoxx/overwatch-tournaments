@@ -278,8 +278,16 @@ import type {
   StageRegulation,
   StageType,
   StageItemInputType,
+  StagePairingMode,
   TournamentStatus
 } from "@/types/tournament.types";
+import type { components } from "@/types/api";
+
+/** One row of an `individual_swiss` stage's personal table (public read, also what the admin pins and locks). */
+export type PlayerStanding = components["schemas"]["tournament.PlayerStandingRead"];
+/** The qualifiers and playoff captains a lock froze. */
+export type QualificationLock = components["schemas"]["tournament.QualificationLockRead"];
+export type PlayerStandingPin = components["schemas"]["tournament.PlayerStandingPinWrite"];
 
 export interface TournamentCreateInput {
   workspace_id: number;
@@ -409,6 +417,9 @@ export interface StageCreateInput extends Partial<StageRegulation> {
   max_rounds?: number;
   advance_count?: number | null;
   advance_upper_count?: number | null;
+  /** `individual_swiss` only. */
+  pairing_mode?: StagePairingMode | null;
+  playoff_team_count?: number | null;
   order?: number;
 }
 
@@ -419,6 +430,9 @@ export interface StageUpdateInput extends Partial<StageRegulation> {
   max_rounds?: number;
   advance_count?: number | null;
   advance_upper_count?: number | null;
+  /** `individual_swiss` only. */
+  pairing_mode?: StagePairingMode | null;
+  playoff_team_count?: number | null;
   order?: number;
 }
 
