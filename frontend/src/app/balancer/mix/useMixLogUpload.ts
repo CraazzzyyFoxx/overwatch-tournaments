@@ -9,10 +9,11 @@ import { customGameKeys, type CustomGame } from "@/services/custom-game.service"
 import { useAuthProfileStore } from "@/stores/auth-profile.store";
 
 /**
- * What a viewer who may file match logs under a mix is handed: the mix, what to run once a log is accepted, and
- * whether the mix's game fetches matches by id (`capabilities.match_fetch`), so a round may be filed by that id too.
+ * What a viewer who may file match logs under a mix is handed: the mix, what to run once a log is accepted, whether
+ * the mix's game parses an uploaded log file (`capabilities.log_upload`; Deadlock does not), and whether it fetches
+ * matches by id (`capabilities.match_fetch`), so a round may be filed by that id too.
  */
-export type MixLogUpload = { customGameId: number; onUploaded: () => void; matchFetch: boolean };
+export type MixLogUpload = { customGameId: number; onUploaded: () => void; fileUpload: boolean; matchFetch: boolean };
 
 /**
  * `null` unless the viewer may file a match log under this mix: the host, a co-host or a superuser (a closed mix
@@ -32,6 +33,7 @@ export function useMixLogUpload(game: CustomGame | undefined): MixLogUpload | nu
   }
   return {
     customGameId: game.id,
+    fileUpload: metadata.data?.discipline.capabilities.log_upload === true,
     matchFetch: metadata.data?.discipline.capabilities.match_fetch === true,
     onUploaded: () =>
       void queryClient.invalidateQueries({ queryKey: customGameKeys.matches(game.workspace_id, game.id) })

@@ -77,6 +77,7 @@ vi.mock("@/lib/notify", () => ({
 vi.mock("@/components/kit/AuditTrailSheet", () => ({
   AuditTrailButton: () => <button type="button">Change history</button>
 }));
+vi.mock("@/services/discipline.service", async () => (await import("@/test/discipline-metadata")).disciplineServiceMock);
 
 // Every URL write re-renders from the new `useSearchParams` in the app — the
 // router's `replace` and, through Next's History patch, the inspector's native
@@ -110,6 +111,7 @@ function encounter(overrides: Partial<Encounter> = {}): Encounter {
     round: 3,
     best_of: 3,
     tournament_id: 78,
+    discipline: "overwatch",
     stage_id: 5,
     stage_item_id: null,
     challonge_id: null,
@@ -324,8 +326,8 @@ describe("hub Matches › Encounters", () => {
       "the inspector"
     );
     expect(inspector.textContent).toContain("Encounter #8812");
-    // The entity actions live in the inspector header, not in every table row.
-    expect(button("Upload log")).toBeTruthy();
+    // The entity actions live in the inspector header, not in every table row; Overwatch parses an uploaded log.
+    await waitFor(() => button("Upload log"), "the log upload action");
   });
 
   it("deletes an encounter from the row kebab through one confirmation", async () => {

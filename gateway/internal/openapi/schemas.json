@@ -12884,7 +12884,7 @@
       "type": "object"
     },
     "analytics.PersonDisplayRead": {
-      "description": "How a person is named on a surface owned by one game (docs/users-identity.md \u00a73.6).\n\n``name`` + ``tag`` is the first of: the workspace's ``display_name``, the person's game handle (the game's\nidentity provider's primary account visible in scope; Steam: the persona name), the event's snapshot, the\ncanonical ``players.user.name``. ``canonical`` builds the profile link (``None``: nobody to link to);\n``snapshot`` is set only when it names the person differently from what is shown.",
+      "description": "How a person is named on a surface owned by one game (docs/users-identity.md \u00a73.6).\n\n``name`` + ``tag`` is the first of: the person's VERIFIED game handle, the workspace's ``display_name``, an\nunverified game handle, the event's snapshot, the canonical ``players.user.name``. The game handle is the game's\nidentity provider's account visible in scope (Steam: the persona name). ``canonical`` builds the profile link\n(``None``: nobody to link to); ``snapshot`` is set only when it names the person differently from what is shown.",
       "properties": {
         "canonical": {
           "anyOf": [
@@ -15340,6 +15340,10 @@
           "title": "Catalog Sync",
           "type": "boolean"
         },
+        "log_upload": {
+          "title": "Log Upload",
+          "type": "boolean"
+        },
         "match_fetch": {
           "title": "Match Fetch",
           "type": "boolean"
@@ -15358,6 +15362,7 @@
         "native_rank_collection",
         "native_ladder",
         "match_fetch",
+        "log_upload",
         "achievement_conditions",
         "analytics"
       ],
@@ -24473,7 +24478,7 @@
       "type": "object"
     },
     "balancer.PersonDisplayRead": {
-      "description": "How a person is named on a surface owned by one game (docs/users-identity.md \u00a73.6).\n\n``name`` + ``tag`` is the first of: the workspace's ``display_name``, the person's game handle (the game's\nidentity provider's primary account visible in scope; Steam: the persona name), the event's snapshot, the\ncanonical ``players.user.name``. ``canonical`` builds the profile link (``None``: nobody to link to);\n``snapshot`` is set only when it names the person differently from what is shown.",
+      "description": "How a person is named on a surface owned by one game (docs/users-identity.md \u00a73.6).\n\n``name`` + ``tag`` is the first of: the person's VERIFIED game handle, the workspace's ``display_name``, an\nunverified game handle, the event's snapshot, the canonical ``players.user.name``. The game handle is the game's\nidentity provider's account visible in scope (Steam: the persona name). ``canonical`` builds the profile link\n(``None``: nobody to link to); ``snapshot`` is set only when it names the person differently from what is shown.",
       "properties": {
         "canonical": {
           "anyOf": [
@@ -34886,7 +34891,7 @@
       "type": "object"
     },
     "stats.PersonDisplayRead": {
-      "description": "How a person is named on a surface owned by one game (docs/users-identity.md \u00a73.6).\n\n``name`` + ``tag`` is the first of: the workspace's ``display_name``, the person's game handle (the game's\nidentity provider's primary account visible in scope; Steam: the persona name), the event's snapshot, the\ncanonical ``players.user.name``. ``canonical`` builds the profile link (``None``: nobody to link to);\n``snapshot`` is set only when it names the person differently from what is shown.",
+      "description": "How a person is named on a surface owned by one game (docs/users-identity.md \u00a73.6).\n\n``name`` + ``tag`` is the first of: the person's VERIFIED game handle, the workspace's ``display_name``, an\nunverified game handle, the event's snapshot, the canonical ``players.user.name``. The game handle is the game's\nidentity provider's account visible in scope (Steam: the persona name). ``canonical`` builds the profile link\n(``None``: nobody to link to); ``snapshot`` is set only when it names the person differently from what is shown.",
       "properties": {
         "canonical": {
           "anyOf": [
@@ -51571,7 +51576,7 @@
       "type": "object"
     },
     "tournament.PersonDisplayRead": {
-      "description": "How a person is named on a surface owned by one game (docs/users-identity.md \u00a73.6).\n\n``name`` + ``tag`` is the first of: the workspace's ``display_name``, the person's game handle (the game's\nidentity provider's primary account visible in scope; Steam: the persona name), the event's snapshot, the\ncanonical ``players.user.name``. ``canonical`` builds the profile link (``None``: nobody to link to);\n``snapshot`` is set only when it names the person differently from what is shown.",
+      "description": "How a person is named on a surface owned by one game (docs/users-identity.md \u00a73.6).\n\n``name`` + ``tag`` is the first of: the person's VERIFIED game handle, the workspace's ``display_name``, an\nunverified game handle, the event's snapshot, the canonical ``players.user.name``. The game handle is the game's\nidentity provider's account visible in scope (Steam: the persona name). ``canonical`` builds the profile link\n(``None``: nobody to link to); ``snapshot`` is set only when it names the person differently from what is shown.",
       "properties": {
         "canonical": {
           "anyOf": [

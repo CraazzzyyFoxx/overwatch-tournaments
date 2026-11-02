@@ -179,6 +179,7 @@ class DisciplineMetadataTests(IsolatedAsyncioTestCase):
                 "native_rank_collection": True,
                 "native_ladder": True,
                 "match_fetch": False,
+                "log_upload": True,
                 "achievement_conditions": True,
                 "analytics": True,
             },
@@ -190,6 +191,7 @@ class DisciplineMetadataTests(IsolatedAsyncioTestCase):
                 "native_rank_collection": True,
                 "native_ladder": True,
                 "match_fetch": False,
+                "log_upload": False,
                 "achievement_conditions": False,
                 "analytics": False,
             },
@@ -476,6 +478,7 @@ class DisciplineMetadataTests(IsolatedAsyncioTestCase):
             start_jobs=spy("start_jobs"),
             collection_handlers={"rank.collect": spy("rank.collect")},
             match_fetchers={"probe": spy("match_fetch")},
+            ingestors={"upload": spy("upload")},
         )
         with patch.dict(discipline_service.DISCIPLINES, {"overwatch": probed}):
             listed = await self.list("all")
@@ -492,6 +495,7 @@ class DisciplineMetadataTests(IsolatedAsyncioTestCase):
             analytics=None,
             native_ladder=(),
             collection_handlers={"impact.recompute_baselines": lambda *_: None},
+            ingestors={"discord": lambda *_: None},  # another source is not a file upload
         )
         with patch.dict(discipline_service.DISCIPLINES, {"overwatch": bare}):
             capabilities = (await self.metadata("overwatch", "all"))["data"]["discipline"]["capabilities"]
@@ -501,6 +505,7 @@ class DisciplineMetadataTests(IsolatedAsyncioTestCase):
                 "native_rank_collection": False,  # another collection handler is not rank collection
                 "native_ladder": False,
                 "match_fetch": False,
+                "log_upload": False,
                 "achievement_conditions": False,
                 "analytics": False,
             },

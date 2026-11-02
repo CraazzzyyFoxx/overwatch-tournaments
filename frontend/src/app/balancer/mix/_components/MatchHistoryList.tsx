@@ -211,25 +211,29 @@ function MatchHistoryRow({
           }
         />
       ) : null}
-      {logUpload != null ? (
-        <LogUploadDialog
-          scope={{ customGameId: logUpload.customGameId, encounterId: match.id }}
-          onUploaded={logUpload.onUploaded}
-          trigger={
-            <Button type="button" variant="ghost" size="icon-sm" aria-label={tHistory("uploadLog")}>
-              <FileUp aria-hidden="true" />
-            </Button>
-          }
-        />
+      {logUpload?.fileUpload ? (
+        <IconTooltip control label={tHistory("uploadLog")}>
+          <LogUploadDialog
+            scope={{ customGameId: logUpload.customGameId, encounterId: match.id }}
+            onUploaded={logUpload.onUploaded}
+            trigger={
+              <Button type="button" variant="ghost" size="icon-sm" aria-label={tHistory("uploadLog")}>
+                <FileUp aria-hidden="true" />
+              </Button>
+            }
+          />
+        </IconTooltip>
       ) : null}
       {logUpload?.matchFetch ? (
         // Statistics only: the round's recorded result is never touched.
         <Dialog>
-          <DialogTrigger asChild>
-            <Button type="button" variant="ghost" size="icon-sm" aria-label={tHistory("importMatch")}>
-              <FileDown aria-hidden="true" />
-            </Button>
-          </DialogTrigger>
+          <IconTooltip control label={tHistory("importMatch")}>
+            <DialogTrigger asChild>
+              <Button type="button" variant="ghost" size="icon-sm" aria-label={tHistory("importMatch")}>
+                <FileDown aria-hidden="true" />
+              </Button>
+            </DialogTrigger>
+          </IconTooltip>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>{tHistory("importMatchTitle")}</DialogTitle>

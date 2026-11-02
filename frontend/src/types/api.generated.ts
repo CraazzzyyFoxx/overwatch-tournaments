@@ -12657,10 +12657,10 @@ export interface components {
          * PersonDisplayRead
          * @description How a person is named on a surface owned by one game (docs/users-identity.md §3.6).
          *
-         *     ``name`` + ``tag`` is the first of: the workspace's ``display_name``, the person's game handle (the game's
-         *     identity provider's primary account visible in scope; Steam: the persona name), the event's snapshot, the
-         *     canonical ``players.user.name``. ``canonical`` builds the profile link (``None``: nobody to link to);
-         *     ``snapshot`` is set only when it names the person differently from what is shown.
+         *     ``name`` + ``tag`` is the first of: the person's VERIFIED game handle, the workspace's ``display_name``, an
+         *     unverified game handle, the event's snapshot, the canonical ``players.user.name``. The game handle is the game's
+         *     identity provider's account visible in scope (Steam: the persona name). ``canonical`` builds the profile link
+         *     (``None``: nobody to link to); ``snapshot`` is set only when it names the person differently from what is shown.
          */
         "analytics.PersonDisplayRead": {
             /**
@@ -13075,6 +13075,8 @@ export interface components {
             analytics: boolean;
             /** Catalog Sync */
             catalog_sync: boolean;
+            /** Log Upload */
+            log_upload: boolean;
             /** Match Fetch */
             match_fetch: boolean;
             /** Native Ladder */
@@ -15220,10 +15222,10 @@ export interface components {
          * PersonDisplayRead
          * @description How a person is named on a surface owned by one game (docs/users-identity.md §3.6).
          *
-         *     ``name`` + ``tag`` is the first of: the workspace's ``display_name``, the person's game handle (the game's
-         *     identity provider's primary account visible in scope; Steam: the persona name), the event's snapshot, the
-         *     canonical ``players.user.name``. ``canonical`` builds the profile link (``None``: nobody to link to);
-         *     ``snapshot`` is set only when it names the person differently from what is shown.
+         *     ``name`` + ``tag`` is the first of: the person's VERIFIED game handle, the workspace's ``display_name``, an
+         *     unverified game handle, the event's snapshot, the canonical ``players.user.name``. The game handle is the game's
+         *     identity provider's account visible in scope (Steam: the persona name). ``canonical`` builds the profile link
+         *     (``None``: nobody to link to); ``snapshot`` is set only when it names the person differently from what is shown.
          */
         "balancer.PersonDisplayRead": {
             /**
@@ -17224,10 +17226,10 @@ export interface components {
          * PersonDisplayRead
          * @description How a person is named on a surface owned by one game (docs/users-identity.md §3.6).
          *
-         *     ``name`` + ``tag`` is the first of: the workspace's ``display_name``, the person's game handle (the game's
-         *     identity provider's primary account visible in scope; Steam: the persona name), the event's snapshot, the
-         *     canonical ``players.user.name``. ``canonical`` builds the profile link (``None``: nobody to link to);
-         *     ``snapshot`` is set only when it names the person differently from what is shown.
+         *     ``name`` + ``tag`` is the first of: the person's VERIFIED game handle, the workspace's ``display_name``, an
+         *     unverified game handle, the event's snapshot, the canonical ``players.user.name``. The game handle is the game's
+         *     identity provider's account visible in scope (Steam: the persona name). ``canonical`` builds the profile link
+         *     (``None``: nobody to link to); ``snapshot`` is set only when it names the person differently from what is shown.
          */
         "stats.PersonDisplayRead": {
             /**
@@ -19873,10 +19875,10 @@ export interface components {
          * PersonDisplayRead
          * @description How a person is named on a surface owned by one game (docs/users-identity.md §3.6).
          *
-         *     ``name`` + ``tag`` is the first of: the workspace's ``display_name``, the person's game handle (the game's
-         *     identity provider's primary account visible in scope; Steam: the persona name), the event's snapshot, the
-         *     canonical ``players.user.name``. ``canonical`` builds the profile link (``None``: nobody to link to);
-         *     ``snapshot`` is set only when it names the person differently from what is shown.
+         *     ``name`` + ``tag`` is the first of: the person's VERIFIED game handle, the workspace's ``display_name``, an
+         *     unverified game handle, the event's snapshot, the canonical ``players.user.name``. The game handle is the game's
+         *     identity provider's account visible in scope (Steam: the persona name). ``canonical`` builds the profile link
+         *     (``None``: nobody to link to); ``snapshot`` is set only when it names the person differently from what is shown.
          */
         "tournament.PersonDisplayRead": {
             /**
