@@ -20,7 +20,6 @@ from typing import Any
 
 import sqlalchemy as sa
 from loguru import logger
-from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
@@ -31,6 +30,8 @@ from shared.models import MatchSearch, MatchSearchStatus
 from shared.observability import observe_scheduled_job
 from shared.repository.encounter import EncounterGameRepository, EncounterTeamRepository
 from shared.repository.match_fetch import MatchFetchRepository
+from shared.repository.match_search import MatchSearchRepository
+from shared.repository.tournament import EncounterRepository
 from shared.services.distributed_lock import (
     DistributedLockUnavailable,
     acquire_distributed_lock,
@@ -50,9 +51,11 @@ LEADER_LOCK_KEY = "stats:match_search:leader"
 _DUE_PER_TICK = 20
 _REASON_LIMIT = 500
 
+_encounters = EncounterRepository()
 _fetches = MatchFetchRepository()
 _games = EncounterGameRepository()
 _teams = EncounterTeamRepository()
+_searches = MatchSearchRepository()
 _scheduler = IntervalScheduler(job_id="match_search_tick", label="Match search tick")
 
 
@@ -106,30 +109,11 @@ async def _enroll(session: AsyncSession, discipline: str, now: datetime) -> None
             ~sa.exists().where(MatchSearch.encounter_id == encounter.id),
         )
     )
-    await session.execute(
-        pg_insert(MatchSearch)
-        .from_select(["workspace_id", "discipline", "encounter_id", "next_attempt_at"], rounds)
-        .on_conflict_do_nothing(constraint="uq_match_search_encounter")
-    )
-
-
-async def _due_ids(session: AsyncSession, discipline: str, now: datetime) -> list[int]:
-    return list(
-        await session.scalars(
-            sa.select(MatchSearch.id)
-            .where(
-                MatchSearch.status == MatchSearchStatus.PENDING,
-                MatchSearch.next_attempt_at <= now,
-                MatchSearch.discipline == discipline,
-            )
-            .order_by(MatchSearch.next_attempt_at)
-            .limit(_DUE_PER_TICK)
-        )
-    )
+    await _searches.enroll(session, rounds)
 
 
 async def _locked(session: AsyncSession, search_id: int) -> MatchSearch | None:
-    row = await session.get(MatchSearch, search_id, with_for_update=True, populate_existing=True)
+    row = await _searches.get_for_update(session, search_id)
     return row if row is not None and row.status == MatchSearchStatus.PENDING else None
 
 
@@ -161,7 +145,8 @@ async def _round(
     session: AsyncSession, row: MatchSearch, provider: str
 ) -> tuple[int, MatchQuery, list[list[frozenset[str]]]] | MatchSearchStatus:
     """The round's game, query and linked teams, or the outcome that ends the search before asking anyone."""
-    encounter = await session.get(models.Encounter, row.encounter_id)
+    # A pickup round is mix-owned, so the tournament-only ``get`` would hide it.
+    encounter = await _encounters.get_any_owner(session, row.encounter_id)
     games = await _games.list_for_encounter(session, row.encounter_id)
     settled = await session.scalar(
         sa.select(
@@ -204,7 +189,7 @@ async def _round(
 
 async def _attempt(search_id: int, *, session_factory: Any, now: datetime) -> None:
     async with session_factory() as session:
-        row = await session.get(MatchSearch, search_id)
+        row = await _searches.get(session, search_id)
         if row is None or row.status != MatchSearchStatus.PENDING:
             return
         found = searcher_of(row.discipline)
@@ -285,7 +270,7 @@ async def _run_discipline(discipline: str, *, redis: Any, session_factory: Any, 
         async with session_factory() as session:
             await _enroll(session, discipline, now)
             await session.commit()
-            due = await _due_ids(session, discipline, now)
+            due = await _searches.due_ids(session, now=now, limit=_DUE_PER_TICK, discipline=discipline)
         for search_id in due:
             if not await renew_distributed_lock(redis, token, ttl_seconds=fetch.LEASE_SECONDS):
                 logger.warning("Match search lease for {} lost; the pass stops", discipline)

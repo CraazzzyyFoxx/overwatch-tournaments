@@ -722,7 +722,7 @@ async def search_tick(env, now=None):
     async with env.sf() as session:
         await search._enroll(session, "overwatch", moment)
         await session.commit()
-        due = await search._due_ids(session, "overwatch", moment)
+        due = await search._searches.due_ids(session, now=moment, limit=search._DUE_PER_TICK, discipline="overwatch")
     for search_id in due:
         await search._attempt(search_id, session_factory=env.sf, now=moment)
 
