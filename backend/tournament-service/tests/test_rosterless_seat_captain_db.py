@@ -176,3 +176,68 @@ class RosterlessSeatTests(EncounterLayerCase):
             {"Команда A": [("cap_a", "tank"), ("mem_a", "damage")], "Команда B": [("cap_b", "support")]}, by_name
         )
         self.assertTrue(all(isinstance(p, RosterlessTarget) for players in rosters.values() for p in players))
+
+    async def test_a_team_backed_seat_beside_a_rosterless_one_follows_the_live_team_captain(self) -> None:
+        # The team's captain was transferred after the seat was snapshotted: the old captain is still the snapshot's
+        # ``is_captain``, the new one is a plain snapshot member. Only ``Team.captain_id`` decides a team-backed seat.
+        async with self.Session() as s:
+            dimension = await s.scalar(
+                sa.select(RoleDimension.code).where(RoleDimension.discipline == "overwatch", RoleDimension.rated)
+            )
+            snapshots: dict[str, MemberSnapshot] = {}
+            for who, is_captain in (("old_cap", True), ("new_cap", False)):
+                account = AuthUser(
+                    email=f"{who}-{self.workspace_id}@example.test",
+                    username=f"{who}-{self.workspace_id}",
+                    is_active=True,
+                )
+                s.add(account)
+                await s.flush()
+                user = User(name=f"{who}-{self.workspace_id}", auth_user_id=account.id)
+                s.add(user)
+                await s.flush()
+                member = WorkspaceMember(workspace_id=self.workspace_id, player_id=user.id)
+                s.add(member)
+                await s.flush()
+                self.accounts[who] = account
+                setattr(self, f"{who}_user_id", user.id)
+                snapshots[who] = MemberSnapshot(
+                    workspace_member_id=member.id,
+                    display_name=user.name,
+                    rank=3000,
+                    is_substitute=False,
+                    roles=((dimension, "tank"),),
+                    is_captain=is_captain,
+                )
+            rosterless_captain = MemberSnapshot(
+                workspace_member_id=await s.scalar(
+                    sa.select(WorkspaceMember.id).where(WorkspaceMember.player_id == self.cap_c_user_id)
+                ),
+                display_name="cap_c",
+                rank=3000,
+                is_substitute=False,
+                roles=((dimension, "damage"),),
+                is_captain=True,
+            )
+            await s.execute(sa.update(Team).where(Team.id == self.teams[1]).values(captain_id=self.new_cap_user_id))
+            tournament = await s.get_one(Tournament, self.tournament_id)
+            mixed = await add_encounter(s, tournament, self.rule_id, teams=[None, None], stage_id=self.stage_id)
+            await place_team(s, mixed, slot=1, team_id=None, name="Команда C", seed=None, members=[rosterless_captain])
+            await place_team(
+                s,
+                mixed,
+                slot=2,
+                team_id=self.teams[1],
+                name="t1",
+                seed=None,
+                members=[snapshots["old_cap"], snapshots["new_cap"]],
+            )
+            await s.commit()
+            encounter = await s.get_one(Encounter, mixed.id)
+            seat, player_id = await captain_service.captain_seat(s, self.accounts["new_cap"], encounter)
+            self.assertEqual((self.teams[1], self.new_cap_user_id), (seat.team_id, player_id))
+            with self.assertRaises(BaseAPIException) as refused:
+                await captain_service.captain_seat(s, self.accounts["old_cap"], encounter)
+            self.assertEqual(403, refused.exception.status_code)
+            rosterless_seat, _ = await captain_service.captain_seat(s, self.accounts["cap_c"], encounter)
+            self.assertIsNone(rosterless_seat.team_id)

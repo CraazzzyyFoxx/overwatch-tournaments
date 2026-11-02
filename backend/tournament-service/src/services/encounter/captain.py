@@ -200,7 +200,8 @@ class CaptainService:
                 )
             ).first()
             for seat in seats:
-                if row is not None and seat.id == row.encounter_team_id:
+                # A team-backed tournament seat is always the live ``Team.captain_id``'s, never its snapshot's.
+                if row is not None and seat.id == row.encounter_team_id and (is_mix or seat.team_id is None):
                     return seat, player.id, bool(row.is_captain), row.id if is_mix else None
         if not is_mix:
             team_ids = [seat.team_id for seat in seats if seat.team_id is not None]
