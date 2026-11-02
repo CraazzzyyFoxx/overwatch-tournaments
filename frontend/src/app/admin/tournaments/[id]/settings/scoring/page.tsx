@@ -2,7 +2,6 @@
 
 import { useTranslations } from "next-intl";
 
-import { NumberInput } from "@/components/ui/number-input";
 import { Switch } from "@/components/ui/switch";
 import { SaveBar } from "@/components/kit/SaveBar";
 import { SettingGroup, SettingRow } from "@/components/kit/SettingRow";
@@ -11,9 +10,8 @@ import { SettingsSectionPage } from "../SettingsSection";
 import { useTournamentSettingsForm } from "../useTournamentSettingsForm";
 
 /**
- * What a result is worth, and the two flags that decide how the tournament is
- * counted: split out of the old "Rules & scoring" page, which mixed an
- * authored document with a points table nobody edits in the same sitting.
+ * The flags that decide how the tournament is counted. Points per result
+ * are set per stage, in the bracket's stage settings.
  */
 export default function ScoringSettingsPage() {
   return (
@@ -44,39 +42,6 @@ function ScoringForm({
   return (
     <>
       <div className="flex flex-col gap-4">
-        <SettingGroup id="points" title={t("points")}>
-          <SettingRow htmlFor="settings-win-points" label={t("win")}>
-            <NumberInput
-              id="settings-win-points"
-              value={form.win_points}
-              disabled={disabled}
-              onValueChange={(next) => patch({ win_points: next ?? 0 })}
-              size="sm"
-              className="w-24"
-            />
-          </SettingRow>
-          <SettingRow htmlFor="settings-draw-points" label={t("draw")}>
-            <NumberInput
-              id="settings-draw-points"
-              value={form.draw_points}
-              disabled={disabled}
-              onValueChange={(next) => patch({ draw_points: next ?? 0 })}
-              size="sm"
-              className="w-24"
-            />
-          </SettingRow>
-          <SettingRow htmlFor="settings-loss-points" label={t("loss")}>
-            <NumberInput
-              id="settings-loss-points"
-              value={form.loss_points}
-              disabled={disabled}
-              onValueChange={(next) => patch({ loss_points: next ?? 0 })}
-              size="sm"
-              className="w-24"
-            />
-          </SettingRow>
-        </SettingGroup>
-
         <SettingGroup id="results" title={t("results")}>
           <SettingRow htmlFor="settings-is-league" label={t("league")}>
             <Switch

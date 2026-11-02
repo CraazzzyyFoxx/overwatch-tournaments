@@ -361,12 +361,16 @@ def _tiebreak_order(stage: models.Stage, *, rules: ScoringRules | None = None) -
     return normalize_tiebreak_order(preset, ffa_columns=columns)
 
 
-def _scoring(stage: models.Stage, tournament: models.Tournament) -> tuple[float, float, float]:
-    """Points per win/draw/loss: the stage's own where it set one, else the tournament's."""
+#: Points per win/draw/loss where the stage sets none.
+DEFAULT_WIN_POINTS, DEFAULT_DRAW_POINTS, DEFAULT_LOSS_POINTS = 1.0, 0.5, 0.0
+
+
+def _scoring(stage: models.Stage) -> tuple[float, float, float]:
+    """Points per win/draw/loss: the stage's own where it set one, else the defaults."""
     return (
-        tournament.win_points if stage.win_points is None else stage.win_points,
-        tournament.draw_points if stage.draw_points is None else stage.draw_points,
-        tournament.loss_points if stage.loss_points is None else stage.loss_points,
+        DEFAULT_WIN_POINTS if stage.win_points is None else stage.win_points,
+        DEFAULT_DRAW_POINTS if stage.draw_points is None else stage.draw_points,
+        DEFAULT_LOSS_POINTS if stage.loss_points is None else stage.loss_points,
     )
 
 
@@ -813,7 +817,6 @@ def _stage_item_team_ids(stage_item: models.StageItem | None) -> list[int]:
 
 
 def rank_group(
-    tournament: models.Tournament,
     stage: models.Stage,
     stage_item: models.StageItem | None,
     encounters: typing.Sequence[StageEncounter],
@@ -827,7 +830,7 @@ def rank_group(
     that found the previous round closed -- never the stored table, which the
     standings job may have ranked a moment before that round's last result.
     """
-    win_points, draw_points, loss_points = _scoring(stage, tournament)
+    win_points, draw_points, loss_points = _scoring(stage)
     return prepare_teams_for_groups(
         encounters,
         seed_team_ids=_stage_item_team_ids(stage_item),
@@ -854,7 +857,7 @@ def _build_group_stage_standings(
 
     tiebreak_order = _tiebreak_order(stage)
     thresholds = SwissThresholds.of(stage) if stage.stage_type == StageType.SWISS else SwissThresholds()
-    teams = rank_group(tournament, stage, stage_item, encounters, bye_counts=bye_counts)
+    teams = rank_group(stage, stage_item, encounters, bye_counts=bye_counts)
     # Pinned after ranking, never inside ``rank_group``: that one also feeds the
     # Swiss pairing, which must pair on real results.
     teams, pinned = _pin_group_table(teams, pins, tiebreak_order=tiebreak_order)

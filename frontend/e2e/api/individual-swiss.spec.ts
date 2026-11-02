@@ -1,7 +1,7 @@
 import { poll } from "../support/api";
 import { expect, test } from "../support/fixtures";
 import { battleTag, generateStage, listEncounters, openRegistration, rankRegistration, registerSelf, type FormSchema, type Registration, type Stage, type TournamentJob } from "../support/flows";
-import { reportSeries, series, setPoints } from "../support/results";
+import { reportSeries, series } from "../support/results";
 import { createTournament, createWorkspace, setStatus } from "../support/seed";
 import { draftBoard, type DraftBoard, type DraftSession } from "../support/team-formation";
 import type { TestUser } from "../support/users";
@@ -108,14 +108,13 @@ test("individual swiss: single-role pool → rounds by captains → personal tab
     await setStatus(adminApi, tid, "check_in");
     await setStatus(adminApi, tid, "live");
     expect((await anonApi.get<{ status: string }>(`/api/v1/tournaments/${tid}`)).status).toBe("live");
-    await setPoints(adminApi, tid, 3, 1, 0);
   });
 
   let stage: Stage;
   await test.step("4a — stage individual_swiss is created with its settings", async () => {
     stage = await adminApi.post<Stage & { pairing_mode: string; playoff_team_count: number; max_rounds: number }>(
       `/api/v1/admin/stages/tournament/${tid}`,
-      { name: "Swiss", stage_type: "individual_swiss", best_of: { default: 3 }, order: 0, max_rounds: ROUNDS, playoff_team_count: PLAYOFF_TEAMS },
+      { name: "Swiss", stage_type: "individual_swiss", best_of: { default: 3 }, order: 0, max_rounds: ROUNDS, playoff_team_count: PLAYOFF_TEAMS, scoring: { win: 3, draw: 1, loss: 0 } },
       201
     );
     expect(stage).toMatchObject({ stage_type: "individual_swiss", pairing_mode: "score", playoff_team_count: PLAYOFF_TEAMS, max_rounds: ROUNDS });

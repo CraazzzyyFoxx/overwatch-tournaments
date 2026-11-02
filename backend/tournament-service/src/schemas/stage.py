@@ -92,7 +92,7 @@ class StageScoring(BaseModel):
     """How a stage scores, at all three levels.
 
     ``win``/``draw``/``loss`` are level 3: what one encounter's result pays in
-    the stage table; ``None`` = the tournament's points. The rest is the
+    the stage table; ``None`` = the default (1 / 0.5 / 0). The rest is the
     ``encounter.scoring_rule`` every encounter of the stage is played and
     ranked by -- ``wins`` is a Bo-N series, ``points`` a lobby scored by the
     organizer's own columns.

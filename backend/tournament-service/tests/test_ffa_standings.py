@@ -44,7 +44,7 @@ TEAM_A, TEAM_B, TEAM_C, TEAM_D = 10, 20, 30, 40
 
 
 def _tournament() -> SimpleNamespace:
-    return SimpleNamespace(id=99, win_points=1.0, draw_points=0.5, loss_points=0.0)
+    return SimpleNamespace(id=99)
 
 
 def _stage(**overrides: object) -> SimpleNamespace:

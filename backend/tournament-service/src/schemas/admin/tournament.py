@@ -41,9 +41,6 @@ class TournamentCreate(BaseModel):
     allow_late_registration: bool = False
     # Owner policy for canonical match ingest; false unless the authorized organizer sets it.
     logs_official: bool = False
-    win_points: float = 1.0
-    draw_points: float = 0.5
-    loss_points: float = 0.0
     division_grid_version_id: int | None = None
     # None = the snake default. Normalized by DraftFormatField, so the column
     # never stores round rules a non-custom format would ignore.
@@ -71,9 +68,6 @@ class TournamentUpdate(BaseModel):
     logs_official: bool | None = None
     # 900 is Twitch's maximum broadcast delay; the column carries the same CHECK.
     pov_stream_delay_s: int | None = Field(default=None, ge=0, le=900)
-    win_points: float | None = None
-    draw_points: float | None = None
-    loss_points: float | None = None
     division_grid_version_id: int | None = None
     draft_format_json: DraftFormatField = None
 

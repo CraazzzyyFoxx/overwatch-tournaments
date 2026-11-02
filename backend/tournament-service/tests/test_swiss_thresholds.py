@@ -129,7 +129,7 @@ class StandingsStatusTests(TestCase):
         )
 
     def test_a_bye_counts_toward_qualifying_and_a_draw_is_not_a_loss(self) -> None:
-        tournament = models.Tournament(id=1, win_points=1.0, draw_points=0.5, loss_points=0.0)
+        tournament = models.Tournament(id=1)
         stage = models.Stage(
             id=7,
             stage_type=enums.StageType.SWISS,

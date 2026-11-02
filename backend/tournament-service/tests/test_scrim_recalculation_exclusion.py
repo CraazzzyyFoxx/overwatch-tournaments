@@ -205,9 +205,6 @@ class _Fixture:
             # A lazily provisioned scrim container never gets a start date; a real
             # tournament always has one.
             start_date=datetime(2026, 1, 1, tzinfo=UTC) if dated else None,
-            win_points=1.0,
-            draw_points=0.5,
-            loss_points=0.0,
         )
         return tournament_id
 

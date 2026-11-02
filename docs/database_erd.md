@@ -13,7 +13,7 @@ baselines and Discord channels live in `stats/`. `catalog/` writes only to `cata
 > `--check` and fails on drift, so the diagrams cannot fall behind the models again.
 
 <!-- ERD:auto _alembic_head -->
-Alembic head: **`iswiss02`** (165 revisions in `backend/migrations/versions/`).
+Alembic head: **`stagepts01`** (166 revisions in `backend/migrations/versions/`).
 <!-- /ERD:auto -->
 
 **Reading the diagrams**
@@ -1393,9 +1393,6 @@ erDiagram
         boolean discord_dms_enabled
         boolean logs_official
         int pov_stream_delay_s
-        float win_points
-        float draw_points
-        float loss_points
         bigint division_grid_version_id FK "nullable"
         jsonb draft_format_json "nullable"
         varchar cover_image_url "nullable"

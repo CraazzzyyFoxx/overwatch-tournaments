@@ -158,7 +158,6 @@ class StageGenerationMixin(StageServiceBase):
         # standings job hands in the very encounters it ranked and closed the
         # round on, so pairing and gate see one snapshot. A result committing
         # after it bumps the generation and gets a job of its own.
-        tournament = await session.get_one(models.Tournament, stage.tournament_id)
         stage_item = next((item for item in stage.items if item.id == stage_item_id), None)
         byes = Counter(await swiss_bye_team_ids(session, stage_id, stage_item_id))
         swiss_standings = [
@@ -169,7 +168,7 @@ class StageGenerationMixin(StageServiceBase):
                 wins=team.wins + byes[team.team_id],
                 losses=team.loses,
             )
-            for team in rank_group(tournament, stage, stage_item, encounters, bye_counts=byes)
+            for team in rank_group(stage, stage_item, encounters, bye_counts=byes)
         ]
 
         return swiss_standings, swiss_played_pairs, swiss_round

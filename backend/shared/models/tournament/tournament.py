@@ -1,7 +1,7 @@
 import typing
 from datetime import datetime
 
-from sqlalchemy import Boolean, CheckConstraint, Enum, Float, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, CheckConstraint, Enum, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -120,9 +120,6 @@ class Tournament(db.TimeStampIntegerMixin):
     # Broadcast delay participants run on their POV streams, in seconds, so a stream's chapter timestamps land
     # on the moment viewers saw rather than the moment it was played. 900 is Twitch's maximum delay.
     pov_stream_delay_s: Mapped[int] = mapped_column(Integer(), default=0, server_default="0", nullable=False)
-    win_points: Mapped[float] = mapped_column(Float(), default=1.0, server_default="1.0", nullable=False)
-    draw_points: Mapped[float] = mapped_column(Float(), default=0.5, server_default="0.5", nullable=False)
-    loss_points: Mapped[float] = mapped_column(Float(), default=0.0, server_default="0.0", nullable=False)
     division_grid_version_id: Mapped[int | None] = mapped_column(
         ForeignKey("division_grid_version.id", ondelete="SET NULL"),
         nullable=True,

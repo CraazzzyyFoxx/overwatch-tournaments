@@ -328,7 +328,6 @@ export function ladder([p1, p2, p3, p4]: number[]): Result[] {
 export async function seedGroupsToPlayoffs(api: Api) {
   const workspace = await createWorkspace(api);
   const tournament = await createTournament(api, workspace.id);
-  await setPoints(api, tournament.id, 3, 1, 0);
   const teams = await seedTeams(api, tournament.id, 8, { players: false });
   const created = await createStage(
     api,
@@ -336,6 +335,7 @@ export async function seedGroupsToPlayoffs(api: Api) {
     teams.map((t) => t.id),
     { stageType: "round_robin", groups: 2, bestOf: 1, extra: { advance_count: 2 } }
   );
+  await setPoints(api, created.id, 3, 1, 0);
   await generateStage(api, created.id);
   const playoff = await api.post<Stage>(
     `/api/v1/admin/stages/tournament/${tournament.id}`,

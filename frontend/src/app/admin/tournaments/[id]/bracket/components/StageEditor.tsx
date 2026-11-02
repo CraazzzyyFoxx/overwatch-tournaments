@@ -466,14 +466,7 @@ export function StageEditor({
             ) : null}
 
             {ranksTable ? (
-              <TiebreakersSection
-                stage={stage}
-                form={form}
-                onChange={patchForm}
-                winPointsDefault={tournament?.win_points ?? 1}
-                drawPointsDefault={tournament?.draw_points ?? 0.5}
-                lossPointsDefault={tournament?.loss_points ?? 0}
-              />
+              <TiebreakersSection stage={stage} form={form} onChange={patchForm} />
             ) : null}
 
             <BestOfSection

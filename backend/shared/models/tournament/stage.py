@@ -121,8 +121,8 @@ class Stage(db.TimeStampIntegerMixin):
     is_completed: Mapped[bool] = mapped_column(Boolean(), default=False, server_default="false")
 
     # ── Regulation. NULL means "not set here": the engine falls back to the
-    # tournament (points), the stage type's preset (ranking) or the win points
-    # (a Swiss bye).
+    # default points (1 / 0.5 / 0), the stage type's preset (ranking) or the win
+    # points (a Swiss bye).
     #: A ``RULE_PRESET_DEFAULTS`` key; NULL = chosen by ``stage_type``.
     ranking_preset: Mapped[str | None] = mapped_column(String(), nullable=True)
     #: The tiebreak metrics in order; NULL = the preset's order.

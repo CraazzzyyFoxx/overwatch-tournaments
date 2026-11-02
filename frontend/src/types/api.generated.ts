@@ -21980,11 +21980,6 @@ export interface components {
                 [key: string]: unknown;
             } | null;
             /**
-             * Draw Points
-             * @default 0.5
-             */
-            draw_points: number;
-            /**
              * End Date
              * Format: date-time
              */
@@ -22020,11 +22015,6 @@ export interface components {
              * @default false
              */
             logs_official: boolean;
-            /**
-             * Loss Points
-             * @default 0
-             */
-            loss_points: number;
             /** Name */
             name: string;
             /** Participants Count */
@@ -22084,11 +22074,6 @@ export interface components {
              * @default null
              */
             teams_count: number | null;
-            /**
-             * Win Points
-             * @default 1
-             */
-            win_points: number;
             /** Workspace Id */
             workspace_id: number;
         };
@@ -31219,7 +31204,7 @@ export interface components {
          * @description How a stage scores, at all three levels.
          *
          *     ``win``/``draw``/``loss`` are level 3: what one encounter's result pays in
-         *     the stage table; ``None`` = the tournament's points. The rest is the
+         *     the stage table; ``None`` = the default (1 / 0.5 / 0). The rest is the
          *     ``encounter.scoring_rule`` every encounter of the stage is played and
          *     ranked by -- ``wins`` is a Bo-N series, ``points`` a lobby scored by the
          *     organizer's own columns.
@@ -31859,11 +31844,6 @@ export interface components {
                 [key: string]: unknown;
             } | null;
             /**
-             * Draw Points
-             * @default 0.5
-             */
-            draw_points: number;
-            /**
              * End Date
              * Format: date
              */
@@ -31883,11 +31863,6 @@ export interface components {
              * @default false
              */
             logs_official: boolean;
-            /**
-             * Loss Points
-             * @default 0
-             */
-            loss_points: number;
             /** Name */
             name: string;
             /**
@@ -31907,11 +31882,6 @@ export interface components {
              * @default balancer
              */
             team_formation: string;
-            /**
-             * Win Points
-             * @default 1
-             */
-            win_points: number;
             /** Workspace Id */
             workspace_id: number;
         };
@@ -32116,11 +32086,6 @@ export interface components {
                 [key: string]: unknown;
             } | null;
             /**
-             * Draw Points
-             * @default null
-             */
-            draw_points: number | null;
-            /**
              * End Date
              * @default null
              */
@@ -32145,11 +32110,6 @@ export interface components {
              * @default null
              */
             logs_official: boolean | null;
-            /**
-             * Loss Points
-             * @default null
-             */
-            loss_points: number | null;
             /**
              * Name
              * @default null
@@ -32180,11 +32140,6 @@ export interface components {
              * @default null
              */
             team_formation: string | null;
-            /**
-             * Win Points
-             * @default null
-             */
-            win_points: number | null;
         };
         /**
          * WireFromGroupsRequest

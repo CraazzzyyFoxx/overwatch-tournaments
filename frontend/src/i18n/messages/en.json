@@ -10091,10 +10091,10 @@
       "regularBestOf": "Regular (default Bo{bo})",
       "swissRoundsShort": "Not every team can reach a verdict: the stage's round cap ({rounds}) is below the {needed} rounds it can take.",
       "swissHalfMismatch": "With equal thresholds exactly half of a group qualifies, but {group} advances {advance} of {size}.",
-      "winOverride": "Win points override",
-      "drawOverride": "Draw points override",
-      "lossOverride": "Loss points override",
-      "pointsHelp": "An empty field uses the tournament's value, shown in the field.",
+      "winOverride": "Win points",
+      "drawOverride": "Draw points",
+      "lossOverride": "Loss points",
+      "pointsHelp": "An empty field uses the default, shown in the field.",
       "tiebreakOrder": "Tiebreaker evaluation order",
       "resetDefaults": "Reset to preset defaults",
       "useMetric": "Use {metric}",
@@ -10306,7 +10306,7 @@
       "sections": {
         "general": "General",
         "rules": "Rules",
-        "scoring": "Scoring",
+        "scoring": "Results",
         "schedule": "Schedule",
         "roster": "Roster shape",
         "draft": "Draft format",
@@ -10615,10 +10615,6 @@
       "phaseEndTime": "{phase} end time"
     },
     "scoring": {
-      "points": "Points per result",
-      "win": "Win",
-      "draw": "Draw",
-      "loss": "Loss",
       "results": "Results",
       "league": "Treat as league season",
       "finished": "Mark tournament as finished",
@@ -13728,7 +13724,7 @@
       "breadcrumbRanks": "Ranks",
       "breadcrumbQuota": "Quota",
       "breadcrumbRegistrationForms": "Registration forms",
-      "breadcrumbScoring": "Scoring",
+      "breadcrumbScoring": "Results",
       "breadcrumbAdmission": "Admission",
       "breadcrumbUnknown": "Unknown section",
       "breadcrumbNew": "New"

@@ -193,7 +193,7 @@ const SWISS_ORDER = ["points", "median_buchholz", "buchholz", "match_wins", "sco
 test.describe("round robin", () => {
   test("4 teams: every pair once over 3 rounds; a half-played round counts for nobody; head-to-head splits teams level on points", async ({ adminApi }) => {
     const seed = await seedBracket(adminApi, { teams: 4, stageType: "round_robin", bestOf: 1, players: false });
-    await setPoints(adminApi, seed.tournament.id, POINTS.win, POINTS.draw, POINTS.loss);
+    await setPoints(adminApi, seed.stage.id, POINTS.win, POINTS.draw, POINTS.loss);
     const teams = seedOrder(seed.stage);
     const [a, b, c, d] = teams;
     const all = seed.encounters;
@@ -230,8 +230,6 @@ test.describe("round robin", () => {
       players: false,
       stage: { tiebreak_order: order, scoring: { win: POINTS.win, draw: POINTS.draw, loss: POINTS.loss } },
     });
-    // The tournament pays differently; a stage that sets its own points overrides it.
-    await setPoints(adminApi, seed.tournament.id, 2, 0.5, 0);
     const teams = seedOrder(seed.stage);
     const all = seed.encounters;
     expect(all.map((e) => pairKey(...seats(e))).sort(), "every pair meets exactly once").toEqual(allPairs(teams));
@@ -281,7 +279,7 @@ async function swissRound(api: Api, tournamentId: number, stageId: number, round
 test.describe("swiss", () => {
   test("8 teams, 3 rounds: Monrad round 1, pairing inside score groups, no rematch, a Buchholz-ordered table", async ({ adminApi }) => {
     const seed = await seedBracket(adminApi, { teams: 8, stageType: "swiss", bestOf: 1, players: false, stage: { max_rounds: 3 } });
-    await setPoints(adminApi, seed.tournament.id, POINTS.win, POINTS.draw, POINTS.loss);
+    await setPoints(adminApi, seed.stage.id, POINTS.win, POINTS.draw, POINTS.loss);
     const seeds = seedOrder(seed.stage);
     const s = (rank: number) => seeds[rank - 1];
     const favourite = seededPick(seeds);
@@ -326,7 +324,7 @@ test.describe("swiss", () => {
 
   test("7 teams: one bye a round to the lowest team without one, never twice, worth a win", async ({ adminApi }) => {
     const seed = await seedBracket(adminApi, { teams: 7, stageType: "swiss", bestOf: 1, players: false, stage: { max_rounds: 3 } });
-    await setPoints(adminApi, seed.tournament.id, POINTS.win, POINTS.draw, POINTS.loss);
+    await setPoints(adminApi, seed.stage.id, POINTS.win, POINTS.draw, POINTS.loss);
     const seeds = seedOrder(seed.stage);
     const favourite = seededPick(seeds);
     const byes = new Map<number, number>();
@@ -516,7 +514,7 @@ test("best-of: games sum to the series score, a Bo3 cannot be claimed 2:2, a for
     players: false,
     stage: { best_of: { default: 3, by_round: { 2: 5 } }, tiebreak_order: order },
   });
-  await setPoints(adminApi, seed.tournament.id, POINTS.win, POINTS.draw, POINTS.loss);
+  await setPoints(adminApi, seed.stage.id, POINTS.win, POINTS.draw, POINTS.loss);
   const teams = seedOrder(seed.stage);
   const all = seed.encounters;
   expect(all.map((e) => [e.round, e.best_of]), "round 2 is a Bo5, the others Bo3").toEqual(all.map((e) => [e.round, e.round === 2 ? 5 : 3]));

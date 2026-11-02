@@ -305,9 +305,6 @@ export interface TournamentCreateInput {
   start_date: string;
   end_date: string;
   auto_transitions_enabled?: boolean;
-  win_points?: number;
-  draw_points?: number;
-  loss_points?: number;
   division_grid_version_id?: number | null;
 }
 
@@ -331,9 +328,6 @@ export interface TournamentUpdateInput {
   discord_dms_enabled?: boolean;
   logs_official?: boolean;
   pov_stream_delay_s?: number;
-  win_points?: number;
-  draw_points?: number;
-  loss_points?: number;
   division_grid_version_id?: number | null;
   /** Draft format rule; `null` clears it back to snake. */
   draft_format_json?: DraftFormatSettings | null;

@@ -81,9 +81,6 @@ function makeTournament(status: TournamentStatus): Tournament {
         ends_at: "2024-08-10T10:00:00.000Z"
       }
     ],
-    win_points: 1,
-    draw_points: 0.5,
-    loss_points: 0,
     stages: [],
     participants_count: 70,
     registrations_count: 75,

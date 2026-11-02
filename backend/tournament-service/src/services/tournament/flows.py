@@ -199,9 +199,6 @@ class TournamentFlowsService:
                 schemas.TournamentPhaseScheduleRead.model_validate(row, from_attributes=True)
                 for row in _loaded_relationship(tournament, "phase_schedule") or []
             ],
-            win_points=tournament.win_points,
-            draw_points=tournament.draw_points,
-            loss_points=tournament.loss_points,
             division_grid_version_id=tournament.division_grid_version_id,
             division_grid_version=division_grid_version,
             discipline=tournament.discipline,

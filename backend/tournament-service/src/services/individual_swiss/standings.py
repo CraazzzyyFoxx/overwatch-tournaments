@@ -133,7 +133,7 @@ async def recalculate_individual_stage(
     if not rows:
         return False
     shape = (await tournament_slot_shape(session, tournament.id)).slots
-    win, draw, loss = _scoring(stage, tournament)
+    win, draw, loss = _scoring(stage)
     totals = compute_totals(
         [row.workspace_member_id for row in rows],
         await _confirmed_results(session, stage.id, {row.workspace_member_id for row in rows}),

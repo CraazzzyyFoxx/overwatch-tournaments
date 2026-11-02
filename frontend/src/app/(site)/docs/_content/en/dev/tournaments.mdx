@@ -125,7 +125,7 @@ Standings are computed per stage and served from `GET /api/v1/tournaments/{id}/s
 
 The central rule: **only fully closed rounds are counted**. A round is playable when both teams in it are known; if even one playable encounter in that round is still open, the whole round is excluded. Otherwise a team's form would run ahead of its own wins and losses.
 
-Points come from the tournament — `win_points` (1.0 by default), `draw_points` (0.5), `loss_points` (0.0) — and may be overridden per stage by its `scoring` field (`win`, `draw`, `loss`; a `null` member inherits the tournament's value). A Swiss `bye` scores a win by default; the stage's `swiss_bye_points` sets its own value.
+Points are set on the stage by its `scoring` field (`win`, `draw`, `loss`); a `null` member takes the default: 1.0 for a win, 0.5 for a draw, 0.0 for a loss. A Swiss `bye` scores a win by default; the stage's `swiss_bye_points` sets its own value.
 
 A standings row carries `position`, `overall_position`, `matches`, `win`, `draw`, `lose`, `points`, `buchholz` (the trimmed, median one), `full_buchholz` (the untrimmed sum), `score_differential`, `tie_group`, `is_pinned`, `swiss_status` (`qualified` / `eliminated` once a Swiss threshold is reached, otherwise `null`), plus `tiebreak_order` and `source_rule_profile` — the order that was actually applied and the preset it came from.
 

@@ -219,7 +219,7 @@ function Harness() {
 async function mount(search = "", stages: Stage[] = [groupStage(), playoffStage()]) {
   currentSearch = search;
   getStages.mockResolvedValue(stages);
-  getTournament.mockResolvedValue({ id: 84, name: "Cup", win_points: 1 });
+  getTournament.mockResolvedValue({ id: 84, name: "Cup" });
   getStagesProgress.mockResolvedValue([]);
   getTeams.mockResolvedValue({ results: [{ id: 1, name: "Team One" }] });
 

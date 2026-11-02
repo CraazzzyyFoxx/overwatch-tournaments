@@ -1,7 +1,7 @@
 -- Anak Tournaments — PostgreSQL DDL compiled from SQLAlchemy metadata.
 -- Open in any SQL editor (DataGrip, DBeaver, VS Code).
 -- Runtime mappings only, not a complete physical-database dump.
--- Tables: 164
+-- Tables: 168
 -- Source of truth is backend/shared/models. Regenerate: python scripts/export_db_schema.py
 
 CREATE SCHEMA IF NOT EXISTS achievements;
@@ -19,6 +19,7 @@ CREATE SCHEMA IF NOT EXISTS realtime;
 CREATE SCHEMA IF NOT EXISTS registration;
 CREATE SCHEMA IF NOT EXISTS roster;
 CREATE SCHEMA IF NOT EXISTS stats;
+CREATE SCHEMA IF NOT EXISTS stream;
 CREATE SCHEMA IF NOT EXISTS subscriptions;
 CREATE SCHEMA IF NOT EXISTS tournament;
 
@@ -35,10 +36,11 @@ CREATE TYPE encounter.encounterresultauditaction AS ENUM ('confirm', 'reopen', '
 CREATE TYPE ck_ingest_job_raw_status AS ENUM ('available', 'missing', 'conflict', 'unverified');
 CREATE TYPE ck_ingest_job_status AS ENUM ('pending', 'processing', 'awaiting_link', 'done', 'failed');
 CREATE TYPE ck_match_fetch_status AS ENUM ('pending', 'done', 'failed');
+CREATE TYPE ck_match_search_status AS ENUM ('pending', 'found', 'not_found', 'stopped');
 CREATE TYPE tournament.pickbanmode AS ENUM ('pool', 'slots');
 CREATE TYPE tournament.pickbanfirstpickrule AS ENUM ('higher_seed');
 CREATE TYPE tournament.pickbanrotation AS ENUM ('fixed', 'alternate', 'result_winner_first', 'result_loser_first', 'result_loser_choice');
-CREATE TYPE tournament.stagetype AS ENUM ('round_robin', 'single_elimination', 'double_elimination', 'swiss', 'ffa_league');
+CREATE TYPE tournament.stagetype AS ENUM ('round_robin', 'single_elimination', 'double_elimination', 'swiss', 'ffa_league', 'individual_swiss');
 CREATE TYPE tournament.stageitemtype AS ENUM ('group', 'bracket_upper', 'bracket_lower', 'single_bracket');
 CREATE TYPE tournament.stageiteminputtype AS ENUM ('final', 'tentative', 'empty');
 CREATE TYPE tournament.tournamentstatus AS ENUM ('announcement', 'registration', 'draft', 'check_in', 'live', 'playoffs', 'completed', 'archived');
@@ -508,6 +510,8 @@ CREATE TABLE auth.refresh_token (
 	FOREIGN KEY(user_id) REFERENCES auth."user" (id) ON DELETE CASCADE
 );
 
+CREATE INDEX ix_auth_refresh_token_expires_at ON auth.refresh_token (expires_at);
+
 CREATE INDEX ix_auth_refresh_token_session_id ON auth.refresh_token (session_id);
 
 CREATE UNIQUE INDEX ix_auth_refresh_token_token ON auth.refresh_token (token);
@@ -772,6 +776,8 @@ CREATE TABLE balancer.user_config (
 	config_json JSONB DEFAULT '{}' NOT NULL,
 	points_per_win INTEGER,
 	rating_mode VARCHAR(16) DEFAULT 'points' NOT NULL,
+	hero_ban_presets JSONB DEFAULT '{}' NOT NULL,
+	formation_defaults JSONB DEFAULT '{}' NOT NULL,
 	PRIMARY KEY (id),
 	CONSTRAINT uq_balancer_user_config_user UNIQUE (user_id),
 	CONSTRAINT ck_balancer_user_config_rating_mode CHECK (rating_mode IN ('points', 'ranker')),
@@ -960,7 +966,7 @@ CREATE TABLE draft.player (
 	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
 	updated_at TIMESTAMP WITH TIME ZONE,
 	session_id BIGINT NOT NULL,
-	registration_id BIGINT NOT NULL,
+	registration_id BIGINT,
 	workspace_member_id BIGINT,
 	status VARCHAR(16) DEFAULT 'available' NOT NULL,
 	is_captain BOOLEAN DEFAULT 'false' NOT NULL,
@@ -970,10 +976,11 @@ CREATE TABLE draft.player (
 	version INTEGER DEFAULT '0' NOT NULL,
 	PRIMARY KEY (id),
 	CONSTRAINT uq_draft_player_session_registration UNIQUE (session_id, registration_id),
+	CONSTRAINT ck_draft_player_identity CHECK (num_nonnulls(registration_id, workspace_member_id) >= 1),
 	CONSTRAINT fk_draft_player_captain_role FOREIGN KEY(captain_role_id, dimension_id) REFERENCES catalog.role (id, dimension_id) DEFERRABLE INITIALLY DEFERRED,
 	FOREIGN KEY(session_id) REFERENCES draft.session (id) ON DELETE CASCADE,
 	FOREIGN KEY(registration_id) REFERENCES registration.registration (id) ON DELETE RESTRICT,
-	FOREIGN KEY(workspace_member_id) REFERENCES workspace_member (id) ON DELETE SET NULL,
+	CONSTRAINT fk_draft_player_workspace_member FOREIGN KEY(workspace_member_id) REFERENCES workspace_member (id) DEFERRABLE INITIALLY DEFERRED,
 	FOREIGN KEY(drafted_by_team_id) REFERENCES draft.team (id) ON DELETE SET NULL
 );
 
@@ -991,7 +998,10 @@ CREATE TABLE draft.session (
 	id BIGSERIAL NOT NULL,
 	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
 	updated_at TIMESTAMP WITH TIME ZONE,
-	tournament_id BIGINT NOT NULL,
+	tournament_id BIGINT,
+	custom_game_id BIGINT,
+	lobby_index INTEGER,
+	discipline VARCHAR(32) NOT NULL,
 	workspace_id BIGINT NOT NULL,
 	status VARCHAR(16) DEFAULT 'setup' NOT NULL,
 	blocked_reason VARCHAR(64),
@@ -1009,7 +1019,11 @@ CREATE TABLE draft.session (
 	settings_json JSON DEFAULT '{}' NOT NULL,
 	version INTEGER DEFAULT '0' NOT NULL,
 	PRIMARY KEY (id),
-	FOREIGN KEY(tournament_id) REFERENCES tournament.tournament (id) ON DELETE CASCADE,
+	CONSTRAINT ck_draft_session_owner CHECK (num_nonnulls(tournament_id, custom_game_id) = 1),
+	CONSTRAINT ck_draft_session_lobby CHECK ((custom_game_id IS NULL) = (lobby_index IS NULL)),
+	CONSTRAINT fk_draft_session_tournament FOREIGN KEY(tournament_id, workspace_id, discipline) REFERENCES tournament.tournament (id, workspace_id, discipline) ON DELETE CASCADE,
+	CONSTRAINT fk_draft_session_custom_game FOREIGN KEY(custom_game_id, workspace_id, discipline) REFERENCES mix.custom_game (id, workspace_id, discipline) ON DELETE CASCADE,
+	CONSTRAINT fk_draft_session_lobby FOREIGN KEY(custom_game_id, lobby_index) REFERENCES mix.lobby (custom_game_id, lobby_index) ON DELETE CASCADE,
 	FOREIGN KEY(workspace_id) REFERENCES workspace (id) ON DELETE CASCADE,
 	FOREIGN KEY(source_balance_id) REFERENCES balancer.balance (id) ON DELETE SET NULL
 );
@@ -1021,6 +1035,8 @@ CREATE INDEX ix_draft_session_status_created ON draft.session (status, created_a
 CREATE INDEX ix_draft_session_tournament_status ON draft.session (tournament_id, status);
 
 CREATE INDEX ix_draft_session_workspace_id ON draft.session (workspace_id);
+
+CREATE UNIQUE INDEX uq_draft_session_active_lobby ON draft.session (custom_game_id, lobby_index) WHERE status IN ('setup','ready','live','paused');
 
 CREATE UNIQUE INDEX uq_draft_session_active_tournament ON draft.session (tournament_id) WHERE status IN ('setup','ready','live','paused');
 
@@ -1201,6 +1217,7 @@ CREATE TABLE encounter.pick_ban_entry (
 	round INTEGER,
 	picked_by_kind encounter.pickbanactor,
 	picked_by_team_id BIGINT,
+	picked_for_member_id BIGINT,
 	status encounter.pickbanentrystatus DEFAULT 'available' NOT NULL,
 	protected_by_kind encounter.pickbanactor,
 	protected_by_team_id BIGINT,
@@ -1209,6 +1226,7 @@ CREATE TABLE encounter.pick_ban_entry (
 	CONSTRAINT fk_pick_ban_entry_session FOREIGN KEY(session_id, encounter_id) REFERENCES encounter.pick_ban_session (id, encounter_id) ON DELETE CASCADE,
 	CONSTRAINT fk_pick_ban_entry_picked_by FOREIGN KEY(picked_by_team_id, encounter_id) REFERENCES encounter.team (id, encounter_id) DEFERRABLE INITIALLY DEFERRED,
 	CONSTRAINT fk_pick_ban_entry_protected_by FOREIGN KEY(protected_by_team_id, encounter_id) REFERENCES encounter.team (id, encounter_id) DEFERRABLE INITIALLY DEFERRED,
+	CONSTRAINT fk_pick_ban_entry_picked_for FOREIGN KEY(picked_for_member_id) REFERENCES encounter.team_member (id) ON DELETE SET NULL,
 	CONSTRAINT ck_pick_ban_entry_picked_by CHECK ((picked_by_kind = 'team') = (picked_by_team_id IS NOT NULL)),
 	CONSTRAINT ck_pick_ban_entry_protected_by CHECK ((protected_by_kind = 'team') = (protected_by_team_id IS NOT NULL))
 );
@@ -1258,6 +1276,7 @@ CREATE TABLE encounter.pick_ban_submission (
 	encounter_id BIGINT NOT NULL,
 	step_index INTEGER NOT NULL,
 	encounter_team_id BIGINT,
+	team_member_id BIGINT,
 	attempt INTEGER DEFAULT '1' NOT NULL,
 	state VARCHAR(16) NOT NULL,
 	items_json JSON DEFAULT '[]' NOT NULL,
@@ -1266,12 +1285,13 @@ CREATE TABLE encounter.pick_ban_submission (
 	PRIMARY KEY (id),
 	CONSTRAINT ck_pick_ban_submission_state CHECK (state IN ('draft', 'locked', 'revealed', 'voided')),
 	CONSTRAINT fk_pick_ban_submission_session FOREIGN KEY(session_id, encounter_id) REFERENCES encounter.pick_ban_session (id, encounter_id) ON DELETE CASCADE,
-	CONSTRAINT fk_pick_ban_submission_team FOREIGN KEY(encounter_team_id, encounter_id) REFERENCES encounter.team (id, encounter_id) DEFERRABLE INITIALLY DEFERRED
+	CONSTRAINT fk_pick_ban_submission_team FOREIGN KEY(encounter_team_id, encounter_id) REFERENCES encounter.team (id, encounter_id) DEFERRABLE INITIALLY DEFERRED,
+	CONSTRAINT fk_pick_ban_submission_team_member FOREIGN KEY(team_member_id) REFERENCES encounter.team_member (id) ON DELETE CASCADE
 );
 
 CREATE INDEX ix_pick_ban_submission_session_id ON encounter.pick_ban_submission (session_id);
 
-CREATE UNIQUE INDEX uq_pick_ban_submission_step_team_attempt ON encounter.pick_ban_submission (session_id, step_index, encounter_team_id, attempt) NULLS NOT DISTINCT;
+CREATE UNIQUE INDEX uq_pick_ban_submission_step_team_attempt ON encounter.pick_ban_submission (session_id, step_index, encounter_team_id, team_member_id, attempt) NULLS NOT DISTINCT;
 
 CREATE TABLE encounter.readiness (
 	id BIGSERIAL NOT NULL,
@@ -1397,6 +1417,7 @@ CREATE TABLE encounter.team_member (
 	display_name_snapshot VARCHAR(255) NOT NULL,
 	rank INTEGER,
 	is_substitute BOOLEAN DEFAULT 'false' NOT NULL,
+	is_captain BOOLEAN DEFAULT 'false' NOT NULL,
 	PRIMARY KEY (id),
 	CONSTRAINT uq_team_member_member UNIQUE (encounter_team_id, workspace_member_id),
 	CONSTRAINT fk_team_member_team FOREIGN KEY(encounter_team_id, encounter_id, active) REFERENCES encounter.team (id, encounter_id, active) ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
@@ -1480,10 +1501,22 @@ CREATE TABLE mix.custom_game (
 	general_voice_channel_id BIGINT,
 	discipline VARCHAR(32) DEFAULT 'overwatch' NOT NULL,
 	scoring_rule_id BIGINT NOT NULL,
+	hero_ban_preset VARCHAR(64),
+	team_formation VARCHAR(16) DEFAULT 'balance' NOT NULL,
+	draft_pick_seconds INTEGER DEFAULT '30' NOT NULL,
+	hero_fearless BOOLEAN DEFAULT 'false' NOT NULL,
+	hero_ban_seconds INTEGER,
+	hero_pick_seconds INTEGER,
+	hero_free_order BOOLEAN DEFAULT 'false' NOT NULL,
+	hero_captains_only BOOLEAN DEFAULT 'false' NOT NULL,
 	PRIMARY KEY (id),
 	CONSTRAINT ck_custom_game_status CHECK (status IN ('draft', 'balanced', 'completed', 'cancelled')),
 	CONSTRAINT ck_custom_game_self_signup CHECK (self_signup IN ('closed', 'pool', 'benched')),
 	CONSTRAINT ck_custom_game_lobby_count CHECK (lobby_count BETWEEN 1 AND 6),
+	CONSTRAINT ck_custom_game_team_formation CHECK (team_formation IN ('balance', 'draft')),
+	CONSTRAINT ck_custom_game_draft_pick_seconds CHECK (draft_pick_seconds BETWEEN 10 AND 600),
+	CONSTRAINT ck_custom_game_hero_ban_seconds CHECK (hero_ban_seconds BETWEEN 10 AND 600),
+	CONSTRAINT ck_custom_game_hero_pick_seconds CHECK (hero_pick_seconds BETWEEN 10 AND 600),
 	CONSTRAINT uq_custom_game_owner_key UNIQUE (id, workspace_id, discipline),
 	CONSTRAINT fk_custom_game_scoring_rule FOREIGN KEY(scoring_rule_id, workspace_id) REFERENCES encounter.scoring_rule (id, workspace_id) DEFERRABLE INITIALLY DEFERRED,
 	FOREIGN KEY(workspace_id) REFERENCES workspace (id) ON DELETE CASCADE,
@@ -1506,11 +1539,16 @@ CREATE TABLE mix.lobby (
 	balanced_at TIMESTAMP WITH TIME ZONE,
 	team1_voice_channel_id BIGINT,
 	team2_voice_channel_id BIGINT,
+	live_encounter_id BIGINT,
+	live_ban_preset VARCHAR(64),
+	lobby_code VARCHAR(64),
 	PRIMARY KEY (custom_game_id, lobby_index),
 	CONSTRAINT ck_custom_game_lobby_index CHECK (lobby_index BETWEEN 0 AND 5),
 	CONSTRAINT ck_custom_game_lobby_next_map_kind CHECK (next_map_kind = 'map'),
 	CONSTRAINT fk_custom_game_lobby_next_map FOREIGN KEY(next_map_id, next_map_kind) REFERENCES catalog.entity (id, kind) ON DELETE SET NULL (next_map_id),
-	FOREIGN KEY(custom_game_id) REFERENCES mix.custom_game (id) ON DELETE CASCADE
+	CONSTRAINT uq_custom_game_lobby_live_encounter UNIQUE (live_encounter_id),
+	FOREIGN KEY(custom_game_id) REFERENCES mix.custom_game (id) ON DELETE CASCADE,
+	CONSTRAINT fk_custom_game_lobby_live_encounter FOREIGN KEY(live_encounter_id) REFERENCES encounter.encounter (id) ON DELETE SET NULL
 );
 
 CREATE TABLE mix.player (
@@ -1524,6 +1562,7 @@ CREATE TABLE mix.player (
 	role_selection_mode VARCHAR(16) DEFAULT 'all_ranked' NOT NULL,
 	is_flex BOOLEAN DEFAULT 'false' NOT NULL,
 	lobby_pin INTEGER,
+	away BOOLEAN DEFAULT 'false' NOT NULL,
 	PRIMARY KEY (id),
 	CONSTRAINT uq_custom_game_player_member UNIQUE (custom_game_id, workspace_member_id),
 	CONSTRAINT ck_custom_game_player_participation CHECK (participation IN ('must_play', 'pool', 'benched')),
@@ -2842,7 +2881,7 @@ CREATE TABLE stats.match_fetch (
 	discipline VARCHAR(32) NOT NULL,
 	source_kind VARCHAR(32) NOT NULL,
 	external_id VARCHAR(128) NOT NULL,
-	hint_tournament_id BIGINT NOT NULL,
+	hint_tournament_id BIGINT,
 	hint_encounter_id BIGINT NOT NULL,
 	hint_encounter_game_id BIGINT NOT NULL,
 	requested_by_user_id BIGINT,
@@ -2865,6 +2904,8 @@ CREATE TABLE stats.match_fetch (
 
 CREATE INDEX ix_match_fetch_due ON stats.match_fetch (status, next_attempt_at);
 
+CREATE INDEX ix_match_fetch_encounter ON stats.match_fetch (hint_encounter_id);
+
 CREATE INDEX ix_match_fetch_workspace_external ON stats.match_fetch (workspace_id, source_kind, external_id);
 
 CREATE TABLE stats.match_player (
@@ -2882,6 +2923,28 @@ CREATE TABLE stats.match_player (
 CREATE INDEX ix_match_player_member ON stats.match_player (workspace_member_id);
 
 CREATE INDEX ix_match_player_observed_role ON stats.match_player (observed_role_id);
+
+CREATE TABLE stats.match_search (
+	id BIGSERIAL NOT NULL,
+	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+	updated_at TIMESTAMP WITH TIME ZONE,
+	workspace_id BIGINT NOT NULL,
+	discipline VARCHAR(32) NOT NULL,
+	encounter_id BIGINT NOT NULL,
+	status VARCHAR(16) DEFAULT 'pending' NOT NULL,
+	attempts INTEGER DEFAULT '0' NOT NULL,
+	next_attempt_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+	last_error TEXT,
+	external_id VARCHAR(128),
+	PRIMARY KEY (id),
+	CONSTRAINT uq_match_search_encounter UNIQUE (encounter_id),
+	CONSTRAINT fk_match_search_workspace FOREIGN KEY(workspace_id) REFERENCES workspace (id) ON DELETE CASCADE,
+	CONSTRAINT fk_match_search_discipline FOREIGN KEY(discipline) REFERENCES catalog.discipline (code),
+	CONSTRAINT fk_match_search_encounter FOREIGN KEY(encounter_id) REFERENCES encounter.encounter (id) ON DELETE CASCADE,
+	CONSTRAINT ck_match_search_status CHECK (status IN ('pending', 'found', 'not_found', 'stopped'))
+);
+
+CREATE INDEX ix_match_search_due ON stats.match_search (status, next_attempt_at);
 
 CREATE TABLE stats.match_team (
 	match_id BIGINT NOT NULL,
@@ -2942,6 +3005,28 @@ CREATE TABLE stats.stat_def (
 	CONSTRAINT ck_stat_def_aggregation CHECK (aggregation IN ('sum', 'max', 'min', 'avg', 'last')),
 	CONSTRAINT fk_stat_def_discipline FOREIGN KEY(discipline) REFERENCES catalog.discipline (code)
 );
+
+CREATE TABLE stream.session (
+	id BIGSERIAL NOT NULL,
+	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+	updated_at TIMESTAMP WITH TIME ZONE,
+	tournament_id BIGINT NOT NULL,
+	user_id BIGINT NOT NULL,
+	channel VARCHAR(64) NOT NULL,
+	broadcaster_id VARCHAR(32) NOT NULL,
+	stream_id VARCHAR(32) NOT NULL,
+	started_at TIMESTAMP WITH TIME ZONE NOT NULL,
+	last_seen_at TIMESTAMP WITH TIME ZONE NOT NULL,
+	vod_id VARCHAR(32),
+	vod_checked_at TIMESTAMP WITH TIME ZONE,
+	vod_gone_at TIMESTAMP WITH TIME ZONE,
+	PRIMARY KEY (id),
+	CONSTRAINT uq_stream_session_tournament_stream UNIQUE (tournament_id, stream_id),
+	FOREIGN KEY(tournament_id) REFERENCES tournament.tournament (id) ON DELETE CASCADE,
+	FOREIGN KEY(user_id) REFERENCES players."user" (id) ON DELETE CASCADE
+);
+
+CREATE INDEX ix_stream_session_tournament_started ON stream.session (tournament_id, started_at);
 
 CREATE TABLE subscriptions.check_log (
 	id BIGSERIAL NOT NULL,
@@ -3290,7 +3375,7 @@ CREATE TABLE tournament.player (
 	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
 	updated_at TIMESTAMP WITH TIME ZONE,
 	name VARCHAR NOT NULL,
-	rank INTEGER NOT NULL,
+	rank INTEGER,
 	is_substitution BOOLEAN DEFAULT 'false' NOT NULL,
 	related_player_id BIGINT,
 	tournament_id BIGINT NOT NULL,
@@ -3325,6 +3410,53 @@ CREATE TABLE tournament.player_role (
 );
 
 CREATE INDEX ix_tournament_player_role_role_id ON tournament.player_role (role_id);
+
+CREATE TABLE tournament.player_standing (
+	id BIGSERIAL NOT NULL,
+	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+	updated_at TIMESTAMP WITH TIME ZONE,
+	tournament_id BIGINT NOT NULL,
+	stage_id BIGINT NOT NULL,
+	registration_id BIGINT,
+	workspace_member_id BIGINT NOT NULL,
+	display_name VARCHAR(255) NOT NULL,
+	role VARCHAR(32) NOT NULL,
+	rank INTEGER NOT NULL,
+	points FLOAT DEFAULT '0' NOT NULL,
+	wins INTEGER DEFAULT '0' NOT NULL,
+	draws INTEGER DEFAULT '0' NOT NULL,
+	losses INTEGER DEFAULT '0' NOT NULL,
+	matches_played INTEGER DEFAULT '0' NOT NULL,
+	maps_won FLOAT DEFAULT '0' NOT NULL,
+	maps_lost FLOAT DEFAULT '0' NOT NULL,
+	buchholz FLOAT DEFAULT '0' NOT NULL,
+	position INTEGER,
+	is_qualified BOOLEAN DEFAULT 'false' NOT NULL,
+	is_captain BOOLEAN DEFAULT 'false' NOT NULL,
+	is_pinned BOOLEAN DEFAULT 'false' NOT NULL,
+	PRIMARY KEY (id),
+	CONSTRAINT uq_player_standing_stage_member UNIQUE (stage_id, workspace_member_id),
+	FOREIGN KEY(tournament_id) REFERENCES tournament.tournament (id) ON DELETE CASCADE,
+	FOREIGN KEY(stage_id) REFERENCES tournament.stage (id) ON DELETE CASCADE,
+	FOREIGN KEY(registration_id) REFERENCES registration.registration (id) ON DELETE SET NULL,
+	FOREIGN KEY(workspace_member_id) REFERENCES workspace_member (id) ON DELETE CASCADE
+);
+
+CREATE INDEX ix_tournament_player_standing_tournament_id ON tournament.player_standing (tournament_id);
+
+CREATE TABLE tournament.player_standing_pin (
+	id BIGSERIAL NOT NULL,
+	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+	updated_at TIMESTAMP WITH TIME ZONE,
+	stage_id BIGINT NOT NULL,
+	workspace_member_id BIGINT NOT NULL,
+	position INTEGER NOT NULL,
+	PRIMARY KEY (id),
+	CONSTRAINT ck_player_standing_pin_position CHECK (position >= 1),
+	CONSTRAINT uq_player_standing_pin_stage_member UNIQUE (stage_id, workspace_member_id),
+	FOREIGN KEY(stage_id) REFERENCES tournament.stage (id) ON DELETE CASCADE,
+	FOREIGN KEY(workspace_member_id) REFERENCES workspace_member (id) ON DELETE CASCADE
+);
 
 CREATE TABLE tournament.recalculation_state (
 	tournament_id BIGINT NOT NULL,
@@ -3416,6 +3548,9 @@ CREATE TABLE tournament.stage (
 	best_of_swiss_eliminate INTEGER,
 	challonge_group_id BIGINT,
 	bracket_template JSONB,
+	pairing_mode VARCHAR(16),
+	playoff_team_count INTEGER,
+	qualification_locked_at TIMESTAMP WITH TIME ZONE,
 	PRIMARY KEY (id),
 	CONSTRAINT ck_stage_de_grand_final_type CHECK (de_grand_final_type IN ('no_reset', 'with_reset')),
 	CONSTRAINT ck_stage_seed_ranking CHECK (seed_ranking IN ('slot', 'avg_sr', 'total_sr', 'random')),
@@ -3425,6 +3560,8 @@ CREATE TABLE tournament.stage (
 	CONSTRAINT ck_stage_swiss_eliminate_losses CHECK (swiss_eliminate_losses IS NULL OR swiss_eliminate_losses >= 1),
 	CONSTRAINT ck_stage_best_of_swiss_qualify CHECK (best_of_swiss_qualify IS NULL OR best_of_swiss_qualify >= 1),
 	CONSTRAINT ck_stage_best_of_swiss_eliminate CHECK (best_of_swiss_eliminate IS NULL OR best_of_swiss_eliminate >= 1),
+	CONSTRAINT ck_stage_pairing_mode CHECK (pairing_mode IS NULL OR pairing_mode IN ('score', 'balance')),
+	CONSTRAINT ck_stage_playoff_team_count CHECK (playoff_team_count IS NULL OR playoff_team_count >= 1),
 	CONSTRAINT uq_stage_id_tournament UNIQUE (id, tournament_id),
 	FOREIGN KEY(tournament_id) REFERENCES tournament.tournament (id) ON DELETE CASCADE,
 	FOREIGN KEY(scoring_rule_id) REFERENCES encounter.scoring_rule (id) DEFERRABLE INITIALLY DEFERRED
@@ -3618,15 +3755,14 @@ CREATE TABLE tournament.tournament (
 	discord_broadcasts_enabled BOOLEAN DEFAULT 'true' NOT NULL,
 	discord_dms_enabled BOOLEAN DEFAULT 'true' NOT NULL,
 	logs_official BOOLEAN DEFAULT 'false' NOT NULL,
-	win_points FLOAT DEFAULT '1.0' NOT NULL,
-	draw_points FLOAT DEFAULT '0.5' NOT NULL,
-	loss_points FLOAT DEFAULT '0.0' NOT NULL,
+	pov_stream_delay_s INTEGER DEFAULT '0' NOT NULL,
 	division_grid_version_id BIGINT,
 	draft_format_json JSONB,
 	cover_image_url VARCHAR,
 	logo_url VARCHAR,
 	PRIMARY KEY (id),
 	CONSTRAINT uq_tournament_owner_key UNIQUE (id, workspace_id, discipline),
+	CONSTRAINT ck_tournament_pov_stream_delay_s CHECK (pov_stream_delay_s BETWEEN 0 AND 900),
 	FOREIGN KEY(workspace_id) REFERENCES workspace (id) ON DELETE CASCADE,
 	FOREIGN KEY(discipline) REFERENCES catalog.discipline (code),
 	FOREIGN KEY(division_grid_version_id) REFERENCES division_grid_version (id) ON DELETE SET NULL

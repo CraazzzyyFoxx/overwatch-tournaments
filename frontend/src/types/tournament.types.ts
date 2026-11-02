@@ -256,9 +256,6 @@ export interface Tournament {
    */
   pov_stream_delay_s: number;
   phase_schedule: TournamentPhaseSchedule[];
-  win_points: number;
-  draw_points: number;
-  loss_points: number;
 
   stages: StageSummary[];
   participants_count: number | null;

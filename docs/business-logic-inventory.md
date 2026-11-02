@@ -352,7 +352,7 @@ Generation (`backend/shared/services/bracket/engine.py`):
 
 **Standings** count only **closed** rounds (no playable encounter in that scope still open — otherwise FORM runs ahead of W·D·L):
 
-Scoring: `win_points` / `draw_points` / `loss_points` from the tournament, stage override allowed. Swiss bye uses `swiss_bye_points` (default = win).
+Scoring: the stage's `win_points` / `draw_points` / `loss_points`; a `NULL` member is the default 1 / 0.5 / 0. Swiss bye uses `swiss_bye_points` (default = win).
 
 Computed: W/D/L, points, score differential, Buchholz + median Buchholz, head-to-head inside a points bucket, `tie_group`, manual positions.
 

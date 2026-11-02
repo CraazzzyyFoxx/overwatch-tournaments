@@ -10091,10 +10091,10 @@
       "regularBestOf": "Обычный (по умолчанию Bo{bo})",
       "swissRoundsShort": "Не каждая команда успеет получить вердикт: максимум раундов этапа ({rounds}) меньше нужного минимума ({needed}).",
       "swissHalfMismatch": "При равных порогах из группы проходит ровно половина, а в «{group}» проходят {advance} из {size}.",
-      "winOverride": "Переопределение очков за победу",
-      "drawOverride": "Переопределение очков за ничью",
-      "lossOverride": "Переопределение очков за поражение",
-      "pointsHelp": "Пустое поле берёт значение турнира — оно показано в поле.",
+      "winOverride": "Очки за победу",
+      "drawOverride": "Очки за ничью",
+      "lossOverride": "Очки за поражение",
+      "pointsHelp": "Пустое поле берёт значение по умолчанию — оно показано в поле.",
       "tiebreakOrder": "Порядок вычисления тай-брейков",
       "resetDefaults": "Сбросить к значениям пресета",
       "useMetric": "Использовать: {metric}",
@@ -10306,7 +10306,7 @@
       "sections": {
         "general": "Общие",
         "rules": "Правила",
-        "scoring": "Подсчёт очков",
+        "scoring": "Результаты",
         "schedule": "Расписание",
         "roster": "Структура ростера",
         "draft": "Формат драфта",
@@ -10615,10 +10615,6 @@
       "phaseEndTime": "{phase}: время окончания"
     },
     "scoring": {
-      "points": "Очки за результат",
-      "win": "Победа",
-      "draw": "Ничья",
-      "loss": "Поражение",
       "results": "Результаты",
       "league": "Считать сезоном лиги",
       "finished": "Отметить турнир завершённым",
@@ -13728,7 +13724,7 @@
       "breadcrumbRanks": "Ранги",
       "breadcrumbQuota": "Квота",
       "breadcrumbRegistrationForms": "Регистрационные формы",
-      "breadcrumbScoring": "Подсчёт очков",
+      "breadcrumbScoring": "Результаты",
       "breadcrumbAdmission": "Допуск",
       "breadcrumbUnknown": "Неизвестный раздел",
       "breadcrumbNew": "Новый"

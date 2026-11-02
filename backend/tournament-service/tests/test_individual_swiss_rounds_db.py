@@ -1,8 +1,7 @@
 """Individual Swiss rounds and the personal table against the real Postgres.
 
 The shape is the Overwatch role queue (tank 1 / damage 2 / support 2): 20 single-role registrations (4 / 8 / 8) make
-four teams per round, so two encounters. ``win_points`` / ``draw_points`` / ``loss_points`` stay at the tournament
-defaults 1 / 0.5 / 0.
+four teams per round, so two encounters. The stage sets no points, so a result pays the defaults 1 / 0.5 / 0.
 """
 
 from __future__ import annotations
