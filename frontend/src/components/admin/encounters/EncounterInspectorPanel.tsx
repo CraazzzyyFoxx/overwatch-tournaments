@@ -9,6 +9,7 @@ import { InspectorField, InspectorSection } from "@/components/kit/InspectorFiel
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { LogUploadDialog } from "@/components/logs/LogUploadDialog";
+import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";
 import { adminQueryKeys } from "@/lib/admin/query-keys";
 import { encounterQueryKeys } from "@/lib/encounters/query-keys";
 import { pregameRoomHref } from "@/lib/encounter/pregame-room";
@@ -137,6 +138,9 @@ export function EncounterInspectorActions({
   onUploaded: () => void;
 }>) {
   const t = useTranslations("adminMatches.encounters");
+  // Only a game that parses an uploaded log file (Overwatch's Workshop log) is offered the upload.
+  const fileUpload =
+    useDisciplineMetadata(workspaceId, encounter.discipline).data?.discipline.capabilities.log_upload === true;
   return (
     <>
       {isLobby(encounter) ? null : (
@@ -152,7 +156,7 @@ export function EncounterInspectorActions({
           {t("edit")}
         </Button>
       ) : null}
-      {canUpdate ? (
+      {canUpdate && fileUpload ? (
         <LogUploadDialog
           scope={{ tournamentId: encounter.tournament_id, encounterId: encounter.id }}
           encounters={[encounter]}

@@ -228,7 +228,11 @@ function PregameRoomBody({ encounterId, seriesReport = true }: Readonly<PregameR
   // The readiness gate already shows both rosters inline; every later screen
   // has its pool or report there, so the rosters sit one click away instead.
   const showRostersButton = !loop.waitingOnReadiness;
-  const canUploadLog = encounter.tournament_id != null && hasWorkspacePermission(workspaceId, "log.create");
+  const canUploadLog =
+    encounter.tournament_id != null &&
+    hasWorkspacePermission(workspaceId, "log.create") &&
+    room.metadata.status === "ready" &&
+    room.metadata.metadata.discipline.capabilities.log_upload;
   const header = (
     <>
       <PregameHeader
