@@ -300,6 +300,8 @@ class MixFlowTests(IsolatedAsyncioTestCase):
             open_match=self.store.open,
             write_result=self.store.record,
             players=SimpleNamespace(get_id_by_auth_user_id=AsyncMock(return_value=90)),
+            # Overwatch has several competitive maps: no sole map, a match plays the rolled one.
+            maps=SimpleNamespace(sole_competitive_map=AsyncMock(return_value=None)),
             ranks=self.ranks,
             scoring_rules=SimpleNamespace(create=AsyncMock(side_effect=lambda _s, row: setattr(row, "id", 5) or row)),
             load_roster=AsyncMock(
