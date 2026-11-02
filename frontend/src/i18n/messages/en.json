@@ -3344,14 +3344,12 @@
       }
     },
     "mapPool": {
-      "title": "Map pool · {count}",
       "open": "all maps",
       "slot": "Map {n}",
       "allStages": "Whole tournament",
       "stagesLabel": "Map pool by stage",
       "rounds": {
         "title": "By round",
-        "lede": "Each round plays its own set of maps — one set per map of the series.",
         "wholeStage": "Whole stage"
       },
       "col": {
@@ -3365,7 +3363,6 @@
       "emptyTitle": "No map pool published",
       "emptyDescription": "Maps will appear here once the organizer configures the tournament's pick-and-ban pool.",
       "mixedModes": "mixed modes",
-      "playedLede": "Each round has its own pool, one per map of the series; ×N is how often a map was played in that slot, faded ones never came up.",
       "playedTimes": "{count, plural, =0 {not played} one {played once} other {played # times}}"
     },
     "rules": {
@@ -3430,7 +3427,6 @@
         }
       },
       "players": {
-        "all": "All players",
         "leaders": "Leaders",
         "player": "Player",
         "roleFilter": "Role",
@@ -3571,7 +3567,6 @@
       },
       "results": {
         "section": "Participants",
-        "all": "All participants",
         "filter": "Draft slot",
         "everyone": "Everyone",
         "captains": "Captains",
@@ -3726,7 +3721,6 @@
       "noLogs": "no logs",
       "allPlayers": "All players",
       "more": "More",
-      "shownOf": "{shown} of {total}",
       "showMore": "Show {count} more"
     }
   },

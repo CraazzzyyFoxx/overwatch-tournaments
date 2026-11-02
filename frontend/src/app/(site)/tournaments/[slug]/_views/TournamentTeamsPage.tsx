@@ -7,7 +7,6 @@ import { useTranslations } from "next-intl";
 import { PersonLabel } from "@/components/PlayerName";
 import { TournamentTeamCard } from "@/components/TournamentTeamCard";
 import { FilterChip } from "@/components/ui/filter-chip";
-import { Eyebrow } from "@/components/ui/eyebrow";
 import { SearchField } from "@/components/ui/search-field";
 import {
   Select,
@@ -123,6 +122,7 @@ const TournamentTeamsView = ({ tournament, slug }: { tournament: Tournament; slu
       ) : (
         <>
           <SectionToolbar
+            variant="plain"
             label={t("common.filters")}
             end={
               <>
@@ -156,25 +156,27 @@ const TournamentTeamsView = ({ tournament, slug }: { tournament: Tournament; slu
                     ))}
                   </SelectContent>
                 </Select>
-                <ViewSegment
-                  param="view"
-                  defaultValue={storedView ?? "list"}
-                  options={[
-                    {
-                      value: "list",
-                      label: <List aria-hidden width={14} height={14} />,
-                      ariaLabel: t("tournamentDetail.teams.viewList")
-                    },
-                    {
-                      value: "cards",
-                      label: <LayoutGrid aria-hidden width={14} height={14} />,
-                      ariaLabel: t("tournamentDetail.teams.viewCards")
-                    }
-                  ]}
-                  onChange={(next) => writeStoredView(next)}
-                  label={t("tournamentDetail.teams.viewLabel")}
-                />
               </>
+            }
+            view={
+              <ViewSegment
+                param="view"
+                defaultValue={storedView ?? "list"}
+                options={[
+                  {
+                    value: "list",
+                    label: <List aria-hidden width={14} height={14} />,
+                    ariaLabel: t("tournamentDetail.teams.viewList")
+                  },
+                  {
+                    value: "cards",
+                    label: <LayoutGrid aria-hidden width={14} height={14} />,
+                    ariaLabel: t("tournamentDetail.teams.viewCards")
+                  }
+                ]}
+                onChange={(next) => writeStoredView(next)}
+                label={t("tournamentDetail.teams.viewLabel")}
+              />
             }
           >
             {groupChips.length > 0 ? (
@@ -199,8 +201,6 @@ const TournamentTeamsView = ({ tournament, slug }: { tournament: Tournament; slu
               </>
             ) : null}
           </SectionToolbar>
-
-          <Eyebrow as="h2">{t("common.teams")}</Eyebrow>
 
           {visibleTeams.length === 0 ? (
             <TournamentPageState

@@ -365,8 +365,6 @@ describe("how the pool was played", () => {
     await render();
 
     expect(container.textContent).not.toContain("×");
-    expect(container.textContent).toContain(en.tournamentDetail.mapPool.rounds.lede);
-    expect(container.textContent).not.toContain(en.tournamentDetail.maps.playedLede);
   });
 
   it("counts each map per slot from completed series, and says which never came up", async () => {
@@ -387,7 +385,6 @@ describe("how the pool was played", () => {
 
     await render();
 
-    expect(container.textContent).toContain(en.tournamentDetail.maps.playedLede);
     const [upper, lower] = roundCards();
     // Ilios is a candidate of both slots and is counted in each on its own.
     expect(slotRows(upper).map((row) => row.strips)).toEqual([

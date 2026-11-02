@@ -348,15 +348,6 @@ describe("the list is the default view", () => {
     expect(container.querySelectorAll("details > summary")).toHaveLength(0);
   });
 
-  it("names the section with a heading in both views, like every other tab", async () => {
-    for (const query of ["", "view=cards"]) {
-      await render(query);
-
-      const headings = Array.from(container.querySelectorAll("h2")).map((node) => node.textContent);
-      expect(headings).toEqual([en.common.teams]);
-    }
-  });
-
   it("links a row's roster to that team's matches", async () => {
     await render();
 

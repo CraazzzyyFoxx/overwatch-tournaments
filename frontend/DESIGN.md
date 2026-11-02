@@ -323,7 +323,7 @@ the last-resort `global-error`) are listed in the script with their reason.
 | Need                        | Use                                                                                                                     |
 | --------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | Filter chip                 | `FilterChip` in `FilterChipGroup` (`ui/filter-chip.tsx`), `accent` for a role-tinted chip                               |
-| Filter + controls row       | `SectionToolbar` (tournament sections): chips at the start, search/sort/view at the end                                 |
+| Filter + controls row       | `SectionToolbar` (tournament sections): chips at the start, search/sort at the end, view switch (`view`) last; `variant` `panel` · `plain` · `inset` |
 | Search                      | `SearchField` (`ui/search-field.tsx`, an `Input` behind an icon), `label` required, `size` (default `sm`)               |
 | Text / number / time field  | `ui/input.tsx`, `ui/number-input.tsx`, `ui/time-input.tsx`, `ui/textarea.tsx`, `ui/input-group.tsx` — one surface (`controlSurfaceClass`), no `variant`. Only `SelectTrigger`, `Combobox` and the date pickers keep `variant="surface"` (a well instead of the raised trigger) for public forms |
 | Labelled form field         | `FieldShell` (`components/forms/FieldShell.tsx`): label, help and error wired by id; a group puts `aria-invalid` on its controls (or the radiogroup), never on the fieldset. `FieldError` (`role="alert"`) / `FieldDescription` (`ui/field.tsx`; `size="sm"` is `text-label`) for a bare error or hint |
@@ -401,8 +401,15 @@ same columns.
 (every child at `min-width: 0`, so a bracket or a wide table owns its own
 scroll instead of widening the page) →
 `UpdatingBadge` (refetching) → `SectionToolbar` (only if it has a choice) →
-optional caption line (`EYEBROW` title + lede on **one** line) →
-stage heading `h2/h3` (`text-ui font-semibold`) → grid of group cards.
+stage heading `h2/h3` (`text-ui font-semibold`) → grid of group cards. No
+caption over a list or table that only restates the tab ("Teams", "All
+players · 20 of 20"): the tab already names it, and the table carries its own
+`label`.
+
+`SectionToolbar` `variant`: `panel` (its own card; a toolbar over one table,
+Ranking), `plain` (no surface, above a stack of cards: Teams, Matches),
+`inset` (the top strip of the card holding the table it filters). The view
+switch goes in `view`, always at the far end; search and sort in `end`.
 
 ### Responsive
 

@@ -56,8 +56,9 @@ export function MatchesToolbar({
 
   return (
     <SectionToolbar
+      variant="plain"
       label={t("tournamentDetail.matches.toolbarLabel")}
-      end={
+      view={
         hasSchedule ? (
           <ViewSegment<MatchesView>
             param="view"

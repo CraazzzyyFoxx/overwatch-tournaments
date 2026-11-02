@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 import type { Team } from "@/types/team.types";
 import type { Tournament } from "@/types/tournament.types";
 
+import { SectionToolbar } from "../../_components/SectionToolbar";
 import { useTournamentInsights } from "../../_hooks/useTournamentInsights";
 import { useTournamentRoster, type RosterEntry } from "../useTournamentRoster";
 import { playerMatches } from "../tournamentTeams.model";
@@ -43,6 +44,7 @@ type ParticipantRow = {
 /** A finished tournament's participants: who went where in the draft, and how it paid off. */
 export function FinishedParticipantsView({ tournament }: Readonly<{ tournament: Tournament }>) {
   const t = useTranslations("tournamentDetail");
+  const tRoot = useTranslations();
   const roster = useTournamentRoster(tournament);
   const insights = useTournamentInsights(tournament);
   const ontology =
@@ -210,13 +212,21 @@ export function FinishedParticipantsView({ tournament }: Readonly<{ tournament: 
       {draft ? (
         <DraftSummary rows={rows} teams={roster.teams} rounds={rounds} draft={draft} two={two} />
       ) : null}
-      <CardSurface
-        title={t("participants.results.all")}
-        subtitle={t("common.shownOf", { shown: visible.length, total: rows.length })}
-        flush
-      >
-        <div className="flex flex-wrap items-center gap-2 border-b border-[color:var(--aqt-border)] px-4.5 py-3">
-          <FilterChipGroup label={t("participants.results.filter")}>
+      <CardSurface flush>
+        <SectionToolbar
+          variant="inset"
+          label={tRoot("common.filters")}
+          end={
+            <SearchField
+              label={t("participants.results.search")}
+              placeholder={t("stats.players.searchPlaceholder")}
+              value={query}
+              onValueChange={setQuery}
+              containerClassName="w-full sm:w-64"
+            />
+          }
+        >
+          <FilterChipGroup label={t("participants.results.filter")} className="flex-nowrap">
             <FilterChip
               active={filter === "all"}
               onClick={() => setFilter("all")}
@@ -252,14 +262,7 @@ export function FinishedParticipantsView({ tournament }: Readonly<{ tournament: 
               </FilterChip>
             ) : null}
           </FilterChipGroup>
-          <SearchField
-            label={t("participants.results.search")}
-            placeholder={t("stats.players.searchPlaceholder")}
-            value={query}
-            onValueChange={setQuery}
-            containerClassName="w-full sm:ms-auto sm:w-64"
-          />
-        </div>
+        </SectionToolbar>
         <SortableTable
           rows={visible}
           columns={columns}
