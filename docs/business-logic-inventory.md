@@ -83,6 +83,8 @@ ANNOUNCEMENT → REGISTRATION → [CHECK_IN] → [DRAFT] → LIVE → [PLAYOFFS]
 
 Phase order is 0…7. `CHECK_IN` is optional. `DRAFT` applies only when `team_formation="draft"`. Forward skips are legal (`REGISTRATION → LIVE` is one hop). Rollback edges exist up to `LIVE` so an organizer can reopen a phase without the superuser `force` bypass. `PLAYOFFS` only leads to `COMPLETED`. `COMPLETED ⇄ ARCHIVED` is reversible.
 
+The Individual Swiss qualification lock (§7) also takes a `LIVE` tournament back to `DRAFT`, once the personal stage is complete; it is an organizer action, not a schedule tick.
+
 `is_finished` is **derived**: true exactly for `COMPLETED` and `ARCHIVED`. “In play” = `LIVE | PLAYOFFS` (check-in is a lobby, not a ball in play).
 
 **Schedule** (`tournament_phase_schedule`):
@@ -136,6 +138,8 @@ Form flex mode: `optional` | `all_roles` | `forced`. Unreadable form → `option
 A game with one rated role (Deadlock, VALORANT) is normalized like `forced` on every write path: the role set is always that role,
 primary; a write naming no role keeps the stored row (and its rank); a new registration without a `roles` answer gets
 it; a public sign-up's absent `roles` answer is that role (`_common.only_role_answer`) — its form shows no role step.
+
+`RolesParams.max_roles` (optional, ≥ 1) caps how many roles one `roles` answer may name: more is refused (`roles.too_many_roles`, counted on the normalised answer, after the `all_roles` / `forced` backfill). An Individual Swiss tournament sets it to 1; do not combine it with `all_roles` / `forced`.
 
 Rank resolution (`pick_rank`, first non-null layer wins):
 
@@ -331,7 +335,7 @@ Caps: 6 lobbies (`MAX_LOBBIES`), 8 teams, 16 co-hosts, 100 roster rows for a sel
 
 ## 7. Stages, brackets, standings
 
-`StageType`: `round_robin` | `single_elimination` | `double_elimination` | `swiss`.
+`StageType`: `round_robin` | `single_elimination` | `double_elimination` | `swiss` | `individual_swiss`.
 
 Stage lifecycle: `DRAFT` (no encounters) → `PREVIEW` (encounters exist, not published) → `LIVE` (published/active) → `DONE`.
 
@@ -342,6 +346,7 @@ Generation (`backend/shared/services/bracket/engine.py`):
 - DE: optional lower-bracket seeds (group runners-up). Grand Final Reset is **lazy**: only if the LB champion wins the GF.
 - Swiss: Monrad, sort `(points, buchholz)`. Rematch-free first; rematch only if the alternative is idle teams. Bye not to a team that already had one. Unpairable field → error.
 - Swiss thresholds (`swiss_qualify_wins` / `swiss_eliminate_losses`, `SwissThresholds`): a team with that many wins (byes count) / losses is decided and paired no more; fewer than two undecided → no round, scope complete before `max_rounds`; a threshold disables the full-circle round-robin shortcut. A match that can decide a team takes `best_of_swiss_qualify` / `best_of_swiss_eliminate` (the larger when both) over the round's best-of; the best-of backfill replays each round's records to agree.
+- Individual Swiss: see [Individual Swiss](#individual-swiss) below.
 
 **Advancement** (`advance_after_result`): reads the final positions the result writer materialised on the participations and fills only empty seats; a position two teams share (a draw) blocks and nobody advances out of it until an admin breaks the tie. A changed result is reopen → `reset_downstream` (retires the seats it filled and cancels the games they had not played, recursively) → write the new result → advance.
 
@@ -355,11 +360,60 @@ Elimination positions are counted from the bottom: the losers of a closed round 
 
 Jobs: `tournament_bracket_jobs` / `tournament_standings_jobs`, prefetch 4, isolated from the RPC channel.
 
+### Individual Swiss
+
+`individual_swiss` ranks **players**, not teams, and re-deals them into new teams every round, then qualifies a few per role for a captain draft and a playoff on an ordinary stage type. Flow: registration (one role each) → check-in → organizer trims the pool by hand (the existing `balancer_status` exclusion) → LIVE: this stage → qualification lock (LIVE → DRAFT) → snake draft → LIVE: playoff (`single_elimination` / `double_elimination` / `round_robin`, seeded by `seed_teams` mode `captain_rank`) → finished. Code: `tournament-service/src/domain/individual_swiss/` (pure rules) and `src/services/individual_swiss/` (`rounds`, `standings`, `reads`, `pins`, `qualification`).
+
+Stage config: `max_rounds` (default 5), best-of (any), `pairing_mode` `score` | `balance` (default `score`), `playoff_team_count` `K` (default 4, ≥ 1). The two new fields exist only on this type: create/update fills the defaults for it and forces them `NULL` on every other type; an explicit `null` on an update restores the defaults. Points are the stage's `win_points` / `draw_points` / `loss_points` for the series (preset `wins`).
+
+**Start** (`IndividualSwissRoundsService.start`, reached by the ordinary "activate and generate" action; a stage that already has encounters is 409). The pool is the tournament's roster still in the balancer pool; the roster shape is the tournament's (`tournament_slot_shape`; first target Overwatch 1 tank / 2 damage / 2 support). Nothing is written until all of these hold; the system never trims the pool itself. Each refusal is 409 `{code, message}`:
+
+- `member_required` — a registration has no workspace member;
+- `one_role_required` — a player does not have exactly one playable (ranked) role (no flex);
+- `duplicate_member` — one workspace member is registered twice;
+- `role_outside_shape` / `role_count_mismatch` — a role is not in the shape, or a role's head-count is not `T × shape[role]`;
+- `odd_team_count` / `too_few_players` — `T`, the teams per round, is odd or zero (a single team is odd);
+- `playoff_too_large` — `K` is greater than `T`.
+
+Start then replaces the stage's `PlayerStanding` rows with the **frozen pool** (display name, role and rank as of now; pins survive), runs the first standings recalculation (positions, cut line and captains exist before any result) and generates round 1.
+
+**Pairing** (`domain/individual_swiss/pairing.py`, all in-process — the balancer service is not called; `n_role = 2 × shape[role]`):
+
+- `score`: every role is ordered by the personal table separately; lobby *i* takes that role's players at places `(i−1)·n_role + 1 … i·n_role`, so a lobby holds players of equal standing from every role, and `split_two` divides it into two teams. Round 1 has no points, so the order falls back to rank.
+- `balance`: `split_pool` balances the whole pool into `T` equal teams (swap search on the rank sums), `pair_randomly` pairs them.
+- `split_two` takes the split of a lobby with the smallest rank-sum gap, ties picked by the rng; it enumerates combinations per role, so it is exponential in one role's lobby size (fine for the first-target shape).
+- The rng is `random.Random(f"{stage_id}:{round}")`: a given stage and round always reproduce the same teams.
+- Repeat teammates and opponents are allowed; there is no history penalty (known gap).
+
+**Rounds** are generated by the standings job, not by the result write: `generate_ready_rounds` runs in the standings worker after the Swiss pass, under a `SELECT … FOR UPDATE` of the stage row, and creates round `r + 1` (published at once, like the team Swiss) when every encounter of round `r` is `COMPLETED` and `r < max_rounds`. It is idempotent — the latest round is read under the lock, so a second call finds an open round. A round is **never re-paired**: correcting a result recomputes the table and leaves the existing rounds as they are. The stage is complete when the round `max_rounds` is closed.
+
+**Round teams** are rosterless seats: `encounter.team.team_id = NULL`; roster, role and captain are in the `encounter.team_member` snapshot (role in `team_member_role`); the seat is named "Команда <captain>"; the **round captain** is the highest-ranked member (ties by member id). Encounters are written through the same repositories as the bracket skeleton, with a `bracket_encounter` each; the hub's `swiss` tab covers the type.
+
+**Personal table** (`tournament.player_standing`; `compute_totals`, `order_role`). Built from the stage's `COMPLETED` encounters, over the active seats and active snapshot members that are in the frozen pool (an outside substitute is ignored; mid-round substitutions are not modelled):
+
+- *Points*: the series win / draw / loss points. A draw is a shared first place; a seat with no placement is ranked by score.
+- *Map differential*: maps won − maps lost (the seat scores of the series).
+- *Buchholz*: for each match the player played, the mean of the **final** points (whole-stage totals, a second pass) of the opponent seat's players; summed over the player's matches. A seat with no members adds nothing.
+- Order **inside each role**, never across roles: points ↓ → map differential ↓ → Buchholz ↓ → rank ↓ → member id. `position` is 1-based in the role.
+- **Pins** (`tournament.player_standing_pin`, one per stage and member, `position ≥ 1`) override the order: a pinned member takes its position in the role; a clash (duplicate, or past the end) takes the next free slot after it, else the last free slot before it. Set by `PUT /api/v1/admin/tournaments/{tournament_id}/stages/{stage_id}/player-standing-pins` (replaces all pins; permission `standing.update`; 422 `not_individual_swiss`, `no_player_table`, `pin_duplicate_player`, `pin_unknown_player`, `pin_position_out_of_range` — past the role's size —, `pin_duplicate_position` per role; 409 `qualification_locked` once the tournament is `DRAFT` or later), which schedules a standings recalculation. A recalculation rewrites only the changed attributes; a retroactive result change flows through it.
+
+**Qualification** (`qualify`, `pick_captains`): the cut is per role — the first `K × shape[role]` places of each role are `is_qualified`, so the qualifiers are exactly `K` teams' worth by role. The **captains** are the `K` qualifiers with the highest `rank` across all roles (ties by member id), flagged `is_captain`. The cut line and captains exist from the start and follow every recalculation and pin.
+
+**Qualification lock** (`POST /api/v1/admin/tournaments/{tournament_id}/stages/{stage_id}/lock-qualification`, `qualification_service.lock`; permissions `stage.update` **and** `tournament.update`; audit `stage.lock_qualification`). Refused with 409: `not_individual_swiss`, `qualification_not_live` (the tournament is not `LIVE` — also what a second lock after a success gets), `stage_not_completed`, `no_qualifiers`. Otherwise, with the tournament row locked `FOR UPDATE` (two organizers locking at once serialize), every player of the table that is not `is_qualified` gets `balancer_status = excluded`, `exclude_reason = not_qualified` (`bulk_set_balancer_status`, realtime change emitted) — the balancer pool, hence the draft pool, is exactly the qualifiers — and then the tournament moves `LIVE → DRAFT`. These are **two commits**; a failure between them leaves a trimmed pool in LIVE, and calling the lock again re-applies the same exclusion and finishes the move. The answer lists the qualifiers (role order, position) and the captains (rank ↓). After `DRAFT` the qualifier list is frozen, which is why pins are refused. The draft is the ordinary live draft (§6): a player's role is fixed to their one role (the existing `illegal_role` check, `resolve_pick_slot`; a captain fills a slot of their own role) and the organizer sets the captain order (`weakest` lets the weakest captain pick first). The playoff stage is seeded by `seed_teams` mode `captain_rank` (the captain's own rank, highest first, no rank last, ties by team id; the mode belongs to `seed_teams` only and is not a `Stage.seed_ranking` value).
+
+**Reads.** `GET /api/v1/tournaments/{id}/player-standings` (public; ordered by stage, role in roster-shape order, position; `map_diff` derived) and `GET /api/v1/tournaments/{id}/stages/{stage_id}/individual-rounds` (public; lobbies, rosters with roles, captains, score; 404 for another stage type or tournament). Both are `@versioned` by the tournament's standings generation; the gateway response cache is not enabled for them.
+
+**Isolation from ratings.** The stage writes no player rank and no hidden rating (`member_hidden_rating` moves only in a mix with `rating_mode = ranker`).
+
+**Known gaps.** No teammate / opponent history penalty in pairing; round teams get no direct messages (`lifecycle_notifier.on_encounters_changed` skips seats with `team_id IS NULL`); the lock is two commits, not one transaction; `max_roles = 1` is not guarded against the `all_roles` / `forced` flex modes.
+
 ---
 
 ## 8. Encounters, reports, pick-ban
 
 Encounter status: `OPEN | PENDING | COMPLETED`. An encounter (`encounter.encounter`) seats `slot_count` participations (`encounter.team`, append-only; a replaced occupant is `active = false`). The official result is `result_status` (`none | pending_confirmation | confirmed | disputed`) with `result_source` `games | series_claim | admin | import`, and every change of it bumps `result_version` and writes one `encounter.result_audit` row. The result of one position is the **encounter game** (`encounter.game`, with one `game_team` row per participation): `state` `planned | awaiting_result | disputed | confirmed | cancelled`, `result_source` `captain_agreement | admin | admin_log`. The series score is wins over confirmed, non-cancelled games (the `wins` scoring preset). A `Match` is the parsed-log record of a played map and carries statistics, not the result.
+
+**Who is a seat's captain.** `resolve_participant` (and `is_participant_captain` for FFA lobbies) answers from two sources. A seat with a source team — a team-backed tournament seat — is found through the team's live `Team.captain_id` only, so its member is always the captain. A seat with `team_id IS NULL` — a mix round or an Individual Swiss round team — is found through the roster snapshot (`encounter.team_member` → workspace member → player) and carries the snapshot's `is_captain`; for a tournament encounter a snapshot miss falls through to the `Team.captain_id` path, for a mix it does not. The same snapshot captain files the game claims and the series report, reads the chat, takes part in map veto and hero pick-ban, and is paged on a per-game dispute (mix behaviour unchanged); a series-level dispute pages staff only, as before. Disputes are resolved by an admin.
 
 Two report layers, plus log evidence:
 
@@ -397,6 +451,9 @@ Role uniqueness for heroes (the legacy `unique_attribute_per_side_per_round = "r
 First pick: `higher_seed`. First-ban rotation includes `result_loser_choice` (previous map winner).
 
 Undo requires both captains. Admins can override.
+
+**Hero-ban targets of a rosterless seat.** A hero ban's `target_player_id` is a `tournament.player` id for a team-backed seat. A seat with `team_id IS NULL` (an Individual Swiss round team) has no such row, so the room's targets are built from its `encounter.team_member` snapshot (`RosterlessTarget`: name, rank, substitute flag, role) and `target_player_id` is the snapshot row's `encounter.team_member.id`. An encounter never mixes the two kinds of seat; the outcomes read echoes the ids as stored.
+
 
 The pre-game room's organizer controls and history are hidden on entry. Authorized organizers
 can show or hide them on the readiness, pick-ban, map-report and closing screens. While hidden,
@@ -538,6 +595,7 @@ Duplicates only what the UI needs instantly; comments cite the server symbol:
 | Rank layers | `backend/shared/domain/member_rank.py` |
 | Team eligibility | `backend/shared/domain/team_eligibility.py` |
 | Bracket gen / advance | `backend/shared/services/bracket/` |
+| Individual Swiss rules / services | `tournament-service/src/domain/individual_swiss/`, `tournament-service/src/services/individual_swiss/` |
 | Result writer, scoring | `backend/shared/services/encounter/result.py`, `backend/shared/domain/encounter_scoring.py` |
 | Log evidence acceptance | `tournament-service/src/services/encounter/log_evidence.py`, `…/log_evidence_events.py` |
 | Pick-ban engine | `backend/shared/domain/pick_ban_engine.py`, `tournament-service/src/services/encounter/pick_ban_*` |
