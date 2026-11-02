@@ -14,6 +14,7 @@ from shared.services.tournament.computation import dispatch_job
 from src.core import db
 from src.services.admin.stage import stage_service as admin_stage_service
 from src.services.computation.jobs import failure_message, is_refusal, jobs_service
+from src.services.individual_swiss import individual_swiss_rounds_service
 from src.services.standings.service import standings_service
 from src.services.standings.swiss_auto_round import swiss_rounds_service
 from src.services.tournament.events import (
@@ -150,6 +151,14 @@ async def process_standings_job(job_id: int) -> None:
                         encounters=run.encounters if reuse else None,
                     ),
                 )
+                # Its own read, not ``stages``: the pass after a rolled-back savepoint must not touch expired rows.
+                individual = await _isolated(
+                    session,
+                    "Individual Swiss round generation",
+                    tournament_id,
+                    lambda: individual_swiss_rounds_service.generate_ready_rounds(session, tournament_id),
+                )
+                generated = [*(generated or []), *(individual or [])]
             # Nothing moved, nothing to announce: no refetch storm and no achievement run for an identical table.
             if generated:
                 # A generated round is a new bracket section, not just new numbers.
