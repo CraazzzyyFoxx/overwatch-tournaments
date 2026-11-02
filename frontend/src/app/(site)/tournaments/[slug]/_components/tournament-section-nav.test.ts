@@ -186,16 +186,17 @@ describe("buildTournamentSectionNav", () => {
       available: false,
       reasonKey: "tournamentDetail.nav.reasons.noTeams"
     });
-    // Play itself still opens the section: rosters exist by then even if the
-    // overview count has not arrived yet.
-    expect(
+    // Once play starts without a roster, none is coming: the tab is gone, not locked.
+    const liveIds = (hasTeams: boolean) =>
       buildTournamentSectionNav({
         tournamentId,
         status: "live",
         stages: [stage()],
-        pathname: `/tournaments/${tournamentId}/teams`
-      }).find((item) => item.id === "teams")?.available
-    ).toBe(true);
+        hasTeams,
+        pathname: `/tournaments/${tournamentId}`
+      }).map((item) => item.id);
+    expect(liveIds(true)).toContain("teams");
+    expect(liveIds(false)).not.toContain("teams");
   });
 
   it("links the bracket to the current stage, not to an unstarted playoff", () => {

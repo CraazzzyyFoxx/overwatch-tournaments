@@ -30,7 +30,8 @@ type BuildTournamentSectionNavInput = {
   /**
    * Whether any team exists yet. Teams are formed before play starts (balancer
    * run or draft), so the section opens as soon as there is a roster to show
-   * rather than waiting for the competition phase.
+   * rather than waiting for the competition phase. Once play starts without
+   * one (an individual tournament), none is coming: the section disappears.
    */
   hasTeams?: boolean;
   /**
@@ -192,7 +193,8 @@ export function buildTournamentSectionNav({
       (id !== "stream" || hasStreams) &&
       (id !== "rules" || hasRules) &&
       (id !== "maps" || hasMapPool) &&
-      (id !== "ranking" || hasRanking)
+      (id !== "ranking" || hasRanking) &&
+      (id !== "teams" || hasTeams || !competitionStarted)
   );
 
   return sections.map((id) => {
@@ -207,7 +209,7 @@ export function buildTournamentSectionNav({
       (competitionOnlySections.has(id) && !competitionStarted) ||
       (id === "ranking" && !rankingOpen);
     const stageLocked = id === "bracket" && competitionStarted && stages.length === 0;
-    const teamsLocked = id === "teams" && !hasTeams && !competitionStarted;
+    const teamsLocked = id === "teams" && !hasTeams;
     const reasonKey = resolveNavLockReason({ phaseLocked, stageLocked, teamsLocked });
 
     return {
