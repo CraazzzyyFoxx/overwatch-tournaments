@@ -109,7 +109,7 @@ export function BalancerLayoutClient({ children, tenantWorkspace }: Readonly<Bal
     // instead of a viewport-locked frame with two internally-scrolling panels.
     return (
       <div className="site-theme min-h-screen w-full">
-        <div className="mx-auto h-full w-full max-w-screen-3xl px-4 md:px-6 xl:px-10">
+        <div className="mx-auto h-full w-full max-w-site px-4 md:px-6 xl:px-10">
           <Header tenantMode={tenantWorkspace != null} tenantWorkspace={tenantWorkspace ?? undefined} />
           <div className="flex w-full flex-col min-h-[95%]">
             <main

@@ -375,7 +375,9 @@ the last-resort `global-error`) are listed in the script with their reason.
 
 ## 7. Layout
 
-- App container: `max-w-screen-3xl` (1720px), gutters `px-4 md:px-6 xl:px-10`.
+- Site container: `max-w-site` (1520px = 1440px content + `xl:px-10`), gutters
+  `px-4 md:px-6 xl:px-10`; `/balancer/mix` uses the same shell. The draft room
+  stays at `max-w-screen-3xl` (1720px).
 - Breakpoints (`--breakpoint-*` in `globals.css`): `xs` 320, `xs1` 540,
   `sm` 640, `md` 768, `lg` 1024, `xl` 1280, `2xl` 1520, `3xl` 1720.
 - Verify every change at **390, 768, 1024, 1440**. The page body never
