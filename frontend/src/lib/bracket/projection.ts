@@ -62,15 +62,13 @@ export const SEED_RANKING_LABELS: Record<SeedRanking, string> = {
   slot: "Slot order (manual / standings)",
   avg_sr: "Highest team avg SR first",
   total_sr: "Highest team total SR first",
-  random: "Random (stable per stage)",
-  captain_rank: "Highest captain rank first"
+  random: "Random (stable per stage)"
 };
 export const SEED_RANKING_LABEL_KEYS: Record<SeedRanking, string> = {
   slot: "slot",
   avg_sr: "avg_sr",
   total_sr: "total_sr",
-  random: "random",
-  captain_rank: "captain_rank"
+  random: "random"
 };
 
 const DEFAULT_SWISS_TIEBREAKERS = [

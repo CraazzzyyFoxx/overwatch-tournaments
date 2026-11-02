@@ -75,7 +75,7 @@ export interface StageItem {
 }
 
 /** How a bracket stage orders its seeds; `slot` keeps the manual/standings order. */
-export type SeedRanking = "slot" | "avg_sr" | "total_sr" | "random" | "captain_rank";
+export type SeedRanking = "slot" | "avg_sr" | "total_sr" | "random";
 
 /** How an `individual_swiss` round forms its lobbies. */
 export type StagePairingMode = "score" | "balance";
