@@ -119,7 +119,6 @@ class StageBestOfMixin(StageServiceBase):
         what the teams brought into the round, as the generator saw them. A bye
         stored without a round predates round tracking and counts everywhere.
         """
-        tournament = await session.get_one(models.Tournament, stage.tournament_id)
         items = {item.id: item for item in stage.items}
         byes = await bye_rounds(session, stage.id)
         by_scope: defaultdict[int | None, list] = defaultdict(list)
@@ -135,7 +134,6 @@ class StageBestOfMixin(StageServiceBase):
                     if bye_round is None or bye_round < round_number
                 )
                 ranked = rank_group(
-                    tournament,
                     stage,
                     items.get(stage_item_id),
                     [encounter for encounter in encounters if encounter.round < round_number],

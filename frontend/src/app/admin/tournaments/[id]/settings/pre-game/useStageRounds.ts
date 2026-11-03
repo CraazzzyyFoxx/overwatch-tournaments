@@ -71,7 +71,9 @@ export function useStageRounds(
     // instead of a row per game nobody plays in sequence. (The lobbies' kickoff
     // is a different screen: `RoundScheduleSection` reads them itself.)
     if (FFA_STAGE_TYPES.includes(stage.stage_type)) return FFA_ROUNDS;
-    if (!GROUP_STAGE_TYPES.includes(stage.stage_type)) return EMPTY_ROUNDS;
+    if (!GROUP_STAGE_TYPES.includes(stage.stage_type) && !isSwissFamily(stage.stage_type)) {
+      return EMPTY_ROUNDS;
+    }
     const derived =
       stage.stage_type === "round_robin" ? projectedRoundRobinRounds(stage) : 0;
     const count = derived > 0 ? derived : Math.floor(stage.max_rounds);
@@ -90,7 +92,7 @@ export function useStageRounds(
   // field a union would let leak in as a round the bracket never has.
   const known = useMemo(() => {
     if (generated.length === 0) return planned;
-    if (planned.length === 0 || stage?.stage_type !== "swiss") return generated;
+    if (planned.length === 0 || !isSwissFamily(stage?.stage_type)) return generated;
     return [...new Set([...generated, ...planned])].sort((left, right) => left - right);
   }, [generated, planned, stage?.stage_type]);
 
@@ -111,5 +113,11 @@ export function useStageRounds(
 }
 
 const EMPTY_ROUNDS: number[] = [];
+
+/** Both Swiss types are generated one round at a time, so their rounds are the generated ones plus the planned length. */
+function isSwissFamily(stageType: Stage["stage_type"] | undefined): boolean {
+  return stageType === "swiss" || stageType === "individual_swiss";
+}
+
 /** Every lobby of an FFA stage is round 1; there is no second round to author. */
 const FFA_ROUNDS: number[] = [1];

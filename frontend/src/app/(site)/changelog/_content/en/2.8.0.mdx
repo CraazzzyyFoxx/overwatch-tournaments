@@ -1,0 +1,37 @@
+<Lead>Tournaments get a new format, the individual Swiss: players take part on their own, teams are dealt anew every round, and the best of each role go on to a draft playoff. And the Discord bot now creates a tournament's voice channels and moves players into them.</Lead>
+
+### Individual Swiss
+
+A new stage type for tournaments where players sign up on their own, not as teams. Every round splits the players into new teams and lobbies, and a match result counts for every player of the team. A round team's captain is its highest-ranked player.
+
+Players' places are on the **Personal standings** tab. Each role has its own places: by points, map differential and Buchholz. The table filters by role and finds a player by nickname; playoff qualifiers are marked, and a single role's table shows the playoff cut. Rounds have their own view: the lobby's team rosters face each other with the score between them.
+
+The organizer picks the **Lobby pairing**: **By points** deals each role's table neighbours into one lobby, **Whole-pool balance** has the balancer split everyone into equal teams and pairs them at random. The number of rounds and **Playoff teams** are stage settings, and a player's place can be pinned by hand. Once the stage is played, **Lock the qualification and go to the draft** removes everyone below the cut from the pool: the highest-ranked captains draft the qualifiers, and the playoff is seeded by captain rank.
+
+### Tournament voice channels
+
+The organizer turns on **Voice channels** in the tournament's Discord settings. The bot creates a channel for every team and a shared hub: a player who joins the hub is moved straight into their team's channel. In an individual Swiss the bot keeps round lobbies and, with each new round, moves those whose team changed — the lobbies are laid out so most people stay put. Eliminated teams' channels go when the next stage starts, the rest after the final.
+
+Channels can be private: only the team's players, substitutes included, and the chosen staff roles see them. Players without a linked Discord are not moved or let in — the settings list them. The bot needs Manage Channels, Manage Roles, Move Members, View Channel and Connect in the category.
+
+<Also title="Also">
+<div>
+
+#### For players
+
+- Your rank refreshes right away when your tournament registration is approved or re-checked and when you join a mix; your Steam name refreshes with it.
+- Mix cards in Discord — signup, lineup, the voice-move report and the invite answer — name players the way the game's pages do, without the #tag.
+- A tournament section's filters sit in one panel, with the view switch at its end.
+- Site content, mix pages included, is at most 1440 px wide.
+
+</div>
+<div>
+
+#### For organizers
+
+- Win, draw and loss points are set on the stage only; an empty field means 1, 0.5 and 0. Values the tournament carried were copied onto its stages, and the tournament settings section is now **Results**.
+- The registration form has **Only one role**: a submission names exactly one role and flex is turned off.
+- **Seed by captain rank** orders a stage's teams by their captains' ranks.
+
+</div>
+</Also>

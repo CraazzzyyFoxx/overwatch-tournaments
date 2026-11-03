@@ -1,4 +1,5 @@
 import typing
+from datetime import datetime
 
 from sqlalchemy import (
     JSON,
@@ -82,6 +83,8 @@ class Stage(db.TimeStampIntegerMixin):
         CheckConstraint(
             "best_of_swiss_eliminate IS NULL OR best_of_swiss_eliminate >= 1", name="ck_stage_best_of_swiss_eliminate"
         ),
+        CheckConstraint("pairing_mode IS NULL OR pairing_mode IN ('score', 'balance')", name="ck_stage_pairing_mode"),
+        CheckConstraint("playoff_team_count IS NULL OR playoff_team_count >= 1", name="ck_stage_playoff_team_count"),
         #: Target of ``tournament.bracket_encounter``'s composite FK.
         UniqueConstraint("id", "tournament_id", name="uq_stage_id_tournament"),
         {"schema": "tournament"},
@@ -118,8 +121,8 @@ class Stage(db.TimeStampIntegerMixin):
     is_completed: Mapped[bool] = mapped_column(Boolean(), default=False, server_default="false")
 
     # ── Regulation. NULL means "not set here": the engine falls back to the
-    # tournament (points), the stage type's preset (ranking) or the win points
-    # (a Swiss bye).
+    # default points (1 / 0.5 / 0), the stage type's preset (ranking) or the win
+    # points (a Swiss bye).
     #: A ``RULE_PRESET_DEFAULTS`` key; NULL = chosen by ``stage_type``.
     ranking_preset: Mapped[str | None] = mapped_column(String(), nullable=True)
     #: The tiebreak metrics in order; NULL = the preset's order.
@@ -153,6 +156,13 @@ class Stage(db.TimeStampIntegerMixin):
     # A custom bracket drawn in the admin editor (tournament-service ``src.domain.bracket.template``);
     # NULL = the format's generator draws it.
     bracket_template: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    #: ``individual_swiss`` only (``enums.StagePairingMode``); NULL for every other type.
+    pairing_mode: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    #: ``individual_swiss`` only: how many teams the draft playoff has (K); NULL for every other type.
+    playoff_team_count: Mapped[int | None] = mapped_column(Integer(), nullable=True)
+    #: ``individual_swiss`` only: when the qualification was locked. From then on the qualifier and captain flags of the
+    #: personal table no longer move, whatever result is corrected; NULL until the lock.
+    qualification_locked_at: Mapped[datetime | None] = mapped_column(db.DateTime(timezone=True), nullable=True)
 
     tournament: Mapped[Tournament] = relationship(back_populates="stages")
     items: Mapped[list[StageItem]] = relationship(

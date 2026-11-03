@@ -9678,6 +9678,14 @@
       },
       "summary": "Get encounter"
     },
+    "rpc.tournament.get_individual_rounds": {
+      "description": "Permission: public; no authentication required \u2014 a hidden tournament is visible only to its workspace's admins and users on its preview allowlist. Returns an `individual_swiss` stage's encounters grouped by round, each seat with its roster snapshot (role, rank, round captain). 404 for a stage that is not an `individual_swiss` stage of this tournament.",
+      "response": {
+        "array": true,
+        "ref": "tournament.IndividualRoundRead"
+      },
+      "summary": "Get individual Swiss rounds"
+    },
     "rpc.tournament.get_match": {
       "description": "Permission: public; no authentication required \u2014 a hidden tournament is visible only to its workspace's admins and users on its preview allowlist. Returns one match by id: its participants (official result lines and observed team facts), every member, segment and fact at every grain, and optionally hydrated related entities, scoped to the given workspace.",
       "query_params": [
@@ -9727,6 +9735,14 @@
     "rpc.tournament.get_pick_ban_configs": {
       "description": "Permission: public; no authentication required \u2014 a hidden tournament is visible only to its workspace's admins and users on its preview allowlist. Returns the tournament's map pick-ban configs in cascade order.",
       "summary": "List public map pick-ban configs"
+    },
+    "rpc.tournament.get_player_standings": {
+      "description": "Permission: public; no authentication required \u2014 a hidden tournament is visible only to its workspace's admins and users on its preview allowlist. Returns the personal table of every `individual_swiss` stage of the tournament, ordered by stage order, role (roster-shape order) and place inside the role; `position` is null until the standings job has ranked the table.",
+      "response": {
+        "array": true,
+        "ref": "tournament.PlayerStandingRead"
+      },
+      "summary": "Get individual Swiss player standings"
     },
     "rpc.tournament.get_stages": {
       "description": "Permission: public; no authentication required \u2014 a hidden tournament is visible only to its workspace's admins and users on its preview allowlist. Returns all stages of a tournament ordered by stage order, with their items and item inputs hydrated.",
@@ -10018,6 +10034,14 @@
     "rpc.tournament.grid_workspace_list": {
       "description": "Permission: workspace `division_grid.read`. Lists a workspace's division grids, each with `tournament_count`: the tournaments pinned to any of its versions.",
       "summary": "List workspace grids"
+    },
+    "rpc.tournament.individual_swiss_lock_qualification": {
+      "description": "Permission: workspace `stage.update` and `tournament.update` on the tournament's workspace. Closes the personal Swiss day: first recalculates the personal table from the current results and pins, stamps the stage `qualification_locked_at` (the qualifier and captain flags are frozen from then on, and pins and the playoff team count are refused), then every non-qualified player of the completed stage gets balancer status `excluded` with reason `not_qualified`, then the tournament moves LIVE to DRAFT, so the draft pool is exactly the qualifiers. Answers the qualifiers (role, then place) and the playoff captains. 409 when the stage is not an `individual_swiss` stage, is not completed, has no qualifiers, is already locked, the tournament is not LIVE, or the tournament's draft format is not snake (checked before any exclusion).",
+      "response": {
+        "array": false,
+        "ref": "tournament.QualificationLockRead"
+      },
+      "summary": "Lock individual Swiss qualification"
     },
     "rpc.tournament.job_get": {
       "description": "Permission: workspace `standing.update` when the job's kind is 'standings', otherwise `stage.update`, on the workspace of the job's tournament. Returns one tournament computation job by id.",
@@ -10789,6 +10813,18 @@
         }
       ],
       "summary": "Get the pick-ban ruleset catalog"
+    },
+    "rpc.tournament.player_standing_pins_set": {
+      "description": "Permission: workspace `standing.update` on the tournament's workspace. Replaces every pin of an `individual_swiss` stage's personal table: a pinned player keeps that place inside their role whatever results arrive later, the others fill the free places in computed order. An empty `pins` list unpins everyone. 422 for a player outside the stage's table, a player pinned twice, a place past the role's size or one place given to two players of a role; 409 once the qualification is locked (`qualification_locked_at` on the stage). Schedules the standings recalculation that applies the pins and answers the stored pins.",
+      "request": {
+        "array": false,
+        "ref": "tournament.PlayerStandingPinsUpdate"
+      },
+      "response": {
+        "array": false,
+        "ref": "tournament.PlayerStandingPinsRead"
+      },
+      "summary": "Set individual Swiss pins"
     },
     "rpc.tournament.preview_access_add": {
       "description": "Permission: workspace `owner`/`admin` role on the tournament's workspace (403 otherwise). Allowlists one account (body `auth_user_id`, 422 when absent) to view a tournament before it is public and invalidates the cached tournament read so the change lands immediately.",
@@ -12125,6 +12161,34 @@
         "ref": "tournament.TournamentFacets"
       },
       "summary": "Tournament facet counts"
+    },
+    "rpc.tournament.voice_get": {
+      "description": "Permission: workspace `tournament.read` on the tournament's workspace. The organizer's voice settings (defaults, all off, before the first save), whether the workspace has a linked Discord guild, the channels the plan wants joined to the bot's own rows by `slot_key` (`planned` = in the plan, not made yet; rows the plan dropped are listed too, `deleting`), roster members without a linked Discord (`player_without_discord`) and what the last bot sync reported (`sync_issues`, `last_synced_at`). Discord ids are strings.",
+      "response": {
+        "array": false,
+        "ref": "tournament.VoiceStatus"
+      },
+      "summary": "Get tournament voice channels"
+    },
+    "rpc.tournament.voice_put": {
+      "description": "Permission: workspace `tournament.update` on the tournament's workspace. Saves `enabled`, `private`, `early_teams`, `category_id` and `staff_role_ids` (Discord ids as digit strings), requests a bot sync and answers the status like the read. A newly set `category_id` must be a category of the workspace's guild (422 `discord_category_not_in_guild`) and every newly set role must exist there (422 `discord_role_not_in_guild`); 409 `discord_guild_not_linked` when the workspace has no guild, 503 `discord_unavailable` when Discord cannot be asked. `enabled: false` removes every channel the bot made.",
+      "request": {
+        "array": false,
+        "ref": "tournament.VoiceSettings"
+      },
+      "response": {
+        "array": false,
+        "ref": "tournament.VoiceStatus"
+      },
+      "summary": "Save tournament voice settings"
+    },
+    "rpc.tournament.voice_sync": {
+      "description": "Permission: workspace `tournament.update` on the tournament's workspace. Asks the bot to reconcile the tournament's Discord voice channels with the plan now (repairs a channel deleted by hand) and answers the status like the read.",
+      "response": {
+        "array": false,
+        "ref": "tournament.VoiceStatus"
+      },
+      "summary": "Sync tournament voice channels"
     }
   },
   "schemas": {
@@ -49810,6 +49874,156 @@
       "title": "GameMapSelectInput",
       "type": "object"
     },
+    "tournament.IndividualRoundEncounterRead": {
+      "properties": {
+        "best_of": {
+          "title": "Best Of",
+          "type": "integer"
+        },
+        "encounter_id": {
+          "title": "Encounter Id",
+          "type": "integer"
+        },
+        "result_status": {
+          "$ref": "#/components/schemas/tournament.EncounterResultStatus"
+        },
+        "seats": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.IndividualRoundSeatRead"
+          },
+          "title": "Seats",
+          "type": "array"
+        },
+        "status": {
+          "$ref": "#/components/schemas/tournament.EncounterStatus"
+        }
+      },
+      "required": [
+        "encounter_id",
+        "status",
+        "result_status",
+        "best_of",
+        "seats"
+      ],
+      "title": "IndividualRoundEncounterRead",
+      "type": "object"
+    },
+    "tournament.IndividualRoundRead": {
+      "properties": {
+        "encounters": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.IndividualRoundEncounterRead"
+          },
+          "title": "Encounters",
+          "type": "array"
+        },
+        "round": {
+          "title": "Round",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "round",
+        "encounters"
+      ],
+      "title": "IndividualRoundRead",
+      "type": "object"
+    },
+    "tournament.IndividualRoundSeatMemberRead": {
+      "properties": {
+        "display_name": {
+          "title": "Display Name",
+          "type": "string"
+        },
+        "is_captain": {
+          "title": "Is Captain",
+          "type": "boolean"
+        },
+        "rank": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Rank"
+        },
+        "role": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Role"
+        },
+        "workspace_member_id": {
+          "title": "Workspace Member Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "workspace_member_id",
+        "display_name",
+        "role",
+        "rank",
+        "is_captain"
+      ],
+      "title": "IndividualRoundSeatMemberRead",
+      "type": "object"
+    },
+    "tournament.IndividualRoundSeatRead": {
+      "properties": {
+        "members": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.IndividualRoundSeatMemberRead"
+          },
+          "title": "Members",
+          "type": "array"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "participation_id": {
+          "title": "Participation Id",
+          "type": "integer"
+        },
+        "placement": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Placement"
+        },
+        "score": {
+          "title": "Score",
+          "type": "number"
+        },
+        "slot": {
+          "title": "Slot",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "participation_id",
+        "slot",
+        "name",
+        "score",
+        "placement",
+        "members"
+      ],
+      "title": "IndividualRoundSeatRead",
+      "type": "object"
+    },
     "tournament.IngestJobStatus": {
       "enum": [
         "pending",
@@ -52394,6 +52608,194 @@
       "title": "PlayerRead",
       "type": "object"
     },
+    "tournament.PlayerStandingPinRead": {
+      "properties": {
+        "position": {
+          "minimum": 1,
+          "title": "Position",
+          "type": "integer"
+        },
+        "workspace_member_id": {
+          "title": "Workspace Member Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "workspace_member_id",
+        "position"
+      ],
+      "title": "PlayerStandingPinRead",
+      "type": "object"
+    },
+    "tournament.PlayerStandingPinWrite": {
+      "properties": {
+        "position": {
+          "minimum": 1,
+          "title": "Position",
+          "type": "integer"
+        },
+        "workspace_member_id": {
+          "title": "Workspace Member Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "workspace_member_id",
+        "position"
+      ],
+      "title": "PlayerStandingPinWrite",
+      "type": "object"
+    },
+    "tournament.PlayerStandingPinsRead": {
+      "properties": {
+        "pins": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.PlayerStandingPinRead"
+          },
+          "title": "Pins",
+          "type": "array"
+        }
+      },
+      "required": [
+        "pins"
+      ],
+      "title": "PlayerStandingPinsRead",
+      "type": "object"
+    },
+    "tournament.PlayerStandingPinsUpdate": {
+      "description": "The whole set of pins of the stage; an empty list unpins everyone.",
+      "properties": {
+        "pins": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.PlayerStandingPinWrite"
+          },
+          "title": "Pins",
+          "type": "array"
+        }
+      },
+      "required": [
+        "pins"
+      ],
+      "title": "PlayerStandingPinsUpdate",
+      "type": "object"
+    },
+    "tournament.PlayerStandingRead": {
+      "properties": {
+        "buchholz": {
+          "title": "Buchholz",
+          "type": "number"
+        },
+        "display_name": {
+          "title": "Display Name",
+          "type": "string"
+        },
+        "draws": {
+          "title": "Draws",
+          "type": "integer"
+        },
+        "is_captain": {
+          "title": "Is Captain",
+          "type": "boolean"
+        },
+        "is_pinned": {
+          "title": "Is Pinned",
+          "type": "boolean"
+        },
+        "is_qualified": {
+          "title": "Is Qualified",
+          "type": "boolean"
+        },
+        "losses": {
+          "title": "Losses",
+          "type": "integer"
+        },
+        "map_diff": {
+          "title": "Map Diff",
+          "type": "number"
+        },
+        "maps_lost": {
+          "title": "Maps Lost",
+          "type": "number"
+        },
+        "maps_won": {
+          "title": "Maps Won",
+          "type": "number"
+        },
+        "matches_played": {
+          "title": "Matches Played",
+          "type": "integer"
+        },
+        "points": {
+          "title": "Points",
+          "type": "number"
+        },
+        "position": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Position"
+        },
+        "rank": {
+          "title": "Rank",
+          "type": "integer"
+        },
+        "registration_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Registration Id"
+        },
+        "role": {
+          "title": "Role",
+          "type": "string"
+        },
+        "stage_id": {
+          "title": "Stage Id",
+          "type": "integer"
+        },
+        "wins": {
+          "title": "Wins",
+          "type": "integer"
+        },
+        "workspace_member_id": {
+          "title": "Workspace Member Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "stage_id",
+        "workspace_member_id",
+        "registration_id",
+        "display_name",
+        "role",
+        "rank",
+        "position",
+        "points",
+        "wins",
+        "draws",
+        "losses",
+        "maps_won",
+        "maps_lost",
+        "map_diff",
+        "buchholz",
+        "matches_played",
+        "is_qualified",
+        "is_captain",
+        "is_pinned"
+      ],
+      "title": "PlayerStandingRead",
+      "type": "object"
+    },
     "tournament.PlayerSubRoleCreate": {
       "properties": {
         "color": {
@@ -53258,6 +53660,30 @@
         "rooms"
       ],
       "title": "PregameRoomsRead",
+      "type": "object"
+    },
+    "tournament.QualificationLockRead": {
+      "properties": {
+        "captains": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.PlayerStandingRead"
+          },
+          "title": "Captains",
+          "type": "array"
+        },
+        "qualified": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.PlayerStandingRead"
+          },
+          "title": "Qualified",
+          "type": "array"
+        }
+      },
+      "required": [
+        "qualified",
+        "captains"
+      ],
+      "title": "QualificationLockRead",
       "type": "object"
     },
     "tournament.RawSourceStatus": {
@@ -55838,14 +56264,15 @@
       "type": "object"
     },
     "tournament.SeedTeamsRequest": {
-      "description": "Distribute teams into a stage's stage_items (groups) automatically.\n\n``mode`` selects the distribution strategy:\n- ``snake_sr`` (default) \u2014 sort by Team.avg_sr desc, snake-distribute\n  across groups so each group ends up roughly equally strong.\n- ``by_total_sr`` \u2014 same but sorts by Team.total_sr (raw sum).\n- ``random`` \u2014 deterministic shuffle based on team.id (reproducible).",
+      "description": "Distribute teams into a stage's stage_items (groups) automatically.\n\n``mode`` selects the distribution strategy:\n- ``snake_sr`` (default) \u2014 sort by Team.avg_sr desc, snake-distribute\n  across groups so each group ends up roughly equally strong.\n- ``by_total_sr`` \u2014 same but sorts by Team.total_sr (raw sum).\n- ``random`` \u2014 deterministic shuffle based on team.id (reproducible).\n- ``captain_rank`` \u2014 sort by the captain's rank desc (the draft playoff: strongest captain is seed 1).",
       "properties": {
         "mode": {
           "default": "snake_sr",
           "enum": [
             "snake_sr",
             "by_total_sr",
-            "random"
+            "random",
+            "captain_rank"
           ],
           "title": "Mode",
           "type": "string"
@@ -56191,6 +56618,30 @@
           "default": 0,
           "title": "Order",
           "type": "integer"
+        },
+        "pairing_mode": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/tournament.StagePairingMode"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "playoff_team_count": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Playoff Team Count"
         },
         "ranking_preset": {
           "anyOf": [
@@ -56732,6 +57183,15 @@
       "title": "StageItemUpdate",
       "type": "object"
     },
+    "tournament.StagePairingMode": {
+      "description": "How an ``individual_swiss`` round forms its lobbies.",
+      "enum": [
+        "score",
+        "balance"
+      ],
+      "title": "StagePairingMode",
+      "type": "string"
+    },
     "tournament.StageRead": {
       "properties": {
         "advance_count": {
@@ -56848,6 +57308,29 @@
           "title": "Order",
           "type": "integer"
         },
+        "pairing_mode": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/tournament.StagePairingMode"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "playoff_team_count": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Playoff Team Count"
+        },
         "ranking_preset": {
           "anyOf": [
             {
@@ -56948,7 +57431,7 @@
     },
     "tournament.StageScoring": {
       "additionalProperties": false,
-      "description": "How a stage scores, at all three levels.\n\n``win``/``draw``/``loss`` are level 3: what one encounter's result pays in\nthe stage table; ``None`` = the tournament's points. The rest is the\n``encounter.scoring_rule`` every encounter of the stage is played and\nranked by -- ``wins`` is a Bo-N series, ``points`` a lobby scored by the\norganizer's own columns.\n\nEvery rule field is nullable and means \"the preset's default\", the way\n``ranking_preset`` does: the preset itself defaults to the one the stage\nTYPE implies, which only the service knows.",
+      "description": "How a stage scores, at all three levels.\n\n``win``/``draw``/``loss`` are level 3: what one encounter's result pays in\nthe stage table; ``None`` = the default (1 / 0.5 / 0). The rest is the\n``encounter.scoring_rule`` every encounter of the stage is played and\nranked by -- ``wins`` is a Bo-N series, ``points`` a lobby scored by the\norganizer's own columns.\n\nEvery rule field is nullable and means \"the preset's default\", the way\n``ranking_preset`` does: the preset itself defaults to the one the stage\nTYPE implies, which only the service knows.",
       "properties": {
         "columns": {
           "anyOf": [
@@ -57260,6 +57743,29 @@
           "title": "Order",
           "type": "integer"
         },
+        "pairing_mode": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/tournament.StagePairingMode"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "playoff_team_count": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Playoff Team Count"
+        },
         "ranking_preset": {
           "anyOf": [
             {
@@ -57364,7 +57870,8 @@
         "single_elimination",
         "double_elimination",
         "swiss",
-        "ffa_league"
+        "ffa_league",
+        "individual_swiss"
       ],
       "title": "StageType",
       "type": "string"
@@ -57458,6 +57965,30 @@
           ],
           "default": null,
           "title": "Order"
+        },
+        "pairing_mode": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/tournament.StagePairingMode"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "playoff_team_count": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Playoff Team Count"
         },
         "ranking_preset": {
           "anyOf": [
@@ -59493,11 +60024,6 @@
           "default": null,
           "title": "Draft Format Json"
         },
-        "draw_points": {
-          "default": 0.5,
-          "title": "Draw Points",
-          "type": "number"
-        },
         "end_date": {
           "format": "date",
           "title": "End Date",
@@ -59517,11 +60043,6 @@
           "default": false,
           "title": "Logs Official",
           "type": "boolean"
-        },
-        "loss_points": {
-          "default": 0.0,
-          "title": "Loss Points",
-          "type": "number"
         },
         "name": {
           "title": "Name",
@@ -59552,11 +60073,6 @@
           "default": "balancer",
           "title": "Team Formation",
           "type": "string"
-        },
-        "win_points": {
-          "default": 1.0,
-          "title": "Win Points",
-          "type": "number"
         },
         "workspace_id": {
           "title": "Workspace Id",
@@ -60127,11 +60643,6 @@
           "default": null,
           "title": "Draft Format Json"
         },
-        "draw_points": {
-          "default": 0.5,
-          "title": "Draw Points",
-          "type": "number"
-        },
         "end_date": {
           "format": "date-time",
           "title": "End Date",
@@ -60184,11 +60695,6 @@
           "default": false,
           "title": "Logs Official",
           "type": "boolean"
-        },
-        "loss_points": {
-          "default": 0.0,
-          "title": "Loss Points",
-          "type": "number"
         },
         "name": {
           "title": "Name",
@@ -60313,11 +60819,6 @@
           ],
           "default": null,
           "title": "Teams Count"
-        },
-        "win_points": {
-          "default": 1.0,
-          "title": "Win Points",
-          "type": "number"
         },
         "workspace_id": {
           "title": "Workspace Id",
@@ -60864,18 +61365,6 @@
           "default": null,
           "title": "Draft Format Json"
         },
-        "draw_points": {
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Draw Points"
-        },
         "end_date": {
           "anyOf": [
             {
@@ -60936,18 +61425,6 @@
           ],
           "default": null,
           "title": "Logs Official"
-        },
-        "loss_points": {
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Loss Points"
         },
         "name": {
           "anyOf": [
@@ -61024,18 +61501,6 @@
           ],
           "default": null,
           "title": "Team Formation"
-        },
-        "win_points": {
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Win Points"
         }
       },
       "title": "TournamentUpdate",
@@ -61065,6 +61530,236 @@
         "name"
       ],
       "title": "UserRead",
+      "type": "object"
+    },
+    "tournament.VoiceChannelStatus": {
+      "properties": {
+        "discord_channel_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Discord Channel Id"
+        },
+        "kind": {
+          "enum": [
+            "category",
+            "hub",
+            "team",
+            "swiss_slot"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Name"
+        },
+        "slot_key": {
+          "title": "Slot Key",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "planned",
+            "pending",
+            "active",
+            "deleting"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "slot_key",
+        "kind",
+        "status"
+      ],
+      "title": "VoiceChannelStatus",
+      "type": "object"
+    },
+    "tournament.VoiceSettings": {
+      "properties": {
+        "category_id": {
+          "anyOf": [
+            {
+              "pattern": "^[1-9]\\d{0,18}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Category Id"
+        },
+        "early_teams": {
+          "default": false,
+          "title": "Early Teams",
+          "type": "boolean"
+        },
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "private": {
+          "default": false,
+          "title": "Private",
+          "type": "boolean"
+        },
+        "staff_role_ids": {
+          "items": {
+            "pattern": "^[1-9]\\d{0,18}$",
+            "type": "string"
+          },
+          "maxItems": 25,
+          "title": "Staff Role Ids",
+          "type": "array"
+        }
+      },
+      "title": "VoiceSettings",
+      "type": "object"
+    },
+    "tournament.VoiceStatus": {
+      "properties": {
+        "channels": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.VoiceChannelStatus"
+          },
+          "title": "Channels",
+          "type": "array"
+        },
+        "guild_linked": {
+          "title": "Guild Linked",
+          "type": "boolean"
+        },
+        "last_synced_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Last Synced At"
+        },
+        "settings": {
+          "$ref": "#/components/schemas/tournament.VoiceSettings"
+        },
+        "sync_issues": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.VoiceSyncIssue"
+          },
+          "title": "Sync Issues",
+          "type": "array"
+        },
+        "warnings": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.VoiceWarning"
+          },
+          "title": "Warnings",
+          "type": "array"
+        }
+      },
+      "required": [
+        "settings",
+        "guild_linked",
+        "channels",
+        "warnings",
+        "sync_issues"
+      ],
+      "title": "VoiceStatus",
+      "type": "object"
+    },
+    "tournament.VoiceSyncIssue": {
+      "properties": {
+        "code": {
+          "title": "Code",
+          "type": "string"
+        },
+        "detail": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Detail"
+        }
+      },
+      "required": [
+        "code"
+      ],
+      "title": "VoiceSyncIssue",
+      "type": "object"
+    },
+    "tournament.VoiceWarning": {
+      "properties": {
+        "code": {
+          "title": "Code",
+          "type": "string"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Name"
+        },
+        "team_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Team Id"
+        },
+        "workspace_member_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Workspace Member Id"
+        }
+      },
+      "required": [
+        "code"
+      ],
+      "title": "VoiceWarning",
       "type": "object"
     },
     "tournament.WireFromGroupsRequest": {

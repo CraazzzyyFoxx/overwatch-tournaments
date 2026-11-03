@@ -28,6 +28,7 @@ The system as it is. These are updated in the same commit as the change they des
 | [`glossary.md`](./glossary.md) | Domain vocabulary used across code, API and UI |
 | [`business-logic-inventory.md`](./business-logic-inventory.md) | Domain rules and invariants: lifecycle, registration, admission, roster, balancer/draft, brackets, pick-ban, logs, achievements, analytics |
 | [`api-rate-limits.md`](./api-rate-limits.md) | Client-facing API quota contract: what is metered, the refusal shape, reading your remaining budget |
+| [`tournament-voice-channels.md`](./tournament-voice-channels.md) | Tournament Discord voice channels: the plan, the bot's reconciler, hub routing, Individual Swiss round slots, the admin API |
 | [`../frontend/src/app/(site)/docs/_content/`](../frontend/src/app/%28site%29/docs/_content/) | Player, organizer and developer guides served at `/docs`, one MDX file per locale (`ru`, `en`). Titles and order live in `frontend/src/app/(site)/docs/nav.ts`. The `/docs/dev/schema` page renders `schema.generated.json`, written by `backend/scripts/export_erd.py` alongside `database_erd.md` |
 
 ### Per component

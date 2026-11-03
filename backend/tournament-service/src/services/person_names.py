@@ -16,9 +16,9 @@ from sqlalchemy.orm import selectinload
 from shared import models
 from shared.disciplines import identity_provider
 from shared.schemas.identity import PersonDisplayRead
-from shared.services.person_display import game_handle, pick_game_handle
+from shared.services.person_display import game_handle, load_person_displays, pick_game_handle
 
-__all__ = ("player_displays", "registration_display", "registration_person_loader")
+__all__ = ("account_display_name", "player_displays", "registration_display", "registration_person_loader")
 
 
 def _provider(discipline: str) -> str | None:
@@ -26,6 +26,33 @@ def _provider(discipline: str) -> str | None:
         return identity_provider(discipline)
     except LookupError:  # a game with no identity provider has no game handle to show
         return None
+
+
+async def account_display_name(
+    session: AsyncSession, *, tournament_id: int, auth_user_id: int, snapshot: str | None
+) -> str | None:
+    """How the tournament's game names the person behind an account, without the ``#tag``: for a message that is
+    sent once (a Discord DM). ``snapshot`` is the name the event recorded; ``None`` when the account has no player."""
+    scope = (
+        await session.execute(
+            sa.select(models.Tournament.discipline, models.Tournament.workspace_id).where(
+                models.Tournament.id == tournament_id
+            )
+        )
+    ).one_or_none()
+    user_id = await session.scalar(sa.select(models.User.id).where(models.User.auth_user_id == auth_user_id))
+    unlinked = PersonDisplayRead.build(canonical=None, snapshot=snapshot).name or None
+    if scope is None or user_id is None or _provider(scope.discipline) is None:
+        return unlinked
+    displays = await load_person_displays(
+        session,
+        [user_id],
+        discipline=scope.discipline,
+        workspace_id=scope.workspace_id,
+        snapshots={user_id: snapshot},
+    )
+    shown = displays.get(user_id)
+    return shown.name if shown is not None else unlinked
 
 
 async def player_displays(session: AsyncSession, players: Iterable[models.Player]) -> dict[int, PersonDisplayRead]:

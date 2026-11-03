@@ -85,7 +85,7 @@ export default async function SiteLayout({
         <div className="site-theme min-h-screen w-full" style={style}>
           <WorkspaceHostLock workspaceId={tenantMode && workspace ? workspace.id : null} />
           <WorkspaceThemeSync />
-          <div className="mx-auto h-full w-full max-w-screen-3xl px-4 md:px-6 xl:px-10">
+          <div className="mx-auto h-full w-full max-w-site px-4 md:px-6 xl:px-10">
             <Header
               tenantMode={tenantMode}
               tenantWorkspace={

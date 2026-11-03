@@ -281,7 +281,7 @@ async def list_roster(
 
 
 async def hosts_by_user_id(
-    session: AsyncSession, *, workspace_id: int, user_ids: Sequence[int]
+    session: AsyncSession, *, workspace_id: int, user_ids: Sequence[int], provider: str | None = None
 ) -> dict[int, str | None]:
     """Display name for a set of ``auth.user.id``s, resolved within one workspace.
 
@@ -299,16 +299,24 @@ async def hosts_by_user_id(
     playing is the common case. ``auth.user.username`` is the final fallback:
     it is required and unique, so it resolves for every id that still names a
     real account.
+
+    ``provider`` (the mix game's identity provider) names a host who is on this
+    workspace's roster the way that game names its players
+    (``PersonDisplayRead.build``), without the ``#tag``; anyone else keeps the
+    name above.
     """
     ids = {uid for uid in user_ids if uid is not None}
     if not ids:
         return {}
+    handle = game_handle(models.User.id, provider, workspace_id) if provider is not None else (sa.null(), sa.null())
     result = await session.execute(
         sa.select(
             models.AuthUser.id,
             models.AuthUser.username,
             models.WorkspaceMember.display_name,
             models.User.name,
+            models.WorkspaceMember.observed_only.is_(False),
+            *handle,
         )
         .select_from(models.AuthUser)
         .outerjoin(models.User, models.User.auth_user_id == models.AuthUser.id)
@@ -321,10 +329,19 @@ async def hosts_by_user_id(
         )
         .where(models.AuthUser.id.in_(ids))
     )
-    return {
-        auth_user_id: (display_name or player_name or username)
-        for auth_user_id, username, display_name, player_name in result.all()
-    }
+    names: dict[int, str | None] = {}
+    for auth_user_id, username, display_name, player_name, rostered, shown, verified in result.all():
+        if provider is not None and rostered:
+            names[auth_user_id] = PersonDisplayRead.build(
+                canonical=player_name,
+                provider=provider,
+                handle=shown,
+                handle_verified=bool(verified),
+                workspace_name=display_name,
+            ).name
+        else:
+            names[auth_user_id] = display_name or player_name or username
+    return names
 
 
 async def workspace_member_user_ids(

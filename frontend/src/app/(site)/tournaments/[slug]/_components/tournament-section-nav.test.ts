@@ -49,6 +49,8 @@ function stage(overrides: Partial<StageSummary> = {}): StageSummary {
     has_custom_bracket: false,
     challonge_id: null,
     challonge_slug: null,
+    pairing_mode: null,
+    playoff_team_count: null,
     ...overrides
   };
 }
@@ -110,6 +112,45 @@ describe("buildTournamentSectionNav", () => {
     ]);
   });
 
+  it("adds the player standings tab only for a tournament with an individual Swiss stage", () => {
+    const ids = (status: TournamentStatus, stages: StageSummary[]) =>
+      model(status, `/tournaments/${tournamentId}/participants`, stages).map((item) => item.id);
+    const individual = stage({ stage_type: "individual_swiss", pairing_mode: "score" });
+
+    expect(ids("live", [stage()])).not.toContain("ranking");
+    expect(ids("live", [individual, stage()])).toEqual([
+      "overview",
+      "bracket",
+      "ranking",
+      "teams",
+      "matches",
+      "maps",
+      "stats",
+      "participants"
+    ]);
+    expect(
+      model("registration", `/tournaments/${tournamentId}/ranking`, [individual]).find(
+        (item) => item.id === "ranking"
+      )
+    ).toMatchObject({
+      available: false,
+      active: true,
+      href: `/tournaments/${tournamentId}/ranking`,
+      labelKey: "common.ranking"
+    });
+    expect(
+      model("live", `/tournaments/${tournamentId}/ranking`, [individual]).find(
+        (item) => item.id === "ranking"
+      )
+    ).toMatchObject({ available: true, active: true });
+    // The qualification lock moves the tournament back to draft: a finished table stays open.
+    expect(
+      model("draft", `/tournaments/${tournamentId}/ranking`, [
+        stage({ stage_type: "individual_swiss", is_completed: true })
+      ]).find((item) => item.id === "ranking")
+    ).toMatchObject({ available: true });
+  });
+
   it("locks only the bracket for missing stage structure after competition starts", () => {
     const items = model("live", `/tournaments/${tournamentId}/bracket`, []);
     const bracket = items.find((item) => item.id === "bracket");
@@ -145,16 +186,17 @@ describe("buildTournamentSectionNav", () => {
       available: false,
       reasonKey: "tournamentDetail.nav.reasons.noTeams"
     });
-    // Play itself still opens the section: rosters exist by then even if the
-    // overview count has not arrived yet.
-    expect(
+    // Once play starts without a roster, none is coming: the tab is gone, not locked.
+    const liveIds = (hasTeams: boolean) =>
       buildTournamentSectionNav({
         tournamentId,
         status: "live",
         stages: [stage()],
-        pathname: `/tournaments/${tournamentId}/teams`
-      }).find((item) => item.id === "teams")?.available
-    ).toBe(true);
+        hasTeams,
+        pathname: `/tournaments/${tournamentId}`
+      }).map((item) => item.id);
+    expect(liveIds(true)).toContain("teams");
+    expect(liveIds(false)).not.toContain("teams");
   });
 
   it("links the bracket to the current stage, not to an unstarted playoff", () => {

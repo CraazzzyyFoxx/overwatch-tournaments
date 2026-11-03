@@ -50,6 +50,7 @@ def _result_handler(processor: module.AttachmentProcessor):
         registry=MagicMock(),
         directory=MagicMock(),
         voice=MagicMock(),
+        voice_sync=MagicMock(),
         bot=MagicMock(wait_until_ready=AsyncMock()),
         session_maker=MagicMock(),
         projector=MagicMock(),

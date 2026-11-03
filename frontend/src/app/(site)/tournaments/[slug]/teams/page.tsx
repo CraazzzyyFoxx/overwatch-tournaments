@@ -1,3 +1,5 @@
+import { notFound } from "next/navigation";
+
 import TournamentTabBoundary from "../_prefetch";
 import TournamentTeamsPage from "@/app/(site)/tournaments/[slug]/_views/TournamentTeamsPage";
 import { tournamentTeamsQueryOptions } from "@/lib/tournament/teams-query";
@@ -24,7 +26,10 @@ export default async function TournamentTeamsRoutePage({
         queryClient.prefetchQuery(tournamentTeamsQueryOptions(overview))
       }
     >
-      {(overview) => <TournamentTeamsPage key={overview.id} slug={slug} />}
+      {(overview) =>
+        // No roster, no page: the rail locks or hides the tab, a typed URL gets the 404.
+        (overview.teams_count ?? 0) > 0 ? <TournamentTeamsPage key={overview.id} slug={slug} /> : notFound()
+      }
     </TournamentTabBoundary>
   );
 }

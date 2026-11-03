@@ -76,7 +76,7 @@ const RES_TAG_KIND: Record<ResultKind, ResTagKind> = { w: "w", l: "l", t: "d" };
 /** The row's place against the lines: the crowned winner, a tie a line cuts, the advancing block. */
 type Zone = "crown" | "tie" | "advance";
 
-const ROW_TINT: Record<Zone, string> = {
+export const ROW_TINT: Record<Zone, string> = {
   crown:
     "bg-[color:color-mix(in_srgb,var(--aqt-medal-gold)_6%,transparent)] hover:bg-[color:color-mix(in_srgb,var(--aqt-medal-gold)_10%,transparent)]",
   tie: "bg-[color:color-mix(in_srgb,var(--aqt-amber)_8%,transparent)] hover:bg-[color:color-mix(in_srgb,var(--aqt-amber)_13%,transparent)]",
@@ -90,8 +90,8 @@ const RANK_TONE: Record<Zone, string> = {
   advance: "text-[color:var(--aqt-teal)]"
 };
 
-const CELL = "px-2.5 py-2.75";
-const HEAD = "h-auto px-2.5 py-2.5 whitespace-nowrap";
+export const CELL = "px-2.5 py-2.75";
+export const HEAD = "h-auto px-2.5 py-2.5 whitespace-nowrap";
 
 /**
  * The team column stays put while the row scrolls under it. Opaque, so the
@@ -102,7 +102,7 @@ const STICKY_TEAM =
   "sticky left-0 z-2 bg-[color:var(--aqt-card)] after:absolute after:inset-y-0 after:right-0 after:w-px after:bg-[color:var(--aqt-border)]";
 
 /** A dashed rule across the table, its `data-label` centred on it. */
-const CUT_LINE =
+export const CUT_LINE =
   "relative h-0 before:absolute before:inset-x-3.5 before:top-0 before:border-t-[1.5px] before:border-dashed before:border-[color:color-mix(in_srgb,var(--aqt-teal)_40%,transparent)] after:absolute after:left-1/2 after:top-1/2 after:-translate-x-1/2 after:-translate-y-1/2 after:whitespace-nowrap after:bg-[color:var(--aqt-card)] after:px-2.5 after:py-0.5 after:font-[family-name:var(--aqt-data)] after:text-label after:font-bold after:uppercase after:tracking-label after:text-[color:var(--aqt-teal)] after:content-[attr(data-label)]";
 
 /** The team's own seat and what the other seats scored, from the encounter's participations. */
@@ -132,7 +132,7 @@ function computeMaps(teamId: number, history: Encounter[]) {
   return { won, lost, diff: won - lost };
 }
 
-function MapDiff({ diff }: Readonly<{ diff: number }>) {
+export function MapDiff({ diff }: Readonly<{ diff: number }>) {
   const tone =
     diff > 0
       ? "text-[color:var(--aqt-emerald)]"

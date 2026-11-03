@@ -20,8 +20,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.models.encounter.encounter import Encounter
 from shared.models.encounter.game import EncounterGame
-from shared.models.encounter.team import EncounterTeam
+from shared.models.encounter.team import EncounterTeam, EncounterTeamMember
 from shared.models.identity.user import User
+from shared.models.tenancy.workspace import WorkspaceMember
 from shared.models.tournament.team import Team
 from shared.repository.notification_recipients import NotificationRecipientRepository
 from shared.repository.tournament import TournamentRepository
@@ -63,6 +64,22 @@ async def notify_dispute(
                 .where(Team.id.in_(team_ids), User.auth_user_id.is_not(None))
             )
             captains = [int(value) for value in rows.scalars()]
+        if encounter.custom_game_id is None and any(seat.team_id is None for seat in seats):
+            # A rosterless tournament seat (an individual-Swiss round team): its captain is the snapshot's.
+            rows = await session.execute(
+                sa.select(User.auth_user_id)
+                .join(WorkspaceMember, WorkspaceMember.player_id == User.id)
+                .join(EncounterTeamMember, EncounterTeamMember.workspace_member_id == WorkspaceMember.id)
+                .join(EncounterTeam, EncounterTeam.id == EncounterTeamMember.encounter_team_id)
+                .where(
+                    EncounterTeamMember.encounter_id == encounter.id,
+                    EncounterTeamMember.active.is_(True),
+                    EncounterTeamMember.is_captain.is_(True),
+                    EncounterTeam.team_id.is_(None),
+                    User.auth_user_id.is_not(None),
+                )
+            )
+            captains += [int(value) for value in rows.scalars()]
         for recipient in captains:
             await notify(
                 session,

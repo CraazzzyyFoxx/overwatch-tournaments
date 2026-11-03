@@ -654,7 +654,8 @@ def assert_tournament_golden(actual: dict) -> None:
         ``MatchRead``, the catalog ``mode_id``/``mode`` a match and an encounter game gained with matchmode01, and the
         browse's ``played_at``/``is_live``/``is_final`` on ``EncounterRead`` (a match's own ``played_at`` was captured
         and stays), and the per-game person ``display`` every roster player gained (docs/users-identity.md §3.6). The
-        golden's nested ``tournament`` objects already carried theirs and keep them."""
+        golden's nested ``tournament`` objects already carried theirs and keep them. ``TournamentRead`` lost its
+        ``win_points``/``draw_points``/``loss_points`` after the capture (stagepts01): points live on the stage."""
         if isinstance(value, dict):
             encounter = value.keys() >= {"scoring_preset", "tournament_id"}
             owner = encounter or value.keys() >= {"encounter_id", "map_id"}
@@ -667,6 +668,9 @@ def assert_tournament_golden(actual: dict) -> None:
             dropped = {
                 "logs_official",
                 "pov_stream_delay_s",
+                "win_points",
+                "draw_points",
+                "loss_points",
                 *(("workspace_id", "discipline") if owner else ()),
                 *(("mode_id", "mode") if "map_id" in value else ()),
                 *(("played_at", "is_live", "is_final") if encounter else ()),

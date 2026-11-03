@@ -91,6 +91,8 @@ export const adminQueryKeys = {
   tournamentTeams: (tournamentId: KeyPart) =>
     ["admin", "tournament", tournamentId, "teams"] as const,
   tournament: (tournamentId: KeyPart) => ["admin", "tournament", tournamentId] as const,
+  tournamentVoice: (tournamentId: KeyPart) =>
+    ["admin", "tournament", tournamentId, "voice"] as const,
   tournamentTeamFormat: (tournamentId: KeyPart, workspaceId: KeyPart, discipline: KeyPart) =>
     ["admin", "tournament", tournamentId, "team-format", workspaceId, discipline] as const,
   tournamentEncountersCount: (tournamentId: KeyPart) =>
@@ -102,6 +104,9 @@ export const adminQueryKeys = {
   /** The Matches → Pre-game rooms overview; the sub-tab badge shares this key. */
   pregameRooms: (tournamentId: KeyPart) =>
     ["admin", "tournament", tournamentId, "pregame-rooms"] as const,
+  /** The personal tables of the tournament's `individual_swiss` stages. */
+  tournamentPlayerStandings: (tournamentId: KeyPart) =>
+    ["admin", "tournament", tournamentId, "player-standings"] as const,
   tournamentStandings: (tournamentId: KeyPart) =>
     ["admin", "tournament", tournamentId, "standings"] as const,
   tournamentTeamsCount: (tournamentId: KeyPart) =>

@@ -36,12 +36,12 @@ import { invalidateTournamentWorkspace } from "@/lib/tournament/workspace-query-
 const SETTINGS_SECTION_FIELDS = {
   // How teams form and which grid seeds them are read on every screen that
   // describes the tournament, so they sit with its name rather than with the
-  // points a result is worth.
+  // results flags.
   general: ["name", "slug", "description", "team_formation", "division_grid_version_id"],
   // One field, and deliberately alone: the published document is the section.
-  // Saving the scoring must not rewrite it in the audit trail, nor the reverse.
+  // Saving the results flags must not rewrite it in the audit trail, nor the reverse.
   rules: ["rules"],
-  scoring: ["is_league", "is_finished", "win_points", "draw_points", "loss_points", "logs_official"],
+  scoring: ["is_league", "is_finished", "logs_official"],
   schedule: ["start_date", "end_date", "auto_transitions_enabled", "allow_late_registration"],
   draft: ["draft_format_json"],
   challonge: ["challonge_slug"],

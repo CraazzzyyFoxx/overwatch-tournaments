@@ -23,6 +23,14 @@ export interface Release {
 
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.8.0",
+    date: "2026-11-03",
+    title: {
+      ru: "Личная швейцарка и голосовые каналы турниров",
+      en: "Individual Swiss and tournament voice channels"
+    }
+  },
+  {
     version: "2.7.0",
     date: "2026-11-02",
     title: {

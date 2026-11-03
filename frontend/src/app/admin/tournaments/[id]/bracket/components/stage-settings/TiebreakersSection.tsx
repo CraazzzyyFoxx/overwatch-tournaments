@@ -27,17 +27,10 @@ import {
 } from "@/lib/bracket/projection";
 import type { SectionProps } from "./types";
 
-export function TiebreakersSection({
-  form,
-  onChange,
-  winPointsDefault,
-  drawPointsDefault,
-  lossPointsDefault
-}: SectionProps & {
-  winPointsDefault: number;
-  drawPointsDefault: number;
-  lossPointsDefault: number;
-}) {
+/** What the engine pays for a result where the stage sets no points (`standings/service.py` `_scoring`). */
+const DEFAULT_POINTS = { win: 1, draw: 0.5, loss: 0 } as const;
+
+export function TiebreakersSection({ form, onChange }: SectionProps) {
   const t = useTranslations("adminBracket.settings");
   const tRoot = useTranslations("adminBracket");
   const ids = useId();
@@ -82,7 +75,7 @@ export function TiebreakersSection({
               id={`${ids}-win`}
               size="sm"
               className="w-24"
-              placeholder={String(winPointsDefault)}
+              placeholder={String(DEFAULT_POINTS.win)}
               value={form.scoringWin === "" ? null : Number(form.scoringWin)}
               onValueChange={(next) => onChange({ scoringWin: next == null ? "" : String(next) })}
             />
@@ -92,7 +85,7 @@ export function TiebreakersSection({
               id={`${ids}-draw`}
               size="sm"
               className="w-24"
-              placeholder={String(drawPointsDefault)}
+              placeholder={String(DEFAULT_POINTS.draw)}
               value={form.scoringDraw === "" ? null : Number(form.scoringDraw)}
               onValueChange={(next) => onChange({ scoringDraw: next == null ? "" : String(next) })}
             />
@@ -102,7 +95,7 @@ export function TiebreakersSection({
               id={`${ids}-loss`}
               size="sm"
               className="w-24"
-              placeholder={String(lossPointsDefault)}
+              placeholder={String(DEFAULT_POINTS.loss)}
               value={form.scoringLoss === "" ? null : Number(form.scoringLoss)}
               onValueChange={(next) => onChange({ scoringLoss: next == null ? "" : String(next) })}
             />
@@ -113,7 +106,7 @@ export function TiebreakersSection({
                 id={`${ids}-bye`}
                 size="sm"
                 className="w-24"
-                placeholder={String(form.scoringWin || winPointsDefault)}
+                placeholder={String(form.scoringWin || DEFAULT_POINTS.win)}
                 value={form.swissByePoints === "" ? null : Number(form.swissByePoints)}
                 onValueChange={(next) =>
                   onChange({ swissByePoints: next == null ? "" : String(next) })

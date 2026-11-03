@@ -18,8 +18,7 @@ from faststream import FastStream
 from shared.messaging.config import (
     ACHIEVEMENT_EVALUATE_DEFERRED_QUEUE,
     ACHIEVEMENT_EVALUATE_QUEUE,
-    TOURNAMENT_REGISTRATION_APPROVED_QUEUE,
-    TOURNAMENT_REGISTRATION_RANK_CHECK_QUEUE,
+    RANK_PLAYER_REFRESH_QUEUE,
 )
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
@@ -81,9 +80,8 @@ def test_the_worker_registers_consumers_and_no_rpc_handler() -> None:
         ACHIEVEMENT_EVALUATE_DEFERRED_QUEUE.name,
     } <= subjects
     assert "tournament_encounter_completed" in subjects
-    # The OverFast module's own consumers: normal/priority fetch and both registration rank checks.
-    assert {"rank_fetch", "rank_fetch_priority"} <= subjects
-    assert {TOURNAMENT_REGISTRATION_APPROVED_QUEUE.name, TOURNAMENT_REGISTRATION_RANK_CHECK_QUEUE.name} <= subjects
+    # The OverFast module's own consumers: normal/priority fetch and the player refresh.
+    assert {"rank_fetch", "rank_fetch_priority", RANK_PLAYER_REFRESH_QUEUE.name} <= subjects
     assert "process_match_log" not in subjects
     assert "swiss_next_round" not in subjects and "tournament_recalc" not in subjects
 

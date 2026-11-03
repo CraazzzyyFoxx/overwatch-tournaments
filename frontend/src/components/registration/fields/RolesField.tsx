@@ -24,6 +24,7 @@ export function rolesParams(field: FormField): RolesParams {
     flex_allowed: params.flex_allowed ?? true,
     flex_mode: params.flex_mode ?? "optional",
     subroles: params.subroles ?? {},
+    max_roles: params.max_roles ?? null,
     top_heroes: {
       enabled: heroes?.enabled ?? false,
       required: heroes?.required ?? false,

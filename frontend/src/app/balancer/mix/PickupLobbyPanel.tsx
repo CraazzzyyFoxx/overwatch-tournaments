@@ -207,30 +207,40 @@ export function PickupLobbyPanel({
       </div>
 
       {rows.length > 0 && supply.length > 0 ? (
-        <div className="flex flex-wrap border-b border-[color:var(--aqt-border)]">
-          {supply.map((entry) => (
-            <div
-              key={entry.role}
-              className="min-w-[7.5rem] flex-1 border-r border-[color:var(--aqt-border)] px-3.5 py-2.5 last:border-r-0"
-            >
-              <div className="flex items-center gap-1.5">
-                <PlayerRoleIcon role={entry.role} ontology={owner.ontology} size={16} decorative />
+        // Chips wrap for any number of roles. A met demand shows only the supply -- "need N" is the format's constant,
+        // kept in the tooltip and for screen readers; a short one spells out the gap.
+        <div className="flex flex-wrap gap-1.5 border-b border-[color:var(--aqt-border)] px-4 py-2.5">
+          {supply.map((entry) => {
+            const short = entry.short > 0;
+            const met = t("supply", { supply: entry.supply, need: entry.need });
+            return (
+              <div
+                key={entry.role}
+                title={short ? undefined : met}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-md border px-2 py-1",
+                  short
+                    ? "border-[color:color-mix(in_srgb,var(--aqt-amber)_45%,transparent)]"
+                    : "border-[color:var(--aqt-border)]",
+                )}
+              >
+                <PlayerRoleIcon role={entry.role} ontology={owner.ontology} size={14} decorative />
                 <Eyebrow tone="dim">{slotLabel(entry.role)}</Eyebrow>
-                <span
-                  className={cn(
-                    "ml-auto text-caption font-semibold tabular-nums",
-                    entry.short > 0
-                      ? "text-[color:var(--aqt-amber)]"
-                      : "text-[color:var(--aqt-fg-muted)]",
-                  )}
-                >
-                  {entry.short > 0
-                    ? t("supplyShort", { supply: entry.supply, short: entry.short })
-                    : t("supply", { supply: entry.supply, need: entry.need })}
-                </span>
+                {short ? (
+                  <span className="whitespace-nowrap text-caption font-semibold tabular-nums text-[color:var(--aqt-amber)]">
+                    {t("supplyShort", { supply: entry.supply, short: entry.short })}
+                  </span>
+                ) : (
+                  <>
+                    <span aria-hidden className="text-caption font-semibold tabular-nums text-[color:var(--aqt-fg)]">
+                      {entry.supply}
+                    </span>
+                    <span className="sr-only">{met}</span>
+                  </>
+                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       ) : null}
 

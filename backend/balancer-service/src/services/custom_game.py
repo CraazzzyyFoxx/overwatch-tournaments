@@ -30,6 +30,8 @@ from shared.domain.mix_lobby import LOBBY_LETTERS
 from shared.domain.pick_ban_rules import mix_ban_preset
 from shared.domain.roster import PlayerRoster, RosterRole
 from shared.domain.roster_shape import FLEX_SLOT_CODE
+from shared.messaging.config import PLAYER_EVENTS_EXCHANGE, PLAYER_REFRESH_REQUESTED_ROUTING_KEY
+from shared.messaging.outbox import enqueue_outbox_event
 from shared.rbac import assign_workspace_system_role
 from shared.repository import (
     CatalogEntityRepository,
@@ -56,7 +58,7 @@ from shared.repository.draft import (
 )
 from shared.repository.roles import CatalogRoleRepository
 from shared.repository.workspace import get_or_create_workspace_member
-from shared.schemas.events import DiscordCommandEvent
+from shared.schemas.events import DiscordCommandEvent, PlayerRefreshRequestedEvent
 from shared.schemas.identity import PersonDisplayRead
 from shared.schemas.role import RoleRef
 from shared.schemas.roster_slots import RosterShapeRead
@@ -563,9 +565,10 @@ class CustomGameService:
         )
 
     async def hosts(
-        self, session: AsyncSession, workspace_id: int, host_user_ids: Sequence[int]
+        self, session: AsyncSession, workspace_id: int, host_user_ids: Sequence[int], *, provider: str | None = None
     ) -> dict[int, str | None]:
-        """Display name for each mix's host, keyed by ``host_user_id``.
+        """Display name for each mix's host, keyed by ``host_user_id``; ``provider`` names a rostered host the way
+        the mix's game does (``hosts_by_user_id``).
 
         Unlike ``members`` this never 404s: a host who has left the workspace
         has no label, and the list falls back to the raw id rather than hiding
@@ -574,7 +577,35 @@ class CustomGameService:
         ids = _uniq(host_user_ids)
         if not ids:
             return {}
-        return await self.load_hosts(session, workspace_id=workspace_id, user_ids=ids)
+        if provider is None:
+            return await self.load_hosts(session, workspace_id=workspace_id, user_ids=ids)
+        return await self.load_hosts(session, workspace_id=workspace_id, user_ids=ids, provider=provider)
+
+    async def _seat_names(
+        self, session: AsyncSession, game: models.CustomGame, member_ids: Iterable[int]
+    ) -> dict[int, str]:
+        """Discord's name for each seated member: the mix game's name for them, without the ``#tag`` (a card or a
+        picture has no room to mute it). A member who has left the roster has none: the caller keeps its stored name."""
+        members = await self.load_roster(
+            session,
+            workspace_id=game.workspace_id,
+            provider=DISCIPLINES[game.discipline].identity_provider,
+            member_ids=sorted(set(member_ids)),
+        )
+        return {member_id: member.display.name for member_id, member in members.items()}
+
+    async def _named_players(
+        self, session: AsyncSession, game: models.CustomGame, players: Mapping[str, Any]
+    ) -> dict[str, Any]:
+        """A lineup document's ``players`` map with each seat's ``name`` replaced by ``_seat_names``; copied, the
+        stored balance keeps the names it was balanced under (seat uuids are workspace member ids)."""
+        names = await self._seat_names(session, game, (int(uuid) for uuid in players if str(uuid).isdigit()))
+        return {
+            uuid: {**seat, "name": names[int(uuid)]}
+            if isinstance(seat, Mapping) and str(uuid).isdigit() and int(uuid) in names
+            else seat
+            for uuid, seat in players.items()
+        }
 
     async def get(
         self,
@@ -1423,12 +1454,23 @@ class CustomGameService:
             return await self.self_state(
                 session, custom_game_id=custom_game_id, auth_user=auth_user, workspace_id=workspace_id
             )
-        await self._seed_host_ranks(
+        joined = await self.members(session, ctx.game.workspace_id, [member.id], discipline=ctx.game.discipline)
+        await self._seed_host_ranks(session, ctx.game, joined)
+        # A fresh signup re-reads the player's ranks and profile names from the game's providers (reference-only).
+        seat = joined[member.id]
+        await enqueue_outbox_event(
             session,
-            ctx.game,
-            await self.members(session, ctx.game.workspace_id, [member.id], discipline=ctx.game.discipline),
+            PlayerRefreshRequestedEvent(
+                user_id=seat.player_id,
+                discipline=ctx.game.discipline,
+                workspace_id=ctx.game.workspace_id,
+                source="mix_signup",
+                identity=seat.identity,
+                source_service="balancer-service",
+            ),
+            exchange=PLAYER_EVENTS_EXCHANGE,
+            routing_key=PLAYER_REFRESH_REQUESTED_ROUTING_KEY,
         )
-        await session.flush()
         await emit_pickup_mix_changed(
             session,
             ctx.game.workspace_id,
@@ -1729,7 +1771,8 @@ class CustomGameService:
             provider=DISCIPLINES[game.discipline].identity_provider,
             member_ids=[row.workspace_member_id for row in roster],
         )
-        host_names = await self.hosts(session, game.workspace_id, [game.host_user_id])
+        provider = DISCIPLINES[game.discipline].identity_provider
+        host_names = await self.hosts(session, game.workspace_id, [game.host_user_id], provider=provider)
         # The numbers the balancer will balance them at: the host's own book
         # above the workspace canon (``MIX_ORDER``), as in ``balance``.
         resolved = await self.ranks.resolve(
@@ -1746,7 +1789,8 @@ class CustomGameService:
         for row in roster:
             member_id = row.workspace_member_id
             member = members.get(member_id)
-            name = (member.display_name or member.handle) if member else None
+            # The card names people as the mix's game does, without the ``#tag``.
+            name = member.display.name if member else None
             roles = stored.get(row.id, []) if row.role_selection_mode == MixRoleSelectionMode.EXPLICIT else None
             ranks = {
                 role: found.value
@@ -2743,13 +2787,15 @@ class CustomGameService:
         member_ids = [member for lobby in shaped for team in lobby.teams for member in team]
         plan = plan_move(config, shaped, await self.discord_links(session, member_ids))
         results = await self._ask_discord(discord, config, moves=plan.moves, drain=None) if plan.moves else []
-        # The board's own names: every seat's uuid resolves in its document's player map.
-        names = {
+        # The board's own seats: every seat's uuid resolves in its document's player map, named as the game names
+        # the member now; a member who has left keeps the name the balance stored.
+        stored = {
             int(uuid): str(player.get("name"))
             for lobby in lobbies
             for uuid, player in _lobby_players(as_lobby_document(lobby.balance_result_json)).items()
             if str(uuid).isdigit() and isinstance(player, Mapping) and player.get("name")
         }
+        names = {**stored, **await self._seat_names(session, game, stored)}
         return report(plan, results, names)
 
     async def voice_return(
@@ -2903,7 +2949,7 @@ class CustomGameService:
             **out,
             "current": True,
             "variant": variants[index],
-            "players": _lobby_players(result),
+            "players": await self._named_players(session, game, _lobby_players(result)),
             "team_names": {str(team): name for team, name in team_names.items()},
             "next_map": next_map,
             "map_image": map_image,

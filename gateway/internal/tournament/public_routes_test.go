@@ -98,6 +98,10 @@ func TestPickBanV2RouteContracts(t *testing.T) {
 		"rpc.tournament.admin_pick_ban_reopen":         adminEncounter,
 		"rpc.tournament.admin_pick_ban_rules_validate": adminTournament,
 		"rpc.tournament.admin_pick_ban_rules_preview":  adminTournament,
+		// Voice channels: the sync press carries no body, the settings save does.
+		"rpc.tournament.voice_get":  {method: "GET", idParam: "tournament_id", auth: edge.AuthRequired},
+		"rpc.tournament.voice_put":  {method: "PUT", idParam: "tournament_id", body: true, auth: edge.AuthRequired},
+		"rpc.tournament.voice_sync": {method: "POST", idParam: "tournament_id", auth: edge.AuthRequired},
 		// The pre-game room overrides: readiness is a body write on an
 		// encounter, the rooms board a bodyless read on a tournament.
 		"rpc.tournament.admin_encounter_readiness_set": adminEncounter,

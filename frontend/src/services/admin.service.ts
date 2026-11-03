@@ -36,6 +36,9 @@ import {
   TournamentReadiness,
   TournamentPhaseScheduleEntryInput,
   StageCreateInput,
+  PlayerStanding,
+  PlayerStandingPin,
+  QualificationLock,
   StageUpdateInput,
   StageItemCreateInput,
   StageItemInputCreateInput,
@@ -85,6 +88,8 @@ import {
   DiscordChannelRead,
   GameObservationRead,
   DiscordChannelInput,
+  VoiceSettings,
+  VoiceStatus,
   LogBindRequest,
   LogBindResponse,
   LogHistoryResponse,
@@ -1303,6 +1308,28 @@ class AdminService {
     });
   }
 
+  // ─── Tournament voice channels ────────────────────────────────────────────
+
+  async getVoice(tournamentId: number): Promise<VoiceStatus> {
+    const response = await apiFetch(`/api/v1/admin/tournaments/${tournamentId}/voice`);
+    return response.json();
+  }
+
+  async putVoice(tournamentId: number, data: VoiceSettings): Promise<VoiceStatus> {
+    const response = await apiFetch(`/api/v1/admin/tournaments/${tournamentId}/voice`, {
+      method: "PUT",
+      body: data
+    });
+    return response.json();
+  }
+
+  async syncVoice(tournamentId: number): Promise<VoiceStatus> {
+    const response = await apiFetch(`/api/v1/admin/tournaments/${tournamentId}/voice/sync`, {
+      method: "POST"
+    });
+    return response.json();
+  }
+
   // ─── Log Processing History ───────────────────────────────────────────────
 
   async getLogHistory(
@@ -1630,13 +1657,41 @@ class AdminService {
     stageId: number,
     data: {
       team_ids: number[];
-      mode?: "snake_sr" | "by_total_sr" | "random";
+      mode?: "snake_sr" | "by_total_sr" | "random" | "captain_rank";
     }
   ): Promise<Stage> {
     const response = await apiFetch(`/api/v1/admin/stages/${stageId}/seed-teams`, {
       method: "POST",
       body: data
     });
+    return response.json();
+  }
+
+  /** The personal tables of every `individual_swiss` stage of the tournament (the public read). */
+  async listPlayerStandings(tournamentId: number): Promise<PlayerStanding[]> {
+    const response = await apiFetch(`/api/v1/tournaments/${tournamentId}/player-standings`);
+    return response.json();
+  }
+
+  /** Replaces every pin of the stage; an empty list unpins everyone. */
+  async setPlayerStandingPins(
+    tournamentId: number,
+    stageId: number,
+    pins: PlayerStandingPin[]
+  ): Promise<PlayerStandingPin[]> {
+    const response = await apiFetch(
+      `/api/v1/admin/tournaments/${tournamentId}/stages/${stageId}/player-standing-pins`,
+      { method: "PUT", body: { pins } }
+    );
+    return (await response.json()).pins;
+  }
+
+  /** Freezes the qualifiers and moves the tournament LIVE to DRAFT. */
+  async lockQualification(tournamentId: number, stageId: number): Promise<QualificationLock> {
+    const response = await apiFetch(
+      `/api/v1/admin/tournaments/${tournamentId}/stages/${stageId}/lock-qualification`,
+      { method: "POST" }
+    );
     return response.json();
   }
 

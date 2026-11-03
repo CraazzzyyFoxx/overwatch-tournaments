@@ -114,7 +114,8 @@ class FormSchema(BaseModel):
                         except ValidationError as exc:
                             first = exc.errors()[0]
                             loc = ".".join(str(part) for part in first["loc"])
-                            raise ValueError(f"{path}.params.{loc}: {first['msg']}") from exc
+                            where = f"{path}.params.{loc}" if loc else f"{path}.params"
+                            raise ValueError(f"{where}: {first['msg']}") from exc
                     elif field.params:
                         raise ValueError(f"{path}.params: {field.key!r} takes no params")
                     if spec.fixed_visibility is not None and field.visibility != spec.fixed_visibility:

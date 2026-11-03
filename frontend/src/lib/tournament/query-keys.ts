@@ -36,6 +36,11 @@ export const tournamentQueryKeys = {
     workspaceId == null
       ? (["standings", tournamentId] as const)
       : (["standings", tournamentId, workspaceId] as const),
+  /** Under `standings`, so the realtime standings invalidation refreshes the personal table too. */
+  playerStandings: (tournamentId: number) => ["standings", tournamentId, "players"] as const,
+  /** Under `encounters`, so a result write refreshes the rounds. */
+  individualRounds: (tournamentId: number, stageId: number) =>
+    ["encounters", "tournament", tournamentId, "individual-rounds", stageId] as const,
   bracketStandings: (tournamentId: number, workspaceId?: number | null) =>
     workspaceId == null
       ? (["standings", tournamentId, "bracket"] as const)

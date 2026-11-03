@@ -15,6 +15,7 @@ from typing import Any
 import discord
 
 from src.services.directory import DirectoryOutcome
+from src.services.guild_queue import GuildQueues, Priority
 
 __all__ = ("VoiceMover",)
 
@@ -22,8 +23,9 @@ _REASON = "OWT mix"
 
 
 class VoiceMover:
-    def __init__(self, client: discord.Client) -> None:
+    def __init__(self, client: discord.Client, queues: GuildQueues | None = None) -> None:
         self._client = client
+        self._queues = queues or GuildQueues()
 
     async def move(
         self,
@@ -48,14 +50,14 @@ class VoiceMover:
             if current is None or getattr(current, "category_id", None) != category:
                 results.append(_row(user_id, member, channel_id, "not_in_voice"))
                 continue
-            results.append(await self._apply(member, self._voice(guild, category, channel_id), channel_id))
+            results.append(await self._apply(guild, member, self._voice(guild, category, channel_id), channel_id))
         if drain:
             to_channel_id = str(drain["to_channel_id"])
             target = self._voice(guild, category, to_channel_id)
             for source_id in drain.get("channel_ids") or []:
                 source = self._voice(guild, category, str(source_id))
                 for member in list(source.members) if source is not None else []:
-                    results.append(await self._apply(member, target, to_channel_id))
+                    results.append(await self._apply(guild, member, target, to_channel_id))
         return DirectoryOutcome("success", {"results": results})
 
     @staticmethod
@@ -66,15 +68,16 @@ class VoiceMover:
             return channel
         return None
 
-    @staticmethod
-    async def _apply(member: discord.Member, target: discord.VoiceChannel | None, channel_id: str) -> dict[str, Any]:
+    async def _apply(
+        self, guild: discord.Guild, member: discord.Member, target: discord.VoiceChannel | None, channel_id: str
+    ) -> dict[str, Any]:
         user_id = str(member.id)
         if target is None:
             return _row(user_id, member, channel_id, "channel_outside_category")
         if member.voice is not None and member.voice.channel is not None and member.voice.channel.id == target.id:
             return _row(user_id, member, channel_id, "moved")
         try:
-            await member.move_to(target, reason=_REASON)
+            await self._queues.submit(guild.id, Priority.HUB_MOVE, lambda: member.move_to(target, reason=_REASON))
         except discord.Forbidden:
             return _row(user_id, member, channel_id, "missing_permission")
         except discord.HTTPException:

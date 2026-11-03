@@ -4,8 +4,8 @@ The registry's lazy wrappers (``shared.disciplines.overwatch``) call these; a wo
 never imports this module.
 
 Topology: the scheduler publishes one ``FetchRankEvent`` per due battle tag; the consumers perform the HTTP call.
-The rank-fetch queues get their own channel prefetch (OverFast-protective); the registration consumers ride the broker's
-default channel. Their dead-letter queues are declared by ``start_jobs`` (the module owns them).
+The rank-fetch queues get their own channel prefetch (OverFast-protective); the player-refresh consumer rides the
+broker's default channel. Their dead-letter queues are declared by ``start_jobs`` (the module owns them).
 """
 
 from collections.abc import Awaitable
@@ -15,15 +15,13 @@ from faststream.rabbit import Channel
 from faststream.rabbit.annotations import RabbitMessage
 
 from shared.messaging.config import (
+    PLAYER_EVENTS_EXCHANGE,
     RANK_FETCH_DLQ,
     RANK_FETCH_PRIORITY_DLQ,
     RANK_FETCH_PRIORITY_QUEUE,
     RANK_FETCH_QUEUE,
-    TOURNAMENT_EVENTS_EXCHANGE,
-    TOURNAMENT_REGISTRATION_APPROVED_DLQ,
-    TOURNAMENT_REGISTRATION_APPROVED_QUEUE,
-    TOURNAMENT_REGISTRATION_RANK_CHECK_DLQ,
-    TOURNAMENT_REGISTRATION_RANK_CHECK_QUEUE,
+    RANK_PLAYER_REFRESH_DLQ,
+    RANK_PLAYER_REFRESH_QUEUE,
 )
 from shared.messaging.topology import declare_dead_letter_queue
 from shared.observability import observe_message_processing
@@ -36,8 +34,7 @@ from .settings import settings
 OWNED_DLQS = (
     RANK_FETCH_DLQ,
     RANK_FETCH_PRIORITY_DLQ,
-    TOURNAMENT_REGISTRATION_APPROVED_DLQ,
-    TOURNAMENT_REGISTRATION_RANK_CHECK_DLQ,
+    RANK_PLAYER_REFRESH_DLQ,
 )
 
 
@@ -59,26 +56,16 @@ def register_jobs(broker: Any, *, session_factory: Any, redis: Any, logger: Any)
         ):
             await tasks.process_fetch_rank(data)
 
-    @broker.subscriber(TOURNAMENT_REGISTRATION_APPROVED_QUEUE, exchange=TOURNAMENT_EVENTS_EXCHANGE)
-    async def process_registration_approved_rank_check(data: dict, msg: RabbitMessage) -> None:
+    # Player refresh (registration approved / re-checked, mix signup): the handler skips another game's request.
+    @broker.subscriber(RANK_PLAYER_REFRESH_QUEUE, exchange=PLAYER_EVENTS_EXCHANGE)
+    async def process_player_refresh(data: dict, msg: RabbitMessage) -> None:
         async with observe_message_processing(
-            queue=TOURNAMENT_REGISTRATION_APPROVED_QUEUE,
-            handler="process_registration_approved_rank_check",
+            queue=RANK_PLAYER_REFRESH_QUEUE,
+            handler="process_player_refresh",
             message=msg,
             logger=logger,
         ):
-            await tasks.handle_registration_approved(data, broker=broker)
-
-    # The registrant's own "check again" from their card: same rank check, own queue.
-    @broker.subscriber(TOURNAMENT_REGISTRATION_RANK_CHECK_QUEUE, exchange=TOURNAMENT_EVENTS_EXCHANGE)
-    async def process_registration_rank_check(data: dict, msg: RabbitMessage) -> None:
-        async with observe_message_processing(
-            queue=TOURNAMENT_REGISTRATION_RANK_CHECK_QUEUE,
-            handler="process_registration_rank_check",
-            message=msg,
-            logger=logger,
-        ):
-            await tasks.handle_registration_approved(data, broker=broker)
+            await tasks.handle_player_refresh(data, broker=broker)
 
 
 async def start_jobs(*, session_factory: Any, redis: Any, logger: Any) -> None:

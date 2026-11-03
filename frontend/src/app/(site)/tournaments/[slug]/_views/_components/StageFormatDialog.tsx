@@ -372,6 +372,7 @@ const SCHEMA: Record<StageFormat, () => JSX.Element> = {
   round_robin: RoundRobinSchema,
   swiss: SwissSchema,
   ffa_league: FfaSchema,
+  individual_swiss: SwissSchema,
   single_elimination: SingleEliminationSchema,
   double_elimination: DoubleEliminationSchema
 };

@@ -34,6 +34,7 @@ import type { Encounter } from "@/types/encounter.types";
 import type { Tournament, TournamentPlayerStatKey } from "@/types/tournament.types";
 import type { CharacterPlaytime } from "@/types/user.types";
 
+import { SectionToolbar } from "../_components/SectionToolbar";
 import { TournamentPageState } from "../_components/TournamentPageState";
 import {
   TournamentHeroesSkeleton,
@@ -181,6 +182,7 @@ function PlayerCell({
 
 function PlayersTab({ tournament }: Readonly<{ tournament: Tournament }>) {
   const t = useTranslations("tournamentDetail");
+  const tRoot = useTranslations();
   const insights = useTournamentInsights(tournament);
   const roster = useTournamentRoster(tournament);
   const ontology =
@@ -294,13 +296,21 @@ function PlayersTab({ tournament }: Readonly<{ tournament: Tournament }>) {
           })}
         </div>
       </CardSurface>
-      <CardSurface
-        title={t("stats.players.all")}
-        subtitle={t("common.shownOf", { shown: visible.length, total: rows.length })}
-        flush
-      >
-        <div className="flex flex-wrap items-center gap-2 border-b border-[color:var(--aqt-border)] px-4.5 py-3">
-          <FilterChipGroup label={t("stats.players.roleFilter")}>
+      <CardSurface flush>
+        <SectionToolbar
+          variant="inset"
+          label={tRoot("common.filters")}
+          end={
+            <SearchField
+              label={t("stats.players.search")}
+              placeholder={t("stats.players.searchPlaceholder")}
+              value={query}
+              onValueChange={setQuery}
+              containerClassName="w-full sm:w-64"
+            />
+          }
+        >
+          <FilterChipGroup label={t("stats.players.roleFilter")} className="flex-nowrap">
             <FilterChip active={role === "all"} onClick={() => setRole("all")}>
               {t("stats.players.allRoles")}
             </FilterChip>
@@ -310,14 +320,7 @@ function PlayersTab({ tournament }: Readonly<{ tournament: Tournament }>) {
               </FilterChip>
             ))}
           </FilterChipGroup>
-          <SearchField
-            label={t("stats.players.search")}
-            placeholder={t("stats.players.searchPlaceholder")}
-            value={query}
-            onValueChange={setQuery}
-            containerClassName="w-full sm:ms-auto sm:w-64"
-          />
-        </div>
+        </SectionToolbar>
         <SortableTable
           rows={visible}
           columns={columns}
@@ -859,7 +862,7 @@ function MapsTab({ tournament, slug }: Readonly<{ tournament: Tournament; slug: 
   ];
 
   return (
-    <CardSurface title={t("stats.maps.table")} flush>
+    <CardSurface flush>
       <SortableTable
         rows={rows}
         columns={columns}

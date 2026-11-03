@@ -19,7 +19,6 @@ import {
 import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Eyebrow } from "@/components/ui/eyebrow";
 import { FilterChip } from "@/components/ui/filter-chip";
 import { SearchField } from "@/components/ui/search-field";
@@ -71,6 +70,7 @@ import {
 import { useParticipantSearchInput } from "./useParticipantSearchInput";
 import VirtualParticipantsList from "./VirtualParticipantsList";
 import { TournamentParticipantsSkeleton } from "../../_components/TournamentSkeletons";
+import { SectionToolbar } from "../../_components/SectionToolbar";
 import { TournamentPageState } from "../../_components/TournamentPageState";
 import { ViewSegment } from "../../_components/ViewSegment";
 import { MyRegistrationCard } from "./MyRegistrationCard";
@@ -646,49 +646,100 @@ function TournamentParticipantsView({ tournament }: Readonly<{ tournament: Tourn
         </p>
       )}
 
-      {/* One toolbar for both views, two clusters: what you are looking at on
-          the left (view switch, status chips), how you are narrowing it on the
-          right (search, division, columns). The switch stays put when the view
-          changes — the search owns the single `auto` margin between the
-          clusters, and a second one would scatter the controls across the bar.
-          Below `sm` the chips take their own line and scroll sideways instead
-          of wrapping into a third and fourth row; from `sm` up their wrapper is
-          `display: contents`, so the desktop bar stays one flex row. Below `sm`
-          every control is 40px: the 32px toolbar row is under the touch minimum. */}
+      {/* One toolbar for both views: the status chips lead, the search,
+          division and columns follow, and the view switch stays at the far end
+          in either view. Below `sm` every control is 40px: the 32px toolbar
+          row is under the touch minimum. */}
       {!listHidden && !trueEmpty && (
-        <Card
-          className="flex flex-wrap items-center gap-2 p-2.5"
-          role="group"
-          aria-label={t("common.filters")}
+        <SectionToolbar
           ref={resultsHeadingRef}
-        >
-          {hasPoolView && (
-            <ViewSegment<ParticipantView>
-              param="view"
-              defaultValue={defaultView}
-              label={t("tournamentDetail.participantsPool.viewLabel")}
-              options={[
-                {
-                  value: "table",
-                  label: <Table2 aria-hidden width={14} height={14} />,
-                  ariaLabel: t("tournamentDetail.participantsPool.view.table")
-                },
-                {
-                  value: "pool",
-                  label: <LayoutGrid aria-hidden width={14} height={14} />,
-                  ariaLabel: t("tournamentDetail.participantsPool.view.pool")
+          label={t("common.filters")}
+          end={
+            <>
+              <SearchField
+                label={
+                  view === "pool"
+                    ? t("tournamentDetail.participantsPool.searchLabel")
+                    : t("common.searchParticipants")
                 }
-              ]}
-            />
-          )}
+                defaultValue={searchQuery}
+                maxLength={PARTICIPANT_SEARCH_MAX_LENGTH}
+                onChange={handleParticipantSearchChange}
+                placeholder={
+                  view === "pool"
+                    ? t("tournamentDetail.participantsPool.searchLabel")
+                    : t("common.searchParticipants")
+                }
+                ref={participantSearchInputRef}
+                className="max-sm:h-10"
+                containerClassName="min-w-0 flex-1 sm:min-w-[200px] sm:max-w-[300px]"
+              />
+              {view === "pool" && divisionOptions.length > 0 && (
+                <Select
+                  value={divisionFilter === null ? "all" : String(divisionFilter)}
+                  onValueChange={(value) =>
+                    navigateParticipantUrl({
+                      type: "division",
+                      value: value === "all" ? null : Number(value)
+                    })
+                  }
+                >
+                  <SelectTrigger
+                    aria-label={t("tournamentDetail.participantsPool.divisionFilterLabel")}
+                    size="sm"
+                    className="w-[10.5rem] max-sm:h-10"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">
+                      {t("tournamentDetail.participantsPool.allDivisions")}
+                    </SelectItem>
+                    {divisionOptions.map((division) => (
+                      <SelectItem key={division} value={String(division)}>
+                        {t("tournamentDetail.participantsPool.divisionOption", { division })}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              {view === "table" && (
+                <ColumnPicker
+                  columns={allColumns}
+                  visibility={visibility}
+                  onToggle={toggleColumn}
+                  onReset={resetToDefaults}
+                />
+              )}
+            </>
+          }
+          view={
+            hasPoolView ? (
+              <ViewSegment<ParticipantView>
+                param="view"
+                defaultValue={defaultView}
+                label={t("tournamentDetail.participantsPool.viewLabel")}
+                options={[
+                  {
+                    value: "table",
+                    label: <Table2 aria-hidden width={14} height={14} />,
+                    ariaLabel: t("tournamentDetail.participantsPool.view.table")
+                  },
+                  {
+                    value: "pool",
+                    label: <LayoutGrid aria-hidden width={14} height={14} />,
+                    ariaLabel: t("tournamentDetail.participantsPool.view.pool")
+                  }
+                ]}
+              />
+            ) : undefined
+          }
+        >
           {view === "table" && (
-            // The negative margins give the chips' 4px focus ring room inside
-            // the scroll clip and run the row to the card's right edge; the
-            // basis adds them back so the row still owns the whole line.
-            <div className="-my-1 -ml-1 -mr-2.5 flex min-w-0 shrink-0 basis-[calc(100%+0.875rem)] gap-2 overflow-x-auto py-1 pl-1 pr-2.5 [scrollbar-width:none] sm:contents [&::-webkit-scrollbar]:hidden">
+            <>
               <FilterChip
                 active={statusFilter === "all"}
-                className="shrink-0 max-sm:h-10"
+                className="max-sm:h-10"
                 count={registrations.length}
                 onClick={() => navigateParticipantUrl({ type: "status", value: "all" })}
               >
@@ -700,7 +751,7 @@ function TournamentParticipantsView({ tournament }: Readonly<{ tournament: Tourn
                   <FilterChip
                     key={status}
                     active={statusFilter === status}
-                    className="shrink-0 max-sm:h-10"
+                    className="max-sm:h-10"
                     count={statusCounts[status] ?? 0}
                     dotColor={meta?.dot ?? "var(--aqt-fg-dim)"}
                     onClick={() =>
@@ -714,64 +765,9 @@ function TournamentParticipantsView({ tournament }: Readonly<{ tournament: Tourn
                   </FilterChip>
                 );
               })}
-            </div>
+            </>
           )}
-          <SearchField
-            label={
-              view === "pool"
-                ? t("tournamentDetail.participantsPool.searchLabel")
-                : t("common.searchParticipants")
-            }
-            defaultValue={searchQuery}
-            maxLength={PARTICIPANT_SEARCH_MAX_LENGTH}
-            onChange={handleParticipantSearchChange}
-            placeholder={
-              view === "pool"
-                ? t("tournamentDetail.participantsPool.searchLabel")
-                : t("common.searchParticipants")
-            }
-            ref={participantSearchInputRef}
-            className="max-sm:h-10"
-            containerClassName="min-w-0 flex-1 sm:ml-auto sm:min-w-[200px] sm:max-w-[300px]"
-          />
-          {view === "pool" && divisionOptions.length > 0 && (
-            <Select
-              value={divisionFilter === null ? "all" : String(divisionFilter)}
-              onValueChange={(value) =>
-                navigateParticipantUrl({
-                  type: "division",
-                  value: value === "all" ? null : Number(value)
-                })
-              }
-            >
-              <SelectTrigger
-                aria-label={t("tournamentDetail.participantsPool.divisionFilterLabel")}
-                size="sm"
-                className="w-[10.5rem] max-sm:h-10"
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">
-                  {t("tournamentDetail.participantsPool.allDivisions")}
-                </SelectItem>
-                {divisionOptions.map((division) => (
-                  <SelectItem key={division} value={String(division)}>
-                    {t("tournamentDetail.participantsPool.divisionOption", { division })}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-          {view === "table" && (
-            <ColumnPicker
-              columns={allColumns}
-              visibility={visibility}
-              onToggle={toggleColumn}
-              onReset={resetToDefaults}
-            />
-          )}
-        </Card>
+        </SectionToolbar>
       )}
 
       {/* Participants list — or, when the organizer hid it, the only thing the

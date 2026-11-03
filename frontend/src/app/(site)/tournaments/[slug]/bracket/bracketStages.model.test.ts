@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import type { Stage, StageItem, Tournament } from "@/types/tournament.types";
 
-import { buildBracketTabs } from "./bracketStages.model";
+import { buildBracketTabs, buildGroupStagePanels, selectBracketStages } from "./bracketStages.model";
 
 const tournament = { id: 117, slug: "txao-5" } as Tournament;
 
@@ -60,6 +60,20 @@ describe("buildBracketTabs before any match", () => {
     expect(tabs([groups], finished, 252)).toEqual([
       ["Group stage", false],
       ["Playoff", true]
+    ]);
+  });
+});
+
+describe("an individual Swiss stage", () => {
+  const individual = stage(300, "individual_swiss", []);
+
+  it("is a group-scope stage with one panel and one tab, never judged on its items", () => {
+    expect(selectBracketStages([individual], null, 300).activeGroupStages).toEqual([individual]);
+    expect(buildGroupStagePanels([individual], [], [])).toHaveLength(1);
+    // No items and no matches, yet its tab leads to the round view.
+    expect(tabs([individual], stage(301, "single_elimination", []), 301)).toEqual([
+      ["Stage 300", false],
+      ["Playoff", false]
     ]);
   });
 });

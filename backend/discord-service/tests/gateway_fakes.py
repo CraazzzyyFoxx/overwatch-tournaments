@@ -184,6 +184,7 @@ def gateway(
         registry=MagicMock(),
         directory=MagicMock(),
         voice=MagicMock(),
+        voice_sync=MagicMock(),
         bot=bot or MagicMock(wait_until_ready=AsyncMock()),
         session_maker=maker or session_maker(),
         projector=projector or MagicMock(),

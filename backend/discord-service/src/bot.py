@@ -17,6 +17,7 @@ from discord.ext import commands, tasks
 from src.cogs.interactions import InteractionsCog
 from src.cogs.log_ingestion import LogIngestionCog
 from src.cogs.membership import MembershipEventsCog
+from src.cogs.voice import VoiceChannelsCog
 from src.core.config import Settings
 from src.core.db import async_session_maker
 from src.interactions.dispatcher import ActionDispatcher
@@ -26,8 +27,10 @@ from src.services.attachment_client import AttachmentClientFactory
 from src.services.attachment_processor import AttachmentProcessor
 from src.services.channel_registry import ChannelRegistry
 from src.services.directory import DiscordDirectoryService
+from src.services.guild_queue import GuildQueues
 from src.services.mix_projector import MixProjector
 from src.services.voice import VoiceMover
+from src.services.voice_sync import VoiceSync
 from src.watchdog import GatewayWatchdog
 
 
@@ -61,7 +64,9 @@ class LogCollectorBot(commands.Bot):
             registry=self.channel_registry,
         )
         self.directory = DiscordDirectoryService(self)
-        self.voice = VoiceMover(self)
+        self.guild_queues = GuildQueues()
+        self.voice = VoiceMover(self, self.guild_queues)
+        self.voice_sync = VoiceSync(bot=self, session_maker=self.session_maker, queues=self.guild_queues)
         self.action_dispatcher = ActionDispatcher(site_url=settings.public_site_url, session_maker=self.session_maker)
         self.rabbit_gateway = DiscordRabbitGateway(
             settings=settings,
@@ -69,6 +74,7 @@ class LogCollectorBot(commands.Bot):
             registry=self.channel_registry,
             directory=self.directory,
             voice=self.voice,
+            voice_sync=self.voice_sync,
             bot=self,
             session_maker=self.session_maker,
             projector=MixProjector(bot=self, session_maker=self.session_maker),
@@ -85,6 +91,7 @@ class LogCollectorBot(commands.Bot):
         self._reload_emoji.start()
         await self.add_cog(LogIngestionCog(self))
         await self.add_cog(MembershipEventsCog(self))
+        await self.add_cog(VoiceChannelsCog(self))
         await self.add_cog(InteractionsCog(self))
         await self.rabbit_gateway.start()
         self.watchdog.start()
@@ -100,6 +107,8 @@ class LogCollectorBot(commands.Bot):
 
     async def close(self) -> None:
         self._reload_emoji.cancel()
+        self.voice_sync.close()
+        self.guild_queues.close()
         self.watchdog.stop()
         await self.rabbit_gateway.close()
         await super().close()

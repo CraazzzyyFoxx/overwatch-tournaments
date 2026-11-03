@@ -49,6 +49,7 @@ from src.services.bracket.swiss_state import (
     swiss_bye_team_ids,
 )
 from src.services.encounter.ffa import ffa_encounter_service
+from src.services.individual_swiss import individual_swiss_rounds_service
 from src.services.standings.service import StageEncounter, rank_group, standings_service
 
 
@@ -157,7 +158,6 @@ class StageGenerationMixin(StageServiceBase):
         # standings job hands in the very encounters it ranked and closed the
         # round on, so pairing and gate see one snapshot. A result committing
         # after it bumps the generation and gets a job of its own.
-        tournament = await session.get_one(models.Tournament, stage.tournament_id)
         stage_item = next((item for item in stage.items if item.id == stage_item_id), None)
         byes = Counter(await swiss_bye_team_ids(session, stage_id, stage_item_id))
         swiss_standings = [
@@ -168,7 +168,7 @@ class StageGenerationMixin(StageServiceBase):
                 wins=team.wins + byes[team.team_id],
                 losses=team.loses,
             )
-            for team in rank_group(tournament, stage, stage_item, encounters, bye_counts=byes)
+            for team in rank_group(stage, stage_item, encounters, bye_counts=byes)
         ]
 
         return swiss_standings, swiss_played_pairs, swiss_round
@@ -492,7 +492,9 @@ class StageGenerationMixin(StageServiceBase):
         )
         existing_by_item: dict[int | None, int] = dict(existing_by_item_result.all())
 
-        if stage.stage_type in FFA_STAGE_TYPES:
+        if stage.stage_type == enums.StageType.INDIVIDUAL_SWISS:
+            encounters = await self._generate_individual_swiss_encounters(session, stage, existing_by_item)
+        elif stage.stage_type in FFA_STAGE_TYPES:
             encounters = await self._generate_ffa_encounters(session, stage, existing_by_item)
         elif stage.stage_type in GROUPED_GENERATION_STAGE_TYPES and len(stage.items) > 1:
             encounters = await self._generate_grouped_encounters(session, stage, existing_by_item)
@@ -510,6 +512,21 @@ class StageGenerationMixin(StageServiceBase):
             schedule_standings=schedule_standings,
         )
         return encounters
+
+    async def _generate_individual_swiss_encounters(
+        self,
+        session: AsyncSession,
+        stage: models.Stage,
+        existing_by_item: dict[int | None, int],
+    ) -> list[models.Encounter]:
+        """Start the personal-table stage: freeze the pool and pair round 1 (later rounds come from the standings job)."""
+        await self._lock_stage(session, stage.id)
+        if sum(existing_by_item.values()) > 0:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="This stage already has generated matches. Delete them first to start it again.",
+            )
+        return await individual_swiss_rounds_service.start(session, stage)
 
     async def _generate_ffa_encounters(
         self,

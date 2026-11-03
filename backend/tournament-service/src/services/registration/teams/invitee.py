@@ -18,6 +18,7 @@ from shared.services.realtime import Resource, Scope, emit
 from src.schemas.registration import RegistrationSubmit
 from src.schemas.registration_team import RegistrationTeamInvitePreview
 from src.services.admission import AdmissionStage
+from src.services.person_names import account_display_name
 from src.services.registration.admission import assert_admitted_at
 from src.services.registration.service import TeamPlacement
 from src.services.registration.team_rate_limits import assert_accept_attempt_allowed
@@ -330,7 +331,13 @@ class InviteeMixin(TeamServiceBase):
             invite_id=invite.id,
             answer="accepted",
             responder=auth_user,
-            responder_name=(identity.handle if identity else None) or auth_user.username,
+            responder_name=await account_display_name(
+                session,
+                tournament_id=team.tournament_id,
+                auth_user_id=auth_user.id,
+                snapshot=identity.handle if identity else None,
+            )
+            or auth_user.username,
         )
         try:
             await session.commit()
@@ -385,6 +392,12 @@ class InviteeMixin(TeamServiceBase):
                 invite_id=invite.id,
                 answer="declined",
                 responder=auth_user,
-                responder_name=tags.get(auth_user.id) or auth_user.username,
+                responder_name=await account_display_name(
+                    session,
+                    tournament_id=team_row.tournament_id,
+                    auth_user_id=auth_user.id,
+                    snapshot=tags.get(auth_user.id),
+                )
+                or auth_user.username,
             )
         await session.commit()

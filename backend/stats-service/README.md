@@ -174,13 +174,12 @@ The refresher role must own this MV and have SELECT on its native sources; ordin
 | `achievement_evaluate` | `AchievementEvaluateEvent` | Run the achievement engine for a workspace |
 | `achievement_evaluate.deferred` | `AchievementEvaluateEvent` | Resumes a `queued` run an unverified workspace's manual/`rule_version_bump` recompute was parked as; own channel, prefetch 1 |
 | `tournament_encounter_completed` | `EncounterCompletedEvent` | Bound to the `tournament.events` exchange; fills in the encounter's Push/Clash map scores (`match_logs/objectiveless.py`), then enqueues an achievement evaluation |
-| `tournament_registration_approved` | — | Bound to the same exchange; prioritises and enqueues a rank check for the approved player |
-| `tournament_registration_rank_check` | `RegistrationRankCheckRequestedEvent` | Same rank check, asked for by the registrant from their own card |
+| `rank_player_refresh` | `PlayerRefreshRequestedEvent` | Bound to the `player.events` exchange (routing key `player.refresh_requested`: tournament registration approved or re-checked, mix signup); prioritises and enqueues a rank check for an Overwatch player, skips another game's |
 | `rank_fetch`, `rank_fetch_priority` | `FetchRankEvent` | One OverFast call per battle tag; shared channel with prefetch `RANK_FETCH_WORKER_PREFETCH` |
 | `lol_rank_fetch`, `lol_rank_fetch_priority` | LoL fetch request | One Riot API fetch per Riot account; shared channel with prefetch `LOL_RANK_FETCH_WORKER_PREFETCH` (3) |
-| `lol_rank_registration_approved`, `lol_rank_registration_rank_check` | — | Bound to the same exchange (routing keys `tournament.registration.approved` / `.rank_check_requested`); priority-fetch the Riot accounts of an approved LoL registrant, or of one asking for a re-check |
+| `lol_rank_player_refresh` | `PlayerRefreshRequestedEvent` | Bound to `player.events` (`player.refresh_requested`); priority-fetch every Riot account of a LoL player, skips another game's |
 | `deadlock_rank_fetch`, `deadlock_rank_fetch_priority` | `DeadlockFetchRequest` (up to 1000 Steam accounts) | One deadlock-api `/v1/players/rank` request per batch; shared channel with prefetch 1 |
-| `deadlock_rank_registration_approved`, `deadlock_rank_registration_rank_check` | — | Bound to the same exchange (routing keys `tournament.registration.approved` / `.rank_check_requested`); priority-fetch the Steam accounts of an approved Deadlock registrant, or of one asking for a re-check |
+| `deadlock_rank_player_refresh` | `PlayerRefreshRequestedEvent` | Bound to `player.events` (`player.refresh_requested`); priority-fetch every Steam account of a Deadlock player in one batch, skips another game's |
 | `discord_member_changed` | `DiscordMemberChangedEvent` | Re-resolves the member's Boosty entitlement in every workspace bound to the guild (`subscription_collection/member_events.py`); own channel, prefetch 2; the scheduled sweep stays the slow reconciliation |
 | `cache_invalidation_stats_service` | `CacheInvalidatedEvent` | Bound to the `cache.invalidation` exchange; re-bumps the event's cache generations and, on `tournament.standings`, requests the debounced MV refresh (see [Public reads](#public-reads)); own channel, prefetch 4 |
 
@@ -600,10 +599,9 @@ deployment slice: its schedules are Redis leader-locked, so extra replicas are s
   `stats.ingest.<discipline>.replay.dlq` (selected disciplines), `process_tournament_logs.dlq`, `achievement_evaluate.dlq`,
   `achievement_evaluate.deferred.dlq`, `tournament_encounter_completed.dlq`, `discord_member_changed.dlq` and
   `cache_invalidation_stats_service.dlq`; the Overwatch module
-  declares its own (`rank_fetch.dlq`, `rank_fetch_priority.dlq`, `tournament_registration_approved.dlq`,
-  `tournament_registration_rank_check.dlq`) from its `start_jobs` hook, and so does the LoL module
-  (`lol_rank_fetch.dlq`, `lol_rank_fetch_priority.dlq`, `lol_rank_registration_approved.dlq`,
-  `lol_rank_registration_rank_check.dlq`). An achievement
+  declares its own (`rank_fetch.dlq`, `rank_fetch_priority.dlq`, `rank_player_refresh.dlq`) from its `start_jobs`
+  hook, and so do the LoL and Deadlock modules (`lol_rank_fetch.dlq`, `lol_rank_fetch_priority.dlq`,
+  `lol_rank_player_refresh.dlq`; `deadlock_rank_*` likewise). An achievement
   evaluation that raises is rejected without requeue straight into its DLQ. An invalidation lost to
   `cache_invalidation_stats_service.dlq` is only repaired by the next event or by the cache TTL.
 - **A stuck "Queued" record is a reaper question, not a queue question.** The row, not the message,

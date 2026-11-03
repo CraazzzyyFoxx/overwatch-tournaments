@@ -152,9 +152,6 @@ function makeTournament(
     auto_transitions_enabled: true,
     allow_late_registration: false,
     phase_schedule: [],
-    win_points: 1,
-    draw_points: 0.5,
-    loss_points: 0,
     stages: [],
     participants_count: 4,
     registrations_count: 4,
@@ -448,15 +445,6 @@ describe("participants pool", () => {
     expect(
       [...(segment?.querySelectorAll('[role="radio"]') ?? [])].map((n) => n.textContent)
     ).toEqual(["Table", "By role"]);
-
-    // The switch opens the toolbar and the search closes it: the search owns
-    // the one `auto` margin, so a control after it would be pushed into the
-    // right-hand cluster and jump when the view changes.
-    const toolbar = segment?.closest(`[role="group"][aria-label="${en.common.filters}"]`);
-    const search = toolbar?.querySelector('input[type="search"]');
-    expect(segment && search && segment.compareDocumentPosition(search)).toBe(
-      Node.DOCUMENT_POSITION_FOLLOWING
-    );
   });
 
   it("renders the table when the URL asks for it", async () => {

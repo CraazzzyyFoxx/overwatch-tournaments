@@ -31,6 +31,7 @@ from src.services.admin.stage import stage_service as admin_stage_service
 from src.services.encounter import flows as encounter_flows
 from src.services.encounter import pick_ban_config
 from src.services.encounter.pick_ban_outcomes import pick_ban_outcomes_service
+from src.services.individual_swiss import reads as individual_swiss_reads
 from src.services.standings import flows as standings_flows
 from src.services.team import flows as team_flows
 from src.services.tournament import flows as tournament_flows
@@ -136,6 +137,28 @@ def register(broker: Any, logger: Any) -> None:
             return await standings_flows.flows_service.get_by_tournament(session, tournament_id, entities)
 
         return await _read(logger, op, exclude_none=True)
+
+    # Nulls carry meaning here (a player the job has not ranked yet has no position), so no ``exclude_none``.
+    @broker.subscriber("rpc.tournament.get_player_standings")
+    async def _get_player_standings(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            tournament_id = _require_id(data)
+            # Gate BEFORE the cached read (cache is keyed without the viewer).
+            await ensure_tournament_viewable(session, rehydrate_user_optional(data.get("identity")), tournament_id)
+            return await individual_swiss_reads.reads_service.get_player_standings(session, tournament_id)
+
+        return await _read(logger, op)
+
+    @broker.subscriber("rpc.tournament.get_individual_rounds")
+    async def _get_individual_rounds(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            tournament_id = _require_id(data)
+            await ensure_tournament_viewable(session, rehydrate_user_optional(data.get("identity")), tournament_id)
+            return await individual_swiss_reads.reads_service.get_rounds(
+                session, tournament_id, _path_int(data, "stage_id")
+            )
+
+        return await _read(logger, op)
 
     @broker.subscriber("rpc.tournament.statistics_history")
     async def _statistics_history(data: dict, msg: RabbitMessage) -> dict:

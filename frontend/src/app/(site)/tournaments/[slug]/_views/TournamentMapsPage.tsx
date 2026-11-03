@@ -33,7 +33,6 @@ type PlayedIndex = Map<string, Map<number, number>>;
  */
 export default function TournamentMapsPage({ tournament }: Readonly<{ tournament: Tournament }>) {
   const t = useTranslations();
-  const tp = useTranslations("tournamentDetail");
   const { searchParams, setParams } = useQueryParams();
   const mapPool = useTournamentMapPool(tournament.id, tournament.discipline);
   const encountersQuery = useQuery(tournamentEncountersQueryOptions(tournament));
@@ -100,15 +99,6 @@ export default function TournamentMapsPage({ tournament }: Readonly<{ tournament
           ))}
         </SectionToolbar>
       ) : null}
-
-      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <Eyebrow as="h2" className="aqt-tnum block">
-          {t("tournamentDetail.mapPool.title", { count: pool.total })}
-        </Eyebrow>
-        <p className="text-caption text-[color:var(--aqt-fg-faint)]">
-          {played.size > 0 ? tp("maps.playedLede") : t("tournamentDetail.mapPool.rounds.lede")}
-        </p>
-      </div>
 
       {stages.length === 0 ? (
         // One tournament-wide config: the merged pool IS the rule, by mode.

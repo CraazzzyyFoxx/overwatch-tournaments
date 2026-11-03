@@ -2,7 +2,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
-from shared.core.enums import StageItemInputType, StageItemType, StageType
+from shared.core.enums import StageItemInputType, StageItemType, StagePairingMode, StageType
 from src.schemas.stage import GrandFinalType, SeedRankingValue, StageBestOf, StageScoring
 
 __all__ = (
@@ -34,6 +34,8 @@ class StageCreate(BaseModel):
     swiss_eliminate_losses: int | None = Field(default=None, ge=1)
     de_grand_final_type: GrandFinalType = "no_reset"
     seed_ranking: SeedRankingValue = "slot"
+    pairing_mode: StagePairingMode | None = None
+    playoff_team_count: int | None = Field(default=None, ge=1)
     best_of: StageBestOf = Field(default_factory=StageBestOf)
     challonge_id: int | None = None
     challonge_slug: str | None = None
@@ -60,6 +62,8 @@ class StageUpdate(BaseModel):
     swiss_eliminate_losses: int | None = Field(default=None, ge=1)
     de_grand_final_type: GrandFinalType = "no_reset"
     seed_ranking: SeedRankingValue = "slot"
+    pairing_mode: StagePairingMode | None = None
+    playoff_team_count: int | None = Field(default=None, ge=1)
     best_of: StageBestOf = Field(default_factory=StageBestOf)
 
 
@@ -155,7 +159,8 @@ class SeedTeamsRequest(BaseModel):
       across groups so each group ends up roughly equally strong.
     - ``by_total_sr`` — same but sorts by Team.total_sr (raw sum).
     - ``random`` — deterministic shuffle based on team.id (reproducible).
+    - ``captain_rank`` — sort by the captain's rank desc (the draft playoff: strongest captain is seed 1).
     """
 
     team_ids: list[int]
-    mode: Literal["snake_sr", "by_total_sr", "random"] = "snake_sr"
+    mode: Literal["snake_sr", "by_total_sr", "random", "captain_rank"] = "snake_sr"

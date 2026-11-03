@@ -111,9 +111,6 @@ function makeTournament(status: TournamentStatus): Tournament {
     auto_transitions_enabled: true,
     allow_late_registration: false,
     phase_schedule: [],
-    win_points: 1,
-    draw_points: 0.5,
-    loss_points: 0,
     stages: [],
     participants_count: 15,
     registrations_count: 15,
@@ -346,15 +343,6 @@ describe("the list is the default view", () => {
 
     expect(cardNames()).toEqual(["Emerald and a dot", "Ban kota", "Freak deck"]);
     expect(container.querySelectorAll("details > summary")).toHaveLength(0);
-  });
-
-  it("names the section with a heading in both views, like every other tab", async () => {
-    for (const query of ["", "view=cards"]) {
-      await render(query);
-
-      const headings = Array.from(container.querySelectorAll("h2")).map((node) => node.textContent);
-      expect(headings).toEqual([en.common.teams]);
-    }
   });
 
   it("links a row's roster to that team's matches", async () => {

@@ -76,6 +76,14 @@ DOCS: dict[str, dict] = {
         "summary": "Get tournament standings",
         "description": "Permission: public; no authentication required — a hidden tournament is visible only to its workspace's admins and users on its preview allowlist. Returns the standings for a tournament with optionally hydrated related entities selected via the entities query param.",
     },
+    "rpc.tournament.get_player_standings": {
+        "summary": "Get individual Swiss player standings",
+        "description": "Permission: public; no authentication required — a hidden tournament is visible only to its workspace's admins and users on its preview allowlist. Returns the personal table of every `individual_swiss` stage of the tournament, ordered by stage order, role (roster-shape order) and place inside the role; `position` is null until the standings job has ranked the table.",
+    },
+    "rpc.tournament.get_individual_rounds": {
+        "summary": "Get individual Swiss rounds",
+        "description": "Permission: public; no authentication required — a hidden tournament is visible only to its workspace's admins and users on its preview allowlist. Returns an `individual_swiss` stage's encounters grouped by round, each seat with its roster snapshot (role, rank, round captain). 404 for a stage that is not an `individual_swiss` stage of this tournament.",
+    },
     # ── ffa lobbies ────────────────────────────────────────────────────────
     "rpc.tournament.ffa_stage": {
         "summary": "Get FFA stage lobbies",
@@ -509,6 +517,14 @@ DOCS: dict[str, dict] = {
         "summary": "Set standings pins",
         "description": "Permission: workspace `standing.update` on the stage's workspace. Replaces every pin of one standings table (the stage plus body `stage_item_id`, null for an elimination stage): a pinned team keeps that place whatever results arrive later, the others fill the free places in computed order. An empty `pins` list unpins the table. 422 for a team outside the table or a place past its end; 409 when a playoff seeded from the group is under way and the change touches its qualifying places or removes a pin. Schedules the standings-recalculation job that applies them (202 Accepted).",
     },
+    "rpc.tournament.player_standing_pins_set": {
+        "summary": "Set individual Swiss pins",
+        "description": "Permission: workspace `standing.update` on the tournament's workspace. Replaces every pin of an `individual_swiss` stage's personal table: a pinned player keeps that place inside their role whatever results arrive later, the others fill the free places in computed order. An empty `pins` list unpins everyone. 422 for a player outside the stage's table, a player pinned twice, a place past the role's size or one place given to two players of a role; 409 once the qualification is locked (`qualification_locked_at` on the stage). Schedules the standings recalculation that applies the pins and answers the stored pins.",
+    },
+    "rpc.tournament.individual_swiss_lock_qualification": {
+        "summary": "Lock individual Swiss qualification",
+        "description": "Permission: workspace `stage.update` and `tournament.update` on the tournament's workspace. Closes the personal Swiss day: first recalculates the personal table from the current results and pins, stamps the stage `qualification_locked_at` (the qualifier and captain flags are frozen from then on, and pins and the playoff team count are refused), then every non-qualified player of the completed stage gets balancer status `excluded` with reason `not_qualified`, then the tournament moves LIVE to DRAFT, so the draft pool is exactly the qualifiers. Answers the qualifiers (role, then place) and the playoff captains. 409 when the stage is not an `individual_swiss` stage, is not completed, has no qualifiers, is already locked, the tournament is not LIVE, or the tournament's draft format is not snake (checked before any exclusion).",
+    },
     # ── preview access (who may see a hidden tournament before it is public) ─
     # Workspace-admin gated rather than tournament-permission gated: this grants
     # sight of an unpublished tournament, which no per-resource permission covers.
@@ -523,6 +539,19 @@ DOCS: dict[str, dict] = {
     "rpc.tournament.preview_access_remove": {
         "summary": "Revoke preview access",
         "description": "Permission: workspace `owner`/`admin` role on the tournament's workspace (403 otherwise). Removes an account's preview allowlist entry (204 no body) and invalidates the cached tournament read.",
+    },
+    # ── voice channels (docs/tournament-voice-channels.md) ─────────────────
+    "rpc.tournament.voice_get": {
+        "summary": "Get tournament voice channels",
+        "description": "Permission: workspace `tournament.read` on the tournament's workspace. The organizer's voice settings (defaults, all off, before the first save), whether the workspace has a linked Discord guild, the channels the plan wants joined to the bot's own rows by `slot_key` (`planned` = in the plan, not made yet; rows the plan dropped are listed too, `deleting`), roster members without a linked Discord (`player_without_discord`) and what the last bot sync reported (`sync_issues`, `last_synced_at`). Discord ids are strings.",
+    },
+    "rpc.tournament.voice_put": {
+        "summary": "Save tournament voice settings",
+        "description": "Permission: workspace `tournament.update` on the tournament's workspace. Saves `enabled`, `private`, `early_teams`, `category_id` and `staff_role_ids` (Discord ids as digit strings), requests a bot sync and answers the status like the read. A newly set `category_id` must be a category of the workspace's guild (422 `discord_category_not_in_guild`) and every newly set role must exist there (422 `discord_role_not_in_guild`); 409 `discord_guild_not_linked` when the workspace has no guild, 503 `discord_unavailable` when Discord cannot be asked. `enabled: false` removes every channel the bot made.",
+    },
+    "rpc.tournament.voice_sync": {
+        "summary": "Sync tournament voice channels",
+        "description": "Permission: workspace `tournament.update` on the tournament's workspace. Asks the bot to reconcile the tournament's Discord voice channels with the plan now (repairs a channel deleted by hand) and answers the status like the read.",
     },
     # ── bespoke: pick-ban live-session admin overrides (map + hero) ────────
     "rpc.tournament.admin_pick_ban_session_reset": {

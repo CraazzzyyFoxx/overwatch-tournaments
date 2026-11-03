@@ -15,7 +15,7 @@ export const SETTINGS_SECTION_LABEL_KEYS: Record<SettingsSection, keyof typeof m
 
 /** English labels retained for structural tests; rendering uses translated keys above. */
 export const SETTINGS_SECTION_LABELS: Record<SettingsSection, string> = {
-  general: "General", rules: "Rules", scoring: "Scoring", schedule: "Schedule", roster: "Roster shape", draft: "Draft format", registration: "Registration", admission: "Admission", "pre-game": "Pre-game phase", "report-form": "Match report form", links: "Links", challonge: "Challonge", discord: "Discord", preview: "Preview allowlist", danger: "Delete tournament"
+  general: "General", rules: "Rules", scoring: "Results", schedule: "Schedule", roster: "Roster shape", draft: "Draft format", registration: "Registration", admission: "Admission", "pre-game": "Pre-game phase", "report-form": "Match report form", links: "Links", challonge: "Challonge", discord: "Discord", preview: "Preview allowlist", danger: "Delete tournament"
 };
 
 /**

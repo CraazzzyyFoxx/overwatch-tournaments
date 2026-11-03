@@ -150,8 +150,9 @@ export async function expectAdvanced(api: Api, encounters: Encounter[], fromId: 
   return encounter;
 }
 
-export function setPoints(api: Api, tournamentId: number, win: number, draw: number, loss: number) {
-  return api.patch(`/api/v1/admin/tournaments/${tournamentId}`, { win_points: win, draw_points: draw, loss_points: loss });
+/** Replaces the stage's whole `scoring`: fine for the `wins`-preset stages the specs build. */
+export function setPoints(api: Api, stageId: number, win: number, draw: number, loss: number) {
+  return api.patch(`/api/v1/admin/stages/${stageId}`, { scoring: { win, draw, loss } });
 }
 
 /** Readies both captains and plays the map veto to its end over the API: each acting captain takes its step on the first available map. */

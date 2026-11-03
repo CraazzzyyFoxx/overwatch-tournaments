@@ -21,7 +21,12 @@ export type TournamentStatus =
   | "archived";
 
 export type StageType =
-  "round_robin" | "single_elimination" | "double_elimination" | "swiss" | "ffa_league";
+  | "round_robin"
+  | "single_elimination"
+  | "double_elimination"
+  | "swiss"
+  | "ffa_league"
+  | "individual_swiss";
 
 export type StageItemType = "group" | "bracket_upper" | "bracket_lower" | "single_bracket";
 
@@ -71,6 +76,9 @@ export interface StageItem {
 
 /** How a bracket stage orders its seeds; `slot` keeps the manual/standings order. */
 export type SeedRanking = "slot" | "avg_sr" | "total_sr" | "random";
+
+/** How an `individual_swiss` round forms its lobbies. */
+export type StagePairingMode = "score" | "balance";
 
 /**
  * A stage's series lengths. Precedence: `final` (an elimination stage's last
@@ -163,7 +171,16 @@ export interface StageSummary extends StageRegulation {
   has_custom_bracket: boolean;
   challonge_id: number | null;
   challonge_slug: string | null;
+  /** `individual_swiss` only; `null` on every other stage type. */
+  pairing_mode: StagePairingMode | null;
+  playoff_team_count: number | null;
 }
+
+/** One player's row of an `individual_swiss` stage's personal table. */
+export type PlayerStanding = Schema<"tournament.PlayerStandingRead">;
+
+/** One round of an `individual_swiss` stage: its lobbies, each team with its roster snapshot. */
+export type IndividualRound = Schema<"tournament.IndividualRoundRead">;
 
 export interface Stage extends StageSummary {
   items: StageItem[];
@@ -239,9 +256,6 @@ export interface Tournament {
    */
   pov_stream_delay_s: number;
   phase_schedule: TournamentPhaseSchedule[];
-  win_points: number;
-  draw_points: number;
-  loss_points: number;
 
   stages: StageSummary[];
   participants_count: number | null;

@@ -20,7 +20,7 @@ from shared.core.social import SocialProvider
 from shared.messaging.config import RANK_FETCH_PRIORITY_QUEUE, RANK_FETCH_QUEUE
 from shared.observability import publish_message
 from shared.observability.broker import require_broker
-from shared.schemas.events import FetchRankEvent, RegistrationApprovedEvent
+from shared.schemas.events import FetchRankEvent, PlayerRefreshRequestedEvent
 from shared.services.settings_provider import settings_provider
 
 from . import runtime, service
@@ -106,22 +106,22 @@ async def enqueue_fetch(
     return True
 
 
-async def handle_registration_approved(
+async def handle_player_refresh(
     data: dict[str, Any],
     *,
     broker: Any | None = None,
     redis: Any | None = None,
     session_factory: Any | None = None,
 ) -> int:
-    """On registration approval (or the registrant's own re-check request),
+    """On an Overwatch player refresh (registration approved or re-checked, mix signup),
     prioritize + enqueue a rank check for the player.
 
     Reference-only: snapshots are stored for admin display; the player's declared
-    registration rank is never overwritten. Skips unlinked registrations (the
-    feature attaches to ``players.user``). Returns the number of tags enqueued.
+    registration rank is never overwritten. Another game's request is skipped.
+    Returns the number of tags enqueued.
     """
-    event = RegistrationApprovedEvent.model_validate(data)
-    if event.user_id is None:
+    event = PlayerRefreshRequestedEvent.model_validate(data)
+    if event.discipline != service.DISCIPLINE:
         return 0
 
     session_factory = session_factory or runtime.session_factory()
@@ -149,7 +149,6 @@ async def handle_registration_approved(
             battle_tag=battle_tag,
             source="registration",
             registration_id=event.registration_id,
-            tournament_id=event.tournament_id,
         )
         if await enqueue_fetch(fetch, priority=True, broker=broker, redis=redis):
             enqueued += 1

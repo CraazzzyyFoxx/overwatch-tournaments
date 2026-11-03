@@ -94,7 +94,7 @@ export function PickupMixScreen() {
     return (
       <div role="status" className="flex flex-col gap-5 xl:flex-row xl:items-start">
         <span className="sr-only">{t("loading")}</span>
-        <Skeleton aria-hidden className="h-96 w-full rounded-xl xl:w-[568px] xl:shrink-0" />
+        <Skeleton aria-hidden className="h-96 w-full rounded-xl xl:w-[440px] xl:shrink-0" />
         <div aria-hidden className="mx-auto flex w-full min-w-0 max-w-[1180px] flex-1 flex-col gap-5">
           <Skeleton className="h-20 w-full rounded-xl" />
           <Skeleton className="h-9 w-64 rounded-lg" />
@@ -490,10 +490,10 @@ function PickupMixDetail({ initialGame }: Readonly<{ initialGame: CustomGame }>)
   return (
     <>
       <div className="flex flex-1 flex-col gap-5">
-        {/* Fixed-width lineup, fluid matchup: the lineup stops improving past ~570px, the matchup absorbs the rest
+        {/* Fixed-width lineup, fluid matchup: 440px fits a row's name, roles and rank; the matchup absorbs the rest
             up to its own cap. */}
         <div className="flex flex-col gap-5 xl:flex-row xl:items-start">
-          <div className="xl:w-[568px] xl:shrink-0">{lineupPanel}</div>
+          <div className="xl:w-[440px] xl:shrink-0">{lineupPanel}</div>
 
           <div className="mx-auto flex w-full min-w-0 max-w-[1180px] flex-1 flex-col gap-5">
             <PickupMixHeader

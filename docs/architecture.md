@@ -132,11 +132,13 @@ via FastStream. See [`backend/shared/README.md`](../backend/shared/README.md) fo
   `dead`), so no service's events depend on another
   service being up. The event map (`backend/shared/messaging/config.py`,
   `backend/shared/schemas/events.py`): `tournament.events` carries `encounter.completed`,
-  `registration.approved` / `rank_check_requested`, `state.changed` (consumed by
+  `state.changed` (consumed by
   analytics-worker to create the completed tournament's compute job, and by the discord bot to
   refresh its watched channels), `standings.invalidated`, `encounter.challonge_push_requested`
   (the Challonge push of a confirmed result, retried by the queue instead of swallowed in the
-  request); `cache.invalidation` fans `cache.invalidated.*` out to one queue per caching
+  request); `player.events` carries `player.refresh_requested` (tournament registration approved or
+  re-checked, mix signup → the game's rank collector in stats and identity's Steam persona names);
+  `cache.invalidation` fans `cache.invalidated.*` out to one queue per caching
   service; `notifications` feeds app-service's Discord delivery (it claims `discord_message`
   rows, the bot renders them); `pickup_mix_changed` is balancer (and tournament, when a mix
   match's hero room settles) → the bot (re-render a mix's live cards); `match.ingested` is stats

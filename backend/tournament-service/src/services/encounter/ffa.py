@@ -444,19 +444,30 @@ class FfaEncounterService:
     async def is_participant_captain(
         self, session: AsyncSession, auth_user: models.AuthUser, encounter: Encounter
     ) -> bool:
-        """Does this account captain a team SEATED in this encounter?"""
-        return bool(
-            await session.scalar(
-                sa.select(
-                    sa.exists()
-                    .where(EncounterTeam.encounter_id == encounter.id)
-                    .where(EncounterTeam.active.is_(True))
-                    .where(models.Team.id == EncounterTeam.team_id)
-                    .where(models.User.id == models.Team.captain_id)
-                    .where(models.User.auth_user_id == auth_user.id)
-                )
-            )
+        """Does this account captain a team SEATED in this encounter?
+
+        A seat with no source team (an individual-Swiss round team) is captained by its snapshot's ``is_captain``
+        member."""
+        seated = (
+            sa.exists()
+            .where(EncounterTeam.encounter_id == encounter.id)
+            .where(EncounterTeam.active.is_(True))
+            .where(models.Team.id == EncounterTeam.team_id)
+            .where(models.User.id == models.Team.captain_id)
+            .where(models.User.auth_user_id == auth_user.id)
         )
+        rosterless = (
+            sa.exists()
+            .where(models.EncounterTeamMember.encounter_id == encounter.id)
+            .where(models.EncounterTeamMember.active.is_(True))
+            .where(models.EncounterTeamMember.is_captain.is_(True))
+            .where(EncounterTeam.id == models.EncounterTeamMember.encounter_team_id)
+            .where(EncounterTeam.team_id.is_(None))
+            .where(models.WorkspaceMember.id == models.EncounterTeamMember.workspace_member_id)
+            .where(models.User.id == models.WorkspaceMember.player_id)
+            .where(models.User.auth_user_id == auth_user.id)
+        )
+        return bool(await session.scalar(sa.select(sa.or_(seated, rosterless))))
 
     async def _read_lobbies(self, session: AsyncSession, lobbies: Sequence[Encounter]) -> list[FfaLobbyRead]:
         """Build the read model for a whole stage in a fixed number of queries."""

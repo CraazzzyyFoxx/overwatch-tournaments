@@ -362,35 +362,50 @@ TOURNAMENT_ENCOUNTER_COMPLETED_DLQ = RabbitQueue(
     durable=True,
 )
 
-TOURNAMENT_REGISTRATION_APPROVED_QUEUE = RabbitQueue(
-    "tournament_registration_approved",
+# ============================================================================
+# Player refresh (tournament-service, balancer-service -> rank collectors, identity-service)
+# ============================================================================
+# ``PlayerRefreshRequestedEvent`` through the outbox: a player registered for a tournament (approved or re-checked)
+# or signed up to a mix. Every discipline's rank collector binds its own queue and acts only on its own discipline;
+# identity refreshes the player's Steam persona names. LoL and Deadlock declare their queues in their modules.
+
+PLAYER_EVENTS_EXCHANGE = RabbitExchange(
+    "player.events",
+    type=ExchangeType.TOPIC,
     durable=True,
-    routing_key="tournament.registration.approved",
+)
+
+PLAYER_REFRESH_REQUESTED_ROUTING_KEY = "player.refresh_requested"
+
+RANK_PLAYER_REFRESH_QUEUE = RabbitQueue(
+    "rank_player_refresh",
+    durable=True,
+    routing_key=PLAYER_REFRESH_REQUESTED_ROUTING_KEY,
     arguments={
         "x-dead-letter-exchange": "dlx",
-        "x-dead-letter-routing-key": "tournament_registration_approved.dlq",
+        "x-dead-letter-routing-key": "rank_player_refresh.dlq",
         "x-message-ttl": 600000,  # 10 minutes
     },
 )
 
-TOURNAMENT_REGISTRATION_APPROVED_DLQ = RabbitQueue(
-    "tournament_registration_approved.dlq",
+RANK_PLAYER_REFRESH_DLQ = RabbitQueue(
+    "rank_player_refresh.dlq",
     durable=True,
 )
 
-TOURNAMENT_REGISTRATION_RANK_CHECK_QUEUE = RabbitQueue(
-    "tournament_registration_rank_check",
+STEAM_PLAYER_REFRESH_QUEUE = RabbitQueue(
+    "steam_player_refresh",
     durable=True,
-    routing_key="tournament.registration.rank_check_requested",
+    routing_key=PLAYER_REFRESH_REQUESTED_ROUTING_KEY,
     arguments={
         "x-dead-letter-exchange": "dlx",
-        "x-dead-letter-routing-key": "tournament_registration_rank_check.dlq",
-        "x-message-ttl": 600000,  # 10 minutes
+        "x-dead-letter-routing-key": "steam_player_refresh.dlq",
+        "x-message-ttl": 3600000,  # 1 hour
     },
 )
 
-TOURNAMENT_REGISTRATION_RANK_CHECK_DLQ = RabbitQueue(
-    "tournament_registration_rank_check.dlq",
+STEAM_PLAYER_REFRESH_DLQ = RabbitQueue(
+    "steam_player_refresh.dlq",
     durable=True,
 )
 
@@ -429,6 +444,45 @@ TOURNAMENT_STANDINGS_INVALIDATED_QUEUE = RabbitQueue(
 
 TOURNAMENT_STANDINGS_INVALIDATED_DLQ = RabbitQueue(
     "tournament_standings_invalidated.dlq",
+    durable=True,
+)
+
+# Owner: discord-service. A tournament's voice channels re-sync with its plan
+# (``docs/tournament-voice-channels.md``). Two inputs, one debounced sync:
+# the organizer's explicit request on ``tournament.events``, and every
+# tournament-scoped cache invalidation (stages, rounds, rosters, results), so
+# no domain writer has to remember a voice event of its own.
+TOURNAMENT_VOICE_SYNC_ROUTING_KEY = "tournament.voice.sync_requested"
+
+DISCORD_VOICE_SYNC_QUEUE = RabbitQueue(
+    "discord_voice_sync",
+    durable=True,
+    routing_key=TOURNAMENT_VOICE_SYNC_ROUTING_KEY,
+    arguments={
+        "x-dead-letter-exchange": "dlx",
+        "x-dead-letter-routing-key": "discord_voice_sync.dlq",
+        "x-message-ttl": 300000,  # 5 minutes
+    },
+)
+
+DISCORD_VOICE_SYNC_DLQ = RabbitQueue(
+    "discord_voice_sync.dlq",
+    durable=True,
+)
+
+CACHE_INVALIDATION_DISCORD_VOICE_QUEUE = RabbitQueue(
+    "cache_invalidation_discord_voice",
+    durable=True,
+    routing_key="cache.invalidated.tournament.#",
+    arguments={
+        "x-dead-letter-exchange": "dlx",
+        "x-dead-letter-routing-key": "cache_invalidation_discord_voice.dlq",
+        "x-message-ttl": 300000,  # 5 minutes
+    },
+)
+
+CACHE_INVALIDATION_DISCORD_VOICE_DLQ = RabbitQueue(
+    "cache_invalidation_discord_voice.dlq",
     durable=True,
 )
 
@@ -728,5 +782,6 @@ EXCHANGES_BY_NAME: dict[str, RabbitExchange] = {
         TOURNAMENT_EVENTS_EXCHANGE,
         MATCH_INGESTED_EXCHANGE,
         NOTIFICATIONS_EXCHANGE,
+        PLAYER_EVENTS_EXCHANGE,
     )
 }

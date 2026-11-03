@@ -133,9 +133,6 @@ class ScrimContainerVisibilityTests(IsolatedAsyncioTestCase):
                     is_league=False,
                     start_date=datetime(2026, 8, 12, tzinfo=UTC),
                     end_date=datetime(2026, 8, 12, tzinfo=UTC),
-                    win_points=1.0,
-                    draw_points=0.5,
-                    loss_points=0.0,
                 )
             )
         # What makes CONTAINER_ID a container: it holds a room.

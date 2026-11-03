@@ -437,6 +437,10 @@ interface TournamentTeamCardFrameProps extends Omit<React.HTMLAttributes<HTMLEle
   metricValue?: React.ReactNode;
   /** Encounter-bound cards: the seat's colour along the top edge (slot 1 teal, slot 2 rose). */
   slot?: 1 | 2;
+  /** Only the header band: the body is left out. The caller owns the toggle. */
+  collapsed?: boolean;
+  /** The right card of a side-by-side pair, from `md` up: the metric at the inner (left) edge, the name at the outer one. */
+  mirrored?: boolean;
 }
 
 /** Shared team-card chrome: the Teams page, encounter, pre-game and rosters modal. */
@@ -447,6 +451,8 @@ export const TournamentTeamCardFrame = ({
   metricLabel,
   metricValue,
   slot,
+  collapsed,
+  mirrored,
   children,
   className,
   ...props
@@ -464,15 +470,21 @@ export const TournamentTeamCardFrame = ({
               {positionTag}
             </div>
           )}
-          <div className="flex items-center justify-between gap-3">
-            <CardTitle asChild className={TEAM_CARD_NAME}>
+          <div className={cn("flex items-center justify-between gap-3", mirrored && "md:flex-row-reverse")}>
+            <CardTitle asChild className={cn(TEAM_CARD_NAME, mirrored && "md:text-right")}>
               <h3>{name}</h3>
             </CardTitle>
-            {hasMetric && <TeamCardMetric label={metricLabel} value={metricValue} />}
+            {hasMetric && (
+              <TeamCardMetric label={metricLabel} value={metricValue} className={cn(mirrored && "md:text-left")} />
+            )}
           </div>
         </header>
-        <TeamCardDivider />
-        {children}
+        {!collapsed && (
+          <>
+            <TeamCardDivider />
+            {children}
+          </>
+        )}
       </article>
     </Card>
   );

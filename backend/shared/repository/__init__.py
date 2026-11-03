@@ -73,6 +73,7 @@ from .pick_ban import (
     PickBanSessionRepository,
     PickBanSubmissionRepository,
 )
+from .player_standing import PlayerStandingPinRepository
 from .preferences import FavoritePlayerRepository
 from .ranks import (
     RankAccountStateRepository,
@@ -256,6 +257,7 @@ __all__ = (
     "PickBanSessionRepository",
     "PickBanSubmissionRepository",
     "PlayerRepository",
+    "PlayerStandingPinRepository",
     "QuotaApiKeyLimitRepository",
     "QuotaOperationRepository",
     "QuotaPlanLimitRepository",

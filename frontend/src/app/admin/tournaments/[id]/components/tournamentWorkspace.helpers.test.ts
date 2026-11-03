@@ -22,9 +22,6 @@ function form(partial: Partial<TournamentFormState> = {}): TournamentFormState {
     is_hidden: false,
     start_date: "2026-04-18",
     end_date: "2026-04-19",
-    win_points: 3,
-    draw_points: 1,
-    loss_points: 0,
     auto_transitions_enabled: true,
     allow_late_registration: false,
     phase_schedule: EMPTY_SCHEDULE,
@@ -72,10 +69,10 @@ describe("getTournamentUpdatePayload", () => {
 
   it("combines every changed field, leaving untouched ones out entirely", () => {
     const initial = form();
-    const current = form({ win_points: 1, is_hidden: true });
+    const current = form({ is_league: true, is_hidden: true });
 
     expect(getTournamentUpdatePayload(current, initial)).toEqual({
-      win_points: 1,
+      is_league: true,
       is_hidden: true
     });
   });

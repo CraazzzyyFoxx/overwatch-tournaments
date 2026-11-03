@@ -9,6 +9,7 @@ import { SettingGroup, SettingRow } from "@/components/kit/SettingRow";
 import adminService from "@/services/admin.service";
 import type { Tournament } from "@/types/tournament.types";
 import { TournamentDiscordSection } from "../../components/TournamentDiscordSection";
+import { TournamentVoiceSection } from "../../components/TournamentVoiceSection";
 import { getTournamentWorkspaceQueryKeys } from "@/lib/tournament/workspace-query-keys";
 import { SettingsSectionPage } from "../SettingsSection";
 import { useTournamentSettingsForm } from "../useTournamentSettingsForm";
@@ -38,6 +39,7 @@ function DiscordSettings({
 }>) {
   const t = useTranslations("adminTournament.discordSettings");
   const tChannel = useTranslations("adminTournament.discord");
+  const tVoice = useTranslations("adminTournament.voiceSettings");
   const channelQuery = useQuery({
     queryKey: getTournamentWorkspaceQueryKeys(tournamentId).discordChannel,
     queryFn: () => adminService.getDiscordChannel(tournamentId)
@@ -81,6 +83,14 @@ function DiscordSettings({
           canUpdateTournament={canUpdateTournament}
           discordChannel={channelQuery.data}
           discordChannelLoading={channelQuery.isLoading}
+        />
+      </SettingGroup>
+
+      <SettingGroup id="voice-channels" title={tVoice("title")} description={tVoice("description")}>
+        <TournamentVoiceSection
+          tournamentId={tournamentId}
+          workspaceId={tournament.workspace_id}
+          canUpdateTournament={canUpdateTournament}
         />
       </SettingGroup>
 

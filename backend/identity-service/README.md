@@ -116,6 +116,9 @@ Besides its own RPC queues it consumes two event queues:
   staged by `shared.services.social_identity` when any service creates a Steam `players.social_account` or changes its
   account id. It writes the account's persona name into `display_name` (`src/services/steam_profiles.py`). The same
   refresh runs over every Steam account at startup and then daily (`serve.py`, `steam_display_names`).
+- `steam_player_refresh` (`src/rpc/steam_names.py`, DLQ `steam_player_refresh.dlq`): `PlayerRefreshRequestedEvent` on
+  `player.events` (a tournament registration approved or re-checked, a mix signup). The same persona-name refresh over
+  every Steam account of the player, whatever the event's game.
 
 It publishes no domain events. The one outbox row it can write is that same `SteamAccountChangedEvent`, when an OAuth
 sign-in creates a Steam account without a persona name; the other services' drains relay it. Its one Redis realtime

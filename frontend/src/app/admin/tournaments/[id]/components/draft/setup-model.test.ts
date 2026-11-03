@@ -2,11 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import type { RosterShape } from "@/lib/roster/shape";
 
+import type { PlayerStanding } from "@/types/admin.types";
 import type { AdminRegistration } from "@/types/balancer-admin.types";
 
 import {
   buildDraftSchedule,
   canCancelDraftSetup,
+  captainPrefill,
   derivePoolReadiness,
   effectiveTeamCount,
   maxDraftTeamCount,
@@ -360,5 +362,52 @@ describe("draft setup model", () => {
         2
       ).round_rules
     ).toEqual(["reverse", "team_avg_asc"]);
+  });
+});
+
+describe("captainPrefill", () => {
+  const row = (member: number, registration: number | null, isCaptain: boolean): PlayerStanding => ({
+    stage_id: 1,
+    workspace_member_id: member,
+    registration_id: registration,
+    display_name: `P${member}`,
+    role: "tank",
+    rank: 3000,
+    position: 1,
+    points: 0,
+    wins: 0,
+    draws: 0,
+    losses: 0,
+    maps_won: 0,
+    maps_lost: 0,
+    map_diff: 0,
+    buchholz: 0,
+    matches_played: 0,
+    is_qualified: true,
+    is_captain: isCaptain,
+    is_pinned: false
+  });
+
+  it("takes the team count, the captains' registrations and the weakest-first order", () => {
+    const standings = [row(1, 11, true), row(2, 12, false), row(3, 13, true), row(4, 14, true)];
+    expect(captainPrefill(standings, new Set([11, 12, 13, 14]))).toEqual({
+      teamCount: 3,
+      ids: [11, 13, 14],
+      order: "weakest_first"
+    });
+  });
+
+  it("keeps the team count when a captain's registration is not in the pool", () => {
+    const standings = [row(1, 11, true), row(2, null, true), row(3, 13, true)];
+    expect(captainPrefill(standings, new Set([11]))).toEqual({
+      teamCount: 3,
+      ids: [11],
+      order: "weakest_first"
+    });
+  });
+
+  it("prefills nothing for a tournament without playoff captains", () => {
+    expect(captainPrefill([row(1, 11, false)], new Set([11]))).toBeNull();
+    expect(captainPrefill([], new Set())).toBeNull();
   });
 });

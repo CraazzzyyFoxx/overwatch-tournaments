@@ -348,6 +348,13 @@ render a `display` (tag muted, hidden in dense cells and OG images; admin adds t
 Names inside cached reads follow the existing rule for other people's cosmetic data: a changed account or
 `display_name` reaches them when the cache TTL runs out.
 
+The Discord bot follows the same rule, always without the `#tag` (a card or a picture cannot mute it). The mix signup
+card's players and host, the lineup picture and the host's voice-move report are re-resolved on every render
+(balancer-service `CustomGameService._seat_names`, `hosts_by_user_id(provider=…)`); a seat whose member has left the
+roster keeps the name its balance stored, and a host off the workspace roster keeps the plain name (workspace name,
+canonical name, then account username). The `team_invite.answered` DM computes `responder_name` once, when it is
+queued (tournament-service `person_names.account_display_name`).
+
 
 ## 4. Design decisions
 

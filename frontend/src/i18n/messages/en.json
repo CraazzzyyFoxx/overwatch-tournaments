@@ -62,6 +62,7 @@
     "stages": "Stages",
     "teams": "Teams",
     "participants": "Participants",
+    "ranking": "Player standings",
     "matches": "Matches",
     "heroes": "Heroes",
     "characters": "Characters",
@@ -3155,6 +3156,10 @@
             "name": "Free-for-all (FFA)",
             "description": "Teams are not paired off: the whole group plays in one lobby, several games in a row. Every game gives each team a placement and points, and the points add up into the standings."
           },
+          "individual_swiss": {
+            "name": "Individual Swiss",
+            "description": "Players, not teams, take part. In every round the players are split into new teams and lobbies, and each result counts for every player of the team. Players are ranked in a personal table; the best of each role go on to the draft playoff."
+          },
           "single_elimination": {
             "name": "Single elimination",
             "description": "A knockout bracket: the winner of a match moves on, the loser is out. One loss and the team is done."
@@ -3339,14 +3344,12 @@
       }
     },
     "mapPool": {
-      "title": "Map pool · {count}",
       "open": "all maps",
       "slot": "Map {n}",
       "allStages": "Whole tournament",
       "stagesLabel": "Map pool by stage",
       "rounds": {
         "title": "By round",
-        "lede": "Each round plays its own set of maps — one set per map of the series.",
         "wholeStage": "Whole stage"
       },
       "col": {
@@ -3360,7 +3363,6 @@
       "emptyTitle": "No map pool published",
       "emptyDescription": "Maps will appear here once the organizer configures the tournament's pick-and-ban pool.",
       "mixedModes": "mixed modes",
-      "playedLede": "Each round has its own pool, one per map of the series; ×N is how often a map was played in that slot, faded ones never came up.",
       "playedTimes": "{count, plural, =0 {not played} one {played once} other {played # times}}"
     },
     "rules": {
@@ -3425,7 +3427,6 @@
         }
       },
       "players": {
-        "all": "All players",
         "leaders": "Leaders",
         "player": "Player",
         "roleFilter": "Role",
@@ -3510,6 +3511,38 @@
         "noTeams": "Available once teams are formed."
       }
     },
+    "ranking": {
+      "title": "Personal standings",
+      "stageFilter": "Stage",
+      "roleFilter": "Role",
+      "search": "Search players",
+      "searchPlaceholder": "Nickname…",
+      "player": "Player",
+      "cutLine": "Playoff cut",
+      "qualified": "Qualified for the playoff",
+      "captain": "Playoff captain",
+      "empty": {
+        "title": "No standings yet",
+        "description": "The table appears once the first round is played."
+      }
+    },
+    "individualRounds": {
+      "roundsLabel": "Rounds",
+      "round": "Round {round}",
+      "match": "Match {number} · Bo{bestOf}",
+      "open": "Open match {number}",
+      "avgRank": "Avg rank",
+      "versus": "VS",
+      "score": "Score {first} : {second}",
+      "expandMatch": "Show match {number} rosters",
+      "collapseMatch": "Hide match {number} rosters",
+      "expandAll": "Expand all",
+      "collapseAll": "Collapse all",
+      "empty": {
+        "title": "No rounds yet",
+        "description": "The teams of the first round appear when the stage starts."
+      }
+    },
     "loading": {
       "pages": {
         "bracket": "Loading tournament bracket",
@@ -3518,6 +3551,7 @@
         "matches": "Loading tournament matches",
         "heroes": "Loading hero statistics",
         "maps": "Loading the tournament map pool",
+        "ranking": "Loading player standings",
         "stream": "Loading tournament streams"
       }
     },
@@ -3533,7 +3567,6 @@
       },
       "results": {
         "section": "Participants",
-        "all": "All participants",
         "filter": "Draft slot",
         "everyone": "Everyone",
         "captains": "Captains",
@@ -3688,7 +3721,6 @@
       "noLogs": "no logs",
       "allPlayers": "All players",
       "more": "More",
-      "shownOf": "{shown} of {total}",
       "showMore": "Show {count} more"
     }
   },
@@ -7713,7 +7745,9 @@
       "topHeroesEnabled": "Ask for top heroes",
       "topHeroesHint": "Per role, the heroes the registrant plays best.",
       "topHeroesRequired": "Top heroes are required",
-      "topHeroesMax": "Max heroes per role"
+      "topHeroesMax": "Max heroes per role",
+      "singleRole": "Only one role",
+      "singleRoleHint": "A submission names exactly one role and flex is turned off."
     },
     "subroles": {
       "title": "Subroles",
@@ -9306,7 +9340,8 @@
         "one_priority_or_flex": "Choose one priority role, or Flex.",
         "unknown_role": "This role does not exist.",
         "subrole_not_allowed": "This sub-role is not available for the chosen role.",
-        "too_many_heroes": "Too many heroes selected for one role."
+        "too_many_heroes": "Too many heroes selected for one role.",
+        "too_many_roles": "Too many roles chosen."
       }
     }
   },
@@ -9760,7 +9795,11 @@
       "withReset": "With reset · LB champion can force a rematch",
       "reorder": "Reorder {name}",
       "phase": "Phase {number}",
-      "progress": "{completed} of {total} matches complete"
+      "progress": "{completed} of {total} matches complete",
+      "pairingMode": "Lobby pairing",
+      "pairingScore": "By points",
+      "pairingBalance": "Whole-pool balance",
+      "playoffTeams": "Playoff teams"
     },
     "items": {
       "drag": "Drag {label} to another slot",
@@ -9885,7 +9924,10 @@
       "mergeDescription": "Move the groups, matches and standings of {count} stage(s) into \"{name}\". The merged stages leave the timeline.",
       "forceActivateDescription": "Upstream stages still have pending encounters. Activating \"{name}\" now freezes its seeds from standings that can still change.",
       "revertDescription": "Revert \"{name}\" back to draft. This only works while none of its matches has been played or reported.",
-      "regenerateDescription": "\"{name}\" already has generated matches. Existing matches are left untouched: for a grouped stage, only groups with no matches yet get a new bracket; for a bracket that is still all TBD, the seeded teams are written into it; otherwise this is blocked until you delete its existing matches."
+      "regenerateDescription": "\"{name}\" already has generated matches. Existing matches are left untouched: for a grouped stage, only groups with no matches yet get a new bracket; for a bracket that is still all TBD, the seeded teams are written into it; otherwise this is blocked until you delete its existing matches.",
+      "seedCaptain": "Seed by captain rank",
+      "reseedCaptainTitle": "Reseed stage by captain rank",
+      "reseedCaptainDescription": "Seed {teams} teams of \"{name}\" in the order of their captains' ranks: the strongest captain is seed 1. Every manual assignment in this stage is cleared first."
     },
     "changes": {
       "name": "Name",
@@ -9908,7 +9950,9 @@
       "pointsPerPlace": "Points per place",
       "gameColumns": "Game columns",
       "pointsFormula": "Points formula",
-      "roundSchedule": "Round schedule"
+      "roundSchedule": "Round schedule",
+      "pairingMode": "Lobby pairing",
+      "playoffTeams": "Playoff teams"
     },
     "preview": {
       "swapSuccess": "Teams swapped",
@@ -10047,10 +10091,10 @@
       "regularBestOf": "Regular (default Bo{bo})",
       "swissRoundsShort": "Not every team can reach a verdict: the stage's round cap ({rounds}) is below the {needed} rounds it can take.",
       "swissHalfMismatch": "With equal thresholds exactly half of a group qualifies, but {group} advances {advance} of {size}.",
-      "winOverride": "Win points override",
-      "drawOverride": "Draw points override",
-      "lossOverride": "Loss points override",
-      "pointsHelp": "An empty field uses the tournament's value, shown in the field.",
+      "winOverride": "Win points",
+      "drawOverride": "Draw points",
+      "lossOverride": "Loss points",
+      "pointsHelp": "An empty field uses the default, shown in the field.",
       "tiebreakOrder": "Tiebreaker evaluation order",
       "resetDefaults": "Reset to preset defaults",
       "useMetric": "Use {metric}",
@@ -10072,7 +10116,13 @@
       "grandFinalCap": "Grand Final",
       "final": "Final",
       "sameUpper": "Same as upper bracket",
-      "sameRounds": "Same as rounds"
+      "sameRounds": "Same as rounds",
+      "pairingMode": "Lobby pairing",
+      "pairingModeHelp": "By points: each role is sorted by the personal table and cut into lobbies in order. Whole-pool balance: the balancer splits everyone into equal teams and the pairs are random.",
+      "pairingScore": "By points",
+      "pairingBalance": "Whole-pool balance",
+      "playoffTeams": "Playoff teams",
+      "playoffTeamsHelp": "Each role sends its best players to the draft: this many teams times the role's slots."
     },
     "extra": {
       "matches": "matches",
@@ -10100,7 +10150,8 @@
         "single_elimination": "Single Elimination",
         "double_elimination": "Double Elimination",
         "swiss": "Swiss",
-        "ffa_league": "FFA"
+        "ffa_league": "FFA",
+        "individual_swiss": "Individual Swiss"
       },
       "itemTypes": {
         "group": "Group",
@@ -10158,6 +10209,29 @@
         "preview": "Preview code (ctrl + 9)",
         "fullscreen": "Toggle fullscreen (ctrl + 0)"
       }
+    },
+    "individual": {
+      "description": "Each role is ranked on its own. Pin a place to keep a player there whatever results arrive; the others fill the free places in computed order. The heavier line marks the playoff cut.",
+      "empty": "The table appears once the first round is generated.",
+      "place": "Place",
+      "player": "Player",
+      "points": "Points",
+      "record": "W–D–L",
+      "mapDiff": "Map diff",
+      "buchholz": "Buchholz",
+      "pin": "Pin",
+      "pinLabel": "Pinned place of {name}",
+      "captain": "Captain",
+      "savePins": "Save pins",
+      "pinsSaved": "Pins saved. The table updates in a moment.",
+      "pinsError": "Could not save the pins",
+      "lock": "Lock the qualification and go to the draft",
+      "lockTitle": "Lock the qualification?",
+      "lockDescription": "Players below the cut are excluded from the pool and the tournament moves to the draft. This cannot be undone.",
+      "lockConfirm": "Lock",
+      "lockHint": "Available once the stage is completed and the tournament is live.",
+      "lockError": "Could not lock the qualification",
+      "locked": "Qualification locked: {qualified} qualifiers, {captains} captains."
     }
   },
   "adminTournament": {
@@ -10232,7 +10306,7 @@
       "sections": {
         "general": "General",
         "rules": "Rules",
-        "scoring": "Scoring",
+        "scoring": "Results",
         "schedule": "Schedule",
         "roster": "Roster shape",
         "draft": "Draft format",
@@ -10541,10 +10615,6 @@
       "phaseEndTime": "{phase} end time"
     },
     "scoring": {
-      "points": "Points per result",
-      "win": "Win",
-      "draw": "Draw",
-      "loss": "Loss",
       "results": "Results",
       "league": "Treat as league season",
       "finished": "Mark tournament as finished",
@@ -10588,6 +10658,60 @@
       "exporting": "Exporting…",
       "export": "Export",
       "unmappedParticipants": "{count, plural, one {<num>#</num> Challonge participant not mapped to a team.} other {<num>#</num> Challonge participants not mapped to a team.}}"
+    },
+    "voiceSettings": {
+      "title": "Voice channels",
+      "description": "The bot creates voice channels for teams, a shared hub that moves players to their channel, and lobby slots for Swiss rounds. They are removed after the final.",
+      "loadError": "Couldn't load voice channel settings.",
+      "saved": "Voice channel settings saved",
+      "syncRequested": "Sync requested",
+      "enabled": "Voice channels",
+      "enabledHint": "Create voice channels for this tournament automatically.",
+      "private": "Private channels",
+      "privateHint": "Only team members and staff roles can see and join their channels. The shared hub stays public.",
+      "category": "Category",
+      "categoryHint": "Where the channels are created. A category you pick is never deleted by the bot.",
+      "categoryAuto": "Create automatically",
+      "staffRoles": "Staff roles",
+      "staffRolesHint": "Roles that can see and join every private channel.",
+      "rolesLoading": "Loading roles…",
+      "noRoles": "No roles available. Check that the bot is on the server.",
+      "save": "Save",
+      "sync": "Sync",
+      "earlyTeams": "Create team channels now",
+      "deleteAll": "Delete all channels",
+      "deleteTitle": "Delete all voice channels?",
+      "deleteDescription": "Voice channels are turned off and the bot deletes every channel it made for this tournament, as soon as each is empty.",
+      "deleteConfirm": "Delete channels",
+      "guildNotLinked": "No Discord server is linked to this workspace, so no channels can be created.",
+      "issuesTitle": "Sync issues",
+      "issues": {
+        "guild_not_found": "The bot can't see the linked Discord server.",
+        "missing_permission": "The bot lacks the permission: {permission}.",
+        "category_not_found": "The chosen category no longer exists; the bot's own category is used instead.",
+        "category_overflow": "The category is full; the bot adds extra categories after it."
+      },
+      "channelsTitle": "Channels",
+      "noChannels": "No channels yet.",
+      "kinds": {
+        "category": "Category",
+        "hub": "Hub",
+        "team": "Team",
+        "swiss_slot": "Round lobby"
+      },
+      "statuses": {
+        "planned": "Planned",
+        "pending": "Pending",
+        "active": "Active",
+        "deleting": "Deleting"
+      },
+      "warningsTitle": "Players without a linked Discord",
+      "warningsHint": "They won't be moved or given access until they link Discord.",
+      "unnamedPlayer": "Unnamed player",
+      "noTeam": "No team",
+      "team": "Team #{id}",
+      "lastSynced": "Last synced: {time}",
+      "neverSynced": "Not synced yet."
     },
     "discordSettings": {
       "announcements": "Post announcements to Discord",
@@ -13654,7 +13778,7 @@
       "breadcrumbRanks": "Ranks",
       "breadcrumbQuota": "Quota",
       "breadcrumbRegistrationForms": "Registration forms",
-      "breadcrumbScoring": "Scoring",
+      "breadcrumbScoring": "Results",
       "breadcrumbAdmission": "Admission",
       "breadcrumbUnknown": "Unknown section",
       "breadcrumbNew": "New"

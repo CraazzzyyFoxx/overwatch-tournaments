@@ -13,7 +13,7 @@ baselines and Discord channels live in `stats/`. `catalog/` writes only to `cata
 > `--check` and fails on drift, so the diagrams cannot fall behind the models again.
 
 <!-- ERD:auto _alembic_head -->
-Alembic head: **`mixsearch01`** (163 revisions in `backend/migrations/versions/`).
+Alembic head: **`voice01`** (167 revisions in `backend/migrations/versions/`).
 <!-- /ERD:auto -->
 
 **Reading the diagrams**
@@ -1189,6 +1189,38 @@ erDiagram
         bigint dimension_id FK
         bigint role_id PK,FK
     }
+    TOURNAMENT_PLAYER_STANDING {
+        bigint id PK
+        timestamptz created_at
+        timestamptz updated_at "nullable"
+        bigint tournament_id FK
+        bigint stage_id FK
+        bigint registration_id FK "nullable"
+        bigint workspace_member_id FK
+        varchar(255) display_name
+        varchar(32) role
+        int rank
+        float points
+        int wins
+        int draws
+        int losses
+        int matches_played
+        float maps_won
+        float maps_lost
+        float buchholz
+        int position "nullable"
+        boolean is_qualified
+        boolean is_captain
+        boolean is_pinned
+    }
+    TOURNAMENT_PLAYER_STANDING_PIN {
+        bigint id PK
+        timestamptz created_at
+        timestamptz updated_at "nullable"
+        bigint stage_id FK
+        bigint workspace_member_id FK
+        int position
+    }
     TOURNAMENT_RECALCULATION_STATE {
         bigint tournament_id PK,FK
         bigint requested_generation
@@ -1248,6 +1280,9 @@ erDiagram
         int best_of_swiss_eliminate "nullable"
         bigint challonge_group_id "nullable"
         jsonb bracket_template "nullable"
+        varchar(16) pairing_mode "nullable"
+        int playoff_team_count "nullable"
+        timestamptz qualification_locked_at "nullable"
     }
     TOURNAMENT_STAGE_ITEM {
         bigint id PK
@@ -1358,9 +1393,6 @@ erDiagram
         boolean discord_dms_enabled
         boolean logs_official
         int pov_stream_delay_s
-        float win_points
-        float draw_points
-        float loss_points
         bigint division_grid_version_id FK "nullable"
         jsonb draft_format_json "nullable"
         varchar cover_image_url "nullable"
@@ -1393,6 +1425,33 @@ erDiagram
         bigint tournament_id FK
         bigint auth_user_id FK
     }
+    TOURNAMENT_VOICE_CHANNEL {
+        bigint id PK
+        timestamptz created_at
+        timestamptz updated_at "nullable"
+        bigint tournament_id FK
+        bigint stage_id FK "nullable"
+        bigint team_id FK "nullable"
+        varchar(16) kind
+        varchar(64) slot_key
+        bigint discord_channel_id UK "nullable"
+        boolean owned
+        varchar(16) status
+        timestamptz delete_requested_at "nullable"
+    }
+    TOURNAMENT_VOICE_SETTINGS {
+        bigint id PK
+        timestamptz created_at
+        timestamptz updated_at "nullable"
+        bigint tournament_id FK,UK
+        boolean enabled
+        boolean private
+        boolean early_teams
+        bigint category_id "nullable"
+        bigint[] staff_role_ids
+        timestamptz last_synced_at "nullable"
+        jsonb sync_issues
+    }
 
     AUTH_USER |o--o{ TOURNAMENT_COMPUTATION_JOB : "requested_by_user_id"
     AUTH_USER ||--o{ TOURNAMENT_SCRIM_ROOM : "created_by_auth_user_id"
@@ -1413,6 +1472,9 @@ erDiagram
     PUBLIC_WORKSPACE ||--o{ TOURNAMENT_SCRIM_ROOM : "workspace_id"
     PUBLIC_WORKSPACE ||--o{ TOURNAMENT_TOURNAMENT : "workspace_id"
     PUBLIC_WORKSPACE_MEMBER ||--o{ TOURNAMENT_PLAYER : "workspace_member_id"
+    PUBLIC_WORKSPACE_MEMBER ||--o{ TOURNAMENT_PLAYER_STANDING : "workspace_member_id"
+    PUBLIC_WORKSPACE_MEMBER ||--o{ TOURNAMENT_PLAYER_STANDING_PIN : "workspace_member_id"
+    REGISTRATION_REGISTRATION |o--o{ TOURNAMENT_PLAYER_STANDING : "registration_id"
     TOURNAMENT_CHALLONGE_SOURCE |o--o{ TOURNAMENT_CHALLONGE_SYNC_LOG : "source_id"
     TOURNAMENT_CHALLONGE_SOURCE ||--o{ TOURNAMENT_CHALLONGE_MATCH_MAPPING : "source_id"
     TOURNAMENT_CHALLONGE_SOURCE ||--o{ TOURNAMENT_CHALLONGE_PARTICIPANT_MAPPING : "source_id"
@@ -1426,7 +1488,10 @@ erDiagram
     TOURNAMENT_STAGE |o--o{ TOURNAMENT_COMPUTATION_JOB : "stage_id"
     TOURNAMENT_STAGE |o--o{ TOURNAMENT_PICK_BAN_CONFIG : "stage_id"
     TOURNAMENT_STAGE |o--o{ TOURNAMENT_STANDING : "stage_id"
+    TOURNAMENT_STAGE |o--o{ TOURNAMENT_VOICE_CHANNEL : "stage_id"
     TOURNAMENT_STAGE ||--o{ TOURNAMENT_BRACKET_ENCOUNTER : "tournament_id"
+    TOURNAMENT_STAGE ||--o{ TOURNAMENT_PLAYER_STANDING : "stage_id"
+    TOURNAMENT_STAGE ||--o{ TOURNAMENT_PLAYER_STANDING_PIN : "stage_id"
     TOURNAMENT_STAGE ||--o{ TOURNAMENT_SCRIM_ROOM : "stage_id"
     TOURNAMENT_STAGE ||--o{ TOURNAMENT_STAGE_ITEM : "stage_id"
     TOURNAMENT_STAGE ||--o{ TOURNAMENT_STANDING_PIN : "stage_id"
@@ -1444,6 +1509,7 @@ erDiagram
     TOURNAMENT_STAGE_ITEM |o--o{ TOURNAMENT_SWISS_STOPPED_SCOPE : "stage_item_id"
     TOURNAMENT_STAGE_ITEM ||--o{ TOURNAMENT_STAGE_ITEM_INPUT : "stage_item_id"
     TOURNAMENT_TEAM |o--o{ TOURNAMENT_STAGE_ITEM_INPUT : "team_id"
+    TOURNAMENT_TEAM |o--o{ TOURNAMENT_VOICE_CHANNEL : "team_id"
     TOURNAMENT_TEAM ||--o{ TOURNAMENT_CHALLONGE_PARTICIPANT_MAPPING : "team_id"
     TOURNAMENT_TEAM ||--o{ TOURNAMENT_PLAYER : "team_id"
     TOURNAMENT_TEAM ||--o{ TOURNAMENT_STANDING : "team_id"
@@ -1454,6 +1520,7 @@ erDiagram
     TOURNAMENT_TOURNAMENT ||--o{ TOURNAMENT_COMPUTATION_JOB : "tournament_id"
     TOURNAMENT_TOURNAMENT ||--o{ TOURNAMENT_PICK_BAN_CONFIG : "tournament_id"
     TOURNAMENT_TOURNAMENT ||--o{ TOURNAMENT_PLAYER : "tournament_id"
+    TOURNAMENT_TOURNAMENT ||--o{ TOURNAMENT_PLAYER_STANDING : "tournament_id"
     TOURNAMENT_TOURNAMENT ||--o{ TOURNAMENT_SCRIM_ROOM : "tournament_id"
     TOURNAMENT_TOURNAMENT ||--o{ TOURNAMENT_SLUG_REDIRECT : "tournament_id"
     TOURNAMENT_TOURNAMENT ||--o{ TOURNAMENT_STAGE : "tournament_id"
@@ -1463,8 +1530,10 @@ erDiagram
     TOURNAMENT_TOURNAMENT ||--o{ TOURNAMENT_TOURNAMENT_LINK : "tournament_id"
     TOURNAMENT_TOURNAMENT ||--o{ TOURNAMENT_TOURNAMENT_PHASE_SCHEDULE : "tournament_id"
     TOURNAMENT_TOURNAMENT ||--o{ TOURNAMENT_TOURNAMENT_PREVIEW_ACCESS : "tournament_id"
+    TOURNAMENT_TOURNAMENT ||--o{ TOURNAMENT_VOICE_CHANNEL : "tournament_id"
     TOURNAMENT_TOURNAMENT ||--o| TOURNAMENT_ENCOUNTER_REPORT_FORM : "tournament_id"
     TOURNAMENT_TOURNAMENT ||--o| TOURNAMENT_RECALCULATION_STATE : "tournament_id"
+    TOURNAMENT_TOURNAMENT ||--o| TOURNAMENT_VOICE_SETTINGS : "tournament_id"
 ```
 
 Composite unique keys:
@@ -1478,6 +1547,8 @@ Composite unique keys:
 - `TOURNAMENT_PICK_BAN_CONFIG_ITEM` unique on (`pick_ban_config_id`, `item_id`)
 - `TOURNAMENT_PICK_BAN_CONFIG_SLOT` unique on (`pick_ban_config_id`, `position`)
 - `TOURNAMENT_PICK_BAN_CONFIG_SLOT_ITEM` unique on (`pick_ban_config_slot_id`, `item_id`)
+- `TOURNAMENT_PLAYER_STANDING` unique on (`stage_id`, `workspace_member_id`)
+- `TOURNAMENT_PLAYER_STANDING_PIN` unique on (`stage_id`, `workspace_member_id`)
 - `TOURNAMENT_STAGE` unique on (`id`, `tournament_id`)
 - `TOURNAMENT_STAGE_ITEM` unique on (`id`, `stage_id`)
 - `TOURNAMENT_STAGE_ITEM_INPUT` unique on (`stage_item_id`, `slot`)
@@ -1486,6 +1557,7 @@ Composite unique keys:
 - `TOURNAMENT_TOURNAMENT_LINK` unique on (`tournament_id`, `kind`, `url`)
 - `TOURNAMENT_TOURNAMENT_PHASE_SCHEDULE` unique on (`tournament_id`, `status`)
 - `TOURNAMENT_TOURNAMENT_PREVIEW_ACCESS` unique on (`tournament_id`, `auth_user_id`)
+- `TOURNAMENT_VOICE_CHANNEL` unique on (`tournament_id`, `slot_key`)
 <!-- /ERD:auto -->
 
 ## encounter — `encounter`

@@ -278,8 +278,16 @@ import type {
   StageRegulation,
   StageType,
   StageItemInputType,
+  StagePairingMode,
   TournamentStatus
 } from "@/types/tournament.types";
+import type { components } from "@/types/api";
+
+/** One row of an `individual_swiss` stage's personal table (public read, also what the admin pins and locks). */
+export type PlayerStanding = components["schemas"]["tournament.PlayerStandingRead"];
+/** The qualifiers and playoff captains a lock froze. */
+export type QualificationLock = components["schemas"]["tournament.QualificationLockRead"];
+export type PlayerStandingPin = components["schemas"]["tournament.PlayerStandingPinWrite"];
 
 export interface TournamentCreateInput {
   workspace_id: number;
@@ -297,9 +305,6 @@ export interface TournamentCreateInput {
   start_date: string;
   end_date: string;
   auto_transitions_enabled?: boolean;
-  win_points?: number;
-  draw_points?: number;
-  loss_points?: number;
   division_grid_version_id?: number | null;
 }
 
@@ -323,9 +328,6 @@ export interface TournamentUpdateInput {
   discord_dms_enabled?: boolean;
   logs_official?: boolean;
   pov_stream_delay_s?: number;
-  win_points?: number;
-  draw_points?: number;
-  loss_points?: number;
   division_grid_version_id?: number | null;
   /** Draft format rule; `null` clears it back to snake. */
   draft_format_json?: DraftFormatSettings | null;
@@ -409,6 +411,9 @@ export interface StageCreateInput extends Partial<StageRegulation> {
   max_rounds?: number;
   advance_count?: number | null;
   advance_upper_count?: number | null;
+  /** `individual_swiss` only. */
+  pairing_mode?: StagePairingMode | null;
+  playoff_team_count?: number | null;
   order?: number;
 }
 
@@ -419,6 +424,9 @@ export interface StageUpdateInput extends Partial<StageRegulation> {
   max_rounds?: number;
   advance_count?: number | null;
   advance_upper_count?: number | null;
+  /** `individual_swiss` only. */
+  pairing_mode?: StagePairingMode | null;
+  playoff_team_count?: number | null;
   order?: number;
 }
 
@@ -1502,6 +1510,36 @@ export interface DiscordChannelInput {
   channel_id: string;
   channel_name?: string | null;
   is_active: boolean;
+}
+
+// ─── Tournament voice channels ────────────────────────────────────────────────
+
+export interface VoiceSettings {
+  enabled: boolean;
+  private: boolean;
+  early_teams: boolean;
+  category_id: string | null;
+  staff_role_ids: string[];
+}
+
+export interface VoiceStatus {
+  settings: VoiceSettings;
+  guild_linked: boolean;
+  channels: {
+    slot_key: string;
+    kind: "category" | "hub" | "team" | "swiss_slot";
+    name: string | null;
+    discord_channel_id: string | null;
+    status: "planned" | "pending" | "active" | "deleting";
+  }[];
+  warnings: {
+    code: string;
+    workspace_member_id: number | null;
+    name: string | null;
+    team_id: number | null;
+  }[];
+  sync_issues: { code: string; detail: string | null }[];
+  last_synced_at: string | null;
 }
 
 // ─── Log Processing ───────────────────────────────────────────────────────────

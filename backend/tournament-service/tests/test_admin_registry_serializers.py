@@ -122,9 +122,6 @@ def _tournament(tournament_id: int = 91_001) -> models.Tournament:
         discord_dms_enabled=True,
         logs_official=False,
         pov_stream_delay_s=0,
-        win_points=1.0,
-        draw_points=0.5,
-        loss_points=0.0,
         team_formation="balancer",
         division_grid_version_id=5,
         # Plain columns the serializer reads: unset on a detached instance means

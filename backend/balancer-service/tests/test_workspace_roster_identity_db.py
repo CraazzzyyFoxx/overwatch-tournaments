@@ -256,6 +256,29 @@ class RosterIdentityTests(IsolatedAsyncioTestCase):
         assert by_player[hidden.id].name == hidden.name and by_player[hidden.id].canonical == hidden.name
         assert by_player[named.id].name == "Org Pick" and by_player[named.id].canonical == named.name
 
+    async def test_a_rostered_host_is_named_by_the_game_and_anyone_else_as_before(self):
+        marker = uuid4().hex[:6]
+        rostered = await self._player("rostered", auth_user_id=self.host.id)
+        account = await self._account(rostered, "riot", f"Proven {marker}#EUW")
+        account.is_verified = True
+        self.session.add(
+            models.WorkspaceMember(workspace_id=self.workspace.id, player_id=rostered.id, display_name="Org")
+        )
+        outsider = models.AuthUser(username=f"outsider-{marker}", email=f"{marker}@example.test")
+        self.session.add(outsider)
+        await self.session.flush()
+        ids = [self.host.id, outsider.id]
+
+        named = await workspace_roster.hosts_by_user_id(
+            self.session, workspace_id=self.workspace.id, user_ids=ids, provider="riot"
+        )
+        plain = await workspace_roster.hosts_by_user_id(self.session, workspace_id=self.workspace.id, user_ids=ids)
+
+        # The verified Riot ID outranks the workspace name, without its tag; a host off the roster keeps the username.
+        assert named == {self.host.id: f"Proven {marker}", outsider.id: outsider.username}
+        # Without a game, the mix pages' host label is unchanged.
+        assert plain == {self.host.id: "Org", outsider.id: outsider.username}
+
     async def test_rank_write_names_its_game_and_reads_default_to_the_first_enabled(self):
         player = await self._player("ranked")
         member = models.WorkspaceMember(workspace_id=self.workspace.id, player_id=player.id)

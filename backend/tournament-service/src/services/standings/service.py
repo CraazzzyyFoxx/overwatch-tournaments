@@ -23,6 +23,7 @@ from src import schemas
 from src.domain.bracket.swiss import SwissThresholds
 from src.services.bracket.swiss_state import bye_counts_by_scope, stopped_scopes
 from src.services.encounter.ffa import ffa_encounter_service
+from src.services.individual_swiss.standings import recalculate_individual_stage
 
 GROUP_STAGE_TYPES = {StageType.ROUND_ROBIN, StageType.SWISS}
 ELIMINATION_STAGE_TYPES = {
@@ -360,12 +361,16 @@ def _tiebreak_order(stage: models.Stage, *, rules: ScoringRules | None = None) -
     return normalize_tiebreak_order(preset, ffa_columns=columns)
 
 
-def _scoring(stage: models.Stage, tournament: models.Tournament) -> tuple[float, float, float]:
-    """Points per win/draw/loss: the stage's own where it set one, else the tournament's."""
+#: Points per win/draw/loss where the stage sets none.
+DEFAULT_WIN_POINTS, DEFAULT_DRAW_POINTS, DEFAULT_LOSS_POINTS = 1.0, 0.5, 0.0
+
+
+def _scoring(stage: models.Stage) -> tuple[float, float, float]:
+    """Points per win/draw/loss: the stage's own where it set one, else the defaults."""
     return (
-        tournament.win_points if stage.win_points is None else stage.win_points,
-        tournament.draw_points if stage.draw_points is None else stage.draw_points,
-        tournament.loss_points if stage.loss_points is None else stage.loss_points,
+        DEFAULT_WIN_POINTS if stage.win_points is None else stage.win_points,
+        DEFAULT_DRAW_POINTS if stage.draw_points is None else stage.draw_points,
+        DEFAULT_LOSS_POINTS if stage.loss_points is None else stage.loss_points,
     )
 
 
@@ -812,7 +817,6 @@ def _stage_item_team_ids(stage_item: models.StageItem | None) -> list[int]:
 
 
 def rank_group(
-    tournament: models.Tournament,
     stage: models.Stage,
     stage_item: models.StageItem | None,
     encounters: typing.Sequence[StageEncounter],
@@ -826,7 +830,7 @@ def rank_group(
     that found the previous round closed -- never the stored table, which the
     standings job may have ranked a moment before that round's last result.
     """
-    win_points, draw_points, loss_points = _scoring(stage, tournament)
+    win_points, draw_points, loss_points = _scoring(stage)
     return prepare_teams_for_groups(
         encounters,
         seed_team_ids=_stage_item_team_ids(stage_item),
@@ -853,7 +857,7 @@ def _build_group_stage_standings(
 
     tiebreak_order = _tiebreak_order(stage)
     thresholds = SwissThresholds.of(stage) if stage.stage_type == StageType.SWISS else SwissThresholds()
-    teams = rank_group(tournament, stage, stage_item, encounters, bye_counts=bye_counts)
+    teams = rank_group(stage, stage_item, encounters, bye_counts=bye_counts)
     # Pinned after ranking, never inside ``rank_group``: that one also feeds the
     # Swiss pairing, which must pair on real results.
     teams, pinned = _pin_group_table(teams, pins, tiebreak_order=tiebreak_order)
@@ -1452,6 +1456,16 @@ class StandingsService:
                     )
                     for stage_item_id, total, completed, max_round in scopes
                 )
+            elif stage.stage_type == StageType.INDIVIDUAL_SWISS:
+                # Done once its last round exists and every round is closed; a closed round before that waits for
+                # the next one.
+                total = sum(row_total for _, row_total, _, _ in stage_rows)
+                completed = sum(row_completed for _, _, row_completed, _ in stage_rows)
+                should_be_completed = (
+                    total > 0
+                    and completed == total
+                    and max((max_round for _, _, _, max_round in stage_rows), default=0) >= _stage_max_rounds(stage)
+                )
             else:
                 total = sum(row_total for _, row_total, _, _ in stage_rows)
                 completed = sum(row_completed for _, _, row_completed, _ in stage_rows)
@@ -1492,6 +1506,7 @@ class StandingsService:
         byes = await bye_counts_by_scope(session, [stage.id for stage in stages if stage.stage_type == StageType.SWISS])
         all_standings: list[models.Standing] = []
         encounters: dict[int, list[StageEncounter]] = {}
+        personal_changed = False
 
         for stage in stages:
             # Loaded per branch, not up front: an FFA stage ranks from its game
@@ -1550,9 +1565,11 @@ class StandingsService:
                             pins=pins.get((stage.id, stage_item.id), _EMPTY),
                         )
                     )
+            elif stage.stage_type == StageType.INDIVIDUAL_SWISS:
+                personal_changed = await recalculate_individual_stage(session, stage, tournament) or personal_changed
 
         final_standings = calculate_overall_positions(all_standings, stages)
-        changed = await self._write_standings(session, tournament.id, final_standings)
+        changed = await self._write_standings(session, tournament.id, final_standings) or personal_changed
         # Flip Stage.is_completed in the same transaction as the standings write.
         changed = await self._update_stage_completion_flags(session, tournament, final_standings) or changed
         if commit:

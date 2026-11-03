@@ -92,7 +92,7 @@ class StageScoring(BaseModel):
     """How a stage scores, at all three levels.
 
     ``win``/``draw``/``loss`` are level 3: what one encounter's result pays in
-    the stage table; ``None`` = the tournament's points. The rest is the
+    the stage table; ``None`` = the default (1 / 0.5 / 0). The rest is the
     ``encounter.scoring_rule`` every encounter of the stage is played and
     ranked by -- ``wins`` is a Bo-N series, ``points`` a lobby scored by the
     organizer's own columns.
@@ -224,6 +224,9 @@ class _StageRegulationRead(BaseModel):
     swiss_eliminate_losses: int | None = None
     de_grand_final_type: GrandFinalType = "no_reset"
     seed_ranking: SeedRankingValue = "slot"
+    #: ``individual_swiss`` only; ``None`` on every other type.
+    pairing_mode: enums.StagePairingMode | None = None
+    playoff_team_count: int | None = None
     best_of: StageBestOf = Field(default_factory=StageBestOf)
 
 

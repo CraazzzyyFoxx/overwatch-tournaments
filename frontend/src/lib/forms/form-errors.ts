@@ -35,6 +35,7 @@ export const FORM_ERROR_CODES = [
   "roles.unknown_role",
   "roles.subrole_not_allowed",
   "roles.too_many_heroes",
+  "roles.too_many_roles",
   // Form and schema level.
   "form_version_stale",
   "schema_invalid",

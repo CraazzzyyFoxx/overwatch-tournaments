@@ -270,9 +270,9 @@ test.describe("bracket progression and standings", () => {
     ]);
   });
 
-  test("swiss: the next round pairs equal records without rematches; standings count the tournament's points", async ({ adminApi }) => {
+  test("swiss: the next round pairs equal records without rematches; standings count the stage's points", async ({ adminApi }) => {
     const seed = await seedBracket(adminApi, { teams: 6, stageType: "swiss", bestOf: 1, players: false, stage: { max_rounds: 3 } });
-    await setPoints(adminApi, seed.tournament.id, 3, 1, 0);
+    await setPoints(adminApi, seed.stage.id, 3, 1, 0);
     const round1 = seed.encounters;
     expect(round1.map((e) => e.round), "swiss generates one round at a time").toEqual([1, 1, 1]);
 
@@ -308,7 +308,7 @@ test.describe("bracket progression and standings", () => {
 
   test("round robin: standings follow the win/draw/loss points and recalculate after a config change", async ({ adminApi, makeUser }) => {
     const seed: BracketSeed = await seedBracket(adminApi, { teams: 4, stageType: "round_robin", bestOf: 2, players: false });
-    await setPoints(adminApi, seed.tournament.id, 3, 1, 0);
+    await setPoints(adminApi, seed.stage.id, 3, 1, 0);
     const [first, second] = seed.encounters.filter((e) => e.round === 1);
     await setResult(adminApi, first, [1, 1]); // draw
     await setResult(adminApi, second, [2, 0]);
@@ -320,7 +320,7 @@ test.describe("bracket progression and standings", () => {
     expect(standingOf(rows, slot(first, 2)), "draw = 1").toMatchObject({ draw: 1, points: 1 });
     expect(standingOf(rows, slot(second, 2)), "loss = 0").toMatchObject({ lose: 1, points: 0, position: 4 });
 
-    await setPoints(adminApi, seed.tournament.id, 2, 0.5, 0);
+    await setPoints(adminApi, seed.stage.id, 2, 0.5, 0);
     rows = await recalcStandings(adminApi, seed.tournament.id);
     expect(standingOf(rows, slot(second, 1)).points, "recalculated win points").toBe(2);
     expect(standingOf(rows, slot(first, 1)).points, "recalculated draw points").toBe(0.5);

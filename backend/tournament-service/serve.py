@@ -65,6 +65,7 @@ from src.rpc import (
     team_binary,
     team_format,
     tournament_binary,
+    voice,
 )
 from src.rpc import reads as rpc_reads
 from src.services.admin import registry as admin_registry
@@ -159,6 +160,8 @@ team_format.register(broker, logger)
 # Ad-hoc scrim rooms. Provisioning only — a room is then played through the
 # pre-game subjects registered just above.
 scrim.register(broker, logger)
+# Tournament voice channels: the plan discord-service applies, and the admin settings/status/sync.
+voice.register(broker, logger)
 # standings.invalidated: each event becomes a durable standings job, which the
 # compute consumers at the bottom of this file run.
 broker.include_router(recalculation_events.task_router)

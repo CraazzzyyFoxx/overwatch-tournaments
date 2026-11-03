@@ -1,8 +1,17 @@
 import type { LinkTabItem } from "@/components/kit/LinkTabs";
-import { FFA_STAGE_TYPES, GROUP_STAGE_TYPES } from "@/lib/bracket/projection";
+import {
+  FFA_STAGE_TYPES,
+  GROUP_STAGE_TYPES,
+  INDIVIDUAL_SWISS_STAGE_TYPES
+} from "@/lib/bracket/projection";
 import { tournamentHref } from "@/lib/tournament/url";
 import type { Encounter } from "@/types/encounter.types";
 import type { Stage, StageItem, Standings, Tournament } from "@/types/tournament.types";
+
+/** FFA and individual Swiss: one panel per STAGE, never per group item. */
+const isWholeStagePanel = (stage: Stage) =>
+  FFA_STAGE_TYPES.includes(stage.stage_type) ||
+  INDIVIDUAL_SWISS_STAGE_TYPES.includes(stage.stage_type);
 
 /** Which stages the bracket screen is currently drawing, and in which mode. */
 export type BracketStageSelection = {
@@ -29,7 +38,7 @@ export function selectBracketStages(
 ): BracketStageSelection {
   const groupStages = stages.filter(
     (stage) =>
-      GROUP_STAGE_TYPES.includes(stage.stage_type) || FFA_STAGE_TYPES.includes(stage.stage_type)
+      GROUP_STAGE_TYPES.includes(stage.stage_type) || isWholeStagePanel(stage)
   );
   const eliminationStages = stages.filter(
     (stage) =>
@@ -76,7 +85,7 @@ export function buildGroupStagePanels(
     // One panel per FFA STAGE, not per group: `FfaStagePanel` reads every
     // lobby of the stage in a single request and renders a table per lobby,
     // so splitting by item here would repeat that request per group.
-    if (FFA_STAGE_TYPES.includes(stage.stage_type)) {
+    if (isWholeStagePanel(stage)) {
       return [{ key: `stage-${stage.id}`, stage, stageItem: undefined, encounters: [], standings: [] }];
     }
 
@@ -141,18 +150,14 @@ export function buildBracketTabs({
   const tabs: LinkTabItem[] = [];
   let activeKey = "";
 
-  // An FFA stage is ONE scope however many groups it has: its panel renders
+  // An FFA or individual Swiss stage is ONE scope however many groups it has: its panel renders
   // every lobby of the stage at once, so its groups are not separate tabs.
   const groupScopeCount = groupStages.reduce(
     (count, stage) =>
-      count + (FFA_STAGE_TYPES.includes(stage.stage_type) ? 1 : Math.max(stage.items.length, 1)),
+      count + (isWholeStagePanel(stage) ? 1 : Math.max(stage.items.length, 1)),
     0
   );
-  const ffaStageIds = new Set(
-    groupStages
-      .filter((stage) => FFA_STAGE_TYPES.includes(stage.stage_type))
-      .map((stage) => stage.id)
-  );
+  const wholeStageIds = new Set(groupStages.filter(isWholeStagePanel).map((stage) => stage.id));
 
   const isGroupViewActive =
     viewParam === "groups" ||
@@ -166,7 +171,7 @@ export function buildBracketTabs({
   // the generator would build; only a finished one with none has nothing.
   const groupHasContent = (stage: Stage) =>
     stageIdsWithMatches.has(stage.id) ||
-    ffaStageIds.has(stage.id) ||
+    wholeStageIds.has(stage.id) ||
     stage.items.some((item) => item.inputs.length > 0);
   const isDead = (isActive: boolean, hasContent: boolean) =>
     !isActive && matchCountsKnown && !hasContent;

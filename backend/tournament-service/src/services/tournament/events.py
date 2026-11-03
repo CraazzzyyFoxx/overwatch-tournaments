@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Any
+from typing import Any, Literal
 
 import sqlalchemy as sa
 from sqlalchemy import event
@@ -10,12 +10,18 @@ from sqlalchemy.orm import Session
 
 from shared import models
 from shared.disciplines import discipline as discipline_spec
-from shared.messaging.config import TOURNAMENT_EVENTS_EXCHANGE, TOURNAMENT_STATE_CHANGED_ROUTING_KEY
+from shared.messaging.config import (
+    PLAYER_EVENTS_EXCHANGE,
+    PLAYER_REFRESH_REQUESTED_ROUTING_KEY,
+    TOURNAMENT_EVENTS_EXCHANGE,
+    TOURNAMENT_STATE_CHANGED_ROUTING_KEY,
+    TOURNAMENT_VOICE_SYNC_ROUTING_KEY,
+)
 from shared.messaging.outbox import enqueue_outbox_event
 from shared.schemas.events import (
-    RegistrationApprovedEvent,
-    RegistrationRankCheckRequestedEvent,
+    PlayerRefreshRequestedEvent,
     TournamentStateChangedEvent,
+    TournamentVoiceSyncRequestedEvent,
 )
 from shared.schemas.identity import PlayerIdentityRead
 from shared.services.notifications import PersonalNotification, notify_users
@@ -225,6 +231,38 @@ async def _notify_registration_decision(
     )
 
 
+async def _enqueue_player_refresh(
+    session: AsyncSession,
+    registration: models.Registration,
+    tournament: Any,
+    player_id: int | None,
+    *,
+    source: Literal["tournament_registration", "tournament_recheck"],
+    flush: bool = True,
+) -> None:
+    """Ask the tournament's rank collector (and identity) to re-read the registrant's accounts.
+
+    A registration without a player has no accounts to read: no event.
+    """
+    if player_id is None:
+        return
+    await enqueue_outbox_event(
+        session,
+        PlayerRefreshRequestedEvent(
+            user_id=player_id,
+            discipline=tournament.discipline,
+            workspace_id=tournament.workspace_id,
+            source=source,
+            registration_id=registration.id,
+            identity=_identity(registration, tournament.discipline),
+            source_service="tournament-service",
+        ),
+        exchange=PLAYER_EVENTS_EXCHANGE,
+        routing_key=PLAYER_REFRESH_REQUESTED_ROUTING_KEY,
+        flush=flush,
+    )
+
+
 async def enqueue_registration_approved(
     session: AsyncSession,
     registration: models.Registration,
@@ -236,26 +274,15 @@ async def enqueue_registrations_approved(
     session: AsyncSession,
     registrations: Sequence[models.Registration],
 ) -> None:
-    """Per registration of ONE tournament: the approval event, the registrant's inbox row and the page
+    """Per registration of ONE tournament: the player refresh, the registrant's inbox row and the page
     invalidation, in a constant number of statements -- ``bulk_approve_registrations`` approves up to 500 at
-    once. The approval rows ride the inbox rows' flush (or the caller's commit when nobody has an inbox)."""
+    once. The refresh rows ride the inbox rows' flush (or the caller's commit when nobody has an inbox)."""
     if not registrations:
         return
     tournament, registrants = await _event_snapshot(session, registrations)
     for registration, (player_id, _recipient) in zip(registrations, registrants, strict=True):
-        await enqueue_outbox_event(
-            session,
-            RegistrationApprovedEvent(
-                tournament_id=registration.tournament_id,
-                workspace_id=tournament.workspace_id,
-                registration_id=registration.id,
-                user_id=player_id,
-                identity=_identity(registration, tournament.discipline),
-                source_service="tournament-service",
-            ),
-            exchange=TOURNAMENT_EVENTS_EXCHANGE,
-            routing_key="tournament.registration.approved",
-            flush=False,
+        await _enqueue_player_refresh(
+            session, registration, tournament, player_id, source="tournament_registration", flush=False
         )
         await emit(
             session,
@@ -291,19 +318,7 @@ async def enqueue_registration_rank_check(
 ) -> None:
     """Ask the discipline's rank collector to re-fetch the registrant's accounts (the profile check)."""
     tournament, [(player_id, _recipient)] = await _event_snapshot(session, [registration])
-    await enqueue_outbox_event(
-        session,
-        RegistrationRankCheckRequestedEvent(
-            tournament_id=registration.tournament_id,
-            workspace_id=tournament.workspace_id,
-            registration_id=registration.id,
-            user_id=player_id,
-            identity=_identity(registration, tournament.discipline),
-            source_service="tournament-service",
-        ),
-        exchange=TOURNAMENT_EVENTS_EXCHANGE,
-        routing_key="tournament.registration.rank_check_requested",
-    )
+    await _enqueue_player_refresh(session, registration, tournament, player_id, source="tournament_recheck")
 
 
 async def enqueue_tournament_state_changed(
@@ -324,4 +339,18 @@ async def enqueue_tournament_state_changed(
         ),
         exchange=TOURNAMENT_EVENTS_EXCHANGE,
         routing_key=TOURNAMENT_STATE_CHANGED_ROUTING_KEY,
+    )
+
+
+async def enqueue_tournament_voice_sync(session: AsyncSession, tournament: models.Tournament) -> None:
+    """Ask discord-service to reconcile this tournament's voice channels (settings saved, "sync" pressed)."""
+    await enqueue_outbox_event(
+        session,
+        TournamentVoiceSyncRequestedEvent(
+            tournament_id=tournament.id,
+            workspace_id=tournament.workspace_id,
+            source_service="tournament-service",
+        ),
+        exchange=TOURNAMENT_EVENTS_EXCHANGE,
+        routing_key=TOURNAMENT_VOICE_SYNC_ROUTING_KEY,
     )

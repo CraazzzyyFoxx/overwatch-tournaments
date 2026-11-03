@@ -92,6 +92,9 @@ TABLE_NAMES = (
     "stats.match",
     "workspace",
     "players.user",
+    # The game handle a DM names an invitee by (``person_names.account_display_name``).
+    "players.social_account",
+    "players.social_account_visibility",
     "workspace_member",
     "registration.registration",
     "registration.role",
@@ -498,7 +501,8 @@ class TeamInviteAnsweredTests(_ProducerTestCase):
                 "tournament_id": self.team.tournament_id,
                 "invite_id": self.invite.id,
                 "answer": "accepted",
-                "responder_name": "Rook#2222",
+                # The game's name for them, without the ``#tag``: a DM has no room to mute it.
+                "responder_name": "Rook",
             },
             rows[0].payload_json,
         )
@@ -515,7 +519,26 @@ class TeamInviteAnsweredTests(_ProducerTestCase):
         self.assertEqual("team_invite.answered", rows[0].kind)
         self.assertEqual(CAPTAIN_AUTH, rows[0].recipient_auth_user_id)
         self.assertEqual("declined", rows[0].payload_json["answer"])
-        self.assertEqual("Rook#2222", rows[0].payload_json["responder_name"])
+        self.assertEqual("Rook", rows[0].payload_json["responder_name"])
+
+    async def test_a_verified_game_account_names_the_responder(self) -> None:
+        """A proven account outranks the handle the registration recorded (docs/users-identity.md §3.6)."""
+        user_id = self.fx.session.scalar(sa.select(models.User.id).where(models.User.auth_user_id == INVITEE_AUTH))
+        account = models.SocialAccount(
+            user_id=user_id, provider="battlenet", username="RookMain#9", is_verified=True, is_primary=True
+        )
+        self.fx.session.add(account)
+        self.fx.session.flush()
+        self.fx.session.add(models.SocialAccountVisibility(account_id=account.id, workspace_id=None))
+        self.fx.session.flush()
+
+        await teams_module.teams_service.decline_invite(
+            self.fx.shim,
+            auth_user=_auth_user(INVITEE_AUTH, "rook"),
+            invite_id=self.invite.id,
+        )
+
+        self.assertEqual("RookMain", self.fx.notifications()[0].payload_json["responder_name"])
 
 
 class RegistrationDecisionTests(_ProducerTestCase):

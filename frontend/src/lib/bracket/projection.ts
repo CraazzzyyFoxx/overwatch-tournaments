@@ -41,13 +41,19 @@ export const GROUP_STAGE_TYPES: StageType[] = ["round_robin", "swiss"];
  * advance a top N, which is why `getDefaultStageItemType` answers "group".
  */
 export const FFA_STAGE_TYPES: StageType[] = ["ffa_league"];
+/**
+ * Individual Swiss rounds reshuffle players into new rosterless teams, so —
+ * like FFA — it is in neither family above and draws one panel per stage.
+ */
+export const INDIVIDUAL_SWISS_STAGE_TYPES: StageType[] = ["individual_swiss"];
 
 export const STAGE_TYPE_LABELS: Record<StageType, string> = {
   round_robin: "Round Robin",
   single_elimination: "Single Elimination",
   double_elimination: "Double Elimination",
   swiss: "Swiss",
-  ffa_league: "FFA"
+  ffa_league: "FFA",
+  individual_swiss: "Individual Swiss"
 };
 
 export const STAGE_ITEM_TYPE_LABELS: Record<StageItemType, string> = {

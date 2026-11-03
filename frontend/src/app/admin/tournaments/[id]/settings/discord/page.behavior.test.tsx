@@ -20,6 +20,8 @@ const getTournament = vi.fn();
 const getDiscordChannel = vi.fn();
 const setDiscordChannel = vi.fn();
 const updateTournament = vi.fn();
+const getVoice = vi.fn();
+const putVoice = vi.fn();
 
 vi.mock("@/services/admin.service", () => ({
   default: {
@@ -27,6 +29,9 @@ vi.mock("@/services/admin.service", () => ({
     getDiscordChannel: (...args: unknown[]) => getDiscordChannel(...args),
     setDiscordChannel: (...args: unknown[]) => setDiscordChannel(...args),
     updateTournament: (...args: unknown[]) => updateTournament(...args),
+    getVoice: (...args: unknown[]) => getVoice(...args),
+    putVoice: (...args: unknown[]) => putVoice(...args),
+    syncVoice: vi.fn(),
     deleteDiscordChannel: vi.fn(),
     backfillDiscordChannel: vi.fn()
   }
@@ -51,7 +56,9 @@ vi.mock("next-intl", async (importOriginal) => {
   return {
     ...actual,
     useTranslations: (namespace?: string) =>
-      actual.createTranslator({ locale: "en", messages: en, namespace: namespace as never })
+      actual.createTranslator({ locale: "en", messages: en, namespace: namespace as never }),
+    useLocale: () => "en",
+    useTimeZone: () => "UTC"
   };
 });
 
@@ -59,7 +66,12 @@ vi.mock("next-intl", async (importOriginal) => {
 // a disabled combobox rather than the manual-ID fallback — so the fallback is
 // what this test drives, deterministically.
 vi.mock("@/hooks/useDiscordEntities", () => ({
-  useDiscordChannels: () => ({ data: [], isLoading: false, refetch: vi.fn() })
+  useDiscordChannels: () => ({ data: [], isLoading: false, refetch: vi.fn() }),
+  useDiscordRoles: () => ({
+    data: { roles: [{ id: "5", name: "Staff", managed: false }] },
+    isLoading: false,
+    refetch: vi.fn()
+  })
 }));
 
 const TOURNAMENT = {
@@ -131,7 +143,60 @@ async function type(input: HTMLInputElement, value: string) {
   await settle(2);
 }
 
+const VOICE_SETTINGS = {
+  enabled: false,
+  private: true,
+  early_teams: false,
+  category_id: null,
+  staff_role_ids: ["5"]
+};
+
+const VOICE_STATUS = {
+  settings: VOICE_SETTINGS,
+  guild_linked: true,
+  channels: [
+    {
+      slot_key: "hub",
+      kind: "hub",
+      name: "Общий · OWT 64",
+      discord_channel_id: "111",
+      status: "active"
+    },
+    {
+      slot_key: "team:3",
+      kind: "team",
+      name: "Rockets",
+      discord_channel_id: "222",
+      status: "active"
+    }
+  ],
+  warnings: [
+    { code: "player_without_discord", workspace_member_id: 1, name: "Ann", team_id: 3 },
+    { code: "player_without_discord", workspace_member_id: 2, name: "Bob", team_id: 3 }
+  ],
+  sync_issues: [
+    { code: "missing_permission:manage_roles", detail: null },
+    { code: "something_new", detail: null }
+  ],
+  last_synced_at: null
+};
+
+function buttonByText(text: string) {
+  return [...document.querySelectorAll("button")].find(
+    (button) => button.textContent?.trim() === text
+  );
+}
+
+async function click(element: Element | undefined) {
+  await act(async () => {
+    element?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  });
+  await settle();
+}
+
 beforeEach(() => {
+  getVoice.mockReset().mockResolvedValue(VOICE_STATUS);
+  putVoice.mockReset().mockResolvedValue(VOICE_STATUS);
   getTournament.mockReset().mockResolvedValue(TOURNAMENT);
   getDiscordChannel.mockReset().mockResolvedValue(null);
   setDiscordChannel.mockReset().mockResolvedValue(undefined);
@@ -204,5 +269,41 @@ describe("Settings › Discord", () => {
 
     expect(updateTournament).toHaveBeenCalledWith(64, { [field]: false });
     expect(setDiscordChannel).not.toHaveBeenCalled();
+  });
+
+  describe("voice channels", () => {
+    it("shows sync issues and players without Discord, grouped by team", async () => {
+      await render();
+
+      expect(container.textContent).toContain("The bot lacks the permission: manage_roles.");
+      expect(container.textContent).toContain("something_new");
+      expect(container.textContent).toContain("Rockets: Ann, Bob");
+    });
+
+    it("saves a draft with an automatic category as null", async () => {
+      await render();
+      await click(container.querySelector("#voice-enabled")!);
+      await click(buttonByText("Save"));
+
+      expect(putVoice).toHaveBeenCalledWith(64, { ...VOICE_SETTINGS, enabled: true });
+    });
+
+    it("asks before deleting every channel, then turns the feature off", async () => {
+      getVoice.mockResolvedValue({
+        ...VOICE_STATUS,
+        settings: { ...VOICE_SETTINGS, enabled: true, category_id: "42" }
+      });
+      await render();
+      await click(buttonByText("Delete all channels"));
+
+      expect(putVoice).not.toHaveBeenCalled();
+      await click(buttonByText("Delete channels"));
+
+      expect(putVoice).toHaveBeenCalledWith(64, {
+        ...VOICE_SETTINGS,
+        enabled: false,
+        category_id: "42"
+      });
+    });
   });
 });

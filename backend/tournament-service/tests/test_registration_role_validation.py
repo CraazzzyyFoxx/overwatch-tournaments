@@ -304,6 +304,19 @@ class FlexGuardTests(TestCase):
         assert _codes(_field(), self.FULL_FLEX) == []
 
 
+class MaxRolesTests(TestCase):
+    TWO = [{"role": "tank", "is_primary": True}, {"role": "damage", "is_primary": False}]
+
+    def test_two_roles_over_a_cap_of_one(self) -> None:
+        assert _codes(_field(max_roles=1), self.TWO) == ["roles.too_many_roles"]
+
+    def test_one_role_within_a_cap_of_one(self) -> None:
+        assert _codes(_field(max_roles=1), self.TWO[:1]) == []
+
+    def test_no_cap_by_default(self) -> None:
+        assert _codes(_field(), self.TWO) == []
+
+
 class AdditionalRolesRequiredTests(TestCase):
     """``additional_required``: the submission must cover more than the
     priority role. The guard used to read ``not is_flex and not any(not

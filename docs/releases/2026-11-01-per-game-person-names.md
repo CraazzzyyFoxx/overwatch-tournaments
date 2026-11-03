@@ -22,6 +22,9 @@ Rules: `docs/users-identity.md` §3.6.
 - **Admin:** roster, team and registration-team views show the game name with the canonical name beside it.
 - **Links:** every profile link is built from the canonical name (`display.canonical`).
 - **Search:** `users.search` also matches `social_account.display_name` (Steam personas) of publicly visible accounts.
+- **Discord:** the mix signup card (players and host), the lineup picture, the host's voice-move report and the
+  "invite accepted/declined" DM name people by the same rule, without the `#tag`. Cards and the picture re-resolve on
+  every render; a member who left the roster keeps the name the balance stored; the DM is resolved when it is queued.
 
 ## Wire changes
 
@@ -45,8 +48,8 @@ The cache keys of every changed read moved to a new version, so no payload missi
 `user_tournament_encounters:v9`.
 
 Known limit: a changed social account, account visibility or workspace `display_name` reaches cached reads only when
-their TTL expires or the tournament next writes, the same as other people's cosmetic data today. The Discord bot's
-messages and images are unchanged.
+their TTL expires or the tournament next writes, the same as other people's cosmetic data today. A Discord card picks
+up a new name on its next re-render (the next change to the mix).
 
 ## Migration and deploy
 
