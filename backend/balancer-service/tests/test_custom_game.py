@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import sys
 from collections.abc import Sequence
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -35,6 +36,7 @@ from shared.domain.member_rank import ResolvedRank  # noqa: E402
 from shared.domain.roles import UnknownRole  # noqa: E402
 from shared.domain.roster_shape import RosterShape  # noqa: E402
 from shared.domain.team_format import TeamFormat, slot_shape  # noqa: E402
+from shared.messaging.config import PLAYER_REFRESH_REQUESTED_ROUTING_KEY  # noqa: E402
 from shared.schemas.identity import PersonDisplayRead, PlayerIdentityRead  # noqa: E402
 from shared.schemas.role import RoleRef  # noqa: E402
 from shared.schemas.roster_slots import RosterShapeRead  # noqa: E402
@@ -1222,6 +1224,21 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         self.assertEqual(self.emit.await_args.kwargs["change"], "roster")
         self.assertEqual(state["seat"]["participation"], MixParticipation.POOL)
         self.assertEqual(state["policy"]["join_blocker"], "already_joined")
+        # The signup asks the game's collectors for the player's ranks: one player refresh in the same transaction.
+        [refresh] = [row for (row,), _ in self.session.add.call_args_list if isinstance(row, models.EventOutbox)]
+        self.assertEqual(
+            (refresh.exchange, refresh.routing_key), ("player.events", PLAYER_REFRESH_REQUESTED_ROUTING_KEY)
+        )
+        self.assertEqual(
+            {key: refresh.payload_json[key] for key in ("user_id", "discipline", "workspace_id", "source", "identity")},
+            {
+                "user_id": 70,
+                "discipline": "overwatch",
+                "workspace_id": 1,
+                "source": "mix_signup",
+                "identity": {"provider": "battlenet", "handle": "P7#1"},
+            },
+        )
 
     async def test_self_join_benched_mode_parks_the_newcomer(self) -> None:
         self.games.get.return_value = _game(self_signup="benched")
@@ -1243,6 +1260,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         state = await self.service.self_join(self.session, custom_game_id=11, auth_user=_auth(), workspace_id=1)
 
         self.roster.create.assert_not_awaited()
+        self.session.add.assert_not_called()
         self.assertEqual(row.participation, MixParticipation.BENCHED)
         self.assertEqual(state["seat"]["participation"], MixParticipation.BENCHED)
         self.assertEqual(state["policy"]["join_blocker"], "already_joined")
@@ -1682,6 +1700,11 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
             _roster_row(4, 10, 3, roles=["support"], is_flex=True, participation=MixParticipation.BENCHED),
         ]
         self.load_hosts.return_value = {9: "Foxx"}
+        # The card shows the game's name for each player (not the workspace name), without the ``#tag``.
+        self.load_roster.side_effect = lambda _s, *, workspace_id, provider, member_ids: {
+            member_id: replace(member, display=PersonDisplayRead(name=f"G{member_id}", tag="#1"))
+            for member_id, member in _members(*member_ids).items()
+        }
         self.ranks.resolve.return_value = {
             **_ranks(7, 10),
             (8, "damage"): ResolvedRank(2200, "author"),
@@ -1709,10 +1732,10 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
                 "status": "draft",
                 "lobby_count": 1,
                 "players": [
-                    {"name": "P7", "role": "tank", "benched": False, "rank": 2500, "away": False},
-                    {"name": "P8", "role": "damage", "benched": False, "rank": 2200, "away": True},
-                    {"name": "P9", "role": "support", "benched": True, "rank": 2700, "away": False},
-                    {"name": "P10", "role": "flex", "benched": True, "rank": 2300, "away": False},
+                    {"name": "G7", "role": "tank", "benched": False, "rank": 2500, "away": False},
+                    {"name": "G8", "role": "damage", "benched": False, "rank": 2200, "away": True},
+                    {"name": "G9", "role": "support", "benched": True, "rank": 2700, "away": False},
+                    {"name": "G10", "role": "flex", "benched": True, "rank": 2300, "away": False},
                 ],
                 # The one lobby a fresh mix has, with no lineup yet.
                 "lobbies": [{"lobby_index": 0, "state": "idle", "live_started_at": None}],
@@ -1722,6 +1745,8 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         )
         kwargs = self.ranks.resolve.await_args.kwargs
         self.assertEqual((kwargs["order"], kwargs["author_user_id"]), (MIX_ORDER, 9))
+        # The host is named by the mix game's provider too.
+        self.assertEqual(self.load_hosts.await_args.kwargs["provider"], "battlenet")
 
     async def test_discord_view_of_an_unknown_mix_404(self) -> None:
         self.games.get.return_value = None
@@ -3002,7 +3027,8 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
                     "match_number": 4,
                     "current": True,
                     "variant": document["variants"][1],
-                    "players": document["players"],
+                    # Each seat as the game names its member now; the stored balance keeps its own names.
+                    "players": {uuid: {**seat, "name": f"P{uuid}"} for uuid, seat in document["players"].items()},
                     "team_names": {"0": "Blue"},
                     "next_map": ["Busan", "Control"],
                     "map_image": "https://s3.example/busan.jpg",
@@ -3014,6 +3040,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
                 }
             ],
         )
+        self.assertEqual(document["players"]["1"]["name"], "Ana")
 
     async def test_discord_view_names_the_only_map_of_a_single_map_game(self) -> None:
         """One competitive map is every match's map: the card names it, even unrolled or over a map set before."""
@@ -3185,6 +3212,10 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
             team2_voice_channel_id=3,
         )
         self._voice_reads({"mix_voice_category_id": "10"}, "5", {7: "70", 9: "90"})
+        # Cid has left the roster: the report keeps the name the balance stored.
+        self.load_roster.side_effect = lambda _s, *, workspace_id, provider, member_ids: _members(
+            *(member_id for member_id in member_ids if member_id != 9)
+        )
         discord = SimpleNamespace(
             voice_move=AsyncMock(
                 return_value=[
@@ -3207,7 +3238,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         self.assertEqual(body["moved"], 1)
         self.assertEqual(
             [(row["workspace_member_id"], row["name"], row["status"], row["channel_id"]) for row in body["results"]],
-            [(8, "Bob", "no_discord_link", "2"), (7, "Ana", "moved", "2"), (9, "Cid", "not_in_voice", "3")],
+            [(8, "P8", "no_discord_link", "2"), (7, "P7", "moved", "2"), (9, "Cid", "not_in_voice", "3")],
         )
 
     async def test_voice_move_without_a_lobby_moves_the_whole_mix(self) -> None:
@@ -3260,7 +3291,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
             body,
             {
                 "moved": 0,
-                "results": [{"workspace_member_id": 7, "name": "Ana", "status": "not_configured", "channel_id": None}],
+                "results": [{"workspace_member_id": 7, "name": "P7", "status": "not_configured", "channel_id": None}],
             },
         )
 
