@@ -1,4 +1,4 @@
-"""Worker lifecycle of the LoL rank collector: its four consumers, its schedules and the Riot API client.
+"""Worker lifecycle of the LoL rank collector: its three consumers, its schedules and the Riot API client.
 
 A worker that does not select ``lol`` never imports this module (the registry's hooks import it on call).
 """
@@ -10,7 +10,7 @@ from faststream.rabbit import Channel
 from faststream.rabbit.annotations import RabbitMessage
 
 from shared.disciplines.lol import collector, riot
-from shared.messaging.config import TOURNAMENT_EVENTS_EXCHANGE
+from shared.messaging.config import PLAYER_EVENTS_EXCHANGE
 from shared.messaging.topology import declare_dead_letter_queue
 from shared.observability import observe_message_processing
 from shared.observability.broker import require_broker
@@ -29,19 +29,16 @@ def register_jobs(broker: Any, *, session_factory: Any, redis: Any, logger: Any)
         handle.__name__ = name
         broker.subscriber(queue, channel=fetch_channel)(handle)
 
-    def approval(queue: Any, name: str) -> None:
-        async def handle(data: dict, msg: RabbitMessage) -> None:
-            async with observe_message_processing(queue=queue, handler=name, message=msg, logger=logger):
-                await collector.handle_registration_approved(data, broker=broker)
-
-        handle.__name__ = name
-        broker.subscriber(queue, exchange=TOURNAMENT_EVENTS_EXCHANGE)(handle)
-
     fetch(collector.FETCH_QUEUE, "process_lol_rank_fetch")
     fetch(collector.FETCH_PRIORITY_QUEUE, "process_lol_rank_fetch_priority")
-    approval(collector.APPROVED_QUEUE, "process_lol_registration_approved")
-    # The registrant's own "check again" from their card: same rank check, own queue.
-    approval(collector.RANK_CHECK_QUEUE, "process_lol_registration_rank_check")
+
+    # Registration approved / re-checked, mix signup: the handler skips another game's request.
+    @broker.subscriber(collector.PLAYER_REFRESH_QUEUE, exchange=PLAYER_EVENTS_EXCHANGE)
+    async def process_lol_player_refresh(data: dict, msg: RabbitMessage) -> None:
+        async with observe_message_processing(
+            queue=collector.PLAYER_REFRESH_QUEUE, handler="process_lol_player_refresh", message=msg, logger=logger
+        ):
+            await collector.handle_player_refresh(data, broker=broker)
 
 
 async def start_jobs(*, session_factory: Any, redis: Any, logger: Any) -> None:

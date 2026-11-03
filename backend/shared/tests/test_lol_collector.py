@@ -401,23 +401,17 @@ def test_the_tick_claims_as_many_fetches_as_the_request_budget_pays_for(monkeypa
     assert claim.await_args.kwargs["limit"] == 50 // collector.REQUESTS_PER_FETCH == 25
 
 
-def test_an_approved_riot_registration_enqueues_a_priority_fetch_per_riot_account(monkeypatch) -> None:
+def test_a_lol_player_refresh_enqueues_a_priority_fetch_per_riot_account(monkeypatch) -> None:
     accounts = [(10, "A#EUW"), (11, "B#EUW")]
     monkeypatch.setattr(collector, "_riot_accounts_of", AsyncMock(return_value=accounts))
     monkeypatch.setattr(collector, "ensure_state", AsyncMock())
     enqueue = AsyncMock(return_value=True)
     monkeypatch.setattr(collector, "enqueue_fetch", enqueue)
-    event = {
-        "tournament_id": 1,
-        "workspace_id": 2,
-        "registration_id": 3,
-        "user_id": 7,
-        "identity": {"provider": SocialProvider.RIOT, "handle": "A#EUW"},
-    }
-    assert asyncio.run(collector.handle_registration_approved(event, session_factory=lambda: _Session())) == 2
+    event = {"user_id": 7, "discipline": "lol", "workspace_id": 2, "source": "mix_signup"}
+    assert asyncio.run(collector.handle_player_refresh(event, session_factory=lambda: _Session())) == 2
     assert [call.kwargs["priority"] for call in enqueue.await_args_list] == [True, True]
-    event["identity"] = {"provider": SocialProvider.BATTLENET, "handle": "A#1234"}
-    assert asyncio.run(collector.handle_registration_approved(event, session_factory=lambda: _Session())) == 0
+    event["discipline"] = "overwatch"
+    assert asyncio.run(collector.handle_player_refresh(event, session_factory=lambda: _Session())) == 0
 
 
 _TAG = itertools.count()

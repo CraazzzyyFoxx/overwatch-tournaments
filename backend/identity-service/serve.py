@@ -17,7 +17,7 @@ from datetime import timedelta
 
 from faststream import FastStream
 
-from shared.messaging.config import STEAM_ACCOUNT_CHANGED_DLQ, WORKSPACE_MEMBER_CHANGED_DLQ
+from shared.messaging.config import STEAM_ACCOUNT_CHANGED_DLQ, STEAM_PLAYER_REFRESH_DLQ, WORKSPACE_MEMBER_CHANGED_DLQ
 from shared.messaging.topology import declare_dead_letter_queue
 from shared.observability import (
     make_rabbit_broker,
@@ -122,6 +122,7 @@ async def setup_worker() -> None:
     await broker.connect()
     await declare_dead_letter_queue(broker, WORKSPACE_MEMBER_CHANGED_DLQ)
     await declare_dead_letter_queue(broker, STEAM_ACCOUNT_CHANGED_DLQ)
+    await declare_dead_letter_queue(broker, STEAM_PLAYER_REFRESH_DLQ)
     setup_sentry(
         dsn=settings.sentry_dsn,
         traces_sample_rate=settings.sentry_traces_sample_rate,

@@ -284,28 +284,26 @@ class EncounterCompletedEvent(BaseEvent):
     winner_team_id: int | None = Field(default=None, description="Winner team ID if determinable")
 
 
-class RegistrationApprovedEvent(BaseEvent):
-    """Domain event emitted when a tournament registration is approved."""
+class PlayerRefreshRequestedEvent(BaseEvent):
+    """Re-read one player's game data from the providers: their native ranks and their profile names.
 
-    event_type: str = Field(default="registration_approved", frozen=True)
-    tournament_id: int = Field(..., description="Tournament ID")
-    workspace_id: int = Field(..., description="Workspace ID")
-    registration_id: int = Field(..., description="Registration ID")
-    user_id: int | None = Field(default=None, description="Player user ID when linked")
-    identity: PlayerIdentityRead | None = Field(
-        default=None,
-        description="Approved registration's primary handle for its tournament's identity provider",
-    )
-
-
-class RegistrationRankCheckRequestedEvent(RegistrationApprovedEvent):
-    """The registrant asked to re-check their profile from their own card.
-
-    Same payload as the approval event, so stats-service runs the same rank check
-    for it; a distinct type and routing key so it is never read as an approval.
+    Published by: tournament-service (registration approved, the registrant's own re-check) and balancer-service
+    (a player signing up to a mix), through the outbox onto ``player.events``.
+    Consumed by: the rank collector of ``discipline`` (priority fetch of the player's accounts; reference-only, a
+    declared rank is never overwritten) and identity-service (Steam persona names of every Steam account).
     """
 
-    event_type: str = Field(default="registration_rank_check_requested", frozen=True)
+    event_type: str = Field(default="player_refresh_requested", frozen=True)
+    user_id: int = Field(..., description="players.user id whose accounts are refreshed")
+    discipline: str = Field(..., min_length=1, max_length=32, description="Game whose rank collector acts")
+    workspace_id: int = Field(..., description="Workspace the request came from")
+    source: Literal["tournament_registration", "tournament_recheck", "mix_signup"]
+    registration_id: int | None = Field(
+        default=None, description="Tournament registration whose declared handles pick the accounts (Overwatch)"
+    )
+    identity: PlayerIdentityRead | None = Field(
+        default=None, description="The player's primary handle for the discipline's identity provider"
+    )
 
 
 class TournamentStateChangedEvent(BaseEvent):
@@ -462,7 +460,6 @@ class FetchRankEvent(BaseEvent):
         default="scheduled", description="What triggered this fetch"
     )
     registration_id: int | None = Field(default=None, description="Registration that triggered it")
-    tournament_id: int | None = Field(default=None, description="Tournament context, when applicable")
 
 
 class AchievementEvaluateEvent(BaseEvent):

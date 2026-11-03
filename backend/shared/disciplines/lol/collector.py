@@ -32,6 +32,7 @@ from shared.core.tournament_state import FINISHED_STATUSES
 from shared.disciplines.lol import riot
 from shared.disciplines.lol.ladder import DIVISIONAL_TIERS, QUEUES, division_number, rank_value
 from shared.disciplines.lol.ranks import DISCIPLINE
+from shared.messaging.config import PLAYER_REFRESH_REQUESTED_ROUTING_KEY
 from shared.observability import observe_scheduled_job, publish_message
 from shared.observability.broker import require_broker
 from shared.repository.ranks import (
@@ -42,7 +43,7 @@ from shared.repository.ranks import (
     jittered_interval,
     workspace_account_ids,
 )
-from shared.schemas.events import RegistrationApprovedEvent
+from shared.schemas.events import PlayerRefreshRequestedEvent
 from shared.schemas.settings import RankCollectionConfig, RankCollectionScope
 from shared.services.distributed_lock import (
     DistributedLockUnavailable,
@@ -54,14 +55,13 @@ from shared.services.settings_provider import settings_provider
 from shared.services.social_identity import SocialHandleConflict, social_identity_service
 
 __all__ = (
-    "APPROVED_QUEUE",
     "COOLDOWN_KEY",
     "DISCIPLINE",
     "FETCH_PRIORITY_QUEUE",
     "FETCH_QUEUE",
     "INVALID_RIOT_ID_ERROR",
     "OWNED_DLQS",
-    "RANK_CHECK_QUEUE",
+    "PLAYER_REFRESH_QUEUE",
     "SETTINGS_KEY",
     "LolFetchRequest",
     "LolRankCollectionConfig",
@@ -71,7 +71,7 @@ __all__ = (
     "configure",
     "enqueue_fetch",
     "ensure_state",
-    "handle_registration_approved",
+    "handle_player_refresh",
     "mark_failure",
     "mark_not_found",
     "mark_ok",
@@ -109,12 +109,11 @@ def _queue(name: str, routing_key: str | None = None) -> RabbitQueue:
 
 FETCH_QUEUE = _queue("lol_rank_fetch")
 FETCH_PRIORITY_QUEUE = _queue("lol_rank_fetch_priority")
-APPROVED_QUEUE = _queue("lol_rank_registration_approved", "tournament.registration.approved")
-RANK_CHECK_QUEUE = _queue("lol_rank_registration_rank_check", "tournament.registration.rank_check_requested")
+PLAYER_REFRESH_QUEUE = _queue("lol_rank_player_refresh", PLAYER_REFRESH_REQUESTED_ROUTING_KEY)
 #: Every queue the module consumes dead-letters; nothing else would declare or bind these.
 OWNED_DLQS = tuple(
     RabbitQueue(f"{queue.name}.dlq", durable=True)
-    for queue in (FETCH_QUEUE, FETCH_PRIORITY_QUEUE, APPROVED_QUEUE, RANK_CHECK_QUEUE)
+    for queue in (FETCH_QUEUE, FETCH_PRIORITY_QUEUE, PLAYER_REFRESH_QUEUE)
 )
 
 _states = RankAccountStateRepository()
@@ -592,13 +591,13 @@ async def _riot_accounts_of(session: AsyncSession, user_ids: Sequence[int]) -> l
     return [(row[0], row[1]) for row in rows.all()]
 
 
-async def handle_registration_approved(
+async def handle_player_refresh(
     data: dict[str, Any], *, broker: Any | None = None, redis: Any | None = None, session_factory: Any | None = None
 ) -> int:
-    """A LoL registration approved (or re-checked by its player): priority-fetch every Riot account of the player.
-    Reference-only, like Overwatch's: the declared registration rank is never overwritten."""
-    event = RegistrationApprovedEvent.model_validate(data)
-    if event.user_id is None or event.identity is None or event.identity.provider != SocialProvider.RIOT:
+    """A LoL player refresh (registration approved or re-checked, mix signup): priority-fetch every Riot account of the
+    player. Reference-only, like Overwatch's: the declared registration rank is never overwritten."""
+    event = PlayerRefreshRequestedEvent.model_validate(data)
+    if event.discipline != DISCIPLINE:
         return 0
     async with (session_factory or _sessions())() as session:
         accounts = await _riot_accounts_of(session, [event.user_id])

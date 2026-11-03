@@ -114,8 +114,7 @@ print(json.dumps({"queues": sorted(queues), "overwatch": sorted(m for m in sys.m
             [
                 "lol_rank_fetch",
                 "lol_rank_fetch_priority",
-                "lol_rank_registration_approved",
-                "lol_rank_registration_rank_check",
+                "lol_rank_player_refresh",
             ]
         ),
         "overwatch": [],
@@ -168,12 +167,7 @@ class OverwatchJobsTests(IsolatedAsyncioTestCase):
 
     async def test_an_overwatch_worker_binds_the_rank_consumers_and_runs_the_collector(self) -> None:
         from shared.disciplines.overwatch.collector.settings import settings
-        from shared.messaging.config import (
-            RANK_FETCH_PRIORITY_QUEUE,
-            RANK_FETCH_QUEUE,
-            TOURNAMENT_REGISTRATION_APPROVED_QUEUE,
-            TOURNAMENT_REGISTRATION_RANK_CHECK_QUEUE,
-        )
+        from shared.messaging.config import RANK_FETCH_PRIORITY_QUEUE, RANK_FETCH_QUEUE, RANK_PLAYER_REFRESH_QUEUE
 
         selected = [DISCIPLINES["overwatch"]]
         broker, session_factory, redis = _Broker(), object(), object()
@@ -186,8 +180,7 @@ class OverwatchJobsTests(IsolatedAsyncioTestCase):
             {
                 RANK_FETCH_QUEUE.name,
                 RANK_FETCH_PRIORITY_QUEUE.name,
-                TOURNAMENT_REGISTRATION_APPROVED_QUEUE.name,
-                TOURNAMENT_REGISTRATION_RANK_CHECK_QUEUE.name,
+                RANK_PLAYER_REFRESH_QUEUE.name,
             },
         )
         # OverFast-protective prefetch: both fetch queues share one channel sized by the collector setting.
@@ -202,11 +195,7 @@ class OverwatchJobsTests(IsolatedAsyncioTestCase):
         # The module owns the dead-letter queues of the queues it consumes.
         self.assertEqual(
             set(broker.dlqs),
-            {"rank_fetch.dlq", "rank_fetch_priority.dlq"}
-            | {
-                q.name + ".dlq"
-                for q in (TOURNAMENT_REGISTRATION_APPROVED_QUEUE, TOURNAMENT_REGISTRATION_RANK_CHECK_QUEUE)
-            },
+            {"rank_fetch.dlq", "rank_fetch_priority.dlq", RANK_PLAYER_REFRESH_QUEUE.name + ".dlq"},
         )
         self.client.start.assert_awaited_once()
         self.scheduler.start_scheduler.assert_called_once()

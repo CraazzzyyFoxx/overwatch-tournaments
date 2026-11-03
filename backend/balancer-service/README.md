@@ -173,6 +173,10 @@ announces nothing:
 - `PickBanRoomOpenRequestedEvent` (`event_id` `pick_ban_room_open:<encounter>`) onto tournament-service's
   `tournament_pick_ban_room_open`: `custom.start_match` on a mix with a hero ban preset, which it
   freezes on the lobby (`live_ban_preset`) for the room to open on.
+- `PlayerRefreshRequestedEvent` (`source: mix_signup`) onto `player.events` / `player.refresh_requested`:
+  `custom.self_join` when it seats a new roster row (never on a repeat click or a host's roster edit); the game's rank
+  collector priority-fetches the player's accounts and identity refreshes their Steam names. Reference-only: the
+  mix's ranks are not touched.
 
 **Realtime topics** (published to Redis, relayed to clients by the gateway):
 

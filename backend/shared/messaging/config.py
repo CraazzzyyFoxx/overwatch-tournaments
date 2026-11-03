@@ -362,35 +362,50 @@ TOURNAMENT_ENCOUNTER_COMPLETED_DLQ = RabbitQueue(
     durable=True,
 )
 
-TOURNAMENT_REGISTRATION_APPROVED_QUEUE = RabbitQueue(
-    "tournament_registration_approved",
+# ============================================================================
+# Player refresh (tournament-service, balancer-service -> rank collectors, identity-service)
+# ============================================================================
+# ``PlayerRefreshRequestedEvent`` through the outbox: a player registered for a tournament (approved or re-checked)
+# or signed up to a mix. Every discipline's rank collector binds its own queue and acts only on its own discipline;
+# identity refreshes the player's Steam persona names. LoL and Deadlock declare their queues in their modules.
+
+PLAYER_EVENTS_EXCHANGE = RabbitExchange(
+    "player.events",
+    type=ExchangeType.TOPIC,
     durable=True,
-    routing_key="tournament.registration.approved",
+)
+
+PLAYER_REFRESH_REQUESTED_ROUTING_KEY = "player.refresh_requested"
+
+RANK_PLAYER_REFRESH_QUEUE = RabbitQueue(
+    "rank_player_refresh",
+    durable=True,
+    routing_key=PLAYER_REFRESH_REQUESTED_ROUTING_KEY,
     arguments={
         "x-dead-letter-exchange": "dlx",
-        "x-dead-letter-routing-key": "tournament_registration_approved.dlq",
+        "x-dead-letter-routing-key": "rank_player_refresh.dlq",
         "x-message-ttl": 600000,  # 10 minutes
     },
 )
 
-TOURNAMENT_REGISTRATION_APPROVED_DLQ = RabbitQueue(
-    "tournament_registration_approved.dlq",
+RANK_PLAYER_REFRESH_DLQ = RabbitQueue(
+    "rank_player_refresh.dlq",
     durable=True,
 )
 
-TOURNAMENT_REGISTRATION_RANK_CHECK_QUEUE = RabbitQueue(
-    "tournament_registration_rank_check",
+STEAM_PLAYER_REFRESH_QUEUE = RabbitQueue(
+    "steam_player_refresh",
     durable=True,
-    routing_key="tournament.registration.rank_check_requested",
+    routing_key=PLAYER_REFRESH_REQUESTED_ROUTING_KEY,
     arguments={
         "x-dead-letter-exchange": "dlx",
-        "x-dead-letter-routing-key": "tournament_registration_rank_check.dlq",
-        "x-message-ttl": 600000,  # 10 minutes
+        "x-dead-letter-routing-key": "steam_player_refresh.dlq",
+        "x-message-ttl": 3600000,  # 1 hour
     },
 )
 
-TOURNAMENT_REGISTRATION_RANK_CHECK_DLQ = RabbitQueue(
-    "tournament_registration_rank_check.dlq",
+STEAM_PLAYER_REFRESH_DLQ = RabbitQueue(
+    "steam_player_refresh.dlq",
     durable=True,
 )
 
@@ -767,5 +782,6 @@ EXCHANGES_BY_NAME: dict[str, RabbitExchange] = {
         TOURNAMENT_EVENTS_EXCHANGE,
         MATCH_INGESTED_EXCHANGE,
         NOTIFICATIONS_EXCHANGE,
+        PLAYER_EVENTS_EXCHANGE,
     )
 }

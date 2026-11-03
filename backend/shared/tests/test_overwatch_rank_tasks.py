@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from types import SimpleNamespace
+from typing import Any
 from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock, patch
 
@@ -223,7 +224,18 @@ class ProcessFetchTests(IsolatedAsyncioTestCase):
         self.assertNotIn(tasks._inflight_key(9), redis.store)
 
 
-class RegistrationHookTests(IsolatedAsyncioTestCase):
+def _refresh(**values: Any) -> dict[str, Any]:
+    return {
+        "user_id": 50,
+        "discipline": "overwatch",
+        "workspace_id": 1,
+        "source": "tournament_registration",
+        "registration_id": 2,
+        **values,
+    }
+
+
+class PlayerRefreshTests(IsolatedAsyncioTestCase):
     async def test_generic_identity_is_converted_to_a_battletag_only_at_the_ow_boundary(self) -> None:
         for identity, expected in [
             ({"provider": "battlenet", "handle": "Battle#1234"}, "Battle#1234"),
@@ -239,22 +251,14 @@ class RegistrationHookTests(IsolatedAsyncioTestCase):
                 ),
                 patch.object(tasks.service, "resolve_registration_targets", AsyncMock(return_value=[])) as targets,
             ):
-                count = await tasks.handle_registration_approved(
-                    {"tournament_id": 1, "workspace_id": 1, "registration_id": 2, "user_id": 50, "identity": identity},
-                    session_factory=_session_factory(session),
+                count = await tasks.handle_player_refresh(
+                    _refresh(identity=identity), session_factory=_session_factory(session)
                 )
             self.assertEqual(count, 0)
             self.assertEqual(targets.await_args.kwargs["fallback_battle_tag"], expected)
 
     async def test_enqueues_priority_for_each_user_tag(self) -> None:
         session = SimpleNamespace(commit=AsyncMock())
-        data = {
-            "event_type": "registration_approved",
-            "tournament_id": 1,
-            "workspace_id": 1,
-            "registration_id": 2,
-            "user_id": 50,
-        }
         with (
             patch.object(
                 tasks.settings_provider,
@@ -269,22 +273,17 @@ class RegistrationHookTests(IsolatedAsyncioTestCase):
             patch.object(tasks.service, "ensure_state", AsyncMock()),
             patch.object(tasks, "enqueue_fetch", AsyncMock(return_value=True)) as enq,
         ):
-            count = await tasks.handle_registration_approved(
-                data, broker=SimpleNamespace(), redis=FakeRedis(), session_factory=_session_factory(session)
+            count = await tasks.handle_player_refresh(
+                _refresh(), broker=SimpleNamespace(), redis=FakeRedis(), session_factory=_session_factory(session)
             )
         self.assertEqual(count, 2)
         self.assertEqual(enq.await_count, 2)
         self.assertTrue(all(c.kwargs["priority"] for c in enq.await_args_list))
 
-    async def test_skips_unlinked_registration(self) -> None:
-        data = {
-            "event_type": "registration_approved",
-            "tournament_id": 1,
-            "workspace_id": 1,
-            "registration_id": 2,
-            "user_id": None,
-        }
+    async def test_skips_another_games_refresh(self) -> None:
         with patch.object(tasks, "enqueue_fetch", AsyncMock()) as enq:
-            count = await tasks.handle_registration_approved(data, broker=SimpleNamespace())
+            count = await tasks.handle_player_refresh(
+                _refresh(discipline="lol", source="mix_signup", registration_id=None), broker=SimpleNamespace()
+            )
         self.assertEqual(count, 0)
         enq.assert_not_awaited()

@@ -142,13 +142,13 @@ class RegistrationBulkApprovalEventsTests(IsolatedAsyncioTestCase):
 
         self.assertEqual(one_at_a_time, batched)
         notifications, outbox, (_resources, entity_ids) = batched
-        # Only the three account holders have an inbox; every registration gets its event.
+        # Only the three account holders have an inbox; every registration with a player gets its refresh.
         self.assertEqual(self.auth_ids, [row[2] for row in notifications])
-        approvals = [payload for *_, payload in outbox if "registration_id" in payload]
-        self.assertEqual([r.id for r in self.registrations], [payload["registration_id"] for payload in approvals])
-        self.assertEqual(3, len(outbox) - len(approvals))
-        self.assertIsNotNone(approvals[3]["user_id"])  # the shadow player is still a player
-        self.assertIsNone(approvals[4]["user_id"])  # no member, no player
+        refreshes = [payload for *_, payload in outbox if "registration_id" in payload]
+        # The shadow player (index 3) is still a player; the memberless registration (index 4) has none to refresh.
+        self.assertEqual([r.id for r in self.registrations[:4]], [payload["registration_id"] for payload in refreshes])
+        self.assertEqual(3, len(outbox) - len(refreshes))
+        self.assertTrue(all(payload["source"] == "tournament_registration" for payload in refreshes))
         self.assertEqual({"registration_ids": [r.id for r in self.registrations]}, entity_ids)
 
     async def test_the_statements_do_not_grow_with_the_batch(self):
