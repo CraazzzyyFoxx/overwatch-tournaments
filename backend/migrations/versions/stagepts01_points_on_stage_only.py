@@ -1,8 +1,9 @@
-"""Points per win/draw/loss live on the stage only: drop ``tournament.win_points``/``draw_points``/``loss_points``.
+"""Points per win/draw/loss live on the stage only: copy ``tournament.win_points``/``draw_points``/``loss_points`` down.
 
 A stage member left NULL used to inherit the tournament's value; it now means the fixed default (1 / 0.5 / 0).
-Before the drop, every NULL member whose tournament value differs from that default is written onto the stage,
-so no existing table is ranked differently.
+Every NULL member whose tournament value differs from that default is written onto the stage, so no existing
+table is ranked differently. The tournament columns stay: the previous release's containers still map them
+while this migration runs (CONTRIBUTING, destructive migrations); a later revision drops them.
 
 Revision ID: stagepts01
 Revises: iswiss02
@@ -12,7 +13,6 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-import sqlalchemy as sa
 from alembic import op
 
 # Annotated form on purpose: scripts/export_erd.py finds the chain's head with
@@ -38,15 +38,8 @@ def upgrade() -> None:
         WHERE t.id = s.tournament_id
         """
     )
-    for column, _ in _POINTS:
-        op.drop_column("tournament", column, schema="tournament")
 
 
 def downgrade() -> None:
-    # The stage values written by the upgrade stay: restored tournament columns only carry the defaults.
-    for column, default in _POINTS:
-        op.add_column(
-            "tournament",
-            sa.Column(column, sa.Float(), server_default=default, nullable=False),
-            schema="tournament",
-        )
+    # The stage values written by the upgrade stay; the tournament columns were never dropped.
+    pass
