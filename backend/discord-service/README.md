@@ -91,10 +91,13 @@ The other outbound RPCs are the ones a card button makes (see *User-facing surfa
 | `match_log_result` | consumes | `MatchLogProcessedEvent`, the parse verdict for one uploaded file, naming the message to put it on. |
 | `discord_member_changed` | publishes | `DiscordMemberChangedEvent` (guild, user, `role_update` / `member_join` / `member_remove`), straight from the gateway event — there is no transaction for an outbox row to join. Consumed by stats-service. |
 | `tournament.events` (topic exchange) | consumes | `tournament.state.changed`, on a server-named, exclusive, auto-deleted queue per replica: each replica reloads its own watched-channel map. A binding changed through `rpc.discord.channel.*` reloads it in-process. |
+| `discord_voice_sync` | consumes | `TournamentVoiceSyncRequestedEvent` (`tournament.voice.sync_requested` on `tournament.events`): the organizer saved the voice settings or pressed "sync". See *Tournament voice channels*. |
+| `cache_invalidation_discord_voice` | consumes | `CacheInvalidatedEvent` of scope `tournament` (`cache.invalidated.tournament.#` on `cache.invalidation`): stage, round, roster and result writes — each wakes one debounced voice sync of that tournament. |
+| `rpc.tournament.voice_plan` | requests | The tournament's whole desired voice layout (`shared/schemas/voice.py`, 15 s timeout; `not_found` = the tournament is gone). |
 
 The durable queues it consumes (`discord_commands`, the five `discord_*` request/reply queues,
-`match_log_result` and `pickup_mix_changed`) dead-letter to `dlx` with a `<name>.dlq` routing key —
-the bot declares all eight DLQs before it starts consuming — and most carry a message TTL (60 s for
+`match_log_result`, `pickup_mix_changed`, `discord_voice_sync` and `cache_invalidation_discord_voice`) dead-letter to `dlx` with a `<name>.dlq` routing key —
+the bot declares all ten DLQs before it starts consuming — and most carry a message TTL (60 s for
 the directory lookups, 5 min for `discord_commands` and `match_log_result`) — a lookup no live bot
 answers expires rather than piling up. `discord_commands` and `pickup_mix_changed` each consume on
 their own channel with `prefetch_count=4`: a send renders a card (an RPC, maybe a picture drawn)
@@ -128,6 +131,55 @@ file's `warn`, and adding a reaction the bot already has is a no-op.
 `on_message` and `on_message_edit` in monitored channels. `MembershipEventsCog` —
 `on_guild_join`/`on_guild_remove` (logging only) and `on_member_join`/`on_member_remove`/`on_member_update`
 (publish `DiscordMemberChangedEvent`; with `RABBITMQ_URL` unset the change is logged and dropped).
+`VoiceChannelsCog` — `on_ready` (sync every tournament with enabled voice settings or rows),
+`on_voice_state_update` (the hub), `on_guild_channel_delete` / `on_guild_channel_update` (drift of a
+tracked channel), and the 30 s deletion sweep.
+
+### Tournament voice channels
+
+Creates the voice channels of a tournament (a hub, one per team, a reused pool of Swiss round
+lobbies), sends participants to theirs and deletes everything when it is over. The design and the
+plan contract are in [`../../docs/tournament-voice-channels.md`](../../docs/tournament-voice-channels.md);
+tournament-service decides WHAT should exist, this service makes Discord equal to it.
+
+- **Reconciler** (`src/services/voice_sync.py`, pure decisions in `src/services/voice_diff.py`). A sync
+  fetches the plan over `rpc.tournament.voice_plan`, diffs it against `tournament.voice_channel` and what
+  the guild cache shows, applies the difference and writes `voice_settings.last_synced_at` and
+  `sync_issues` (`guild_not_found`, `missing_permission:<name>`, `category_not_found`,
+  `category_overflow`, `role_not_found`, `member_overwrite_failed`, `discord_error`). It repairs a lost
+  event, a 429 or a channel deleted by hand on the next run.
+- **Triggers.** `discord_voice_sync`, `cache_invalidation_discord_voice` and `tournament.state.changed`.
+  Tournaments with neither enabled settings nor rows are ignored (an in-memory set, filled at startup and
+  by an explicit request). Requests of one tournament are debounced for 3 s, and a tournament never runs
+  two syncs at once: a request arriving mid-sync becomes one follow-up. A failed sync retries after 30 s,
+  60 s, ... up to five times; a rename Discord would refuse is retried when its 10-minute window opens.
+- **Layout.** The organizer's category or the bot's own `category:1` named after the tournament; a
+  category holds 50 channels counting foreign ones, past that the bot adds `<category> · 2`, `· 3` right
+  after it. Its own empty categories are deleted; the organizer's is never (no row is kept for it:
+  `voice_channel.discord_channel_id` is unique and two tournaments may share one category).
+- **Permissions.** Public channels follow the category. Private: the category's overwrites, deny
+  View/Connect for `@everyone`, allow View/Connect/Speak for staff roles and members (as
+  `discord.Object(type=Member)`, so members who are not cached work), the bot's own allow; written in
+  one edit, only when they differ. If Discord rejects a member who is not in the guild, the edit is
+  repeated without those members and `member_overwrite_failed` is reported.
+- **Names and order.** Renamed only when the plan's name differs, at most twice per channel per 10 minutes
+  (the rest waits). Channels are kept in plan order inside their category.
+- **Deletion.** A dropped channel is marked `deleting`; the sweep deletes it once empty or 10 minutes
+  after the drop, then the row. A category goes when nothing is left in it.
+- **Hub and moves.** Joining a hub moves the member to `routes[member]` (no route: stay). After each sync,
+  members whose route changed and who sit in one of the tournament's channels move to the new one in plan
+  order. After a restart nobody is moved (no earlier routes to compare).
+- **Queue** (`src/services/guild_queue.py`). Every voice call of a guild runs through one sequential
+  queue: hub moves and mix moves (`VoiceMover`), then round moves, then creates and edits, then deletes;
+  first in first out inside a priority. discord.py waits out 429s.
+- **Drift.** A tracked channel deleted or edited by hand (name, category, overwrites) triggers a sync.
+  The bot's own edits are ignored during a sync and for 5 s after it.
+
+Needs **Manage Channels**, **Manage Roles** (permission overwrites), **Move Members**, **View Channel** and
+**Connect**, in the guild and in the organizer's category. Process memory (debounce, routes, the id map,
+the rename ledger) makes this a **single-replica** feature, like the mix projector; a restart rebuilds it
+with the startup sync. If the bot dies between creating a channel and recording it, the channel is left
+behind and the next sync makes another.
 
 ### User-facing surface
 
@@ -295,6 +347,8 @@ Run from `backend/discord-service` with the service env (REST only, safe beside 
   500 when it has none. Qualifying attachments are uploaded; stats-service deduplicates their bytes.
 - Re-renders of live mix cards wait out a 2 s coalescing window per message (see *Operational
   notes*).
+- Tournament voice: a 30 s sweep deletes the channels of `deleting` rows (`VoiceChannelsCog`), and a
+  debounced sync of each tournament with voice runs on its events (see *Tournament voice channels*).
 - `GatewayWatchdog` (`discord.ext.tasks.loop`, every 30 s) proves the gateway session is alive — see
   *Operational notes*.
 
@@ -324,6 +378,9 @@ Reads elsewhere: `workspace.discord_guild_id` (the guild a workspace posts into 
 `/mix`, `rpc.discord.*`), `workspace.name` / `icon_url` and `tournament.logo_url` (a notification
 card's branding), `notification_workspace_config.locale` (the language of a notification card) and
 `discord_message` (below).
+
+Reads `tournament.voice_settings` (and writes its `last_synced_at` and `sync_issues`) and owns
+`tournament.voice_channel`: what the bot made in Discord, one row per channel and per own category.
 
 Writes `discord_message` — the one state of every message the platform sends on its own behalf
 (notification DMs, workspace broadcasts, mix signup and lineup posts). Ownership is split on purpose

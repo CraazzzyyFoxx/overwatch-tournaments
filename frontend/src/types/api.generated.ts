@@ -8494,6 +8494,56 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/tournaments/{tournament_id}/voice": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get tournament voice channels
+         * @description Permission: workspace `tournament.read` on the tournament's workspace. The organizer's voice settings (defaults, all off, before the first save), whether the workspace has a linked Discord guild, the channels the plan wants joined to the bot's own rows by `slot_key` (`planned` = in the plan, not made yet; rows the plan dropped are listed too, `deleting`), roster members without a linked Discord (`player_without_discord`) and what the last bot sync reported (`sync_issues`, `last_synced_at`). Discord ids are strings.
+         *
+         *     RPC subject: `rpc.tournament.voice_get`
+         */
+        get: operations["get__api_v1_admin_tournaments__tournament_id__voice"];
+        /**
+         * Save tournament voice settings
+         * @description Permission: workspace `tournament.update` on the tournament's workspace. Saves `enabled`, `private`, `early_teams`, `category_id` and `staff_role_ids` (Discord ids as digit strings), requests a bot sync and answers the status like the read. A newly set `category_id` must be a category of the workspace's guild (422 `discord_category_not_in_guild`) and every newly set role must exist there (422 `discord_role_not_in_guild`); 409 `discord_guild_not_linked` when the workspace has no guild, 503 `discord_unavailable` when Discord cannot be asked. `enabled: false` removes every channel the bot made.
+         *
+         *     RPC subject: `rpc.tournament.voice_put`
+         */
+        put: operations["put__api_v1_admin_tournaments__tournament_id__voice"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/tournaments/{tournament_id}/voice/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sync tournament voice channels
+         * @description Permission: workspace `tournament.update` on the tournament's workspace. Asks the bot to reconcile the tournament's Discord voice channels with the plan now (repairs a channel deleted by hand) and answers the status like the read.
+         *
+         *     RPC subject: `rpc.tournament.voice_sync`
+         */
+        post: operations["post__api_v1_admin_tournaments__tournament_id__voice_sync"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/users": {
         parameters: {
             query?: never;
@@ -32140,6 +32190,103 @@ export interface components {
              * @default null
              */
             team_formation: string | null;
+        };
+        /** VoiceChannelStatus */
+        "tournament.VoiceChannelStatus": {
+            /**
+             * Discord Channel Id
+             * @default null
+             */
+            discord_channel_id: string | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: TournamentVoiceChannelStatusKind;
+            /**
+             * Name
+             * @default null
+             */
+            name: string | null;
+            /** Slot Key */
+            slot_key: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: TournamentVoiceChannelStatusStatus;
+        };
+        /** VoiceSettings */
+        "tournament.VoiceSettings": {
+            /**
+             * Category Id
+             * @default null
+             */
+            category_id: string | null;
+            /**
+             * Early Teams
+             * @default false
+             */
+            early_teams: boolean;
+            /**
+             * Enabled
+             * @default false
+             */
+            enabled: boolean;
+            /**
+             * Private
+             * @default false
+             */
+            private: boolean;
+            /** Staff Role Ids */
+            staff_role_ids?: string[];
+        };
+        /** VoiceStatus */
+        "tournament.VoiceStatus": {
+            /** Channels */
+            channels: components["schemas"]["tournament.VoiceChannelStatus"][];
+            /** Guild Linked */
+            guild_linked: boolean;
+            /**
+             * Last Synced At
+             * @default null
+             */
+            last_synced_at: string | null;
+            settings: components["schemas"]["tournament.VoiceSettings"];
+            /** Sync Issues */
+            sync_issues: components["schemas"]["tournament.VoiceSyncIssue"][];
+            /** Warnings */
+            warnings: components["schemas"]["tournament.VoiceWarning"][];
+        };
+        /** VoiceSyncIssue */
+        "tournament.VoiceSyncIssue": {
+            /** Code */
+            code: string;
+            /**
+             * Detail
+             * @default null
+             */
+            detail: string | null;
+        };
+        /** VoiceWarning */
+        "tournament.VoiceWarning": {
+            /** Code */
+            code: string;
+            /**
+             * Name
+             * @default null
+             */
+            name: string | null;
+            /**
+             * Team Id
+             * @default null
+             */
+            team_id: number | null;
+            /**
+             * Workspace Member Id
+             * @default null
+             */
+            workspace_member_id: number | null;
         };
         /**
          * WireFromGroupsRequest
@@ -65366,6 +65513,244 @@ export interface operations {
             };
         };
     };
+    get__api_v1_admin_tournaments__tournament_id__voice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["tournament.VoiceStatus"];
+                };
+            };
+            /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not authorized (`forbidden`). Authenticated, but the credential lacks the permission, workspace, or scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    put__api_v1_admin_tournaments__tournament_id__voice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["tournament.VoiceSettings"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["tournament.VoiceStatus"];
+                };
+            };
+            /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not authorized (`forbidden`). Authenticated, but the credential lacks the permission, workspace, or scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post__api_v1_admin_tournaments__tournament_id__voice_sync: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["tournament.VoiceStatus"];
+                };
+            };
+            /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not authorized (`forbidden`). Authenticated, but the credential lacks the permission, workspace, or scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     get__api_v1_admin_users: {
         parameters: {
             query?: never;
@@ -83695,6 +84080,18 @@ export enum TournamentTournamentLinkUpdateKindAnyOf0 {
     bracket = "bracket",
     rules = "rules",
     other = "other"
+}
+export enum TournamentVoiceChannelStatusKind {
+    category = "category",
+    hub = "hub",
+    team = "team",
+    swiss_slot = "swiss_slot"
+}
+export enum TournamentVoiceChannelStatusStatus {
+    planned = "planned",
+    pending = "pending",
+    active = "active",
+    deleting = "deleting"
 }
 export enum TournamentWireFromGroupsRequestMode {
     cross = "cross",

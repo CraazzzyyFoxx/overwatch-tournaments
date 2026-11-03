@@ -12161,6 +12161,34 @@
         "ref": "tournament.TournamentFacets"
       },
       "summary": "Tournament facet counts"
+    },
+    "rpc.tournament.voice_get": {
+      "description": "Permission: workspace `tournament.read` on the tournament's workspace. The organizer's voice settings (defaults, all off, before the first save), whether the workspace has a linked Discord guild, the channels the plan wants joined to the bot's own rows by `slot_key` (`planned` = in the plan, not made yet; rows the plan dropped are listed too, `deleting`), roster members without a linked Discord (`player_without_discord`) and what the last bot sync reported (`sync_issues`, `last_synced_at`). Discord ids are strings.",
+      "response": {
+        "array": false,
+        "ref": "tournament.VoiceStatus"
+      },
+      "summary": "Get tournament voice channels"
+    },
+    "rpc.tournament.voice_put": {
+      "description": "Permission: workspace `tournament.update` on the tournament's workspace. Saves `enabled`, `private`, `early_teams`, `category_id` and `staff_role_ids` (Discord ids as digit strings), requests a bot sync and answers the status like the read. A newly set `category_id` must be a category of the workspace's guild (422 `discord_category_not_in_guild`) and every newly set role must exist there (422 `discord_role_not_in_guild`); 409 `discord_guild_not_linked` when the workspace has no guild, 503 `discord_unavailable` when Discord cannot be asked. `enabled: false` removes every channel the bot made.",
+      "request": {
+        "array": false,
+        "ref": "tournament.VoiceSettings"
+      },
+      "response": {
+        "array": false,
+        "ref": "tournament.VoiceStatus"
+      },
+      "summary": "Save tournament voice settings"
+    },
+    "rpc.tournament.voice_sync": {
+      "description": "Permission: workspace `tournament.update` on the tournament's workspace. Asks the bot to reconcile the tournament's Discord voice channels with the plan now (repairs a channel deleted by hand) and answers the status like the read.",
+      "response": {
+        "array": false,
+        "ref": "tournament.VoiceStatus"
+      },
+      "summary": "Sync tournament voice channels"
     }
   },
   "schemas": {
@@ -61502,6 +61530,236 @@
         "name"
       ],
       "title": "UserRead",
+      "type": "object"
+    },
+    "tournament.VoiceChannelStatus": {
+      "properties": {
+        "discord_channel_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Discord Channel Id"
+        },
+        "kind": {
+          "enum": [
+            "category",
+            "hub",
+            "team",
+            "swiss_slot"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Name"
+        },
+        "slot_key": {
+          "title": "Slot Key",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "planned",
+            "pending",
+            "active",
+            "deleting"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "slot_key",
+        "kind",
+        "status"
+      ],
+      "title": "VoiceChannelStatus",
+      "type": "object"
+    },
+    "tournament.VoiceSettings": {
+      "properties": {
+        "category_id": {
+          "anyOf": [
+            {
+              "pattern": "^[1-9]\\d{0,18}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Category Id"
+        },
+        "early_teams": {
+          "default": false,
+          "title": "Early Teams",
+          "type": "boolean"
+        },
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "private": {
+          "default": false,
+          "title": "Private",
+          "type": "boolean"
+        },
+        "staff_role_ids": {
+          "items": {
+            "pattern": "^[1-9]\\d{0,18}$",
+            "type": "string"
+          },
+          "maxItems": 25,
+          "title": "Staff Role Ids",
+          "type": "array"
+        }
+      },
+      "title": "VoiceSettings",
+      "type": "object"
+    },
+    "tournament.VoiceStatus": {
+      "properties": {
+        "channels": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.VoiceChannelStatus"
+          },
+          "title": "Channels",
+          "type": "array"
+        },
+        "guild_linked": {
+          "title": "Guild Linked",
+          "type": "boolean"
+        },
+        "last_synced_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Last Synced At"
+        },
+        "settings": {
+          "$ref": "#/components/schemas/tournament.VoiceSettings"
+        },
+        "sync_issues": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.VoiceSyncIssue"
+          },
+          "title": "Sync Issues",
+          "type": "array"
+        },
+        "warnings": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.VoiceWarning"
+          },
+          "title": "Warnings",
+          "type": "array"
+        }
+      },
+      "required": [
+        "settings",
+        "guild_linked",
+        "channels",
+        "warnings",
+        "sync_issues"
+      ],
+      "title": "VoiceStatus",
+      "type": "object"
+    },
+    "tournament.VoiceSyncIssue": {
+      "properties": {
+        "code": {
+          "title": "Code",
+          "type": "string"
+        },
+        "detail": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Detail"
+        }
+      },
+      "required": [
+        "code"
+      ],
+      "title": "VoiceSyncIssue",
+      "type": "object"
+    },
+    "tournament.VoiceWarning": {
+      "properties": {
+        "code": {
+          "title": "Code",
+          "type": "string"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Name"
+        },
+        "team_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Team Id"
+        },
+        "workspace_member_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Workspace Member Id"
+        }
+      },
+      "required": [
+        "code"
+      ],
+      "title": "VoiceWarning",
       "type": "object"
     },
     "tournament.WireFromGroupsRequest": {

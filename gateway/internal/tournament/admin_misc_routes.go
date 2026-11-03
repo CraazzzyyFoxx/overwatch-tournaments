@@ -124,4 +124,8 @@ var AdminMiscRoutes = []edge.RouteSpec{
 	{Method: "GET", Pattern: "/api/v1/admin/tournaments/{tournament_id}/preview-access", Queue: "rpc.tournament.preview_access_list", IDParam: "tournament_id", Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/v1/admin/tournaments/{tournament_id}/preview-access", Queue: "rpc.tournament.preview_access_add", IDParam: "tournament_id", Body: true, Auth: edge.AuthRequired, Success: 201},
 	{Method: "DELETE", Pattern: "/api/v1/admin/tournaments/{tournament_id}/preview-access/{auth_user_id}", Queue: "rpc.tournament.preview_access_remove", IDParam: "tournament_id", Path: []string{"auth_user_id"}, Auth: edge.AuthRequired, Success: 204},
+	// voice channels (docs/tournament-voice-channels.md) — workspace tournament.read for the get, tournament.update for the put and sync.
+	{Method: "GET", Pattern: "/api/v1/admin/tournaments/{tournament_id}/voice", Queue: "rpc.tournament.voice_get", IDParam: "tournament_id", Auth: edge.AuthRequired},
+	{Method: "PUT", Pattern: "/api/v1/admin/tournaments/{tournament_id}/voice", Queue: "rpc.tournament.voice_put", IDParam: "tournament_id", Body: true, Auth: edge.AuthRequired},
+	{Method: "POST", Pattern: "/api/v1/admin/tournaments/{tournament_id}/voice/sync", Queue: "rpc.tournament.voice_sync", IDParam: "tournament_id", Auth: edge.AuthRequired},
 }

@@ -13,7 +13,7 @@ baselines and Discord channels live in `stats/`. `catalog/` writes only to `cata
 > `--check` and fails on drift, so the diagrams cannot fall behind the models again.
 
 <!-- ERD:auto _alembic_head -->
-Alembic head: **`stagepts01`** (166 revisions in `backend/migrations/versions/`).
+Alembic head: **`voice01`** (167 revisions in `backend/migrations/versions/`).
 <!-- /ERD:auto -->
 
 **Reading the diagrams**
@@ -1425,6 +1425,33 @@ erDiagram
         bigint tournament_id FK
         bigint auth_user_id FK
     }
+    TOURNAMENT_VOICE_CHANNEL {
+        bigint id PK
+        timestamptz created_at
+        timestamptz updated_at "nullable"
+        bigint tournament_id FK
+        bigint stage_id FK "nullable"
+        bigint team_id FK "nullable"
+        varchar(16) kind
+        varchar(64) slot_key
+        bigint discord_channel_id UK "nullable"
+        boolean owned
+        varchar(16) status
+        timestamptz delete_requested_at "nullable"
+    }
+    TOURNAMENT_VOICE_SETTINGS {
+        bigint id PK
+        timestamptz created_at
+        timestamptz updated_at "nullable"
+        bigint tournament_id FK,UK
+        boolean enabled
+        boolean private
+        boolean early_teams
+        bigint category_id "nullable"
+        bigint[] staff_role_ids
+        timestamptz last_synced_at "nullable"
+        jsonb sync_issues
+    }
 
     AUTH_USER |o--o{ TOURNAMENT_COMPUTATION_JOB : "requested_by_user_id"
     AUTH_USER ||--o{ TOURNAMENT_SCRIM_ROOM : "created_by_auth_user_id"
@@ -1461,6 +1488,7 @@ erDiagram
     TOURNAMENT_STAGE |o--o{ TOURNAMENT_COMPUTATION_JOB : "stage_id"
     TOURNAMENT_STAGE |o--o{ TOURNAMENT_PICK_BAN_CONFIG : "stage_id"
     TOURNAMENT_STAGE |o--o{ TOURNAMENT_STANDING : "stage_id"
+    TOURNAMENT_STAGE |o--o{ TOURNAMENT_VOICE_CHANNEL : "stage_id"
     TOURNAMENT_STAGE ||--o{ TOURNAMENT_BRACKET_ENCOUNTER : "tournament_id"
     TOURNAMENT_STAGE ||--o{ TOURNAMENT_PLAYER_STANDING : "stage_id"
     TOURNAMENT_STAGE ||--o{ TOURNAMENT_PLAYER_STANDING_PIN : "stage_id"
@@ -1481,6 +1509,7 @@ erDiagram
     TOURNAMENT_STAGE_ITEM |o--o{ TOURNAMENT_SWISS_STOPPED_SCOPE : "stage_item_id"
     TOURNAMENT_STAGE_ITEM ||--o{ TOURNAMENT_STAGE_ITEM_INPUT : "stage_item_id"
     TOURNAMENT_TEAM |o--o{ TOURNAMENT_STAGE_ITEM_INPUT : "team_id"
+    TOURNAMENT_TEAM |o--o{ TOURNAMENT_VOICE_CHANNEL : "team_id"
     TOURNAMENT_TEAM ||--o{ TOURNAMENT_CHALLONGE_PARTICIPANT_MAPPING : "team_id"
     TOURNAMENT_TEAM ||--o{ TOURNAMENT_PLAYER : "team_id"
     TOURNAMENT_TEAM ||--o{ TOURNAMENT_STANDING : "team_id"
@@ -1501,8 +1530,10 @@ erDiagram
     TOURNAMENT_TOURNAMENT ||--o{ TOURNAMENT_TOURNAMENT_LINK : "tournament_id"
     TOURNAMENT_TOURNAMENT ||--o{ TOURNAMENT_TOURNAMENT_PHASE_SCHEDULE : "tournament_id"
     TOURNAMENT_TOURNAMENT ||--o{ TOURNAMENT_TOURNAMENT_PREVIEW_ACCESS : "tournament_id"
+    TOURNAMENT_TOURNAMENT ||--o{ TOURNAMENT_VOICE_CHANNEL : "tournament_id"
     TOURNAMENT_TOURNAMENT ||--o| TOURNAMENT_ENCOUNTER_REPORT_FORM : "tournament_id"
     TOURNAMENT_TOURNAMENT ||--o| TOURNAMENT_RECALCULATION_STATE : "tournament_id"
+    TOURNAMENT_TOURNAMENT ||--o| TOURNAMENT_VOICE_SETTINGS : "tournament_id"
 ```
 
 Composite unique keys:
@@ -1526,6 +1557,7 @@ Composite unique keys:
 - `TOURNAMENT_TOURNAMENT_LINK` unique on (`tournament_id`, `kind`, `url`)
 - `TOURNAMENT_TOURNAMENT_PHASE_SCHEDULE` unique on (`tournament_id`, `status`)
 - `TOURNAMENT_TOURNAMENT_PREVIEW_ACCESS` unique on (`tournament_id`, `auth_user_id`)
+- `TOURNAMENT_VOICE_CHANNEL` unique on (`tournament_id`, `slot_key`)
 <!-- /ERD:auto -->
 
 ## encounter — `encounter`

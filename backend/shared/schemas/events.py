@@ -325,6 +325,20 @@ class TournamentStateChangedEvent(BaseEvent):
     new_status: str = Field(..., description="New tournament status")
 
 
+class TournamentVoiceSyncRequestedEvent(BaseEvent):
+    """A tournament's voice channels are to be re-synced with its plan.
+
+    Published by: tournament-service, when the organizer changes the voice settings or presses "sync".
+    Domain changes (stages, rounds, rosters, results) reach the bot as ``cache.invalidated.tournament.*``
+    instead, so no writer has to remember this event.
+    Consumed by: discord-service ``discord_voice_sync`` (debounced per tournament).
+    """
+
+    event_type: str = Field(default="tournament_voice_sync_requested", frozen=True)
+    tournament_id: int = Field(..., description="Tournament ID")
+    workspace_id: int | None = Field(default=None, description="Workspace ID")
+
+
 class ChallongePushRequestedEvent(BaseEvent):
     """A confirmed result of a Challonge-linked encounter is to be pushed to Challonge.
 

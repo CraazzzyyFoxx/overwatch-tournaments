@@ -16,3 +16,4 @@ from .stage import *
 from .standings import *
 from .team import *
 from .tournament import *
+from .voice import *

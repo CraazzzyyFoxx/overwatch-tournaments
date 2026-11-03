@@ -1512,6 +1512,36 @@ export interface DiscordChannelInput {
   is_active: boolean;
 }
 
+// ─── Tournament voice channels ────────────────────────────────────────────────
+
+export interface VoiceSettings {
+  enabled: boolean;
+  private: boolean;
+  early_teams: boolean;
+  category_id: string | null;
+  staff_role_ids: string[];
+}
+
+export interface VoiceStatus {
+  settings: VoiceSettings;
+  guild_linked: boolean;
+  channels: {
+    slot_key: string;
+    kind: "category" | "hub" | "team" | "swiss_slot";
+    name: string | null;
+    discord_channel_id: string | null;
+    status: "planned" | "pending" | "active" | "deleting";
+  }[];
+  warnings: {
+    code: string;
+    workspace_member_id: number | null;
+    name: string | null;
+    team_id: number | null;
+  }[];
+  sync_issues: { code: string; detail: string | null }[];
+  last_synced_at: string | null;
+}
+
 // ─── Log Processing ───────────────────────────────────────────────────────────
 
 export type LogProcessingStatus = "pending" | "processing" | "awaiting_link" | "done" | "failed";

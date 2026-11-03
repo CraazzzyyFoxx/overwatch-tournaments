@@ -39,6 +39,7 @@ from src.schemas import pregame_rooms as pregame_rooms_schemas
 from src.schemas import registration as reg_schemas
 from src.schemas import registration_form as reg_form_schemas
 from src.schemas import registration_team as reg_team_schemas
+from src.schemas import voice as voice_schemas
 from src.services.encounter import room_journal
 
 # Reusable ad-hoc query params (handlers read these via _q/_q1, no query model).
@@ -187,6 +188,10 @@ OPERATIONS: dict[str, Op] = {
     "rpc.tournament.tournament_schedule_set": Op(
         request=schemas.TournamentScheduleSet, response=schemas.TournamentRead
     ),
+    # ── bespoke: voice channels ────────────────────────────────────────────
+    "rpc.tournament.voice_get": Op(response=voice_schemas.VoiceStatus),
+    "rpc.tournament.voice_put": Op(request=voice_schemas.VoiceSettings, response=voice_schemas.VoiceStatus),
+    "rpc.tournament.voice_sync": Op(response=voice_schemas.VoiceStatus),
     "rpc.tournament.standing_recalculate": Op(response=schemas.TournamentComputationJobRead),
     "rpc.tournament.standing_pins_set": Op(
         request=schemas.StandingPinsUpdate, response=schemas.TournamentComputationJobRead

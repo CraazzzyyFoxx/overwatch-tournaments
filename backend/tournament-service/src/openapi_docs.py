@@ -540,6 +540,19 @@ DOCS: dict[str, dict] = {
         "summary": "Revoke preview access",
         "description": "Permission: workspace `owner`/`admin` role on the tournament's workspace (403 otherwise). Removes an account's preview allowlist entry (204 no body) and invalidates the cached tournament read.",
     },
+    # ── voice channels (docs/tournament-voice-channels.md) ─────────────────
+    "rpc.tournament.voice_get": {
+        "summary": "Get tournament voice channels",
+        "description": "Permission: workspace `tournament.read` on the tournament's workspace. The organizer's voice settings (defaults, all off, before the first save), whether the workspace has a linked Discord guild, the channels the plan wants joined to the bot's own rows by `slot_key` (`planned` = in the plan, not made yet; rows the plan dropped are listed too, `deleting`), roster members without a linked Discord (`player_without_discord`) and what the last bot sync reported (`sync_issues`, `last_synced_at`). Discord ids are strings.",
+    },
+    "rpc.tournament.voice_put": {
+        "summary": "Save tournament voice settings",
+        "description": "Permission: workspace `tournament.update` on the tournament's workspace. Saves `enabled`, `private`, `early_teams`, `category_id` and `staff_role_ids` (Discord ids as digit strings), requests a bot sync and answers the status like the read. A newly set `category_id` must be a category of the workspace's guild (422 `discord_category_not_in_guild`) and every newly set role must exist there (422 `discord_role_not_in_guild`); 409 `discord_guild_not_linked` when the workspace has no guild, 503 `discord_unavailable` when Discord cannot be asked. `enabled: false` removes every channel the bot made.",
+    },
+    "rpc.tournament.voice_sync": {
+        "summary": "Sync tournament voice channels",
+        "description": "Permission: workspace `tournament.update` on the tournament's workspace. Asks the bot to reconcile the tournament's Discord voice channels with the plan now (repairs a channel deleted by hand) and answers the status like the read.",
+    },
     # ── bespoke: pick-ban live-session admin overrides (map + hero) ────────
     "rpc.tournament.admin_pick_ban_session_reset": {
         "summary": "Reset pick-ban session",

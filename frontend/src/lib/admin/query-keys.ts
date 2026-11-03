@@ -91,6 +91,8 @@ export const adminQueryKeys = {
   tournamentTeams: (tournamentId: KeyPart) =>
     ["admin", "tournament", tournamentId, "teams"] as const,
   tournament: (tournamentId: KeyPart) => ["admin", "tournament", tournamentId] as const,
+  tournamentVoice: (tournamentId: KeyPart) =>
+    ["admin", "tournament", tournamentId, "voice"] as const,
   tournamentTeamFormat: (tournamentId: KeyPart, workspaceId: KeyPart, discipline: KeyPart) =>
     ["admin", "tournament", tournamentId, "team-format", workspaceId, discipline] as const,
   tournamentEncountersCount: (tournamentId: KeyPart) =>

@@ -88,6 +88,8 @@ import {
   DiscordChannelRead,
   GameObservationRead,
   DiscordChannelInput,
+  VoiceSettings,
+  VoiceStatus,
   LogBindRequest,
   LogBindResponse,
   LogHistoryResponse,
@@ -1304,6 +1306,28 @@ class AdminService {
     await apiFetch(`/api/v1/admin/tournaments/${tournamentId}/discord-channel`, {
       method: "DELETE"
     });
+  }
+
+  // ─── Tournament voice channels ────────────────────────────────────────────
+
+  async getVoice(tournamentId: number): Promise<VoiceStatus> {
+    const response = await apiFetch(`/api/v1/admin/tournaments/${tournamentId}/voice`);
+    return response.json();
+  }
+
+  async putVoice(tournamentId: number, data: VoiceSettings): Promise<VoiceStatus> {
+    const response = await apiFetch(`/api/v1/admin/tournaments/${tournamentId}/voice`, {
+      method: "PUT",
+      body: data
+    });
+    return response.json();
+  }
+
+  async syncVoice(tournamentId: number): Promise<VoiceStatus> {
+    const response = await apiFetch(`/api/v1/admin/tournaments/${tournamentId}/voice/sync`, {
+      method: "POST"
+    });
+    return response.json();
   }
 
   // ─── Log Processing History ───────────────────────────────────────────────

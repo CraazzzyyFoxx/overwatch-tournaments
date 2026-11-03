@@ -10,12 +10,17 @@ from sqlalchemy.orm import Session
 
 from shared import models
 from shared.disciplines import discipline as discipline_spec
-from shared.messaging.config import TOURNAMENT_EVENTS_EXCHANGE, TOURNAMENT_STATE_CHANGED_ROUTING_KEY
+from shared.messaging.config import (
+    TOURNAMENT_EVENTS_EXCHANGE,
+    TOURNAMENT_STATE_CHANGED_ROUTING_KEY,
+    TOURNAMENT_VOICE_SYNC_ROUTING_KEY,
+)
 from shared.messaging.outbox import enqueue_outbox_event
 from shared.schemas.events import (
     RegistrationApprovedEvent,
     RegistrationRankCheckRequestedEvent,
     TournamentStateChangedEvent,
+    TournamentVoiceSyncRequestedEvent,
 )
 from shared.schemas.identity import PlayerIdentityRead
 from shared.services.notifications import PersonalNotification, notify_users
@@ -324,4 +329,18 @@ async def enqueue_tournament_state_changed(
         ),
         exchange=TOURNAMENT_EVENTS_EXCHANGE,
         routing_key=TOURNAMENT_STATE_CHANGED_ROUTING_KEY,
+    )
+
+
+async def enqueue_tournament_voice_sync(session: AsyncSession, tournament: models.Tournament) -> None:
+    """Ask discord-service to reconcile this tournament's voice channels (settings saved, "sync" pressed)."""
+    await enqueue_outbox_event(
+        session,
+        TournamentVoiceSyncRequestedEvent(
+            tournament_id=tournament.id,
+            workspace_id=tournament.workspace_id,
+            source_service="tournament-service",
+        ),
+        exchange=TOURNAMENT_EVENTS_EXCHANGE,
+        routing_key=TOURNAMENT_VOICE_SYNC_ROUTING_KEY,
     )

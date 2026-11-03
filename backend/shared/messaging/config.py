@@ -432,6 +432,45 @@ TOURNAMENT_STANDINGS_INVALIDATED_DLQ = RabbitQueue(
     durable=True,
 )
 
+# Owner: discord-service. A tournament's voice channels re-sync with its plan
+# (``docs/tournament-voice-channels.md``). Two inputs, one debounced sync:
+# the organizer's explicit request on ``tournament.events``, and every
+# tournament-scoped cache invalidation (stages, rounds, rosters, results), so
+# no domain writer has to remember a voice event of its own.
+TOURNAMENT_VOICE_SYNC_ROUTING_KEY = "tournament.voice.sync_requested"
+
+DISCORD_VOICE_SYNC_QUEUE = RabbitQueue(
+    "discord_voice_sync",
+    durable=True,
+    routing_key=TOURNAMENT_VOICE_SYNC_ROUTING_KEY,
+    arguments={
+        "x-dead-letter-exchange": "dlx",
+        "x-dead-letter-routing-key": "discord_voice_sync.dlq",
+        "x-message-ttl": 300000,  # 5 minutes
+    },
+)
+
+DISCORD_VOICE_SYNC_DLQ = RabbitQueue(
+    "discord_voice_sync.dlq",
+    durable=True,
+)
+
+CACHE_INVALIDATION_DISCORD_VOICE_QUEUE = RabbitQueue(
+    "cache_invalidation_discord_voice",
+    durable=True,
+    routing_key="cache.invalidated.tournament.#",
+    arguments={
+        "x-dead-letter-exchange": "dlx",
+        "x-dead-letter-routing-key": "cache_invalidation_discord_voice.dlq",
+        "x-message-ttl": 300000,  # 5 minutes
+    },
+)
+
+CACHE_INVALIDATION_DISCORD_VOICE_DLQ = RabbitQueue(
+    "cache_invalidation_discord_voice.dlq",
+    durable=True,
+)
+
 # Owner: tournament-service. The confirmed-result push to Challonge, taken out
 # of the confirming request: the request commits the result and this row, the
 # consumer talks to Challonge with the queue's retry instead of a swallowed

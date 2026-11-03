@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from shared import models
 from shared.messaging.config import (
+    CACHE_INVALIDATION_DISCORD_VOICE_DLQ,
     DISCORD_COMMANDS_DLQ,
     DISCORD_COMMANDS_QUEUE,
     DISCORD_GUILD_CHANNELS_DLQ,
@@ -38,6 +39,7 @@ from shared.messaging.config import (
     DISCORD_MEMBER_ROLES_QUEUE,
     DISCORD_VOICE_MOVE_DLQ,
     DISCORD_VOICE_MOVE_QUEUE,
+    DISCORD_VOICE_SYNC_DLQ,
     MATCH_LOG_RESULT_DLQ,
     MATCH_LOG_RESULT_QUEUE,
     PICKUP_MIX_CHANGED_DLQ,
@@ -60,6 +62,7 @@ from src.services.channel_registry import ChannelRegistry
 from src.services.directory import DirectoryOutcome, DiscordDirectoryService
 from src.services.mix_projector import MixProjector
 from src.services.voice import VoiceMover
+from src.services.voice_sync import VoiceSync
 
 _DIRECTORY_CODES = {
     "guild_not_found": "not_found",
@@ -77,6 +80,8 @@ _OWNED_DLQS = (
     DISCORD_GUILD_CHANNELS_DLQ,
     DISCORD_GUILD_INFO_DLQ,
     DISCORD_VOICE_MOVE_DLQ,
+    DISCORD_VOICE_SYNC_DLQ,
+    CACHE_INVALIDATION_DISCORD_VOICE_DLQ,
     MATCH_LOG_RESULT_DLQ,
     PICKUP_MIX_CHANGED_DLQ,
 )
@@ -105,6 +110,7 @@ class DiscordRabbitGateway:
         registry: ChannelRegistry,
         directory: DiscordDirectoryService,
         voice: VoiceMover,
+        voice_sync: VoiceSync,
         bot: discord.Client,
         session_maker: async_sessionmaker[AsyncSession],
         projector: MixProjector,
@@ -116,6 +122,7 @@ class DiscordRabbitGateway:
         self._registry = registry
         self._directory = directory
         self._voice = voice
+        self._voice_sync = voice_sync
         self._bot = bot
         self._session_maker = session_maker
         self._projector = projector
@@ -473,6 +480,7 @@ class DiscordRabbitGateway:
                     raise
 
         self._projector.register(broker)
+        self._voice_sync.register(broker)
 
         @broker.subscriber(DISCORD_MEMBER_ROLES_QUEUE)
         async def handle_get_member_roles(body: dict[str, Any], msg: RabbitMessage) -> dict[str, Any]:
@@ -606,6 +614,9 @@ class DiscordRabbitGateway:
                 logger=logger,
             ):
                 await self._registry.reload()
+                # A finished tournament loses its channels; a started one gets its team voices.
+                if isinstance(tournament_id := body.get("tournament_id"), int):
+                    self._voice_sync.request(tournament_id)
 
         rpc_api.register(
             broker,
