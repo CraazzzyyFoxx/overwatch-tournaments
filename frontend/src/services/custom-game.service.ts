@@ -389,6 +389,11 @@ export type CustomGameMatch = {
    * up so the host files the id by hand. Null otherwise, and once there are stats.
    */
   match_search: "searching" | "not_found" | null;
+  /**
+   * Why a `not_found` search gave up: `no_linked_accounts`, `not_found_in_window`, `ambiguous: <ids>` or the source's
+   * own refusal. Null otherwise.
+   */
+  match_search_error: string | null;
 };
 
 /** Patch semantics: an omitted key is left untouched on the server. */
@@ -1239,5 +1244,10 @@ export const customGameService = {
       method: "POST",
       body: { external_id: externalId } satisfies MatchImportInput,
     }).then((r) => r.json());
+  },
+
+  /** Looks the round's match up by its players again: a fresh 24 h search, filed as the round's import if found. */
+  async searchMatch(gameId: number, matchId: number): Promise<void> {
+    await apiFetch(`/api/v1/custom-games/${gameId}/matches/${matchId}/match-search`, { method: "POST" });
   },
 };

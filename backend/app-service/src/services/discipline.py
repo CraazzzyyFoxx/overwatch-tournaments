@@ -93,6 +93,8 @@ def _descriptor(spec: DisciplineSpec, *, enabled: bool) -> DisciplineDescriptor:
             native_rank_collection="rank.collect" in spec.collection_handlers,
             native_ladder=bool(spec.native_ladder),
             match_fetch=bool(spec.match_fetchers),
+            match_search=spec.identity_provider is not None
+            and any(kind in spec.match_fetchers for kind in spec.match_searchers),
             log_upload="upload" in spec.ingestors,
             achievement_conditions=spec.achievement_conditions is not None,
             analytics=spec.analytics is not None,

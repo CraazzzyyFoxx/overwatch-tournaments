@@ -10,10 +10,17 @@ import { useAuthProfileStore } from "@/stores/auth-profile.store";
 
 /**
  * What a viewer who may file match logs under a mix is handed: the mix, what to run once a log is accepted, whether
- * the mix's game parses an uploaded log file (`capabilities.log_upload`; Deadlock does not), and whether it fetches
- * matches by id (`capabilities.match_fetch`), so a round may be filed by that id too.
+ * the mix's game parses an uploaded log file (`capabilities.log_upload`; Deadlock does not), whether it fetches
+ * matches by id (`capabilities.match_fetch`), so a round may be filed by that id too, and whether a round's match can
+ * be looked up by its players (`capabilities.match_search`), so its search may be started again.
  */
-export type MixLogUpload = { customGameId: number; onUploaded: () => void; fileUpload: boolean; matchFetch: boolean };
+export type MixLogUpload = {
+  customGameId: number;
+  onUploaded: () => void;
+  fileUpload: boolean;
+  matchFetch: boolean;
+  matchSearch: boolean;
+};
 
 /**
  * `null` unless the viewer may file a match log under this mix: the host, a co-host or a superuser (a closed mix
@@ -35,6 +42,7 @@ export function useMixLogUpload(game: CustomGame | undefined): MixLogUpload | nu
     customGameId: game.id,
     fileUpload: metadata.data?.discipline.capabilities.log_upload === true,
     matchFetch: metadata.data?.discipline.capabilities.match_fetch === true,
+    matchSearch: metadata.data?.discipline.capabilities.match_search === true,
     onUploaded: () =>
       void queryClient.invalidateQueries({ queryKey: customGameKeys.matches(game.workspace_id, game.id) })
   };

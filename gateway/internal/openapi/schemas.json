@@ -2437,7 +2437,7 @@
       "summary": "List custom games"
     },
     "rpc.balancer.custom.match_history": {
-      "description": "Permission: public; no authentication required. Returns every round recorded for the mix, newest first: its two teams by slot (slot 1 banned first) with name and score, its hero bans {slot, item_id} in order, whose hero each pick was {slot, member_id, name, item_id} in pick order, the winning slot (null for a draw), lobby, map, recorder and the rank points it applied, plus its statistics: stats_match_id (the bound stats match, null when none), log_state (\"processing\" while there is no stats match and the newest uploaded log is pending/processing, the newest match import waits for the game's source or the match is still being looked up by its players; else \"failed\" when that log failed/awaits a link or that import gave up; else null) and match_search (\"searching\" while the match of a game that can be found by its players is still being looked up, \"not_found\" once the search gave up and the host files the id by hand; else null).",
+      "description": "Permission: public; no authentication required. Returns every round recorded for the mix, newest first: its two teams by slot (slot 1 banned first) with name and score, its hero bans {slot, item_id} in order, whose hero each pick was {slot, member_id, name, item_id} in pick order, the winning slot (null for a draw), lobby, map, recorder and the rank points it applied, plus its statistics: stats_match_id (the bound stats match, null when none), log_state (\"processing\" while there is no stats match and the newest uploaded log is pending/processing, the newest match import waits for the game's source or the match is still being looked up by its players; else \"failed\" when that log failed/awaits a link or that import gave up; else null), match_search (\"searching\" while the match of a game that can be found by its players is still being looked up, \"not_found\" once the search gave up and the host files the id by hand or starts it again; else null) and match_search_error (why a not_found search gave up: no_linked_accounts, not_found_in_window, \"ambiguous: <ids>\" or the source's refusal; else null).",
       "summary": "List custom game matches"
     },
     "rpc.balancer.custom.post_discord": {
@@ -5187,6 +5187,10 @@
         "ref": "stats.MatchImportRead"
       },
       "summary": "List a mix round's match imports"
+    },
+    "rpc.stats.ingest.mix_search": {
+      "description": "Permission: same as the import. Starts the round's search by its players again (`stats.match_search`): a fresh 24 h window with the import's backoff, due at the worker's next tick, also for a round recorded before the automatic search's window; a search still looking is left as it is. A single fit is filed as the round's match import, several or none end it as `not_found` again. 422 `unsupported_match_search` for a game whose matches cannot be found by players, 409 `match_search_settled` for a round that has statistics or a pending/done import. Answers 204.",
+      "summary": "Search a mix round's match by its players again"
     },
     "rpc.stats.ingest.submit": {
       "description": "Permission: a workspace API key whose `stats.ingest` scope is backed by the owner's effective `stats.ingest` permission; sessions, service tokens and owner privilege alone are refused (403 `api_key_required` / `scope_required`). The request body is the bare `owt.match/1` document (Content-Type `application/json`, up to 25 MiB); the workspace is always the key's own. Idempotent per `(source.kind, source.external_id)` when an external id is present, otherwise per the SHA-256 of the exact request bytes: the same bytes return the existing job, changed bytes or discipline under one external id answer 409 `idempotency_conflict`. Answers 202 with the job while it is `pending`/`processing`, and 200 with the actual job when it already finished (`done`, `awaiting_link`, `failed`; a failed duplicate is never retried implicitly). A structurally valid document whose codes do not resolve is persisted as a failed job with diagnostics and answers 422 with `ingest_job_id`; malformed JSON answers 400, a non-JSON content type 415, an oversized body 413.",
@@ -15412,6 +15416,10 @@
           "title": "Match Fetch",
           "type": "boolean"
         },
+        "match_search": {
+          "title": "Match Search",
+          "type": "boolean"
+        },
         "native_ladder": {
           "title": "Native Ladder",
           "type": "boolean"
@@ -15426,6 +15434,7 @@
         "native_rank_collection",
         "native_ladder",
         "match_fetch",
+        "match_search",
         "log_upload",
         "achievement_conditions",
         "analytics"

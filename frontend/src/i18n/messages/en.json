@@ -5103,7 +5103,16 @@
         "hintMix": "The match ID from the game's match history. Its statistics are imported once the game's servers publish the match, which can take a while.",
         "autoSearch": {
           "searching": "Looking this match up among the players' private lobby games. The ID is filed on its own once the match is found.",
-          "notFound": "The match was not found by its players. Enter its ID above."
+          "notFound": "The match was not found by its players. Enter its ID above or search again.",
+          "reasons": {
+            "no_linked_accounts": "Nobody on one of the teams has linked a game account, so there is no one to search by.",
+            "not_found_in_window": "No matching match turned up within 24 hours.",
+            "ambiguous": "Several matches fit: {ids}. Paste the right ID above."
+          },
+          "start": "Find by players",
+          "again": "Search again",
+          "restarted": "Looking the match up by its players. The ID is filed on its own once it is found.",
+          "restartFailed": "Could not start the match search"
         },
         "gameLabel": "Game",
         "game": "Game {position}",

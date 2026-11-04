@@ -10709,7 +10709,7 @@ export interface paths {
         };
         /**
          * List custom game matches
-         * @description Permission: public; no authentication required. Returns every round recorded for the mix, newest first: its two teams by slot (slot 1 banned first) with name and score, its hero bans {slot, item_id} in order, whose hero each pick was {slot, member_id, name, item_id} in pick order, the winning slot (null for a draw), lobby, map, recorder and the rank points it applied, plus its statistics: stats_match_id (the bound stats match, null when none), log_state ("processing" while there is no stats match and the newest uploaded log is pending/processing, the newest match import waits for the game's source or the match is still being looked up by its players; else "failed" when that log failed/awaits a link or that import gave up; else null) and match_search ("searching" while the match of a game that can be found by its players is still being looked up, "not_found" once the search gave up and the host files the id by hand; else null).
+         * @description Permission: public; no authentication required. Returns every round recorded for the mix, newest first: its two teams by slot (slot 1 banned first) with name and score, its hero bans {slot, item_id} in order, whose hero each pick was {slot, member_id, name, item_id} in pick order, the winning slot (null for a draw), lobby, map, recorder and the rank points it applied, plus its statistics: stats_match_id (the bound stats match, null when none), log_state ("processing" while there is no stats match and the newest uploaded log is pending/processing, the newest match import waits for the game's source or the match is still being looked up by its players; else "failed" when that log failed/awaits a link or that import gave up; else null), match_search ("searching" while the match of a game that can be found by its players is still being looked up, "not_found" once the search gave up and the host files the id by hand or starts it again; else null) and match_search_error (why a not_found search gave up: no_linked_accounts, not_found_in_window, "ambiguous: <ids>" or the source's refusal; else null).
          *
          *     RPC subject: `rpc.balancer.custom.match_history`
          */
@@ -11318,6 +11318,28 @@ export interface paths {
          *     RPC subject: `rpc.stats.ingest.mix_fetch`
          */
         post: operations["post__api_v1_custom_games__custom_game_id__matches__match_id__match_import"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/custom-games/{custom_game_id}/matches/{match_id}/match-search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Search a mix round's match by its players again
+         * @description Permission: same as the import. Starts the round's search by its players again (`stats.match_search`): a fresh 24 h window with the import's backoff, due at the worker's next tick, also for a round recorded before the automatic search's window; a search still looking is left as it is. A single fit is filed as the round's match import, several or none end it as `not_found` again. 422 `unsupported_match_search` for a game whose matches cannot be found by players, 409 `match_search_settled` for a round that has statistics or a pending/done import. Answers 204.
+         *
+         *     RPC subject: `rpc.stats.ingest.mix_search`
+         */
+        post: operations["post__api_v1_custom_games__custom_game_id__matches__match_id__match_search"];
         delete?: never;
         options?: never;
         head?: never;
@@ -13217,6 +13239,8 @@ export interface components {
             log_upload: boolean;
             /** Match Fetch */
             match_fetch: boolean;
+            /** Match Search */
+            match_search: boolean;
             /** Native Ladder */
             native_ladder: boolean;
             /** Native Rank Collection */
@@ -77634,6 +77658,83 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["stats.MatchImportRead"];
                 };
+            };
+            /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not authorized (`forbidden`). Authenticated, but the credential lacks the permission, workspace, or scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post__api_v1_custom_games__custom_game_id__matches__match_id__match_search: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                custom_game_id: string;
+                match_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
             401: {

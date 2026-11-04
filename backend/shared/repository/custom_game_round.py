@@ -333,13 +333,13 @@ class CustomGameRoundRepository(BaseRepository[models.CustomGameRound]):
 
     async def match_logs(
         self, session: AsyncSession, encounter_ids: Sequence[int]
-    ) -> dict[int, tuple[int | None, str | None, str | None]]:
-        """``encounter_id -> (stats_match_id, log_state, match_search)`` for every id, in ONE read. The match is the
-        newest ``stats.match`` bound to the encounter. Only while there is none do the newest ``stats.ingest_job`` and
-        the newest ``stats.match_fetch`` hinted at it and its ``stats.match_search`` speak: a pending/processing job, a
-        pending import or a search still looking -> ``"processing"``, else a failed/awaiting_link job or a failed import
-        -> ``"failed"``, else ``None``; ``match_search`` is ``"searching"`` or ``"not_found"`` (else ``None``). No ids,
-        no query."""
+    ) -> dict[int, tuple[int | None, str | None, str | None, str | None]]:
+        """``encounter_id -> (stats_match_id, log_state, match_search, match_search_error)`` for every id, in ONE read.
+        The match is the newest ``stats.match`` bound to the encounter. Only while there is none do the newest
+        ``stats.ingest_job`` and the newest ``stats.match_fetch`` hinted at it and its ``stats.match_search`` speak: a
+        pending/processing job, a pending import or a search still looking -> ``"processing"``, else a
+        failed/awaiting_link job or a failed import -> ``"failed"``, else ``None``; ``match_search`` is ``"searching"``
+        or ``"not_found"`` (else ``None``), and a ``not_found`` search says why (its ``last_error``). No ids, no query."""
         if not encounter_ids:
             return {}
         match_id = (
@@ -361,20 +361,27 @@ class CustomGameRoundRepository(BaseRepository[models.CustomGameRound]):
             .limit(1)
             .scalar_subquery()
         )
-        search_status = (
-            sa.select(models.MatchSearch.status)
-            .where(models.MatchSearch.encounter_id == models.Encounter.id)
-            .scalar_subquery()
-        )
         rows = await session.execute(
-            sa.select(models.Encounter.id, match_id, job_status, fetch_status, search_status).where(
-                models.Encounter.id.in_(encounter_ids)
+            sa.select(
+                models.Encounter.id,
+                match_id,
+                job_status,
+                fetch_status,
+                models.MatchSearch.status,
+                models.MatchSearch.last_error,
             )
+            .outerjoin(models.MatchSearch, models.MatchSearch.encounter_id == models.Encounter.id)
+            .where(models.Encounter.id.in_(encounter_ids))
         )
-        logs: dict[int, tuple[int | None, str | None, str | None]] = {}
-        for encounter_id, matched, job, fetch, search_row in rows:
+        logs: dict[int, tuple[int | None, str | None, str | None, str | None]] = {}
+        for encounter_id, matched, job, fetch, search_row, search_error in rows:
             search = None if matched is not None else _SEARCH_STATE.get(search_row)
-            logs[encounter_id] = (matched, None if matched is not None else _log_state(job, fetch, search), search)
+            logs[encounter_id] = (
+                matched,
+                None if matched is not None else _log_state(job, fetch, search),
+                search,
+                search_error if search == "not_found" else None,
+            )
         return logs
 
     async def delete_round(self, session: AsyncSession, encounter_id: int) -> None:

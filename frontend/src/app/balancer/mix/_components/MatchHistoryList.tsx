@@ -244,7 +244,9 @@ function MatchHistoryRow({
                 customGameId: logUpload.customGameId,
                 encounterId: match.id,
                 onSubmitted: logUpload.onUploaded,
-                search: match.match_search
+                search: match.match_search,
+                searchError: match.match_search_error,
+                searchable: logUpload.matchSearch && match.stats_match_id == null
               }}
             />
           </DialogContent>

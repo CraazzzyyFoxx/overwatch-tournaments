@@ -672,9 +672,11 @@ DOCS: dict[str, dict] = {
             'statistics: stats_match_id (the bound stats match, null when none), log_state ("processing" while '
             "there is no stats match and the newest uploaded log is pending/processing, the newest match import "
             'waits for the game\'s source or the match is still being looked up by its players; else "failed" when '
-            'that log failed/awaits a link or that import gave up; else null) and match_search ("searching" while '
+            'that log failed/awaits a link or that import gave up; else null), match_search ("searching" while '
             'the match of a game that can be found by its players is still being looked up, "not_found" once the '
-            "search gave up and the host files the id by hand; else null)."
+            "search gave up and the host files the id by hand or starts it again; else null) and "
+            "match_search_error (why a not_found search gave up: no_linked_accounts, not_found_in_window, "
+            '"ambiguous: <ids>" or the source\'s refusal; else null).'
         ),
     },
     "rpc.balancer.custom.undo_match": {

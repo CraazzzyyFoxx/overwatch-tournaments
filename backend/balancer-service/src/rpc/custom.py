@@ -628,11 +628,11 @@ def _dump_round(
     map_info: dict[int, tuple[str, str | None]],
     bans: list[dict[str, int]],
     picks: list[dict[str, int | str]],
-    log: tuple[int | None, str | None, str | None],
+    log: tuple[int | None, str | None, str | None, str | None],
 ) -> dict[str, Any]:
     """One recorded round as the history wire spells it: the two seats by slot, the winning slot, the hero bans and
     whose hero each pick was."""
-    stats_match_id, log_state, match_search = log
+    stats_match_id, log_state, match_search, match_search_error = log
     encounter = round_.encounter
     teams = sorted(encounter.teams, key=lambda team: team.slot)
     map_id = encounter.games[0].map_id if encounter.games else None
@@ -664,6 +664,9 @@ def _dump_round(
         "stats_match_id": stats_match_id,
         "log_state": log_state,
         "match_search": match_search,
+        # Why a search gave up: ``no_linked_accounts``, ``not_found_in_window``, ``ambiguous: <ids>`` or the source's
+        # own refusal.
+        "match_search_error": match_search_error,
     }
 
 
@@ -682,7 +685,7 @@ async def _dump_rounds(session: Any, rounds: list[Any]) -> list[dict[str, Any]]:
             map_info,
             bans.get(round_.encounter.id, []),
             picks.get(round_.encounter.id, []),
-            logs.get(round_.encounter.id, (None, None, None)),
+            logs.get(round_.encounter.id, (None, None, None, None)),
         )
         for round_ in rounds
     ]

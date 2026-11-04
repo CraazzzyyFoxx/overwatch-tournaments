@@ -1126,9 +1126,15 @@ class CustomGameRoundStoreTests(EncounterWriterCase):
         self.addAsyncCleanup(self._drop_maps, [oasis.id])
         bound, failed, pending, done, bare, searching, gave_up = [await self._record(self._draft()) for _ in range(7)]
 
-        def search(encounter_id: int, status: models.MatchSearchStatus) -> models.MatchSearch:
+        def search(
+            encounter_id: int, status: models.MatchSearchStatus, last_error: str | None = None
+        ) -> models.MatchSearch:
             return models.MatchSearch(
-                workspace_id=self.ids["ws"], discipline="overwatch", encounter_id=encounter_id, status=status
+                workspace_id=self.ids["ws"],
+                discipline="overwatch",
+                encounter_id=encounter_id,
+                status=status,
+                last_error=last_error,
             )
 
         def job(encounter_id: int, status: IngestJobStatus, n: int) -> models.IngestJob:
@@ -1155,11 +1161,12 @@ class CustomGameRoundStoreTests(EncounterWriterCase):
                     job(pending, IngestJobStatus.PENDING, 0),
                     job(done, IngestJobStatus.DONE, 0),
                     # A bound match wins over a search too.
-                    search(bound, models.MatchSearchStatus.PENDING),
-                    # A search still looking is something still coming, even over a failed job.
-                    search(searching, models.MatchSearchStatus.PENDING),
+                    search(bound, models.MatchSearchStatus.NOT_FOUND, "ambiguous: 1, 2"),
+                    # A search still looking is something still coming, even over a failed job; its retry reason
+                    # is no reason it gave up.
+                    search(searching, models.MatchSearchStatus.PENDING, "no_match_yet"),
                     job(searching, IngestJobStatus.FAILED, 0),
-                    search(gave_up, models.MatchSearchStatus.NOT_FOUND),
+                    search(gave_up, models.MatchSearchStatus.NOT_FOUND, "no_linked_accounts"),
                 ]
             )
             await s.flush()
@@ -1174,15 +1181,18 @@ class CustomGameRoundStoreTests(EncounterWriterCase):
 
         self.assertEqual(
             {
-                bound: (match_id, None, None),
-                failed: (None, "failed", None),
-                pending: (None, "processing", None),
-                done: (None, None, None),
-                bare: (None, None, None),
-                searching: (None, "processing", "searching"),
-                gave_up: (None, None, "not_found"),
+                bound: (match_id, None, None, None),
+                failed: (None, "failed", None, None),
+                pending: (None, "processing", None, None),
+                done: (None, None, None, None),
+                bare: (None, None, None, None),
+                searching: (None, "processing", "searching", None),
+                gave_up: (None, None, "not_found", "no_linked_accounts"),
             },
-            {row["id"]: (row["stats_match_id"], row["log_state"], row["match_search"]) for row in rows},
+            {
+                row["id"]: (row["stats_match_id"], row["log_state"], row["match_search"], row["match_search_error"])
+                for row in rows
+            },
         )
 
     async def test_the_history_lists_whose_hero_each_pick_was(self) -> None:

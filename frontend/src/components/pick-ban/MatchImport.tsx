@@ -34,8 +34,8 @@ const PENDING_POLL_MS = 30_000;
  * Where a match id is filed: a tournament encounter's games (`games` are the positions it may be filed for: one,
  * a captain's report, hides the picker; `admin` uses the organizer routes, whose rows carry the warnings) or a
  * recorded round of a mix (one game by construction, always the organizer read; `onSubmitted` runs after a filed
- * id, so the caller can refresh what the import changes; `search` is the round's match being looked up by its
- * players, or given up on).
+ * id or a started search, so the caller can refresh what it changes; `search` is the round's match being looked up
+ * by its players, or given up on for `searchError`; `searchable` lets a search that is not looking start again).
  */
 export type MatchImportScope =
   | { encounterId: number; games: ReadonlyArray<{ id: number; position: number }>; admin?: boolean }
@@ -44,6 +44,8 @@ export type MatchImportScope =
       encounterId: number;
       onSubmitted: () => void;
       search?: "searching" | "not_found" | null;
+      searchError?: string | null;
+      searchable?: boolean;
     };
 
 /**
@@ -102,8 +104,34 @@ export function MatchImport({ scope }: Readonly<{ scope: MatchImportScope }>) {
     onSettled: () => void queryClient.invalidateQueries({ queryKey: key })
   });
 
+  const research = useMutation({
+    mutationFn: async () => {
+      if (mix) await customGameService.searchMatch(mix.customGameId, encounterId);
+    },
+    onSuccess: () => {
+      notify.success(t("autoSearch.restarted"));
+      mix?.onSubmitted();
+    },
+    onError: (error) => notify.apiError(error, { title: t("autoSearch.restartFailed") })
+  });
+
   if (mix == null && gameId == null) return null;
   const rows = imports.data ?? [];
+  // Nothing to look for while a filed id is still coming or already served.
+  const canSearch =
+    mix?.searchable === true &&
+    mix.search !== "searching" &&
+    imports.isSuccess &&
+    rows.every((row) => row.status === "failed");
+  // Why the search gave up, in words; a source's own refusal reads as it came.
+  const searchError = mix?.search === "not_found" ? mix.searchError : null;
+  const reason = !searchError
+    ? null
+    : searchError === "no_linked_accounts" || searchError === "not_found_in_window"
+      ? t(`autoSearch.reasons.${searchError}`)
+      : searchError.startsWith("ambiguous: ")
+        ? t("autoSearch.reasons.ambiguous", { ids: searchError.slice("ambiguous: ".length) })
+        : searchError;
 
   return (
     <section className="flex flex-col gap-2">
@@ -145,10 +173,27 @@ export function MatchImport({ scope }: Readonly<{ scope: MatchImportScope }>) {
         </div>
         <p className="text-caption text-[color:var(--aqt-fg-muted)]">{t(mix ? "hintMix" : "hint")}</p>
       </form>
-      {mix?.search ? (
-        <p className="text-caption text-[color:var(--aqt-fg-muted)]">
-          {t(mix.search === "searching" ? "autoSearch.searching" : "autoSearch.notFound")}
-        </p>
+      {mix?.search || canSearch ? (
+        <div className="flex flex-col items-start gap-1.5">
+          {mix?.search ? (
+            <p className="text-caption text-[color:var(--aqt-fg-muted)]">
+              {t(mix.search === "searching" ? "autoSearch.searching" : "autoSearch.notFound")}
+            </p>
+          ) : null}
+          {reason ? <p className="text-caption text-[color:var(--aqt-fg-dim)]">{reason}</p> : null}
+          {canSearch ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={research.isPending}
+              onClick={() => research.mutate()}
+            >
+              {research.isPending ? <Spinner className="mr-2" /> : null}
+              {t(mix?.search === "not_found" ? "autoSearch.again" : "autoSearch.start")}
+            </Button>
+          ) : null}
+        </div>
       ) : null}
 
       {imports.isError ? (

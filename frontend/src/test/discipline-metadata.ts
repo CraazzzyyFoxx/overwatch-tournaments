@@ -47,6 +47,7 @@ function descriptor(code: string, name: string, provider: string): DisciplineDes
       achievement_conditions: code === "overwatch",
       analytics: code === "overwatch",
       match_fetch: false,
+      match_search: false,
       log_upload: code === "overwatch"
     }
   } as DisciplineDescriptor;

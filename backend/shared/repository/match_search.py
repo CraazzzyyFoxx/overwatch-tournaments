@@ -28,6 +28,29 @@ class MatchSearchRepository:
             .on_conflict_do_nothing(constraint="uq_match_search_encounter")
         )
 
+    async def restart(
+        self, session: AsyncSession, *, workspace_id: int, discipline: str, encounter_id: int, now: datetime
+    ) -> None:
+        """The round's search, due at once with a fresh window: created if it has none, reset unless still looking."""
+        fresh = {
+            "status": MatchSearchStatus.PENDING,
+            "attempts": 0,
+            "next_attempt_at": now,
+            "created_at": now,
+            "last_error": None,
+            "external_id": None,
+        }
+        insert = pg_insert(MatchSearch).values(
+            workspace_id=workspace_id, discipline=discipline, encounter_id=encounter_id, **fresh
+        )
+        await session.execute(
+            insert.on_conflict_do_update(
+                constraint="uq_match_search_encounter",
+                set_=fresh,
+                where=MatchSearch.status != MatchSearchStatus.PENDING,
+            )
+        )
+
     async def due_ids(self, session: AsyncSession, *, now: datetime, limit: int, discipline: str) -> list[int]:
         return list(
             await session.scalars(

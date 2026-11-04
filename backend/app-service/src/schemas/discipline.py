@@ -31,6 +31,8 @@ class DisciplineCapabilities(BaseModel):
     native_ladder: bool
     #: A match can be imported by its external id (``DisciplineSpec.match_fetchers``).
     match_fetch: bool
+    #: A mix round's match is looked up by its players (a ``match_searchers`` kind it can fetch, and an identity).
+    match_search: bool
     #: An uploaded match-log file is parsed (an ``upload`` entry in ``DisciplineSpec.ingestors``).
     log_upload: bool
     achievement_conditions: bool

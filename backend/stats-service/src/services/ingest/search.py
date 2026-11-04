@@ -7,8 +7,9 @@ The tick asks the module's searcher for the matches any seated player's linked a
 round's when every round team has at least half of its linked members on one distinct side of it and none on another
 (:func:`fitting`); one another game of the workspace already holds is not. Exactly one -> its id is filed through
 :func:`fetch.submit_fetch` like a host's (``found``); several -> ``not_found`` (``ambiguous``); none -> retried with
-the fetch backoff until the window closes (``not_found``). A round that got statistics or a filed id another way
-stops searching (``stopped``); filing an id stops it at once (``submit_fetch``).
+the fetch backoff until the window closes (``not_found``). A round that got statistics or a live/done filed id another
+way stops searching (``stopped``); filing an id stops it at once (``submit_fetch``). The round's organizer may start it
+again (:func:`restart_search`): a fresh window, also for a round recorded before the enrolment window.
 """
 
 from __future__ import annotations
@@ -23,6 +24,7 @@ from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
+from shared.core.errors import ApiExc
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.disciplines import DISCIPLINES
 from shared.disciplines.ingest import MatchCandidate, MatchFetchFailed, MatchFetchNotReady, MatchQuery, MatchSearcher
@@ -42,7 +44,7 @@ from shared.services.scheduler import IntervalScheduler
 from src.core import db
 from src.services.ingest import fetch
 
-__all__ = ("fitting", "run_search_tick", "searcher_of", "shutdown_scheduler", "start_scheduler")
+__all__ = ("fitting", "restart_search", "run_search_tick", "searcher_of", "shutdown_scheduler", "start_scheduler")
 
 #: A lobby is often readied before the host presses Start.
 START_SLACK = timedelta(minutes=5)
@@ -141,6 +143,23 @@ async def _settle(
         await session.commit()
 
 
+async def _settled(session: AsyncSession, encounter_id: int) -> bool:
+    """The round has statistics or a live/done filed id; one that gave up leaves the round to the search."""
+    return bool(
+        await session.scalar(
+            sa.select(
+                sa.or_(
+                    sa.exists().where(models.StatsMatch.encounter_id == encounter_id),
+                    sa.exists().where(
+                        models.MatchFetch.hint_encounter_id == encounter_id,
+                        models.MatchFetch.status != models.MatchFetchStatus.FAILED,
+                    ),
+                )
+            )
+        )
+    )
+
+
 async def _round(
     session: AsyncSession, row: MatchSearch, provider: str
 ) -> tuple[int, MatchQuery, list[list[frozenset[str]]]] | MatchSearchStatus:
@@ -148,15 +167,7 @@ async def _round(
     # A pickup round is mix-owned, so the tournament-only ``get`` would hide it.
     encounter = await _encounters.get_any_owner(session, row.encounter_id)
     games = await _games.list_for_encounter(session, row.encounter_id)
-    settled = await session.scalar(
-        sa.select(
-            sa.or_(
-                sa.exists().where(models.StatsMatch.encounter_id == row.encounter_id),
-                sa.exists().where(models.MatchFetch.hint_encounter_id == row.encounter_id),
-            )
-        )
-    )
-    if encounter is None or encounter.started_at is None or not games or settled:
+    if encounter is None or encounter.started_at is None or not games or await _settled(session, row.encounter_id):
         return MatchSearchStatus.STOPPED
     member = models.EncounterTeamMember
     linked = await session.execute(
@@ -255,6 +266,31 @@ async def _attempt(search_id: int, *, session_factory: Any, now: datetime) -> No
                 await session.rollback()
                 return await _settle(session_factory, search_id, now, retry=str(exc.detail)[:_REASON_LIMIT])
     return await _settle(session_factory, search_id, now, retry="no_match_yet")
+
+
+async def restart_search(session: AsyncSession, target: dict[str, Any]) -> None:
+    """Look the round up by its players again (``target`` as :func:`fetch.mix_round_target` names it, so already
+    authorized): a fresh window, due at the next tick; a search still looking is left as it is. Refused for a game
+    without a searcher, and for a round that has statistics or a live/done filed id -- nothing left to look for."""
+    if searcher_of(target["discipline"]) is None:
+        raise HTTPException(
+            status_code=422,
+            detail=[ApiExc(code="unsupported_match_search", msg="This game's matches cannot be found by players")],
+        )
+    encounter_id = target["encounter_id"]
+    if await _settled(session, encounter_id):
+        raise HTTPException(
+            status_code=409,
+            detail=[ApiExc(code="match_search_settled", msg="This match already has statistics or a filed id")],
+        )
+    await _searches.restart(
+        session,
+        workspace_id=target["workspace_id"],
+        discipline=target["discipline"],
+        encounter_id=encounter_id,
+        now=datetime.now(UTC),
+    )
+    await session.commit()
 
 
 async def _run_discipline(discipline: str, *, redis: Any, session_factory: Any, now: datetime) -> int:
