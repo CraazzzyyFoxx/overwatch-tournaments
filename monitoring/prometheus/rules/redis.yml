@@ -40,14 +40,16 @@ groups:
       # -----------------------------------------------------------------------
       # Connections
       # -----------------------------------------------------------------------
+      # Clients' pools keep their peak size (redis-py never reaps idle connections, Redis `timeout 0`): a traffic
+      # spike leaves ~120 clients for good (14d max 120, median 87). A leak grows past 2x that.
       - alert: RedisHighConnections
-        expr: redis_connected_clients > 100
-        for: 5m
+        expr: redis_connected_clients > 250
+        for: 15m
         labels:
           severity: warning
         annotations:
           summary: "Redis has many connected clients"
-          description: "Redis has {{ $value }} connected clients. Check for connection leaks."
+          description: "Redis has {{ $value }} connected clients (normal peak ~120). Check for connection leaks: CLIENT LIST grouped by addr."
 
       # -----------------------------------------------------------------------
       # Key evictions
