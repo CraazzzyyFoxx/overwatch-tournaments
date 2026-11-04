@@ -236,7 +236,7 @@ def test_a_bot_lobby_is_bound_to_the_live_match_and_its_code_becomes_the_lobby_c
 
     [request] = asked
     assert (request.region, request.team_size, request.roster_size) == ("us_east", 6, 12)
-    assert request.callback_url.startswith("https://anak.example/api/v1/deadlock/lobby-callback/")
+    assert request.callback_url.startswith("https://anak.example/api/v1/lobby-bot/callback/")
     [party] = repo.replaced
     assert request.callback_url.endswith(party_token_path(party))
     assert (party.encounter_id, party.party_id, party.party_code, party.callback_secret) == (

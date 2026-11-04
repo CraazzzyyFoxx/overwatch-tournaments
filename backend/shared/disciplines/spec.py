@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from shared.catalog_sync import CatalogImageMirror, CatalogSyncProgress
     from shared.disciplines.analytics import AnalyticsExports
     from shared.disciplines.ingest import Decoder, DeriveMatch, MatchFetcher, MatchSearcher
-    from shared.disciplines.lobby import IngestStatusSource, LobbyBotSpec
+    from shared.disciplines.lobby import IngestClient, IngestStatusSource, LobbyBotSpec
     from shared.domain.achievements.context import EvalContext
     from shared.domain.pick_ban_rules.presets import Preset
     from shared.models.achievements.achievement import AchievementGrain, AchievementRule
@@ -270,6 +270,8 @@ class DisciplineSpec:
     lobby_bot: LobbyBotSpec | None = field(default=None, compare=False)
     #: Whether players' own clients upload their matches (what ``match_searchers`` depends on); ``None`` when unknown.
     ingest_status: IngestStatusSource | None = field(default=None, compare=False)
+    #: Where a player gets the client ``ingest_status`` asks about; ``None`` when the game names none.
+    ingest_client: IngestClient | None = field(default=None, compare=False)
     #: Facts that need the bound match (baselines, registration ranks); ``None`` when nothing derives after binding.
     derive_match: DeriveMatch | None = field(default=None, compare=False)
     #: Achievement kernel hooks, all lazy and all ``None`` for a game with no conditions (LoL): a missing hook is

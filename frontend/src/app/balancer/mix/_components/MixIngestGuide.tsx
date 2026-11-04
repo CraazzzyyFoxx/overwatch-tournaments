@@ -8,13 +8,14 @@ import { Alert } from "@/components/ui/alert";
 import { Card } from "@/components/ui/card";
 import { triggerChevronClass } from "@/components/ui/chevron";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import type { IngestClient } from "@/types/discipline.types";
 
 /**
- * The host's note on how a Deadlock mix's matches reach the site by themselves: through any player's ingest tool, the
+ * The host's note on how a mix's matches reach the site by themselves: through any player's uploader (`client`), the
  * bot's lobby, or the match id pasted after the game. Collapsed, so it costs a line; `warn` -- nobody seated in the
  * lobby uploads and the lobby has no bot -- puts the consequence above it, always open.
  */
-export function MixIngestGuide({ warn }: Readonly<{ warn: boolean }>) {
+export function MixIngestGuide({ warn, client }: Readonly<{ warn: boolean; client: IngestClient }>) {
   const t = useTranslations("mixes.ingest");
   return (
     <div className="flex flex-col gap-2">
@@ -37,7 +38,7 @@ export function MixIngestGuide({ warn }: Readonly<{ warn: boolean }>) {
               <li>{t("guideBot")}</li>
               <li>{t("guidePaste")}</li>
             </ul>
-            <IngestLinks />
+            <IngestLinks client={client} />
           </CollapsibleContent>
         </Collapsible>
       </Card>

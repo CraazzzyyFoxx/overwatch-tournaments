@@ -46,7 +46,7 @@ from src.services.custom_game import custom_game_service
 __all__ = ("BotLobbyService", "bot_lobby_service", "run_poll_tick", "shutdown_scheduler", "start_scheduler")
 
 #: The game source POSTs the match id here (the gateway's public, token-addressed route).
-CALLBACK_PATH = "/api/v1/deadlock/lobby-callback/{token}"
+CALLBACK_PATH = "/api/v1/lobby-bot/callback/{token}"
 POLL_SECONDS = 60
 #: The poll's own lease: one replica asks the source per tick.
 LEADER_LOCK_KEY = "balancer:bot_lobby:poll:leader"

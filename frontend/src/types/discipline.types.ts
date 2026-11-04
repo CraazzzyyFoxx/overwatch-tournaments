@@ -4,6 +4,8 @@ import type { Schema } from "@/types/api";
 export type CatalogKind = "character" | "map" | "mode";
 export type DisciplineCapabilities = Schema<"app.DisciplineCapabilities">;
 export type DisciplineDescriptor = Schema<"app.DisciplineDescriptor">;
+/** Where a player gets the client that uploads their matches (descriptor `ingest_client`); null when the game names none. */
+export type IngestClient = Schema<"app.IngestClientRead">;
 export type OntologyRole = Schema<"app.OntologyRole">;
 export type RoleDimension = Schema<"app.RoleDimensionRead">;
 export type StatDefinition = Schema<"app.StatDefinition">;

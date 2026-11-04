@@ -23,11 +23,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { revalidateUser } from "@/app/actions/users";
 import { SITE_NAME } from "@/config/site";
+import { useGameDescriptors } from "@/hooks/useGameDescriptors";
 import { usePermissions } from "@/hooks/usePermissions";
 import { getSocialProviderConfig, hasTaggedHandle, socialAccountLabel } from "@/lib/social/providers";
 import { userQueryKeys } from "@/lib/users/query-keys";
 import { cn } from "@/lib/utils";
 import meService from "@/services/me.service";
+import type { DisciplineDescriptor, IngestClient } from "@/types/discipline.types";
 import type { SocialProvider, User } from "@/types/user.types";
 
 import { OAUTH_ADDABLE, groupLinkedAccounts } from "./linked-accounts";
@@ -50,14 +52,27 @@ function ProviderTile({ provider }: Readonly<{ provider: string }>) {
   );
 }
 
-/** Deadlock matches of a mix reach the site through the player's deadlock-api-ingest; say so where Steam is linked. */
-function SteamIngestHint({ className }: Readonly<{ className?: string }>) {
+/** A game whose mix matches reach the site through the player's own uploader: say so where its account is linked. */
+function IngestHint({ game, client, className }: Readonly<{ game: string; client: IngestClient; className?: string }>) {
   const t = useTranslations("accountSettings");
   return (
     <div className={cn("space-y-0.5 text-caption text-pretty text-[color:var(--aqt-fg-dim)]", className)}>
-      <p>{t("linked.steamIngestHint")}</p>
-      <IngestLinks />
+      <p>{t("linked.ingestHint", { game })}</p>
+      <IngestLinks client={client} />
     </div>
+  );
+}
+
+/** The hints of every installed game that identifies players by `provider` and names an uploader. */
+function IngestHints({
+  games,
+  provider,
+  className
+}: Readonly<{ games: ReadonlyMap<string, DisciplineDescriptor>; provider: string; className?: string }>) {
+  return [...games.values()].map((game) =>
+    game.identity_provider === provider && game.ingest_client ? (
+      <IngestHint key={game.code} game={game.name} client={game.ingest_client} className={className} />
+    ) : null
   );
 }
 
@@ -74,6 +89,7 @@ export function LinkedAccountsGroup() {
     // A failed load is shown in the group itself, with a retry.
     meta: { suppressErrorToast: true }
   });
+  const games = useGameDescriptors();
 
   // Persist the fresh user into the query cache AND bust the Next Data Cache so
   // the public users/[slug] header / list / search reflect the change at once.
@@ -235,7 +251,7 @@ export function LinkedAccountsGroup() {
                   );
                 })}
               </ul>
-              {provider === "steam" ? <SteamIngestHint className="mt-2 pl-11" /> : null}
+              <IngestHints games={games} provider={provider} className="mt-2 pl-11" />
             </div>
           );
         })}
@@ -256,7 +272,7 @@ export function LinkedAccountsGroup() {
                       {notice ? (
                         <p className="text-caption text-pretty text-[color:var(--aqt-fg-dim)]">{notice}</p>
                       ) : null}
-                      {provider === "steam" ? <SteamIngestHint /> : null}
+                      <IngestHints games={games} provider={provider} />
                     </div>
                     <Button variant="outline" size="sm" asChild>
                       <a href={linkHref(provider)} aria-label={t("linked.linkAria", { provider: label })}>

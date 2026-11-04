@@ -12,7 +12,7 @@ import (
 // dispatcher), so the raw bytes and the secret header must reach the worker untouched.
 func TestLobbyCallbackRelaysTheRawBodyAndSecretAndAnswers204(t *testing.T) {
 	c := &recordingCaller{}
-	r := httptest.NewRequest(http.MethodPost, "/api/v1/deadlock/lobby-callback/tok", strings.NewReader("123456789"))
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/lobby-bot/callback/tok", strings.NewReader("123456789"))
 	r.SetPathValue("token", "tok")
 	r.Header.Set("X-Callback-Secret", "s3cret")
 	w := httptest.NewRecorder()

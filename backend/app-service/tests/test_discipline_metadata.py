@@ -213,6 +213,11 @@ class DisciplineMetadataTests(IsolatedAsyncioTestCase):
             {"overwatch": False, "lol": False, "deadlock": True, "valorant": False},
             {code: row["capabilities"]["ingest_status"] for code, row in by_code.items()},
         )
+        # A game whose ingest status the site reads also names the client a player installs: the hints link to it.
+        self.assertEqual(
+            {code: row["capabilities"]["ingest_status"] for code, row in by_code.items()},
+            {code: row["ingest_client"] is not None for code, row in by_code.items()},
+        )
         self.assertEqual(
             {
                 "overwatch": ("OW", f"{ORIGIN}/assets/overwatch/icon.svg"),

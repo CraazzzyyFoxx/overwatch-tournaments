@@ -25,6 +25,7 @@ from src.schemas.discipline import (
     DisciplineDescriptor,
     DisciplineMetadata,
     EventTypeRead,
+    IngestClientRead,
     LobbyBotRead,
     NativeTierRead,
     OntologyRole,
@@ -89,6 +90,14 @@ def _descriptor(spec: DisciplineSpec, *, enabled: bool) -> DisciplineDescriptor:
         flex=spec.flex,
         short_name=spec.short_name or spec.name,
         icon=public_asset_url(spec.icon, public_origin=config.settings.s3_public_url),
+        ingest_client=(
+            IngestClientRead(
+                instructions_url=spec.ingest_client.instructions_url,
+                installer_url=spec.ingest_client.installer_url,
+            )
+            if spec.ingest_client is not None
+            else None
+        ),
         capabilities=DisciplineCapabilities(
             catalog_sync=spec.catalog_sync is not None,
             native_rank_collection="rank.collect" in spec.collection_handlers,

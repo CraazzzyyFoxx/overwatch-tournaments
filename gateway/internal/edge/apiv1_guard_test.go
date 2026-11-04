@@ -118,8 +118,8 @@ func buildGuardedMux(t *testing.T) *http.ServeMux {
 		slog.New(slog.NewTextHandler(io.Discard, nil)))
 	mux.HandleFunc("POST /api/v1/balancer/tournaments/{tournament_id}/teams/import", bbin.TeamsImport)
 	mux.HandleFunc("POST /api/v1/balancer/jobs", bbin.JobCreate)
-	mux.HandleFunc("POST /api/v1/deadlock/lobby-callback/{token}", bbin.LobbyCallback)
-	mux.HandleFunc("POST /api/v1/deadlock/lobby-callback/{token}/settings", bbin.LobbyCallbackSettings)
+	mux.HandleFunc("POST /api/v1/lobby-bot/callback/{token}", bbin.LobbyCallback)
+	mux.HandleFunc("POST /api/v1/lobby-bot/callback/{token}/settings", bbin.LobbyCallbackSettings)
 	// stream-svc: the repoll route nests under the read route's {tournament_id}.
 	d.Register(mux, stream.PublicRoutes)
 	d.Register(mux, stream.AdminRoutes)
