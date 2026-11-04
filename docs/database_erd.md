@@ -13,7 +13,7 @@ baselines and Discord channels live in `stats/`. `catalog/` writes only to `cata
 > `--check` and fails on drift, so the diagrams cannot fall behind the models again.
 
 <!-- ERD:auto _alembic_head -->
-Alembic head: **`voice01`** (167 revisions in `backend/migrations/versions/`).
+Alembic head: **`botlobby01`** (169 revisions in `backend/migrations/versions/`).
 <!-- /ERD:auto -->
 
 **Reading the diagrams**
@@ -2305,6 +2305,7 @@ erDiagram
         varchar(16) rating_mode
         jsonb hero_ban_presets
         jsonb formation_defaults
+        jsonb bot_lobby_regions
     }
     BALANCER_WORKSPACE_CONFIG {
         bigint id PK
@@ -2506,6 +2507,22 @@ seated (with the rank delta frozen at record time) or busy in another lobby. `di
 <!-- ERD:auto mix -->
 ```mermaid
 erDiagram
+    MIX_BOT_LOBBY {
+        bigint id PK
+        timestamptz created_at
+        timestamptz updated_at "nullable"
+        bigint workspace_id FK
+        bigint custom_game_id FK
+        int lobby_index
+        bigint encounter_id FK,UK
+        varchar(32) discipline FK
+        varchar(128) party_id
+        varchar(64) party_code
+        varchar(64) callback_token_sha256 UK
+        varchar(256) callback_secret "nullable"
+        varchar(128) match_id "nullable"
+        bigint created_by_user_id FK "nullable"
+    }
     MIX_CO_HOST {
         bigint custom_game_id PK,FK
         bigint user_id PK,FK
@@ -2584,23 +2601,28 @@ erDiagram
         varchar(60) name
     }
 
+    AUTH_USER |o--o{ MIX_BOT_LOBBY : "created_by_user_id"
     AUTH_USER |o--o{ MIX_CUSTOM_GAME : "host_user_id"
     AUTH_USER ||--o| MIX_CO_HOST : "user_id"
+    CATALOG_DISCIPLINE ||--o{ MIX_BOT_LOBBY : "discipline"
     CATALOG_DISCIPLINE ||--o{ MIX_CUSTOM_GAME : "discipline"
     CATALOG_ENTITY |o--o{ MIX_LOBBY : "next_map_id"
     CATALOG_ENTITY ||--o{ MIX_LOBBY : "next_map_kind"
     CATALOG_ROLE ||--o{ MIX_PLAYER_ROLE : "dimension_id"
     CATALOG_ROLE ||--o| MIX_PLAYER_ROLE : "role_id"
     ENCOUNTER_ENCOUNTER |o--o| MIX_LOBBY : "live_encounter_id"
+    ENCOUNTER_ENCOUNTER ||--o| MIX_BOT_LOBBY : "encounter_id"
     ENCOUNTER_ENCOUNTER ||--o| MIX_ROUND : "encounter_id"
     ENCOUNTER_SCORING_RULE ||--o{ MIX_CUSTOM_GAME : "scoring_rule_id"
     ENCOUNTER_SCORING_RULE ||--o{ MIX_CUSTOM_GAME : "workspace_id"
+    MIX_CUSTOM_GAME ||--o{ MIX_BOT_LOBBY : "custom_game_id"
     MIX_CUSTOM_GAME ||--o{ MIX_PLAYER : "custom_game_id"
     MIX_CUSTOM_GAME ||--o| MIX_CO_HOST : "custom_game_id"
     MIX_CUSTOM_GAME ||--o| MIX_LOBBY : "custom_game_id"
     MIX_CUSTOM_GAME ||--o| MIX_TEAM_NAME : "custom_game_id"
     MIX_PLAYER ||--o| MIX_PLAYER_ROLE : "custom_game_player_id"
     MIX_ROUND ||--o| MIX_ROUND_MEMBER : "encounter_id"
+    PUBLIC_WORKSPACE ||--o{ MIX_BOT_LOBBY : "workspace_id"
     PUBLIC_WORKSPACE ||--o{ MIX_CUSTOM_GAME : "workspace_id"
     PUBLIC_WORKSPACE_MEMBER ||--o{ MIX_PLAYER : "workspace_member_id"
     PUBLIC_WORKSPACE_MEMBER ||--o| MIX_ROUND_MEMBER : "workspace_member_id"

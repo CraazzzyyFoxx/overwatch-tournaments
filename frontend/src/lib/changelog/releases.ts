@@ -23,6 +23,15 @@ export interface Release {
 
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.9.0",
+    date: "2026-11-04",
+    title: {
+      ru: "Лобби через бота и импорт матчей Deadlock в миксах",
+      en: "Bot lobbies and Deadlock match import in mixes"
+    },
+    games: ["deadlock"]
+  },
+  {
     version: "2.8.0",
     date: "2026-11-03",
     title: {

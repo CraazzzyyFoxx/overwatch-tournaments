@@ -47,7 +47,10 @@ function descriptor(code: string, name: string, provider: string): DisciplineDes
       achievement_conditions: code === "overwatch",
       analytics: code === "overwatch",
       match_fetch: false,
-      log_upload: code === "overwatch"
+      match_search: false,
+      log_upload: code === "overwatch",
+      ingest_status: false,
+      lobby_bot: false
     }
   } as DisciplineDescriptor;
 }
@@ -68,7 +71,8 @@ function metadata(
     roles,
     stat_defs: [],
     team_format_presets: [],
-    native_ladder: []
+    native_ladder: [],
+    lobby_bot: null
   } as unknown as DisciplineMetadata;
 }
 

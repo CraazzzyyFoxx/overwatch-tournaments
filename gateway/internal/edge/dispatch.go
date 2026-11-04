@@ -171,7 +171,7 @@ func (d *Dispatcher) serve(w http.ResponseWriter, r *http.Request, spec RouteSpe
 		// An explicitly sent value always wins, and an ambiguous credential
 		// (two or more workspaces) is left alone: guessing would silently scope
 		// the read to the wrong tenant, so the fail-closed 400 stands.
-		if _, sent := q["workspace_id"]; !sent && id.SoleWorkspaceID > 0 && (spec.AllQuery || slices.Contains(spec.Query, "workspace_id")) {
+		if _, sent := q["workspace_id"]; !sent && !spec.NoWorkspaceFill && id.SoleWorkspaceID > 0 && (spec.AllQuery || slices.Contains(spec.Query, "workspace_id")) {
 			q["workspace_id"] = []string{strconv.FormatInt(id.SoleWorkspaceID, 10)}
 		}
 		if len(q) > 0 {

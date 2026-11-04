@@ -47,6 +47,7 @@ source_modules =
     shared.disciplines.spec
     shared.disciplines.analytics
     shared.disciplines.ingest
+    shared.disciplines.lobby
     shared.disciplines.jobs
 forbidden_modules =
     shared.disciplines.overwatch

@@ -1,0 +1,21 @@
+<Lead>Deadlock mix matches are easier to get statistics for: the host can open the in-game lobby through a bot, every seat shows whether its player uploads matches, and the import window says why a search is still waiting and can start it again.</Lead>
+
+### Lobby via the bot
+
+Once a lobby's match is started, the host can **Create lobby via bot**: deadlock-api's bot opens the in-game party and its code goes into the lobby code field. Pick the **Bot server region**; it is remembered for next time. Start the match within 15 minutes, after that the bot leaves. The bot reports the match ID by itself, so after you record the result the statistics arrive without anyone linking an account.
+
+### Ingest status and hints
+
+A Deadlock match is found automatically only if one of its players runs deadlock-api-ingest. Seats in the mix room now show who uploads matches, a player without recent uploads sees a hint with the installer, and the host is warned when nobody in the lobby uploads. The same links are in account settings next to the Steam link.
+
+<Also title="Also">
+<div>
+
+#### For organizers
+
+- The import window says why the search is still waiting or has given up, and when the next attempt runs.
+- **Search again** restarts the search by players with a fresh 24-hour window; a match recorded before the automatic search gets **Find by players**.
+- A failed import no longer stops the search.
+
+</div>
+</Also>

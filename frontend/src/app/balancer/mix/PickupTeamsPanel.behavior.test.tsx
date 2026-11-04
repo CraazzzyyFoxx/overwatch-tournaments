@@ -230,6 +230,7 @@ function match(overrides: Partial<CustomGameMatch> = {}): CustomGameMatch {
     stats_match_id: null,
     log_state: null,
     match_search: null,
+    match_search_error: null,
     ...overrides,
   };
 }

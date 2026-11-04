@@ -74,6 +74,8 @@ STAT_DEFS: tuple[StatDefSpec, ...] = (
     StatDefSpec("souls_breakables", "Souls from breakables"),
     StatDefSpec("souls_items", "Souls from items and abilities"),
     StatDefSpec("souls_lost", "Souls lost on death"),
+    #: The match's observed result per team: 1 for the winner, 0 for the loser.
+    StatDefSpec("score", "Score", group="team"),
 )
 EVENT_TYPES: tuple[EventTypeSpec, ...] = (
     EventTypeSpec("kill", "Kill"),

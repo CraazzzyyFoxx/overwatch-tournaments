@@ -5,7 +5,8 @@ nothing in the body can overwrite the identity, and workspace/key come only from
 
 ``rpc.stats.ingest.fetch`` and ``rpc.stats.ingest.fetch_list`` are internal: no gateway route reaches them, only
 tournament-service, which authorized the caller for the encounter and names the game (``services.ingest.fetch``).
-``rpc.stats.ingest.mix_fetch`` / ``mix_fetch_list`` are their pickup-mix twins, routed and authorized here.
+``rpc.stats.ingest.mix_fetch`` / ``mix_fetch_list`` are their pickup-mix twins, routed and authorized here, and
+``rpc.stats.ingest.mix_search`` starts a mix round's search by its players again (``services.ingest.search``).
 """
 
 from __future__ import annotations
@@ -21,7 +22,7 @@ from shared.schemas.match_doc import MAX_MATCH_DOC_BYTES
 from src.core import clients as _clients
 from src.core import db
 from src.schemas.ingest import BindIngestRequest
-from src.services.ingest import fetch, jobs
+from src.services.ingest import fetch, jobs, search
 from src.services.ingest.process import bind_ingest_job, game_observation
 from src.services.match_logs.limits import max_base64_length
 
@@ -144,3 +145,16 @@ def register(broker: Any, logger: Any) -> None:
             return await fetch.list_fetches(session, encounter_game_id=target["encounter_game_id"], with_warnings=True)
 
         return await c.envelope(logger, "ingest.mix_fetch_list", op, session_factory=_SF)
+
+    @broker.subscriber("rpc.stats.ingest.mix_search")
+    async def _mix_search(data: dict, msg: RabbitMessage) -> dict:
+        # POST /custom-games/{custom_game_id}/matches/{match_id}/match-search -- the import's audience; 204.
+        async def op(session: Any) -> Any:
+            user = c.actor(data)
+            c.require_active(user)
+            target = await fetch.mix_round_target(
+                session, user, custom_game_id=c.require_id(data), encounter_id=c.require_path_int(data, "match_id")
+            )
+            await search.restart_search(session, target)
+
+        return await c.envelope(logger, "ingest.mix_search", op, session_factory=_SF)

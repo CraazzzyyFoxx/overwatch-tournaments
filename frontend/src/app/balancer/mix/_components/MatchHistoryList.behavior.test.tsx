@@ -58,6 +58,7 @@ function match(overrides: Partial<CustomGameMatch> = {}): CustomGameMatch {
     stats_match_id: null,
     log_state: null,
     match_search: null,
+    match_search_error: null,
     ...overrides,
   };
 }
@@ -126,6 +127,8 @@ describe("MatchHistoryList log actions", () => {
       onUploaded: vi.fn(),
       fileUpload: true,
       matchFetch: false,
+      matchSearch: false,
+      ingestHint: false,
     });
 
     const scopes = [...scope.querySelectorAll('[data-testid="upload-dialog"]')].map((node) =>
@@ -145,20 +148,36 @@ describe("MatchHistoryList log actions", () => {
   });
 
   it("offers no file upload for a game that parses no uploaded log (Deadlock)", async () => {
-    const scope = await mount([match()], { customGameId: 4, onUploaded: vi.fn(), fileUpload: false, matchFetch: true });
+    const scope = await mount([match()], {
+      customGameId: 4,
+      onUploaded: vi.fn(),
+      fileUpload: false,
+      matchFetch: true,
+      matchSearch: true,
+      ingestHint: true,
+    });
 
     expect(scope.querySelector('[data-testid="upload-dialog"]')).toBeNull();
   });
 
   it("offers a per-round import by match ID only to a viewer who files logs for a game that fetches matches", async () => {
-    const fetching = await mount([match()], { customGameId: 4, onUploaded: vi.fn(), fileUpload: false, matchFetch: true });
+    const fetching = await mount([match()], {
+      customGameId: 4,
+      onUploaded: vi.fn(),
+      fileUpload: false,
+      matchFetch: true,
+      matchSearch: true,
+      ingestHint: true,
+    });
     expect(fetching.querySelector('button[aria-label="Import statistics by match ID"]')).not.toBeNull();
 
     const notFetching = await mount([match()], {
       customGameId: 4,
       onUploaded: vi.fn(),
       fileUpload: true,
-      matchFetch: false
+      matchFetch: false,
+      matchSearch: false,
+      ingestHint: false
     });
     expect(notFetching.querySelector('button[aria-label="Import statistics by match ID"]')).toBeNull();
 

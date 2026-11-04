@@ -38,6 +38,8 @@ from src.rpc import players as rpc_players
 from src.rpc import prefs as rpc_prefs
 from src.rpc import ranks as rpc_ranks
 from src.services.balancer.jobs import execute_balance_job
+from src.services.bot_lobby import shutdown_scheduler as shutdown_bot_lobby_poll
+from src.services.bot_lobby import start_scheduler as start_bot_lobby_poll
 from src.services.draft.board import configure_prewarm as configure_draft_prewarm
 from src.services.draft.clock import draft_clock_service
 
@@ -160,6 +162,19 @@ async def start_draft_clock() -> None:
     logger.info("Draft clock supervisor started")
 
 
+# The poll's Redis client: its leader lease, so one replica asks the game source per tick.
+_bot_lobby_redis: Redis | None = None
+
+
+@app.on_startup
+async def start_bot_lobby_poller() -> None:
+    global _bot_lobby_redis
+    # Parties still waiting for their match id are asked after every minute, whether or not the source's callback
+    # can reach this site.
+    _bot_lobby_redis = Redis.from_url(config.redis_url, decode_responses=True)
+    start_bot_lobby_poll(redis=_bot_lobby_redis)
+
+
 @app.on_shutdown
 async def close_rpc_clients() -> None:
     _outbox_scheduler.shutdown()
@@ -180,6 +195,9 @@ async def close_rpc_clients() -> None:
             await _draft_clock_task
     if _draft_clock_redis is not None:
         await _draft_clock_redis.aclose()
+    shutdown_bot_lobby_poll()
+    if _bot_lobby_redis is not None:
+        await _bot_lobby_redis.aclose()
     await db.async_engine.dispose()
 
 

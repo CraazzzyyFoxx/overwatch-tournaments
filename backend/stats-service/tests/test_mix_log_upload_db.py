@@ -527,7 +527,8 @@ async def game_of(env, encounter_id):
 
 async def round_log(env, encounter_id):
     async with env.sf() as session:
-        return (await CustomGameRoundRepository().match_logs(session, [encounter_id]))[encounter_id]
+        # The four state fields; when a search tries next is time-dependent and asserted where it matters.
+        return (await CustomGameRoundRepository().match_logs(session, [encounter_id]))[encounter_id][:4]
 
 
 @pytest.fixture
@@ -556,7 +557,7 @@ def test_a_mix_round_import_is_hinted_at_the_round_and_stored_under_the_mix(
                 game,
             )
             # The history chip speaks while the source does not serve the match yet.
-            assert await round_log(env, encounter) == (None, "processing", None)
+            assert await round_log(env, encounter) == (None, "processing", None, None)
 
             job = await job_of(env, await store_fetched(env, read["id"], b'{"match_info": "first answer"}'))
 
@@ -767,7 +768,7 @@ def test_a_recorded_round_files_the_one_match_its_sides_played(stats_parity_data
             async with env.sf() as session:
                 await search._enroll(session, "overwatch", datetime.now(UTC))
                 await session.commit()
-            assert await round_log(env, encounter) == (None, "processing", "searching")
+            assert await round_log(env, encounter) == (None, "processing", "searching", None)
 
             await search_tick(env)
 
@@ -787,7 +788,69 @@ def test_a_recorded_round_files_the_one_match_its_sides_played(stats_parity_data
                 None,
             )
             assert filed.hint_encounter_game_id == await game_of(env, encounter)
-            assert await round_log(env, encounter) == (None, "processing", None)
+            assert await round_log(env, encounter) == (None, "processing", None, None)
+
+    asyncio.run(run())
+
+
+def _bot_lobby(env, mix, encounter, match_id):
+    return models.CustomGameBotLobby(
+        workspace_id=env.workspace,
+        custom_game_id=mix.id,
+        lobby_index=0,
+        encounter_id=encounter,
+        discipline="overwatch",
+        party_id="party-1",
+        party_code="ABCD",
+        callback_token_sha256="a" * 64,
+        match_id=match_id,
+    )
+
+
+def test_a_round_whose_bot_lobby_named_its_match_files_that_id_without_searching(
+    stats_parity_database, monkeypatch, fetchable
+):
+    async def run():
+        async with environment(stats_parity_database, monkeypatch) as env:
+            mix = await _mix(env)
+            encounter = await _played(env, mix)
+            # The searcher would name another match: the bot's word wins and the players are never asked.
+            queries = searchable(monkeypatch, [candidate("7", AWAY, HOME)])
+            async with env.sf() as session:
+                session.add(_bot_lobby(env, mix, encounter, "555"))
+                await session.commit()
+
+            await search_tick(env)
+
+            assert queries == []
+            row = await search_of(env, encounter)
+            assert (row.status, row.external_id, row.attempts) == (models.MatchSearchStatus.FOUND, "555", 1)
+            [filed] = await fetches_of(env, encounter)
+            assert (filed.external_id, filed.status, filed.requested_by_user_id) == (
+                "555",
+                models.MatchFetchStatus.PENDING,
+                None,
+            )
+
+    asyncio.run(run())
+
+
+def test_a_bot_match_id_is_ignored_once_the_round_has_a_filed_id(stats_parity_database, monkeypatch, fetchable):
+    async def run():
+        async with environment(stats_parity_database, monkeypatch) as env:
+            mix = await _mix(env)
+            encounter = await _played(env, mix)
+            await mix_import(env, mix, encounter, "7")
+            queries = searchable(monkeypatch, [])
+            async with env.sf() as session:
+                session.add(_bot_lobby(env, mix, encounter, "555"))
+                await session.commit()
+
+            await search_tick(env)
+
+            assert queries == []
+            assert (await search_of(env, encounter)).status == models.MatchSearchStatus.STOPPED
+            assert [filed.external_id for filed in await fetches_of(env, encounter)] == ["7"]
 
     asyncio.run(run())
 
@@ -811,7 +874,7 @@ def test_a_match_two_rounds_could_be_or_another_round_holds_is_left_to_the_host(
             row = await search_of(env, later)
             assert (row.status, row.last_error) == (models.MatchSearchStatus.NOT_FOUND, "ambiguous: 9, 10")
             assert await fetches_of(env, later) == []
-            assert await round_log(env, later) == (None, None, "not_found")
+            assert await round_log(env, later) == (None, None, "not_found", "ambiguous: 9, 10")
 
     asyncio.run(run())
 
@@ -829,6 +892,11 @@ def test_no_match_yet_backs_off_until_the_window_closes(stats_parity_database, m
             row = await search_of(env, encounter)
             assert (row.status, row.attempts, row.last_error) == (models.MatchSearchStatus.PENDING, 1, "no_match_yet")
             assert row.next_attempt_at == now + fetch.next_delay(1)
+            # The history tells why it is still waiting, and when it tries next.
+            assert await round_log(env, encounter) == (None, "processing", "searching", "no_match_yet")
+            async with env.sf() as session:
+                logs = await CustomGameRoundRepository().match_logs(session, [encounter])
+            assert logs[encounter][4] == row.next_attempt_at
 
             await search._attempt(row.id, session_factory=env.sf, now=row.created_at + fetch.FETCH_WINDOW)
 
@@ -849,6 +917,92 @@ def test_a_host_filing_the_id_stops_the_search_at_once(stats_parity_database, mo
             await mix_import(env, mix, encounter, "7")
 
             assert (await search_of(env, encounter)).status == models.MatchSearchStatus.STOPPED
-            assert await round_log(env, encounter) == (None, "processing", None)
+            assert await round_log(env, encounter) == (None, "processing", None, None)
+
+    asyncio.run(run())
+
+
+async def restart(env, mix, encounter_id, *, user=ADMIN):
+    async with env.sf() as session:
+        target = await fetch.mix_round_target(session, user, custom_game_id=mix.id, encounter_id=encounter_id)
+        await search.restart_search(session, target)
+
+
+def test_a_search_that_gave_up_starts_again_with_a_fresh_window(stats_parity_database, monkeypatch, fetchable):
+    async def run():
+        async with environment(stats_parity_database, monkeypatch) as env:
+            mix = await _mix(env)
+            encounter = await _played(env, mix)
+            searchable(monkeypatch, [candidate("9", HOME, AWAY), candidate("10", HOME, AWAY)])
+            await search_tick(env)
+            assert (await search_of(env, encounter)).status == models.MatchSearchStatus.NOT_FOUND
+
+            await restart(env, mix, encounter)
+
+            row = await search_of(env, encounter)
+            assert (row.status, row.attempts, row.last_error) == (models.MatchSearchStatus.PENDING, 0, None)
+            assert row.created_at == row.next_attempt_at
+            assert await round_log(env, encounter) == (None, "processing", "searching", None)
+            # The second look finds the one match the sides played.
+            searchable(monkeypatch, [candidate("9", HOME, AWAY)])
+            await search_tick(env, row.next_attempt_at)
+
+            [filed] = await fetches_of(env, encounter)
+            assert (filed.external_id, filed.status) == ("9", models.MatchFetchStatus.PENDING)
+
+    asyncio.run(run())
+
+
+def test_a_round_recorded_before_the_window_is_searched_on_request(stats_parity_database, monkeypatch, fetchable):
+    async def run():
+        async with environment(stats_parity_database, monkeypatch) as env:
+            mix = await _mix(env)
+            encounter = await _played(env, mix)
+            searchable(monkeypatch, [])
+            # The tick never enrolls it: recorded longer ago than the window.
+            await search_tick(env, datetime.now(UTC) + fetch.FETCH_WINDOW + timedelta(minutes=1))
+            assert await search_of(env, encounter) is None
+
+            await restart(env, mix, encounter)
+
+            assert (await search_of(env, encounter)).status == models.MatchSearchStatus.PENDING
+
+    asyncio.run(run())
+
+
+def test_a_search_restarts_only_while_the_round_has_nothing_better(stats_parity_database, monkeypatch, fetchable):
+    async def run():
+        async with environment(stats_parity_database, monkeypatch) as env:
+            mix = await _mix(env)
+            encounter = await _played(env, mix)
+            searchable(monkeypatch, [])
+            read = await mix_import(env, mix, encounter, "7")
+
+            # A filed id still coming: nothing to look for.
+            with pytest.raises(BaseAPIException) as refused:
+                await restart(env, mix, encounter)
+            assert refused.value.status_code == 409
+            with pytest.raises(BaseAPIException) as refused:
+                await restart(env, mix, encounter, user=GUEST)
+            assert refused.value.status_code == 403
+
+            # The filed id gave up: the round is left to the search, which the tick no longer stops.
+            async with env.sf() as session:
+                await session.execute(
+                    sa.update(models.MatchFetch)
+                    .where(models.MatchFetch.id == read["id"])
+                    .values(status=models.MatchFetchStatus.FAILED)
+                )
+                await session.commit()
+            await restart(env, mix, encounter)
+            await search_tick(env)
+
+            row = await search_of(env, encounter)
+            assert (row.status, row.last_error) == (models.MatchSearchStatus.PENDING, "no_match_yet")
+
+            monkeypatch.setattr(search, "searcher_of", lambda discipline: None)
+            with pytest.raises(BaseAPIException) as refused:
+                await restart(env, mix, encounter)
+            assert refused.value.status_code == 422
 
     asyncio.run(run())

@@ -33,8 +33,16 @@ _LOG_STATE = {
 }
 #: A match imported by id is pending until the game's source serves it, then speaks through its ingest job.
 _FETCH_STATE = {MatchFetchStatus.PENDING: "processing", MatchFetchStatus.FAILED: "failed"}
-#: A search for the round's match by its players: the history row says it is still looking, or it gave up.
 _SEARCH_STATE = {MatchSearchStatus.PENDING: "searching", MatchSearchStatus.NOT_FOUND: "not_found"}
+
+
+def _pending_reason(last_error: str | None) -> str | None:
+    """Why a search still looking has not found the match: nothing fit yet (the worker's own ``no_match_yet``), or
+    the source could not be asked (unreachable, rate limited, 5xx, or any other refusal it reported). ``None`` until
+    its first attempt."""
+    if last_error is None:
+        return None
+    return "no_match_yet" if last_error == "no_match_yet" else "source_unavailable"
 
 
 def _log_state(
@@ -333,13 +341,15 @@ class CustomGameRoundRepository(BaseRepository[models.CustomGameRound]):
 
     async def match_logs(
         self, session: AsyncSession, encounter_ids: Sequence[int]
-    ) -> dict[int, tuple[int | None, str | None, str | None]]:
-        """``encounter_id -> (stats_match_id, log_state, match_search)`` for every id, in ONE read. The match is the
-        newest ``stats.match`` bound to the encounter. Only while there is none do the newest ``stats.ingest_job`` and
-        the newest ``stats.match_fetch`` hinted at it and its ``stats.match_search`` speak: a pending/processing job, a
-        pending import or a search still looking -> ``"processing"``, else a failed/awaiting_link job or a failed import
-        -> ``"failed"``, else ``None``; ``match_search`` is ``"searching"`` or ``"not_found"`` (else ``None``). No ids,
-        no query."""
+    ) -> dict[int, tuple[int | None, str | None, str | None, str | None, datetime | None]]:
+        """``encounter_id -> (stats_match_id, log_state, match_search, match_search_error, match_search_next_attempt_at)``
+        for every id, in ONE read. The match is the newest ``stats.match`` bound to the encounter. Only while there is
+        none do the newest ``stats.ingest_job`` and the newest ``stats.match_fetch`` hinted at it and its
+        ``stats.match_search`` speak: a pending/processing job, a pending import or a search still looking ->
+        ``"processing"``, else a failed/awaiting_link job or a failed import -> ``"failed"``, else ``None``;
+        ``match_search`` is ``"searching"`` or ``"not_found"`` (else ``None``). A ``not_found`` search says why (its
+        ``last_error``); a ``searching`` one says why it is still waiting (``no_match_yet`` | ``source_unavailable``,
+        else ``None``) and when it tries next. No ids, no query."""
         if not encounter_ids:
             return {}
         match_id = (
@@ -361,20 +371,30 @@ class CustomGameRoundRepository(BaseRepository[models.CustomGameRound]):
             .limit(1)
             .scalar_subquery()
         )
-        search_status = (
-            sa.select(models.MatchSearch.status)
-            .where(models.MatchSearch.encounter_id == models.Encounter.id)
-            .scalar_subquery()
-        )
         rows = await session.execute(
-            sa.select(models.Encounter.id, match_id, job_status, fetch_status, search_status).where(
-                models.Encounter.id.in_(encounter_ids)
+            sa.select(
+                models.Encounter.id,
+                match_id,
+                job_status,
+                fetch_status,
+                models.MatchSearch.status,
+                models.MatchSearch.last_error,
+                models.MatchSearch.next_attempt_at,
             )
+            .outerjoin(models.MatchSearch, models.MatchSearch.encounter_id == models.Encounter.id)
+            .where(models.Encounter.id.in_(encounter_ids))
         )
-        logs: dict[int, tuple[int | None, str | None, str | None]] = {}
-        for encounter_id, matched, job, fetch, search_row in rows:
+        logs: dict[int, tuple[int | None, str | None, str | None, str | None, datetime | None]] = {}
+        for encounter_id, matched, job, fetch, search_row, search_error, next_attempt_at in rows:
             search = None if matched is not None else _SEARCH_STATE.get(search_row)
-            logs[encounter_id] = (matched, None if matched is not None else _log_state(job, fetch, search), search)
+            error = search_error if search == "not_found" else _pending_reason(search_error) if search else None
+            logs[encounter_id] = (
+                matched,
+                None if matched is not None else _log_state(job, fetch, search),
+                search,
+                error,
+                next_attempt_at if search == "searching" else None,
+            )
         return logs
 
     async def delete_round(self, session: AsyncSession, encounter_id: int) -> None:

@@ -1165,7 +1165,8 @@
       "disconnectTitle": "Disconnect {provider}?",
       "disconnectBody": "The account stays on your profile, unverified, until you connect it again. Only an administrator can remove it from your profile completely.",
       "connectableTitle": "Available to connect",
-      "connect": "Connect"
+      "connect": "Connect",
+      "steamIngestHint": "To have Deadlock mix matches found automatically, install deadlock-api-ingest and keep it running while you play."
     },
     "stream": {
       "title": "Live stream",
@@ -5103,7 +5104,21 @@
         "hintMix": "The match ID from the game's match history. Its statistics are imported once the game's servers publish the match, which can take a while.",
         "autoSearch": {
           "searching": "Looking this match up among the players' private lobby games. The ID is filed on its own once the match is found.",
-          "notFound": "The match was not found by its players. Enter its ID above."
+          "notFound": "The match was not found by its players. Enter its ID above or search again.",
+          "reasons": {
+            "no_linked_accounts": "Nobody on one of the teams has linked a game account, so there is no one to search by.",
+            "not_found_in_window": "No matching match turned up within 24 hours.",
+            "ambiguous": "Several matches fit: {ids}. Paste the right ID above.",
+            "no_match_yet": "The match has not appeared in the game's records yet.",
+            "source_unavailable": "The match source is temporarily unavailable. The search will retry.",
+            "other": "The match source returned a temporary error."
+          },
+          "start": "Find by players",
+          "again": "Search again",
+          "restarted": "Looking the match up by its players. The ID is filed on its own once it is found.",
+          "restartFailed": "Could not start the match search",
+          "nextAttempt": "Next attempt at {time}",
+          "ingestHint": "A match is found on its own only if one of the players runs deadlock-api-ingest, or the lobby was created via the bot. Otherwise paste the match ID above."
         },
         "gameLabel": "Game",
         "game": "Game {position}",
@@ -9239,6 +9254,63 @@
       "mixDeleted": "Mix deleted",
       "signupPosted": "Signup opened in Discord",
       "postRemoving": "Removing the post from Discord"
+    },
+    "ingest": {
+      "instructionsLink": "How to set up ingest",
+      "installerLink": "Windows installer",
+      "badgeActive": "Uploads matches to the Deadlock API: its games are found automatically",
+      "badgeInactive": "No recent uploads to the Deadlock API",
+      "seatHint": "Your matches are not reaching the Deadlock API yet, so this mix's games may not be found automatically. Install deadlock-api-ingest and keep it running while you play.",
+      "hostWarning": "Nobody seated in this lobby uploads matches to the Deadlock API, so the match will not be found automatically. Create the lobby via the bot, or paste the match ID after the game.",
+      "guideTitle": "How matches are imported automatically",
+      "guideIntro": "The match is found and its stats are imported on their own in any of these cases:",
+      "guideIngest": "Any player in the lobby runs deadlock-api-ingest while playing.",
+      "guideBot": "The lobby is created via the bot (the button appears once the match is started).",
+      "guidePaste": "You paste the match ID after the game, in the match history."
+    },
+    "botLobby": {
+      "region": "Bot server region",
+      "create": "Create lobby via bot",
+      "recreate": "Recreate",
+      "created": "Bot lobby created. The code is in the lobby code field",
+      "open": "Bot lobby open: {minutes, plural, one {# minute} other {# minutes}} left",
+      "matchSeen": "The bot saw the match start. Its stats will be filed after you record the result.",
+      "expired": "The bot has left the lobby. Recreate it if the match has not started.",
+      "startWithin": "Start the match in the game within 15 minutes of creating the lobby: the bot leaves after that.",
+      "errors": {
+        "rateLimited": "The bot lobby limit is reached. Try again in {minutes, plural, one {# minute} other {# minutes}}.",
+        "rateLimitedLater": "The bot lobby limit is reached. Try again later.",
+        "lobby_bot_failed": "The bot could not create the lobby. Try again in a moment.",
+        "no_live_match": "Start the match first, then create the bot lobby."
+      },
+      "regions": {
+        "europe": "Europe",
+        "eu_amsterdam": "Europe — Amsterdam",
+        "eu_poland": "Europe — Poland",
+        "eu_stockholm": "Europe — Stockholm",
+        "eu_helsinki": "Europe — Helsinki",
+        "eu_falkenstein": "Europe — Falkenstein",
+        "eu_spain": "Europe — Spain",
+        "eu_east": "Europe — East",
+        "eu_london": "Europe — London",
+        "south_africa": "South Africa",
+        "us_west": "US West",
+        "us_east": "US East",
+        "us_north_central": "US North Central",
+        "us_south_central": "US South Central",
+        "us_south_east": "US South East",
+        "us_south_west": "US South West",
+        "australia": "Australia",
+        "singapore": "Singapore",
+        "japan": "Japan",
+        "hong_kong": "Hong Kong",
+        "mp_hong_kong": "Hong Kong (MP)",
+        "seoul": "Seoul",
+        "chile": "Chile",
+        "peru": "Peru",
+        "argentina": "Argentina",
+        "south_america": "South America"
+      }
     }
   },
   "quota": {

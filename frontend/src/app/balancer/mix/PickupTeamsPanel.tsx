@@ -41,8 +41,10 @@ import { Spinner } from "@/components/ui/spinner";
 
 import { MatchHistoryList } from "./_components/MatchHistoryList";
 import type { MixLogUpload } from "./useMixLogUpload";
+import type { BotLobbyOptions } from "./pickup-bot-lobby";
 import { NextMapStrip } from "./_components/NextMapStrip";
 import { LobbyCodeStrip } from "./_components/LobbyCodeStrip";
+import { BotLobbyControl } from "./_components/BotLobbyControl";
 import { StartMatchButton } from "./_components/StartMatchButton";
 import { VariantView } from "./_components/VariantView";
 import { slotCodeOrder } from "@/lib/roster/ontology";
@@ -118,6 +120,8 @@ type PickupTeamsPanelProps = {
   settingLobbyCode: boolean;
   /** Trimmed; `null` clears. Persisted per lobby server-side, writable while the match is live. */
   onLobbyCodeChange: (lobbyCode: string | null) => void;
+  /** The host's bot-lobby control, for a game whose bot opens lobbies. Omitted -- none. */
+  botLobby?: BotLobbyOptions | null;
   closingMix: boolean;
   onCloseMix: () => void;
   /** Takes the GLOBAL team index (`lobbyIndex * 2 + team`). Omitted -- team headers render read-only. */
@@ -189,6 +193,7 @@ export function PickupTeamsPanel({
   onNextMapChange,
   settingLobbyCode,
   onLobbyCodeChange,
+  botLobby = null,
   closingMix,
   onCloseMix,
   onRenameTeam,
@@ -450,6 +455,9 @@ export function PickupTeamsPanel({
             <div className="flex flex-col gap-3 border-t border-[color:var(--aqt-border)] px-4 py-3">
               {onFloor ? (
                 <>
+                  {live && canWrite && botLobby != null ? (
+                    <BotLobbyControl options={botLobby} botLobby={lobby?.bot_lobby} />
+                  ) : null}
                   {live && variant && canWrite ? (
                     <PickupResultControls
                       teamCount={variant.teams.length}

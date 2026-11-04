@@ -14,6 +14,13 @@ var BinaryPublicDocRoutes = []edge.RouteSpec{
 		Media: edge.Media{Files: []string{"player_data_file"}, Fields: []string{"config_overrides", "tournament_id"}}},
 }
 
+// LobbyCallbackDocRoutes documents the public webhook a game source calls to report a bot lobby's match
+// (callback.go): the token in the path is the credential, every token is answered 204.
+var LobbyCallbackDocRoutes = []edge.RouteSpec{
+	{Method: "POST", Pattern: "/api/v1/deadlock/lobby-callback/{token}", Queue: "rpc.balancer.custom.bot_lobby_callback", Path: []string{"token"}, Auth: edge.AuthNone, Success: 204},
+	{Method: "POST", Pattern: "/api/v1/deadlock/lobby-callback/{token}/settings", Queue: "rpc.balancer.custom.bot_lobby_callback", Path: []string{"token"}, Auth: edge.AuthNone, Success: 204},
+}
+
 // BinaryAdminDocRoutes is the admin teams-import upload.
 var BinaryAdminDocRoutes = []edge.RouteSpec{
 	{Method: "POST", Pattern: "/api/v1/balancer/tournaments/{tournament_id}/teams/import", Queue: "rpc.balancer.admin.teams_import", Auth: edge.AuthRequired,

@@ -15,6 +15,7 @@ from src.domain.mix_self_service import MAX_ROSTER
 __all__ = (
     "CustomGameBalanceRequest",
     "CustomGameBanPresetPatch",
+    "CustomGameBotLobbyCreate",
     "CustomGameCaptainPatch",
     "CustomGameCoHostPatch",
     "CustomGameCreate",
@@ -165,6 +166,12 @@ class CustomGameLobbyCodePatch(_LobbyScoped):
     """The in-game lobby's join code, trimmed; ``null`` or a blank string clears it."""
 
     lobby_code: Annotated[str, StringConstraints(strip_whitespace=True, max_length=64)] | None
+
+
+class CustomGameBotLobbyCreate(_LobbyScoped):
+    """Have the game's bot open the in-game lobby for the lobby's live match, in one of the game's server regions."""
+
+    region: str = Field(min_length=1, max_length=64)
 
 
 class CustomGameVariantIndexPatch(_LobbyScoped):

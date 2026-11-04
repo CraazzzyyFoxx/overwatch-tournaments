@@ -171,6 +171,7 @@ OPERATIONS: dict[str, Op] = {
     "rpc.balancer.custom.set_team_names": Op(request=custom_game.CustomGameTeamNamesPatch),
     "rpc.balancer.custom.set_next_map": Op(request=custom_game.CustomGameNextMapPatch),
     "rpc.balancer.custom.set_lobby_code": Op(request=custom_game.CustomGameLobbyCodePatch),
+    "rpc.balancer.custom.create_bot_lobby": Op(request=custom_game.CustomGameBotLobbyCreate),
     "rpc.balancer.custom.set_variant_index": Op(request=custom_game.CustomGameVariantIndexPatch),
     "rpc.balancer.custom.post_discord": Op(request=custom_game.CustomGamePostDiscord),
     "rpc.balancer.custom.set_voice_channels": Op(request=custom_game.CustomGameVoicePatch),

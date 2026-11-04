@@ -2,10 +2,11 @@
 
 import type { ReactNode } from "react";
 import { useTranslations } from "next-intl";
-import { Ban, Crown, WifiOff } from "lucide-react";
+import { Ban, CloudOff, CloudUpload, Crown, WifiOff } from "lucide-react";
 
 import { AWAY_CHIP_CLASS, teamAccent } from "@/app/balancer/mix/pickup-chrome";
 import type { MixOwner } from "@/app/balancer/mix/pickup-lineup";
+import type { IngestState } from "@/app/balancer/mix/_hooks/useMixIngest";
 import { PersonLabel } from "@/components/PlayerName";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { RankCrest } from "@/components/RankCrest";
@@ -42,6 +43,7 @@ export function RoomTeamColumn({
   captainOffline = false,
   captainControl,
   pickFor,
+  ingestOf,
   className
 }: Readonly<{
   team: RoomTeam;
@@ -63,6 +65,8 @@ export function RoomTeamColumn({
    * for. With more than one to choose from, each of their rows is a button that picks for that player.
    */
   pickFor?: { choosable: readonly number[]; acting: number | null; onChoose: (teamMemberId: number) => void };
+  /** A game whose matches reach the site through a player's ingest tool: that player's state, shown as a badge on their seat. */
+  ingestOf?: (memberId: number | null) => IngestState;
   className?: string;
 }>) {
   const t = useTranslations("mixes.arena");
@@ -150,6 +154,7 @@ export function RoomTeamColumn({
               hero={slot.seat.heroId != null ? heroesById[slot.seat.heroId] : undefined}
               heroName={slot.seat.heroId != null ? heroName(slot.seat.heroId) : null}
               wide={wide}
+              ingest={ingestOf?.(slot.seat.memberId) ?? null}
               acting={teamMemberId != null && pickFor?.acting === teamMemberId}
               onChoose={
                 choosing != null && teamMemberId != null && choosing.choosable.includes(teamMemberId)
@@ -173,6 +178,7 @@ function SeatLine({
   hero,
   heroName,
   wide,
+  ingest,
   acting,
   onChoose
 }: Readonly<{
@@ -185,6 +191,7 @@ function SeatLine({
   heroName: string | null;
   /** The desktop columns: bigger art. */
   wide: boolean;
+  ingest: IngestState;
   /** The member pick in play is this player's. */
   acting: boolean;
   /** Makes the row a button that picks for this player instead. */
@@ -193,6 +200,7 @@ function SeatLine({
   const t = useTranslations("mixes.arena");
   const tRoom = useTranslations("mixes.room");
   const slotLabel = useSlotLabel(owner.ontology);
+  const tIngest = useTranslations("mixes.ingest");
   const showRole = owner.showsRoles && seat.role != null && seat.role !== OPEN_SLOT_CODE;
   const heroSize = wide ? 36 : 26;
   const body = (
@@ -222,6 +230,15 @@ function SeatLine({
         <span className="shrink-0 text-label font-semibold text-[color:var(--aqt-teal)]">{tRoom("you")}</span>
       ) : null}
       {away ? <span className={AWAY_CHIP_CLASS}>{tRoom("away")}</span> : null}
+      {ingest != null ? (
+        <IconTooltip label={tIngest(ingest === "active" ? "badgeActive" : "badgeInactive")} className="flex shrink-0 items-center">
+          {ingest === "active" ? (
+            <CloudUpload aria-hidden className="size-3.5 text-[color:var(--aqt-emerald)]" />
+          ) : (
+            <CloudOff aria-hidden className="size-3.5 text-[color:var(--aqt-fg-dim)]" />
+          )}
+        </IconTooltip>
+      ) : null}
       {heroName != null && seat.heroId != null ? (
         <span className="shrink-0" style={{ viewTransitionName: heroTransitionName(seat.heroId) }}>
           <PickBanItemThumb kind={CHARACTER_PICK_BAN_KIND} item={hero} name={heroName} size={heroSize} />

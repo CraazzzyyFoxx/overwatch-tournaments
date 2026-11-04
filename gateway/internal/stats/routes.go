@@ -86,6 +86,7 @@ var Routes = []edge.RouteSpec{
 	// workspace log.create, checked in the handler. {match_id} is the round's encounter.
 	{Method: "POST", Pattern: "/api/v1/custom-games/{custom_game_id}/matches/{match_id}/match-import", Queue: "rpc.stats.ingest.mix_fetch", IDParam: "custom_game_id", Path: []string{"match_id"}, Body: true, Auth: edge.AuthRequired},
 	{Method: "GET", Pattern: "/api/v1/custom-games/{custom_game_id}/matches/{match_id}/match-import", Queue: "rpc.stats.ingest.mix_fetch_list", IDParam: "custom_game_id", Path: []string{"match_id"}, Auth: edge.AuthRequired},
+	{Method: "POST", Pattern: "/api/v1/custom-games/{custom_game_id}/matches/{match_id}/match-search", Queue: "rpc.stats.ingest.mix_search", IDParam: "custom_game_id", Path: []string{"match_id"}, Auth: edge.AuthRequired, Success: 204},
 	// match-log enqueue (src/routes/match_logs.py); admin-role gated in the handler.
 	{Method: "POST", Pattern: "/api/v1/logs/{id}", Queue: "rpc.stats.logs.process_tournament", IDParam: "id", Auth: edge.AuthRequired},
 

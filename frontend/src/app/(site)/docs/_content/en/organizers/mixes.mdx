@@ -182,7 +182,19 @@ For a game whose matches the site fetches by ID (Deadlock today), each history r
 
 A wrong ID is fixed by filing the right one: its statistics replace the previous ones. One match ID serves one match of the workspace. After an undo, file the same ID again from the re-recorded match's row.
 
-You often do not need to type the ID at all. Once the result is recorded, the site looks the match up by its players: a private lobby match that started between **Start match** and the recorded result and has each team of the round on one side — at least half of each team, since private profiles are hidden, and nobody of a team on the other side. While it is looking, the row says **Log processing** and the import window says so too; when it finds exactly one such match, it files its ID itself. If it finds several, or nothing within 24 hours, the window says the match was not found by its players, and you enter the ID by hand. Filing an ID yourself stops the search. It only knows players who linked Steam.
+You often do not need to type the ID at all. Once the result is recorded, the site looks the match up by its players: a private lobby match that started between **Start match** and the recorded result and has each team of the round on one side — at least half of each team, since private profiles are hidden, and nobody of a team on the other side. While it is looking, the row says **Log processing** and the import window says so too; when it finds exactly one such match, it files its ID itself. If it finds several, or nothing within 24 hours, the window says the match was not found by its players, and you enter the ID by hand. Filing an ID yourself stops the search. It only knows players who linked Steam. If the lobby was created through the bot, the site files the bot's match ID directly instead of searching (see **Deadlock: where a round's statistics come from** below).
+
+### Deadlock: where a round's statistics come from
+
+A Deadlock private lobby is not a public match: the game's data source, deadlock-api, can only publish its statistics once it knows the match's **salts**, the keys that unlock the replay. Salts reach it from the players' computers, so a round gets statistics in one of three ways:
+
+1. **Any player runs deadlock-api-ingest.** It is a small program on the player's PC that sends the salts of the matches they play. Once one player of the lobby has it running, the site finds the match by its players, as described above. Installation is on [deadlock-api.com/ingest-cache](https://deadlock-api.com/ingest-cache); for Windows there is a [ready installer](https://github.com/deadlock-api/deadlock-api-ingest/releases/latest/download/deadlock-api-ingest-setup.exe).
+2. **You create the in-game lobby through the deadlock-api bot.** On the **Live** stage of a lobby (after **Start match**) pick a server region and press **Create lobby via bot**. The bot makes the party, joins it as a spectator and puts its code into the lobby's **Lobby code**; the players join with it. When the match starts the site learns its ID from the bot and files it once the result is recorded, with no player-based search. The bot leaves 15 minutes after it was created, whether the match has started or not, so start the match within that time; after that **Recreate** makes a new party and a new code. The region is remembered per game for you. A 4-per-team lobby is created in the Street Brawl mode, any other in the normal one. Creation is limited in count: when the limit is hit the button says how long to wait.
+3. **You paste the match ID after the match.** The ID from the game's match history goes into the import window, as in **Statistics by match ID** above. It needs neither the program nor the bot.
+
+Player-based search needs the program and a player's Steam account that is **the one they play on**, linked on the site, with a **public game profile**: a private profile hides the player from the search. In the mix room each seat has an **ingest badge**: it is on when that player's computer sent matches in the last 14 days. The badge only says the program works for them, not that they will be in this match. When nobody in a lobby has the badge, the room warns you that the automatic search will not work: create the lobby through the bot or paste the ID after the match. If the badge could not be checked right now, the seat shows no verdict either way.
+
+deadlock-api limits how many matches a site without an API key may fetch, so an import by ID, a bot lobby's match or a search hit can wait for the limit: when it does, the window says that the source is temporarily unavailable and when the next attempt is. Without a key a match can take up to an hour to arrive; there is nothing for you to do but wait or file the ID later.
 
 ## Mix statuses
 
@@ -223,6 +235,9 @@ Deleting a mix erases it completely and is available only to a workspace admin. 
 | The statistics are gone after a match was undone | That is by design. Record the match again and upload the same log from its history row. |
 | Filing a match ID says the match is already sent for another game | That ID is filed for another match of the workspace. Check which round it was played as. |
 | The row says **Log failed to bind** after a match ID | The game did not publish the match within 24 hours, or its players are not this round's. Check the ID in the import window and file it again. |
+| The room warns that the automatic search will not work | Nobody in that lobby has uploaded matches with deadlock-api-ingest in the last 14 days. Create the lobby through the bot, or paste the match ID after the match. |
+| **Create lobby via bot** says the limit is hit | deadlock-api caps how many lobbies it creates; the message says how long to wait. Create the lobby by hand in the game and paste the ID after the match. |
+| The bot's lobby is gone before the match started | The bot leaves 15 minutes after it was created. Press **Recreate**, share the new code and start the match within 15 minutes. |
 
 ## See also
 

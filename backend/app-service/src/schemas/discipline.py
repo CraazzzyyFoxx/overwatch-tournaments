@@ -14,6 +14,7 @@ __all__ = (
     "DisciplineDescriptor",
     "DisciplineMetadata",
     "EventTypeRead",
+    "LobbyBotRead",
     "NativeTierRead",
     "OntologyRole",
     "RoleDimensionRead",
@@ -31,8 +32,14 @@ class DisciplineCapabilities(BaseModel):
     native_ladder: bool
     #: A match can be imported by its external id (``DisciplineSpec.match_fetchers``).
     match_fetch: bool
+    #: A mix round's match is looked up by its players (a ``match_searchers`` kind it can fetch, and an identity).
+    match_search: bool
     #: An uploaded match-log file is parsed (an ``upload`` entry in ``DisciplineSpec.ingestors``).
     log_upload: bool
+    #: A bot can open the in-game lobby of a pickup mix (``DisciplineSpec.lobby_bot``).
+    lobby_bot: bool
+    #: A player's match-upload (ingest) status can be read (``DisciplineSpec.ingest_status``).
+    ingest_status: bool
     achievement_conditions: bool
     analytics: bool
 
@@ -113,6 +120,13 @@ class NativeTierRead(BaseModel):
     native_tier: int | None
 
 
+class LobbyBotRead(BaseModel):
+    """Mirrors ``shared.disciplines.lobby.LobbyBotSpec``'s declarations."""
+
+    regions: list[str]
+    default_region: str
+
+
 class DisciplineMetadata(BaseModel):
     discipline: DisciplineDescriptor
     #: ``None``: the global view (module roles only).
@@ -123,5 +137,7 @@ class DisciplineMetadata(BaseModel):
     stat_defs: list[StatDefinition]
     event_types: list[EventTypeRead]
     team_format_presets: list[TeamFormatRead]
+    #: ``None``: the game has no bot lobby.
+    lobby_bot: LobbyBotRead | None
     #: Top tier first; empty for a game whose organiser enters ranks.
     native_ladder: list[NativeTierRead]

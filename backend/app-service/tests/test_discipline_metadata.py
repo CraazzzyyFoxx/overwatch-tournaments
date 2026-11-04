@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
 from shared.disciplines import DISCIPLINES, DisciplineSpec
+from shared.disciplines.lobby import LobbyBotSpec
 from shared.repository import CatalogRoleRepository
 from shared.services.ontology import project_disciplines
 from shared.testing import create_test_async_engine, ensure_test_postgres
@@ -179,6 +180,9 @@ class DisciplineMetadataTests(IsolatedAsyncioTestCase):
                 "native_rank_collection": True,
                 "native_ladder": True,
                 "match_fetch": False,
+                "match_search": False,
+                "lobby_bot": False,
+                "ingest_status": False,
                 "log_upload": True,
                 "achievement_conditions": True,
                 "analytics": True,
@@ -191,11 +195,23 @@ class DisciplineMetadataTests(IsolatedAsyncioTestCase):
                 "native_rank_collection": True,
                 "native_ladder": True,
                 "match_fetch": False,
+                "match_search": False,
+                "lobby_bot": False,
+                "ingest_status": False,
                 "log_upload": False,
                 "achievement_conditions": False,
                 "analytics": False,
             },
             lol["capabilities"],
+        )
+        # Only Deadlock has a bot lobby and an ingest status to ask for.
+        self.assertEqual(
+            {"overwatch": False, "lol": False, "deadlock": True, "valorant": False},
+            {code: row["capabilities"]["lobby_bot"] for code, row in by_code.items()},
+        )
+        self.assertEqual(
+            {"overwatch": False, "lol": False, "deadlock": True, "valorant": False},
+            {code: row["capabilities"]["ingest_status"] for code, row in by_code.items()},
         )
         self.assertEqual(
             {
@@ -374,6 +390,12 @@ class DisciplineMetadataTests(IsolatedAsyncioTestCase):
         capabilities = meta["discipline"]["capabilities"]
         self.assertEqual((True, False), (capabilities["native_ladder"], capabilities["analytics"]))
 
+    async def test_the_bot_lobby_regions_are_declared_by_deadlock_only(self) -> None:
+        deadlock = (await self.metadata("deadlock", "all"))["data"]["lobby_bot"]
+        self.assertEqual(list(DISCIPLINES["deadlock"].lobby_bot.regions), deadlock["regions"])
+        self.assertIn(deadlock["default_region"], deadlock["regions"])
+        self.assertIsNone((await self.metadata("overwatch", "all"))["data"]["lobby_bot"])
+
     async def test_an_uninstalled_or_malformed_code_is_404_discipline_not_installed_never_overwatch(self) -> None:
         for code in ("chess", "OVERWATCH", "../etc", "overwatch ", "ow", "%00"):
             reply = await self.metadata(code, "all")
@@ -478,6 +500,9 @@ class DisciplineMetadataTests(IsolatedAsyncioTestCase):
             start_jobs=spy("start_jobs"),
             collection_handlers={"rank.collect": spy("rank.collect")},
             match_fetchers={"probe": spy("match_fetch")},
+            match_searchers={"probe": spy("match_search")},
+            lobby_bot=LobbyBotSpec(("europe",), "europe", spy("lobby_bot.create"), spy("lobby_bot.match_id")),
+            ingest_status=spy("ingest_status"),
             ingestors={"upload": spy("upload")},
         )
         with patch.dict(discipline_service.DISCIPLINES, {"overwatch": probed}):
@@ -505,6 +530,9 @@ class DisciplineMetadataTests(IsolatedAsyncioTestCase):
                 "native_rank_collection": False,  # another collection handler is not rank collection
                 "native_ladder": False,
                 "match_fetch": False,
+                "match_search": False,
+                "lobby_bot": False,
+                "ingest_status": False,
                 "log_upload": False,
                 "achievement_conditions": False,
                 "analytics": False,

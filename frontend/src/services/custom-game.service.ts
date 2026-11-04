@@ -114,6 +114,21 @@ export type CustomGameSettings = {
  */
 export type MixLobbyState = "idle" | "ready" | "pregame" | "live" | "draft_setup" | "draft_live";
 
+/** The bot-created in-game party of a lobby's LIVE match; the bot leaves 15 minutes after `created_at`. */
+export type MixBotLobby = {
+  party_code: string;
+  created_at: string;
+  expires_at: string;
+  /** The match id the party's match started with, once known; null before. */
+  match_id: string | null;
+};
+
+/** `GET .../ingest-status`: per roster `player_id`, `null` = unknown (the source did not answer). */
+export type MixIngestStatus = {
+  window_days: number;
+  players: Record<string, { active: boolean; last_upload_at: string | null } | null>;
+};
+
 /**
  * One lobby of a mix — the four columns that used to sit on the mix itself
  * (`custom_game_lobby`). A mix always has exactly `lobby_count` of them, so
@@ -134,6 +149,8 @@ export type CustomGameLobby = {
   next_map_id: number | null;
   /** The in-game lobby's join code the host shared, or `null`. Kept across matches until the host changes it. */
   lobby_code: string | null;
+  /** The bot's party for this lobby's current live match, or `null`. */
+  bot_lobby?: MixBotLobby | null;
   /** When this lobby was last balanced, or `null` while it never was. */
   balanced_at: string | null;
   /**
@@ -219,6 +236,8 @@ export type CustomGame = {
   created_at: string | null;
   /** How many lobbies this mix runs at once; 6 is the ceiling (CHECK server-side). */
   lobby_count: number;
+  /** The viewer's remembered bot-lobby region for this discipline; `null` when none or anonymous. */
+  bot_lobby_region?: string | null;
   /**
    * This mix's lobbies, ordered by `lobby_index` -- exactly `lobby_count` of
    * them. The balance document, the pager position and the next map all live
@@ -389,6 +408,13 @@ export type CustomGameMatch = {
    * up so the host files the id by hand. Null otherwise, and once there are stats.
    */
   match_search: "searching" | "not_found" | null;
+  /**
+   * Why the search is not done: while `searching` `no_match_yet` | `source_unavailable`; for `not_found`
+   * `no_linked_accounts`, `not_found_in_window`, `ambiguous: <ids>` or the source's own refusal. Null otherwise.
+   */
+  match_search_error: string | null;
+  /** When the next search attempt is due; only while `searching`. */
+  match_search_next_attempt_at?: string | null;
 };
 
 /** Patch semantics: an omitted key is left untouched on the server. */
@@ -624,6 +650,8 @@ export const customGameKeys = {
     ["custom-games", workspaceId, gameId, "voice-options"] as const,
   stats: (workspaceId: number, since: string | null, discipline?: string) =>
     ["custom-games", workspaceId, "stats", since ?? "all", discipline ?? null] as const,
+  /** Deliberately NOT under `all`: the mix's realtime echo drops that prefix on every change, and this read is cached upstream for minutes. */
+  ingestStatus: (workspaceId: number, gameId: number) => ["custom-game-ingest-status", workspaceId, gameId] as const,
 };
 
 export const customGameService = {
@@ -896,6 +924,27 @@ export const customGameService = {
       skipWorkspace: true,
       method: "PUT",
       body: { lobby_index: lobbyIndex, lobby_code: lobbyCode },
+    }).then((r) => r.json());
+  },
+
+  /** The host's bot opens an in-game party for the lobby's live match and its code lands in `lobby_code`. */
+  createBotLobby(
+    workspaceId: number,
+    gameId: number,
+    body: { lobby_index: number; region: string },
+  ): Promise<CustomGame> {
+    return apiFetch(`/api/v1/balancer/workspaces/${workspaceId}/custom-games/${gameId}/bot-lobby`, {
+      skipWorkspace: true,
+      method: "POST",
+      body,
+    }).then((r) => r.json());
+  },
+
+  /** Who of the mix's roster uploads matches to the Deadlock API lately (`unsupported_ingest_status` elsewhere). */
+  getIngestStatus(workspaceId: number, gameId: number, opts?: { signal?: AbortSignal }): Promise<MixIngestStatus> {
+    return apiFetch(`/api/v1/balancer/workspaces/${workspaceId}/custom-games/${gameId}/ingest-status`, {
+      skipWorkspace: true,
+      signal: opts?.signal,
     }).then((r) => r.json());
   },
 
@@ -1239,5 +1288,10 @@ export const customGameService = {
       method: "POST",
       body: { external_id: externalId } satisfies MatchImportInput,
     }).then((r) => r.json());
+  },
+
+  /** Looks the round's match up by its players again: a fresh 24 h search, filed as the round's import if found. */
+  async searchMatch(gameId: number, matchId: number): Promise<void> {
+    await apiFetch(`/api/v1/custom-games/${gameId}/matches/${matchId}/match-search`, { method: "POST" });
   },
 };

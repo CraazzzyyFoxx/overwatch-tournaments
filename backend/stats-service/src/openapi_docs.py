@@ -55,6 +55,10 @@ DOCS: dict[str, dict] = {
         "summary": "List a mix round's match imports",
         "description": "Permission: same as the submit. The round's import requests, newest first, shaped like the submit's answer, with the organizer warnings: `fetch_failed`, `participants_dropped` (`count` players the round seated but the match does not show, e.g. private profiles) and `banned_character_played`.",
     },
+    "rpc.stats.ingest.mix_search": {
+        "summary": "Search a mix round's match by its players again",
+        "description": "Permission: same as the import. Starts the round's search by its players again (`stats.match_search`): a fresh 24 h window with the import's backoff, due at the worker's next tick, also for a round recorded before the automatic search's window; a search still looking is left as it is. A single fit is filed as the round's match import, several or none end it as `not_found` again. 422 `unsupported_match_search` for a game whose matches cannot be found by players, 409 `match_search_settled` for a round that has statistics or a pending/done import. Answers 204.",
+    },
     # ── impact baselines ──────────────────────────────────────────────────────
     "rpc.stats.impact.recompute_baselines": {
         "summary": "Recompute impact baselines",

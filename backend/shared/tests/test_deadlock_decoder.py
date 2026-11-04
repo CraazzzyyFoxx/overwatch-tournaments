@@ -35,6 +35,18 @@ def _raw(players: list[dict], **info: object) -> bytes:
     return json.dumps({"match_info": match_info | info}).encode()
 
 
+def test_the_winner_scores_one_and_an_undecided_match_records_no_score() -> None:
+    players = [_player(1, 11, 0, 7), _player(2, 12, 1, 1)]
+
+    def scores(winner: object) -> dict[str | None, float]:
+        doc = decode(_raw(players, winning_team=winner), CTX)
+        return {fact.team: fact.value for fact in doc.facts if fact.stat == "score"}
+
+    assert scores(1) == {"team0": 0.0, "team1": 1.0}
+    assert scores(0) == {"team0": 1.0, "team1": 0.0}
+    assert scores(None) == {}
+
+
 def test_purchases_keep_sold_and_imbued_only_when_set_and_drop_anonymous_buyers() -> None:
     raw = json.dumps(
         {

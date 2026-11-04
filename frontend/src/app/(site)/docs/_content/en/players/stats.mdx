@@ -55,6 +55,12 @@ Two entries in the **Matches** menu collect games from across the platform:
 - **Encounters** — head-to-heads between teams, split into live, upcoming and completed, with filters by tournament, format and closeness, search by team or player, and sorting by date or closeness. **Presets** narrow the list to finals, upsets, encounters with logs or your team's, and keep your own filter sets; **Summary** shows closeness, final scores, popular maps and the closest encounters under the same filters.
 - **Matches** — individual maps that were played. A match page has the **Tables**, **Comparison** and **Timeline** tabs, the last of which replays the kill feed when logs have been parsed.
 
+## Match statistics of Deadlock mixes
+
+A Deadlock private lobby is not a public match: the game's data source, deadlock-api, publishes its statistics only once it knows the match's salts, the keys that unlock the replay. They reach it from players' computers through the deadlock-api-ingest program, so a mix match gets statistics when at least one player of the lobby runs it, when the host creates the lobby through the deadlock-api bot, or when the host pastes the match ID after the game.
+
+To help your mix, install the program: the instructions are on [deadlock-api.com/ingest-cache](https://deadlock-api.com/ingest-cache), and for Windows there is a [ready installer](https://github.com/deadlock-api/deadlock-api-ingest/releases/latest/download/deadlock-api-ingest-setup.exe). Next to your seat in the mix room, the ingest badge shows that the program sent something in the last 14 days; without it the room tells you how to set it up. Finding a match by its players works when the Steam account you play on is linked to the site and your game profile is public: a private profile hides you from the search.
+
 ## Platform statistics
 
 The **Statistics** page is the all-time **Tournament almanac**. Its header carries the totals: **Tournaments**, **Players**, **Encounters**, **Maps**, **Hours played** and **Tournament days**. Below them:

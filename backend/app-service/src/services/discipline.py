@@ -25,6 +25,7 @@ from src.schemas.discipline import (
     DisciplineDescriptor,
     DisciplineMetadata,
     EventTypeRead,
+    LobbyBotRead,
     NativeTierRead,
     OntologyRole,
     RoleDimensionRead,
@@ -93,6 +94,10 @@ def _descriptor(spec: DisciplineSpec, *, enabled: bool) -> DisciplineDescriptor:
             native_rank_collection="rank.collect" in spec.collection_handlers,
             native_ladder=bool(spec.native_ladder),
             match_fetch=bool(spec.match_fetchers),
+            match_search=spec.identity_provider is not None
+            and any(kind in spec.match_fetchers for kind in spec.match_searchers),
+            lobby_bot=spec.lobby_bot is not None,
+            ingest_status=spec.ingest_status is not None,
             log_upload="upload" in spec.ingestors,
             achievement_conditions=spec.achievement_conditions is not None,
             analytics=spec.analytics is not None,
@@ -196,6 +201,11 @@ async def metadata(
         ],
         event_types=[EventTypeRead(id=row.id, code=row.code, name=row.name, active=row.active) for row in event_types],
         team_format_presets=presets,
+        lobby_bot=(
+            LobbyBotRead(regions=list(spec.lobby_bot.regions), default_region=spec.lobby_bot.default_region)
+            if spec.lobby_bot is not None
+            else None
+        ),
         native_ladder=[
             NativeTierRead(
                 **{
