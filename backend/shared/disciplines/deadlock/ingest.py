@@ -8,7 +8,8 @@ dropped with its facts and every event naming it. A ``hero_id`` no catalog hero 
 handed on verbatim so the semantic validator reports it.
 
 Facts, per player on the played hero: the top-level counters, the counters of the last ``stats[]`` sample and its souls
-by ``gold_sources`` (gold plus orbs; ``souls_lost`` is ``gold_death_loss``).
+by ``gold_sources`` (gold plus orbs; ``souls_lost`` is ``gold_death_loss``). Per team, ``score``: 1 for the winner, 0 for
+the loser; none when ``winning_team`` names neither.
 
 Events (``stats.EVENT_TYPES`` says what each one is):
 
@@ -206,6 +207,10 @@ def _document(info: dict[str, Any], ctx: DecodeContext) -> dict[str, Any]:
         )
 
     winner = info.get("winning_team")
+    if winner in (0, 1):
+        facts.extend(
+            {"team": team, "stat": "score", "value": float(index == winner)} for index, team in enumerate(TEAMS)
+        )
     mode = int(info.get("game_mode", 0))
     return {
         "protocol": PROTOCOL,
