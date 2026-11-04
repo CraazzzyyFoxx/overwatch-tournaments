@@ -19,6 +19,7 @@ __all__ = (
     "BotLobbyParty",
     "BotLobbyRateLimited",
     "BotLobbyRequest",
+    "IngestClient",
     "IngestStatus",
     "IngestStatusSource",
     "LobbyBotSpec",
@@ -85,3 +86,11 @@ class IngestStatus:
 #: ``status(account ids) -> {account id: status}``, ``None`` for an account the source could not answer for (unknown is
 #: never "inactive"). The ids are the discipline's ``identity_provider`` account ids.
 IngestStatusSource = Callable[[Sequence[str]], Awaitable[dict[str, IngestStatus | None]]]
+
+
+@dataclass(frozen=True, slots=True)
+class IngestClient:
+    """Where a player gets the client that uploads their matches: its instructions first, then its installer."""
+
+    instructions_url: str
+    installer_url: str

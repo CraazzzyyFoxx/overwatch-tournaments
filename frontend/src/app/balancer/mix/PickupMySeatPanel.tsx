@@ -24,6 +24,7 @@ import {
   type MixSelfState,
 } from "@/services/custom-game.service";
 import { useAccountSettingsModalStore } from "@/stores/account-settings-modal.store";
+import type { IngestClient } from "@/types/discipline.types";
 
 import { resolveRoleOrder, roleRefsOf, toggleRole, type MixOwner, type MySeatTeam } from "./pickup-lineup";
 
@@ -60,8 +61,8 @@ type PickupMySeatPanelProps = {
   onSetAway: (away: boolean) => void;
   /** Their lobby's room while something plays out there (draft, bans and picks, the match); `null` otherwise. */
   roomHref: string | null;
-  /** The viewer plays a game whose matches are found through a player's ingest tool, and theirs has not uploaded lately. */
-  ingestHint?: boolean;
+  /** Where to get the game's uploader, set while the viewer's has not uploaded lately; `null` otherwise. */
+  ingestClient?: IngestClient | null;
 };
 
 /** Everything the panel edits before Save, kept apart from the server seat. */
@@ -127,7 +128,7 @@ export function PickupMySeatPanel({
   lobbies,
   onSetAway,
   roomHref,
-  ingestHint = false,
+  ingestClient = null,
 }: Readonly<PickupMySeatPanelProps>) {
   const t = useTranslations("mixes.self");
   const tRoom = useTranslations("mixes.room");
@@ -282,10 +283,10 @@ export function PickupMySeatPanel({
         </div>
       ) : null}
 
-      {ingestHint && seat != null && !seat.away ? (
+      {ingestClient && seat != null && !seat.away ? (
         <div className="flex flex-col gap-1">
           <p className="text-caption text-[color:var(--aqt-fg-muted)]">{tIngest("seatHint")}</p>
-          <IngestLinks className="text-caption" />
+          <IngestLinks client={ingestClient} className="text-caption" />
         </div>
       ) : null}
 

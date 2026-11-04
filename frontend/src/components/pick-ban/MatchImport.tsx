@@ -17,6 +17,7 @@ import { useFormatter } from "@/lib/datetime/client";
 import { notify } from "@/lib/notify";
 import { customGameKeys, customGameService } from "@/services/custom-game.service";
 import pickBanService from "@/services/pickBan.service";
+import type { IngestClient } from "@/types/discipline.types";
 import type { MatchImport as MatchImportRow } from "@/types/encounter.types";
 
 /** Refusals a submitter can act on (the match-import routes); anything else is the generic failure. */
@@ -36,7 +37,7 @@ const PENDING_POLL_MS = 30_000;
  * Where a match id is filed: a tournament encounter's games (`games` are the positions it may be filed for: one,
  * id or a started search, so the caller can refresh what it changes; `search` is the round's match being looked up
  * by its players, or given up on for `searchError` (while still looking, `searchNextAttemptAt` is when it tries again);
- * `searchable` lets a search that is not looking start again; `ingestHint` adds how to install the game's ingest tool).
+ * `searchable` lets a search that is not looking start again; `ingestClient` adds where to get the game's uploader).
  */
 export type MatchImportScope =
   | { encounterId: number; games: ReadonlyArray<{ id: number; position: number }>; admin?: boolean }
@@ -48,7 +49,7 @@ export type MatchImportScope =
       searchError?: string | null;
       searchNextAttemptAt?: string | null;
       searchable?: boolean;
-      ingestHint?: boolean;
+      ingestClient?: IngestClient | null;
     };
 
 /**
@@ -196,10 +197,10 @@ export function MatchImport({ scope }: Readonly<{ scope: MatchImportScope }>) {
           {nextAttempt ? (
             <p className="text-caption text-[color:var(--aqt-fg-dim)]">{t("autoSearch.nextAttempt", { time: nextAttempt })}</p>
           ) : null}
-          {mix?.ingestHint && mix.search ? (
+          {mix?.ingestClient && mix.search ? (
             <div className="flex flex-col gap-1 text-caption text-[color:var(--aqt-fg-muted)]">
               <p>{t("autoSearch.ingestHint")}</p>
-              <IngestLinks />
+              <IngestLinks client={mix.ingestClient} />
             </div>
           ) : null}
           {canSearch ? (

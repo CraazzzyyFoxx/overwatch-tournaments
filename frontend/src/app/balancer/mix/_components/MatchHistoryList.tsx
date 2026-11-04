@@ -248,7 +248,7 @@ function MatchHistoryRow({
                 searchError: match.match_search_error,
                 searchNextAttemptAt: match.match_search_next_attempt_at,
                 searchable: logUpload.matchSearch && match.stats_match_id == null,
-                ingestHint: logUpload.ingestHint
+                ingestClient: logUpload.ingestClient
               }}
             />
           </DialogContent>

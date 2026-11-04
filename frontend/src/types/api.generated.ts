@@ -1918,50 +1918,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/deadlock/lobby-callback/{token}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Report a bot lobby's match
-         * @description Permission: public; the one-time token in the path is the credential. The game source reports the match id of a bot-created lobby here (body: a bare number or string, a JSON object with match_id, or plain digits; header X-Callback-Secret is checked when sent). Always 204 -- for an unknown, answered or expired token too, so it reveals nothing. The same path with /settings acknowledges the source's settings notifications and ignores them.
-         *
-         *     RPC subject: `rpc.balancer.custom.bot_lobby_callback`
-         */
-        post: operations["post__api_v1_deadlock_lobby_callback__token_"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/deadlock/lobby-callback/{token}/settings": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Report a bot lobby's match
-         * @description Permission: public; the one-time token in the path is the credential. The game source reports the match id of a bot-created lobby here (body: a bare number or string, a JSON object with match_id, or plain digits; header X-Callback-Secret is checked when sent). Always 204 -- for an unknown, answered or expired token too, so it reveals nothing. The same path with /settings acknowledges the source's settings notifications and ignores them.
-         *
-         *     RPC subject: `rpc.balancer.custom.bot_lobby_callback`
-         */
-        post: operations["post__api_v1_deadlock_lobby_callback__token__settings"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/disciplines": {
         parameters: {
             query?: never;
@@ -2574,6 +2530,50 @@ export interface paths {
         get: operations["get__api_v1_game_accounts__id__rank_history"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lobby-bot/callback/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Report a bot lobby's match
+         * @description Permission: public; the one-time token in the path is the credential. The game source reports the match id of a bot-created lobby here (body: a bare number or string, a JSON object with match_id, or plain digits; header X-Callback-Secret is checked when sent). Always 204 -- for an unknown, answered or expired token too, so it reveals nothing. The same path with /settings acknowledges the source's settings notifications and ignores them.
+         *
+         *     RPC subject: `rpc.balancer.custom.bot_lobby_callback`
+         */
+        post: operations["post__api_v1_lobby_bot_callback__token_"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lobby-bot/callback/{token}/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Report a bot lobby's match
+         * @description Permission: public; the one-time token in the path is the credential. The game source reports the match id of a bot-created lobby here (body: a bare number or string, a JSON object with match_id, or plain digits; header X-Callback-Secret is checked when sent). Always 204 -- for an unknown, answered or expired token too, so it reveals nothing. The same path with /settings acknowledges the source's settings notifications and ignores them.
+         *
+         *     RPC subject: `rpc.balancer.custom.bot_lobby_callback`
+         */
+        post: operations["post__api_v1_lobby_bot_callback__token__settings"];
         delete?: never;
         options?: never;
         head?: never;
@@ -13353,6 +13353,7 @@ export interface components {
             icon: string | null;
             /** Identity Provider */
             identity_provider: string | null;
+            ingest_client: components["schemas"]["app.IngestClientRead"] | null;
             /** Kinds */
             kinds: {
                 [key: string]: string;
@@ -13480,6 +13481,16 @@ export interface components {
              */
             recommended_min: number | null;
             role: components["schemas"]["app.RoleRef"];
+        };
+        /**
+         * IngestClientRead
+         * @description Mirrors ``shared.disciplines.lobby.IngestClient``.
+         */
+        "app.IngestClientRead": {
+            /** Installer Url */
+            installer_url: string;
+            /** Instructions Url */
+            instructions_url: string;
         };
         /**
          * LobbyBotRead
@@ -39835,122 +39846,6 @@ export interface operations {
             };
         };
     };
-    post__api_v1_deadlock_lobby_callback__token_: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                token: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Success */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
-            429: {
-                headers: {
-                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
-                    "Retry-After"?: number;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    post__api_v1_deadlock_lobby_callback__token__settings: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                token: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Success */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
-            429: {
-                headers: {
-                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
-                    "Retry-After"?: number;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
     get__api_v1_disciplines: {
         parameters: {
             query?: {
@@ -42269,6 +42164,122 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["stats.RankHistoryResponse"];
                 };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post__api_v1_lobby_bot_callback__token_: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post__api_v1_lobby_bot_callback__token__settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
             404: {

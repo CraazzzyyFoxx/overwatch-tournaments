@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 from shared.core.social import SocialProvider
 from shared.disciplines.deadlock.ladder import NATIVE_LADDER
 from shared.disciplines.deadlock.stats import EVENT_TYPES, STAT_DEFS
-from shared.disciplines.lobby import LobbyBotSpec
+from shared.disciplines.lobby import IngestClient, LobbyBotSpec
 from shared.disciplines.spec import DimensionSpec, DisciplineSpec, FormatDimensionSpec, RoleSpec, TeamFormatPreset
 
 if TYPE_CHECKING:
@@ -218,6 +218,10 @@ SPEC = DisciplineSpec(
         regions=SERVER_REGIONS, default_region="europe", create=_create_lobby, match_id=_lobby_match_id
     ),
     ingest_status=_ingest_status,
+    ingest_client=IngestClient(
+        instructions_url="https://deadlock-api.com/ingest-cache",
+        installer_url="https://github.com/deadlock-api/deadlock-api-ingest/releases/latest/download/deadlock-api-ingest-setup.exe",
+    ),
     dimensions=(AGENT,),
     team_format_presets=(OPEN_6V6, OPEN_4V4),
     flex=False,

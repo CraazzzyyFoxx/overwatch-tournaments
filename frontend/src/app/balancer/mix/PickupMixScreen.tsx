@@ -399,7 +399,7 @@ function PickupMixDetail({ initialGame }: Readonly<{ initialGame: CustomGame }>)
         nextMapName={nextMapName}
         queuePosition={myQueuePosition}
         lobbies={lobbies.map((row) => ({ lobbyIndex: row.lobby_index, state: row.state ?? "idle" }))}
-        ingestHint={ingest.of(myMemberId) === "inactive"}
+        ingestClient={ingest.of(myMemberId) === "inactive" ? (metadataQuery.data?.discipline.ingest_client ?? null) : null}
         onSetAway={(away) => setMyAway.mutate(away)}
         roomHref={
           myLobby != null && (playsInRoom(myLobby.state) || myLobby.state === "live")

@@ -114,15 +114,16 @@ describe("MatchImport search by players", () => {
     expect(raw.textContent).not.toContain("HTTPError");
   });
 
-  it("shows how to install the ingest tool to a Deadlock round that is searching or gave up, and to nobody else", async () => {
-    const searching = await mount({ search: "searching", searchable: true, ingestHint: true });
-    const gaveUp = await mount({ search: "not_found", searchable: true, ingestHint: true });
+  it("links the game's uploader to a round that is searching or gave up, and to nobody else", async () => {
+    const client = { instructions_url: "https://uploader.example/how", installer_url: "https://uploader.example/setup.exe" };
+    const searching = await mount({ search: "searching", searchable: true, ingestClient: client });
+    const gaveUp = await mount({ search: "not_found", searchable: true, ingestClient: client });
     const otherGame = await mount({ search: "searching", searchable: true });
 
     for (const scope of [searching, gaveUp]) {
-      expect(scope.querySelector('a[href="https://deadlock-api.com/ingest-cache"]')).not.toBeNull();
-      expect(scope.querySelector('a[href$="deadlock-api-ingest-setup.exe"]')).not.toBeNull();
+      expect(scope.querySelector(`a[href="${client.instructions_url}"]`)).not.toBeNull();
+      expect(scope.querySelector(`a[href="${client.installer_url}"]`)).not.toBeNull();
     }
-    expect(otherGame.querySelector('a[href="https://deadlock-api.com/ingest-cache"]')).toBeNull();
+    expect(otherGame.querySelector(`a[href="${client.instructions_url}"]`)).toBeNull();
   });
 });

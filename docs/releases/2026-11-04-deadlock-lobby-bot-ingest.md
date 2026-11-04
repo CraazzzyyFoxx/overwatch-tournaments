@@ -29,9 +29,9 @@ payload and emits `pickup_mix_changed(change="bot_lobby")`.
   resolves for the viewer (null anonymously) instead of being scoped to a credential's sole workspace.
 
 **Match id.** Two paths, whichever lands first:
-- Callback: `POST /api/v1/deadlock/lobby-callback/{token}`, `AuthNone`, served by a dedicated gateway handler
+- Callback: `POST /api/v1/lobby-bot/callback/{token}` (game-neutral: the token names the party), `AuthNone`, served by a dedicated gateway handler
   (not the JSON dispatcher) that relays the raw body (16 KiB cap, 413 above) and `X-Callback-Secret` to
-  `rpc.balancer.custom.bot_lobby_callback`. `POST …/lobby-callback/{token}/settings` is acknowledged with 204 at the
+  `rpc.balancer.custom.bot_lobby_callback`. `POST …/callback/{token}/settings` is acknowledged with 204 at the
   gateway and never reaches the worker. The token is one-time and stored as SHA-256; the secret is compared with
   `hmac.compare_digest` when deadlock-api sent one. An unknown, answered or expired token, a wrong secret or a body
   without a match id answers 204 like a good one (no oracle). The body format is not documented by deadlock-api, so
@@ -54,7 +54,9 @@ endpoint internal: its contract may change.
 
 **Module hooks.** `DisciplineSpec.lobby_bot` and `DisciplineSpec.ingest_status`; Deadlock implements them in
 `shared/disciplines/deadlock/lobby.py` and `ingest_status.py`. Discipline descriptor: `capabilities.lobby_bot`,
-`capabilities.ingest_status`, `lobby_bot: {regions, default_region} | null`.
+`capabilities.ingest_status`, `lobby_bot: {regions, default_region} | null`. `DisciplineSpec.ingest_client` names
+where a player gets the uploader (`ingest_client: {instructions_url, installer_url} | null` on the descriptor); the
+frontend hints render only those links, so no game's URLs live in core.
 
 **History wire.** `rpc.balancer.custom.match_history` rows: `match_search_error` is also set while `match_search` is
 `searching` (`no_match_yet` or `source_unavailable`), and `match_search_next_attempt_at` says when the next attempt
@@ -94,7 +96,8 @@ pending match id is lost, and the host files it by hand; hosts' remembered regio
 | --- | --- |
 | `POST …/custom-games/{game_id}/bot-lobby` (`AuthRequired`) | additive |
 | `GET …/custom-games/{game_id}/ingest-status` (`AuthRequired`) | additive |
-| `POST /api/v1/deadlock/lobby-callback/{token}` (`AuthNone`, 204) and `…/settings` (204 at the gateway) | additive, public |
+| `POST /api/v1/lobby-bot/callback/{token}` (`AuthNone`, 204) and `…/settings` (204 at the gateway) | additive, public |
 | Mix payload `bot_lobby` per lobby, `bot_lobby_region` | additive |
 | Discipline `capabilities.lobby_bot`, `capabilities.ingest_status`, `lobby_bot` | additive |
+| Discipline descriptor `ingest_client` (`instructions_url`, `installer_url` or null): the links the hints show | additive |
 | Match history `match_search_error` while searching, `match_search_next_attempt_at` | additive / changed meaning |

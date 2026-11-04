@@ -195,6 +195,7 @@ class CustomMixPublicReadTests(IsolatedAsyncioTestCase):
                     "team1_voice_channel_id": None,
                     "team2_voice_channel_id": None,
                     "live_encounter_id": None,
+                    "bot_lobby": None,
                     # Counted by the list too, so a row can say what each lobby has played.
                     "matches_count": 0,
                 }
@@ -375,7 +376,13 @@ class CustomMixPublicReadTests(IsolatedAsyncioTestCase):
         service.ranks.resolve = AsyncMock(return_value={})
         service.grid = AsyncMock(return_value=object())
 
-        with patch.object(custom, "custom_game_service", service):
+        bot_lobbies = MagicMock()
+        bot_lobbies.bot_lobbies.for_encounters = AsyncMock(return_value={})
+        bot_lobbies.region_for = AsyncMock(return_value=None)
+        with (
+            patch.object(custom, "custom_game_service", service),
+            patch.object(custom, "bot_lobby_service", bot_lobbies),
+        ):
             read = await self._call("rpc.balancer.custom.get", {"workspace_id": 7, "custom_game_id": 3})
 
         self.assertTrue(read["ok"], read)

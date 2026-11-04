@@ -424,7 +424,9 @@ export function MixRoom({ initialGame, lobbyIndex }: Readonly<{ initialGame: Cus
               />
             </Card>
           ) : null}
-          {canWrite && capabilities?.ingest_status === true ? <MixIngestGuide warn={ingestWarn} /> : null}
+          {canWrite && capabilities?.ingest_status === true && metadataQuery.data?.discipline.ingest_client ? (
+            <MixIngestGuide warn={ingestWarn} client={metadataQuery.data.discipline.ingest_client} />
+          ) : null}
           {center}
         </section>
       </div>

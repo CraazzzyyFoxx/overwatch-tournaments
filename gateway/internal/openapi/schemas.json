@@ -15514,6 +15514,16 @@
           ],
           "title": "Identity Provider"
         },
+        "ingest_client": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/app.IngestClientRead"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "kinds": {
           "additionalProperties": {
             "type": "string"
@@ -15547,7 +15557,8 @@
         "flex",
         "capabilities",
         "short_name",
-        "icon"
+        "icon",
+        "ingest_client"
       ],
       "title": "DisciplineDescriptor",
       "type": "object"
@@ -15905,6 +15916,25 @@
         "role"
       ],
       "title": "FormatRuleWire",
+      "type": "object"
+    },
+    "app.IngestClientRead": {
+      "description": "Mirrors ``shared.disciplines.lobby.IngestClient``.",
+      "properties": {
+        "installer_url": {
+          "title": "Installer Url",
+          "type": "string"
+        },
+        "instructions_url": {
+          "title": "Instructions Url",
+          "type": "string"
+        }
+      },
+      "required": [
+        "instructions_url",
+        "installer_url"
+      ],
+      "title": "IngestClientRead",
       "type": "object"
     },
     "app.LobbyBotRead": {

@@ -1166,7 +1166,7 @@
       "disconnectBody": "The account stays on your profile, unverified, until you connect it again. Only an administrator can remove it from your profile completely.",
       "connectableTitle": "Available to connect",
       "connect": "Connect",
-      "steamIngestHint": "To have Deadlock mix matches found automatically, install deadlock-api-ingest and keep it running while you play."
+      "ingestHint": "To have {game} mix matches found automatically, install the game's match uploader and keep it running while you play."
     },
     "stream": {
       "title": "Live stream",

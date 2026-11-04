@@ -14,6 +14,7 @@ __all__ = (
     "DisciplineDescriptor",
     "DisciplineMetadata",
     "EventTypeRead",
+    "IngestClientRead",
     "LobbyBotRead",
     "NativeTierRead",
     "OntologyRole",
@@ -44,6 +45,13 @@ class DisciplineCapabilities(BaseModel):
     analytics: bool
 
 
+class IngestClientRead(BaseModel):
+    """Mirrors ``shared.disciplines.lobby.IngestClient``."""
+
+    instructions_url: str
+    installer_url: str
+
+
 class DisciplineDescriptor(BaseModel):
     code: str
     name: str
@@ -60,6 +68,8 @@ class DisciplineDescriptor(BaseModel):
     short_name: str
     #: The icon's public URL, or ``None`` (the frontend draws the monogram).
     icon: str | None
+    #: Where a player gets the client that uploads their matches; ``None`` when the game names none.
+    ingest_client: IngestClientRead | None
 
 
 class RoleDimensionRead(BaseModel):
