@@ -27,6 +27,7 @@ import {
   type PickupRecordOutcomeInput,
 } from "@/app/balancer/mix/pickup-lineup";
 import { voiceRefusal } from "@/app/balancer/mix/pickup-voice";
+import { botLobbyRefusal } from "@/app/balancer/mix/pickup-bot-lobby";
 import {
   workspacePlayerKeys,
   workspacePlayerService,
@@ -87,6 +88,7 @@ export function usePickupMix(
   const tRoom = useTranslations("mixes.room");
   const tDraft = useTranslations("mixes.draft");
   const tToast = useTranslations("mixes.toast");
+  const tBotLobby = useTranslations("mixes.botLobby");
 
   // Every open mix of the workspace, whatever its game: the voice panel names the channels this workspace's OTHER
   // open mixes already took, and voice channels are shared across games. The same page the directory's "now" block
@@ -409,6 +411,27 @@ export function usePickupMix(
     onError: (error) => notify.apiError(error),
   });
 
+  /** The host's bot opens the lobby's in-game party for its live match; the code lands in the lobby's `lobby_code`. */
+  const createBotLobby = useMutation({
+    mutationFn: ({ lobbyIndex, region }: { lobbyIndex: number; region: string }) =>
+      customGameService.createBotLobby(workspaceId, selectedGameId as number, { lobby_index: lobbyIndex, region }),
+    onSuccess: (game) => {
+      applyGame(game);
+      notify.success(tBotLobby("created"));
+    },
+    onError: (error) => {
+      const refusal = botLobbyRefusal(error);
+      if (refusal == null) return notify.apiError(error);
+      notify.error(
+        refusal.code === "lobby_bot_rate_limited"
+          ? refusal.minutes == null
+            ? tBotLobby("errors.rateLimitedLater")
+            : tBotLobby("errors.rateLimited", { minutes: refusal.minutes })
+          : tBotLobby(`errors.${refusal.code}`)
+      );
+    },
+  });
+
   /**
    * Which balance option the mix shows -- stored on the mix, so a viewer reads
    * the matchup the host is calling out instead of whatever their own browser
@@ -704,6 +727,7 @@ export function usePickupMix(
     undoMatch,
     setNextMap,
     setLobbyCode,
+    createBotLobby,
     setVariantIndex,
     setLobbyCount,
     closeMix,

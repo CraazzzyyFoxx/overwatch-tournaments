@@ -1124,7 +1124,9 @@ class CustomGameRoundStoreTests(EncounterWriterCase):
             s.add(oasis)
             await s.commit()
         self.addAsyncCleanup(self._drop_maps, [oasis.id])
-        bound, failed, pending, done, bare, searching, gave_up = [await self._record(self._draft()) for _ in range(7)]
+        bound, failed, pending, done, bare, searching, gave_up, unreachable = [
+            await self._record(self._draft()) for _ in range(8)
+        ]
 
         def search(
             encounter_id: int, status: models.MatchSearchStatus, last_error: str | None = None
@@ -1162,11 +1164,15 @@ class CustomGameRoundStoreTests(EncounterWriterCase):
                     job(done, IngestJobStatus.DONE, 0),
                     # A bound match wins over a search too.
                     search(bound, models.MatchSearchStatus.NOT_FOUND, "ambiguous: 1, 2"),
-                    # A search still looking is something still coming, even over a failed job; its retry reason
-                    # is no reason it gave up.
+                    # A search still looking is something still coming, even over a failed job; its retry reason says
+                    # why it is still waiting, not why it gave up.
                     search(searching, models.MatchSearchStatus.PENDING, "no_match_yet"),
                     job(searching, IngestJobStatus.FAILED, 0),
                     search(gave_up, models.MatchSearchStatus.NOT_FOUND, "no_linked_accounts"),
+                    # Anything but "no match fit yet" means the source could not be asked.
+                    search(
+                        unreachable, models.MatchSearchStatus.PENDING, "deadlock-api answered 429 to a match search"
+                    ),
                 ]
             )
             await s.flush()
@@ -1186,12 +1192,22 @@ class CustomGameRoundStoreTests(EncounterWriterCase):
                 pending: (None, "processing", None, None),
                 done: (None, None, None, None),
                 bare: (None, None, None, None),
-                searching: (None, "processing", "searching", None),
+                searching: (None, "processing", "searching", "no_match_yet"),
                 gave_up: (None, None, "not_found", "no_linked_accounts"),
+                unreachable: (None, "processing", "searching", "source_unavailable"),
             },
             {
                 row["id"]: (row["stats_match_id"], row["log_state"], row["match_search"], row["match_search_error"])
                 for row in rows
+            },
+        )
+        # The next attempt is told only while the search is still looking.
+        self.assertEqual(
+            {searching: True, unreachable: True, gave_up: False, bound: False},
+            {
+                row["id"]: row["match_search_next_attempt_at"] is not None
+                for row in rows
+                if row["id"] in (searching, unreachable, gave_up, bound)
             },
         )
 

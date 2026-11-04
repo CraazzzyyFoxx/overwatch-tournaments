@@ -128,6 +128,7 @@ describe("MatchHistoryList log actions", () => {
       fileUpload: true,
       matchFetch: false,
       matchSearch: false,
+      ingestHint: false,
     });
 
     const scopes = [...scope.querySelectorAll('[data-testid="upload-dialog"]')].map((node) =>
@@ -153,6 +154,7 @@ describe("MatchHistoryList log actions", () => {
       fileUpload: false,
       matchFetch: true,
       matchSearch: true,
+      ingestHint: true,
     });
 
     expect(scope.querySelector('[data-testid="upload-dialog"]')).toBeNull();
@@ -165,6 +167,7 @@ describe("MatchHistoryList log actions", () => {
       fileUpload: false,
       matchFetch: true,
       matchSearch: true,
+      ingestHint: true,
     });
     expect(fetching.querySelector('button[aria-label="Import statistics by match ID"]')).not.toBeNull();
 
@@ -173,7 +176,8 @@ describe("MatchHistoryList log actions", () => {
       onUploaded: vi.fn(),
       fileUpload: true,
       matchFetch: false,
-      matchSearch: false
+      matchSearch: false,
+      ingestHint: false
     });
     expect(notFetching.querySelector('button[aria-label="Import statistics by match ID"]')).toBeNull();
 

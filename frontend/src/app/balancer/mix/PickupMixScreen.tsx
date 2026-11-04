@@ -14,7 +14,9 @@ import { PickupMySeatPanel } from "@/app/balancer/mix/PickupMySeatPanel";
 import { PickupTeamsPanel } from "@/app/balancer/mix/PickupTeamsPanel";
 import { PickupVoicePanel } from "@/app/balancer/mix/PickupVoicePanel";
 import { MatchHistoryList } from "@/app/balancer/mix/_components/MatchHistoryList";
+import { useMixIngest } from "@/app/balancer/mix/_hooks/useMixIngest";
 import { useRoomAutoOpen } from "@/app/balancer/mix/_hooks/useRoomAutoOpen";
+import { botLobbyOptions } from "@/app/balancer/mix/pickup-bot-lobby";
 import { lobbyIndexFromLetter, lobbyLetter, mixRoomHref, playsInRoom } from "@/app/balancer/mix/pickup-chrome";
 import { navigateRoom } from "@/app/balancer/mix/_room/room-navigation";
 import { soleMap } from "@/app/balancer/mix/pickup-map-roll";
@@ -152,6 +154,7 @@ function PickupMixDetail({ initialGame }: Readonly<{ initialGame: CustomGame }>)
     undoMatch,
     setNextMap,
     setLobbyCode,
+    createBotLobby,
     setVariantIndex,
     setLobbyCount,
     closeMix,
@@ -235,6 +238,7 @@ function PickupMixDetail({ initialGame }: Readonly<{ initialGame: CustomGame }>)
   const matches = matchesQuery.data ?? [];
   const mySeat = mySeatQuery.data;
   const myMemberId = mySeat?.seat?.workspace_member_id ?? null;
+  const ingest = useMixIngest(game, isSignedIn && metadataQuery.data?.discipline.capabilities.ingest_status === true);
   // The lobby the viewer's seat names: its seats or, while it drafts, its draft pool (balancer-service
   // `current_lobbies`).
   const myLobby = lobbies.find((row) => row.lobby_index === mySeat?.seat?.current_lobby);
@@ -327,6 +331,9 @@ function PickupMixDetail({ initialGame }: Readonly<{ initialGame: CustomGame }>)
         onNextMapChange={(mapId) => setNextMap.mutate({ lobbyIndex: shownLobby, mapId })}
         settingLobbyCode={setLobbyCode.isPending}
         onLobbyCodeChange={(lobbyCode) => setLobbyCode.mutate({ lobbyIndex: shownLobby, lobbyCode })}
+        botLobby={botLobbyOptions(metadataQuery.data, game, canWrite, createBotLobby.isPending, (region) =>
+          createBotLobby.mutate({ lobbyIndex: shownLobby, region })
+        )}
         closingMix={closeMix.isPending}
         onCloseMix={() => closeMix.mutate()}
         onRenameTeam={(teamIndex, name) => setTeamNames.mutateAsync({ teamIndex, name })}
@@ -392,6 +399,7 @@ function PickupMixDetail({ initialGame }: Readonly<{ initialGame: CustomGame }>)
         nextMapName={nextMapName}
         queuePosition={myQueuePosition}
         lobbies={lobbies.map((row) => ({ lobbyIndex: row.lobby_index, state: row.state ?? "idle" }))}
+        ingestHint={ingest.of(myMemberId) === "inactive"}
         onSetAway={(away) => setMyAway.mutate(away)}
         roomHref={
           myLobby != null && (playsInRoom(myLobby.state) || myLobby.state === "live")

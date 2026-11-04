@@ -113,7 +113,7 @@ The worker subscribes to `rpc.balancer.*` and consumes one durable job queue. Me
 | `rpc.balancer.teams.*` / `admin.teams_import` | Team roster import from an uploaded file, and export of a tournament's registered teams |
 | `rpc.balancer.jobs.*` | Async balancing: `create` (uploaded roster), `create_for_tournament` (the tournament's own pool, nothing uploaded), `status`, `result` |
 | `rpc.balancer.draft.*` | Board and session reads, feasibility/suggestions/pick options, admin lifecycle, pick actions, export |
-| `rpc.balancer.custom.*` | Mix lifecycle, lineup, host/co-host grants, role mask, balance, seat swaps, outcomes, rotation, Discord posts (`post_signup`, `post_discord`, `delete_discord_post`), the bot's render input (`discord_view`, internal), the player's own seat (`self_*`, including `self_current` — the newest open mix of a workspace, for the bot's `/mix`) |
+| `rpc.balancer.custom.*` | Mix lifecycle, lineup, host/co-host grants, role mask, balance, seat swaps, outcomes, rotation, Discord posts (`post_signup`, `post_discord`, `delete_discord_post`), the bot's render input (`discord_view`, internal), the player's own seat (`self_*`, including `self_current` — the newest open mix of a workspace, for the bot's `/mix`), the game source's bot lobby (`create_bot_lobby`, `ingest_status`, `bot_lobby_callback`; see **Bot lobby** below) |
 | `rpc.balancer.players.*` | Workspace roster page, rank writes per layer, ranking-author list |
 | `rpc.balancer.ranks.list` | Read-only admin overview: every rank value of every workspace member, one flat row per value |
 
@@ -153,6 +153,19 @@ mix is finished — the bot then leaves that card as it is. Unknown mix → `not
 Rendering (the cards, the lineup picture, its fonts and art) and the projection that keeps live
 cards in step with the board live in discord-service: it consumes the `pickup_mix_changed` facts
 this service emits and re-renders from `discord_view`.
+
+**Bot lobby.** For a discipline with a `lobby_bot` hook (Deadlock) the host has the game source's bot open the
+in-game party of a lobby's live match (`create_bot_lobby`: 409 `no_live_match`, 422 `unsupported_lobby_bot` /
+`invalid_region`, 429 `lobby_bot_rate_limited:<s>` with `Retry-After`, 503 `lobby_bot_failed`). The party code becomes
+`mix.lobby.lobby_code`, the host's region is remembered in `balancer.user_config.bot_lobby_regions`, and the
+row in `mix.bot_lobby` (token stored as SHA-256) is dropped with its encounter. The match id arrives by the source's
+callback (`bot_lobby_callback`, public, 204 for every token; the gateway relays the raw body and `X-Callback-Secret`)
+or by `bot_lobby_poll`, a 60 s tick under the Redis lease `balancer:bot_lobby:poll:leader` that asks the source for
+parties younger than 20 min; stats-service files that id as the round's import. `ingest_status` answers per seated
+player whether their own client uploads matches (`null` = unknown), cached 15 min per account in Redis. The mix read
+carries `bot_lobby` per lobby and the viewer's `bot_lobby_region`; `match_history` rows also carry
+`match_search_error` while a search is `searching` (`no_match_yet`, `source_unavailable`) and
+`match_search_next_attempt_at`.
 
 **Events published to the broker.** `BalancerJobEvent` onto `balancer_jobs`, which this same
 worker consumes — job creation and job execution are one process, split by a queue rather than by a
@@ -318,6 +331,7 @@ Writes, in the `balancer`, `mix` and `draft` schemas unless noted:
   settings (solver knobs, points per win, rating mode); roster rules belong to each mix's frozen format.
 - `mix.custom_game`, `co_host`, `lobby`, `player`, `player_role`, `team_name` — mixes. A lobby's
   `live_encounter_id` points at its started, unrecorded match.
+- `mix.bot_lobby` — the game bot's party for a live match (code, callback token hash and secret, reported match id).
 - `balancer.member_rank` — both rank layers.
 - `balancer.member_hidden_rating` — the mix ranker's hidden ratings (derived; rebuildable from the recorded rounds).
 - `mix.round`, `round_member` — what only the balancer reads about a recorded round: its lobby,
@@ -357,7 +371,8 @@ Entity diagrams: [`../../docs/database_erd.md`](../../docs/database_erd.md) —
   channels when a workspace admin sets the mix channel / voice category / general voices, the
   category's voices for a mix's voice picker, and voice moves.
 
-No external APIs, no S3, no outbound `proxy` egress.
+The only external API is the game source behind the bot lobby (deadlock-api, called directly with
+`X-API-KEY` when `DEADLOCK_API_KEY` is set); no S3, no outbound `proxy` egress.
 
 ## Configuration
 
@@ -373,6 +388,10 @@ No external APIs, no S3, no outbound `proxy` egress.
   (QoS is per consumer, not per channel). The job consumer's prefetch is fixed at 2.
 - `WORKER_METRICS_PORT` — Prometheus scrape port.
 - `REDIS_URL`, `RABBITMQ_URL`, `POSTGRES_*` — inherited from `common.env`.
+- `PUBLIC_SITE_URL` — the public origin of the site. The bot lobby's callback URL is built from it and omitted for
+  a localhost value (the poll then finds the match id); also the Discord card's board link.
+- `DEADLOCK_API_KEY` (optional, recommended) — raises deadlock-api's per-IP limits for lobby creation, the poll and
+  ingest status.
 
 Balancer algorithm parameters are *not* environment configuration. Defaults, limits and presets live
 in `src/services/balancer/config/` and are served by `rpc.balancer.config`; persisted overrides live

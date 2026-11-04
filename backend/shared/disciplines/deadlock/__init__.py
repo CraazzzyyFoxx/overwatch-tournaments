@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 from shared.core.social import SocialProvider
 from shared.disciplines.deadlock.ladder import NATIVE_LADDER
 from shared.disciplines.deadlock.stats import EVENT_TYPES, STAT_DEFS
+from shared.disciplines.lobby import LobbyBotSpec
 from shared.disciplines.spec import DimensionSpec, DisciplineSpec, FormatDimensionSpec, RoleSpec, TeamFormatPreset
 
 if TYPE_CHECKING:
@@ -16,6 +17,7 @@ if TYPE_CHECKING:
 
     from shared.catalog_sync import CatalogImageMirror, CatalogSyncProgress
     from shared.disciplines.ingest import DecodeContext, MatchCandidate, MatchQuery
+    from shared.disciplines.lobby import BotLobbyParty, BotLobbyRequest, IngestStatus
     from shared.disciplines.spec import CollectionHandler
     from shared.domain.pick_ban_rules.presets import Preset
     from shared.models.identity.auth_user import AuthUser
@@ -74,6 +76,57 @@ async def _search_matches(query: MatchQuery) -> Sequence[MatchCandidate]:
     from shared.disciplines.deadlock.search import search_matches
 
     return await search_matches(query)
+
+
+#: deadlock-api ``ServerRegion``: the bot lobby's ``server_region``.
+SERVER_REGIONS = (
+    "europe",
+    "eu_amsterdam",
+    "eu_poland",
+    "eu_stockholm",
+    "eu_helsinki",
+    "eu_falkenstein",
+    "eu_spain",
+    "eu_east",
+    "eu_london",
+    "south_africa",
+    "us_west",
+    "us_east",
+    "us_north_central",
+    "us_south_central",
+    "us_south_east",
+    "us_south_west",
+    "australia",
+    "singapore",
+    "japan",
+    "hong_kong",
+    "mp_hong_kong",
+    "seoul",
+    "chile",
+    "peru",
+    "argentina",
+    "south_america",
+)
+
+
+async def _create_lobby(request: BotLobbyRequest) -> BotLobbyParty:
+    # Imported on call: the bot lobby opens an HTTP client.
+    from shared.disciplines.deadlock.lobby import create_party
+
+    return await create_party(request)
+
+
+async def _lobby_match_id(party_id: str) -> str | None:
+    from shared.disciplines.deadlock.lobby import party_match_id
+
+    return await party_match_id(party_id)
+
+
+async def _ingest_status(account_ids: Sequence[str]) -> dict[str, IngestStatus | None]:
+    # Imported on call, like the fetcher: the status read opens an HTTP client.
+    from shared.disciplines.deadlock.ingest_status import ingest_status
+
+    return await ingest_status(account_ids)
 
 
 #: The collection RPCs the collector serves (``handlers.HANDLERS`` holds the bodies) — LoL's set.
@@ -161,6 +214,10 @@ SPEC = DisciplineSpec(
     ingestors={SOURCE_KIND: _decode},
     match_fetchers={SOURCE_KIND: _fetch_match},
     match_searchers={SOURCE_KIND: _search_matches},
+    lobby_bot=LobbyBotSpec(
+        regions=SERVER_REGIONS, default_region="europe", create=_create_lobby, match_id=_lobby_match_id
+    ),
+    ingest_status=_ingest_status,
     dimensions=(AGENT,),
     team_format_presets=(OPEN_6V6, OPEN_4V4),
     flex=False,

@@ -63,7 +63,7 @@ func Groups() (public, admin []openapi.Group) {
 		{Tag: "Streams", Description: "Live stream channels for a tournament and the match timestamps inside participants' POV recordings (public reads).",
 			Routes: stream.PublicRoutes},
 		{Tag: "Balancer & Draft", Description: "Balancer config, draft spectating reads, balance jobs.",
-			Routes: concat(balancer.PublicRoutes, balancer.DraftReadRoutes, balancer.JobRoutes, balancer.DraftRoutes, balancer.BinaryPublicDocRoutes)},
+			Routes: concat(balancer.PublicRoutes, balancer.DraftReadRoutes, balancer.JobRoutes, balancer.DraftRoutes, balancer.BinaryPublicDocRoutes, balancer.LobbyCallbackDocRoutes)},
 		{Tag: "Ranks", Description: "OverFast rank history (public reads).",
 			Routes: openapi.PublicOnly(stats.Routes)},
 		{Tag: "Match Ingest", Description: "Submit one canonical owt.match/1 match document with a workspace API key (stats.ingest scope) and poll its ingest job.",

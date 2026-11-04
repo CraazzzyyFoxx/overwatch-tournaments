@@ -5,6 +5,7 @@ import { AlertTriangle, CheckCircle2, Hourglass } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { IngestLinks } from "@/components/IngestLinks";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Spinner } from "@/components/ui/spinner";
 import { ApiError } from "@/lib/api/error";
 import { encounterQueryKeys } from "@/lib/encounters/query-keys";
+import { useFormatter } from "@/lib/datetime/client";
 import { notify } from "@/lib/notify";
 import { customGameKeys, customGameService } from "@/services/custom-game.service";
 import pickBanService from "@/services/pickBan.service";
@@ -32,10 +34,9 @@ const PENDING_POLL_MS = 30_000;
 
 /**
  * Where a match id is filed: a tournament encounter's games (`games` are the positions it may be filed for: one,
- * a captain's report, hides the picker; `admin` uses the organizer routes, whose rows carry the warnings) or a
- * recorded round of a mix (one game by construction, always the organizer read; `onSubmitted` runs after a filed
  * id or a started search, so the caller can refresh what it changes; `search` is the round's match being looked up
- * by its players, or given up on for `searchError`; `searchable` lets a search that is not looking start again).
+ * by its players, or given up on for `searchError` (while still looking, `searchNextAttemptAt` is when it tries again);
+ * `searchable` lets a search that is not looking start again; `ingestHint` adds how to install the game's ingest tool).
  */
 export type MatchImportScope =
   | { encounterId: number; games: ReadonlyArray<{ id: number; position: number }>; admin?: boolean }
@@ -45,7 +46,9 @@ export type MatchImportScope =
       onSubmitted: () => void;
       search?: "searching" | "not_found" | null;
       searchError?: string | null;
+      searchNextAttemptAt?: string | null;
       searchable?: boolean;
+      ingestHint?: boolean;
     };
 
 /**
@@ -57,6 +60,7 @@ export type MatchImportScope =
  */
 export function MatchImport({ scope }: Readonly<{ scope: MatchImportScope }>) {
   const t = useTranslations("pickBan.room.matchImport");
+  const format = useFormatter();
   const inputId = useId();
   const queryClient = useQueryClient();
   const [picked, setPicked] = useState<number | null>(null);
@@ -123,15 +127,23 @@ export function MatchImport({ scope }: Readonly<{ scope: MatchImportScope }>) {
     mix.search !== "searching" &&
     imports.isSuccess &&
     rows.every((row) => row.status === "failed");
-  // Why the search gave up, in words; a source's own refusal reads as it came.
-  const searchError = mix?.search === "not_found" ? mix.searchError : null;
+  // Why the search is not done, in words: a known code reads in the reader's language, anything else as a generic
+  // temporary refusal -- never the source's own text.
+  const searchError = mix?.search != null ? mix.searchError : null;
   const reason = !searchError
     ? null
-    : searchError === "no_linked_accounts" || searchError === "not_found_in_window"
+    : searchError === "no_linked_accounts" ||
+        searchError === "not_found_in_window" ||
+        searchError === "no_match_yet" ||
+        searchError === "source_unavailable"
       ? t(`autoSearch.reasons.${searchError}`)
       : searchError.startsWith("ambiguous: ")
         ? t("autoSearch.reasons.ambiguous", { ids: searchError.slice("ambiguous: ".length) })
-        : searchError;
+        : t("autoSearch.reasons.other");
+  const nextAttempt =
+    mix?.search === "searching" && mix.searchNextAttemptAt
+      ? format.dateTime(new Date(mix.searchNextAttemptAt), { hour: "2-digit", minute: "2-digit" })
+      : null;
 
   return (
     <section className="flex flex-col gap-2">
@@ -181,6 +193,15 @@ export function MatchImport({ scope }: Readonly<{ scope: MatchImportScope }>) {
             </p>
           ) : null}
           {reason ? <p className="text-caption text-[color:var(--aqt-fg-dim)]">{reason}</p> : null}
+          {nextAttempt ? (
+            <p className="text-caption text-[color:var(--aqt-fg-dim)]">{t("autoSearch.nextAttempt", { time: nextAttempt })}</p>
+          ) : null}
+          {mix?.ingestHint && mix.search ? (
+            <div className="flex flex-col gap-1 text-caption text-[color:var(--aqt-fg-muted)]">
+              <p>{t("autoSearch.ingestHint")}</p>
+              <IngestLinks />
+            </div>
+          ) : null}
           {canSearch ? (
             <Button
               type="button"

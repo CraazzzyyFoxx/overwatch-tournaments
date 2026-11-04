@@ -33,6 +33,7 @@ type RouteSpec struct {
 	Path         []string      // path params copied verbatim into the body (by name)
 	Query        []string      // query params copied into data["query"]
 	AllQuery     bool          // forward ALL query params into data["query"] (for pagination/filter routes)
+	NoWorkspaceFill bool       // AuthOptional public read: the identity must not scope it to the credential's sole workspace
 	Body         bool          // merge the JSON request body into data["payload"]
 	BodyOptional bool          // documentation only: the JSON body may be omitted (OpenAPI requestBody not required)
 	Auth         AuthMode      // identity requirement

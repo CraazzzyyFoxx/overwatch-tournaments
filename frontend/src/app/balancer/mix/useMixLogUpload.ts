@@ -12,7 +12,9 @@ import { useAuthProfileStore } from "@/stores/auth-profile.store";
  * What a viewer who may file match logs under a mix is handed: the mix, what to run once a log is accepted, whether
  * the mix's game parses an uploaded log file (`capabilities.log_upload`; Deadlock does not), whether it fetches
  * matches by id (`capabilities.match_fetch`), so a round may be filed by that id too, and whether a round's match can
- * be looked up by its players (`capabilities.match_search`), so its search may be started again.
+ * be looked up by its players (`capabilities.match_search`), so its search may be started again, and whether the
+ * game's matches reach that lookup through a player's ingest tool (`capabilities.ingest_status`), so a waiting search
+ * shows how to install it.
  */
 export type MixLogUpload = {
   customGameId: number;
@@ -20,6 +22,7 @@ export type MixLogUpload = {
   fileUpload: boolean;
   matchFetch: boolean;
   matchSearch: boolean;
+  ingestHint: boolean;
 };
 
 /**
@@ -43,6 +46,7 @@ export function useMixLogUpload(game: CustomGame | undefined): MixLogUpload | nu
     fileUpload: metadata.data?.discipline.capabilities.log_upload === true,
     matchFetch: metadata.data?.discipline.capabilities.match_fetch === true,
     matchSearch: metadata.data?.discipline.capabilities.match_search === true,
+    ingestHint: metadata.data?.discipline.capabilities.ingest_status === true,
     onUploaded: () =>
       void queryClient.invalidateQueries({ queryKey: customGameKeys.matches(game.workspace_id, game.id) })
   };

@@ -28,6 +28,10 @@ const fastReadTimeout = 15 * time.Second
 // wedged solve releases the prefetch slot rather than holding it to the end.
 const syncBalanceTimeout = 90 * time.Second
 
+// ingestStatusTimeout covers one lookup per linked account at the game source (a few seconds each, a handful at a
+// time) for a whole roster; the answer is cached 15 minutes per account.
+const ingestStatusTimeout = 30 * time.Second
+
 // PublicRoutes need no auth (mirrors GET /config in src/routes/balancer.py).
 var PublicRoutes = []edge.RouteSpec{
 	{Method: "GET", Pattern: "/api/v1/balancer/config", Queue: "rpc.balancer.config", Query: []string{"discipline"}, Auth: edge.AuthNone, Timeout: fastReadTimeout},
@@ -77,19 +81,21 @@ var RosterRoutes = []edge.RouteSpec{
 	// ?layer=/?role=/?author_user_id=) and entirely server-side.
 	{Method: "GET", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/ranks", Queue: "rpc.balancer.ranks.list", Path: []string{"workspace_id"}, AllQuery: true, Auth: edge.AuthRequired, Timeout: fastReadTimeout},
 	{Method: "GET", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/players/authors", Queue: "rpc.balancer.players.authors", Path: []string{"workspace_id"}, Auth: edge.AuthRequired, Timeout: fastReadTimeout},
-	// The five mix reads (list, stats, get, matches, rotation) are public:
-	// AuthNone, like the draft spectating reads. A mix screen is a lobby board
-	// a host reads out to players who may not hold an account here at all, and
-	// none of these handlers looks at the caller -- the ranks they return are
-	// the host's own book, resolved from the mix's host_user_id. Every write
-	// below stays AuthRequired plus host-or-co-host in the worker.
+	// The mix reads (list, stats, matches, rotation) are public: AuthNone, like the
+	// draft spectating reads. A mix screen is a lobby board a host reads out to
+	// players who may not hold an account here at all, and none of these handlers
+	// looks at the caller -- the ranks they return are the host's own book,
+	// resolved from the mix's host_user_id. The single-mix read is AuthOptional:
+	// the same board for everyone, plus the signed-in viewer's own remembered bot
+	// lobby region. Every write below stays AuthRequired plus host-or-co-host in
+	// the worker.
 	{Method: "GET", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games", Queue: "rpc.balancer.custom.list", Path: []string{"workspace_id"}, Query: []string{"discipline", "status", "q", "limit", "before_id"}, Auth: edge.AuthNone, Timeout: fastReadTimeout},
 	{Method: "POST", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games", Queue: "rpc.balancer.custom.create", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
 	// Workspace-wide mix scoreboard, not a per-game read. ServeMux precedence
 	// already gives this literal segment the win over {game_id} whatever the
 	// order; it is listed above that row so the table reads the same way.
 	{Method: "GET", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/stats", Queue: "rpc.balancer.custom.stats", Path: []string{"workspace_id"}, AllQuery: true, Auth: edge.AuthNone, Timeout: fastReadTimeout},
-	{Method: "GET", Pattern: "/api/v1/balancer/custom-games/{custom_game_id}", Queue: "rpc.balancer.custom.get", IDParam: "custom_game_id", Query: []string{"workspace_id"}, Auth: edge.AuthNone, Timeout: fastReadTimeout},
+	{Method: "GET", Pattern: "/api/v1/balancer/custom-games/{custom_game_id}", Queue: "rpc.balancer.custom.get", IDParam: "custom_game_id", Query: []string{"workspace_id"}, Auth: edge.AuthOptional, NoWorkspaceFill: true, Timeout: fastReadTimeout},
 	{Method: "POST", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/roster", Queue: "rpc.balancer.custom.update_roster", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
 	{Method: "PUT", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/name", Queue: "rpc.balancer.custom.rename", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
 	{Method: "PUT", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/players/{workspace_member_id}", Queue: "rpc.balancer.custom.update_player", IDParam: "game_id", Path: []string{"workspace_id", "workspace_member_id"}, Body: true, Auth: edge.AuthRequired},
@@ -99,6 +105,11 @@ var RosterRoutes = []edge.RouteSpec{
 	{Method: "PUT", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/team-names", Queue: "rpc.balancer.custom.set_team_names", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
 	{Method: "PUT", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/next-map", Queue: "rpc.balancer.custom.set_next_map", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
 	{Method: "PUT", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/lobby-code", Queue: "rpc.balancer.custom.set_lobby_code", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
+	// Host-only: have the game's bot open the in-game lobby for the lobby's live match; its join code becomes the
+	// lobby code. The worker waits on the game source, so this keeps the default (long) deadline.
+	{Method: "POST", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/bot-lobby", Queue: "rpc.balancer.custom.create_bot_lobby", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
+	// Per roster row, whether the player's own client uploads their matches (what the by-players match search needs).
+	{Method: "GET", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/ingest-status", Queue: "rpc.balancer.custom.ingest_status", IDParam: "game_id", Path: []string{"workspace_id"}, Auth: edge.AuthRequired, Timeout: ingestStatusTimeout},
 	// The pager itself: which balance option the mix shows every viewer.
 	{Method: "PUT", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/variant", Queue: "rpc.balancer.custom.set_variant_index", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/discord/post", Queue: "rpc.balancer.custom.post_discord", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},

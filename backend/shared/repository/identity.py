@@ -177,6 +177,26 @@ class SocialAccountRepository(BaseRepository[models.SocialAccount]):
         result = await session.execute(query.order_by(models.SocialAccount.id))
         return result.unique().scalars().all()
 
+    async def handles_by_user(
+        self, session: AsyncSession, user_ids: Collection[int], *, provider: str
+    ) -> dict[int, list[str]]:
+        """``player id -> normalized handles`` of their ``provider`` accounts, primary first; a player with none is absent."""
+        if not user_ids:
+            return {}
+        rows = await session.execute(
+            sa.select(models.SocialAccount.user_id, models.SocialAccount.username_normalized)
+            .where(
+                models.SocialAccount.user_id.in_(list(user_ids)),
+                models.SocialAccount.provider == provider,
+                models.SocialAccount.username_normalized.is_not(None),
+            )
+            .order_by(models.SocialAccount.is_primary.desc(), models.SocialAccount.id)
+        )
+        handles: dict[int, list[str]] = {}
+        for user_id, handle in rows:
+            handles.setdefault(user_id, []).append(handle)
+        return handles
+
     async def get_by_provider_subject(
         self,
         session: AsyncSession,

@@ -10,6 +10,7 @@ import { LobbyCode } from "@/app/balancer/mix/_components/LobbyCodeStrip";
 import { CAPTION_CLASS, CARD_TITLE_CLASS, lobbyLetter } from "@/app/balancer/mix/pickup-chrome";
 import { PersonLabel } from "@/components/PlayerName";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
+import { IngestLinks } from "@/components/IngestLinks";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Eyebrow } from "@/components/ui/eyebrow";
@@ -59,6 +60,8 @@ type PickupMySeatPanelProps = {
   onSetAway: (away: boolean) => void;
   /** Their lobby's room while something plays out there (draft, bans and picks, the match); `null` otherwise. */
   roomHref: string | null;
+  /** The viewer plays a game whose matches are found through a player's ingest tool, and theirs has not uploaded lately. */
+  ingestHint?: boolean;
 };
 
 /** Everything the panel edits before Save, kept apart from the server seat. */
@@ -124,9 +127,11 @@ export function PickupMySeatPanel({
   lobbies,
   onSetAway,
   roomHref,
+  ingestHint = false,
 }: Readonly<PickupMySeatPanelProps>) {
   const t = useTranslations("mixes.self");
   const tRoom = useTranslations("mixes.room");
+  const tIngest = useTranslations("mixes.ingest");
   const tRoles = useTranslations("mixes.roleOrder");
   const openAccountSettings = useAccountSettingsModalStore((store) => store.open);
   const slotLabel = useSlotLabel(owner.ontology);
@@ -274,6 +279,13 @@ export function PickupMySeatPanel({
               {t("fixLinks")}
             </Button>
           ) : null}
+        </div>
+      ) : null}
+
+      {ingestHint && seat != null && !seat.away ? (
+        <div className="flex flex-col gap-1">
+          <p className="text-caption text-[color:var(--aqt-fg-muted)]">{tIngest("seatHint")}</p>
+          <IngestLinks className="text-caption" />
         </div>
       ) : null}
 

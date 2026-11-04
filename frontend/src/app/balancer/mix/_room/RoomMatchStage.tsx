@@ -4,7 +4,9 @@ import { useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import { Dices, Headphones, Shuffle, Users } from "lucide-react";
 
+import { BotLobbyControl } from "@/app/balancer/mix/_components/BotLobbyControl";
 import { MatchHistoryList } from "@/app/balancer/mix/_components/MatchHistoryList";
+import type { BotLobbyOptions } from "@/app/balancer/mix/pickup-bot-lobby";
 import type { MixLogUpload } from "@/app/balancer/mix/useMixLogUpload";
 import { NextMapRoll } from "@/app/balancer/mix/_components/NextMapStrip";
 import { soleMap } from "@/app/balancer/mix/pickup-map-roll";
@@ -58,6 +60,7 @@ export function RoomMatchStage({
   mixMatches,
   voiceUrl,
   logUpload,
+  botLobby,
   actions
 }: Readonly<{
   phase: "idle" | "ready" | "live";
@@ -76,6 +79,8 @@ export function RoomMatchStage({
   voiceUrl: string | null;
   /** Present when the viewer may file a match log under this mix: the history rows then offer an upload. */
   logUpload: MixLogUpload | null;
+  /** The host's bot-lobby control, for a game whose bot opens lobbies; `null` hides it. */
+  botLobby: BotLobbyOptions | null;
   actions: RoomMatchActions;
 }>) {
   const t = useTranslations("mixes.arena.match");
@@ -198,13 +203,16 @@ export function RoomMatchStage({
       <div className="border-t border-[color:var(--aqt-border)] px-5 py-4">
         {phase === "live" ? (
           canWrite ? (
-            <PickupResultControls
-              teamCount={2}
-              teamNames={teamNames}
-              saving={actions.recording}
-              pointsPerWin={game.settings.points_per_win ?? null}
-              onRecord={actions.onRecord}
-            />
+            <div className="flex flex-col gap-3">
+              {botLobby != null ? <BotLobbyControl options={botLobby} botLobby={lobby.bot_lobby} /> : null}
+              <PickupResultControls
+                teamCount={2}
+                teamNames={teamNames}
+                saving={actions.recording}
+                pointsPerWin={game.settings.points_per_win ?? null}
+                onRecord={actions.onRecord}
+              />
+            </div>
           ) : (
             <p className={CAPTION_CLASS}>{t("liveViewer")}</p>
           )

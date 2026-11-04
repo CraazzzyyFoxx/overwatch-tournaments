@@ -2917,6 +2917,8 @@ def unsupported_and_diagnostics(live: Live, ids: dict[str, Any]) -> None:
         "native_ladder": True,
         "match_fetch": False,
         "match_search": False,
+        "lobby_bot": False,
+        "ingest_status": False,
         "log_upload": False,
         "achievement_conditions": False,
         "analytics": False,

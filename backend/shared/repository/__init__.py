@@ -159,6 +159,7 @@ from .workspace import (
 )
 from .custom_game_round import CustomGameRoundRepository
 from .custom_game import (
+    CustomGameBotLobbyRepository,
     CustomGameCoHostRepository,
     CustomGameLobbyRepository,
     CustomGamePlayerRepository,
@@ -315,6 +316,7 @@ __all__ = (
     "WorkspaceBalancerConfigRepository",
     "WorkspaceMemberRepository",
     "CustomGameRoundRepository",
+    "CustomGameBotLobbyRepository",
     "CustomGameCoHostRepository",
     "CustomGameLobbyRepository",
     "CustomGamePlayerRepository",

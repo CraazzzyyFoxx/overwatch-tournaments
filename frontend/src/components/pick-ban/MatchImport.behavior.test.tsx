@@ -98,4 +98,31 @@ describe("MatchImport search by players", () => {
       expect(button(scope, "Search again") ?? button(scope, "Find by players")).toBeUndefined();
     }
   });
+
+  it("says why a search is still waiting and when it tries again, never in the source's own words", async () => {
+    const nextAttemptAt = "2026-11-01T20:05:00Z";
+    const time = new Intl.DateTimeFormat("en", { hour: "2-digit", minute: "2-digit" }).format(new Date(nextAttemptAt));
+    const waiting = await mount({ search: "searching", searchError: "no_match_yet", searchNextAttemptAt: nextAttemptAt });
+    expect(waiting.textContent).toContain("The match has not appeared in the game's records yet.");
+    expect(waiting.textContent).toContain(`Next attempt at ${time}`);
+
+    const down = await mount({ search: "searching", searchError: "source_unavailable" });
+    expect(down.textContent).toContain("The match source is temporarily unavailable.");
+
+    const raw = await mount({ search: "searching", searchError: "HTTPError 502 from upstream" });
+    expect(raw.textContent).toContain("The match source returned a temporary error.");
+    expect(raw.textContent).not.toContain("HTTPError");
+  });
+
+  it("shows how to install the ingest tool to a Deadlock round that is searching or gave up, and to nobody else", async () => {
+    const searching = await mount({ search: "searching", searchable: true, ingestHint: true });
+    const gaveUp = await mount({ search: "not_found", searchable: true, ingestHint: true });
+    const otherGame = await mount({ search: "searching", searchable: true });
+
+    for (const scope of [searching, gaveUp]) {
+      expect(scope.querySelector('a[href="https://deadlock-api.com/ingest-cache"]')).not.toBeNull();
+      expect(scope.querySelector('a[href$="deadlock-api-ingest-setup.exe"]')).not.toBeNull();
+    }
+    expect(otherGame.querySelector('a[href="https://deadlock-api.com/ingest-cache"]')).toBeNull();
+  });
 });

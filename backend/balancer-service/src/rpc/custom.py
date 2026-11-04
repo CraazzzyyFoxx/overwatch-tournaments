@@ -53,6 +53,7 @@ from shared.core.enums import MixRoleSelectionMode
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.disciplines import DISCIPLINES, rated_role_codes
 from shared.domain.custom_game_round import winner_slot
+from shared.rpc.common import optional_actor
 from shared.rpc.identity import ensure_workspace_permission
 from shared.rpc.query import build_query_model
 from shared.schemas.identity import PersonDisplayRead
@@ -66,10 +67,12 @@ from shared.services.pickup_mix_realtime import emit_pickup_mix_changed
 from src.core import db
 from src.core.config import config
 from src.domain.balancer.result_serializer import as_lobby_document
+from src.domain.bot_lobby import PARTY_TTL
 from src.domain.mix_lobbies import current_lobbies, lobby_state, with_captains
 from src.domain.mix_voice import snowflake
 from src.rpc import _common as c
 from src.schemas import custom_game as schemas
+from src.services.bot_lobby import bot_lobby_service
 from src.services.custom_game import custom_game_service
 from src.services.mix_draft import mix_draft_service
 
@@ -283,6 +286,19 @@ def _with_displays(document: Any, members: dict[int, Any]) -> Any:
     return document
 
 
+def _dump_bot_lobby(row: Any) -> dict[str, Any] | None:
+    """The game bot's party for the lobby's live match: its join code, when its bot leaves, and the match id once the
+    source reported it. Public like ``lobby_code``; never the token or the secret."""
+    if row is None:
+        return None
+    return {
+        "party_code": row.party_code,
+        "created_at": row.created_at.isoformat(),
+        "expires_at": (row.created_at + PARTY_TTL).isoformat(),
+        "match_id": row.match_id,
+    }
+
+
 def _dump_lobby(
     lobby: Any,
     *,
@@ -294,6 +310,7 @@ def _dump_lobby(
     opener_index: int | None = None,
     draft: tuple[int, str, frozenset[int]] | None = None,
     members: dict[int, Any] | None = None,
+    bot_lobby: Any = None,
 ) -> dict[str, Any]:
     """One lobby: its pager, its rolled map, its live match, when it was last balanced, its match count whenever the
     read counted them (the list and the detail read do) -- and, in the detail read, its own matchup and stage.
@@ -319,6 +336,8 @@ def _dump_lobby(
         "team2_voice_channel_id": snowflake(lobby.team2_voice_channel_id),
         # The match on the floor: started, not yet recorded or cancelled.
         "live_encounter_id": lobby.live_encounter_id,
+        # The bot's party for the CURRENT live match only; a party of a finished match is no longer shown.
+        "bot_lobby": _dump_bot_lobby(bot_lobby),
     }
     if activity is not None:
         out["matches_count"] = activity[0]
@@ -401,6 +420,8 @@ def _dump_game(
     openers: dict[int, int | None] | None = None,
     draft_lobbies: dict[int, tuple[int, str, frozenset[int]]] | None = None,
     draft_started_at: dict[int, Any] | None = None,
+    bot_lobbies: dict[int, Any] | None = None,
+    bot_lobby_region: str | None = None,
 ) -> dict[str, Any]:
     matches_count, last_match_at = activity if activity is not None else (0, None)
     out: dict[str, Any] = {
@@ -432,9 +453,12 @@ def _dump_game(
                 opener_index=(openers or {}).get(lobby.lobby_index),
                 draft=(draft_lobbies or {}).get(lobby.lobby_index),
                 members=members,
+                bot_lobby=(bot_lobbies or {}).get(lobby.live_encounter_id),
             )
             for lobby in (lobbies or [])
         ],
+        # The viewer's remembered bot-lobby region of this game (null for anyone who has none, and anonymously).
+        "bot_lobby_region": bot_lobby_region,
         # Whether players may seat themselves here (closed | pool | benched) and
         # whether a seated one may re-order their own roles. Both are read by the
         # board's host controls and by the player's own panel.
@@ -497,7 +521,7 @@ async def _game_settings(
     )
 
 
-async def _with_roster(session: Any, game: Any) -> dict[str, Any]:
+async def _with_roster(session: Any, game: Any, viewer_id: int | None = None) -> dict[str, Any]:
     """Roster rows carry the member's name, role order, effective ranks and their source.
 
     Without the name a client only has member ids and has to guess from a
@@ -547,6 +571,8 @@ async def _with_roster(session: Any, game: Any) -> dict[str, Any]:
     draft_started_at = {
         index: draft_starts[entry[0]] for index, entry in draft_lobbies.items() if entry[0] in draft_starts
     }
+    bot_lobbies = await bot_lobby_service.bot_lobbies.for_encounters(session, live_ids)
+    bot_lobby_region = await bot_lobby_service.region_for(session, viewer_id, game.discipline)
     # Derived once, here: the board, the player sheet and the bot all ask the
     # same question, and none of them should re-parse a solver document.
     current_lobby = current_lobbies(lobbies, draft_lobbies)
@@ -569,6 +595,8 @@ async def _with_roster(session: Any, game: Any) -> dict[str, Any]:
             openers=openers,
             draft_lobbies=draft_lobbies,
             draft_started_at=draft_started_at,
+            bot_lobbies=bot_lobbies,
+            bot_lobby_region=bot_lobby_region,
         )
     member_ids = [row.workspace_member_id for row in roster]
     members = await custom_game_service.members(session, game.workspace_id, member_ids, discipline=game.discipline)
@@ -620,6 +648,8 @@ async def _with_roster(session: Any, game: Any) -> dict[str, Any]:
         openers=openers,
         draft_lobbies=draft_lobbies,
         draft_started_at=draft_started_at,
+        bot_lobbies=bot_lobbies,
+        bot_lobby_region=bot_lobby_region,
     )
 
 
@@ -628,11 +658,11 @@ def _dump_round(
     map_info: dict[int, tuple[str, str | None]],
     bans: list[dict[str, int]],
     picks: list[dict[str, int | str]],
-    log: tuple[int | None, str | None, str | None, str | None],
+    log: tuple[int | None, str | None, str | None, str | None, datetime | None],
 ) -> dict[str, Any]:
     """One recorded round as the history wire spells it: the two seats by slot, the winning slot, the hero bans and
     whose hero each pick was."""
-    stats_match_id, log_state, match_search, match_search_error = log
+    stats_match_id, log_state, match_search, match_search_error, match_search_next_attempt_at = log
     encounter = round_.encounter
     teams = sorted(encounter.teams, key=lambda team: team.slot)
     map_id = encounter.games[0].map_id if encounter.games else None
@@ -664,9 +694,13 @@ def _dump_round(
         "stats_match_id": stats_match_id,
         "log_state": log_state,
         "match_search": match_search,
-        # Why a search gave up: ``no_linked_accounts``, ``not_found_in_window``, ``ambiguous: <ids>`` or the source's
-        # own refusal.
+        # While searching, why it is still waiting (``no_match_yet`` | ``source_unavailable``); once it gave up, why:
+        # ``no_linked_accounts``, ``not_found_in_window``, ``ambiguous: <ids>`` or the source's own refusal.
         "match_search_error": match_search_error,
+        # When a search still looking tries next; null otherwise.
+        "match_search_next_attempt_at": (
+            match_search_next_attempt_at.isoformat() if match_search_next_attempt_at is not None else None
+        ),
     }
 
 
@@ -685,7 +719,7 @@ async def _dump_rounds(session: Any, rounds: list[Any]) -> list[dict[str, Any]]:
             map_info,
             bans.get(round_.encounter.id, []),
             picks.get(round_.encounter.id, []),
-            logs.get(round_.encounter.id, (None, None, None, None)),
+            logs.get(round_.encounter.id, (None, None, None, None, None)),
         )
         for round_ in rounds
     ]
@@ -750,7 +784,7 @@ def register(broker: Any, logger: Any) -> None:
                 session, workspace_id, custom_game_id=game.id, change="create", actor_user_id=user.id
             )
             await session.commit()
-            return await _with_roster(session, game)
+            return await _with_roster(session, game, user.id)
 
         return await c.envelope(logger, "custom.create", op, session_factory=_SF)
 
@@ -822,7 +856,9 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             workspace_id = _opt_int(data, "workspace_id")
             game = await custom_game_service.get(session, workspace_id=workspace_id, custom_game_id=_game_id(data))
-            return await _with_roster(session, game)
+            # AuthOptional: the viewer's own remembered bot-lobby region rides the public read when signed in.
+            viewer = optional_actor(data)
+            return await _with_roster(session, game, viewer.id if viewer is not None else None)
 
         return await c.envelope(logger, "custom.get", op, session_factory=_SF)
 
@@ -845,7 +881,7 @@ def register(broker: Any, logger: Any) -> None:
                 session, workspace_id, custom_game_id=game.id, change="roster", actor_user_id=user.id
             )
             await session.commit()
-            return await _with_roster(session, game)
+            return await _with_roster(session, game, user.id)
 
         return await c.envelope(logger, "custom.update_roster", op, session_factory=_SF)
 
@@ -871,7 +907,7 @@ def register(broker: Any, logger: Any) -> None:
                 session, workspace_id, custom_game_id=game.id, change="roster", actor_user_id=user.id
             )
             await session.commit()
-            return await _with_roster(session, game)
+            return await _with_roster(session, game, user.id)
 
         return await c.envelope(logger, "custom.update_player", op, session_factory=_SF)
 
@@ -903,7 +939,7 @@ def register(broker: Any, logger: Any) -> None:
                 session, workspace_id, custom_game_id=game.id, change="roster", actor_user_id=user.id
             )
             await session.commit()
-            return await _with_roster(session, game)
+            return await _with_roster(session, game, user.id)
 
         return await c.envelope(logger, "custom.set_participation", op, session_factory=_SF)
 
@@ -1051,7 +1087,7 @@ def register(broker: Any, logger: Any) -> None:
                 session, workspace_id, custom_game_id=game.id, change="member", actor_user_id=user.id
             )
             await session.commit()
-            return await _with_roster(session, game)
+            return await _with_roster(session, game, user.id)
 
         return await c.envelope(logger, "custom.set_self_service", op, session_factory=_SF)
 
@@ -1082,7 +1118,7 @@ def register(broker: Any, logger: Any) -> None:
                 session, workspace_id, custom_game_id=game.id, change="member", actor_user_id=user.id
             )
             await session.commit()
-            return await _with_roster(session, game)
+            return await _with_roster(session, game, user.id)
 
         return await c.envelope(logger, "custom.set_ban_preset", op, session_factory=_SF)
 
@@ -1108,7 +1144,7 @@ def register(broker: Any, logger: Any) -> None:
                 session, workspace_id, custom_game_id=game.id, change="member", actor_user_id=user.id
             )
             await session.commit()
-            return await _with_roster(session, game)
+            return await _with_roster(session, game, user.id)
 
         return await c.envelope(logger, "custom.set_draft_settings", op, session_factory=_SF)
 
@@ -1133,7 +1169,7 @@ def register(broker: Any, logger: Any) -> None:
                 session, workspace_id, custom_game_id=game.id, change="draft", actor_user_id=user.id
             )
             await session.commit()
-            return await _with_roster(session, game)
+            return await _with_roster(session, game, user.id)
 
         return await c.envelope(logger, "custom.draft_seed", op, session_factory=_SF)
 
@@ -1156,7 +1192,7 @@ def register(broker: Any, logger: Any) -> None:
                 session, workspace_id, custom_game_id=game.id, change="draft", actor_user_id=user.id
             )
             await session.commit()
-            return await _with_roster(session, game)
+            return await _with_roster(session, game, user.id)
 
         return await c.envelope(logger, "custom.draft_split", op, session_factory=_SF)
 
@@ -1183,7 +1219,7 @@ def register(broker: Any, logger: Any) -> None:
                 session, workspace_id, custom_game_id=game.id, change="draft", actor_user_id=user.id
             )
             await session.commit()
-            return await _with_roster(session, game)
+            return await _with_roster(session, game, user.id)
 
         return await c.envelope(logger, "custom.draft_captain", op, session_factory=_SF)
 
@@ -1209,7 +1245,7 @@ def register(broker: Any, logger: Any) -> None:
                 session, workspace_id, custom_game_id=game.id, change="draft", actor_user_id=user.id
             )
             await session.commit()
-            return await _with_roster(session, game)
+            return await _with_roster(session, game, user.id)
 
         return await c.envelope(logger, "custom.draft_add_player", op, session_factory=_SF)
 
@@ -1235,7 +1271,7 @@ def register(broker: Any, logger: Any) -> None:
                 session, workspace_id, custom_game_id=game.id, change="lobby", actor_user_id=user.id
             )
             await session.commit()
-            return await _with_roster(session, game)
+            return await _with_roster(session, game, user.id)
 
         return await c.envelope(logger, "custom.set_lobby_count", op, session_factory=_SF)
 
@@ -1259,7 +1295,7 @@ def register(broker: Any, logger: Any) -> None:
                 session, workspace_id, custom_game_id=game.id, change="name", actor_user_id=user.id
             )
             await session.commit()
-            return await _with_roster(session, game)
+            return await _with_roster(session, game, user.id)
 
         return await c.envelope(logger, "custom.rename", op, session_factory=_SF)
 
@@ -1284,7 +1320,7 @@ def register(broker: Any, logger: Any) -> None:
                 session, workspace_id, custom_game_id=game.id, change="balance", actor_user_id=user.id
             )
             await session.commit()
-            return await _with_roster(session, game)
+            return await _with_roster(session, game, user.id)
 
         return await c.envelope(logger, "custom.balance", op, session_factory=_SF)
 
@@ -1307,7 +1343,7 @@ def register(broker: Any, logger: Any) -> None:
                 session, workspace_id, custom_game_id=game.id, change="team_names", actor_user_id=user.id
             )
             await session.commit()
-            return await _with_roster(session, game)
+            return await _with_roster(session, game, user.id)
 
         return await c.envelope(logger, "custom.set_team_names", op, session_factory=_SF)
 
@@ -1331,7 +1367,7 @@ def register(broker: Any, logger: Any) -> None:
                 session, workspace_id, custom_game_id=game.id, change="next_map", actor_user_id=user.id
             )
             await session.commit()
-            return await _with_roster(session, game)
+            return await _with_roster(session, game, user.id)
 
         return await c.envelope(logger, "custom.set_next_map", op, session_factory=_SF)
 
@@ -1355,9 +1391,66 @@ def register(broker: Any, logger: Any) -> None:
                 session, workspace_id, custom_game_id=game.id, change="lobby_code", actor_user_id=user.id
             )
             await session.commit()
-            return await _with_roster(session, game)
+            return await _with_roster(session, game, user.id)
 
         return await c.envelope(logger, "custom.set_lobby_code", op, session_factory=_SF)
+
+    @broker.subscriber("rpc.balancer.custom.create_bot_lobby")
+    async def _create_bot_lobby(data: dict, msg: RabbitMessage) -> dict:
+        """Have the game's bot open the in-game lobby for the lobby's live match; the party's join code becomes the
+        lobby's ``lobby_code`` and the region is remembered for this host."""
+
+        async def op(session: Any) -> Any:
+            user = c.active_actor(data)
+            workspace_id = _int(data, "workspace_id")
+            _require_mix(user, workspace_id, "update")
+            body = _body(schemas.CustomGameBotLobbyCreate, data)
+            game = await bot_lobby_service.create(
+                session,
+                workspace_id=workspace_id,
+                custom_game_id=_game_id(data),
+                lobby_index=body.lobby_index,
+                region=body.region,
+                actor_user_id=user.id,
+                actor_is_superuser=user.is_superuser,
+            )
+            await emit_pickup_mix_changed(
+                session, workspace_id, custom_game_id=game.id, change="bot_lobby", actor_user_id=user.id
+            )
+            await session.commit()
+            return await _with_roster(session, game, user.id)
+
+        return await c.envelope(logger, "custom.create_bot_lobby", op, session_factory=_SF)
+
+    @broker.subscriber("rpc.balancer.custom.ingest_status")
+    async def _ingest_status(data: dict, msg: RabbitMessage) -> dict:
+        """Per roster row, whether the player's own client uploads their matches; account ids stay server-side."""
+
+        async def op(session: Any) -> Any:
+            c.active_actor(data)
+            game = await custom_game_service.get(
+                session, workspace_id=_int(data, "workspace_id"), custom_game_id=_game_id(data)
+            )
+            return await bot_lobby_service.ingest_status(session, game)
+
+        return await c.envelope(logger, "custom.ingest_status", op, session_factory=_SF)
+
+    @broker.subscriber("rpc.balancer.custom.bot_lobby_callback")
+    async def _bot_lobby_callback(data: dict, msg: RabbitMessage) -> dict:
+        """The game source reporting a party's match id (public route; the token in the path is the credential).
+        Answers ok for every token so the endpoint is no oracle; the gateway relays the raw body and secret header."""
+
+        async def op(session: Any) -> Any:
+            await bot_lobby_service.accept_callback(
+                session,
+                token=str(data.get("token") or ""),
+                body=str(data.get("body") or ""),
+                secret=str(data.get("secret") or "") or None,
+            )
+            await session.commit()
+            return {}
+
+        return await c.envelope(logger, "custom.bot_lobby_callback", op, session_factory=_SF)
 
     @broker.subscriber("rpc.balancer.custom.set_variant_index")
     async def _set_variant_index(data: dict, msg: RabbitMessage) -> dict:
@@ -1382,7 +1475,7 @@ def register(broker: Any, logger: Any) -> None:
                 session, workspace_id, custom_game_id=game.id, change="variant_index", actor_user_id=user.id
             )
             await session.commit()
-            return await _with_roster(session, game)
+            return await _with_roster(session, game, user.id)
 
         return await c.envelope(logger, "custom.set_variant_index", op, session_factory=_SF)
 
@@ -1441,7 +1534,7 @@ def register(broker: Any, logger: Any) -> None:
                 session, workspace_id, custom_game_id=game.id, change="voice", actor_user_id=user.id
             )
             await session.commit()
-            return await _with_roster(session, game)
+            return await _with_roster(session, game, user.id)
 
         return await c.envelope(logger, "custom.set_voice_channels", op, session_factory=_SF)
 
@@ -1567,7 +1660,7 @@ def register(broker: Any, logger: Any) -> None:
             )
             await discord_messages.enqueue(session, commands)
             await session.commit()
-            return await _with_roster(session, game)
+            return await _with_roster(session, game, user.id)
 
         return await c.envelope(logger, "custom.delete_discord_post", op, session_factory=_SF)
 
@@ -1612,7 +1705,7 @@ def register(broker: Any, logger: Any) -> None:
                 session, workspace_id, custom_game_id=game.id, change="host", actor_user_id=user.id
             )
             await session.commit()
-            return await _with_roster(session, game)
+            return await _with_roster(session, game, user.id)
 
         return await c.envelope(logger, "custom.transfer_host", op, session_factory=_SF)
 
@@ -1635,7 +1728,7 @@ def register(broker: Any, logger: Any) -> None:
                 session, workspace_id, custom_game_id=game.id, change="co_hosts", actor_user_id=user.id
             )
             await session.commit()
-            return await _with_roster(session, game)
+            return await _with_roster(session, game, user.id)
 
         return await c.envelope(logger, "custom.add_co_host", op, session_factory=_SF)
 
@@ -1659,7 +1752,7 @@ def register(broker: Any, logger: Any) -> None:
                 session, workspace_id, custom_game_id=game.id, change="co_hosts", actor_user_id=user.id
             )
             await session.commit()
-            return await _with_roster(session, game)
+            return await _with_roster(session, game, user.id)
 
         return await c.envelope(logger, "custom.remove_co_host", op, session_factory=_SF)
 
@@ -1685,7 +1778,7 @@ def register(broker: Any, logger: Any) -> None:
                 session, workspace_id, custom_game_id=game.id, change="teams", actor_user_id=user.id
             )
             await session.commit()
-            return await _with_roster(session, game)
+            return await _with_roster(session, game, user.id)
 
         return await c.envelope(logger, "custom.swap_seats", op, session_factory=_SF)
 
@@ -1709,7 +1802,7 @@ def register(broker: Any, logger: Any) -> None:
                 session, workspace_id, custom_game_id=game.id, change="teams", actor_user_id=user.id
             )
             await session.commit()
-            return await _with_roster(session, game)
+            return await _with_roster(session, game, user.id)
 
         return await c.envelope(logger, "custom.set_captain", op, session_factory=_SF)
 
@@ -1753,7 +1846,7 @@ def register(broker: Any, logger: Any) -> None:
                     )
                 except HTTPException as exc:
                     logger.warning(f"custom.start_match: voice split skipped ({exc.detail})")
-            return await _with_roster(session, game)
+            return await _with_roster(session, game, user.id)
 
         return await c.envelope(logger, "custom.start_match", op, session_factory=_SF)
 
@@ -1776,7 +1869,7 @@ def register(broker: Any, logger: Any) -> None:
                 session, workspace_id, custom_game_id=game.id, change="match", actor_user_id=user.id
             )
             await session.commit()
-            return await _with_roster(session, game)
+            return await _with_roster(session, game, user.id)
 
         return await c.envelope(logger, "custom.cancel_match", op, session_factory=_SF)
 
@@ -1800,7 +1893,7 @@ def register(broker: Any, logger: Any) -> None:
                 session, workspace_id, custom_game_id=game.id, change="outcome", actor_user_id=user.id
             )
             await session.commit()
-            return await _with_roster(session, game)
+            return await _with_roster(session, game, user.id)
 
         return await c.envelope(logger, "custom.record_outcome", op, session_factory=_SF)
 
@@ -1833,7 +1926,7 @@ def register(broker: Any, logger: Any) -> None:
                 session, workspace_id, custom_game_id=game.id, change="outcome", actor_user_id=user.id
             )
             await session.commit()
-            return await _with_roster(session, game)
+            return await _with_roster(session, game, user.id)
 
         return await c.envelope(logger, "custom.undo_match", op, session_factory=_SF)
 
@@ -1891,7 +1984,7 @@ def register(broker: Any, logger: Any) -> None:
                 session, workspace_id, custom_game_id=game.id, change="close", actor_user_id=user.id
             )
             await session.commit()
-            return await _with_roster(session, game)
+            return await _with_roster(session, game, user.id)
 
         return await c.envelope(logger, "custom.close", op, session_factory=_SF)
 

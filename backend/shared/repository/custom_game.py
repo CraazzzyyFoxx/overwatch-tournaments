@@ -345,6 +345,19 @@ class CustomGameLobbyRepository:
             seats.setdefault(row.encounter_id, []).append({"id": row.id, "slot": row.slot, "name": row.name})
         return seats
 
+    async def team_sizes(self, session: AsyncSession, encounter_id: int) -> list[int]:
+        """The seated (active) members of each active team of one match, in slot order."""
+        team, member = models.EncounterTeam, models.EncounterTeamMember
+        rows = await session.execute(
+            sa.select(sa.func.count(member.id))
+            .select_from(team)
+            .outerjoin(member, sa.and_(member.encounter_team_id == team.id, member.active.is_(True)))
+            .where(team.encounter_id == encounter_id, team.active.is_(True))
+            .group_by(team.id, team.slot)
+            .order_by(team.slot)
+        )
+        return list(rows.scalars())
+
     async def create(self, session: AsyncSession, lobby: models.CustomGameLobby) -> models.CustomGameLobby:
         session.add(lobby)
         await session.flush()
@@ -353,3 +366,69 @@ class CustomGameLobbyRepository:
     async def delete(self, session: AsyncSession, lobby: models.CustomGameLobby) -> None:
         await session.delete(lobby)
         await session.flush()
+
+
+class CustomGameBotLobbyRepository(BaseRepository[models.CustomGameBotLobby]):
+    """The bot party of a live match, keyed by its encounter. Write methods flush only."""
+
+    def __init__(self) -> None:
+        super().__init__(models.CustomGameBotLobby)
+
+    async def for_encounters(
+        self, session: AsyncSession, encounter_ids: Sequence[int]
+    ) -> dict[int, models.CustomGameBotLobby]:
+        """``encounter_id -> party`` for the encounters that have one. No ids, no query."""
+        if not encounter_ids:
+            return {}
+        rows = await session.scalars(
+            sa.select(models.CustomGameBotLobby).where(models.CustomGameBotLobby.encounter_id.in_(encounter_ids))
+        )
+        return {row.encounter_id: row for row in rows}
+
+    async def replace(self, session: AsyncSession, bot_lobby: models.CustomGameBotLobby) -> models.CustomGameBotLobby:
+        """File ``bot_lobby``, dropping the previous party of its encounter."""
+        await session.execute(
+            sa.delete(models.CustomGameBotLobby).where(models.CustomGameBotLobby.encounter_id == bot_lobby.encounter_id)
+        )
+        return await self.create(session, bot_lobby)
+
+    async def get_awaiting_by_token(self, session: AsyncSession, token_sha256: str) -> models.CustomGameBotLobby | None:
+        """The party this token opened, locked, while its match id is still unknown (the token is dead after)."""
+        return await session.scalar(
+            sa.select(models.CustomGameBotLobby)
+            .where(
+                models.CustomGameBotLobby.callback_token_sha256 == token_sha256,
+                models.CustomGameBotLobby.match_id.is_(None),
+            )
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+
+    async def list_awaiting(self, session: AsyncSession, *, since: datetime) -> list[models.CustomGameBotLobby]:
+        """Parties created after ``since`` whose match id is still unknown, oldest first."""
+        rows = await session.scalars(
+            sa.select(models.CustomGameBotLobby)
+            .where(models.CustomGameBotLobby.match_id.is_(None), models.CustomGameBotLobby.created_at > since)
+            .order_by(models.CustomGameBotLobby.id)
+        )
+        return list(rows)
+
+    async def get_awaiting_for_update(
+        self, session: AsyncSession, bot_lobby_id: int
+    ) -> models.CustomGameBotLobby | None:
+        """One party, locked, if its match id is still unknown."""
+        return await session.scalar(
+            sa.select(models.CustomGameBotLobby)
+            .where(models.CustomGameBotLobby.id == bot_lobby_id, models.CustomGameBotLobby.match_id.is_(None))
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+
+    async def match_id_for_encounter(self, session: AsyncSession, encounter_id: int) -> str | None:
+        """The match id the encounter's bot party reported, else ``None``."""
+        return await session.scalar(
+            sa.select(models.CustomGameBotLobby.match_id).where(
+                models.CustomGameBotLobby.encounter_id == encounter_id,
+                models.CustomGameBotLobby.match_id.is_not(None),
+            )
+        )

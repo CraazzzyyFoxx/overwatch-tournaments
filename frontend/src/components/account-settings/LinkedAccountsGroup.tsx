@@ -6,6 +6,7 @@ import { Eye, EyeOff, MoreHorizontal, Plus } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { HandleLabel } from "@/components/HandleLabel";
+import { IngestLinks } from "@/components/IngestLinks";
 import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import { SettingGroup } from "@/components/kit/SettingRow";
 import { SocialIcon } from "@/components/social/SocialIcon";
@@ -46,6 +47,17 @@ function ProviderTile({ provider }: Readonly<{ provider: string }>) {
     <span className="flex size-8 shrink-0 items-center justify-center rounded-md border border-[color:var(--aqt-overlay-border)] bg-[color:var(--aqt-overlay-2)]">
       <SocialIcon provider={provider} size={16} decorative />
     </span>
+  );
+}
+
+/** Deadlock matches of a mix reach the site through the player's deadlock-api-ingest; say so where Steam is linked. */
+function SteamIngestHint({ className }: Readonly<{ className?: string }>) {
+  const t = useTranslations("accountSettings");
+  return (
+    <div className={cn("space-y-0.5 text-caption text-pretty text-[color:var(--aqt-fg-dim)]", className)}>
+      <p>{t("linked.steamIngestHint")}</p>
+      <IngestLinks />
+    </div>
   );
 }
 
@@ -223,6 +235,7 @@ export function LinkedAccountsGroup() {
                   );
                 })}
               </ul>
+              {provider === "steam" ? <SteamIngestHint className="mt-2 pl-11" /> : null}
             </div>
           );
         })}
@@ -243,6 +256,7 @@ export function LinkedAccountsGroup() {
                       {notice ? (
                         <p className="text-caption text-pretty text-[color:var(--aqt-fg-dim)]">{notice}</p>
                       ) : null}
+                      {provider === "steam" ? <SteamIngestHint /> : null}
                     </div>
                     <Button variant="outline" size="sm" asChild>
                       <a href={linkHref(provider)} aria-label={t("linked.linkAria", { provider: label })}>

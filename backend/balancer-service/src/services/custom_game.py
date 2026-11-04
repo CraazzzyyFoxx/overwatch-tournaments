@@ -2551,6 +2551,26 @@ class CustomGameService:
         await session.flush()
         return game
 
+    async def writable_lobby(
+        self,
+        session: AsyncSession,
+        *,
+        workspace_id: int,
+        custom_game_id: int,
+        lobby_index: int,
+        actor_user_id: int,
+        actor_is_superuser: bool = False,
+    ) -> tuple[models.CustomGame, models.CustomGameLobby]:
+        """The locked, host-writable mix and one of its lobbies, for a lobby write another service class owns."""
+        game = await self._writable(
+            session,
+            workspace_id=workspace_id,
+            custom_game_id=custom_game_id,
+            actor_user_id=actor_user_id,
+            actor_is_superuser=actor_is_superuser,
+        )
+        return game, await self._lobby(session, game, lobby_index)
+
     async def set_variant_index(
         self,
         session: AsyncSession,

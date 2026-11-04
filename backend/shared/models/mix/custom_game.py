@@ -28,6 +28,7 @@ if typing.TYPE_CHECKING:
 
 __all__ = (
     "CustomGame",
+    "CustomGameBotLobby",
     "CustomGameCoHost",
     "CustomGameLobby",
     "CustomGamePlayer",
@@ -205,6 +206,42 @@ class CustomGameLobby(db.Base):
     # The in-game lobby's join code, as the host pasted it (trimmed, 1..64 chars; NULL = none). Public like the
     # rest of the lobby, kept across matches until the host changes it, and editable while a match is live.
     lobby_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+
+class CustomGameBotLobby(db.TimeStampIntegerMixin):
+    """The bot-created in-game party of one live match (``DisciplineSpec.lobby_bot``).
+
+    Bound to the match's encounter: Cancel, Undo and a workspace delete drop the party with it, and a Recreate replaces
+    it. ``match_id`` is the source's id of the match played in it, filed by the stats worker as the round's import
+    (``stats.match_search``). Only the SHA-256 of the callback token is stored: the token is a capability in a URL.
+    """
+
+    __tablename__ = "bot_lobby"
+    __table_args__ = (
+        CheckConstraint(f"lobby_index BETWEEN 0 AND {MAX_LOBBIES - 1}", name="ck_custom_game_bot_lobby_index"),
+        UniqueConstraint("encounter_id", name="uq_custom_game_bot_lobby_encounter"),
+        UniqueConstraint("callback_token_sha256", name="uq_custom_game_bot_lobby_token"),
+        Index("ix_custom_game_bot_lobby_custom_game_id", "custom_game_id"),
+        {"schema": "mix"},
+    )
+
+    workspace_id: Mapped[int] = mapped_column(ForeignKey("workspace.id", ondelete="CASCADE"))
+    custom_game_id: Mapped[int] = mapped_column(ForeignKey("mix.custom_game.id", ondelete="CASCADE"))
+    lobby_index: Mapped[int] = mapped_column(Integer(), nullable=False)
+    encounter_id: Mapped[int] = mapped_column(
+        ForeignKey("encounter.encounter.id", ondelete="CASCADE", name="fk_custom_game_bot_lobby_encounter")
+    )
+    discipline: Mapped[str] = mapped_column(
+        String(32), ForeignKey("catalog.discipline.code", name="fk_custom_game_bot_lobby_discipline")
+    )
+    party_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    party_code: Mapped[str] = mapped_column(String(64), nullable=False)
+    callback_token_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    callback_secret: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    match_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    created_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("auth.user.id", ondelete="SET NULL"), nullable=True
+    )
 
 
 class CustomGamePlayer(db.TimeStampIntegerMixin):

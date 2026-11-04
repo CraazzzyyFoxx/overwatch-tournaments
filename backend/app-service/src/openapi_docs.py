@@ -29,7 +29,7 @@ DOCS: dict[str, dict] = {
     },
     "rpc.app.disciplines.metadata": {
         "summary": "Get a discipline's native metadata",
-        "description": "Permission: public; an optional identity lets a hidden workspace's members read it. Returns the descriptor, the role dictionary (inactive rows included for history; global roles plus the requested workspace's sub-roles), stat and event vocabularies, team-format presets and the native ladder. 404 `discipline_not_installed` for an unknown code; a disabled discipline is still readable.",
+        "description": "Permission: public; an optional identity lets a hidden workspace's members read it. Returns the descriptor, the role dictionary (inactive rows included for history; global roles plus the requested workspace's sub-roles), stat and event vocabularies, team-format presets, the bot lobby the game offers pickup mixes (`lobby_bot`: its server regions and default region; null when none) and the native ladder. 404 `discipline_not_installed` for an unknown code; a disabled discipline is still readable.",
     },
     # ── users (identity reads) ───────────────────────────────────────────────────
     "rpc.app.users.list": {

@@ -6,8 +6,11 @@ import { ChevronDown, FileUp } from "lucide-react";
 
 import { LobbyStage } from "@/app/balancer/mix/_components/LobbyStage";
 import { LobbyCodeStrip } from "@/app/balancer/mix/_components/LobbyCodeStrip";
+import { MixIngestGuide } from "@/app/balancer/mix/_components/MixIngestGuide";
 import { useMixBanRoom } from "@/app/balancer/mix/_hooks/useMixBanRoom";
+import { useMixIngest } from "@/app/balancer/mix/_hooks/useMixIngest";
 import { lobbyCandidateCount, buildMixOwner, canWriteMix, parseVariants, teamNamesByIndex } from "@/app/balancer/mix/pickup-lineup";
+import { botLobbyOptions } from "@/app/balancer/mix/pickup-bot-lobby";
 import { lobbyLetter } from "@/app/balancer/mix/pickup-chrome";
 import { usePickupMix } from "@/app/balancer/mix/usePickupMix";
 import { useMixLogUpload } from "@/app/balancer/mix/useMixLogUpload";
@@ -89,6 +92,8 @@ export function MixRoom({ initialGame, lobbyIndex }: Readonly<{ initialGame: Cus
   const discipline = game.discipline;
   const metadataQuery = useDisciplineMetadata(workspaceId, discipline);
   const workspaceGrid = useDivisionGrid(discipline);
+  const capabilities = metadataQuery.data?.discipline.capabilities;
+  const ingest = useMixIngest(game, isSignedIn && capabilities?.ingest_status === true);
   const owner = useMemo(
     () => buildMixOwner(metadataQuery.data, game.roster_shape, workspaceGrid),
     [metadataQuery.data, game.roster_shape, workspaceGrid]
@@ -162,6 +167,16 @@ export function MixRoom({ initialGame, lobbyIndex }: Readonly<{ initialGame: Cus
         ? lineupRoomTeams(variant)
         : emptyTeams(game, teamNames);
   const teams = withHeroRoom(baseTeams, shown.heroState, shownLobby.live_seats ?? []);
+  // The lobby's seated players' ingest states: with nobody uploading and no bot lobby, the match will not be found by itself.
+  const seatedStates = teams
+    .flatMap((team) => team.slots)
+    .flatMap((slot) => (slot.seat != null ? [ingest.of(slot.seat.memberId)] : []));
+  const ingestWarn =
+    ingest.ready &&
+    (shown.phase === "ready" || shown.phase === "pregame" || shown.phase === "live") &&
+    seatedStates.length > 0 &&
+    seatedStates.every((state) => state === "inactive") &&
+    shownLobby.bot_lobby == null;
   const heroesById = heroRoom.heroesById;
   // Only while the ban stage is up: its bar is what confirms the pick.
   const pickFor =
@@ -278,6 +293,13 @@ export function MixRoom({ initialGame, lobbyIndex }: Readonly<{ initialGame: Cus
         mixMatches={mix.matchesQuery.data ?? []}
         voiceUrl={mySeat != null && !mySeat.away && mySeat.current_lobby === lobbyIndex ? (mySeat.voice_url ?? null) : null}
         logUpload={logUpload}
+        botLobby={botLobbyOptions(
+          metadataQuery.data,
+          game,
+          canWrite,
+          mix.createBotLobby.isPending,
+          (region) => mix.createBotLobby.mutate({ lobbyIndex, region })
+        )}
         actions={{
           onBalance: () => mix.balance.mutate({ scope: "lobby", lobbyIndex }),
           balancing: mix.balance.isPending,
@@ -373,6 +395,7 @@ export function MixRoom({ initialGame, lobbyIndex }: Readonly<{ initialGame: Cus
             captainOffline={shown.phase === "draft" && (captainOffline[index] ?? false)}
             captainControl={draftOrder[index] != null ? captainControl(draftOrder[index], index) : null}
             pickFor={pickFor != null ? { ...pickFor, onChoose: setChosenMember } : undefined}
+            ingestOf={capabilities?.ingest_status === true ? ingest.of : undefined}
             className={cn(
               "row-start-1",
               index === 0 ? "col-start-1" : "col-start-2 lg:col-start-3",
@@ -401,6 +424,7 @@ export function MixRoom({ initialGame, lobbyIndex }: Readonly<{ initialGame: Cus
               />
             </Card>
           ) : null}
+          {canWrite && capabilities?.ingest_status === true ? <MixIngestGuide warn={ingestWarn} /> : null}
           {center}
         </section>
       </div>

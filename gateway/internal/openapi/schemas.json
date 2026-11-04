@@ -1333,7 +1333,7 @@
       "summary": "List installed disciplines"
     },
     "rpc.app.disciplines.metadata": {
-      "description": "Permission: public; an optional identity lets a hidden workspace's members read it. Returns the descriptor, the role dictionary (inactive rows included for history; global roles plus the requested workspace's sub-roles), stat and event vocabularies, team-format presets and the native ladder. 404 `discipline_not_installed` for an unknown code; a disabled discipline is still readable.",
+      "description": "Permission: public; an optional identity lets a hidden workspace's members read it. Returns the descriptor, the role dictionary (inactive rows included for history; global roles plus the requested workspace's sub-roles), stat and event vocabularies, team-format presets, the bot lobby the game offers pickup mixes (`lobby_bot`: its server regions and default region; null when none) and the native ladder. 404 `discipline_not_installed` for an unknown code; a disabled discipline is still readable.",
       "query_params": [
         {
           "name": "workspace_id",
@@ -2277,6 +2277,10 @@
       },
       "summary": "Balance custom game"
     },
+    "rpc.balancer.custom.bot_lobby_callback": {
+      "description": "Permission: public; the one-time token in the path is the credential. The game source reports the match id of a bot-created lobby here (body: a bare number or string, a JSON object with match_id, or plain digits; header X-Callback-Secret is checked when sent). Always 204 -- for an unknown, answered or expired token too, so it reveals nothing. The same path with /settings acknowledges the source's settings notifications and ignores them.",
+      "summary": "Report a bot lobby's match"
+    },
     "rpc.balancer.custom.cancel_match": {
       "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Throws the lobby's live match away: its encounter is deleted with its game and rosters, nothing is recorded and no rank, pin or map moves; the lineup is ready to start again. 409 no_live_match when nothing was started.",
       "request": {
@@ -2296,6 +2300,14 @@
         "ref": "balancer.CustomGameCreate"
       },
       "summary": "Create custom game"
+    },
+    "rpc.balancer.custom.create_bot_lobby": {
+      "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Has the game's bot open the in-game lobby for the lobby's live match, in one of the game's server regions (the discipline metadata's lobby_bot.regions): the party's join code becomes the lobby's lobby_code, the region is remembered for the caller per game, and a previous party of the same match is replaced. The bot leaves 15 minutes after creation whatever the match does. The match id comes back by the game source's callback or by polling it, and is filed as the round's statistics import once the round is recorded. Returns the refreshed mix. 409 no_live_match when the lobby has no live match, 422 unsupported_lobby_bot for a game without a bot lobby, 422 invalid_region, 429 lobby_bot_rate_limited:<seconds> (with Retry-After) when the game source refused to open another lobby, 503 lobby_bot_failed when it is down or refused.",
+      "request": {
+        "array": false,
+        "ref": "balancer.CustomGameBotLobbyCreate"
+      },
+      "summary": "Create custom game bot lobby"
     },
     "rpc.balancer.custom.delete_discord_post": {
       "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Asks the bot to delete one message this mix posted, named by its id from the mix's `discord_posts`, and returns the refreshed mix. 404 when the id belongs to another mix's message. Clicking twice is harmless; closing or cancelling a mix deletes nothing, its posts stay as history.",
@@ -2330,7 +2342,7 @@
       "summary": "Split custom game pool into lobby drafts"
     },
     "rpc.balancer.custom.get": {
-      "description": "Permission: public; no authentication required. Returns one mix with its full lineup: each seat's participation state, role order, the ranks the balancer would use and which layer each came from. Resolves ownership from the mix id; an optional workspace_id restricts the read and returns 404 if the mix belongs to another workspace. It carries the mix's hero_ban_preset (null = no bans). It carries hero_fearless (spec \u00a711.4), hero_ban_seconds / hero_pick_seconds (the hero room's clock per ban / per pick step in seconds; null = the preset's own), hero_free_order (a turn-by-turn pick is for whichever teammate still without a hero the picker taps) and hero_captains_only (only a team's captain or a host picks its heroes). Each lobby carries state (idle | ready | pregame | live), live_seats (the live match's participations {id, slot, name}) and opener_index (the lineup team that bans first in the next match, null without bans). Each lobby also carries lobby_code: the in-game lobby's join code its host set, null while none. A lobby's `state` reads `draft_setup` / `draft_live` while its draft runs, with `draft_session_id`; a drafted lineup's document carries `source: \"draft\"`. A player in a drafting lobby's pool reads that lobby as `current_lobby`; an unpicked player who stepped away leaves the pool.",
+      "description": "Permission: public; no authentication required (a signed-in caller only adds its own remembered bot-lobby region). Returns one mix with its full lineup: each seat's participation state, role order, the ranks the balancer would use and which layer each came from. Resolves ownership from the mix id; an optional workspace_id restricts the read and returns 404 if the mix belongs to another workspace. It carries the mix's hero_ban_preset (null = no bans). It carries hero_fearless (spec \u00a711.4), hero_ban_seconds / hero_pick_seconds (the hero room's clock per ban / per pick step in seconds; null = the preset's own), hero_free_order (a turn-by-turn pick is for whichever teammate still without a hero the picker taps) and hero_captains_only (only a team's captain or a host picks its heroes). Each lobby carries state (idle | ready | pregame | live), live_seats (the live match's participations {id, slot, name}) and opener_index (the lineup team that bans first in the next match, null without bans). Each lobby also carries lobby_code: the in-game lobby's join code its host set, null while none. Each lobby also carries bot_lobby: the game bot's party for the lobby's CURRENT live match {party_code, created_at, expires_at (when its bot leaves), match_id (once reported)}, else null; the top-level bot_lobby_region is the signed-in viewer's remembered bot-lobby region of this game (null when none or anonymous). A lobby's `state` reads `draft_setup` / `draft_live` while its draft runs, with `draft_session_id`; a drafted lineup's document carries `source: \"draft\"`. A player in a drafting lobby's pool reads that lobby as `current_lobby`; an unpicked player who stepped away leaves the pool.",
       "query_params": [
         {
           "name": "workspace_id",
@@ -2346,6 +2358,10 @@
     "rpc.balancer.custom.hard_delete": {
       "description": "Permission: workspace membership plus the workspace `admin` or `owner` role (superuser counts). Permanently erases the mix together with its roster, every match it recorded and every Discord message it posted, and returns the deleted id. Irreversible, and unlike close it is not open to the mix's own host and co-hosts.",
       "summary": "Delete custom game"
+    },
+    "rpc.balancer.custom.ingest_status": {
+      "description": "Permission: any signed-in account. Per roster row (keyed by the row's player_id), whether the player's own client uploads their matches to the game's source -- what the automatic search for a round's match depends on: {active, last_upload_at}, or null when unknown (no linked game account, or the source could not answer; never read as inactive). window_days is the source's look-back. Cached 15 minutes per account; account ids never leave the server. 422 unsupported_ingest_status for a game without one.",
+      "summary": "Get custom game ingest status"
     },
     "rpc.balancer.custom.list": {
       "description": "Permission: public; no authentication required. One keyset page of the workspace's mixes, newest first: `{items, next_before_id}`. Each item carries the mix's settings and host display name (no roster), `players_count` (distinct members seated across its recorded matches), `roster_count`, the most recently played `maps` (at most 4, with `maps_count` for all of them) and every lobby's `matches_count`. Optional query: `discipline` (an installed game), `status` (`open` = draft or balanced, `history` = completed or cancelled; anything else is a 422), `q` (case-insensitive substring of the mix name or the host's display name), `limit` (1..100, default 30) and `before_id` (pass the previous page's `next_before_id`; null means there is no further page).",
@@ -2437,7 +2453,7 @@
       "summary": "List custom games"
     },
     "rpc.balancer.custom.match_history": {
-      "description": "Permission: public; no authentication required. Returns every round recorded for the mix, newest first: its two teams by slot (slot 1 banned first) with name and score, its hero bans {slot, item_id} in order, whose hero each pick was {slot, member_id, name, item_id} in pick order, the winning slot (null for a draw), lobby, map, recorder and the rank points it applied, plus its statistics: stats_match_id (the bound stats match, null when none), log_state (\"processing\" while there is no stats match and the newest uploaded log is pending/processing, the newest match import waits for the game's source or the match is still being looked up by its players; else \"failed\" when that log failed/awaits a link or that import gave up; else null), match_search (\"searching\" while the match of a game that can be found by its players is still being looked up, \"not_found\" once the search gave up and the host files the id by hand or starts it again; else null) and match_search_error (why a not_found search gave up: no_linked_accounts, not_found_in_window, \"ambiguous: <ids>\" or the source's refusal; else null).",
+      "description": "Permission: public; no authentication required. Returns every round recorded for the mix, newest first: its two teams by slot (slot 1 banned first) with name and score, its hero bans {slot, item_id} in order, whose hero each pick was {slot, member_id, name, item_id} in pick order, the winning slot (null for a draw), lobby, map, recorder and the rank points it applied, plus its statistics: stats_match_id (the bound stats match, null when none), log_state (\"processing\" while there is no stats match and the newest uploaded log is pending/processing, the newest match import waits for the game's source or the match is still being looked up by its players; else \"failed\" when that log failed/awaits a link or that import gave up; else null), match_search (\"searching\" while the match of a game that can be found by its players is still being looked up, \"not_found\" once the search gave up and the host files the id by hand or starts it again; else null), match_search_error (while searching, why it is still waiting: no_match_yet when no match fit the players yet, source_unavailable when the game's source could not be asked or refused, null before the first attempt; once not_found, why it gave up: no_linked_accounts, not_found_in_window, \"ambiguous: <ids>\" or the source's refusal; else null) and match_search_next_attempt_at (when a search still looking tries next; else null).",
       "summary": "List custom game matches"
     },
     "rpc.balancer.custom.post_discord": {
@@ -15408,6 +15424,14 @@
           "title": "Catalog Sync",
           "type": "boolean"
         },
+        "ingest_status": {
+          "title": "Ingest Status",
+          "type": "boolean"
+        },
+        "lobby_bot": {
+          "title": "Lobby Bot",
+          "type": "boolean"
+        },
         "log_upload": {
           "title": "Log Upload",
           "type": "boolean"
@@ -15436,6 +15460,8 @@
         "match_fetch",
         "match_search",
         "log_upload",
+        "lobby_bot",
+        "ingest_status",
         "achievement_conditions",
         "analytics"
       ],
@@ -15545,6 +15571,16 @@
           "title": "Event Types",
           "type": "array"
         },
+        "lobby_bot": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/app.LobbyBotRead"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "native_ladder": {
           "items": {
             "$ref": "#/components/schemas/app.NativeTierRead"
@@ -15593,6 +15629,7 @@
         "stat_defs",
         "event_types",
         "team_format_presets",
+        "lobby_bot",
         "native_ladder"
       ],
       "title": "DisciplineMetadata",
@@ -15868,6 +15905,28 @@
         "role"
       ],
       "title": "FormatRuleWire",
+      "type": "object"
+    },
+    "app.LobbyBotRead": {
+      "description": "Mirrors ``shared.disciplines.lobby.LobbyBotSpec``'s declarations.",
+      "properties": {
+        "default_region": {
+          "title": "Default Region",
+          "type": "string"
+        },
+        "regions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Regions",
+          "type": "array"
+        }
+      },
+      "required": [
+        "regions",
+        "default_region"
+      ],
+      "title": "LobbyBotRead",
       "type": "object"
     },
     "app.LookupItem": {
@@ -21466,6 +21525,30 @@
         "hero_ban_preset"
       ],
       "title": "CustomGameBanPresetPatch",
+      "type": "object"
+    },
+    "balancer.CustomGameBotLobbyCreate": {
+      "additionalProperties": false,
+      "description": "Have the game's bot open the in-game lobby for the lobby's live match, in one of the game's server regions.",
+      "properties": {
+        "lobby_index": {
+          "default": 0,
+          "maximum": 5,
+          "minimum": 0,
+          "title": "Lobby Index",
+          "type": "integer"
+        },
+        "region": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Region",
+          "type": "string"
+        }
+      },
+      "required": [
+        "region"
+      ],
+      "title": "CustomGameBotLobbyCreate",
       "type": "object"
     },
     "balancer.CustomGameCaptainPatch": {

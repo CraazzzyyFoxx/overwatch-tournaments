@@ -2,7 +2,9 @@
 
 Every round recorded within :data:`fetch.FETCH_WINDOW` in a discipline whose module declares a ``match_searchers``
 entry gets one ``stats.match_search`` row, enrolled by this worker tick (a missed tick or a restart loses nothing).
-The tick asks the module's searcher for the matches any seated player's linked account (the discipline's
+A round whose encounter has a bot lobby that reported its match id (``mix.bot_lobby.match_id``) files that id
+directly, whatever its players have linked.
+Otherwise the tick asks the module's searcher for the matches any seated player's linked account (the discipline's
 ``identity_provider``) played between the round's Start, :data:`START_SLACK` earlier, and its Record. A match is the
 round's when every round team has at least half of its linked members on one distinct side of it and none on another
 (:func:`fitting`); one another game of the workspace already holds is not. Exactly one -> its id is filed through
@@ -30,6 +32,7 @@ from shared.disciplines import DISCIPLINES
 from shared.disciplines.ingest import MatchCandidate, MatchFetchFailed, MatchFetchNotReady, MatchQuery, MatchSearcher
 from shared.models import MatchSearch, MatchSearchStatus
 from shared.observability import observe_scheduled_job
+from shared.repository.custom_game import CustomGameBotLobbyRepository
 from shared.repository.encounter import EncounterGameRepository, EncounterTeamRepository
 from shared.repository.match_fetch import MatchFetchRepository
 from shared.repository.match_search import MatchSearchRepository
@@ -54,6 +57,7 @@ _DUE_PER_TICK = 20
 _REASON_LIMIT = 500
 
 _encounters = EncounterRepository()
+_bot_lobbies = CustomGameBotLobbyRepository()
 _fetches = MatchFetchRepository()
 _games = EncounterGameRepository()
 _teams = EncounterTeamRepository()
@@ -161,14 +165,17 @@ async def _settled(session: AsyncSession, encounter_id: int) -> bool:
 
 
 async def _round(
-    session: AsyncSession, row: MatchSearch, provider: str
-) -> tuple[int, MatchQuery, list[list[frozenset[str]]]] | MatchSearchStatus:
-    """The round's game, query and linked teams, or the outcome that ends the search before asking anyone."""
+    session: AsyncSession, row: MatchSearch, provider: str, bot_match_id: str | None
+) -> tuple[int, MatchQuery | None, list[list[frozenset[str]]]] | MatchSearchStatus:
+    """The round's game, query and linked teams, or the outcome that ends the search before asking anyone. A round
+    whose bot lobby named its match needs neither (the query is ``None``): no linked account is required to file it."""
     # A pickup round is mix-owned, so the tournament-only ``get`` would hide it.
     encounter = await _encounters.get_any_owner(session, row.encounter_id)
     games = await _games.list_for_encounter(session, row.encounter_id)
     if encounter is None or encounter.started_at is None or not games or await _settled(session, row.encounter_id):
         return MatchSearchStatus.STOPPED
+    if bot_match_id is not None:
+        return games[0].id, None, []
     member = models.EncounterTeamMember
     linked = await session.execute(
         sa.select(member.encounter_team_id, member.workspace_member_id, models.SocialAccount.username_normalized)
@@ -198,20 +205,58 @@ async def _round(
     return games[0].id, query, teams
 
 
+async def _file(session: AsyncSession, row: MatchSearch, external_id: str, game_id: int) -> str | None:
+    """Settle the search on ``external_id`` and file it as the round's import (``found``). ``None`` once filed;
+    a refusal (another game took the match) rolls back and is returned as the reason to retry with."""
+    row.attempts += 1
+    row.status, row.external_id, row.last_error = MatchSearchStatus.FOUND, external_id, None
+    data = {
+        "workspace_id": row.workspace_id,
+        "discipline": row.discipline,
+        "tournament_id": None,
+        "encounter_id": row.encounter_id,
+        "encounter_game_id": game_id,
+        "external_id": external_id,
+    }
+    await session.flush()
+    try:
+        # Commits the row with the request: the round's import, as if its host had filed the id.
+        await fetch.submit_fetch(session, data=data, requested_by_user_id=None)
+    except HTTPException as exc:
+        await session.rollback()
+        return str(exc.detail)[:_REASON_LIMIT]
+    return None
+
+
 async def _attempt(search_id: int, *, session_factory: Any, now: datetime) -> None:
     async with session_factory() as session:
         row = await _searches.get(session, search_id)
         if row is None or row.status != MatchSearchStatus.PENDING:
             return
         found = searcher_of(row.discipline)
-        workspace_id, discipline, encounter_id = row.workspace_id, row.discipline, row.encounter_id
-        known = await _round(session, row, found[2]) if found is not None else MatchSearchStatus.STOPPED
+        workspace_id, encounter_id = row.workspace_id, row.encounter_id
+        bot_match_id = await _bot_lobbies.match_id_for_encounter(session, encounter_id)
+        known = await _round(session, row, found[2], bot_match_id) if found is not None else MatchSearchStatus.STOPPED
     if isinstance(known, MatchSearchStatus):
+        if bot_match_id is not None and known == MatchSearchStatus.STOPPED:
+            logger.info(
+                "Bot lobby match {} of round {} ignored: it has statistics or a filed id", bot_match_id, encounter_id
+            )
         reason = "no_linked_accounts" if known == MatchSearchStatus.NOT_FOUND else None
         return await _settle(session_factory, search_id, now, outcome=known, reason=reason)
     assert found is not None  # a round only reaches the search through a discipline that has one
     kind, searcher, _provider = found
     game_id, query, teams = known
+    if query is None:
+        assert bot_match_id is not None  # only a bot-named match needs no query
+        async with session_factory() as session:
+            row = await _locked(session, search_id)
+            if row is None:
+                return None
+            reason = await _file(session, row, bot_match_id, game_id)
+        if reason is None:
+            return None
+        return await _settle(session_factory, search_id, now, retry=reason)
     try:
         candidates = await searcher(query)
     except MatchFetchNotReady as exc:
@@ -244,27 +289,10 @@ async def _attempt(search_id: int, *, session_factory: Any, now: datetime) -> No
             await session.commit()
             return None
         if ours:
-            row.attempts += 1
-            row.status, row.external_id, row.last_error = MatchSearchStatus.FOUND, ours[0], None
-            await session.flush()
-            try:
-                # Commits the row with the request: the round's import, as if its host had filed the id.
-                await fetch.submit_fetch(
-                    session,
-                    data={
-                        "workspace_id": workspace_id,
-                        "discipline": discipline,
-                        "tournament_id": None,
-                        "encounter_id": encounter_id,
-                        "encounter_game_id": game_id,
-                        "external_id": ours[0],
-                    },
-                    requested_by_user_id=None,
-                )
+            reason = await _file(session, row, ours[0], game_id)
+            if reason is None:
                 return None
-            except HTTPException as exc:  # another game took the match meanwhile
-                await session.rollback()
-                return await _settle(session_factory, search_id, now, retry=str(exc.detail)[:_REASON_LIMIT])
+            return await _settle(session_factory, search_id, now, retry=reason)
     return await _settle(session_factory, search_id, now, retry="no_match_yet")
 
 

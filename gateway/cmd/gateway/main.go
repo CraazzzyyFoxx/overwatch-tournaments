@@ -389,6 +389,10 @@ func run() error {
 	balancerBinary := balancer.NewBinary(rpcClient, resolver.Resolve, logger)
 	mux.HandleFunc("POST /api/v1/balancer/tournaments/{tournament_id}/teams/import", balancerBinary.TeamsImport)
 	mux.HandleFunc("POST /api/v1/balancer/jobs", balancerBinary.JobCreate)
+	// The game source's bot-lobby webhook: public, its body is not JSON and its secret is a header, so it has its own
+	// handler; the settings variant is acknowledged at the edge.
+	mux.HandleFunc("POST /api/v1/deadlock/lobby-callback/{token}", balancerBinary.LobbyCallback)
+	mux.HandleFunc("POST /api/v1/deadlock/lobby-callback/{token}/settings", balancerBinary.LobbyCallbackSettings)
 	// stream-service: the tournament live-stream surface. The spectator read is
 	// public and rides the anonymous response cache (TTL-only — see
 	// stream.PublicCacheableReads); the repoll trigger is an operator action

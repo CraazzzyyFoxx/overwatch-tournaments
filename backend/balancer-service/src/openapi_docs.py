@@ -303,10 +303,47 @@ DOCS: dict[str, dict] = {
             "(pass the previous page's `next_before_id`; null means there is no further page)."
         ),
     },
+    "rpc.balancer.custom.create_bot_lobby": {
+        "summary": "Create custom game bot lobby",
+        "description": (
+            "Permission: workspace membership plus being the mix's host or co-host (or a superuser). "
+            "Has the game's bot open the in-game lobby for the lobby's live match, in one of the game's server "
+            "regions (the discipline metadata's lobby_bot.regions): the party's join code becomes the lobby's "
+            "lobby_code, the region is remembered for the caller per game, and a previous party of the same match "
+            "is replaced. The bot leaves 15 minutes after creation whatever the match does. The match id comes back "
+            "by the game source's callback or by polling it, and is filed as the round's statistics import once the "
+            "round is recorded. Returns the refreshed mix. 409 no_live_match when the lobby has no live match, "
+            "422 unsupported_lobby_bot for a game without a bot lobby, 422 invalid_region, 429 "
+            "lobby_bot_rate_limited:<seconds> (with Retry-After) when the game source refused to open another "
+            "lobby, 503 lobby_bot_failed when it is down or refused."
+        ),
+    },
+    "rpc.balancer.custom.ingest_status": {
+        "summary": "Get custom game ingest status",
+        "description": (
+            "Permission: any signed-in account. Per roster row (keyed by the row's player_id), whether the "
+            "player's own client uploads their matches to the game's source -- what the automatic search for a "
+            "round's match depends on: {active, last_upload_at}, or null when unknown (no linked game account, or "
+            "the source could not answer; never read as inactive). window_days is the source's look-back. Cached "
+            "15 minutes per account; account ids never leave the server. 422 unsupported_ingest_status for a game "
+            "without one."
+        ),
+    },
+    "rpc.balancer.custom.bot_lobby_callback": {
+        "summary": "Report a bot lobby's match",
+        "description": (
+            "Permission: public; the one-time token in the path is the credential. The game source reports the "
+            "match id of a bot-created lobby here (body: a bare number or string, a JSON object with match_id, or "
+            "plain digits; header X-Callback-Secret is checked when sent). Always 204 -- for an unknown, answered "
+            "or expired token too, so it reveals nothing. The same path with /settings acknowledges the source's "
+            "settings notifications and ignores them."
+        ),
+    },
     "rpc.balancer.custom.get": {
         "summary": "Get custom game",
         "description": (
-            "Permission: public; no authentication required. "
+            "Permission: public; no authentication required (a signed-in caller only adds its own remembered "
+            "bot-lobby region). "
             "Returns one mix with its full lineup: each seat's participation state, role "
             "order, the ranks the balancer would use and which layer each came from. "
             "Resolves ownership from the mix id; an optional workspace_id restricts the read "
@@ -320,6 +357,10 @@ DOCS: dict[str, dict] = {
             " {id, slot, name}) and opener_index (the lineup team that bans first in the next match, null without"
             " bans)."
             " Each lobby also carries lobby_code: the in-game lobby's join code its host set, null while none."
+            " Each lobby also carries bot_lobby: the game bot's party for the lobby's CURRENT live match"
+            " {party_code, created_at, expires_at (when its bot leaves), match_id (once reported)}, else null;"
+            " the top-level bot_lobby_region is the signed-in viewer's remembered bot-lobby region of this game"
+            " (null when none or anonymous)."
             " A lobby's `state` reads `draft_setup` / `draft_live` while its draft runs, with `draft_session_id`;"
             " a drafted lineup's document carries `source: \"draft\"`. A player in a drafting lobby's pool reads"
             " that lobby as `current_lobby`; an unpicked player who stepped away leaves the pool."
@@ -674,9 +715,12 @@ DOCS: dict[str, dict] = {
             'waits for the game\'s source or the match is still being looked up by its players; else "failed" when '
             'that log failed/awaits a link or that import gave up; else null), match_search ("searching" while '
             'the match of a game that can be found by its players is still being looked up, "not_found" once the '
-            "search gave up and the host files the id by hand or starts it again; else null) and "
-            "match_search_error (why a not_found search gave up: no_linked_accounts, not_found_in_window, "
-            '"ambiguous: <ids>" or the source\'s refusal; else null).'
+            "search gave up and the host files the id by hand or starts it again; else null), "
+            "match_search_error (while searching, why it is still waiting: no_match_yet when no match fit the players "
+            "yet, source_unavailable when the game's source could not be asked or refused, null before the first "
+            "attempt; once not_found, why it gave up: no_linked_accounts, not_found_in_window, "
+            '"ambiguous: <ids>" or the source\'s refusal; else null) and match_search_next_attempt_at (when a search '
+            "still looking tries next; else null)."
         ),
     },
     "rpc.balancer.custom.undo_match": {

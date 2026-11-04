@@ -106,6 +106,8 @@ class UserBalancerConfig(db.TimeStampIntegerMixin):
     formation_defaults: Mapped[dict[str, dict[str, Any]]] = mapped_column(
         JSONB, nullable=False, server_default="{}", default=dict
     )
+    # ``{discipline code: region code}``: the server region this host last opened a bot lobby in, preselected next time.
+    bot_lobby_regions: Mapped[dict[str, str]] = mapped_column(JSONB, nullable=False, server_default="{}", default=dict)
 
 
 class BalancerBalance(db.TimeStampIntegerMixin):
