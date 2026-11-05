@@ -238,6 +238,12 @@ class DraftLifecycleService:
     ) -> DraftSession:
         """A session of exactly one owner: a tournament's formation node, or one lobby of a mix (spec §9.1). One
         active session per owner -- checked here for a node, by ``uq_draft_session_active_lobby`` for a lobby."""
+        if (tournament_id is None) != (formation_node_id is None):
+            raise _err(
+                "formation_node_required",
+                "A tournament draft names its formation node, a mix draft names none",
+                status_code=422,
+            )
         # `rounds` is derived, never passed: the shape owns the roster size.
         if shape.draft_rounds < 1:
             raise _err(

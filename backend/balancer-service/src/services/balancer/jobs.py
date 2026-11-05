@@ -241,6 +241,7 @@ async def create_job(
                     "config_overrides": config_overrides,
                     "job_id": job_id,
                     "tournament_id": tournament_id,
+                    "formation_node_id": formation_node_id,
                     "created_by": user.id,
                     "credential_type": getattr(user, "_credential_type", "access_token"),
                     "api_key_id": api_key_id,
@@ -268,6 +269,7 @@ async def create_job(
         await _emit_job(
             tournament_id,
             BALANCER_JOB_QUEUED,
+            formation_node_id=formation_node_id,
             job_id=job_id,
             status="queued",
             actor_user_id=user.id,
@@ -407,12 +409,14 @@ async def execute_balance_job(job_id: str, *, progress_clock=None) -> None:
     # without one (API-key/public) skip realtime broadcasting entirely.
     rt_tournament_id = current_meta.get("tournament_id") if isinstance(current_meta, dict) else None
     rt_actor_id = current_meta.get("created_by") if isinstance(current_meta, dict) else None
+    rt_node_id = current_meta.get("formation_node_id") if isinstance(current_meta, dict) else None
 
     async def publish_job_progress(update: dict[str, Any]) -> None:
         if rt_tournament_id is None:
             return
         await _emit_job_progress(
             int(rt_tournament_id),
+            formation_node_id=rt_node_id,
             job_id=job_id,
             status=str(update.get("status", "running")),
             progress=update.get("progress"),
@@ -430,6 +434,7 @@ async def execute_balance_job(job_id: str, *, progress_clock=None) -> None:
         await _emit_job(
             int(rt_tournament_id),
             event_type,
+            formation_node_id=rt_node_id,
             job_id=job_id,
             status=status_value,
             progress=progress,

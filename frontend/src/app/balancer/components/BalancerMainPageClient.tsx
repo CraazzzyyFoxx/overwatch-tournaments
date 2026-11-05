@@ -473,6 +473,7 @@ export function BalancerMainPageClient() {
 
   const { registerLocalJob } = useBalancerRealtime({
     tournamentId,
+    formationNodeId,
     dispatchJob,
     setVariants,
     setActiveVariantId,

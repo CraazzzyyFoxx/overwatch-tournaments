@@ -32,6 +32,8 @@ const CONFIG_CHANGED_EVENT = "balancer.config_changed";
 
 type BalancerJobEventData = {
   tournament_id?: number;
+  /** The formation node the job balances; `null` for a job that names none. */
+  formation_node_id?: number | null;
   job_id: string;
   status: string;
   progress?: { percent?: number | null; current?: number | null; total?: number | null } | null;
@@ -44,6 +46,8 @@ type PresenceEventData = {
 
 type UseBalancerRealtimeOptions = {
   tournamentId: number | null;
+  /** The formation node this page balances: jobs of another node on the same topic are not ours. */
+  formationNodeId: number | null;
   dispatchJob: React.Dispatch<JobAction>;
   setVariants: React.Dispatch<React.SetStateAction<BalanceVariant[]>>;
   setActiveVariantId: React.Dispatch<React.SetStateAction<string | null>>;
@@ -64,8 +68,14 @@ function extractPercent(progress: BalancerJobEventData["progress"]): number | nu
   return null;
 }
 
+/** Whether a job event belongs to the node the page works on (an event naming no node is everyone's). */
+export function isJobOfNode(data: BalancerJobEventData, formationNodeId: number | null): boolean {
+  return data.formation_node_id == null || formationNodeId == null || data.formation_node_id === formationNodeId;
+}
+
 export function useBalancerRealtime({
   tournamentId,
+  formationNodeId,
   dispatchJob,
   setVariants,
   setActiveVariantId,
@@ -118,6 +128,9 @@ export function useBalancerRealtime({
 
   const handleJobEvent = useCallback(
     (eventType: string, data: BalancerJobEventData) => {
+      if (!isJobOfNode(data, formationNodeId)) {
+        return;
+      }
       const percent = extractPercent(data.progress);
       switch (eventType) {
         case "balancer_job.queued":
@@ -145,7 +158,7 @@ export function useBalancerRealtime({
           return;
       }
     },
-    [dispatchJob, handleJobSucceeded, t]
+    [dispatchJob, formationNodeId, handleJobSucceeded, t]
   );
 
   const handleEvent = useCallback(

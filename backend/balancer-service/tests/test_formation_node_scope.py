@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 from shared import models
 from shared.core.enums import DraftStatus
 from shared.core.errors import ApiHTTPException
+from shared.domain.roster_shape import RosterShape
 from shared.domain.team_format import FormatDimension, FormatRule, TeamFormat
 from shared.services.team_format import save_tournament_format
 from shared.testing import create_test_async_engine
@@ -208,9 +209,31 @@ class FormationScopeTests(IsolatedAsyncioTestCase):
             ).all()
             self.assertEqual(players, [self.b])
 
-    async def test_guard_fires_on_the_standings_of_legacy_teams_the_export_does_not_replace(self) -> None:
+    async def test_a_new_formation_leaves_unrelated_legacy_teams_alone(self) -> None:
         async with self.Session() as s:
-            await self._team(s, None, "Legacy", standing=True)
+            legacy = await self._team(s, None, "Legacy", standing=True)
+            await s.commit()
+            outcome = await team_materialization.run(
+                s,
+                ExportPlan(
+                    tournament_id=self.tournament_id,
+                    formation_node_id=self.b,
+                    teams=[_team("New", self.members[1])],
+                    guard_standings=True,
+                ),
+            )
+            self.assertEqual(outcome.imported_teams, 1)
+            self.assertEqual(await s.scalar(sa.select(models.Team.id).where(models.Team.id == legacy)), legacy)
+            self.assertEqual(
+                await s.scalar(sa.select(models.Player.id).where(models.Player.team_id == legacy)) is not None, True
+            )
+            self.assertEqual(
+                await s.scalar(sa.select(models.Standing.team_id).where(models.Standing.team_id == legacy)), legacy
+            )
+
+    async def test_guard_fires_on_standings_of_the_nodes_teams_the_export_does_not_replace(self) -> None:
+        async with self.Session() as s:
+            await self._team(s, self.b, "Mine", standing=True)
             await s.commit()
             with self.assertRaises(ApiHTTPException) as caught:
                 await team_materialization.run(
@@ -291,6 +314,17 @@ class FormationScopeTests(IsolatedAsyncioTestCase):
             with self.assertRaises(ApiHTTPException) as caught:
                 await lifecycle_service.start(s, draft)
             self.assertEqual(_code(caught), "draft_no_picks")
+
+    async def test_a_tournament_draft_must_name_its_node(self) -> None:
+        async with self.Session() as s:
+            with self.assertRaises(ApiHTTPException) as caught:
+                await lifecycle_service.create_session(
+                    s,
+                    workspace_id=self.workspace_id,
+                    tournament_id=self.tournament_id,
+                    shape=RosterShape(entries=(("tank", 2),)),
+                )
+            self.assertEqual(_code(caught), "formation_node_required")
 
     async def test_draft_needs_draft_mode_node(self) -> None:
         async with self.Session() as s:

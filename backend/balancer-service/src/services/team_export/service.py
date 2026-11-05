@@ -109,7 +109,7 @@ class TeamMaterializationService:
         prior_ids = list(plan.prior_team_ids)
 
         if plan.guard_standings:
-            await self._assert_no_foreign_standings(session, plan.tournament_id, plan.formation_node_id, prior_ids)
+            await self._assert_no_foreign_standings(session, plan.formation_node_id, prior_ids)
 
         if prior_ids:
             # A link may point into another formation's export: only this node's teams go, plus the legacy
@@ -158,11 +158,12 @@ class TeamMaterializationService:
     @staticmethod
     async def _assert_no_foreign_standings(
         session: AsyncSession,
-        tournament_id: int,
         formation_node_id: int,
         prior_team_ids: Sequence[int],
     ) -> None:
-        """Refuse when standings exist for teams of this node that this export will not replace.
+        """Refuse when standings exist for teams of this node that this export will not replace. The legacy
+        (NULL-formation) teams the export adopts are in ``prior_team_ids`` and are replaced; any other NULL team is
+        not this export's business.
 
         Re-export is destructive-then-idempotent, not diffed, so a bracket built
         on teams outside ``prior_team_ids`` would be silently invalidated.
@@ -171,7 +172,7 @@ class TeamMaterializationService:
             sa.select(sa.literal(1))
             .select_from(Standing)
             .join(Team, Team.id == Standing.team_id)
-            .where(Team.tournament_id == tournament_id, _owned(formation_node_id))
+            .where(Team.formation_node_id == formation_node_id)
             .limit(1)
         )
         if prior_team_ids:

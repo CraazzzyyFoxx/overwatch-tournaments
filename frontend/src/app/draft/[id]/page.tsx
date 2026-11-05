@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ShieldAlert } from "lucide-react";
-import { redirect, useParams } from "next/navigation";
+import { redirect, useParams, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 
 import { DraftBoard, DraftStateFrame } from "@/components/draft/DraftBoard";
@@ -11,7 +11,8 @@ import { tournamentHref } from "@/lib/tournament/url";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import draftService from "@/services/draft.service";
 import { useDraftBoardQuery } from "@/hooks/useDraftData";
-import { useFlowNodeParam } from "@/hooks/useFlowNodeParam";
+import { FLOW_NODE_PARAM, useFlowNodeParam } from "@/hooks/useFlowNodeParam";
+import { draftFormationNode } from "@/lib/tournament/flow-nodes";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useTournamentQuery } from "@/hooks/useTournamentClientData";
 import { useEntityWorkspace } from "@/hooks/useEntityWorkspace";
@@ -26,6 +27,7 @@ const LOOKUP_POLL_MS = 60_000;
 export default function PublicDraftRoomPage() {
   const t = useTranslations("draftRedesign");
   const params = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
   // Legacy numeric ref: this route is addressed by tournament id directly
   // (not by slug), and the backend resolves a numeric ref like any other.
   const tournamentQuery = useTournamentQuery(params.id);
@@ -34,7 +36,11 @@ export default function PublicDraftRoomPage() {
   useEntityWorkspace(tournament?.workspace_id, tournament?.discipline);
   const { canAccessPermission } = usePermissions();
   // The tournament's current draft (active, else the latest): the room is the session's.
-  const formationNodeId = useFlowNodeParam(tournament, "formation");
+  // `?node=` names a formation; without it the room follows the tournament's draft formation, as the overview does.
+  const requestedNodeId = useFlowNodeParam(tournament, "formation");
+  const formationNodeId = searchParams?.get(FLOW_NODE_PARAM)
+    ? requestedNodeId
+    : (draftFormationNode(tournament)?.id ?? requestedNodeId);
   const lookup = useQuery({
     queryKey: tournamentQueryKeys.draftBoard(tournament?.id ?? 0, formationNodeId ?? 0),
     queryFn: () => draftService.getTournamentBoard(tournament!.id, formationNodeId!),
