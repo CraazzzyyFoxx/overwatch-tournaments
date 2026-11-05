@@ -58159,8 +58159,16 @@
           "type": "string"
         },
         "node_id": {
-          "title": "Node Id",
-          "type": "integer"
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Node Id"
         },
         "order": {
           "title": "Order",
@@ -58219,7 +58227,15 @@
           "$ref": "#/components/schemas/tournament.StageType"
         },
         "status": {
-          "$ref": "#/components/schemas/tournament.FlowNodeStatus"
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/tournament.FlowNodeStatus"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "swiss_bye_points": {
           "anyOf": [
@@ -58283,9 +58299,7 @@
         "name",
         "description",
         "stage_type",
-        "order",
-        "node_id",
-        "status"
+        "order"
       ],
       "title": "StageRead",
       "type": "object"
@@ -58593,8 +58607,16 @@
           "type": "string"
         },
         "node_id": {
-          "title": "Node Id",
-          "type": "integer"
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Node Id"
         },
         "order": {
           "title": "Order",
@@ -58653,7 +58675,15 @@
           "$ref": "#/components/schemas/tournament.StageType"
         },
         "status": {
-          "$ref": "#/components/schemas/tournament.FlowNodeStatus"
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/tournament.FlowNodeStatus"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "swiss_bye_points": {
           "anyOf": [
@@ -58717,9 +58747,7 @@
         "name",
         "description",
         "stage_type",
-        "order",
-        "node_id",
-        "status"
+        "order"
       ],
       "title": "StageSummaryRead",
       "type": "object"

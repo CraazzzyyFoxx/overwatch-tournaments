@@ -21699,8 +21699,11 @@ export interface components {
             max_rounds: number;
             /** Name */
             name: string;
-            /** Node Id */
-            node_id: number;
+            /**
+             * Node Id
+             * @default null
+             */
+            node_id: number | null;
             /** Order */
             order: number;
             /** @default null */
@@ -21723,7 +21726,8 @@ export interface components {
              */
             seed_ranking: TournamentStageReadSeed_ranking;
             stage_type: components["schemas"]["tournament.StageType"];
-            status: components["schemas"]["tournament.FlowNodeStatus"];
+            /** @default null */
+            status: components["schemas"]["tournament.FlowNodeStatus"] | null;
             /**
              * Swiss Bye Points
              * @default null
@@ -21841,8 +21845,11 @@ export interface components {
             max_rounds: number;
             /** Name */
             name: string;
-            /** Node Id */
-            node_id: number;
+            /**
+             * Node Id
+             * @default null
+             */
+            node_id: number | null;
             /** Order */
             order: number;
             /** @default null */
@@ -21865,7 +21872,8 @@ export interface components {
              */
             seed_ranking: TournamentStageSummaryReadSeed_ranking;
             stage_type: components["schemas"]["tournament.StageType"];
-            status: components["schemas"]["tournament.FlowNodeStatus"];
+            /** @default null */
+            status: components["schemas"]["tournament.FlowNodeStatus"] | null;
             /**
              * Swiss Bye Points
              * @default null

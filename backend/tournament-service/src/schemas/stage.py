@@ -267,8 +267,8 @@ class StageSummaryRead(BaseRead, _StageRegulationRead):
     advance_count: int | None = None
     advance_upper_count: int | None = None
     order: int
-    node_id: int
-    status: enums.FlowNodeStatus
+    node_id: int | None = None  #: ``None`` only on a scrim room's stage (no flow node)
+    status: enums.FlowNodeStatus | None = None
     is_published: bool = False
     challonge_id: int | None = None
     challonge_slug: str | None = None
@@ -284,8 +284,8 @@ class StageRead(BaseRead, _StageRegulationRead):
     advance_count: int | None = None
     advance_upper_count: int | None = None
     order: int
-    node_id: int
-    status: enums.FlowNodeStatus
+    node_id: int | None = None
+    status: enums.FlowNodeStatus | None = None
     is_published: bool = False
     challonge_id: int | None = None
     challonge_slug: str | None = None

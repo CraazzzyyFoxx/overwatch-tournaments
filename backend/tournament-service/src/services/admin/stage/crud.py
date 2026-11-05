@@ -440,7 +440,7 @@ class StageCrudMixin(StageServiceBase):
 
     async def delete_stage(self, session: AsyncSession, stage_id: int) -> None:
         stage = await self.get_stage(session, stage_id)
-        if stage.status != enums.FlowNodeStatus.DRAFT:
+        if stage.status not in (None, enums.FlowNodeStatus.DRAFT):
             raise ApiHTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=[ApiExc(code="node_frozen", msg="A stage that left draft cannot be deleted")],

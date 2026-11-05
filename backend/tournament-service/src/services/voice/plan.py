@@ -34,8 +34,8 @@ _NAME_LIMIT = 100
 
 
 def _is_complete(stages: list[sa.Row]) -> bool:
-    """The last stage (highest ``order``; parallel divisions share one) is completed."""
-    if not stages:
+    """The last stage (highest ``order``; parallel divisions share one) is completed and no stage is still live."""
+    if not stages or any(stage.status == _LIVE for stage in stages):
         return False
     last = max(stage.order for stage in stages)
     return all(stage.status == _COMPLETED for stage in stages if stage.order == last)

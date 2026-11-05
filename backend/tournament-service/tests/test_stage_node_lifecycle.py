@@ -8,10 +8,13 @@ from shared import models
 from shared.core import enums
 from shared.core.enums import FlowNodeStatus as S
 from shared.core.errors import ApiHTTPException, BaseAPIException
+from shared.services.encounter.result import reopen
+from src import schemas
 from src.services.admin.stage import stage_service
 from src.services.flow.lifecycle import flow_node_service
 from src.services.standings.service import standings_service
 from src.services.voice.plan import build_voice_plan
+from tests._encounter_layer import add_scoring_rule
 from tests._flow_case import FlowCase
 
 
@@ -116,14 +119,29 @@ class StageNodeTests(FlowCase):
         self.assertEqual(409, (await self.refused(node_id, S.DRAFT)).status_code)
         self.assertEqual("ready", await self.node_status(node_id))
 
-    async def test_worker_completion_moves_live_to_completed_and_back(self) -> None:
+    async def test_worker_completion_moves_live_to_completed(self) -> None:
         stage_id, node_id = await self.seated_stage()
         await self.move(node_id, S.READY, S.LIVE)
         await self.set_encounters(stage_id, completed=True)
         await self.sync()
         self.assertEqual("completed", await self.node_status(node_id))
-        await self.set_encounters(stage_id, completed=False, only_first=True)
+
+    async def test_manual_completion_survives_an_unrelated_standings_job(self) -> None:
+        stage_id, node_id = await self.seated_stage()
+        await self.move(node_id, S.READY, S.LIVE, S.COMPLETED)
+        await self.sync()  # the rule says "not complete": the worker never moves a node back
+        self.assertEqual("completed", await self.node_status(node_id))
+
+    async def test_reopening_an_encounter_of_a_completed_stage_moves_its_node_to_live(self) -> None:
+        stage_id, node_id = await self.seated_stage()
+        await self.move(node_id, S.READY, S.LIVE)
+        await self.set_encounters(stage_id, completed=True)
         await self.sync()
+        self.assertEqual("completed", await self.node_status(node_id))
+        encounter_id = (await self.encounters(stage_id))[0]
+        async with self.Session() as s:
+            await reopen(s, await s.get_one(models.Encounter, encounter_id), actor_user_id=None, reason="correction")
+            await s.commit()
         self.assertEqual("live", await self.node_status(node_id))
 
     async def sync(self) -> None:
@@ -159,6 +177,29 @@ class StageNodeTests(FlowCase):
         self.assertIn(f"team:{self.teams[1]}", keys)
         self.assertIn(f"team:{self.teams[2]}", keys)
         self.assertNotIn(f"team:{self.teams[0]}", keys)
+        # The higher-order stage completing first must not drop the lower-order stage that is still live.
+        await self.move(first, S.LIVE)
+        await self.move(second, S.COMPLETED)
+        async with self.Session() as s:
+            keys = {channel.slot_key for channel in (await build_voice_plan(s, self.tournament_id)).channels}
+        self.assertEqual({"hub", f"team:{self.teams[0]}", f"team:{self.teams[1]}"}, keys)
+
+    async def test_a_flowless_scrim_stage_reads_with_no_node(self) -> None:
+        async with self.Session() as s:
+            rule = await add_scoring_rule(s, self.workspace_id)
+            stage = models.Stage(
+                tournament_id=self.tournament_id,
+                scoring_rule_id=rule.id,
+                name="room",
+                stage_type=enums.StageType.SINGLE_ELIMINATION,
+                order=1,
+            )
+            s.add(stage)
+            await s.commit()
+            read = schemas.StageSummaryRead.model_validate(
+                await stage_service.get_stage(s, stage.id), from_attributes=True
+            )
+        self.assertEqual((None, None), (read.node_id, read.status))
 
     async def test_merge_refuses_mismatched_statuses(self) -> None:
         _, live = await self.seated_stage(order=1, teams=())

@@ -178,18 +178,19 @@ class Stage(db.TimeStampIntegerMixin):
     #: every stage read carries -- is built from it.
     scoring_rule: Mapped[ScoringRule] = relationship(lazy="selectin")
     #: The stage's flow node (spec §4.5): its status is the stage's lifecycle. Loaded with the stage because every
-    #: stage read carries ``node_id`` and ``status``.
+    #: stage read carries ``node_id`` and ``status``. Scrim room stages have none.
     node: Mapped[FlowNode | None] = relationship(
         lazy="selectin", uselist=False, cascade="all, delete-orphan", passive_deletes=True
     )
 
     @property
-    def node_id(self) -> int:
-        return self.node.id
+    def node_id(self) -> int | None:
+        """``None`` for a scrim room's stage: the scrim container is intentionally flowless."""
+        return self.node.id if self.node is not None else None
 
     @property
-    def status(self) -> str:
-        return self.node.status
+    def status(self) -> str | None:
+        return self.node.status if self.node is not None else None
 
     @property
     def scoring(self) -> dict[str, typing.Any]:

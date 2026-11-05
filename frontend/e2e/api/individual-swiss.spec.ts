@@ -141,7 +141,8 @@ test("individual swiss: single-role pool → rounds by captains → personal tab
   const userOfMember = new Map<number, TestUser>();
   const regOfMember = new Map<number, number>();
   await test.step("6 — start the stage: round 1 has 2 encounters of rosterless seats, one captain each", async () => {
-    await startStage(adminApi, stage.id);
+    // Step 5 left the node `ready` (its `live` move was refused): only that move remains.
+    await transitionStage(adminApi, stage.id, "live");
 
     const table = await readStandings();
     expect(table).toHaveLength(20);
