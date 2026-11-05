@@ -8,10 +8,10 @@ from __future__ import annotations
 
 import importlib
 import sys
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from unittest import IsolatedAsyncioTestCase
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import sqlalchemy as sa
 
@@ -98,3 +98,30 @@ class StreaksChronologyTests(_ChronologyTestCase):
     async def test_the_cutoff_is_the_current_tournaments_place_in_the_chronology(self) -> None:
         # 1 has the lowest id but started after 2, so it is not in 2's history; 3 ended before 2, so it is.
         self.assertEqual([2, 3], await self._positions(2))
+
+
+splits = importlib.import_module("src.services.ml.training.splits")
+backfill = importlib.import_module("src.services.ml.inference.backfill")
+
+
+class SplitsChronologyTests(_ChronologyTestCase):
+    async def test_tournaments_up_to_a_cutoff_follow_the_key(self) -> None:
+        self.world()
+        up_to = {}
+        for cutoff in (1, 2):
+            up_to[cutoff] = [t.id for t in await splits.tournaments_up_to(self.db.shim, cutoff, discipline="overwatch")]
+        # 3 ended before 2, so it precedes 2 although its id is higher; 1 started last.
+        self.assertEqual({1: CHRONOLOGY, 2: [3, 2]}, up_to)
+
+
+class BackfillChronologyTests(_ChronologyTestCase):
+    async def _visited(self, start: date, end: date) -> list[int]:
+        with patch.object(backfill, "run_for_tournament", AsyncMock(return_value={})):
+            return list(await backfill.backfill_range(self.db.shim, from_date=start, to_date=end))
+
+    async def test_a_date_range_is_swept_in_chronology(self) -> None:
+        self.world()
+        self.assertEqual(CHRONOLOGY, await self._visited(date(2026, 2, 1), date(2026, 3, 1)))
+        # Whole UTC days: tournament 1 starts at 00:00 on March 1, the day after the range.
+        self.assertEqual([3, 2], await self._visited(date(2026, 2, 1), date(2026, 2, 28)))
+        self.assertEqual([], await self._visited(date(2026, 3, 2), date(2026, 3, 1)))

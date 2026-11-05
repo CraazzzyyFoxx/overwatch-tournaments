@@ -31,7 +31,7 @@ from ..features.shift_features import build_shift_feature_frame
 from ..features.standings_features import build_standings_training_frame
 from ..models.base import artifact_path, save_artifact
 from .registry import registry_service
-from .splits import TimeSeriesSplit, tournament_ids_up_to
+from .splits import TimeSeriesSplit, tournaments_up_to
 
 logger = logging.getLogger(__name__)
 
@@ -169,14 +169,14 @@ async def train_performance_v2_for_cutoff(
         exports.features_for_role(code)
     algorithm = await registry_service.ensure_algorithm(session, declaration.algorithm_name)
 
-    all_ids = await tournament_ids_up_to(
+    tournaments = await tournaments_up_to(
         session,
         cutoff_tournament_id,
         discipline=discipline,
         workspace_id=workspace_id,
         workspace_ids=workspace_ids,
     )
-    if not all_ids:
+    if not tournaments:
         logger.warning(
             "No tournaments to train on (cutoff=%d, workspace_id=%s)",
             cutoff_tournament_id,
@@ -184,7 +184,8 @@ async def train_performance_v2_for_cutoff(
         )
         return []
 
-    split = TimeSeriesSplit.from_ids(all_ids, test_id=cutoff_tournament_id)
+    all_ids = [t.id for t in tournaments]
+    split = TimeSeriesSplit.from_ids(tournaments, test_id=cutoff_tournament_id)
     train_ids = split.train_ids or tuple(all_ids[:-1])
     val_ids = (split.val_id,) if split.val_id is not None else ()
 
@@ -323,17 +324,18 @@ async def train_standings_v2_for_cutoff(
     discipline, exports = await _scope(session, cutoff_tournament_id)
     declaration = exports.MODELS["standings"]
     algorithm = await registry_service.ensure_algorithm(session, declaration.algorithm_name)
-    all_ids = await tournament_ids_up_to(
+    tournaments = await tournaments_up_to(
         session,
         cutoff_tournament_id,
         discipline=discipline,
         workspace_id=workspace_id,
         workspace_ids=workspace_ids,
     )
-    if not all_ids:
+    if not tournaments:
         return None
 
-    split = TimeSeriesSplit.from_ids(all_ids, test_id=cutoff_tournament_id)
+    all_ids = [t.id for t in tournaments]
+    split = TimeSeriesSplit.from_ids(tournaments, test_id=cutoff_tournament_id)
     train_ids = split.train_ids or tuple(all_ids[:-1])
     val_ids = (split.val_id,) if split.val_id is not None else ()
 
@@ -400,17 +402,18 @@ async def train_shift_v2_for_cutoff(
     discipline, exports = await _scope(session, cutoff_tournament_id)
     declaration = exports.MODELS["shift"]
     algorithm = await registry_service.ensure_algorithm(session, declaration.algorithm_name)
-    all_ids = await tournament_ids_up_to(
+    tournaments = await tournaments_up_to(
         session,
         cutoff_tournament_id,
         discipline=discipline,
         workspace_id=workspace_id,
         workspace_ids=workspace_ids,
     )
-    if not all_ids:
+    if not tournaments:
         return None
 
-    split = TimeSeriesSplit.from_ids(all_ids, test_id=cutoff_tournament_id)
+    all_ids = [t.id for t in tournaments]
+    split = TimeSeriesSplit.from_ids(tournaments, test_id=cutoff_tournament_id)
     train_ids = split.train_ids or tuple(all_ids[:-1])
     val_ids = (split.val_id,) if split.val_id is not None else ()
 

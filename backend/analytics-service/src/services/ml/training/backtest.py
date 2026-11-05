@@ -38,7 +38,7 @@ from ..models.base import models_dir_override
 from .calibration import compute_calibration_report
 from .orchestrator import train_all_models
 from .registry import registry_service
-from .splits import tournament_ids_up_to
+from .splits import tournaments_up_to
 
 logger = logging.getLogger(__name__)
 
@@ -263,7 +263,7 @@ def _spearman_correlation(actual: dict[int, int], predicted: dict[int, float]) -
 
 async def _latest_tournament_id(session: AsyncSession, *, discipline: str, workspace_id: int | None) -> int:
     # Latest by start date (``coalesce(start_date, created_at)``, id tie-break), the chronology of
-    # ``tournament_ids_up_to``: ids are not chronological. Same exclusion too: the per-workspace scrim container is
+    # ``tournaments_up_to``: ids are not chronological. Same exclusion too: the per-workspace scrim container is
     # hidden and carries no ranked roster data, so it must not end a timeline the backtest scores nothing against.
     chrono = sa.func.coalesce(models.Tournament.start_date, models.Tournament.created_at)
     tid = await session.scalar(
@@ -365,12 +365,15 @@ class BacktestService:
             cutoff_tournament_id = await _latest_tournament_id(
                 session, discipline=discipline, workspace_id=workspace_id
             )
-        all_ids = await tournament_ids_up_to(
-            session,
-            cutoff_tournament_id,
-            discipline=discipline,
-            workspace_id=workspace_id,
-        )
+        all_ids = [
+            t.id
+            for t in await tournaments_up_to(
+                session,
+                cutoff_tournament_id,
+                discipline=discipline,
+                workspace_id=workspace_id,
+            )
+        ]
         if len(all_ids) < window + 1:
             logger.warning("Not enough tournaments for backtest window=%d", window)
             return {"folds": {}, "summary": {}, "n_tournaments": len(all_ids), "discipline": discipline}

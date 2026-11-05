@@ -363,7 +363,7 @@ class HiddenTournamentTimelineTests(_DatabaseTestCase):
         self.db.tournament(2, is_hidden=True, name="Scrims")
         self.db.tournament(3)
 
-        ids = await splits.tournament_ids_up_to(self.db.shim, 3, discipline="overwatch")
+        ids = [t.id for t in await splits.tournaments_up_to(self.db.shim, 3, discipline="overwatch")]
 
         self.assertEqual([1, 3], ids)
 
@@ -372,7 +372,7 @@ class HiddenTournamentTimelineTests(_DatabaseTestCase):
         self.db.tournament(2)
         self.db.tournament(3, is_hidden=True, name="Scrims")
 
-        ids = await splits.tournament_ids_up_to(self.db.shim, 3, discipline="overwatch")
+        ids = [t.id for t in await splits.tournaments_up_to(self.db.shim, 3, discipline="overwatch")]
 
         # A trailing hidden container must not become the cutoff fold either.
         self.assertEqual([1, 2], ids)

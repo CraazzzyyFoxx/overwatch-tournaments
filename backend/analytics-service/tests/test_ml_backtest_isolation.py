@@ -25,7 +25,7 @@ from src.services.ml.inference.runner import run_for_tournament
 from src.services.ml.training import orchestrator
 from src.services.ml.training.backtest import backtest_service
 from src.services.ml.training.registry import registry_service
-from src.services.ml.training.splits import tournament_ids_up_to
+from src.services.ml.training.splits import tournaments_up_to
 from tests.test_ml_prediction_parity import load_fixture_models
 
 OW = "overwatch"
@@ -87,7 +87,9 @@ def test_backtest_leaves_registry_model_files_and_analytics_rows_untouched(stats
                         await registry_service.ensure_algorithm(session, name)
                     await orchestrator.train_all_models(session, tid, workspace_id=workspace)
                     await session.commit()
-                    all_ids = await tournament_ids_up_to(session, tid, discipline=OW, workspace_id=workspace)
+                    all_ids = [
+                        t.id for t in await tournaments_up_to(session, tid, discipline=OW, workspace_id=workspace)
+                    ]
                     for fold in all_ids[-2:]:
                         await run_for_tournament(session, fold, workspace_id=workspace)
                         await flows_service.recalculate_analytics(session, fold, workspace_id=workspace)

@@ -30,7 +30,7 @@ from src.core import db
 
 from .services.ml.features.aggregations import build_match_features_with_strength
 from .services.ml.training.drift import compute_drift_report
-from .services.ml.training.splits import tournament_ids_up_to
+from .services.ml.training.splits import tournaments_up_to
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +50,7 @@ async def _drift_check(session: AsyncSession, code: str) -> None:
     if not latest:
         logger.info("No %s tournaments yet — skipping drift check", code)
         return
-    tids = await tournament_ids_up_to(session, int(latest), discipline=code)
+    tids = [t.id for t in await tournaments_up_to(session, int(latest), discipline=code)]
     # Build a feature frame across the last 10 tournaments only (fast path).
     recent_ids = tids[-10:] if len(tids) > 10 else tids
     frames = []

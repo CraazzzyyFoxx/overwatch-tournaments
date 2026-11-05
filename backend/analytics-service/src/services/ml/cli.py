@@ -4,7 +4,7 @@ Subcommands:
 
 - ``train --cutoff <tid>``        — train every active model kind.
 - ``infer --tournament <tid>``    — run inference for one tournament.
-- ``backfill --from N --to M``    — inference sweep over a range.
+- ``backfill --from YYYY-MM-DD --to YYYY-MM-DD`` — inference sweep over the tournaments started in that date range.
 - ``backtest --window K``         — rolling backtest, rolled back afterwards; only its summary is attached to the
   active artifacts' metrics (``--no-persist`` skips that).
 - ``evaluate [--from N] [--to M]`` — read-only: how well each shift method's levels predict the encounter outcomes
@@ -24,6 +24,7 @@ import json
 import logging
 import sys
 from collections.abc import Sequence
+from datetime import date
 
 from src.core import db
 from src.core.analytics_exports import tournament_discipline
@@ -73,8 +74,8 @@ async def _cmd_backfill(args: argparse.Namespace) -> int:
     async with db.async_session_maker() as session:
         summary = await backfill_range(
             session,
-            from_tournament_id=int(args.from_id),
-            to_tournament_id=int(args.to_id),
+            from_date=args.from_date,
+            to_date=args.to_date,
             workspace_id=args.workspace_id,
             model_kinds=_parse_model_kinds(args.models),
             discipline=args.discipline,
@@ -150,8 +151,20 @@ def _build_parser() -> argparse.ArgumentParser:
     p_infer.add_argument("--models", default=None)
 
     p_back = sub.add_parser("backfill", help="Sweep inference across a range")
-    p_back.add_argument("--from", dest="from_id", required=True)
-    p_back.add_argument("--to", dest="to_id", required=True)
+    p_back.add_argument(
+        "--from",
+        dest="from_date",
+        type=date.fromisoformat,
+        required=True,
+        help="First start day, YYYY-MM-DD (UTC, inclusive)",
+    )
+    p_back.add_argument(
+        "--to",
+        dest="to_date",
+        type=date.fromisoformat,
+        required=True,
+        help="Last start day, YYYY-MM-DD (UTC, inclusive)",
+    )
     p_back.add_argument("--models", default=None)
 
     p_bt = sub.add_parser("backtest", help="Rolling-window backtest report")

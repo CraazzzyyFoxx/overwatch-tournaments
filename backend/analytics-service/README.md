@@ -130,8 +130,7 @@ another algorithm sharing a kind and another game's same-code role (`support`) a
 loaded. A discipline that declares no analytics module (LoL) offers no algorithm, returns an empty summary from
 automatic enrichment without a single write, and answers explicit train/infer/model requests with 422 before a job is
 admitted or quota is charged. The CLI takes an optional `--discipline` that must agree with the tournament; a
-`backtest` without `--cutoff` and an `evaluate` without `--from`/`--to` require it, and `backfill` visits only
-existing, non-hidden, supported tournaments.
+`backtest` without `--cutoff` and an `evaluate` without `--from`/`--to` require it, and `backfill --from YYYY-MM-DD --to YYYY-MM-DD` visits the existing, non-hidden, supported tournaments that started on those UTC days, in tournament chronology.
 
 **Measuring the shift methods.** `backtest` trains, activates and infers for real inside a transaction it rolls back,
 with fold artifacts in a removed temporary directory, and scores the v2 shift and its baselines (no move, Points,

@@ -31,6 +31,7 @@ The final methodology (after reverting the merit rewrite):
 COMPOSE="docker compose -f docker-compose.production.yml"
 LATEST=73   # the latest tournament by start date
 FIRST=1     # the workspace's earliest tournament with analytics
+SINCE=2000-01-01   # on or before the earliest tournament's start day
 
 # 0) ship the code and rebuild the image (exec runs what is in the image!)
 $COMPOSE build analytics analytics-worker && $COMPOSE up -d analytics analytics-worker
@@ -48,11 +49,11 @@ ML="$COMPOSE exec -e DB_STATEMENT_TIMEOUT=1800000 analytics-worker python -m src
 # 1a) (required for individual skill and the smurf flag) retrain Performance v2 — its pre-encounter strength no longer
 #     contains the encounter's own result and the logless fallback no longer sees the score — then materialize it
 $ML train --cutoff $LATEST --models performance
-$ML backfill --from 1 --to $LATEST --models performance
+$ML backfill --from $SINCE --to $(date -u +%F) --models performance
 
 # 1b) retrain shift v2 (weights snapshotted from env) and recompute
 $ML train --cutoff $LATEST --models shift
-$ML backfill --from 1 --to $LATEST
+$ML backfill --from $SINCE --to $(date -u +%F)
 #   ^ backfill (without --models) updates shift + player_anomalies (smurf) + match_quality + standings + performance
 
 # 2) v1 Points/Linear/OpenSkill — a compute job (v1 recalc + v2 infer together) via the API (analytics.update
