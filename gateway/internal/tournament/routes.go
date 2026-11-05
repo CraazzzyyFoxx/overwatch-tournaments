@@ -37,6 +37,8 @@ var PublicReadRoutes = []edge.RouteSpec{
 	// AuthOptional like standings; same gate, viewer-agnostic body. Not in cacheable.go: the gateway's invalidation
 	// table maps resources to URL substrings, and the backend's own versioned cache already serves these.
 	{Method: "GET", Pattern: "/api/v1/tournaments/{id}/player-standings", Queue: "rpc.tournament.get_player_standings", IDParam: "id", Auth: edge.AuthOptional, Timeout: publicReadTimeout},
+	// The flow graph (nodes with ports, edges, results). AuthOptional like standings; same hidden-tournament gate.
+	{Method: "GET", Pattern: "/api/v1/tournaments/{id}/flow", Queue: "rpc.tournament.get_flow", IDParam: "id", Auth: edge.AuthOptional, Timeout: publicReadTimeout},
 	{Method: "GET", Pattern: "/api/v1/tournaments/{id}/stages/{stage_id}/individual-rounds", Queue: "rpc.tournament.get_individual_rounds", IDParam: "id", Path: []string{"stage_id"}, Auth: edge.AuthOptional, Timeout: publicReadTimeout},
 	// Every hero ban a spectator may see and every picked/banned map of the
 	// tournament's pick-ban rooms, in one read (the tournament page's ban and

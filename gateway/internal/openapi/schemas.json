@@ -9678,6 +9678,14 @@
       },
       "summary": "Get FFA stage lobbies (organizer view)"
     },
+    "rpc.tournament.flow_get": {
+      "description": "Permission: workspace `tournament.read` on the tournament's workspace. The public flow read plus the validator's issues on the stored graph and the port catalogue per node kind.",
+      "response": {
+        "array": false,
+        "ref": "tournament.AdminFlowRead"
+      },
+      "summary": "Get a tournament's flow (admin)"
+    },
     "rpc.tournament.get_encounter": {
       "description": "Permission: public; no authentication required \u2014 a hidden tournament is visible only to its workspace's admins and users on its preview allowlist. Returns one encounter by id with optionally hydrated related entities selected via the entities query param.",
       "query_params": [
@@ -9697,6 +9705,14 @@
         "ref": "tournament.EncounterRead"
       },
       "summary": "Get encounter"
+    },
+    "rpc.tournament.get_flow": {
+      "description": "Permission: public; no authentication required \u2014 a hidden tournament is visible only to its workspace's admins and users on its preview allowlist. Returns the tournament's flow graph: nodes with their resolved ports, edges, and every node's ranked results (`tentative` until the node's inputs are final).",
+      "response": {
+        "array": false,
+        "ref": "tournament.FlowRead"
+      },
+      "summary": "Get a tournament's flow"
     },
     "rpc.tournament.get_individual_rounds": {
       "description": "Permission: public; no authentication required \u2014 a hidden tournament is visible only to its workspace's admins and users on its preview allowlist. Returns an `individual_swiss` stage's encounters grouped by round, each seat with its roster snapshot (role, rank, round captain). 404 for a stage that is not an `individual_swiss` stage of this tournament.",
@@ -40351,6 +40367,54 @@
       "title": "AdminDashboard",
       "type": "object"
     },
+    "tournament.AdminFlowRead": {
+      "properties": {
+        "catalogue": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.FlowKindPortsRead"
+          },
+          "title": "Catalogue",
+          "type": "array"
+        },
+        "edges": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.FlowEdgeRead"
+          },
+          "title": "Edges",
+          "type": "array"
+        },
+        "issues": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.FlowIssueRead"
+          },
+          "title": "Issues",
+          "type": "array"
+        },
+        "nodes": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.FlowNodeRead"
+          },
+          "title": "Nodes",
+          "type": "array"
+        },
+        "results": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.FlowNodeResultRead"
+          },
+          "title": "Results",
+          "type": "array"
+        }
+      },
+      "required": [
+        "nodes",
+        "edges",
+        "results",
+        "issues",
+        "catalogue"
+      ],
+      "title": "AdminFlowRead",
+      "type": "object"
+    },
     "tournament.AdminForfeitResult": {
       "description": "One participation's score in an explicitly stated forfeit.",
       "properties": {
@@ -49534,6 +49598,474 @@
         "higher_seed"
       ],
       "title": "FirstPickRule",
+      "type": "string"
+    },
+    "tournament.FlowEdgeRead": {
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "integer"
+        },
+        "source_node_id": {
+          "title": "Source Node Id",
+          "type": "integer"
+        },
+        "source_port": {
+          "title": "Source Port",
+          "type": "string"
+        },
+        "target_node_id": {
+          "title": "Target Node Id",
+          "type": "integer"
+        },
+        "target_port": {
+          "title": "Target Port",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "source_node_id",
+        "source_port",
+        "target_node_id",
+        "target_port"
+      ],
+      "title": "FlowEdgeRead",
+      "type": "object"
+    },
+    "tournament.FlowIssueRead": {
+      "properties": {
+        "code": {
+          "title": "Code",
+          "type": "string"
+        },
+        "edge_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Edge Id"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "node_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Node Id"
+        },
+        "severity": {
+          "enum": [
+            "error",
+            "warning"
+          ],
+          "title": "Severity",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "severity",
+        "message"
+      ],
+      "title": "FlowIssueRead",
+      "type": "object"
+    },
+    "tournament.FlowKindPortsRead": {
+      "properties": {
+        "inputs": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.FlowPortSpecRead"
+          },
+          "title": "Inputs",
+          "type": "array"
+        },
+        "kind": {
+          "$ref": "#/components/schemas/tournament.FlowNodeKind"
+        },
+        "outputs": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.FlowPortSpecRead"
+          },
+          "title": "Outputs",
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind",
+        "inputs",
+        "outputs"
+      ],
+      "title": "FlowKindPortsRead",
+      "type": "object"
+    },
+    "tournament.FlowNodeKind": {
+      "enum": [
+        "registration",
+        "formation",
+        "stage",
+        "filter",
+        "merge",
+        "split",
+        "aggregate",
+        "leaderboard"
+      ],
+      "title": "FlowNodeKind",
+      "type": "string"
+    },
+    "tournament.FlowNodeRead": {
+      "properties": {
+        "completed_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Completed At"
+        },
+        "config": {
+          "additionalProperties": true,
+          "title": "Config",
+          "type": "object"
+        },
+        "id": {
+          "title": "Id",
+          "type": "integer"
+        },
+        "kind": {
+          "$ref": "#/components/schemas/tournament.FlowNodeKind"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "ports": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.FlowPortRead"
+          },
+          "title": "Ports",
+          "type": "array"
+        },
+        "position_x": {
+          "title": "Position X",
+          "type": "number"
+        },
+        "position_y": {
+          "title": "Position Y",
+          "type": "number"
+        },
+        "stage_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Stage Id"
+        },
+        "started_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Started At"
+        },
+        "status": {
+          "$ref": "#/components/schemas/tournament.FlowNodeStatus"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "name",
+        "status",
+        "config",
+        "stage_id",
+        "position_x",
+        "position_y",
+        "started_at",
+        "completed_at",
+        "ports"
+      ],
+      "title": "FlowNodeRead",
+      "type": "object"
+    },
+    "tournament.FlowNodeResultRead": {
+      "properties": {
+        "breakdown": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "items": {},
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Breakdown"
+        },
+        "item_rank": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Item Rank"
+        },
+        "node_id": {
+          "title": "Node Id",
+          "type": "integer"
+        },
+        "port": {
+          "title": "Port",
+          "type": "string"
+        },
+        "rank": {
+          "title": "Rank",
+          "type": "integer"
+        },
+        "score": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Score"
+        },
+        "stage_item_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Stage Item Id"
+        },
+        "state": {
+          "$ref": "#/components/schemas/tournament.FlowResultState"
+        },
+        "team_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Team Id"
+        },
+        "tie_group": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Tie Group"
+        },
+        "workspace_member_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Workspace Member Id"
+        }
+      },
+      "required": [
+        "node_id",
+        "port",
+        "rank",
+        "workspace_member_id",
+        "team_id",
+        "stage_item_id",
+        "item_rank",
+        "score",
+        "tie_group",
+        "breakdown",
+        "state"
+      ],
+      "title": "FlowNodeResultRead",
+      "type": "object"
+    },
+    "tournament.FlowNodeStatus": {
+      "enum": [
+        "draft",
+        "open",
+        "check_in",
+        "closed",
+        "forming",
+        "completed",
+        "ready",
+        "live",
+        "pending",
+        "tentative",
+        "final"
+      ],
+      "title": "FlowNodeStatus",
+      "type": "string"
+    },
+    "tournament.FlowPortRead": {
+      "properties": {
+        "direction": {
+          "enum": [
+            "in",
+            "out"
+          ],
+          "title": "Direction",
+          "type": "string"
+        },
+        "multi": {
+          "title": "Multi",
+          "type": "boolean"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "unit": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/tournament.FlowUnit"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "direction",
+        "multi",
+        "unit"
+      ],
+      "title": "FlowPortRead",
+      "type": "object"
+    },
+    "tournament.FlowPortSpecRead": {
+      "properties": {
+        "multi": {
+          "title": "Multi",
+          "type": "boolean"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "repeated": {
+          "title": "Repeated",
+          "type": "boolean"
+        },
+        "unit_rule": {
+          "enum": [
+            "players",
+            "teams",
+            "stage",
+            "config",
+            "input"
+          ],
+          "title": "Unit Rule",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "multi",
+        "repeated",
+        "unit_rule"
+      ],
+      "title": "FlowPortSpecRead",
+      "type": "object"
+    },
+    "tournament.FlowRead": {
+      "properties": {
+        "edges": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.FlowEdgeRead"
+          },
+          "title": "Edges",
+          "type": "array"
+        },
+        "nodes": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.FlowNodeRead"
+          },
+          "title": "Nodes",
+          "type": "array"
+        },
+        "results": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.FlowNodeResultRead"
+          },
+          "title": "Results",
+          "type": "array"
+        }
+      },
+      "required": [
+        "nodes",
+        "edges",
+        "results"
+      ],
+      "title": "FlowRead",
+      "type": "object"
+    },
+    "tournament.FlowResultState": {
+      "enum": [
+        "tentative",
+        "final"
+      ],
+      "title": "FlowResultState",
+      "type": "string"
+    },
+    "tournament.FlowUnit": {
+      "enum": [
+        "players",
+        "teams"
+      ],
+      "title": "FlowUnit",
       "type": "string"
     },
     "tournament.FormField": {

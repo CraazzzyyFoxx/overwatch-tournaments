@@ -3706,6 +3706,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/tournaments/{id}/flow": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a tournament's flow
+         * @description Permission: public; no authentication required — a hidden tournament is visible only to its workspace's admins and users on its preview allowlist. Returns the tournament's flow graph: nodes with their resolved ports, edges, and every node's ranked results (`tentative` until the node's inputs are final).
+         *
+         *     RPC subject: `rpc.tournament.get_flow`
+         */
+        get: operations["get__api_v1_tournaments__id__flow"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/tournaments/{id}/pick-ban/outcomes": {
         parameters: {
             query?: never;
@@ -8216,6 +8238,28 @@ export interface paths {
          *     RPC subject: `rpc.tournament.tournament_finish`
          */
         post: operations["post__api_v1_admin_tournaments__tournament_id__finish"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/tournaments/{tournament_id}/flow": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a tournament's flow (admin)
+         * @description Permission: workspace `tournament.read` on the tournament's workspace. The public flow read plus the validator's issues on the stored graph and the port catalogue per node kind.
+         *
+         *     RPC subject: `rpc.tournament.flow_get`
+         */
+        get: operations["get__api_v1_admin_tournaments__tournament_id__flow"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -19750,6 +19794,112 @@ export interface components {
          * @enum {string}
          */
         "tournament.FirstPickRule": TournamentFirstPickRule;
+        /** FlowEdgeRead */
+        "tournament.FlowEdgeRead": {
+            /** Id */
+            id: number;
+            /** Source Node Id */
+            source_node_id: number;
+            /** Source Port */
+            source_port: string;
+            /** Target Node Id */
+            target_node_id: number;
+            /** Target Port */
+            target_port: string;
+        };
+        /**
+         * FlowNodeKind
+         * @enum {string}
+         */
+        "tournament.FlowNodeKind": TournamentFlowNodeKind;
+        /** FlowNodeRead */
+        "tournament.FlowNodeRead": {
+            /** Completed At */
+            completed_at: string | null;
+            /** Config */
+            config: {
+                [key: string]: unknown;
+            };
+            /** Id */
+            id: number;
+            kind: components["schemas"]["tournament.FlowNodeKind"];
+            /** Name */
+            name: string;
+            /** Ports */
+            ports: components["schemas"]["tournament.FlowPortRead"][];
+            /** Position X */
+            position_x: number;
+            /** Position Y */
+            position_y: number;
+            /** Stage Id */
+            stage_id: number | null;
+            /** Started At */
+            started_at: string | null;
+            status: components["schemas"]["tournament.FlowNodeStatus"];
+        };
+        /** FlowNodeResultRead */
+        "tournament.FlowNodeResultRead": {
+            /** Breakdown */
+            breakdown: {
+                [key: string]: unknown;
+            } | unknown[] | null;
+            /** Item Rank */
+            item_rank: number | null;
+            /** Node Id */
+            node_id: number;
+            /** Port */
+            port: string;
+            /** Rank */
+            rank: number;
+            /** Score */
+            score: number | null;
+            /** Stage Item Id */
+            stage_item_id: number | null;
+            state: components["schemas"]["tournament.FlowResultState"];
+            /** Team Id */
+            team_id: number | null;
+            /** Tie Group */
+            tie_group: number | null;
+            /** Workspace Member Id */
+            workspace_member_id: number | null;
+        };
+        /**
+         * FlowNodeStatus
+         * @enum {string}
+         */
+        "tournament.FlowNodeStatus": TournamentFlowNodeStatus;
+        /** FlowPortRead */
+        "tournament.FlowPortRead": {
+            /**
+             * Direction
+             * @enum {string}
+             */
+            direction: TournamentFlowPortReadDirection;
+            /** Multi */
+            multi: boolean;
+            /** Name */
+            name: string;
+            unit: components["schemas"]["tournament.FlowUnit"] | null;
+        };
+        /** FlowRead */
+        "tournament.FlowRead": {
+            /** Edges */
+            edges: components["schemas"]["tournament.FlowEdgeRead"][];
+            /** Nodes */
+            nodes: components["schemas"]["tournament.FlowNodeRead"][];
+            /** Results */
+            results: components["schemas"]["tournament.FlowNodeResultRead"][];
+        };
+        /**
+         * FlowResultState
+         * @enum {string}
+         */
+        "tournament.FlowResultState": TournamentFlowResultState;
+        /**
+         * FlowUnit
+         * @enum {string}
+         */
+        "tournament.FlowUnit": TournamentFlowUnit;
         /**
          * GameClaimIn
          * @description One captain's independent claim of a single played GAME's result —
@@ -27079,6 +27229,19 @@ export interface components {
             /** Tournaments */
             tournaments: components["schemas"]["tournament.DashboardTournamentCard"][];
         };
+        /** AdminFlowRead */
+        "tournament.AdminFlowRead": {
+            /** Catalogue */
+            catalogue: components["schemas"]["tournament.FlowKindPortsRead"][];
+            /** Edges */
+            edges: components["schemas"]["tournament.FlowEdgeRead"][];
+            /** Issues */
+            issues: components["schemas"]["tournament.FlowIssueRead"][];
+            /** Nodes */
+            nodes: components["schemas"]["tournament.FlowNodeRead"][];
+            /** Results */
+            results: components["schemas"]["tournament.FlowNodeResultRead"][];
+        };
         /**
          * AdminForfeitResult
          * @description One participation's score in an explicitly stated forfeit.
@@ -29689,6 +29852,50 @@ export interface components {
              * @default null
              */
             regex: string | null;
+        };
+        /** FlowIssueRead */
+        "tournament.FlowIssueRead": {
+            /** Code */
+            code: string;
+            /**
+             * Edge Id
+             * @default null
+             */
+            edge_id: number | null;
+            /** Message */
+            message: string;
+            /**
+             * Node Id
+             * @default null
+             */
+            node_id: number | null;
+            /**
+             * Severity
+             * @enum {string}
+             */
+            severity: TournamentFlowIssueReadSeverity;
+        };
+        /** FlowKindPortsRead */
+        "tournament.FlowKindPortsRead": {
+            /** Inputs */
+            inputs: components["schemas"]["tournament.FlowPortSpecRead"][];
+            kind: components["schemas"]["tournament.FlowNodeKind"];
+            /** Outputs */
+            outputs: components["schemas"]["tournament.FlowPortSpecRead"][];
+        };
+        /** FlowPortSpecRead */
+        "tournament.FlowPortSpecRead": {
+            /** Multi */
+            multi: boolean;
+            /** Name */
+            name: string;
+            /** Repeated */
+            repeated: boolean;
+            /**
+             * Unit Rule
+             * @enum {string}
+             */
+            unit_rule: TournamentFlowPortSpecReadUnit_rule;
         };
         /** FormField */
         "tournament.FormField": {
@@ -46166,6 +46373,66 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["tournament.TournamentRead"];
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get__api_v1_tournaments__id__flow: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["tournament.FlowRead"];
                 };
             };
             /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
@@ -64270,6 +64537,84 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["tournament.TournamentRead"];
+                };
+            };
+            /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not authorized (`forbidden`). Authenticated, but the credential lacks the permission, workspace, or scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get__api_v1_admin_tournaments__tournament_id__flow: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["tournament.AdminFlowRead"];
                 };
             };
             /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
@@ -83960,6 +84305,41 @@ export enum TournamentFirstBanRotation {
 export enum TournamentFirstPickRule {
     higher_seed = "higher_seed"
 }
+export enum TournamentFlowNodeKind {
+    registration = "registration",
+    formation = "formation",
+    stage = "stage",
+    filter = "filter",
+    merge = "merge",
+    split = "split",
+    aggregate = "aggregate",
+    leaderboard = "leaderboard"
+}
+export enum TournamentFlowNodeStatus {
+    draft = "draft",
+    open = "open",
+    check_in = "check_in",
+    closed = "closed",
+    forming = "forming",
+    completed = "completed",
+    ready = "ready",
+    live = "live",
+    pending = "pending",
+    tentative = "tentative",
+    final = "final"
+}
+export enum TournamentFlowPortReadDirection {
+    in = "in",
+    out = "out"
+}
+export enum TournamentFlowResultState {
+    tentative = "tentative",
+    final = "final"
+}
+export enum TournamentFlowUnit {
+    players = "players",
+    teams = "teams"
+}
 export enum TournamentMapVetoMode {
     pool = "pool",
     slots = "slots"
@@ -84409,6 +84789,17 @@ export enum TournamentEncounterResultAuditAction {
     game_confirm = "game_confirm",
     game_correct = "game_correct",
     game_cancel = "game_cancel"
+}
+export enum TournamentFlowIssueReadSeverity {
+    error = "error",
+    warning = "warning"
+}
+export enum TournamentFlowPortSpecReadUnit_rule {
+    players = "players",
+    teams = "teams",
+    stage = "stage",
+    config = "config",
+    input = "input"
 }
 export enum TournamentFormFieldKind {
     builtin = "builtin",

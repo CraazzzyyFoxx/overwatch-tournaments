@@ -33,6 +33,7 @@ from src.rpc import pick_ban_admin
 from src.schemas import captain as captain_schemas
 from src.schemas import encounter_report_form as report_form_schemas
 from src.schemas import ffa as ffa_schemas
+from src.schemas import flow as flow_schemas
 from src.schemas import individual_swiss as individual_swiss_schemas
 from src.schemas import pick_ban_outcomes as pick_ban_outcomes_schemas
 from src.schemas import pregame_rooms as pregame_rooms_schemas
@@ -85,6 +86,7 @@ OPERATIONS: dict[str, Op] = {
     "rpc.tournament.get_player_standings": Op(
         response=individual_swiss_schemas.PlayerStandingRead, response_array=True
     ),
+    "rpc.tournament.get_flow": Op(response=flow_schemas.FlowRead),
     "rpc.tournament.get_individual_rounds": Op(
         response=individual_swiss_schemas.IndividualRoundRead, response_array=True
     ),
@@ -192,6 +194,8 @@ OPERATIONS: dict[str, Op] = {
     "rpc.tournament.voice_get": Op(response=voice_schemas.VoiceStatus),
     "rpc.tournament.voice_put": Op(request=voice_schemas.VoiceSettings, response=voice_schemas.VoiceStatus),
     "rpc.tournament.voice_sync": Op(response=voice_schemas.VoiceStatus),
+    # ── bespoke: flow graph ────────────────────────────────────────────────
+    "rpc.tournament.flow_get": Op(response=flow_schemas.AdminFlowRead),
     "rpc.tournament.standing_recalculate": Op(response=schemas.TournamentComputationJobRead),
     "rpc.tournament.standing_pins_set": Op(
         request=schemas.StandingPinsUpdate, response=schemas.TournamentComputationJobRead

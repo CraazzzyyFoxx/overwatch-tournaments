@@ -84,6 +84,10 @@ DOCS: dict[str, dict] = {
         "summary": "Get individual Swiss rounds",
         "description": "Permission: public; no authentication required — a hidden tournament is visible only to its workspace's admins and users on its preview allowlist. Returns an `individual_swiss` stage's encounters grouped by round, each seat with its roster snapshot (role, rank, round captain). 404 for a stage that is not an `individual_swiss` stage of this tournament.",
     },
+    "rpc.tournament.get_flow": {
+        "summary": "Get a tournament's flow",
+        "description": "Permission: public; no authentication required — a hidden tournament is visible only to its workspace's admins and users on its preview allowlist. Returns the tournament's flow graph: nodes with their resolved ports, edges, and every node's ranked results (`tentative` until the node's inputs are final).",
+    },
     # ── ffa lobbies ────────────────────────────────────────────────────────
     "rpc.tournament.ffa_stage": {
         "summary": "Get FFA stage lobbies",
@@ -552,6 +556,11 @@ DOCS: dict[str, dict] = {
     "rpc.tournament.voice_sync": {
         "summary": "Sync tournament voice channels",
         "description": "Permission: workspace `tournament.update` on the tournament's workspace. Asks the bot to reconcile the tournament's Discord voice channels with the plan now (repairs a channel deleted by hand) and answers the status like the read.",
+    },
+    # ── flow graph ─────────────────────────────────────────────────────────
+    "rpc.tournament.flow_get": {
+        "summary": "Get a tournament's flow (admin)",
+        "description": "Permission: workspace `tournament.read` on the tournament's workspace. The public flow read plus the validator's issues on the stored graph and the port catalogue per node kind.",
     },
     # ── bespoke: pick-ban live-session admin overrides (map + hero) ────────
     "rpc.tournament.admin_pick_ban_session_reset": {

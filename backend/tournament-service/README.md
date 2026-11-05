@@ -83,6 +83,7 @@ Method groups:
 | Pick/ban | `get_pick_ban_configs`, `admin_pick_ban_*` | Config CRUD, admin acting, opener election, session reset |
 | Lifecycle | `tournament_status`, `tournament_finish`, `tournament_schedule_set` | Status transitions and the phase schedule |
 | Individual Swiss | `get_player_standings`, `get_individual_rounds`, `player_standing_pins_set`, `individual_swiss_lock_qualification` | The personal table and round teams (public reads), organizer pins, and the qualification lock |
+| Flow | get_flow, flow_get | The tournament's node graph with resolved ports and per-node results (public read; admin read adds validation issues and the port catalogue) |
 | Images | `teams.image_*`, `tournaments.image_*`, `regteam_image_*` | Binary upload/delete (base64 on the wire) to S3 |
 | Scrims | `scrim_*` | Ad-hoc room provisioning, claiming and closing |
 | Preview access | `preview_access_*` | Pre-publication access grants |

@@ -54,6 +54,7 @@ from src.rpc import (
     admin_misc,
     dashboard,
     ffa,
+    flow,
     integrations,
     match_import,
     pick_ban_admin,
@@ -162,6 +163,8 @@ team_format.register(broker, logger)
 scrim.register(broker, logger)
 # Tournament voice channels: the plan discord-service applies, and the admin settings/status/sync.
 voice.register(broker, logger)
+# The tournament's flow graph (phase 2: read-only): the public read and the admin read.
+flow.register(broker, logger)
 # standings.invalidated: each event becomes a durable standings job, which the
 # compute consumers at the bottom of this file run.
 broker.include_router(recalculation_events.task_router)

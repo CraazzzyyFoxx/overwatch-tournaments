@@ -128,4 +128,6 @@ var AdminMiscRoutes = []edge.RouteSpec{
 	{Method: "GET", Pattern: "/api/v1/admin/tournaments/{tournament_id}/voice", Queue: "rpc.tournament.voice_get", IDParam: "tournament_id", Auth: edge.AuthRequired},
 	{Method: "PUT", Pattern: "/api/v1/admin/tournaments/{tournament_id}/voice", Queue: "rpc.tournament.voice_put", IDParam: "tournament_id", Body: true, Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/v1/admin/tournaments/{tournament_id}/voice/sync", Queue: "rpc.tournament.voice_sync", IDParam: "tournament_id", Auth: edge.AuthRequired},
+	// flow graph — workspace tournament.read in the worker.
+	{Method: "GET", Pattern: "/api/v1/admin/tournaments/{tournament_id}/flow", Queue: "rpc.tournament.flow_get", IDParam: "tournament_id", Auth: edge.AuthRequired},
 }
