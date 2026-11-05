@@ -4,7 +4,7 @@ Rule 2: per member, the last-formed team the member played for (substitutes neve
 team's positive ``Standing.overall_position`` in its last stage by ``Stage.order`` (NULL when it never had one), and
 ``field_size`` the tournament's team count. The migration ``flowP1_participant_result`` carries a frozen copy of the
 same SQL for the backfill; keep the two in step. The storage and the member's tournament-row helpers live in
-``shared.repository.participant_result`` (repositories cannot import services) and are re-exported here.
+``shared.repository.participant_result``.
 """
 
 from __future__ import annotations
@@ -13,13 +13,9 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
-from shared.repository.participant_result import (
-    ParticipantResultRepository,
-    is_member_tournament_row,
-    member_tournament_player_id,
-)
+from shared.repository.participant_result import ParticipantResultRepository
 
-__all__ = ("is_member_tournament_row", "member_tournament_player_id", "write_participant_results")
+__all__ = ("write_participant_results",)
 
 
 def _team_rule_rows(tournament_id: int) -> sa.Select:

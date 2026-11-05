@@ -16,13 +16,13 @@ from shared import models
 from shared.core import enums, pagination
 from shared.disciplines import discipline, identity_provider
 from shared.models.catalog.role import leaf_code
+from shared.repository.participant_result import is_member_tournament_row
 from shared.repository.stats_queries import match_context
 from shared.repository.stats_reads import MatchReadContext, duel_matches, get_match_members, get_match_reads
 from shared.schemas.catalog import CatalogEntityRead
 from shared.schemas.identity import PersonDisplayRead
 from shared.schemas.match import NativeFact
 from shared.schemas.role import RoleRef
-from shared.services.participant_result import is_member_tournament_row
 from shared.services.person_display import game_handle_of
 from src.core.workspace import workspace_filter
 from src.schemas.user import UserMatchViewer

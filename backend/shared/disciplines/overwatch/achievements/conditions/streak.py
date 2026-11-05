@@ -15,7 +15,7 @@ from shared.core.chrono import tournament_chrono_key
 from shared.disciplines.overwatch.achievements.stage_filters import standing_is_elimination
 from shared.domain.achievements.context import EvalContext
 from shared.models.achievements.achievement import AchievementGrain
-from shared.services.participant_result import is_member_tournament_row
+from shared.repository.participant_result import is_member_tournament_row
 
 from . import ResultSet, register
 

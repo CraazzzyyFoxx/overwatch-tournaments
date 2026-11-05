@@ -27,7 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
 from shared.core.chrono import tournament_chrono_key
-from shared.services.participant_result import is_member_tournament_row
+from shared.repository.participant_result import is_member_tournament_row
 from shared.services.workspace_scope import workspace_filter
 from src.core.analytics_exports import analytics_exports, tournament_discipline
 from src.domain.ratings import LINEAR, OPENSKILL, POINTS

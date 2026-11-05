@@ -14,7 +14,7 @@ from shared import models
 from shared.core.chrono import tournament_chrono_key
 from shared.domain.achievements.context import EvalContext
 from shared.models.achievements.achievement import AchievementGrain
-from shared.services.participant_result import is_member_tournament_row
+from shared.repository.participant_result import is_member_tournament_row
 
 from . import ResultSet, always, one_of, register
 from .stat_threshold import OPERATORS

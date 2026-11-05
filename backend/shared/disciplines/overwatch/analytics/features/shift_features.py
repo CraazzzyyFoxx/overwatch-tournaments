@@ -29,8 +29,8 @@ from shared import models
 from shared.core.chrono import tournament_chrono_key
 from shared.division_grid import DEFAULT_GRID
 from shared.domain.analytics import PERFORMANCE_MODEL
+from shared.repository.participant_result import is_member_tournament_row
 from shared.services.division_grid.access import load_division_grids
-from shared.services.participant_result import is_member_tournament_row
 from shared.services.workspace_scope import workspace_scope_filter
 
 from ..canonical import assign_canonical_division

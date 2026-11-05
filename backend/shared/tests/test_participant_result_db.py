@@ -8,9 +8,10 @@ import sqlalchemy as sa
 from shared import models
 from shared.core import enums
 from shared.models.tournament import Player, Stage, Standing, Tournament
+from shared.repository.participant_result import is_member_tournament_row
 from shared.repository.stream import StreamTargetRepository
 from shared.repository.tournament import PlayerRepository
-from shared.services.participant_result import is_member_tournament_row, write_participant_results
+from shared.services.participant_result import write_participant_results
 from shared.tests.encounter_writer_case import EncounterWriterCase
 
 PR = models.ParticipantResult

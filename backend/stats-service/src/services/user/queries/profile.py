@@ -12,9 +12,9 @@ from shared.core import enums, pagination
 from shared.core.chrono import tournament_chrono_key
 from shared.disciplines import discipline
 from shared.models.stats.match import mv_entity_global_stats
+from shared.repository.participant_result import is_member_tournament_row
 from shared.schemas.role import RoleRef
 from shared.services.division_grid.access import tournament_effective_version_id_expr
-from shared.services.participant_result import is_member_tournament_row
 from src.services.discipline_queries import DisciplineQueries
 from src.services.encounter_seats import Seat
 
