@@ -27,30 +27,34 @@ def _run(body):  # noqa: ANN001, ANN202
     async def exercise():  # noqa: ANN202
         engine = create_test_async_engine()
         tag = uuid.uuid4().hex
-        async with engine.connect() as connection:
-            transaction = await connection.begin()
-            sessions = async_sessionmaker(connection, expire_on_commit=False, join_transaction_mode="create_savepoint")
-            try:
-                async with sessions() as session:
-                    workspace = Workspace(slug=tag, name=tag)
-                    session.add(workspace)
-                    await session.flush()
-                    world = {}
-                    for label, start, end in (("x", MAR, None), ("y", FEB, FEB_9), ("z", FEB, FEB_2)):
-                        world[label] = Tournament(
-                            workspace_id=workspace.id,
-                            name=f"{tag}-{label}",
-                            slug=f"{tag}-{label}",
-                            status=enums.TournamentStatus.COMPLETED,
-                            start_date=start,
-                            end_date=end,
-                        )
-                        session.add(world[label])
+        try:
+            async with engine.connect() as connection:
+                transaction = await connection.begin()
+                sessions = async_sessionmaker(
+                    connection, expire_on_commit=False, join_transaction_mode="create_savepoint"
+                )
+                try:
+                    async with sessions() as session:
+                        workspace = Workspace(slug=tag, name=tag)
+                        session.add(workspace)
                         await session.flush()
-                    return await body(session, workspace, world)
-            finally:
-                await transaction.rollback()
-        await engine.dispose()
+                        world = {}
+                        for label, start, end in (("x", MAR, None), ("y", FEB, FEB_9), ("z", FEB, FEB_2)):
+                            world[label] = Tournament(
+                                workspace_id=workspace.id,
+                                name=f"{tag}-{label}",
+                                slug=f"{tag}-{label}",
+                                status=enums.TournamentStatus.COMPLETED,
+                                start_date=start,
+                                end_date=end,
+                            )
+                            session.add(world[label])
+                            await session.flush()
+                        return await body(session, workspace, world)
+                finally:
+                    await transaction.rollback()
+        finally:
+            await engine.dispose()
 
     return asyncio.run(exercise(), loop_factory=asyncio.SelectorEventLoop if sys.platform == "win32" else None)
 
