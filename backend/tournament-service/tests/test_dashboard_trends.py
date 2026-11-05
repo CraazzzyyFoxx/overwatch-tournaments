@@ -69,8 +69,8 @@ async def _seed(session: Any) -> _Seed:
     rows["ow2"].status = enums.TournamentStatus.ARCHIVED
     rows |= {
         "older": tournament("older", _day(2030, 6, 1)),
-        # Undated: the key falls back to its creation time (now), older than every dated row here.
-        "undated": tournament("undated", None),
+        # Undated: the key falls back to its creation time, seeded older than every dated row here.
+        "undated": tournament("undated", None, created_at=_day(2030, 5, 1)),
         "lol": tournament("lol", _day(2031, 2, 1), discipline="lol"),
         # Newer than everything above, and excluded regardless.
         "league": tournament("league", _day(2031, 3, 1), is_league=True),

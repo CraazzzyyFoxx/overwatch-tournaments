@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
 from shared.core import enums, errors, pagination
+from shared.core.chrono import chrono_sort_key
 from shared.core.errors import BaseAPIException
 from shared.disciplines import DISCIPLINES
 from shared.division_grid import DivisionGrid
@@ -1170,9 +1171,7 @@ class UserService(DisciplineQueries):
         # page's "last tournament" is the first card.
         tournaments = [
             _mappers.to_user_tournament_summary(tournament)
-            for tournament in sorted(
-                (team.tournament for team in teams), key=_mappers.tournament_recency_key, reverse=True
-            )
+            for tournament in sorted((team.tournament for team in teams), key=chrono_sort_key, reverse=True)
         ]
 
         for team in teams:
@@ -1364,7 +1363,7 @@ class UserService(DisciplineQueries):
         tournaments_count = 0
         tournaments_won = 0
         recent: dict[int, schemas.UserDraftCardTournament] = {}
-        for team in sorted(teams, key=lambda item: _mappers.tournament_recency_key(item.tournament), reverse=True):
+        for team in sorted(teams, key=lambda item: chrono_sort_key(item.tournament), reverse=True):
             tournament = team.tournament
             if tournament.is_league:
                 continue

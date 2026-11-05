@@ -288,15 +288,6 @@ def encounter_play_key(encounter: models.Encounter) -> tuple[datetime, int]:
     return (played or _MISSING_PLAYED_AT, encounter.id)
 
 
-def tournament_recency_key(tournament: models.Tournament) -> tuple[bool, datetime, int]:
-    """Sort key (``reverse=True`` = newest first) for tournaments: start date, undated last, then id.
-
-    The SQL readers' ``start_date DESC NULLS LAST, id DESC``. Ids follow creation, not play: across workspaces an
-    imported or later-created community's old event outranks a newer one by id.
-    """
-    return (tournament.start_date is not None, tournament.start_date or _MISSING_PLAYED_AT, tournament.id)
-
-
 def sort_user_matches(
     matches: list[schemas.MatchReadWithUserStats],
 ) -> list[schemas.MatchReadWithUserStats]:

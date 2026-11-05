@@ -81,3 +81,37 @@ class RuleCutoffChronologyTests(_EngineTestCase):
     async def test_a_cutoff_tournament_that_no_longer_exists_does_not_skip(self) -> None:
         self._two_tournaments(cutoff=999)
         self.assertGreater(await self._created(3), 0)
+
+
+CLIMB = {"type": "div_span", "params": {"op": ">=", "value": 1}}
+# Division numbers fall as the rank rises (Champion 5 is 5, Silver 5 is 40); `div_span` compares the numbers.
+NUMBER_5, NUMBER_40 = 4500, 1000
+
+
+class DivisionSpanChronologyTests(_EngineTestCase):
+    def _seed(self, *tournaments: tuple[int, dict, int]) -> None:
+        """One damage player in each tournament: (id, tournament kwargs, rank)."""
+        for tid, kwargs, rank in tournaments:
+            self.db.tournament(tid, name=f"T{tid}", is_hidden=False, **kwargs)
+            team = self.db.team(tid, f"T{tid} team", captain_id=None)
+            self.db.player(tid, team, self.db.member(REAL_HOME_USER), name="home player", rank=rank)
+        self.db.session.commit()
+
+    async def _qualifying(self) -> set:
+        return await evaluator.evaluate(self.db.shim, CLIMB, await self.context(None))
+
+    async def test_an_undated_tournament_sits_at_its_creation_date(self) -> None:
+        # Created in December, so it is the first one: 5 -> 40 meets the threshold. Undated-last would give 40 -> 5.
+        self._seed(
+            (1, {"start": JAN}, NUMBER_40),
+            (2, {"start": None, "created": datetime(2025, 12, 1, tzinfo=UTC)}, NUMBER_5),
+        )
+        self.assertEqual({(REAL_HOME_USER,)}, await self._qualifying())
+
+    async def test_a_start_tie_is_ordered_by_end_date(self) -> None:
+        # 2 ends before 1, so 2 comes first: 40 -> 5 does not meet it. By id alone it would be 5 -> 40.
+        self._seed(
+            (1, {"start": FEB, "end": FEB_20}, NUMBER_5),
+            (2, {"start": FEB, "end": FEB_2}, NUMBER_40),
+        )
+        self.assertEqual(set(), await self._qualifying())

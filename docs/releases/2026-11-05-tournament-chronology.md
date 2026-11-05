@@ -12,7 +12,9 @@ a different order in different places. Design: `docs/superpowers/specs/2026-11-0
 - **Where it applies.** Analytics and ML (v1 histories and streaks, timelines, windows and replays, chronological
   splits), achievements (streaks, division change), newcomer status in the balancer, and the stats and tournament-service
   "newest first" reads: the rank-autofill lookback and its three source queries, the registration history, the history
-  and average-division tournament lists, and the dashboard backlog and trends.
+  and average-division tournament lists, and the dashboard backlog and trends. The Python-side sorts follow it too: the
+  user overview's "last tournament" card, the draft card's recent tournaments and the division-climb achievement
+  (`div_span`).
 - **Undated tournaments** now sit at their creation time (they used to sort after every dated tournament). A start-date
   tie is broken by the end date, then the id.
 - **`ml.cli backfill`** takes `--from/--to YYYY-MM-DD` (UTC start days) instead of an id range; the shift-recompute
@@ -20,6 +22,11 @@ a different order in different places. Design: `docs/superpowers/specs/2026-11-0
 - **`TimeSeriesSplit.from_ids`** refuses tournament ids that are not in chronology order instead of splitting them.
 - **Achievement rule cutoffs** compare chronology, not ids. A rule whose cutoff tournament was deleted applies to every
   tournament; the old id comparison kept skipping the lower ids.
+- **Achievement results can be removed, not only granted.** Streak (`consecutive`, `stable_streak`), division-change
+  and cutoff-rule semantics changed, and evaluation diffs against the stored results. The next evaluation of a
+  workspace or tournament revokes results of users whose tournaments moved (undated tournaments, start-date ties, ids
+  on the other side of a rule's `min_tournament_id`) as well as granting new ones. Re-evaluate on your own schedule and
+  tell affected players.
 
 ## Why
 

@@ -301,8 +301,16 @@ class _Fixture:
         self.session.execute(sa.insert(table).values(**values))
 
     def tournament(
-        self, tournament_id: int, *, name: str, is_hidden: bool, start: datetime | None, end: datetime | None = None
+        self,
+        tournament_id: int,
+        *,
+        name: str,
+        is_hidden: bool,
+        start: datetime | None,
+        end: datetime | None = None,
+        created: datetime | None = None,
     ) -> None:
+        # `created` unset leaves `created_at` to its server default (now).
         self.insert(
             models.Tournament.__table__,
             id=tournament_id,
@@ -313,6 +321,7 @@ class _Fixture:
             is_league=False,
             start_date=start,
             end_date=end,
+            **({} if created is None else {"created_at": created}),
         )
 
     def member(self, user_id: int, *, workspace_id: int = WORKSPACE_ID) -> int:
