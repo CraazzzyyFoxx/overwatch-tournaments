@@ -42,6 +42,7 @@ from typing import Any
 
 from shared.domain.mix_lobby import LOBBY_LETTERS
 from shared.services.notifications import NOTIFICATION_KINDS
+from src.interactions.actions import registration_target
 from src.render.card import DiscordActionButton, DiscordButton, DiscordCard, DiscordLinkButton
 from src.ui import AMBER, BLUE, GREEN, RED, TEAL, emoji
 
@@ -444,8 +445,8 @@ def _action_row(kind: str, payload: Mapping[str, Any], labels: Mapping[str, str]
     """The one-click answers a card offers: only where one call does the whole job.
 
     Registering, reporting a score or disputing one needs a form, so those
-    cards link to the site instead. A missing id leaves the card without the
-    button rather than with one that cannot work.
+    cards link to the site instead. A missing id (the tournament's, or the payload's ``registration_node_id``
+    that the entry routes require) leaves the card without the button rather than with one that cannot work.
     """
     tournament_id = payload.get("tournament_id")
     invite_id = payload.get("invite_id")
@@ -466,19 +467,21 @@ def _action_row(kind: str, payload: Mapping[str, Any], labels: Mapping[str, str]
                 emoji=_ACTION_EMOJI["invite.decline"],
             ),
         ]
-    if not isinstance(tournament_id, int):
+    registration_node_id = payload.get("registration_node_id")
+    if not isinstance(tournament_id, int) or not isinstance(registration_node_id, int):
         return []
+    target = registration_target(tournament_id, registration_node_id)
     view = DiscordActionButton(
         label=labels["registration.view"],
         action="registration.view",
-        target=str(tournament_id),
+        target=target,
         emoji=_ACTION_EMOJI["registration.view"],
     )
     if kind == "check_in.opened":
         check_in = DiscordActionButton(
             label=labels["check_in"],
             action="check_in",
-            target=str(tournament_id),
+            target=target,
             style="success",
             emoji=_ACTION_EMOJI["check_in"],
         )

@@ -36,6 +36,7 @@ __all__ = (
     "parse_seat_set_target",
     "parse_setup_target",
     "parse_voice_target",
+    "registration_target",
     "role_letters",
     "seat_set_target",
     "seat_slots",
@@ -53,9 +54,25 @@ def _invite(target: str, fields: Mapping[str, str]) -> dict[str, Any]:
     return {"payload": {"invite_id": int(target)}}
 
 
-def _tournament(target: str, fields: Mapping[str, str]) -> dict[str, Any]:
-    # ``{tournament_id}`` is a path parameter, which the gateway copies to the body by name.
-    return {"tournament_id": int(target)}
+_REGISTRATION_TARGET = re.compile(r"^(?P<tournament>\d+)-(?P<node>\d+)$")
+
+
+def registration_target(tournament_id: Any, registration_node_id: Any) -> str:
+    """``<tournament id>-<registration node id>``: the entry routes need both (``?registration_node_id=``)."""
+    return f"{tournament_id}-{registration_node_id}"
+
+
+def _registration_accepts(target: str) -> bool:
+    return _REGISTRATION_TARGET.match(target) is not None
+
+
+def _registration(target: str, fields: Mapping[str, str]) -> dict[str, Any]:
+    # ``{tournament_id}`` is a path parameter, which the gateway copies to the body by name; the node is a
+    # query parameter, which the RPC reads from ``query`` as a list of strings.
+    match = _REGISTRATION_TARGET.match(target)
+    if match is None:
+        raise ValueError(target)
+    return {"tournament_id": int(match["tournament"]), "query": {"registration_node_id": [match["node"]]}}
 
 
 def _nothing(target: str, fields: Mapping[str, str]) -> dict[str, Any]:
@@ -266,8 +283,13 @@ _INVITE_BUTTONS = frozenset({"invite.accept", "invite.decline"})
 ACTIONS: dict[str, Action] = {
     "invite.accept": Action("rpc.tournament.regteam_accept", _invite, settles=_INVITE_BUTTONS),
     "invite.decline": Action("rpc.tournament.regteam_decline", _invite, settles=_INVITE_BUTTONS),
-    "check_in": Action("rpc.tournament.reg_pub_check_in", _tournament, settles=frozenset({"check_in"})),
-    "registration.view": Action("rpc.tournament.reg_pub_get_me", _tournament),
+    "check_in": Action(
+        "rpc.tournament.reg_pub_check_in",
+        _registration,
+        accepts=_registration_accepts,
+        settles=frozenset({"check_in"}),
+    ),
+    "registration.view": Action("rpc.tournament.reg_pub_get_me", _registration, accepts=_registration_accepts),
     # The DM card's small button: opens, for the reader alone, the one that
     # switches every Discord DM off, so the card itself carries no such switch.
     "notifications.menu": Action(None, accepts=_everything),

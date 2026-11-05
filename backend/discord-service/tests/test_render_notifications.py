@@ -311,6 +311,12 @@ class RenderDiscordTests(TestCase):
             site_url=SITE,
         )
         check_in = render_discord(
+            "check_in.opened",
+            {"tournament_id": 3, "tournament_name": "Cup", "registration_node_id": 7},
+            locale="ru",
+            site_url=SITE,
+        )
+        no_node = render_discord(
             "check_in.opened", {"tournament_id": 3, "tournament_name": "Cup"}, locale="ru", site_url=SITE
         )
         opened = render_discord(
@@ -320,9 +326,12 @@ class RenderDiscordTests(TestCase):
         self.assertEqual(
             [(b.action, b.target) for b in invite.answers], [("invite.accept", "42"), ("invite.decline", "42")]
         )
+        # The entry routes need the registration node too: ``<tournament>-<node>``.
         self.assertEqual(
-            [(b.action, b.target) for b in check_in.answers], [("check_in", "3"), ("registration.view", "3")]
+            [(b.action, b.target) for b in check_in.answers], [("check_in", "3-7"), ("registration.view", "3-7")]
         )
+        # A button that cannot name its node would only fail on click.
+        self.assertEqual(no_node.answers, [])
         # Registering needs the form: that card only links to it.
         self.assertEqual(opened.answers, [])
         self.assertEqual([b.type for row in opened.rows for b in row], ["link"])
