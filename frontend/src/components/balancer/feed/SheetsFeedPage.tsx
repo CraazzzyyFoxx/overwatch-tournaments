@@ -37,7 +37,11 @@ const PREVIEW_SAMPLE_ROWS = 5;
 
 // D25: rendered by both the hub sub-route (tournament from the path) and the
 // legacy balancer route (tournament from the ?tournament query) until T14.
-export default function SheetsFeedPage({ tournamentId }: Readonly<{ tournamentId: number | null }>) {
+// `registrationNodeId` is the registration node the feed's rows are written into.
+export default function SheetsFeedPage({
+  tournamentId,
+  registrationNodeId
+}: Readonly<{ tournamentId: number | null; registrationNodeId: number | null }>) {
   const queryClient = useQueryClient();
   const t = useTranslations("sheetsFeed");
 
@@ -136,6 +140,7 @@ export default function SheetsFeedPage({ tournamentId }: Readonly<{ tournamentId
   }, [catalogQuery.data?.targets, preview]);
 
   const buildUpsertPayload = (): AdminGoogleSheetFeedUpsertInput => ({
+    registration_node_id: registrationNodeId as number,
     source_url: sourceUrl,
     title: title || null,
     auto_sync_enabled: autoSyncEnabled,
@@ -147,7 +152,7 @@ export default function SheetsFeedPage({ tournamentId }: Readonly<{ tournamentId
   const invalidateFeed = () =>
     queryClient.invalidateQueries({ queryKey: balancerQueryKeys.sheet(tournamentId) });
   const invalidateRegistrations = () =>
-    queryClient.invalidateQueries({ queryKey: balancerQueryKeys.registrations(tournamentId) });
+    queryClient.invalidateQueries({ queryKey: balancerQueryKeys.registrations(tournamentId, registrationNodeId) });
 
   const saveMutation = useMutation({
     mutationFn: () =>

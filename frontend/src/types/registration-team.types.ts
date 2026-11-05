@@ -54,6 +54,8 @@ export interface RegistrationTeamInvite {
 export interface RegistrationTeam {
   id: number;
   tournament_id: number;
+  /** The registration node the team's members are entries of. */
+  registration_node_id: number;
   name: string;
   image_url: string | null;
   status: RegistrationTeamStatus;
@@ -156,6 +158,8 @@ export interface RegistrationTeamInvitePreview {
   tournament_id: number;
   tournament_name: string;
   workspace_id: number;
+  /** The registration node of the invite's team: where the invitee registers. */
+  registration_node_id: number;
   /** The tournament's game: the scope of the role that names `slot_code`. */
   discipline: string;
   team_id: number;

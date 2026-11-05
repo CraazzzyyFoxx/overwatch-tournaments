@@ -17,10 +17,11 @@ import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";
 import { getRegistrationTeamStatus, REGISTRATION_TEAM_STATUS_TONE } from "@/lib/registration/team-tone";
 import { slotCodeOrder, slotRank, type RoleOntology } from "@/lib/roster/ontology";
 import type { SlotCode } from "@/lib/roster/shape";
-import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
+import {
+  tournamentMyRegistrationQueryOptions,
+  tournamentRegistrationTeamsQueryOptions,
+} from "@/lib/tournament/registrations-query";
 import { cn } from "@/lib/utils";
-import registrationService from "@/services/registration.service";
-import registrationTeamService from "@/services/registration-team.service";
 import type { RegistrationTeam, RegistrationTeamMember } from "@/types/registration-team.types";
 import type { Tournament } from "@/types/tournament.types";
 
@@ -190,17 +191,13 @@ export default function RegistrationTeamsList({
   const { status: authStatus, user } = useAuthProfile();
   const isAuthenticated = authStatus === "authenticated" && user != null;
 
-  const teamsQuery = useQuery({
-    queryKey: tournamentQueryKeys.registrationTeams(tournament.workspace_id, tournament.id),
-    queryFn: () => registrationTeamService.listPublic(tournament.id)
-  });
+  const teamsQuery = useQuery(tournamentRegistrationTeamsQueryOptions(tournament));
   // Same query key `MyTeamSection` already uses, so this is a cache read, not a
   // second request: a captain's own team is already shown in full detail above
   // (`MyTeamPanel`), so showing it again here as a third summary of the same
   // roster and shortfall would be the exact clutter this section exists to avoid.
   const myRegQuery = useQuery({
-    queryKey: tournamentQueryKeys.registration(tournament.workspace_id, tournament.id),
-    queryFn: () => registrationService.getMyRegistration(tournament.id),
+    ...tournamentMyRegistrationQueryOptions(tournament),
     enabled: isAuthenticated
   });
   const myTeamId = myRegQuery.data?.team?.id ?? null;

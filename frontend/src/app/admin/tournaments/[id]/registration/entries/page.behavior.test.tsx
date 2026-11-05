@@ -89,7 +89,10 @@ vi.mock("@/services/admin.service", () => ({
       id: 80,
       workspace_id: 1,
       name: "Anak Cup",
-      team_formation: teamFormation
+      team_formation: teamFormation,
+      flow_nodes: [
+        { id: 7, kind: "registration", name: "Registration", status: "open", config: {}, schedule: [], stage_id: null }
+      ]
     }))
   }
 }));
@@ -154,6 +157,8 @@ function registration(
 ): AdminRegistration {
   return {
     id,
+    entry_id: id + 1000,
+    registration_node_id: 7,
     tournament_id: 80,
     workspace_id: 1,
     user_id: id,

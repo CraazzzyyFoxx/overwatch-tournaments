@@ -50,6 +50,7 @@ export interface MyTeamInviteController {
 interface UseMyTeamInviteInput {
   workspaceId: number;
   tournamentId: number;
+  registrationNodeId: number;
   teamId: number;
   /** Whether a roster write can still land at all. The dialog closes with it,
    *  and the submit refuses rather than posting something the server denies. */
@@ -71,6 +72,7 @@ interface UseMyTeamInviteInput {
 export function useMyTeamInvite({
   workspaceId,
   tournamentId,
+  registrationNodeId,
   teamId,
   canEditRoster,
   offerableSlots,
@@ -96,8 +98,8 @@ export function useMyTeamInvite({
   /** Fetched only while the dialog is open: nobody else needs this list, and it
    *  goes stale the moment another captain recruits one of them. */
   const freeAgentsQuery = useQuery({
-    queryKey: tournamentQueryKeys.registrationFreeAgents(workspaceId, tournamentId),
-    queryFn: () => registrationTeamService.listFreeAgents(tournamentId),
+    queryKey: tournamentQueryKeys.registrationFreeAgents(workspaceId, tournamentId, registrationNodeId),
+    queryFn: () => registrationTeamService.listFreeAgents(tournamentId, registrationNodeId),
     enabled: inviteOpen && inviteMode === "targeted",
   });
 

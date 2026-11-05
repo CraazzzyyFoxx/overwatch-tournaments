@@ -14,6 +14,8 @@ import { reachedAtLeast } from "@/lib/tournament/lifecycle";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { useAuthModalStore } from "@/stores/auth-modal.store";
 import registrationService from "@/services/registration.service";
+import { currentRegistrationNode } from "@/lib/tournament/flow-nodes";
+import { tournamentMyRegistrationQueryOptions } from "@/lib/tournament/registrations-query";
 import { tournamentHref } from "@/lib/tournament/url";
 import type { Tournament } from "@/types/tournament.types";
 
@@ -41,6 +43,7 @@ export default function TournamentRegisterButton({
   const openAuthModal = useAuthModalStore((state) => state.open);
   const isAuthenticated = authStatus === "authenticated" && user !== null;
   const [showModal, setShowModal] = useState(false);
+  const registrationNodeId = currentRegistrationNode(tournament)?.id ?? null;
 
   const formQuery = useQuery({
     queryKey: tournamentQueryKeys.registrationForm(workspaceId, tournamentId),
@@ -48,8 +51,7 @@ export default function TournamentRegisterButton({
   });
 
   const myRegQuery = useQuery({
-    queryKey: tournamentQueryKeys.registration(workspaceId, tournamentId),
-    queryFn: () => registrationService.getMyRegistration(tournamentId),
+    ...tournamentMyRegistrationQueryOptions(tournament),
     enabled: isAuthenticated
   });
 
@@ -66,6 +68,8 @@ export default function TournamentRegisterButton({
 
   if (formQuery.isLoading) return null;
   if (!form) return null;
+  // No registration node, nothing to register for.
+  if (registrationNodeId == null) return null;
   // Who is asking is unknown until the profile resolves, and the server render
   // and hydration always see "idle" — with the form seeded server-side, a
   // signed-in viewer would otherwise be offered "Login to register" first, and
@@ -157,7 +161,7 @@ export default function TournamentRegisterButton({
   // foreclosed. `TeamRegistrationEntry` hides itself for a viewer who cannot act,
   // so this renders nothing rather than a dead control.
   if (tournament.team_formation === "registration") {
-    return <TeamRegistrationEntry tournament={tournament} />;
+    return <TeamRegistrationEntry tournament={tournament} registrationNodeId={registrationNodeId} />;
   }
 
   return (
@@ -176,6 +180,7 @@ export default function TournamentRegisterButton({
           <RegistrationWizard
             workspaceId={workspaceId}
             tournamentId={tournamentId}
+            registrationNodeId={registrationNodeId}
             tournamentName={tournamentName}
             form={form}
             onClose={() => setShowModal(false)}

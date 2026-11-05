@@ -41,6 +41,7 @@ declare global {
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 const TOURNAMENT_ID = 88;
+const REGISTRATION_NODE_ID = 21;
 
 const getMyRegistration = vi.fn();
 const listRegistrations = vi.fn();
@@ -134,6 +135,9 @@ function makeTournament(status: TournamentStatus, window: { starts_at: string; e
     status,
     auto_transitions_enabled: true,
     allow_late_registration: false,
+    flow_nodes: [
+      { id: REGISTRATION_NODE_ID, kind: "registration", name: "Registration", status: "check_in", config: {}, schedule: [], stage_id: null }
+    ],
     phase_schedule: [{ status: "check_in", ...window }],
     stages: [],
     participants_count: 1,
@@ -150,6 +154,8 @@ function makeTournament(status: TournamentStatus, window: { starts_at: string; e
 function makeRegistration(overrides: Partial<Registration> = {}): Registration {
   return {
     id: 401,
+    entry_id: 701,
+    registration_node_id: REGISTRATION_NODE_ID,
     tournament_id: TOURNAMENT_ID,
     workspace_id: 3,
     user_id: 5,
@@ -432,7 +438,7 @@ describe("a first visit's hydration", () => {
     );
     const seeded = () => {
       const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-      client.setQueryData(tournamentQueryKeys.registrationsList(3, TOURNAMENT_ID), regList([makeRegistration()]));
+      client.setQueryData(tournamentQueryKeys.registrationsList(3, TOURNAMENT_ID, REGISTRATION_NODE_ID), regList([makeRegistration()]));
       client.setQueryData(tournamentQueryKeys.registrationForm(3, TOURNAMENT_ID), FORM);
       return client;
     };
@@ -441,7 +447,7 @@ describe("a first visit's hydration", () => {
     // In the browser the shell's Register button reads the viewer's own entry
     // as soon as the profile resolves — before this tab hydrates.
     const browserClient = seeded();
-    browserClient.setQueryData(tournamentQueryKeys.registration(3, TOURNAMENT_ID), makeRegistration());
+    browserClient.setQueryData(tournamentQueryKeys.registration(3, TOURNAMENT_ID, REGISTRATION_NODE_ID), makeRegistration());
     const hydrated = document.createElement("div");
     hydrated.innerHTML = html;
     document.body.appendChild(hydrated);
@@ -637,7 +643,7 @@ describe("re-checking profile and subscriptions", () => {
     await act(async () => recheckButton()?.click());
     await settle();
 
-    expect(recheckMyRegistration).toHaveBeenCalledWith(TOURNAMENT_ID);
+    expect(recheckMyRegistration).toHaveBeenCalledWith(TOURNAMENT_ID, REGISTRATION_NODE_ID);
     expect(recheckButton()?.disabled).toBe(true);
     expect(recheckButton()?.textContent).toContain("60s");
   });
@@ -899,7 +905,7 @@ describe("editing your own registration", () => {
     await act(async () => submit?.click());
     await settle();
 
-    expect(updateMyRegistration).toHaveBeenCalledWith(TOURNAMENT_ID, {
+    expect(updateMyRegistration).toHaveBeenCalledWith(TOURNAMENT_ID, REGISTRATION_NODE_ID, {
       form_version_id: FORM.version_id,
       answers: { public_notes: "before" }
     });

@@ -209,10 +209,11 @@ export default class balancerAdminService {
 
   static async exportPlayers(
     tournamentId: number,
+    registrationNodeId: number,
     format: BalancerPlayerExportFormat = "xv-1",
     includePrivate = false
   ): Promise<BalancerPlayerExportResponse> {
-    const query = new URLSearchParams({ format });
+    const query = new URLSearchParams({ format, registration_node_id: String(registrationNodeId) });
     if (includePrivate) query.set("include_private", "1");
     const response = await apiFetch(
       `/api/v1/admin/balancer/tournaments/${tournamentId}/players/export?${query}`
@@ -415,6 +416,7 @@ export default class balancerAdminService {
 
   static async listRegistrations(
     tournamentId: number,
+    registrationNodeId: number,
     filters?: {
       status_filter?: string;
       inclusion_filter?: string;
@@ -424,7 +426,7 @@ export default class balancerAdminService {
   ): Promise<AdminRegistration[]> {
     const response = await apiFetch(`/api/v1/admin/balancer/tournaments/${tournamentId}/registrations`,
       {
-        query: filters
+        query: { ...filters, registration_node_id: registrationNodeId }
       }
     );
     return response.json();
@@ -432,11 +434,13 @@ export default class balancerAdminService {
 
   static async createManualRegistration(
     tournamentId: number,
+    registrationNodeId: number,
     data: AdminRegistrationCreateInput
   ): Promise<AdminRegistration> {
     const response = await apiFetch(`/api/v1/admin/balancer/tournaments/${tournamentId}/registrations`,
       {
         method: "POST",
+        query: { registration_node_id: registrationNodeId },
         body: data
       }
     );
@@ -445,37 +449,42 @@ export default class balancerAdminService {
 
   static async updateRegistration(
     registrationId: number,
+    registrationNodeId: number,
     data: AdminRegistrationUpdateInput
   ): Promise<AdminRegistration> {
     const response = await apiFetch(`/api/v1/admin/balancer/registrations/${registrationId}`, {
       method: "PATCH",
+      query: { registration_node_id: registrationNodeId },
       body: data
     });
     return response.json();
   }
 
-  static async approveRegistration(registrationId: number): Promise<AdminRegistration> {
+  static async approveRegistration(registrationId: number, registrationNodeId: number): Promise<AdminRegistration> {
     const response = await apiFetch(`/api/v1/admin/balancer/registrations/${registrationId}/approve`,
       {
-        method: "PATCH"
+        method: "PATCH",
+        query: { registration_node_id: registrationNodeId }
       }
     );
     return response.json();
   }
 
-  static async rejectRegistration(registrationId: number): Promise<AdminRegistration> {
+  static async rejectRegistration(registrationId: number, registrationNodeId: number): Promise<AdminRegistration> {
     const response = await apiFetch(`/api/v1/admin/balancer/registrations/${registrationId}/reject`,
       {
-        method: "PATCH"
+        method: "PATCH",
+        query: { registration_node_id: registrationNodeId }
       }
     );
     return response.json();
   }
 
-  static async includeInBalancer(registrationId: number): Promise<AdminRegistration> {
+  static async includeInBalancer(registrationId: number, registrationNodeId: number): Promise<AdminRegistration> {
     const response = await apiFetch(`/api/v1/admin/balancer/registrations/${registrationId}/include`,
       {
-        method: "POST"
+        method: "POST",
+        query: { registration_node_id: registrationNodeId }
       }
     );
     return response.json();
@@ -483,6 +492,7 @@ export default class balancerAdminService {
 
   static async bulkSetBalancerStatus(
     tournamentId: number,
+    registrationNodeId: number,
     data: {
       registration_ids: number[];
       balancer_status: BalancerStatus;
@@ -492,43 +502,49 @@ export default class balancerAdminService {
     const response = await apiFetch(`/api/v1/admin/balancer/tournaments/${tournamentId}/registrations/bulk-set-balancer-status`,
       {
         method: "POST",
+        query: { registration_node_id: registrationNodeId },
         body: data
       }
     );
     return response.json();
   }
 
-  static async withdrawRegistration(registrationId: number): Promise<AdminRegistration> {
+  static async withdrawRegistration(registrationId: number, registrationNodeId: number): Promise<AdminRegistration> {
     const response = await apiFetch(`/api/v1/admin/balancer/registrations/${registrationId}/withdraw`,
       {
-        method: "PATCH"
+        method: "PATCH",
+        query: { registration_node_id: registrationNodeId }
       }
     );
     return response.json();
   }
 
-  static async restoreRegistration(registrationId: number): Promise<AdminRegistration> {
+  static async restoreRegistration(registrationId: number, registrationNodeId: number): Promise<AdminRegistration> {
     const response = await apiFetch(`/api/v1/admin/balancer/registrations/${registrationId}/restore`,
       {
-        method: "PATCH"
+        method: "PATCH",
+        query: { registration_node_id: registrationNodeId }
       }
     );
     return response.json();
   }
 
-  static async deleteRegistration(registrationId: number): Promise<void> {
+  static async deleteRegistration(registrationId: number, registrationNodeId: number): Promise<void> {
     await apiFetch(`/api/v1/admin/balancer/registrations/${registrationId}`, {
-      method: "DELETE"
+      method: "DELETE",
+      query: { registration_node_id: registrationNodeId }
     });
   }
 
   static async bulkApproveRegistrations(
     tournamentId: number,
+    registrationNodeId: number,
     registrationIds: number[]
   ): Promise<{ approved: number; skipped: number }> {
     const response = await apiFetch(`/api/v1/admin/balancer/tournaments/${tournamentId}/registrations/bulk-approve`,
       {
         method: "POST",
+        query: { registration_node_id: registrationNodeId },
         body: { registration_ids: registrationIds }
       }
     );
@@ -539,12 +555,14 @@ export default class balancerAdminService {
 
   static async setBalancerStatus(
     registrationId: number,
+    registrationNodeId: number,
     balancerStatus: BalancerStatus,
     excludeReason?: string | null
   ): Promise<AdminRegistration> {
     const response = await apiFetch(`/api/v1/admin/balancer/registrations/${registrationId}/balancer-status`,
       {
         method: "PATCH",
+        query: { registration_node_id: registrationNodeId },
         body: { balancer_status: balancerStatus, exclude_reason: excludeReason ?? null }
       }
     );
@@ -553,11 +571,13 @@ export default class balancerAdminService {
 
   static async bulkAddToBalancer(
     tournamentId: number,
+    registrationNodeId: number,
     registrationIds: number[]
   ): Promise<{ updated: number; skipped: number }> {
     const response = await apiFetch(`/api/v1/admin/balancer/tournaments/${tournamentId}/registrations/bulk-add-to-balancer`,
       {
         method: "POST",
+        query: { registration_node_id: registrationNodeId },
         body: { registration_ids: registrationIds }
       }
     );
@@ -566,11 +586,13 @@ export default class balancerAdminService {
 
   static async previewRegistrationRankAutofill(
     tournamentId: number,
+    registrationNodeId: number,
     data: RegistrationRankAutofillRequest = {}
   ): Promise<RegistrationRankAutofillResponse> {
     const response = await apiFetch(`/api/v1/admin/balancer/tournaments/${tournamentId}/registrations/rank-autofill/preview`,
       {
         method: "POST",
+        query: { registration_node_id: registrationNodeId },
         body: data
       }
     );
@@ -579,11 +601,13 @@ export default class balancerAdminService {
 
   static async applyRegistrationRankAutofill(
     tournamentId: number,
+    registrationNodeId: number,
     data: RegistrationRankAutofillRequest = {}
   ): Promise<RegistrationRankAutofillResponse> {
     const response = await apiFetch(`/api/v1/admin/balancer/tournaments/${tournamentId}/registrations/rank-autofill/apply`,
       {
         method: "POST",
+        query: { registration_node_id: registrationNodeId },
         body: data
       }
     );
@@ -609,11 +633,13 @@ export default class balancerAdminService {
 
   static async checkInRegistration(
     registrationId: number,
+    registrationNodeId: number,
     checkedIn: boolean
   ): Promise<AdminRegistration> {
     const response = await apiFetch(`/api/v1/admin/balancer/registrations/${registrationId}/check-in`,
       {
         method: "PATCH",
+        query: { registration_node_id: registrationNodeId },
         body: { checked_in: checkedIn }
       }
     );

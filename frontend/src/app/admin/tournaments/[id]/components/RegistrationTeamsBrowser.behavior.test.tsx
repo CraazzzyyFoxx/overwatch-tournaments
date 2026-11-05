@@ -101,6 +101,7 @@ function team(overrides: Partial<RegistrationTeam> = {}): RegistrationTeam {
   return {
     id: 1,
     tournament_id: TOURNAMENT_ID,
+    registration_node_id: 7,
     name: "Team Alpha",
     image_url: null,
     status: "forming",
@@ -178,6 +179,7 @@ function Harness() {
       tournamentId={TOURNAMENT_ID}
       workspaceId={WORKSPACE_ID}
       discipline="overwatch"
+      registrationNodeId={7}
       formationNodeId={9}
     />;
 }
@@ -354,7 +356,7 @@ describe("RegistrationTeamsBrowser", () => {
     expect(row(scope, "Team Alpha")?.textContent).toContain("1/4");
     // One read serves every filter below, so terminal teams are already here.
     expect(listAdmin).toHaveBeenCalledTimes(1);
-    expect(listAdmin).toHaveBeenCalledWith(TOURNAMENT_ID, { includeTerminal: true });
+    expect(listAdmin).toHaveBeenCalledWith(TOURNAMENT_ID, 7, { includeTerminal: true });
   });
 
   it("narrows the list from a chip that lives in the URL", async () => {
@@ -581,7 +583,7 @@ describe("RegistrationTeamsBrowser", () => {
     const dialog = formDialog()!;
     // The candidates are this tournament's free agents — a player already on a
     // team is not offered, so the call cannot be refused for that.
-    expect(listFreeAgents).toHaveBeenCalledWith(TOURNAMENT_ID);
+    expect(listFreeAgents).toHaveBeenCalledWith(TOURNAMENT_ID, 7);
 
     await click(dialog.querySelector("button[role='combobox']"));
     await click(commandItem("Rein#2222"));

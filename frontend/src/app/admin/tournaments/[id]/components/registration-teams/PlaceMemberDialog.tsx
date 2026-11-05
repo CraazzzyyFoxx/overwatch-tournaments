@@ -43,6 +43,7 @@ import type { RegistrationTeamActions } from "./useRegistrationTeamActions";
  */
 export function PlaceMemberDialog({
   tournamentId,
+  registrationNodeId,
   workspaceId,
   team,
   ontology,
@@ -50,6 +51,7 @@ export function PlaceMemberDialog({
   actions
 }: Readonly<{
   tournamentId: number;
+  registrationNodeId: number;
   workspaceId: number;
   /** The tournament's own game's scoped ontology; slots are named and drawn in it. */
   ontology: RoleOntology | null;
@@ -87,8 +89,8 @@ export function PlaceMemberDialog({
   }
 
   const freeAgentsQuery = useQuery({
-    queryKey: tournamentQueryKeys.registrationFreeAgents(workspaceId, tournamentId),
-    queryFn: () => registrationTeamService.listFreeAgents(tournamentId),
+    queryKey: tournamentQueryKeys.registrationFreeAgents(workspaceId, tournamentId, registrationNodeId),
+    queryFn: () => registrationTeamService.listFreeAgents(tournamentId, registrationNodeId),
     enabled: team != null
   });
 

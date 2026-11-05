@@ -301,6 +301,9 @@ export type EditLockedReason =
 
 export interface Registration {
   id: number;
+  /** The caller's entry at `registration_node_id`; the profile (`id`) carries one entry per registration node. */
+  entry_id: number;
+  registration_node_id: number;
   tournament_id: number;
   workspace_id: number;
   user_id: number | null;

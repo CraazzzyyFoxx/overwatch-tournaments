@@ -21,7 +21,7 @@ import {
   UnlinkedRegistrationsNotice,
   countUnlinkedRegistrations
 } from "@/components/kit/UnlinkedRegistrationsNotice";
-import { FLOW_NODE_PARAM, useFlowNodeParam } from "@/hooks/useFlowNodeParam";
+import { FLOW_NODE_PARAM, REGISTRATION_NODE_PARAM, useFlowNodeParam } from "@/hooks/useFlowNodeParam";
 import { useQueryParams } from "@/hooks/useQueryParams";
 import { useBalancerJob } from "@/app/balancer/components/useBalancerJob";
 import { useBalancerMutations } from "@/app/balancer/components/useBalancerMutations";
@@ -176,15 +176,17 @@ export function BalancerMainPageClient() {
   });
   // The balance, its config and every export belong to one formation node of the tournament.
   const formationNodeId = useFlowNodeParam(tournamentQuery.data, "formation");
+  // The pool is the entries of one registration node.
+  const registrationNodeId = useFlowNodeParam(tournamentQuery.data, "registration", REGISTRATION_NODE_PARAM);
   const { setParams } = useQueryParams();
 
   const registrationsQuery = useQuery({
-    queryKey: balancerQueryKeys.registrations(tournamentId),
+    queryKey: balancerQueryKeys.registrations(tournamentId, registrationNodeId),
     queryFn: () =>
-      balancerAdminService.listRegistrations(tournamentId as number, {
+      balancerAdminService.listRegistrations(tournamentId as number, registrationNodeId as number, {
         include_deleted: false
       }),
-    enabled: tournamentId !== null,
+    enabled: tournamentId !== null && registrationNodeId !== null,
     refetchOnWindowFocus: false
   });
 
@@ -412,9 +414,10 @@ export function BalancerMainPageClient() {
       includePrivate: boolean;
     }) => {
       const selectedTournamentId = tournamentId;
-      if (!selectedTournamentId) throw new Error(t("errors.noTournament"));
+      if (!selectedTournamentId || registrationNodeId === null) throw new Error(t("errors.noTournament"));
       const payload = await balancerAdminService.exportPlayers(
         selectedTournamentId,
+        registrationNodeId,
         format,
         includePrivate
       );
@@ -494,6 +497,7 @@ export function BalancerMainPageClient() {
   } = useBalancerMutations({
     tournamentId,
     formationNodeId,
+    registrationNodeId,
     workspaceId,
     queryClient,
     dispatchJob,
@@ -777,6 +781,12 @@ export function BalancerMainPageClient() {
         kind="formation"
         value={formationNodeId}
         onChange={(nodeId) => setParams({ [FLOW_NODE_PARAM]: nodeId })}
+      />
+      <FlowNodeSelect
+        tournament={tournamentQuery.data}
+        kind="registration"
+        value={registrationNodeId}
+        onChange={(nodeId) => setParams({ [REGISTRATION_NODE_PARAM]: nodeId })}
       />
       <UnlinkedRegistrationsNotice count={countUnlinkedRegistrations(registrations)} />
       <PresetRunPanel

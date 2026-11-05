@@ -74,6 +74,9 @@ function makeTournament(status: TournamentStatus): Tournament {
     logs_official: false,
     pov_stream_delay_s: 0,
     // Registration closed long ago, whatever the status says.
+    flow_nodes: [
+      { id: 21, kind: "registration", name: "Registration", status: "open", config: {}, schedule: [], stage_id: null }
+    ],
     phase_schedule: [
       {
         status: "registration",

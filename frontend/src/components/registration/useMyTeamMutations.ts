@@ -23,6 +23,7 @@ interface MyTeamRefresh {
 export function useMyTeamRefresh(
   workspaceId: number,
   tournamentId: number,
+  registrationNodeId: number,
   teamId: number,
 ): MyTeamRefresh {
   const tErrors = useTranslations("registrationTeams.errors");
@@ -46,7 +47,7 @@ export function useMyTeamRefresh(
           queryKey: tournamentQueryKeys.registrationsList(workspaceId, tournamentId),
         }),
         queryClient.invalidateQueries({
-          queryKey: tournamentQueryKeys.registrationFreeAgents(workspaceId, tournamentId),
+          queryKey: tournamentQueryKeys.registrationFreeAgents(workspaceId, tournamentId, registrationNodeId),
         }),
       ]),
     failure: (err: unknown) => notify.error(translateRegistrationTeamError(tErrors, err)),
@@ -55,6 +56,7 @@ export function useMyTeamRefresh(
 
 interface UseMyTeamMutationsInput extends MyTeamRefresh {
   teamId: number;
+  registrationNodeId: number;
   /** Post-success UI the card owns: the dialogs a mutation closes, and the
    *  token an extended link invite hands back exactly once. */
   onExtended: (token: string | null) => void;
@@ -69,6 +71,7 @@ interface UseMyTeamMutationsInput extends MyTeamRefresh {
  */
 export function useMyTeamMutations({
   teamId,
+  registrationNodeId,
   invalidate,
   failure,
   onExtended,
@@ -203,7 +206,7 @@ export function useMyTeamMutations({
 
   const checkInMutation = useMutation({
     mutationFn: (excludeIds: number[]) =>
-      registrationTeamService.checkInRoster(teamId, excludeIds),
+      registrationTeamService.checkInRoster(teamId, registrationNodeId, excludeIds),
     onSuccess: async () => {
       notify.success(t("checkIn.success"));
       onCheckedIn();

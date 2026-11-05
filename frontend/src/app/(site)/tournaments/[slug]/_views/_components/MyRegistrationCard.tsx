@@ -290,11 +290,15 @@ function MyRegistrationCard({
     return () => window.clearTimeout(id);
   }, [recheckLeft]);
   const recheckMutation = useMutation({
-    mutationFn: () => registrationService.recheckMyRegistration(tournament.id),
+    mutationFn: () => registrationService.recheckMyRegistration(tournament.id, registration.registration_node_id),
     onSuccess: () => {
       setRecheckLeft(RECHECK_COOLDOWN_SECONDS);
       void queryClient.invalidateQueries({
-        queryKey: tournamentQueryKeys.registration(tournament.workspace_id, tournament.id)
+        queryKey: tournamentQueryKeys.registration(
+          tournament.workspace_id,
+          tournament.id,
+          registration.registration_node_id
+        )
       });
       void queryClient.invalidateQueries({
         queryKey: tournamentQueryKeys.subscriptionStatus(tournament.id)
@@ -314,8 +318,12 @@ function MyRegistrationCard({
   // player who actually is on a team — solo tournaments send no request.
   const teamBrief = registration.team ?? null;
   const teamsQuery = useQuery({
-    queryKey: tournamentQueryKeys.registrationTeams(tournament.workspace_id, tournament.id),
-    queryFn: () => registrationTeamService.listPublic(tournament.id),
+    queryKey: tournamentQueryKeys.registrationTeams(
+      tournament.workspace_id,
+      tournament.id,
+      registration.registration_node_id
+    ),
+    queryFn: () => registrationTeamService.listPublic(tournament.id, registration.registration_node_id),
     enabled: teamBrief !== null
   });
   const myTeam = teamBrief

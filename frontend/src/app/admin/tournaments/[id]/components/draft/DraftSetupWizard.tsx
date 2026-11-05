@@ -62,6 +62,8 @@ import adminService from "@/services/admin.service";
 interface DraftSetupWizardProps {
   tournamentId: number;
   formationNodeId: number;
+  /** The registration node whose entries make the pool. */
+  registrationNodeId: number;
   board: DraftBoard | null;
   /** Resolved tournament roster shape; a live session's own shape wins over it. */
   rosterShape: RosterShape;
@@ -72,6 +74,7 @@ interface DraftSetupWizardProps {
 export function DraftSetupWizard({
   tournamentId,
   formationNodeId,
+  registrationNodeId,
   board,
   rosterShape,
   aside
@@ -124,8 +127,9 @@ export function DraftSetupWizard({
   };
 
   const poolQuery = useQuery({
-    queryKey: balancerQueryKeys.draftSetupPool(tournamentId),
-    queryFn: () => balancerAdminService.listRegistrations(tournamentId, { include_deleted: true })
+    queryKey: balancerQueryKeys.draftSetupPool(tournamentId, registrationNodeId),
+    queryFn: () =>
+      balancerAdminService.listRegistrations(tournamentId, registrationNodeId, { include_deleted: true })
   });
   const allRegistrations = poolQuery.data ?? [];
   const pool = useMemo(() => allRegistrations.filter(isInDraftPool), [allRegistrations]);

@@ -25,7 +25,7 @@ interface NotificationActionsProps {
 
 /**
  * The one-click answer a notification carries: a check-in, or an invite to take
- * or refuse. Both ids travel in the payload (`tournament_id`, `invite_id`), so
+ * or refuse. The ids travel in the payload (`tournament_id` and `registration_node_id`, `invite_id`), so
  * neither action has to resolve anything first; a row missing its id renders no
  * buttons at all and stays a plain link to the tournament.
  */
@@ -35,9 +35,11 @@ export function NotificationActions({ item, done, onResolved, className }: Notif
 
   const tournamentId = item.payload.tournament_id;
   const inviteId = item.payload.invite_id;
+  // `check_in.opened` names the node whose window opened; without it there is no entry to check in.
+  const registrationNodeId = item.payload.registration_node_id;
 
   const checkIn = useMutation({
-    mutationFn: () => registrationService.checkInMyRegistration(tournamentId as number),
+    mutationFn: () => registrationService.checkInMyRegistration(tournamentId as number, registrationNodeId as number),
     meta: { suppressErrorToast: true },
     onSuccess: () => onResolved("checkedIn")
   });
@@ -65,7 +67,8 @@ export function NotificationActions({ item, done, onResolved, className }: Notif
     );
   }
 
-  const isCheckIn = item.kind === "check_in.opened" && typeof tournamentId === "number";
+  const isCheckIn =
+    item.kind === "check_in.opened" && typeof tournamentId === "number" && typeof registrationNodeId === "number";
   const isInvite = item.kind === "team_invite.received" && typeof inviteId === "number";
   if (!isCheckIn && !isInvite) return null;
 

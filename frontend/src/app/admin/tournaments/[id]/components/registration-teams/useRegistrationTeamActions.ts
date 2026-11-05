@@ -28,18 +28,19 @@ import type {
 function invalidateRegistrationTeams(
   queryClient: QueryClient,
   workspaceId: number,
-  tournamentId: number
+  tournamentId: number,
+  registrationNodeId: number
 ) {
   for (const flag of [false, true]) {
     void queryClient.invalidateQueries({
-      queryKey: tournamentQueryKeys.registrationTeamsAdmin(workspaceId, tournamentId, flag)
+      queryKey: tournamentQueryKeys.registrationTeamsAdmin(workspaceId, tournamentId, registrationNodeId, flag)
     });
   }
   void queryClient.invalidateQueries({
-    queryKey: tournamentQueryKeys.registrationsList(workspaceId, tournamentId)
+    queryKey: tournamentQueryKeys.registrationsList(workspaceId, tournamentId, registrationNodeId)
   });
   void queryClient.invalidateQueries({
-    queryKey: tournamentQueryKeys.registrationTeams(workspaceId, tournamentId)
+    queryKey: tournamentQueryKeys.registrationTeams(workspaceId, tournamentId, registrationNodeId)
   });
 }
 
@@ -96,6 +97,7 @@ export interface RegistrationTeamActions {
 export function useRegistrationTeamActions({
   tournamentId,
   workspaceId,
+  registrationNodeId,
   formationNodeId,
   closeConfirm,
   closeRename,
@@ -103,6 +105,8 @@ export function useRegistrationTeamActions({
 }: Readonly<{
   tournamentId: number;
   workspaceId: number;
+  /** The registration node whose teams the screen lists. */
+  registrationNodeId: number;
   /** The formation node the export writes into. */
   formationNodeId: number | null;
   /** A confirmed action that succeeded has nothing left to ask. */
@@ -121,13 +125,14 @@ export function useRegistrationTeamActions({
   const [notesDraft, setNotesDraft] = useState<Record<number, string>>({});
 
   const teamsQuery = useQuery({
-    queryKey: tournamentQueryKeys.registrationTeamsAdmin(workspaceId, tournamentId, true),
-    queryFn: () => registrationTeamService.listAdmin(tournamentId, { includeTerminal: true })
+    queryKey: tournamentQueryKeys.registrationTeamsAdmin(workspaceId, tournamentId, registrationNodeId, true),
+    queryFn: () =>
+      registrationTeamService.listAdmin(tournamentId, registrationNodeId, { includeTerminal: true })
   });
 
   const invalidateTeams = () => {
     setActionError(null);
-    invalidateRegistrationTeams(queryClient, workspaceId, tournamentId);
+    invalidateRegistrationTeams(queryClient, workspaceId, tournamentId, registrationNodeId);
   };
 
   const reportError = (error: unknown) =>
@@ -246,7 +251,7 @@ export function useRegistrationTeamActions({
   const invalidatePlaced = () => {
     invalidateTeams();
     void queryClient.invalidateQueries({
-      queryKey: tournamentQueryKeys.registrationFreeAgents(workspaceId, tournamentId)
+      queryKey: tournamentQueryKeys.registrationFreeAgents(workspaceId, tournamentId, registrationNodeId)
     });
     closePlace();
     notify.success(t("admin.placeSuccess"));

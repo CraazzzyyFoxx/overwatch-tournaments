@@ -7,8 +7,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { isPhaseWindowActive, isRegistrationOpen } from "@/lib/tournament/status";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
+import {
+  tournamentMyRegistrationQueryOptions,
+  tournamentRegistrationTeamsQueryOptions,
+} from "@/lib/tournament/registrations-query";
 import registrationService from "@/services/registration.service";
-import registrationTeamService from "@/services/registration-team.service";
 import type { Tournament } from "@/types/tournament.types";
 
 import MyTeamPanel from "./MyTeamPanel";
@@ -34,13 +37,11 @@ export default function MyTeamSection({ tournament }: Readonly<{ tournament: Tou
   const open = isRegistrationOpen(tournament);
 
   const myRegQuery = useQuery({
-    queryKey: tournamentQueryKeys.registration(tournament.workspace_id, tournament.id),
-    queryFn: () => registrationService.getMyRegistration(tournament.id),
+    ...tournamentMyRegistrationQueryOptions(tournament),
     enabled: isAuthenticated,
   });
   const teamsQuery = useQuery({
-    queryKey: tournamentQueryKeys.registrationTeams(tournament.workspace_id, tournament.id),
-    queryFn: () => registrationTeamService.listPublic(tournament.id),
+    ...tournamentRegistrationTeamsQueryOptions(tournament),
     enabled: isAuthenticated,
   });
   const formQuery = useQuery({

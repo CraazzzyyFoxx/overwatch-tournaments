@@ -44,9 +44,12 @@ import adminService from "@/services/admin.service";
 import { ADMISSION_LABELS, adminRoleForm } from "./registrationsTable.model";
 
 export default function RegistrationsTable({
-  tournamentId
+  tournamentId,
+  registrationNodeId
 }: Readonly<{
   tournamentId: number | null;
+  /** The registration node whose entries the table lists and edits. */
+  registrationNodeId: number | null;
 }>) {
   // The only translated strings on this screen: reason codes are shared with the
   // public participants page, so they live in the message catalogue rather than
@@ -78,12 +81,12 @@ export default function RegistrationsTable({
   // honest — it used to be computed over an already status-filtered list, so
   // filtering to "approved" reported zero pending.
   const registrationsQuery = useQuery({
-    queryKey: balancerQueryKeys.registrations(tournamentId),
+    queryKey: balancerQueryKeys.registrations(tournamentId, registrationNodeId),
     queryFn: () =>
-      balancerAdminService.listRegistrations(tournamentId as number, {
+      balancerAdminService.listRegistrations(tournamentId as number, registrationNodeId as number, {
         include_deleted: false
       }),
-    enabled: tournamentId !== null
+    enabled: tournamentId !== null && registrationNodeId !== null
   });
 
   const formQuery = useQuery({
@@ -175,6 +178,7 @@ export default function RegistrationsTable({
     bulkAddToBalancerMutation
   } = useRegistrationMutations({
     tournamentId,
+    registrationNodeId,
     editingRegistration,
     onCreated: () => setCreateOpen(false),
     onUpdated: () => setEditingRegistration(null),
@@ -202,7 +206,9 @@ export default function RegistrationsTable({
     () => ({
       save: async (registration: AdminRegistration, next: string) => {
         patchRegistrationInCache(
-          await balancerAdminService.updateRegistration(registration.id, { admin_notes: next })
+          await balancerAdminService.updateRegistration(registration.id, registration.registration_node_id, {
+            admin_notes: next
+          })
         );
       },
       // Same gate as the row's Edit action: a withdrawn row is read-only.

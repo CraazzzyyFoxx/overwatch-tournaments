@@ -77,30 +77,41 @@ export const tournamentQueryKeys = {
     workspaceId == null
       ? (["statistics", "overall"] as const)
       : (["statistics", "overall", workspaceId] as const),
-  registration: (workspaceId: number, tournamentId: number) =>
-    ["registration", workspaceId, tournamentId] as const,
-  registrationsList: (workspaceId: number, tournamentId: number) =>
-    ["registrations-list", workspaceId, tournamentId] as const,
+  /** The caller's entry at one registration node; without the node, the prefix every node of the tournament sits under. */
+  registration: (workspaceId: number, tournamentId: number, registrationNodeId?: number) =>
+    registrationNodeId === undefined
+      ? (["registration", workspaceId, tournamentId] as const)
+      : (["registration", workspaceId, tournamentId, registrationNodeId] as const),
+  registrationsList: (workspaceId: number, tournamentId: number, registrationNodeId?: number) =>
+    registrationNodeId === undefined
+      ? (["registrations-list", workspaceId, tournamentId] as const)
+      : (["registrations-list", workspaceId, tournamentId, registrationNodeId] as const),
   registrationForm: (workspaceId: number, tournamentId: number) =>
     ["registration-form", workspaceId, tournamentId] as const,
   /** The public roster of registered teams (pre-formation). Distinct from
    *  `teams`, which is the post-balancer materialized `tournament.team` list. */
-  registrationTeams: (workspaceId: number, tournamentId: number) =>
-    ["registration-teams", workspaceId, tournamentId] as const,
+  registrationTeams: (workspaceId: number, tournamentId: number, registrationNodeId?: number) =>
+    registrationNodeId === undefined
+      ? (["registration-teams", workspaceId, tournamentId] as const)
+      : (["registration-teams", workspaceId, tournamentId, registrationNodeId] as const),
   /** Organizer view: same rows plus invites, and optionally terminal teams. The
    *  flag is part of the key because the two results are different data, not a
    *  filtered view of one cache entry. */
-  registrationTeamsAdmin: (workspaceId: number, tournamentId: number, includeTerminal: boolean) =>
-    ["registration-teams-admin", workspaceId, tournamentId, includeTerminal] as const,
+  registrationTeamsAdmin: (
+    workspaceId: number,
+    tournamentId: number,
+    registrationNodeId: number,
+    includeTerminal: boolean
+  ) => ["registration-teams-admin", workspaceId, tournamentId, registrationNodeId, includeTerminal] as const,
   /** The captain's invite picker: registrants on no team. */
-  registrationFreeAgents: (workspaceId: number, tournamentId: number) =>
-    ["registration-free-agents", workspaceId, tournamentId] as const,
+  registrationFreeAgents: (workspaceId: number, tournamentId: number, registrationNodeId: number) =>
+    ["registration-free-agents", workspaceId, tournamentId, registrationNodeId] as const,
   /** Invites addressed to the CURRENT user. No user id in the key: the server
    *  scopes it from the token, and a per-user key would imply the cache could
    *  legitimately hold another account's offers. Cleared on sign-out with the
    *  rest of the authenticated cache. */
-  registrationMyInvites: (workspaceId: number, tournamentId: number) =>
-    ["registration-my-invites", workspaceId, tournamentId] as const,
+  registrationMyInvites: (workspaceId: number, tournamentId: number, registrationNodeId: number) =>
+    ["registration-my-invites", workspaceId, tournamentId, registrationNodeId] as const,
   /** A team's full invite history. Keyed by TEAM, not tournament: it is fetched
    *  only when a captain or organizer expands one team's section, and keying it
    *  by tournament would make every team share — and invalidate — one entry. */

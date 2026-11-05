@@ -200,6 +200,7 @@ export default function InviteLandingPage() {
       <InviteAcceptWizard
         workspaceId={preview.workspace_id}
         tournamentId={preview.tournament_id}
+        registrationNodeId={preview.registration_node_id}
         tournamentName={preview.tournament_name}
         form={formQuery.data}
         teamName={preview.team_name}

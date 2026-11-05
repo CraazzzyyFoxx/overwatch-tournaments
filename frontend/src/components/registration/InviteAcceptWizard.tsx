@@ -28,6 +28,8 @@ import { userQueryKeys } from "@/lib/users/query-keys";
 interface InviteAcceptWizardProps {
   workspaceId: number;
   tournamentId: number;
+  /** The node the invite's team belongs to: the one the invitee registers at. */
+  registrationNodeId: number;
   tournamentName?: string;
   form: RegistrationForm;
   teamName: string;
@@ -52,6 +54,7 @@ interface InviteAcceptWizardProps {
 export default function InviteAcceptWizard({
   workspaceId,
   tournamentId,
+  registrationNodeId,
   tournamentName,
   form,
   teamName,
@@ -134,8 +137,8 @@ export default function InviteAcceptWizard({
   // one, so the form has nothing left to ask. Terminal rows (withdrawn/rejected)
   // are excluded: the server refuses those with `registration_terminal`.
   const myRegQuery = useQuery({
-    queryKey: tournamentQueryKeys.registration(workspaceId, tournamentId),
-    queryFn: () => registrationService.getMyRegistration(tournamentId),
+    queryKey: tournamentQueryKeys.registration(workspaceId, tournamentId, registrationNodeId),
+    queryFn: () => registrationService.getMyRegistration(tournamentId, registrationNodeId),
     enabled: !!authUser,
   });
   const alreadyRegistered =

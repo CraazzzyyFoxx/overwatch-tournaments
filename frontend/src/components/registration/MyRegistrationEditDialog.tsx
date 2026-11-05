@@ -77,13 +77,13 @@ export default function MyRegistrationEditDialog({
 
   const mutation = useMutation({
     mutationFn: (payload: RegistrationSubmitInput) =>
-      registrationService.updateMyRegistration(tournamentId, payload),
+      registrationService.updateMyRegistration(tournamentId, registration.registration_node_id, payload),
     onSuccess: async (updated) => {
       // The response IS the updated row, so the card behind the dialog re-reads
       // it without a round trip. The public list has to be refetched: this edit
       // may have moved the registrant between the main field and the reserve.
       queryClient.setQueryData(
-        tournamentQueryKeys.registration(workspaceId, tournamentId),
+        tournamentQueryKeys.registration(workspaceId, tournamentId, registration.registration_node_id),
         updated,
       );
       await queryClient.invalidateQueries({

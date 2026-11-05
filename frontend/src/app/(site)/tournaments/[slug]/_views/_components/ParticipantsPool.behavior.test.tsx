@@ -151,6 +151,9 @@ function makeTournament(
     status,
     auto_transitions_enabled: true,
     allow_late_registration: false,
+    flow_nodes: [
+      { id: 21, kind: "registration", name: "Registration", status: "open", config: {}, schedule: [], stage_id: null }
+    ],
     phase_schedule: [],
     stages: [],
     participants_count: 4,

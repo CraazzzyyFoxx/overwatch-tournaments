@@ -6,7 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { FlowNodeSelect } from "@/components/kit/FlowNodeSelect";
 import { PhaseStrip } from "@/components/kit/PhaseStrip";
-import { FLOW_NODE_PARAM, useFlowNodeParam } from "@/hooks/useFlowNodeParam";
+import { FLOW_NODE_PARAM, REGISTRATION_NODE_PARAM, useFlowNodeParam } from "@/hooks/useFlowNodeParam";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useQueryParams } from "@/hooks/useQueryParams";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
@@ -33,6 +33,8 @@ export default function TeamsDraftPage() {
   const tournamentQuery = useHubTournamentQuery(tournamentId);
   const workspaceId = tournamentQuery.data?.workspace_id ?? null;
   const formationNodeId = useFlowNodeParam(tournamentQuery.data, "formation");
+  // The draft pool is the entries of one registration node.
+  const registrationNodeId = useFlowNodeParam(tournamentQuery.data, "registration", REGISTRATION_NODE_PARAM);
   const { setParams } = useQueryParams();
 
   // Same key and fetcher the dashboard mounts, so this is one request shared
@@ -62,11 +64,18 @@ export default function TeamsDraftPage() {
         value={formationNodeId}
         onChange={(nodeId) => setParams({ [FLOW_NODE_PARAM]: nodeId })}
       />
+      <FlowNodeSelect
+        tournament={tournamentQuery.data}
+        kind="registration"
+        value={registrationNodeId}
+        onChange={(nodeId) => setParams({ [REGISTRATION_NODE_PARAM]: nodeId })}
+      />
       {controlRoom ? null : <PhaseStrip phases={phases} />}
-      {formationNodeId != null && (
+      {formationNodeId != null && registrationNodeId != null && (
         <DraftSessionDashboard
           tournamentId={tournamentId}
           formationNodeId={formationNodeId}
+          registrationNodeId={registrationNodeId}
           canManage={canAccessPermission("team.create", workspaceId)}
         />
       )}

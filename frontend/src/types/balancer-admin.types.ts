@@ -485,6 +485,9 @@ export interface BalancerCustomStatusUpdateInput {
 
 export interface AdminRegistration {
   id: number;
+  /** This row is the profile's entry at `registration_node_id`; admission, check-in and review live on the entry. */
+  entry_id: number;
+  registration_node_id: number;
   tournament_id: number;
   workspace_id: number;
   user_id: number | null;
@@ -586,6 +589,8 @@ export interface AdminRegistrationUpdateInput {
 export interface AdminGoogleSheetFeed {
   id: number;
   tournament_id: number;
+  /** The registration node the feed's rows are written into. */
+  registration_node_id: number;
   source_url: string;
   sheet_id: string;
   gid: string | null;
@@ -601,6 +606,7 @@ export interface AdminGoogleSheetFeed {
 }
 
 export interface AdminGoogleSheetFeedUpsertInput {
+  registration_node_id: number;
   source_url: string;
   title?: string | null;
   auto_sync_enabled?: boolean;

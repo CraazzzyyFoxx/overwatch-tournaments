@@ -20609,6 +20609,8 @@ export interface components {
             edit_locked_reason: string | null;
             /** Edit Writable Keys */
             edit_writable_keys?: string[];
+            /** Entry Id */
+            entry_id: number;
             /**
              * Form Version Id
              * @default null
@@ -20653,6 +20655,8 @@ export interface components {
              * @default null
              */
             queue_total: number | null;
+            /** Registration Node Id */
+            registration_node_id: number;
             /**
              * Reviewed At
              * @default null
@@ -21029,6 +21033,8 @@ export interface components {
             is_redeemable: boolean;
             /** Is Substitute */
             is_substitute: boolean;
+            /** Registration Node Id */
+            registration_node_id: number;
             /** Slot Code */
             slot_code: string;
             /** State */
@@ -27481,6 +27487,8 @@ export interface components {
             mapping_config_json: {
                 [key: string]: unknown;
             } | null;
+            /** Registration Node Id */
+            registration_node_id: number;
             /** Sheet Id */
             sheet_id: string;
             /** Source Url */
@@ -27535,6 +27543,8 @@ export interface components {
             mapping_config_json: {
                 [key: string]: unknown;
             } | null;
+            /** Registration Node Id */
+            registration_node_id: number;
             /** Source Url */
             source_url: string;
             /**
@@ -28043,6 +28053,8 @@ export interface components {
              * @default null
              */
             display_name: string | null;
+            /** Entry Id */
+            entry_id: number;
             /**
              * Exclude Reason
              * @default null
@@ -28065,6 +28077,8 @@ export interface components {
              * @default null
              */
             profiles_open: boolean | null;
+            /** Registration Node Id */
+            registration_node_id: number;
             /**
              * Reviewed At
              * @default null
@@ -43823,7 +43837,9 @@ export interface operations {
     };
     post__api_v1_registration_teams__team_id__check_in: {
         parameters: {
-            query?: never;
+            query?: {
+                registration_node_id?: string;
+            };
             header?: never;
             path: {
                 team_id: string;
@@ -47135,7 +47151,9 @@ export interface operations {
     };
     post__api_v1_tournaments__tournament_id__registration: {
         parameters: {
-            query?: never;
+            query?: {
+                registration_node_id?: string;
+            };
             header?: never;
             path: {
                 tournament_id: string;
@@ -47217,7 +47235,9 @@ export interface operations {
     };
     get__api_v1_tournaments__tournament_id__registration_teams: {
         parameters: {
-            query?: never;
+            query?: {
+                registration_node_id?: string;
+            };
             header?: never;
             path: {
                 tournament_id: string;
@@ -47277,7 +47297,9 @@ export interface operations {
     };
     post__api_v1_tournaments__tournament_id__registration_teams: {
         parameters: {
-            query?: never;
+            query?: {
+                registration_node_id?: string;
+            };
             header?: never;
             path: {
                 tournament_id: string;
@@ -47359,7 +47381,9 @@ export interface operations {
     };
     get__api_v1_tournaments__tournament_id__registration_teams_free_agents: {
         parameters: {
-            query?: never;
+            query?: {
+                registration_node_id?: string;
+            };
             header?: never;
             path: {
                 tournament_id: string;
@@ -47437,7 +47461,9 @@ export interface operations {
     };
     get__api_v1_tournaments__tournament_id__registration_teams_my_invites: {
         parameters: {
-            query?: never;
+            query?: {
+                registration_node_id?: string;
+            };
             header?: never;
             path: {
                 tournament_id: string;
@@ -47575,7 +47601,9 @@ export interface operations {
     };
     get__api_v1_tournaments__tournament_id__registration_list: {
         parameters: {
-            query?: never;
+            query?: {
+                registration_node_id?: string;
+            };
             header?: never;
             path: {
                 tournament_id: string;
@@ -47635,7 +47663,9 @@ export interface operations {
     };
     get__api_v1_tournaments__tournament_id__registration_me: {
         parameters: {
-            query?: never;
+            query?: {
+                registration_node_id?: string;
+            };
             header?: never;
             path: {
                 tournament_id: string;
@@ -47713,7 +47743,9 @@ export interface operations {
     };
     delete__api_v1_tournaments__tournament_id__registration_me: {
         parameters: {
-            query?: never;
+            query?: {
+                registration_node_id?: string;
+            };
             header?: never;
             path: {
                 tournament_id: string;
@@ -47791,7 +47823,9 @@ export interface operations {
     };
     patch__api_v1_tournaments__tournament_id__registration_me: {
         parameters: {
-            query?: never;
+            query?: {
+                registration_node_id?: string;
+            };
             header?: never;
             path: {
                 tournament_id: string;
@@ -47873,7 +47907,9 @@ export interface operations {
     };
     post__api_v1_tournaments__tournament_id__registration_me_check_in: {
         parameters: {
-            query?: never;
+            query?: {
+                registration_node_id?: string;
+            };
             header?: never;
             path: {
                 tournament_id: string;
@@ -47951,7 +47987,9 @@ export interface operations {
     };
     post__api_v1_tournaments__tournament_id__registration_me_recheck: {
         parameters: {
-            query?: never;
+            query?: {
+                registration_node_id?: string;
+            };
             header?: never;
             path: {
                 tournament_id: string;
@@ -50903,7 +50941,9 @@ export interface operations {
     };
     delete__api_v1_admin_balancer_registrations__registration_id_: {
         parameters: {
-            query?: never;
+            query?: {
+                registration_node_id?: string;
+            };
             header?: never;
             path: {
                 registration_id: string;
@@ -50979,7 +51019,9 @@ export interface operations {
     };
     patch__api_v1_admin_balancer_registrations__registration_id_: {
         parameters: {
-            query?: never;
+            query?: {
+                registration_node_id?: string;
+            };
             header?: never;
             path: {
                 registration_id: string;
@@ -51061,7 +51103,9 @@ export interface operations {
     };
     patch__api_v1_admin_balancer_registrations__registration_id__approve: {
         parameters: {
-            query?: never;
+            query?: {
+                registration_node_id?: string;
+            };
             header?: never;
             path: {
                 registration_id: string;
@@ -51139,7 +51183,9 @@ export interface operations {
     };
     patch__api_v1_admin_balancer_registrations__registration_id__balancer_status: {
         parameters: {
-            query?: never;
+            query?: {
+                registration_node_id?: string;
+            };
             header?: never;
             path: {
                 registration_id: string;
@@ -51221,7 +51267,9 @@ export interface operations {
     };
     patch__api_v1_admin_balancer_registrations__registration_id__check_in: {
         parameters: {
-            query?: never;
+            query?: {
+                registration_node_id?: string;
+            };
             header?: never;
             path: {
                 registration_id: string;
@@ -51303,7 +51351,9 @@ export interface operations {
     };
     post__api_v1_admin_balancer_registrations__registration_id__include: {
         parameters: {
-            query?: never;
+            query?: {
+                registration_node_id?: string;
+            };
             header?: never;
             path: {
                 registration_id: string;
@@ -51381,7 +51431,9 @@ export interface operations {
     };
     patch__api_v1_admin_balancer_registrations__registration_id__reject: {
         parameters: {
-            query?: never;
+            query?: {
+                registration_node_id?: string;
+            };
             header?: never;
             path: {
                 registration_id: string;
@@ -51459,7 +51511,9 @@ export interface operations {
     };
     patch__api_v1_admin_balancer_registrations__registration_id__restore: {
         parameters: {
-            query?: never;
+            query?: {
+                registration_node_id?: string;
+            };
             header?: never;
             path: {
                 registration_id: string;
@@ -51537,7 +51591,9 @@ export interface operations {
     };
     patch__api_v1_admin_balancer_registrations__registration_id__withdraw: {
         parameters: {
-            query?: never;
+            query?: {
+                registration_node_id?: string;
+            };
             header?: never;
             path: {
                 registration_id: string;
@@ -52989,7 +53045,9 @@ export interface operations {
     };
     post__api_v1_admin_balancer_tournaments__tournament_id__registrations: {
         parameters: {
-            query?: never;
+            query?: {
+                registration_node_id?: string;
+            };
             header?: never;
             path: {
                 tournament_id: string;
@@ -53071,7 +53129,9 @@ export interface operations {
     };
     post__api_v1_admin_balancer_tournaments__tournament_id__registrations_bulk_add_to_balancer: {
         parameters: {
-            query?: never;
+            query?: {
+                registration_node_id?: string;
+            };
             header?: never;
             path: {
                 tournament_id: string;
@@ -53153,7 +53213,9 @@ export interface operations {
     };
     post__api_v1_admin_balancer_tournaments__tournament_id__registrations_bulk_approve: {
         parameters: {
-            query?: never;
+            query?: {
+                registration_node_id?: string;
+            };
             header?: never;
             path: {
                 tournament_id: string;
@@ -53235,7 +53297,9 @@ export interface operations {
     };
     post__api_v1_admin_balancer_tournaments__tournament_id__registrations_bulk_set_balancer_status: {
         parameters: {
-            query?: never;
+            query?: {
+                registration_node_id?: string;
+            };
             header?: never;
             path: {
                 tournament_id: string;
@@ -53317,7 +53381,9 @@ export interface operations {
     };
     post__api_v1_admin_balancer_tournaments__tournament_id__registrations_rank_autofill_apply: {
         parameters: {
-            query?: never;
+            query?: {
+                registration_node_id?: string;
+            };
             header?: never;
             path: {
                 tournament_id: string;
@@ -53399,7 +53465,9 @@ export interface operations {
     };
     post__api_v1_admin_balancer_tournaments__tournament_id__registrations_rank_autofill_preview: {
         parameters: {
-            query?: never;
+            query?: {
+                registration_node_id?: string;
+            };
             header?: never;
             path: {
                 tournament_id: string;

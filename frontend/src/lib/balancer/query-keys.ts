@@ -6,8 +6,8 @@ import type { KeyPart } from "@/lib/query-keys";
  * per-workspace balancer configuration.
  */
 export const balancerQueryKeys = {
-  rankAutofillPreview: (tournamentId: KeyPart, request: unknown) =>
-    ["balancer-admin", "rank-autofill-preview", tournamentId, request] as const,
+  rankAutofillPreview: (tournamentId: KeyPart, registrationNodeId: KeyPart, request: unknown) =>
+    ["balancer-admin", "rank-autofill-preview", tournamentId, registrationNodeId, request] as const,
   registrationForm: (tournamentId: KeyPart) =>
     ["balancer-admin", "registration-form", tournamentId] as const,
   /** The workspace's saved form templates, offered by the tournament builder. */
@@ -16,8 +16,11 @@ export const balancerQueryKeys = {
   /** One game's templates (`"all"`: every game's); prefixed by `registrationFormTemplates` for invalidation. */
   registrationFormTemplateList: (workspaceId: KeyPart, discipline: string | null) =>
     ["admin", "registration-form-templates", workspaceId, discipline ?? "all"] as const,
-  registrations: (tournamentId: KeyPart) =>
-    ["balancer-admin", "registrations", tournamentId] as const,
+  /** One registration node's rows; without the node, the prefix every node of the tournament sits under. */
+  registrations: (tournamentId: KeyPart, registrationNodeId?: KeyPart) =>
+    registrationNodeId === undefined
+      ? (["balancer-admin", "registrations", tournamentId] as const)
+      : (["balancer-admin", "registrations", tournamentId, registrationNodeId] as const),
   sheetCatalog: (tournamentId: KeyPart) =>
     ["balancer-admin", "sheet-catalog", tournamentId] as const,
   sheet: (tournamentId: KeyPart) => ["balancer-admin", "sheet", tournamentId] as const,
@@ -35,8 +38,8 @@ export const balancerQueryKeys = {
       : (["balancer-public", "balance", tournamentId, formationNodeId] as const),
   /** The public solver config of one game: its role weights are that game's. */
   publicConfig: (discipline: KeyPart) => ["balancer-public", "config", discipline] as const,
-  draftSetupPool: (tournamentId: KeyPart) =>
-    ["balancer", "draft-setup-pool", tournamentId] as const,
+  draftSetupPool: (tournamentId: KeyPart, registrationNodeId: KeyPart) =>
+    ["balancer", "draft-setup-pool", tournamentId, registrationNodeId] as const,
   tournamentSummary: (tournamentId: KeyPart) =>
     ["balancer", "tournament", tournamentId, "summary"] as const,
   workspaceConfig: (workspaceId: KeyPart) => ["workspace-balancer-config", workspaceId] as const,

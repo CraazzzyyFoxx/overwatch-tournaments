@@ -56,10 +56,13 @@ export function RegistrationTeamsBrowser({
   tournamentId,
   workspaceId,
   discipline,
+  registrationNodeId,
   formationNodeId
 }: Readonly<{
   tournamentId: number;
   workspaceId: number;
+  /** The registration node whose teams are listed and edited. */
+  registrationNodeId: number;
   /** The tournament's game: its scoped ontology names and draws every roster slot. */
   discipline: string;
   /** The formation node the export writes teams into; `null` while the tournament has none. */
@@ -86,6 +89,7 @@ export function RegistrationTeamsBrowser({
   const actions = useRegistrationTeamActions({
     tournamentId,
     workspaceId,
+    registrationNodeId,
     formationNodeId,
     closeConfirm: () => setConfirm(null),
     closeRename: () => setRenameTarget(null),
@@ -396,6 +400,7 @@ export function RegistrationTeamsBrowser({
 
       <PlaceMemberDialog
         tournamentId={tournamentId}
+        registrationNodeId={registrationNodeId}
         workspaceId={workspaceId}
         ontology={ontology}
         team={placeTarget}

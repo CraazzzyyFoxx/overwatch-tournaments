@@ -15,6 +15,8 @@ import type {
 
 interface UseRegistrationMutationsInput {
   tournamentId: number | null;
+  /** The registration node whose entries the screen edits; every write names it. */
+  registrationNodeId: number | null;
   /** The row being edited, read at submit time by the update mutation. */
   editingRegistration: AdminRegistration | null;
   /** Dialogs the table owns and a successful write closes. */
@@ -29,6 +31,7 @@ interface UseRegistrationMutationsInput {
  */
 export function useRegistrationMutations({
   tournamentId,
+  registrationNodeId,
   editingRegistration,
   onCreated,
   onUpdated,
@@ -44,16 +47,16 @@ export function useRegistrationMutations({
   const patchRegistrationInCache = useCallback(
     (row: AdminRegistration) => {
       queryClient.setQueriesData<AdminRegistration[]>(
-        { queryKey: balancerQueryKeys.registrations(tournamentId) },
+        { queryKey: balancerQueryKeys.registrations(tournamentId, registrationNodeId) },
         (old) => (old ? old.map((r) => (r.id === row.id ? row : r)) : old)
       );
     },
-    [queryClient, tournamentId]
+    [queryClient, tournamentId, registrationNodeId]
   );
 
   const removeRegistrationFromCache = (registrationId: number) => {
     queryClient.setQueriesData<AdminRegistration[]>(
-      { queryKey: balancerQueryKeys.registrations(tournamentId) },
+      { queryKey: balancerQueryKeys.registrations(tournamentId, registrationNodeId) },
       (old) => (old ? old.filter((r) => r.id !== registrationId) : old)
     );
   };
@@ -62,13 +65,13 @@ export function useRegistrationMutations({
   // immediately after the mutation itself resolves.
   const revalidateRegistrations = () => {
     void queryClient.invalidateQueries({
-      queryKey: balancerQueryKeys.registrations(tournamentId)
+      queryKey: balancerQueryKeys.registrations(tournamentId, registrationNodeId)
     });
   };
 
   const createMutation = useMutation({
     mutationFn: (payload: AdminRegistrationCreateInput) =>
-      balancerAdminService.createManualRegistration(tournamentId as number, payload),
+      balancerAdminService.createManualRegistration(tournamentId as number, registrationNodeId as number, payload),
     onSuccess: () => {
       onCreated();
       notify.success(t("created"));
@@ -81,7 +84,7 @@ export function useRegistrationMutations({
       if (!editingRegistration) {
         throw new Error("No registration selected");
       }
-      return balancerAdminService.updateRegistration(editingRegistration.id, payload);
+      return balancerAdminService.updateRegistration(editingRegistration.id, editingRegistration.registration_node_id, payload);
     },
     onSuccess: (updated) => {
       patchRegistrationInCache(updated);
@@ -93,7 +96,7 @@ export function useRegistrationMutations({
 
   const approveMutation = useMutation({
     mutationFn: (registrationId: number) =>
-      balancerAdminService.approveRegistration(registrationId),
+      balancerAdminService.approveRegistration(registrationId, registrationNodeId as number),
     onSuccess: (updated) => {
       patchRegistrationInCache(updated);
       notify.success(t("approved"));
@@ -102,7 +105,7 @@ export function useRegistrationMutations({
   });
 
   const rejectMutation = useMutation({
-    mutationFn: (registrationId: number) => balancerAdminService.rejectRegistration(registrationId),
+    mutationFn: (registrationId: number) => balancerAdminService.rejectRegistration(registrationId, registrationNodeId as number),
     onSuccess: (updated) => {
       patchRegistrationInCache(updated);
       notify.success(t("rejected"));
@@ -112,7 +115,7 @@ export function useRegistrationMutations({
 
   const withdrawMutation = useMutation({
     mutationFn: (registrationId: number) =>
-      balancerAdminService.withdrawRegistration(registrationId),
+      balancerAdminService.withdrawRegistration(registrationId, registrationNodeId as number),
     onSuccess: (updated) => {
       patchRegistrationInCache(updated);
       notify.success(t("withdrawn"));
@@ -122,7 +125,7 @@ export function useRegistrationMutations({
 
   const restoreMutation = useMutation({
     mutationFn: (registrationId: number) =>
-      balancerAdminService.restoreRegistration(registrationId),
+      balancerAdminService.restoreRegistration(registrationId, registrationNodeId as number),
     onSuccess: (updated) => {
       patchRegistrationInCache(updated);
       notify.success(t("restored"));
@@ -131,7 +134,7 @@ export function useRegistrationMutations({
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (registrationId: number) => balancerAdminService.deleteRegistration(registrationId),
+    mutationFn: (registrationId: number) => balancerAdminService.deleteRegistration(registrationId, registrationNodeId as number),
     onSuccess: (_, registrationId) => {
       removeRegistrationFromCache(registrationId);
       onDeleted();
@@ -142,7 +145,7 @@ export function useRegistrationMutations({
 
   const bulkApproveMutation = useMutation({
     mutationFn: (registrationIds: number[]) =>
-      balancerAdminService.bulkApproveRegistrations(tournamentId as number, registrationIds),
+      balancerAdminService.bulkApproveRegistrations(tournamentId as number, registrationNodeId as number, registrationIds),
     onSuccess: (result, registrationIds) => {
       notify.success(t("bulkApproved", { approved: result.approved, skipped: result.skipped }), {
         duration: 8000,
@@ -153,7 +156,7 @@ export function useRegistrationMutations({
             // status of every id in the batch.
             void Promise.all(
               registrationIds.map((id) =>
-                balancerAdminService.updateRegistration(id, { status: "pending" })
+                balancerAdminService.updateRegistration(id, registrationNodeId as number, { status: "pending" })
               )
             )
               .then(() => {
@@ -171,8 +174,13 @@ export function useRegistrationMutations({
   const balancerInclusionMutation = useMutation({
     mutationFn: ({ registrationId, include }: { registrationId: number; include: boolean }) =>
       include
-        ? balancerAdminService.includeInBalancer(registrationId)
-        : balancerAdminService.setBalancerStatus(registrationId, "excluded", "manual_exclusion"),
+        ? balancerAdminService.includeInBalancer(registrationId, registrationNodeId as number)
+        : balancerAdminService.setBalancerStatus(
+            registrationId,
+            registrationNodeId as number,
+            "excluded",
+            "manual_exclusion"
+          ),
     onSuccess: (updated) => {
       patchRegistrationInCache(updated);
       notify.success(t("balancerUpdated"));
@@ -182,7 +190,7 @@ export function useRegistrationMutations({
 
   const checkInMutation = useMutation({
     mutationFn: ({ registrationId, checkedIn }: { registrationId: number; checkedIn: boolean }) =>
-      balancerAdminService.checkInRegistration(registrationId, checkedIn),
+      balancerAdminService.checkInRegistration(registrationId, registrationNodeId as number, checkedIn),
     onSuccess: (updated, variables) => {
       patchRegistrationInCache(updated);
       notify.success(variables.checkedIn ? t("checkedIn") : t("checkInRemoved"));
@@ -194,7 +202,7 @@ export function useRegistrationMutations({
     // `previouslyExcluded` travels with the call because the undo needs the
     // pre-mutation inclusion state, which the refetched rows no longer carry.
     mutationFn: ({ ids }: { ids: number[]; previouslyExcluded: number[] }) =>
-      balancerAdminService.bulkAddToBalancer(tournamentId as number, ids),
+      balancerAdminService.bulkAddToBalancer(tournamentId as number, registrationNodeId as number, ids),
     onSuccess: (result, { previouslyExcluded }) => {
       notify.success(t("bulkAdded", { updated: result.updated, skipped: result.skipped }), {
         duration: 8000,
@@ -202,7 +210,7 @@ export function useRegistrationMutations({
           label: tActions("undo"),
           onClick: () => {
             void (previouslyExcluded.length > 0
-              ? balancerAdminService.bulkSetBalancerStatus(tournamentId as number, {
+              ? balancerAdminService.bulkSetBalancerStatus(tournamentId as number, registrationNodeId as number, {
                   registration_ids: previouslyExcluded,
                   balancer_status: "excluded",
                   exclude_reason: "manual_exclusion"

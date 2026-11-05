@@ -32,7 +32,12 @@ import {
 import { getApiErrorMessage } from "@/lib/api/error";
 import { formatAdmissionRefusal } from "@/lib/registration/admission";
 import { isPhaseWindowActive } from "@/lib/tournament/status";
+import { currentRegistrationNode } from "@/lib/tournament/flow-nodes";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
+import {
+  tournamentMyRegistrationQueryOptions,
+  tournamentRegistrationsQueryOptions
+} from "@/lib/tournament/registrations-query";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";
@@ -111,16 +116,14 @@ function TournamentParticipantsView({ tournament }: Readonly<{ tournament: Tourn
 
   const isAuthenticated = authStatus === "authenticated" && user !== null;
 
+  const registrationNodeId = currentRegistrationNode(tournament)?.id ?? null;
+
   const myRegQuery = useQuery({
-    queryKey: tournamentQueryKeys.registration(tournament.workspace_id, tournament.id),
-    queryFn: () => registrationService.getMyRegistration(tournament.id),
+    ...tournamentMyRegistrationQueryOptions(tournament),
     enabled: isAuthenticated
   });
 
-  const listQuery = useQuery({
-    queryKey: tournamentQueryKeys.registrationsList(tournament.workspace_id, tournament.id),
-    queryFn: () => registrationService.listRegistrations(tournament.id)
-  });
+  const listQuery = useQuery(tournamentRegistrationsQueryOptions(tournament));
 
   const formQuery = useQuery({
     queryKey: tournamentQueryKeys.registrationForm(tournament.workspace_id, tournament.id),
@@ -128,7 +131,7 @@ function TournamentParticipantsView({ tournament }: Readonly<{ tournament: Tourn
   });
 
   const withdrawMutation = useMutation({
-    mutationFn: () => registrationService.withdrawMyRegistration(tournament.id),
+    mutationFn: () => registrationService.withdrawMyRegistration(tournament.id, registrationNodeId!),
     onSuccess: async () => {
       setIsWithdrawDialogOpen(false);
       await Promise.all([
@@ -146,7 +149,7 @@ function TournamentParticipantsView({ tournament }: Readonly<{ tournament: Tourn
   });
 
   const checkInMutation = useMutation({
-    mutationFn: () => registrationService.checkInMyRegistration(tournament.id),
+    mutationFn: () => registrationService.checkInMyRegistration(tournament.id, registrationNodeId!),
     onSuccess: (updated) => {
       setIsCheckInDialogOpen(false);
       // The response IS the updated registration: write it into the cache
@@ -155,7 +158,7 @@ function TournamentParticipantsView({ tournament }: Readonly<{ tournament: Tourn
       // button spinning through the post-invalidation rebuild (and the WS
       // structure_changed event refreshes the list anyway).
       queryClient.setQueryData(
-        tournamentQueryKeys.registration(tournament.workspace_id, tournament.id),
+        tournamentQueryKeys.registration(tournament.workspace_id, tournament.id, registrationNodeId ?? 0),
         updated
       );
       void queryClient.invalidateQueries({

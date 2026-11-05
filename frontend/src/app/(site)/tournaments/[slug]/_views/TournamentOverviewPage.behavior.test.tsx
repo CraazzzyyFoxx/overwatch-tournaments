@@ -208,6 +208,7 @@ function makeTournament(status: TournamentStatus, overrides: Partial<Tournament>
     is_hidden: false,
     team_formation: "draft",
     flow_nodes: [
+      { id: 4, kind: "registration", name: "Registration", status: "open", config: {}, schedule: [], stage_id: null },
       {
         id: 9,
         kind: "formation",

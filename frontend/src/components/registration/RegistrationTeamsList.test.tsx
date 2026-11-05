@@ -39,12 +39,19 @@ vi.mock("@/services/registration.service", () => ({
   default: { getMyRegistration: (...args: unknown[]) => getMyRegistration(...args) }
 }));
 
-const TOURNAMENT = { id: 5, workspace_id: 1, discipline: "overwatch", name: "Autumn Cup" } as unknown as Tournament;
+const TOURNAMENT = {
+  id: 5,
+  workspace_id: 1,
+  discipline: "overwatch",
+  name: "Autumn Cup",
+  flow_nodes: [{ id: 21, kind: "registration", name: "Registration", status: "open", config: {}, schedule: [], stage_id: null }]
+} as unknown as Tournament;
 
 function team(overrides: Partial<RegistrationTeam>): RegistrationTeam {
   return {
     id: 1,
     tournament_id: 5,
+    registration_node_id: 21,
     name: "Team",
     image_url: null,
     status: "forming",

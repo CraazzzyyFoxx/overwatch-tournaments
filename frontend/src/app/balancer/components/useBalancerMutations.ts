@@ -38,6 +38,8 @@ type UseBalancerMutationsOptions = {
   tournamentId: number | null;
   /** The formation node the balance, its config and the exports belong to; `null` while the tournament loads. */
   formationNodeId: number | null;
+  /** The registration node whose entries the pool lists; `null` while the tournament loads. */
+  registrationNodeId: number | null;
   workspaceId: number | null;
   queryClient: QueryClient;
   dispatchJob: React.Dispatch<JobAction>;
@@ -129,6 +131,7 @@ function mergeRegistrationForCache(
 export function useBalancerMutations({
   tournamentId,
   formationNodeId,
+  registrationNodeId,
   workspaceId,
   queryClient,
   dispatchJob,
@@ -152,7 +155,7 @@ export function useBalancerMutations({
   const t = useTranslations("balancerTool.page");
   const tImport = useTranslations("balancerTool.page.importErrors");
   const invalidateRegistrations = () =>
-    queryClient.invalidateQueries({ queryKey: balancerQueryKeys.registrations(tournamentId) });
+    queryClient.invalidateQueries({ queryKey: balancerQueryKeys.registrations(tournamentId, registrationNodeId) });
 
   /**
    * Merge a mutation response row into the cached registrations list instead
@@ -162,7 +165,7 @@ export function useBalancerMutations({
    */
   const patchRegistrationInCache = (fresh: AdminRegistration) => {
     queryClient.setQueryData<AdminRegistration[]>(
-      ["balancer-admin", "registrations", tournamentId],
+      balancerQueryKeys.registrations(tournamentId, registrationNodeId),
       (current) =>
         current?.map((existing) =>
           existing.id === fresh.id ? mergeRegistrationForCache(existing, fresh) : existing
@@ -178,11 +181,9 @@ export function useBalancerMutations({
       playerId: number;
       payload: BalancerPlayerUpdateInput;
     }) => {
-      const cachedRegistrations = queryClient.getQueryData<AdminRegistration[]>([
-        "balancer-admin",
-        "registrations",
-        tournamentId
-      ]);
+      const cachedRegistrations = queryClient.getQueryData<AdminRegistration[]>(
+        balancerQueryKeys.registrations(tournamentId, registrationNodeId)
+      );
       const existingReg = cachedRegistrations?.find((r) => r.id === playerId);
       let registrationPatch: AdminRegistrationUpdateInput;
       try {
@@ -199,10 +200,14 @@ export function useBalancerMutations({
       }
       let updated: AdminRegistration | null = null;
       if (Object.keys(registrationPatch).length > 0) {
-        updated = await balancerAdminService.updateRegistration(playerId, registrationPatch);
+        updated = await balancerAdminService.updateRegistration(
+          playerId,
+          registrationNodeId as number,
+          registrationPatch
+        );
       }
       if (payload.is_in_pool === true) {
-        updated = await balancerAdminService.includeInBalancer(playerId);
+        updated = await balancerAdminService.includeInBalancer(playerId, registrationNodeId as number);
       }
       return updated;
     },
@@ -220,8 +225,13 @@ export function useBalancerMutations({
   const setPlayerPoolMembershipMutation = useMutation({
     mutationFn: ({ playerId, isInPool }: { playerId: number; isInPool: boolean }) =>
       isInPool
-        ? balancerAdminService.includeInBalancer(playerId)
-        : balancerAdminService.setBalancerStatus(playerId, "excluded", "manual_exclusion"),
+        ? balancerAdminService.includeInBalancer(playerId, registrationNodeId as number)
+        : balancerAdminService.setBalancerStatus(
+            playerId,
+            registrationNodeId as number,
+            "excluded",
+            "manual_exclusion"
+          ),
     onSuccess: (registration, variables) => {
       patchRegistrationInCache(registration);
       if (variables.isInPool) {
@@ -238,7 +248,7 @@ export function useBalancerMutations({
 
   const setBalancerStatusMutation = useMutation({
     mutationFn: ({ playerId, balancerStatus }: { playerId: number; balancerStatus: string }) =>
-      balancerAdminService.setBalancerStatus(playerId, balancerStatus),
+      balancerAdminService.setBalancerStatus(playerId, registrationNodeId as number, balancerStatus),
     onSuccess: (registration) => {
       patchRegistrationInCache(registration);
       notify.success(t("toasts.statusUpdated"));
@@ -247,10 +257,10 @@ export function useBalancerMutations({
 
   const bulkPoolMembershipMutation = useMutation({
     mutationFn: async ({ playerIds, isInPool }: { playerIds: number[]; isInPool: boolean }) => {
-      if (!tournamentId) throw new Error(t("errors.noTournament"));
+      if (!tournamentId || registrationNodeId === null) throw new Error(t("errors.noTournament"));
       const result = isInPool
-        ? await balancerAdminService.bulkAddToBalancer(tournamentId, playerIds)
-        : await balancerAdminService.bulkSetBalancerStatus(tournamentId, {
+        ? await balancerAdminService.bulkAddToBalancer(tournamentId, registrationNodeId, playerIds)
+        : await balancerAdminService.bulkSetBalancerStatus(tournamentId, registrationNodeId, {
             registration_ids: playerIds,
             balancer_status: "excluded",
             exclude_reason: "manual_exclusion"
@@ -277,7 +287,7 @@ export function useBalancerMutations({
     }) => {
       const registrations = await Promise.all(
         playerIds.map((playerId) =>
-          balancerAdminService.setBalancerStatus(playerId, balancerStatus)
+          balancerAdminService.setBalancerStatus(playerId, registrationNodeId as number, balancerStatus)
         )
       );
       return { updated: registrations.length, registrations };

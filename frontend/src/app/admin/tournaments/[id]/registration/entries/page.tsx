@@ -2,7 +2,12 @@
 
 import dynamic from "next/dynamic";
 import { useParams } from "next/navigation";
-import { tabFallback } from "../../hubQueries";
+
+import { FlowNodeSelect } from "@/components/kit/FlowNodeSelect";
+import { FLOW_NODE_PARAM, useFlowNodeParam } from "@/hooks/useFlowNodeParam";
+import { useQueryParams } from "@/hooks/useQueryParams";
+
+import { tabFallback, useHubTournamentQuery } from "../../hubQueries";
 
 // D25: the registrations table lives in a neutral place and is rendered by both
 // the hub tab (tournament from the path) and the legacy balancer route
@@ -13,7 +18,7 @@ const RegistrationsTable = dynamic(
 );
 
 /**
- * The individual registrations of one tournament.
+ * The individual registrations of one registration node of the tournament.
  *
  * Registered TEAMS are the sibling `teams` section, not a switcher inside this
  * one: the admin has a single tab implementation (`LinkTabs`, owned by the
@@ -25,5 +30,19 @@ export default function RegistrationEntriesPage() {
   const validTournamentId =
     Number.isFinite(tournamentId) && tournamentId > 0 ? tournamentId : null;
 
-  return <RegistrationsTable tournamentId={validTournamentId} />;
+  const tournament = useHubTournamentQuery(tournamentId).data;
+  const registrationNodeId = useFlowNodeParam(tournament, "registration");
+  const { setParams } = useQueryParams();
+
+  return (
+    <div className="space-y-4">
+      <FlowNodeSelect
+        tournament={tournament}
+        kind="registration"
+        value={registrationNodeId}
+        onChange={(nodeId) => setParams({ [FLOW_NODE_PARAM]: nodeId })}
+      />
+      <RegistrationsTable tournamentId={validTournamentId} registrationNodeId={registrationNodeId} />
+    </div>
+  );
 }
