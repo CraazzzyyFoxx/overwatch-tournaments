@@ -261,6 +261,41 @@ class TournamentStatus(StrEnum):
     ARCHIVED = "archived"
 
 
+class FlowNodeKind(StrEnum):
+    REGISTRATION = "registration"
+    FORMATION = "formation"
+    STAGE = "stage"
+    FILTER = "filter"
+    MERGE = "merge"
+    SPLIT = "split"
+    AGGREGATE = "aggregate"
+    LEADERBOARD = "leaderboard"
+
+
+class FlowNodeStatus(StrEnum):
+    DRAFT = "draft"
+    OPEN = "open"
+    CHECK_IN = "check_in"
+    CLOSED = "closed"
+    FORMING = "forming"
+    COMPLETED = "completed"
+    READY = "ready"
+    LIVE = "live"
+    PENDING = "pending"
+    TENTATIVE = "tentative"
+    FINAL = "final"
+
+
+class FlowResultState(StrEnum):
+    TENTATIVE = "tentative"
+    FINAL = "final"
+
+
+class FlowUnit(StrEnum):
+    PLAYERS = "players"
+    TEAMS = "teams"
+
+
 class MixStatus(StrEnum):
     DRAFT = "draft"
     BALANCED = "balanced"
