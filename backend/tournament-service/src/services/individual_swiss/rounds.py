@@ -78,7 +78,10 @@ class IndividualSwissRoundsService:
             raise _refuse("qualification_locked", "Квалификация уже закреплена: этап нельзя запустить заново")
         tournament = await session.get_one(models.Tournament, stage.tournament_id)
         shape = (await tournament_slot_shape(session, tournament.id)).slots
-        rosters = await roster_engine.for_tournament(session, tournament.id, pool_only=True)
+        node_id = (
+            await session.scalars(sa.select(models.FlowNode.id).where(models.FlowNode.stage_id == stage.id))
+        ).one()
+        rosters = await roster_engine.for_node_input(session, node_id, pool_only=True)
 
         pool: list[PoolPlayer] = []
         for roster in rosters.values():

@@ -30,6 +30,7 @@ ROLES = {"tank": 4, "damage": 8, "support": 8}
 
 class IndividualSwissRoundsTests(EncounterLayerCase):
     async def _seed_pool(self, counts: dict[str, int]) -> None:
+        """The profiles and a closed registration node; the stage created afterwards is wired to it."""
         tag = f"isw-{os.getpid()}-{self.workspace_id}"
         async with self.Session() as s:
             catalog = await CatalogRoleRepository().rated_rows(s, discipline="overwatch", workspace_id=None)
@@ -62,6 +63,27 @@ class IndividualSwissRoundsTests(EncounterLayerCase):
                             is_active=True,
                         )
                     )
+            s.add(models.FlowNode(tournament_id=self.tournament_id, kind="registration", name="Day 1", status="closed"))
+            await s.commit()
+
+    async def _wire_pool(self, stage_id: int) -> None:
+        """``registration.participants -> stage.participants``: ``create_stage`` wires only a tournament's first stage."""
+        async with self.Session() as s:
+            registration_id = await s.scalar(
+                sa.select(models.FlowNode.id).where(
+                    models.FlowNode.tournament_id == self.tournament_id, models.FlowNode.kind == "registration"
+                )
+            )
+            stage_node_id = await s.scalar(sa.select(models.FlowNode.id).where(models.FlowNode.stage_id == stage_id))
+            s.add(
+                models.FlowEdge(
+                    tournament_id=self.tournament_id,
+                    source_node_id=registration_id,
+                    source_port="participants",
+                    target_node_id=stage_node_id,
+                    target_port="participants",
+                )
+            )
             await s.commit()
 
     async def _start(self, **fields) -> int:
@@ -79,6 +101,7 @@ class IndividualSwissRoundsTests(EncounterLayerCase):
                 ),
             )
             stage_id = stage.id
+        await self._wire_pool(stage_id)
         await move_stage(self.Session, stage_id, enums.FlowNodeStatus.READY, enums.FlowNodeStatus.LIVE)
         return stage_id
 
@@ -260,6 +283,7 @@ class IndividualSwissRoundsTests(EncounterLayerCase):
                 ),
             )
             stage_id = stage.id
+        await self._wire_pool(stage_id)
         with self.assertRaises(BaseAPIException) as raised:
             await move_stage(self.Session, stage_id, enums.FlowNodeStatus.READY, enums.FlowNodeStatus.LIVE)
         self.assertEqual("playoff_too_large", raised.exception.detail["code"])

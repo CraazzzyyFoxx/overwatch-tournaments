@@ -85,7 +85,7 @@ An individual Swiss ranks **players**, not teams, and deals them into new teams 
 
 A round's seats have **no tournament team**: in `teams[]`, `team_id` is `null` and the seat is named `Команда <captain>`; the roster, roles and the round captain (the highest rank in the team) are read from `GET /api/v1/tournaments/{id}/stages/{stage_id}/individual-rounds`. The personal table is `GET /api/v1/tournaments/{id}/player-standings`: per player `position` inside the role, `points`, `wins`/`draws`/`losses`, `maps_won`/`maps_lost`/`map_diff`, `buchholz`, `is_qualified` (inside the role's top `K × slots`), `is_captain` (one of the `K` highest-ranked qualifiers) and `is_pinned`. Players order by points, map differential, Buchholz (the sum over their matches of the opponents' mean final points) and rank; an organizer's place is set with `PUT /api/v1/admin/tournaments/{tournament_id}/stages/{stage_id}/player-standing-pins`.
 
-When the stage is complete, `POST /api/v1/admin/tournaments/{tournament_id}/stages/{stage_id}/lock-qualification` excludes everyone not qualified from the balancer pool (reason `not_qualified`) and moves the tournament from `LIVE` to `DRAFT`. The captains then draft the qualifiers, and the playoff is an ordinary stage seeded by captain rank.
+When the stage is complete, `POST /api/v1/admin/tournaments/{tournament_id}/stages/{stage_id}/lock-qualification` freezes the qualifiers and completes the stage's flow node; the balancer pool is left alone and the filter downstream decides who plays on. The captains then draft the qualifiers, and the playoff is an ordinary stage seeded by captain rank.
 
 ## The bracket: encounters and links
 

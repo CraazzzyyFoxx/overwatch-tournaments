@@ -124,12 +124,17 @@ class FlowCase(IsolatedAsyncioTestCase):
             return list(rows)
 
     async def stage(
-        self, stage_type: enums.StageType = enums.StageType.ROUND_ROBIN, *, order: int = 1, name: str = "S"
+        self,
+        stage_type: enums.StageType = enums.StageType.ROUND_ROBIN,
+        *,
+        order: int = 1,
+        name: str = "S",
+        **fields: Any,
     ) -> tuple[int, int]:
         """A stage through the admin service and the node ``create_stage`` made for it."""
         async with self.Session() as s:
             created = await stage_service.create_stage(
-                s, self.tournament_id, schemas.StageCreate(name=name, stage_type=stage_type, order=order)
+                s, self.tournament_id, schemas.StageCreate(name=name, stage_type=stage_type, order=order, **fields)
             )
             node_id = await s.scalar(sa.select(models.FlowNode.id).where(models.FlowNode.stage_id == created.id))
         return created.id, node_id

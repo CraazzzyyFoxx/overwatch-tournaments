@@ -42,11 +42,13 @@ from shared.models.registration.registration import (
 )
 from shared.models.tenancy.workspace import WorkspaceMember
 from shared.models.tournament import Tournament
+from shared.models.tournament.flow import FlowNode
 from shared.registration_statuses import balancer_pool_included_clause
 from shared.repository import TournamentRepository
 from shared.schemas.identity import PlayerIdentityRead
 from shared.schemas.role import RoleRef
 from shared.services.division_grid.access import get_effective_division_grid
+from shared.services.flow_queries import input_member_ids
 from shared.services.member_rank import TOURNAMENT_ORDER, MemberRankService, member_rank_service
 
 __all__ = ("RosterEngine", "registration_load_options", "roster_engine")
@@ -260,6 +262,40 @@ class RosterEngine:
                 session, {reg.workspace_member_id for reg in registrations if reg.workspace_member_id is not None}
             ),
         )
+
+    async def for_node_input(
+        self,
+        session: AsyncSession,
+        node_id: int,
+        *,
+        pool_only: bool = False,
+        registration_ids: Sequence[int] | None = None,
+    ) -> dict[int, PlayerRoster]:
+        """The tournament's registration profiles of ``node_id``'s input members, in input order, by registration id.
+
+        ``pool_only`` keeps the balancer-included ones (:func:`_pool_clauses`). A member without a profile in this
+        tournament has no roster and is skipped.
+
+        # shortcut: the pool predicate still reads the profile's ``balancer_status``; the registration entry replaces
+        # it with the entry of the nearest upstream registration node (Task 7).
+        """
+        tournament_id = await session.scalar(sa.select(FlowNode.tournament_id).where(FlowNode.id == node_id))
+        members = await input_member_ids(session, node_id)
+        if tournament_id is None or not members:
+            return {}
+        query = sa.select(Registration.id, Registration.workspace_member_id).where(
+            Registration.tournament_id == tournament_id,
+            Registration.deleted_at.is_(None),
+            _any_of(Registration.workspace_member_id, members),
+        )
+        if registration_ids is not None:
+            query = query.where(_any_of(Registration.id, registration_ids))
+        position = {member_id: index for index, member_id in enumerate(members)}
+        found = sorted(await session.execute(query), key=lambda row: (position[row.workspace_member_id], row.id))
+        rosters = await self.for_tournament(
+            session, tournament_id, pool_only=pool_only, registration_ids=[row.id for row in found]
+        )
+        return {row.id: rosters[row.id] for row in found if row.id in rosters}
 
     async def pool_ids(self, session: AsyncSession, tournament_id: int, registration_ids: Sequence[int]) -> set[int]:
         """Which of these registrations the balancer pool includes -- ids only.

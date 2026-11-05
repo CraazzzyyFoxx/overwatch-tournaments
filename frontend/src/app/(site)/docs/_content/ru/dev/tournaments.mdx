@@ -85,7 +85,7 @@ Host: owt.craazzzyyfoxx.me
 
 У места в раунде **нет команды турнира**: в `teams[]` поле `team_id` равно `null`, а место называется `Команда <капитан>`; состав, роли и капитан раунда (старший по рангу в команде) читаются из `GET /api/v1/tournaments/{id}/stages/{stage_id}/individual-rounds`. Личная таблица — `GET /api/v1/tournaments/{id}/player-standings`: у игрока `position` внутри роли, `points`, `wins`/`draws`/`losses`, `maps_won`/`maps_lost`/`map_diff`, `buchholz`, `is_qualified` (в топ-`K × слотов` своей роли), `is_captain` (один из `K` старших по рангу прошедших) и `is_pinned`. Порядок: очки, разница карт, Бухгольц (сумма по матчам игрока средних итоговых очков соперников) и ранг; место, выставленное организатором, задаёт `PUT /api/v1/admin/tournaments/{tournament_id}/stages/{stage_id}/player-standing-pins`.
 
-Когда стадия завершена, `POST /api/v1/admin/tournaments/{tournament_id}/stages/{stage_id}/lock-qualification` исключает из пула балансировщика всех не прошедших (причина `not_qualified`) и переводит турнир из `LIVE` в `DRAFT`. Затем капитаны драфтуют прошедших, а плей-офф — обычная стадия с посевом по рангу капитана.
+Когда стадия завершена, `POST /api/v1/admin/tournaments/{tournament_id}/stages/{stage_id}/lock-qualification` закрепляет прошедших и завершает узел стадии; пул балансировщика не меняется, а кто играет дальше, решает фильтр ниже по потоку. Затем капитаны драфтуют прошедших, а плей-офф — обычная стадия с посевом по рангу капитана.
 
 ## Сетка: встречи и связи
 

@@ -137,6 +137,17 @@ class IndividualSwissReadsCase(EncounterLayerCase):
             )
             return {name: (status, reason) for name, status, reason in rows.all()}
 
+    async def node_status(self) -> str:
+        async with self.Session() as s:
+            return await s.scalar(sa.select(models.FlowNode.status).where(models.FlowNode.stage_id == self.swiss_id))
+
+    async def set_node_status(self, node_status: str) -> None:
+        async with self.Session() as s:
+            await s.execute(
+                sa.update(models.FlowNode).where(models.FlowNode.stage_id == self.swiss_id).values(status=node_status)
+            )
+            await s.commit()
+
 
 class PlayerStandingsReadTests(IndividualSwissReadsCase):
     async def test_rows_are_ordered_by_role_then_position_with_map_diff(self) -> None:
@@ -335,13 +346,7 @@ class PinsTests(IndividualSwissReadsCase):
         self.assertEqual({}, await self.stored())
 
     async def test_pins_are_refused_once_the_qualification_is_locked(self) -> None:
-        async with self.Session() as s:
-            await s.execute(
-                sa.update(models.Tournament)
-                .where(models.Tournament.id == self.tournament_id)
-                .values(status=enums.TournamentStatus.DRAFT)
-            )
-            await s.commit()
+        await self.set_node_status("completed")
         with self.assertRaises(BaseAPIException) as raised:
             await self.set_pins([("t1", 1)])
         self.assertEqual(409, raised.exception.status_code)
@@ -374,23 +379,14 @@ class LockQualificationTests(IndividualSwissReadsCase):
         self.assertEqual(enums.TournamentStatus.LIVE, await self.tournament_status())
         self.assertEqual({"ready"}, {status for status, _ in (await self.balancer_statuses()).values()})
 
-    async def test_non_qualifiers_leave_the_pool_and_the_tournament_moves_to_draft(self) -> None:
+    async def test_the_lock_completes_the_node_and_leaves_the_pool_alone(self) -> None:
         await self.complete()
         result = await self.lock()
 
         self.assertEqual(["t1", "d1", "d2"], [row.display_name for row in result.qualified])
         self.assertEqual(["t1"], [row.display_name for row in result.captains])
-        self.assertEqual(
-            {
-                "t1": ("ready", None),
-                "d1": ("ready", None),
-                "d2": ("ready", None),
-                "t2": ("excluded", "not_qualified"),
-                "d3": ("excluded", "not_qualified"),
-            },
-            await self.balancer_statuses(),
-        )
-        self.assertEqual(enums.TournamentStatus.DRAFT, await self.tournament_status())
+        self.assertEqual({"ready"}, {status for status, _ in (await self.balancer_statuses()).values()})
+        self.assertEqual("completed", await self.node_status())
         self.assertIsNotNone((await self.stage()).qualification_locked_at)
 
     async def test_a_pin_saved_a_moment_ago_is_applied_before_the_cut(self) -> None:
@@ -400,20 +396,13 @@ class LockQualificationTests(IndividualSwissReadsCase):
         result = await self.lock()
 
         self.assertEqual(["t1", "d3", "d1"], [row.display_name for row in result.qualified])
-        self.assertEqual("excluded", (await self.balancer_statuses())["d2"][0])
-        self.assertEqual("ready", (await self.balancer_statuses())["d3"][0])
+        self.assertEqual({"ready"}, {status for status, _ in (await self.balancer_statuses()).values()})
 
     async def test_pins_are_refused_after_the_lock(self) -> None:
         await self.complete()
         await self.lock()
-        # The tournament is back in LIVE (the playoff), but the marker still freezes the table.
-        async with self.Session() as s:
-            await s.execute(
-                sa.update(models.Tournament)
-                .where(models.Tournament.id == self.tournament_id)
-                .values(status=enums.TournamentStatus.LIVE)
-            )
-            await s.commit()
+        # The node is live again (a reopened stage), but the marker still freezes the table.
+        await self.set_node_status("live")
         with self.assertRaises(BaseAPIException) as raised:
             await PinsTests.set_pins(self, [("d3", 1)])
         self.assertEqual(409, raised.exception.status_code)
@@ -425,21 +414,15 @@ class LockQualificationTests(IndividualSwissReadsCase):
             await self.lock()
         self.assertEqual(409, raised.exception.status_code)
 
-    async def test_a_second_lock_is_refused_even_back_in_live(self) -> None:
+    async def test_a_second_lock_is_refused_even_with_the_node_live_again(self) -> None:
         await self.complete()
         await self.lock()
-        async with self.Session() as s:
-            await s.execute(
-                sa.update(models.Tournament)
-                .where(models.Tournament.id == self.tournament_id)
-                .values(status=enums.TournamentStatus.LIVE)
-            )
-            await s.commit()
+        await self.set_node_status("live")
         with self.assertRaises(BaseAPIException) as raised:
             await self.lock()
         self.assertEqual(409, raised.exception.status_code)
 
-    async def test_a_draft_format_other_than_snake_is_refused_before_any_exclusion(self) -> None:
+    async def test_a_draft_format_other_than_snake_is_refused_before_anything_is_locked(self) -> None:
         await self.complete()
         async with self.Session() as s:
             await s.execute(
@@ -453,7 +436,7 @@ class LockQualificationTests(IndividualSwissReadsCase):
         self.assertEqual(409, raised.exception.status_code)
         self.assertEqual("draft_format_not_snake", raised.exception.detail[0]["code"])
         self.assertEqual({"ready"}, {status for status, _ in (await self.balancer_statuses()).values()})
-        self.assertEqual(enums.TournamentStatus.LIVE, await self.tournament_status())
+        self.assertEqual("live", await self.node_status())
         self.assertIsNone((await self.stage()).qualification_locked_at)
 
     async def test_another_stage_type_is_refused(self) -> None:

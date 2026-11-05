@@ -17,16 +17,6 @@ from src.services.computation.jobs import jobs_service
 
 __all__ = ("IndividualSwissPinsService", "pins_service", "refuse")
 
-#: Once the tournament has left the Swiss day the qualifier list is frozen, so a pin could only contradict it.
-_LOCKED_STATUSES = frozenset(
-    {
-        enums.TournamentStatus.DRAFT,
-        enums.TournamentStatus.PLAYOFFS,
-        enums.TournamentStatus.COMPLETED,
-        enums.TournamentStatus.ARCHIVED,
-    }
-)
-
 
 def refuse(http_status: int, code: str, message: str) -> ApiHTTPException:
     """The error shape the frontend's ``parseApiError`` reads: one coded item with the organizer's sentence."""
@@ -69,10 +59,10 @@ class IndividualSwissPinsService:
             .where(models.Stage.id == stage.id)
             .execution_options(populate_existing=True)
         )
-        tournament_status = await session.scalar(
-            sa.select(models.Tournament.status).where(models.Tournament.id == stage.tournament_id)
+        node_status = await session.scalar(
+            sa.select(models.FlowNode.status).where(models.FlowNode.stage_id == stage.id)
         )
-        if locked_at is not None or tournament_status in _LOCKED_STATUSES:
+        if locked_at is not None or node_status == enums.FlowNodeStatus.COMPLETED:
             raise refuse(status.HTTP_409_CONFLICT, "qualification_locked", "Квалификация уже закреплена")
 
         result = await session.execute(
