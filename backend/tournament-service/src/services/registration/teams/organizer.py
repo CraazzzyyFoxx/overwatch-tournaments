@@ -203,6 +203,9 @@ class OrganizerMixin(TeamServiceBase):
         if dest.tournament_id != tournament_id:
             raise _fail(404, "team_not_found", "Team not found")
         _assert_mutable(dest)
+        if source_id and source_id != dest.id and locked[source_id].registration_node_id != dest.registration_node_id:
+            # The team pointer is one per profile: moving it would pull the member off their other intake's team.
+            raise _fail(409, "already_on_team", "This player is on a team of another registration node")
         tournament = await self.tournament_repo.get(session, tournament_id)
         if tournament is None:
             raise _fail(404, "tournament_not_found", "Tournament not found")

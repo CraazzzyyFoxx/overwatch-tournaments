@@ -414,52 +414,72 @@ class RegistrationLifecycleService:
             # they win outright over a ``roles`` answer sent alongside them.
             values.pop("roles", None)
 
-        await self.registrations.ensure_unique_primary_game_handles(session, tournament_id=tournament_id, values=values)
-
-        registration = models.Registration(
-            tournament_id=tournament_id,
-            form_version_id=form.current_version_id if form is not None else None,
-            admin_notes=admin_notes,
-            # Explicitly initialize even an empty collection before the first flush.
-            identities=[],
-        )
-        entry = models.RegistrationEntry(
-            registration_node_id=registration_node_id,
-            status=resolved_status,
-            balancer_status=NOT_ADDED_BALANCER_STATUS,
-        )
-        entry.registration = registration
-        answer_service.apply(
-            registration,
-            values,
-            schema=schema,
-            hero_catalog=hero_catalog,
-            catalog_roles=catalog_roles,
-            entry=entry,
-        )
         provider = identity_provider(tournament.discipline)
-        primary_identity = registration.primary_game_identity(provider=provider)
-        registration.display_name = display_name or (primary_identity.handle if primary_identity else None)
-        if roles:
-            replace_registration_roles(
-                registration,
-                roles,
-                catalog_roles=catalog_roles,
-                hero_catalog=hero_catalog,
-                max_heroes=max_heroes,
-                mode=flex_role_mode(form),
-            )
         auto_managed = balancer_status_value is None or balancer_status_value in AUTO_MANAGED_BALANCER_STATUSES
+        registration = await self.registrations.live_profile_by_primary_handle(
+            session, tournament_id=tournament_id, values=values
+        )
+        if registration is not None:
+            # The person already has a profile in this tournament (another intake, or an entry an admin deleted):
+            # the organizer adds an entry in this node; the profile and its answers stay as they are.
+            if await self.entry_repo.get_for(session, registration_node_id, registration.id) is not None:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT, detail="A registration with this handle already exists"
+                )
+            entry = models.RegistrationEntry(
+                registration_node_id=registration_node_id,
+                status=resolved_status,
+                balancer_status=NOT_ADDED_BALANCER_STATUS,
+            )
+            entry.registration = registration
+            session.add(entry)
+        else:
+            await self.registrations.ensure_unique_primary_game_handles(
+                session, tournament_id=tournament_id, values=values
+            )
+
+            registration = models.Registration(
+                tournament_id=tournament_id,
+                form_version_id=form.current_version_id if form is not None else None,
+                admin_notes=admin_notes,
+                # Explicitly initialize even an empty collection before the first flush.
+                identities=[],
+            )
+            entry = models.RegistrationEntry(
+                registration_node_id=registration_node_id,
+                status=resolved_status,
+                balancer_status=NOT_ADDED_BALANCER_STATUS,
+            )
+            entry.registration = registration
+            answer_service.apply(
+                registration,
+                values,
+                schema=schema,
+                hero_catalog=hero_catalog,
+                catalog_roles=catalog_roles,
+                entry=entry,
+            )
+            primary_identity = registration.primary_game_identity(provider=provider)
+            registration.display_name = display_name or (primary_identity.handle if primary_identity else None)
+            if roles:
+                replace_registration_roles(
+                    registration,
+                    roles,
+                    catalog_roles=catalog_roles,
+                    hero_catalog=hero_catalog,
+                    max_heroes=max_heroes,
+                    mode=flex_role_mode(form),
+                )
+            await self.registration_repo.create(session, registration)
+            # Unconditional, and with the workspace: a manual registration has no auth
+            # account, but its game handle is still the identity every inherited rank
+            # layer is read through. Gating this on ``auth_user_id`` would leave
+            # admin-created rows with no ``workspace_member``, hence no canon to inherit.
+            await self.registrations.ensure_player_identity(
+                session, registration, provider=provider, auth_user_id=auth_user_id, workspace_id=workspace_id
+            )
         if not auto_managed:
             entry.balancer_status = balancer_status_value
-        await self.registration_repo.create(session, registration)
-        # Unconditional, and with the workspace: a manual registration has no auth
-        # account, but its game handle is still the identity every inherited rank
-        # layer is read through. Gating this on ``auth_user_id`` would leave
-        # admin-created rows with no ``workspace_member``, hence no canon to inherit.
-        await self.registrations.ensure_player_identity(
-            session, registration, provider=provider, auth_user_id=auth_user_id, workspace_id=workspace_id
-        )
         await session.flush()
         if auto_managed:
             # Resolved only now: the member anchor above is what the inherited rank
@@ -471,7 +491,7 @@ class RegistrationLifecycleService:
                 else NOT_ADDED_BALANCER_STATUS
             )
         if resolved_status == "approved":
-            await enqueue_registration_approved(session, registration)
+            await enqueue_registration_approved(session, registration, registration_node_id=registration_node_id)
         else:
             await self.common._register_registration_changed(session, registration)
         await session.commit()
@@ -617,9 +637,9 @@ class RegistrationLifecycleService:
             )
 
         if status_value == "approved" and previous_status != "approved":
-            await enqueue_registration_approved(session, registration)
+            await enqueue_registration_approved(session, registration, registration_node_id=entry.registration_node_id)
         elif status_value == "rejected" and previous_status != "rejected":
-            await notify_registration_rejected(session, registration)
+            await notify_registration_rejected(session, registration, registration_node_id=entry.registration_node_id)
         else:
             await self.common._register_registration_changed(session, registration)
 
@@ -647,7 +667,7 @@ class RegistrationLifecycleService:
         # no exclude_reason -- every write path that could set anything else
         # requires status == "approved" already (see set_balancer_status /
         # update_registration_profile). Nothing to reset here.
-        await enqueue_registration_approved(session, entry.registration)
+        await enqueue_registration_approved(session, entry.registration, registration_node_id=registration_node_id)
         await session.commit()
         return entry
 
@@ -666,7 +686,7 @@ class RegistrationLifecycleService:
         entry.reviewed_by = reviewed_by
         # The FK moved, so the serializer's .reviewer must too; one account read, not a refetch.
         entry.reviewer = await _username_user(session, reviewed_by)
-        await notify_registration_rejected(session, entry.registration)
+        await notify_registration_rejected(session, entry.registration, registration_node_id=registration_node_id)
         await session.commit()
         return entry
 
@@ -698,7 +718,9 @@ class RegistrationLifecycleService:
             entry.status = "approved"
             entry.reviewed_at = now
             entry.reviewed_by = reviewed_by
-        await enqueue_registrations_approved(session, [entry.registration for entry in entries])
+        await enqueue_registrations_approved(
+            session, [entry.registration for entry in entries], registration_node_id=registration_node_id
+        )
         await session.commit()
         return len(entries), len(registration_ids) - len(entries)
 

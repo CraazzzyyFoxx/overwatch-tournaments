@@ -404,11 +404,21 @@ class RegistrationOpenedTests(_LifecycleTestCase):
         self.assertEqual("workspace", rows[0].audience)
         self.assertEqual(WORKSPACE_ID, rows[0].workspace_id)
         self.assertEqual(TOURNAMENT_NAME, rows[0].payload_json["tournament_name"])
-        self.assertEqual(self.fx.node.name, rows[0].payload_json["node_name"])
+        self.assertNotIn("node_name", rows[0].payload_json)
         self.assertEqual(self.fx.node.id, rows[0].payload_json["registration_node_id"])
         self.assertEqual(closes_at, _instant(rows[0].payload_json["closes_at"]))
         self.assertEqual(f"flow_node:{self.fx.node.id}", rows[0].dedupe_key)
         self.assertEqual(1, len(self.fx.broadcasts()))
+
+    async def test_the_announcement_names_the_node_when_the_tournament_has_several_intakes(self) -> None:
+        self.fx.session.add(
+            models.FlowNode(tournament_id=TOURNAMENT_ID, kind="registration", name="Other", status="open", config={})
+        )
+        self.fx.session.flush()
+
+        await self._enter(enums.FlowNodeStatus.OPEN)
+
+        self.assertEqual(self.fx.node.name, self.fx.notifications("registration.opened")[0].payload_json["node_name"])
 
     async def test_a_window_that_has_not_started_announces_nothing(self) -> None:
         """A manual move ahead of the schedule leaves the register button
@@ -494,8 +504,19 @@ class CheckInOpenedTests(_LifecycleTestCase):
         self.assertEqual("user", row.audience)
         self.assertEqual(WORKSPACE_ID, row.source_workspace_id)
         self.assertEqual(self.fx.node.id, row.payload_json["registration_node_id"])
-        self.assertEqual(self.fx.node.name, row.payload_json["node_name"])
+        self.assertNotIn("node_name", row.payload_json)
         self.assertEqual(1, len(self.fx.broadcasts()))
+
+    async def test_the_node_is_named_when_the_tournament_has_several_intakes(self) -> None:
+        self.fx.session.add(
+            models.FlowNode(tournament_id=TOURNAMENT_ID, kind="registration", name="Other", status="open", config={})
+        )
+        self.fx.session.flush()
+
+        await self._enter(enums.FlowNodeStatus.CHECK_IN)
+
+        row = self.fx.notifications("check_in.opened")[0]
+        self.assertEqual(self.fx.node.name, row.payload_json["node_name"])
 
     async def test_only_entries_of_the_node_are_told(self) -> None:
         other = models.FlowNode(

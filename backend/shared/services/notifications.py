@@ -139,6 +139,10 @@ class RegistrationDecisionPayload(_Payload):
     tournament_id: int
     tournament_name: str
     registration_id: int
+    #: The intake the decision is about; ``node_name`` only when the tournament has several (see
+    #: ``TournamentPhaseOpenedPayload``). Absent on rows written before P3.
+    registration_node_id: int | None = None
+    node_name: str | None = None
 
 
 class EncounterReportDisputedPayload(_Payload):

@@ -89,6 +89,16 @@ class RegistrationEntryRepository(BaseRepository[models.RegistrationEntry]):
             )
         return entry
 
+    async def live_for_registration(
+        self, session: AsyncSession, registration_id: int
+    ) -> list[models.RegistrationEntry]:
+        """Every live (not soft-deleted) entry of the profile, whatever the node."""
+        entry = models.RegistrationEntry
+        result = await session.scalars(
+            self.select().where(entry.registration_id == registration_id, entry.deleted_at.is_(None))
+        )
+        return list(result.all())
+
 
 class RegistrationFormRepository(BaseRepository[models.RegistrationForm]):
     def __init__(self) -> None:

@@ -268,6 +268,11 @@ class TestSelfUpdateAppliesAnswers(IsolatedAsyncioTestCase):
         with (
             mock.patch.object(reg_service.registration_service, "ensure_unique_primary_game_handles", _noop),
             mock.patch.object(reg_service.registration_service, "ensure_player_identity", ensure_player_identity),
+            mock.patch.object(
+                reg_service.registration_service.entry_repo,
+                "live_for_registration",
+                mock.AsyncMock(return_value=list(registration.entries)),
+            ),
         ):
             await reg_service.registration_service.update_registration(
                 _RecordingSession(),
@@ -384,6 +389,11 @@ class TestManualCreateHonorsTheEditor(IsolatedAsyncioTestCase):
         with (
             mock.patch.object(
                 reg_lifecycle.lifecycle_service.registrations, "ensure_unique_primary_game_handles", _noop
+            ),
+            mock.patch.object(
+                reg_lifecycle.lifecycle_service.registrations,
+                "live_profile_by_primary_handle",
+                mock.AsyncMock(return_value=None),
             ),
             mock.patch.object(
                 reg_lifecycle.lifecycle_service.common,

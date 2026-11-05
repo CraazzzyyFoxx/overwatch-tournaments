@@ -135,6 +135,16 @@ Rules per area. `/api/docs` has them per subject:
   - `regteam_accept` never moves a player who is already on a team (409 `already_on_team`). For a
     caller with no registration it runs the sign-up admission gate (400 refusal; 409
     `registration_changed` if the registration vanished in between).
+  - The profile (answers, handles, roles, team) is one per tournament; every intake adds only an entry.
+    A second-intake sign-up rewrites the profile answers the form leaves editable and no earlier
+    entry has locked (reviewed identity, pool roles, check-in); the rest of the submission is dropped.
+    Seating a profile that is already on a team into another intake's team (captain create, organizer
+    placement) is 409 `already_on_team`. `reg_create_manual` for a handle that already has a profile
+    adds an entry to that node (409 when it has a live one); `sheet_upsert` cannot move a feed that
+    already synced rows to another node (409 `feed_node_locked`).
+  - `registration.approved` / `registration.rejected` payloads carry `registration_node_id`, and
+    `node_name` (like `registration.opened` and `check_in.opened`) only when the tournament has more
+    than one registration node.
   - Team check-in evaluates every member's admission in one batch before it takes the team lock.
     409 `roster_changed` when the roster moved in between.
   - The admission gate commits the request's session before it answers, so the entitlement and

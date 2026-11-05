@@ -434,6 +434,34 @@ class AdminTournamentService:
         await sync_service.import_tournament(session, tournament.id)
         return await self.get_tournament(session, tournament.id)
 
+    @staticmethod
+    async def _release_flow_node_references(session: AsyncSession, tournament_id: int) -> None:
+        """Clear every row that points at the tournament's flow nodes with ``ON DELETE RESTRICT``.
+
+        Deleting the tournament cascades to its nodes and to those rows as siblings, and Postgres fires sibling
+        cascades in an order that depends on object ids: a node cascade that fires first sees the entries, the
+        sheet feed and the registration teams still there and fails the whole delete. So they go first, here.
+        Teams and players only lose their formation node (they are deleted by the tournament cascade itself).
+        """
+        node_ids = sa.select(models.FlowNode.id).where(models.FlowNode.tournament_id == tournament_id)
+        await session.execute(
+            sa.delete(models.RegistrationEntry).where(models.RegistrationEntry.registration_node_id.in_(node_ids))
+        )
+        await session.execute(
+            sa.delete(models.RegistrationGoogleSheetFeed).where(
+                models.RegistrationGoogleSheetFeed.tournament_id == tournament_id
+            )
+        )
+        await session.execute(
+            sa.delete(models.RegistrationTeam).where(models.RegistrationTeam.tournament_id == tournament_id)
+        )
+        await session.execute(
+            sa.update(models.Player).where(models.Player.tournament_id == tournament_id).values(formation_node_id=None)
+        )
+        await session.execute(
+            sa.update(models.Team).where(models.Team.tournament_id == tournament_id).values(formation_node_id=None)
+        )
+
     async def delete_tournament(self, session: AsyncSession, tournament_id: int) -> None:
         """Delete tournament (cascade deletes groups, teams, etc.)"""
         tournament = await self.tournament_repo.get(session, tournament_id)
@@ -443,6 +471,7 @@ class AdminTournamentService:
 
         workspace_id = tournament.workspace_id
         evidence = await capture_owner_delete(session, tournament_id=tournament_id)
+        await self._release_flow_node_references(session, tournament_id)
         await self.standing_repo.delete_for_tournament(session, tournament_id)
         await publish_tournament_invalidation(session, tournament_id, STRUCTURE_RESOURCES)
         await self.tournament_repo.delete(session, tournament)

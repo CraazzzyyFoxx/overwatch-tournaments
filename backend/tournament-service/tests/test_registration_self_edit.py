@@ -34,7 +34,13 @@ from shared.testing.roles import rated_catalog, registration_role  # noqa: E402
 from src.services.registration import service as reg_service  # noqa: E402
 from src.services.registration.answers import answer_service  # noqa: E402
 from src.services.registration.rank_autofill import _rank_autofill_balancer_addition  # noqa: E402
-from src.services.registration.self_edit import self_edit_policy  # noqa: E402
+from src.services.registration.self_edit import self_edit_policy as _policy  # noqa: E402
+
+
+def self_edit_policy(registration, entry, sign_up_open, schema):
+    """The policy as the single-intake tests mean it: the profile has just this entry."""
+    return _policy(registration, entry, [entry], sign_up_open, schema)
+
 
 NOW = datetime.now(UTC)
 
@@ -174,6 +180,48 @@ class PolicyTests(TestCase):
         assert "reserve" in self_edit_policy(*_registration(), True, opened).writable_keys
 
 
+class OtherIntakeTests(TestCase):
+    """The answers are the profile's, so another intake's state locks them too."""
+
+    @staticmethod
+    def _second_entry(registration: models.Registration, **columns: Any) -> models.RegistrationEntry:
+        second = models.RegistrationEntry(id=2, registration_node_id=4, status="pending", **columns)
+        second.registration = registration
+        return second
+
+    def test_a_reviewed_entry_of_another_intake_locks_the_identity(self) -> None:
+        registration, first = _registration(reviewed_at=NOW)
+        second = self._second_entry(registration)
+        opened = _schema(editable_keys=frozenset({"identity_battlenet"}))
+
+        assert "identity_battlenet" not in _policy(registration, second, [first, second], True, opened).writable_keys
+
+    def test_a_pool_entry_of_another_intake_locks_the_roles(self) -> None:
+        registration, first = _registration(balancer_status="ready")
+        second = self._second_entry(registration)
+        opened = _schema(editable_keys=frozenset({"roles"}))
+
+        assert "roles" not in _policy(registration, second, [first, second], True, opened).writable_keys
+
+    def test_a_checked_in_entry_of_another_intake_freezes_the_edit(self) -> None:
+        registration, first = _registration(checked_in=True)
+        second = self._second_entry(registration)
+        policy = _policy(
+            registration, second, [first, second], True, _schema(editable_keys=frozenset({"public_notes"}))
+        )
+
+        assert (policy.can_edit, policy.reason) == (False, "checked_in")
+
+    def test_a_withdrawn_entry_of_another_intake_locks_nothing(self) -> None:
+        registration, first = _registration(status="withdrawn", reviewed_at=NOW, checked_in=True)
+        second = self._second_entry(registration)
+        opened = _schema(editable_keys=frozenset({"identity_battlenet"}))
+        policy = _policy(registration, second, [first, second], True, opened)
+
+        assert policy.can_edit is True
+        assert "identity_battlenet" in policy.writable_keys
+
+
 class _RecordingSession:
     def __init__(self) -> None:
         self.info: dict = {}
@@ -231,14 +279,17 @@ async def _no_rosters(*_args: Any, **_kwargs: Any) -> dict:
 
 class WritePathTests(IsolatedAsyncioTestCase):
     async def _update(self, entry: models.RegistrationEntry, values: dict[str, Any], schema: FormSchema):
-        return await reg_service.registration_service.update_registration(
-            _RecordingSession(),
-            entry,
-            tournament=_tournament(),
-            values=values,
-            schema=schema,
-            form_version_id=5,
-        )
+        with mock.patch.object(
+            reg_service.registration_service.entry_repo, "live_for_registration", mock.AsyncMock(return_value=[entry])
+        ):
+            return await reg_service.registration_service.update_registration(
+                _RecordingSession(),
+                entry,
+                tournament=_tournament(),
+                values=values,
+                schema=schema,
+                form_version_id=5,
+            )
 
     async def test_an_opened_answer_is_written(self) -> None:
         registration, entry = _registration()
@@ -353,6 +404,11 @@ class RoundTripTests(IsolatedAsyncioTestCase):
         with (
             mock.patch.object(reg_service.registration_service, "ensure_player_identity", _noop),
             mock.patch.object(reg_service.registration_service, "ensure_unique_primary_game_handles", _noop),
+            mock.patch.object(
+                reg_service.registration_service.entry_repo,
+                "live_for_registration",
+                mock.AsyncMock(return_value=[entry]),
+            ),
         ):
             await reg_service.registration_service.update_registration(
                 _RecordingSession(),

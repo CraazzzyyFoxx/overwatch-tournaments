@@ -4,19 +4,24 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import sqlalchemy as sa
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import selectinload
 
 from shared import models
+from shared.core.errors import ApiHTTPException
+from shared.core.errors import BaseAPIException as HTTPException
 from shared.domain.forms import FormField, FormSchema, FormSection
+from shared.services.division_grid import cache as division_grid_cache
 from shared.services.ontology import project_disciplines
 from src.schemas.registration import RegistrationSubmit
+from src.services.admin.tournament import tournament_service
 from src.services.flow.engine import flow_engine
 from src.services.registration import sheet_sync
 from src.services.registration.lifecycle import lifecycle_service
-from src.services.registration.service import registration_service
+from src.services.registration.service import TeamPlacement, registration_service
 from src.services.registration.teams import teams_service
 from tests._flow_case import FlowCase
 
@@ -289,3 +294,241 @@ class EntryTests(FlowCase):
                 )
             )
         self.assertEqual([m1], members)
+
+    async def _team_in(self, node_id: int, name: str) -> int:
+        async with self.Session() as s:
+            team = models.RegistrationTeam(
+                workspace_id=self.workspace_id,
+                tournament_id=self.tournament_id,
+                registration_node_id=node_id,
+                name=name,
+                name_normalized=name.lower(),
+                status="forming",
+            )
+            s.add(team)
+            await s.commit()
+            return team.id
+
+    async def _profile_on_team_of(self, registration_id: int, node_id: int, name: str) -> int:
+        """A registering team in ``node_id`` with the profile seated on it; the team's id."""
+        team_id = await self._team_in(node_id, name)
+        async with self.Session() as s:
+            await s.execute(
+                sa.update(models.Registration)
+                .where(models.Registration.id == registration_id)
+                .values(registration_team_id=team_id, team_slot_code="tank")
+            )
+            await s.commit()
+        return team_id
+
+    async def _profile(self, registration_id: int) -> models.Registration:
+        async with self.Session() as s:
+            return await s.scalar(
+                sa.select(models.Registration)
+                .where(models.Registration.id == registration_id)
+                .options(selectinload(models.Registration.identities))
+            )
+
+    async def test_a_second_intake_sign_up_updates_the_profile_answers(self) -> None:
+        registration_id = await self._sign_up(self.a)
+        async with self.Session() as s:
+            await registration_service.write_public_registration(
+                s,
+                tournament_id=self.tournament_id,
+                auth_user=self.user,
+                body=RegistrationSubmit(
+                    form_version_id=self.version_id,
+                    answers={"identity_battlenet": [f"E{self.tag[-6:]}#1234"], "public_notes": "day two"},
+                ),
+                registration_node_id=self.b,
+            )
+        self.assertEqual("day two", (await self._profile(registration_id)).public_notes)
+
+    async def test_a_second_intake_sign_up_leaves_what_an_earlier_review_locked(self) -> None:
+        registration_id = await self._sign_up(self.a)
+        async with self.Session() as s:
+            await lifecycle_service.approve_registration(s, self.a, registration_id, reviewed_by=self.actor.id)
+        async with self.Session() as s:
+            await registration_service.write_public_registration(
+                s,
+                tournament_id=self.tournament_id,
+                auth_user=self.user,
+                body=RegistrationSubmit(
+                    form_version_id=self.version_id,
+                    answers={"identity_battlenet": [f"Other{self.tag[-6:]}#9999"], "public_notes": "kept"},
+                ),
+                registration_node_id=self.b,
+            )
+        profile = await self._profile(registration_id)
+        self.assertEqual([f"E{self.tag[-6:]}#1234"], [identity.handle for identity in profile.identities])
+        self.assertEqual("kept", profile.public_notes)
+
+    async def test_a_captain_cannot_take_a_member_off_the_team_of_another_intake(self) -> None:
+        registration_id = await self._sign_up(self.a)
+        first_team = await self._profile_on_team_of(registration_id, self.a, "Day One")
+        second_team = await self._team_in(self.b, "Day Two")
+        async with self.Session() as s:
+            with self.assertRaises(ApiHTTPException) as refused:
+                await registration_service.write_public_registration(
+                    s,
+                    tournament_id=self.tournament_id,
+                    auth_user=self.user,
+                    body=self._submit(),
+                    registration_node_id=self.b,
+                    team_placement=TeamPlacement(registration_team_id=second_team, slot_code="tank"),
+                )
+        self.assertEqual((409, "already_on_team"), (refused.exception.status_code, refused.exception.detail[0]["code"]))
+        self.assertEqual(first_team, (await self._profile(registration_id)).registration_team_id)
+
+    async def test_the_organizer_cannot_move_a_member_across_intakes_either(self) -> None:
+        registration_id = await self._sign_up(self.a)
+        first_team = await self._profile_on_team_of(registration_id, self.a, "Day One")
+        second_team = await self._team_in(self.b, "Day Two")
+        await self._sign_up(self.b)
+        async with self.Session() as s:
+            with self.assertRaises(ApiHTTPException) as refused:
+                await teams_service.place_member_as_organizer(
+                    s,
+                    tournament_id=self.tournament_id,
+                    team_id=second_team,
+                    registration_id=registration_id,
+                    slot_code="tank",
+                )
+        self.assertEqual((409, "already_on_team"), (refused.exception.status_code, refused.exception.detail[0]["code"]))
+        self.assertEqual(first_team, (await self._profile(registration_id)).registration_team_id)
+
+    async def _manual(self, node_id: int) -> models.RegistrationEntry:
+        async with self.Session() as s:
+            return await lifecycle_service.create_manual_registration(
+                s,
+                node_id,
+                display_name=None,
+                admin_notes=None,
+                answers={"identity_battlenet": [f"E{self.tag[-6:]}#1234"]},
+                roles=[],
+            )
+
+    async def test_an_admin_adds_an_existing_profile_to_another_node(self) -> None:
+        registration_id = await self._sign_up(self.a)
+
+        entry = await self._manual(self.b)
+
+        self.assertEqual((registration_id, self.b, "approved"), (entry.registration_id, self.b, entry.status))
+        self.assertEqual({self.a, self.b}, set(await self._entries()))
+        with self.assertRaises(HTTPException) as again:
+            await self._manual(self.b)
+        self.assertEqual(409, again.exception.status_code)
+
+    async def test_an_admin_adds_back_an_entry_they_deleted(self) -> None:
+        registration_id = await self._sign_up(self.a)
+        async with self.Session() as s:
+            await lifecycle_service.soft_delete_registration(s, self.a, registration_id, deleted_by=self.actor.id)
+
+        entry = await self._manual(self.a)
+
+        self.assertEqual(registration_id, entry.registration_id)
+        self.assertIsNone(entry.deleted_at)
+
+    async def test_a_feed_with_synced_rows_stays_on_its_node(self) -> None:
+        mapping = {
+            "targets": {
+                "source_record_key": {"mode": "columns", "columns": ["BattleTag"], "parser": "battle_tag"},
+                "identity_battlenet": {"mode": "columns", "columns": ["BattleTag"], "parser": "battle_tag_list"},
+            }
+        }
+        async with self.Session() as s:
+            s.add(
+                models.RegistrationGoogleSheetFeed(
+                    tournament_id=self.tournament_id,
+                    registration_node_id=self.b,
+                    source_url="https://docs.google.com/spreadsheets/d/sheet-lock/edit",
+                    sheet_id="sheet-lock",
+                    mapping_config_json=mapping,
+                )
+            )
+            await s.commit()
+
+        async def _move_to(node_id: int) -> models.RegistrationGoogleSheetFeed:
+            async with self.Session() as s:
+                return await sheet_sync.sheet_sync_service.upsert_google_sheet_feed(
+                    s,
+                    self.tournament_id,
+                    registration_node_id=node_id,
+                    source_url="https://docs.google.com/spreadsheets/d/sheet-lock/edit",
+                    title=None,
+                    auto_sync_enabled=False,
+                    auto_sync_interval_seconds=300,
+                    mapping_config_json=None,
+                    value_mapping_json=None,
+                )
+
+        # Nothing synced yet: the feed is still free to move.
+        self.assertEqual(self.a, (await _move_to(self.a)).registration_node_id)
+        await _move_to(self.b)
+
+        async def _fetch(*_args, **_kwargs):
+            return [["BattleTag"], [f"S{uuid.uuid4().hex[:8]}#4321"]]
+
+        with patch.object(sheet_sync, "fetch_google_sheet_rows", _fetch):
+            async with self.Session() as s:
+                result = await sheet_sync.sheet_sync_service.sync_google_sheet_feed(s, self.tournament_id)
+        self.assertEqual(1, result.created, result.errors)
+
+        with self.assertRaises(ApiHTTPException) as refused:
+            await _move_to(self.a)
+        self.assertEqual(
+            (409, "feed_node_locked"), (refused.exception.status_code, refused.exception.detail[0]["code"])
+        )
+
+    async def test_deleting_a_tournament_clears_what_restricts_its_nodes(self) -> None:
+        await self._sign_up(self.a)
+        formation = await self.node("formation")
+        member, _account = await self._member(1)
+        async with self.Session() as s:
+            s.add(
+                models.RegistrationGoogleSheetFeed(
+                    tournament_id=self.tournament_id,
+                    registration_node_id=self.b,
+                    source_url="https://docs.google.com/spreadsheets/d/sheet-del/edit",
+                    sheet_id="sheet-del",
+                )
+            )
+            team = models.Team(
+                balancer_name="Cup", name="Cup", tournament_id=self.tournament_id, formation_node_id=formation
+            )
+            s.add(team)
+            await s.flush()
+            s.add(
+                models.Player(
+                    name="P",
+                    tournament_id=self.tournament_id,
+                    formation_node_id=formation,
+                    workspace_member_id=member,
+                    team_id=team.id,
+                )
+            )
+            await s.commit()
+        await self._team_in(self.a, "Day One")
+
+        # The guard the delete has to clear: a node cannot go while any of these still points at it.
+        async with self.Session() as s:
+            with self.assertRaises(IntegrityError):
+                await s.execute(sa.delete(models.FlowNode).where(models.FlowNode.id == self.a))
+
+        with (
+            patch.object(division_grid_cache, "invalidate_tournament", AsyncMock()),
+            patch.object(division_grid_cache, "invalidate_workspace", AsyncMock()),
+        ):
+            async with self.Session() as s:
+                await tournament_service.delete_tournament(s, self.tournament_id)
+
+        async with self.Session() as s:
+            self.assertIsNone(await s.get(models.Tournament, self.tournament_id))
+            self.assertEqual(
+                0,
+                await s.scalar(
+                    sa.select(sa.func.count())
+                    .select_from(models.FlowNode)
+                    .where(models.FlowNode.tournament_id == self.tournament_id)
+                ),
+            )

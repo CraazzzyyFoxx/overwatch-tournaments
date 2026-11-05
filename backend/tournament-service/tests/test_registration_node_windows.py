@@ -145,8 +145,9 @@ class NodeWindowTests(FlowCase):
         self.assertEqual("registration_form_missing", caught.exception.detail[0]["code"])
         self.assertEqual("draft", await self.node_status(node))
 
-    async def test_registration_opened_notification_names_the_node(self) -> None:
+    async def test_registration_opened_notification_names_the_node_only_with_several_intakes(self) -> None:
         node = await self.node("registration", "draft", name="Day 3")
+        await self.node("registration", "draft", name="Day 4")
         async with self.Session() as s:
             await flow_node_service.transition(s, node, FlowNodeStatus.OPEN, actor=self.actor)
             await s.commit()

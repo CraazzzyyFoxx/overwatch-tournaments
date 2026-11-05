@@ -39,6 +39,7 @@ from shared.repository.notification_recipients import NotificationRecipientRepos
 from shared.services.notifications import PersonalNotification, broadcast, notify, notify_users
 from src.services.bracket.advancement import AdvanceOutcome, advance_after_result
 from src.services.registration.windows import is_check_in_open_for, is_sign_up_open_for, node_config, windows_service
+from src.services.tournament.events import registration_node_label
 
 
 def _pick_ban_sessions():
@@ -112,7 +113,7 @@ class LifecycleNotifier:
         payload = {
             "tournament_id": tournament.id,
             "tournament_name": tournament.name,
-            "node_name": node.name,
+            "node_name": await registration_node_label(session, tournament.id, node.id),
             "registration_node_id": node.id,
             # ``allow_late_registration`` lifts ``ends_at``, so there is no closing time to promise.
             "closes_at": None if node_config(node).allow_late_registration else (entry.ends_at if entry else None),
@@ -150,7 +151,7 @@ class LifecycleNotifier:
         payload = {
             "tournament_id": tournament.id,
             "tournament_name": tournament.name,
-            "node_name": node.name,
+            "node_name": await registration_node_label(session, tournament.id, node.id),
             "registration_node_id": node.id,
             "closes_at": entry.ends_at if entry else None,
         }

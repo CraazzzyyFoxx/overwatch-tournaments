@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
 from shared import models
+from shared.core.enums import FlowNodeKind
 from shared.disciplines import discipline as discipline_spec
 from shared.messaging.config import (
     ACHIEVEMENT_EVALUATE_QUEUE,
@@ -194,6 +195,23 @@ def _identity(registration: models.Registration, discipline: str) -> PlayerIdent
     return PlayerIdentityRead.of(provider, primary.handle if primary is not None else None)
 
 
+async def registration_node_label(session: AsyncSession, tournament_id: int, node_id: int) -> str | None:
+    """The registration node's name for a notification, only when the tournament has several intakes.
+
+    A single-node tournament carries the default node name ("Registration", English data), which must not
+    be printed as "(Registration)" to a Russian-speaking player.
+    """
+    rows = (
+        await session.execute(
+            sa.select(models.FlowNode.id, models.FlowNode.name).where(
+                models.FlowNode.tournament_id == tournament_id,
+                models.FlowNode.kind == FlowNodeKind.REGISTRATION,
+            )
+        )
+    ).all()
+    return next((row.name for row in rows if row.id == node_id), None) if len(rows) > 1 else None
+
+
 async def _notify_registration_decision(
     session: AsyncSession,
     registrations: Sequence[models.Registration],
@@ -201,6 +219,7 @@ async def _notify_registration_decision(
     tournament: Any,
     *,
     kind: str,
+    registration_node_id: int,
 ) -> None:
     """Tell each registrant their entry was decided; ``registrants`` is ``_event_snapshot``'s, row for row.
 
@@ -214,6 +233,14 @@ async def _notify_registration_decision(
     the same recipient/kind/entity within N minutes), not a unique index, which
     would also block the legitimate repeat.
     """
+    recipients = [
+        (registration, recipient)
+        for registration, (_player_id, recipient) in zip(registrations, registrants, strict=True)
+        if recipient is not None
+    ]
+    if not recipients:
+        return
+    node_name = await registration_node_label(session, registrations[0].tournament_id, registration_node_id)
     await notify_users(
         session,
         kind=kind,
@@ -224,13 +251,14 @@ async def _notify_registration_decision(
                     "tournament_id": registration.tournament_id,
                     "tournament_name": tournament.name,
                     "registration_id": registration.id,
+                    "registration_node_id": registration_node_id,
+                    "node_name": node_name,
                 },
                 # The organizer that owns the tournament, so their operators can find
                 # (and retire) the decision rows their own review produced.
                 source_workspace_id=tournament.workspace_id,
             )
-            for registration, (_player_id, recipient) in zip(registrations, registrants, strict=True)
-            if recipient is not None
+            for registration, recipient in recipients
         ],
     )
 
@@ -270,13 +298,17 @@ async def _enqueue_player_refresh(
 async def enqueue_registration_approved(
     session: AsyncSession,
     registration: models.Registration,
+    *,
+    registration_node_id: int,
 ) -> None:
-    await enqueue_registrations_approved(session, [registration])
+    await enqueue_registrations_approved(session, [registration], registration_node_id=registration_node_id)
 
 
 async def enqueue_registrations_approved(
     session: AsyncSession,
     registrations: Sequence[models.Registration],
+    *,
+    registration_node_id: int,
 ) -> None:
     """Per registration of ONE tournament: the player refresh, the registrant's inbox row and the page
     invalidation, in a constant number of statements -- ``bulk_approve_registrations`` approves up to 500 at
@@ -296,16 +328,32 @@ async def enqueue_registrations_approved(
             # entity_ids is optional precision, so no id just means no narrowing.
             entity_ids={"registration_ids": [registration.id]} if registration.id is not None else None,
         )
-    await _notify_registration_decision(session, registrations, registrants, tournament, kind="registration.approved")
+    await _notify_registration_decision(
+        session,
+        registrations,
+        registrants,
+        tournament,
+        kind="registration.approved",
+        registration_node_id=registration_node_id,
+    )
 
 
 async def notify_registration_rejected(
     session: AsyncSession,
     registration: models.Registration,
+    *,
+    registration_node_id: int,
 ) -> None:
     """Tell the registrant and the open pages; no domain event, nothing consumes a rejection."""
     tournament, registrants = await _event_snapshot(session, [registration])
-    await _notify_registration_decision(session, [registration], registrants, tournament, kind="registration.rejected")
+    await _notify_registration_decision(
+        session,
+        [registration],
+        registrants,
+        tournament,
+        kind="registration.rejected",
+        registration_node_id=registration_node_id,
+    )
     await emit(
         session,
         scope=Scope.tournament(registration.tournament_id),

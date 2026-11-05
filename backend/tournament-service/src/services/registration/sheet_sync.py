@@ -30,7 +30,7 @@ from sqlalchemy.orm import selectinload
 from shared import models
 from shared.balancer_subrole_catalog import resolve_subrole_catalog
 from shared.core import http_status as status
-from shared.core.errors import ApiHTTPException
+from shared.core.errors import ApiExc, ApiHTTPException
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.core.social import normalize_social_handle
 from shared.disciplines import DISCIPLINES, identity_provider
@@ -389,6 +389,20 @@ class SheetSyncService:
             )
             await self.feed_repo.create(session, feed)
         else:
+            if feed.registration_node_id != registration_node_id and await session.scalar(
+                sa.select(sa.exists().where(models.RegistrationGoogleSheetBinding.feed_id == feed.id))
+            ):
+                # The synced rows are this node's entries; a moved feed would re-create every one of them in the new
+                # node as an approved entry and stop withdrawing the old ones.
+                raise ApiHTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=[
+                        ApiExc(
+                            code="feed_node_locked",
+                            msg="The sheet already synced registrations into its node; it cannot move to another one",
+                        )
+                    ],
+                )
             feed.registration_node_id = registration_node_id
             feed.source_url = source_url
             feed.sheet_id = sheet_id

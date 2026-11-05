@@ -44,6 +44,11 @@ class RegistrationBulkApprovalEventsTests(IsolatedAsyncioTestCase):
         )
         self.session.add(self.tournament)
         await self.session.flush()
+        self.node = models.FlowNode(
+            tournament_id=self.tournament.id, kind="registration", name="Registration", status="open", config={}
+        )
+        self.session.add(self.node)
+        await self.session.flush()
         self.outbox_floor = await self.session.scalar(
             sa.select(sa.func.coalesce(sa.func.max(models.EventOutbox.id), 0))
         )
@@ -132,11 +137,11 @@ class RegistrationBulkApprovalEventsTests(IsolatedAsyncioTestCase):
     async def test_a_batch_writes_what_one_approval_at_a_time_writes(self):
         savepoint = await self.session.begin_nested()
         for registration in self.registrations:
-            await events.enqueue_registration_approved(self.session, registration)
+            await events.enqueue_registration_approved(self.session, registration, registration_node_id=self.node.id)
         one_at_a_time = await self._written()
         await savepoint.rollback()
 
-        await events.enqueue_registrations_approved(self.session, self.registrations)
+        await events.enqueue_registrations_approved(self.session, self.registrations, registration_node_id=self.node.id)
         batched = await self._written()
 
         self.assertEqual(one_at_a_time, batched)
@@ -162,9 +167,9 @@ class RegistrationBulkApprovalEventsTests(IsolatedAsyncioTestCase):
         counts = []
         for batch in (self.registrations[:1], self.registrations[1:]):
             statements.clear()
-            await events.enqueue_registrations_approved(self.session, batch)
+            await events.enqueue_registrations_approved(self.session, batch, registration_node_id=self.node.id)
             counts.append(len(statements))
 
-        # One registration or four: a tournament read, a member/account read, and one INSERT each for the
-        # approval events, the inbox rows and their delivery events.
-        self.assertEqual([5, 5], counts)
+        # One registration or four: a tournament read, a member/account read, the registration node names read,
+        # and one INSERT each for the approval events, the inbox rows and their delivery events.
+        self.assertEqual([6, 6], counts)

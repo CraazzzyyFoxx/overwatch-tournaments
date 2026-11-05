@@ -35,7 +35,7 @@ from shared.services.registration_window import is_sign_up_late
 from src.services.registration._common import is_included_in_balancer
 from src.services.registration.answers import answer_service
 
-__all__ = ("SelfEditPolicy", "self_edit_policy")
+__all__ = ("SelfEditPolicy", "self_edit_policy", "submitted_late", "writable_answer_keys")
 
 #: A row in any other status is not a work in progress: ``withdrawn`` is over,
 #: ``rejected``/``banned`` must not be edited back into shape, and a custom
@@ -66,28 +66,38 @@ def submitted_late(entry: models.RegistrationEntry, schedule: Sequence[models.Fl
     return is_sign_up_late("open", schedule, now=entry.created_at)
 
 
+def _live_entries(entries: Sequence[models.RegistrationEntry]) -> list[models.RegistrationEntry]:
+    """The entries of one profile that still stand somewhere: not deleted, not withdrawn/rejected/custom."""
+    return [entry for entry in entries if entry.deleted_at is None and entry.status in _EDITABLE_STATUSES]
+
+
 def _floor(
     registration: models.Registration,
-    entry: models.RegistrationEntry,
+    entries: Sequence[models.RegistrationEntry],
 ) -> frozenset[str]:
     """Keys the organizer cannot open, and why.
 
-    The GAME identity answers (``identity_battlenet``) once the row has been
+    The answers live on the PROFILE, which every intake of the tournament shares, so each lock holds when ANY live
+    entry of the profile triggers it: an edit made through a fresh second-intake entry must not rewrite what the
+    first intake's review, balancer or draft already acted on.
+
+    The GAME identity answers (``identity_battlenet``) once an entry has been
     reviewed: that handle is the row's identity anchor -- uniqueness per
     tournament, the ``workspace_member`` → ``player_id`` resolution and every
     inherited rank layer read through it.
 
-    ``roles`` once the row is in the balancer pool or on a registered team: the
+    ``roles`` once an entry is in the balancer pool or the profile is on a registered team: the
     balancer/draft has already consumed them, and on a team the slot is the
     captain's decision, not the member's.
 
     Nothing locks ``reserve``: it is the registrant's own availability note, not
     a slot the schedule hands out.
     """
+    live = _live_entries(entries)
     locked: set[str] = set()
-    if entry.reviewed_at is not None:
+    if any(entry.reviewed_at is not None for entry in live):
         locked.update(identity_key(provider) for provider in GAME_PROVIDERS)
-    if is_included_in_balancer(entry) or registration.registration_team_id is not None:
+    if any(is_included_in_balancer(entry) for entry in live) or registration.registration_team_id is not None:
         locked.add("roles")
     return frozenset(locked)
 
@@ -110,13 +120,29 @@ def _answered_keys(registration: models.Registration, entry: models.Registration
     return frozenset(answered)
 
 
+def writable_answer_keys(
+    registration: models.Registration,
+    entry: models.RegistrationEntry,
+    profile_entries: Sequence[models.RegistrationEntry],
+    schema: FormSchema,
+) -> frozenset[str]:
+    """The questions the registrant may (re)write on the profile: opened by the organizer or never answered, less the
+    floor. Shared by the self-edit and by a sign-up into a further intake that finds the profile already there."""
+    unanswered = frozenset(field.key for field in schema.fields()) - _answered_keys(registration, entry)
+    return (schema.editable_keys() | unanswered) - _floor(registration, profile_entries)
+
+
 def self_edit_policy(
     registration: models.Registration,
     entry: models.RegistrationEntry,
+    profile_entries: Sequence[models.RegistrationEntry],
     sign_up_open: bool,
     schema: FormSchema,
 ) -> SelfEditPolicy:
-    """The registrant's own edit rights for ``registration``.
+    """The registrant's own edit rights for ``registration`` through ``entry``.
+
+    ``profile_entries`` are ALL the entries of the profile (every intake): the answers are shared, so the floors and
+    the check-in freeze are judged over them, not over ``entry`` alone.
 
     ``schema`` is the form's CURRENT schema, never the version the row was
     submitted against: the PATCH route validates against the current version and
@@ -124,13 +150,12 @@ def self_edit_policy(
     document -- otherwise an organizer freezing a question would leave everyone
     who registered earlier still editing it under their own older version.
     """
-    unanswered = frozenset(field.key for field in schema.fields()) - _answered_keys(registration, entry)
-    writable = (schema.editable_keys() | unanswered) - _floor(registration, entry)
+    writable = writable_answer_keys(registration, entry, profile_entries, schema)
 
     if registration.deleted_at is not None or entry.deleted_at is not None or entry.status not in _EDITABLE_STATUSES:
         return SelfEditPolicy(False, "status_locked", frozenset())
-    if entry.checked_in:
-        # Check-in freezes the entry the organizer is about to balance.
+    if entry.checked_in or any(other.checked_in for other in _live_entries(profile_entries)):
+        # Check-in freezes the profile the organizer is about to balance, whichever intake it happened in.
         return SelfEditPolicy(False, "checked_in", frozenset())
     if not sign_up_open:
         return SelfEditPolicy(False, "window_closed", frozenset())

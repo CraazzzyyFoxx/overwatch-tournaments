@@ -565,7 +565,9 @@ class RegistrationDecisionTests(_ProducerTestCase):
 
     async def test_approve_notifies_the_player(self) -> None:
         self.fx.entries[self.registration.id].status = "approved"
-        await events_module.enqueue_registration_approved(self.fx.shim, self.registration)
+        await events_module.enqueue_registration_approved(
+            self.fx.shim, self.registration, registration_node_id=self.fx.node.id
+        )
         await self.fx.shim.commit()
 
         rows = self.fx.notifications()
@@ -577,13 +579,33 @@ class RegistrationDecisionTests(_ProducerTestCase):
                 "tournament_id": TOURNAMENT_ID,
                 "tournament_name": TOURNAMENT_NAME,
                 "registration_id": self.registration.id,
+                "registration_node_id": self.fx.node.id,
+                # No "node_name": a single-node tournament carries the default node name, which must not be printed.
             },
             rows[0].payload_json,
         )
 
+    async def test_decisions_name_the_node_when_the_tournament_has_several_intakes(self) -> None:
+        second = models.FlowNode(
+            tournament_id=TOURNAMENT_ID, kind="registration", name="Day 2", status="open", config={}
+        )
+        self.fx.session.add(second)
+        self.fx.session.flush()
+        self.fx.node.name = "Day 1"
+
+        await events_module.notify_registration_rejected(
+            self.fx.shim, self.registration, registration_node_id=second.id
+        )
+        await self.fx.shim.commit()
+
+        payload = self.fx.notifications()[0].payload_json
+        self.assertEqual((second.id, "Day 2"), (payload["registration_node_id"], payload["node_name"]))
+
     async def test_reject_notifies_the_player(self) -> None:
         self.fx.entries[self.registration.id].status = "rejected"
-        await events_module.notify_registration_rejected(self.fx.shim, self.registration)
+        await events_module.notify_registration_rejected(
+            self.fx.shim, self.registration, registration_node_id=self.fx.node.id
+        )
         await self.fx.shim.commit()
 
         rows = self.fx.notifications()
@@ -598,7 +620,9 @@ class RegistrationDecisionTests(_ProducerTestCase):
         shadow_registration = self.fx.registration(shadow_member, battle_tag="Ghost#3333", status="pending")
         self.fx.entries[shadow_registration.id].status = "approved"
 
-        await events_module.enqueue_registration_approved(self.fx.shim, shadow_registration)
+        await events_module.enqueue_registration_approved(
+            self.fx.shim, shadow_registration, registration_node_id=self.fx.node.id
+        )
         await self.fx.shim.commit()
 
         self.assertEqual([], self.fx.notifications())
@@ -855,7 +879,9 @@ class RegistrationDecisionQueryBudgetTests(_ProducerTestCase):
         self.fx.entries[registration_id].status = "approved"
         self.statements.clear()
 
-        await events_module.enqueue_registration_approved(self.fx.shim, registration)
+        await events_module.enqueue_registration_approved(
+            self.fx.shim, registration, registration_node_id=self.fx.node.id
+        )
         await self.fx.shim.commit()
 
         self.assertEqual(0, self._tournament_name_reads())

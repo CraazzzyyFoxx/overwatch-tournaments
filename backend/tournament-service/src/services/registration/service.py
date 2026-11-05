@@ -42,6 +42,7 @@ from shared.repository import (
     get_or_create_workspace_member,
 )
 from shared.services.realtime import Resource, Scope, emit
+from shared.services.roster import registration_load_options
 from shared.services.social_identity import social_identity_service
 from src.core.clients import subscription_resolver
 from src.schemas.registration import (
@@ -67,7 +68,7 @@ from src.services.registration.read_model import (
     entry_read_loaders,
     registration_public_keys,
 )
-from src.services.registration.self_edit import self_edit_policy, submitted_late
+from src.services.registration.self_edit import self_edit_policy, submitted_late, writable_answer_keys
 from src.services.registration.serializers import serialize_registration_form
 from src.services.registration.subscription_config import subscription_config_service
 from src.services.registration.windows import (
@@ -729,7 +730,7 @@ class RegistrationService:
                 auth_user_id=auth_user_id,
             )
         if auto_approve:
-            await enqueue_registration_approved(session, registration)
+            await enqueue_registration_approved(session, registration, registration_node_id=registration_node_id)
         else:
             await emit(
                 session,
@@ -794,6 +795,7 @@ class RegistrationService:
         policy = self_edit_policy(
             registration,
             entry,
+            await self.entry_repo.live_for_registration(session, registration.id),
             is_sign_up_open_for(node, await windows_service.load_schedule(session, entry.registration_node_id)),
             schema,
         )
@@ -833,6 +835,42 @@ class RegistrationService:
         await self._registration_changed(session, registration)
         await session.commit()
         return await self._reload_for_read(session, entry)
+
+    async def live_profile_by_primary_handle(
+        self,
+        session: AsyncSession,
+        *,
+        tournament_id: int,
+        values: Mapping[str, Any],
+    ) -> models.Registration | None:
+        """The tournament's live profile whose primary game handle ``values`` names, loaded for the roster engine.
+
+        The inverse of :meth:`ensure_unique_primary_game_handles`: that one refuses the handle, this one returns its
+        owner, so an organizer adding a known person to another node reuses the profile instead of colliding with it.
+        """
+        for provider in GAME_PROVIDERS:
+            handles = values.get(identity_key(provider)) or []
+            if not handles:
+                continue
+            normalized = normalize_social_handle(provider, handles[0])
+            profile = await session.scalar(
+                self.registration_repo.select()
+                .where(
+                    models.Registration.tournament_id == tournament_id,
+                    models.Registration.deleted_at.is_(None),
+                    models.Registration.identities.any(
+                        sa.and_(
+                            models.RegistrationIdentity.provider == provider,
+                            models.RegistrationIdentity.position == 0,
+                            models.RegistrationIdentity.handle_normalized == normalized,
+                        )
+                    ),
+                )
+                .options(*registration_load_options())
+            )
+            if profile is not None:
+                return profile
+        return None
 
     async def ensure_unique_primary_game_handles(
         self,
@@ -962,6 +1000,43 @@ class RegistrationService:
         await session.commit()
         return await self._reload_for_read(session, entry)
 
+    async def _update_profile_answers(
+        self,
+        session: AsyncSession,
+        profile: models.Registration,
+        entry: models.RegistrationEntry,
+        *,
+        tournament: models.Tournament,
+        values: Mapping[str, Any],
+        schema: FormSchema,
+        hero_catalog: HeroCatalog | None,
+    ) -> None:
+        """Write a further intake's validated answers onto the shared profile, the keys the registrant may still move.
+
+        The same writable set as the self-edit, judged over the profile's OTHER entries (``entry`` is brand new):
+        answers an earlier intake's review, balancer or check-in already acted on stay as they are.
+        """
+        live = await self.entry_repo.live_for_registration(session, profile.id)
+        siblings = [other for other in live if other is not entry]
+        writable = writable_answer_keys(profile, entry, siblings, schema)
+        answers = {key: value for key, value in values.items() if key in writable}
+        if not answers:
+            return
+        await self.ensure_unique_primary_game_handles(
+            session, tournament_id=profile.tournament_id, values=answers, exclude_registration_id=profile.id
+        )
+        catalog_roles = await CatalogRoleRepository().rated_rows(
+            session, discipline=tournament.discipline, workspace_id=tournament.workspace_id
+        )
+        answer_service.apply(profile, answers, schema=schema, hero_catalog=hero_catalog, catalog_roles=catalog_roles)
+        if any(identity_provider(key) for key in answers):
+            await self.ensure_player_identity(
+                session,
+                profile,
+                provider=discipline_identity_provider(tournament.discipline),
+                workspace_id=tournament.workspace_id,
+            )
+
     # ── public self-service use-cases (called by rpc/public_rpc.py) ──────────
 
     async def write_public_registration(
@@ -1037,11 +1112,13 @@ class RegistrationService:
         )
 
         profile = await session.scalar(
-            self.registration_repo.select().where(
+            self.registration_repo.select()
+            .where(
                 models.Registration.tournament_id == tournament_id,
                 _owned_by(auth_user.id),
                 models.Registration.deleted_at.is_(None),
             )
+            .options(*registration_load_options())
         )
         existing_status = (
             await session.scalar(
@@ -1080,12 +1157,28 @@ class RegistrationService:
                     tournament=tournament,
                 )
             else:
-                # The profile (answers, handles, roles) is the person's, one per tournament: a later intake adds only
-                # its entry, and the answers of this submission validated above are not written over it.
+                if team_placement is not None and profile.registration_team_id is not None:
+                    # The team pointer lives on the profile, one per tournament: seating the person here would
+                    # silently take them off the team of their other intake.
+                    raise ApiHTTPException(
+                        status_code=409,
+                        detail=[ApiExc(msg="You are already on a team in this tournament", code="already_on_team")],
+                    )
+                # The profile is the person's, one per tournament: a later intake adds its entry and updates the
+                # answers the floor and the form's editable flags still leave open (see ``writable_answer_keys``).
                 entry = self.new_entry(profile, registration_node_id, auto_approve=config.auto_approve, values=values)
                 session.add(entry)
+                await self._update_profile_answers(
+                    session,
+                    profile,
+                    entry,
+                    tournament=tournament,
+                    values=values,
+                    schema=schema,
+                    hero_catalog=hero_catalog,
+                )
                 if config.auto_approve:
-                    await enqueue_registration_approved(session, profile)
+                    await enqueue_registration_approved(session, profile, registration_node_id=registration_node_id)
                 else:
                     await self._registration_changed(session, profile)
             registration = entry.registration
@@ -1165,7 +1258,17 @@ class RegistrationService:
             current_version_id=form.current_version_id if form is not None else None,
             # No schema means no questions to rewrite: ``None`` reads as
             # ``can_edit=False``, which is the truth.
-            self_edit=self_edit_policy(registration, entry, sign_up_open, schema) if schema is not None else None,
+            self_edit=(
+                self_edit_policy(
+                    registration,
+                    entry,
+                    await self.entry_repo.live_for_registration(session, registration.id),
+                    sign_up_open,
+                    schema,
+                )
+                if schema is not None
+                else None
+            ),
             submitted_late=submitted_late(entry, schedule),
         )
 
