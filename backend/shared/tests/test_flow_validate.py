@@ -104,14 +104,14 @@ def test_a_stage_node_needs_its_stage() -> None:
 
 
 def test_aggregate_n_cannot_exceed_its_inputs() -> None:
-    def agg(n):
-        return node(
-            7, K.AGGREGATE, {"unit": "teams", "score": {"preset": "stage_points"}, "mode": "sum_best_n", "n": n}
-        )
+    def agg(n, mode="sum_best_n"):
+        return node(7, K.AGGREGATE, {"unit": "teams", "score": {"preset": "stage_points"}, "mode": mode, "n": n})
 
     two = [edge(1, 3, "ranking", 7, "inputs"), edge(2, 5, "ranking", 7, "inputs")]
     assert codes(validate_flow([GROUPS, PLAYOFF, agg(3)], two)) == [("aggregate_n_exceeds_inputs", 7, None)]
     assert codes(validate_flow([GROUPS, PLAYOFF, agg(2)], two)) == []
+    for mode in ("sum_all", "average"):  # N is unused by these modes
+        assert codes(validate_flow([GROUPS, PLAYOFF, agg(3, mode)], two)) == []
 
 
 def test_an_unparseable_config_is_an_error() -> None:

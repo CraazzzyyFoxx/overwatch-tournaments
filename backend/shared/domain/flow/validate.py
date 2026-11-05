@@ -243,7 +243,12 @@ def validate_flow(nodes: Sequence[FlowNodeSpec], edges: Sequence[FlowEdgeSpec]) 
         inputs_in[e.target_node_id] += 1
     for n in nodes:
         config = parsed[n.id][0]
-        if isinstance(config, AggregateNodeConfig) and config.n is not None and config.n > inputs_in[n.id]:
+        if (
+            isinstance(config, AggregateNodeConfig)
+            and config.mode in ("sum_last_n", "sum_best_n")
+            and config.n is not None
+            and config.n > inputs_in[n.id]
+        ):
             error(
                 "aggregate_n_exceeds_inputs",
                 f"n = {config.n} exceeds the {inputs_in[n.id]} connected inputs",
