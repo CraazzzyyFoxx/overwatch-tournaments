@@ -119,6 +119,7 @@ from src.services.registration.subscription_status import (
     assert_redeem_attempt_allowed,
     subscription_status_for_user,
 )
+from src.services.registration.windows import node_config
 
 # --- helpers -----------------------------------------------------------------
 
@@ -581,11 +582,14 @@ def register(broker: Any, logger: Any) -> None:
             if entry is None:
                 return None
             form = await reg_common._common_service.get_registration_form(session, tournament_id)
+            node = await reg_common._common_service.ensure_registration_node(
+                session, tournament_id, entry.registration_node_id
+            )
             # The registrant's own card goes through the SAME resolver as the
             # participants list and the admin table -- one batch of one row -- so
             # "why am I not admitted" answers identically on every surface.
             admissions = await reg_service.registration_service.resolve_admission_list(
-                session, [entry.registration], {entry.registration_id: entry}, form=form
+                session, [entry.registration], {entry.registration_id: entry}, form=form, node_config=node_config(node)
             )
             return _dump(
                 await reg_service.registration_service.build_own_read(
@@ -745,7 +749,9 @@ def register(broker: Any, logger: Any) -> None:
             if entry is None:
                 raise HTTPException(status_code=404, detail="No registration found")
             await assert_recheck_allowed(auth_user_id=user.id)
-            await recheck_registration(session, entry.registration, auth_user_id=user.id)
+            await recheck_registration(
+                session, entry.registration, registration_node_id=entry.registration_node_id, auth_user_id=user.id
+            )
             await session.commit()
             return None
 
@@ -764,9 +770,13 @@ def register(broker: Any, logger: Any) -> None:
             tournament_id = _path_int(data, "tournament_id")
             await ensure_tournament_viewable(session, user, tournament_id)
             form = await reg_common._common_service.get_registration_form(session, tournament_id)
+            node = await reg_common._common_service.ensure_registration_node(
+                session, tournament_id, await _registration_node_id(session, data, tournament_id)
+            )
             return _dump(
                 await subscription_status_for_user(
                     form=form,
+                    node_config=node_config(node),
                     auth_user_id=user.id,
                     resolver=subscription_resolver(session),
                 )
@@ -790,6 +800,9 @@ def register(broker: Any, logger: Any) -> None:
             form = await reg_common._common_service.get_registration_form(session, tournament_id)
             if form is None:
                 raise HTTPException(status_code=404, detail="Registration form not found")
+            node = await reg_common._common_service.ensure_registration_node(
+                session, tournament_id, await _registration_node_id(session, data, tournament_id)
+            )
 
             await assert_redeem_attempt_allowed(workspace_id=form.workspace_id, auth_user_id=user.id)
             await redeem_challenge_code(
@@ -811,6 +824,7 @@ def register(broker: Any, logger: Any) -> None:
             return _dump(
                 await subscription_status_for_user(
                     form=form,
+                    node_config=node_config(node),
                     auth_user_id=user.id,
                     resolver=subscription_resolver(session),
                 )

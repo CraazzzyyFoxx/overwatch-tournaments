@@ -63,24 +63,13 @@ def _schema(*, editable_keys: frozenset[str] = frozenset()) -> FormSchema:
     )
 
 
-def _tournament(*, ends_in: timedelta | None = timedelta(days=1)) -> models.Tournament:
-    """A tournament whose REGISTRATION window ends ``ends_in`` from now.
+def _tournament() -> models.Tournament:
+    return models.Tournament(id=7, workspace_id=1, discipline="overwatch", status=TournamentStatus.LIVE)
 
-    A negative delta with ``allow_late_registration`` is the late case: open, and
-    every sign-up in it is a reserve.
-    """
-    tournament = models.Tournament(
-        id=7, workspace_id=1, discipline="overwatch", status=TournamentStatus.REGISTRATION, allow_late_registration=True
-    )
-    tournament.phase_schedule = [
-        models.TournamentPhaseSchedule(
-            tournament_id=7,
-            status=TournamentStatus.REGISTRATION,
-            starts_at=NOW - timedelta(days=10),
-            ends_at=None if ends_in is None else NOW + ends_in,
-        )
-    ]
-    return tournament
+
+def _node() -> models.FlowNode:
+    """The registration node the entries sit in: open, no schedule row, so the status decides."""
+    return models.FlowNode(id=3, tournament_id=7, kind="registration", name="Registration", status="open", config={})
 
 
 def _identity(handle: str, *, provider: str = "battlenet", position: int = 0) -> models.RegistrationIdentity:
@@ -119,7 +108,7 @@ def _registration(**kwargs: Any) -> tuple[models.Registration, models.Registrati
 
 class PolicyTests(TestCase):
     def test_only_the_questions_the_organizer_opened_are_writable(self) -> None:
-        policy = self_edit_policy(*_registration(), _tournament(), _schema(editable_keys=frozenset({"public_notes"})))
+        policy = self_edit_policy(*_registration(), True, _schema(editable_keys=frozenset({"public_notes"})))
 
         assert policy.can_edit is True
         assert "public_notes" in policy.writable_keys
@@ -128,7 +117,7 @@ class PolicyTests(TestCase):
     def test_a_question_this_row_never_answered_is_writable_anyway(self) -> None:
         """Otherwise a new question leaves everyone stuck on a stale version they
         cannot clear -- the normal case once the flag defaults to closed."""
-        policy = self_edit_policy(*_registration(), _tournament(), _schema())
+        policy = self_edit_policy(*_registration(), True, _schema())
 
         assert "vk" in policy.writable_keys
         assert "public_notes" not in policy.writable_keys
@@ -144,23 +133,13 @@ class PolicyTests(TestCase):
         assert policy.reason == "nothing_editable"
 
     def test_the_window_closes_editing_too(self) -> None:
-        closed = models.Tournament(id=7, status=TournamentStatus.REGISTRATION, allow_late_registration=False)
-        closed.phase_schedule = [
-            models.TournamentPhaseSchedule(
-                tournament_id=7,
-                status=TournamentStatus.REGISTRATION,
-                starts_at=NOW - timedelta(days=10),
-                ends_at=NOW - timedelta(days=1),
-            )
-        ]
-
-        policy = self_edit_policy(*_registration(), closed, _schema(editable_keys=frozenset({"public_notes"})))
+        policy = self_edit_policy(*_registration(), False, _schema(editable_keys=frozenset({"public_notes"})))
 
         assert (policy.can_edit, policy.reason) == (False, "window_closed")
 
     def test_check_in_freezes_the_entry(self) -> None:
         policy = self_edit_policy(
-            *_registration(checked_in=True), _tournament(), _schema(editable_keys=frozenset({"public_notes"}))
+            *_registration(checked_in=True), True, _schema(editable_keys=frozenset({"public_notes"}))
         )
 
         assert (policy.can_edit, policy.reason) == (False, "checked_in")
@@ -168,7 +147,7 @@ class PolicyTests(TestCase):
     def test_a_settled_registration_is_over(self) -> None:
         for status in ("withdrawn", "rejected"):
             policy = self_edit_policy(
-                *_registration(status=status), _tournament(), _schema(editable_keys=frozenset({"public_notes"}))
+                *_registration(status=status), True, _schema(editable_keys=frozenset({"public_notes"}))
             )
             assert (policy.can_edit, policy.reason) == (False, "status_locked"), status
 
@@ -177,32 +156,22 @@ class PolicyTests(TestCase):
         the member link and every inherited rank layer are read through it."""
         opened = _schema(editable_keys=frozenset({"identity_battlenet", "public_notes"}))
 
-        assert "identity_battlenet" in self_edit_policy(*_registration(), _tournament(), opened).writable_keys
-        assert (
-            "identity_battlenet"
-            not in self_edit_policy(*_registration(reviewed_at=NOW), _tournament(), opened).writable_keys
-        )
+        assert "identity_battlenet" in self_edit_policy(*_registration(), True, opened).writable_keys
+        assert "identity_battlenet" not in self_edit_policy(*_registration(reviewed_at=NOW), True, opened).writable_keys
 
     def test_roles_re_lock_once_the_balancer_has_them(self) -> None:
         opened = _schema(editable_keys=frozenset({"roles"}))
 
-        assert "roles" in self_edit_policy(*_registration(), _tournament(), opened).writable_keys
-        assert (
-            "roles"
-            not in self_edit_policy(*_registration(balancer_status="ready"), _tournament(), opened).writable_keys
-        )
-        assert (
-            "roles" not in self_edit_policy(*_registration(registration_team_id=3), _tournament(), opened).writable_keys
-        )
+        assert "roles" in self_edit_policy(*_registration(), True, opened).writable_keys
+        assert "roles" not in self_edit_policy(*_registration(balancer_status="ready"), True, opened).writable_keys
+        assert "roles" not in self_edit_policy(*_registration(registration_team_id=3), True, opened).writable_keys
 
     def test_a_late_registrant_still_owns_their_on_call_answer(self) -> None:
         """The schedule marks the entry late; it never speaks for the player.
         Locking this was the counterpart of the write that forced it on."""
         opened = _schema(editable_keys=frozenset({"reserve"}))
-        late = _tournament(ends_in=-timedelta(days=3))
 
-        assert "reserve" in self_edit_policy(*_registration(), _tournament(), opened).writable_keys
-        assert "reserve" in self_edit_policy(*_registration(), late, opened).writable_keys
+        assert "reserve" in self_edit_policy(*_registration(), True, opened).writable_keys
 
 
 class _RecordingSession:
@@ -223,15 +192,15 @@ class _RecordingSession:
     async def refresh(self, obj: Any) -> None:
         return None
 
-    async def get(self, _entity: Any, _ident: Any, **_kwargs: Any) -> Any:
-        """``_reload_for_read`` re-reads the written row with its loader set."""
-        return None
+    async def get(self, entity: Any, _ident: Any, **_kwargs: Any) -> Any:
+        """The entry's node (its window gates the edit); ``_reload_for_read`` re-reads the written row, found nowhere."""
+        return _node() if entity is models.FlowNode else None
 
     async def scalar(self, *_args: Any, **_kwargs: Any) -> Any:
         return 42
 
     async def scalars(self, *_args: Any, **_kwargs: Any) -> Any:
-        result = mock.Mock()
+        result = mock.MagicMock()  # iterates empty: the node's schedule (no row, the status decides)
         result.all.return_value = list(rated_catalog().values())
         return result
 

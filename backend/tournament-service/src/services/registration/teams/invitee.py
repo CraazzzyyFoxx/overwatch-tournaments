@@ -22,7 +22,7 @@ from src.services.person_names import account_display_name
 from src.services.registration.admission import assert_admitted_at
 from src.services.registration.service import TeamPlacement
 from src.services.registration.team_rate_limits import assert_accept_attempt_allowed
-from src.services.registration.teams._core import TeamServiceBase, _form
+from src.services.registration.teams._core import TeamServiceBase, _node_config
 from src.services.registration.teams._shared import (
     _SLOT_RELEASING_STATUSES,
     INVITE_ACCEPTED,
@@ -241,9 +241,9 @@ class InviteeMixin(TeamServiceBase):
         team = await self._lock_team(session, invite.team_id)
         _assert_mutable(team)
         _assert_unlocked(team)
-        tournament = await self._assert_registration_open(session, team.tournament_id)
+        tournament = await self._assert_registration_open(session, team.tournament_id, team.registration_node_id)
         shape = await self._resolve_shape(session, tournament)
-        max_substitutes = await self._max_substitutes(session, team.tournament_id)
+        max_substitutes = await self._max_substitutes(session, team.registration_node_id)
 
         occupancy = await self._occupancy(session, team, shape, max_substitutes=max_substitutes)
         # ``offering=False``: this invite must not block its own acceptance.
@@ -281,11 +281,11 @@ class InviteeMixin(TeamServiceBase):
             ):
                 raise _fail(409, "already_on_team", "You are already on a team in this tournament")
             if existing_entry is None:
-                form = await _form(session, team.tournament_id)
+                config = await _node_config(session, team.registration_node_id)
                 existing_entry = self.registrations.new_entry(
                     existing,
                     team.registration_node_id,
-                    auto_approve=bool(form is not None and form.auto_approve),
+                    auto_approve=config.auto_approve,
                     values={},
                 )
                 session.add(existing_entry)

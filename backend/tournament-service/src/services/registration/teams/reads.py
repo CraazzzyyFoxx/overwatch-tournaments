@@ -26,7 +26,7 @@ from src.schemas.registration_team import (
 )
 from src.services.person_names import registration_display, registration_person_loader
 from src.services.registration.service import _owned_by
-from src.services.registration.teams._core import TeamServiceBase
+from src.services.registration.teams._core import TeamServiceBase, _node_config
 from src.services.registration.teams._shared import (
     _MUTABLE_TEAM_STATUSES,
     _SLOT_RELEASING_STATUSES,
@@ -37,7 +37,7 @@ from src.services.registration.teams._shared import (
     _free_agent_clause,
     _occupancy_of,
 )
-from src.services.registration.windows import is_registration_open
+from src.services.registration.windows import windows_service
 
 
 def _primary_handle(registration: models.Registration, provider: str) -> str | None:
@@ -183,7 +183,7 @@ class ReadsMixin(TeamServiceBase):
         include_staff: bool = False,
         eligibility: Mapping[int, list[EligibilityIssue]] | None = None,
     ) -> list[RegistrationTeamRead]:
-        """:meth:`describe_team` for a page of ONE tournament's teams.
+        """:meth:`describe_team` for a page of ONE registration node's teams.
 
         The tournament, shape and bench size are read once, members and live invites
         with one ``IN (…)`` each, and eligibility (with its one Discord batch) once for
@@ -203,7 +203,7 @@ class ReadsMixin(TeamServiceBase):
             raise _fail(404, "tournament_not_found", "Tournament not found")
         provider = identity_provider(tournament.discipline)
         shape = await self._resolve_shape(session, tournament)
-        max_substitutes = await self._max_substitutes(session, tournament.id)
+        max_substitutes = await self._max_substitutes(session, teams[0].registration_node_id)
         team_ids = [team.id for team in teams]
 
         # A roster is the entries, in each team's own node, of the registrations seated on it.
@@ -250,9 +250,7 @@ class ReadsMixin(TeamServiceBase):
         issues = dict(eligibility or {})
         unevaluated = [team for team in private if team.id not in issues]
         if unevaluated:
-            form = await session.scalar(
-                sa.select(models.RegistrationForm).where(models.RegistrationForm.tournament_id == tournament.id)
-            )
+            config = await _node_config(session, teams[0].registration_node_id)
             workspace = await session.scalar(
                 sa.select(models.Workspace).where(models.Workspace.id == tournament.workspace_id)
             )
@@ -260,7 +258,7 @@ class ReadsMixin(TeamServiceBase):
                 await team_eligibility.evaluate_many(
                     session,
                     [(team, rosters[team.id]) for team in unevaluated],
-                    form=form,
+                    config=config,
                     shape=shape,
                     workspace=workspace,
                     discord=discord_client(),
@@ -380,7 +378,7 @@ class ReadsMixin(TeamServiceBase):
         guard would refuse is not an offer, and the recipient has no action for it.
         """
         tournament = await self.tournament_repo.get(session, tournament_id)
-        if tournament is None or not is_registration_open(tournament):
+        if tournament is None or not await windows_service.load_sign_up_open(session, registration_node_id):
             return []
         # Only structurally available offers; acceptance still rechecks under lock.
         rows = await session.scalars(
@@ -421,7 +419,7 @@ class ReadsMixin(TeamServiceBase):
         if not invites:
             return []
         shape = await self._resolve_shape(session, tournament)
-        max_substitutes = await self._max_substitutes(session, tournament_id)
+        max_substitutes = await self._max_substitutes(session, registration_node_id)
         occupancies: dict[int, RosterOccupancy] = {}
         offers = []
         for invite in invites:

@@ -38,7 +38,6 @@ class TournamentCreate(BaseModel):
     start_date: date
     end_date: date
     auto_transitions_enabled: bool = True
-    allow_late_registration: bool = False
     # Owner policy for canonical match ingest; false unless the authorized organizer sets it.
     logs_official: bool = False
     division_grid_version_id: int | None = None
@@ -62,7 +61,6 @@ class TournamentUpdate(BaseModel):
     start_date: date | None = None
     end_date: date | None = None
     auto_transitions_enabled: bool | None = None
-    allow_late_registration: bool | None = None
     discord_broadcasts_enabled: bool | None = None
     discord_dms_enabled: bool | None = None
     logs_official: bool | None = None

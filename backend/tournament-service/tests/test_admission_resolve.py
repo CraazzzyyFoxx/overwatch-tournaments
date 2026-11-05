@@ -33,6 +33,7 @@ if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
 from shared.core.enums import SubscriptionCollectionSource  # noqa: E402
+from shared.domain.flow.config import RegistrationNodeConfig  # noqa: E402
 from shared.services.subscriptions import (  # noqa: E402
     Outcome,
     ProviderRequirement,
@@ -160,13 +161,8 @@ _RULE = SubscriptionRequirement(mode="all", requirements=(ProviderRequirement(pr
 
 def _config(*, profile: bool = False, subscription: bool = False, stage: str = "check_in") -> AdmissionConfig:
     return AdmissionConfig.from_form(
-        SimpleNamespace(
-            workspace_id=7,
-            require_open_profile=profile,
-            open_profile_scope="main",
-            require_subscription=subscription,
-            subscription_stage=stage,
-        ),
+        SimpleNamespace(workspace_id=7, require_open_profile=profile, open_profile_scope="main"),
+        RegistrationNodeConfig(require_subscription=subscription, subscription_stage=stage),
         subscription_rule=_RULE if subscription else None,
     )
 

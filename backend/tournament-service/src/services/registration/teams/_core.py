@@ -12,6 +12,7 @@ from sqlalchemy.orm import selectinload
 
 from shared import models
 from shared.disciplines import identity_provider
+from shared.domain.flow.config import RegistrationNodeConfig
 from shared.domain.roster_shape import RosterShape
 from shared.domain.team_roster import RosterMember, RosterOccupancy
 from shared.repository import (
@@ -34,12 +35,13 @@ from src.services.registration.teams._shared import (
     _fail,
     _occupancy_of,
 )
-from src.services.registration.windows import is_registration_open
+from src.services.registration.windows import node_config, windows_service
 
 
-async def _form(session: AsyncSession, tournament_id: int) -> models.RegistrationForm | None:
-    return await session.scalar(
-        sa.select(models.RegistrationForm).where(models.RegistrationForm.tournament_id == tournament_id)
+async def _node_config(session: AsyncSession, registration_node_id: int) -> RegistrationNodeConfig:
+    """The intake settings of a registration node (a team names its node)."""
+    return node_config(
+        await session.scalar(sa.select(models.FlowNode).where(models.FlowNode.id == registration_node_id))
     )
 
 
@@ -93,11 +95,13 @@ class TeamServiceBase:
             raise _fail(404, "team_not_found", "Team not found")
         return team
 
-    async def _assert_registration_open(self, session: AsyncSession, tournament_id: int) -> models.Tournament:
+    async def _assert_registration_open(
+        self, session: AsyncSession, tournament_id: int, registration_node_id: int
+    ) -> models.Tournament:
         tournament = await self.tournament_repo.get(session, tournament_id)
         if tournament is None:
             raise _fail(404, "tournament_not_found", "Tournament not found")
-        if not is_registration_open(tournament):
+        if not await windows_service.load_sign_up_open(session, registration_node_id):
             raise _fail(400, "registration_closed", "Registration is not open for this tournament")
         return tournament
 
@@ -105,16 +109,8 @@ class TeamServiceBase:
         """The slots projected from the tournament's own team format."""
         return await tournament_slot_shape(session, tournament.id)
 
-    async def _max_substitutes(self, session: AsyncSession, tournament_id: int) -> int:
-        # Single-column scalar projection off the form, not a row fetch.
-        return (
-            await session.scalar(
-                sa.select(models.RegistrationForm.max_substitutes).where(
-                    models.RegistrationForm.tournament_id == tournament_id
-                )
-            )
-            or 0
-        )
+    async def _max_substitutes(self, session: AsyncSession, registration_node_id: int) -> int:
+        return (await _node_config(session, registration_node_id)).max_substitutes
 
     async def _roster_members(
         self, session: AsyncSession, team: models.RegistrationTeam | int, *, fresh: bool = False
@@ -371,13 +367,13 @@ class TeamServiceBase:
         The issues come back so the flow's own team read can reuse them instead of
         evaluating (and asking Discord) a second time.
         """
-        form = await _form(session, team.tournament_id)
+        config = await _node_config(session, team.registration_node_id)
         workspace = await _workspace(session, team.workspace_id)
         issues = await team_eligibility.evaluate(
             session,
             team,
             members,
-            form=form,
+            config=config,
             shape=shape,
             workspace=workspace,
             discord=discord_client(),

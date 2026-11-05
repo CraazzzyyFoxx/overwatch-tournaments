@@ -176,12 +176,12 @@ TEMPLATES: dict[str, dict[str, tuple[str, str, tuple[str, ...]]]] = {
         "registration.opened": (
             "Регистрация открыта",
             "Открыта регистрация на **{tournament_name}**.",
-            ("**Закрытие:** {closes_at}",),
+            ("**Набор:** {node_name}", "**Закрытие:** {closes_at}"),
         ),
         "check_in.opened": (
             "Чек-ин открыт",
             "Открыт чек-ин на **{tournament_name}** — подтвердите участие.",
-            ("**Закрытие:** {closes_at}",),
+            ("**Набор:** {node_name}", "**Закрытие:** {closes_at}"),
         ),
         "encounter.scheduled": (
             "Матч назначен",
@@ -240,12 +240,12 @@ TEMPLATES: dict[str, dict[str, tuple[str, str, tuple[str, ...]]]] = {
         "registration.opened": (
             "Registration opened",
             "Registration for **{tournament_name}** is open.",
-            ("**Closes:** {closes_at}",),
+            ("**Intake:** {node_name}", "**Closes:** {closes_at}"),
         ),
         "check_in.opened": (
             "Check-in opened",
             "Check-in for **{tournament_name}** is open — confirm you are playing.",
-            ("**Closes:** {closes_at}",),
+            ("**Intake:** {node_name}", "**Closes:** {closes_at}"),
         ),
         "encounter.scheduled": (
             "Match scheduled",

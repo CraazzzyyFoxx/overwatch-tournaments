@@ -147,8 +147,8 @@ var PublicWriteRoutes = []edge.RouteSpec{
 
 	// Subscription entitlements — the patron's own standing plus challenge-code
 	// redemption (the Boosty fallback for organizers without a Discord server).
-	{Method: "GET", Pattern: "/api/v1/tournaments/{tournament_id}/subscription/me", Queue: "rpc.tournament.sub_me", Path: []string{"tournament_id"}, Auth: edge.AuthRequired},
-	{Method: "POST", Pattern: "/api/v1/tournaments/{tournament_id}/subscription/redeem-code", Queue: "rpc.tournament.sub_redeem_code", Path: []string{"tournament_id"}, Body: true, Auth: edge.AuthRequired},
+	{Method: "GET", Pattern: "/api/v1/tournaments/{tournament_id}/subscription/me", Queue: "rpc.tournament.sub_me", Path: []string{"tournament_id"}, Query: []string{"registration_node_id"}, Auth: edge.AuthRequired},
+	{Method: "POST", Pattern: "/api/v1/tournaments/{tournament_id}/subscription/redeem-code", Queue: "rpc.tournament.sub_redeem_code", Path: []string{"tournament_id"}, Body: true, Query: []string{"registration_node_id"}, Auth: edge.AuthRequired},
 }
 
 // RegistrationTeamSubtreeRoutes holds the /api/v1/registration-teams/* routes the

@@ -6,7 +6,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from shared.core.enums import FlowNodeKind, FlowUnit
+from shared.core.enums import FlowNodeKind, FlowUnit, SubscriptionEnforcementStage
 
 __all__ = (
     "NODE_CONFIG_MODELS",
@@ -31,6 +31,31 @@ class _NodeConfig(BaseModel):
 class RegistrationNodeConfig(_NodeConfig):
     check_in: bool = False
     intake: Literal["solo", "team"] = "solo"
+    #: Sign-ups are approved on submit instead of waiting for an organizer.
+    auto_approve: bool = False
+    #: Advisory capacity shown next to the participant count. NOT a limit: registration past it succeeds. None hides it.
+    max_participants: int | None = None
+    #: Bench size for team registration: extra ``is_substitute`` members per team on top of the roster shape.
+    #: Zero disables the bench; a substitute holds no starter slot, so the shape and the lock guarding it stay.
+    max_substitutes: int = Field(0, ge=0)
+    #: The per-intake decision; the RULE it enforces is the workspace's (``subscriptions.requirement``), resolved
+    #: through ``SubscriptionResolver.load_requirement``.
+    require_subscription: bool = False
+    #: WHEN the requirement bites. Ordered, not a set: ``registration`` implies check-in as well.
+    subscription_stage: SubscriptionEnforcementStage = SubscriptionEnforcementStage.check_in
+    #: WHO the rule is evaluated against: ``player`` is the anti-smurf per-entrant gate, ``team`` is "the captain
+    #: pays": a coverage stamp on the registered team satisfies the requirement for everyone on that roster.
+    subscription_scope: Literal["player", "team"] = "player"
+    #: Starter-only rank floor/ceiling/spread for team intakes. None means the rule is off; substitutes never count.
+    team_rank_min: int | None = None
+    team_rank_max: int | None = None
+    team_max_rank_spread: int | None = None
+    #: Discord nick / snowflake unique across the teams of this intake.
+    team_unique_identity: bool = False
+    #: Live members must have a Discord identity in ``Workspace.discord_guild_id``; fails closed without a guild.
+    team_require_discord_guild: bool = False
+    #: Lifts the ``open`` window's ``ends_at`` (and keeps sign-ups open in ``check_in``) so latecomers can be admitted.
+    allow_late_registration: bool = False
 
 
 class FormationNodeConfig(_NodeConfig):

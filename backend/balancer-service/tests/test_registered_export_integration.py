@@ -39,7 +39,6 @@ from shared.models.identity.user import User  # noqa: E402
 from shared.models.registration.registration import (  # noqa: E402
     Registration,
     RegistrationEntry,
-    RegistrationForm,
     RegistrationIdentity,
     RegistrationRole,
     RegistrationTeam,
@@ -95,20 +94,12 @@ class RegisteredExportIntegrationTests(IsolatedAsyncioTestCase):
                 ),
             )
 
-            session.add(
-                RegistrationForm(
-                    tournament_id=tournament.id,
-                    workspace_id=workspace.id,
-                    # One bench place, so the substitute assertions have something
-                    # legal to assert on.
-                    max_substitutes=1,
-                )
-            )
-
             self.workspace_id = workspace.id
             self.tournament_id = tournament.id
             self.node_id = await formation_node(session, tournament.id, mode="registered")
             self.registration_node_id = await wire_input(session, self.node_id)
+            # One bench place, so the substitute assertions have something legal to assert on.
+            (await session.get(models.FlowNode, self.registration_node_id)).config = {"max_substitutes": 1}
             self.member_ids: list[int] = []
             self.player_ids: list[int] = []
             for index in range(4):

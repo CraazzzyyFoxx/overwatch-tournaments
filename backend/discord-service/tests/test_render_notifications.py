@@ -226,6 +226,15 @@ class RenderDiscordTests(TestCase):
         self.assertIn(f"<t:{DEADLINE_UNIX}:F>", with_deadline.details)
         self.assertIsNone(no_reason.details)
 
+    def test_an_announcement_names_the_registration_node_when_it_has_one(self) -> None:
+        """Several intakes can run in one tournament ("Day 3"); the card says which one opened."""
+        payload = {"tournament_id": 3, "tournament_name": "Cup"}
+
+        for kind in ("registration.opened", "check_in.opened"):
+            named = render_discord(kind, {**payload, "node_name": "Day 3"}, locale="en", site_url=SITE)
+            self.assertIn("**Intake:** Day 3", named.details, kind)
+            self.assertIsNone(render_discord(kind, payload, locale="en", site_url=SITE).details, kind)
+
     def test_links_land_where_the_inbox_lands(self) -> None:
         """The paths are duplicated from ``lib/notifications/href.ts`` by hand.
 

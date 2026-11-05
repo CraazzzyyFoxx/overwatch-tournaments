@@ -20,6 +20,7 @@ from shared.services.participant_result import write_participant_results
 from shared.services.realtime import Resource
 from src.services.admin.stage import stage_service
 from src.services.flow.engine import flow_engine
+from src.services.notifications.lifecycle import lifecycle_notifier
 from src.services.tournament.events import (
     enqueue_achievement_evaluation,
     enqueue_flow_node_state_changed,
@@ -62,15 +63,37 @@ async def _require_teams(session: AsyncSession, node: models.FlowNode) -> None:
         raise _conflict("formation_has_no_teams", "A formation without teams cannot be completed")
 
 
+async def _require_form(session: AsyncSession, node: models.FlowNode) -> None:
+    """The status is what the public page announces and the register button reads: opening an intake without a
+    registration form advertises a sign-up that cannot be completed."""
+    has_form = await session.scalar(
+        sa.select(sa.exists().where(models.RegistrationForm.tournament_id == node.tournament_id))
+    )
+    if not has_form:
+        raise _conflict(
+            "registration_form_missing",
+            "This tournament has no registration form yet. Save one before opening registration.",
+        )
+
+
 #: Side effects of one move, run before the status is written.
 _HOOKS: dict[
     tuple[FlowNodeKind, FlowNodeStatus, FlowNodeStatus], Callable[[AsyncSession, models.FlowNode], Awaitable[None]]
 ] = {
+    (FlowNodeKind.REGISTRATION, _S.DRAFT, _S.OPEN): _require_form,
     (FlowNodeKind.FORMATION, _S.FORMING, _S.COMPLETED): _require_teams,
     (FlowNodeKind.STAGE, _S.DRAFT, _S.READY): _seat_inputs,
     (FlowNodeKind.STAGE, _S.READY, _S.LIVE): _start_stage,
     (FlowNodeKind.STAGE, _S.READY, _S.DRAFT): _revert_to_draft,
 }
+#: Moves a competitor is waiting to hear about; announced once the status is written (the window checks read it).
+_ANNOUNCED = frozenset(
+    {
+        (FlowNodeKind.REGISTRATION, _S.DRAFT, _S.OPEN),
+        (FlowNodeKind.REGISTRATION, _S.CLOSED, _S.OPEN),
+        (FlowNodeKind.REGISTRATION, _S.OPEN, _S.CHECK_IN),
+    }
+)
 
 
 def _conflict(code: str, msg: str) -> ApiHTTPException:
@@ -97,7 +120,7 @@ class FlowNodeService:
             raise ApiHTTPException(
                 status_code=404, detail=[ApiExc(code="flow_node_not_found", msg="Flow node not found")]
             )
-        await self.lock_tournament(session, tournament_id)
+        tournament = await self.lock_tournament(session, tournament_id)
         node = await session.scalar(
             sa.select(models.FlowNode)
             .where(models.FlowNode.id == node_id)
@@ -125,6 +148,8 @@ class FlowNodeService:
             node.completed_at = now
         elif current in _COMPLETE:
             node.completed_at = None
+        if (kind, current, target) in _ANNOUNCED:
+            await lifecycle_notifier.on_node_entered(session, tournament, node)
         workspace_id = await session.scalar(
             sa.select(models.Tournament.workspace_id).where(models.Tournament.id == node.tournament_id)
         )

@@ -19,6 +19,7 @@ from shared.core.errors import ApiExc, ApiHTTPException
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.core.social import GAME_PROVIDERS, normalize_social_handle
 from shared.disciplines import identity_provider as discipline_identity_provider
+from shared.domain.flow.config import RegistrationNodeConfig
 from shared.domain.forms import (
     ErrorCode,
     FieldError,
@@ -70,8 +71,8 @@ from src.services.registration.self_edit import self_edit_policy, submitted_late
 from src.services.registration.serializers import serialize_registration_form
 from src.services.registration.subscription_config import subscription_config_service
 from src.services.registration.windows import (
-    is_check_in_window_active,
-    is_registration_open,
+    is_sign_up_open_for,
+    node_config,
     windows_service,
 )
 from src.services.tournament.events import enqueue_registration_approved
@@ -789,7 +790,13 @@ class RegistrationService:
         answer lands on it.
         """
         registration = entry.registration
-        policy = self_edit_policy(registration, entry, tournament, schema)
+        node = await session.get(models.FlowNode, entry.registration_node_id)
+        policy = self_edit_policy(
+            registration,
+            entry,
+            is_sign_up_open_for(node, await windows_service.load_schedule(session, entry.registration_node_id)),
+            schema,
+        )
         if not policy.can_edit:
             raise HTTPException(status_code=409, detail=policy.reason)
         # Reported per key, not as one refusal: the message belongs under the
@@ -945,8 +952,8 @@ class RegistrationService:
         if entry.status != "approved":
             raise HTTPException(status_code=409, detail="Registration must be approved before check-in")
 
-        if not is_check_in_window_active(entry.registration.tournament):
-            raise HTTPException(status_code=409, detail="Check-in is not active for this tournament")
+        if not await windows_service.load_check_in_open(session, entry.registration_node_id):
+            raise HTTPException(status_code=409, detail="Check-in is not active for this registration")
 
         entry.checked_in = True
         entry.checked_in_at = datetime.now(UTC)
@@ -1000,9 +1007,12 @@ class RegistrationService:
         """
         form = form or await _common_service.get_registration_form(session, tournament_id)
         tournament = await self.tournament_repo.get(session, tournament_id)
-        # ``form is None`` gates too: a tournament with no registration form has
-        # nothing to submit against. Openness itself is the schedule's alone.
-        if form is None or tournament is None or not is_registration_open(tournament):
+        node = await _common_service.ensure_registration_node(session, tournament_id, registration_node_id)
+        config = node_config(node)
+        schedule = await windows_service.load_schedule(session, registration_node_id)
+        # ``form is None`` gates too: a tournament with no registration form has nothing to submit against.
+        # Openness itself is the node's: its status and window.
+        if form is None or tournament is None or not is_sign_up_open_for(node, schedule):
             raise HTTPException(status_code=400, detail="Registration is not open for this tournament")
         if body is None:
             raise_field_errors([FieldError("answers", ErrorCode.REQUIRED.value, _ANSWERS_REQUIRED)])
@@ -1061,7 +1071,7 @@ class RegistrationService:
                     schema=schema,
                     hero_catalog=hero_catalog,
                     form_version_id=form.current_version_id,
-                    auto_approve=form.auto_approve,
+                    auto_approve=config.auto_approve,
                     auth_user=auth_user,
                     # One transaction for the row, its answers and (below) its team
                     # slot: a registration with a team_id but no slot_code would be
@@ -1072,9 +1082,9 @@ class RegistrationService:
             else:
                 # The profile (answers, handles, roles) is the person's, one per tournament: a later intake adds only
                 # its entry, and the answers of this submission validated above are not written over it.
-                entry = self.new_entry(profile, registration_node_id, auto_approve=form.auto_approve, values=values)
+                entry = self.new_entry(profile, registration_node_id, auto_approve=config.auto_approve, values=values)
                 session.add(entry)
-                if form.auto_approve:
+                if config.auto_approve:
                     await enqueue_registration_approved(session, profile)
                 else:
                     await self._registration_changed(session, profile)
@@ -1123,15 +1133,19 @@ class RegistrationService:
     ) -> RegistrationRead:
         """The registrant's own card: sign-up, get-me, self-edit and check-in all answer with it.
 
-        The entry's registration must carry ``registration_read_loaders()``; the tournament (phase
-        schedule included) comes off it and the form is the caller's, so neither is
-        read again. ``chips`` is the admission verdict, when the caller resolved one.
+        The entry's registration must carry ``registration_read_loaders()``; the tournament comes off it and the
+        form is the caller's, so neither is read again. The entry's node and its schedule are read here: they decide
+        whether the registrant may still edit and whether the sign-up was late.
+        ``chips`` is the admission verdict, when the caller resolved one.
         """
         registration = entry.registration
         tournament = registration.tournament
         workspace_id = form.workspace_id if form is not None else tournament.workspace_id
         schema = schema_from_form(form)
         chips = chips or AdmissionChips.of(None)
+        node = await session.get(models.FlowNode, entry.registration_node_id)
+        schedule = await windows_service.load_schedule(session, entry.registration_node_id)
+        sign_up_open = is_sign_up_open_for(node, schedule)
         rosters = await _public_rosters(session, [registration], {registration.id: entry}, form=form)
         return _reg_to_read(
             registration,
@@ -1151,8 +1165,8 @@ class RegistrationService:
             current_version_id=form.current_version_id if form is not None else None,
             # No schema means no questions to rewrite: ``None`` reads as
             # ``can_edit=False``, which is the truth.
-            self_edit=self_edit_policy(registration, entry, tournament, schema) if schema is not None else None,
-            submitted_late=submitted_late(registration, tournament),
+            self_edit=self_edit_policy(registration, entry, sign_up_open, schema) if schema is not None else None,
+            submitted_late=submitted_late(entry, schedule),
         )
 
     async def resolve_admission_list(
@@ -1162,6 +1176,7 @@ class RegistrationService:
         entries: Mapping[int, models.RegistrationEntry],
         *,
         form: models.RegistrationForm | None,
+        node_config: RegistrationNodeConfig,
     ) -> dict[int, AdmissionEvaluation]:
         """One admission evaluation per registration, for a whole list (``entries``: each one's entry in the node).
 
@@ -1191,10 +1206,10 @@ class RegistrationService:
         # off pays nothing.
         rule = (
             await resolver.load_requirement(workspace_id=form.workspace_id)
-            if form is not None and form.require_subscription and form.workspace_id is not None
+            if form is not None and node_config.require_subscription and form.workspace_id is not None
             else None
         )
-        config = AdmissionConfig.from_form(form, subscription_rule=rule)
+        config = AdmissionConfig.from_form(form, node_config, subscription_rule=rule)
         return await resolve_admission(session, registrations, entries=entries, config=config, resolver=resolver)
 
     async def queue_position(self, session: AsyncSession, entry: models.RegistrationEntry) -> QueuePlace:
@@ -1268,12 +1283,9 @@ class RegistrationService:
         subrole_catalog = await resolve_subrole_catalog(session, form.workspace_id, discipline=discipline)
         # The requirement is the workspace's rule; read here so the sync serializer stays free of round trips.
         requirement = await subscription_config_service.load_workspace_requirement_blob(session, form.workspace_id)
-        is_open, registration_late = await windows_service.load_registration_state(session, tournament_id)
         return serialize_registration_form(
             form,
             discipline=discipline,
-            is_open=is_open,
-            registration_late=registration_late,
             subrole_catalog=subrole_catalog,
             subscription_requirement=requirement,
             stale_registrations=None,
@@ -1300,15 +1312,18 @@ class RegistrationService:
         ``cache.disabling(...)``: it flips a *process-global* flag on the shared
         cashews backend and races with every concurrent request on this worker.
         """
-        # One row for two answers: the workspace this list belongs to, and the
-        # phase schedule each row's ``submitted_late`` is measured against.
+        # One row for two answers: the workspace this list belongs to, and the registration node whose
+        # schedule each row's ``submitted_late`` is measured against and whose config sets the capacity.
         tournament = await self.tournament_repo.get(session, tournament_id)
         if tournament is None:
             raise HTTPException(status_code=404, detail="Tournament not found")
         workspace_id = tournament.workspace_id
 
         form = await _common_service.get_registration_form(session, tournament_id)
-        max_participants = form.max_participants if form is not None else None
+        node = await _common_service.ensure_registration_node(session, tournament_id, registration_node_id)
+        config = node_config(node)
+        schedule = await windows_service.load_schedule(session, registration_node_id)
+        max_participants = config.max_participants
 
         # The organizer publishes the shape of the field, not the field. Enforced
         # HERE and not in the client because this payload is cached per tournament
@@ -1364,7 +1379,9 @@ class RegistrationService:
         entry_by_registration = {entry.registration_id: entry for entry in entries}
         status_meta_map = await get_status_metas_map(session, workspace_id=workspace_id)
 
-        admissions = await self.resolve_admission_list(session, registrations, entry_by_registration, form=form)
+        admissions = await self.resolve_admission_list(
+            session, registrations, entry_by_registration, form=form, node_config=config
+        )
         show_ranks = form.show_ranks if form is not None else False
         rosters = await _public_rosters(session, registrations, entry_by_registration, form=form)
 
@@ -1398,7 +1415,7 @@ class RegistrationService:
                 roster=rosters.get(r.id),
                 public_keys=public_keys_for(r),
                 current_version_id=current_version_id,
-                submitted_late=submitted_late(r, tournament),
+                submitted_late=submitted_late(entry, schedule),
             )
             # ``dict(read)``, not ``model_dump()``: the nested reads stay model
             # instances, which pydantic accepts as-is instead of dumping them to

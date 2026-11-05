@@ -102,7 +102,6 @@ from src.services.registration.serializers import (
     serialize_status,
 )
 from src.services.registration.templates import template_service
-from src.services.registration.windows import windows_service
 
 # --- helpers -----------------------------------------------------------------
 
@@ -365,12 +364,10 @@ def register(broker: Any, logger: Any) -> None:
             requirement = await subscription_config.subscription_config_service.load_workspace_requirement_blob(
                 session, ctx.ws_id
             )
-            is_open = await windows_service.load_registration_open(session, ctx.id)
             return _dump(
                 serialize_registration_form(
                     form,
                     discipline=await reg_common._common_service.get_tournament_discipline(session, ctx.id),
-                    is_open=is_open,
                     subscription_requirement=requirement,
                     stale_registrations=await form_service.stale_count(session, form),
                 )
@@ -395,12 +392,10 @@ def register(broker: Any, logger: Any) -> None:
             requirement = await subscription_config.subscription_config_service.load_workspace_requirement_blob(
                 session, ctx.ws_id
             )
-            is_open = await windows_service.load_registration_open(session, ctx.id)
             return _dump(
                 serialize_registration_form(
                     form,
                     discipline=await reg_common._common_service.get_tournament_discipline(session, ctx.id),
-                    is_open=is_open,
                     subscription_requirement=requirement,
                     stale_registrations=await form_service.stale_count(session, form),
                 )
@@ -499,12 +494,10 @@ def register(broker: Any, logger: Any) -> None:
             requirement = await subscription_config.subscription_config_service.load_workspace_requirement_blob(
                 session, ctx.ws_id
             )
-            is_open = await windows_service.load_registration_open(session, ctx.id)
             return _dump(
                 serialize_registration_form(
                     form,
                     discipline=await reg_common._common_service.get_tournament_discipline(session, ctx.id),
-                    is_open=is_open,
                     subscription_requirement=requirement,
                     stale_registrations=await form_service.stale_count(session, form),
                 )

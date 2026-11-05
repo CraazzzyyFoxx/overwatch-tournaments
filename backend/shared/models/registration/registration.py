@@ -22,7 +22,7 @@ from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import ColumnElement
 
-from shared.core import db, enums
+from shared.core import db
 from shared.models.catalog.role import CatalogRole, leaf_code
 from shared.schemas.role import RoleRef
 
@@ -60,8 +60,6 @@ class RegistrationForm(db.TimeStampIntegerMixin):
 
     tournament_id: Mapped[int] = mapped_column(ForeignKey("tournament.tournament.id", ondelete="CASCADE"), index=True)
     workspace_id: Mapped[int] = mapped_column(ForeignKey("workspace.id", ondelete="CASCADE"), index=True)
-    is_open: Mapped[bool] = mapped_column(Boolean(), nullable=False, server_default="false", default=False)
-    auto_approve: Mapped[bool] = mapped_column(Boolean(), nullable=False, server_default="false", default=False)
     #: The schema the form currently asks. NULLABLE ON PURPOSE: ``registration_form``
     #: and ``registration_form_version`` point at each other, and PostgreSQL never
     #: defers a NOT NULL check, so a NOT NULL pointer could not be written for a
@@ -79,52 +77,6 @@ class RegistrationForm(db.TimeStampIntegerMixin):
     #: cosmetic and a per-viewer branch would poison that cache. Organizers read
     #: the full roster through the admin registrations table instead.
     hide_registrations: Mapped[bool] = mapped_column(Boolean(), nullable=False, server_default="false", default=False)
-    #: Advisory capacity shown next to the participant count. NOT a limit: nothing
-    #: reads it on the write path, and registration past it succeeds. NULL hides it.
-    max_participants: Mapped[int | None] = mapped_column(Integer(), nullable=True)
-    #: Bench size for team registration (decision 4): the roster ``RosterShape`` is
-    #: strict, but an organizer may allow this many extra ``is_substitute`` members
-    #: per team. Zero disables the bench entirely. Deliberately here and not on
-    #: the starter-slot projection: a substitute holds no starter slot, so the
-    #: shape -- and the lock guarding it -- stay untouched.
-    max_substitutes: Mapped[int] = mapped_column(Integer(), nullable=False, server_default="0", default=0)
-    # Subscription admission gate. ``require_subscription`` is the per-tournament
-    # decision and stays here; the RULE it enforces lives in
-    # ``subscriptions.requirement`` (one row per workspace). Resolve it through
-    # ``SubscriptionResolver.load_requirement``, never by reading a column here.
-    require_subscription: Mapped[bool] = mapped_column(Boolean(), nullable=False, server_default="false", default=False)
-    #: WHEN the requirement bites, once ``require_subscription`` is on. Ordered, not
-    #: a set -- ``registration`` implies check-in as well; see
-    #: ``enums.SubscriptionEnforcementStage``. Plain String like
-    #: ``open_profile_scope`` above, matching this schema's convention of storing
-    #: enum-like values as their StrEnum text rather than a PG enum type (which
-    #: would need a migration to add a value).
-    subscription_stage: Mapped[str] = mapped_column(
-        String(16),
-        nullable=False,
-        server_default=enums.SubscriptionEnforcementStage.check_in.value,
-        default=enums.SubscriptionEnforcementStage.check_in.value,
-    )
-    #: WHO the subscription rule is evaluated against. ``player`` (default) is
-    #: the anti-smurf per-entrant gate. ``team`` is "the captain pays": identity
-    #: and profile stay per player, but a coverage stamp on the registered team
-    #: satisfies the subscription requirement for everyone on that roster.
-    subscription_scope: Mapped[str] = mapped_column(
-        String(16), nullable=False, server_default="player", default="player"
-    )
-    #: Starter-only rank floor/ceiling/spread for team-registration tournaments.
-    #: NULL means the rule is off. Substitutes are never included.
-    team_rank_min: Mapped[int | None] = mapped_column(Integer(), nullable=True)
-    team_rank_max: Mapped[int | None] = mapped_column(Integer(), nullable=True)
-    team_max_rank_spread: Mapped[int | None] = mapped_column(Integer(), nullable=True)
-    #: Discord nick / Discord snowflake unique across teams in this tournament.
-    #: Default false so existing events do not grow a new refusal on deploy.
-    team_unique_identity: Mapped[bool] = mapped_column(Boolean(), nullable=False, server_default="false", default=False)
-    #: Live members must have a Discord identity in ``Workspace.discord_guild_id``.
-    #: Fail closed when the workspace has no guild bound.
-    team_require_discord_guild: Mapped[bool] = mapped_column(
-        Boolean(), nullable=False, server_default="false", default=False
-    )
 
     tournament: Mapped[Tournament] = relationship()
     workspace: Mapped[Workspace] = relationship()

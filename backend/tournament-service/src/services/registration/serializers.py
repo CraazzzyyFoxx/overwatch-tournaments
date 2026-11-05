@@ -18,7 +18,6 @@ from src.schemas.admission import AdmissionRead
 from src.schemas.registration_form import RegistrationFormRead, RegistrationFormTemplateRead
 from src.services.registration.answers import answer_service
 from src.services.registration.roles_rules import is_flex_submission
-from src.services.registration.self_edit import submitted_late
 
 
 def loaded_relationship_or_none(instance: object, attribute: str):
@@ -79,6 +78,7 @@ def serialize_registration(
     profiles_open: bool | None = None,
     subscription_outcome: str | None = None,
     roster: PlayerRoster | None = None,
+    submitted_late: bool = False,
 ) -> schemas.BalancerRegistrationRead:
     binding = loaded_relationship_or_none(registration, "google_sheet_binding")
     roles = loaded_relationship_or_none(registration, "roles") or []
@@ -88,7 +88,6 @@ def serialize_registration(
     # member anchor — callers must eager-load workspace_member
     # (loaded_relationship_or_none never lazy-loads).
     workspace_member = loaded_relationship_or_none(registration, "workspace_member")
-    tournament = loaded_relationship_or_none(registration, "tournament")
     sorted_roles = sorted(roles, key=lambda item: (item.priority, item.role))
     # Every role row is reported (the editor toggles the ones the engine left
     # out of the roster); the roster is what rates them.
@@ -134,7 +133,7 @@ def serialize_registration(
         checked_in_by_username=checked_in_by_user.username if checked_in_by_user is not None else None,
         deleted_at=entry.deleted_at,
         submitted_at=registration.submitted_at,
-        submitted_late=tournament is not None and submitted_late(registration, tournament),
+        submitted_late=submitted_late,
         reviewed_at=entry.reviewed_at,
         reviewed_by_username=reviewer.username if reviewer is not None else None,
         balancer_profile_overridden_at=registration.balancer_profile_overridden_at,
@@ -157,8 +156,6 @@ def serialize_registration_form(
     form: models.RegistrationForm,
     *,
     discipline: str,
-    is_open: bool,
-    registration_late: bool = False,
     subscription_requirement: dict[str, Any] | None = None,
     subrole_catalog: dict[str, list[dict[str, str]]] | None = None,
     stale_registrations: int | None = None,
@@ -170,12 +167,7 @@ def serialize_registration_form(
     call; the async RPC handler fetches it once via
     ``subscription_config.load_workspace_requirement_blob``.
 
-    ``is_open`` is passed in for the same reason; it is derived from the
-    tournament's REGISTRATION schedule window, not from the form.
-
-    ``registration_late`` says the window's ``ends_at`` has passed and only
-    ``allow_late_registration`` keeps the form open: everyone signing up now is
-    written as a reserve, and the form has to say so before they submit.
+    Intake settings and whether sign-up is open are the registration node's, not the form's.
 
     ``stale_registrations`` is the organizer-only count of registrations still on
     an older version; the public read leaves it ``None`` rather than paying for it.
@@ -189,23 +181,10 @@ def serialize_registration_form(
         tournament_id=form.tournament_id,
         workspace_id=form.workspace_id,
         discipline=discipline,
-        is_open=is_open,
-        registration_late=registration_late,
-        auto_approve=form.auto_approve,
         require_open_profile=form.require_open_profile,
         open_profile_scope=form.open_profile_scope,
         show_ranks=form.show_ranks,
         hide_registrations=form.hide_registrations,
-        max_participants=form.max_participants,
-        max_substitutes=form.max_substitutes,
-        require_subscription=form.require_subscription,
-        subscription_stage=form.subscription_stage,
-        subscription_scope=getattr(form, "subscription_scope", None) or "player",
-        team_rank_min=getattr(form, "team_rank_min", None),
-        team_rank_max=getattr(form, "team_rank_max", None),
-        team_max_rank_spread=getattr(form, "team_max_rank_spread", None),
-        team_unique_identity=bool(getattr(form, "team_unique_identity", False)),
-        team_require_discord_guild=bool(getattr(form, "team_require_discord_guild", False)),
         subscription_requirement_json=subscription_requirement or {},
         form_schema=schema,
         version_id=version.id,

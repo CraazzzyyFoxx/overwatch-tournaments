@@ -144,6 +144,7 @@ class TestCheckInGate(IsolatedAsyncioTestCase):
         """True when the gate refuses check-in. Providers absent from ``live`` have
         no strategy and therefore resolve to ``unknown``."""
         from shared.core.errors import BaseAPIException
+        from shared.domain.flow.config import RegistrationNodeConfig
         from shared.services.subscriptions.entitlements import SubscriptionResolver
         from shared.services.subscriptions.wiring import build_store
         from src.services.admission import AdmissionConfig, AdmissionStage
@@ -169,6 +170,7 @@ class TestCheckInGate(IsolatedAsyncioTestCase):
         # `_Form`, so nothing here depends on the row either.
         config = AdmissionConfig.from_form(
             _Form(self.ws),
+            RegistrationNodeConfig(require_subscription=True),
             subscription_rule=await resolver.load_requirement(workspace_id=self.ws),
         )
         evaluation = await resolve_admission_for_gate(

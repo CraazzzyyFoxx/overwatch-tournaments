@@ -39,6 +39,7 @@ from unittest import IsolatedAsyncioTestCase, mock
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from shared import models  # noqa: E402
 from shared.core.errors import BaseAPIException  # noqa: E402
 from shared.services.subscriptions import (  # noqa: E402
     SubscriptionRequirement,
@@ -111,6 +112,16 @@ class _Form:
         #: The test's way of saying "this workspace requires X". The gate reads it
         #: through the resolver, never off the form.
         self.blob = blob or {}
+
+
+def _node(form: _Form | None) -> models.FlowNode:
+    """The gated registration node: the subscription toggles are its config, the stub carries them."""
+    config = {}
+    if form is not None:
+        config = {"require_subscription": form.require_subscription, "subscription_stage": form.subscription_stage}
+    return models.FlowNode(
+        id=NODE, tournament_id=TOURNAMENT, kind="registration", name="R", status="open", config=config
+    )
 
 
 class _Rows:
@@ -231,6 +242,7 @@ class _GateCase(IsolatedAsyncioTestCase):
             mock.patch.object(admission, "RegistrationEntryRepository") as entries,
         ):
             forms.get_registration_form = mock.AsyncMock(return_value=form)
+            forms.ensure_registration_node = mock.AsyncMock(return_value=_node(form))
             entries.return_value.get_for = mock.AsyncMock(
                 return_value=registration.entry if registration is not None else None
             )
@@ -447,26 +459,6 @@ class TestCheckInOnlyTournamentCostsNothingAtSignUp(_GateCase):
                 stage=AdmissionStage.registration,
                 resolver=_Resolver({"boosty": INACTIVE}),
             )
-
-    async def test_an_unrecognised_stage_is_check_in(self):
-        """Fail LOOSER: an unknown stage is a config or migration error, and a
-        typo must not start refusing sign-ups nobody asked it to refuse."""
-        _evaluation, resolver, _session = await self.gate(
-            _Form(require_subscription=True, blob=BOOSTY_TIER_2, subscription_stage="Registration"),
-            stage=AdmissionStage.registration,
-            resolver=_Resolver({"boosty": INACTIVE}),
-        )
-        assert resolver.calls == []
-
-    async def test_a_form_predating_the_column_is_check_in(self):
-        form = _Form(require_subscription=True, blob=BOOSTY_TIER_2)
-        del form.subscription_stage
-        _evaluation, resolver, _session = await self.gate(
-            form,
-            stage=AdmissionStage.registration,
-            resolver=_Resolver({"boosty": INACTIVE}),
-        )
-        assert resolver.calls == []
 
 
 class TestSignUpDeferral(_GateCase):

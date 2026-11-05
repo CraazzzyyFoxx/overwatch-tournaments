@@ -15,9 +15,9 @@ Three sources, resolved into one answer:
    leave every existing registrant in a ``form_version_stale`` state they cannot
    clear, which with a closed default is the normal case rather than an edge one.
 
-Pure and session-free, for the same reason ``is_registration_open`` is: the read
-path calls it per row while serializing, and the write path calls it again to
-enforce. Both must get the same answer, and the read path cannot afford a query.
+Pure and session-free: the read path calls it per row while serializing, and the write path calls it again to
+enforce. Both must get the same answer, and the read path cannot afford a query, so the sign-up window verdict of
+the entry's node is an argument.
 
 The ORGANIZER's edit (``lifecycle.update_registration_profile``) is never gated
 by any of this.
@@ -25,16 +25,15 @@ by any of this.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import datetime
 
 from shared import models
 from shared.core.social import GAME_PROVIDERS
 from shared.domain.forms import FormSchema, identity_key
-from shared.services.registration_window import is_registration_late
+from shared.services.registration_window import is_sign_up_late
 from src.services.registration._common import is_included_in_balancer
 from src.services.registration.answers import answer_service
-from src.services.registration.windows import is_registration_open
 
 __all__ = ("SelfEditPolicy", "self_edit_policy")
 
@@ -52,33 +51,24 @@ class SelfEditPolicy:
     writable_keys: frozenset[str]
 
 
-def submitted_late(
-    registration: models.Registration,
-    tournament: models.Tournament,
-) -> bool:
-    """Whether this row was signed up AFTER the registration window's ``ends_at``.
+def submitted_late(entry: models.RegistrationEntry, schedule: Sequence[models.FlowNodeSchedule]) -> bool:
+    """Whether this entry was signed up AFTER its node's ``open`` window ended.
 
-    Recomputed from ``submitted_at`` rather than stored: the schedule and the
-    timestamp are both already here, and a column would be a second copy of an
-    answer that can be derived exactly.
+    Recomputed from ``created_at`` rather than stored: the schedule and the timestamp are both already here, and a
+    column would be a second copy of an answer that can be derived. The same predicate the sign-up path uses,
+    evaluated at the moment the entry was written.
 
-    The same predicate the sign-up path uses, evaluated at the moment the row was
-    written -- so "late" means the same thing when the flag is imposed and when
-    the edit path refuses to let go of it.
+    shortcut: a sign-up taken in ``check_in`` before the ``open`` row's ``ends_at`` (extended afterwards) reads as on
+    time; store the flag if that ever matters.
     """
-    if registration.submitted_at is None:
+    if entry.created_at is None:
         return False
-    return is_registration_late(
-        tournament.status,
-        tournament.phase_schedule,
-        now=registration.submitted_at,
-    )
+    return is_sign_up_late("open", schedule, now=entry.created_at)
 
 
 def _floor(
     registration: models.Registration,
     entry: models.RegistrationEntry,
-    tournament: models.Tournament,
 ) -> frozenset[str]:
     """Keys the organizer cannot open, and why.
 
@@ -123,10 +113,8 @@ def _answered_keys(registration: models.Registration, entry: models.Registration
 def self_edit_policy(
     registration: models.Registration,
     entry: models.RegistrationEntry,
-    tournament: models.Tournament,
+    sign_up_open: bool,
     schema: FormSchema,
-    *,
-    now: datetime | None = None,
 ) -> SelfEditPolicy:
     """The registrant's own edit rights for ``registration``.
 
@@ -137,14 +125,14 @@ def self_edit_policy(
     who registered earlier still editing it under their own older version.
     """
     unanswered = frozenset(field.key for field in schema.fields()) - _answered_keys(registration, entry)
-    writable = (schema.editable_keys() | unanswered) - _floor(registration, entry, tournament)
+    writable = (schema.editable_keys() | unanswered) - _floor(registration, entry)
 
     if registration.deleted_at is not None or entry.deleted_at is not None or entry.status not in _EDITABLE_STATUSES:
         return SelfEditPolicy(False, "status_locked", frozenset())
     if entry.checked_in:
         # Check-in freezes the entry the organizer is about to balance.
         return SelfEditPolicy(False, "checked_in", frozenset())
-    if not is_registration_open(tournament, now=now):
+    if not sign_up_open:
         return SelfEditPolicy(False, "window_closed", frozenset())
     if not writable:
         # The whole-form kill switch, for free: a form where the organizer opened

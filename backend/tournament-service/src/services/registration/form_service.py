@@ -187,9 +187,9 @@ class RegistrationFormService:
         ``workspace_id`` is the tournament's already-resolved workspace (the RPC
         handler resolves it for the permission check anyway).
 
-        ``require_subscription`` is written here because the toggle is the
-        tournament's decision; the rule itself belongs to the workspace and is
-        written through ``subscription_config.upsert_workspace_requirement``.
+        The intake settings (``require_subscription``, ``auto_approve``, ...) are the registration node's config, saved
+        through the flow; the subscription rule belongs to the workspace and is written through
+        ``subscription_config.upsert_workspace_requirement``.
         """
         form = await self.get_form(session, tournament_id)
 
@@ -197,39 +197,17 @@ class RegistrationFormService:
             form = models.RegistrationForm(
                 tournament_id=tournament_id,
                 workspace_id=workspace_id,
-                auto_approve=body.auto_approve,
                 require_open_profile=body.require_open_profile,
                 open_profile_scope=body.open_profile_scope,
                 show_ranks=body.show_ranks,
                 hide_registrations=body.hide_registrations,
-                max_participants=body.max_participants,
-                require_subscription=body.require_subscription,
-                subscription_stage=body.subscription_stage.value,
-                subscription_scope=body.subscription_scope,
-                team_rank_min=body.team_rank_min,
-                team_rank_max=body.team_rank_max,
-                team_max_rank_spread=body.team_max_rank_spread,
-                team_unique_identity=body.team_unique_identity,
-                team_require_discord_guild=body.team_require_discord_guild,
-                max_substitutes=body.max_substitutes,
             )
             await self.form_repo.create(session, form)
         else:
-            form.auto_approve = body.auto_approve
             form.require_open_profile = body.require_open_profile
             form.open_profile_scope = body.open_profile_scope
             form.show_ranks = body.show_ranks
             form.hide_registrations = body.hide_registrations
-            form.max_participants = body.max_participants
-            form.require_subscription = body.require_subscription
-            form.subscription_stage = body.subscription_stage.value
-            form.subscription_scope = body.subscription_scope
-            form.team_rank_min = body.team_rank_min
-            form.team_rank_max = body.team_rank_max
-            form.team_max_rank_spread = body.team_max_rank_spread
-            form.team_unique_identity = body.team_unique_identity
-            form.team_require_discord_guild = body.team_require_discord_guild
-            form.max_substitutes = body.max_substitutes
 
         return await self.save_schema(session, form, body.form_schema, actor_user_id=actor_user_id)
 

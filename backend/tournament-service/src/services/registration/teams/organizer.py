@@ -207,7 +207,7 @@ class OrganizerMixin(TeamServiceBase):
         if tournament is None:
             raise _fail(404, "tournament_not_found", "Tournament not found")
         shape = await self._resolve_shape(session, tournament)
-        max_substitutes = await self._max_substitutes(session, tournament_id)
+        max_substitutes = await self._max_substitutes(session, dest.registration_node_id)
         occupancy = await self._occupancy(session, dest, shape, max_substitutes=max_substitutes)
         _check_slot(occupancy, slot_code, is_substitute=is_substitute, offering=False)
 

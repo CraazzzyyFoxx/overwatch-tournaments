@@ -1,98 +1,89 @@
-"""Status/schedule gating for registration-surface actions.
+"""Sign-up and check-in gating of one registration node.
 
-Tournament status is the single source of truth for what is currently
-possible; ``tournament_phase_schedule`` rows only narrow the action window
-inside a phase (a missing row or ``ends_at IS NULL`` spans the whole phase).
-
-Registration is the one exception: it is governed *solely* by its schedule row,
-where a missing row means closed. See
-:mod:`shared.services.registration_window` for why that inversion lives there
-rather than in ``tournament_state.is_within_phase_window``.
+The node's status is the single source of truth for what is currently possible; its ``flow_node_schedule`` rows only
+narrow the window inside the status (a missing row means the status decides) and the node's
+``allow_late_registration`` lifts the ``open`` row's ``ends_at``. See :mod:`shared.services.registration_window` for
+the rules.
 """
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from collections.abc import Sequence
+from datetime import datetime
 
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
-from shared.core import enums, tournament_state
+from shared.core.enums import FlowNodeKind
+from shared.domain.flow.config import RegistrationNodeConfig, parse_node_config
 from shared.services.registration_window import (
-    is_registration_window_open,
-    registration_late_clause,
-    registration_open_clause,
+    is_check_in_open,
+    is_sign_up_open,
+    sign_up_late_clause,
+    sign_up_open_clause,
 )
 
 
-def is_check_in_window_active(
-    tournament: models.Tournament,
+def node_config(node: models.FlowNode) -> RegistrationNodeConfig:
+    """The typed config of a registration node."""
+    config = parse_node_config(FlowNodeKind.REGISTRATION, node.config)
+    assert isinstance(config, RegistrationNodeConfig)
+    return config
+
+
+def is_sign_up_open_for(
+    node: models.FlowNode,
+    schedule: Sequence[models.FlowNodeSchedule],
     *,
     now: datetime | None = None,
 ) -> bool:
-    """Check-in is possible iff the tournament is in CHECK_IN and ``now`` is
-    inside the CHECK_IN schedule row's window (if one exists)."""
-    if tournament.status != enums.TournamentStatus.CHECK_IN:
-        return False
-    return tournament_state.is_within_phase_window(
-        enums.TournamentStatus.CHECK_IN,
-        tournament.phase_schedule,
-        now or datetime.now(UTC),
-    )
+    """Whether self-service registration into ``node`` is open right now."""
+    return is_sign_up_open(node.status, schedule, now, allow_late=node_config(node).allow_late_registration)
 
 
-def is_registration_open(
-    tournament: models.Tournament,
+def is_check_in_open_for(
+    node: models.FlowNode,
+    schedule: Sequence[models.FlowNodeSchedule],
     *,
     now: datetime | None = None,
 ) -> bool:
-    """Whether self-service registration is currently open.
-
-    The tournament's REGISTRATION schedule window plus one override: no row means
-    closed, COMPLETED/ARCHIVED is always closed, and ``allow_late_registration``
-    lifts the window's ``ends_at`` so latecomers can be admitted without editing
-    away the intended closing time. Neither the tournament's phase nor the
-    registration form has a say.
-    """
-    return is_registration_window_open(
-        tournament.status,
-        tournament.phase_schedule,
-        now,
-        allow_late=tournament.allow_late_registration,
-    )
+    """Whether the node's check-in is possible right now."""
+    return is_check_in_open(node.status, schedule, now)
 
 
 class RegistrationWindowService:
-    """The one session-taking window read; the two predicates above stay pure."""
+    """The session-taking window reads; the predicates above stay pure."""
 
-    async def load_registration_open(self, session: AsyncSession, tournament_id: int) -> bool:
-        """Openness for a tournament we hold only the id of.
-
-        One scalar read of the *same* SQL clause the aggregate readers use, so the
-        per-tournament and in-query answers cannot drift apart. Prefer
-        :func:`is_registration_open` when a ``Tournament`` is already loaded.
-        """
-        return bool(
-            await session.scalar(sa.select(registration_open_clause()).where(models.Tournament.id == tournament_id))
+    async def load_schedule(self, session: AsyncSession, registration_node_id: int) -> list[models.FlowNodeSchedule]:
+        rows = await session.scalars(
+            sa.select(models.FlowNodeSchedule).where(models.FlowNodeSchedule.node_id == registration_node_id)
         )
+        return list(rows)
 
-    async def load_registration_state(self, session: AsyncSession, tournament_id: int) -> tuple[bool, bool]:
-        """``(is_open, is_late)`` in ONE round trip.
+    async def load_sign_up_state(self, session: AsyncSession, registration_node_id: int) -> tuple[bool, bool]:
+        """``(is_open, is_late)`` of a node in ONE round trip.
 
-        The public form read needs both — openness to show the form at all, and
-        lateness to tell the registrant *before* they submit that their sign-up
-        will be marked as a late one. Two scalars off one row rather than two
-        calls, and both off the same clauses the write path evaluates in Python.
+        Two scalars off one row, from the same SQL clauses the aggregate readers use, so the per-node and in-query
+        answers cannot drift apart.
         """
         row = (
             await session.execute(
-                sa.select(registration_open_clause(), registration_late_clause()).where(
-                    models.Tournament.id == tournament_id
+                sa.select(sign_up_open_clause(), sign_up_late_clause()).where(
+                    models.FlowNode.id == registration_node_id
                 )
             )
         ).first()
         return (bool(row[0]), bool(row[1])) if row is not None else (False, False)
+
+    async def load_sign_up_open(self, session: AsyncSession, registration_node_id: int) -> bool:
+        return (await self.load_sign_up_state(session, registration_node_id))[0]
+
+    async def load_check_in_open(self, session: AsyncSession, registration_node_id: int) -> bool:
+        node = await session.get(models.FlowNode, registration_node_id)
+        if node is None:
+            return False
+        return is_check_in_open_for(node, await self.load_schedule(session, registration_node_id))
 
 
 windows_service = RegistrationWindowService()

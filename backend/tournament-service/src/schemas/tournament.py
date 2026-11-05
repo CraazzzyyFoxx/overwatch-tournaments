@@ -72,7 +72,6 @@ class TournamentRead(BaseRead):
     start_date: datetime
     end_date: datetime
     auto_transitions_enabled: bool = True
-    allow_late_registration: bool = False
     discord_broadcasts_enabled: bool = True
     discord_dms_enabled: bool = True
     logs_official: bool = False

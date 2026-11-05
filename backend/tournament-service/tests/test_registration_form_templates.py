@@ -772,21 +772,10 @@ class TemplateHandlersReadTheRequest(IsolatedAsyncioTestCase):
             id=5,
             tournament_id=9,
             workspace_id=1,
-            auto_approve=False,
             require_open_profile=False,
             open_profile_scope="main",
             show_ranks=False,
             hide_registrations=False,
-            max_participants=None,
-            max_substitutes=0,
-            require_subscription=False,
-            subscription_stage="check_in",
-            subscription_scope="player",
-            team_rank_min=None,
-            team_rank_max=None,
-            team_max_rank_spread=None,
-            team_unique_identity=False,
-            team_require_discord_guild=False,
             current_version=SimpleNamespace(id=3, number=2, schema_json=_schema_with("vk").model_dump(mode="json")),
         )
 
@@ -795,9 +784,6 @@ class TemplateHandlersReadTheRequest(IsolatedAsyncioTestCase):
 
         async def _blob(_session, _workspace_id):
             return {}
-
-        async def _open(_session, _tournament_id):
-            return True
 
         async def _stale(_session, _form):
             return 0
@@ -817,7 +803,6 @@ class TemplateHandlersReadTheRequest(IsolatedAsyncioTestCase):
                     "load_workspace_requirement_blob",
                     _blob,
                 ),
-                patch.object(registration_admin.windows_service, "load_registration_open", _open),
                 patch.object(registration_admin.form_service, "stale_count", _stale),
                 patch.object(registration_admin.reg_common._common_service, "get_tournament_discipline", _discipline),
             ),

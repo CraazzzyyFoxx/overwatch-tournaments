@@ -61,7 +61,7 @@ def seeded(db):
     db.add(rule)
     db.flush()
     db.add(Stage(tournament_id=t.id, name="Groups", stage_type=enums.StageType.ROUND_ROBIN, scoring_rule_id=rule.id))
-    db.add(RegistrationForm(tournament_id=t.id, workspace_id=ws.id, is_open=True))
+    db.add(RegistrationForm(tournament_id=t.id, workspace_id=ws.id))
     regs = [Registration(tournament_id=t.id, display_name=name) for name in "abcd"]
     node = models.FlowNode(tournament_id=t.id, kind="registration", name="Registration", status="open", config={})
     db.add_all([*regs, node])

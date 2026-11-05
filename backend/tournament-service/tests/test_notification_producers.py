@@ -52,7 +52,6 @@ sys.path.insert(0, str(backend_root / "tournament-service"))
 
 from shared import models  # noqa: E402
 from shared.core import enums  # noqa: E402
-from shared.core.enums import TournamentStatus  # noqa: E402
 from shared.core.social import SocialProvider, normalize_social_handle  # noqa: E402
 from shared.domain.roster_shape import RosterShape  # noqa: E402
 from shared.models.encounter.encounter import Encounter  # noqa: E402
@@ -84,6 +83,7 @@ TABLE_NAMES = (
     "event_outbox",
     "tournament.tournament",
     "tournament.tournament_phase_schedule",
+    "tournament.flow_node_schedule",
     "tournament.team",
     "tournament.player",
     "encounter.encounter",
@@ -996,15 +996,11 @@ class TeamRosterOutcomeTests(_ProducerTestCase):
 class TargetedInviteAvailabilityTests(_ProducerTestCase):
     def setUp(self) -> None:
         super().setUp()
-        self.window = models.TournamentPhaseSchedule(
-            tournament_id=TOURNAMENT_ID,
-            status=TournamentStatus.REGISTRATION,
-            starts_at=datetime.now(UTC) - timedelta(days=1),
+        self.window = models.FlowNodeSchedule(
+            node_id=self.fx.node.id, phase="open", starts_at=datetime.now(UTC) - timedelta(days=1)
         )
         self.fx.session.add(self.window)
-        self.fx.session.add(
-            models.RegistrationForm(tournament_id=TOURNAMENT_ID, workspace_id=WORKSPACE_ID, max_substitutes=1)
-        )
+        self.fx.node.config = {"max_substitutes": 1}
         shape = patch.object(
             teams_module.RegistrationTeamService,
             "_resolve_shape",

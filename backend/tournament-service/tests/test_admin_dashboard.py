@@ -425,7 +425,7 @@ def test_card_readiness_is_the_checklist_of_its_tournament(db_session) -> None:
             live = await _tournament(db_session, workspace_id, TS.LIVE)
             team = Team(tournament_id=live.id, name="Seeded", balancer_name="seeded")
             db_session.add(team)
-            db_session.add(RegistrationForm(tournament_id=registration.id, workspace_id=workspace_id, is_open=True))
+            db_session.add(RegistrationForm(tournament_id=registration.id, workspace_id=workspace_id))
             regs = [
                 await _register(
                     db_session, registration, "a", status="approved", checked_in=True, balancer_status="ready"

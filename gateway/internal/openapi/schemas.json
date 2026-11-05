@@ -54623,11 +54623,6 @@
     },
     "tournament.RegistrationFormRead": {
       "properties": {
-        "auto_approve": {
-          "default": false,
-          "title": "Auto Approve",
-          "type": "boolean"
-        },
         "discipline": {
           "title": "Discipline",
           "type": "string"
@@ -54644,47 +54639,14 @@
           "title": "Id",
           "type": "integer"
         },
-        "is_open": {
-          "title": "Is Open",
-          "type": "boolean"
-        },
-        "max_participants": {
-          "anyOf": [
-            {
-              "minimum": 0,
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Max Participants"
-        },
-        "max_substitutes": {
-          "default": 0,
-          "minimum": 0,
-          "title": "Max Substitutes",
-          "type": "integer"
-        },
         "open_profile_scope": {
           "default": "main",
           "title": "Open Profile Scope",
           "type": "string"
         },
-        "registration_late": {
-          "default": false,
-          "title": "Registration Late",
-          "type": "boolean"
-        },
         "require_open_profile": {
           "default": false,
           "title": "Require Open Profile",
-          "type": "boolean"
-        },
-        "require_subscription": {
-          "default": false,
-          "title": "Require Subscription",
           "type": "boolean"
         },
         "show_ranks": {
@@ -54719,68 +54681,6 @@
           "title": "Subscription Requirement Json",
           "type": "object"
         },
-        "subscription_scope": {
-          "default": "player",
-          "enum": [
-            "player",
-            "team"
-          ],
-          "title": "Subscription Scope",
-          "type": "string"
-        },
-        "subscription_stage": {
-          "$ref": "#/components/schemas/tournament.SubscriptionEnforcementStage",
-          "default": "check_in"
-        },
-        "team_max_rank_spread": {
-          "anyOf": [
-            {
-              "minimum": 0,
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Team Max Rank Spread"
-        },
-        "team_rank_max": {
-          "anyOf": [
-            {
-              "minimum": 0,
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Team Rank Max"
-        },
-        "team_rank_min": {
-          "anyOf": [
-            {
-              "minimum": 0,
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Team Rank Min"
-        },
-        "team_require_discord_guild": {
-          "default": false,
-          "title": "Team Require Discord Guild",
-          "type": "boolean"
-        },
-        "team_unique_identity": {
-          "default": false,
-          "title": "Team Unique Identity",
-          "type": "boolean"
-        },
         "tournament_id": {
           "title": "Tournament Id",
           "type": "integer"
@@ -54803,7 +54703,6 @@
         "tournament_id",
         "workspace_id",
         "discipline",
-        "is_open",
         "form_schema",
         "version_id",
         "version_number"
@@ -54912,11 +54811,6 @@
     },
     "tournament.RegistrationFormUpsert": {
       "properties": {
-        "auto_approve": {
-          "default": false,
-          "title": "Auto Approve",
-          "type": "boolean"
-        },
         "form_schema": {
           "$ref": "#/components/schemas/tournament.FormSchema-Input"
         },
@@ -54924,25 +54818,6 @@
           "default": false,
           "title": "Hide Registrations",
           "type": "boolean"
-        },
-        "max_participants": {
-          "anyOf": [
-            {
-              "minimum": 0,
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Max Participants"
-        },
-        "max_substitutes": {
-          "default": 0,
-          "minimum": 0,
-          "title": "Max Substitutes",
-          "type": "integer"
         },
         "open_profile_scope": {
           "default": "main",
@@ -54954,76 +54829,9 @@
           "title": "Require Open Profile",
           "type": "boolean"
         },
-        "require_subscription": {
-          "default": false,
-          "title": "Require Subscription",
-          "type": "boolean"
-        },
         "show_ranks": {
           "default": false,
           "title": "Show Ranks",
-          "type": "boolean"
-        },
-        "subscription_scope": {
-          "default": "player",
-          "enum": [
-            "player",
-            "team"
-          ],
-          "title": "Subscription Scope",
-          "type": "string"
-        },
-        "subscription_stage": {
-          "$ref": "#/components/schemas/tournament.SubscriptionEnforcementStage",
-          "default": "check_in"
-        },
-        "team_max_rank_spread": {
-          "anyOf": [
-            {
-              "minimum": 0,
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Team Max Rank Spread"
-        },
-        "team_rank_max": {
-          "anyOf": [
-            {
-              "minimum": 0,
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Team Rank Max"
-        },
-        "team_rank_min": {
-          "anyOf": [
-            {
-              "minimum": 0,
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Team Rank Min"
-        },
-        "team_require_discord_guild": {
-          "default": false,
-          "title": "Team Require Discord Guild",
-          "type": "boolean"
-        },
-        "team_unique_identity": {
-          "default": false,
-          "title": "Team Unique Identity",
           "type": "boolean"
         }
       },
@@ -59629,15 +59437,6 @@
       "title": "SubroleOption",
       "type": "object"
     },
-    "tournament.SubscriptionEnforcementStage": {
-      "description": "The EARLIEST admission gate a subscription requirement blocks at.\n\nOrdered, not a set: ``registration`` implies check-in too. Requiring a\nsubscription to sign up while admitting an unsubscribed player at check-in\nwould be incoherent, so there is no \"registration only\" value to pick wrongly.\n\nOff is not a member -- that is ``registration_form.require_subscription``\nbeing false. Same shape as ``require_open_profile`` + ``open_profile_scope``\nin the same table: one flag for whether, one value for how.",
-      "enum": [
-        "registration",
-        "check_in"
-      ],
-      "title": "SubscriptionEnforcementStage",
-      "type": "string"
-    },
     "tournament.SubscriptionProviderConfigListResponse": {
       "properties": {
         "configs": {
@@ -60939,11 +60738,6 @@
     },
     "tournament.TournamentCreate": {
       "properties": {
-        "allow_late_registration": {
-          "default": false,
-          "title": "Allow Late Registration",
-          "type": "boolean"
-        },
         "auto_transitions_enabled": {
           "default": true,
           "title": "Auto Transitions Enabled",
@@ -61558,11 +61352,6 @@
     },
     "tournament.TournamentRead": {
       "properties": {
-        "allow_late_registration": {
-          "default": false,
-          "title": "Allow Late Registration",
-          "type": "boolean"
-        },
         "auto_transitions_enabled": {
           "default": true,
           "title": "Auto Transitions Enabled",
@@ -62295,18 +62084,6 @@
     },
     "tournament.TournamentUpdate": {
       "properties": {
-        "allow_late_registration": {
-          "anyOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Allow Late Registration"
-        },
         "auto_transitions_enabled": {
           "anyOf": [
             {

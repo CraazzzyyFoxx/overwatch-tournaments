@@ -1812,8 +1812,8 @@ Table division_grid_tier {
   native_rank_max bigint
   canonical_number bigint
   indexes {
-    (version_id, slug) [unique]
     (version_id, sort_order) [unique]
+    (version_id, slug) [unique]
     (version_id) [name: "ix_division_grid_tier_version_id"]
   }
 }
@@ -2185,23 +2185,11 @@ Table registration.form {
   updated_at timestamptz
   tournament_id bigint [not null]
   workspace_id bigint [not null]
-  is_open boolean [not null, default: false]
-  auto_approve boolean [not null, default: false]
   current_version_id bigint
   require_open_profile boolean [not null, default: false]
   open_profile_scope VARCHAR(8) [not null, default: `main`]
   show_ranks boolean [not null, default: false]
   hide_registrations boolean [not null, default: false]
-  max_participants int
-  max_substitutes int [not null, default: 0]
-  require_subscription boolean [not null, default: false]
-  subscription_stage VARCHAR(16) [not null, default: `check_in`]
-  subscription_scope VARCHAR(16) [not null, default: `player`]
-  team_rank_min int
-  team_rank_max int
-  team_max_rank_spread int
-  team_unique_identity boolean [not null, default: false]
-  team_require_discord_guild boolean [not null, default: false]
   indexes {
     (tournament_id) [unique, name: "uq_registration_form_tournament"]
     (workspace_id) [name: "ix_registration_form_workspace_id"]
@@ -3497,7 +3485,6 @@ Table tournament.tournament {
   start_date timestamptz
   end_date timestamptz
   auto_transitions_enabled boolean [not null, default: true]
-  allow_late_registration boolean [not null, default: false]
   discord_broadcasts_enabled boolean [not null, default: true]
   discord_dms_enabled boolean [not null, default: true]
   logs_official boolean [not null, default: false]
@@ -3749,8 +3736,8 @@ Ref: draft.player.dimension_id > catalog.role.dimension_id
 Ref: draft.player.captain_role_id > catalog.role.id
 Ref: draft.session.tournament_id > tournament.tournament.id [delete: cascade]
 Ref: draft.session.formation_node_id > tournament.flow_node.id [delete: cascade]
-Ref: draft.session.custom_game_id > mix.lobby.custom_game_id [delete: cascade]
 Ref: draft.session.custom_game_id > mix.custom_game.id [delete: cascade]
+Ref: draft.session.custom_game_id > mix.lobby.custom_game_id [delete: cascade]
 Ref: draft.session.lobby_index > mix.lobby.lobby_index [delete: cascade]
 Ref: draft.session.discipline > tournament.tournament.discipline [delete: cascade]
 Ref: draft.session.discipline > mix.custom_game.discipline [delete: cascade]
@@ -3963,9 +3950,9 @@ Ref: roster.format_role_rule.team_format_id > roster.team_format_dimension.team_
 Ref: roster.format_role_rule.dimension_id > catalog.role.dimension_id
 Ref: roster.format_role_rule.dimension_id > roster.team_format_dimension.dimension_id [delete: cascade]
 Ref: roster.format_role_rule.role_id > catalog.role.id
-Ref: roster.team_format.workspace_id > mix.custom_game.workspace_id [delete: cascade]
-Ref: roster.team_format.workspace_id > tournament.tournament.workspace_id [delete: cascade]
 Ref: roster.team_format.workspace_id > workspace.id [delete: cascade]
+Ref: roster.team_format.workspace_id > tournament.tournament.workspace_id [delete: cascade]
+Ref: roster.team_format.workspace_id > mix.custom_game.workspace_id [delete: cascade]
 Ref: roster.team_format.discipline > tournament.tournament.discipline [delete: cascade]
 Ref: roster.team_format.discipline > catalog.discipline.code
 Ref: roster.team_format.discipline > mix.custom_game.discipline [delete: cascade]
@@ -3976,11 +3963,11 @@ Ref: roster.team_format_dimension.discipline > catalog.role_dimension.discipline
 Ref: roster.team_format_dimension.discipline > roster.team_format.discipline [delete: cascade]
 Ref: roster.team_format_dimension.dimension_id > catalog.role_dimension.id
 Ref: stats.discord_channel.tournament_id > tournament.tournament.id [delete: cascade]
+Ref: stats.event.match_id > stats.match_team.match_id
 Ref: stats.event.match_id > stats.match.id [delete: cascade]
 Ref: stats.event.match_id > stats.match_player.match_id
 Ref: stats.event.match_id > stats.match_team.match_id
 Ref: stats.event.match_id > stats.match_player.match_id
-Ref: stats.event.match_id > stats.match_team.match_id
 Ref: stats.event.type_id > stats.event_type.id
 Ref: stats.event.actor_member_id > stats.match_player.workspace_member_id
 Ref: stats.event.actor_team_id > stats.match_team.encounter_team_id
@@ -3991,8 +3978,8 @@ Ref: stats.event.related_entity_id > catalog.entity.id
 Ref: stats.event.entity_kind > catalog.entity.kind
 Ref: stats.event.entity_kind > catalog.entity.kind
 Ref: stats.event_type.discipline > catalog.discipline.code
-Ref: stats.fact.match_id > stats.match_player.match_id [delete: cascade]
 Ref: stats.fact.match_id > stats.match_team.match_id [delete: cascade]
+Ref: stats.fact.match_id > stats.match_player.match_id [delete: cascade]
 Ref: stats.fact.encounter_team_id > stats.match_team.encounter_team_id [delete: cascade]
 Ref: stats.fact.workspace_member_id > stats.match_player.workspace_member_id [delete: cascade]
 Ref: stats.fact.entity_id > catalog.entity.id [delete: restrict]

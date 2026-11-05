@@ -274,7 +274,6 @@ class SubscriptionAdminService:
         reg = models.Registration
         member = models.WorkspaceMember
         player = models.User
-        form = models.RegistrationForm
         req = models.WorkspaceSubscriptionRequirement
         rows = (
             await session.execute(
@@ -284,7 +283,7 @@ class SubscriptionAdminService:
                 .join(member, reg.workspace_member_id == member.id)
                 .join(player, member.player_id == player.id)
                 .join(models.Tournament, reg.tournament_id == models.Tournament.id)
-                .join(form, form.tournament_id == models.Tournament.id)
+                .join(models.FlowNode, models.FlowNode.id == models.RegistrationEntry.registration_node_id)
                 .join(
                     req,
                     sa.and_(req.workspace_id == models.Tournament.workspace_id, req.is_default.is_(True)),
@@ -294,7 +293,7 @@ class SubscriptionAdminService:
                     reg.deleted_at.is_(None),
                     models.RegistrationEntry.deleted_at.is_(None),
                     models.RegistrationEntry.status != "withdrawn",
-                    form.require_subscription.is_(True),
+                    models.FlowNode.config["require_subscription"].as_boolean().is_(True),
                 )
             )
         ).all()

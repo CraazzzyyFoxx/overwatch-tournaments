@@ -34,14 +34,30 @@ class ApplyChangesTests(FlowCase):
         self.assertEqual({("registration", "draft"), ("formation", "draft")}, {(n.kind, n.status) for n in read.nodes})
         self.assertEqual(1, len(read.edges))
 
-    async def test_reconfiguring_a_started_registration_is_node_frozen(self) -> None:
-        reg = await self.node("registration", "open")
+    async def test_reconfiguring_a_started_formation_is_node_frozen(self) -> None:
+        form = await self.node("formation", "forming", config={"mode": "draft"})
         self.assertEqual(
             (409, "node_frozen"),
             await self._refusal(
-                FlowChanges(nodes=[FlowNodeUpsert(id=reg, kind="registration", name="R", config={"check_in": True})])
+                FlowChanges(nodes=[FlowNodeUpsert(id=form, kind="formation", name="F", config={"mode": "manual"})])
             ),
         )
+
+    async def test_intake_settings_of_a_started_registration_stay_editable(self) -> None:
+        reg = await self.node("registration", "open")
+        read = await self._apply(
+            FlowChanges(nodes=[FlowNodeUpsert(id=reg, kind="registration", name="R", config={"auto_approve": True})])
+        )
+        self.assertEqual({"auto_approve": True}, next(n for n in read.nodes if n.id == reg).config)
+
+    async def test_an_upsert_without_a_position_keeps_the_canvas_position(self) -> None:
+        reg = await self.node("registration")
+        await self._apply(
+            FlowChanges(nodes=[FlowNodeUpsert(id=reg, kind="registration", name="R", position_x=40.0, position_y=8.0)])
+        )
+        read = await self._apply(FlowChanges(nodes=[FlowNodeUpsert(id=reg, kind="registration", name="Renamed")]))
+        node = next(n for n in read.nodes if n.id == reg)
+        self.assertEqual(("Renamed", 40.0, 8.0), (node.name, node.position_x, node.position_y))
 
     async def test_pure_node_frozen_once_downstream_lifecycle_started(self) -> None:
         reg = await self.node("registration", "closed")

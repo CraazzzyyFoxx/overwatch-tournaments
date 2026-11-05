@@ -231,7 +231,6 @@ class TournamentFlowsService:
             challonge_id=tournament_challonge_id,
             challonge_slug=tournament_challonge_slug,
             auto_transitions_enabled=tournament.auto_transitions_enabled,
-            allow_late_registration=tournament.allow_late_registration,
             discord_broadcasts_enabled=tournament.discord_broadcasts_enabled,
             discord_dms_enabled=tournament.discord_dms_enabled,
             logs_official=tournament.logs_official,

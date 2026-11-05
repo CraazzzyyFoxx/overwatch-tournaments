@@ -56,12 +56,14 @@ def division_grid(version_id: int, tiers: tuple[tuple[int, int, int, int | None]
 
 
 async def registration_node(
-    session: Any, tournament_id: int, *, status: str = "open", name: str = "Registration"
+    session: Any, tournament_id: int, *, status: str = "open", name: str = "Registration", config: dict | None = None
 ) -> int:
     """A registration node of the tournament (flushed, not committed): what an entry belongs to."""
     from shared import models
 
-    node = models.FlowNode(tournament_id=tournament_id, kind="registration", name=name, status=status, config={})
+    node = models.FlowNode(
+        tournament_id=tournament_id, kind="registration", name=name, status=status, config=config or {}
+    )
     session.add(node)
     await session.flush()
     return node.id

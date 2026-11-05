@@ -134,7 +134,7 @@ class SubscriptionEnforcementStage(StrEnum):
     subscription to sign up while admitting an unsubscribed player at check-in
     would be incoherent, so there is no "registration only" value to pick wrongly.
 
-    Off is not a member -- that is ``registration_form.require_subscription``
+    Off is not a member -- that is the registration node's ``require_subscription``
     being false. Same shape as ``require_open_profile`` + ``open_profile_scope``
     in the same table: one flag for whether, one value for how.
     """

@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from unittest.mock import patch
 
 import sqlalchemy as sa
 from sqlalchemy.exc import IntegrityError
 
 from shared import models
-from shared.core import enums
 from shared.domain.forms import FormField, FormSchema, FormSection
 from shared.services.ontology import project_disciplines
 from src.schemas.registration import RegistrationSubmit
@@ -41,14 +40,6 @@ class EntryTests(FlowCase):
         self.a = await self.node("registration", "open", name="Day 1")
         self.b = await self.node("registration", "open", name="Day 2")
         async with self.Session() as s:
-            # Until Task 8 the sign-up gate is still the tournament's.
-            s.add(
-                models.TournamentPhaseSchedule(
-                    tournament_id=self.tournament_id,
-                    status=enums.TournamentStatus.REGISTRATION,
-                    starts_at=datetime.now(UTC) - timedelta(hours=1),
-                )
-            )
             form = await s.scalar(
                 sa.select(models.RegistrationForm).where(models.RegistrationForm.tournament_id == self.tournament_id)
             )
@@ -225,11 +216,7 @@ class EntryTests(FlowCase):
                         registration_node_id=self.a, registration_id=registration.id, status="approved"
                     )
                 )
-            await s.execute(
-                sa.update(models.Tournament)
-                .where(models.Tournament.id == self.tournament_id)
-                .values(status=enums.TournamentStatus.CHECK_IN)
-            )
+            await s.execute(sa.update(models.FlowNode).where(models.FlowNode.id == self.a).values(status="check_in"))
             await s.commit()
             team_id = team.id
         async with self.Session() as s:

@@ -115,7 +115,7 @@ class InvitesMixin(TeamServiceBase):
 
         team = await self._lock_team(session, team_id)
         await self._assert_staff_editable(session, team, auth_user)
-        tournament = await self._assert_registration_open(session, team.tournament_id)
+        tournament = await self._assert_registration_open(session, team.tournament_id, team.registration_node_id)
 
         # The slot reservation caps *concurrent* pending invites, but an
         # invite -> revoke -> invite loop stays inside every slot rule. This cumulative
@@ -130,7 +130,7 @@ class InvitesMixin(TeamServiceBase):
 
         shape = await self._resolve_shape(session, tournament)
         occupancy = await self._occupancy(
-            session, team, shape, max_substitutes=await self._max_substitutes(session, team.tournament_id)
+            session, team, shape, max_substitutes=await self._max_substitutes(session, team.registration_node_id)
         )
         # ``offering=True``: a pending invite reserves its slot, so a captain cannot
         # hold ten open offers for one place.

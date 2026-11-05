@@ -38,7 +38,6 @@ from src.services.draft_guards import assert_no_active_draft_session
 # ``src.services.challonge.sync`` is loaded inside ``create_tournament_from_challonge``:
 # importing a remote bracket is one path out of this whole service, and at
 # module scope it would make every tournament write depend on the exporter.
-from src.services.notifications.lifecycle import lifecycle_notifier
 from src.services.registration_team_guards import assert_no_registered_teams
 from src.services.tournament.events import (
     STRUCTURE_RESOURCES,
@@ -530,15 +529,8 @@ class AdminTournamentService:
 
         Manual transitions (``automated=False``) pause time-driven automation by
         setting ``auto_transitions_enabled = False`` in the same transaction, so
-        the tick never fights an admin decision.
-
-        REGISTRATION additionally requires a saved registration form. The status
-        is what the public page announces and what the register button reads, so
-        entering it without a form advertises a sign-up that cannot be completed.
-        ``force`` bypasses this the same way it bypasses the transition matrix: it
-        is the superuser-only "I know what I am doing" switch, and a
-        Challonge-sourced tournament that never takes its own registrations is the
-        case that needs it.
+        the tick never fights an admin decision. Announcements and the registration-form gate belong to the
+        registration node's own transitions (``FlowNodeService``).
         """
         tournament = await self.tournament_repo.get(session, tournament_id)
 
@@ -547,24 +539,6 @@ class AdminTournamentService:
 
         if not force:
             tournament_state.validate_transition(tournament.status, target_status)
-
-        if (
-            not force
-            and target_status == TournamentStatus.REGISTRATION
-            and not await self.has_registration_form(session, tournament_id)
-        ):
-            # ``ApiExc`` list, not a bare dict: that is the shape the frontend's
-            # `parseApiError` reads, so the organizer sees the sentence below
-            # instead of a generic "An error occurred".
-            raise ApiHTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=[
-                    ApiExc(
-                        code="registration_form_missing",
-                        msg=("This tournament has no registration form yet. Save one before opening registration."),
-                    )
-                ],
-            )
 
         old_status = _status_value(tournament.status)
         was_finished = tournament.is_finished
@@ -582,7 +556,6 @@ class AdminTournamentService:
             old_status=old_status,
             new_status=_status_value(tournament.status),
         )
-        await lifecycle_notifier.on_status_entered(session, tournament)
         await publish_tournament_invalidation(session, tournament_id, STRUCTURE_RESOURCES)
         await session.commit()
         return await self.get_tournament(session, tournament_id)

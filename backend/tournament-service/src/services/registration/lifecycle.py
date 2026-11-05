@@ -68,8 +68,10 @@ from src.services.registration.read_model import (
     _resolve_top_heroes_config,
     registration_read_loaders,
 )
+from src.services.registration.self_edit import submitted_late
 from src.services.registration.serializers import serialize_registration
 from src.services.registration.service import RegistrationService, registration_service
+from src.services.registration.windows import node_config, windows_service
 from src.services.tournament.events import (
     enqueue_registration_approved,
     enqueue_registrations_approved,
@@ -248,8 +250,10 @@ class RegistrationLifecycleService:
         # Same resolution the public participants list uses, so the admin
         # Admission / Subscription / Profile columns are byte-identical to what
         # the player sees on their own card.
+        node = await self.common.ensure_registration_node(session, tournament_id, registration_node_id)
+        schedule = await windows_service.load_schedule(session, registration_node_id)
         admissions = await self.registrations.resolve_admission_list(
-            session, registrations, entry_by_registration, form=form
+            session, registrations, entry_by_registration, form=form, node_config=node_config(node)
         )
         provider = identity_provider(tournament.discipline)
         reads = []
@@ -268,6 +272,7 @@ class RegistrationLifecycleService:
                     profiles_open=chips.profiles_open,
                     subscription_outcome=chips.subscription_outcome,
                     roster=rosters.get(registration.id),
+                    submitted_late=submitted_late(entry, schedule),
                 )
             )
         return reads

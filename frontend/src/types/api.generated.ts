@@ -22298,11 +22298,6 @@ export interface components {
         /** TournamentRead */
         "tournament.TournamentRead": {
             /**
-             * Allow Late Registration
-             * @default false
-             */
-            allow_late_registration: boolean;
-            /**
              * Auto Transitions Enabled
              * @default true
              */
@@ -31086,11 +31081,6 @@ export interface components {
         };
         /** RegistrationFormRead */
         "tournament.RegistrationFormRead": {
-            /**
-             * Auto Approve
-             * @default false
-             */
-            auto_approve: boolean;
             /** Discipline */
             discipline: string;
             form_schema: components["schemas"]["tournament.FormSchema-Output"];
@@ -31101,38 +31091,16 @@ export interface components {
             hide_registrations: boolean;
             /** Id */
             id: number;
-            /** Is Open */
-            is_open: boolean;
-            /**
-             * Max Participants
-             * @default null
-             */
-            max_participants: number | null;
-            /**
-             * Max Substitutes
-             * @default 0
-             */
-            max_substitutes: number;
             /**
              * Open Profile Scope
              * @default main
              */
             open_profile_scope: string;
             /**
-             * Registration Late
-             * @default false
-             */
-            registration_late: boolean;
-            /**
              * Require Open Profile
              * @default false
              */
             require_open_profile: boolean;
-            /**
-             * Require Subscription
-             * @default false
-             */
-            require_subscription: boolean;
             /**
              * Show Ranks
              * @default false
@@ -31151,39 +31119,6 @@ export interface components {
             subscription_requirement_json?: {
                 [key: string]: unknown;
             };
-            /**
-             * Subscription Scope
-             * @default player
-             * @enum {string}
-             */
-            subscription_scope: TournamentRegistrationFormReadSubscription_scope;
-            /** @default check_in */
-            subscription_stage: components["schemas"]["tournament.SubscriptionEnforcementStage"];
-            /**
-             * Team Max Rank Spread
-             * @default null
-             */
-            team_max_rank_spread: number | null;
-            /**
-             * Team Rank Max
-             * @default null
-             */
-            team_rank_max: number | null;
-            /**
-             * Team Rank Min
-             * @default null
-             */
-            team_rank_min: number | null;
-            /**
-             * Team Require Discord Guild
-             * @default false
-             */
-            team_require_discord_guild: boolean;
-            /**
-             * Team Unique Identity
-             * @default false
-             */
-            team_unique_identity: boolean;
             /** Tournament Id */
             tournament_id: number;
             /** Version Id */
@@ -31239,27 +31174,12 @@ export interface components {
         };
         /** RegistrationFormUpsert */
         "tournament.RegistrationFormUpsert": {
-            /**
-             * Auto Approve
-             * @default false
-             */
-            auto_approve: boolean;
             form_schema: components["schemas"]["tournament.FormSchema-Input"];
             /**
              * Hide Registrations
              * @default false
              */
             hide_registrations: boolean;
-            /**
-             * Max Participants
-             * @default null
-             */
-            max_participants: number | null;
-            /**
-             * Max Substitutes
-             * @default 0
-             */
-            max_substitutes: number;
             /**
              * Open Profile Scope
              * @default main
@@ -31271,48 +31191,10 @@ export interface components {
              */
             require_open_profile: boolean;
             /**
-             * Require Subscription
-             * @default false
-             */
-            require_subscription: boolean;
-            /**
              * Show Ranks
              * @default false
              */
             show_ranks: boolean;
-            /**
-             * Subscription Scope
-             * @default player
-             * @enum {string}
-             */
-            subscription_scope: TournamentRegistrationFormUpsertSubscription_scope;
-            /** @default check_in */
-            subscription_stage: components["schemas"]["tournament.SubscriptionEnforcementStage"];
-            /**
-             * Team Max Rank Spread
-             * @default null
-             */
-            team_max_rank_spread: number | null;
-            /**
-             * Team Rank Max
-             * @default null
-             */
-            team_rank_max: number | null;
-            /**
-             * Team Rank Min
-             * @default null
-             */
-            team_rank_min: number | null;
-            /**
-             * Team Require Discord Guild
-             * @default false
-             */
-            team_require_discord_guild: boolean;
-            /**
-             * Team Unique Identity
-             * @default false
-             */
-            team_unique_identity: boolean;
         };
         /** RegistrationTeamAdmissionRequest */
         "tournament.RegistrationTeamAdmissionRequest": {
@@ -32006,20 +31888,6 @@ export interface components {
             /** Slug */
             slug: string;
         };
-        /**
-         * SubscriptionEnforcementStage
-         * @description The EARLIEST admission gate a subscription requirement blocks at.
-         *
-         *     Ordered, not a set: ``registration`` implies check-in too. Requiring a
-         *     subscription to sign up while admitting an unsubscribed player at check-in
-         *     would be incoherent, so there is no "registration only" value to pick wrongly.
-         *
-         *     Off is not a member -- that is ``registration_form.require_subscription``
-         *     being false. Same shape as ``require_open_profile`` + ``open_profile_scope``
-         *     in the same table: one flag for whether, one value for how.
-         * @enum {string}
-         */
-        "tournament.SubscriptionEnforcementStage": TournamentSubscriptionEnforcementStage;
         /** SubscriptionProviderConfigListResponse */
         "tournament.SubscriptionProviderConfigListResponse": {
             /** Configs */
@@ -32340,11 +32208,6 @@ export interface components {
         /** TournamentCreate */
         "tournament.TournamentCreate": {
             /**
-             * Allow Late Registration
-             * @default false
-             */
-            allow_late_registration: boolean;
-            /**
              * Auto Transitions Enabled
              * @default true
              */
@@ -32568,11 +32431,6 @@ export interface components {
         };
         /** TournamentUpdate */
         "tournament.TournamentUpdate": {
-            /**
-             * Allow Late Registration
-             * @default null
-             */
-            allow_late_registration: boolean | null;
             /**
              * Auto Transitions Enabled
              * @default null
@@ -48065,7 +47923,9 @@ export interface operations {
     };
     get__api_v1_tournaments__tournament_id__subscription_me: {
         parameters: {
-            query?: never;
+            query?: {
+                registration_node_id?: string;
+            };
             header?: never;
             path: {
                 tournament_id: string;
@@ -48143,7 +48003,9 @@ export interface operations {
     };
     post__api_v1_tournaments__tournament_id__subscription_redeem_code: {
         parameters: {
-            query?: never;
+            query?: {
+                registration_node_id?: string;
+            };
             header?: never;
             path: {
                 tournament_id: string;
@@ -85008,14 +84870,6 @@ export enum TournamentPregameRoomRowPhase {
     done = "done",
     idle = "idle"
 }
-export enum TournamentRegistrationFormReadSubscription_scope {
-    player = "player",
-    team = "team"
-}
-export enum TournamentRegistrationFormUpsertSubscription_scope {
-    player = "player",
-    team = "team"
-}
 export enum TournamentRegistrationTeamAdmissionRequestAdmission {
     pending = "pending",
     accepted = "accepted",
@@ -85062,10 +84916,6 @@ export enum TournamentStatusMetaReadKind {
 export enum TournamentStatusMetaReadScope {
     registration = "registration",
     balancer = "balancer"
-}
-export enum TournamentSubscriptionEnforcementStage {
-    registration = "registration",
-    check_in = "check_in"
 }
 export enum TournamentTeamFormatReadSource {
     tournament = "tournament",

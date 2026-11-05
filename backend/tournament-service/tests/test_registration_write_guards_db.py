@@ -52,7 +52,7 @@ from shared.models.subscriptions.subscription import (  # noqa: E402
     WorkspaceSubscriptionRequirement,
 )
 from shared.models.tenancy.workspace import Workspace  # noqa: E402
-from shared.models.tournament import Tournament, TournamentPhaseSchedule  # noqa: E402
+from shared.models.tournament import Tournament  # noqa: E402
 from shared.services.subscriptions import SubscriptionVerdict  # noqa: E402
 from shared.services.subscriptions.entitlements import SubscriptionResolver  # noqa: E402
 from shared.services.subscriptions.wiring import build_log_sink, build_store  # noqa: E402
@@ -115,21 +115,7 @@ async def _seed(session: Any, *, require_subscription: bool = False) -> SimpleNa
     await save_tournament_format(
         session, tournament, TeamFormat(discipline="overwatch", name="Open three", starter_min=3, starter_max=3)
     )
-    now = datetime.now(UTC)
-    session.add(
-        TournamentPhaseSchedule(
-            tournament_id=tournament.id,
-            status=enums.TournamentStatus.REGISTRATION,
-            starts_at=now - timedelta(days=1),
-            ends_at=now + timedelta(days=1),
-        )
-    )
-    form = RegistrationForm(
-        tournament_id=tournament.id,
-        workspace_id=workspace.id,
-        require_subscription=require_subscription,
-        subscription_stage=enums.SubscriptionEnforcementStage.registration.value,
-    )
+    form = RegistrationForm(tournament_id=tournament.id, workspace_id=workspace.id)
     session.add(form)
     await session.flush()
     version = RegistrationFormVersion(form_id=form.id, number=1, schema_json=SCHEMA.model_dump(mode="json"))
@@ -161,7 +147,14 @@ async def _seed(session: Any, *, require_subscription: bool = False) -> SimpleNa
     ]
     session.add_all(users)
     await session.flush()
-    node_id = await registration_node(session, tournament.id)
+    node_id = await registration_node(
+        session,
+        tournament.id,
+        config={
+            "require_subscription": require_subscription,
+            "subscription_stage": enums.SubscriptionEnforcementStage.registration.value,
+        },
+    )
     await session.commit()
     return SimpleNamespace(
         suffix=suffix,

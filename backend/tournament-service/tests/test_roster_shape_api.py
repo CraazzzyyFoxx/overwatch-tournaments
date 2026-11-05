@@ -59,7 +59,6 @@ def _tournament(
         start_date=datetime.now(UTC),
         end_date=datetime.now(UTC),
         auto_transitions_enabled=True,
-        allow_late_registration=False,
         discord_broadcasts_enabled=True,
         discord_dms_enabled=True,
         logs_official=False,

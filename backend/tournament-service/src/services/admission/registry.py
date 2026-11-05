@@ -10,7 +10,7 @@ registrant's progress steps walk that tuple.
 
 The profile stage is a hard-coded ``check_in``; there is no per-tournament
 profile stage. The subscription entry is the only reader of
-``registration_form.subscription_stage``, and it is gated on
+the registration node's ``subscription_stage``, and it is gated on
 ``enforces_subscription`` rather than ``require_subscription``: an armed toggle
 over an empty rule disarms itself rather than refusing everyone.
 

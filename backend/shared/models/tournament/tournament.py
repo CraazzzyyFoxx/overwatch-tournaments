@@ -100,11 +100,6 @@ class Tournament(db.TimeStampIntegerMixin):
     auto_transitions_enabled: Mapped[bool] = mapped_column(
         Boolean(), default=True, server_default="true", nullable=False
     )
-    # Registration stays open regardless of the current phase (until the
-    # tournament is COMPLETED/ARCHIVED).
-    allow_late_registration: Mapped[bool] = mapped_column(
-        Boolean(), default=False, server_default="false", nullable=False
-    )
     # Whether lifecycle events (registration/check-in opened, match scheduled)
     # are posted to the workspace's Discord notification channel.
     discord_broadcasts_enabled: Mapped[bool] = mapped_column(

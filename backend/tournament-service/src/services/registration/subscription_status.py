@@ -24,6 +24,7 @@ from loguru import logger
 from redis.exceptions import RedisError
 
 from shared.core.errors import ApiExc, ApiHTTPException
+from shared.domain.flow.config import RegistrationNodeConfig
 from shared.services.subscriptions import (
     Outcome,
     SubscriptionRequirement,
@@ -68,10 +69,11 @@ class RequirementEvaluator(Protocol):
 async def subscription_status_for_user(
     *,
     form: Any | None,
+    node_config: RegistrationNodeConfig,
     auth_user_id: int,
     resolver: RequirementEvaluator,
 ) -> SubscriptionStatusRead:
-    if form is None or not getattr(form, "require_subscription", False):
+    if form is None or not node_config.require_subscription:
         return SubscriptionStatusRead(required=False)
 
     # The workspace owns the rule; the resolver owns the parse and fails open on a
@@ -102,11 +104,10 @@ async def subscription_status_for_user(
         # tournament never refuses sign-up, so promising a block here would disable a
         # submit the server accepts. Non-forcing, so a patron who just subscribed may
         # see a stale block for up to the entitlement TTL; the gate re-resolves live.
-        # The stage comes from ``AdmissionConfig`` (the column's only reader), where an
-        # absent or unrecognised value reads as ``check_in``: a typo must not start
-        # refusing sign-ups.
+        # The stage comes from ``AdmissionConfig``, where an absent or unrecognised value reads as ``check_in``: a
+        # typo must not start refusing sign-ups.
         blocks_registration=(
-            AdmissionConfig.from_form(form).subscription_stage is AdmissionStage.registration
+            AdmissionConfig.from_form(form, node_config).subscription_stage is AdmissionStage.registration
             and evaluate_requirement(requirement, verdicts, deferred_providers=code_providers).blocks_admission
         ),
         verdicts={

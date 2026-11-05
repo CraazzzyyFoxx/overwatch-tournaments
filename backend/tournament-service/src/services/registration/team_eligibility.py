@@ -18,6 +18,7 @@ from sqlalchemy.orm import selectinload
 
 from shared import models
 from shared.core.social import SocialProvider
+from shared.domain.flow.config import RegistrationNodeConfig
 from shared.domain.roster import PlayerRoster
 from shared.domain.roster_shape import FLEX_SLOT_CODE
 from shared.domain.team_eligibility import (
@@ -193,14 +194,14 @@ class TeamEligibilityService:
         team: models.RegistrationTeam,
         members: Sequence[models.RegistrationEntry],
         *,
-        form: models.RegistrationForm | None,
+        config: RegistrationNodeConfig,
         shape: Any,
         workspace: models.Workspace | None,
         discord: DiscordClient,
     ) -> list[EligibilityIssue]:
         """All configured team rules for this roster. Empty when every rule is off."""
         issues = await self.evaluate_many(
-            session, [(team, members)], form=form, shape=shape, workspace=workspace, discord=discord
+            session, [(team, members)], config=config, shape=shape, workspace=workspace, discord=discord
         )
         return issues[team.id]
 
@@ -209,15 +210,15 @@ class TeamEligibilityService:
         session: AsyncSession,
         rosters: Sequence[tuple[models.RegistrationTeam, Sequence[models.RegistrationEntry]]],
         *,
-        form: models.RegistrationForm | None,
+        config: RegistrationNodeConfig,
         shape: Any,
         workspace: models.Workspace | None,
         discord: DiscordClient,
     ) -> dict[int, list[EligibilityIssue]]:
-        """:meth:`evaluate` for several teams of ONE tournament: every read, the rank
+        """:meth:`evaluate` for several teams of ONE registration node: every read, the rank
         resolve and the Discord batch happen once, not once per team."""
         issues: dict[int, list[EligibilityIssue]] = {team.id: [] for team, _members in rosters}
-        if form is None or not rosters:
+        if not rosters:
             return issues
         first = rosters[0][0]
         # The rosters are entries (their node's participation); the rules read the registrations behind them.
@@ -225,7 +226,9 @@ class TeamEligibilityService:
         members = [entry.registration for entry in entries]
 
         ranked = (
-            form.team_rank_min is not None or form.team_rank_max is not None or form.team_max_rank_spread is not None
+            config.team_rank_min is not None
+            or config.team_rank_max is not None
+            or config.team_max_rank_spread is not None
         )
         if ranked and members:
             loaded = list(
@@ -246,14 +249,14 @@ class TeamEligibilityService:
                 issues[team.id].extend(
                     evaluate_rank_rules(
                         _starter_ranks(roster, resolved, shape),
-                        rank_min=form.team_rank_min,
-                        rank_max=form.team_rank_max,
-                        max_spread=form.team_max_rank_spread,
+                        rank_min=config.team_rank_min,
+                        rank_max=config.team_rank_max,
+                        max_spread=config.team_max_rank_spread,
                     )
                 )
 
         discord_ids = await _discord_ids_by_registration(session, members)
-        if form.team_unique_identity:
+        if config.team_unique_identity:
             keys_by_team = await _identity_keys_by_team(session, tournament_id=first.tournament_id)
             for team, roster in rosters:
                 taken = set().union(*(keys for team_id, keys in keys_by_team.items() if team_id != team.id))
@@ -263,7 +266,7 @@ class TeamEligibilityService:
                 }
                 issues[team.id].extend(evaluate_unique_identity(this_keys=this_keys, taken_keys=taken))
 
-        if form.team_require_discord_guild:
+        if config.team_require_discord_guild:
             guild_id = getattr(workspace, "discord_guild_id", None) if workspace is not None else None
             signals = await _discord_signals(members, discord_ids, guild_id=guild_id, discord=discord)
             for team, roster in rosters:

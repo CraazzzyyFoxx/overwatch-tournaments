@@ -7,11 +7,10 @@ tournament ASKS lives here, as one versioned :class:`FormSchema`.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Literal
+from typing import Any
 
 from pydantic import BaseModel, Field
 
-from shared.core.enums import SubscriptionEnforcementStage
 from shared.domain.forms import FormSchema
 from src.schemas.registration import SubroleOption
 
@@ -24,43 +23,16 @@ class RegistrationFormRead(BaseModel):
     #: provider. Carried here so every form consumer (wizard, invite, edit dialog) scopes its
     #: metadata reads from the loaded owner DTO instead of a second tournament read.
     discipline: str
-    # DERIVED, read-only: "is registration open right now", computed from the
-    # tournament's REGISTRATION phase-schedule window
-    # (shared.services.registration_window).
-    is_open: bool
-    # DERIVED, read-only: ``is_open`` is true only because
-    # ``allow_late_registration`` lifted the window's ``ends_at``. The wizard
-    # renders the reserve switch forced ON when this is set, because that is what
-    # the server will write -- a registrant must learn it BEFORE submitting.
-    registration_late: bool = False
-    auto_approve: bool = False
     require_open_profile: bool = False
     open_profile_scope: str = "main"
     show_ranks: bool = False
     #: Collapses the public participants list to an aggregate. See
     #: ``RegistrationForm.hide_registrations`` -- enforced in the read model.
     hide_registrations: bool = False
-    #: Advisory capacity, never enforced. ``None`` means "not announced".
-    max_participants: int | None = Field(default=None, ge=0)
-    require_subscription: bool = False
-    # WHEN the requirement bites, once the toggle above is on. See
-    # ``enums.SubscriptionEnforcementStage``: ``registration`` implies check-in too.
-    subscription_stage: SubscriptionEnforcementStage = SubscriptionEnforcementStage.check_in
     # Server-resolved from the WORKSPACE's requirement and READ-ONLY: the rule is
     # workspace-scoped (see WorkspaceSubscriptionRequirementUpsert) and has no
     # column on the form mapper. The caller passes the resolved blob in.
     subscription_requirement_json: dict[str, Any] = Field(default_factory=dict)
-    #: Bench size for team registration. Zero disables substitutes. Not a starter
-    #: slot -- see ``RegistrationForm.max_substitutes``.
-    max_substitutes: int = Field(default=0, ge=0)
-    #: ``player`` (default) keeps the per-entrant subscription gate. ``team`` is
-    #: "the captain pays": a stamp on the registered team covers the roster.
-    subscription_scope: Literal["player", "team"] = "player"
-    team_rank_min: int | None = Field(default=None, ge=0)
-    team_rank_max: int | None = Field(default=None, ge=0)
-    team_max_rank_spread: int | None = Field(default=None, ge=0)
-    team_unique_identity: bool = False
-    team_require_discord_guild: bool = False
     #: The questions this form asks, as of ``version_id``.
     form_schema: FormSchema
     version_id: int
@@ -75,32 +47,13 @@ class RegistrationFormRead(BaseModel):
 
 
 class RegistrationFormUpsert(BaseModel):
-    # No `subscription_requirement_json` (workspace-scoped) and no `is_open` (the
-    # tournament's REGISTRATION schedule window decides). A client that sends
-    # either is TOLERATED, not rejected -- Pydantic's default `extra="ignore"`
-    # drops the key and the rest of the save succeeds.
-    auto_approve: bool = False
+    # No `subscription_requirement_json` (workspace-scoped) and no intake settings (the registration node's config).
+    # A client that sends either is TOLERATED, not rejected -- Pydantic's default `extra="ignore"` drops the key and
+    # the rest of the save succeeds.
     require_open_profile: bool = False
     open_profile_scope: str = "main"
     show_ranks: bool = False
     hide_registrations: bool = False
-    #: Informational only -- deliberately no cross-check against the live count.
-    max_participants: int | None = Field(default=None, ge=0)
-    require_subscription: bool = False
-    # Defaults to the looser stage, so a client that omits the field cannot
-    # silently turn a check-in requirement into a sign-up wall.
-    subscription_stage: SubscriptionEnforcementStage = SubscriptionEnforcementStage.check_in
-    #: Omitted becomes 0, same as every other field on this full-replace upsert.
-    #: The builder always sends it.
-    max_substitutes: int = Field(default=0, ge=0)
-    #: Omitted becomes ``player``, the same full-replace trap as
-    #: ``max_substitutes``. The builder always sends it.
-    subscription_scope: Literal["player", "team"] = "player"
-    team_rank_min: int | None = Field(default=None, ge=0)
-    team_rank_max: int | None = Field(default=None, ge=0)
-    team_max_rank_spread: int | None = Field(default=None, ge=0)
-    team_unique_identity: bool = False
-    team_require_discord_guild: bool = False
     #: The whole question set, full-replace. A save whose canonical JSON differs
     #: from the current version appends a new version; an identical one does not.
     form_schema: FormSchema

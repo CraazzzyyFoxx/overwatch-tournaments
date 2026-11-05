@@ -108,18 +108,16 @@ Side effect of reaching `LIVE`: auto-start the first group-stage wave (stages sh
 
 ### Windows
 
-Registration inverts the other windows (`backend/shared/services/registration_window.py`):
+Sign-up and check-in are windows of a **registration node** (`backend/shared/services/registration_window.py`):
 
-- No `REGISTRATION` schedule row → closed.
-- `COMPLETED` / `ARCHIVED` → always closed.
-- `allow_late_registration` lifts `ends_at` without erasing the intended close time.
-- The tournament's current **phase does not participate**.
+- Sign-up is open iff the node is `open` and inside its `open` schedule row (a missing row means the status decides), or the node is `check_in` and `allow_late_registration` is on. `allow_late_registration` lifts the row's `ends_at` without erasing the intended close time.
+- A sign-up is *late* (written as a reserve) when the node is `check_in` or past the `open` row's `ends_at`.
+- Check-in is open iff the node is `check_in` and inside its `check_in` row (a missing row means open).
+- Several registration nodes run independent windows in one tournament.
 
-Check-in: status **must** be `CHECK_IN` **and** `now` inside the window (missing row / `ends_at NULL` = the whole phase).
+### Form, intake settings and statuses
 
-### Form and statuses
-
-One form per tournament: fields, flex mode, team rank rules, Discord-guild requirement, subscription toggle/stage/scope.
+The form holds the questions and the profile-level rules (open profile, rank visibility). Who may take part in an intake and when lives in the registration node's config: auto-approve, capacity, bench size, late sign-up, team rank rules, Discord-guild requirement, subscription toggle/stage/scope.
 
 Registration statuses are a per-workspace catalog. `ready` / `incomplete` **cannot be written by hand** — they are derived from roles + ranks.
 

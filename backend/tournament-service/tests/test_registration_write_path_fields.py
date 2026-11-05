@@ -23,7 +23,6 @@ Runs under stdlib unittest -- no pytest-asyncio in this repo.
 from __future__ import annotations
 
 import sys
-from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from unittest import IsolatedAsyncioTestCase, mock
@@ -74,18 +73,12 @@ SCHEMA = _schema()
 
 
 def _open_tournament() -> models.Tournament:
-    """A tournament whose REGISTRATION window is open right now."""
-    now = datetime.now(UTC)
-    tournament = models.Tournament(id=7, workspace_id=1, discipline="overwatch", status=TournamentStatus.REGISTRATION)
-    tournament.phase_schedule = [
-        models.TournamentPhaseSchedule(
-            tournament_id=7,
-            status=TournamentStatus.REGISTRATION,
-            starts_at=now - timedelta(days=1),
-            ends_at=now + timedelta(days=1),
-        )
-    ]
-    return tournament
+    return models.Tournament(id=7, workspace_id=1, discipline="overwatch", status=TournamentStatus.LIVE)
+
+
+def _open_node() -> models.FlowNode:
+    """The registration node the entries sit in: open, no schedule row, so the status decides."""
+    return models.FlowNode(id=3, tournament_id=7, kind="registration", name="Registration", status="open", config={})
 
 
 class _RecordingSession:
@@ -111,15 +104,15 @@ class _RecordingSession:
     async def refresh(self, obj: Any) -> None:
         return None
 
-    async def get(self, _entity: Any, _ident: Any, **_kwargs: Any) -> Any:
-        """``_reload_for_read`` re-reads the written row with its loader set."""
-        return None
+    async def get(self, entity: Any, _ident: Any, **_kwargs: Any) -> Any:
+        """The entry's node (its window gates the edit); ``_reload_for_read`` re-reads the written row, found nowhere."""
+        return _open_node() if entity is models.FlowNode else None
 
     async def scalar(self, *_args: Any, **_kwargs: Any) -> Any:
         return self._scalar_value
 
     async def scalars(self, *_args: Any, **_kwargs: Any) -> Any:
-        result = mock.Mock()
+        result = mock.MagicMock()  # iterates empty: the node's schedule
         result.all.return_value = list(rated_catalog().values())
         return result
 

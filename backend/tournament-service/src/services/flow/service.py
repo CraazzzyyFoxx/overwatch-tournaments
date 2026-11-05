@@ -186,7 +186,12 @@ class FlowService:
                 spec = FlowNodeSpec(node_id, u.kind, u.config, old.stage_id, old.stage_type)
                 if FlowNodeKind.STAGE in (u.kind, old.kind) and u.kind != old.kind:
                     error("stage_node_managed_by_stage", "A node cannot become or stop being a stage node", node_id)
-                elif (u.kind, dict(u.config)) != (old.kind, dict(old.config)) and await frozen(node_id):
+                elif (
+                    (u.kind, dict(u.config)) != (old.kind, dict(old.config))
+                    # Intake settings stay editable while a registration node runs; its input (edges) and kind do not.
+                    and (u.kind != old.kind or old.kind != FlowNodeKind.REGISTRATION)
+                    and await frozen(node_id)
+                ):
                     error(
                         "node_frozen", "A started node, or one feeding a started node, cannot be reconfigured", node_id
                     )
@@ -263,11 +268,13 @@ class FlowService:
                 "kind": u.kind.value,
                 "name": u.name,
                 "config": u.config,
-                "position_x": u.position_x,
-                "position_y": u.position_y,
                 # A kind change (allowed only on an unfrozen node) starts the node over in the new kind's lifecycle.
                 "status": (FlowNodeStatus.DRAFT if u.kind in LIFECYCLE_KINDS else FlowNodeStatus.PENDING).value,
             }
+            # A settings save that omits the canvas position must not move the node.
+            for axis in ("position_x", "position_y"):
+                if u.id is None or axis in u.model_fields_set:
+                    fields[axis] = getattr(u, axis)
             if u.id is None:
                 created.append(FlowNode(tournament_id=tournament_id, stage_id=u.stage_id, **fields))
             else:

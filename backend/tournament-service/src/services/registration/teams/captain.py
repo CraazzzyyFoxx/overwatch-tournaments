@@ -19,7 +19,7 @@ from shared.services.subscriptions.wiring import build_store
 from src.schemas.registration import RegistrationSubmit
 from src.services.registration.service import TeamPlacement
 from src.services.registration.subscription_codes import redeem_challenge_code
-from src.services.registration.teams._core import TeamServiceBase, _form
+from src.services.registration.teams._core import TeamServiceBase, _node_config
 from src.services.registration.teams._shared import (
     INVITE_PENDING,
     INVITE_REVOKED,
@@ -32,7 +32,7 @@ from src.services.registration.teams._shared import (
     _check_slot,
     _fail,
 )
-from src.services.registration.windows import is_check_in_window_active
+from src.services.registration.windows import windows_service
 
 
 def _cleaned_name(name: str) -> str:
@@ -78,9 +78,9 @@ class CaptainMixin(TeamServiceBase):
             # exported_team_id backfill, keyed on the full name, would then miss.
             raise _fail(400, "team_name_invalid", 'A team name cannot contain "#"')
 
-        tournament = await self._assert_registration_open(session, tournament_id)
+        tournament = await self._assert_registration_open(session, tournament_id, registration_node_id)
         shape = await self._resolve_shape(session, tournament)
-        max_substitutes = await self._max_substitutes(session, tournament_id)
+        max_substitutes = await self._max_substitutes(session, registration_node_id)
 
         team = models.RegistrationTeam(
             tournament_id=tournament_id,
@@ -290,7 +290,7 @@ class CaptainMixin(TeamServiceBase):
         tournament = await self.tournament_repo.get(session, team.tournament_id)
         if tournament is None:
             raise _fail(404, "tournament_not_found", "Tournament not found")
-        if not is_check_in_window_active(tournament):
+        if not await windows_service.load_check_in_open(session, registration_node_id):
             raise _fail(409, "check_in_closed", "Check-in is not active for this tournament")
         awaiting = _awaiting(await self._roster_members(session, team.id))
         registrations = [member.registration for member in awaiting]
@@ -333,8 +333,7 @@ class CaptainMixin(TeamServiceBase):
     ) -> models.RegistrationTeam:
         team = await self._lock_team(session, team_id)
         await self._assert_staff(session, team, auth_user)
-        form = await _form(session, team.tournament_id)
-        if form is None or (form.subscription_scope or "player") != SUBSCRIPTION_SCOPE_TEAM:
+        if (await _node_config(session, team.registration_node_id)).subscription_scope != SUBSCRIPTION_SCOPE_TEAM:
             raise _fail(409, "subscription_not_team_scoped", "This tournament does not use team subscription")
         store = build_store(session)
         now = datetime.now(UTC)
@@ -378,8 +377,7 @@ class CaptainMixin(TeamServiceBase):
         Does not refuse create when nothing is active: the captain may redeem a
         code later. Create still gates the captain personally when the form asks.
         """
-        form = await _form(session, team.tournament_id)
-        if form is None or (form.subscription_scope or "player") != SUBSCRIPTION_SCOPE_TEAM:
+        if (await _node_config(session, team.registration_node_id)).subscription_scope != SUBSCRIPTION_SCOPE_TEAM:
             return
         if team_subscription_is_current(team):
             return
@@ -408,7 +406,7 @@ class CaptainMixin(TeamServiceBase):
         """Hand captaincy to another accepted member. Rosters are unchanged."""
         team = await self._lock_team(session, team_id)
         _assert_mutable(team)
-        await self._assert_registration_open(session, team.tournament_id)
+        await self._assert_registration_open(session, team.tournament_id, team.registration_node_id)
         await self._assert_captain(session, team, auth_user)
 
         successor = await self.entry_repo.get_for(
@@ -441,7 +439,7 @@ class CaptainMixin(TeamServiceBase):
         """
         team = await self._lock_team(session, team_id)
         _assert_mutable(team)
-        await self._assert_registration_open(session, team.tournament_id)
+        await self._assert_registration_open(session, team.tournament_id, team.registration_node_id)
         await self._assert_captain(session, team, auth_user)
 
         # Only the STATUS changes; the team link is retained deliberately. The "your

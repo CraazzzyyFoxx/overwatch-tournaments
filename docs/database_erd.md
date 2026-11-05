@@ -13,7 +13,7 @@ baselines and Discord channels live in `stats/`. `catalog/` writes only to `cata
 > `--check` and fails on drift, so the diagrams cannot fall behind the models again.
 
 <!-- ERD:auto _alembic_head -->
-Alembic head: **`flowP3_04`** (176 revisions in `backend/migrations/versions/`).
+Alembic head: **`flowP3_05`** (177 revisions in `backend/migrations/versions/`).
 <!-- /ERD:auto -->
 
 **Reading the diagrams**
@@ -1446,7 +1446,6 @@ erDiagram
         timestamptz start_date "nullable"
         timestamptz end_date "nullable"
         boolean auto_transitions_enabled
-        boolean allow_late_registration
         boolean discord_broadcasts_enabled
         boolean discord_dms_enabled
         boolean logs_official
@@ -2041,23 +2040,11 @@ erDiagram
         timestamptz updated_at "nullable"
         bigint tournament_id FK,UK
         bigint workspace_id FK
-        boolean is_open
-        boolean auto_approve
         bigint current_version_id FK "nullable"
         boolean require_open_profile
         varchar(8) open_profile_scope
         boolean show_ranks
         boolean hide_registrations
-        int max_participants "nullable"
-        int max_substitutes
-        boolean require_subscription
-        varchar(16) subscription_stage
-        varchar(16) subscription_scope
-        int team_rank_min "nullable"
-        int team_rank_max "nullable"
-        int team_max_rank_spread "nullable"
-        boolean team_unique_identity
-        boolean team_require_discord_guild
     }
     REGISTRATION_FORM_TEMPLATE {
         bigint id PK

@@ -1,8 +1,7 @@
 """What the tournament and its workspace decided, as one value.
 
-Assembled once per request and passed by value. The tournament's
-``registration_form`` holds the TOGGLES (whether a requirement is on, and from
-which stage); the workspace's ``subscriptions.requirement`` holds the RULE, so a
+Assembled once per request and passed by value. The registration node's config holds the TOGGLES (whether a
+requirement is on, and from which stage); the workspace's ``subscriptions.requirement`` holds the RULE, so a
 new tournament does not re-ask which providers count.
 
 Forms are duck-typed (the ORM row, or a stub in unit tests), so every read is a
@@ -18,6 +17,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from src.services.admission.types import AdmissionStage
 
 if TYPE_CHECKING:
+    from shared.domain.flow.config import RegistrationNodeConfig
     from shared.services.subscriptions import SubscriptionRequirement
 
 __all__ = ("AdmissionConfig",)
@@ -60,14 +60,16 @@ class AdmissionConfig:
     def from_form(
         cls,
         form: Any | None,
+        node_config: RegistrationNodeConfig,
         *,
         subscription_rule: SubscriptionRequirement | None = None,
     ) -> AdmissionConfig:
-        """Project a ``RegistrationForm`` (or a stub) into a config.
+        """Project a ``RegistrationForm`` (or a stub) and the registration node's config into a config.
 
         ``form is None`` yields the all-off config: a tournament with no
         registration form has nothing to submit against, so it also has no
-        requirements to enforce.
+        requirements to enforce. The subscription toggles are the node's (per intake); the open-profile
+        requirement is the form's.
         """
         if form is None:
             return cls()
@@ -76,12 +78,10 @@ class AdmissionConfig:
         return cls(
             require_open_profile=bool(getattr(form, "require_open_profile", False)),
             open_profile_scope="all" if scope == "all" else "main",
-            require_subscription=bool(getattr(form, "require_subscription", False)),
+            require_subscription=node_config.require_subscription,
             workspace_id=getattr(form, "workspace_id", None),
-            subscription_stage=_stage(getattr(form, "subscription_stage", None)),
-            subscription_scope=(
-                "team" if str(getattr(form, "subscription_scope", "player") or "player") == "team" else "player"
-            ),
+            subscription_stage=_stage(node_config.subscription_stage),
+            subscription_scope=node_config.subscription_scope,
             subscription_rule=subscription_rule,
         )
 

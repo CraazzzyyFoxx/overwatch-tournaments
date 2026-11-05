@@ -35,6 +35,7 @@ for root in (str(SERVICE_ROOT), str(BACKEND_ROOT)):
     if root not in sys.path:
         sys.path.insert(0, root)
 
+from shared.domain.flow.config import RegistrationNodeConfig  # noqa: E402
 from src.schemas.admission import AdmissionRead  # noqa: E402
 from src.services.admission import (  # noqa: E402
     AdmissionConfig,
@@ -52,13 +53,8 @@ from src.services.registration.read_model import AdmissionChips  # noqa: E402
 
 def _config(*, profile: bool = False, subscription: bool = False) -> AdmissionConfig:
     return AdmissionConfig.from_form(
-        SimpleNamespace(
-            workspace_id=7,
-            require_open_profile=profile,
-            open_profile_scope="main",
-            require_subscription=subscription,
-            subscription_stage="check_in",
-        ),
+        SimpleNamespace(workspace_id=7, require_open_profile=profile, open_profile_scope="main"),
+        RegistrationNodeConfig(require_subscription=subscription, subscription_stage="check_in"),
         # A rule is required for ``enforces_subscription``; its content is
         # irrelevant here because the signal is supplied already composed.
         subscription_rule=object() if subscription else None,

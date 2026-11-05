@@ -43,7 +43,7 @@ class RosterMixin(TeamServiceBase):
         if tournament is None:
             raise _fail(404, "tournament_not_found", "Tournament not found")
         shape = await self._resolve_shape(session, tournament)
-        max_substitutes = await self._max_substitutes(session, team.tournament_id)
+        max_substitutes = await self._max_substitutes(session, team.registration_node_id)
         members = await self._roster_members(session, team.id)
         target = next((m for m in members if m.registration_id == registration_id), None)
         if target is None:
@@ -161,7 +161,7 @@ class RosterMixin(TeamServiceBase):
         """Captain removes an accepted member; the vacated slot returns to open."""
         team = await self._lock_team(session, team_id)
         await self._assert_staff_editable(session, team, auth_user)
-        tournament = await self._assert_registration_open(session, team.tournament_id)
+        tournament = await self._assert_registration_open(session, team.tournament_id, team.registration_node_id)
 
         if registration_id == team.captain_registration_id:
             raise _fail(409, "cannot_kick_captain", "A captain cannot remove themselves; transfer or disband instead")
@@ -189,7 +189,7 @@ class RosterMixin(TeamServiceBase):
             team,
             entry,
             shape,
-            max_substitutes=await self._max_substitutes(session, team.tournament_id),
+            max_substitutes=await self._max_substitutes(session, team.registration_node_id),
         )
         if kicked_auth_user_id is not None:
             await notify(
@@ -220,7 +220,7 @@ class RosterMixin(TeamServiceBase):
         team = await self._lock_team(session, team_id)
         _assert_mutable(team)
         _assert_unlocked(team)
-        tournament = await self._assert_registration_open(session, team.tournament_id)
+        tournament = await self._assert_registration_open(session, team.tournament_id, team.registration_node_id)
 
         entry = await self._own_entry(session, team.registration_node_id, auth_user.id)
         if entry is None or entry.registration.registration_team_id != team.id:
@@ -234,6 +234,6 @@ class RosterMixin(TeamServiceBase):
             team,
             entry,
             shape,
-            max_substitutes=await self._max_substitutes(session, team.tournament_id),
+            max_substitutes=await self._max_substitutes(session, team.registration_node_id),
         )
         await session.commit()

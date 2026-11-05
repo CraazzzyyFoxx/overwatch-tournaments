@@ -529,12 +529,12 @@ def _event(live: Live, ids: dict[str, Any], game: str, purpose: str) -> dict[str
         "org",
         "PUT",
         "/api/v1/admin/balancer/tournaments/{tid}/registration-form",
-        {"form_schema": FORM, "auto_approve": False},
+        {"form_schema": FORM},
         expect=200,
         tid=tid,
     )
     form = call(live, ids, None, "GET", "/api/v1/tournaments/{tid}/registration/form", expect=200, tid=tid).json()
-    assert form["is_open"] is True and form["discipline"] == game, form
+    assert form["discipline"] == game, form
     event = {"tournament_id": tid, "form_version_id": form["version_id"], "registrations": {}, "ranks": {}}
     ids["events"][key] = event
     return event

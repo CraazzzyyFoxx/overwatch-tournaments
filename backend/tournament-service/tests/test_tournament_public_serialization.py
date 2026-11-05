@@ -38,7 +38,6 @@ def _tournament() -> models.Tournament:
         start_date=datetime.now(UTC),
         end_date=datetime.now(UTC),
         auto_transitions_enabled=True,
-        allow_late_registration=False,
         discord_broadcasts_enabled=True,
         discord_dms_enabled=True,
         logs_official=False,
@@ -105,7 +104,6 @@ class TournamentSerializationTests(IsolatedAsyncioTestCase):
         read = await flows.flows_service.to_pydantic(cast(AsyncSession, object()), tournament, [])
 
         self.assertTrue(read.auto_transitions_enabled)
-        self.assertFalse(read.allow_late_registration)
         self.assertEqual(
             [
                 schemas.TournamentPhaseScheduleRead(

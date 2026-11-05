@@ -26,6 +26,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from datetime import UTC, datetime  # noqa: E402
 
+from shared.domain.flow.config import RegistrationNodeConfig  # noqa: E402
 from shared.services.subscriptions import (  # noqa: E402
     Outcome,
     SubscriptionState,
@@ -41,16 +42,14 @@ USER = 42
 
 
 class _Form:
-    """Only the toggles and the workspace now -- the rule moved to the workspace.
+    """Only the workspace: the toggles are the registration node's and the rule is the workspace's."""
 
-    Staged at ``registration`` so the ``blocks_registration`` cases below exercise the
-    composition rather than the opt-in; the opt-in itself is pinned in
-    ``TestStageGatesBlocksRegistration``.
-    """
-
-    require_subscription = True
     workspace_id = WS
-    subscription_stage = "registration"
+
+
+#: Staged at ``registration`` so the ``blocks_registration`` cases below exercise the composition rather than the
+#: opt-in; the opt-in itself is pinned in ``TestStageGatesBlocksRegistration``.
+_NODE = RegistrationNodeConfig(require_subscription=True, subscription_stage="registration")
 
 
 def _requirement(*providers: str, mode: str = "any") -> dict:
@@ -99,15 +98,16 @@ class _FakeResolver:
 
 async def _status(verdicts, code_providers, *, requirement=None, stage="registration"):
     resolver = _FakeResolver(verdicts, code_providers, requirement or _requirement("boosty"))
-    form = _Form()
-    form.subscription_stage = stage
-    read = await subscription_status_for_user(form=form, auth_user_id=USER, resolver=resolver)
+    node = RegistrationNodeConfig(require_subscription=True, subscription_stage=stage)
+    read = await subscription_status_for_user(form=_Form(), node_config=node, auth_user_id=USER, resolver=resolver)
     return read, resolver
 
 
 class TestNotRequired(IsolatedAsyncioTestCase):
     async def test_no_form_reports_not_required(self):
-        read = await subscription_status_for_user(form=None, auth_user_id=USER, resolver=_FakeResolver({}, set()))
+        read = await subscription_status_for_user(
+            form=None, node_config=_NODE, auth_user_id=USER, resolver=_FakeResolver({}, set())
+        )
         assert read.required is False
         assert read.verdicts == {}
 
@@ -119,6 +119,7 @@ class TestNotRequired(IsolatedAsyncioTestCase):
     async def test_malformed_requirement_degrades_instead_of_500ing(self):
         read = await subscription_status_for_user(
             form=_Form(),
+            node_config=_NODE,
             auth_user_id=USER,
             resolver=_FakeResolver({}, set(), {"mode": "nonsense", "requirements": "not-a-list"}),
         )
@@ -228,7 +229,9 @@ class TestBlocksRegistration(IsolatedAsyncioTestCase):
         assert read.blocks_registration is True
 
     async def test_not_required_never_blocks(self):
-        read = await subscription_status_for_user(form=None, auth_user_id=USER, resolver=_FakeResolver({}, set()))
+        read = await subscription_status_for_user(
+            form=None, node_config=_NODE, auth_user_id=USER, resolver=_FakeResolver({}, set())
+        )
         assert read.blocks_registration is False
 
 
@@ -246,17 +249,12 @@ class TestStageGatesBlocksRegistration(IsolatedAsyncioTestCase):
         # Still refused overall -- that is the check-in answer, and the form shows it.
         assert read.outcome == Outcome.REFUSED.value
 
-    async def test_a_form_predating_the_column_never_blocks_sign_up(self):
-        # A bare stub rather than `del` on `_Form`: the attribute is a CLASS attribute
-        # there, so deleting it from an instance raises instead of hiding it.
-        class _LegacyForm:
-            require_subscription = True
-            workspace_id = WS
-
+    async def test_a_node_left_at_the_default_stage_never_blocks_sign_up(self):
         resolver = _FakeResolver({"boosty": _verdict(SubscriptionState.INACTIVE)}, set(), _requirement("boosty"))
-        read = await subscription_status_for_user(form=_LegacyForm(), auth_user_id=USER, resolver=resolver)
-        assert read.blocks_registration is False
-
-    async def test_an_unrecognised_stage_never_blocks_sign_up(self):
-        read, _ = await _status({"boosty": _verdict(SubscriptionState.INACTIVE)}, set(), stage="whenever")
+        read = await subscription_status_for_user(
+            form=_Form(),
+            node_config=RegistrationNodeConfig(require_subscription=True),
+            auth_user_id=USER,
+            resolver=resolver,
+        )
         assert read.blocks_registration is False
