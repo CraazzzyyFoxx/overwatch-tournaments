@@ -103,8 +103,14 @@ export function useBalancerRealtime({
     jobContextRef.current.set(jobId, context);
   }, []);
 
+  // The node on screen NOW: a result fetched for one node must not land in another's state after a switch.
+  const currentNodeRef = useRef(formationNodeId);
+  useEffect(() => {
+    currentNodeRef.current = formationNodeId;
+  }, [formationNodeId]);
+
   const handleJobSucceeded = useCallback(
-    async (jobId: string) => {
+    async (jobId: string, originNodeId: number | null) => {
       if (appliedJobsRef.current.has(jobId)) {
         return;
       }
@@ -112,6 +118,10 @@ export function useBalancerRealtime({
       dispatchJob({ type: "update", status: "succeeded", message: t("completed"), progress: 100 });
       try {
         const result = await balancerService.getBalanceJobResult(jobId);
+        if (originNodeId !== null && currentNodeRef.current !== originNodeId) {
+          jobContextRef.current.delete(jobId);
+          return;
+        }
         const context = jobContextRef.current.get(jobId) ?? {};
         appendGeneratedVariants(setVariants, setActiveVariantId, result, context);
         jobContextRef.current.delete(jobId);
@@ -146,7 +156,7 @@ export function useBalancerRealtime({
           });
           return;
         case "balancer_job.succeeded":
-          void handleJobSucceeded(data.job_id);
+          void handleJobSucceeded(data.job_id, data.formation_node_id ?? formationNodeId);
           return;
         case "balancer_job.failed": {
           const message = data.error ?? t("failed");
