@@ -11,6 +11,7 @@ from sqlalchemy.orm import aliased
 
 from shared import models
 from shared.core import enums, pagination
+from shared.core.chrono import tournament_chrono_key
 from shared.disciplines import DISCIPLINES, discipline, rated_role_codes
 from shared.division_grid import DivisionGrid, division_case_expr, ladder_grid
 from shared.schemas.role import RoleRef
@@ -550,12 +551,11 @@ class UserOverviewQueries(DisciplineQueries):
                 sa.func.row_number()
                 .over(
                     partition_by=[models.WorkspaceMember.player_id, models.Tournament.discipline, models.Player.role],
-                    # The newest ranked event first, by start date (undated last), not id: ids follow creation, not
+                    # The newest ranked event first, by the tournament chronology, not id: ids follow creation, not
                     # play, so across workspaces an older event can carry the higher id.
                     order_by=[
                         models.Player.rank.is_(None),
-                        models.Tournament.start_date.desc().nulls_last(),
-                        models.Player.tournament_id.desc(),
+                        *(c.desc() for c in tournament_chrono_key()),
                         models.Player.id.desc(),
                     ],
                 )

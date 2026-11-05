@@ -7,6 +7,7 @@ from sqlalchemy.orm import aliased
 
 from shared import models
 from shared.core import enums, pagination
+from shared.core.chrono import tournament_chrono_key
 from shared.services.tournament.visibility import visible_tournaments_predicate
 from src.services.discipline_queries import DisciplineQueries
 from src.services.encounter_seats import Seat
@@ -359,18 +360,20 @@ class StatisticsQueries(DisciplineQueries):
     async def get_win_streak(self, session: AsyncSession, workspace_id: int | None = None) -> sa.Row | None:
         """The longest run of consecutive series a player's team won, across tournaments.
 
-        Series order: the tournament's start, then the series' own end (the ``played_at`` chain of the
+        Series order: the tournament chronology, then the series' own end (the ``played_at`` chain of the
         encounters tab); a draw or a loss ends the run. The span shows real series times, else the tournament's
         dates: imported history carries only its import time.
         """
         seat = Seat(name="streak_seat")
         e, t = models.Encounter, models.Tournament
+        start, end, _ = tournament_chrono_key()
         series = (
             seat.join(
                 sa.select(
                     models.WorkspaceMember.player_id.label("user_id"),
                     seat.won.label("won"),
-                    t.start_date,
+                    start.label("chrono_start"),
+                    end.label("chrono_end"),
                     t.id.label("tournament_id"),
                     sa.func.coalesce(e.ended_at, e.confirmed_at, e.started_at, e.created_at).label("played_at"),
                     e.id.label("encounter_id"),
@@ -401,7 +404,8 @@ class StatisticsQueries(DisciplineQueries):
             .over(
                 partition_by=series.c.user_id,
                 order_by=(
-                    sa.nulls_last(series.c.start_date.asc()),
+                    series.c.chrono_start,
+                    series.c.chrono_end,
                     series.c.tournament_id,
                     series.c.played_at,
                     series.c.encounter_id,
@@ -461,7 +465,7 @@ class StatisticsQueries(DisciplineQueries):
             .order_by(
                 relative.desc(),
                 gap.desc(),
-                sa.nulls_last(models.Tournament.start_date.desc()),
+                *(c.desc() for c in tournament_chrono_key()),
                 models.Encounter.id.desc(),
             )
             .limit(1)
@@ -490,8 +494,7 @@ class StatisticsQueries(DisciplineQueries):
             .where(rated.c.team_id.in_(champions), rated.c.rated_teams > 1)
             .order_by(
                 (sa.cast(rated.c.sr_rank, sa.Float) / rated.c.rated_teams).desc(),
-                sa.nulls_last(models.Tournament.start_date.desc()),
-                models.Tournament.id.desc(),
+                *(c.desc() for c in tournament_chrono_key()),
             )
             .limit(1)
         )
@@ -541,7 +544,7 @@ class StatisticsQueries(DisciplineQueries):
             .order_by(
                 closeness.desc(),
                 sa.func.abs(_winner.score - _loser.score),
-                sa.nulls_last(models.Tournament.start_date.desc()),
+                *(c.desc() for c in tournament_chrono_key()),
                 models.Encounter.id.desc(),
             )
             .limit(1)
