@@ -308,6 +308,12 @@ def _ensure_compare_division_fixture(db: Session) -> dict[str, int | str]:
                 buchholz=None,
                 tb=None,
             ),
+        ]
+    )
+    # ParticipantResult has no relationship(), so the unit of work does not order it after its FK parents.
+    db.flush()
+    db.add_all(
+        [
             models.ParticipantResult(
                 tournament_id=ids["subject_cohort_tournament"],
                 workspace_member_id=ids["subject_member"],
