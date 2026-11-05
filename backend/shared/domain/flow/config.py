@@ -5,6 +5,7 @@ from types import MappingProxyType
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, NonNegativeInt, model_validator
+from pydantic_core import PydanticCustomError
 
 from shared.core.enums import FlowNodeKind, FlowUnit, SubscriptionEnforcementStage
 
@@ -15,6 +16,7 @@ __all__ = (
     "FilterNodeConfig",
     "FormationNodeConfig",
     "LeaderboardNodeConfig",
+    "LeaderboardPin",
     "MergeNodeConfig",
     "RegistrationNodeConfig",
     "SplitBucket",
@@ -70,8 +72,25 @@ class MergeNodeConfig(_NodeConfig):
     pass
 
 
+class LeaderboardPin(_NodeConfig):
+    """An admin-fixed place on a leaderboard, like ``StandingPin`` on a stage table."""
+
+    participant_id: int
+    position: int = Field(ge=1)
+
+
 class LeaderboardNodeConfig(_NodeConfig):
-    pass
+    pins: list[LeaderboardPin] = []
+
+    @model_validator(mode="after")
+    def _pins_are_distinct(self) -> LeaderboardNodeConfig:
+        if len({p.participant_id for p in self.pins}) < len(self.pins) or len({p.position for p in self.pins}) < len(
+            self.pins
+        ):
+            raise PydanticCustomError(
+                "leaderboard_pin_duplicate", "A participant and a position can each be pinned once"
+            )
+        return self
 
 
 class FilterNodeConfig(_NodeConfig):

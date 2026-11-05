@@ -1,6 +1,6 @@
 """Flow recompute (spec §5.4, §8.1): derives every node's output rows from the tournament's current state.
 
-Lifecycle nodes read their rows from the registration, team and standings tables; filter and merge compute them from
+Lifecycle nodes read their rows from the registration, team and standings tables; the pure nodes compute them from
 their inputs. Rows are updated in place so ids stay stable (plan Decision 5). Lifecycle statuses are never written here.
 """
 
@@ -15,7 +15,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
 from shared.core.enums import FlowNodeKind, FlowNodeStatus, FlowResultState, StageType
-from shared.domain.flow.config import FilterNodeConfig, RegistrationNodeConfig, parse_node_config
+from shared.domain.flow.config import (
+    FilterNodeConfig,
+    LeaderboardNodeConfig,
+    RegistrationNodeConfig,
+    SplitNodeConfig,
+    parse_node_config,
+)
+from shared.domain.flow.ports import concrete_outputs
 from shared.domain.flow.validate import topological_order
 from shared.models.balancer.balance import BalancerBalance, BalancerTeam
 from shared.models.draft.draft import DraftSession, DraftTeam
@@ -25,7 +32,14 @@ from shared.models.tournament.player_standing import PlayerStanding
 from shared.models.tournament.stage import Stage, StageItem
 from shared.models.tournament.standings import Standing
 from shared.models.tournament.team import Team
-from src.domain.flow.compute import PureOutput, ResultRow, compute_filter, compute_merge
+from src.domain.flow.compute import (
+    PureOutput,
+    ResultRow,
+    compute_filter,
+    compute_leaderboard,
+    compute_merge,
+    compute_split,
+)
 
 __all__ = ("FlowEngine", "FlowRecomputeReport", "flow_engine")
 
@@ -34,7 +48,8 @@ _LIFECYCLE_PORT = {
     FlowNodeKind.FORMATION: "teams",
     FlowNodeKind.STAGE: "ranking",
 }
-_PURE_PORT = {FlowNodeKind.FILTER: "passed", FlowNodeKind.MERGE: "merged"}
+#: The output port of a pure node with exactly one (split has one per bucket).
+_PURE_PORT = {FlowNodeKind.FILTER: "passed", FlowNodeKind.MERGE: "merged", FlowNodeKind.LEADERBOARD: "ranking"}
 #: The status at which a lifecycle node's rows stop moving.
 _FINAL_STATUS = {
     FlowNodeKind.REGISTRATION: FlowNodeStatus.CLOSED,
@@ -71,7 +86,7 @@ class FlowEngine:
         ).all()
         by_id = {n.id: n for n in nodes}
         for n in nodes:
-            if n.kind not in _LIFECYCLE_PORT and n.kind not in _PURE_PORT:
+            if n.kind not in _LIFECYCLE_PORT and n.kind not in _PURE_PORT and n.kind != FlowNodeKind.SPLIT:
                 raise ValueError(f"flow node {n.id} of kind {n.kind} is not computed in phase 2")
         order = topological_order(by_id, ((e.source_node_id, e.target_node_id) for e in edges))
         if order is None:
@@ -97,7 +112,8 @@ class FlowEngine:
             else:
                 sources = [outputs.get((e.source_node_id, e.source_port)) for e in incoming[node_id]]
                 if not sources or not all(s and s[0] for s in sources):
-                    ports, state, status = {_PURE_PORT[kind]: []}, FlowResultState.TENTATIVE, FlowNodeStatus.PENDING
+                    ports = {p.name: [] for p in concrete_outputs(kind, node.config)}
+                    state, status = FlowResultState.TENTATIVE, FlowNodeStatus.PENDING
                 else:
                     ready = [s for s in sources if s]
                     computed = self._compute_pure(kind, node, [s[0] for s in ready], item_order)
@@ -123,6 +139,14 @@ class FlowEngine:
             config = parse_node_config(kind, node.config)
             assert isinstance(config, FilterNodeConfig)
             return compute_filter(config, inputs[0], item_order=item_order)
+        if kind == FlowNodeKind.SPLIT:
+            split = parse_node_config(kind, node.config)
+            assert isinstance(split, SplitNodeConfig)
+            return compute_split(split, inputs[0])
+        if kind == FlowNodeKind.LEADERBOARD:
+            board = parse_node_config(kind, node.config)
+            assert isinstance(board, LeaderboardNodeConfig)
+            return compute_leaderboard(board, inputs[0])
         return PureOutput({_PURE_PORT[kind]: compute_merge(inputs)})
 
     def _lifecycle_state(self, node: FlowNode) -> FlowResultState:

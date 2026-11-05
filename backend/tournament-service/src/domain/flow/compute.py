@@ -1,13 +1,23 @@
-"""Pure flow node functions (spec §5.4): filter in every mode, merge."""
+"""Pure flow node functions (spec §5.4): filter in every mode, merge, split, leaderboard."""
 
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import Any
 
-from shared.domain.flow.config import FilterNodeConfig
+from shared.domain.flow.config import FilterNodeConfig, LeaderboardNodeConfig, SplitNodeConfig
+from src.domain.stage.seeds import group_for_index
+from src.services.standings.service import apply_pins
 
-__all__ = ("PureOutput", "ResultRow", "compute_filter", "compute_merge", "participant_id")
+__all__ = (
+    "PureOutput",
+    "ResultRow",
+    "compute_filter",
+    "compute_leaderboard",
+    "compute_merge",
+    "compute_split",
+    "participant_id",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -98,3 +108,48 @@ def compute_merge(inputs: Sequence[Sequence[ResultRow]]) -> list[ResultRow]:
             seen.add(key)
             merged.append(r)
     return merged
+
+
+def compute_split(config: SplitNodeConfig, rows: Sequence[ResultRow]) -> PureOutput:
+    sizes = [bucket.size for bucket in config.buckets]
+    buckets: list[list[ResultRow]] = [[] for _ in sizes]
+    if config.serpentine:
+
+        def full(i: int) -> bool:
+            return sizes[i] is not None and len(buckets[i]) >= sizes[i]
+
+        dealt = 0
+        for r in rows:
+            if all(full(i) for i in range(len(sizes))):
+                break
+            while full(i := group_for_index(dealt, len(sizes), snake=True)):
+                dealt += 1
+            buckets[i].append(r)
+            dealt += 1
+    else:
+        start = 0
+        for i, size in enumerate(sizes):
+            end = len(rows) if size is None else start + size
+            buckets[i] = list(rows[start:end])
+            start = end
+    return PureOutput({f"bucket_{i}": bucket for i, bucket in enumerate(buckets, 1)})
+
+
+def compute_leaderboard(config: LeaderboardNodeConfig, rows: Sequence[ResultRow]) -> PureOutput:
+    if not config.pins:
+        return PureOutput({"ranking": list(rows)})
+    by_id = {participant_id(r): r for r in rows}
+    placed = apply_pins(
+        [(participant_id(r), index) for index, r in enumerate(rows, 1)],
+        {p.participant_id: p.position for p in config.pins},
+    )
+    ordered = [(by_id[pid], pinned) for pid, _position, pinned in placed]
+    ranking: list[ResultRow] = []
+    for i, (r, pinned) in enumerate(ordered):
+        # A pinned row is never tied; an unpinned one stays tied only with an adjacent unpinned row of its group.
+        neighbours = [ordered[j] for j in (i - 1, i + 1) if 0 <= j < len(ordered)]
+        shares = not pinned and any(
+            not other_pinned and other.tie_group == r.tie_group for other, other_pinned in neighbours
+        )
+        ranking.append(replace(r, tie_group=r.tie_group if shares else None))
+    return PureOutput({"ranking": ranking})
