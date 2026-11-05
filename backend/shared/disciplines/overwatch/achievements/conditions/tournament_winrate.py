@@ -19,6 +19,7 @@ from shared.core.enums import EncounterStatus
 from shared.disciplines.overwatch.achievements.duel import series_total
 from shared.domain.achievements.context import EvalContext
 from shared.models.achievements.achievement import AchievementGrain
+from shared.services.participant_result import is_member_tournament_row
 
 from . import ResultSet, register
 from .stat_threshold import OPERATORS
@@ -29,7 +30,7 @@ from .stat_threshold import OPERATORS
     grain=AchievementGrain.user_tournament,
     description="Series winrate inside one tournament",
     required=("op", "value"),
-    depends_on=("tournament.encounter", "tournament.player"),
+    depends_on=("tournament.encounter", "tournament.player", "tournament.participant_result"),
 )
 async def execute_tournament_winrate(
     session: AsyncSession,
@@ -63,6 +64,7 @@ async def execute_tournament_winrate(
         .join(models.Tournament, models.Tournament.id == models.Player.tournament_id)
         .where(
             models.Player.is_substitution.is_(False),
+            is_member_tournament_row(),
             sa.and_(
                 models.Tournament.workspace_id == context.workspace_id,
                 models.Tournament.discipline == context.discipline,

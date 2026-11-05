@@ -99,6 +99,7 @@ TABLE_NAMES = (
     "catalog.role",
     "tournament.bracket_encounter",
     "tournament.standing",
+    "tournament.participant_result",
     "stats.match",
     "stats.match_team",
     "stats.match_player",
@@ -606,6 +607,23 @@ class _Fixture:
             lose=0,
             points=1.0,
         )
+        self.placement(tournament_id, team_id, 1)
+
+    def placement(self, tournament_id: int, team_id: int, placement: int | None, *, field_size: int = 2) -> None:
+        """The tournament result of every non-substitute player of ``team_id`` (the writer's rule 2, by hand)."""
+        players = models.Player.__table__.c
+        members = self.session.scalars(
+            sa.select(players.workspace_member_id).where(players.team_id == team_id, players.is_substitution.is_(False))
+        ).all()
+        for member_id in members:
+            self.insert(
+                models.ParticipantResult.__table__,
+                tournament_id=tournament_id,
+                workspace_member_id=member_id,
+                final_team_id=team_id,
+                placement=placement,
+                field_size=field_size,
+            )
 
     def rostered_tournament(self, tournament_id: int) -> dict[str, int]:
         """A real tournament: two teams, both captained, both with a roster."""

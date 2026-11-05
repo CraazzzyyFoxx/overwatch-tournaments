@@ -186,6 +186,7 @@ class ConsecutiveStreakTests(_NodeCase):
         self.db.player(REAL_TOURNAMENT_ID, away, self.db.member(REAL_AWAY_USER), name="away")
         self.db.standing(REAL_TOURNAMENT_ID, home, overall_position=1)
         self.db.standing(REAL_TOURNAMENT_ID, home, overall_position=1)
+        self.db.placement(REAL_TOURNAMENT_ID, home, 1)
         self.db.session.commit()
 
         result = await evaluator.evaluate(

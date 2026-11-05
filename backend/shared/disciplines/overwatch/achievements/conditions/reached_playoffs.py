@@ -20,6 +20,7 @@ from shared.disciplines.overwatch.achievements.eligibility import all_eligible_u
 from shared.disciplines.overwatch.achievements.stage_filters import standing_is_elimination
 from shared.domain.achievements.context import EvalContext
 from shared.models.achievements.achievement import AchievementGrain
+from shared.services.participant_result import is_member_tournament_row
 
 from . import ResultSet, register
 from .stat_threshold import OPERATORS
@@ -45,6 +46,7 @@ def _base_query() -> sa.Select[tuple[int, int]]:
             models.WorkspaceMember,
             models.WorkspaceMember.id == models.Player.workspace_member_id,
         )
+        .where(is_member_tournament_row())
     )
 
 
@@ -53,7 +55,7 @@ def _base_query() -> sa.Select[tuple[int, int]]:
     grain=AchievementGrain.user_tournament,
     description="Reached the elimination stage",
     optional=("op", "scope", "value"),
-    depends_on=("tournament.standing", "tournament.player"),
+    depends_on=("tournament.standing", "tournament.player", "tournament.participant_result"),
     grain_for=lambda params: (
         AchievementGrain.user if params.get("scope") == "global" else AchievementGrain.user_tournament
     ),

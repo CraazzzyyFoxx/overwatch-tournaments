@@ -297,7 +297,6 @@ const BUILDERS: Record<string, Builder> = {
   // ── Standings ──
   standing_position: (p, o) => ({
     text: msg(o, "leaf.standing_position", { amount: amount(o, p.op, p.value) }),
-    details: [p.include_groups === true ? msg(o, "q.groupsIncluded") : null],
   }),
   standing_record: (p, o) => ({
     text: msg(o, "leaf.standing_record", {

@@ -94,8 +94,8 @@ class StageCompletedNodeTests(_StageCase):
 
 
 class BracketNodesWaitForStageCompletionTests(_StageCase):
-    async def test_standing_position_waits_for_its_stage(self) -> None:
-        playoff = self.stage(enums.StageType.SINGLE_ELIMINATION, order=0, completed=False)
+    async def test_standing_position_waits_for_the_tournament_result(self) -> None:
+        playoff = self.stage(enums.StageType.SINGLE_ELIMINATION, order=0, completed=True)
         self.db.insert(
             models.Standing.__table__,
             id=self.db._id(),
@@ -114,7 +114,8 @@ class BracketNodesWaitForStageCompletionTests(_StageCase):
         params = {"op": "==", "value": 1}
 
         self.assertEqual(set(), await self.node("standing_position", params))
-        self.complete(playoff)
+        self.db.placement(REAL_TOURNAMENT_ID, self.teams["home"], 1)
+        self.db.session.commit()
         self.assertEqual({HOME_KEY}, await self.node("standing_position", params))
 
     async def test_final_scoreline_waits_for_the_final_stage(self) -> None:

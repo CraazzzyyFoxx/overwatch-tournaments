@@ -15,6 +15,7 @@ from shared.disciplines.overwatch.achievements.stage_filters import (
 )
 from shared.domain.achievements.context import EvalContext
 from shared.models.achievements.achievement import AchievementGrain
+from shared.services.participant_result import is_member_tournament_row
 
 from . import ResultSet, one_of, register
 from .stat_threshold import OPERATORS
@@ -48,39 +49,29 @@ def _standing_base_query() -> sa.Select:
     grain=AchievementGrain.user_tournament,
     description="Final standing position in the tournament",
     required=("op", "value"),
-    optional=("include_groups",),
-    depends_on=("tournament.stage", "tournament.standing", "tournament.player"),
+    depends_on=("tournament.participant_result",),
 )
 async def execute_position(
     session: AsyncSession,
     params: dict[str, Any],
     context: EvalContext,
 ) -> ResultSet:
-    op = params["op"]
-    value = params["value"]
-    op_fn = OPERATORS[op]
-    include_groups = params.get("include_groups", False)
-
-    where_clauses = [
-        op_fn(models.Standing.overall_position, value),
-        sa.and_(
-            models.Tournament.workspace_id == context.workspace_id, models.Tournament.discipline == context.discipline
-        ),
-        models.Player.is_substitution.is_(False),
-        stage_is_completed(stage=models.Stage),
-    ]
-    if not include_groups:
-        where_clauses.append(
-            standing_is_elimination(
-                standing=models.Standing,
-                stage=models.Stage,
-            )
+    result_row = models.ParticipantResult
+    query = (
+        sa.select(models.WorkspaceMember.player_id, result_row.tournament_id)
+        .select_from(result_row)
+        .join(models.WorkspaceMember, models.WorkspaceMember.id == result_row.workspace_member_id)
+        .join(models.Tournament, models.Tournament.id == result_row.tournament_id)
+        .where(
+            OPERATORS[params["op"]](result_row.placement, params["value"]),
+            sa.and_(
+                models.Tournament.workspace_id == context.workspace_id,
+                models.Tournament.discipline == context.discipline,
+            ),
         )
-
-    query = _standing_base_query().where(*where_clauses)
-
+    )
     if context.tournament:
-        query = query.where(models.Standing.tournament_id == context.tournament.id)
+        query = query.where(result_row.tournament_id == context.tournament.id)
 
     result = await session.execute(query)
     return {(row[0], row[1]) for row in result}
@@ -93,7 +84,7 @@ async def execute_position(
     required=("field", "op", "value"),
     optional=("groups_only", "include_groups"),
     validate_params=one_of(field=("wins", "losses", "draws", "points", "buchholz", "matches")),
-    depends_on=("tournament.stage", "tournament.standing", "tournament.player"),
+    depends_on=("tournament.stage", "tournament.standing", "tournament.player", "tournament.participant_result"),
 )
 async def execute_record(
     session: AsyncSession,
@@ -147,7 +138,7 @@ async def execute_record(
             )
         )
 
-    query = _standing_base_query().where(*where_clauses)
+    query = _standing_base_query().where(is_member_tournament_row(), *where_clauses)
 
     if context.tournament:
         query = query.where(models.Standing.tournament_id == context.tournament.id)
