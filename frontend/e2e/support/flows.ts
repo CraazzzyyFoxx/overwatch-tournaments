@@ -282,9 +282,9 @@ export type Stage = {
   tournament_id: number;
   name: string;
   stage_type: StageType;
-  is_active: boolean;
+  node_id: number;
+  status: "draft" | "ready" | "live" | "completed";
   is_published: boolean;
-  is_completed: boolean;
   items: StageItem[];
 };
 export type TournamentJob = {
@@ -352,9 +352,16 @@ export async function waitForJob(api: Api, job: Pick<TournamentJob, "id">, timeo
   return done;
 }
 
-/** activate-and-generate (202) + poll: the stage goes live/published with its encounters. */
-export async function generateStage(api: Api, stageId: number): Promise<TournamentJob> {
-  return waitForJob(api, await api.post<TournamentJob>(`/api/v1/admin/stages/${stageId}/activate-and-generate`, undefined, 202));
+/** Moves a stage's node one step (`POST /admin/flow-nodes/{id}/transition`); `ready → live` generates the matches when there are none. */
+export async function transitionStage(api: Api, stageId: number, status: "draft" | "ready" | "live" | "completed"): Promise<unknown> {
+  const stage = await api.get<Stage>(`/api/v1/admin/stages/${stageId}`);
+  return api.post(`/api/v1/admin/flow-nodes/${stage.node_id}/transition`, { status });
+}
+
+/** `draft → ready → live`: the stage goes live/published with its encounters. */
+export async function startStage(api: Api, stageId: number): Promise<void> {
+  await transitionStage(api, stageId, "ready");
+  await transitionStage(api, stageId, "live");
 }
 
 /** Duels by default; the list answers `slot_count = 2` only, so an FFA lobby needs its seat count. */
@@ -443,7 +450,7 @@ export async function seedBracket(
     teams.map((t) => t.id),
     { stageType, bestOf: opts.bestOf, extra: opts.stage }
   );
-  await generateStage(api, created.id);
+  await startStage(api, created.id);
   const status = opts.status ?? "live";
   if (status !== "announcement") await setStatus(api, tournament.id, status, true);
   const stage = await api.get<Stage>(`/api/v1/admin/stages/${created.id}`);

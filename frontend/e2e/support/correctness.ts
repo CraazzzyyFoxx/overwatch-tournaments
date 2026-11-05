@@ -2,7 +2,7 @@ import { expect } from "@playwright/test";
 import type { Api } from "./api";
 import {
   createStage,
-  generateStage,
+  startStage,
   listEncounters,
   seedTeams,
   setResult,
@@ -336,7 +336,7 @@ export async function seedGroupsToPlayoffs(api: Api) {
     { stageType: "round_robin", groups: 2, bestOf: 1, extra: { advance_count: 2 } }
   );
   await setPoints(api, created.id, 3, 1, 0);
-  await generateStage(api, created.id);
+  await startStage(api, created.id);
   const playoff = await api.post<Stage>(
     `/api/v1/admin/stages/tournament/${tournament.id}`,
     { name: "Playoffs", stage_type: "single_elimination", best_of: { default: 1 }, order: 1 },

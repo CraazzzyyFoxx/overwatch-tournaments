@@ -11,7 +11,7 @@ import {
   type TableStanding,
 } from "../support/correctness";
 import { expect, openPage, test } from "../support/fixtures";
-import { generateStage, listEncounters, seedBracket, type Encounter, type Stage } from "../support/flows";
+import { startStage, listEncounters, seedBracket, type Encounter, type Stage } from "../support/flows";
 
 /**
  * The public bracket pages against the engine: every card shows the teams and
@@ -80,7 +80,7 @@ test("groups → playoffs: group cards and tables, then the playoff bracket and 
   const { tournament, groupStage, playoff } = setup;
   for (const r of [...ladder(setup.groupA), ...ladder(setup.groupB)]) await enter(adminApi, setup.encounters, r);
   await stageStandings(adminApi, tournament.id, groupStage.id);
-  await generateStage(adminApi, playoff.id);
+  await startStage(adminApi, playoff.id);
   const seeds = seedOrder(await adminApi.get<Stage>(`/api/v1/admin/stages/${playoff.id}`));
   const playoffEncounters = await playBracket(adminApi, tournament.id, playoff.id, singleElimination(seeds), better(seeds));
   const groupEncounters = await listEncounters(adminApi, tournament.id, groupStage.id);

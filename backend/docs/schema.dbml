@@ -1,7 +1,7 @@
 // Anak Tournaments — PostgreSQL schema dumped from SQLAlchemy metadata.
 // Open in VS Code (DBML extension) or paste into https://dbdiagram.io
 // Runtime mappings only, not a complete physical-database dump.
-// Tables: 168
+// Tables: 176
 
 Project anak_tournaments {
   database_type: "PostgreSQL"
@@ -791,6 +791,7 @@ Table balancer.user_config {
   rating_mode VARCHAR(16) [not null, default: `points`]
   hero_ban_presets jsonb [not null, default: `{}`]
   formation_defaults jsonb [not null, default: `{}`]
+  bot_lobby_regions jsonb [not null, default: `{}`]
   indexes {
     (user_id) [unique, name: "uq_balancer_user_config_user"]
   }
@@ -1351,8 +1352,8 @@ Table encounter.team_report {
   comment text
   custom_fields_json json [not null, default: `{}`]
   indexes {
-    (id, encounter_id) [unique, name: "uq_team_report_id_encounter"]
     (encounter_id, encounter_team_id) [unique, name: "uq_team_report_claimant"]
+    (id, encounter_id) [unique, name: "uq_team_report_id_encounter"]
   }
 }
 
@@ -1386,6 +1387,28 @@ TableGroup encounter {
 }
 
 // ----- mix -----
+
+Table mix.bot_lobby {
+  id bigint [pk, increment]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz
+  workspace_id bigint [not null]
+  custom_game_id bigint [not null]
+  lobby_index int [not null]
+  encounter_id bigint [not null]
+  discipline VARCHAR(32) [not null]
+  party_id VARCHAR(128) [not null]
+  party_code VARCHAR(64) [not null]
+  callback_token_sha256 VARCHAR(64) [not null]
+  callback_secret VARCHAR(256)
+  match_id VARCHAR(128)
+  created_by_user_id bigint
+  indexes {
+    (callback_token_sha256) [unique, name: "uq_custom_game_bot_lobby_token"]
+    (encounter_id) [unique, name: "uq_custom_game_bot_lobby_encounter"]
+    (custom_game_id) [name: "ix_custom_game_bot_lobby_custom_game_id"]
+  }
+}
 
 Table mix.co_host {
   custom_game_id bigint [pk]
@@ -1496,6 +1519,7 @@ Table mix.team_name {
 }
 
 TableGroup mix {
+  mix.bot_lobby
   mix.co_host
   mix.custom_game
   mix.lobby
@@ -2220,8 +2244,8 @@ Table registration.google_sheet_binding {
   row_hash VARCHAR(128)
   last_seen_at timestamptz
   indexes {
-    (registration_id) [unique, name: "uq_registration_google_sheet_binding_registration"]
     (feed_id, source_record_key) [unique, name: "uq_registration_google_sheet_binding_key"]
+    (registration_id) [unique, name: "uq_registration_google_sheet_binding_registration"]
     (feed_id) [name: "ix_registration_google_sheet_binding_feed_id"]
   }
 }
@@ -2332,8 +2356,8 @@ Table registration.role_entity {
   entity_kind VARCHAR(16) [not null, default: `character`]
   priority int [not null]
   indexes {
-    (role_id, entity_id) [unique, name: "uq_reg_role_entity_role_entity"]
     (role_id, priority) [unique, name: "uq_reg_role_entity_role_priority"]
+    (role_id, entity_id) [unique, name: "uq_reg_role_entity_role_entity"]
     (role_id) [name: "ix_registration_role_entity_role_id"]
   }
 }
@@ -2470,9 +2494,9 @@ Table roster.team_format {
   substitute_min int [not null, default: 0]
   substitute_max int [not null, default: 0]
   indexes {
-    (id, discipline) [unique, name: "uq_team_format_key"]
-    (custom_game_id) [unique, name: "uq_team_format_custom_game"]
     (tournament_id) [unique, name: "uq_team_format_tournament"]
+    (custom_game_id) [unique, name: "uq_team_format_custom_game"]
+    (id, discipline) [unique, name: "uq_team_format_key"]
     (workspace_id, discipline) [unique, name: "uq_team_format_workspace_default"]
   }
 }
@@ -3001,6 +3025,89 @@ Table tournament.encounter_saved_view {
   }
 }
 
+Table tournament.flow_edge {
+  id bigint [pk, increment]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz
+  tournament_id bigint [not null]
+  source_node_id bigint [not null]
+  source_port VARCHAR(32) [not null]
+  target_node_id bigint [not null]
+  target_port VARCHAR(32) [not null]
+  indexes {
+    (source_node_id) [name: "ix_flow_edge_source_node_id"]
+    (target_node_id) [name: "ix_flow_edge_target_node_id"]
+    (tournament_id) [name: "ix_flow_edge_tournament_id"]
+  }
+}
+
+Table tournament.flow_node {
+  id bigint [pk, increment]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz
+  tournament_id bigint [not null]
+  kind VARCHAR(16) [not null]
+  name VARCHAR [not null]
+  status VARCHAR(16) [not null]
+  config jsonb [not null, default: `'{}'::jsonb`]
+  stage_id bigint
+  position_x float [not null, default: 0]
+  position_y float [not null, default: 0]
+  started_at timestamptz
+  completed_at timestamptz
+  indexes {
+    (stage_id) [unique, name: "uq_flow_node_stage_id"]
+    (tournament_id) [name: "ix_flow_node_tournament_id"]
+  }
+}
+
+Table tournament.flow_node_result {
+  id bigint [pk, increment]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz
+  node_id bigint [not null]
+  port VARCHAR(32) [not null]
+  rank int [not null]
+  workspace_member_id bigint
+  team_id bigint
+  stage_item_id bigint
+  item_rank int
+  score NUMERIC
+  tie_group int
+  breakdown jsonb
+  state VARCHAR(16) [not null]
+  indexes {
+    (node_id) [name: "ix_flow_node_result_node_id"]
+    (node_id, port, workspace_member_id) [unique, name: "uq_flow_node_result_member"]
+    (node_id, port, team_id) [unique, name: "uq_flow_node_result_team"]
+  }
+}
+
+Table tournament.flow_node_schedule {
+  id bigint [pk, increment]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz
+  node_id bigint [not null]
+  phase VARCHAR(16) [not null]
+  starts_at timestamptz [not null]
+  ends_at timestamptz
+  indexes {
+    (node_id, phase) [unique, name: "uq_flow_node_schedule_phase"]
+  }
+}
+
+Table tournament.participant_result {
+  tournament_id bigint [pk]
+  workspace_member_id bigint [pk]
+  final_team_id bigint
+  placement int
+  field_size int [not null]
+  source_node_id bigint
+  indexes {
+    (workspace_member_id) [name: "ix_participant_result_workspace_member_id"]
+  }
+}
+
 Table tournament.pick_ban_config {
   id bigint [pk, increment]
   created_at timestamptz [not null, default: `now()`]
@@ -3188,9 +3295,7 @@ Table tournament.stage {
   advance_count int
   advance_upper_count int
   "order" int [not null]
-  is_active boolean [not null, default: false]
   is_published boolean [not null, default: false]
-  is_completed boolean [not null, default: false]
   ranking_preset VARCHAR
   tiebreak_order VARCHAR[]
   win_points float
@@ -3427,6 +3532,38 @@ Table tournament.tournament_preview_access {
   }
 }
 
+Table tournament.voice_channel {
+  id bigint [pk, increment]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz
+  tournament_id bigint [not null]
+  stage_id bigint
+  team_id bigint
+  kind VARCHAR(16) [not null]
+  slot_key VARCHAR(64) [not null]
+  discord_channel_id bigint [unique]
+  owned boolean [not null, default: true]
+  status VARCHAR(16) [not null, default: `pending`]
+  delete_requested_at timestamptz
+  indexes {
+    (tournament_id, slot_key) [unique, name: "uq_voice_channel_slot"]
+  }
+}
+
+Table tournament.voice_settings {
+  id bigint [pk, increment]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz
+  tournament_id bigint [not null, unique]
+  enabled boolean [not null, default: false]
+  private boolean [not null, default: false]
+  early_teams boolean [not null, default: false]
+  category_id bigint
+  staff_role_ids BIGINT[] [not null, default: `'{}'::bigint[]`]
+  last_synced_at timestamptz
+  sync_issues jsonb [not null, default: `'[]'::jsonb`]
+}
+
 TableGroup tournament {
   tournament.bracket_encounter
   tournament.challonge_match_mapping
@@ -3437,6 +3574,11 @@ TableGroup tournament {
   tournament.encounter_link
   tournament.encounter_report_form
   tournament.encounter_saved_view
+  tournament.flow_edge
+  tournament.flow_node
+  tournament.flow_node_result
+  tournament.flow_node_schedule
+  tournament.participant_result
   tournament.pick_ban_config
   tournament.pick_ban_config_item
   tournament.pick_ban_config_slot
@@ -3461,6 +3603,8 @@ TableGroup tournament {
   tournament.tournament_link
   tournament.tournament_phase_schedule
   tournament.tournament_preview_access
+  tournament.voice_channel
+  tournament.voice_settings
 }
 
 // ----- refs -----
@@ -3573,8 +3717,8 @@ Ref: draft.player.drafted_by_team_id > draft.team.id [delete: set null]
 Ref: draft.player.dimension_id > catalog.role.dimension_id
 Ref: draft.player.captain_role_id > catalog.role.id
 Ref: draft.session.tournament_id > tournament.tournament.id [delete: cascade]
-Ref: draft.session.custom_game_id > mix.lobby.custom_game_id [delete: cascade]
 Ref: draft.session.custom_game_id > mix.custom_game.id [delete: cascade]
+Ref: draft.session.custom_game_id > mix.lobby.custom_game_id [delete: cascade]
 Ref: draft.session.lobby_index > mix.lobby.lobby_index [delete: cascade]
 Ref: draft.session.discipline > mix.custom_game.discipline [delete: cascade]
 Ref: draft.session.discipline > tournament.tournament.discipline [delete: cascade]
@@ -3670,10 +3814,15 @@ Ref: encounter.team_report_result.report_id > encounter.team_report.id [delete: 
 Ref: encounter.team_report_result.encounter_id > encounter.team.encounter_id
 Ref: encounter.team_report_result.encounter_id > encounter.team_report.encounter_id [delete: cascade]
 Ref: encounter.team_report_result.encounter_team_id > encounter.team.id
+Ref: mix.bot_lobby.workspace_id > workspace.id [delete: cascade]
+Ref: mix.bot_lobby.custom_game_id > mix.custom_game.id [delete: cascade]
+Ref: mix.bot_lobby.encounter_id > encounter.encounter.id [delete: cascade]
+Ref: mix.bot_lobby.discipline > catalog.discipline.code
+Ref: mix.bot_lobby.created_by_user_id > auth.user.id [delete: set null]
 Ref: mix.co_host.custom_game_id > mix.custom_game.id [delete: cascade]
 Ref: mix.co_host.user_id > auth.user.id [delete: cascade]
-Ref: mix.custom_game.workspace_id > workspace.id [delete: cascade]
 Ref: mix.custom_game.workspace_id > encounter.scoring_rule.workspace_id
+Ref: mix.custom_game.workspace_id > workspace.id [delete: cascade]
 Ref: mix.custom_game.host_user_id > auth.user.id [delete: set null]
 Ref: mix.custom_game.discipline > catalog.discipline.code
 Ref: mix.custom_game.scoring_rule_id > encounter.scoring_rule.id
@@ -3780,14 +3929,14 @@ Ref: roster.format_role_rule.role_id > catalog.role.id
 Ref: roster.team_format.workspace_id > workspace.id [delete: cascade]
 Ref: roster.team_format.workspace_id > tournament.tournament.workspace_id [delete: cascade]
 Ref: roster.team_format.workspace_id > mix.custom_game.workspace_id [delete: cascade]
-Ref: roster.team_format.discipline > catalog.discipline.code
 Ref: roster.team_format.discipline > mix.custom_game.discipline [delete: cascade]
+Ref: roster.team_format.discipline > catalog.discipline.code
 Ref: roster.team_format.discipline > tournament.tournament.discipline [delete: cascade]
 Ref: roster.team_format.tournament_id > tournament.tournament.id [delete: cascade]
 Ref: roster.team_format.custom_game_id > mix.custom_game.id [delete: cascade]
 Ref: roster.team_format_dimension.team_format_id > roster.team_format.id [delete: cascade]
-Ref: roster.team_format_dimension.discipline > catalog.role_dimension.discipline
 Ref: roster.team_format_dimension.discipline > roster.team_format.discipline [delete: cascade]
+Ref: roster.team_format_dimension.discipline > catalog.role_dimension.discipline
 Ref: roster.team_format_dimension.dimension_id > catalog.role_dimension.id
 Ref: stats.discord_channel.tournament_id > tournament.tournament.id [delete: cascade]
 Ref: stats.event.match_id > stats.match_team.match_id
@@ -3844,8 +3993,8 @@ Ref: stats.match_search.workspace_id > workspace.id [delete: cascade]
 Ref: stats.match_search.discipline > catalog.discipline.code
 Ref: stats.match_search.encounter_id > encounter.encounter.id [delete: cascade]
 Ref: stats.match_team.match_id > stats.match.id [delete: cascade]
-Ref: stats.match_team.encounter_id > stats.match.encounter_id [delete: cascade]
 Ref: stats.match_team.encounter_id > encounter.team.encounter_id [delete: cascade]
+Ref: stats.match_team.encounter_id > stats.match.encounter_id [delete: cascade]
 Ref: stats.match_team.encounter_team_id > encounter.team.id [delete: cascade]
 Ref: stats.segment.match_id > stats.match.id [delete: cascade]
 Ref: stats.stat_baseline.role_id > catalog.role.id
@@ -3886,6 +4035,20 @@ Ref: tournament.encounter_link.target_encounter_id > encounter.encounter.id [del
 Ref: tournament.encounter_report_form.tournament_id > tournament.tournament.id [delete: cascade]
 Ref: tournament.encounter_saved_view.workspace_id > workspace.id [delete: cascade]
 Ref: tournament.encounter_saved_view.auth_user_id > auth.user.id [delete: cascade]
+Ref: tournament.flow_edge.tournament_id > tournament.tournament.id [delete: cascade]
+Ref: tournament.flow_edge.source_node_id > tournament.flow_node.id [delete: cascade]
+Ref: tournament.flow_edge.target_node_id > tournament.flow_node.id [delete: cascade]
+Ref: tournament.flow_node.tournament_id > tournament.tournament.id [delete: cascade]
+Ref: tournament.flow_node.stage_id > tournament.stage.id [delete: cascade]
+Ref: tournament.flow_node_result.node_id > tournament.flow_node.id [delete: cascade]
+Ref: tournament.flow_node_result.workspace_member_id > workspace_member.id [delete: cascade]
+Ref: tournament.flow_node_result.team_id > tournament.team.id [delete: cascade]
+Ref: tournament.flow_node_result.stage_item_id > tournament.stage_item.id [delete: cascade]
+Ref: tournament.flow_node_schedule.node_id > tournament.flow_node.id [delete: cascade]
+Ref: tournament.participant_result.tournament_id > tournament.tournament.id [delete: cascade]
+Ref: tournament.participant_result.workspace_member_id > workspace_member.id [delete: cascade]
+Ref: tournament.participant_result.final_team_id > tournament.team.id [delete: set null]
+Ref: tournament.participant_result.source_node_id > tournament.flow_node.id [delete: set null]
 Ref: tournament.pick_ban_config.tournament_id > tournament.tournament.id [delete: cascade]
 Ref: tournament.pick_ban_config.stage_id > tournament.stage.id [delete: cascade]
 Ref: tournament.pick_ban_config_item.pick_ban_config_id > tournament.pick_ban_config.id [delete: cascade]
@@ -3940,3 +4103,7 @@ Ref: tournament.tournament_link.tournament_id > tournament.tournament.id [delete
 Ref: tournament.tournament_phase_schedule.tournament_id > tournament.tournament.id [delete: cascade]
 Ref: tournament.tournament_preview_access.tournament_id > tournament.tournament.id [delete: cascade]
 Ref: tournament.tournament_preview_access.auth_user_id > auth.user.id [delete: cascade]
+Ref: tournament.voice_channel.tournament_id > tournament.tournament.id [delete: cascade]
+Ref: tournament.voice_channel.stage_id > tournament.stage.id [delete: set null]
+Ref: tournament.voice_channel.team_id > tournament.team.id [delete: set null]
+Ref: tournament.voice_settings.tournament_id > tournament.tournament.id [delete: cascade]

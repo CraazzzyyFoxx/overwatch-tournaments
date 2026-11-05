@@ -1,7 +1,7 @@
 -- Anak Tournaments — PostgreSQL DDL compiled from SQLAlchemy metadata.
 -- Open in any SQL editor (DataGrip, DBeaver, VS Code).
 -- Runtime mappings only, not a complete physical-database dump.
--- Tables: 168
+-- Tables: 176
 -- Source of truth is backend/shared/models. Regenerate: python scripts/export_db_schema.py
 
 CREATE SCHEMA IF NOT EXISTS achievements;
@@ -778,6 +778,7 @@ CREATE TABLE balancer.user_config (
 	rating_mode VARCHAR(16) DEFAULT 'points' NOT NULL,
 	hero_ban_presets JSONB DEFAULT '{}' NOT NULL,
 	formation_defaults JSONB DEFAULT '{}' NOT NULL,
+	bot_lobby_regions JSONB DEFAULT '{}' NOT NULL,
 	PRIMARY KEY (id),
 	CONSTRAINT uq_balancer_user_config_user UNIQUE (user_id),
 	CONSTRAINT ck_balancer_user_config_rating_mode CHECK (rating_mode IN ('points', 'ranker')),
@@ -1476,6 +1477,34 @@ CREATE TABLE encounter.team_report_result (
 	CONSTRAINT ck_report_result_placement CHECK (placement IS NULL OR placement >= 1),
 	CONSTRAINT ck_report_result_wins CHECK (wins IS NULL OR wins >= 0)
 );
+
+CREATE TABLE mix.bot_lobby (
+	id BIGSERIAL NOT NULL,
+	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+	updated_at TIMESTAMP WITH TIME ZONE,
+	workspace_id BIGINT NOT NULL,
+	custom_game_id BIGINT NOT NULL,
+	lobby_index INTEGER NOT NULL,
+	encounter_id BIGINT NOT NULL,
+	discipline VARCHAR(32) NOT NULL,
+	party_id VARCHAR(128) NOT NULL,
+	party_code VARCHAR(64) NOT NULL,
+	callback_token_sha256 VARCHAR(64) NOT NULL,
+	callback_secret VARCHAR(256),
+	match_id VARCHAR(128),
+	created_by_user_id BIGINT,
+	PRIMARY KEY (id),
+	CONSTRAINT ck_custom_game_bot_lobby_index CHECK (lobby_index BETWEEN 0 AND 5),
+	CONSTRAINT uq_custom_game_bot_lobby_encounter UNIQUE (encounter_id),
+	CONSTRAINT uq_custom_game_bot_lobby_token UNIQUE (callback_token_sha256),
+	FOREIGN KEY(workspace_id) REFERENCES workspace (id) ON DELETE CASCADE,
+	FOREIGN KEY(custom_game_id) REFERENCES mix.custom_game (id) ON DELETE CASCADE,
+	CONSTRAINT fk_custom_game_bot_lobby_encounter FOREIGN KEY(encounter_id) REFERENCES encounter.encounter (id) ON DELETE CASCADE,
+	CONSTRAINT fk_custom_game_bot_lobby_discipline FOREIGN KEY(discipline) REFERENCES catalog.discipline (code),
+	FOREIGN KEY(created_by_user_id) REFERENCES auth."user" (id) ON DELETE SET NULL
+);
+
+CREATE INDEX ix_custom_game_bot_lobby_custom_game_id ON mix.bot_lobby (custom_game_id);
 
 CREATE TABLE mix.co_host (
 	custom_game_id BIGINT NOT NULL,
@@ -3301,6 +3330,113 @@ CREATE INDEX ix_tournament_encounter_saved_view_auth_user_id ON tournament.encou
 
 CREATE INDEX ix_tournament_encounter_saved_view_workspace_id ON tournament.encounter_saved_view (workspace_id);
 
+CREATE TABLE tournament.flow_edge (
+	id BIGSERIAL NOT NULL,
+	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+	updated_at TIMESTAMP WITH TIME ZONE,
+	tournament_id BIGINT NOT NULL,
+	source_node_id BIGINT NOT NULL,
+	source_port VARCHAR(32) NOT NULL,
+	target_node_id BIGINT NOT NULL,
+	target_port VARCHAR(32) NOT NULL,
+	PRIMARY KEY (id),
+	FOREIGN KEY(tournament_id) REFERENCES tournament.tournament (id) ON DELETE CASCADE,
+	FOREIGN KEY(source_node_id) REFERENCES tournament.flow_node (id) ON DELETE CASCADE,
+	FOREIGN KEY(target_node_id) REFERENCES tournament.flow_node (id) ON DELETE CASCADE
+);
+
+CREATE INDEX ix_flow_edge_source_node_id ON tournament.flow_edge (source_node_id);
+
+CREATE INDEX ix_flow_edge_target_node_id ON tournament.flow_edge (target_node_id);
+
+CREATE INDEX ix_flow_edge_tournament_id ON tournament.flow_edge (tournament_id);
+
+CREATE TABLE tournament.flow_node (
+	id BIGSERIAL NOT NULL,
+	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+	updated_at TIMESTAMP WITH TIME ZONE,
+	tournament_id BIGINT NOT NULL,
+	kind VARCHAR(16) NOT NULL,
+	name VARCHAR NOT NULL,
+	status VARCHAR(16) NOT NULL,
+	config JSONB DEFAULT '{}'::jsonb NOT NULL,
+	stage_id BIGINT,
+	position_x FLOAT DEFAULT '0' NOT NULL,
+	position_y FLOAT DEFAULT '0' NOT NULL,
+	started_at TIMESTAMP WITH TIME ZONE,
+	completed_at TIMESTAMP WITH TIME ZONE,
+	PRIMARY KEY (id),
+	CONSTRAINT ck_flow_node_kind CHECK (kind IN ('registration', 'formation', 'stage', 'filter', 'merge', 'split', 'aggregate', 'leaderboard')),
+	CONSTRAINT ck_flow_node_stage_id CHECK ((kind = 'stage') = (stage_id IS NOT NULL)),
+	CONSTRAINT uq_flow_node_stage_id UNIQUE (stage_id),
+	FOREIGN KEY(tournament_id) REFERENCES tournament.tournament (id) ON DELETE CASCADE,
+	FOREIGN KEY(stage_id) REFERENCES tournament.stage (id) ON DELETE CASCADE
+);
+
+CREATE INDEX ix_flow_node_tournament_id ON tournament.flow_node (tournament_id);
+
+CREATE TABLE tournament.flow_node_result (
+	id BIGSERIAL NOT NULL,
+	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+	updated_at TIMESTAMP WITH TIME ZONE,
+	node_id BIGINT NOT NULL,
+	port VARCHAR(32) NOT NULL,
+	rank INTEGER NOT NULL,
+	workspace_member_id BIGINT,
+	team_id BIGINT,
+	stage_item_id BIGINT,
+	item_rank INTEGER,
+	score NUMERIC,
+	tie_group INTEGER,
+	breakdown JSONB,
+	state VARCHAR(16) NOT NULL,
+	PRIMARY KEY (id),
+	CONSTRAINT ck_flow_node_result_one_participant CHECK (num_nonnulls(workspace_member_id, team_id) = 1),
+	CONSTRAINT ck_flow_node_result_rank CHECK (rank >= 1),
+	CONSTRAINT ck_flow_node_result_state CHECK (state IN ('tentative', 'final')),
+	FOREIGN KEY(node_id) REFERENCES tournament.flow_node (id) ON DELETE CASCADE,
+	FOREIGN KEY(workspace_member_id) REFERENCES workspace_member (id) ON DELETE CASCADE,
+	FOREIGN KEY(team_id) REFERENCES tournament.team (id) ON DELETE CASCADE,
+	FOREIGN KEY(stage_item_id) REFERENCES tournament.stage_item (id) ON DELETE CASCADE
+);
+
+CREATE INDEX ix_flow_node_result_node_id ON tournament.flow_node_result (node_id);
+
+CREATE UNIQUE INDEX uq_flow_node_result_member ON tournament.flow_node_result (node_id, port, workspace_member_id) WHERE workspace_member_id IS NOT NULL;
+
+CREATE UNIQUE INDEX uq_flow_node_result_team ON tournament.flow_node_result (node_id, port, team_id) WHERE team_id IS NOT NULL;
+
+CREATE TABLE tournament.flow_node_schedule (
+	id BIGSERIAL NOT NULL,
+	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+	updated_at TIMESTAMP WITH TIME ZONE,
+	node_id BIGINT NOT NULL,
+	phase VARCHAR(16) NOT NULL,
+	starts_at TIMESTAMP WITH TIME ZONE NOT NULL,
+	ends_at TIMESTAMP WITH TIME ZONE,
+	PRIMARY KEY (id),
+	CONSTRAINT ck_flow_node_schedule_phase CHECK (phase IN ('open', 'check_in', 'start')),
+	CONSTRAINT ck_flow_node_schedule_window CHECK (ends_at IS NULL OR ends_at > starts_at),
+	CONSTRAINT uq_flow_node_schedule_phase UNIQUE (node_id, phase),
+	FOREIGN KEY(node_id) REFERENCES tournament.flow_node (id) ON DELETE CASCADE
+);
+
+CREATE TABLE tournament.participant_result (
+	tournament_id BIGINT NOT NULL,
+	workspace_member_id BIGINT NOT NULL,
+	final_team_id BIGINT,
+	placement INTEGER,
+	field_size INTEGER NOT NULL,
+	source_node_id BIGINT,
+	PRIMARY KEY (tournament_id, workspace_member_id),
+	FOREIGN KEY(tournament_id) REFERENCES tournament.tournament (id) ON DELETE CASCADE,
+	FOREIGN KEY(workspace_member_id) REFERENCES workspace_member (id) ON DELETE CASCADE,
+	FOREIGN KEY(final_team_id) REFERENCES tournament.team (id) ON DELETE SET NULL,
+	FOREIGN KEY(source_node_id) REFERENCES tournament.flow_node (id) ON DELETE SET NULL
+);
+
+CREATE INDEX ix_participant_result_workspace_member_id ON tournament.participant_result (workspace_member_id);
+
 CREATE TABLE tournament.pick_ban_config (
 	id BIGSERIAL NOT NULL,
 	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
@@ -3529,9 +3665,7 @@ CREATE TABLE tournament.stage (
 	advance_count INTEGER,
 	advance_upper_count INTEGER,
 	"order" INTEGER NOT NULL,
-	is_active BOOLEAN DEFAULT 'false' NOT NULL,
 	is_published BOOLEAN DEFAULT 'false' NOT NULL,
-	is_completed BOOLEAN DEFAULT 'false' NOT NULL,
 	ranking_preset VARCHAR,
 	tiebreak_order VARCHAR[],
 	win_points FLOAT,
@@ -3830,3 +3964,43 @@ CREATE TABLE tournament.tournament_preview_access (
 CREATE INDEX ix_tournament_tournament_preview_access_auth_user_id ON tournament.tournament_preview_access (auth_user_id);
 
 CREATE INDEX ix_tournament_tournament_preview_access_tournament_id ON tournament.tournament_preview_access (tournament_id);
+
+CREATE TABLE tournament.voice_channel (
+	id BIGSERIAL NOT NULL,
+	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+	updated_at TIMESTAMP WITH TIME ZONE,
+	tournament_id BIGINT NOT NULL,
+	stage_id BIGINT,
+	team_id BIGINT,
+	kind VARCHAR(16) NOT NULL,
+	slot_key VARCHAR(64) NOT NULL,
+	discord_channel_id BIGINT,
+	owned BOOLEAN DEFAULT 'true' NOT NULL,
+	status VARCHAR(16) DEFAULT 'pending' NOT NULL,
+	delete_requested_at TIMESTAMP WITH TIME ZONE,
+	PRIMARY KEY (id),
+	CONSTRAINT uq_voice_channel_slot UNIQUE (tournament_id, slot_key),
+	CONSTRAINT ck_voice_channel_kind CHECK (kind IN ('category', 'hub', 'team', 'swiss_slot')),
+	CONSTRAINT ck_voice_channel_status CHECK (status IN ('pending', 'active', 'deleting')),
+	FOREIGN KEY(tournament_id) REFERENCES tournament.tournament (id) ON DELETE CASCADE,
+	FOREIGN KEY(stage_id) REFERENCES tournament.stage (id) ON DELETE SET NULL,
+	FOREIGN KEY(team_id) REFERENCES tournament.team (id) ON DELETE SET NULL,
+	UNIQUE (discord_channel_id)
+);
+
+CREATE TABLE tournament.voice_settings (
+	id BIGSERIAL NOT NULL,
+	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+	updated_at TIMESTAMP WITH TIME ZONE,
+	tournament_id BIGINT NOT NULL,
+	enabled BOOLEAN DEFAULT 'false' NOT NULL,
+	private BOOLEAN DEFAULT 'false' NOT NULL,
+	early_teams BOOLEAN DEFAULT 'false' NOT NULL,
+	category_id BIGINT,
+	staff_role_ids BIGINT[] DEFAULT '{}'::bigint[] NOT NULL,
+	last_synced_at TIMESTAMP WITH TIME ZONE,
+	sync_issues JSONB DEFAULT '[]'::jsonb NOT NULL,
+	PRIMARY KEY (id),
+	UNIQUE (tournament_id),
+	FOREIGN KEY(tournament_id) REFERENCES tournament.tournament (id) ON DELETE CASCADE
+);

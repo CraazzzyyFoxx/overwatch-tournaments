@@ -4,7 +4,7 @@ import type { Page } from "@playwright/test";
 import { Api, assertStatus, poll } from "../support/api";
 import { AUTH_DIR, BASE_URL } from "../support/env";
 import { expect, openPage, test as base } from "../support/fixtures";
-import { createStage, generateStage, listEncounters, openRegistration, seedTeams, setResult } from "../support/flows";
+import { createStage, startStage, listEncounters, openRegistration, seedTeams, setResult } from "../support/flows";
 import {
   ROUTES,
   TOURNAMENT_CASES,
@@ -26,7 +26,7 @@ const NOT_FOUND_TITLE = "That route is off the board.";
 async function seedBracket(api: Api, tournamentId: number) {
   const teams = await seedTeams(api, tournamentId, 2);
   const stage = await createStage(api, tournamentId, teams.map((team) => team.id), { stageType: "single_elimination" });
-  await generateStage(api, stage.id);
+  await startStage(api, stage.id);
   const [encounter] = await listEncounters(api, tournamentId, stage.id);
   return { teams, encounter };
 }

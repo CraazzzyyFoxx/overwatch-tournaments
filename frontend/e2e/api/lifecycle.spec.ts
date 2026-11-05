@@ -4,7 +4,7 @@ import {
   balanceAndExport,
   battleTag,
   createStage,
-  generateStage,
+  startStage,
   listEncounters,
   OW_FORM,
   openRegistration,
@@ -261,7 +261,7 @@ test("overwatch lifecycle: announcement → archived through the API", async ({ 
       })
       .toBe(6);
     const stages = await anonApi.get<Stage[]>(`/api/v1/tournaments/${tid}/stages`);
-    expect(stages.find((s) => s.id === groups.id)).toMatchObject({ is_active: true, is_published: true });
+    expect(stages.find((s) => s.id === groups.id)).toMatchObject({ status: "live", is_published: true });
     r = await readiness();
     expect(r.bracket_generated).toBe(true);
     expect(r.duel_encounters_total).toBe(6);
@@ -325,7 +325,7 @@ test("overwatch lifecycle: announcement → archived through the API", async ({ 
       name: "Final",
       order: 1,
     });
-    await generateStage(adminApi, final.id);
+    await startStage(adminApi, final.id);
     const [match] = await listEncounters(anonApi, tid, final.id);
     expect(match.teams.map((s) => s.team_id).sort()).toEqual([teams[0].id, teams[1].id].sort());
     // The group runner-up takes the title.

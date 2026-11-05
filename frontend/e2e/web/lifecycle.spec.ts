@@ -3,7 +3,7 @@ import { expect, openPage, test } from "../support/fixtures";
 import {
   balanceAndExport,
   createStage,
-  generateStage,
+  startStage,
   listEncounters,
   OW_FORM,
   openRegistration,
@@ -122,7 +122,7 @@ test("public tournament page follows the lifecycle (anon + player)", async ({ ad
 
   await test.step("LIVE: rail reorders, bracket opens with team names and the result", async () => {
     const stage = await createStage(adminApi, t.id, teamIds, { stageType: "single_elimination", name: "Final" });
-    await generateStage(adminApi, stage.id);
+    await startStage(adminApi, stage.id);
     await setStatus(adminApi, t.id, "live");
 
     await openPage(anon, url);

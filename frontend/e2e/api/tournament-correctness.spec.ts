@@ -26,7 +26,7 @@ import {
 import { expect, test } from "../support/fixtures";
 import {
   createStage,
-  generateStage,
+  startStage,
   listEncounters,
   seedBracket,
   seedTeams,
@@ -315,7 +315,7 @@ test.describe("swiss", () => {
     }
     const rows = await stageStandings(adminApi, seed.tournament.id, seed.stage.id);
     expect((await listEncounters(adminApi, seed.tournament.id, seed.stage.id)).some((e) => e.round > 3), "max_rounds: no fourth round").toBe(false);
-    expect((await adminApi.get<Stage>(`/api/v1/admin/stages/${seed.stage.id}`)).is_completed, "the stage is complete after its last round").toBe(true);
+    expect((await adminApi.get<Stage>(`/api/v1/admin/stages/${seed.stage.id}`)).status, "the stage is complete after its last round").toBe("completed");
     const table = groupTable(seeds, results, POINTS, SWISS_ORDER);
     expect(rows.map((r) => [r.team_id, r.position, r.points, r.win, r.draw, r.lose, r.buchholz, r.full_buchholz])).toEqual(
       table.map((r, i) => [r.team, i + 1, r.points, r.win, r.draw, r.lose, r.median_buchholz, r.buchholz])
@@ -376,17 +376,7 @@ test("groups → playoffs: top 2 cross-seed A1-B2 / B1-A2 only once the groups c
   const planB = ladder(groupB);
   for (const r of [...planA, ...planB.slice(0, 5)]) await enter(adminApi, groupEncounters, r);
 
-  // One group match still open: activation refuses to freeze the playoff seeds.
-  const refused = await adminApi.post<TournamentJob>(`/api/v1/admin/stages/${playoff.id}/activate-and-generate`, undefined, 202);
-  const outcome = await poll(
-    async () => {
-      const job = await adminApi.get<TournamentJob>(`/api/v1/admin/tournament-jobs/${refused.id}`);
-      return job.status === "pending" || job.status === "running" ? undefined : job;
-    },
-    "the early playoff generation to settle"
-  );
-  expect(outcome.status, "playoff generation before the groups close").toBe("failed");
-  expect(outcome.error).toContain("upstream_stages_not_completed");
+  // One group match still open, the playoff is not started.
   expect(await listEncounters(adminApi, tournament.id, playoff.id), "no playoff match before the groups close").toHaveLength(0);
 
   await enter(adminApi, groupEncounters, planB[5]);
@@ -395,9 +385,9 @@ test("groups → playoffs: top 2 cross-seed A1-B2 / B1-A2 only once the groups c
   const [itemA, itemB] = [...groupStage.items].sort((x, y) => x.id - y.id).map((item) => item.id);
   expect(groupOrder(itemA)).toEqual(groupTable(groupA, planA, POINTS, ROUND_ROBIN_ORDER).map((r) => r.team));
   expect(groupOrder(itemB)).toEqual(groupTable(groupB, planB, POINTS, ROUND_ROBIN_ORDER).map((r) => r.team));
-  expect((await adminApi.get<Stage>(`/api/v1/admin/stages/${groupStage.id}`)).is_completed, "both groups closed").toBe(true);
+  expect((await adminApi.get<Stage>(`/api/v1/admin/stages/${groupStage.id}`)).status, "both groups closed").toBe("completed");
 
-  await generateStage(adminApi, playoff.id);
+  await startStage(adminApi, playoff.id);
   const firstRound = async () =>
     (await listEncounters(adminApi, tournament.id, playoff.id))
       .filter((e) => e.round === 1)
@@ -472,7 +462,7 @@ for (const [groupCount, wiring] of [
       teams.map((t) => t.id),
       { stageType: "round_robin", groups: groupCount, bestOf: 1, extra: explicit ? {} : { advance_count: 2 } }
     );
-    await generateStage(adminApi, created.id);
+    await startStage(adminApi, created.id);
     const playoff = await adminApi.post<Stage>(
       `/api/v1/admin/stages/tournament/${tournament.id}`,
       { name: "Playoffs", stage_type: "single_elimination", best_of: { default: 1 }, order: 1 },
@@ -488,7 +478,7 @@ for (const [groupCount, wiring] of [
     const rows = await stageStandings(adminApi, tournament.id, created.id);
     const winners = new Set(rows.filter((r) => r.position === 1).map((r) => r.team_id));
     if (explicit) await adminApi.post(`/api/v1/admin/stages/${playoff.id}/wire-from-groups`, { source_stage_id: created.id, top: 2 });
-    await generateStage(adminApi, playoff.id);
+    await startStage(adminApi, playoff.id);
 
     const firstRound = (await listEncounters(adminApi, tournament.id, playoff.id)).filter((e) => e.round === 1).map((e) => seats(e) as [number, number]);
     const n = groupCount * 2;
@@ -645,7 +635,7 @@ test("ffa: two lobbies scored by a placement table; ties go to game wins, the he
       },
     }
   );
-  await generateStage(adminApi, ffa.id);
+  await startStage(adminApi, ffa.id);
   const playoff = await adminApi.post<Stage>(
     `/api/v1/admin/stages/tournament/${tournament.id}`,
     { name: "Playoffs", stage_type: "single_elimination", best_of: { default: 1 }, order: 1 },
@@ -720,9 +710,9 @@ test("ffa: two lobbies scored by a placement table; ties go to game wins, the he
       `lobby table of stage item ${item}`
     ).toEqual(expected.map((r, i) => [r.team, i + 1, r.points, r.wins, 2]));
   }
-  expect((await adminApi.get<Stage>(`/api/v1/admin/stages/${ffa.id}`)).is_completed, "both lobbies played their card").toBe(true);
+  expect((await adminApi.get<Stage>(`/api/v1/admin/stages/${ffa.id}`)).status, "both lobbies played their card").toBe("completed");
 
-  await generateStage(adminApi, playoff.id);
+  await startStage(adminApi, playoff.id);
   const firstRound = (await listEncounters(adminApi, tournament.id, playoff.id)).filter((e) => e.round === 1).map((e) => seats(e).join("-"));
   expect(firstRound.sort(), "A1 vs B2, B1 vs A2").toEqual([`${p2}-${q3}`, `${q4}-${p1}`].sort());
 });
