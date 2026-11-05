@@ -25,6 +25,7 @@ from shared.schemas.team_format import TeamFormatWrite
 from shared.services.division_grid import cache as division_grid_cache
 from shared.services.division_grid.access import get_workspace_division_grid_version_id, require_event_grid
 from shared.services.ontology import assert_discipline_enabled
+from shared.services.participant_result import write_participant_results
 from shared.services.realtime import Resource, Scope, emit
 from shared.services.stats_owner_delete import capture_owner_delete, stage_owner_delete
 from shared.services.team_format import copy_for_tournament, save_tournament_format
@@ -42,6 +43,7 @@ from src.services.notifications.lifecycle import lifecycle_notifier
 from src.services.registration_team_guards import assert_no_registered_teams
 from src.services.tournament.events import (
     STRUCTURE_RESOURCES,
+    enqueue_achievement_evaluation,
     enqueue_tournament_state_changed,
     publish_tournament_invalidation,
 )
@@ -628,8 +630,12 @@ class AdminTournamentService:
             )
 
         old_status = _status_value(tournament.status)
+        was_finished = tournament.is_finished
         tournament.status = target_status
         tournament.is_finished = tournament_state.is_finished_for_status(target_status)
+        if tournament.is_finished != was_finished:
+            await write_participant_results(session, tournament_id)
+            await enqueue_achievement_evaluation(session, tournament, ["tournament.participant_result"])
         if not automated:
             tournament.auto_transitions_enabled = False
 

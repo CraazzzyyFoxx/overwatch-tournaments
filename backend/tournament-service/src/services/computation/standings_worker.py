@@ -5,11 +5,7 @@ from faststream.exceptions import RejectMessage
 from loguru import logger
 
 from shared import models
-from shared.messaging.config import ACHIEVEMENT_EVALUATE_QUEUE
-from shared.messaging.outbox import enqueue_outbox_event
 from shared.repository import TournamentRepository
-from shared.schemas.events import AchievementEvaluateEvent
-from shared.services.scrim_scope import is_scrim_container
 from shared.services.tournament.computation import dispatch_job
 from src.core import db
 from src.services.admin.stage import stage_service as admin_stage_service
@@ -20,6 +16,7 @@ from src.services.standings.swiss_auto_round import swiss_rounds_service
 from src.services.tournament.events import (
     RESULT_RESOURCES,
     STRUCTURE_RESOURCES,
+    enqueue_achievement_evaluation,
     publish_tournament_invalidation,
 )
 
@@ -29,24 +26,15 @@ _tournaments = TournamentRepository()
 # The outbox row goes out in the same transaction as the standings themselves,
 # so the evaluation can never observe an older generation than the one that
 # triggered it. The same job flips ``Stage.is_completed``, which the
-# stage-completion rules read.
-_STANDINGS_CHANGED_TABLES = ["tournament.standing", "tournament.player", "tournament.team", "tournament.stage"]
-
-
-async def _enqueue_achievement_evaluation(session, tournament: models.Tournament) -> None:
-    if await is_scrim_container(session, tournament.id):
-        return
-    await enqueue_outbox_event(
-        session,
-        AchievementEvaluateEvent(
-            workspace_id=tournament.workspace_id,
-            tournament_id=tournament.id,
-            changed_tables=_STANDINGS_CHANGED_TABLES,
-        ),
-        # Default exchange: the routing key IS the queue name.
-        exchange=None,
-        routing_key=ACHIEVEMENT_EVALUATE_QUEUE.name,
-    )
+# stage-completion rules read. The recalculation also rewrites
+# ``participant_result`` of a finished tournament.
+_STANDINGS_CHANGED_TABLES = [
+    "tournament.standing",
+    "tournament.player",
+    "tournament.team",
+    "tournament.stage",
+    "tournament.participant_result",
+]
 
 
 async def _isolated(session, what: str, tournament_id: int, step):
@@ -166,7 +154,7 @@ async def process_standings_job(job_id: int) -> None:
             elif run.changed or requalified:
                 await publish_tournament_invalidation(session, tournament_id, RESULT_RESOURCES)
             if run.changed:
-                await _enqueue_achievement_evaluation(session, run.tournament)
+                await enqueue_achievement_evaluation(session, run.tournament, _STANDINGS_CHANGED_TABLES)
             await jobs_service.mark_job_succeeded(
                 session,
                 current,

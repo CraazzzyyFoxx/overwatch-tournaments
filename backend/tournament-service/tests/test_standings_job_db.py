@@ -137,7 +137,7 @@ class StandingsJobTests(EncounterLayerCase):
             job_id = await self._request()
             with (
                 patch.object(standings_worker, "publish_tournament_invalidation", AsyncMock()) as invalidate,
-                patch.object(standings_worker, "_enqueue_achievement_evaluation", AsyncMock()) as achievements,
+                patch.object(standings_worker, "enqueue_achievement_evaluation", AsyncMock()) as achievements,
             ):
                 await self._run(job_id)
             announced.append((invalidate.await_count, achievements.await_count))

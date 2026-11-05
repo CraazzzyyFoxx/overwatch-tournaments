@@ -19,6 +19,7 @@ from shared.domain.tournament_utils import (
 )
 from shared.domain.tournament_utils import is_completed_encounter, sort_bracket_matches
 from shared.repository import EncounterRepository, StandingRepository, TeamRepository, TournamentRepository
+from shared.services.participant_result import write_participant_results
 from src import schemas
 from src.domain.bracket.swiss import SwissThresholds
 from src.services.bracket.swiss_state import bye_counts_by_scope, stopped_scopes
@@ -1572,6 +1573,9 @@ class StandingsService:
         changed = await self._write_standings(session, tournament.id, final_standings) or personal_changed
         # Flip Stage.is_completed in the same transaction as the standings write.
         changed = await self._update_stage_completion_flags(session, tournament, final_standings) or changed
+        if changed and tournament.is_finished:
+            # A standings correction of a finished tournament (spec §4.7).
+            await write_participant_results(session, tournament.id)
         if commit:
             await session.commit()
         else:

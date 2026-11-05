@@ -55,12 +55,16 @@ class RepointPlayerWorkspaceMembersTests(IsolatedAsyncioTestCase):
             self.assertEqual(77, player_id)
             return members_by_workspace[workspace_id]
 
-        with patch.object(
-            user_merge, "get_or_create_workspace_member", AsyncMock(side_effect=fake_get_or_create)
-        ) as get_or_create:
+        with (
+            patch.object(
+                user_merge, "get_or_create_workspace_member", AsyncMock(side_effect=fake_get_or_create)
+            ) as get_or_create,
+            patch.object(user_merge, "write_participant_results", AsyncMock()) as write_results,
+        ):
             moved = await merges._repoint_player_workspace_members(session, source_user_id=5, target_user_id=77)
 
         self.assertEqual(2, get_or_create.await_count)
+        self.assertEqual([call.args[1] for call in write_results.await_args_list], [10, 20])
         # First execute() call is the SELECT; the next two are the per-workspace UPDATEs.
         self.assertEqual(3, session.execute.await_count)
         self.assertEqual(2, moved)
@@ -72,12 +76,14 @@ class RepointPlayerWorkspaceMembersTests(IsolatedAsyncioTestCase):
         session = SimpleNamespace(execute=AsyncMock(side_effect=[_rows((201, 30, 5), (202, 31, 5)), Mock(rowcount=2)]))
         member = SimpleNamespace(id=555)
 
-        with patch.object(
-            user_merge, "get_or_create_workspace_member", AsyncMock(return_value=member)
-        ) as get_or_create:
+        with (
+            patch.object(user_merge, "get_or_create_workspace_member", AsyncMock(return_value=member)) as get_or_create,
+            patch.object(user_merge, "write_participant_results", AsyncMock()) as write_results,
+        ):
             moved = await merges._repoint_player_workspace_members(session, source_user_id=8, target_user_id=88)
 
         get_or_create.assert_awaited_once_with(session, workspace_id=5, player_id=88)
+        self.assertEqual([call.args[1] for call in write_results.await_args_list], [30, 31])
         self.assertEqual(2, session.execute.await_count)
         self.assertIn("UPDATE", _sql(session, 1))
         self.assertEqual(2, moved)
@@ -85,10 +91,14 @@ class RepointPlayerWorkspaceMembersTests(IsolatedAsyncioTestCase):
     async def test_repoints_noop_when_source_has_no_player_rows(self) -> None:
         session = SimpleNamespace(execute=AsyncMock(return_value=_rows()))
 
-        with patch.object(user_merge, "get_or_create_workspace_member", AsyncMock()) as get_or_create:
+        with (
+            patch.object(user_merge, "get_or_create_workspace_member", AsyncMock()) as get_or_create,
+            patch.object(user_merge, "write_participant_results", AsyncMock()) as write_results,
+        ):
             moved = await merges._repoint_player_workspace_members(session, source_user_id=9, target_user_id=99)
 
         get_or_create.assert_not_awaited()
+        write_results.assert_not_awaited()
         session.execute.assert_awaited_once()
         self.assertEqual(0, moved)
 

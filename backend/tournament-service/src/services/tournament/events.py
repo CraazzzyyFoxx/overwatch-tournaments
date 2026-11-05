@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from shared import models
 from shared.disciplines import discipline as discipline_spec
 from shared.messaging.config import (
+    ACHIEVEMENT_EVALUATE_QUEUE,
     PLAYER_EVENTS_EXCHANGE,
     PLAYER_REFRESH_REQUESTED_ROUTING_KEY,
     TOURNAMENT_EVENTS_EXCHANGE,
@@ -19,6 +20,7 @@ from shared.messaging.config import (
 )
 from shared.messaging.outbox import enqueue_outbox_event
 from shared.schemas.events import (
+    AchievementEvaluateEvent,
     PlayerRefreshRequestedEvent,
     TournamentStateChangedEvent,
     TournamentVoiceSyncRequestedEvent,
@@ -339,6 +341,26 @@ async def enqueue_tournament_state_changed(
         ),
         exchange=TOURNAMENT_EVENTS_EXCHANGE,
         routing_key=TOURNAMENT_STATE_CHANGED_ROUTING_KEY,
+    )
+
+
+async def enqueue_achievement_evaluation(
+    session: AsyncSession,
+    tournament: models.Tournament,
+    changed_tables: Sequence[str],
+) -> None:
+    if await is_scrim_container(session, tournament.id):
+        return
+    await enqueue_outbox_event(
+        session,
+        AchievementEvaluateEvent(
+            workspace_id=tournament.workspace_id,
+            tournament_id=tournament.id,
+            changed_tables=list(changed_tables),
+        ),
+        # Default exchange: the routing key IS the queue name.
+        exchange=None,
+        routing_key=ACHIEVEMENT_EVALUATE_QUEUE.name,
     )
 
 
