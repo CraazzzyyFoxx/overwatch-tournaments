@@ -4,7 +4,7 @@ from collections.abc import Mapping
 from types import MappingProxyType
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, NonNegativeInt, model_validator
 
 from shared.core.enums import FlowNodeKind, FlowUnit, SubscriptionEnforcementStage
 
@@ -80,13 +80,20 @@ class FilterNodeConfig(_NodeConfig):
     from_: int | None = Field(None, alias="from", ge=1)
     to: int | None = Field(None, ge=1)
     per_item: dict[int, int] = {}
+    #: Double elimination (``per_item_top`` only): a passed row below this ``item_rank`` starts in the lower bracket.
+    upper: int | None = Field(None, ge=0)
+    per_item_upper: dict[int, NonNegativeInt] = {}
     swiss_status: Literal["qualified", "eliminated"] | None = None
     manual: list[int] = []
 
     @model_validator(mode="after")
-    def _n_for_top_modes(self) -> FilterNodeConfig:
+    def _required_for_mode(self) -> FilterNodeConfig:
         if self.mode in ("top", "per_item_top") and self.n is None:
             raise ValueError(f"n is required for mode {self.mode!r}")
+        if self.mode == "range" and (self.from_ is None or self.to is None or self.to < self.from_):
+            raise ValueError("range needs from <= to")
+        if self.mode == "swiss_status" and self.swiss_status is None:
+            raise ValueError("swiss_status is required for mode 'swiss_status'")
         return self
 
 

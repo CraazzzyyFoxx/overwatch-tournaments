@@ -25,7 +25,7 @@ from shared.models.tournament.player_standing import PlayerStanding
 from shared.models.tournament.stage import Stage, StageItem
 from shared.models.tournament.standings import Standing
 from shared.models.tournament.team import Team
-from src.domain.flow.compute import ResultRow, compute_filter, compute_merge
+from src.domain.flow.compute import PureOutput, ResultRow, compute_filter, compute_merge
 
 __all__ = ("FlowEngine", "FlowRecomputeReport", "flow_engine")
 
@@ -86,7 +86,6 @@ class FlowEngine:
         for node_id in order:
             node = by_id[node_id]
             kind = FlowNodeKind(node.kind)
-            port = _LIFECYCLE_PORT.get(kind) or _PURE_PORT[kind]
             status = None
             if kind in _LIFECYCLE_PORT:
                 loader = {
@@ -94,24 +93,21 @@ class FlowEngine:
                     FlowNodeKind.FORMATION: self.formation_rows,
                     FlowNodeKind.STAGE: self._stage_rows,
                 }[kind]
-                rows, state = await loader(session, node), self._lifecycle_state(node)
+                ports, state = {_LIFECYCLE_PORT[kind]: await loader(session, node)}, self._lifecycle_state(node)
             else:
                 sources = [outputs.get((e.source_node_id, e.source_port)) for e in incoming[node_id]]
                 if not sources or not all(s and s[0] for s in sources):
-                    rows, state, status = [], FlowResultState.TENTATIVE, FlowNodeStatus.PENDING
+                    ports, state, status = {_PURE_PORT[kind]: []}, FlowResultState.TENTATIVE, FlowNodeStatus.PENDING
                 else:
                     ready = [s for s in sources if s]
-                    if kind == FlowNodeKind.FILTER:
-                        config = parse_node_config(kind, node.config)
-                        assert isinstance(config, FilterNodeConfig)
-                        rows = compute_filter(config, ready[0][0], item_order=item_order)
-                    else:
-                        rows = compute_merge([s[0] for s in ready])
-                    final = all(s[1] == FlowResultState.FINAL for s in ready)
-                    state = FlowResultState.FINAL if final else FlowResultState.TENTATIVE
+                    computed = self._compute_pure(kind, node, [s[0] for s in ready], item_order)
+                    final = not computed.boundary_tie and all(s[1] == FlowResultState.FINAL for s in ready)
+                    ports, state = computed.ports, FlowResultState.FINAL if final else FlowResultState.TENTATIVE
                     status = FlowNodeStatus(state.value)
-            outputs[(node_id, port)] = (rows, state)
-            moved = await self._write_results(session, node_id, port, rows, state)
+            moved = False
+            for port, rows in ports.items():
+                outputs[(node_id, port)] = (rows, state)
+                moved |= await self._write_results(session, node_id, port, rows, state)
             if status is not None and status != node.status:
                 await session.execute(sa.update(FlowNode).where(FlowNode.id == node_id).values(status=status.value))
                 moved = True
@@ -119,6 +115,15 @@ class FlowEngine:
                 changed.append(node_id)
         await session.flush()
         return FlowRecomputeReport(tuple(changed))
+
+    def _compute_pure(
+        self, kind: FlowNodeKind, node: FlowNode, inputs: Sequence[list[ResultRow]], item_order: Mapping[int, int]
+    ) -> PureOutput:
+        if kind == FlowNodeKind.FILTER:
+            config = parse_node_config(kind, node.config)
+            assert isinstance(config, FilterNodeConfig)
+            return compute_filter(config, inputs[0], item_order=item_order)
+        return PureOutput({_PURE_PORT[kind]: compute_merge(inputs)})
 
     def _lifecycle_state(self, node: FlowNode) -> FlowResultState:
         final = node.status == _FINAL_STATUS[FlowNodeKind(node.kind)]
