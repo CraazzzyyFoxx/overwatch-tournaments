@@ -11,7 +11,7 @@ looks at all unordered player pairs and their shared prior teams:
   handles missing natively; 0.5 would fake "average" experience).
 
 Strictly pre-tournament: only tournaments that STARTED before the target one
-count (chronology is ``(coalesce(start_date, created_at), id)`` — ids are not
+count (chronology is the key of ``shared.core.chrono`` — ids are not
 time-ordered in this database).
 """
 
@@ -25,6 +25,7 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
+from shared.core.chrono import tournament_chrono_key
 from shared.services.workspace_scope import workspace_scope_filter
 
 __all__ = ("team_synergy_features",)
@@ -110,9 +111,8 @@ async def team_synergy_features(
     workspace_ids: typing.Sequence[int] | None = None,
 ) -> pd.DataFrame:
     """Return ``(team_id, synergy_pairs, synergy_winrate)`` for a tournament's rosters."""
-    chrono = sa.func.coalesce(models.Tournament.start_date, models.Tournament.created_at)
     target_key = (
-        await session.execute(sa.select(chrono, models.Tournament.id).where(models.Tournament.id == tournament_id))
+        await session.execute(sa.select(*tournament_chrono_key()).where(models.Tournament.id == tournament_id))
     ).one_or_none()
     target = await _roster_frame(session, [models.Player.tournament_id == tournament_id])
     if target.empty or target_key is None:
@@ -123,7 +123,7 @@ async def team_synergy_features(
         for row in (
             await session.execute(
                 sa.select(models.Tournament.id).where(
-                    sa.tuple_(chrono, models.Tournament.id) < sa.tuple_(*target_key),
+                    sa.tuple_(*tournament_chrono_key()) < sa.tuple_(*target_key),
                     models.Tournament.is_hidden.is_(False),
                     models.Tournament.discipline == "overwatch",
                     *workspace_scope_filter(workspace_id, workspace_ids),

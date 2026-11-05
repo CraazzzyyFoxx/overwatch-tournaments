@@ -42,6 +42,7 @@ player_profile = ow_module("features.player_profile")
 
 JAN, FEB, MAR, MAY = (datetime(2026, month, 1, tzinfo=UTC) for month in (1, 2, 3, 5))
 JAN_3, JAN_9 = datetime(2026, 1, 3, tzinfo=UTC), datetime(2026, 1, 9, tzinfo=UTC)
+FEB_2, FEB_9 = datetime(2026, 2, 2, tzinfo=UTC), datetime(2026, 2, 9, tzinfo=UTC)
 # Each history entry is (started, ended, rank, wins, losses).
 HISTORY = ((JAN, JAN, 1500, 3, 0), (FEB, FEB, 2500, 0, 3), (MAR, MAR, 2500, 2, 1))
 # The first two start together; the first ends first.
@@ -258,7 +259,7 @@ class _Database:
         self._next_id += 1
         return self._next_id
 
-    def tournament(self, tournament_id: int, started: datetime) -> None:
+    def tournament(self, tournament_id: int, started: datetime, ended: datetime | None = None) -> None:
         self.insert(
             models.Tournament.__table__,
             id=tournament_id,
@@ -267,6 +268,7 @@ class _Database:
             slug=f"tournament-{tournament_id}",
             is_hidden=False,
             start_date=started,
+            end_date=ended,
         )
 
     def player(self, tournament_id: int, *, user_id: int, rank: int) -> int:
@@ -336,6 +338,16 @@ class RankHistoryChronologyTests(_DatabaseTestCase):
         history = await self._history([61])
 
         # 62 started before 61 (in the history); 63 started after it (beyond the horizon).
+        self.assertEqual([62, 61], history["tournament_id"].tolist())
+
+    async def test_equal_starts_follow_end_date(self) -> None:
+        for tid, ended, rank in ((61, FEB_9, 2500), (62, FEB_2, 1500)):
+            self.db.tournament(tid, FEB, ended)
+            self.db.player(tid, user_id=10, rank=rank)
+
+        history = await self._history([61])
+
+        # 62 has the higher id but ended first: it is 61's history, not its future.
         self.assertEqual([62, 61], history["tournament_id"].tolist())
 
 

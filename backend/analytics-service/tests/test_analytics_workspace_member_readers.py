@@ -151,7 +151,7 @@ class ShiftFeaturesRankHistoryTests(IsolatedAsyncioTestCase):
         self.assertIn("workspace_member.player_id AS user_id", sql)
         self.assertRegex(
             sql,
-            r"(?s)ORDER BY workspace_member\.player_id, \(SELECT coalesce\(rated_parent\.code, rated_leaf\.code\).*?LIMIT 1\), tournament\.tournament\.id$",
+            r"(?s)ORDER BY workspace_member\.player_id, \(SELECT coalesce\(rated_parent\.code, rated_leaf\.code\).*?LIMIT 1\), coalesce\(tournament\.tournament\.start_date, tournament\.tournament\.created_at\), coalesce\(tournament\.tournament\.end_date, tournament\.tournament\.start_date, tournament\.tournament\.created_at\), tournament\.tournament\.id$",
         )
 
 

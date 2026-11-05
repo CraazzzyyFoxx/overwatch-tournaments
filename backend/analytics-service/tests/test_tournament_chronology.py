@@ -125,3 +125,38 @@ class BackfillChronologyTests(_ChronologyTestCase):
         # Whole UTC days: tournament 1 starts at 00:00 on March 1, the day after the range.
         self.assertEqual([3, 2], await self._visited(date(2026, 2, 1), date(2026, 2, 28)))
         self.assertEqual([], await self._visited(date(2026, 3, 2), date(2026, 3, 1)))
+
+
+evaluate = importlib.import_module("src.services.analytics.evaluate")
+backtest = importlib.import_module("src.services.ml.training.backtest")
+
+
+class TimelineChronologyTests(_ChronologyTestCase):
+    async def test_lookback_window_follows_the_key(self) -> None:
+        self.world()
+        self.assertEqual(
+            CHRONOLOGY, await analytics_service.lookback_tournament_ids(self.db.shim, 1, 5, discipline="overwatch")
+        )
+        self.assertEqual(
+            [3, 2], await analytics_service.lookback_tournament_ids(self.db.shim, 2, 5, discipline="overwatch")
+        )
+
+    async def test_latest_tournament_breaks_a_start_tie_on_end_date(self) -> None:
+        self.world(only=(2, 3))
+        latest = await backtest._latest_tournament_id(self.db.shim, discipline="overwatch", workspace_id=None)
+        self.assertEqual(2, latest)  # 3 has the higher id, 2 ends later
+
+    async def test_evaluation_scope_follows_the_key(self) -> None:
+        self.world()
+        _, ids = await evaluate._scoped_tournaments(
+            self.db.shim, discipline="overwatch", workspace_id=None, from_tournament_id=None, to_tournament_id=None
+        )
+        self.assertEqual(CHRONOLOGY, ids)
+
+    async def test_replay_encounters_follow_the_key(self) -> None:
+        for tid, team in self.world().items():
+            self.db.encounter(tid, team, self.db.team(tid, f"away{tid}"))
+        encounters = await analytics_service.get_matches_for_tournaments(
+            self.db.shim, [1, 2, 3], discipline="overwatch"
+        )
+        self.assertEqual(CHRONOLOGY, [encounter.tournament_id for encounter in encounters])

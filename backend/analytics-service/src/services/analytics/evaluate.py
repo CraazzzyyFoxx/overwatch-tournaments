@@ -2,7 +2,7 @@
 
 A shift claims a player belongs elsewhere on the ladder; the check is whether the level it implies predicts who wins
 the encounters of the player's next tournament. For every tournament T′ in scope (non-hidden, one discipline, optional
-workspace, chronological ``(coalesce(start_date, created_at), id)``) and every duel encounter of T′ — exactly two active
+workspace, chronological by ``shared.core.chrono.tournament_chrono_key``) and every duel encounter of T′ — exactly two active
 seats, both placed, placements differ, both seats with a roster — each roster player (non-substitute, ranked at T′)
 gets a level per method, in canonical-ladder divisions (lower = stronger):
 
@@ -26,6 +26,7 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
+from shared.core.chrono import tournament_chrono_key
 from shared.services.workspace_scope import workspace_filter
 from src.core.analytics_exports import analytics_exports, tournament_discipline
 from src.domain.ratings import LINEAR, OPENSKILL, POINTS
@@ -61,7 +62,6 @@ async def _scoped_tournaments(
     to_tournament_id: int | None,
 ) -> tuple[pd.DataFrame, list[int]]:
     """The discipline's visible tournaments through ``to`` in chronological order, and the evaluated ``from..to``."""
-    chrono = sa.func.coalesce(models.Tournament.start_date, models.Tournament.created_at)
     result = await session.execute(
         sa.select(
             models.Tournament.id.label("tournament_id"),
@@ -73,7 +73,7 @@ async def _scoped_tournaments(
             models.Tournament.is_hidden.is_(False),
             *workspace_filter(workspace_id),
         )
-        .order_by(chrono, models.Tournament.id)
+        .order_by(*tournament_chrono_key())
     )
     tournaments = pd.DataFrame(result.mappings().all(), columns=["tournament_id", "workspace_id", "version_id"])
     ids = [int(tid) for tid in tournaments["tournament_id"]]
