@@ -132,7 +132,7 @@ class StageNodeTests(FlowCase):
         await self.sync()  # the rule says "not complete": the worker never moves a node back
         self.assertEqual("completed", await self.node_status(node_id))
 
-    async def test_reopening_an_encounter_of_a_completed_stage_moves_its_node_to_live(self) -> None:
+    async def test_reopening_an_encounter_of_a_completed_stage_moves_its_node_to_live_on_the_next_job(self) -> None:
         stage_id, node_id = await self.seated_stage()
         await self.move(node_id, S.READY, S.LIVE)
         await self.set_encounters(stage_id, completed=True)
@@ -142,6 +142,7 @@ class StageNodeTests(FlowCase):
         async with self.Session() as s:
             await reopen(s, await s.get_one(models.Encounter, encounter_id), actor_user_id=None, reason="correction")
             await s.commit()
+        await self.sync()  # the next standings job reopens the stage
         self.assertEqual("live", await self.node_status(node_id))
 
     async def sync(self) -> None:

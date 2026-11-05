@@ -23,7 +23,7 @@ at all.
 from __future__ import annotations
 
 import math
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Mapping
 from datetime import UTC, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -115,11 +115,6 @@ async def apply_result(
     )
 
 
-#: Called after an encounter that was COMPLETED lost its result and went back to OPEN (a correction). The owner of
-#: the stage lifecycle (tournament-service's flow lifecycle) registers here: the result writer must not import it.
-REOPEN_HOOKS: list[Callable[[AsyncSession, Encounter], Awaitable[None]]] = []
-
-
 async def _write(
     session: AsyncSession,
     encounter: Encounter,
@@ -160,7 +155,6 @@ async def _write(
         )
     before = snapshot(seats)
     from_result_status = encounter.result_status
-    reopened = False
 
     for seat in seats:
         seat.score = _finite(totals.get(seat.id, 0.0), seat.id)
@@ -177,7 +171,6 @@ async def _write(
         # complete is re-opened by losing its result.
         if encounter.status == EncounterStatus.COMPLETED:
             encounter.status = EncounterStatus.OPEN
-            reopened = True
         encounter.confirmed_at = None
     encounter.result_version += 1
 
@@ -195,9 +188,6 @@ async def _write(
         reason=reason,
     )
     await session.flush()
-    if reopened:
-        for hook in REOPEN_HOOKS:
-            await hook(session, encounter)
     return audit
 
 

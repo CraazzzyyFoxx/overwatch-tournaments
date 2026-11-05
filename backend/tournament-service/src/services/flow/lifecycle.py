@@ -11,11 +11,10 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
-from shared.core.enums import FlowNodeKind, FlowNodeStatus, StageType, TournamentStatus
+from shared.core.enums import EncounterStatus, FlowNodeKind, FlowNodeStatus, StageType, TournamentStatus
 from shared.core.errors import ApiExc, ApiHTTPException
 from shared.core.flow_state import FlowNodeState, derive_tournament_status, tournament_status_after, validate_transition
 from shared.core.tournament_state import is_finished_for_status
-from shared.services.encounter.result import REOPEN_HOOKS
 from shared.services.flow_queries import downstream_lifecycle_started
 from shared.services.participant_result import write_participant_results
 from shared.services.realtime import Resource
@@ -174,13 +173,25 @@ class FlowNodeService:
     async def sync_stage_completion(
         self, session: AsyncSession, tournament_id: int, completed_stage_ids: frozenset[int]
     ) -> list[int]:
-        """Move ``live`` stage nodes in ``completed_stage_ids`` to ``completed`` (§5.3); returns the moved node ids.
+        """Move stage nodes along the standings (§5.3); returns the moved node ids.
 
-        Never moves a node back: a manual completion must survive an unrelated job, and a correction that reopens a
-        match moves its stage back through ``reopen_stage_of``. Individual Swiss completes by its qualification lock.
+        ``live`` and in ``completed_stage_ids`` → ``completed``. ``completed`` → ``live`` only when an encounter of the
+        stage is not completed AND changed after the node completed: a correction reopened it. A manual completion
+        over older unfinished matches therefore stays. Individual Swiss completes by its qualification lock, never here.
+        The worker holds the tournament lock, so the order is tournament → node; each node is re-read before its move.
         """
+        reopened = (
+            sa.exists()
+            .where(
+                models.BracketEncounter.stage_id == models.FlowNode.stage_id,
+                models.Encounter.id == models.BracketEncounter.encounter_id,
+                models.Encounter.status != EncounterStatus.COMPLETED,
+                models.Encounter.updated_at > models.FlowNode.completed_at,
+            )
+            .correlate(models.FlowNode)
+        )
         rows = await session.execute(
-            sa.select(models.FlowNode.id, models.FlowNode.status, models.FlowNode.stage_id)
+            sa.select(models.FlowNode.id, models.FlowNode.status, models.FlowNode.stage_id, reopened)
             .join(models.Stage, models.Stage.id == models.FlowNode.stage_id)
             .where(
                 models.FlowNode.tournament_id == tournament_id,
@@ -190,10 +201,21 @@ class FlowNodeService:
             .order_by(models.FlowNode.id)
         )
         moved: list[int] = []
-        for node_id, node_status, stage_id in rows.all():
-            if node_status != _S.LIVE or stage_id not in completed_stage_ids:
+        for node_id, node_status, stage_id, was_reopened in rows.all():
+            if node_status == _S.LIVE and stage_id in completed_stage_ids:
+                target = _S.COMPLETED
+            elif node_status == _S.COMPLETED and was_reopened and stage_id not in completed_stage_ids:
+                target = _S.LIVE
+            else:
                 continue
-            await self.transition(session, node_id, _S.COMPLETED, automated=True, actor=None)
+            current = await session.scalar(
+                sa.select(models.FlowNode.status)
+                .where(models.FlowNode.id == node_id)
+                .execution_options(populate_existing=True)
+            )
+            if current == target.value:
+                continue
+            await self.transition(session, node_id, target, automated=True, actor=None)
             moved.append(node_id)
         return moved
 
@@ -215,27 +237,3 @@ class FlowNodeService:
 
 
 flow_node_service = FlowNodeService()
-
-
-async def reopen_stage_of(session: AsyncSession, encounter: models.Encounter) -> None:
-    """A correction reopened ``encounter``: its stage node goes ``completed → live`` (§5.3).
-
-    Registered on ``REOPEN_HOOKS`` of the result writer. Individual Swiss is skipped: its qualification lock freezes it.
-    """
-    row = (
-        await session.execute(
-            sa.select(models.FlowNode.id)
-            .join(models.BracketEncounter, models.BracketEncounter.stage_id == models.FlowNode.stage_id)
-            .join(models.Stage, models.Stage.id == models.FlowNode.stage_id)
-            .where(
-                models.BracketEncounter.encounter_id == encounter.id,
-                models.FlowNode.status == _S.COMPLETED,
-                models.Stage.stage_type != StageType.INDIVIDUAL_SWISS,
-            )
-        )
-    ).first()
-    if row is not None:
-        await flow_node_service.transition(session, row[0], _S.LIVE, automated=True, actor=None)
-
-
-REOPEN_HOOKS.append(reopen_stage_of)
