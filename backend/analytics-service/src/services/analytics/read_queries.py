@@ -4,6 +4,7 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
+from shared.core.chrono import tournament_chrono_key
 from shared.repository import (
     AnalyticsAlgorithmRepository,
     AnalyticsPlayerRepository,
@@ -235,6 +236,12 @@ class AnalyticsReadService:
     async def get_streaks(
         self, session: AsyncSession, tournament_id: int
     ) -> typing.Sequence[tuple[models.User, str | None, str | None, str, int]]:
+        start, end, tid = tournament_chrono_key()
+        current = (
+            sa.select(start.label("chrono_start"), end.label("chrono_end"), tid.label("tournament_id"))
+            .where(models.Tournament.id == tournament_id)
+            .subquery("current")
+        )
         subquery = (
             sa.select(
                 models.WorkspaceMember.player_id.label("user_id"),
@@ -242,6 +249,9 @@ class AnalyticsReadService:
                 models.Player.sub_role,
                 models.Tournament.discipline,
                 models.Standing.overall_position,
+                start.label("chrono_start"),
+                end.label("chrono_end"),
+                models.Player.tournament_id,
             )
             .select_from(models.Player)
             .join(models.Tournament, models.Tournament.id == models.Player.tournament_id)
@@ -250,12 +260,11 @@ class AnalyticsReadService:
                 models.WorkspaceMember.id == models.Player.workspace_member_id,
             )
             .join(models.Standing, models.Standing.team_id == models.Player.team_id)
-            .where(
-                sa.and_(
-                    models.Player.tournament_id <= tournament_id,
-                )
+            .join(
+                current,
+                sa.tuple_(start, end, tid)
+                <= sa.tuple_(current.c.chrono_start, current.c.chrono_end, current.c.tournament_id),
             )
-            .order_by(models.Player.tournament_id.desc())
         ).subquery()
 
         query = (
@@ -273,11 +282,8 @@ class AnalyticsReadService:
             )
             .join(subquery, subquery.c.user_id == models.WorkspaceMember.player_id)
             .join(models.User, models.User.id == subquery.c.user_id)
-            .where(
-                sa.and_(
-                    models.Player.tournament_id == tournament_id,
-                )
-            )
+            .where(models.Player.tournament_id == tournament_id)
+            .order_by(subquery.c.chrono_start.desc(), subquery.c.chrono_end.desc(), subquery.c.tournament_id.desc())
         )
 
         result = await session.execute(query)

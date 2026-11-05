@@ -57,6 +57,7 @@ class AnalyticsFlowsService:
                 {
                     "tournament_id": tid,
                     "started_at": row["started_at"],
+                    "ended_at": row["ended_at"],
                     "version_id": tournament_version_ids.get(tid),
                     "team_id": row["team_id"],
                     "player_name": row["player_name"],
@@ -103,8 +104,8 @@ class AnalyticsFlowsService:
             canonical_div_for(grids, version_id, cost)
             for version_id, cost in zip(df["version_id"], df["cost"], strict=False)
         ]
-        # Per-player history runs in tournament chronology (start date, then id): ids are not chronological.
-        df = df.sort_values(["id_role", "started_at", "tournament_id"]).reset_index(drop=True)
+        # Per-player history runs in tournament chronology (start, end, then id): ids are not chronological.
+        df = df.sort_values(["id_role", "started_at", "ended_at", "tournament_id"]).reset_index(drop=True)
         # The rank chronology runs over ranked rows only: an unranked tournament has no division and does not break
         # the previous-division link of the next ranked one.
         ranked = df["cost"].notna()

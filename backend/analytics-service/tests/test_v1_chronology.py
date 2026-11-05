@@ -41,6 +41,11 @@ shift_features = ow_module("features.shift_features")
 player_profile = ow_module("features.player_profile")
 
 JAN, FEB, MAR, MAY = (datetime(2026, month, 1, tzinfo=UTC) for month in (1, 2, 3, 5))
+JAN_3, JAN_9 = datetime(2026, 1, 3, tzinfo=UTC), datetime(2026, 1, 9, tzinfo=UTC)
+# Each history entry is (started, ended, rank, wins, losses).
+HISTORY = ((JAN, JAN, 1500, 3, 0), (FEB, FEB, 2500, 0, 3), (MAR, MAR, 2500, 2, 1))
+# The first two start together; the first ends first.
+TIED = ((JAN, JAN_3, 1500, 3, 0), (JAN, JAN_9, 2500, 0, 3), (MAR, MAR, 2500, 2, 1))
 
 
 @compiles(JSONB, "sqlite")
@@ -53,13 +58,13 @@ def _compile_array_sqlite(type_, compiler, **kw):  # noqa: ANN001, ANN003, ANN20
     return "JSON"
 
 
-def _analytics_rows(ids: tuple[int, int, int]) -> list[dict]:
+def _analytics_rows(ids: tuple[int, int, int], history=HISTORY) -> list[dict]:  # noqa: ANN001
     """One tank's January, February and March tournaments, under the given ids, in the query's id order."""
-    history = ((JAN, 1500, 3, 0), (FEB, 2500, 0, 3), (MAR, 2500, 2, 1))
     rows = [
         {
             "tournament_id": tid,
             "started_at": started,
+            "ended_at": ended,
             "team_id": tid,
             "player_name": "p",
             "player_id": 1000 + tid,
@@ -73,23 +78,25 @@ def _analytics_rows(ids: tuple[int, int, int]) -> list[dict]:
             "team_count": None,
             "impact_points": None,
         }
-        for tid, (started, rank, wins, losses) in zip(ids, history, strict=True)
+        for tid, (started, ended, rank, wins, losses) in zip(ids, history, strict=True)
     ]
     return sorted(rows, key=lambda row: row["tournament_id"])
 
 
-async def _frame(ids: tuple[int, int, int]) -> pd.DataFrame:
+async def _frame(ids: tuple[int, int, int], history=HISTORY) -> pd.DataFrame:  # noqa: ANN001
     with (
-        patch.object(analytics_flows.analytics_service, "get_analytics", AsyncMock(return_value=_analytics_rows(ids))),
+        patch.object(
+            analytics_flows.analytics_service, "get_analytics", AsyncMock(return_value=_analytics_rows(ids, history))
+        ),
         patch.object(analytics_flows.analytics_service, "get_tournament_version_ids", AsyncMock(return_value={})),
         patch.object(analytics_flows, "load_source_grids", AsyncMock(return_value={})),
     ):
         return await analytics_flows.flows_service.get_data_frame(SimpleNamespace(), discipline="overwatch")
 
 
-async def _scored_by_date(ids: tuple[int, int, int]) -> pd.DataFrame:
+async def _scored_by_date(ids: tuple[int, int, int], history=HISTORY) -> pd.DataFrame:  # noqa: ANN001
     """The scored frame's January, February and March rows, in that order."""
-    df = await _frame(ids)
+    df = await _frame(ids, history)
     df = ratings.compute_points_shifts(df)
     df = ratings.compute_linear_metrics(df)
     return df.set_index("tournament_id").loc[list(ids)].reset_index()
@@ -127,6 +134,14 @@ class PointsLinearChronologyTests(IsolatedAsyncioTestCase):
         self.assertTrue(february["is_changed"])
         self.assertEqual(2500, march["previous_cost"])
         self.assertFalse(march["is_changed"])
+
+    async def test_equal_starts_score_in_end_date_order(self) -> None:
+        in_order = await _scored_by_date((1, 2, 3), TIED)
+        reversed_tie = await _scored_by_date((2, 1, 3), TIED)
+
+        for column in ("previous_cost", "previous_div", "is_changed", "points_shift", "linear_stable_shift"):
+            with self.subTest(column=column):
+                pd.testing.assert_series_equal(in_order[column], reversed_tie[column])
 
 
 class AtomicRecalculationTests(IsolatedAsyncioTestCase):

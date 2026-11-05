@@ -109,6 +109,7 @@ class AnalyticsWorkspaceScopeTests(IsolatedAsyncioTestCase):
             {
                 "tournament_id": tid,
                 "started_at": datetime(2026, 1, tid, tzinfo=UTC),
+                "ended_at": datetime(2026, 1, tid, tzinfo=UTC),
                 "team_id": tid,
                 "player_name": "p",
                 "player_id": tid,

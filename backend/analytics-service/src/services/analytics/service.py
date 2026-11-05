@@ -6,6 +6,7 @@ from sqlalchemy.orm import aliased
 
 from shared import models
 from shared.core import enums
+from shared.core.chrono import tournament_chrono_key
 from shared.repository import AnalyticsAlgorithmRepository, AnalyticsPlayerRepository, TeamRepository
 from shared.repository.stats_queries import player_facts
 from shared.services.workspace_scope import workspace_scope_filter
@@ -129,6 +130,7 @@ class AnalyticsService:
             .group_by(models.Player.id)
         ).cte("impact_points")
 
+        start, end, _ = tournament_chrono_key()
         query = (
             sa.select(
                 models.Team.id.label("team_id"),
@@ -138,8 +140,10 @@ class AnalyticsService:
                 models.Player.role.label("role"),
                 models.Player.rank.label("rank"),
                 models.Tournament.id.label("tournament_id"),
-                # Tournament chronology: ids are not chronological, so every per-player history orders by this.
-                sa.func.coalesce(models.Tournament.start_date, models.Tournament.created_at).label("started_at"),
+                # Tournament chronology (the key of `shared.core.chrono`): ids are not chronological, so every
+                # per-player history orders by it.
+                start.label("started_at"),
+                end.label("ended_at"),
                 sa.func.coalesce(points.c.wins, 0).label("wins"),
                 sa.func.coalesce(points.c.losses, 0).label("losses"),
                 sa.func.coalesce(matches.c.match_count, 0).label("match_count"),
@@ -180,7 +184,7 @@ class AnalyticsService:
                 models.Tournament.discipline == discipline,
                 *workspace_scope_filter(workspace_id, workspace_ids),
             )
-            .order_by(models.WorkspaceMember.player_id, models.Player.role, models.Tournament.id)
+            .order_by(models.WorkspaceMember.player_id, models.Player.role, *tournament_chrono_key())
         )
 
         result = await session.execute(query)
