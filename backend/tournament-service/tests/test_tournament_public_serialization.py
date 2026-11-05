@@ -84,36 +84,13 @@ class TournamentSerializationTests(IsolatedAsyncioTestCase):
 
         self.assertEqual("## Format\n\nBest of 3.\n", read.rules)
 
-    async def test_to_pydantic_round_trips_flags_and_phase_schedule(self) -> None:
+    async def test_to_pydantic_round_trips_flags(self) -> None:
         tournament = _tournament()
-        starts_at = datetime(2026, 7, 1, 18, 0, tzinfo=UTC)
-        ends_at = datetime(2026, 7, 1, 18, 45, tzinfo=UTC)
-        tournament.phase_schedule = [
-            models.TournamentPhaseSchedule(
-                id=1,
-                created_at=datetime.now(UTC),
-                updated_at=None,
-                tournament_id=tournament.id,
-                status=enums.TournamentStatus.CHECK_IN,
-                starts_at=starts_at,
-                ends_at=ends_at,
-            )
-        ]
         make_transient_to_detached(tournament)
 
         read = await flows.flows_service.to_pydantic(cast(AsyncSession, object()), tournament, [])
 
         self.assertTrue(read.auto_transitions_enabled)
-        self.assertEqual(
-            [
-                schemas.TournamentPhaseScheduleRead(
-                    status=enums.TournamentStatus.CHECK_IN,
-                    starts_at=starts_at,
-                    ends_at=ends_at,
-                )
-            ],
-            read.phase_schedule,
-        )
 
     async def test_to_pydantic_resolves_requested_teams_count(self) -> None:
         tournament = _tournament()

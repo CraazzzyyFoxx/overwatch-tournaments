@@ -64,9 +64,6 @@ def _compile_array_sqlite(type_, compiler, **kw):  # noqa: ANN001, ANN003, ANN20
 # are unenforced under SQLite, so those tables are deliberately not created.
 TABLES = (
     models.Tournament.__table__,
-    # ``Tournament.phase_schedule`` is ``lazy="selectin"``, so loading a
-    # tournament through ``get_matches_for_tournaments``' ``joinedload`` queries this table too.
-    models.TournamentPhaseSchedule.__table__,
     models.Team.__table__,
     models.Player.__table__,
     PlayerRole.__table__,

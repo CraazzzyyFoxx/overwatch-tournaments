@@ -309,7 +309,7 @@ class PlayerRefreshRequestedEvent(BaseEvent):
 class TournamentStateChangedEvent(BaseEvent):
     """Domain event emitted when tournament lifecycle state changes.
 
-    Published by: tournament-service (``transition_status``, manual and automatic).
+    Published by: tournament-service (``FlowNodeService.sync_tournament_status`` and ``set_archived``).
     Consumed by: analytics-worker (``tournament_state_changed``: a ``completed``
     tournament gets its compute job created without anyone clicking), and the
     discord bot's channel registry (per-replica exclusive queue: a finished

@@ -30,15 +30,11 @@ from unittest import IsolatedAsyncioTestCase
 
 from sqlalchemy.dialects import postgresql
 
+from shared import models
 from shared.core import enums
 from shared.repository import StreamTargetRepository, TournamentLinkRepository
 
-_POLLED_STATUSES = (
-    enums.TournamentStatus.CHECK_IN,
-    enums.TournamentStatus.DRAFT,
-    enums.TournamentStatus.LIVE,
-    enums.TournamentStatus.PLAYOFFS,
-)
+_ACTIVE = models.Tournament.status == enums.TournamentStatus.LIVE
 
 
 class _Result:
@@ -77,17 +73,17 @@ class ActiveTournamentQueryTests(IsolatedAsyncioTestCase):
         session = _CapturingSession([])
         repo = StreamTargetRepository()
 
-        await repo.list_active_tournaments(session, _POLLED_STATUSES)
+        await repo.list_active_tournaments(session, _ACTIVE)
 
         sql = _compiled(session.statements[0])
-        self.assertIn("tournament.tournament.status IN", sql)
+        self.assertIn("tournament.tournament.status =", sql)
         self.assertNotIn("is_finished", sql)
 
     async def test_row_shape_carries_workspace_and_hidden_flag(self) -> None:
         session = _CapturingSession([(7, 3, True)])
         repo = StreamTargetRepository()
 
-        [tournament] = await repo.list_active_tournaments(session, _POLLED_STATUSES)
+        [tournament] = await repo.list_active_tournaments(session, _ACTIVE)
 
         self.assertEqual(tournament.tournament_id, 7)
         self.assertEqual(tournament.workspace_id, 3)
@@ -193,7 +189,8 @@ class ParticipantSelfDeclaredTests(IsolatedAsyncioTestCase):
         sql = await self._self_declared_sql()
 
         self.assertIn("registration.registration.deleted_at IS NULL", sql)
-        self.assertIn("registration.registration.status =", sql)
+        self.assertIn("registration.registration_entry.status =", sql)
+        self.assertIn("registration.registration_entry.deleted_at IS NULL", sql)
 
     async def test_player_identity_comes_through_workspace_member(self) -> None:
         sql = await self._self_declared_sql()

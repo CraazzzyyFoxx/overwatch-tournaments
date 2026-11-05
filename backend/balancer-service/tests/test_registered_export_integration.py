@@ -78,7 +78,7 @@ class RegisteredExportIntegrationTests(IsolatedAsyncioTestCase):
 
             # ``slug`` is NOT NULL and globally unique (migration tslug0001).
             tournament = Tournament(workspace_id=workspace.id, name=f"T {self.suffix}", slug=f"t-{self.suffix}")
-            tournament.status = "registration"
+            tournament.status = "live"
             session.add(tournament)
             await session.flush()
             await save_tournament_format(

@@ -221,7 +221,7 @@ async def _seed(session: Any) -> tuple[int, int]:
         workspace_id=workspace.id,
         name=f"Form versions {suffix}",
         slug=f"formver-{suffix}",
-        status=enums.TournamentStatus.REGISTRATION,
+        status=enums.TournamentStatus.LIVE,
     )
     session.add(tournament)
     await session.flush()

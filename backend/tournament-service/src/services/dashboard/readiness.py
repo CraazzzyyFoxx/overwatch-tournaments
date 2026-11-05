@@ -74,8 +74,8 @@ def standings_recalc_pending(tournament_id: sa.SQLColumnExpression[int] | int) -
 
 
 def setup_counts(tournament_id: sa.SQLColumnExpression[int] | int) -> list[sa.Label[Any]]:
-    """Stage, bracket-slot and bracketed-encounter counts: the part of the ``tournament.read`` group that
-    neither the tournament row nor the encounter counts answer."""
+    """Stage, bracket-slot, bracketed-encounter and node-schedule facts: the part of the ``tournament.read`` group
+    that neither the tournament row nor the encounter counts answer."""
     stage = models.Stage
     slot = models.StageItemInput
     stages_total = sa.select(sa.func.count(stage.id)).where(stage.tournament_id == tournament_id)
@@ -91,11 +91,15 @@ def setup_counts(tournament_id: sa.SQLColumnExpression[int] | int) -> list[sa.La
         .join(models.BracketEncounter, models.BracketEncounter.encounter_id == models.Encounter.id)
         .where(models.Encounter.tournament_id == tournament_id, models.BracketEncounter.stage_id.is_not(None))
     )
+    schedule_configured = sa.exists().where(
+        models.FlowNode.tournament_id == tournament_id, models.FlowNodeSchedule.node_id == models.FlowNode.id
+    )
     return [
         stages_total.scalar_subquery().label("stages_total"),
         slots_total.scalar_subquery().label("slots_total"),
         slots_empty.scalar_subquery().label("slots_empty"),
         encounters_bracket.scalar_subquery().label("bracket_encounters"),
+        schedule_configured.label("schedule_configured"),
     ]
 
 
@@ -199,8 +203,7 @@ def build_readiness(
     if can_tournament_read:
         duels_with_logs = count("duels_with_logs")
         fields.update(
-            # The schedule is loaded with every tournament (``lazy="selectin"``).
-            schedule_configured=bool(tournament.phase_schedule),
+            schedule_configured=bool(values.get("schedule_configured")),
             grid_selected=tournament.division_grid_version_id is not None,
             stages_total=count("stages_total"),
             stage_slots_filled=count("slots_total") > 0 and count("slots_empty") == 0,

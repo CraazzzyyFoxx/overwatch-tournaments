@@ -90,7 +90,7 @@ async def _seed(session: Any) -> tuple[int, int]:
         workspace_id=workspace.id,
         name=f"Form templates {suffix}",
         slug=f"formtpl-{suffix}",
-        status=enums.TournamentStatus.REGISTRATION,
+        status=enums.TournamentStatus.LIVE,
     )
     session.add(tournament)
     await session.flush()
@@ -355,7 +355,7 @@ def test_apply_to_a_tournament_with_no_form_creates_one(db_session) -> None:
                 workspace_id=workspace_id,
                 name=f"Baseline {uuid.uuid4().hex[:8]}",
                 slug=f"baseline-{uuid.uuid4().hex[:8]}",
-                status=enums.TournamentStatus.REGISTRATION,
+                status=enums.TournamentStatus.LIVE,
             )
             db_session.add(baseline_tournament)
             await db_session.flush()

@@ -42,9 +42,10 @@ sys.path.insert(0, str(backend_root / "tournament-service"))
 from shared.core import enums  # noqa: E402
 from shared.models.identity.auth_user import AuthUser  # noqa: E402
 from shared.models.tenancy.workspace import Workspace  # noqa: E402
-from shared.models.tournament import Tournament  # noqa: E402
+from shared.models.tournament import FlowNode, Stage, Tournament  # noqa: E402
 from shared.testing import real_db_sessionmaker as _db_sessions  # noqa: E402
 from src.services.tournament import flows as tournament_flows  # noqa: E402
+from tests.encounter_seed import seed_scoring_rule  # noqa: E402
 
 STATUS = enums.TournamentStatus
 
@@ -119,7 +120,8 @@ def test_league_split_ignores_is_league_but_keeps_status_and_search() -> None:
 def test_totals_ignore_every_filter_but_never_visibility() -> None:
     _, (_, _, totals_sql) = asyncio.run(_run_facets(status=STATUS.LIVE, is_league=True, query="cup", workspace_id=4))
 
-    assert "tournament.status = " not in totals_sql
+    # Only the "live" aggregate reads the status; no user filter does.
+    assert totals_sql.count("tournament.status = ") == 1
     assert "tournament.is_league IS " not in totals_sql
     assert "ILIKE" not in totals_sql
     # Scope, however, is not a filter: it is who is allowed to be counted.
@@ -144,7 +146,7 @@ def test_all_statuses_are_present_even_at_zero() -> None:
     assert facets.by_status[STATUS.COMPLETED] == 30
     # Absent groups come back as explicit zeros, so no client re-derives them.
     assert facets.by_status[STATUS.ARCHIVED] == 0
-    assert facets.by_status[STATUS.DRAFT] == 0
+    assert facets.by_status[STATUS.ANNOUNCEMENT] == 0
 
 
 def test_league_and_standard_come_from_the_boolean_groups() -> None:
@@ -163,13 +165,15 @@ def test_missing_league_group_reads_as_zero_not_a_key_error() -> None:
     assert facets.standard == 2
 
 
-def test_live_counts_playoffs_too() -> None:
+def test_in_play_counts_a_live_tournament_with_a_live_stage_node() -> None:
     statements = asyncio.run(_run_facet_statements())
     totals = statements[2].compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True})
 
-    # Rendered with literals: the hero's "live now" number is the one place a
-    # visitor sees group play and bracket play as a single fact.
-    assert "status IN ('live', 'playoffs')" in str(totals)
+    # Rendered with literals: the hero's "live now" number is a ball in play, not a registration filling up.
+    sql = str(totals)
+    assert "tournament.status = 'live'" in sql
+    assert "flow_node.kind = 'stage'" in sql
+    assert "flow_node.status = 'live'" in sql
 
 
 # ─── DB-backed end-to-end confirmation ────────────────────────────────────────
@@ -187,7 +191,13 @@ async def _make_workspace(session) -> Workspace:
 
 
 async def _make_tournament(
-    session, *, workspace_id: int, status: enums.TournamentStatus, is_league: bool = False, is_hidden: bool = False
+    session,
+    *,
+    workspace_id: int,
+    status: enums.TournamentStatus,
+    is_league: bool = False,
+    is_hidden: bool = False,
+    in_play: bool = False,
 ) -> Tournament:
     now = datetime.now(UTC)
     suffix = uuid.uuid4().hex[:12]
@@ -205,6 +215,19 @@ async def _make_tournament(
     )
     session.add(tournament)
     await session.flush()
+    if in_play:
+        stage = Stage(
+            tournament_id=tournament.id,
+            name="S",
+            stage_type=enums.StageType.ROUND_ROBIN,
+            scoring_rule_id=await seed_scoring_rule(session, workspace_id),
+        )
+        session.add(stage)
+        await session.flush()
+        session.add(
+            FlowNode(tournament_id=tournament.id, kind="stage", name="S", status="live", stage_id=stage.id, config={})
+        )
+        await session.flush()
     return tournament
 
 
@@ -222,11 +245,11 @@ def test_facets_over_a_real_workspace() -> None:
         async with _db_sessions() as session_maker:
             async with session_maker() as session:
                 ws = await _make_workspace(session)
+                await _make_tournament(session, workspace_id=ws.id, status=STATUS.LIVE, in_play=True)
                 await _make_tournament(session, workspace_id=ws.id, status=STATUS.LIVE)
-                await _make_tournament(session, workspace_id=ws.id, status=STATUS.PLAYOFFS)
-                await _make_tournament(session, workspace_id=ws.id, status=STATUS.REGISTRATION)
-                await _make_tournament(session, workspace_id=ws.id, status=STATUS.LIVE, is_league=True)
-                await _make_tournament(session, workspace_id=ws.id, status=STATUS.LIVE, is_hidden=True)
+                await _make_tournament(session, workspace_id=ws.id, status=STATUS.ANNOUNCEMENT)
+                await _make_tournament(session, workspace_id=ws.id, status=STATUS.LIVE, is_league=True, in_play=True)
+                await _make_tournament(session, workspace_id=ws.id, status=STATUS.LIVE, is_hidden=True, in_play=True)
                 await session.commit()
                 workspace_id = ws.id
 
@@ -235,7 +258,7 @@ def test_facets_over_a_real_workspace() -> None:
                     flows = tournament_flows.flows_service
                     anon = await flows.get_facets(session, workspace_id=workspace_id)
                     # Selecting a chip must not collapse the other axes.
-                    picked = await flows.get_facets(session, workspace_id=workspace_id, status=STATUS.REGISTRATION)
+                    picked = await flows.get_facets(session, workspace_id=workspace_id, status=STATUS.ANNOUNCEMENT)
                     leagues_only = await flows.get_facets(session, workspace_id=workspace_id, is_league=True)
                     superuser = await flows.get_facets(session, workspace_id=workspace_id, viewer=_superuser())
                 return anon, picked, leagues_only, superuser
@@ -248,13 +271,12 @@ def test_facets_over_a_real_workspace() -> None:
 
     # Anonymous: the hidden live tournament is in no counter at all.
     assert anon.total == 4
-    assert anon.live == 3  # live + playoffs, hidden one excluded
-    assert anon.by_status[STATUS.LIVE] == 2
-    assert anon.by_status[STATUS.PLAYOFFS] == 1
-    assert anon.by_status[STATUS.REGISTRATION] == 1
+    assert anon.live == 2  # live with a live stage node, hidden one excluded; the node-less live one is not in play
+    assert anon.by_status[STATUS.LIVE] == 3
+    assert anon.by_status[STATUS.ANNOUNCEMENT] == 1
     assert (anon.league, anon.standard) == (1, 3)
 
-    # status=registration: by_status is unchanged, league/standard narrow to it.
+    # status=announcement: by_status is unchanged, league/standard narrow to it.
     assert picked.by_status == anon.by_status
     assert (picked.league, picked.standard) == (0, 1)
     assert (picked.total, picked.live) == (anon.total, anon.live)
@@ -262,10 +284,10 @@ def test_facets_over_a_real_workspace() -> None:
     # is_league=true: league/standard are unchanged, by_status narrows.
     assert (leagues_only.league, leagues_only.standard) == (anon.league, anon.standard)
     assert leagues_only.by_status[STATUS.LIVE] == 1
-    assert leagues_only.by_status[STATUS.REGISTRATION] == 0
+    assert leagues_only.by_status[STATUS.ANNOUNCEMENT] == 0
     assert (leagues_only.total, leagues_only.live) == (anon.total, anon.live)
 
     # A superuser sees the hidden one everywhere.
     assert superuser.total == 5
-    assert superuser.live == 4
-    assert superuser.by_status[STATUS.LIVE] == 3
+    assert superuser.live == 3
+    assert superuser.by_status[STATUS.LIVE] == 4

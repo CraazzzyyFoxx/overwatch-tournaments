@@ -16,7 +16,16 @@ from src.core import auth
 from src.rpc._helpers import _dump, _identity, _payload, _read, _require_id, _run
 from src.schemas import flow as flow_schemas
 from src.services.flow.lifecycle import flow_node_service
+from src.services.flow.schedule import flow_node_schedule_service
 from src.services.flow.service import flow_service
+
+
+async def _node_scope(session: Any, node_id: int) -> tuple[int, int]:
+    """The node's tournament and that tournament's workspace; 404 for a missing node."""
+    tournament_id = await session.scalar(sa.select(FlowNode.tournament_id).where(FlowNode.id == node_id))
+    if tournament_id is None:
+        raise ApiHTTPException(status_code=404, detail=[ApiExc(code="flow_node_not_found", msg="Flow node not found")])
+    return tournament_id, await auth.get_tournament_workspace_id(session, tournament_id)
 
 
 def register(broker: Any, logger: Any) -> None:
@@ -46,12 +55,7 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             user = _identity(data)
             node_id = _require_id(data)
-            tournament_id = await session.scalar(sa.select(FlowNode.tournament_id).where(FlowNode.id == node_id))
-            if tournament_id is None:
-                raise ApiHTTPException(
-                    status_code=404, detail=[ApiExc(code="flow_node_not_found", msg="Flow node not found")]
-                )
-            ws_id = await auth.get_tournament_workspace_id(session, tournament_id)
+            tournament_id, ws_id = await _node_scope(session, node_id)
             ensure_workspace_permission(user, ws_id, "tournament", "update")
             body = flow_schemas.FlowNodeTransition.model_validate(_payload(data))
             await record_admin_audit(
@@ -65,6 +69,30 @@ def register(broker: Any, logger: Any) -> None:
                 after={"status": body.status.value},
             )
             await flow_node_service.transition(session, node_id, body.status, actor=user)
+            await session.commit()
+            return _dump(await flow_service.get_node_read(session, tournament_id, node_id))
+
+        return await _run(logger, op)
+
+    @broker.subscriber("rpc.tournament.flow_node_schedule_set")
+    async def _flow_node_schedule_set(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = _identity(data)
+            node_id = _require_id(data)
+            tournament_id, ws_id = await _node_scope(session, node_id)
+            ensure_workspace_permission(user, ws_id, "tournament", "update")
+            body = flow_schemas.FlowNodeScheduleSet.model_validate(_payload(data))
+            await record_admin_audit(
+                session,
+                action="flow_node.schedule",
+                actor=user,
+                data=data,
+                workspace_id=ws_id,
+                entity_type="flow_node",
+                entity_id=node_id,
+                after=body.model_dump(mode="json"),
+            )
+            await flow_node_schedule_service.set_schedule(session, node_id, body.schedule)
             await session.commit()
             return _dump(await flow_service.get_node_read(session, tournament_id, node_id))
 

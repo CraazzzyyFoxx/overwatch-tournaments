@@ -1,7 +1,7 @@
 -- Anak Tournaments — PostgreSQL DDL compiled from SQLAlchemy metadata.
 -- Open in any SQL editor (DataGrip, DBeaver, VS Code).
 -- Runtime mappings only, not a complete physical-database dump.
--- Tables: 177
+-- Tables: 176
 -- Source of truth is backend/shared/models. Regenerate: python scripts/export_db_schema.py
 
 CREATE SCHEMA IF NOT EXISTS achievements;
@@ -43,7 +43,7 @@ CREATE TYPE tournament.pickbanrotation AS ENUM ('fixed', 'alternate', 'result_wi
 CREATE TYPE tournament.stagetype AS ENUM ('round_robin', 'single_elimination', 'double_elimination', 'swiss', 'ffa_league', 'individual_swiss');
 CREATE TYPE tournament.stageitemtype AS ENUM ('group', 'bracket_upper', 'bracket_lower', 'single_bracket');
 CREATE TYPE tournament.stageiteminputtype AS ENUM ('final', 'tentative', 'empty');
-CREATE TYPE tournament.tournamentstatus AS ENUM ('announcement', 'registration', 'draft', 'check_in', 'live', 'playoffs', 'completed', 'archived');
+CREATE TYPE tournament.tournamentstatus AS ENUM ('announcement', 'live', 'completed', 'archived');
 
 CREATE TABLE achievements.evaluation_result (
 	id BIGSERIAL NOT NULL,
@@ -3960,24 +3960,6 @@ CREATE TABLE tournament.tournament_link (
 CREATE INDEX ix_tournament_link_tournament_active ON tournament.tournament_link (tournament_id, is_active);
 
 CREATE INDEX ix_tournament_tournament_link_tournament_id ON tournament.tournament_link (tournament_id);
-
-CREATE TABLE tournament.tournament_phase_schedule (
-	id BIGSERIAL NOT NULL,
-	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
-	updated_at TIMESTAMP WITH TIME ZONE,
-	tournament_id BIGINT NOT NULL,
-	status tournament.tournamentstatus NOT NULL,
-	starts_at TIMESTAMP WITH TIME ZONE NOT NULL,
-	ends_at TIMESTAMP WITH TIME ZONE,
-	PRIMARY KEY (id),
-	CONSTRAINT uq_tournament_phase_schedule_phase UNIQUE (tournament_id, status),
-	CONSTRAINT ck_tournament_phase_schedule_window CHECK (ends_at IS NULL OR ends_at > starts_at),
-	FOREIGN KEY(tournament_id) REFERENCES tournament.tournament (id) ON DELETE CASCADE
-);
-
-CREATE INDEX ix_tournament_tournament_phase_schedule_starts_at ON tournament.tournament_phase_schedule (starts_at);
-
-CREATE INDEX ix_tournament_tournament_phase_schedule_tournament_id ON tournament.tournament_phase_schedule (tournament_id);
 
 CREATE TABLE tournament.tournament_preview_access (
 	id BIGSERIAL NOT NULL,

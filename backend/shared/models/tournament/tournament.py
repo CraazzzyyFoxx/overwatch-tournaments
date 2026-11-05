@@ -16,7 +16,6 @@ if typing.TYPE_CHECKING:
 
 __all__ = (
     "Tournament",
-    "TournamentPhaseSchedule",
     "TournamentSlugRedirect",
 )
 
@@ -90,13 +89,11 @@ class Tournament(db.TimeStampIntegerMixin):
         index=True,
     )
     # Purely informational dates ("when the tournament takes place") — they do
-    # NOT drive status transitions; phase timing lives in
-    # ``TournamentPhaseSchedule`` rows.
+    # NOT drive status transitions; phase timing lives in ``FlowNodeSchedule`` rows.
     start_date: Mapped[datetime | None] = mapped_column(db.DateTime(timezone=True), nullable=True)
     end_date: Mapped[datetime | None] = mapped_column(db.DateTime(timezone=True), nullable=True)
-    # When true, the tournament-worker tick advances ``status`` forward along
-    # the phase schedule. Any manual status transition flips this off so
-    # automation never fights an admin decision.
+    # The tournament-wide switch of the schedule tick (``flow_node_schedule``): when false, no node of this
+    # tournament is moved by time.
     auto_transitions_enabled: Mapped[bool] = mapped_column(
         Boolean(), default=True, server_default="true", nullable=False
     )
@@ -140,41 +137,6 @@ class Tournament(db.TimeStampIntegerMixin):
     )
     stages: Mapped[list[Stage]] = relationship(uselist=True, passive_deletes=True)
     standings: Mapped[list[Standing]] = relationship(uselist=True)
-    # Eagerly loaded (selectin): the schedule is tiny (<=4 rows) and gating
-    # helpers (registration/check-in windows) need it wherever a tournament is
-    # in hand, including async contexts where lazy loads would raise.
-    phase_schedule: Mapped[list[TournamentPhaseSchedule]] = relationship(
-        uselist=True,
-        passive_deletes=True,
-        order_by="TournamentPhaseSchedule.starts_at",
-        cascade="all, delete-orphan",
-        lazy="selectin",
-    )
-
-
-class TournamentPhaseSchedule(db.TimeStampIntegerMixin):
-    """One row = "phase X starts at T" for a tournament.
-
-    ``starts_at`` is the only field that moves ``Tournament.status`` (forward,
-    via the worker tick). ``ends_at`` optionally closes the phase's action
-    window early (e.g. check-in closes 15 minutes before matches start) and
-    never changes the status. Only REGISTRATION/CHECK_IN/DRAFT/LIVE may be
-    scheduled — see ``shared.core.tournament_state.SCHEDULABLE_STATUSES``.
-    """
-
-    __tablename__ = "tournament_phase_schedule"
-    __table_args__ = (
-        UniqueConstraint("tournament_id", "status", name="uq_tournament_phase_schedule_phase"),
-        CheckConstraint("ends_at IS NULL OR ends_at > starts_at", name="ck_tournament_phase_schedule_window"),
-        {"schema": "tournament"},
-    )
-
-    tournament_id: Mapped[int] = mapped_column(
-        ForeignKey(Tournament.id, ondelete="CASCADE"), index=True, nullable=False
-    )
-    status: Mapped[enums.TournamentStatus] = mapped_column(TOURNAMENT_STATUS_ENUM, nullable=False)
-    starts_at: Mapped[datetime] = mapped_column(db.DateTime(timezone=True), nullable=False, index=True)
-    ends_at: Mapped[datetime | None] = mapped_column(db.DateTime(timezone=True), nullable=True)
 
 
 class TournamentSlugRedirect(db.TimeStampIntegerMixin):

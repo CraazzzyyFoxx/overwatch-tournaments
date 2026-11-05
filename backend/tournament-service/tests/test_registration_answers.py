@@ -22,7 +22,6 @@ import asyncio
 import gc
 import sys
 import uuid
-from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -45,7 +44,7 @@ from shared.models.registration.registration import (  # noqa: E402
     RegistrationFormVersion,
 )
 from shared.models.tenancy.workspace import Workspace  # noqa: E402
-from shared.models.tournament import Tournament, TournamentPhaseSchedule  # noqa: E402
+from shared.models.tournament import Tournament  # noqa: E402
 from shared.services.ontology import project_disciplines  # noqa: E402
 from shared.testing.factories import registration_node  # noqa: E402
 from shared.testing.roles import rated_catalog, registration_role  # noqa: E402
@@ -547,19 +546,10 @@ async def _seed(session: Any, *, schema: FormSchema) -> dict[str, Any]:
         workspace_id=workspace.id,
         name=f"Answers {suffix}",
         slug=f"answers-{suffix}",
-        status=enums.TournamentStatus.REGISTRATION,
+        status=enums.TournamentStatus.LIVE,
     )
     session.add(tournament)
     await session.flush()
-    now = datetime.now(UTC)
-    session.add(
-        TournamentPhaseSchedule(
-            tournament_id=tournament.id,
-            status=enums.TournamentStatus.REGISTRATION,
-            starts_at=now - timedelta(days=1),
-            ends_at=now + timedelta(days=1),
-        )
-    )
 
     form = RegistrationForm(tournament_id=tournament.id, workspace_id=workspace.id)
     session.add(form)

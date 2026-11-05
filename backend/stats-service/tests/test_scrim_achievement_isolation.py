@@ -88,7 +88,6 @@ TABLE_NAMES = (
     "division_grid_tier",
     "workspace_division_grid_default",
     "tournament.tournament",
-    "tournament.tournament_phase_schedule",
     "tournament.flow_node_schedule",
     "tournament.stage",
     "tournament.flow_node",

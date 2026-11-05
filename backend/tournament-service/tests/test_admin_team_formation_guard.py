@@ -49,7 +49,7 @@ async def _seed(session, *, draft_status: str | None) -> tuple[int, int]:
         # NOT NULL and globally unique; production writes go through
         # `generate_unique_tournament_slug`, which this factory bypasses.
         slug=f"tf-guard-{suffix}",
-        status=enums.TournamentStatus.DRAFT,
+        status=enums.TournamentStatus.LIVE,
         team_formation="draft",
         is_hidden=True,
     )

@@ -45,7 +45,7 @@ async def _seed(session):
         # NOT NULL and globally unique; production writes go through
         # `generate_unique_tournament_slug`, which this factory bypasses.
         slug=f"pa-{suffix}",
-        status=enums.TournamentStatus.DRAFT,
+        status=enums.TournamentStatus.LIVE,
         is_hidden=True,
     )
     session.add(tournament)

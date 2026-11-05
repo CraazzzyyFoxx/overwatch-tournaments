@@ -9698,6 +9698,18 @@
       },
       "summary": "Get a tournament's flow (admin)"
     },
+    "rpc.tournament.flow_node_schedule_set": {
+      "description": "Permission: workspace `tournament.update`. Replaces the node's schedule (full replace). A row's `starts_at` moves the node when the tournament's `auto_transitions_enabled` is on: registration `open` (draft to open) and `check_in` (open to check_in), formation and stage `start` (draft to forming, ready to live); `ends_at` only closes the phase's action window. 422 `invalid_schedule_phase` for a phase the node's kind does not have, `invalid_schedule` for a duplicate phase, an end not after its start, or a check-in that does not start after the open.",
+      "request": {
+        "array": false,
+        "ref": "tournament.FlowNodeScheduleSet"
+      },
+      "response": {
+        "array": false,
+        "ref": "tournament.FlowNodeRead"
+      },
+      "summary": "Set a flow node's schedule"
+    },
     "rpc.tournament.flow_node_transition": {
       "description": "Permission: workspace `tournament.update`. Moves one registration, formation or stage node along its lifecycle (`invalid_node_transition`, `input_not_final`, `downstream_started` answer 409) and re-derives the tournament status.",
       "request": {
@@ -12060,13 +12072,17 @@
       },
       "summary": "Upload team image"
     },
-    "rpc.tournament.tournament_finish": {
-      "description": "Permission: superuser only. Toggles a tournament's `is_finished` flag and returns it with stages.",
+    "rpc.tournament.tournament_archive": {
+      "description": "Permission: workspace `tournament.update` on the tournament's workspace. `archived: true` needs a `completed` tournament (409 `tournament_not_completed`); `false` needs an `archived` one and returns it to `completed`. Returns the tournament with stages.",
+      "request": {
+        "array": false,
+        "ref": "tournament.TournamentArchiveSet"
+      },
       "response": {
         "array": false,
         "ref": "tournament.TournamentRead"
       },
-      "summary": "Toggle tournament finished"
+      "summary": "Archive or unarchive a tournament"
     },
     "rpc.tournament.tournament_readiness": {
       "description": "Permission: workspace `tournament.read` or `team.read` on the tournament's own workspace. Returns the living readiness checklist for one tournament, telling its organisers what is still missing before it can run: schedule/grid/stage-slot configuration, bracket, duel log coverage and pending standings recalculation (`tournament.read`); the registration, pool, balance and draft state (`team.read`); the overdue, pending-confirmation and disputed results (`match.read`); and the achievement evaluation status (`achievement.read`). Each group of fields is masked to null when the caller lacks the permission that gates it, so a partial reader sees no-access rather than zeros. 403 without `tournament.read` or `team.read`, 404 if the tournament is unknown; hidden tournaments of the caller's own workspace are visible.",
@@ -12075,30 +12091,6 @@
         "ref": "tournament.TournamentReadiness"
       },
       "summary": "Tournament readiness checklist"
-    },
-    "rpc.tournament.tournament_schedule_set": {
-      "description": "Permission: workspace `tournament.update` on the tournament's workspace. Replaces the tournament's phase schedule (full replace of REGISTRATION/CHECK_IN/DRAFT/LIVE rows).",
-      "request": {
-        "array": false,
-        "ref": "tournament.TournamentScheduleSet"
-      },
-      "response": {
-        "array": false,
-        "ref": "tournament.TournamentRead"
-      },
-      "summary": "Set tournament phase schedule"
-    },
-    "rpc.tournament.tournament_status": {
-      "description": "Permission: workspace `tournament.update` on the tournament's workspace; the `force` flag additionally requires superuser. Transitions a tournament to the requested status.",
-      "request": {
-        "array": false,
-        "ref": "tournament.TournamentStatusTransition"
-      },
-      "response": {
-        "array": false,
-        "ref": "tournament.TournamentRead"
-      },
-      "summary": "Transition tournament status"
     },
     "rpc.tournament.tournaments.image_delete": {
       "description": "Permission: workspace `tournament.update` on the tournament's workspace. Clears a tournament's cover or logo URL, commits, then removes its objects from S3; the slot path segment is 'cover' or 'logo'. A failed S3 delete is logged and the request still succeeds. Answers the tournament with `stages`, `roster_shape`, `division_grid_version` and `rules`.",
@@ -36760,11 +36752,7 @@
     "stats.TournamentStatus": {
       "enum": [
         "announcement",
-        "registration",
-        "draft",
-        "check_in",
         "live",
-        "playoffs",
         "completed",
         "archived"
       ],
@@ -44906,18 +44894,28 @@
           ],
           "title": "Ends At"
         },
+        "node_id": {
+          "title": "Node Id",
+          "type": "integer"
+        },
+        "node_name": {
+          "title": "Node Name",
+          "type": "string"
+        },
+        "phase": {
+          "title": "Phase",
+          "type": "string"
+        },
         "starts_at": {
           "format": "date-time",
           "title": "Starts At",
           "type": "string"
-        },
-        "status": {
-          "title": "Status",
-          "type": "string"
         }
       },
       "required": [
-        "status",
+        "node_id",
+        "node_name",
+        "phase",
         "starts_at",
         "ends_at"
       ],
@@ -44939,12 +44937,16 @@
           "title": "Edge",
           "type": "string"
         },
+        "node_name": {
+          "title": "Node Name",
+          "type": "string"
+        },
         "overdue": {
           "title": "Overdue",
           "type": "boolean"
         },
-        "status": {
-          "title": "Status",
+        "phase": {
+          "title": "Phase",
           "type": "string"
         },
         "tournament_id": {
@@ -44959,7 +44961,8 @@
       "required": [
         "tournament_id",
         "tournament_name",
-        "status",
+        "phase",
+        "node_name",
         "edge",
         "at",
         "overdue"
@@ -45050,20 +45053,11 @@
         "phase": {
           "enum": [
             "preparation",
-            "registration",
-            "formation",
             "live",
             "wrap_up"
           ],
           "title": "Phase",
           "type": "string"
-        },
-        "phase_schedule": {
-          "items": {
-            "$ref": "#/components/schemas/tournament.DashboardScheduleEntry"
-          },
-          "title": "Phase Schedule",
-          "type": "array"
         },
         "play": {
           "anyOf": [
@@ -45100,6 +45094,13 @@
             }
           ],
           "title": "Registrations Last 24H"
+        },
+        "schedule": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.DashboardScheduleEntry"
+          },
+          "title": "Schedule",
+          "type": "array"
         },
         "start_date": {
           "anyOf": [
@@ -45145,7 +45146,7 @@
         "start_date",
         "end_date",
         "finished_at",
-        "phase_schedule",
+        "schedule",
         "next_deadline_at",
         "registration_closes_at",
         "registrations_last_24h",
@@ -50117,6 +50118,23 @@
         "starts_at"
       ],
       "title": "FlowNodeScheduleEntry",
+      "type": "object"
+    },
+    "tournament.FlowNodeScheduleSet": {
+      "description": "A node's whole schedule; replaces the stored one.",
+      "properties": {
+        "schedule": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.FlowNodeScheduleEntry"
+          },
+          "title": "Schedule",
+          "type": "array"
+        }
+      },
+      "required": [
+        "schedule"
+      ],
+      "title": "FlowNodeScheduleSet",
       "type": "object"
     },
     "tournament.FlowNodeStatus": {
@@ -60570,6 +60588,19 @@
       "title": "TemplateSlot",
       "type": "object"
     },
+    "tournament.TournamentArchiveSet": {
+      "properties": {
+        "archived": {
+          "title": "Archived",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "archived"
+      ],
+      "title": "TournamentArchiveSet",
+      "type": "object"
+    },
     "tournament.TournamentComputationJobRead": {
       "properties": {
         "attempts": {
@@ -60824,10 +60855,6 @@
           "format": "date",
           "title": "Start Date",
           "type": "string"
-        },
-        "status": {
-          "$ref": "#/components/schemas/tournament.TournamentStatus",
-          "default": "announcement"
         },
         "team_formation": {
           "default": "balancer",
@@ -61294,38 +61321,6 @@
       "title": "TournamentPaginationSortSearchQueryParams",
       "type": "object"
     },
-    "tournament.TournamentPhaseScheduleRead": {
-      "description": "One phase-schedule row: when phase ``status`` starts (and its action window ends).",
-      "properties": {
-        "ends_at": {
-          "anyOf": [
-            {
-              "format": "date-time",
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Ends At"
-        },
-        "starts_at": {
-          "format": "date-time",
-          "title": "Starts At",
-          "type": "string"
-        },
-        "status": {
-          "$ref": "#/components/schemas/tournament.TournamentStatus"
-        }
-      },
-      "required": [
-        "status",
-        "starts_at"
-      ],
-      "title": "TournamentPhaseScheduleRead",
-      "type": "object"
-    },
     "tournament.TournamentPickBanOutcomes": {
       "properties": {
         "hero_bans": {
@@ -61526,14 +61521,6 @@
             }
           ],
           "title": "Participants Count"
-        },
-        "phase_schedule": {
-          "default": [],
-          "items": {
-            "$ref": "#/components/schemas/tournament.TournamentPhaseScheduleRead"
-          },
-          "title": "Phase Schedule",
-          "type": "array"
         },
         "pov_stream_delay_s": {
           "default": 0,
@@ -61962,55 +61949,6 @@
       "title": "TournamentReadiness",
       "type": "object"
     },
-    "tournament.TournamentScheduleEntryInput": {
-      "description": "One phase-schedule row in a full-replace schedule update.",
-      "properties": {
-        "ends_at": {
-          "anyOf": [
-            {
-              "format": "date-time",
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Ends At"
-        },
-        "starts_at": {
-          "format": "date-time",
-          "title": "Starts At",
-          "type": "string"
-        },
-        "status": {
-          "$ref": "#/components/schemas/tournament.TournamentStatus"
-        }
-      },
-      "required": [
-        "status",
-        "starts_at"
-      ],
-      "title": "TournamentScheduleEntryInput",
-      "type": "object"
-    },
-    "tournament.TournamentScheduleSet": {
-      "description": "A tournament's whole phase schedule; replaces the stored one.",
-      "properties": {
-        "schedule": {
-          "items": {
-            "$ref": "#/components/schemas/tournament.TournamentScheduleEntryInput"
-          },
-          "title": "Schedule",
-          "type": "array"
-        }
-      },
-      "required": [
-        "schedule"
-      ],
-      "title": "TournamentScheduleSet",
-      "type": "object"
-    },
     "tournament.TournamentStatistics": {
       "properties": {
         "avg_closeness": {
@@ -62054,33 +61992,12 @@
     "tournament.TournamentStatus": {
       "enum": [
         "announcement",
-        "registration",
-        "draft",
-        "check_in",
         "live",
-        "playoffs",
         "completed",
         "archived"
       ],
       "title": "TournamentStatus",
       "type": "string"
-    },
-    "tournament.TournamentStatusTransition": {
-      "properties": {
-        "force": {
-          "default": false,
-          "title": "Force",
-          "type": "boolean"
-        },
-        "status": {
-          "$ref": "#/components/schemas/tournament.TournamentStatus"
-        }
-      },
-      "required": [
-        "status"
-      ],
-      "title": "TournamentStatusTransition",
-      "type": "object"
     },
     "tournament.TournamentUpdate": {
       "properties": {

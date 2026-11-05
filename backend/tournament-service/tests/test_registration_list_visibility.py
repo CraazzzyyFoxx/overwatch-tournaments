@@ -105,7 +105,7 @@ class HiddenListTests(IsolatedAsyncioTestCase):
             patch.object(
                 service.registration_service.tournament_repo,
                 "get",
-                AsyncMock(return_value=SimpleNamespace(workspace_id=7, status=None, phase_schedule=[])),
+                AsyncMock(return_value=SimpleNamespace(workspace_id=7, status=None)),
             ),
             patch.object(service._common_service, "get_registration_form", AsyncMock(return_value=form)),
             patch.object(

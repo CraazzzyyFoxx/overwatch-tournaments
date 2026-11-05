@@ -75,7 +75,6 @@ def _compile_bigint_sqlite(type_, compiler, **kw):  # noqa: ANN001, ANN003, ANN2
 # are deliberately not created.
 TABLE_NAMES = (
     "tournament.tournament",
-    "tournament.tournament_phase_schedule",
     "tournament.stage",
     "tournament.stage_round_best_of",
     "tournament.stage_item",

@@ -249,14 +249,10 @@ def is_ascending_stat(stat: LogStatsName) -> bool:
 
 
 class TournamentStatus(StrEnum):
-    # First phase: the tournament exists and is public, but nothing can be done
-    # with it yet. It ends when the REGISTRATION schedule row comes due.
+    # Derived from the flow nodes (shared.core.flow_state): ANNOUNCEMENT while every lifecycle node is draft, LIVE once
+    # any has started, COMPLETED when every sink is done. ARCHIVED is the one manual status (set_archived).
     ANNOUNCEMENT = "announcement"
-    REGISTRATION = "registration"
-    DRAFT = "draft"
-    CHECK_IN = "check_in"
     LIVE = "live"
-    PLAYOFFS = "playoffs"
     COMPLETED = "completed"
     ARCHIVED = "archived"
 

@@ -111,10 +111,8 @@ var AdminMiscRoutes = []edge.RouteSpec{
 	// "match"/"read" for the get and "match"/"update" for the upsert.
 	{Method: "GET", Pattern: "/api/v1/admin/tournaments/{tournament_id}/report-form", Queue: "rpc.tournament.report_form_get", IDParam: "tournament_id", Auth: edge.AuthRequired},
 	{Method: "PUT", Pattern: "/api/v1/admin/tournaments/{tournament_id}/report-form", Queue: "rpc.tournament.report_form_upsert", IDParam: "tournament_id", Body: true, Auth: edge.AuthRequired},
-	// tournament.py — finish (legacy toggle), status transition, and phase schedule replace.
-	{Method: "POST", Pattern: "/api/v1/admin/tournaments/{tournament_id}/finish", Queue: "rpc.tournament.tournament_finish", IDParam: "tournament_id", Auth: edge.AuthRequired},
-	{Method: "PATCH", Pattern: "/api/v1/admin/tournaments/{tournament_id}/status", Queue: "rpc.tournament.tournament_status", IDParam: "tournament_id", Body: true, Auth: edge.AuthRequired},
-	{Method: "PUT", Pattern: "/api/v1/admin/tournaments/{tournament_id}/schedule", Queue: "rpc.tournament.tournament_schedule_set", IDParam: "tournament_id", Body: true, Auth: edge.AuthRequired},
+	// tournament.py — archive / unarchive a completed tournament (workspace tournament.update in the worker).
+	{Method: "POST", Pattern: "/api/v1/admin/tournaments/{tournament_id}/archive", Queue: "rpc.tournament.tournament_archive", IDParam: "tournament_id", Body: true, Auth: edge.AuthRequired},
 	// standing.py — recalculate schedules a durable job (202 Accepted).
 	{Method: "POST", Pattern: "/api/v1/admin/standings/recalculate/{tournament_id}", Queue: "rpc.tournament.standing_recalculate", IDParam: "tournament_id", Auth: edge.AuthRequired, Success: 202},
 	// computation.py — read-only job get/list.
@@ -134,4 +132,5 @@ var AdminMiscRoutes = []edge.RouteSpec{
 	{Method: "PUT", Pattern: "/api/v1/admin/tournaments/{tournament_id}/flow", Queue: "rpc.tournament.flow_apply", IDParam: "tournament_id", Body: true, Auth: edge.AuthRequired},
 	// flow node lifecycle — workspace tournament.update in the worker.
 	{Method: "POST", Pattern: "/api/v1/admin/flow-nodes/{node_id}/transition", Queue: "rpc.tournament.flow_node_transition", IDParam: "node_id", Body: true, Auth: edge.AuthRequired},
+	{Method: "PUT", Pattern: "/api/v1/admin/flow-nodes/{node_id}/schedule", Queue: "rpc.tournament.flow_node_schedule_set", IDParam: "node_id", Body: true, Auth: edge.AuthRequired},
 }

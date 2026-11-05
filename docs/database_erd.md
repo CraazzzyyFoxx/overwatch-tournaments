@@ -13,7 +13,7 @@ baselines and Discord channels live in `stats/`. `catalog/` writes only to `cata
 > `--check` and fails on drift, so the diagrams cannot fall behind the models again.
 
 <!-- ERD:auto _alembic_head -->
-Alembic head: **`flowP3_05`** (177 revisions in `backend/migrations/versions/`).
+Alembic head: **`flowP3_06`** (178 revisions in `backend/migrations/versions/`).
 <!-- /ERD:auto -->
 
 **Reading the diagrams**
@@ -1466,15 +1466,6 @@ erDiagram
         int sort_order
         boolean is_active
     }
-    TOURNAMENT_TOURNAMENT_PHASE_SCHEDULE {
-        bigint id PK
-        timestamptz created_at
-        timestamptz updated_at "nullable"
-        bigint tournament_id FK
-        tournamentstatus status
-        timestamptz starts_at
-        timestamptz ends_at "nullable"
-    }
     TOURNAMENT_TOURNAMENT_PREVIEW_ACCESS {
         bigint id PK
         timestamptz created_at
@@ -1600,7 +1591,6 @@ erDiagram
     TOURNAMENT_TOURNAMENT ||--o{ TOURNAMENT_STANDING_PIN : "tournament_id"
     TOURNAMENT_TOURNAMENT ||--o{ TOURNAMENT_TEAM : "tournament_id"
     TOURNAMENT_TOURNAMENT ||--o{ TOURNAMENT_TOURNAMENT_LINK : "tournament_id"
-    TOURNAMENT_TOURNAMENT ||--o{ TOURNAMENT_TOURNAMENT_PHASE_SCHEDULE : "tournament_id"
     TOURNAMENT_TOURNAMENT ||--o{ TOURNAMENT_TOURNAMENT_PREVIEW_ACCESS : "tournament_id"
     TOURNAMENT_TOURNAMENT ||--o{ TOURNAMENT_VOICE_CHANNEL : "tournament_id"
     TOURNAMENT_TOURNAMENT ||--o| TOURNAMENT_ENCOUNTER_REPORT_FORM : "tournament_id"
@@ -1629,7 +1619,6 @@ Composite unique keys:
 - `TOURNAMENT_TEAM` unique on (`id`, `tournament_id`)
 - `TOURNAMENT_TOURNAMENT` unique on (`id`, `workspace_id`, `discipline`)
 - `TOURNAMENT_TOURNAMENT_LINK` unique on (`tournament_id`, `kind`, `url`)
-- `TOURNAMENT_TOURNAMENT_PHASE_SCHEDULE` unique on (`tournament_id`, `status`)
 - `TOURNAMENT_TOURNAMENT_PREVIEW_ACCESS` unique on (`tournament_id`, `auth_user_id`)
 - `TOURNAMENT_VOICE_CHANNEL` unique on (`tournament_id`, `slot_key`)
 <!-- /ERD:auto -->

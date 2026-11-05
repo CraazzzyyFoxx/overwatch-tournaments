@@ -151,8 +151,8 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
                 status=DraftStatus.SETUP.value,
                 team_formation="draft",
             )
-            # Tournament.status is TournamentStatus; reuse "draft" value via enum string.
-            tourn.status = "draft"
+            # Tournament.status is TournamentStatus; "live" is a plain, non-finished value.
+            tourn.status = "live"
             s.add(tourn)
             await s.flush()
             await save_tournament_format(
@@ -1598,7 +1598,7 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
             s.add(other_ws)
             await s.flush()
             other = Tournament(
-                workspace_id=other_ws.id, name=f"T other {self._suffix}", slug=f"t-other-{self._suffix}", status="draft"
+                workspace_id=other_ws.id, name=f"T other {self._suffix}", slug=f"t-other-{self._suffix}", status="live"
             )
             s.add(other)
             await s.flush()
@@ -1659,7 +1659,7 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
             s.add(other_ws)
             await s.flush()
             other = Tournament(
-                workspace_id=other_ws.id, name=f"T life {self._suffix}", slug=f"t-life-{self._suffix}", status="draft"
+                workspace_id=other_ws.id, name=f"T life {self._suffix}", slug=f"t-life-{self._suffix}", status="live"
             )
             s.add(other)
             await s.flush()

@@ -424,7 +424,7 @@ async def _seed_feed(
         name=f"Sheet atomic {suffix}",
         slug=f"sheetatomic-{suffix}",
         discipline=discipline,
-        status=enums.TournamentStatus.REGISTRATION,
+        status=enums.TournamentStatus.LIVE,
     )
     session.add(tournament)
     await session.flush()

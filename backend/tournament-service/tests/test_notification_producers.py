@@ -82,7 +82,6 @@ TABLE_NAMES = (
     "notification",
     "event_outbox",
     "tournament.tournament",
-    "tournament.tournament_phase_schedule",
     "tournament.flow_node_schedule",
     "tournament.team",
     "tournament.player",

@@ -77,7 +77,7 @@ async def _make_tournament(session, *, workspace_id: int) -> Tournament:
         # NOT NULL and globally unique; production writes go through
         # `generate_unique_tournament_slug`, which this factory bypasses.
         slug=f"selfreg-{suffix}",
-        status=enums.TournamentStatus.CHECK_IN,
+        status=enums.TournamentStatus.LIVE,
     )
     session.add(tournament)
     await session.flush()

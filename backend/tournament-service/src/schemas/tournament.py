@@ -17,7 +17,6 @@ from src.schemas.stage import StageSummaryRead
 
 __all__ = (
     "TournamentRead",
-    "TournamentPhaseScheduleRead",
     "TournamentPaginationSortSearchQueryParams",
     "TournamentPaginationSortSearchParams",
     "TournamentFacets",
@@ -33,14 +32,6 @@ def _every_workspace_is_unfiltered(value: typing.Any) -> typing.Any:
 #: and ``all`` (the cross-workspace opt-in the other reads accept) mean every
 #: workspace.
 WorkspaceFilter = typing.Annotated[int | None, BeforeValidator(_every_workspace_is_unfiltered)]
-
-
-class TournamentPhaseScheduleRead(BaseModel):
-    """One phase-schedule row: when phase ``status`` starts (and its action window ends)."""
-
-    status: enums.TournamentStatus
-    starts_at: datetime
-    ends_at: datetime | None = None
 
 
 class TournamentRead(BaseRead):
@@ -77,7 +68,6 @@ class TournamentRead(BaseRead):
     logs_official: bool = False
     # Seconds participants' POV streams run behind real time; the stream VOD chapter offsets add it.
     pov_stream_delay_s: int = 0
-    phase_schedule: list[TournamentPhaseScheduleRead] = []
 
     stages: list[StageSummaryRead] = []
     participants_count: int | None

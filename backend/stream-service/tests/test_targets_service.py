@@ -15,11 +15,18 @@ tests are about the Python merge logic, not the queries underneath it.
 
 from __future__ import annotations
 
+import asyncio
+import sys
+import uuid
 from typing import Any
 from unittest import IsolatedAsyncioTestCase
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from shared import models
 from shared.core import enums  # noqa: E402
 from shared.repository.stream import SelfDeclaredChannelRow, VerifiedChannelRow  # noqa: E402
+from shared.testing import create_test_async_engine, ensure_test_postgres
 from src.services import targets  # noqa: E402
 
 
@@ -57,24 +64,86 @@ def _service(
     )
 
 
-class PolledStatusTests(IsolatedAsyncioTestCase):
-    async def test_finished_tournaments_are_never_polled(self) -> None:
-        polled = set(targets.POLLED_TOURNAMENT_STATUSES)
+class PolledTournamentTests(IsolatedAsyncioTestCase):
+    if sys.platform == "win32":
+        loop_factory = asyncio.SelectorEventLoop  # psycopg async cannot run on the Proactor loop
 
-        self.assertNotIn(enums.TournamentStatus.COMPLETED, polled)
-        self.assertNotIn(enums.TournamentStatus.ARCHIVED, polled)
-        # `registration` can run for weeks with nobody broadcasting; polling it
-        # would burn a Helix bucket shared with identity-service for nothing.
-        self.assertNotIn(enums.TournamentStatus.REGISTRATION, polled)
-        self.assertEqual(
-            polled,
-            {
-                enums.TournamentStatus.CHECK_IN,
-                enums.TournamentStatus.DRAFT,
-                enums.TournamentStatus.LIVE,
-                enums.TournamentStatus.PLAYOFFS,
-            },
-        )
+    async def test_only_live_tournaments_with_a_lifecycle_node_in_play_are_polled(self) -> None:
+        """Finished tournaments are never polled. A registration that is merely ``open`` can run for weeks with
+        nobody broadcasting; polling it would burn a Helix bucket shared with identity-service for nothing."""
+        ensure_test_postgres()
+        tag = uuid.uuid4().hex[:10]
+        engine = create_test_async_engine()
+        connection = await engine.connect()
+        transaction = await connection.begin()
+        session = AsyncSession(connection, expire_on_commit=False, join_transaction_mode="create_savepoint")
+        try:
+            workspace = models.Workspace(slug=f"tgt-{tag}", name=f"tgt-{tag}", disciplines_enabled=["overwatch"])
+            session.add(workspace)
+            await session.flush()
+            cases = {
+                "check_in": (enums.TournamentStatus.LIVE, [("registration", "check_in")], True),
+                "open_only": (enums.TournamentStatus.LIVE, [("registration", "open")], False),
+                "closed_registration_draft_formation": (
+                    enums.TournamentStatus.LIVE,
+                    [("registration", "closed"), ("formation", "draft")],
+                    False,
+                ),
+                "forming": (enums.TournamentStatus.LIVE, [("formation", "forming")], True),
+                "stage_ready": (enums.TournamentStatus.LIVE, [("stage", "ready")], True),
+                "announcement": (enums.TournamentStatus.ANNOUNCEMENT, [("registration", "draft")], False),
+                "completed": (enums.TournamentStatus.COMPLETED, [("stage", "completed")], False),
+                "archived": (enums.TournamentStatus.ARCHIVED, [("stage", "completed")], False),
+            }
+            rule = models.ScoringRule(
+                workspace_id=workspace.id, preset="wins", game_formula="win", end_formula="games >= best_of"
+            )
+            session.add(rule)
+            await session.flush()
+            ids: dict[str, int] = {}
+            for name, (status, nodes, _polled) in cases.items():
+                tournament = models.Tournament(
+                    workspace_id=workspace.id,
+                    discipline="overwatch",
+                    name=f"{name} {tag}",
+                    slug=f"{name}-{tag}",
+                    status=status,
+                )
+                session.add(tournament)
+                await session.flush()
+                for kind, node_status in nodes:
+                    stage_id = None
+                    if kind == "stage":
+                        stage = models.Stage(
+                            tournament_id=tournament.id,
+                            name="S",
+                            stage_type=enums.StageType.ROUND_ROBIN,
+                            scoring_rule_id=rule.id,
+                        )
+                        session.add(stage)
+                        await session.flush()
+                        stage_id = stage.id
+                    session.add(
+                        models.FlowNode(
+                            tournament_id=tournament.id,
+                            kind=kind,
+                            name=kind,
+                            status=node_status,
+                            config={},
+                            stage_id=stage_id,
+                        )
+                    )
+                ids[name] = tournament.id
+            await session.flush()
+
+            polled = {t.tournament_id for t in await targets.StreamTargetsService().active_tournaments(session)}
+        finally:
+            await session.close()
+            await transaction.rollback()
+            await connection.close()
+            await engine.dispose()
+
+        self.assertEqual({ids[name] for name, case in cases.items() if case[2]}, polled & set(ids.values()))
 
 
 class ParticipantMergeTests(IsolatedAsyncioTestCase):

@@ -76,7 +76,7 @@ from `src/openapi_schemas.py` (`OPERATIONS`) and `src/openapi_docs.py` (`DOCS`).
 | Queue | Payload | Runs | TTL |
 |---|---|---|---|
 | `analytics_job` | `AnalyticsJobRequested` (job id only) | The unified pipeline: dispatch by `AnalyticsJob.kind` to ratings recompute + ML inference (`compute`) or training (`train_ml`) | 1 h |
-| `tournament_state_changed` (bound to `tournament.events`, key `tournament.state.changed`) | `TournamentStateChangedEvent` | A tournament that becomes `completed` gets a `compute` job (`src/worker/tournament_events.py`): the `create_job` gates minus the actor, skipped and acked for an unverified workspace or an active job | 5 min |
+| `tournament_state_changed` (bound to `tournament.events`, key `tournament.state.changed`) | `TournamentStateChangedEvent` | A tournament whose derived status becomes `completed` gets a `compute` job (`src/worker/tournament_events.py`): the `create_job` gates minus the actor, skipped and acked for an unverified workspace or an active job | 5 min |
 
 Each has a matching `<queue>.dlq`, declared by `analytics-worker` at startup.
 

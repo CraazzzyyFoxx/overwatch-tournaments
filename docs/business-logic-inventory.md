@@ -75,30 +75,28 @@ Other rules:
 
 ## 3. Tournament lifecycle
 
-State machine: `backend/shared/core/tournament_state.py`. Only `tournament-svc` applies it.
+Status is **derived** from the flow nodes (`backend/shared/core/flow_state.py`, written by `FlowNodeService.sync_tournament_status` in the transaction of every node move); node lifecycles live on the nodes (`FlowNodeService.transition`). Only `tournament-svc` applies them.
 
 ```
-ANNOUNCEMENT → REGISTRATION → [CHECK_IN] → [DRAFT] → LIVE → [PLAYOFFS] → COMPLETED ⇄ ARCHIVED
+ANNOUNCEMENT → LIVE → COMPLETED ⇄ ARCHIVED
 ```
 
-Phase order is 0…7. `CHECK_IN` is optional. `DRAFT` applies only when `team_formation="draft"`. Forward skips are legal (`REGISTRATION → LIVE` is one hop). Rollback edges exist up to `LIVE` so an organizer can reopen a phase without the superuser `force` bypass. `PLAYOFFS` only leads to `COMPLETED`. `COMPLETED ⇄ ARCHIVED` is reversible.
+`announcement` while every lifecycle node is `draft`; `live` once any has left `draft`; `completed` when every sink is done. `ARCHIVED` is the only manual status: `tournament_archive` archives a `completed` tournament (409 `tournament_not_completed` otherwise) and un-archives it back to `completed`; a correction that makes the flow incomplete turns an archived tournament `live`.
 
-The Individual Swiss qualification lock (§7) also takes a `LIVE` tournament back to `DRAFT`, once the personal stage is complete; it is an organizer action, not a schedule tick.
+`is_finished` is **derived**: true exactly for `COMPLETED` and `ARCHIVED`. “In play” = `LIVE` with a live stage node (a registration filling up is not a ball in play).
 
-`is_finished` is **derived**: true exactly for `COMPLETED` and `ARCHIVED`. “In play” = `LIVE | PLAYOFFS` (check-in is a lobby, not a ball in play).
+**Schedule** (`flow_node_schedule`, set per node by `flow_node_schedule_set`):
 
-**Schedule** (`tournament_phase_schedule`):
+- Phases: registration `open`, `check_in`; formation `start`; stage `start`.
+- `starts_at` moves the node (`SCHEDULE_TRANSITIONS`: registration `draft → open`, `open → check_in`; formation `draft → forming`; stage `ready → live`). `ends_at` **never** moves a node — it only closes that phase's action window.
+- One row per phase; `ends_at > starts_at` when set; a registration's `check_in` starts after its `open`.
 
-- Schedulable: `REGISTRATION`, `CHECK_IN`, `DRAFT`, `LIVE`. Not `ANNOUNCEMENT`, `PLAYOFFS`, `COMPLETED`.
-- `starts_at` moves status. `ends_at` **never** moves status — it only closes that phase's action window.
-- One row per phase; strictly increasing `starts_at`; `ends_at > starts_at` when set.
+**What moves a node — only two things:**
 
-**What moves status — only two things:**
+1. An admin via `flow_node_transition`. A manual move does not touch `auto_transitions_enabled`: the tick only moves a node from the exact status its phase starts from, so it never undoes an admin's move.
+2. The 30-second tick. Forward only, one due row at a time, tournament row locked before the node, one transaction per node. A refused move (no registration form, an input not final) is skipped and retried.
 
-1. An admin via `tournament_status`. Validated against the transition matrix unless `force`. A manual transition **disables** `auto_transitions_enabled` in the same transaction so automation never fights the admin.
-2. The 30-second tick. Forward only, only out of `{ANNOUNCEMENT, REGISTRATION, CHECK_IN, DRAFT}`, furthest destination `LIVE`. Several due rows → jump to the **latest** due phase, not step through intermediates. `FOR UPDATE SKIP LOCKED`, one transaction per tournament.
-
-Side effect of reaching `LIVE`: auto-start the first group-stage wave (stages sharing `order` are one parallel phase).
+Side effect of a stage's `ready → live`: its encounters are generated (the group-stage auto-start).
 
 **Visibility.** A hidden tournament 404s as “not found”. Preview allowlist (`tournament_preview_access`) for unpublished hidden events. Exception: a **scrim container** is readable by any workspace member (the opponent must open the link before claiming). Listings still hide the container.
 

@@ -26,8 +26,8 @@ layering.
 
 ## Responsibilities
 
-- **Tournament lifecycle.** The status state machine, its phase schedule, and the time-driven
-  automation that advances it.
+- **Tournament lifecycle.** The derived tournament status, the node schedules, and the time-driven
+  automation that advances nodes.
 - **Registration.** Player self-service registration and the admin queue behind it: approval,
   rejection, withdrawal, restoration, balancer inclusion, rank autofill, the per-workspace
   registration-status catalog, and the registration form itself.
@@ -81,9 +81,9 @@ Method groups:
 | Encounters and results | `encounter_*`, `admin_encounter_reports_*`, `admin_match*`, `report_form_*` | Admin result writes, the result audit trail, the captain-report form, parsed-match reads, an organizer's match import by external id (`admin_match_import(s)`, with the stats warnings) |
 | Captain surfaces | `captain_*` | A captain's own role, readiness, map reports, report submission, match import by external id (`captain_match_import(s)`), pick-ban state and actions |
 | Pick/ban | `get_pick_ban_configs`, `admin_pick_ban_*` | Config CRUD, admin acting, opener election, session reset |
-| Lifecycle | `tournament_status`, `tournament_finish`, `tournament_schedule_set` | Status transitions and the phase schedule |
+| Lifecycle | `tournament_archive` | Archive / unarchive a completed tournament |
 | Individual Swiss | `get_player_standings`, `get_individual_rounds`, `player_standing_pins_set`, `individual_swiss_lock_qualification` | The personal table and round teams (public reads), organizer pins, and the qualification lock |
-| Flow | get_flow, flow_get, flow_apply, flow_node_transition | The tournament's node graph with resolved ports and per-node results (public read; admin read adds validation issues and the port catalogue), graph edits under the frozen-node rules, and node lifecycle moves |
+| Flow | get_flow, flow_get, flow_apply, flow_node_transition, flow_node_schedule_set | The tournament's node graph with resolved ports and per-node results (public read; admin read adds validation issues and the port catalogue), graph edits under the frozen-node rules, node lifecycle moves and node schedules |
 | Images | `teams.image_*`, `tournaments.image_*`, `regteam_image_*` | Binary upload/delete (base64 on the wire) to S3 |
 | Scrims | `scrim_*` | Ad-hoc room provisioning, claiming and closing |
 | Preview access | `preview_access_*` | Pre-publication access grants |
@@ -258,7 +258,7 @@ All of these go through the outbox, never directly from the request transaction:
 | Routing key | Exchange | Emitted when |
 | --- | --- | --- |
 | `cache.invalidated.tournament.{tournament_id}` | `cache.invalidation` | A write staled tournament resources another service caches (`publish_tournament_invalidation`): a `CacheInvalidatedEvent` naming them, the durable copy of the commit-time generation bump |
-| `tournament.state.changed` | `tournament.events` | Status transition (manual or automatic); consumed by `analytics-worker`, which creates the compute job of a `completed` tournament |
+| `tournament.state.changed` | `tournament.events` | Tournament status change (a node move re-deriving it, or archiving); consumed by `analytics-worker`, which creates the compute job of a `completed` tournament |
 | `flow.node.state.changed` | `tournament.events` | A registration, formation or stage node changed status (`FlowNodeService.transition`, manual or scheduled); `FlowNodeStateChangedEvent{tournament_id, workspace_id, node_id, kind, old_status, new_status}` |
 | `player.refresh_requested` | `player.events` | Registration approved (`source: tournament_registration`) or the registrant asked to re-check their profile (`tournament_recheck`); `PlayerRefreshRequestedEvent`, none for a registration without a player |
 | `tournament.encounter.completed` | `tournament.events` | Encounter result confirmed |
@@ -350,52 +350,43 @@ three new purges delete 5000 rows per transaction. A run APScheduler skips (stil
 missed) counts in `scheduler_job_skipped_total{service,job_id,reason}`.
 
 Registration windows and invite caps are *not* scheduled: registration openness is evaluated from the
-`REGISTRATION` phase-schedule row on every read and write, and invite caps are reset on demand
+registration node's `open` and `check_in` schedule rows on every read and write, and invite caps are reset on demand
 through `regteam_invite_cap_reset`.
 
-## The tournament state machine
+## The tournament status
 
-Status lives on `tournament.tournament.status`. The machine itself is
-[`shared/core/tournament_state.py`](../shared/core/tournament_state.py); this service is the only
-process that applies it.
+Status lives on `tournament.tournament.status` and has four values: `announcement`, `live`, `completed`, `archived`.
+It is **derived** from the flow nodes by
+[`shared/core/flow_state.py`](../shared/core/flow_state.py) (`derive_tournament_status`) and written by
+`FlowNodeService.sync_tournament_status` in the transaction of every node move: `announcement` while every
+lifecycle node is `draft`, `live` once any has left `draft`, `completed` when every sink is done. The registration,
+formation and stage lifecycles live on their nodes (`FlowNodeService.transition`).
 
-```
-REGISTRATION ──▶ CHECK_IN ──▶ DRAFT ──▶ LIVE ──▶ PLAYOFFS ──▶ COMPLETED ◀──▶ ARCHIVED
-      │             │            │        │                       ▲
-      └─────────────┴────────────┴────────┴───────────────────────┘
-                    (forward skips legal; rollback edges omitted)
-```
+- `archived` is the only manual status: `rpc.tournament.tournament_archive` (`AdminTournamentService.set_archived`)
+  archives a `completed` tournament (409 `tournament_not_completed` otherwise) and un-archives it back to
+  `completed`. A correction that makes the flow incomplete again turns an archived tournament `live`.
+- `is_finished` is derived, not set independently: it is true exactly for `completed` and `archived`.
 
-- `CHECK_IN` is optional and `DRAFT` applies only to `team_formation="draft"` tournaments, so forward
-  transitions may skip phases. `REGISTRATION → LIVE` is a legal single hop.
-- Rollback edges exist for the phases before the current one (e.g. `CHECK_IN → REGISTRATION`,
-  `LIVE → DRAFT`), so an organizer can reopen a phase without the superuser `force` bypass.
-- `LIVE → COMPLETED` is direct; `PLAYOFFS` is an optional stop in between and only leads to
-  `COMPLETED`. `COMPLETED ↔ ARCHIVED` is reversible.
-- `is_finished` is derived, not set independently: it is true exactly for `COMPLETED` and `ARCHIVED`.
+**What triggers a node move.** Two things, and only two:
 
-**What triggers a transition.** Two things, and only two:
+1. **An admin**, via `rpc.tournament.flow_node_transition`. A manual move does not touch
+   `auto_transitions_enabled`: the tick only moves a node forward from the exact status its phase starts from, so
+   it never undoes an admin's move.
+2. **The 30-second automation tick** (`services/tournament/auto_transitions.py`), from `flow_node_schedule` rows
+   (`rpc.tournament.flow_node_schedule_set`). A row's `starts_at` is the moment its phase begins; `ends_at` never
+   moves a node, it only closes that phase's action window early.
 
-1. **An admin**, via `rpc.tournament.tournament_status` (or the legacy `tournament_finish` toggle).
-   The target is validated against the transition matrix unless a superuser passes `force`. A manual
-   transition also sets `auto_transitions_enabled = false` in the same transaction, so the automation
-   never fights an admin decision — re-enabling it is an explicit edit.
-2. **The 30-second automation tick**, from `tournament_phase_schedule` rows. Each row's `starts_at`
-   is the moment its phase begins; `ends_at` never moves the status, it only closes that phase's
-   action window early (`is_within_phase_window`).
+**What the tick will and will not do.** It moves a node forward only, from the status the phase starts from
+(`SCHEDULE_TRANSITIONS`): a registration's `open` row `draft → open`, its `check_in` row `open → check_in`, a
+formation's `start` row `draft → forming`, a stage's `start` row `ready → live` (which generates its encounters).
+Closing, completing and every other move stay with an admin or the standings worker. Tournaments with
+`auto_transitions_enabled = false` are never touched. A move the node's own guards refuse (no registration form yet,
+an input that is not final) is reported as `skipped` with the guard's code and retried on the next tick.
 
-**What the tick will and will not do.** It moves forward only, and only *out of* `REGISTRATION`,
-`CHECK_IN` or `DRAFT` — so the furthest it can take a tournament is `LIVE`. `PLAYOFFS` and
-`COMPLETED` depend on the actual course of play and stay manual. A stage node's `start` schedule row
-moves it `ready → live` and generates its encounters. Tournaments with
-`auto_transitions_enabled = false` are never touched. When several rows are due at once the tick
-picks the *latest* due phase and jumps straight to it rather than stepping through the intermediate
-ones.
-
-Candidates are selected with one coarse SQL filter, then each is re-locked
-`FOR UPDATE SKIP LOCKED` in its own session and re-checked under the lock before transitioning — one
-transaction per tournament, so a failure on one never aborts the rest of the tick and two replicas
-never transition the same row twice.
+Candidates are selected with one coarse SQL filter, then each is handled in its own session: the tournament row is
+locked first and the node second (the order of `FlowNodeService.transition`), the due-ness is re-checked under the
+locks, and the node moves through `FlowNodeService.transition(automated=True)` — one transaction per node, so a
+failure on one never aborts the rest of the tick and two replicas never move the same node twice.
 
 ## The transactional outbox
 
@@ -511,7 +502,7 @@ project at [`../migrations/`](../migrations/).
 
 **Writes:**
 
-- **`tournament`** — the structure: `tournament`, `tournament_phase_schedule`, `stage`, `stage_item`,
+- **`tournament`** — the structure: `tournament`, `stage`, `stage_item`,
   `stage_item_input`, `stage_round_best_of`, `team`, `player`, `player_role`,
   `bracket_encounter` (an encounter's stage, stage item and round), `encounter_link`,
   `encounter_report_form`, the `pick_ban_config*` template tables, `standing`, `recalculation_state`,

@@ -6672,6 +6672,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/flow-nodes/{node_id}/schedule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set a flow node's schedule
+         * @description Permission: workspace `tournament.update`. Replaces the node's schedule (full replace). A row's `starts_at` moves the node when the tournament's `auto_transitions_enabled` is on: registration `open` (draft to open) and `check_in` (open to check_in), formation and stage `start` (draft to forming, ready to live); `ends_at` only closes the phase's action window. 422 `invalid_schedule_phase` for a phase the node's kind does not have, `invalid_schedule` for a duplicate phase, an end not after its start, or a check-in that does not start after the open.
+         *
+         *     RPC subject: `rpc.tournament.flow_node_schedule_set`
+         */
+        put: operations["put__api_v1_admin_flow_nodes__node_id__schedule"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/flow-nodes/{node_id}/transition": {
         parameters: {
             query?: never;
@@ -8178,7 +8200,7 @@ export interface paths {
         patch: operations["patch__api_v1_admin_tournaments__tournament_id_"];
         trace?: never;
     };
-    "/api/v1/admin/tournaments/{tournament_id}/finish": {
+    "/api/v1/admin/tournaments/{tournament_id}/archive": {
         parameters: {
             query?: never;
             header?: never;
@@ -8188,12 +8210,12 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Toggle tournament finished
-         * @description Permission: superuser only. Toggles a tournament's `is_finished` flag and returns it with stages.
+         * Archive or unarchive a tournament
+         * @description Permission: workspace `tournament.update` on the tournament's workspace. `archived: true` needs a `completed` tournament (409 `tournament_not_completed`); `false` needs an `archived` one and returns it to `completed`. Returns the tournament with stages.
          *
-         *     RPC subject: `rpc.tournament.tournament_finish`
+         *     RPC subject: `rpc.tournament.tournament_archive`
          */
-        post: operations["post__api_v1_admin_tournaments__tournament_id__finish"];
+        post: operations["post__api_v1_admin_tournaments__tournament_id__archive"];
         delete?: never;
         options?: never;
         head?: never;
@@ -8428,28 +8450,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/admin/tournaments/{tournament_id}/schedule": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Set tournament phase schedule
-         * @description Permission: workspace `tournament.update` on the tournament's workspace. Replaces the tournament's phase schedule (full replace of REGISTRATION/CHECK_IN/DRAFT/LIVE rows).
-         *
-         *     RPC subject: `rpc.tournament.tournament_schedule_set`
-         */
-        put: operations["put__api_v1_admin_tournaments__tournament_id__schedule"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/admin/tournaments/{tournament_id}/stages/{stage_id}/lock-qualification": {
         parameters: {
             query?: never;
@@ -8492,28 +8492,6 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
-        trace?: never;
-    };
-    "/api/v1/admin/tournaments/{tournament_id}/status": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /**
-         * Transition tournament status
-         * @description Permission: workspace `tournament.update` on the tournament's workspace; the `force` flag additionally requires superuser. Transitions a tournament to the requested status.
-         *
-         *     RPC subject: `rpc.tournament.tournament_status`
-         */
-        patch: operations["patch__api_v1_admin_tournaments__tournament_id__status"];
         trace?: never;
     };
     "/api/v1/admin/tournaments/{tournament_id}/team-format": {
@@ -22271,23 +22249,6 @@ export interface components {
             /** Url */
             url: string;
         };
-        /**
-         * TournamentPhaseScheduleRead
-         * @description One phase-schedule row: when phase ``status`` starts (and its action window ends).
-         */
-        "tournament.TournamentPhaseScheduleRead": {
-            /**
-             * Ends At
-             * @default null
-             */
-            ends_at: string | null;
-            /**
-             * Starts At
-             * Format: date-time
-             */
-            starts_at: string;
-            status: components["schemas"]["tournament.TournamentStatus"];
-        };
         /** TournamentPickBanOutcomes */
         "tournament.TournamentPickBanOutcomes": {
             /** Hero Bans */
@@ -22381,11 +22342,6 @@ export interface components {
             name: string;
             /** Participants Count */
             participants_count: number | null;
-            /**
-             * Phase Schedule
-             * @default []
-             */
-            phase_schedule: components["schemas"]["tournament.TournamentPhaseScheduleRead"][];
             /**
              * Pov Stream Delay S
              * @default 0
@@ -28878,13 +28834,17 @@ export interface components {
         "tournament.DashboardScheduleEntry": {
             /** Ends At */
             ends_at: string | null;
+            /** Node Id */
+            node_id: number;
+            /** Node Name */
+            node_name: string;
+            /** Phase */
+            phase: string;
             /**
              * Starts At
              * Format: date-time
              */
             starts_at: string;
-            /** Status */
-            status: string;
         };
         /** DashboardTimelineEvent */
         "tournament.DashboardTimelineEvent": {
@@ -28898,10 +28858,12 @@ export interface components {
              * @enum {string}
              */
             edge: TournamentDashboardTimelineEventEdge;
+            /** Node Name */
+            node_name: string;
             /** Overdue */
             overdue: boolean;
-            /** Status */
-            status: string;
+            /** Phase */
+            phase: string;
             /** Tournament Id */
             tournament_id: number;
             /** Tournament Name */
@@ -28934,14 +28896,14 @@ export interface components {
              * @enum {string}
              */
             phase: TournamentDashboardTournamentCardPhase;
-            /** Phase Schedule */
-            phase_schedule: components["schemas"]["tournament.DashboardScheduleEntry"][];
             play: components["schemas"]["tournament.DashboardPlay"] | null;
             readiness: components["schemas"]["tournament.TournamentReadiness"];
             /** Registration Closes At */
             registration_closes_at: string | null;
             /** Registrations Last 24H */
             registrations_last_24h: number | null;
+            /** Schedule */
+            schedule: components["schemas"]["tournament.DashboardScheduleEntry"][];
             /** Start Date */
             start_date: string | null;
             /** Status */
@@ -29949,6 +29911,14 @@ export interface components {
             kind: components["schemas"]["tournament.FlowNodeKind"];
             /** Outputs */
             outputs: components["schemas"]["tournament.FlowPortSpecRead"][];
+        };
+        /**
+         * FlowNodeScheduleSet
+         * @description A node's whole schedule; replaces the stored one.
+         */
+        "tournament.FlowNodeScheduleSet": {
+            /** Schedule */
+            schedule: components["schemas"]["tournament.FlowNodeScheduleEntry"][];
         };
         /** FlowNodeTransition */
         "tournament.FlowNodeTransition": {
@@ -32155,6 +32125,11 @@ export interface components {
              */
             source_position: number | null;
         };
+        /** TournamentArchiveSet */
+        "tournament.TournamentArchiveSet": {
+            /** Archived */
+            archived: boolean;
+        };
         /** TournamentComputationJobRead */
         "tournament.TournamentComputationJobRead": {
             /** Attempts */
@@ -32263,8 +32238,6 @@ export interface components {
              * Format: date
              */
             start_date: string;
-            /** @default announcement */
-            status: components["schemas"]["tournament.TournamentStatus"];
             /**
              * Team Formation
              * @default balancer
@@ -32394,40 +32367,6 @@ export interface components {
             team_formation: string;
             /** Tournament Id */
             tournament_id: number;
-        };
-        /**
-         * TournamentScheduleEntryInput
-         * @description One phase-schedule row in a full-replace schedule update.
-         */
-        "tournament.TournamentScheduleEntryInput": {
-            /**
-             * Ends At
-             * @default null
-             */
-            ends_at: string | null;
-            /**
-             * Starts At
-             * Format: date-time
-             */
-            starts_at: string;
-            status: components["schemas"]["tournament.TournamentStatus"];
-        };
-        /**
-         * TournamentScheduleSet
-         * @description A tournament's whole phase schedule; replaces the stored one.
-         */
-        "tournament.TournamentScheduleSet": {
-            /** Schedule */
-            schedule: components["schemas"]["tournament.TournamentScheduleEntryInput"][];
-        };
-        /** TournamentStatusTransition */
-        "tournament.TournamentStatusTransition": {
-            /**
-             * Force
-             * @default false
-             */
-            force: boolean;
-            status: components["schemas"]["tournament.TournamentStatus"];
         };
         /** TournamentUpdate */
         "tournament.TournamentUpdate": {
@@ -57630,6 +57569,88 @@ export interface operations {
             };
         };
     };
+    put__api_v1_admin_flow_nodes__node_id__schedule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                node_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["tournament.FlowNodeScheduleSet"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["tournament.FlowNodeRead"];
+                };
+            };
+            /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not authorized (`forbidden`). Authenticated, but the credential lacks the permission, workspace, or scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     post__api_v1_admin_flow_nodes__node_id__transition: {
         parameters: {
             query?: never;
@@ -64408,7 +64429,7 @@ export interface operations {
             };
         };
     };
-    post__api_v1_admin_tournaments__tournament_id__finish: {
+    post__api_v1_admin_tournaments__tournament_id__archive: {
         parameters: {
             query?: never;
             header?: never;
@@ -64417,7 +64438,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["tournament.TournamentArchiveSet"];
+            };
+        };
         responses: {
             /** @description Success */
             200: {
@@ -65610,88 +65635,6 @@ export interface operations {
             };
         };
     };
-    put__api_v1_admin_tournaments__tournament_id__schedule: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                tournament_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["tournament.TournamentScheduleSet"];
-            };
-        };
-        responses: {
-            /** @description Success */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["tournament.TournamentRead"];
-                };
-            };
-            /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Not authorized (`forbidden`). Authenticated, but the credential lacks the permission, workspace, or scope. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
-            429: {
-                headers: {
-                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
-                    "Retry-After"?: number;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
     post__api_v1_admin_tournaments__tournament_id__stages__stage_id__lock_qualification: {
         parameters: {
             query?: never;
@@ -65794,88 +65737,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["tournament.PlayerStandingPinsRead"];
-                };
-            };
-            /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Not authorized (`forbidden`). Authenticated, but the credential lacks the permission, workspace, or scope. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
-            429: {
-                headers: {
-                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
-                    "Retry-After"?: number;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    patch__api_v1_admin_tournaments__tournament_id__status: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                tournament_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["tournament.TournamentStatusTransition"];
-            };
-        };
-        responses: {
-            /** @description Success */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["tournament.TournamentRead"];
                 };
             };
             /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
@@ -84183,11 +84044,7 @@ export enum StatsStatRecordCode {
 }
 export enum StatsTournamentStatus {
     announcement = "announcement",
-    registration = "registration",
-    draft = "draft",
-    check_in = "check_in",
     live = "live",
-    playoffs = "playoffs",
     completed = "completed",
     archived = "archived"
 }
@@ -84439,11 +84296,7 @@ export enum TournamentTournamentLinkReadKind {
 }
 export enum TournamentTournamentStatus {
     announcement = "announcement",
-    registration = "registration",
-    draft = "draft",
-    check_in = "check_in",
     live = "live",
-    playoffs = "playoffs",
     completed = "completed",
     archived = "archived"
 }
@@ -84732,8 +84585,6 @@ export enum TournamentDashboardTimelineEventEdge {
 }
 export enum TournamentDashboardTournamentCardPhase {
     preparation = "preparation",
-    registration = "registration",
-    formation = "formation",
     live = "live",
     wrap_up = "wrap_up"
 }

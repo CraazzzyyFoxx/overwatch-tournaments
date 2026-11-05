@@ -42,7 +42,6 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
-from shared.core import enums
 from shared.core.social import SocialProvider
 from shared.repository.participant_result import is_member_tournament_row
 
@@ -124,9 +123,9 @@ class StreamTargetRepository:
     async def list_active_tournaments(
         self,
         session: AsyncSession,
-        statuses: Sequence[enums.TournamentStatus],
+        active: sa.ColumnElement[bool],
     ) -> Sequence[TournamentPollTarget]:
-        """Tournaments in any of ``statuses``, id ascending.
+        """Tournaments matching the ``active`` clause (a predicate over ``Tournament``), id ascending.
 
         Only three columns are loaded (not the full ``Tournament`` row): this
         runs on a 30s heartbeat and the poller needs nothing else.
@@ -137,7 +136,7 @@ class StreamTargetRepository:
                 models.Tournament.workspace_id,
                 models.Tournament.is_hidden,
             )
-            .where(models.Tournament.status.in_(statuses))
+            .where(active)
             .order_by(models.Tournament.id)
         )
         rows = (await session.execute(stmt)).all()

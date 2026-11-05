@@ -846,31 +846,6 @@ class TournamentPreviewAccessRepository(BaseRepository[models.TournamentPreviewA
         )
 
 
-class TournamentPhaseScheduleRepository(BaseRepository[models.TournamentPhaseSchedule]):
-    """``tournament_phase_schedule`` — planned status windows for auto-transitions."""
-
-    def __init__(self) -> None:
-        super().__init__(models.TournamentPhaseSchedule)
-
-    async def list_for_tournament(
-        self, session: AsyncSession, tournament_id: int
-    ) -> Sequence[models.TournamentPhaseSchedule]:
-        result = await session.execute(
-            self.select()
-            .where(models.TournamentPhaseSchedule.tournament_id == tournament_id)
-            .order_by(models.TournamentPhaseSchedule.starts_at)
-        )
-        return result.scalars().all()
-
-    async def delete_for_tournament(self, session: AsyncSession, tournament_id: int) -> None:
-        """Statement delete — the schedule is always rewritten wholesale."""
-        await session.execute(
-            sa.delete(models.TournamentPhaseSchedule).where(
-                models.TournamentPhaseSchedule.tournament_id == tournament_id
-            )
-        )
-
-
 class TournamentComputationJobRepository(BaseRepository[models.TournamentComputationJob]):
     """``computation_job`` — bracket/standings recomputation queue."""
 

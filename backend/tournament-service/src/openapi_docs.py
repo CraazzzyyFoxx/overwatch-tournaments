@@ -500,18 +500,10 @@ DOCS: dict[str, dict] = {
         "summary": "List tournament links",
         "description": "Permission: workspace `tournament_link.read`. Lists a tournament's links ordered by sort_order then id, optionally only the active ones.",
     },
-    # ── bespoke: tournament status / lifecycle ─────────────────────────────
-    "rpc.tournament.tournament_finish": {
-        "summary": "Toggle tournament finished",
-        "description": "Permission: superuser only. Toggles a tournament's `is_finished` flag and returns it with stages.",
-    },
-    "rpc.tournament.tournament_status": {
-        "summary": "Transition tournament status",
-        "description": "Permission: workspace `tournament.update` on the tournament's workspace; the `force` flag additionally requires superuser. Transitions a tournament to the requested status.",
-    },
-    "rpc.tournament.tournament_schedule_set": {
-        "summary": "Set tournament phase schedule",
-        "description": "Permission: workspace `tournament.update` on the tournament's workspace. Replaces the tournament's phase schedule (full replace of REGISTRATION/CHECK_IN/DRAFT/LIVE rows).",
+    # ── bespoke: tournament archive ────────────────────────────────────────
+    "rpc.tournament.tournament_archive": {
+        "summary": "Archive or unarchive a tournament",
+        "description": "Permission: workspace `tournament.update` on the tournament's workspace. `archived: true` needs a `completed` tournament (409 `tournament_not_completed`); `false` needs an `archived` one and returns it to `completed`. Returns the tournament with stages.",
     },
     "rpc.tournament.standing_recalculate": {
         "summary": "Recalculate standings",
@@ -569,6 +561,10 @@ DOCS: dict[str, dict] = {
     "rpc.tournament.flow_node_transition": {
         "summary": "Move a flow node along its lifecycle",
         "description": "Permission: workspace `tournament.update`. Moves one registration, formation or stage node along its lifecycle (`invalid_node_transition`, `input_not_final`, `downstream_started` answer 409) and re-derives the tournament status.",
+    },
+    "rpc.tournament.flow_node_schedule_set": {
+        "summary": "Set a flow node's schedule",
+        "description": "Permission: workspace `tournament.update`. Replaces the node's schedule (full replace). A row's `starts_at` moves the node when the tournament's `auto_transitions_enabled` is on: registration `open` (draft to open) and `check_in` (open to check_in), formation and stage `start` (draft to forming, ready to live); `ends_at` only closes the phase's action window. 422 `invalid_schedule_phase` for a phase the node's kind does not have, `invalid_schedule` for a duplicate phase, an end not after its start, or a check-in that does not start after the open.",
     },
     # ── bespoke: pick-ban live-session admin overrides (map + hero) ────────
     "rpc.tournament.admin_pick_ban_session_reset": {

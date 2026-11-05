@@ -27,7 +27,7 @@ from shared.models.registration.registration import (
     RegistrationRole,
 )
 from shared.models.tenancy.workspace import Workspace
-from shared.models.tournament import Stage, Tournament, TournamentPhaseSchedule
+from shared.models.tournament import Stage, Tournament
 from tests.encounter_seed import seed_encounter, seed_scoring_rule
 
 TOPIC = "rpc.tournament.tournament_readiness"
@@ -46,17 +46,10 @@ def seeded(db):
         workspace_id=ws.id,
         name=f"Readiness {suffix}",
         slug=f"readiness-{suffix}",
-        status=enums.TournamentStatus.REGISTRATION,
+        status=enums.TournamentStatus.LIVE,
     )
     db.add(t)
     db.flush()
-    db.add(
-        TournamentPhaseSchedule(
-            tournament_id=t.id,
-            status=enums.TournamentStatus.REGISTRATION,
-            starts_at=datetime.now(UTC),
-        )
-    )
     rule = ScoringRule(workspace_id=ws.id, preset="wins", game_formula="win", end_formula="games >= best_of")
     db.add(rule)
     db.flush()
@@ -66,6 +59,7 @@ def seeded(db):
     node = models.FlowNode(tournament_id=t.id, kind="registration", name="Registration", status="open", config={})
     db.add_all([*regs, node])
     db.flush()
+    db.add(models.FlowNodeSchedule(node_id=node.id, phase="open", starts_at=datetime.now(UTC)))
     db.add_all(
         models.RegistrationEntry(registration_node_id=node.id, registration_id=reg.id, **fields)
         for reg, fields in zip(
@@ -136,7 +130,7 @@ def test_readiness_counts(rpc, seeded):
 
     r = asyncio.run(run())
     assert r.tournament_id == tournament_id
-    assert r.status == "registration"
+    assert r.status == "live"
     assert r.team_formation == "balancer"
     # tournament.read group
     assert r.schedule_configured is True
@@ -199,7 +193,7 @@ def test_readiness_masks_fields_without_tournament_read(rpc, seeded):
     d = resp["data"]
     # always-visible header
     assert d["tournament_id"] == tournament_id
-    assert d["status"] == "registration"
+    assert d["status"] == "live"
     assert d["team_formation"] == "balancer"
     # tournament.read-gated fields are masked
     assert d["stages_total"] is None

@@ -1,15 +1,14 @@
-"""Time-driven tournament status transitions (the tournament-worker tick).
+"""Time-driven node transitions (the tournament-worker tick), spec §9.
 
-Advances ``Tournament.status`` forward along its ``tournament_phase_schedule``
-rows (see ``shared.core.tournament_state``). Automation only moves forward and
-only up to LIVE; PLAYOFFS/COMPLETED stay manual/event-driven. Tournaments in
-manual mode (``auto_transitions_enabled = False``) are never touched.
+Each due ``flow_node_schedule`` row moves its node forward from the exact status its phase starts from
+(``SCHEDULE_TRANSITIONS``: registration ``open`` draft→open and ``check_in`` open→check_in, formation ``start``
+draft→forming, stage ``start`` ready→live), so the tick can never undo an admin's move (plan Decision 4). A tournament
+with ``auto_transitions_enabled = False`` is never touched.
 
-Candidates are picked with a coarse SQL filter (enabled + source status + any
-due schedule row), then each is re-locked ``FOR NO KEY UPDATE SKIP LOCKED`` in its own
-session and re-checked with the precise pure helper ``next_due_status`` before
-transitioning — one transaction per tournament, so a failure in one never
-aborts the loop.
+Candidates are picked with a coarse SQL filter, then each is handled in its own session: the tournament is locked
+first and the node second (the order ``FlowNodeService.transition`` takes), the due-ness is re-checked under the
+locks and the node is moved with ``flow_node_service.transition(automated=True)``. One transaction per node, so a
+failure in one never aborts the loop.
 """
 
 from datetime import UTC, datetime
@@ -20,9 +19,11 @@ from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from shared import models
-from shared.core import tournament_state
-from shared.core.enums import TournamentStatus
-from src.services.admin.tournament import tournament_service as admin_tournament_service
+from shared.core.enums import FlowNodeKind
+from shared.core.errors import ApiHTTPException
+from shared.core.flow_state import SCHEDULE_TRANSITIONS
+from shared.core.tournament_state import as_utc
+from src.services.flow.lifecycle import flow_node_service
 
 __all__ = ("run_due_transitions",)
 
@@ -30,105 +31,78 @@ __all__ = ("run_due_transitions",)
 async def run_due_transitions(
     session_factory: async_sessionmaker[AsyncSession],
 ) -> list[dict[str, Any]]:
-    """Apply every due phase transition; returns one result dict per attempt."""
-    async with session_factory() as session:
-        result = await session.execute(
-            sa.select(models.Tournament.id)
-            .where(
-                models.Tournament.auto_transitions_enabled.is_(True),
-                models.Tournament.status.in_(tournament_state.AUTO_TRANSITION_SOURCE_STATUSES),
-                sa.exists().where(
-                    models.TournamentPhaseSchedule.tournament_id == models.Tournament.id,
-                    models.TournamentPhaseSchedule.starts_at <= sa.func.now(),
-                ),
-            )
-            .order_by(models.Tournament.id.asc())
+    """Apply every due node transition; returns one result dict per attempt."""
+    node, schedule = models.FlowNode, models.FlowNodeSchedule
+    at_source = sa.or_(
+        *(
+            sa.and_(node.kind == kind, schedule.phase == phase, node.status == source)
+            for (kind, phase), (source, _target) in SCHEDULE_TRANSITIONS.items()
         )
-        candidate_ids = list(result.scalars().all())
+    )
+    async with session_factory() as session:
+        rows = (
+            await session.execute(
+                sa.select(schedule.node_id, schedule.phase, node.tournament_id)
+                .join(node, node.id == schedule.node_id)
+                .join(models.Tournament, models.Tournament.id == node.tournament_id)
+                .where(
+                    models.Tournament.auto_transitions_enabled.is_(True),
+                    schedule.starts_at <= sa.func.now(),
+                    at_source,
+                )
+                .order_by(schedule.starts_at, schedule.node_id)
+            )
+        ).all()
 
     results: list[dict[str, Any]] = []
-    for tournament_id in candidate_ids:
-        # ``transition_status`` commits internally (releasing the row lock), so
-        # each candidate gets its own session: re-lock, re-check due-ness under
-        # the lock, then transition in the same session/transaction chain.
+    for node_id, phase, tournament_id in rows:
+        base = {"node_id": node_id, "tournament_id": tournament_id}
         async with session_factory() as session:
             try:
-                result = await session.execute(
-                    sa.select(models.Tournament)
-                    .where(
-                        models.Tournament.id == tournament_id,
-                        models.Tournament.auto_transitions_enabled.is_(True),
-                        models.Tournament.status.in_(tournament_state.AUTO_TRANSITION_SOURCE_STATUSES),
-                    )
-                    # NO KEY UPDATE: held across transition_status's notification fan-out, a plain FOR UPDATE
-                    # would block the KEY SHARE foreign-key checks of every insert under this tournament.
-                    .with_for_update(of=models.Tournament, skip_locked=True, key_share=True)
+                tournament = await flow_node_service.lock_tournament(session, tournament_id)
+                locked = await session.scalar(
+                    sa.select(node)
+                    .where(node.id == node_id)
+                    .with_for_update(key_share=True)
+                    .execution_options(populate_existing=True)
                 )
-                tournament = result.scalar_one_or_none()
-                if tournament is None:
+                row = await session.scalar(
+                    sa.select(schedule).where(schedule.node_id == node_id, schedule.phase == phase)
+                )
+                if locked is None or row is None or not tournament.auto_transitions_enabled:
                     continue
-
+                source, target = SCHEDULE_TRANSITIONS[(FlowNodeKind(locked.kind), phase)]
                 now = datetime.now(UTC)
-                schedule = list(tournament.phase_schedule)
-                target = tournament_state.next_due_status(tournament.status, schedule, now)
-                if target is None:
+                if locked.status != source.value or as_utc(row.starts_at) > now:
                     continue
 
-                # Same prerequisite the admin path enforces, but the tick cannot
-                # raise on it: this candidate is due every 30 s until someone
-                # saves the form, and a 409 per pass would be a log flood, not a
-                # signal. Skipping leaves it in its current phase, which is what
-                # "registration is not ready" means.
-                if target == TournamentStatus.REGISTRATION and not await admin_tournament_service.has_registration_form(
-                    session, tournament_id
-                ):
-                    results.append(
-                        {
-                            "tournament_id": tournament_id,
-                            "status": "skipped",
-                            "reason": "registration_form_missing",
-                        }
-                    )
-                    continue
-
-                old_status = tournament.status
-                scheduled_at = next(
-                    (entry.starts_at for entry in schedule if entry.status == target),
-                    None,
-                )
-                if scheduled_at is not None and scheduled_at.tzinfo is None:
-                    scheduled_at = scheduled_at.replace(tzinfo=UTC)
-                await admin_tournament_service.transition_status(
-                    session,
-                    tournament_id,
-                    target,
-                    automated=True,
-                )
-                lag_seconds = (now - scheduled_at).total_seconds() if scheduled_at is not None else None
+                await flow_node_service.transition(session, node_id, target, automated=True, actor=None)
+                await session.commit()
+                lag_seconds = (now - as_utc(row.starts_at)).total_seconds()
                 logger.info(
-                    "Auto-transitioned tournament",
+                    "Auto-transitioned flow node",
+                    node_id=node_id,
                     tournament_id=tournament_id,
-                    old_status=old_status.value,
+                    old_status=source.value,
                     new_status=target.value,
-                    scheduled_at=scheduled_at.isoformat() if scheduled_at is not None else None,
+                    scheduled_at=row.starts_at.isoformat(),
                     lag_seconds=lag_seconds,
                 )
                 results.append(
                     {
-                        "tournament_id": tournament_id,
+                        **base,
                         "status": "success",
-                        "old_status": old_status.value,
+                        "old_status": source.value,
                         "new_status": target.value,
                         "lag_seconds": lag_seconds,
                     }
                 )
             except Exception as exc:  # noqa: BLE001
-                logger.exception("Failed to auto-transition tournament", tournament_id=tournament_id)
-                results.append(
-                    {
-                        "tournament_id": tournament_id,
-                        "status": "failed",
-                        "error": str(exc),
-                    }
-                )
+                if isinstance(exc, ApiHTTPException) and exc.status_code == 409:
+                    # A refused move (no registration form yet, an input not final) is "not ready", not broken: the
+                    # row stays due every 30 s until someone fixes it, and a stack trace per pass would be a log flood.
+                    results.append({**base, "status": "skipped", "reason": exc.detail[0]["code"]})
+                    continue
+                logger.exception("Failed to auto-transition flow node", **base)
+                results.append({**base, "status": "failed", "error": str(exc)})
     return results

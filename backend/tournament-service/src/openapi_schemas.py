@@ -184,12 +184,8 @@ OPERATIONS: dict[str, Op] = {
     # ── bespoke: registered-team image (binary upload + delete) ────────────
     "rpc.tournament.regteam_image_upload": Op(response=reg_team_schemas.RegistrationTeamRead),
     "rpc.tournament.regteam_image_delete": Op(response=reg_team_schemas.RegistrationTeamRead),
-    # ── bespoke: tournament status / lifecycle ─────────────────────────────
-    "rpc.tournament.tournament_finish": Op(response=schemas.TournamentRead),
-    "rpc.tournament.tournament_status": Op(request=schemas.TournamentStatusTransition, response=schemas.TournamentRead),
-    "rpc.tournament.tournament_schedule_set": Op(
-        request=schemas.TournamentScheduleSet, response=schemas.TournamentRead
-    ),
+    # ── bespoke: tournament archive ────────────────────────────────────────
+    "rpc.tournament.tournament_archive": Op(request=schemas.TournamentArchiveSet, response=schemas.TournamentRead),
     # ── bespoke: voice channels ────────────────────────────────────────────
     "rpc.tournament.voice_get": Op(response=voice_schemas.VoiceStatus),
     "rpc.tournament.voice_put": Op(request=voice_schemas.VoiceSettings, response=voice_schemas.VoiceStatus),
@@ -198,6 +194,9 @@ OPERATIONS: dict[str, Op] = {
     "rpc.tournament.flow_get": Op(response=flow_schemas.AdminFlowRead),
     "rpc.tournament.flow_node_transition": Op(
         request=flow_schemas.FlowNodeTransition, response=flow_schemas.FlowNodeRead
+    ),
+    "rpc.tournament.flow_node_schedule_set": Op(
+        request=flow_schemas.FlowNodeScheduleSet, response=flow_schemas.FlowNodeRead
     ),
     "rpc.tournament.flow_apply": Op(request=flow_schemas.FlowChanges, response=flow_schemas.AdminFlowRead),
     "rpc.tournament.standing_recalculate": Op(response=schemas.TournamentComputationJobRead),

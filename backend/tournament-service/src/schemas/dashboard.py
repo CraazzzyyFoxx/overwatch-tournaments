@@ -27,11 +27,13 @@ __all__ = (
     "AdminDashboard",
 )
 
-DashboardPhase = Literal["preparation", "registration", "formation", "live", "wrap_up"]
+DashboardPhase = Literal["preparation", "live", "wrap_up"]
 
 
 class DashboardScheduleEntry(BaseModel):
-    status: str  # registration | check_in | draft | live
+    node_id: int
+    node_name: str
+    phase: str  # open | check_in | start
     starts_at: datetime
     ends_at: datetime | None
 
@@ -77,10 +79,10 @@ class DashboardTournamentCard(BaseModel):
     end_date: datetime | None
     # wrap_up only: COALESCE(end_date, latest encounter confirmed_at)
     finished_at: datetime | None
-    phase_schedule: list[DashboardScheduleEntry]  # [] without tournament.read
+    schedule: list[DashboardScheduleEntry]  # [] without tournament.read
     # Earliest schedule starts_at/ends_at after now (None without tournament.read)
     next_deadline_at: datetime | None
-    # The REGISTRATION row's ends_at while the status is registration
+    # The earliest ``open`` row's ends_at among the registration nodes that are open
     registration_closes_at: datetime | None
     registrations_last_24h: int | None  # team.read
     # A tournament- or stage-level Challonge source with a slug
@@ -93,10 +95,11 @@ class DashboardTournamentCard(BaseModel):
 class DashboardTimelineEvent(BaseModel):
     tournament_id: int
     tournament_name: str
-    status: str  # the schedule row's status
+    phase: str  # the schedule row's phase: open | check_in | start
+    node_name: str
     edge: Literal["start", "end"]
     at: datetime
-    # A start more than 10 minutes past whose phase the tournament has not reached
+    # A start more than 10 minutes past whose node has not made the move
     overdue: bool
 
 

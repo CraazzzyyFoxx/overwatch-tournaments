@@ -19,6 +19,7 @@ __all__ = (
     "FlowNodeRead",
     "FlowNodeResultRead",
     "FlowNodeScheduleEntry",
+    "FlowNodeScheduleSet",
     "FlowNodeTransition",
     "FlowNodeUpsert",
     "FlowPortRead",
@@ -111,6 +112,12 @@ class FlowNodeScheduleEntry(BaseModel):
     phase: Literal["open", "check_in", "start"]
     starts_at: datetime
     ends_at: datetime | None = None
+
+
+class FlowNodeScheduleSet(BaseModel):
+    """A node's whole schedule; replaces the stored one."""
+
+    schedule: list[FlowNodeScheduleEntry]
 
 
 class TournamentFlowNodeRead(BaseModel):

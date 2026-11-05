@@ -69,7 +69,7 @@ class BalanceExportMissingHandleTests(IsolatedAsyncioTestCase):
                 discipline="overwatch",
                 name=self.tag,
                 slug=self.tag,
-                status=enums.TournamentStatus.REGISTRATION,
+                status=enums.TournamentStatus.LIVE,
             )
             s.add(tournament)
             await s.flush()

@@ -5,14 +5,8 @@ from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from shared import models
-from shared.core import enums
+from shared.services.tournament.in_play import TOURNAMENT_IN_PLAY
 from src.core import config
-
-# "Active" = matches are in play.
-ACTIVE_TOURNAMENT_STATUSES = (
-    enums.TournamentStatus.LIVE,
-    enums.TournamentStatus.PLAYOFFS,
-)
 
 
 class AutoSyncMixin:
@@ -23,7 +17,7 @@ class AutoSyncMixin:
         result = await session.execute(
             sa.select(models.Tournament.id)
             .where(
-                models.Tournament.status.in_(ACTIVE_TOURNAMENT_STATUSES),
+                TOURNAMENT_IN_PLAY,
                 self.source_repo.linked_tournament_exists(),
             )
             .order_by(models.Tournament.id.asc())

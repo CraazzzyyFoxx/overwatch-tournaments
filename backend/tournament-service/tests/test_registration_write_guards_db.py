@@ -107,7 +107,7 @@ async def _seed(session: Any, *, require_subscription: bool = False) -> SimpleNa
         workspace_id=workspace.id,
         name=f"Write guards {suffix}",
         slug=f"wguard-{suffix}",
-        status=enums.TournamentStatus.REGISTRATION,
+        status=enums.TournamentStatus.LIVE,
         team_formation="registration",
     )
     session.add(tournament)

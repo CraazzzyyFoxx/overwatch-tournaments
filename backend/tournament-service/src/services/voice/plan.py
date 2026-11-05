@@ -15,6 +15,7 @@ from shared import models
 from shared.core import enums
 from shared.core import http_status as status
 from shared.core.errors import BaseAPIException as HTTPException
+from shared.core.tournament_state import FINISHED_STATUSES
 from shared.repository import WorkspaceMemberRepository
 from shared.schemas.voice import VoicePlan, VoicePlanChannel, VoicePlanWarning
 from shared.services.flow_queries import stage_node_status
@@ -25,7 +26,7 @@ __all__ = ("build_voice_plan",)
 _members = WorkspaceMemberRepository()
 
 #: ``Tournament.status`` after which nothing may exist.
-_FINISHED = (enums.TournamentStatus.COMPLETED, enums.TournamentStatus.ARCHIVED)
+_FINISHED = FINISHED_STATUSES
 _LIVE = enums.FlowNodeStatus.LIVE
 _COMPLETED = enums.FlowNodeStatus.COMPLETED
 _NO_DISCORD = "player_without_discord"

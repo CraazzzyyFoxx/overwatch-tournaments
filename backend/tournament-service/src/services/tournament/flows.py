@@ -9,13 +9,13 @@ from shared import models
 from shared.core import enums, errors, pagination
 from shared.core.enums import FlowNodeKind
 from shared.core.flow_state import LIFECYCLE_KINDS
-from shared.core.tournament_state import IN_PLAY_STATUSES
 from shared.division_grid import DivisionGrid
 from shared.models.identity.auth_user import AuthUser
 from shared.services.cache_generations import versioned
 from shared.services.challonge_refs import ChallongeRef, resolve_stage_challonge, resolve_tournament_challonge
 from shared.services.division_grid.normalization import DivisionGridNormalizationError, DivisionGridNormalizer
 from shared.services.team_format import tournament_shape_reads
+from shared.services.tournament.in_play import TOURNAMENT_IN_PLAY
 from shared.services.tournament.visibility import visible_tournaments_predicate
 from src import schemas
 from src.core import config
@@ -235,10 +235,6 @@ class TournamentFlowsService:
             discord_dms_enabled=tournament.discord_dms_enabled,
             logs_official=tournament.logs_official,
             pov_stream_delay_s=tournament.pov_stream_delay_s,
-            phase_schedule=[
-                schemas.TournamentPhaseScheduleRead.model_validate(row, from_attributes=True)
-                for row in _loaded_relationship(tournament, "phase_schedule") or []
-            ],
             division_grid_version_id=tournament.division_grid_version_id,
             division_grid_version=division_grid_version,
             discipline=tournament.discipline,
@@ -421,7 +417,7 @@ class TournamentFlowsService:
             await session.execute(
                 sa.select(
                     sa.func.count(models.Tournament.id),
-                    sa.func.count(models.Tournament.id).filter(models.Tournament.status.in_(IN_PLAY_STATUSES)),
+                    sa.func.count(models.Tournament.id).filter(TOURNAMENT_IN_PLAY),
                 ).where(*scope)
             )
         ).one()

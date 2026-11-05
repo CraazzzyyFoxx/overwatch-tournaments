@@ -23,7 +23,6 @@ from __future__ import annotations
 import asyncio
 import sys
 import uuid
-from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -45,7 +44,7 @@ from shared.models.registration.registration import (  # noqa: E402
     RegistrationFormVersion,
 )
 from shared.models.tenancy.workspace import Workspace  # noqa: E402
-from shared.models.tournament import Tournament, TournamentPhaseSchedule  # noqa: E402
+from shared.models.tournament import Tournament  # noqa: E402
 from shared.services.team_format import save_tournament_format  # noqa: E402
 from shared.testing.factories import registration_node  # noqa: E402
 from src.schemas.registration import RegistrationSubmit  # noqa: E402
@@ -72,7 +71,7 @@ async def _seed(session: Any) -> SimpleNamespace:
         workspace_id=workspace.id,
         name=f"Flex roster {suffix}",
         slug=f"flexros-{suffix}",
-        status=enums.TournamentStatus.REGISTRATION,
+        status=enums.TournamentStatus.LIVE,
         team_formation="registration",
     )
     session.add(tournament)
@@ -86,15 +85,6 @@ async def _seed(session: Any) -> SimpleNamespace:
             starter_min=sum(ALL_FLEX.values()),
             starter_max=sum(ALL_FLEX.values()),
         ),
-    )
-    now = datetime.now(UTC)
-    session.add(
-        TournamentPhaseSchedule(
-            tournament_id=tournament.id,
-            status=enums.TournamentStatus.REGISTRATION,
-            starts_at=now - timedelta(days=1),
-            ends_at=now + timedelta(days=1),
-        )
     )
 
     form = RegistrationForm(tournament_id=tournament.id, workspace_id=workspace.id)

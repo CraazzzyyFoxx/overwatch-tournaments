@@ -291,7 +291,7 @@ async def seed(session_factory: async_sessionmaker[AsyncSession], suffix: str) -
         s.add(ws)
         await s.flush()
         tourn = Tournament(
-            workspace_id=ws.id, name=f"T {suffix}", slug=f"t-{suffix}", status="draft", team_formation="draft"
+            workspace_id=ws.id, name=f"T {suffix}", slug=f"t-{suffix}", status="live", team_formation="draft"
         )
         s.add(tourn)
         await s.flush()

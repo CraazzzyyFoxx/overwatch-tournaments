@@ -66,7 +66,7 @@ async def _seed(session: Any) -> dict[str, Any]:
         name=f"Sheet changes {suffix}",
         slug=f"sheetchg-{suffix}",
         discipline="overwatch",
-        status=enums.TournamentStatus.REGISTRATION,
+        status=enums.TournamentStatus.LIVE,
     )
     session.add(tournament)
     await session.flush()

@@ -18,7 +18,6 @@ from __future__ import annotations
 import asyncio
 import sys
 import uuid
-from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -44,7 +43,7 @@ from shared.models.registration.registration import (  # noqa: E402
     RegistrationFormVersion,
 )
 from shared.models.tenancy.workspace import Workspace  # noqa: E402
-from shared.models.tournament import Tournament, TournamentPhaseSchedule  # noqa: E402
+from shared.models.tournament import Tournament  # noqa: E402
 from shared.services.ontology import project_disciplines  # noqa: E402
 from shared.services.social_identity import social_identity_service  # noqa: E402
 from shared.services.team_format import save_tournament_format  # noqa: E402
@@ -90,7 +89,7 @@ async def _seed(session: Any, *, discipline: str) -> SimpleNamespace:
         name=f"Owner provider {suffix}",
         slug=f"ownprov-{suffix}",
         discipline=discipline,
-        status=enums.TournamentStatus.REGISTRATION,
+        status=enums.TournamentStatus.LIVE,
         team_formation="registration",
     )
     session.add(tournament)
@@ -100,15 +99,6 @@ async def _seed(session: Any, *, discipline: str) -> SimpleNamespace:
         await session.flush()
     await save_tournament_format(
         session, tournament, TeamFormat(discipline=discipline, name="Open three", starter_min=3, starter_max=3)
-    )
-    now = datetime.now(UTC)
-    session.add(
-        TournamentPhaseSchedule(
-            tournament_id=tournament.id,
-            status=enums.TournamentStatus.REGISTRATION,
-            starts_at=now - timedelta(days=1),
-            ends_at=now + timedelta(days=1),
-        )
     )
 
     form = RegistrationForm(tournament_id=tournament.id, workspace_id=workspace.id)

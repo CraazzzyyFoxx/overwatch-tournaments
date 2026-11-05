@@ -12,7 +12,7 @@ from shared.models.platform.outbox import EventOutbox
 from shared.models.tournament import Player, Standing, Tournament
 from shared.tests.encounter_writer_case import EncounterWriterCase
 from src.domain.bracket import engine
-from src.services.admin.tournament import tournament_service
+from src.services.flow.lifecycle import flow_node_service
 from tests.test_elimination_standings import _PlayoffTableCase, _round
 
 PR = models.ParticipantResult
@@ -58,11 +58,27 @@ class CompletionTests(EncounterWriterCase):
             )
             await s.commit()
         async with self.Session() as s:
-            await tournament_service.transition_status(s, self.ids["t"], enums.TournamentStatus.COMPLETED)
-        async with self.Session() as s:
-            completed = await _placements(s, self.ids["t"])
-        async with self.Session() as s:
-            await tournament_service.toggle_finished(s, self.ids["t"])
+            stage = models.Stage(
+                tournament_id=self.ids["t"],
+                name="S",
+                stage_type=enums.StageType.ROUND_ROBIN,
+                scoring_rule_id=self.ids["rule"],
+            )
+            s.add(stage)
+            await s.flush()
+            node = models.FlowNode(
+                tournament_id=self.ids["t"], kind="stage", name="S", status="live", stage_id=stage.id, config={}
+            )
+            s.add(node)
+            await s.commit()
+            node_id = node.id
+        for target in (enums.FlowNodeStatus.COMPLETED, enums.FlowNodeStatus.LIVE):
+            async with self.Session() as s:
+                await flow_node_service.transition(s, node_id, target, actor=None)
+                await s.commit()
+            if target is enums.FlowNodeStatus.COMPLETED:
+                async with self.Session() as s:
+                    completed = await _placements(s, self.ids["t"])
         async with self.Session() as s:
             reopened = await _placements(s, self.ids["t"])
             evaluations = await _evaluations(s, self.ids["t"])

@@ -3457,7 +3457,6 @@
         }
       ],
       "tournament": {
-        "allow_late_registration": false,
         "auto_transitions_enabled": false,
         "challonge_id": null,
         "challonge_slug": null,
@@ -3481,7 +3480,6 @@
         "loss_points": 0.0,
         "name": "P4 tournament",
         "participants_count": null,
-        "phase_schedule": [],
         "registrations_count": null,
         "roster_locked_by_draft": null,
         "roster_locked_by_teams": null,
@@ -3711,7 +3709,6 @@
         }
       ],
       "tournament": {
-        "allow_late_registration": false,
         "auto_transitions_enabled": false,
         "challonge_id": null,
         "challonge_slug": null,
@@ -3735,7 +3732,6 @@
         "loss_points": 0.0,
         "name": "P4 tournament_other",
         "participants_count": null,
-        "phase_schedule": [],
         "registrations_count": null,
         "roster_locked_by_draft": null,
         "roster_locked_by_teams": null,
@@ -3962,7 +3958,6 @@
               }
             ],
             "tournament": {
-              "allow_late_registration": false,
               "auto_transitions_enabled": false,
               "challonge_id": null,
               "challonge_slug": null,
@@ -3986,7 +3981,6 @@
               "loss_points": 0.0,
               "name": "P4 tournament_other",
               "participants_count": null,
-              "phase_schedule": [],
               "registrations_count": null,
               "roster_locked_by_draft": null,
               "roster_locked_by_teams": null,
@@ -4268,7 +4262,6 @@
               }
             ],
             "tournament": {
-              "allow_late_registration": false,
               "auto_transitions_enabled": false,
               "challonge_id": null,
               "challonge_slug": null,
@@ -4292,7 +4285,6 @@
               "loss_points": 0.0,
               "name": "P4 tournament_other",
               "participants_count": null,
-              "phase_schedule": [],
               "registrations_count": null,
               "roster_locked_by_draft": null,
               "roster_locked_by_teams": null,
@@ -4836,7 +4828,6 @@
               }
             ],
             "tournament": {
-              "allow_late_registration": false,
               "auto_transitions_enabled": false,
               "challonge_id": null,
               "challonge_slug": null,
@@ -4860,7 +4851,6 @@
               "loss_points": 0.0,
               "name": "P4 tournament",
               "participants_count": null,
-              "phase_schedule": [],
               "registrations_count": null,
               "roster_locked_by_draft": null,
               "roster_locked_by_teams": null,
@@ -5020,7 +5010,6 @@
               }
             ],
             "tournament": {
-              "allow_late_registration": false,
               "auto_transitions_enabled": false,
               "challonge_id": null,
               "challonge_slug": null,
@@ -5044,7 +5033,6 @@
               "loss_points": 0.0,
               "name": "P4 tournament_career_3",
               "participants_count": null,
-              "phase_schedule": [],
               "registrations_count": null,
               "roster_locked_by_draft": null,
               "roster_locked_by_teams": null,
@@ -5204,7 +5192,6 @@
               }
             ],
             "tournament": {
-              "allow_late_registration": false,
               "auto_transitions_enabled": false,
               "challonge_id": null,
               "challonge_slug": null,
@@ -5228,7 +5215,6 @@
               "loss_points": 0.0,
               "name": "P4 tournament_career_2",
               "participants_count": null,
-              "phase_schedule": [],
               "registrations_count": null,
               "roster_locked_by_draft": null,
               "roster_locked_by_teams": null,
@@ -5903,7 +5889,6 @@
               }
             ],
             "tournament": {
-              "allow_late_registration": false,
               "auto_transitions_enabled": false,
               "challonge_id": null,
               "challonge_slug": null,
@@ -5927,7 +5912,6 @@
               "loss_points": 0.0,
               "name": "P4 tournament",
               "participants_count": null,
-              "phase_schedule": [],
               "registrations_count": null,
               "roster_locked_by_draft": null,
               "roster_locked_by_teams": null,
@@ -6087,7 +6071,6 @@
               }
             ],
             "tournament": {
-              "allow_late_registration": false,
               "auto_transitions_enabled": false,
               "challonge_id": null,
               "challonge_slug": null,
@@ -6111,7 +6094,6 @@
               "loss_points": 0.0,
               "name": "P4 tournament_career_3",
               "participants_count": null,
-              "phase_schedule": [],
               "registrations_count": null,
               "roster_locked_by_draft": null,
               "roster_locked_by_teams": null,
@@ -6271,7 +6253,6 @@
               }
             ],
             "tournament": {
-              "allow_late_registration": false,
               "auto_transitions_enabled": false,
               "challonge_id": null,
               "challonge_slug": null,
@@ -6295,7 +6276,6 @@
               "loss_points": 0.0,
               "name": "P4 tournament_career_2",
               "participants_count": null,
-              "phase_schedule": [],
               "registrations_count": null,
               "roster_locked_by_draft": null,
               "roster_locked_by_teams": null,
@@ -6455,7 +6435,6 @@
               }
             ],
             "tournament": {
-              "allow_late_registration": false,
               "auto_transitions_enabled": false,
               "challonge_id": null,
               "challonge_slug": null,
@@ -6479,7 +6458,6 @@
               "loss_points": 0.0,
               "name": "P4 tournament_career_1",
               "participants_count": null,
-              "phase_schedule": [],
               "registrations_count": null,
               "roster_locked_by_draft": null,
               "roster_locked_by_teams": null,
@@ -7281,7 +7259,6 @@
             }
           ],
           "tournament": {
-            "allow_late_registration": false,
             "auto_transitions_enabled": false,
             "challonge_id": null,
             "challonge_slug": null,
@@ -7305,7 +7282,6 @@
             "loss_points": 0.0,
             "name": "P4 tournament_other",
             "participants_count": null,
-            "phase_schedule": [],
             "registrations_count": null,
             "roster_locked_by_draft": null,
             "roster_locked_by_teams": null,
@@ -8263,7 +8239,6 @@
             }
           ],
           "tournament": {
-            "allow_late_registration": false,
             "auto_transitions_enabled": false,
             "challonge_id": null,
             "challonge_slug": null,
@@ -8287,7 +8262,6 @@
             "loss_points": 0.0,
             "name": "P4 tournament_career_1",
             "participants_count": null,
-            "phase_schedule": [],
             "registrations_count": null,
             "roster_locked_by_draft": null,
             "roster_locked_by_teams": null,
@@ -8561,7 +8535,6 @@
             }
           ],
           "tournament": {
-            "allow_late_registration": false,
             "auto_transitions_enabled": false,
             "challonge_id": null,
             "challonge_slug": null,
@@ -8585,7 +8558,6 @@
             "loss_points": 0.0,
             "name": "P4 tournament_career_2",
             "participants_count": null,
-            "phase_schedule": [],
             "registrations_count": null,
             "roster_locked_by_draft": null,
             "roster_locked_by_teams": null,
@@ -8859,7 +8831,6 @@
             }
           ],
           "tournament": {
-            "allow_late_registration": false,
             "auto_transitions_enabled": false,
             "challonge_id": null,
             "challonge_slug": null,
@@ -8883,7 +8854,6 @@
             "loss_points": 0.0,
             "name": "P4 tournament_career_3",
             "participants_count": null,
-            "phase_schedule": [],
             "registrations_count": null,
             "roster_locked_by_draft": null,
             "roster_locked_by_teams": null,
@@ -10297,7 +10267,6 @@
             }
           ],
           "tournament": {
-            "allow_late_registration": false,
             "auto_transitions_enabled": false,
             "challonge_id": null,
             "challonge_slug": null,
@@ -10321,7 +10290,6 @@
             "loss_points": 0.0,
             "name": "P4 tournament",
             "participants_count": null,
-            "phase_schedule": [],
             "registrations_count": null,
             "roster_locked_by_draft": null,
             "roster_locked_by_teams": null,
@@ -10573,7 +10541,6 @@
           }
         ],
         "tournament": {
-          "allow_late_registration": false,
           "auto_transitions_enabled": false,
           "challonge_id": null,
           "challonge_slug": null,
@@ -10597,7 +10564,6 @@
           "loss_points": 0.0,
           "name": "P4 tournament",
           "participants_count": null,
-          "phase_schedule": [],
           "registrations_count": null,
           "roster_locked_by_draft": null,
           "roster_locked_by_teams": null,
@@ -10805,7 +10771,6 @@
           }
         ],
         "tournament": {
-          "allow_late_registration": false,
           "auto_transitions_enabled": false,
           "challonge_id": null,
           "challonge_slug": null,
@@ -10829,7 +10794,6 @@
           "loss_points": 0.0,
           "name": "P4 tournament",
           "participants_count": null,
-          "phase_schedule": [],
           "registrations_count": null,
           "roster_locked_by_draft": null,
           "roster_locked_by_teams": null,
@@ -11037,7 +11001,6 @@
           }
         ],
         "tournament": {
-          "allow_late_registration": false,
           "auto_transitions_enabled": false,
           "challonge_id": null,
           "challonge_slug": null,
@@ -11061,7 +11024,6 @@
           "loss_points": 0.0,
           "name": "P4 tournament_other",
           "participants_count": null,
-          "phase_schedule": [],
           "registrations_count": null,
           "roster_locked_by_draft": null,
           "roster_locked_by_teams": null,
@@ -11227,7 +11189,6 @@
           }
         ],
         "tournament": {
-          "allow_late_registration": false,
           "auto_transitions_enabled": false,
           "challonge_id": null,
           "challonge_slug": null,
@@ -11251,7 +11212,6 @@
           "loss_points": 0.0,
           "name": "P4 tournament",
           "participants_count": null,
-          "phase_schedule": [],
           "registrations_count": null,
           "roster_locked_by_draft": null,
           "roster_locked_by_teams": null,
@@ -11461,7 +11421,6 @@
           }
         ],
         "tournament": {
-          "allow_late_registration": false,
           "auto_transitions_enabled": false,
           "challonge_id": null,
           "challonge_slug": null,
@@ -11485,7 +11444,6 @@
           "loss_points": 0.0,
           "name": "P4 tournament",
           "participants_count": null,
-          "phase_schedule": [],
           "registrations_count": null,
           "roster_locked_by_draft": null,
           "roster_locked_by_teams": null,
@@ -12249,7 +12207,6 @@
           }
         ],
         "tournament": {
-          "allow_late_registration": false,
           "auto_transitions_enabled": false,
           "challonge_id": null,
           "challonge_slug": null,
@@ -12273,7 +12230,6 @@
           "loss_points": 0.0,
           "name": "P4 tournament",
           "participants_count": null,
-          "phase_schedule": [],
           "registrations_count": null,
           "roster_locked_by_draft": null,
           "roster_locked_by_teams": null,
@@ -12396,7 +12352,6 @@
           }
         ],
         "tournament": {
-          "allow_late_registration": false,
           "auto_transitions_enabled": false,
           "challonge_id": null,
           "challonge_slug": null,
@@ -12420,7 +12375,6 @@
           "loss_points": 0.0,
           "name": "P4 tournament_other",
           "participants_count": null,
-          "phase_schedule": [],
           "registrations_count": null,
           "roster_locked_by_draft": null,
           "roster_locked_by_teams": null,
@@ -12955,7 +12909,6 @@
           }
         ],
         "tournament": {
-          "allow_late_registration": false,
           "auto_transitions_enabled": false,
           "challonge_id": null,
           "challonge_slug": null,
@@ -12979,7 +12932,6 @@
           "loss_points": 0.0,
           "name": "P4 tournament",
           "participants_count": null,
-          "phase_schedule": [],
           "registrations_count": null,
           "roster_locked_by_draft": null,
           "roster_locked_by_teams": null,
@@ -14025,7 +13977,6 @@
               }
             ],
             "tournament": {
-              "allow_late_registration": false,
               "auto_transitions_enabled": false,
               "challonge_id": null,
               "challonge_slug": null,
@@ -14049,7 +14000,6 @@
               "loss_points": 0.0,
               "name": "P4 tournament_other",
               "participants_count": null,
-              "phase_schedule": [],
               "registrations_count": null,
               "roster_locked_by_draft": null,
               "roster_locked_by_teams": null,
@@ -15090,7 +15040,6 @@
               }
             ],
             "tournament": {
-              "allow_late_registration": false,
               "auto_transitions_enabled": false,
               "challonge_id": null,
               "challonge_slug": null,
@@ -15114,7 +15063,6 @@
               "loss_points": 0.0,
               "name": "P4 tournament_career_1",
               "participants_count": null,
-              "phase_schedule": [],
               "registrations_count": null,
               "roster_locked_by_draft": null,
               "roster_locked_by_teams": null,
@@ -15280,7 +15228,6 @@
               }
             ],
             "tournament": {
-              "allow_late_registration": false,
               "auto_transitions_enabled": false,
               "challonge_id": null,
               "challonge_slug": null,
@@ -15304,7 +15251,6 @@
               "loss_points": 0.0,
               "name": "P4 tournament_career_2",
               "participants_count": null,
-              "phase_schedule": [],
               "registrations_count": null,
               "roster_locked_by_draft": null,
               "roster_locked_by_teams": null,
@@ -15528,7 +15474,6 @@
               }
             ],
             "tournament": {
-              "allow_late_registration": false,
               "auto_transitions_enabled": false,
               "challonge_id": null,
               "challonge_slug": null,
@@ -15552,7 +15497,6 @@
               "loss_points": 0.0,
               "name": "P4 tournament_career_3",
               "participants_count": null,
-              "phase_schedule": [],
               "registrations_count": null,
               "roster_locked_by_draft": null,
               "roster_locked_by_teams": null,
@@ -15718,7 +15662,6 @@
               }
             ],
             "tournament": {
-              "allow_late_registration": false,
               "auto_transitions_enabled": false,
               "challonge_id": null,
               "challonge_slug": null,
@@ -15742,7 +15685,6 @@
               "loss_points": 0.0,
               "name": "P4 tournament",
               "participants_count": null,
-              "phase_schedule": [],
               "registrations_count": null,
               "roster_locked_by_draft": null,
               "roster_locked_by_teams": null,

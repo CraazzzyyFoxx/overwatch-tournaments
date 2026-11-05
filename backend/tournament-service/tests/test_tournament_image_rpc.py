@@ -98,7 +98,7 @@ def _tournament_read(*, cover_image_url: str | None, logo_url: str | None) -> ob
         challonge_slug=None,
         is_league=False,
         is_finished=False,
-        status="registration",
+        status="live",
         start_date=now,
         end_date=now,
         cover_image_url=cover_image_url,
