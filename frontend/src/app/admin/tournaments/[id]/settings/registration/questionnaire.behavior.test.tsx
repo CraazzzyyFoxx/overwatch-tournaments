@@ -297,7 +297,6 @@ beforeEach(() => {
     max_substitutes: 0,
     subscription_scope: "player",
     subscription_stage: "check_in",
-    require_subscription: false,
     team_rank_min: null,
     team_rank_max: null,
     team_max_rank_spread: null,

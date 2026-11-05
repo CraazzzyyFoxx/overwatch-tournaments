@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { slotCodesOf } from "@/lib/roster/shape";
-import { isRegistrationOpen } from "@/lib/tournament/status";
+import { isSignUpOpen, nodesOfKind } from "@/lib/tournament/flow-nodes";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import { tournamentMyRegistrationQueryOptions } from "@/lib/tournament/registrations-query";
 import registrationService from "@/services/registration.service";
@@ -42,7 +42,9 @@ export default function TeamRegistrationEntry({
   const isAuthenticated = authStatus === "authenticated" && user != null;
   const [open, setOpen] = useState(false);
 
-  const registrationOpen = isRegistrationOpen(tournament);
+  const registrationOpen = isSignUpOpen(
+    nodesOfKind(tournament, "registration").find((node) => node.id === registrationNodeId),
+  );
 
   const myRegQuery = useQuery({
     ...tournamentMyRegistrationQueryOptions(tournament),

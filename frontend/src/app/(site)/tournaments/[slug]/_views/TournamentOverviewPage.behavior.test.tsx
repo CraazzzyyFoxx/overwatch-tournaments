@@ -221,7 +221,6 @@ function makeTournament(status: TournamentStatus, overrides: Partial<Tournament>
     ],
     status,
     auto_transitions_enabled: true,
-    allow_late_registration: false,
     phase_schedule: PHASE_SCHEDULE,
     stages: [makeStage({ id: 7 })],
     participants_count: 20,

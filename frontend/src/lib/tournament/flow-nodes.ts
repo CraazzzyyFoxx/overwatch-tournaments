@@ -31,3 +31,80 @@ export function currentRegistrationNode(
     null
   );
 }
+
+/** The registration node's intake settings, as `RegistrationNodeConfig` (backend) stores them; absent keys read as its defaults. */
+export interface RegistrationNodeConfig {
+  check_in: boolean;
+  intake: "solo" | "team";
+  auto_approve: boolean;
+  /** Advisory capacity, never a limit. */
+  max_participants: number | null;
+  max_substitutes: number;
+  require_subscription: boolean;
+  subscription_stage: "registration" | "check_in";
+  subscription_scope: "player" | "team";
+  team_rank_min: number | null;
+  team_rank_max: number | null;
+  team_max_rank_spread: number | null;
+  team_unique_identity: boolean;
+  team_require_discord_guild: boolean;
+  allow_late_registration: boolean;
+}
+
+/** A registration node's config with the backend defaults filled in; the defaults for no node at all. */
+export function registrationNodeConfig(node: Pick<TournamentFlowNode, "config"> | null | undefined): RegistrationNodeConfig {
+  return {
+    check_in: false,
+    intake: "solo",
+    auto_approve: false,
+    max_participants: null,
+    max_substitutes: 0,
+    require_subscription: false,
+    subscription_stage: "check_in",
+    subscription_scope: "player",
+    team_rank_min: null,
+    team_rank_max: null,
+    team_max_rank_spread: null,
+    team_unique_identity: false,
+    team_require_discord_guild: false,
+    allow_late_registration: false,
+    ...(node?.config as Partial<RegistrationNodeConfig> | undefined)
+  };
+}
+
+function scheduleRow(node: Pick<TournamentFlowNode, "schedule">, phase: "open" | "check_in") {
+  return node.schedule.find((entry) => entry.phase === phase);
+}
+
+/**
+ * Mirrors `shared.services.registration_window.is_sign_up_open`: the node is `open` and inside its `open` row (no row:
+ * the status decides), or in `check_in` with `allow_late_registration`, which lifts the row's `ends_at` and nothing else.
+ * The client only decides whether to render the register button, so it must agree with the server.
+ */
+export function isSignUpOpen(node: TournamentFlowNode | null | undefined, now: number = Date.now()): boolean {
+  if (!node) return false;
+  const allowLate = registrationNodeConfig(node).allow_late_registration;
+  if (node.status === "check_in") return allowLate;
+  if (node.status !== "open") return false;
+  const row = scheduleRow(node, "open");
+  if (!row) return true;
+  if (new Date(row.starts_at).getTime() > now) return false;
+  return row.ends_at == null || allowLate || now <= new Date(row.ends_at).getTime();
+}
+
+/** Mirrors `is_sign_up_late`: a sign-up now is only possible past the announced closing time (it is written as a reserve). */
+export function isSignUpLate(node: TournamentFlowNode | null | undefined, now: number = Date.now()): boolean {
+  if (!node) return false;
+  if (node.status === "check_in") return true;
+  const row = scheduleRow(node, "open");
+  if (node.status !== "open" || !row?.ends_at) return false;
+  return new Date(row.starts_at).getTime() <= now && now > new Date(row.ends_at).getTime();
+}
+
+/** Mirrors `is_check_in_open`: the node is in `check_in` and inside its `check_in` row (no row: the status decides). */
+export function isCheckInOpen(node: TournamentFlowNode | null | undefined, now: number = Date.now()): boolean {
+  if (node?.status !== "check_in") return false;
+  const row = scheduleRow(node, "check_in");
+  if (!row) return true;
+  return new Date(row.starts_at).getTime() <= now && (row.ends_at == null || now <= new Date(row.ends_at).getTime());
+}

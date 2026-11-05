@@ -344,29 +344,12 @@ export interface AdminRegistrationForm {
   id: number;
   tournament_id: number;
   workspace_id: number;
-  is_open: boolean;
-  auto_approve: boolean;
   require_open_profile?: boolean;
   open_profile_scope?: "main" | "all";
   show_ranks?: boolean;
   /** Collapses the public participants list to a count + role distribution.
    *  Enforced server-side; the organizer's own roster is this admin table. */
   hide_registrations?: boolean;
-  /** Advisory capacity shown next to the count. Never enforced — a registration
-   *  past it is still accepted. */
-  max_participants?: number | null;
-  /** Extra ``is_substitute`` members per team. 0 disables the bench. */
-  max_substitutes?: number;
-  subscription_scope?: "player" | "team";
-  team_rank_min?: number | null;
-  team_rank_max?: number | null;
-  team_max_rank_spread?: number | null;
-  team_unique_identity?: boolean;
-  team_require_discord_guild?: boolean;
-  require_subscription?: boolean;
-  /** WHEN the requirement blocks: `registration` refuses sign-up too, `check_in`
-   *  (the default) only refuses at check-in. Ordered — `registration` implies both. */
-  subscription_stage?: "registration" | "check_in";
   /** Server-resolved from the workspace requirement and read-only: the rule now
    *  lives on the workspace, so the upsert below deliberately has no counterpart.
    *  Still returned because the check-in dialog renders the composed rule. */
@@ -382,25 +365,12 @@ export interface AdminRegistrationForm {
 }
 
 export interface AdminRegistrationFormUpsert {
-  // No `is_open`: registration openness is the tournament's REGISTRATION
-  // phase-schedule window, so the form cannot set it. The server ignores the
-  // field if a stale client still sends it.
-  auto_approve: boolean;
+  // The intake settings live in the registration node's config, so the form carries none of them. The server ignores
+  // them if a stale client still sends them.
   require_open_profile?: boolean;
   open_profile_scope?: "main" | "all";
   show_ranks?: boolean;
   hide_registrations?: boolean;
-  max_participants?: number | null;
-  /** Extra is_substitute members per team. 0 disables the bench. */
-  max_substitutes?: number;
-  subscription_scope?: "player" | "team";
-  team_rank_min?: number | null;
-  team_rank_max?: number | null;
-  team_max_rank_spread?: number | null;
-  team_unique_identity?: boolean;
-  team_require_discord_guild?: boolean;
-  require_subscription?: boolean;
-  subscription_stage?: "registration" | "check_in";
   form_schema: FormSchema;
 }
 

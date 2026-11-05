@@ -1,5 +1,5 @@
 import { reachedAtLeast } from "@/lib/tournament/lifecycle";
-import type { Tournament, TournamentStatus } from "@/types/tournament.types";
+import type { TournamentStatus } from "@/types/tournament.types";
 
 // Display text is `common.statusBadge.<status>` in the message catalogs, never here.
 type TournamentStatusMeta = {
@@ -112,57 +112,6 @@ export const TOURNAMENT_STATUS_ORDER: TournamentStatus[] = [
   "archived",
   "draft"
 ];
-
-/**
- * True when the tournament currently sits in `status` and `now` falls inside
- * that phase's schedule row window. A missing row or a `null` ends_at means
- * the window spans the whole phase.
- */
-export function isPhaseWindowActive(
-  tournament: Pick<Tournament, "status" | "phase_schedule">,
-  status: TournamentStatus,
-  now: number = Date.now()
-) {
-  if (tournament.status !== status) return false;
-
-  const row = tournament.phase_schedule?.find((entry) => entry.status === status);
-  if (!row) return true;
-
-  const startsAt = new Date(row.starts_at).getTime();
-  const endsAt = row.ends_at ? new Date(row.ends_at).getTime() : null;
-  return startsAt <= now && (endsAt === null || now <= endsAt);
-}
-
-/**
- * Mirrors the backend registration gate (`shared.services.registration_window`):
- * the REGISTRATION phase window plus one override.
- *
- * A MISSING row means closed — deliberately the opposite of
- * `isPhaseWindowActive` above, whose "no row spans the whole phase" rule stays
- * as-is for check-in. The tournament's own phase does not participate: an
- * `ends_at` reaching past the LIVE start keeps registration open by itself.
- *
- * `allow_late_registration` lifts `ends_at` and NOTHING else — it cannot open a
- * tournament with no row, one whose window has not started, or a finished one.
- * Keep this in lockstep with the backend predicate: this function only decides
- * whether to render the register button, and a client that disagrees with the
- * server either hides a working button or offers one that 400s.
- */
-export function isRegistrationOpen(
-  tournament: Pick<Tournament, "status" | "phase_schedule" | "allow_late_registration">,
-  now: number = Date.now()
-) {
-  if (tournament.status === "completed" || tournament.status === "archived") return false;
-
-  const row = tournament.phase_schedule?.find((entry) => entry.status === "registration");
-  if (!row) return false;
-
-  const startsAt = new Date(row.starts_at).getTime();
-  if (startsAt > now) return false;
-
-  const endsAt = row.ends_at ? new Date(row.ends_at).getTime() : null;
-  return endsAt === null || tournament.allow_late_registration === true || now <= endsAt;
-}
 
 /**
  * Whether the tournament's streams belong on screen at all.

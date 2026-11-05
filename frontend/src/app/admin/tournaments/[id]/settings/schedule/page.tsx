@@ -137,25 +137,6 @@ function ScheduleForm({
               onCheckedChange={(checked) => patch({ auto_transitions_enabled: checked })}
             />
           </SettingRow>
-          <SettingRow
-            htmlFor="settings-allow-late-registration"
-            label={t("late")}
-            hint={
-              <>
-                {t("lateHint")}
-                {!form.phase_schedule.registration.ends_at && (
-                  <span className="mt-0.5 block text-warning">{t("noEnd")}</span>
-                )}
-              </>
-            }
-          >
-            <Switch
-              id="settings-allow-late-registration"
-              checked={form.allow_late_registration}
-              disabled={disabled}
-              onCheckedChange={(checked) => patch({ allow_late_registration: checked })}
-            />
-          </SettingRow>
         </SettingGroup>
       </div>
 

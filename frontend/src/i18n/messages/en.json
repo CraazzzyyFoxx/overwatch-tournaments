@@ -535,7 +535,8 @@
     "button": {
       "closed": "Registration closed",
       "loginToRegister": "Login to register",
-      "register": "Register"
+      "register": "Register",
+      "registerFor": "Register for {node}"
     },
     "myCard": {
       "title": "Your Registration",
@@ -7831,6 +7832,9 @@
         "maxParticipants": "Announced capacity",
         "maxParticipantsHint": "Shown next to the participant count as \"42 / 100\". Informational only. It is not a limit, and registrations past it are still accepted. Leave empty to show nothing."
       },
+      "capacity": {
+        "title": "Capacity"
+      },
       "questionnaire": {
         "title": "Questionnaire"
       },
@@ -7876,10 +7880,13 @@
     "status": {
       "title": "Registration status",
       "acceptLabel": "Accepting registrations",
-      "scheduleHint": "Set by the Registration window on Schedule.",
+      "scheduleHint": "Set by this registration node's status and sign-up window.",
       "stateOpen": "Open",
       "autoApproveLabel": "Auto-approve",
-      "autoApproveHint": "Skip manual review. Registrations are approved instantly and players are added to the pool automatically."
+      "autoApproveHint": "Skip manual review. Registrations are approved instantly and players are added to the pool automatically.",
+      "late": "Allow late registration",
+      "lateHint": "Keeps sign-ups open past the sign-up window's end time, so the advertised closing date stays on the page. Does not open registration that never started, and never reopens a finished tournament.",
+      "noEnd": "No end time is set on this node's sign-up window, so registration is already open-ended and this changes nothing."
     }
   },
   "subscriptionRequirement": {
@@ -8337,10 +8344,10 @@
       "registration": {
         "approved": "Your registration for <b>{tournament_name}</b> was approved",
         "rejected": "Your registration for <b>{tournament_name}</b> was rejected",
-        "opened": "Registration for <b>{tournament_name}</b> is open{closes_at, select, none {} other { until {closes_at}}}"
+        "opened": "Registration for <b>{tournament_name}</b>{node_name, select, none {} other { ({node_name})}} is open{closes_at, select, none {} other { until {closes_at}}}"
       },
       "check_in": {
-        "opened": "Check-in for <b>{tournament_name}</b> is open{closes_at, select, none {} other { until {closes_at}}} — confirm you are playing"
+        "opened": "Check-in for <b>{tournament_name}</b>{node_name, select, none {} other { ({node_name})}} is open{closes_at, select, none {} other { until {closes_at}}} — confirm you are playing"
       },
       "encounter": {
         "report_disputed": "{map_index, plural, =0 {A report in your match is disputed} other {The report for map # of your match is disputed}}",
@@ -10680,9 +10687,6 @@
       "automation": "Automation",
       "automatic": "Automatic phase transitions",
       "automaticHint": "Re-enabling immediately catches up any overdue phases. Manual status changes switch this off.",
-      "late": "Allow late registration",
-      "lateHint": "Keeps sign-ups open past the registration window's end time, so the advertised closing date stays on the page. Does not open registration that never started, and never reopens a finished tournament.",
-      "noEnd": "No end time is set on the registration window above, so registration is already open-ended and this changes nothing.",
       "phaseStartsAt": "{phase} starts at",
       "phaseStartTime": "{phase} start time",
       "phaseEndsAt": "{phase} ends at (optional)",

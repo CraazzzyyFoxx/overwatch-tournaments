@@ -31,8 +31,7 @@ import {
 } from "@/components/ui/select";
 import { getApiErrorMessage } from "@/lib/api/error";
 import { formatAdmissionRefusal } from "@/lib/registration/admission";
-import { isPhaseWindowActive } from "@/lib/tournament/status";
-import { currentRegistrationNode } from "@/lib/tournament/flow-nodes";
+import { currentRegistrationNode, isCheckInOpen, registrationNodeConfig } from "@/lib/tournament/flow-nodes";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import {
   tournamentMyRegistrationQueryOptions,
@@ -116,7 +115,9 @@ function TournamentParticipantsView({ tournament }: Readonly<{ tournament: Tourn
 
   const isAuthenticated = authStatus === "authenticated" && user !== null;
 
-  const registrationNodeId = currentRegistrationNode(tournament)?.id ?? null;
+  const registrationNode = currentRegistrationNode(tournament);
+  const registrationNodeId = registrationNode?.id ?? null;
+  const requireSubscription = registrationNodeConfig(registrationNode).require_subscription;
 
   const myRegQuery = useQuery({
     ...tournamentMyRegistrationQueryOptions(tournament),
@@ -184,7 +185,7 @@ function TournamentParticipantsView({ tournament }: Readonly<{ tournament: Tourn
     Boolean(myRegistration) &&
     myRegistration?.status === "approved" &&
     myRegistration.checked_in !== true &&
-    isPhaseWindowActive(tournament, "check_in");
+    isCheckInOpen(registrationNode);
 
   // The check-in window is open and this player still has to confirm: open the
   // dialog for them rather than trusting they will find the button. `claimCheckInPrompt`
@@ -226,9 +227,10 @@ function TournamentParticipantsView({ tournament }: Readonly<{ tournament: Tourn
         { discipline: tournament.discipline, identityProvider, ontology },
         divisionGrid,
         heroesMap,
-        hasTeams
+        hasTeams,
+        requireSubscription
       ),
-    [form, t, tournament.discipline, identityProvider, ontology, divisionGrid, heroesMap, hasTeams]
+    [form, t, tournament.discipline, identityProvider, ontology, divisionGrid, heroesMap, hasTeams, requireSubscription]
   );
   const allColumns = useMemo(
     () =>
@@ -602,7 +604,8 @@ function TournamentParticipantsView({ tournament }: Readonly<{ tournament: Tourn
           <CheckInSubscriptionProof
             tournamentId={tournament.id}
             requirement={form?.subscription_requirement_json}
-            active={isCheckInDialogOpen && form?.require_subscription === true}
+            registrationNodeId={registrationNodeId}
+            active={isCheckInDialogOpen && requireSubscription}
           />
           {checkInMutation.isError && (
             <p role="alert" className="text-sm text-[color:var(--aqt-rose)]">

@@ -150,7 +150,6 @@ function makeTournament(
     team_formation: teamFormation,
     status,
     auto_transitions_enabled: true,
-    allow_late_registration: false,
     flow_nodes: [
       { id: 21, kind: "registration", name: "Registration", status: "open", config: {}, schedule: [], stage_id: null }
     ],
@@ -165,6 +164,11 @@ function makeTournament(
     roster_shape: rosterShape,
     roster_locked_by_draft: null
   };
+}
+
+/** The subscription rule is the registration node's setting, not the form's. */
+function requiringSubscription(base: Tournament): Tournament {
+  return { ...base, flow_nodes: base.flow_nodes.map((node) => ({ ...node, config: { require_subscription: true } })) };
 }
 
 function role(
@@ -234,9 +238,7 @@ function makeForm(overrides: Partial<RegistrationForm> = {}): RegistrationForm {
     id: 9,
     tournament_id: TOURNAMENT_ID,
     workspace_id: 3,
-    is_open: false,
     require_open_profile: false,
-    require_subscription: false,
     // Explicit: an empty schema means "this form asks nothing", which would
     // leave the gated `public_notes`/`identity_battlenet_extras` columns out
     // for an unrelated reason.
@@ -459,8 +461,7 @@ describe("participants pool", () => {
   });
 
   it("keeps organizer-only columns out of the config without the grant", async () => {
-    tournament = makeTournament("registration", "check_in", null);
-    getForm.mockResolvedValue(makeForm({ require_subscription: true }));
+    tournament = requiringSubscription(makeTournament("registration", "check_in", null));
     await mount();
 
     const columns = (
@@ -479,8 +480,7 @@ describe("participants pool", () => {
 
   it("restores organizer-only columns for a reader who may see them", async () => {
     canReadOrganizerColumns = true;
-    tournament = makeTournament("registration", "check_in", null);
-    getForm.mockResolvedValue(makeForm({ require_subscription: true }));
+    tournament = requiringSubscription(makeTournament("registration", "check_in", null));
     await mount();
 
     const columns = (

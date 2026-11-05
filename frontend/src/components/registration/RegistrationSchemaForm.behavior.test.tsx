@@ -53,6 +53,9 @@ vi.mock("@/components/ui/popover", () => ({
 vi.mock("@/services/registration.service", () => ({
   default: { getMySubscriptionStatus: async () => ({ required: false, verdicts: {} }) },
 }));
+// The registration node the form reads its sign-up window from rides on the public tournament read.
+const getPublicOverview = vi.fn(async () => ({ flow_nodes: [] as unknown[] }));
+vi.mock("@/services/tournament.service", () => ({ default: { getPublicOverview: () => getPublicOverview() } }));
 vi.mock("@/services/rbac.service", () => ({
   rbacService: { listOAuthConnections: async () => ({ results: [] }) },
 }));
@@ -123,7 +126,6 @@ const FORM = {
   id: 1,
   tournament_id: 7,
   workspace_id: 3,
-  is_open: true,
   form_schema: SCHEMA,
   discipline: "overwatch",
   version_id: 42,
@@ -376,11 +378,19 @@ describe("RegistrationSchemaForm editing an existing registration", () => {
 });
 
 describe("RegistrationSchemaForm on a late sign-up", () => {
-  /** The window's `ends_at` is behind us; `allow_late_registration` is the only
+  /** The node's sign-up window ended an hour ago; `allow_late_registration` is the only
    *  reason this form is open, so the entry is marked as a late one. */
+  const nodeWith = (endsAt: number) => ({
+    id: 21,
+    kind: "registration",
+    name: "Registration",
+    status: "open",
+    config: { allow_late_registration: true },
+    stage_id: null,
+    schedule: [{ phase: "open", starts_at: new Date(endsAt - 86_400_000).toISOString(), ends_at: new Date(endsAt).toISOString() }]
+  });
   const LATE_FORM = {
     ...FORM,
-    registration_late: true,
     form_schema: {
       schema_version: 1,
       sections: [
@@ -401,13 +411,18 @@ describe("RegistrationSchemaForm on a late sign-up", () => {
     // and the `reserve` question stays theirs, untouched and unticked.
     testWindow.localStorage.clear();
     let submitted: { answers: Record<string, unknown> } | null = null;
+    getPublicOverview.mockResolvedValueOnce({ flow_nodes: [nodeWith(Date.now() - 3_600_000)] });
     await mountForm({
       form: LATE_FORM,
+      registrationNodeId: 21,
       onSubmit: async (input: { answers: Record<string, unknown> }) => {
         submitted = input;
       }
     });
 
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    });
     expect(container.textContent).toContain("registration.reserve.lateNotice");
 
     const buttons = container.querySelectorAll("button");
@@ -421,7 +436,11 @@ describe("RegistrationSchemaForm on a late sign-up", () => {
 
   it("says nothing while the window is still open", async () => {
     testWindow.localStorage.clear();
-    await mountForm({ form: { ...LATE_FORM, registration_late: false } as unknown as RegistrationForm });
+    getPublicOverview.mockResolvedValueOnce({ flow_nodes: [nodeWith(Date.now() + 3_600_000)] });
+    await mountForm({ form: LATE_FORM, registrationNodeId: 21 });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    });
 
     expect(container.textContent).not.toContain("registration.reserve.lateNotice");
   });

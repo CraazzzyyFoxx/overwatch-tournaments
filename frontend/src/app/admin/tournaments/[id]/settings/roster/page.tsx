@@ -18,20 +18,29 @@ import { PageStateCard } from "@/components/ui/page-state-card";
 import { tabFallback } from "../../hubQueries";
 import type { Tournament } from "@/types/tournament.types";
 import { SettingsSectionPage } from "../SettingsSection";
-import { useRegistrationFormSection } from "../useRegistrationFormSection";
+import { RegistrationNodeScope } from "../RegistrationNodeScope";
+import { useRegistrationNodeConfig } from "../useRegistrationNodeConfig";
+import type { TournamentFlowNode } from "@/types/flow.types";
 
 export default function RosterSettingsPage() {
   return (
     <SettingsSectionPage section="roster">
-      {({ tournament, tournamentId, canUpdateTournament, canTeamCreate }) => (
-        <RosterForm
-          key={`${tournament.workspace_id}:${tournament.discipline}:${tournamentId}`}
-          tournament={tournament}
-          tournamentId={tournamentId}
-          disabled={!canUpdateTournament}
-          benchDisabled={!canTeamCreate}
-        />
-      )}
+      {({ tournament, tournamentId, canUpdateTournament }) => {
+        const form = (node: TournamentFlowNode | null) => (
+          <RosterForm
+            key={`${tournament.workspace_id}:${tournament.discipline}:${tournamentId}`}
+            tournament={tournament}
+            tournamentId={tournamentId}
+            node={node}
+            disabled={!canUpdateTournament}
+          />
+        );
+        return tournament.team_formation === "registration" ? (
+          <RegistrationNodeScope tournament={tournament}>{form}</RegistrationNodeScope>
+        ) : (
+          form(null)
+        );
+      }}
     </SettingsSectionPage>
   );
 }
@@ -39,13 +48,14 @@ export default function RosterSettingsPage() {
 function RosterForm({
   tournament,
   tournamentId,
-  disabled,
-  benchDisabled
+  node,
+  disabled
 }: Readonly<{
   tournament: Tournament;
   tournamentId: number;
+  /** The registration node holding the bench size; null where there is no bench. */
+  node: TournamentFlowNode | null;
   disabled: boolean;
-  benchDisabled: boolean;
 }>) {
   const t = useTranslations("registrationFormAdmin.page");
   const formatT = useTranslations("common.roleOntology");
@@ -75,17 +85,17 @@ function RosterForm({
     }
   });
   // The bench is the second number of a squad, so it belongs beside the starter
-  // slots -- but it is stored on the registration form, not the tournament. Two
+  // slots -- but it is stored in the registration node's config, not the tournament. Two
   // endpoints, ONE save bar: a screen with two "Save" buttons makes the reader
   // guess which one owns the field they just edited.
-  const bench = useRegistrationFormSection(tournamentId);
+  const bench = useRegistrationNodeConfig(tournamentId, node);
   // Substitutes only exist where captains register a roster; on balancer or
   // draft formation there is no team to sit anyone out of.
-  const hasBench = tournament.team_formation === "registration";
+  const hasBench = node !== null;
 
   const errors = form && metadata.data ? teamFormatErrors(form, metadata.data) : ["metadata"];
   const totalError = errors.length > 0;
-  const benchDirty = hasBench && bench.dirty;
+  const benchDirty = bench.dirty;
 
   return (
     <>
@@ -97,18 +107,7 @@ function RosterForm({
       ) : tabFallback}
       {form && totalError && <p role="alert" className="text-sm text-destructive">{formatT("invalidFormat")}</p>}
 
-      {hasBench && !bench.value ? (
-        bench.error ? (
-          <PageStateCard
-            state="error"
-            title={t("loadError.title")}
-            description={bench.error.message}
-            onAction={bench.retry}
-          />
-        ) : (
-          tabFallback
-        )
-      ) : hasBench && bench.value ? (
+      {hasBench && bench.form ? (
         <SettingGroup id="bench" title={t("bench.title")} description={t("bench.description")}>
           <SettingRow
             htmlFor={`${ids}-max-substitutes`}
@@ -119,8 +118,8 @@ function RosterForm({
               id={`${ids}-max-substitutes`}
               integer
               min={0}
-              value={bench.value.max_substitutes ?? 0}
-              disabled={benchDisabled}
+              value={bench.form.max_substitutes}
+              disabled={disabled}
               onValueChange={(next) => bench.patch({ max_substitutes: next ?? 0 })}
               aria-label={t("team.maxSubstitutesAria")}
               size="sm"
@@ -139,7 +138,7 @@ function RosterForm({
                 .filter(Boolean)
                 .join(" · ")
         }
-        error={error}
+        error={error ?? bench.error}
         saving={saving || bench.saving}
         onDiscard={() => {
           discard();
@@ -148,7 +147,7 @@ function RosterForm({
         onSave={() => {
           if (totalError) return;
           if (dirty && !disabled && !tournament.roster_locked_by_draft) save();
-          if (benchDirty && !benchDisabled) bench.save();
+          if (benchDirty && !disabled) bench.save();
         }}
       />
     </>

@@ -69,9 +69,10 @@ const registrationService = {
 
   /** The caller's own subscription standing. Never forces a provider refresh, so
    *  the registration form can poll it on render. */
-  async getMySubscriptionStatus(tournamentId: number): Promise<SubscriptionStatus> {
+  async getMySubscriptionStatus(tournamentId: number, registrationNodeId: number): Promise<SubscriptionStatus> {
     const response = await apiFetch(
       `/api/v1/tournaments/${tournamentId}/subscription/me`,
+      { query: { registration_node_id: registrationNodeId } },
     );
     return response.json();
   },
@@ -80,12 +81,13 @@ const registrationService = {
    *  status so the caller does not need a second round-trip. */
   async redeemSubscriptionCode(
     tournamentId: number,
+    registrationNodeId: number,
     code: string,
     provider = "boosty",
   ): Promise<SubscriptionStatus> {
     const response = await apiFetch(
       `/api/v1/tournaments/${tournamentId}/subscription/redeem-code`,
-      { method: "POST", body: { code, provider } },
+      { method: "POST", query: { registration_node_id: registrationNodeId }, body: { code, provider } },
     );
     return response.json();
   },

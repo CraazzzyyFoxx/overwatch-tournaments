@@ -323,7 +323,6 @@ export interface TournamentUpdateInput {
   start_date?: string;
   end_date?: string;
   auto_transitions_enabled?: boolean;
-  allow_late_registration?: boolean;
   discord_broadcasts_enabled?: boolean;
   discord_dms_enabled?: boolean;
   logs_official?: boolean;

@@ -29,7 +29,6 @@ export type TournamentFormState = {
   start_date: string;
   end_date: string;
   auto_transitions_enabled: boolean;
-  allow_late_registration: boolean;
   discord_broadcasts_enabled: boolean;
   discord_dms_enabled: boolean;
   logs_official: boolean;
@@ -111,7 +110,6 @@ export function getTournamentForm(tournament: Tournament, timezone: string): Tou
     start_date: toDateInput(tournament.start_date),
     end_date: toDateInput(tournament.end_date),
     auto_transitions_enabled: tournament.auto_transitions_enabled ?? true,
-    allow_late_registration: tournament.allow_late_registration ?? false,
     discord_broadcasts_enabled: tournament.discord_broadcasts_enabled ?? true,
     discord_dms_enabled: tournament.discord_dms_enabled ?? true,
     logs_official: tournament.logs_official ?? false,
@@ -152,7 +150,6 @@ function normalizeTournamentFormValues(form: TournamentFormState): TournamentUpd
     start_date: form.start_date,
     end_date: form.end_date,
     auto_transitions_enabled: form.auto_transitions_enabled,
-    allow_late_registration: form.allow_late_registration,
     discord_broadcasts_enabled: form.discord_broadcasts_enabled,
     discord_dms_enabled: form.discord_dms_enabled,
     logs_official: form.logs_official,

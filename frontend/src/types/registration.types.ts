@@ -218,17 +218,11 @@ export interface RegistrationForm {
   workspace_id: number;
   /** The owning tournament's game: the scope of the form's roles, characters and identity provider. */
   discipline: string;
-  is_open: boolean;
   require_open_profile?: boolean;
   open_profile_scope?: "main" | "all";
   show_ranks?: boolean;
   /** The public list is served as a count + role distribution only. */
   hide_registrations?: boolean;
-  /** Informational capacity; not a limit. */
-  max_participants?: number | null;
-  require_subscription?: boolean;
-  subscription_scope?: "player" | "team";
-  subscription_stage?: "registration" | "check_in";
   /** Server-resolved from the workspace requirement and read-only — the rule no
    *  longer lives on the form. The check-in dialog renders it, so it stays on
    *  the read model. */
@@ -246,16 +240,6 @@ export interface RegistrationForm {
   /** Registrations still filed against an older version. Organizer reads only —
    *  a public read sends `null`. */
   stale_registrations?: number | null;
-  /**
-   * The registration window's `ends_at` has passed and only
-   * `allow_late_registration` keeps this form open. Everyone who signs up from
-   * now on is written as a RESERVE by the server, whatever they tick — so the
-   * wizard has to say so before the submit, not after it.
-   *
-   * Optional for the same fail-safe reason `FormField.editable` is: a payload
-   * or fixture that omits it must read as "not late", never as "closed".
-   */
-  registration_late?: boolean;
   subrole_catalog?: SubroleCatalog;
 }
 

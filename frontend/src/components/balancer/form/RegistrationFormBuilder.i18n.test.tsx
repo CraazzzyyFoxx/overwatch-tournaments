@@ -82,7 +82,6 @@ vi.mock("@/services/balancer-admin.service", () => ({
       auto_approve: false,
       require_open_profile: true,
       open_profile_scope: "all",
-      require_subscription: true,
       show_ranks: false
     }),
     upsertRegistrationForm: vi.fn()

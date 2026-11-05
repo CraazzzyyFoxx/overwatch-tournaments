@@ -101,7 +101,7 @@ async function mount(props: { active: boolean }) {
     root.render(
       <QueryClientProvider client={client}>
         <NextIntlClientProvider locale="en" messages={MESSAGES}>
-          <CheckInSubscriptionProof tournamentId={7} requirement={REQUIREMENT} {...props} />
+          <CheckInSubscriptionProof tournamentId={7} registrationNodeId={21} requirement={REQUIREMENT} {...props} />
         </NextIntlClientProvider>
       </QueryClientProvider>
     );
@@ -171,7 +171,7 @@ describe("CheckInSubscriptionProof", () => {
       redeemButton(container).click();
     });
     await flush();
-    expect(redeemSubscriptionCode).toHaveBeenCalledWith(7, "secret", "boosty");
+    expect(redeemSubscriptionCode).toHaveBeenCalledWith(7, 21, "secret", "boosty");
   });
 
   it("writes the recomposed status back, so the chip turns green in place", async () => {

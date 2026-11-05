@@ -42,7 +42,7 @@ const SETTINGS_SECTION_FIELDS = {
   // Saving the results flags must not rewrite it in the audit trail, nor the reverse.
   rules: ["rules"],
   scoring: ["is_league", "is_finished", "logs_official"],
-  schedule: ["start_date", "end_date", "auto_transitions_enabled", "allow_late_registration"],
+  schedule: ["start_date", "end_date", "auto_transitions_enabled"],
   draft: ["draft_format_json"],
   challonge: ["challonge_slug"],
   // Sits beside the stream links: the delay the rules require of a POV stream.

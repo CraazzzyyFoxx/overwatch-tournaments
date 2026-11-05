@@ -134,9 +134,16 @@ function makeTournament(status: TournamentStatus, window: { starts_at: string; e
     team_formation: "balancer",
     status,
     auto_transitions_enabled: true,
-    allow_late_registration: false,
     flow_nodes: [
-      { id: REGISTRATION_NODE_ID, kind: "registration", name: "Registration", status: "check_in", config: {}, schedule: [], stage_id: null }
+      {
+        id: REGISTRATION_NODE_ID,
+        kind: "registration",
+        name: "Registration",
+        status: status === "check_in" ? "check_in" : "open",
+        config: {},
+        schedule: [{ phase: "check_in", ...window }],
+        stage_id: null
+      }
     ],
     phase_schedule: [{ status: "check_in", ...window }],
     stages: [],
@@ -217,9 +224,7 @@ const FORM: RegistrationForm = {
   id: 9,
   tournament_id: TOURNAMENT_ID,
   workspace_id: 3,
-  is_open: false,
   require_open_profile: false,
-  require_subscription: false,
   form_schema: {
     schema_version: 1,
     sections: [
@@ -272,7 +277,7 @@ const OPEN_WINDOW = {
   starts_at: new Date(Date.now() - 3_600_000).toISOString(),
   ends_at: new Date(Date.now() + 3_600_000).toISOString()
 };
-/** Both bounds in the past: the phase is still `check_in`, the window is not. */
+/** Both bounds in the past: the node is still in `check_in`, the window is not. */
 const CLOSED_WINDOW = {
   starts_at: new Date(Date.now() - 7_200_000).toISOString(),
   ends_at: new Date(Date.now() - 3_600_000).toISOString()

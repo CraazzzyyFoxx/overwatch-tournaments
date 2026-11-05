@@ -301,7 +301,7 @@ function MyRegistrationCard({
         )
       });
       void queryClient.invalidateQueries({
-        queryKey: tournamentQueryKeys.subscriptionStatus(tournament.id)
+        queryKey: tournamentQueryKeys.subscriptionStatus(tournament.id, registration.registration_node_id)
       });
     },
     onError: (error) => {

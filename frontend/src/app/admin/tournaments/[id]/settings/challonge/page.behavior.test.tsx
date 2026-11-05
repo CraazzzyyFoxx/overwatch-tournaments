@@ -92,7 +92,6 @@ const TOURNAMENT = {
   team_formation: "balancer",
   status: "live",
   auto_transitions_enabled: true,
-  allow_late_registration: false,
   phase_schedule: [],
   stages: [],
   start_date: new Date("2026-04-18T00:00:00Z"),

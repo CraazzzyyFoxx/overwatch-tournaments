@@ -37,6 +37,7 @@ import { cn } from "@/lib/utils";
 import { useCurrentWorkspaceId } from "@/hooks/useCurrentWorkspace";
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";
 import { balancerQueryKeys } from "@/lib/balancer/query-keys";
+import { nodesOfKind, registrationNodeConfig } from "@/lib/tournament/flow-nodes";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import { adminQueryKeys } from "@/lib/admin/query-keys";
 import adminService from "@/services/admin.service";
@@ -89,12 +90,6 @@ export default function RegistrationsTable({
     enabled: tournamentId !== null && registrationNodeId !== null
   });
 
-  const formQuery = useQuery({
-    queryKey: balancerQueryKeys.registrationForm(tournamentId),
-    queryFn: () => balancerAdminService.getRegistrationForm(tournamentId as number),
-    enabled: tournamentId !== null
-  });
-
   const publicFormQuery = useQuery({
     queryKey: tournamentQueryKeys.registrationFormPublic(tournamentId),
     queryFn: () => registrationService.getForm(tournamentId as number),
@@ -117,8 +112,10 @@ export default function RegistrationsTable({
 
   // `require_open_profile` is deliberately NOT read here any more: admission is
   // resolved server-side and travels on each row. This flag survives only
-  // because the Subscription chip column exists or does not exist per tournament.
-  const requireSubscription = formQuery.data?.require_subscription ?? false;
+  // because the Subscription chip column exists or does not exist per registration node.
+  const requireSubscription = registrationNodeConfig(
+    nodesOfKind(tournament, "registration").find((node) => node.id === registrationNodeId)
+  ).require_subscription;
   // The questions the CURRENT schema asks, flattened in render order. A row
   // filed against an older version is still read through these: answers are
   // keyed, not positional. What the current schema no longer asks has no column

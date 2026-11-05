@@ -68,14 +68,21 @@ function makeTournament(status: TournamentStatus): Tournament {
     team_formation: "balancer",
     status,
     auto_transitions_enabled: true,
-    allow_late_registration: false,
     discord_broadcasts_enabled: false,
     discord_dms_enabled: false,
     logs_official: false,
     pov_stream_delay_s: 0,
-    // Registration closed long ago, whatever the status says.
+    // The node is open but its sign-up window closed long ago, whatever the status says.
     flow_nodes: [
-      { id: 21, kind: "registration", name: "Registration", status: "open", config: {}, schedule: [], stage_id: null }
+      {
+        id: 21,
+        kind: "registration",
+        name: "Registration",
+        status: "open",
+        config: {},
+        schedule: [{ phase: "open", starts_at: "2024-08-01T10:00:00.000Z", ends_at: "2024-08-10T10:00:00.000Z" }],
+        stage_id: null
+      }
     ],
     phase_schedule: [
       {
@@ -139,6 +146,32 @@ async function mount(tournament: Tournament) {
     });
   }
 }
+
+describe("the register button of an open registration node", () => {
+  const openNode = (id: number, name: string) => ({
+    id,
+    kind: "registration" as const,
+    name,
+    status: "open" as const,
+    config: {},
+    schedule: [],
+    stage_id: null
+  });
+
+  it("offers a plain label with one registration node", async () => {
+    auth = { status: "authenticated", user: { id: 1 } };
+    await mount({ ...makeTournament("live"), flow_nodes: [openNode(21, "Registration")] });
+
+    expect(container.textContent).toBe(en.registration.button.register);
+  });
+
+  it("names the node when the tournament has several", async () => {
+    auth = { status: "authenticated", user: { id: 1 } };
+    await mount({ ...makeTournament("live"), flow_nodes: [openNode(21, "Day 1"), openNode(22, "Day 3")] });
+
+    expect(container.textContent).toBe(en.registration.button.registerFor.replace("{node}", "Day 1"));
+  });
+});
 
 describe("the action slot once registration has closed", () => {
   it("says so while a latecomer could still be looking for the sign-up", async () => {

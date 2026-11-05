@@ -82,6 +82,8 @@ export function buildParticipantColumns(
    *  `RegistrationForm`, so the data itself is the only per-tournament signal;
    *  without it the column is not built at all. */
   hasTeams: boolean = false,
+  /** The registration node's `require_subscription`: with it the roster gets a subscription column. */
+  requireSubscription: boolean = false,
 ): ColumnDefinition[] {
   const columns: ColumnDefinition[] = [];
   const provider = owner.identityProvider;
@@ -357,7 +359,7 @@ export function buildParticipantColumns(
   // Meta: subscription — only when the tournament requires it. ONE column with
   // the COMPOSED outcome, not one per provider: under `any` mode a red provider
   // cell beside a green one reads as a failure when it is not.
-  if (form?.require_subscription) {
+  if (requireSubscription) {
     columns.push({
       id: "_subscription",
       label: t("common.subscriptionColumn"),

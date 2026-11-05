@@ -6,14 +6,14 @@ import { useTranslations } from "next-intl";
 
 import { SaveBar } from "@/components/kit/SaveBar";
 import { SettingGroup, SettingRow } from "@/components/kit/SettingRow";
-import { StatusPill } from "@/components/kit/StatusPill";
 import { eyebrowClass } from "@/components/ui/eyebrow";
-import { NumberInput } from "@/components/ui/number-input";
 import { Switch } from "@/components/ui/switch";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { tabFallback } from "../../hubQueries";
+import { RegistrationNodeScope } from "../RegistrationNodeScope";
 import { SettingsSectionPage } from "../SettingsSection";
 import { useRegistrationFormSection } from "../useRegistrationFormSection";
+import { RegistrationNodeSettingsForm } from "./RegistrationNodeSettingsForm";
 
 const RegistrationFormBuilder = dynamic(
   () => import("@/components/balancer/form/RegistrationFormBuilder"),
@@ -25,9 +25,10 @@ const RegistrationFormBuilder = dynamic(
  * itself. The builder used to be a Registration sub-tab of its own; it is
  * configuration, so it lives here (`registration/form` redirects to this page).
  *
- * Two editors, two save bars: both write the same full-replace form, and each
- * echoes the other's saved fields. Each bar is sticky only inside its own
- * block, so the two never stack.
+ * Three editors, three save bars: the intake settings belong to one registration
+ * node, the other two write the same full-replace form, and each echoes the
+ * other's saved fields. Each bar is sticky only inside its own block, so they
+ * never stack.
  */
 export default function RegistrationSettingsPage() {
   const t = useTranslations("registrationFormAdmin.page");
@@ -36,7 +37,12 @@ export default function RegistrationSettingsPage() {
       {({ tournament, tournamentId, canTeamCreate }) => (
         <>
           <div>
-            <RegistrationForm tournamentId={tournamentId} disabled={!canTeamCreate} />
+            <RegistrationNodeScope tournament={tournament}>
+              {(node) => <RegistrationNodeSettingsForm tournament={tournament} node={node} />}
+            </RegistrationNodeScope>
+          </div>
+          <div>
+            <PublicPageForm tournamentId={tournamentId} disabled={!canTeamCreate} />
           </div>
           <section className="flex flex-col gap-3">
             <h2 className={eyebrowClass("muted")}>{t("questionnaire.title")}</h2>
@@ -51,14 +57,13 @@ export default function RegistrationSettingsPage() {
   );
 }
 
-function RegistrationForm({
+function PublicPageForm({
   tournamentId,
   disabled
 }: Readonly<{ tournamentId: number; disabled: boolean }>) {
   const t = useTranslations("registrationFormAdmin.page");
-  const tStatus = useTranslations("registrationFormAdmin.status");
   const ids = useId();
-  const { value, saved, patch, dirty, summary, saving, save, discard, error, retry } =
+  const { value, patch, dirty, summary, saving, save, discard, error, retry } =
     useRegistrationFormSection(tournamentId);
 
   if (!value) {
@@ -77,45 +82,7 @@ function RegistrationForm({
   return (
     <>
       <div className="flex flex-col gap-4">
-        <SettingGroup id="status" title={tStatus("title")}>
-          {/* Derived, not editable: openness is the REGISTRATION phase-schedule
-                window. Shown because this is the screen an organizer opens to ask
-                "are we taking entries", and the answer lives one section away.
-                Closed is the absence of the pill. */}
-          <SettingRow label={tStatus("acceptLabel")} hint={tStatus("scheduleHint")}>
-            {saved?.is_open ? <StatusPill tone="success">{tStatus("stateOpen")}</StatusPill> : null}
-          </SettingRow>
-          <SettingRow
-            htmlFor={`${ids}-auto-approve`}
-            label={tStatus("autoApproveLabel")}
-            hint={tStatus("autoApproveHint")}
-          >
-            <Switch
-              id={`${ids}-auto-approve`}
-              checked={value.auto_approve}
-              disabled={disabled}
-              onCheckedChange={(next) => patch({ auto_approve: next })}
-            />
-          </SettingRow>
-        </SettingGroup>
-
         <SettingGroup id="display" title={t("display.title")} description={t("display.description")}>
-          <SettingRow
-            htmlFor={`${ids}-max-participants`}
-            label={t("display.maxParticipants")}
-            hint={t("display.maxParticipantsHint")}
-          >
-            <NumberInput
-              id={`${ids}-max-participants`}
-              integer
-              min={0}
-              value={value.max_participants ?? null}
-              disabled={disabled}
-              onValueChange={(next) => patch({ max_participants: next })}
-              size="sm"
-              className="w-24"
-            />
-          </SettingRow>
           <SettingRow
             htmlFor={`${ids}-hide-registrations`}
             label={t("display.hideRegistrations")}

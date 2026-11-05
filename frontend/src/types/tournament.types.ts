@@ -236,12 +236,6 @@ export interface Tournament {
   status: TournamentStatus;
   auto_transitions_enabled: boolean;
   /**
-   * Admits latecomers past the REGISTRATION window's `ends_at`, so an organizer
-   * can keep the advertised closing date on the page instead of erasing it by
-   * pushing `ends_at` out. Lifts `ends_at` ONLY — see `isRegistrationOpen`.
-   */
-  allow_late_registration: boolean;
-  /**
    * Posts registration/check-in/match-time announcements to the workspace's
    * Discord notification channel.
    */

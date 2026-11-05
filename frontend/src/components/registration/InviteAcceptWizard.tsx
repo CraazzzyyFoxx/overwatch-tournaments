@@ -195,6 +195,7 @@ export default function InviteAcceptWizard({
         <RegistrationSchemaForm
           mode="public"
           tournamentId={tournamentId}
+          registrationNodeId={registrationNodeId}
           form={form}
           tournamentName={tournamentName}
           userProfile={userQuery.data}

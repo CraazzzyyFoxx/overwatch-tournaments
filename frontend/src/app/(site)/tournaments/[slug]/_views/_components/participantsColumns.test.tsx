@@ -32,7 +32,6 @@ function form(fields: FormField[] = []): RegistrationForm {
     id: 1,
     tournament_id: 72,
     workspace_id: 1,
-    is_open: true,
     form_schema: { schema_version: 1, sections: [{ key: "main", fields }] },
     version_id: 9,
     version_number: 1,

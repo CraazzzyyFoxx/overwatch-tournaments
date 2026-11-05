@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { TournamentFlowNode } from "@/types/flow.types";
 
-import { currentRegistrationNode } from "./flow-nodes";
+import { currentRegistrationNode, isCheckInOpen, isSignUpLate, isSignUpOpen } from "./flow-nodes";
 
 function node(id: number, status: string, kind = "registration"): TournamentFlowNode {
   return { id, kind, name: `Node ${id}`, status, config: {}, schedule: [], stage_id: null } as TournamentFlowNode;
@@ -27,5 +27,68 @@ describe("currentRegistrationNode", () => {
     expect(idOf([node(3, "draft")])).toBeNull();
     expect(idOf([node(9, "forming", "formation")])).toBeNull();
     expect(currentRegistrationNode(undefined)).toBeNull();
+  });
+});
+
+const NOW = Date.parse("2026-08-20T12:00:00Z");
+const HOUR = 60 * 60 * 1000;
+const iso = (offset: number) => new Date(NOW + offset).toISOString();
+
+function windowed(
+  status: string,
+  rows: { phase: "open" | "check_in"; starts_at?: string; ends_at?: string | null }[] = [],
+  config: Record<string, unknown> = {}
+): TournamentFlowNode {
+  return {
+    ...node(1, status),
+    config,
+    schedule: rows.map((row) => ({ starts_at: iso(-24 * HOUR), ends_at: null, ...row }))
+  } as TournamentFlowNode;
+}
+
+describe("isSignUpOpen", () => {
+  it("needs the open status; an open node with no row is open", () => {
+    expect(isSignUpOpen(windowed("draft"), NOW)).toBe(false);
+    expect(isSignUpOpen(windowed("closed"), NOW)).toBe(false);
+    expect(isSignUpOpen(windowed("open"), NOW)).toBe(true);
+    expect(isSignUpOpen(null, NOW)).toBe(false);
+  });
+
+  it("includes both bounds of the window", () => {
+    expect(isSignUpOpen(windowed("open", [{ phase: "open", starts_at: iso(0) }]), NOW)).toBe(true);
+    expect(isSignUpOpen(windowed("open", [{ phase: "open", ends_at: iso(0) }]), NOW)).toBe(true);
+    expect(isSignUpOpen(windowed("open", [{ phase: "open", ends_at: iso(-HOUR) }]), NOW)).toBe(false);
+    expect(isSignUpOpen(windowed("open", [{ phase: "open", starts_at: iso(HOUR) }]), NOW)).toBe(false);
+  });
+
+  it("lets allow_late_registration lift only ends_at", () => {
+    const late = { allow_late_registration: true };
+    expect(isSignUpOpen(windowed("open", [{ phase: "open", ends_at: iso(-HOUR) }], late), NOW)).toBe(true);
+    expect(isSignUpOpen(windowed("open", [{ phase: "open", starts_at: iso(HOUR) }], late), NOW)).toBe(false);
+  });
+
+  it("stays open in check-in only with allow_late_registration", () => {
+    expect(isSignUpOpen(windowed("check_in"), NOW)).toBe(false);
+    expect(isSignUpOpen(windowed("check_in", [], { allow_late_registration: true }), NOW)).toBe(true);
+  });
+});
+
+describe("isSignUpLate", () => {
+  it("is late in check-in or past the open row's end, never before it", () => {
+    expect(isSignUpLate(windowed("check_in"), NOW)).toBe(true);
+    expect(isSignUpLate(windowed("open", [{ phase: "open", ends_at: iso(-HOUR) }]), NOW)).toBe(true);
+    expect(isSignUpLate(windowed("open", [{ phase: "open", ends_at: iso(HOUR) }]), NOW)).toBe(false);
+    expect(isSignUpLate(windowed("open"), NOW)).toBe(false);
+    expect(isSignUpLate(windowed("closed", [{ phase: "open", ends_at: iso(-HOUR) }]), NOW)).toBe(false);
+  });
+});
+
+describe("isCheckInOpen", () => {
+  it("needs the check_in status and the check_in row; no row means open", () => {
+    expect(isCheckInOpen(windowed("open"), NOW)).toBe(false);
+    expect(isCheckInOpen(windowed("check_in"), NOW)).toBe(true);
+    expect(isCheckInOpen(windowed("check_in", [{ phase: "check_in", ends_at: iso(-HOUR) }]), NOW)).toBe(false);
+    expect(isCheckInOpen(windowed("check_in", [{ phase: "check_in", starts_at: iso(HOUR) }]), NOW)).toBe(false);
+    expect(isCheckInOpen(windowed("check_in", [{ phase: "check_in", ends_at: iso(0) }]), NOW)).toBe(true);
   });
 });

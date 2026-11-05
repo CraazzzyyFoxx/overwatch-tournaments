@@ -9,12 +9,11 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { getCurrentPathForAuthRedirect } from "@/lib/auth/redirect";
 import { cn } from "@/lib/utils";
-import { isRegistrationOpen } from "@/lib/tournament/status";
 import { reachedAtLeast } from "@/lib/tournament/lifecycle";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { useAuthModalStore } from "@/stores/auth-modal.store";
 import registrationService from "@/services/registration.service";
-import { currentRegistrationNode } from "@/lib/tournament/flow-nodes";
+import { currentRegistrationNode, isSignUpOpen, nodesOfKind } from "@/lib/tournament/flow-nodes";
 import { tournamentMyRegistrationQueryOptions } from "@/lib/tournament/registrations-query";
 import { tournamentHref } from "@/lib/tournament/url";
 import type { Tournament } from "@/types/tournament.types";
@@ -43,7 +42,8 @@ export default function TournamentRegisterButton({
   const openAuthModal = useAuthModalStore((state) => state.open);
   const isAuthenticated = authStatus === "authenticated" && user !== null;
   const [showModal, setShowModal] = useState(false);
-  const registrationNodeId = currentRegistrationNode(tournament)?.id ?? null;
+  const registrationNode = currentRegistrationNode(tournament);
+  const registrationNodeId = registrationNode?.id ?? null;
 
   const formQuery = useQuery({
     queryKey: tournamentQueryKeys.registrationForm(workspaceId, tournamentId),
@@ -125,8 +125,8 @@ export default function TournamentRegisterButton({
   }
 
   // The form must exist (checked above) but no longer decides openness — the
-  // tournament's REGISTRATION schedule window does.
-  if (!isRegistrationOpen(tournament)) {
+  // registration node's status and sign-up window do.
+  if (!isSignUpOpen(registrationNode)) {
     // Someone may still come to sign up while the tournament registers or
     // checks in. From the forming of the teams on nobody asks, and a dead box
     // would be the loudest thing in the hero.
@@ -168,7 +168,9 @@ export default function TournamentRegisterButton({
     <>
       <Button type="button" size={small ? "sm" : "default"} onClick={() => setShowModal(true)}>
         <UserPlus aria-hidden />
-        {t("registration.button.register")}
+        {nodesOfKind(tournament, "registration").length > 1
+          ? t("registration.button.registerFor", { node: registrationNode?.name ?? "" })
+          : t("registration.button.register")}
       </Button>
       <Dialog open={showModal} onOpenChange={setShowModal}>
         <DialogContent className="max-h-[94vh] overflow-y-auto sm:max-w-2xl lg:max-w-3xl">

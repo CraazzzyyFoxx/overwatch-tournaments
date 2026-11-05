@@ -268,6 +268,7 @@ export default function TeamRegistrationWizard({
       <RegistrationSchemaForm
         mode="public"
         tournamentId={tournamentId}
+        registrationNodeId={registrationNodeId}
         form={form}
         tournamentName={tournamentName}
         // The dialog title already names the task and the tournament; a second

@@ -135,6 +135,7 @@ export default function MyRegistrationEditDialog({
           mode="public"
           form={form}
           tournamentId={tournamentId}
+          registrationNodeId={registration.registration_node_id}
           initial={registration}
           userProfile={userQuery.data}
           writableKeys={registration.edit_writable_keys}

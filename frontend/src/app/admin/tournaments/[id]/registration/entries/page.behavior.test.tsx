@@ -419,7 +419,6 @@ describe("Registration entries", () => {
       id: 9,
       tournament_id: 80,
       workspace_id: 1,
-      is_open: true,
       form_schema: {
         schema_version: 1,
         sections: [

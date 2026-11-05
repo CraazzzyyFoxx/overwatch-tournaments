@@ -70,7 +70,6 @@ function tournament(id: number, name: string): Tournament {
     team_formation: "balancer",
     status: "completed",
     auto_transitions_enabled: false,
-    allow_late_registration: false,
     phase_schedule: [],
     stages: [],
     participants_count: 30,
