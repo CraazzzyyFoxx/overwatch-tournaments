@@ -13,7 +13,7 @@ baselines and Discord channels live in `stats/`. `catalog/` writes only to `cata
 > `--check` and fails on drift, so the diagrams cannot fall behind the models again.
 
 <!-- ERD:auto _alembic_head -->
-Alembic head: **`flowP3_03`** (175 revisions in `backend/migrations/versions/`).
+Alembic head: **`flowP3_04`** (176 revisions in `backend/migrations/versions/`).
 <!-- /ERD:auto -->
 
 **Reading the diagrams**
@@ -2095,6 +2095,7 @@ erDiagram
         timestamptz created_at
         timestamptz updated_at "nullable"
         bigint tournament_id FK,UK
+        bigint registration_node_id FK
         text source_url
         varchar(255) sheet_id
         varchar(64) gid "nullable"
@@ -2126,28 +2127,37 @@ erDiagram
         bigint workspace_member_id FK "nullable"
         varchar(255) display_name "nullable"
         boolean stream_pov
-        boolean is_reserve
         bigint form_version_id FK "nullable"
         text public_notes "nullable"
         text organizer_notes "nullable"
-        varchar(64) exclude_reason "nullable"
         text admin_notes "nullable"
         json custom_fields_json "nullable"
-        varchar(32) status
-        varchar(32) balancer_status
-        boolean checked_in
-        timestamptz checked_in_at "nullable"
-        bigint checked_in_by FK "nullable"
         timestamptz submitted_at
-        timestamptz reviewed_at "nullable"
-        bigint reviewed_by FK "nullable"
         timestamptz deleted_at "nullable"
         bigint deleted_by FK "nullable"
         timestamptz balancer_profile_overridden_at "nullable"
         bigint registration_team_id FK "nullable"
         varchar(16) team_slot_code "nullable"
-        boolean is_substitute
         boolean is_team_manager
+    }
+    REGISTRATION_REGISTRATION_ENTRY {
+        bigint id PK
+        timestamptz created_at
+        timestamptz updated_at "nullable"
+        bigint registration_node_id FK
+        bigint registration_id FK
+        varchar(32) status
+        boolean checked_in
+        timestamptz checked_in_at "nullable"
+        bigint checked_in_by FK "nullable"
+        varchar(32) balancer_status
+        varchar(64) exclude_reason "nullable"
+        boolean is_reserve
+        boolean is_substitute
+        timestamptz reviewed_at "nullable"
+        bigint reviewed_by FK "nullable"
+        timestamptz deleted_at "nullable"
+        bigint deleted_by FK "nullable"
     }
     REGISTRATION_ROLE {
         bigint id PK
@@ -2190,6 +2200,7 @@ erDiagram
         timestamptz created_at
         timestamptz updated_at "nullable"
         bigint tournament_id FK
+        bigint registration_node_id FK
         bigint workspace_id FK
         varchar(255) name
         varchar(255) name_normalized
@@ -2237,9 +2248,10 @@ erDiagram
 
     AUTH_USER |o--o{ REGISTRATION_FORM_TEMPLATE : "created_by"
     AUTH_USER |o--o{ REGISTRATION_FORM_VERSION : "created_by"
-    AUTH_USER |o--o{ REGISTRATION_REGISTRATION : "checked_in_by"
     AUTH_USER |o--o{ REGISTRATION_REGISTRATION : "deleted_by"
-    AUTH_USER |o--o{ REGISTRATION_REGISTRATION : "reviewed_by"
+    AUTH_USER |o--o{ REGISTRATION_REGISTRATION_ENTRY : "checked_in_by"
+    AUTH_USER |o--o{ REGISTRATION_REGISTRATION_ENTRY : "deleted_by"
+    AUTH_USER |o--o{ REGISTRATION_REGISTRATION_ENTRY : "reviewed_by"
     AUTH_USER |o--o{ REGISTRATION_TEAM : "deleted_by"
     AUTH_USER |o--o{ REGISTRATION_TEAM : "invite_cap_reset_by"
     AUTH_USER |o--o{ REGISTRATION_TEAM : "roster_locked_by"
@@ -2264,11 +2276,15 @@ erDiagram
     REGISTRATION_REGISTRATION |o--o{ REGISTRATION_TEAM : "captain_registration_id"
     REGISTRATION_REGISTRATION |o--o{ REGISTRATION_TEAM_INVITE : "accepted_registration_id"
     REGISTRATION_REGISTRATION ||--o{ REGISTRATION_IDENTITY : "registration_id"
+    REGISTRATION_REGISTRATION ||--o{ REGISTRATION_REGISTRATION_ENTRY : "registration_id"
     REGISTRATION_REGISTRATION ||--o{ REGISTRATION_ROLE : "registration_id"
     REGISTRATION_REGISTRATION ||--o| REGISTRATION_GOOGLE_SHEET_BINDING : "registration_id"
     REGISTRATION_ROLE ||--o{ REGISTRATION_ROLE_ENTITY : "role_id"
     REGISTRATION_TEAM |o--o{ REGISTRATION_REGISTRATION : "registration_team_id"
     REGISTRATION_TEAM ||--o{ REGISTRATION_TEAM_INVITE : "team_id"
+    TOURNAMENT_FLOW_NODE ||--o{ REGISTRATION_GOOGLE_SHEET_FEED : "registration_node_id"
+    TOURNAMENT_FLOW_NODE ||--o{ REGISTRATION_REGISTRATION_ENTRY : "registration_node_id"
+    TOURNAMENT_FLOW_NODE ||--o{ REGISTRATION_TEAM : "registration_node_id"
     TOURNAMENT_TEAM |o--o{ REGISTRATION_TEAM : "exported_team_id"
     TOURNAMENT_TOURNAMENT ||--o{ REGISTRATION_REGISTRATION : "tournament_id"
     TOURNAMENT_TOURNAMENT ||--o{ REGISTRATION_TEAM : "tournament_id"
