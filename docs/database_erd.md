@@ -13,7 +13,7 @@ baselines and Discord channels live in `stats/`. `catalog/` writes only to `cata
 > `--check` and fails on drift, so the diagrams cannot fall behind the models again.
 
 <!-- ERD:auto _alembic_head -->
-Alembic head: **`flowP1_participant_result`** (170 revisions in `backend/migrations/versions/`).
+Alembic head: **`flowP2_01_flow_tables`** (171 revisions in `backend/migrations/versions/`).
 <!-- /ERD:auto -->
 
 **Reading the diagrams**
@@ -1133,13 +1133,63 @@ erDiagram
         json built_in_fields_json
         json custom_fields_json
     }
+    TOURNAMENT_FLOW_EDGE {
+        bigint id PK
+        timestamptz created_at
+        timestamptz updated_at "nullable"
+        bigint tournament_id FK
+        bigint source_node_id FK
+        varchar(32) source_port
+        bigint target_node_id FK
+        varchar(32) target_port
+    }
+    TOURNAMENT_FLOW_NODE {
+        bigint id PK
+        timestamptz created_at
+        timestamptz updated_at "nullable"
+        bigint tournament_id FK
+        varchar(16) kind
+        varchar name
+        varchar(16) status
+        jsonb config
+        bigint stage_id FK,UK "nullable"
+        float position_x
+        float position_y
+        timestamptz started_at "nullable"
+        timestamptz completed_at "nullable"
+    }
+    TOURNAMENT_FLOW_NODE_RESULT {
+        bigint id PK
+        timestamptz created_at
+        timestamptz updated_at "nullable"
+        bigint node_id FK
+        varchar(32) port
+        int rank
+        bigint workspace_member_id FK "nullable"
+        bigint team_id FK "nullable"
+        bigint stage_item_id FK "nullable"
+        int item_rank "nullable"
+        numeric score "nullable"
+        int tie_group "nullable"
+        jsonb breakdown "nullable"
+        varchar(16) state
+    }
+    TOURNAMENT_FLOW_NODE_SCHEDULE {
+        bigint id PK
+        timestamptz created_at
+        timestamptz updated_at "nullable"
+        bigint node_id FK
+        varchar(16) phase
+        timestamptz starts_at
+        timestamptz ends_at "nullable"
+    }
     TOURNAMENT_PARTICIPANT_RESULT {
         bigint tournament_id PK,FK
         bigint workspace_member_id PK,FK
         bigint final_team_id FK "nullable"
         int placement "nullable"
         int field_size
-        bigint source_node_id "nullable"
+        bigint source_node_id FK "nullable"
     }
     TOURNAMENT_PICK_BAN_CONFIG {
         bigint id PK
@@ -1479,6 +1529,7 @@ erDiagram
     PUBLIC_DIVISION_GRID_VERSION |o--o{ TOURNAMENT_TOURNAMENT : "division_grid_version_id"
     PUBLIC_WORKSPACE ||--o{ TOURNAMENT_SCRIM_ROOM : "workspace_id"
     PUBLIC_WORKSPACE ||--o{ TOURNAMENT_TOURNAMENT : "workspace_id"
+    PUBLIC_WORKSPACE_MEMBER |o--o{ TOURNAMENT_FLOW_NODE_RESULT : "workspace_member_id"
     PUBLIC_WORKSPACE_MEMBER ||--o{ TOURNAMENT_PLAYER : "workspace_member_id"
     PUBLIC_WORKSPACE_MEMBER ||--o{ TOURNAMENT_PLAYER_STANDING : "workspace_member_id"
     PUBLIC_WORKSPACE_MEMBER ||--o{ TOURNAMENT_PLAYER_STANDING_PIN : "workspace_member_id"
@@ -1487,6 +1538,11 @@ erDiagram
     TOURNAMENT_CHALLONGE_SOURCE |o--o{ TOURNAMENT_CHALLONGE_SYNC_LOG : "source_id"
     TOURNAMENT_CHALLONGE_SOURCE ||--o{ TOURNAMENT_CHALLONGE_MATCH_MAPPING : "source_id"
     TOURNAMENT_CHALLONGE_SOURCE ||--o{ TOURNAMENT_CHALLONGE_PARTICIPANT_MAPPING : "source_id"
+    TOURNAMENT_FLOW_NODE |o--o{ TOURNAMENT_PARTICIPANT_RESULT : "source_node_id"
+    TOURNAMENT_FLOW_NODE ||--o{ TOURNAMENT_FLOW_EDGE : "source_node_id"
+    TOURNAMENT_FLOW_NODE ||--o{ TOURNAMENT_FLOW_EDGE : "target_node_id"
+    TOURNAMENT_FLOW_NODE ||--o{ TOURNAMENT_FLOW_NODE_RESULT : "node_id"
+    TOURNAMENT_FLOW_NODE ||--o{ TOURNAMENT_FLOW_NODE_SCHEDULE : "node_id"
     TOURNAMENT_PICK_BAN_CONFIG ||--o{ TOURNAMENT_PICK_BAN_CONFIG_ITEM : "pick_ban_config_id"
     TOURNAMENT_PICK_BAN_CONFIG ||--o{ TOURNAMENT_PICK_BAN_CONFIG_SLOT : "pick_ban_config_id"
     TOURNAMENT_PICK_BAN_CONFIG_SLOT ||--o{ TOURNAMENT_PICK_BAN_CONFIG_SLOT_ITEM : "pick_ban_config_slot_id"
@@ -1498,6 +1554,7 @@ erDiagram
     TOURNAMENT_STAGE |o--o{ TOURNAMENT_PICK_BAN_CONFIG : "stage_id"
     TOURNAMENT_STAGE |o--o{ TOURNAMENT_STANDING : "stage_id"
     TOURNAMENT_STAGE |o--o{ TOURNAMENT_VOICE_CHANNEL : "stage_id"
+    TOURNAMENT_STAGE |o--o| TOURNAMENT_FLOW_NODE : "stage_id"
     TOURNAMENT_STAGE ||--o{ TOURNAMENT_BRACKET_ENCOUNTER : "tournament_id"
     TOURNAMENT_STAGE ||--o{ TOURNAMENT_PLAYER_STANDING : "stage_id"
     TOURNAMENT_STAGE ||--o{ TOURNAMENT_PLAYER_STANDING_PIN : "stage_id"
@@ -1511,12 +1568,14 @@ erDiagram
     TOURNAMENT_STAGE_ITEM |o--o{ TOURNAMENT_BRACKET_ENCOUNTER : "stage_item_id"
     TOURNAMENT_STAGE_ITEM |o--o{ TOURNAMENT_CHALLONGE_SOURCE : "stage_item_id"
     TOURNAMENT_STAGE_ITEM |o--o{ TOURNAMENT_COMPUTATION_JOB : "stage_item_id"
+    TOURNAMENT_STAGE_ITEM |o--o{ TOURNAMENT_FLOW_NODE_RESULT : "stage_item_id"
     TOURNAMENT_STAGE_ITEM |o--o{ TOURNAMENT_STAGE_ITEM_INPUT : "source_stage_item_id"
     TOURNAMENT_STAGE_ITEM |o--o{ TOURNAMENT_STANDING : "stage_item_id"
     TOURNAMENT_STAGE_ITEM |o--o{ TOURNAMENT_STANDING_PIN : "stage_item_id"
     TOURNAMENT_STAGE_ITEM |o--o{ TOURNAMENT_SWISS_BYE : "stage_item_id"
     TOURNAMENT_STAGE_ITEM |o--o{ TOURNAMENT_SWISS_STOPPED_SCOPE : "stage_item_id"
     TOURNAMENT_STAGE_ITEM ||--o{ TOURNAMENT_STAGE_ITEM_INPUT : "stage_item_id"
+    TOURNAMENT_TEAM |o--o{ TOURNAMENT_FLOW_NODE_RESULT : "team_id"
     TOURNAMENT_TEAM |o--o{ TOURNAMENT_PARTICIPANT_RESULT : "final_team_id"
     TOURNAMENT_TEAM |o--o{ TOURNAMENT_STAGE_ITEM_INPUT : "team_id"
     TOURNAMENT_TEAM |o--o{ TOURNAMENT_VOICE_CHANNEL : "team_id"
@@ -1528,6 +1587,8 @@ erDiagram
     TOURNAMENT_TOURNAMENT ||--o{ TOURNAMENT_CHALLONGE_SOURCE : "tournament_id"
     TOURNAMENT_TOURNAMENT ||--o{ TOURNAMENT_CHALLONGE_SYNC_LOG : "tournament_id"
     TOURNAMENT_TOURNAMENT ||--o{ TOURNAMENT_COMPUTATION_JOB : "tournament_id"
+    TOURNAMENT_TOURNAMENT ||--o{ TOURNAMENT_FLOW_EDGE : "tournament_id"
+    TOURNAMENT_TOURNAMENT ||--o{ TOURNAMENT_FLOW_NODE : "tournament_id"
     TOURNAMENT_TOURNAMENT ||--o{ TOURNAMENT_PICK_BAN_CONFIG : "tournament_id"
     TOURNAMENT_TOURNAMENT ||--o{ TOURNAMENT_PLAYER : "tournament_id"
     TOURNAMENT_TOURNAMENT ||--o{ TOURNAMENT_PLAYER_STANDING : "tournament_id"
@@ -1555,6 +1616,7 @@ Composite unique keys:
 - `TOURNAMENT_CHALLONGE_SOURCE` unique on (`tournament_id`, `challonge_tournament_id`)
 - `TOURNAMENT_ENCOUNTER_LINK` unique on (`source_encounter_id`, `source_position`)
 - `TOURNAMENT_ENCOUNTER_LINK` unique on (`target_encounter_id`, `target_slot`)
+- `TOURNAMENT_FLOW_NODE_SCHEDULE` unique on (`node_id`, `phase`)
 - `TOURNAMENT_PICK_BAN_CONFIG_ITEM` unique on (`pick_ban_config_id`, `item_id`)
 - `TOURNAMENT_PICK_BAN_CONFIG_SLOT` unique on (`pick_ban_config_id`, `position`)
 - `TOURNAMENT_PICK_BAN_CONFIG_SLOT_ITEM` unique on (`pick_ban_config_slot_id`, `item_id`)

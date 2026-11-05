@@ -1,7 +1,8 @@
-from sqlalchemy import BigInteger, ForeignKey, Index, Integer
+from sqlalchemy import ForeignKey, Index, Integer
 from sqlalchemy.orm import Mapped, mapped_column
 
 from shared.core import db
+from shared.models.tournament.flow import FlowNode
 from shared.models.tournament.team import Team
 from shared.models.tournament.tournament import Tournament
 
@@ -12,7 +13,7 @@ class ParticipantResult(db.Base):
     """One row per member per finished tournament: the member's final team, final placement and the field size.
 
     Written only by ``shared.services.participant_result.write_participant_results``. ``placement`` NULL means the
-    final team has no positive place; ``source_node_id`` is a plain BIGINT until the formation node table exists.
+    final team has no positive place; ``source_node_id`` is the formation node the member came from, cleared with it.
     """
 
     __tablename__ = "participant_result"
@@ -28,4 +29,4 @@ class ParticipantResult(db.Base):
     final_team_id: Mapped[int | None] = mapped_column(ForeignKey(Team.id, ondelete="SET NULL"), nullable=True)
     placement: Mapped[int | None] = mapped_column(Integer(), nullable=True)
     field_size: Mapped[int] = mapped_column(Integer())
-    source_node_id: Mapped[int | None] = mapped_column(BigInteger(), nullable=True)
+    source_node_id: Mapped[int | None] = mapped_column(ForeignKey(FlowNode.id, ondelete="SET NULL"), nullable=True)
