@@ -59,6 +59,16 @@ class FlowNodeService:
         actor: models.AuthUser | None,
     ) -> models.FlowNode:
         """Move a node to ``target``; locks the node row, flushes, never commits."""
+        # Lock order is tournament, then node: the guards below read other nodes, so two moves of one tournament
+        # must not interleave. The unlocked read only finds the tournament; the node is re-read under the locks.
+        tournament_id = await session.scalar(
+            sa.select(models.FlowNode.tournament_id).where(models.FlowNode.id == node_id)
+        )
+        if tournament_id is None:
+            raise ApiHTTPException(
+                status_code=404, detail=[ApiExc(code="flow_node_not_found", msg="Flow node not found")]
+            )
+        await self._lock_tournament(session, tournament_id)
         node = await session.scalar(
             sa.select(models.FlowNode)
             .where(models.FlowNode.id == node_id)
@@ -97,8 +107,8 @@ class FlowNodeService:
         )
         return node
 
-    async def sync_tournament_status(self, session: AsyncSession, tournament_id: int) -> TournamentStatus:
-        """Write the status the nodes derive (spec §9); emits the state event and the finish effects on a change."""
+    async def _lock_tournament(self, session: AsyncSession, tournament_id: int) -> models.Tournament:
+        """The tournament row ``FOR NO KEY UPDATE``: serializes node moves and the status write of one tournament."""
         tournament = await session.scalar(
             sa.select(models.Tournament)
             .where(models.Tournament.id == tournament_id)
@@ -109,6 +119,11 @@ class FlowNodeService:
             raise ApiHTTPException(
                 status_code=404, detail=[ApiExc(code="tournament_not_found", msg="Tournament not found")]
             )
+        return tournament
+
+    async def sync_tournament_status(self, session: AsyncSession, tournament_id: int) -> TournamentStatus:
+        """Write the status the nodes derive (spec §9); emits the state event and the finish effects on a change."""
+        tournament = await self._lock_tournament(session, tournament_id)
         has_outgoing = sa.exists().where(models.FlowEdge.source_node_id == models.FlowNode.id)
         rows = await session.execute(
             sa.select(models.FlowNode.kind, models.FlowNode.status, ~has_outgoing).where(

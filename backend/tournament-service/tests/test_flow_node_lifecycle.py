@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, date, datetime
 
 import sqlalchemy as sa
@@ -102,6 +103,22 @@ class TransitionTests(FlowCase):
         await self._move(b, S.OPEN)
         self.assertEqual(1, len(await self.outbox(TOURNAMENT_STATE_CHANGED_ROUTING_KEY)))
         self.assertEqual(2, len(await self.outbox(FLOW_NODE_STATE_CHANGED_ROUTING_KEY)))
+
+    async def test_moves_of_one_tournament_serialize_and_the_second_re_reads(self) -> None:
+        reg = await self.node("registration", "closed")
+        form = await self.node("formation", config={"mode": "balancer"})
+        await self.edge(reg, "participants", form, "players")
+        async with self.Session() as first, self.Session() as second:
+            await flow_node_service.transition(first, reg, S.OPEN, actor=self.actor)
+            # Without the tournament lock this passes its guard (the registration is still closed for it) and commits.
+            blocked = asyncio.create_task(flow_node_service.transition(second, form, S.FORMING, actor=self.actor))
+            done, _ = await asyncio.wait({blocked}, timeout=1)
+            self.assertEqual(set(), done)
+            await first.commit()
+            with self.assertRaises(ApiHTTPException) as caught:
+                await blocked
+        self.assertEqual("input_not_final", caught.exception.detail[0]["code"])
+        self.assertEqual("draft", await self.node_status(form))
 
 
 class CreateTournamentFlowTests(FlowCase):
