@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from shared import models
+from shared.core.chrono import tournament_chrono_key
 from shared.disciplines import discipline, rated_role_codes
 from shared.division_grid import DivisionGrid
 from shared.domain.forms import RolesParams, schema_from_form, schema_from_version
@@ -443,6 +444,7 @@ async def _build_tournament_history(
     # Duplicate (player, tournament) rows (substitutions) are collapsed first; then
     # each player keeps the most recent ``HISTORY_LIMIT`` tournaments and a window
     # count of the true unique total.
+    start, end, _ = tournament_chrono_key()
     history_ranked = (
         sa.select(
             models.Player.tournament_id.label("tournament_id"),
@@ -450,7 +452,8 @@ async def _build_tournament_history(
             models.Player.role,
             models.Player.rank,
             models.Tournament.name.label("tournament_name"),
-            models.Tournament.start_date.label("start_date"),
+            start.label("chrono_start"),
+            end.label("chrono_end"),
             models.Player.sub_role,
             models.Tournament.discipline,
             sa.func.row_number()
@@ -491,7 +494,8 @@ async def _build_tournament_history(
             .over(
                 partition_by=history_ranked.c.player_id,
                 order_by=(
-                    history_ranked.c.start_date.desc().nullslast(),
+                    history_ranked.c.chrono_start.desc(),
+                    history_ranked.c.chrono_end.desc(),
                     history_ranked.c.tournament_id.desc(),
                 ),
             )

@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
 from shared.core import enums
+from shared.core.chrono import tournament_chrono_key
 from src.schemas.dashboard_trends import DashboardTrendPoint, DashboardTrends
 
 __all__ = ("DashboardTrendsService", "trends")
@@ -25,7 +26,15 @@ __all__ = ("DashboardTrendsService", "trends")
 class DashboardTrendsService:
     async def get_trends(self, session: AsyncSession, *, workspace_id: int, discipline: str | None) -> DashboardTrends:
         tournament = models.Tournament
-        picked_q = sa.select(tournament.id, tournament.name, tournament.discipline, tournament.start_date).where(
+        start, end, _ = tournament_chrono_key()
+        picked_q = sa.select(
+            tournament.id,
+            tournament.name,
+            tournament.discipline,
+            tournament.start_date,
+            start.label("chrono_start"),
+            end.label("chrono_end"),
+        ).where(
             tournament.workspace_id == workspace_id,
             tournament.status.in_((enums.TournamentStatus.COMPLETED, enums.TournamentStatus.ARCHIVED)),
             tournament.is_hidden.is_(False),
@@ -33,11 +42,7 @@ class DashboardTrendsService:
         )
         if discipline is not None:
             picked_q = picked_q.where(tournament.discipline == discipline)
-        picked = (
-            picked_q.order_by(tournament.start_date.desc().nulls_last(), tournament.id.desc())
-            .limit(10)
-            .cte("trend_tournaments")
-        )
+        picked = picked_q.order_by(*(c.desc() for c in tournament_chrono_key())).limit(10).cte("trend_tournaments")
         picked_ids = sa.select(picked.c.id)
 
         player = models.Player
@@ -90,7 +95,7 @@ class DashboardTrendsService:
             .outerjoin(roster, roster.c.tournament_id == picked.c.id)
             .outerjoin(play, play.c.tournament_id == picked.c.id)
             # Oldest first: the exact reverse of the picking order.
-            .order_by(picked.c.start_date.asc().nulls_first(), picked.c.id.asc())
+            .order_by(picked.c.chrono_start, picked.c.chrono_end, picked.c.id)
         )
         return DashboardTrends(points=[DashboardTrendPoint(**row._mapping) for row in rows])
 

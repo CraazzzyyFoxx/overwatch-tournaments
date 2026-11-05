@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
 from shared.core import enums
+from shared.core.chrono import tournament_chrono_key
 from shared.core.tournament_state import FINISHED_STATUSES, PHASE_ORDER
 from src import schemas
 from src.services.dashboard.readiness import (
@@ -424,6 +425,7 @@ class AdminDashboardService:
         """Workspace tournaments without a card that have a visible data-quality issue (counts ``NULL`` when
         masked): the newest ``BACKLOG_ROWS`` of them, with the totals over all of them as window aggregates."""
         tournament = models.Tournament
+        start, end, _ = tournament_chrono_key()
         encounter = models.Encounter
         team = models.Team
         stage = models.Stage
@@ -454,7 +456,8 @@ class AdminDashboardService:
                 tournament.id,
                 tournament.name,
                 tournament.discipline,
-                tournament.start_date,
+                start.label("chrono_start"),
+                end.label("chrono_end"),
                 gated(permissions.match_read, missing_logs.scalar_subquery(), sa.BigInteger).label("missing_logs"),
                 gated(permissions.team_read, teams_without_players.scalar_subquery(), sa.BigInteger).label(
                     "teams_without_players"
@@ -485,7 +488,7 @@ class AdminDashboardService:
                         scan.c.has_stages.is_(False),
                     )
                 )
-                .order_by(scan.c.start_date.desc().nulls_last(), scan.c.id.desc())
+                .order_by(scan.c.chrono_start.desc(), scan.c.chrono_end.desc(), scan.c.id.desc())
                 .limit(BACKLOG_ROWS)
             )
         ).all()

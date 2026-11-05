@@ -17,6 +17,7 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
+from shared.core.chrono import chrono_sort_key, tournament_chrono_key
 from shared.core.social import SocialProvider
 from shared.disciplines import discipline
 from shared.domain.roster import PlayerRoster
@@ -319,22 +320,16 @@ class RankAutofillService:
     ) -> set[int] | None:
         """Ids of the N workspace tournaments immediately preceding ``target``, or None when unrestricted.
 
-        "Preceding" is chronological by ``(start_date, id)`` with NULL start dates sorting last; the N
-        most recent of those (``start_date DESC NULLS LAST, id DESC``) form the lookback window.
+        "Preceding" is the tournament chronology (`shared.core.chrono`); the N most recent of those form the
+        lookback window.
         """
         if lookback_tournaments is None:
             return None
-        if target.start_date is not None:
-            before = sa.or_(
-                models.Tournament.start_date < target.start_date,
-                sa.and_(models.Tournament.start_date == target.start_date, models.Tournament.id < target.id),
-            )
-        else:
-            before = sa.or_(models.Tournament.start_date.is_not(None), models.Tournament.id < target.id)
+        before = sa.tuple_(*tournament_chrono_key()) < sa.tuple_(*chrono_sort_key(target))
         stmt = (
             sa.select(models.Tournament.id)
             .where(models.Tournament.workspace_id == target.workspace_id, before)
-            .order_by(models.Tournament.start_date.desc().nulls_last(), models.Tournament.id.desc())
+            .order_by(*(c.desc() for c in tournament_chrono_key()))
             .limit(lookback_tournaments)
         )
         return set((await session.execute(stmt)).scalars().all())

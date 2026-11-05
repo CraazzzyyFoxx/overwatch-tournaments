@@ -419,7 +419,7 @@ def test_lookback_ids_returns_queried_id_set() -> None:
         async def execute(self, stmt):
             return SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: [3, 2]))
 
-    target = SimpleNamespace(id=5, start_date=datetime(2024, 1, 1, tzinfo=UTC).date(), workspace_id=1)
+    target = SimpleNamespace(id=5, start_date=datetime(2024, 1, 1, tzinfo=UTC).date(), end_date=None, workspace_id=1)
     assert asyncio.run(
         rank_autofill.rank_autofill_service._autofill_lookback_tournament_ids(_Session(), target, 2)
     ) == {3, 2}

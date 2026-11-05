@@ -7,6 +7,7 @@ from sqlalchemy.orm.strategy_options import _AbstractLoad
 
 from shared import models
 from shared.core import enums, pagination, utils
+from shared.core.chrono import tournament_chrono_key
 from shared.repository import TournamentRepository
 from shared.services.tournament.visibility import completed_encounters_clauses, visible_tournaments_predicate
 from src import schemas
@@ -179,7 +180,7 @@ class TournamentService:
             .join(teams_sq, teams_sq.c.tournament_id == models.Tournament.id, isouter=True)
             .join(encounters_sq, encounters_sq.c.tournament_id == models.Tournament.id, isouter=True)
             .where(models.Tournament.is_league.is_(False), visible_tournaments_predicate(None))
-            .order_by(models.Tournament.start_date.nulls_last(), models.Tournament.id)
+            .order_by(*tournament_chrono_key())
         )
         if workspace_id is not None:
             query = query.where(models.Tournament.workspace_id == workspace_id)
@@ -227,7 +228,7 @@ class TournamentService:
             # Grouping by the Tournament PK lets Postgres project the whole
             # tournament row (functional dependency).
             .group_by(models.Tournament.id, models.Player.role, models.Player.rank)
-            .order_by(models.Tournament.start_date.nulls_last(), models.Tournament.id)
+            .order_by(*tournament_chrono_key())
         )
         if workspace_id is not None:
             query = query.where(models.Tournament.workspace_id == workspace_id)

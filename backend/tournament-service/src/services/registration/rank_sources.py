@@ -21,6 +21,7 @@ from sqlalchemy.orm import aliased, selectinload
 
 from shared import models
 from shared.core import enums
+from shared.core.chrono import tournament_chrono_key
 from shared.core.social import SocialProvider
 from shared.disciplines import discipline
 from shared.division_grid import DivisionGrid, normalize_native_ranks_to_grid
@@ -473,8 +474,7 @@ class RankSourcesService:
             .order_by(
                 models.WorkspaceMember.player_id,
                 models.RegistrationRole.role,
-                models.Tournament.start_date.desc().nulls_last(),
-                models.Tournament.id.desc(),
+                *(c.desc() for c in tournament_chrono_key()),
             )
         )
         if allowed_tournament_ids is not None:
@@ -547,8 +547,7 @@ class RankSourcesService:
             .order_by(
                 models.WorkspaceMember.player_id,
                 models.Player.role,
-                models.Tournament.start_date.desc().nulls_last(),
-                models.Tournament.id.desc(),
+                *(c.desc() for c in tournament_chrono_key()),
             )
         )
         if allowed_tournament_ids is not None:
@@ -614,8 +613,7 @@ class RankSourcesService:
                     models.RegistrationRole.rank_value.is_not(None),
                 )
                 .order_by(
-                    models.Tournament.start_date.desc().nulls_last(),
-                    models.Registration.tournament_id.desc(),
+                    *(c.desc() for c in tournament_chrono_key()),
                 )
             )
         ).all()
