@@ -188,9 +188,12 @@ class FlowService:
                     error("stage_node_managed_by_stage", "A node cannot become or stop being a stage node", node_id)
                 elif (
                     (u.kind, dict(u.config)) != (old.kind, dict(old.config))
-                    # Intake settings stay editable while a registration node runs; its input (edges) and kind do not.
-                    and (u.kind != old.kind or old.kind != FlowNodeKind.REGISTRATION)
-                    and await frozen(node_id)
+                    # An intake's settings decide its output: editable until a consumer has frozen that input (§6.4).
+                    and await (
+                        downstream_lifecycle_started(session, node_id)
+                        if u.kind == old.kind == FlowNodeKind.REGISTRATION
+                        else frozen(node_id)
+                    )
                 ):
                     error(
                         "node_frozen", "A started node, or one feeding a started node, cannot be reconfigured", node_id

@@ -1,6 +1,6 @@
 """Facet counters for the public tournaments page (rpc.tournament.tournaments_facets).
 
-The whole contract of ``get_facets`` is *which filter each of its three queries
+The whole contract of ``get_facets`` is *which filter each of its four queries
 leaves out*, and that is visible in the SQL it builds — so the primary tests drive
 it with a recording session and assert on the compiled statements plus the schema
 assembled from canned rows. Nothing about it needs a database, and the properties
@@ -73,12 +73,13 @@ class _RecordingSession:
         return _Rows(self._results[len(self.statements) - 1])
 
 
-#: Enough rows to satisfy all three queries: per-status groups, per-is_league
+#: Enough rows to satisfy all four queries: per-status groups, per-is_league
 #: groups, then the single (total, live) row.
 _DEFAULT_RESULTS = [
     [(STATUS.LIVE, 3), (STATUS.COMPLETED, 30)],
     [(True, 6), (False, 36)],
     [(42, 3)],
+    [(5,)],
 ]
 
 
@@ -97,7 +98,7 @@ async def _run_facet_statements(**kwargs) -> list[sa.Select]:
 
 
 def test_by_status_ignores_its_own_axis_but_keeps_the_others() -> None:
-    _, (status_sql, _, _) = asyncio.run(_run_facets(status=STATUS.LIVE, is_league=True, query="cup", workspace_id=4))
+    _, (status_sql, _, _, _) = asyncio.run(_run_facets(status=STATUS.LIVE, is_league=True, query="cup", workspace_id=4))
 
     assert "GROUP BY tournament.tournament.status" in status_sql
     # Its own filter must be absent...
@@ -109,7 +110,7 @@ def test_by_status_ignores_its_own_axis_but_keeps_the_others() -> None:
 
 
 def test_league_split_ignores_is_league_but_keeps_status_and_search() -> None:
-    _, (_, league_sql, _) = asyncio.run(_run_facets(status=STATUS.LIVE, is_league=True, query="cup", workspace_id=4))
+    _, (_, league_sql, _, _) = asyncio.run(_run_facets(status=STATUS.LIVE, is_league=True, query="cup", workspace_id=4))
 
     assert "GROUP BY tournament.tournament.is_league" in league_sql
     assert "tournament.is_league IS " not in league_sql
@@ -118,7 +119,7 @@ def test_league_split_ignores_is_league_but_keeps_status_and_search() -> None:
 
 
 def test_totals_ignore_every_filter_but_never_visibility() -> None:
-    _, (_, _, totals_sql) = asyncio.run(_run_facets(status=STATUS.LIVE, is_league=True, query="cup", workspace_id=4))
+    _, (_, _, totals_sql, _) = asyncio.run(_run_facets(status=STATUS.LIVE, is_league=True, query="cup", workspace_id=4))
 
     # Only the "live" aggregate reads the status; no user filter does.
     assert totals_sql.count("tournament.status = ") == 1
@@ -129,6 +130,18 @@ def test_totals_ignore_every_filter_but_never_visibility() -> None:
     assert "tournament.workspace_id = " in totals_sql
     # `live` is the conditional aggregate over the same unfiltered set.
     assert "FILTER (WHERE" in totals_sql
+
+
+def test_registration_open_counts_registering_tournaments_under_search_and_league_but_not_status() -> None:
+    facets, (_, _, _, registration_sql) = asyncio.run(
+        _run_facets(status=STATUS.LIVE, is_league=True, query="cup", workspace_id=4)
+    )
+
+    assert facets.registration_open == 5
+    assert "tournament.flow_node.status IN" in registration_sql
+    assert "tournament.is_league IS " in registration_sql
+    assert "tournament.name ILIKE" in registration_sql
+    assert "tournament.status = " not in registration_sql
 
 
 def test_visibility_predicate_is_on_every_query() -> None:
@@ -159,7 +172,7 @@ def test_league_and_standard_come_from_the_boolean_groups() -> None:
 
 
 def test_missing_league_group_reads_as_zero_not_a_key_error() -> None:
-    facets, _ = asyncio.run(_run_facets(results=[[(STATUS.LIVE, 2)], [(False, 2)], [(2, 2)]]))
+    facets, _ = asyncio.run(_run_facets(results=[[(STATUS.LIVE, 2)], [(False, 2)], [(2, 2)], [(0,)]]))
 
     assert facets.league == 0
     assert facets.standard == 2

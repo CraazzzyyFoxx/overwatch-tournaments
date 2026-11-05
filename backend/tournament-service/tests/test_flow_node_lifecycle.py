@@ -184,3 +184,26 @@ class TournamentReadFlowNodesTests(FlowCase):
         self.assertEqual(
             [("open", opens, None)], [(e.phase, e.starts_at, e.ends_at) for e in read.flow_nodes[0].schedule]
         )
+
+
+class RegistrationOpenFilterTests(FlowCase):
+    async def _listed(self) -> list[int]:
+        params = schemas.TournamentPaginationSortSearchParams.from_query_params(
+            schemas.TournamentPaginationSortSearchQueryParams(workspace_id=self.workspace_id, registration_open=True)
+        )
+        async with self.Session() as s:
+            page = await flows_service.get_all(s, params)
+        return [row.id for row in page.results]
+
+    async def test_only_tournaments_with_an_open_or_check_in_registration_node_are_listed(self) -> None:
+        reg = await self.node("registration", "draft")
+        self.assertEqual([], await self._listed())
+        for status in ("open", "check_in"):
+            async with self.Session() as s:
+                await s.execute(sa.update(models.FlowNode).where(models.FlowNode.id == reg).values(status=status))
+                await s.commit()
+            self.assertEqual([self.tournament_id], await self._listed(), status)
+        async with self.Session() as s:
+            await s.execute(sa.update(models.FlowNode).where(models.FlowNode.id == reg).values(status="closed"))
+            await s.commit()
+        self.assertEqual([], await self._listed())

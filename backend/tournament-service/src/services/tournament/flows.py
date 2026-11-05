@@ -27,7 +27,7 @@ from src.services.registration_team_guards import has_registered_teams, register
 from src.services.team.service import team_service
 
 from .cache_resources import DETAIL, tournament_generations
-from .service import TournamentService, tournament_service
+from .service import TournamentService, registering_tournament, tournament_service
 
 #: The entities ``to_pydantic`` honours: all a cached read's key keeps of the client's list (``canonical_entities``).
 READ_ENTITIES = frozenset(
@@ -422,10 +422,17 @@ class TournamentFlowsService:
             )
         ).one()
 
+        registration_open = (
+            await session.execute(
+                sa.select(sa.func.count(models.Tournament.id)).where(*scope, *search, *league, registering_tournament())
+            )
+        ).one()[0]
+
         return schemas.TournamentFacets(
             total=int(totals[0]),
             live=int(totals[1]),
             by_status=by_status,
+            registration_open=int(registration_open),
             league=league_count,
             standard=standard_count,
         )

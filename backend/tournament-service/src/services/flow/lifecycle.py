@@ -5,7 +5,6 @@ re-derived from the nodes in the same transaction.
 """
 
 from collections.abc import Awaitable, Callable
-from datetime import UTC, datetime
 
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -76,6 +75,14 @@ async def _require_form(session: AsyncSession, node: models.FlowNode) -> None:
         )
 
 
+async def _require_swiss_lock(session: AsyncSession, node: models.FlowNode) -> None:
+    """An individual Swiss stage completes by its qualification lock (Decision 7): the lock checks the rounds and
+    the draft format and freezes the qualifiers, so a bare ``live → completed`` would skip all of it."""
+    stage = await _stage_of(session, node)
+    if stage.stage_type == StageType.INDIVIDUAL_SWISS and stage.qualification_locked_at is None:
+        raise _conflict("qualification_not_locked", "An individual Swiss stage completes by locking its qualification")
+
+
 #: Side effects of one move, run before the status is written.
 _HOOKS: dict[
     tuple[FlowNodeKind, FlowNodeStatus, FlowNodeStatus], Callable[[AsyncSession, models.FlowNode], Awaitable[None]]
@@ -85,6 +92,7 @@ _HOOKS: dict[
     (FlowNodeKind.STAGE, _S.DRAFT, _S.READY): _seat_inputs,
     (FlowNodeKind.STAGE, _S.READY, _S.LIVE): _start_stage,
     (FlowNodeKind.STAGE, _S.READY, _S.DRAFT): _revert_to_draft,
+    (FlowNodeKind.STAGE, _S.LIVE, _S.COMPLETED): _require_swiss_lock,
 }
 #: Moves a competitor is waiting to hear about; announced once the status is written (the window checks read it).
 _ANNOUNCED = frozenset(
@@ -140,7 +148,8 @@ class FlowNodeService:
         if hook := _HOOKS.get((kind, current, target)):
             await hook(session, node)
 
-        now = datetime.now(UTC)
+        # The database clock, as ``Encounter.updated_at`` uses: the reopen rule compares the two across hosts.
+        now = await session.scalar(sa.select(sa.func.clock_timestamp()))
         node.status = target.value
         if current == _S.DRAFT and node.started_at is None:
             node.started_at = now

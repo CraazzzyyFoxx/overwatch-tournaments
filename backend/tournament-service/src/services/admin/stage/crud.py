@@ -223,7 +223,7 @@ class StageCrudMixin(StageServiceBase):
         _apply_stage_fields(stage, payload)
         _normalize_individual_swiss(stage)
         await self.stage_repo.create(session, stage)
-        await self._add_stage_node(session, stage)
+        await self.add_stage_node(session, stage)
         if challonge_id is not None:
             session.add(
                 models.ChallongeSource(
@@ -238,7 +238,7 @@ class StageCrudMixin(StageServiceBase):
         await session.commit()
         return await self.get_stage(session, stage.id)
 
-    async def _add_stage_node(self, session: AsyncSession, stage: models.Stage) -> models.FlowNode:
+    async def add_stage_node(self, session: AsyncSession, stage: models.Stage) -> models.FlowNode:
         """The stage's ``draft`` node (spec §4.5), wired to its input only for the tournament's first stage.
 
         The input is ``formation.teams`` when the tournament has exactly one formation node, or -- for an individual
@@ -331,7 +331,7 @@ class StageCrudMixin(StageServiceBase):
         playoff_count_moved = await self._check_playoff_team_count_edit(session, stage, update_data)
         _apply_stage_fields(stage, update_data)
         _normalize_individual_swiss(stage)
-        if "name" in update_data:
+        if "name" in update_data and stage.node is not None:
             stage.node.name = stage.name
         # The rule row is EDITED, never replaced: every encounter of the stage
         # points at its id, and a new row would leave the played ones scored by
@@ -446,6 +446,14 @@ class StageCrudMixin(StageServiceBase):
                 detail=[ApiExc(code="node_frozen", msg="A stage that left draft cannot be deleted")],
             )
         tournament_id = stage.tournament_id
+        # Lazy: ``flow.lifecycle`` imports this package. Tournament lock first, as a node move takes it, before the
+        # node row goes with the stage.
+        from src.services.flow.engine import flow_engine  # noqa: PLC0415
+        from src.services.flow.lifecycle import flow_node_service  # noqa: PLC0415
+
+        had_node = stage.node is not None
+        if had_node:
+            await flow_node_service.lock_tournament(session, tournament_id)
         workspace_id = await session.scalar(
             select(models.Tournament.workspace_id).where(models.Tournament.id == tournament_id)
         )
@@ -458,6 +466,11 @@ class StageCrudMixin(StageServiceBase):
         await self.encounter_repo.delete_for_stage(session, stage_id)
         await self.standing_repo.delete_for_stage(session, stage_id)
         await self.stage_repo.delete(session, stage)
+        if had_node:
+            # The status derives from the nodes: a deleted draft sink can complete the tournament.
+            await session.flush()
+            await flow_engine.recompute(session, tournament_id)
+            await flow_node_service.sync_tournament_status(session, tournament_id)
         await self._publish_structure_changed(session, tournament_id)
         await stage_owner_delete(session, evidence, workspace_id=workspace_id, entity_type="stage", entity_id=stage_id)
         await session.commit()

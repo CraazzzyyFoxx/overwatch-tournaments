@@ -25,6 +25,19 @@ def _is_desc(order: typing.Any) -> bool:
     return order == pagination.SortOrder.DESC or order == "desc"
 
 
+def registering_tournament() -> sa.ColumnElement[bool]:
+    """The tournament has a registration node in ``open`` or ``check_in``: a player can sign up or check in (§9)."""
+    return (
+        sa.exists()
+        .where(
+            models.FlowNode.tournament_id == models.Tournament.id,
+            models.FlowNode.kind == enums.FlowNodeKind.REGISTRATION.value,
+            models.FlowNode.status.in_((enums.FlowNodeStatus.OPEN.value, enums.FlowNodeStatus.CHECK_IN.value)),
+        )
+        .correlate(models.Tournament)
+    )
+
+
 def tournament_entities(in_entities: list[str], child: typing.Any | None = None) -> list[_AbstractLoad]:
     """Loader options for a tournament's requested relations; ``child`` chains them under a parent load.
 
@@ -112,6 +125,10 @@ class TournamentService:
             # from exactly that comparison.
             query = query.where(models.Tournament.status.in_(params.status))
             total_query = total_query.where(models.Tournament.status.in_(params.status))
+
+        if params.registration_open:
+            query = query.where(registering_tournament())
+            total_query = total_query.where(registering_tournament())
 
         # Hidden-tournament visibility filter: applied to BOTH the page and count
         # query so hidden tournaments never leak into results OR totals.

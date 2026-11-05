@@ -177,3 +177,14 @@ class ApplyChangesTests(FlowCase):
                 FlowChanges(nodes=[FlowNodeUpsert(id=form, kind="filter", name="T", config={"mode": "top", "n": 2})])
             ),
         )
+
+    async def test_intake_settings_freeze_once_a_downstream_lifecycle_node_left_draft(self) -> None:
+        reg = await self.node("registration", "closed")
+        form = await self.node("formation", "forming", config={"mode": "balancer"})
+        await self.edge(reg, "participants", form, "players")
+        self.assertEqual(
+            (409, "node_frozen"),
+            await self._refusal(
+                FlowChanges(nodes=[FlowNodeUpsert(id=reg, kind="registration", name="R", config={"check_in": True})])
+            ),
+        )

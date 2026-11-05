@@ -176,7 +176,7 @@ class AdminStageDeleteOrderTests(IsolatedAsyncioTestCase):
     phase numbers the organizer owns, and two stages may share one on purpose."""
 
     async def test_delete_stage_does_not_renumber_remaining_phases(self) -> None:
-        deleted_stage = SimpleNamespace(id=10, tournament_id=99, order=1, status="draft")
+        deleted_stage = SimpleNamespace(id=10, tournament_id=99, order=1, status="draft", node=None)
         remaining_a = SimpleNamespace(id=9, order=0)
         remaining_b = SimpleNamespace(id=11, order=2)
         remaining_c = SimpleNamespace(id=12, order=2)

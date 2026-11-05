@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqlalchemy as sa
+from sqlalchemy.orm import selectinload
 
 from shared import models
 from shared.core import enums
@@ -11,6 +12,7 @@ from shared.core.errors import ApiHTTPException, BaseAPIException
 from shared.services.encounter.result import reopen
 from src import schemas
 from src.services.admin.stage import stage_service
+from src.services.challonge.sync.structure import ChallongeStructureService
 from src.services.flow.lifecycle import flow_node_service
 from src.services.standings.service import standings_service
 from src.services.voice.plan import build_voice_plan
@@ -216,3 +218,68 @@ class StageNodeTests(FlowCase):
             (409, "stage_status_mismatch"), (caught.exception.status_code, caught.exception.detail[0]["code"])
         )
         self.assertEqual("draft", await self.node_status(draft))
+
+    async def test_deleting_the_draft_sink_of_a_completed_tournament_completes_it(self) -> None:
+        _, done = await self.seated_stage(order=1, teams=(0, 1))
+        pending_id, _ = await self.stage(order=2, name="Later")
+        async with self.Session() as s:
+            await s.execute(sa.update(models.FlowNode).where(models.FlowNode.id == done).values(status="completed"))
+            await s.execute(
+                sa.update(models.Tournament)
+                .where(models.Tournament.id == self.tournament_id)
+                .values(status=enums.TournamentStatus.LIVE)
+            )
+            await s.commit()
+        async with self.Session() as s:
+            await stage_service.delete_stage(s, pending_id)
+        self.assertEqual(enums.TournamentStatus.COMPLETED, await self.tournament_status())
+
+    async def test_renaming_a_flowless_stage_does_not_need_a_node(self) -> None:
+        async with self.Session() as s:
+            rule = await add_scoring_rule(s, self.workspace_id)
+            stage = models.Stage(
+                tournament_id=self.tournament_id,
+                scoring_rule_id=rule.id,
+                name="room",
+                stage_type=enums.StageType.SINGLE_ELIMINATION,
+                order=1,
+            )
+            s.add(stage)
+            await s.commit()
+            renamed = await stage_service.update_stage(s, stage.id, schemas.StageUpdate(name="room 2"))
+        self.assertEqual("room 2", renamed.name)
+
+    async def test_individual_swiss_completes_only_through_its_qualification_lock(self) -> None:
+        stage_id, node_id = await self.stage(enums.StageType.INDIVIDUAL_SWISS, name="Swiss")
+        async with self.Session() as s:
+            await s.execute(sa.update(models.FlowNode).where(models.FlowNode.id == node_id).values(status="live"))
+            await s.commit()
+        refused = await self.refused(node_id, S.COMPLETED)
+        self.assertEqual((409, "qualification_not_locked"), (refused.status_code, refused.detail[0]["code"]))
+        async with self.Session() as s:
+            await s.execute(
+                sa.update(models.Stage).where(models.Stage.id == stage_id).values(qualification_locked_at=sa.func.now())
+            )
+            await s.commit()
+        await self.move(node_id, S.COMPLETED)
+        self.assertEqual("completed", await self.node_status(node_id))
+
+    async def test_a_challonge_group_stage_gets_a_draft_node_and_the_tournament_follows_it(self) -> None:
+        async with self.Session() as s:
+            tournament = await s.scalar(
+                sa.select(models.Tournament)
+                .where(models.Tournament.id == self.tournament_id)
+                .options(selectinload(models.Tournament.stages))
+            )
+            stage = await ChallongeStructureService()._create_group_with_stage(
+                s, tournament, name="Group A", challonge_id=None, stage_type=enums.StageType.ROUND_ROBIN
+            )
+            await s.commit()
+            node_id = await s.scalar(sa.select(models.FlowNode.id).where(models.FlowNode.stage_id == stage.id))
+        self.assertIsNotNone(node_id)
+        self.assertEqual("draft", await self.node_status(node_id))
+        async with self.Session() as s:
+            await s.execute(sa.update(models.FlowNode).where(models.FlowNode.id == node_id).values(status="live"))
+            await s.commit()
+        await self.move(node_id, S.COMPLETED)
+        self.assertEqual(enums.TournamentStatus.COMPLETED, await self.tournament_status())

@@ -13,6 +13,8 @@ from shared.repository import (
 )
 from shared.services.encounter.participants import active_teams
 from src import schemas
+from src.services.admin.stage import stage_service
+from src.services.admin.stage.crud import rule_values
 from src.services.challonge.stage_refs import StageRefs, resolve_stage_refs_from_group
 from src.services.challonge.sync._types import _ImportSource
 from src.services.challonge.sync.helpers import (
@@ -101,6 +103,8 @@ class ChallongeStructureService:
             stage_type=stage_type,
             order=_next_stage_order(tournament),
         )
+        # ``stage.scoring_rule_id`` is NOT NULL; an empty block is the rule the stage type implies, as in ``create_stage``.
+        stage.scoring_rule = models.ScoringRule(workspace_id=tournament.workspace_id, **rule_values(stage_type, {}))
         # Seeded while the stage is still transient, like ``item.inputs`` below: the
         # flush turns it persistent, and from then on the first touch of a collection
         # nothing ever loaded emits a lazy SELECT -- MissingGreenlet under async
@@ -118,6 +122,7 @@ class ChallongeStructureService:
         item.inputs = []
         await self.stage_item_repo.create(session, item)
         _append_once(stage.items, item)
+        await stage_service.add_stage_node(session, stage)
         return stage
 
     async def _ensure_group_stage(

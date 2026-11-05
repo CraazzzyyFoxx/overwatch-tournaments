@@ -112,6 +112,8 @@ class TournamentPaginationSortSearchQueryParams(
     workspace_id: WorkspaceFilter = None
     #: Any of these statuses (``?status=live&status=playoffs``); absent or empty is every status.
     status: list[enums.TournamentStatus] = []
+    #: ``true``: only tournaments with a registration node in ``open`` or ``check_in``; ``false`` is no filter.
+    registration_open: bool = False
     discipline: InstalledDisciplineFilter = None
 
 
@@ -120,6 +122,7 @@ class TournamentPaginationSortSearchParams(pagination.PaginationSortSearchParams
     is_league: bool | None = None
     workspace_id: int | None = None
     status: list[enums.TournamentStatus] = field(default_factory=list)
+    registration_open: bool = False
     discipline: str | None = None
 
     # ``per_page=-1`` ("every row") stops here, not at the shared 10,000: each row is ~100 us of serialization on
@@ -170,5 +173,8 @@ class TournamentFacets(BaseModel):
     total: int
     live: int
     by_status: dict[enums.TournamentStatus, int]
+    #: Tournaments with a registration node in ``open`` or ``check_in`` (the "Registration" chip); like ``by_status``
+    #: it ignores the status filter.
+    registration_open: int
     league: int
     standard: int
