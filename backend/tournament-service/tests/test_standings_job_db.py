@@ -16,6 +16,7 @@ import sqlalchemy as sa
 
 from shared.core.errors import BaseAPIException
 from shared.models.tournament.computation import TournamentComputationJob, TournamentRecalculationState
+from shared.models.tournament.flow import FlowNode, FlowNodeResult
 from shared.models.tournament.standings import Standing
 from src.services.computation import standings_worker
 from src.services.computation.jobs import jobs_service
@@ -144,3 +145,33 @@ class StandingsJobTests(EncounterLayerCase):
 
         self.assertEqual([(1, 1), (0, 0)], announced)
         self.assertEqual(["succeeded", "succeeded"], await self._jobs())
+
+    async def _stage_node(self) -> int:
+        async with self.Session() as s:
+            node = FlowNode(
+                tournament_id=self.tournament_id, kind="stage", name="Playoff", status="live", stage_id=self.stage_id
+            )
+            s.add(node)
+            await s.commit()
+            return node.id
+
+    async def test_the_job_recomputes_the_flow(self) -> None:
+        node_id = await self._stage_node()
+        await self.encounter(0, 1, scores=[2, 0])
+        await self._run(await self._request())
+        async with self.Session() as s:
+            teams = set(await s.scalars(sa.select(FlowNodeResult.team_id).where(FlowNodeResult.node_id == node_id)))
+        self.assertLessEqual({self.teams[0], self.teams[1]}, teams)
+
+    async def test_a_failed_flow_recompute_does_not_roll_back_the_standings(self) -> None:
+        await self._stage_node()
+        await self.encounter(0, 1, scores=[2, 0])
+        job_id = await self._request()
+        with patch.object(standings_worker.flow_engine, "recompute", AsyncMock(side_effect=RuntimeError("boom"))):
+            await self._run(job_id)
+        async with self.Session() as s:
+            standings = await s.scalar(
+                sa.select(sa.func.count()).select_from(Standing).where(Standing.tournament_id == self.tournament_id)
+            )
+        self.assertGreater(standings, 0)
+        self.assertEqual(["succeeded"], await self._jobs())

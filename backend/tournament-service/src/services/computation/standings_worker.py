@@ -10,6 +10,7 @@ from shared.services.tournament.computation import dispatch_job
 from src.core import db
 from src.services.admin.stage import stage_service as admin_stage_service
 from src.services.computation.jobs import failure_message, is_refusal, jobs_service
+from src.services.flow.engine import flow_engine
 from src.services.individual_swiss import individual_swiss_rounds_service
 from src.services.standings.service import standings_service
 from src.services.standings.swiss_auto_round import swiss_rounds_service
@@ -145,6 +146,11 @@ async def process_standings_job(job_id: int) -> None:
                     "Individual Swiss round generation",
                     tournament_id,
                     lambda: individual_swiss_rounds_service.generate_ready_rounds(session, tournament_id),
+                )
+                # After every other step: the flow reads the standings and the stages they just moved. Not used for
+                # invalidation; a failure here must not freeze the standings.
+                await _isolated(
+                    session, "Flow recompute", tournament_id, lambda: flow_engine.recompute(session, tournament_id)
                 )
                 generated = [*(generated or []), *(individual or [])]
             # Nothing moved, nothing to announce: no refetch storm and no achievement run for an identical table.
