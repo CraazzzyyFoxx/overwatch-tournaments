@@ -37,6 +37,7 @@ from tests.ow_analytics import module as ow_module  # noqa: E402
 player_profile = ow_module("features.player_profile")
 shift_features = ow_module("features.shift_features")
 backtest = importlib.import_module("src.services.ml.training.backtest")
+mvp_dominance = ow_module("features.mvp_dominance")
 
 
 class _EmptyResult:
@@ -116,6 +117,7 @@ class AnalyticsReadStreaksSubqueryTests(IsolatedAsyncioTestCase):
         self.assertIn("workspace_member.player_id AS user_id", sql)
         self.assertIn("anon_1.user_id = workspace_member.player_id", sql)
         self.assertIn('JOIN players."user" ON players."user".id = anon_1.user_id', sql)
+        self.assertIn("tournament.participant_result", sql)
 
 
 class PlayerProfileHistoryTests(IsolatedAsyncioTestCase):
@@ -153,6 +155,7 @@ class ShiftFeaturesRankHistoryTests(IsolatedAsyncioTestCase):
             sql,
             r"(?s)ORDER BY workspace_member\.player_id, \(SELECT coalesce\(rated_parent\.code, rated_leaf\.code\).*?LIMIT 1\), coalesce\(tournament\.tournament\.start_date, tournament\.tournament\.created_at\), coalesce\(tournament\.tournament\.end_date, tournament\.tournament\.start_date, tournament\.tournament\.created_at\), tournament\.tournament\.id$",
         )
+        self.assertIn("tournament.participant_result", sql)
 
 
 class BacktestRealisedShiftTests(IsolatedAsyncioTestCase):
@@ -166,3 +169,15 @@ class BacktestRealisedShiftTests(IsolatedAsyncioTestCase):
 
         sql = _compiled(session.statements[0])
         self.assertIn("workspace_member.player_id AS user_id", sql)
+        self.assertIn("tournament.participant_result", sql)
+
+
+class MvpDominanceTeamScopeTests(IsolatedAsyncioTestCase):
+    """A member on two teams of one tournament: each roster row reads only its own team's matches (spec §11.4)."""
+
+    async def test_the_roster_join_is_scoped_to_the_fact_team(self) -> None:
+        session = _CapturingSession()
+
+        await mvp_dominance.compute_mvp_dominance(session, 1)
+
+        self.assertRegex(_compiled(session.statements[0]), r"tournament\.player\.team_id = \w+\.tournament_team_id")

@@ -28,6 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection, AsyncSession
 from shared import models
 from shared.core.chrono import tournament_chrono_key
 from shared.repository import MLModelArtifactRepository
+from shared.services.participant_result import is_member_tournament_row
 from shared.services.workspace_scope import workspace_filter, workspace_scope_filter
 from src.core.analytics_exports import analytics_exports, tournament_discipline
 from src.domain.ratings import LINEAR, OPENSKILL, POINTS
@@ -136,6 +137,7 @@ async def _realised_shift_map(
         )
         .where(
             models.Player.is_substitution.is_(False),
+            is_member_tournament_row(),
             # Unranked rows have no division: the realised move is between consecutive ranked tournaments.
             models.Player.rank.is_not(None),
             models.Tournament.discipline == discipline,

@@ -73,19 +73,18 @@ class StreaksChronologyTests(_ChronologyTestCase):
     def setUp(self) -> None:
         super().setUp()
         self.db.insert(models.User.__table__, id=USER, name="streaker")
-        for tid, team in self.world().items():
+        teams = self.world()
+        member = self.db.session.scalar(
+            sa.select(models.WorkspaceMember.id).where(models.WorkspaceMember.player_id == USER)
+        )
+        for tid, team in teams.items():
             self.db.insert(
-                models.Standing.__table__,
-                id=1000 + tid,
+                models.ParticipantResult.__table__,
                 tournament_id=tid,
-                team_id=team,
-                position=tid,
-                overall_position=tid,
-                matches=1,
-                win=0,
-                draw=0,
-                lose=1,
-                points=0.0,
+                workspace_member_id=member,
+                final_team_id=team,
+                placement=tid,
+                field_size=1,
             )
 
     async def _positions(self, tournament_id: int) -> list[int]:

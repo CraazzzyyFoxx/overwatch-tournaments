@@ -27,6 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
 from shared.core.chrono import tournament_chrono_key
+from shared.services.participant_result import is_member_tournament_row
 from shared.services.workspace_scope import workspace_filter
 from src.core.analytics_exports import analytics_exports, tournament_discipline
 from src.domain.ratings import LINEAR, OPENSKILL, POINTS
@@ -124,6 +125,7 @@ async def load_evaluation_frame(
             models.WorkspaceMember.player_id.label("user_id"),
             models.Player.role.label("role"),
             models.Player.rank,
+            is_member_tournament_row().label("is_final"),
         )
         .join(models.WorkspaceMember, models.WorkspaceMember.id == models.Player.workspace_member_id)
         .where(
@@ -133,14 +135,15 @@ async def load_evaluation_frame(
         )
     )
     players = pd.DataFrame(
-        result.mappings().all(), columns=["player_id", "tournament_id", "team_id", "user_id", "role", "rank"]
+        result.mappings().all(),
+        columns=["player_id", "tournament_id", "team_id", "user_id", "role", "rank", "is_final"],
     ).merge(tournaments, on="tournament_id")
     grids = await load_source_grids(session, players["version_id"].dropna().unique())
     exports.assign_canonical_division(players, grids, rank_col="rank")
     ranked = players[players["div"].notna()].sort_values([*_ROLE_KEY, "order", "player_id"])
 
     # T_p: the previous ranked tournament of the same (workspace, user, role), in tournament start order.
-    chain = ranked.drop_duplicates([*_ROLE_KEY, "tournament_id"], keep="last")
+    chain = ranked[ranked["is_final"]].drop_duplicates([*_ROLE_KEY, "tournament_id"], keep="last")
     by_role = chain.groupby(_ROLE_KEY, sort=False)
     chain = chain.assign(
         prev_tournament_id=by_role["tournament_id"].shift(1),

@@ -79,37 +79,6 @@ class AnalyticsService:
             .group_by(match_seat.team_id)
         ).cte("player_matches")
 
-        team_counts = (
-            sa.select(
-                models.Team.tournament_id.label("tournament_id"),
-                sa.func.count(models.Team.id).label("team_count"),
-            )
-            .join(models.Tournament, models.Team.tournament_id == models.Tournament.id)
-            .where(models.Tournament.discipline == discipline, *workspace_scope_filter(workspace_id, workspace_ids))
-            .group_by(models.Team.tournament_id)
-        ).cte("team_counts")
-
-        # A team's FINAL tournament placement is the overall_position of its LATEST
-        # stage standing (the playoff bracket if it advanced, else the group stage),
-        # not ``min()`` across stages: an advancing team carries a placeholder
-        # overall_position=0 in the group stage, so ``min()`` mis-reads a 13th-place
-        # finisher as the champion (inflating placement_score and the placement gate).
-        standings = (
-            sa.select(
-                models.Standing.team_id.label("team_id"),
-                models.Standing.tournament_id.label("tournament_id"),
-                models.Standing.overall_position.label("overall_position"),
-            )
-            .join(models.Tournament, models.Standing.tournament_id == models.Tournament.id)
-            .where(models.Tournament.discipline == discipline, *workspace_scope_filter(workspace_id, workspace_ids))
-            .distinct(models.Standing.team_id, models.Standing.tournament_id)
-            .order_by(
-                models.Standing.team_id,
-                models.Standing.tournament_id,
-                models.Standing.stage_id.desc(),
-            )
-        ).cte("team_standings")
-
         facts = player_facts(discipline=discipline)
         impact_points = (
             sa.select(
@@ -147,8 +116,8 @@ class AnalyticsService:
                 sa.func.coalesce(points.c.wins, 0).label("wins"),
                 sa.func.coalesce(points.c.losses, 0).label("losses"),
                 sa.func.coalesce(matches.c.match_count, 0).label("match_count"),
-                standings.c.overall_position.label("overall_position"),
-                team_counts.c.team_count.label("team_count"),
+                models.ParticipantResult.placement.label("overall_position"),
+                models.ParticipantResult.field_size.label("team_count"),
                 impact_points.c.impact_points.label("impact_points"),
             )
             .select_from(models.Team)
@@ -169,14 +138,13 @@ class AnalyticsService:
             )
             .join(matches, models.Player.team_id == matches.c.team_id, isouter=True)
             .join(
-                standings,
+                models.ParticipantResult,
                 sa.and_(
-                    standings.c.team_id == models.Team.id,
-                    standings.c.tournament_id == models.Tournament.id,
+                    models.ParticipantResult.tournament_id == models.Tournament.id,
+                    models.ParticipantResult.workspace_member_id == models.Player.workspace_member_id,
                 ),
                 isouter=True,
             )
-            .join(team_counts, team_counts.c.tournament_id == models.Tournament.id, isouter=True)
             .join(impact_points, impact_points.c.player_id == models.Player.id, isouter=True)
             .where(
                 models.Tournament.id >= 1,

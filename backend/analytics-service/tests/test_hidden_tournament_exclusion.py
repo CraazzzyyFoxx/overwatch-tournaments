@@ -80,6 +80,7 @@ TABLES = (
     models.StatsFact.__table__,
     models.StatDef.__table__,
     models.Standing.__table__,
+    models.ParticipantResult.__table__,
 )
 
 WORKSPACE_ID = 1

@@ -248,18 +248,25 @@ class AnalyticsReadService:
                 models.Player.role,
                 models.Player.sub_role,
                 models.Tournament.discipline,
-                models.Standing.overall_position,
+                models.ParticipantResult.placement.label("overall_position"),
                 start.label("chrono_start"),
                 end.label("chrono_end"),
-                models.Player.tournament_id,
+                models.ParticipantResult.tournament_id,
             )
-            .select_from(models.Player)
-            .join(models.Tournament, models.Tournament.id == models.Player.tournament_id)
+            .select_from(models.ParticipantResult)
+            .join(
+                models.Player,
+                sa.and_(
+                    models.Player.tournament_id == models.ParticipantResult.tournament_id,
+                    models.Player.workspace_member_id == models.ParticipantResult.workspace_member_id,
+                    models.Player.team_id == models.ParticipantResult.final_team_id,
+                ),
+            )
+            .join(models.Tournament, models.Tournament.id == models.ParticipantResult.tournament_id)
             .join(
                 models.WorkspaceMember,
-                models.WorkspaceMember.id == models.Player.workspace_member_id,
+                models.WorkspaceMember.id == models.ParticipantResult.workspace_member_id,
             )
-            .join(models.Standing, models.Standing.team_id == models.Player.team_id)
             .join(
                 current,
                 sa.tuple_(start, end, tid)
@@ -275,14 +282,14 @@ class AnalyticsReadService:
                 subquery.c.discipline,
                 subquery.c.overall_position,
             )
-            .select_from(models.Player)
+            .select_from(models.ParticipantResult)
             .join(
                 models.WorkspaceMember,
-                models.WorkspaceMember.id == models.Player.workspace_member_id,
+                models.WorkspaceMember.id == models.ParticipantResult.workspace_member_id,
             )
             .join(subquery, subquery.c.user_id == models.WorkspaceMember.player_id)
             .join(models.User, models.User.id == subquery.c.user_id)
-            .where(models.Player.tournament_id == tournament_id)
+            .where(models.ParticipantResult.tournament_id == tournament_id)
             .order_by(subquery.c.chrono_start.desc(), subquery.c.chrono_end.desc(), subquery.c.tournament_id.desc())
         )
 
