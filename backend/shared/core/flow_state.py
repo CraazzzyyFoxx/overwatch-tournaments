@@ -25,7 +25,7 @@ def derive_tournament_status(nodes: Sequence[FlowNodeState]) -> TournamentStatus
 
     ARCHIVED is a manual overlay and is never derived.
     """
-    if all(x.status is FlowNodeStatus.DRAFT for x in nodes if x.kind in LIFECYCLE_KINDS):
+    if all(x.status == FlowNodeStatus.DRAFT for x in nodes if x.kind in LIFECYCLE_KINDS):
         return TournamentStatus.ANNOUNCEMENT
     if all(x.status in _DONE for x in nodes if x.is_sink):
         return TournamentStatus.COMPLETED

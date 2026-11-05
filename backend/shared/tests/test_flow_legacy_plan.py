@@ -260,6 +260,29 @@ def test_a_ref_to_an_unknown_item_is_ignored() -> None:
     assert not [n for n in plan.nodes if n.kind == K.FILTER]
 
 
+LOOPING_REFS = {
+    "self": [LegacySourceRef(20, 101, 1), LegacySourceRef(20, 201, 1)],
+    "mutual": [LegacySourceRef(20, 101, 1), LegacySourceRef(10, 201, 1)],
+}
+
+
+@pytest.mark.parametrize("refs", LOOPING_REFS.values(), ids=LOOPING_REFS)
+def test_refs_that_do_not_come_from_an_earlier_stage_are_ignored(refs) -> None:
+    t = tournament(GROUPS, PLAYOFF, refs=refs)
+    plan = plan_legacy_flow(t)
+    assert ("Groups", "ranking", "Top 1 per group", "ranking") in edges(plan)
+    assert ("Playoff", "ranking", "Top 1 per group", "ranking") not in edges(plan)
+    assert ("Teams", "teams", "Groups", "participants") in edges(plan)
+    assert_status_reproduced(t, plan)
+
+
+def test_an_explicit_zero_advance_on_an_item_reads_as_the_stage_default() -> None:
+    # Same reading as group_advance_counts in the wiring code: 0 is "no override" (the API rejects it anyway).
+    groups = replace(GROUPS, advance_count=2, items=(item(101, 0, advance=0), item(102, 1, advance=3)))
+    plan = plan_legacy_flow(tournament(groups, PLAYOFF))
+    assert by_name(plan, "Top 3 per group").config == {"mode": "per_item_top", "n": 3, "per_item": {"101": 2, "102": 3}}
+
+
 def test_a_status_mismatch_aborts_with_the_tournament_named() -> None:
     t = tournament(stage(10, "Main", active=True, published=True))
     plan = plan_legacy_flow(t)
@@ -276,6 +299,7 @@ def test_every_planned_graph_validates_without_errors() -> None:
         tournament(replace(GROUPS, advance_count=2), PLAYOFF),
         tournament(swiss, PLAYOFF, formation="draft"),
         tournament(formation="registration"),
+        *(tournament(GROUPS, PLAYOFF, refs=refs) for refs in LOOPING_REFS.values()),
     ]
     for t in cases:
         plan = plan_legacy_flow(t)

@@ -142,7 +142,7 @@ class PlannedSchedule:
 @dataclass(frozen=True, slots=True)
 class LegacyFlowPlan:
     tournament_id: int
-    nodes: tuple[PlannedNode, ...]
+    nodes: tuple[PlannedNode, ...] = ()
     edges: tuple[PlannedEdge, ...] = ()
     schedules: tuple[PlannedSchedule, ...] = ()
 
@@ -224,11 +224,12 @@ def plan_legacy_flow(t: LegacyTournament) -> LegacyFlowPlan:
             continue
         if s is playoff:
             continue
-        # (a) explicit source refs: per source stage, the best position referenced from each of its items
+        # (a) explicit source refs: per source stage, the best position referenced from each of its items.
+        # Only refs from a strictly earlier stage count, so the graph stays acyclic whatever the manual inputs say.
         best: dict[int, dict[int, int]] = {}
         for r in t.source_refs:
             src = item_stage.get(r.source_stage_item_id)
-            if r.target_stage_id == s.id and src is not None:
+            if r.target_stage_id == s.id and src is not None and (src.order, src.id) < (s.order, s.id):
                 per = best.setdefault(src.id, {})
                 per[r.source_stage_item_id] = max(per.get(r.source_stage_item_id, 0), r.source_position)
         if best:

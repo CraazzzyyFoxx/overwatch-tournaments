@@ -28,5 +28,5 @@ tournament status, stages, registration, the balancer or the draft changes.
   `flowP2_02_legacy_flows` builds the graph of every existing tournament and aborts on a status mismatch.
   Rehearse it on a production dump first.
 - Deploy from one SHA in this order: migration, tournament-service, gateway, frontend.
-- Then run `cd backend/tournament-service && uv run python recompute_flows.py` once. It prints one line per tournament
-  and exits 0. Running it again is safe.
+- Then run `cd backend/tournament-service && uv run python recompute_flows.py` once. It prints one line per tournament,
+  reports a failing tournament on stderr without stopping, and exits non-zero if any failed. Running it again is safe.

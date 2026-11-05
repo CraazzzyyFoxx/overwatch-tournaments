@@ -61,6 +61,8 @@ APPROVED_DIRECT_WRITE_FILES = {
     "shared/rbac/bootstrap.py",
     "tournament-service/src/services/bracket/advancement.py",
     "tournament-service/src/services/bracket/usability.py",
+    # Flow recompute: one batched delete/update/insert of ``flow_node_result`` rows per node, diffed in place.
+    "tournament-service/src/services/flow/engine.py",
     # Append-only event journal, not CRUD: the realtime rail writes one
     # WorkspaceEvent row per staged event from the session's own before_commit
     # hook, which is where the row has to be created for it to ride the
