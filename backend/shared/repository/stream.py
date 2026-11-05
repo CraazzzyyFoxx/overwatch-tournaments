@@ -44,6 +44,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from shared import models
 from shared.core import enums
 from shared.core.social import SocialProvider
+from shared.services.participant_result import is_member_tournament_row
 
 __all__ = (
     "SelfDeclaredChannelRow",
@@ -281,7 +282,8 @@ class StreamTargetRepository:
 
         The join walks the anchor the roster actually uses. A caller's user id is
         a ``players.user.id``, and ``tournament.player`` carries none, so the
-        only path to a roster row is through ``workspace_member``.
+        only path to a roster row is through ``workspace_member``. One row per user
+        even when the user played for two teams.
         """
         if not user_ids:
             return []
@@ -307,7 +309,14 @@ class StreamTargetRepository:
             )
             .select_from(user)
             .outerjoin(member, member.player_id == user.id)
-            .outerjoin(player, sa.and_(player.workspace_member_id == member.id, player.tournament_id == tournament_id))
+            .outerjoin(
+                player,
+                sa.and_(
+                    player.workspace_member_id == member.id,
+                    player.tournament_id == tournament_id,
+                    is_member_tournament_row(player),
+                ),
+            )
             .outerjoin(team, team.id == player.team_id)
             .where(user.id.in_(user_ids))
         )

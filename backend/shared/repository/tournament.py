@@ -14,6 +14,7 @@ from shared import models
 from shared.core.utils import join_entity, prepare_entities, selectin_entity
 from shared.repository.base import BaseRepository
 from shared.repository.identity import UserRepository
+from shared.services.participant_result import is_member_tournament_row
 
 #: A public ref that is a legacy numeric id rather than a slug.
 _NUMERIC_REF = re.compile(r"[1-9]\d*")
@@ -436,7 +437,7 @@ class PlayerRepository(BaseRepository[models.Player]):
         tournament_id: int,
         options: Sequence[_AbstractLoad] | None = None,
     ) -> models.Player | None:
-        """One roster row for a user in a tournament.
+        """The member's tournament row (spec §11.4): the final team's, else the latest non-substitute row.
 
         ``user_id`` is a ``User.id``, reached through ``workspace_member`` — ``Player``
         has no ``user_id`` column; ``workspace_member_id`` is the sole identity anchor.
@@ -445,6 +446,7 @@ class PlayerRepository(BaseRepository[models.Player]):
             sa.select(models.Player).where(
                 models.Player.workspace_member.has(models.WorkspaceMember.player_id == user_id),
                 models.Player.tournament_id == tournament_id,
+                is_member_tournament_row(),
             ),
             options,
         )
