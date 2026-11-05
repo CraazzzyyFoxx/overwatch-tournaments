@@ -12,6 +12,7 @@ from sqlalchemy import exc as sa_exc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
+from shared.core.chrono import chrono_sort_key, tournament_chrono_key
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.division_grid import DivisionGrid
 from shared.domain.achievements.context import EvalContext
@@ -243,6 +244,23 @@ class AchievementEvaluationRunnerService:
             trigger = await self._resolve_trigger(session, workspace_id, tournament_id, match_id)
             tournament = trigger.tournament
             rules = await _select_rules(session, workspace_id, trigger.discipline, rule_ids, changed_tables)
+            # Computed before the per-rule commits expire ``tournament``.
+            tournament_key = chrono_sort_key(tournament) if tournament is not None else None
+            cutoff_ids = {rule.min_tournament_id for rule in rules if rule.min_tournament_id}
+            cutoffs = (
+                {
+                    row[0]: tuple(row[1:])
+                    for row in (
+                        await session.execute(
+                            sa.select(models.Tournament.id, *tournament_chrono_key()).where(
+                                models.Tournament.id.in_(cutoff_ids)
+                            )
+                        )
+                    ).all()
+                }
+                if cutoff_ids
+                else {}
+            )
 
             total_created = 0
             total_removed = 0
@@ -295,7 +313,12 @@ class AchievementEvaluationRunnerService:
                     rules_ok += 1
                     continue
 
-                if rule.min_tournament_id and eval_tournament and eval_tournament.id < rule.min_tournament_id:
+                # Applies from the cutoff tournament on, in chronology; a cutoff that no longer exists cuts nothing.
+                if (
+                    eval_tournament is not None
+                    and (cutoff := cutoffs.get(rule.min_tournament_id)) is not None
+                    and tournament_key < cutoff
+                ):
                     diff = await diff_and_apply(
                         session,
                         rule,

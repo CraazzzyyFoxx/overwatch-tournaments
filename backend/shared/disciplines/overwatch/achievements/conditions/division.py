@@ -11,6 +11,7 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
+from shared.core.chrono import tournament_chrono_key
 from shared.domain.achievements.context import EvalContext
 from shared.models.achievements.achievement import AchievementGrain
 
@@ -106,13 +107,13 @@ async def execute_div_change(
             sa.func.lag(models.Player.rank)
             .over(
                 partition_by=[models.WorkspaceMember.player_id, models.Player.role],
-                order_by=[models.Tournament.start_date.nulls_last(), models.Tournament.id],
+                order_by=[*tournament_chrono_key()],
             )
             .label("prev_rank"),
             sa.func.lag(models.Tournament.division_grid_version_id)
             .over(
                 partition_by=[models.WorkspaceMember.player_id, models.Player.role],
-                order_by=[models.Tournament.start_date.nulls_last(), models.Tournament.id],
+                order_by=[*tournament_chrono_key()],
             )
             .label("prev_source_version_id"),
         )

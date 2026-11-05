@@ -300,7 +300,9 @@ class _Fixture:
     def insert(self, table, **values) -> None:  # noqa: ANN001, ANN003
         self.session.execute(sa.insert(table).values(**values))
 
-    def tournament(self, tournament_id: int, *, name: str, is_hidden: bool, start: datetime | None) -> None:
+    def tournament(
+        self, tournament_id: int, *, name: str, is_hidden: bool, start: datetime | None, end: datetime | None = None
+    ) -> None:
         self.insert(
             models.Tournament.__table__,
             id=tournament_id,
@@ -310,6 +312,7 @@ class _Fixture:
             is_hidden=is_hidden,
             is_league=False,
             start_date=start,
+            end_date=end,
         )
 
     def member(self, user_id: int, *, workspace_id: int = WORKSPACE_ID) -> int:
@@ -792,15 +795,15 @@ class ScrimTournamentTimelineTests(_EngineTestCase):
     """The container must not disturb the streak conditions' ordinal timeline.
 
     ``conditions/streak.py`` ranks the workspace's non-league tournaments with
-    ``dense_rank() OVER (ORDER BY start_date NULLS LAST, id)`` — an ordinal
+    ``dense_rank() OVER (ORDER BY <tournament chronology key>)`` — an ordinal
     timeline, so any row that takes a rank BETWEEN two real tournaments splits a
     streak spanning them.
 
     This used to hold by accident: the container had no start date, so
-    ``NULLS LAST`` parked it at the end. It now carries its creation date
-    (``TournamentRead`` requires one), so the accident is gone and the
-    ``is_hidden`` filter is what keeps the sequence honest. The dated case below
-    is the one that fails without that filter.
+    ``NULLS LAST`` parked it at the end. The key now places an undated
+    tournament at its creation date, so the ``is_hidden`` filter is what keeps
+    the sequence honest. The dated case below is the one that fails without
+    that filter.
     """
 
     async def _streak_users(self) -> set:

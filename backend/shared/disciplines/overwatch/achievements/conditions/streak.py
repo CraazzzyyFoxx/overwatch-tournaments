@@ -11,6 +11,7 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
+from shared.core.chrono import tournament_chrono_key
 from shared.disciplines.overwatch.achievements.stage_filters import stage_is_completed, standing_is_elimination
 from shared.domain.achievements.context import EvalContext
 from shared.models.achievements.achievement import AchievementGrain
@@ -50,16 +51,14 @@ async def execute_consecutive(
     # Hidden tournaments are excluded because the scrim container is one and
     # this rank is an ordinal timeline: a row that takes a rank in the middle of
     # it splits any streak that spans it (the container carries its creation
-    # date, so ``NULLS LAST`` does not park it at the end). Hidden PREVIEW
+    # date, so the key places it between real tournaments). Hidden PREVIEW
     # tournaments are excluded too: they are real tournaments, but one that is
     # still hidden has not been played yet, so it cannot be a link in a
     # consecutive-tournament streak either.
     tournament_seq = (
         sa.select(
             models.Tournament.id.label("tournament_id"),
-            sa.func.dense_rank()
-            .over(order_by=[models.Tournament.start_date.nulls_last(), models.Tournament.id])
-            .label("seq"),
+            sa.func.dense_rank().over(order_by=[*tournament_chrono_key()]).label("seq"),
         ).where(
             sa.and_(
                 models.Tournament.workspace_id == context.workspace_id,
@@ -284,7 +283,7 @@ async def execute_stable_streak(
             models.Tournament.is_league.is_(False),
             models.Player.is_substitution.is_(False),
         )
-        .order_by(models.WorkspaceMember.player_id, models.Tournament.start_date.nulls_last(), models.Tournament.id)
+        .order_by(models.WorkspaceMember.player_id, *tournament_chrono_key())
     )
 
     result = await session.execute(query)
