@@ -242,3 +242,57 @@ class RosterEngineReadsTests(IsolatedAsyncioTestCase):
             )
             await s.commit()
             assert await roster_engine.pool_ids(s, node.id, self.ids) == {one, foreign}
+
+    async def test_several_upstream_nodes_pool_every_member_and_the_newest_entry_decides(self) -> None:
+        one, two, _excluded, _foreign, _deleted = self.ids
+        async with self.Session() as s:
+            newer = models.FlowNode(tournament_id=self.tournament_id, kind="registration", name="R2", status="closed")
+            formation = models.FlowNode(
+                tournament_id=self.tournament_id, kind="formation", name="Teams", status="draft"
+            )
+            s.add_all([newer, formation])
+            await s.flush()
+            s.add_all(
+                models.FlowEdge(
+                    tournament_id=self.tournament_id,
+                    source_node_id=source,
+                    source_port="participants",
+                    target_node_id=formation.id,
+                    target_port="players",
+                )
+                for source in (self.node_id, newer.id)
+            )
+            members = dict(
+                (
+                    await s.execute(
+                        sa.select(models.Registration.id, models.Registration.workspace_member_id).where(
+                            models.Registration.id.in_([one, two])
+                        )
+                    )
+                ).all()
+            )
+            # ``one`` joined the older intake only; ``two`` both, and the newer intake pulls it out of the pool.
+            for source, registrations in ((self.node_id, (one, two)), (newer.id, (two,))):
+                s.add_all(
+                    models.FlowNodeResult(
+                        node_id=source,
+                        port="participants",
+                        rank=rank,
+                        workspace_member_id=members[registration],
+                        state="final",
+                    )
+                    for rank, registration in enumerate(registrations, start=1)
+                )
+            entry = models.RegistrationEntry(
+                registration_node_id=newer.id, registration_id=two, status="approved", balancer_status="excluded"
+            )
+            s.add(entry)
+            await s.commit()
+            assert set(await roster_engine.for_node_input(s, formation.id)) == {one, two}
+            assert set(await roster_engine.for_node_input(s, formation.id, pool_only=True)) == {one}
+            assert await roster_engine.pool_ids(s, formation.id, [one, two]) == {one}
+            assert set(await roster_engine.for_node_registrations(s, formation.id, [one, two])) == {one, two}
+            entry.balancer_status = "ready"
+            await s.commit()
+            assert set(await roster_engine.for_node_input(s, formation.id, pool_only=True)) == {one, two}
+            assert await roster_engine.pool_ids(s, formation.id, [one, two]) == {one, two}

@@ -331,6 +331,7 @@ class AdminTeamService:
 
         player_data = _prepare_player_create_data(data)
         player_data["tournament_id"] = team.tournament_id
+        player_data["formation_node_id"] = team.formation_node_id
         player_data["workspace_member_id"] = await self._resolve_workspace_member_id(
             session,
             tournament_id=team.tournament_id,

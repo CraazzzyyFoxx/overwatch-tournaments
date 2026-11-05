@@ -150,7 +150,7 @@ class WriteParticipantResultsTests(_ResultCase):
                 await self.results(s),
             )
 
-    async def test_the_last_completed_formation_decides_and_the_field_is_its_node(self) -> None:
+    async def test_the_last_completed_formation_decides_and_the_field_is_its_output(self) -> None:
         async with self.Session() as s:
             await self.formations(s, early=("team0", "team1"), late=("team2",))  # team3 stays tournament-wide
             await self.roster(s, "m0", "team2")  # the lower Player.id, but the later formation
@@ -165,12 +165,29 @@ class WriteParticipantResultsTests(_ResultCase):
             await self.finish(s)
             await write_participant_results(s, self.ids["t"])
             await s.commit()
+            # A node's field is its teams plus the tournament-wide ones; a tournament-wide team's is every team.
             self.assertEqual(
                 {
-                    self.ids["m0"]: (self.ids["team2"], 1, 1),
-                    self.ids["m1"]: (self.ids["team1"], 3, 2),
-                    self.ids["m2"]: (self.ids["team3"], 2, 1),
+                    self.ids["m0"]: (self.ids["team2"], 1, 2),
+                    self.ids["m1"]: (self.ids["team1"], 3, 3),
+                    self.ids["m2"]: (self.ids["team3"], 2, 4),
                 },
+                await self.results(s),
+            )
+
+    async def test_the_formation_is_the_teams_not_the_players_column(self) -> None:
+        async with self.Session() as s:
+            await self.formations(s, early=("team0", "team1"), late=("team2",))
+            await self.roster(s, "m0", "team0")
+            await self.roster(s, "m1", "team2")
+            await s.execute(sa.update(Player).values(formation_node_id=None))  # a player added without the node
+            self.standing(s, "team0", 2)
+            self.standing(s, "team2", 1)
+            await self.finish(s)
+            await write_participant_results(s, self.ids["t"])
+            await s.commit()
+            self.assertEqual(
+                {self.ids["m0"]: (self.ids["team0"], 2, 3), self.ids["m1"]: (self.ids["team2"], 1, 2)},
                 await self.results(s),
             )
 

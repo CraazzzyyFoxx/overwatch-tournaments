@@ -124,7 +124,7 @@ async def _export(shape, roster: PlayerRoster, *, slot_code: str | None = "tank"
         "resolve",
         AsyncMock(return_value={roster.registration_id: roster}),
     ):
-        payload = await build_registered_export(session, 1, shape)
+        payload = await build_registered_export(session, 1, shape, [5])
     assert len(payload.teams) == 1
     return payload.teams[0].members[0]
 
@@ -279,7 +279,7 @@ class NonRatedAssignmentTests(IsolatedAsyncioTestCase):
         session = _FakeSession(teams=[_team()], registrations=[registration])
         roster = _roster(roles=(_role(HeroClass.tank, 3000),))
         with patch.object(registered.roster_engine, "resolve", AsyncMock(return_value={1: roster})):
-            payload = await build_registered_export(session, 1, ROLE_SHAPE)
+            payload = await build_registered_export(session, 1, ROLE_SHAPE, [5])
         member = payload.teams[0].members[0]
         assert member.non_rated_roles == (shotcaller,)
         assert member.slot_code == "tank"

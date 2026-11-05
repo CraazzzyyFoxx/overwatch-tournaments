@@ -156,8 +156,8 @@ async def materialize_teams(
 
     Idempotent twice over: a team whose lowercased ``name`` already exists in the
     formation node is reused rather than duplicated, and a player already placed in
-    the node is never given a second row. New rows carry ``formation_node_id``; what
-    other formations of the tournament hold is not looked at.
+    the node's output (its teams and the tournament-wide ones) is never given a second row. New rows carry
+    ``formation_node_id``; what other formations of the tournament hold is not looked at.
     """
     result = MaterializationResult()
 
@@ -262,8 +262,8 @@ async def materialize_teams(
             existing_teams.setdefault(team.name.lower(), team)
 
     # 3. ``load_prior_participation`` answers the newcomer question separately
-    #    (chronological, scope-aware); one more query finds players already in
-    #    this formation node so a repeat never creates a duplicate row.
+    #    (chronological, scope-aware); one more query finds players already in this formation node's output (its
+    #    teams and the tournament-wide ones, plan Decision 8) so a repeat never creates a duplicate row.
     placed_user_ids: set[int] = set()
     starters_by_name: dict[str, list[tuple[RoleNode, ...]]] = {team.display_name.lower(): [] for team in teams}
     team_name_by_id = {team.id: name for name, team in existing_teams.items()}
@@ -275,8 +275,10 @@ async def materialize_teams(
             await session.execute(
                 sa.select(WorkspaceMember.player_id, Player)
                 .join(Player, Player.workspace_member_id == WorkspaceMember.id)
+                .join(Team, Team.id == Player.team_id)
                 .where(
-                    Player.formation_node_id == formation_node_id,
+                    Team.tournament_id == tournament_id,
+                    sa.or_(Team.formation_node_id == formation_node_id, Team.formation_node_id.is_(None)),
                     sa.or_(
                         WorkspaceMember.player_id.in_(user_id_list),
                         Player.team_id.in_(team_name_by_id),

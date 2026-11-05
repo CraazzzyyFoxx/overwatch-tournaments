@@ -185,6 +185,19 @@ class TournamentReadFlowNodesTests(FlowCase):
             [("open", opens, None)], [(e.phase, e.starts_at, e.ends_at) for e in read.flow_nodes[0].schedule]
         )
 
+    async def test_a_formation_names_the_registration_nodes_feeding_it_newest_first(self) -> None:
+        day1 = await self.node("registration", "closed", name="Day 1")
+        day2 = await self.node("registration", "open", name="Day 2")
+        teams = await self.node("formation", "draft", config={"mode": "balancer"})
+        await self.edge(day1, "participants", teams, "players")
+        await self.edge(day2, "participants", teams, "players")
+        async with self.Session() as s:
+            tournament = await s.get(models.Tournament, self.tournament_id)
+            read = await flows_service.to_pydantic(s, tournament, ["flow_nodes"])
+        self.assertEqual(
+            {day1: [], day2: [], teams: [day2, day1]}, {n.id: n.pool_registration_node_ids for n in read.flow_nodes}
+        )
+
 
 class RegistrationOpenFilterTests(FlowCase):
     async def _listed(self) -> list[int]:

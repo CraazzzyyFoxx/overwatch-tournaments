@@ -27,6 +27,7 @@ from shared import models
 from shared.core.errors import ApiExc, ApiHTTPException
 from shared.repository import RegistrationTeamRepository, TournamentRepository
 from shared.services.balancer_realtime import BALANCER_TEAMS_CHANGED
+from shared.services.flow_queries import upstream_registration_node_ids
 from shared.services.team_format import tournament_slot_shape
 from src.services.balancer.realtime import emit_balancer_data, stage_export_invalidation
 from src.services.formation_node import require_forming
@@ -67,7 +68,7 @@ class RegisteredTeamsService:
         team_ids: Sequence[int] | None = None,
         actor_user_id: int,
     ) -> RegisteredExportResult:
-        """Export this tournament's complete registered teams. Commits (via the
+        """Export the complete registered teams of this formation's upstream registration nodes. Commits (via the
         orchestrator) or rolls back as one unit; the realtime signals are staged after
         that commit, so the caller commits once more to publish them.
 
@@ -78,11 +79,12 @@ class RegisteredTeamsService:
         tournament = await self.tournaments.get(session, tournament_id)
         if tournament is None:
             raise _err("not_found", f"Tournament {tournament_id} not found", status_code=404)
-        await require_forming(session, formation_node_id)
+        await require_forming(session, formation_node_id, mode="registered")
 
         shape = await tournament_slot_shape(session, tournament_id)
 
-        payload = await build_registered_export(session, tournament_id, shape, team_ids=team_ids)
+        upstream = await upstream_registration_node_ids(session, formation_node_id)
+        payload = await build_registered_export(session, tournament_id, shape, upstream, team_ids=team_ids)
         if not payload.teams:
             # No transaction at all: there is nothing to delete and nothing to write,
             # so running the orchestrator would only take the standings guard for no

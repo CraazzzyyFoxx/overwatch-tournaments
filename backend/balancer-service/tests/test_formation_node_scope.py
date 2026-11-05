@@ -10,6 +10,7 @@ import itertools
 import os
 import sys
 from unittest import IsolatedAsyncioTestCase
+from unittest.mock import patch
 
 import sqlalchemy as sa
 from sqlalchemy.exc import IntegrityError
@@ -18,23 +19,28 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 from shared import models
 from shared.core.enums import DraftStatus
 from shared.core.errors import ApiHTTPException
+from shared.domain.roster import PlayerRoster
 from shared.domain.roster_shape import RosterShape
 from shared.domain.team_format import FormatDimension, FormatRule, TeamFormat
+from shared.schemas.identity import PlayerIdentityRead
 from shared.services.team_format import save_tournament_format
 from shared.testing import create_test_async_engine
 from shared.testing.db import ensure_test_postgres
 from src import schemas
 from src.services.admin.balancer import balancer_admin_service
 from src.services.draft.lifecycle import lifecycle_service
+from src.services.registered_teams import registered_teams_service
 from src.services.team_export import (
     ExportPlan,
     MaterializationMember,
     MaterializationTeam,
+    registered,
     sync_player_ranks,
     team_materialization,
 )
 from src.services.team_export.materialization import materialize_teams
-from tests.factories import formation_node
+from src.services.team_export.registered import build_registered_export
+from tests.factories import formation_node, wire_input
 
 _TAG = itertools.count()
 
@@ -344,3 +350,89 @@ class FormationScopeTests(IsolatedAsyncioTestCase):
                 await balancer_admin_service.export_balance(s, balance.id, actor_user_id=0)
             self.assertEqual(caught.exception.status_code, 409)
             self.assertEqual(_code(caught), "formation_not_forming")
+
+    async def test_export_refused_unless_the_node_forms_that_way(self) -> None:
+        async with self.Session() as s:
+            node = await formation_node(s, self.tournament_id, mode="registered")
+            balance = models.BalancerBalance(tournament_id=self.tournament_id, formation_node_id=node, result_json={})
+            s.add(balance)
+            await s.commit()
+            with self.assertRaises(ApiHTTPException) as caught:
+                await balancer_admin_service.export_balance(s, balance.id, actor_user_id=0)
+            self.assertEqual(_code(caught), "formation_wrong_mode")
+            with self.assertRaises(ApiHTTPException) as caught:  # self.a forms by draft
+                await registered_teams_service.export_registered(s, self.tournament_id, self.a, actor_user_id=0)
+            self.assertEqual(_code(caught), "formation_wrong_mode")
+
+    async def test_materialization_skips_a_member_already_on_a_tournament_wide_team(self) -> None:
+        async with self.Session() as s:
+            await self._team(s, None, "Manual")  # a tournament-wide team seating members[0]
+            result = await materialize_teams(
+                s, self.tournament_id, self.b, [_team("Alpha", self.members[0], self.members[1])]
+            )
+            self.assertEqual(result.skipped_members, 1)
+            placed = await s.scalars(
+                sa.select(models.Player.workspace_member_id).where(
+                    models.Player.tournament_id == self.tournament_id, models.Player.name.like("Alpha%")
+                )
+            )
+            self.assertEqual(list(placed), [self.members[1]])
+
+    async def test_registered_export_takes_only_the_formations_input(self) -> None:
+        async with self.Session() as s:
+            nodes = {}
+            for formation, name, member in ((self.a, "TeamA", self.members[0]), (self.b, "TeamB", self.members[1])):
+                registration_node = await wire_input(s, formation)
+                nodes[formation] = registration_node
+                team = models.RegistrationTeam(
+                    tournament_id=self.tournament_id,
+                    registration_node_id=registration_node,
+                    workspace_id=self.workspace_id,
+                    name=name,
+                    name_normalized=name.lower(),
+                    status="complete",
+                )
+                s.add(team)
+                await s.flush()
+                registration = models.Registration(
+                    tournament_id=self.tournament_id,
+                    workspace_member_id=member,
+                    registration_team_id=team.id,
+                    team_slot_code="tank",
+                )
+                s.add(registration)
+                await s.flush()
+                s.add(
+                    models.RegistrationEntry(
+                        registration_node_id=registration_node, registration_id=registration.id, status="approved"
+                    )
+                )
+                if formation == self.a:
+                    # Formation A's export left a legacy (tournament-wide) team linked to its source team.
+                    legacy = await self._team(s, None, "TeamA")
+                    team.exported_team_id = legacy
+            await s.flush()
+
+            async def resolve(_session, registrations, **_kwargs):
+                return {
+                    r.id: PlayerRoster(
+                        registration_id=r.id,
+                        identity=PlayerIdentityRead.of("battlenet", f"P#{r.id}"),
+                        display_name=None,
+                        player_id=None,
+                        auth_user_id=None,
+                        workspace_member_id=r.workspace_member_id,
+                        roles=(),
+                        is_full_flex=False,
+                    )
+                    for r in registrations
+                }
+
+            shape = RosterShape(entries=(("tank", 1),))
+            with patch.object(registered.roster_engine, "resolve", resolve):
+                for_b = await build_registered_export(s, self.tournament_id, shape, [nodes[self.b]])
+                for_a = await build_registered_export(s, self.tournament_id, shape, [nodes[self.a]])
+            self.assertEqual([team.balancer_name for team in for_b.teams], ["TeamB"])
+            self.assertEqual(for_b.prior_team_ids, [])  # A's linked legacy team is not B's to adopt
+            self.assertEqual([team.balancer_name for team in for_a.teams], ["TeamA"])
+            self.assertEqual(len(for_a.prior_team_ids), 1)

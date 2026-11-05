@@ -66,7 +66,7 @@ class DraftCustomRulesTests(IsolatedAsyncioTestCase):
                 workspace_id=ws.id,
                 name=f"T {self._suffix}",
                 slug=f"t-{self._suffix}",
-                status="draft",
+                status="announcement",
                 team_formation="draft",
             )
             s.add(tourn)

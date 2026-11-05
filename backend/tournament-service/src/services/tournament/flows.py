@@ -14,6 +14,7 @@ from shared.models.identity.auth_user import AuthUser
 from shared.services.cache_generations import versioned
 from shared.services.challonge_refs import ChallongeRef, resolve_stage_challonge, resolve_tournament_challonge
 from shared.services.division_grid.normalization import DivisionGridNormalizationError, DivisionGridNormalizer
+from shared.services.flow_queries import upstream_registration_node_ids
 from shared.services.team_format import tournament_shape_reads
 from shared.services.tournament.in_play import TOURNAMENT_IN_PLAY
 from shared.services.tournament.visibility import visible_tournaments_predicate
@@ -194,6 +195,11 @@ class TournamentFlowsService:
                 schedules[row.node_id].append(
                     flow_schemas.FlowNodeScheduleEntry.model_validate(row, from_attributes=True)
                 )
+            pools = {
+                node.id: await upstream_registration_node_ids(session, node.id)
+                for node in nodes
+                if node.kind == FlowNodeKind.FORMATION
+            }
             flow_nodes = [
                 flow_schemas.TournamentFlowNodeRead(
                     id=node.id,
@@ -202,6 +208,7 @@ class TournamentFlowsService:
                     status=node.status,
                     stage_id=node.stage_id,
                     config=node.config,
+                    pool_registration_node_ids=pools.get(node.id, []),
                     schedule=schedules[node.id],
                 )
                 for node in nodes
@@ -421,7 +428,6 @@ class TournamentFlowsService:
                 ).where(*scope)
             )
         ).one()
-
         registration_open = (
             await session.execute(
                 sa.select(sa.func.count(models.Tournament.id)).where(*scope, *search, *league, registering_tournament())

@@ -19,6 +19,7 @@ from datetime import UTC, datetime
 from typing import Any, NamedTuple
 
 import sqlalchemy as sa
+from sqlalchemy import Row
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased, selectinload
@@ -295,33 +296,36 @@ class RosterEngine:
     ) -> dict[int, PlayerRoster]:
         """The registration profiles of ``node_id``'s input members, in input order, by registration id.
 
-        The roster's status and pool state are the member's entry in the NEAREST upstream registration node (the
-        latest one when several feed the node, plan Decision 9); ``pool_only`` keeps the balancer-included ones
-        (:func:`_pool_clauses`). A member without a live entry in that node has no roster and is skipped.
+        Every registration node upstream feeds the pool; per member the NEWEST of those nodes that has an entry for
+        the profile decides the roster's status and pool state (plan Decision 9, :meth:`_deciding`). ``pool_only``
+        keeps the balancer-included ones (:func:`_pool_clauses`). A member with no live entry upstream has no roster
+        and is skipped.
         """
         members = await input_member_ids(session, node_id)
-        upstream = await upstream_registration_node_ids(session, node_id)
-        if not members or not upstream:
+        if not members:
             return {}
-        registration_node_id = upstream[0]
-        query = (
-            sa.select(Registration.id, Registration.workspace_member_id)
-            .join(RegistrationEntry, RegistrationEntry.registration_id == Registration.id)
-            .where(
-                RegistrationEntry.registration_node_id == registration_node_id,
-                RegistrationEntry.deleted_at.is_(None),
-                Registration.deleted_at.is_(None),
-                _any_of(Registration.workspace_member_id, members),
-            )
+        found = await self._deciding(
+            session, node_id, members=members, registration_ids=registration_ids, pool_only=pool_only
         )
-        if registration_ids is not None:
-            query = query.where(_any_of(Registration.id, registration_ids))
         position = {member_id: index for index, member_id in enumerate(members)}
-        found = sorted(await session.execute(query), key=lambda row: (position[row.workspace_member_id], row.id))
-        rosters = await self.for_registration_node(
-            session, registration_node_id, pool_only=pool_only, registration_ids=[row.id for row in found]
-        )
+        found.sort(key=lambda row: (position[row.workspace_member_id], row.id))
+        rosters = await self._resolve_deciding(session, found)
         return {row.id: rosters[row.id] for row in found if row.id in rosters}
+
+    async def for_node_registrations(
+        self,
+        session: AsyncSession,
+        node_id: int,
+        registration_ids: Sequence[int],
+        *,
+        include_deleted: bool = False,
+    ) -> dict[int, PlayerRoster]:
+        """These registrations resolved on their deciding entry upstream of ``node_id`` (see :meth:`for_node_input`),
+        whether or not they are in the node's input: the seats of a draft keep their roster after they leave the pool."""
+        return await self._resolve_deciding(
+            session,
+            await self._deciding(session, node_id, registration_ids=registration_ids, include_deleted=include_deleted),
+        )
 
     async def pool_ids(self, session: AsyncSession, node_id: int, registration_ids: Sequence[int]) -> set[int]:
         """Which of these registrations :meth:`for_node_input` would keep with ``pool_only`` -- ids only.
@@ -331,21 +335,66 @@ class RosterEngine:
         costs one cheap id query instead of a second full engine run.
         """
         members = await input_member_ids(session, node_id)
-        upstream = await upstream_registration_node_ids(session, node_id)
-        if not members or not upstream or not registration_ids:
+        if not members:
             return set()
-        rows = await session.scalars(
-            sa.select(Registration.id)
-            .join(RegistrationEntry, RegistrationEntry.registration_id == Registration.id)
-            .where(
-                RegistrationEntry.registration_node_id == upstream[0],
-                _any_of(Registration.id, registration_ids),
-                _any_of(Registration.workspace_member_id, members),
-                Registration.deleted_at.is_(None),
-                *_pool_clauses(upstream[0]),
-            )
+        found = await self._deciding(
+            session, node_id, members=members, registration_ids=registration_ids, pool_only=True
         )
-        return set(rows)
+        return {row.id for row in found}
+
+    async def _deciding(
+        self,
+        session: AsyncSession,
+        node_id: int,
+        *,
+        members: Sequence[int] | None = None,
+        registration_ids: Sequence[int] | None = None,
+        include_deleted: bool = False,
+        pool_only: bool = False,
+    ) -> list[Row[Any]]:
+        """One row per registration: its DECIDING entry, the one in the newest registration node upstream of
+        ``node_id`` that has a live entry for it (a deleted entry only decides when none is live and
+        ``include_deleted``). Columns ``id``, ``workspace_member_id``, ``node_id``. ``pool_only`` keeps the rows
+        whose deciding entry is in the balancer pool: a member excluded in the newest intake stays out."""
+        upstream = await upstream_registration_node_ids(session, node_id)
+        if not upstream or registration_ids is not None and not registration_ids:
+            return []
+        live = sa.and_(RegistrationEntry.deleted_at.is_(None), Registration.deleted_at.is_(None))
+        query = (
+            sa.select(
+                Registration.id,
+                Registration.workspace_member_id,
+                RegistrationEntry.registration_node_id.label("node_id"),
+                live.label("live"),
+                sa.and_(*_pool_clauses(upstream[0])).label("pooled"),
+            )
+            .join(RegistrationEntry, RegistrationEntry.registration_id == Registration.id)
+            .where(_any_of(RegistrationEntry.registration_node_id, upstream))
+        )
+        if not include_deleted:
+            query = query.where(live)
+        if members is not None:
+            query = query.where(_any_of(Registration.workspace_member_id, members))
+        if registration_ids is not None:
+            query = query.where(_any_of(Registration.id, registration_ids))
+        decided: dict[int, Row[Any]] = {}
+        for row in await session.execute(query):
+            best = decided.get(row.id)
+            if best is None or (row.live, row.node_id) > (best.live, best.node_id):
+                decided[row.id] = row
+        return [row for row in decided.values() if not pool_only or (row.pooled and row.live)]
+
+    async def _resolve_deciding(self, session: AsyncSession, found: Sequence[Row[Any]]) -> dict[int, PlayerRoster]:
+        """Resolve :meth:`_deciding` rows, one :meth:`for_registration_node` pass per node they decide in."""
+        by_node: dict[int, list[int]] = {}
+        for row in found:
+            by_node.setdefault(row.node_id, []).append(row.id)
+        rosters: dict[int, PlayerRoster] = {}
+        for registration_node_id, ids in by_node.items():
+            rosters |= await self.for_registration_node(
+                session, registration_node_id, registration_ids=ids, include_deleted=True
+            )
+        return rosters
 
     async def resolve(
         self,

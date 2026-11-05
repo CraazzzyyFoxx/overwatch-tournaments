@@ -93,6 +93,7 @@ class PlanWiringTests(IsolatedAsyncioTestCase):
             mock.patch.object(registered_teams, "build_registered_export", return_value=payload),
             mock.patch.object(registered_teams, "tournament_slot_shape", return_value=SHAPE),
             mock.patch.object(registered_teams, "require_forming", mock.AsyncMock()),
+            mock.patch.object(registered_teams, "upstream_registration_node_ids", mock.AsyncMock(return_value=[5])),
             mock.patch.object(registered_teams.team_materialization, "run", side_effect=_run),
             mock.patch.object(registered_teams, "stage_export_invalidation", mock.AsyncMock()),
         ):
@@ -143,6 +144,7 @@ class NoOpExportTests(IsolatedAsyncioTestCase):
             mock.patch.object(registered_teams, "build_registered_export", return_value=payload),
             mock.patch.object(registered_teams, "tournament_slot_shape", return_value=SHAPE),
             mock.patch.object(registered_teams, "require_forming", mock.AsyncMock()),
+            mock.patch.object(registered_teams, "upstream_registration_node_ids", mock.AsyncMock(return_value=[5])),
             mock.patch.object(registered_teams.team_materialization, "run", runner),
         ):
             result = await registered_teams.registered_teams_service.export_registered(
@@ -166,6 +168,7 @@ class NoOpExportTests(IsolatedAsyncioTestCase):
             mock.patch.object(registered_teams, "build_registered_export", return_value=payload),
             mock.patch.object(registered_teams, "tournament_slot_shape", return_value=SHAPE),
             mock.patch.object(registered_teams, "require_forming", mock.AsyncMock()),
+            mock.patch.object(registered_teams, "upstream_registration_node_ids", mock.AsyncMock(return_value=[5])),
             mock.patch.object(registered_teams.team_materialization, "run", side_effect=_run),
             mock.patch.object(registered_teams, "stage_export_invalidation", mock.AsyncMock()),
         ):

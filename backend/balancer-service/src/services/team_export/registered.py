@@ -110,20 +110,22 @@ async def build_registered_export(
     session: AsyncSession,
     tournament_id: int,
     shape: RosterShape,
+    registration_node_ids: Sequence[int],
     *,
     team_ids: Sequence[int] | None = None,
 ) -> RegisteredExportPayload:
-    """Turn this tournament's complete registered teams into an export payload.
+    """Turn the complete registered teams of the given registration nodes into an export payload.
 
-    ``team_ids`` narrows to a subset (one organizer exporting one team); omitted,
-    every complete team is taken. Incomplete and terminal teams are reported in
-    ``skipped`` rather than silently dropped: the people in a stuck team must be
-    told.
+    ``registration_node_ids`` are the registration nodes feeding the exporting formation (its input): the teams of
+    any other intake are not this formation's to materialize. ``team_ids`` narrows to a subset (one organizer
+    exporting one team); omitted, every complete team is taken. Incomplete and terminal teams are reported in
+    ``skipped`` rather than silently dropped: the people in a stuck team must be told.
     """
     payload = RegisteredExportPayload()
 
     conditions = [
         RegistrationTeam.tournament_id == tournament_id,
+        RegistrationTeam.registration_node_id.in_(list(registration_node_ids)),
         RegistrationTeam.deleted_at.is_(None),
     ]
     if team_ids is not None:

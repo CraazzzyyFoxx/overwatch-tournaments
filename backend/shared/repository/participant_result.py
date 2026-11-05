@@ -37,9 +37,15 @@ class ParticipantResultRepository:
 def member_tournament_player_id(player: type[models.Player] | AliasedClass = models.Player) -> sa.ScalarSelect[int]:
     """The id of the member's tournament row: the final team's, else the row of the last-completed formation, then the
     latest non-substitute row (spec §11.4)."""
-    other, result, formation = aliased(models.Player), models.ParticipantResult, models.FlowNode
+    other, result, team, formation = (
+        aliased(models.Player),
+        models.ParticipantResult,
+        aliased(models.Team),
+        models.FlowNode,
+    )
     return (
         sa.select(other.id)
+        .join(team, team.id == other.team_id)
         .outerjoin(
             result,
             sa.and_(
@@ -47,7 +53,7 @@ def member_tournament_player_id(player: type[models.Player] | AliasedClass = mod
                 result.workspace_member_id == other.workspace_member_id,
             ),
         )
-        .outerjoin(formation, formation.id == other.formation_node_id)
+        .outerjoin(formation, formation.id == team.formation_node_id)
         .where(
             other.workspace_member_id == player.workspace_member_id,
             other.tournament_id == player.tournament_id,
@@ -59,7 +65,7 @@ def member_tournament_player_id(player: type[models.Player] | AliasedClass = mod
             other.id.desc(),
         )
         .limit(1)
-        .correlate_except(other, result, formation)
+        .correlate_except(other, team, result, formation)
         .scalar_subquery()
     )
 

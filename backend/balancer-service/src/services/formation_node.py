@@ -25,12 +25,21 @@ async def require_formation_node(session: AsyncSession, tournament_id: int, node
     return node
 
 
-async def require_forming(session: AsyncSession, node_id: int) -> FlowNode:
-    """The formation node, 409 ``formation_not_forming`` unless it is ``forming``: teams are written only then."""
+async def require_forming(session: AsyncSession, node_id: int, *, mode: str | None = None) -> FlowNode:
+    """The formation node, 409 ``formation_not_forming`` unless it is ``forming``: teams are written only then.
+
+    ``mode`` also requires the node's ``config.mode`` to be that one (409 ``formation_wrong_mode``): the mode is the
+    authority for how a formation's teams are made, so an export of another kind is refused.
+    """
     # FOR SHARE: a concurrent forming -> completed waits for this export's commit instead of racing it.
     node = await _nodes.get_for_share(session, node_id)
     if node is None:
         raise err("flow_node_not_found", "Flow node not found", status_code=404)
     if node.status != FlowNodeStatus.FORMING:
         raise err("formation_not_forming", f"Formation node {node_id} is {node.status!r}, not forming")
+    if mode is not None and node.config.get("mode") != mode:
+        raise err(
+            "formation_wrong_mode",
+            f"Formation node {node_id} forms its teams by {node.config.get('mode')!r}, not {mode!r}",
+        )
     return node

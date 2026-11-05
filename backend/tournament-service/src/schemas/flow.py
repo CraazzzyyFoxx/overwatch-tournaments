@@ -129,6 +129,9 @@ class TournamentFlowNodeRead(BaseModel):
     status: FlowNodeStatus
     stage_id: int | None
     config: dict[str, Any]
+    #: A formation node's pool: the registration nodes feeding it through the graph, newest first (the newest
+    #: intake's entry decides a member present in several). Empty for every other kind.
+    pool_registration_node_ids: list[int]
     schedule: list[FlowNodeScheduleEntry]
 
 

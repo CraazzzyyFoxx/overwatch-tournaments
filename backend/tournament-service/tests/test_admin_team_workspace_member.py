@@ -68,7 +68,7 @@ class AdminTeamWorkspaceMemberTests(IsolatedAsyncioTestCase):
 
     async def test_create_player_sets_workspace_member_id(self) -> None:
         user_result = _result(SimpleNamespace(id=9))
-        team_result = _result(SimpleNamespace(id=4, tournament_id=101))
+        team_result = _result(SimpleNamespace(id=4, tournament_id=101, formation_node_id=7))
         session = SimpleNamespace(
             execute=AsyncMock(
                 side_effect=[user_result, team_result, _result(SimpleNamespace(discipline="overwatch", workspace_id=1))]
@@ -100,6 +100,7 @@ class AdminTeamWorkspaceMemberTests(IsolatedAsyncioTestCase):
         created_player = session.add.call_args.args[0]
         self.assertFalse(hasattr(created_player, "user_id"))
         self.assertEqual(9001, created_player.workspace_member_id)
+        self.assertEqual(7, created_player.formation_node_id)
 
 
 class AdminPlayerRankTests(TestCase):
