@@ -37,6 +37,8 @@ var resourcePatterns = map[string][]string{
 	// visibility flip (is_hidden), after which no anonymous entry of the
 	// tournament may survive — the participants list included.
 	"tournament.structure": nil,
+	// A node's status moves the tournament status and what every page offers.
+	"tournament.flow": nil,
 	// The public participants list, plus the detail read that embeds live
 	// participants_count / registrations_count.
 	"tournament.registrations": {"/registration/list", bareTournamentDetailPattern},

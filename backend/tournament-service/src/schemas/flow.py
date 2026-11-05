@@ -16,9 +16,12 @@ __all__ = (
     "FlowKindPortsRead",
     "FlowNodeRead",
     "FlowNodeResultRead",
+    "FlowNodeScheduleEntry",
+    "FlowNodeTransition",
     "FlowPortRead",
     "FlowPortSpecRead",
     "FlowRead",
+    "TournamentFlowNodeRead",
 )
 
 
@@ -95,3 +98,25 @@ class FlowKindPortsRead(BaseModel):
 class AdminFlowRead(FlowRead):
     issues: list[FlowIssueRead]
     catalogue: list[FlowKindPortsRead]
+
+
+class FlowNodeTransition(BaseModel):
+    status: FlowNodeStatus
+
+
+class FlowNodeScheduleEntry(BaseModel):
+    phase: Literal["open", "check_in", "start"]
+    starts_at: datetime
+    ends_at: datetime | None = None
+
+
+class TournamentFlowNodeRead(BaseModel):
+    """A lifecycle or leaderboard node as the tournament read carries it (no ports, no results)."""
+
+    id: int
+    kind: FlowNodeKind
+    name: str
+    status: FlowNodeStatus
+    stage_id: int | None
+    config: dict[str, Any]
+    schedule: list[FlowNodeScheduleEntry]

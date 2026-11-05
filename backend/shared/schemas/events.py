@@ -323,6 +323,22 @@ class TournamentStateChangedEvent(BaseEvent):
     new_status: str = Field(..., description="New tournament status")
 
 
+class FlowNodeStateChangedEvent(BaseEvent):
+    """Domain event emitted when a registration, formation or stage node changes status.
+
+    Published by: tournament-service (``FlowNodeService.transition``, manual and automatic).
+    Consumed by: discord-service (channel registry reload, voice sync).
+    """
+
+    event_type: str = Field(default="flow_node_state_changed", frozen=True)
+    tournament_id: int = Field(..., description="Tournament ID")
+    workspace_id: int = Field(..., description="Workspace ID")
+    node_id: int = Field(..., description="Flow node ID")
+    kind: str = Field(..., description="Node kind: registration, formation or stage")
+    old_status: str = Field(..., description="Previous node status")
+    new_status: str = Field(..., description="New node status")
+
+
 class TournamentVoiceSyncRequestedEvent(BaseEvent):
     """A tournament's voice channels are to be re-synced with its plan.
 

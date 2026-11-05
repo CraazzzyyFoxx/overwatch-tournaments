@@ -10,6 +10,7 @@ from shared.core.enums import FlowNodeKind, FlowNodeStatus, TournamentStatus
 from shared.core.flow_state import FlowNodeState, derive_tournament_status
 
 __all__ = (
+    "FORMATION_MODE",
     "LEGACY_STATUS_TARGET",
     "LegacyFlowPlan",
     "LegacySchedule",
@@ -51,7 +52,7 @@ _REGISTRATION_STATUS = {
     "registration": FlowNodeStatus.OPEN,
     "check_in": FlowNodeStatus.CHECK_IN,
 }
-_FORMATION_MODE = {"balancer": "balancer", "draft": "draft", "registration": "registered"}
+FORMATION_MODE = {"balancer": "balancer", "draft": "draft", "registration": "registered"}
 _SCHEDULE_PHASE = {"registration": "open", "check_in": "check_in"}
 _DEMOTION = {
     (FlowNodeKind.STAGE, FlowNodeStatus.COMPLETED): FlowNodeStatus.LIVE,
@@ -286,7 +287,7 @@ def plan_legacy_flow(t: LegacyTournament) -> LegacyFlowPlan:
             FlowNodeKind.FORMATION,
             "Teams",
             _formation_status(t, target),
-            {"mode": _FORMATION_MODE.get(t.team_formation, "manual")},
+            {"mode": FORMATION_MODE.get(t.team_formation, "manual")},
             None,
             *formation_xy,
         ),

@@ -259,6 +259,7 @@ All of these go through the outbox, never directly from the request transaction:
 | --- | --- | --- |
 | `cache.invalidated.tournament.{tournament_id}` | `cache.invalidation` | A write staled tournament resources another service caches (`publish_tournament_invalidation`): a `CacheInvalidatedEvent` naming them, the durable copy of the commit-time generation bump |
 | `tournament.state.changed` | `tournament.events` | Status transition (manual or automatic); consumed by `analytics-worker`, which creates the compute job of a `completed` tournament |
+| `flow.node.state.changed` | `tournament.events` | A registration, formation or stage node changed status (`FlowNodeService.transition`, manual or scheduled); `FlowNodeStateChangedEvent{tournament_id, workspace_id, node_id, kind, old_status, new_status}` |
 | `player.refresh_requested` | `player.events` | Registration approved (`source: tournament_registration`) or the registrant asked to re-check their profile (`tournament_recheck`); `PlayerRefreshRequestedEvent`, none for a registration without a player |
 | `tournament.encounter.completed` | `tournament.events` | Encounter result confirmed |
 | `tournament.encounter.challonge_push_requested` | `tournament.events` | A write left a Challonge-linked encounter confirmed (every confirm path, corrections included); one per `result_version`, consumed by this service's `tournament_challonge_push` |

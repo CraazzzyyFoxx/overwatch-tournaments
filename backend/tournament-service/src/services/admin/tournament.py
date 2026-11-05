@@ -10,9 +10,10 @@ from sqlalchemy.orm import selectinload
 from shared import models
 from shared.core import http_status as status
 from shared.core import tournament_state
-from shared.core.enums import StageType, TournamentStatus
+from shared.core.enums import FlowNodeKind, FlowNodeStatus, StageType, TournamentStatus
 from shared.core.errors import ApiExc, ApiHTTPException
 from shared.core.errors import BaseAPIException as HTTPException
+from shared.domain.flow.legacy import FORMATION_MODE, X_STEP
 from shared.domain.tournament_slug import slugify
 from shared.repository import (
     ChallongeSourceRepository,
@@ -288,6 +289,32 @@ class AdminTournamentService:
 
         tournament = await self.tournament_repo.create(session, models.Tournament(**payload))
         await copy_for_tournament(session, tournament)
+        registration = models.FlowNode(
+            tournament_id=tournament.id,
+            kind=FlowNodeKind.REGISTRATION,
+            name="Registration",
+            status=FlowNodeStatus.DRAFT,
+            config={"check_in": False, "intake": "team" if tournament.team_formation == "registration" else "solo"},
+        )
+        formation = models.FlowNode(
+            tournament_id=tournament.id,
+            kind=FlowNodeKind.FORMATION,
+            name="Teams",
+            status=FlowNodeStatus.DRAFT,
+            config={"mode": FORMATION_MODE.get(tournament.team_formation, "manual")},
+            position_x=X_STEP,
+        )
+        session.add_all([registration, formation])
+        await session.flush()
+        session.add(
+            models.FlowEdge(
+                tournament_id=tournament.id,
+                source_node_id=registration.id,
+                source_port="participants",
+                target_node_id=formation.id,
+                target_port="players",
+            )
+        )
         await publish_tournament_invalidation(session, tournament.id, STRUCTURE_RESOURCES)
         await session.commit()
         await division_grid_cache.invalidate_tournament(tournament.id)

@@ -12,11 +12,12 @@ from shared.services.realtime import Resource, resource_generation
 
 __all__ = ("DETAIL", "ENCOUNTERS", "REGISTRATION_LIST", "STANDINGS", "TEAMS", "tournament_generations")
 
-# The tournament read carries its stages and the live participants_count / registrations_count.
+# The tournament read carries its stages, the live participants_count / registrations_count and the flow nodes.
 DETAIL = (
     Resource.TOURNAMENT_DETAIL,
     Resource.TOURNAMENT_STAGES,
     Resource.TOURNAMENT_STRUCTURE,
+    Resource.TOURNAMENT_FLOW,
     Resource.TOURNAMENT_REGISTRATIONS,
 )
 ENCOUNTERS = (Resource.TOURNAMENT_ENCOUNTERS, Resource.TOURNAMENT_STRUCTURE)

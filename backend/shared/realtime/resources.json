@@ -39,6 +39,10 @@
       "scope": "tournament",
       "doc": "The set of sections a tournament page has (stages created/removed, teams first materialized). Clients repair it by refetching the overview, which this also stales."
     },
+    "tournament.flow": {
+      "scope": "tournament",
+      "doc": "The tournament's flow graph and the lifecycle status of its registration, formation and stage nodes."
+    },
     "tournament.registrations": {
       "scope": "tournament",
       "doc": "Public participants list and per-registration admin rows."

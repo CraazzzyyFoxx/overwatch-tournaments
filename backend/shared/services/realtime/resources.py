@@ -29,6 +29,7 @@ class Resource(StrEnum):
     TOURNAMENT_STANDINGS = "tournament.standings"
     TOURNAMENT_TEAMS = "tournament.teams"
     TOURNAMENT_STRUCTURE = "tournament.structure"
+    TOURNAMENT_FLOW = "tournament.flow"
     TOURNAMENT_REGISTRATIONS = "tournament.registrations"
     TOURNAMENT_REGISTRATION_FORM = "tournament.registration_form"
     TOURNAMENT_STREAMS = "tournament.streams"

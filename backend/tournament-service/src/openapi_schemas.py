@@ -196,6 +196,9 @@ OPERATIONS: dict[str, Op] = {
     "rpc.tournament.voice_sync": Op(response=voice_schemas.VoiceStatus),
     # ── bespoke: flow graph ────────────────────────────────────────────────
     "rpc.tournament.flow_get": Op(response=flow_schemas.AdminFlowRead),
+    "rpc.tournament.flow_node_transition": Op(
+        request=flow_schemas.FlowNodeTransition, response=flow_schemas.FlowNodeRead
+    ),
     "rpc.tournament.standing_recalculate": Op(response=schemas.TournamentComputationJobRead),
     "rpc.tournament.standing_pins_set": Op(
         request=schemas.StandingPinsUpdate, response=schemas.TournamentComputationJobRead

@@ -44,6 +44,15 @@ describe("realtime resource registry", () => {
     expect(resourceQueryKeys(["tournament.registration_form"], 42)).toEqual([]);
   });
 
+  it("stales the flow graph (public and admin) and the tournament read", () => {
+    expect(resourceQueryKeys(["tournament.flow"], 42)).toEqual([
+      ["tournament", 42],
+      ["tournament", 42, "flow"],
+      ["admin", "tournament", 42],
+      ["admin", "tournament", 42, "flow"],
+    ]);
+  });
+
   it("de-duplicates keys shared by two resources in one event", () => {
     const keys = resourceQueryKeys(["tournament.detail", "tournament.structure"], 42);
     const serialized = keys.map((key) => JSON.stringify(key));

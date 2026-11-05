@@ -12,6 +12,7 @@ from shared import models
 from shared.disciplines import discipline as discipline_spec
 from shared.messaging.config import (
     ACHIEVEMENT_EVALUATE_QUEUE,
+    FLOW_NODE_STATE_CHANGED_ROUTING_KEY,
     PLAYER_EVENTS_EXCHANGE,
     PLAYER_REFRESH_REQUESTED_ROUTING_KEY,
     TOURNAMENT_EVENTS_EXCHANGE,
@@ -21,6 +22,7 @@ from shared.messaging.config import (
 from shared.messaging.outbox import enqueue_outbox_event
 from shared.schemas.events import (
     AchievementEvaluateEvent,
+    FlowNodeStateChangedEvent,
     PlayerRefreshRequestedEvent,
     TournamentStateChangedEvent,
     TournamentVoiceSyncRequestedEvent,
@@ -341,6 +343,29 @@ async def enqueue_tournament_state_changed(
         ),
         exchange=TOURNAMENT_EVENTS_EXCHANGE,
         routing_key=TOURNAMENT_STATE_CHANGED_ROUTING_KEY,
+    )
+
+
+async def enqueue_flow_node_state_changed(
+    session: AsyncSession,
+    node: models.FlowNode,
+    *,
+    workspace_id: int,
+    old_status: str,
+) -> None:
+    await enqueue_outbox_event(
+        session,
+        FlowNodeStateChangedEvent(
+            tournament_id=node.tournament_id,
+            workspace_id=workspace_id,
+            node_id=node.id,
+            kind=node.kind,
+            old_status=old_status,
+            new_status=node.status,
+            source_service="tournament-service",
+        ),
+        exchange=TOURNAMENT_EVENTS_EXCHANGE,
+        routing_key=FLOW_NODE_STATE_CHANGED_ROUTING_KEY,
     )
 
 

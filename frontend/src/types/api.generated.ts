@@ -6672,6 +6672,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/flow-nodes/{node_id}/transition": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move a flow node along its lifecycle
+         * @description Permission: workspace `tournament.update`. Moves one registration, formation or stage node along its lifecycle (`invalid_node_transition`, `input_not_final`, `downstream_started` answer 409) and re-derives the tournament status.
+         *
+         *     RPC subject: `rpc.tournament.flow_node_transition`
+         */
+        post: operations["post__api_v1_admin_flow_nodes__node_id__transition"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/logs/games/{id}/observation": {
         parameters: {
             query?: never;
@@ -19863,6 +19885,24 @@ export interface components {
             /** Workspace Member Id */
             workspace_member_id: number | null;
         };
+        /** FlowNodeScheduleEntry */
+        "tournament.FlowNodeScheduleEntry": {
+            /**
+             * Ends At
+             * @default null
+             */
+            ends_at: string | null;
+            /**
+             * Phase
+             * @enum {string}
+             */
+            phase: TournamentFlowNodeScheduleEntryPhase;
+            /**
+             * Starts At
+             * Format: date-time
+             */
+            starts_at: string;
+        };
         /**
          * FlowNodeStatus
          * @enum {string}
@@ -22227,6 +22267,26 @@ export interface components {
             /** Total */
             total: number;
         };
+        /**
+         * TournamentFlowNodeRead
+         * @description A lifecycle or leaderboard node as the tournament read carries it (no ports, no results).
+         */
+        "tournament.TournamentFlowNodeRead": {
+            /** Config */
+            config: {
+                [key: string]: unknown;
+            };
+            /** Id */
+            id: number;
+            kind: components["schemas"]["tournament.FlowNodeKind"];
+            /** Name */
+            name: string;
+            /** Schedule */
+            schedule: components["schemas"]["tournament.FlowNodeScheduleEntry"][];
+            /** Stage Id */
+            stage_id: number | null;
+            status: components["schemas"]["tournament.FlowNodeStatus"];
+        };
         /** TournamentLinkRead */
         "tournament.TournamentLinkRead": {
             /** Id */
@@ -22322,6 +22382,11 @@ export interface components {
              * Format: date-time
              */
             end_date: string;
+            /**
+             * Flow Nodes
+             * @default []
+             */
+            flow_nodes: components["schemas"]["tournament.TournamentFlowNodeRead"][];
             /** Id */
             id: number;
             /**
@@ -29882,6 +29947,10 @@ export interface components {
             kind: components["schemas"]["tournament.FlowNodeKind"];
             /** Outputs */
             outputs: components["schemas"]["tournament.FlowPortSpecRead"][];
+        };
+        /** FlowNodeTransition */
+        "tournament.FlowNodeTransition": {
+            status: components["schemas"]["tournament.FlowNodeStatus"];
         };
         /** FlowPortSpecRead */
         "tournament.FlowPortSpecRead": {
@@ -57587,6 +57656,88 @@ export interface operations {
             };
         };
     };
+    post__api_v1_admin_flow_nodes__node_id__transition: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                node_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["tournament.FlowNodeTransition"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["tournament.FlowNodeRead"];
+                };
+            };
+            /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not authorized (`forbidden`). Authenticated, but the credential lacks the permission, workspace, or scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     get__api_v1_admin_logs_games__id__observation: {
         parameters: {
             query?: never;
@@ -84314,6 +84465,11 @@ export enum TournamentFlowNodeKind {
     split = "split",
     aggregate = "aggregate",
     leaderboard = "leaderboard"
+}
+export enum TournamentFlowNodeScheduleEntryPhase {
+    open = "open",
+    check_in = "check_in",
+    start = "start"
 }
 export enum TournamentFlowNodeStatus {
     draft = "draft",

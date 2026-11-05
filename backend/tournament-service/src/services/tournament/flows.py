@@ -7,6 +7,8 @@ from sqlalchemy.orm import selectinload
 
 from shared import models
 from shared.core import enums, errors, pagination
+from shared.core.enums import FlowNodeKind
+from shared.core.flow_state import LIFECYCLE_KINDS
 from shared.core.tournament_state import IN_PLAY_STATUSES
 from shared.division_grid import DivisionGrid
 from shared.models.identity.auth_user import AuthUser
@@ -17,6 +19,7 @@ from shared.services.team_format import tournament_shape_reads
 from shared.services.tournament.visibility import visible_tournaments_predicate
 from src import schemas
 from src.core import config
+from src.schemas import flow as flow_schemas
 from src.services.admin.tournament_link import tournament_link_service
 from src.services.draft_guards import has_unfinished_draft_session, unfinished_draft_tournament_ids
 from src.services.registration.service import registration_service
@@ -36,9 +39,14 @@ READ_ENTITIES = frozenset(
         "division_grid_version",
         "roster_shape",
         "links",
+        "flow_nodes",
         "rules",
     }
 )
+
+#: The flow nodes ``TournamentRead.flow_nodes`` lists: the lifecycle ones plus ``leaderboard`` (the section nav asks
+#: "is there a table" without fetching the flow).
+TOURNAMENT_READ_NODE_KINDS: tuple[FlowNodeKind, ...] = (*LIFECYCLE_KINDS, FlowNodeKind.LEADERBOARD)
 
 
 def _entity_requested(entities: list[str], entity: str) -> bool:
@@ -165,6 +173,39 @@ class TournamentFlowsService:
                     schemas.TournamentLinkRead.model_validate(row, from_attributes=True)
                     for row in await tournament_link_service.list_links(session, tournament.id, active_only=True)
                 ]
+        flow_nodes: list[flow_schemas.TournamentFlowNodeRead] = []
+        if _entity_requested(entities, "flow_nodes"):
+            nodes = (
+                await session.scalars(
+                    sa.select(models.FlowNode)
+                    .where(
+                        models.FlowNode.tournament_id == tournament.id,
+                        models.FlowNode.kind.in_([kind.value for kind in TOURNAMENT_READ_NODE_KINDS]),
+                    )
+                    .order_by(models.FlowNode.id)
+                )
+            ).all()
+            schedules: dict[int, list[flow_schemas.FlowNodeScheduleEntry]] = {node.id: [] for node in nodes}
+            for row in await session.scalars(
+                sa.select(models.FlowNodeSchedule)
+                .where(models.FlowNodeSchedule.node_id.in_(schedules))
+                .order_by(models.FlowNodeSchedule.starts_at, models.FlowNodeSchedule.id)
+            ):
+                schedules[row.node_id].append(
+                    flow_schemas.FlowNodeScheduleEntry.model_validate(row, from_attributes=True)
+                )
+            flow_nodes = [
+                flow_schemas.TournamentFlowNodeRead(
+                    id=node.id,
+                    kind=node.kind,
+                    name=node.name,
+                    status=node.status,
+                    stage_id=node.stage_id,
+                    config=node.config,
+                    schedule=schedules[node.id],
+                )
+                for node in nodes
+            ]
         tournament_challonge_id, tournament_challonge_slug = (
             challonge_ref if challonge_ref is not None else (None, None)
         )
@@ -211,6 +252,7 @@ class TournamentFlowsService:
             registrations_count=registrations_count,
             teams_count=teams_count,
             links=links,
+            flow_nodes=flow_nodes,
         )
 
     async def get(self, session: AsyncSession, id: int, entities: list[str]) -> models.Tournament:

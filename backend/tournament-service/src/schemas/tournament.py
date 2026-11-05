@@ -12,6 +12,7 @@ from shared.services.workspace_scope import ALL_WORKSPACES
 from src.schemas.admin.tournament_link import TournamentLinkRead
 from src.schemas.base import BaseRead
 from src.schemas.division_grid import DivisionGridVersionRead
+from src.schemas.flow import TournamentFlowNodeRead
 from src.schemas.stage import StageSummaryRead
 
 __all__ = (
@@ -103,6 +104,8 @@ class TournamentRead(BaseRead):
     # Opt-in too, and for the same reason: the rows live in their own table, so
     # filling them unconditionally would cost a query per nested TournamentRead.
     links: list[TournamentLinkRead] = []
+    # Opt-in (`flow_nodes`): the registration, formation, stage and leaderboard nodes with their status and schedule.
+    flow_nodes: list[TournamentFlowNodeRead] = []
 
     @computed_field
     @property

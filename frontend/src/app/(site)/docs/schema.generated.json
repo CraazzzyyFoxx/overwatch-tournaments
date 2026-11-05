@@ -1,6 +1,6 @@
 {
   "_generated_by": "backend/scripts/export_erd.py -- do not edit by hand",
-  "alembic_head": "flowP2_02_legacy_flows",
+  "alembic_head": "flowP3_01",
   "packages": [
     {
       "key": "achievements",

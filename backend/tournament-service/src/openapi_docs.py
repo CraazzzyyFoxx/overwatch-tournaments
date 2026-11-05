@@ -562,6 +562,10 @@ DOCS: dict[str, dict] = {
         "summary": "Get a tournament's flow (admin)",
         "description": "Permission: workspace `tournament.read` on the tournament's workspace. The public flow read plus the validator's issues on the stored graph and the port catalogue per node kind.",
     },
+    "rpc.tournament.flow_node_transition": {
+        "summary": "Move a flow node along its lifecycle",
+        "description": "Permission: workspace `tournament.update`. Moves one registration, formation or stage node along its lifecycle (`invalid_node_transition`, `input_not_final`, `downstream_started` answer 409) and re-derives the tournament status.",
+    },
     # ── bespoke: pick-ban live-session admin overrides (map + hero) ────────
     "rpc.tournament.admin_pick_ban_session_reset": {
         "summary": "Reset pick-ban session",

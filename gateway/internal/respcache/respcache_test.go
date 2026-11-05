@@ -1254,31 +1254,35 @@ func TestRuleTTLOverridesCacheDefault(t *testing.T) {
 // anonymous entry of the tournament may survive it. The shell-only pattern
 // set left the participants list and a player's page for that tournament
 // serving a now-hidden tournament for a whole TTL. Another tournament's
-// entries stay.
+// entries stay. tournament.flow (a node's status moved) drops the same set.
 func TestBroadcastStructureDropsTheWholeTournament(t *testing.T) {
-	var calls atomic.Int64
-	c := testCache(t)
-	h := c.Wrap(upstream(&calls), Rule{Extract: FromPathValue("id")})
-	targets := []string{
-		"/api/v1/tournaments/72/registration/list",
-		"/api/v1/users/5/tournaments/72/leaderboard",
-		"/api/v1/tournaments/72",
-	}
-	for _, target := range targets {
-		doGet(h, target, "")
-	}
-	const other = "/api/v1/tournaments/73/registration/list"
-	doGetWithID(h, other, "73", "")
+	for _, resource := range []string{"tournament.structure", "tournament.flow"} {
+		t.Run(resource, func(t *testing.T) {
+			var calls atomic.Int64
+			c := testCache(t)
+			h := c.Wrap(upstream(&calls), Rule{Extract: FromPathValue("id")})
+			targets := []string{
+				"/api/v1/tournaments/72/registration/list",
+				"/api/v1/users/5/tournaments/72/leaderboard",
+				"/api/v1/tournaments/72",
+			}
+			for _, target := range targets {
+				doGet(h, target, "")
+			}
+			const other = "/api/v1/tournaments/73/registration/list"
+			doGetWithID(h, other, "73", "")
 
-	c.Broadcast("tournament:72:invalidation", invalidationFrame("tournament.structure"))
+			c.Broadcast("tournament:72:invalidation", invalidationFrame(resource))
 
-	for _, target := range targets {
-		if rec := doGet(h, target, ""); rec.Header().Get("X-Cache") == "HIT" {
-			t.Fatalf("%s survived tournament.structure", target)
-		}
-	}
-	if rec := doGetWithID(h, other, "73", ""); rec.Header().Get("X-Cache") != "HIT" {
-		t.Fatal("tournament 73 must survive 72's structure frame")
+			for _, target := range targets {
+				if rec := doGet(h, target, ""); rec.Header().Get("X-Cache") == "HIT" {
+					t.Fatalf("%s survived %s", target, resource)
+				}
+			}
+			if rec := doGetWithID(h, other, "73", ""); rec.Header().Get("X-Cache") != "HIT" {
+				t.Fatalf("tournament 73 must survive 72's %s frame", resource)
+			}
+		})
 	}
 }
 

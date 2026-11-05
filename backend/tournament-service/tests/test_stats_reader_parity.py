@@ -650,7 +650,7 @@ def assert_tournament_golden(actual: dict) -> None:
 
     def without_post_capture_fields(value):
         """Fields added after the frozen P4 capture are not reader output: ``TournamentRead.logs_official`` (P5) and
-        ``pov_stream_delay_s``, the owner context (``workspace_id``/``discipline``) P7 added to ``EncounterRead`` and
+        ``pov_stream_delay_s``, ``flow_nodes`` (P3, opt-in; empty on a tournament without a flow), the owner context (``workspace_id``/``discipline``) P7 added to ``EncounterRead`` and
         ``MatchRead``, the catalog ``mode_id``/``mode`` a match and an encounter game gained with matchmode01, and the
         browse's ``played_at``/``is_live``/``is_final`` on ``EncounterRead`` (a match's own ``played_at`` was captured
         and stays), and the per-game person ``display`` every roster player gained (docs/users-identity.md §3.6). The
@@ -668,6 +668,7 @@ def assert_tournament_golden(actual: dict) -> None:
             dropped = {
                 "logs_official",
                 "pov_stream_delay_s",
+                "flow_nodes",
                 "win_points",
                 "draw_points",
                 "loss_points",

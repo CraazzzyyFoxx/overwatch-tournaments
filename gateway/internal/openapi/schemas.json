@@ -9686,6 +9686,18 @@
       },
       "summary": "Get a tournament's flow (admin)"
     },
+    "rpc.tournament.flow_node_transition": {
+      "description": "Permission: workspace `tournament.update`. Moves one registration, formation or stage node along its lifecycle (`invalid_node_transition`, `input_not_final`, `downstream_started` answer 409) and re-derives the tournament status.",
+      "request": {
+        "array": false,
+        "ref": "tournament.FlowNodeTransition"
+      },
+      "response": {
+        "array": false,
+        "ref": "tournament.FlowNodeRead"
+      },
+      "summary": "Move a flow node along its lifecycle"
+    },
     "rpc.tournament.get_encounter": {
       "description": "Permission: public; no authentication required \u2014 a hidden tournament is visible only to its workspace's admins and users on its preview allowlist. Returns one encounter by id with optionally hydrated related entities selected via the entities query param.",
       "query_params": [
@@ -49930,6 +49942,43 @@
       "title": "FlowNodeResultRead",
       "type": "object"
     },
+    "tournament.FlowNodeScheduleEntry": {
+      "properties": {
+        "ends_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ends At"
+        },
+        "phase": {
+          "enum": [
+            "open",
+            "check_in",
+            "start"
+          ],
+          "title": "Phase",
+          "type": "string"
+        },
+        "starts_at": {
+          "format": "date-time",
+          "title": "Starts At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "phase",
+        "starts_at"
+      ],
+      "title": "FlowNodeScheduleEntry",
+      "type": "object"
+    },
     "tournament.FlowNodeStatus": {
       "enum": [
         "draft",
@@ -49946,6 +49995,18 @@
       ],
       "title": "FlowNodeStatus",
       "type": "string"
+    },
+    "tournament.FlowNodeTransition": {
+      "properties": {
+        "status": {
+          "$ref": "#/components/schemas/tournament.FlowNodeStatus"
+        }
+      },
+      "required": [
+        "status"
+      ],
+      "title": "FlowNodeTransition",
+      "type": "object"
     },
     "tournament.FlowPortRead": {
       "properties": {
@@ -60842,6 +60903,59 @@
       "title": "TournamentFacetsQueryParams",
       "type": "object"
     },
+    "tournament.TournamentFlowNodeRead": {
+      "description": "A lifecycle or leaderboard node as the tournament read carries it (no ports, no results).",
+      "properties": {
+        "config": {
+          "additionalProperties": true,
+          "title": "Config",
+          "type": "object"
+        },
+        "id": {
+          "title": "Id",
+          "type": "integer"
+        },
+        "kind": {
+          "$ref": "#/components/schemas/tournament.FlowNodeKind"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "schedule": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.FlowNodeScheduleEntry"
+          },
+          "title": "Schedule",
+          "type": "array"
+        },
+        "stage_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Stage Id"
+        },
+        "status": {
+          "$ref": "#/components/schemas/tournament.FlowNodeStatus"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "name",
+        "status",
+        "stage_id",
+        "config",
+        "schedule"
+      ],
+      "title": "TournamentFlowNodeRead",
+      "type": "object"
+    },
     "tournament.TournamentLinkCreate": {
       "properties": {
         "is_active": {
@@ -61301,6 +61415,14 @@
           "format": "date-time",
           "title": "End Date",
           "type": "string"
+        },
+        "flow_nodes": {
+          "default": [],
+          "items": {
+            "$ref": "#/components/schemas/tournament.TournamentFlowNodeRead"
+          },
+          "title": "Flow Nodes",
+          "type": "array"
         },
         "id": {
           "title": "Id",
