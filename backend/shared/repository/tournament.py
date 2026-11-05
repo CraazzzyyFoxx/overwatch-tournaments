@@ -14,7 +14,7 @@ from shared import models
 from shared.core.utils import join_entity, prepare_entities, selectin_entity
 from shared.repository.base import BaseRepository
 from shared.repository.identity import UserRepository
-from shared.services.participant_result import is_member_tournament_row
+from shared.repository.participant_result import is_member_tournament_row
 
 #: A public ref that is a legacy numeric id rather than a slug.
 _NUMERIC_REF = re.compile(r"[1-9]\d*")

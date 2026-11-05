@@ -44,7 +44,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from shared import models
 from shared.core import enums
 from shared.core.social import SocialProvider
-from shared.services.participant_result import is_member_tournament_row
+from shared.repository.participant_result import is_member_tournament_row
 
 __all__ = (
     "SelfDeclaredChannelRow",

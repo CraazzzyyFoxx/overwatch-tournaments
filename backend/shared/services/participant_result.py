@@ -3,24 +3,27 @@
 Rule 2: per member, the last-formed team the member played for (substitutes never count), the placement being that
 team's positive ``Standing.overall_position`` in its last stage by ``Stage.order`` (NULL when it never had one), and
 ``field_size`` the tournament's team count. The migration ``flowP1_participant_result`` carries a frozen copy of the
-same SQL for the backfill; keep the two in step.
+same SQL for the backfill; keep the two in step. The storage and the member's tournament-row helpers live in
+``shared.repository.participant_result`` (repositories cannot import services) and are re-exported here.
 """
 
 from __future__ import annotations
 
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import aliased
-from sqlalchemy.orm.util import AliasedClass
 
 from shared import models
+from shared.repository.participant_result import (
+    ParticipantResultRepository,
+    is_member_tournament_row,
+    member_tournament_player_id,
+)
 
 __all__ = ("is_member_tournament_row", "member_tournament_player_id", "write_participant_results")
 
-_COLUMNS = ("tournament_id", "workspace_member_id", "final_team_id", "placement", "field_size", "source_node_id")
-
 
 def _team_rule_rows(tournament_id: int) -> sa.Select:
+    """One select in ``ParticipantResultRepository`` column order (``COLUMNS``)."""
     player, standing, stage = models.Player, models.Standing, models.Stage
     placement = (
         sa.select(standing.overall_position)
@@ -56,45 +59,4 @@ def _team_rule_rows(tournament_id: int) -> sa.Select:
 
 async def write_participant_results(session: AsyncSession, tournament_id: int) -> int:
     """Replace the tournament's rows with the rule-2 rows; none unless the tournament is finished. Never commits."""
-    await session.flush()
-    await session.execute(
-        sa.delete(models.ParticipantResult).where(models.ParticipantResult.tournament_id == tournament_id)
-    )
-    # RETURNING, not rowcount: psycopg reports -1 for a bare INSERT ... SELECT.
-    result = await session.execute(
-        sa.insert(models.ParticipantResult)
-        .from_select(list(_COLUMNS), _team_rule_rows(tournament_id))
-        .returning(models.ParticipantResult.workspace_member_id)
-    )
-    return len(result.all())
-
-
-def member_tournament_player_id(player: type[models.Player] | AliasedClass = models.Player) -> sa.ScalarSelect[int]:
-    """The id of the member's tournament row: the final team's, else the latest non-substitute row (spec §11.4)."""
-    other, result = aliased(models.Player), models.ParticipantResult
-    return (
-        sa.select(other.id)
-        .outerjoin(
-            result,
-            sa.and_(
-                result.tournament_id == other.tournament_id,
-                result.workspace_member_id == other.workspace_member_id,
-            ),
-        )
-        .where(
-            other.workspace_member_id == player.workspace_member_id,
-            other.tournament_id == player.tournament_id,
-        )
-        .order_by(
-            sa.func.coalesce(other.team_id == result.final_team_id, False).desc(),
-            other.is_substitution.asc(),
-            other.id.desc(),
-        )
-        .limit(1)
-        .correlate_except(other, result)
-        .scalar_subquery()
-    )
-
-
-def is_member_tournament_row(player: type[models.Player] | AliasedClass = models.Player) -> sa.ColumnElement[bool]:
-    return player.id == member_tournament_player_id(player)
+    return await ParticipantResultRepository().replace(session, tournament_id, _team_rule_rows(tournament_id))
