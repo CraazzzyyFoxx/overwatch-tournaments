@@ -6,8 +6,10 @@ Three layers, all of them here, none of them touching a session:
    treats ``team_ids[0]`` as seed 1 (plays the lowest seed). Lives in
    ``Stage.seed_ranking``:
 
-   - ``slot`` (default): keep StageItemInput slot order (standings wiring,
-     manual slots).
+   - ``slot`` (default) / ``source``: keep StageItemInput slot order (standings wiring, manual slots; ``source`` =
+     the input's rank order).
+   - ``cross`` / ``snake``: regroup the input's rows by ``(stage_item_id, item_rank)`` at seating (:func:`plan_seats`);
+     generation keeps the seated slot order, like ``slot``.
    - ``avg_sr``: highest ``Team.avg_sr`` is seed 1.
    - ``total_sr``: highest ``Team.total_sr`` is seed 1.
    - ``random``: ``random.Random(stage.id)`` shuffle, stable across processes.
@@ -18,12 +20,10 @@ Three layers, all of them here, none of them touching a session:
    ``seed_teams`` vocabulary (``snake_sr``/``by_total_sr``/``random``) and the
    snake/round-robin deal across a stage's groups.
 
-3. Group -> playoff wiring — ``group_advance_counts`` + ``build_seeding`` +
-   ``separate_groups``: how many teams each group sends and how many of them
-   start upper (``advance_count`` / ``advance_upper_count``, a group's own value
-   overriding its stage's), which (group, position) pair lands in which playoff
-   slot, ``cross`` or ``snake``, and the swaps that keep a group's teams apart in
-   the first round.
+3. Result rows -> seats — ``plan_seats`` (+ ``build_seeding`` + ``separate_groups``): which input row lands in which
+   stage item and slot. A bracket target is seated in input order or, for ``cross``/``snake``, band by band (upper /
+   lower starters): one slice per source group, ``cross`` or ``snake``, then the swaps that keep a group's teams
+   apart in the first round. A group target gets a snake (or, for ``random``, shuffled round-robin) deal.
 
 The engine's 1-vs-N slot layout itself (``src.domain.bracket.seeding_order``)
 stays next to the generators that apply it; ``separate_groups`` only reads it.
@@ -33,7 +33,7 @@ from __future__ import annotations
 
 import random
 from collections.abc import Mapping, Sequence
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from enum import StrEnum
 from typing import Any, NamedTuple, Protocol
 
@@ -44,6 +44,7 @@ from src.domain.bracket.seeding_order import seeding_order
 __all__ = (
     "SEED_TEAMS_MODES",
     "GroupSlice",
+    "SeatSource",
     "SeedRanking",
     "apply_seed_ranking",
     "bracket_seeds",
@@ -53,6 +54,7 @@ __all__ = (
     "group_for_index",
     "lower_bracket_item",
     "parse_seed_mode",
+    "plan_seats",
     "rank_team_ids",
     "resolve_seeds",
     "separate_groups",
@@ -61,10 +63,17 @@ __all__ = (
 
 class SeedRanking(StrEnum):
     SLOT = "slot"
+    SOURCE = "source"
     AVG_SR = "avg_sr"
     TOTAL_SR = "total_sr"
     RANDOM = "random"
     CAPTAIN_RANK = "captain_rank"
+    CROSS = "cross"
+    SNAKE = "snake"
+
+
+# Rankings that put no order of their own on a seated list: generation keeps its slot order.
+_SEATED_ORDER = (SeedRanking.SLOT, SeedRanking.SOURCE, SeedRanking.CROSS, SeedRanking.SNAKE)
 
 
 class RankableTeam(Protocol):
@@ -113,7 +122,7 @@ def rank_team_ids(
     ``captain_ranks`` (team id -> the captain's rank) is read by ``CAPTAIN_RANK`` only; a team without one sorts last.
     """
     items = list(teams)
-    if ranking is SeedRanking.SLOT:
+    if ranking in _SEATED_ORDER:
         return [team.id for team in items]
     if ranking is SeedRanking.AVG_SR:
         return [team.id for team in sorted(items, key=lambda team: (-(team.avg_sr or 0.0), team.id))]
@@ -137,7 +146,7 @@ def apply_seed_ranking(
     rng_seed: int,
 ) -> list[int]:
     """Reorder ``team_ids`` by ``ranking``. Unknown or placeholder ids keep slot order."""
-    if ranking is SeedRanking.SLOT or not team_ids:
+    if ranking in _SEATED_ORDER or not team_ids:
         return list(team_ids)
     if any(team_id <= 0 or team_id not in teams_by_id for team_id in team_ids):
         return list(team_ids)
@@ -291,3 +300,92 @@ def separate_groups(seeding: Sequence[tuple[int, int]]) -> list[tuple[int, int]]
                 break
             order[lower], order[candidate] = order[candidate], order[lower]
     return order
+
+
+@dataclass(frozen=True, slots=True)
+class SeatSource:
+    """One input result row to seat: who, and where it finished upstream (a group's place, for ``cross``/``snake``)."""
+
+    result_id: int
+    team_id: int
+    stage_item_id: int | None
+    item_rank: int | None
+    #: A double-elimination row that starts in the lower bracket (``breakdown["bracket"] == "lower"``).
+    lower: bool = False
+
+
+_BRACKET_ITEMS = (
+    enums.StageItemType.BRACKET_UPPER,
+    enums.StageItemType.SINGLE_BRACKET,
+    enums.StageItemType.BRACKET_LOWER,
+)
+
+
+def _seat_band(
+    band: Sequence[SeatSource],
+    ranking: SeedRanking,
+    *,
+    arrange_groups: bool,
+    source_item_order: Mapping[int, int],
+) -> list[SeatSource]:
+    """One bracket half in slot order: the input order, or ``cross``/``snake`` over the groups the rows came from."""
+    if ranking not in (SeedRanking.CROSS, SeedRanking.SNAKE) or any(
+        one.stage_item_id is None or one.item_rank is None for one in band
+    ):
+        return list(band)
+    by_item: dict[int, list[SeatSource]] = {}
+    for one in sorted(band, key=lambda one: one.item_rank or 0):
+        by_item.setdefault(one.stage_item_id or 0, []).append(one)
+    # A band's places need not be contiguous ("top" over a ragged table), so slices count places, not item_rank.
+    slices = [
+        GroupSlice(item_id, 1, len(rows))
+        for item_id, rows in sorted(
+            by_item.items(), key=lambda pair: (source_item_order.get(pair[0], len(by_item)), pair[0])
+        )
+    ]
+    seeding = build_seeding(slices, ranking.value)
+    if arrange_groups:
+        seeding = separate_groups(seeding)
+    return [by_item[item_id][place - 1] for item_id, place in seeding]
+
+
+def plan_seats(
+    sources: Sequence[SeatSource],
+    *,
+    ranking: SeedRanking,
+    target_items: Sequence[Any],
+    double_elimination: bool,
+    arrange_groups: bool,
+    source_item_order: Mapping[int, int],
+    rng_seed: int,
+) -> dict[int, list[SeatSource]]:
+    """Target stage item id -> its sources in slot order.
+
+    Bracket targets (``arrange_groups``: also keep a group's teams apart in round 1 -- off for a bracket template,
+    whose layout is fixed): lower starters go to the ``BRACKET_LOWER`` item of a double-elimination stage and
+    everyone else to the upper / single bracket; each half is seated by :func:`_seat_band`. Group targets: a snake
+    deal in input order, or a shuffled round-robin for ``random``.
+    """
+    items = sorted(target_items, key=lambda item: item.order)
+    if not any(item.type in _BRACKET_ITEMS for item in items):
+        rows = list(sources)
+        if ranking is SeedRanking.RANDOM:
+            random.Random(rng_seed).shuffle(rows)
+        plan: dict[int, list[SeatSource]] = {item.id: [] for item in items}
+        for index, one in enumerate(rows):
+            plan[items[group_for_index(index, len(items), snake=ranking is not SeedRanking.RANDOM)].id].append(one)
+        return plan
+
+    lower_item = next((item for item in items if item.type == enums.StageItemType.BRACKET_LOWER), None)
+    upper_item = next(item for item in items if item.type != enums.StageItemType.BRACKET_LOWER)
+    lower = [one for one in sources if one.lower] if double_elimination else []
+    if lower and lower_item is None:
+        raise ValueError("lower bracket item missing")
+    upper = [one for one in sources if not (double_elimination and one.lower)]
+    plan = {item.id: [] for item in items}
+    plan[upper_item.id] = _seat_band(upper, ranking, arrange_groups=arrange_groups, source_item_order=source_item_order)
+    if lower_item is not None:
+        plan[lower_item.id] = _seat_band(
+            lower, ranking, arrange_groups=arrange_groups, source_item_order=source_item_order
+        )
+    return plan

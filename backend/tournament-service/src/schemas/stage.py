@@ -27,7 +27,7 @@ __all__ = (
 )
 
 GrandFinalType = Literal["no_reset", "with_reset"]
-SeedRankingValue = Literal["slot", "avg_sr", "total_sr", "random"]
+SeedRankingValue = Literal["slot", "source", "avg_sr", "total_sr", "random", "cross", "snake"]
 
 
 class BracketSeedCounts(BaseModel):
