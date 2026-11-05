@@ -72,6 +72,11 @@ class ExportPlan:
     on_failure: FailureHook | None = None
 
 
+def _owned(formation_node_id: int) -> sa.ColumnElement[bool]:
+    """Teams this node's export may replace or must guard: its own and the legacy ones that predate formation nodes."""
+    return sa.or_(Team.formation_node_id == formation_node_id, Team.formation_node_id.is_(None))
+
+
 @dataclass
 class ExportOutcome:
     removed_teams: int = 0
@@ -104,11 +109,12 @@ class TeamMaterializationService:
         prior_ids = list(plan.prior_team_ids)
 
         if plan.guard_standings:
-            await self._assert_no_foreign_standings(session, plan.formation_node_id, prior_ids)
+            await self._assert_no_foreign_standings(session, plan.tournament_id, plan.formation_node_id, prior_ids)
 
         if prior_ids:
-            # A link may point into another formation's export: only this node's teams go.
-            own_ids = sa.select(Team.id).where(Team.id.in_(prior_ids), Team.formation_node_id == plan.formation_node_id)
+            # A link may point into another formation's export: only this node's teams go, plus the legacy
+            # (NULL-formation) teams the source rows link to -- the export adopts them (spec R2.Q5).
+            own_ids = sa.select(Team.id).where(Team.id.in_(prior_ids), _owned(plan.formation_node_id))
             await session.execute(sa.delete(Standing).where(Standing.team_id.in_(own_ids)))
             await session.execute(sa.delete(Player).where(Player.team_id.in_(own_ids)))
             await session.execute(sa.delete(Team).where(Team.id.in_(own_ids)))
@@ -152,6 +158,7 @@ class TeamMaterializationService:
     @staticmethod
     async def _assert_no_foreign_standings(
         session: AsyncSession,
+        tournament_id: int,
         formation_node_id: int,
         prior_team_ids: Sequence[int],
     ) -> None:
@@ -164,7 +171,7 @@ class TeamMaterializationService:
             sa.select(sa.literal(1))
             .select_from(Standing)
             .join(Team, Team.id == Standing.team_id)
-            .where(Team.formation_node_id == formation_node_id)
+            .where(Team.tournament_id == tournament_id, _owned(formation_node_id))
             .limit(1)
         )
         if prior_team_ids:

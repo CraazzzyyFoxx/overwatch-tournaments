@@ -429,6 +429,9 @@ class BalancerRegistrationRead(BaseRead):
     tournament_id: int
     workspace_id: int
     user_id: int | None = None
+    #: The workspace member the registration is anchored on; NULL (a manual row, a skipped provisioning) keeps it
+    #: out of every formation's input, and so out of the balance job and the draft pool.
+    workspace_member_id: int | None = None
     display_name: str | None = None
     #: Primary handle of the registration's first GAME identity: the owning
     #: tournament's identity provider, position zero. Every handle of that provider,

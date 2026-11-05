@@ -230,8 +230,13 @@ class DraftExportService:
         if draft_session.status != DraftStatus.COMPLETED.value:
             raise _err("draft_not_completed", "Only a completed draft can be exported")
 
-        _teams, payload, _rosters = await self._load_payload(session, draft_session)
-        updated = await sync_player_ranks(session, draft_session.formation_node_id, to_materialization_teams(payload))
+        teams, payload, _rosters = await self._load_payload(session, draft_session)
+        updated = await sync_player_ranks(
+            session,
+            draft_session.formation_node_id,
+            to_materialization_teams(payload),
+            linked_team_ids=[t.exported_team_id for t in teams if t.exported_team_id is not None],
+        )
         # Ranks only: no team is removed or created, so no draft lifecycle event.
         await stage_export_invalidation(session, draft_session.tournament_id)
         return updated

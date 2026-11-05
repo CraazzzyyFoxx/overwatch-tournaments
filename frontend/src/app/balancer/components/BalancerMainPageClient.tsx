@@ -17,6 +17,10 @@ import { TeamDistributionPanel } from "@/app/balancer/components/TeamDistributio
 import { VariantSelector } from "@/app/balancer/components/VariantSelector";
 import { useBalancerTournamentId } from "@/app/balancer/components/useBalancerTournamentId";
 import { FlowNodeSelect } from "@/components/kit/FlowNodeSelect";
+import {
+  UnlinkedRegistrationsNotice,
+  countUnlinkedRegistrations
+} from "@/components/kit/UnlinkedRegistrationsNotice";
 import { FLOW_NODE_PARAM, useFlowNodeParam } from "@/hooks/useFlowNodeParam";
 import { useQueryParams } from "@/hooks/useQueryParams";
 import { useBalancerJob } from "@/app/balancer/components/useBalancerJob";
@@ -773,6 +777,7 @@ export function BalancerMainPageClient() {
         value={formationNodeId}
         onChange={(nodeId) => setParams({ [FLOW_NODE_PARAM]: nodeId })}
       />
+      <UnlinkedRegistrationsNotice count={countUnlinkedRegistrations(registrations)} />
       <PresetRunPanel
         counters={[
           { label: t("counters.pool"), value: poolPlayers.length, icon: Users },

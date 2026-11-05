@@ -25,7 +25,13 @@ from shared.testing.db import ensure_test_postgres
 from src import schemas
 from src.services.admin.balancer import balancer_admin_service
 from src.services.draft.lifecycle import lifecycle_service
-from src.services.team_export import ExportPlan, MaterializationMember, MaterializationTeam, team_materialization
+from src.services.team_export import (
+    ExportPlan,
+    MaterializationMember,
+    MaterializationTeam,
+    sync_player_ranks,
+    team_materialization,
+)
 from src.services.team_export.materialization import materialize_teams
 from tests.factories import formation_node
 
@@ -172,6 +178,63 @@ class FormationScopeTests(IsolatedAsyncioTestCase):
                 ),
             )
             self.assertEqual(outcome.imported_teams, 1)
+
+    async def test_re_export_adopts_the_legacy_teams_its_source_rows_link_to(self) -> None:
+        async with self.Session() as s:
+            legacy = await self._team(s, None, "Alpha", standing=True)
+            await s.commit()
+            outcome = await team_materialization.run(
+                s,
+                ExportPlan(
+                    tournament_id=self.tournament_id,
+                    formation_node_id=self.b,
+                    teams=[_team("Alpha", self.members[0])],
+                    prior_team_ids=[legacy],
+                    guard_standings=True,
+                ),
+            )
+            self.assertEqual(outcome.removed_teams, 1)
+            teams = (
+                await s.execute(
+                    sa.select(models.Team.id, models.Team.formation_node_id).where(
+                        models.Team.tournament_id == self.tournament_id
+                    )
+                )
+            ).all()
+            self.assertEqual([row.formation_node_id for row in teams], [self.b])
+            self.assertNotIn(legacy, [row.id for row in teams])
+            players = (
+                await s.scalars(sa.select(models.Player.formation_node_id).where(models.Player.name.like("Alpha%")))
+            ).all()
+            self.assertEqual(players, [self.b])
+
+    async def test_guard_fires_on_the_standings_of_legacy_teams_the_export_does_not_replace(self) -> None:
+        async with self.Session() as s:
+            await self._team(s, None, "Legacy", standing=True)
+            await s.commit()
+            with self.assertRaises(ApiHTTPException) as caught:
+                await team_materialization.run(
+                    s,
+                    ExportPlan(
+                        tournament_id=self.tournament_id,
+                        formation_node_id=self.b,
+                        teams=[_team("New", self.members[1])],
+                        guard_standings=True,
+                    ),
+                )
+            self.assertEqual(_code(caught), "standings_exist")
+
+    async def test_rank_sync_reaches_the_legacy_players_of_linked_teams(self) -> None:
+        async with self.Session() as s:
+            legacy = await self._team(s, None, "Alpha")
+            await sync_player_ranks(
+                s,
+                self.b,
+                [MaterializationTeam("Alpha", (MaterializationMember(name="Alpha-p", rank=3100, slot_code="tank"),))],
+                linked_team_ids=[legacy],
+            )
+            rank = await s.scalar(sa.select(models.Player.rank).where(models.Player.team_id == legacy))
+            self.assertEqual(rank, 3100)
 
     async def test_same_member_placed_in_two_formations(self) -> None:
         async with self.Session() as s:

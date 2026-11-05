@@ -14667,6 +14667,9 @@
       "map": "Map"
     }
   },
+  "unlinkedRegistrationsNotice": {
+    "message": "{count, plural, one {# registration is not linked to a workspace member — excluded from the balance and the draft pool.} other {# registrations are not linked to a workspace member — excluded from the balance and the draft pool.}}"
+  },
   "balancerTool": {
     "title": "Balancer: {tournament}",
     "pool": {

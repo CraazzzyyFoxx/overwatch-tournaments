@@ -488,6 +488,8 @@ export interface AdminRegistration {
   tournament_id: number;
   workspace_id: number;
   user_id: number | null;
+  /** The workspace member it is anchored on; `null` keeps it out of the balance job and the draft pool. */
+  workspace_member_id: number | null;
   display_name: string | null;
   /** The registration's public identity: the primary handle of its first game
    *  identity (the BattleTag, today). */

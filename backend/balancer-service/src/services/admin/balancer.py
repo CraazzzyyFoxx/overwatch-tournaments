@@ -390,6 +390,7 @@ class BalancerAdminService:
             session,
             balance.formation_node_id,
             to_materialization_teams([team.to_balancer_team(dimension) for team in payload.teams]),
+            linked_team_ids=[team.exported_team_id for team in balance.teams if team.exported_team_id is not None],
         )
         await emit_balancer_data(session, balance.tournament_id, BALANCER_TEAMS_CHANGED, actor_user_id=actor_user_id)
         await stage_export_invalidation(session, balance.tournament_id)

@@ -42654,6 +42654,18 @@
         "workspace_id": {
           "title": "Workspace Id",
           "type": "integer"
+        },
+        "workspace_member_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Workspace Member Id"
         }
       },
       "required": [

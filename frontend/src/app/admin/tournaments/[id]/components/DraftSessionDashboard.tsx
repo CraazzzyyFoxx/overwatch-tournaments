@@ -75,7 +75,7 @@ export function DraftSessionDashboard({
       // Erasing the session the wizard is editing must clear its local state:
       // the wizard prefers its own copy over the refetched board, so a stale
       // session would otherwise survive the delete.
-      key={wizardEpoch}
+      key={`${formationNodeId}:${wizardEpoch}`}
       tournamentId={tournamentId}
       formationNodeId={formationNodeId}
       board={terminalSession ? null : board}

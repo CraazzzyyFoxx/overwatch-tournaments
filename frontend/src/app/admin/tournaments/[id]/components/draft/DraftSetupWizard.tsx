@@ -50,6 +50,10 @@ import {
 } from "./setup-model";
 import { configFromSession, createEmptyCaptainSetup, formatFromSession } from "./setup-session";
 import type { DraftCaptainSetup, DraftSetupConfig } from "./setup-types";
+import {
+  UnlinkedRegistrationsNotice,
+  countUnlinkedRegistrations
+} from "@/components/kit/UnlinkedRegistrationsNotice";
 import { captainSeat, isInDraftPool, poolRegistrationSummary } from "./setup-types";
 import { balancerQueryKeys } from "@/lib/balancer/query-keys";
 import { adminQueryKeys } from "@/lib/admin/query-keys";
@@ -461,6 +465,7 @@ export function DraftSetupWizard({
 
   return (
     <>
+      <UnlinkedRegistrationsNotice count={countUnlinkedRegistrations(allRegistrations)} />
       <WizardShell
         steps={wizardSteps}
         aside={aside}

@@ -27,7 +27,8 @@ async def require_formation_node(session: AsyncSession, tournament_id: int, node
 
 async def require_forming(session: AsyncSession, node_id: int) -> FlowNode:
     """The formation node, 409 ``formation_not_forming`` unless it is ``forming``: teams are written only then."""
-    node = await _nodes.get(session, node_id)
+    # FOR SHARE: a concurrent forming -> completed waits for this export's commit instead of racing it.
+    node = await _nodes.get_for_share(session, node_id)
     if node is None:
         raise err("flow_node_not_found", "Flow node not found", status_code=404)
     if node.status != FlowNodeStatus.FORMING:

@@ -32,8 +32,13 @@ async def sync_player_ranks(
     session: AsyncSession,
     formation_node_id: int,
     teams: Sequence[MaterializationTeam],
+    *,
+    linked_team_ids: Sequence[int] = (),
 ) -> int:
     """Update ``tournament.player.rank`` from an export payload. Flushes; never commits.
+
+    ``linked_team_ids`` are the teams the source rows were exported to: their legacy (NULL-formation) players are
+    matched too, since an export adopts such teams.
 
     Returns the number of rows whose rank actually changed.
     """
@@ -44,7 +49,10 @@ async def sync_player_ranks(
     rows = (
         await session.scalars(
             sa.select(Player).where(
-                Player.formation_node_id == formation_node_id,
+                sa.or_(
+                    Player.formation_node_id == formation_node_id,
+                    sa.and_(Player.formation_node_id.is_(None), Player.team_id.in_(list(linked_team_ids))),
+                ),
                 Player.name.in_(list(rank_by_name)),
             )
         )

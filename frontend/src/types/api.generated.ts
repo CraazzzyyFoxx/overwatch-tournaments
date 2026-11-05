@@ -28114,6 +28114,11 @@ export interface components {
             user_id: number | null;
             /** Workspace Id */
             workspace_id: number;
+            /**
+             * Workspace Member Id
+             * @default null
+             */
+            workspace_member_id: number | null;
         };
         /** BalancerRegistrationRoleInput */
         "tournament.BalancerRegistrationRoleInput": {

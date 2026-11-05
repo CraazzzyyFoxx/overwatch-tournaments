@@ -103,6 +103,7 @@ def serialize_registration(
         tournament_id=registration.tournament_id,
         workspace_id=workspace_id,
         user_id=workspace_member.player_id if workspace_member is not None else None,
+        workspace_member_id=registration.workspace_member_id,
         display_name=registration.display_name,
         primary_handle=(
             identity.handle if (identity := registration.primary_game_identity(provider=provider)) else None
