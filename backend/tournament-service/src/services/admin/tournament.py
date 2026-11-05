@@ -10,7 +10,7 @@ from sqlalchemy.orm import selectinload
 from shared import models
 from shared.core import http_status as status
 from shared.core import tournament_state
-from shared.core.enums import FlowNodeKind, FlowNodeStatus, StageType, TournamentStatus
+from shared.core.enums import FlowNodeKind, FlowNodeStatus, TournamentStatus
 from shared.core.errors import ApiExc, ApiHTTPException
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.domain.flow.legacy import FORMATION_MODE, X_STEP
@@ -30,11 +30,9 @@ from shared.services.participant_result import write_participant_results
 from shared.services.realtime import Resource, Scope, emit
 from shared.services.stats_owner_delete import capture_owner_delete, stage_owner_delete
 from shared.services.team_format import copy_for_tournament, save_tournament_format
-from shared.services.tournament.computation import request_bracket_job
 from shared.services.tournament.slug import generate_unique_tournament_slug
 from src import schemas
 from src.clients.challonge import challonge_client
-from src.services.admin.stage import stage_service
 from src.services.draft_guards import assert_no_active_draft_session
 
 # ``src.services.challonge.sync`` is loaded inside ``create_tournament_from_challonge``:
@@ -48,8 +46,6 @@ from src.services.tournament.events import (
     enqueue_tournament_state_changed,
     publish_tournament_invalidation,
 )
-
-GROUP_STAGE_TYPES = {StageType.ROUND_ROBIN, StageType.SWISS, StageType.FFA_LEAGUE}
 
 
 def _status_value(value: TournamentStatus | str) -> str:
@@ -72,18 +68,6 @@ def _normalize_challonge_slug(value: str) -> str:
             return path.split("/")[-1]
 
     return slug.strip("/").split("/")[-1]
-
-
-def _stage_has_ready_inputs(stage: models.Stage) -> bool:
-    stage_items = list(getattr(stage, "items", []) or [])
-    if not stage_items:
-        return False
-
-    for item in stage_items:
-        team_count = sum(1 for stage_input in getattr(item, "inputs", []) if stage_input.team_id is not None)
-        if team_count < 2:
-            return False
-    return True
 
 
 class AdminTournamentService:
@@ -503,72 +487,6 @@ class AdminTournamentService:
         await division_grid_cache.invalidate_tournament(tournament_id)
         await division_grid_cache.invalidate_workspace(workspace_id)
 
-    async def _stage_has_encounters(self, session: AsyncSession, stage_id: int) -> bool:
-        # Analytical: grouped count, not a CRUD row read. An encounter's stage is
-        # its bracket POSITION, so the count is over that table.
-        count = await session.scalar(
-            sa.select(sa.func.count(models.BracketEncounter.encounter_id)).where(
-                models.BracketEncounter.stage_id == stage_id
-            )
-        )
-        return bool(count)
-
-    async def _maybe_auto_start_group_stage(
-        self,
-        session: AsyncSession,
-        tournament: models.Tournament,
-        *,
-        target_status: TournamentStatus,
-    ) -> None:
-        if target_status != TournamentStatus.LIVE:
-            return
-
-        group_stages = [
-            stage
-            for stage in getattr(tournament, "stages", []) or []
-            if stage.stage_type in GROUP_STAGE_TYPES and not getattr(stage, "is_completed", False)
-        ]
-        if not group_stages:
-            return
-
-        # Stages sharing an ``order`` are one phase and run in parallel (Low /
-        # High divisions), so the whole wave starts, not just its first stage.
-        phase = min(stage.order for stage in group_stages)
-        wave = [stage for stage in group_stages if stage.order == phase]
-        active = [stage for stage in wave if getattr(stage, "is_active", False)]
-        for stage in active or wave:
-            await self._auto_start_stage(session, tournament, stage)
-
-    async def _auto_start_stage(
-        self,
-        session: AsyncSession,
-        tournament: models.Tournament,
-        stage: models.Stage,
-    ) -> None:
-        has_encounters = await self._stage_has_encounters(session, stage.id)
-
-        if not getattr(stage, "is_active", False):
-            if not has_encounters and not _stage_has_ready_inputs(stage):
-                return
-            if has_encounters:
-                await stage_service.activate_stage(session, stage.id, commit=False)
-            else:
-                await request_bracket_job(
-                    session,
-                    tournament_id=tournament.id,
-                    stage_id=stage.id,
-                    operation="activate_and_generate",
-                )
-                return
-
-        if not has_encounters and _stage_has_ready_inputs(stage):
-            await request_bracket_job(
-                session,
-                tournament_id=tournament.id,
-                stage_id=stage.id,
-                operation="generate_stage",
-            )
-
     async def toggle_finished(self, session: AsyncSession, tournament_id: int) -> models.Tournament:
         """The hub's "mark finished / reopen" button, as a two-way COMPLETED move.
 
@@ -622,15 +540,7 @@ class AdminTournamentService:
         Challonge-sourced tournament that never takes its own registrations is the
         case that needs it.
         """
-        tournament = await self.tournament_repo.get(
-            session,
-            tournament_id,
-            options=[
-                selectinload(models.Tournament.stages)
-                .selectinload(models.Stage.items)
-                .selectinload(models.StageItem.inputs)
-            ],
-        )
+        tournament = await self.tournament_repo.get(session, tournament_id)
 
         if not tournament:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tournament not found")
@@ -674,14 +584,6 @@ class AdminTournamentService:
         )
         await lifecycle_notifier.on_status_entered(session, tournament)
         await publish_tournament_invalidation(session, tournament_id, STRUCTURE_RESOURCES)
-        # Before the commit: the bracket job it requests is a row in this
-        # session, and neither caller (the RPC envelope, the worker tick)
-        # commits after us.
-        await self._maybe_auto_start_group_stage(
-            session,
-            tournament,
-            target_status=target_status,
-        )
         await session.commit()
         return await self.get_tournament(session, tournament_id)
 

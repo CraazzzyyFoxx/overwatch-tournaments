@@ -1147,10 +1147,12 @@ class StandingsRecalculation:
     tournament: models.Tournament | None
     #: The computed rows (not session-bound).
     standings: list[models.Standing]
-    #: Whether anything was written: a standing row or a ``Stage.is_completed`` flag.
+    #: Whether anything was written: a standing row.
     changed: bool
     #: Each group and elimination stage's encounters as they were ranked, by stage id.
     encounters: dict[int, list[StageEncounter]]
+    #: The stages whose encounters say they are finished (the rule of ``_completed_stage_ids``).
+    completed_stage_ids: frozenset[int]
 
 
 class StandingsService:
@@ -1364,33 +1366,33 @@ class StandingsService:
         """Rebuild a tournament's standings atomically: readers never observe a half-written table."""
         tournament = await self.get_tournament_for_standings(session, tournament_id)
         if tournament is None:
-            return StandingsRecalculation(tournament=None, standings=[], changed=False, encounters={})
+            return StandingsRecalculation(
+                tournament=None, standings=[], changed=False, encounters={}, completed_stage_ids=frozenset()
+            )
         return await self.calculate_for_tournament(session, tournament, commit=commit)
 
-    async def _update_stage_completion_flags(
+    async def _completed_stage_ids(
         self,
         session: AsyncSession,
         tournament: models.Tournament,
         standings: typing.Sequence[models.Standing],
-    ) -> bool:
-        """After recalc, flip ``Stage.is_completed`` to match reality.
+    ) -> frozenset[int]:
+        """The stages the standings say are finished; ``FlowNodeService.sync_stage_completion`` moves their nodes.
 
         A stage is considered completed when every encounter that belongs to it
         has ``status == COMPLETED``. Stages without any encounters are treated
         as not-completed (nothing to finish).
 
-        This powers the admin UI's "Group A — 10/10 done" badge and the
-        activate-and-generate warning for downstream playoff stages.
-
         A Swiss scope is done once its rounds are played and either
         ``max_rounds`` is reached, it ran out of pairings, or its thresholds
         left fewer than two teams undecided (read off ``standings``).
 
-        Returns whether any flag flipped.
+        ``INDIVIDUAL_SWISS`` stages are included -- the qualification lock reads the rule -- but the worker never
+        completes them.
         """
         stages = getattr(tournament, "stages", []) or []
         if not stages:
-            return False
+            return frozenset()
 
         stage_ids = [s.id for s in stages]
         counts_result = await session.execute(
@@ -1428,7 +1430,7 @@ class StandingsService:
         for row in standings:
             if row.swiss_status is None:
                 undecided[(row.stage_id, row.stage_item_id)] += 1
-        flipped = False
+        done: set[int] = set()
         for stage in stages:
             stage_rows = rows_by_stage.get(stage.id, [])
             if stage.stage_type == StageType.SWISS:
@@ -1471,10 +1473,9 @@ class StandingsService:
                 total = sum(row_total for _, row_total, _, _ in stage_rows)
                 completed = sum(row_completed for _, _, row_completed, _ in stage_rows)
                 should_be_completed = total > 0 and completed == total
-            if stage.is_completed != should_be_completed:
-                stage.is_completed = should_be_completed
-                flipped = True
-        return flipped
+            if should_be_completed:
+                done.add(stage.id)
+        return frozenset(done)
 
     async def get_pins_by_table(
         self,
@@ -1571,8 +1572,7 @@ class StandingsService:
 
         final_standings = calculate_overall_positions(all_standings, stages)
         changed = await self._write_standings(session, tournament.id, final_standings) or personal_changed
-        # Flip Stage.is_completed in the same transaction as the standings write.
-        changed = await self._update_stage_completion_flags(session, tournament, final_standings) or changed
+        completed_stage_ids = await self._completed_stage_ids(session, tournament, final_standings)
         if changed and tournament.is_finished:
             # A standings correction of a finished tournament (spec §4.7).
             await write_participant_results(session, tournament.id)
@@ -1582,7 +1582,11 @@ class StandingsService:
             await session.flush()
         logger.info(f"Stage-first standings calculated for tournament {tournament.id} (changed={changed})")
         return StandingsRecalculation(
-            tournament=tournament, standings=final_standings, changed=changed, encounters=encounters
+            tournament=tournament,
+            standings=final_standings,
+            changed=changed,
+            encounters=encounters,
+            completed_stage_ids=completed_stage_ids,
         )
 
 

@@ -23,6 +23,7 @@ from shared.domain.roster import PlayerRoster
 from shared.repository import BracketEncounterRepository, CatalogRoleRepository, EncounterRepository, StageRepository
 from shared.repository.player_standing import PlayerStandingRepository
 from shared.services.encounter.participants import MemberSnapshot, place_team
+from shared.services.flow_queries import stage_node_status
 from shared.services.roster import roster_engine
 from shared.services.team_format import tournament_slot_shape
 from src.domain.admin.best_of import best_of_config, resolve_best_of
@@ -128,7 +129,7 @@ class IndividualSwissRoundsService:
         *,
         stages: Sequence[models.Stage] | None = None,
     ) -> list[models.Encounter]:
-        """Generate round ``r + 1`` of every active, unfinished individual Swiss stage whose round ``r`` is closed.
+        """Generate round ``r + 1`` of every live individual Swiss stage whose round ``r`` is closed.
 
         Idempotent: the latest round is read under the stage lock, so a second call finds the new round open.
         """
@@ -139,7 +140,7 @@ class IndividualSwissRoundsService:
                     .where(
                         models.Stage.tournament_id == tournament_id,
                         models.Stage.stage_type == enums.StageType.INDIVIDUAL_SWISS,
-                        models.Stage.is_active.is_(True),
+                        stage_node_status(models.Stage.id) == enums.FlowNodeStatus.LIVE,
                     )
                     .options(selectinload(models.Stage.items))
                     .execution_options(populate_existing=True)
@@ -148,7 +149,7 @@ class IndividualSwissRoundsService:
         candidates = [
             stage
             for stage in stages
-            if stage.stage_type == enums.StageType.INDIVIDUAL_SWISS and stage.is_active and not stage.is_completed
+            if stage.stage_type == enums.StageType.INDIVIDUAL_SWISS and stage.status == enums.FlowNodeStatus.LIVE
         ]
         generated: list[models.Encounter] = []
         for stage in candidates:

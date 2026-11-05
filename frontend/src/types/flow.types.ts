@@ -9,7 +9,7 @@ export type FlowChanges = Schema<"tournament.FlowChanges">;
 export type FlowNodeRead = Schema<"tournament.FlowNodeRead">;
 
 /** Lifecycle status of a node; which values apply depends on its kind. */
-export type FlowNodeStatus = Schema<"tournament.FlowNodeStatus">;
+export type FlowNodeStatus = `${Schema<"tournament.FlowNodeStatus">}`;
 
 /** One phase window (`open`, `check_in`, `start`) of a node. */
 export type FlowNodeScheduleEntry = Schema<"tournament.FlowNodeScheduleEntry">;

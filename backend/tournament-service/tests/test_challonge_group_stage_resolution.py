@@ -37,9 +37,7 @@ def _stage(stage_id: int, challonge_group_id: int | None) -> models.Stage:
         advance_count=None,
         advance_upper_count=None,
         order=stage_id,
-        is_active=False,
         is_published=False,
-        is_completed=False,
         challonge_group_id=challonge_group_id,
     )
 

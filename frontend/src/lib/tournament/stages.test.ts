@@ -9,13 +9,13 @@ import {
   pickCurrentStage
 } from "./stages";
 
-type Flags = Partial<Pick<StageSummary, "is_active" | "is_published" | "is_completed">>;
-const flags = { is_active: false, is_published: false, is_completed: false };
+type Flags = Partial<Pick<StageSummary, "status" | "is_published">>;
+const flags = { status: "draft", is_published: false };
 const groups = (over: Flags = {}) =>
   ({ id: 1, stage_type: "swiss", order: 0, ...flags, ...over }) as StageSummary;
 const playoffs = (over: Flags = {}) =>
   ({ id: 2, stage_type: "double_elimination", order: 1, ...flags, ...over }) as StageSummary;
-const done = { is_published: true, is_completed: true };
+const done = { is_published: true, status: "completed" } as const;
 
 describe("pickCurrentStage", () => {
   it.each([
@@ -30,7 +30,7 @@ describe("pickCurrentStage", () => {
     ["groups finished, playoff started", [groups(done), playoffs({ is_published: true })], 2],
     [
       "the active stage, whatever else holds",
-      [groups({ is_published: true }), playoffs({ is_active: true, is_published: true })],
+      [groups({ is_published: true }), playoffs({ status: "live", is_published: true })],
       2
     ],
     ["everything finished", [groups(done), playoffs(done)], 2]
@@ -38,8 +38,8 @@ describe("pickCurrentStage", () => {
     expect(pickCurrentStage(stages, "live")?.id).toBe(expected);
   });
 
-  it("picks the playoff that decided a finished tournament over a later-activated group", () => {
-    const stages = [groups({ ...done, is_active: true }), playoffs(done)];
+  it("picks the playoff that decided a finished tournament over a group stage", () => {
+    const stages = [groups(done), playoffs(done)];
 
     expect(pickCurrentStage(stages, "completed")?.id).toBe(2);
     expect(pickCurrentStage(stages, "archived")?.id).toBe(2);

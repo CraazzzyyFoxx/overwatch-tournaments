@@ -742,14 +742,6 @@ DOCS: dict[str, dict] = {
         "summary": "Merge group stages",
         "description": "Permission: workspace `stage.update` on the target stage's workspace. Merges source group stages into a target stage.",
     },
-    "rpc.tournament.stage_activate": {
-        "summary": "Activate stage",
-        "description": "Permission: workspace `stage.update` on the stage's workspace. Activates a stage.",
-    },
-    "rpc.tournament.stage_deactivate": {
-        "summary": "Deactivate stage",
-        "description": "Permission: workspace `stage.update` on the stage's workspace. Reverts an accidentally-activated stage back to Draft/preview; refuses (409) once any of its matches has been reported or started.",
-    },
     "rpc.tournament.stage_generate": {
         "summary": "Generate stage bracket",
         "description": "Permission: workspace `stage.update` on the stage's workspace. Enqueues a bracket-generation job (202 Accepted) for the stage.",
@@ -758,13 +750,9 @@ DOCS: dict[str, dict] = {
         "summary": "Apply best-of to existing matches",
         "description": "Permission: workspace `stage.update` on the stage's workspace. Rewrites best_of on the stage's existing encounters from the stage's best-of config (in place, preserving scores).",
     },
-    "rpc.tournament.stage_activate_and_generate": {
-        "summary": "Activate and generate stage",
-        "description": "Permission: workspace `stage.update` on the stage's workspace (the optional force flag needs no extra grant). Enqueues a combined activate-and-generate bracket job (202 Accepted), honoring an optional force flag.",
-    },
     "rpc.tournament.stage_auto_wire": {
         "summary": "Auto-wire stage from groups",
-        "description": "Permission: workspace `stage.update` on the stage's workspace. Wires the stage's TENTATIVE inputs from a round-robin/Swiss stage's \"Teams advancing to playoff\" count — the same auto-wire Activate & generate runs automatically, exposed standalone for preview/debugging. The source is the one group stage of the latest earlier phase; pass source_stage_id to name it when that phase runs several divisions in parallel (a value that is not an integer is 422 `invalid_query_param`).",
+        "description": "Permission: workspace `stage.update` on the stage's workspace. Wires the stage's TENTATIVE inputs from a round-robin/Swiss stage's \"Teams advancing to playoff\" count — the same auto-wire the stage's `draft → ready` move runs, exposed standalone for preview/debugging. The source is the one group stage of the latest earlier phase; pass source_stage_id to name it when that phase runs several divisions in parallel (a value that is not an integer is 422 `invalid_query_param`).",
     },
     "rpc.tournament.stage_wire": {
         "summary": "Wire stage from groups",

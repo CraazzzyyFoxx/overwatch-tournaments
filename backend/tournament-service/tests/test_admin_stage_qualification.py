@@ -2,12 +2,12 @@
 
 Two defects are pinned here.
 
-``activate_stage`` used to read ``standings[position - 1]`` straight out of the
+``seat_inputs`` (the stage's ``draft → ready`` hook) used to read ``standings[position - 1]`` straight out of the
 table, so a boundary the standings themselves marked as unresolved
 (``tie_group``) got decided by the technical ``team_id`` fallback -- an
 automatic qualification nobody adjudicated.
 
-And once activation turned an input FINAL, a later correction of the group
+And once seating turned an input FINAL, a later correction of the group
 result was invisible to it: the playoff kept the team that no longer qualified,
 with neither an automatic re-qualification nor a refusal of the correction.
 """
@@ -105,7 +105,6 @@ def _playoff(inputs: list) -> SimpleNamespace:
         tournament_id=99,
         order=1,
         stage_type=enums.StageType.SINGLE_ELIMINATION,
-        is_active=False,
         is_published=False,
         items=[SimpleNamespace(id=200, name="Playoffs", order=0, inputs=inputs)],
     )
@@ -128,22 +127,20 @@ def _encounter(*, home_team_id: int, away_team_id: int) -> SimpleNamespace:
 class QualificationBoundaryTieTests(IsolatedAsyncioTestCase):
     """Item 9: a tie the standings could not break must not be broken by row order."""
 
-    async def _activate(self, standings: list) -> SimpleNamespace:
+    async def _seat(self, standings: list) -> SimpleNamespace:
         stage = _playoff([_tentative(slot=1, source_position=1)])
-        # 1: the sibling-stage deactivation UPDATE, 2: the standings SELECT,
-        # 3: the published stage's ready encounters.
-        session = _session([[], standings, []])
-        with patch.object(service, "_publish_structure_changed", AsyncMock()):
-            await service.activate_stage(session, stage.id, stage=stage)
+        session = _session([standings])
+        with patch.object(service, "_auto_wire_from_groups", AsyncMock()):
+            await service.seat_inputs(session, stage)
         return stage
 
-    async def test_unresolved_tie_at_the_boundary_refuses_activation(self) -> None:
+    async def test_unresolved_tie_at_the_boundary_refuses_seating(self) -> None:
         standings = [
             _standing(stage_item_id=100, position=1, team_id=1, tie_group=1),
             _standing(stage_item_id=100, position=2, team_id=2, tie_group=1),
         ]
         with self.assertRaises(Exception) as ctx:
-            await self._activate(standings)
+            await self._seat(standings)
 
         self.assertEqual(409, ctx.exception.status_code)
         self.assertIn("unresolved tie at qualification boundary", str(ctx.exception.detail))
@@ -156,7 +153,7 @@ class QualificationBoundaryTieTests(IsolatedAsyncioTestCase):
             _standing(stage_item_id=100, position=1, team_id=7, tie_group=1),
             _standing(stage_item_id=100, position=2, team_id=8, tie_group=2),
         ]
-        stage = await self._activate(standings)
+        stage = await self._seat(standings)
 
         inp = stage.items[0].inputs[0]
         self.assertEqual(7, inp.team_id)
@@ -169,9 +166,9 @@ class QualificationBoundaryTieTests(IsolatedAsyncioTestCase):
             _standing(stage_item_id=100, position=2, team_id=6, tie_group=3),
         ]
         stage = _playoff([_tentative(slot=1, source_position=2)])
-        session = _session([[], standings, []])
-        with patch.object(service, "_publish_structure_changed", AsyncMock()):
-            await service.activate_stage(session, stage.id, stage=stage)
+        session = _session([standings])
+        with patch.object(service, "_auto_wire_from_groups", AsyncMock()):
+            await service.seat_inputs(session, stage)
 
         self.assertEqual(6, stage.items[0].inputs[0].team_id)
 

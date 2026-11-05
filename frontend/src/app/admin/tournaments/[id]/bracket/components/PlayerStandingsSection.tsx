@@ -118,7 +118,8 @@ export function PlayerStandingsSection({
   if (standingsQuery.isPending) return tabFallback;
   if (standingsQuery.isError) return tabError(() => standingsQuery.refetch());
 
-  const canLock = stage.is_completed && tournament?.status === "live";
+  // The server refuses a lock while rounds are still open and says why; the worker never completes this stage.
+  const canLock = stage.status === "live" && tournament?.status === "live";
 
   return (
     <div className="flex flex-col gap-4">

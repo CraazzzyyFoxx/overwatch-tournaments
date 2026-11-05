@@ -15,7 +15,7 @@ function stage(
   items: Partial<StageItem>[],
   isCompleted = false
 ): Stage {
-  return { id, stage_type: stageType, name: `Stage ${id}`, items, is_completed: isCompleted } as Stage;
+  return { id, stage_type: stageType, name: `Stage ${id}`, items, status: isCompleted ? "completed" : "draft" } as Stage;
 }
 
 const seeded = { id: 1, inputs: [{ id: 10 }] } as Partial<StageItem>;

@@ -84,7 +84,13 @@ async def execute_position(
     required=("field", "op", "value"),
     optional=("groups_only", "include_groups"),
     validate_params=one_of(field=("wins", "losses", "draws", "points", "buchholz", "matches")),
-    depends_on=("tournament.stage", "tournament.standing", "tournament.player", "tournament.participant_result"),
+    depends_on=(
+        "tournament.stage",
+        "tournament.flow_node",
+        "tournament.standing",
+        "tournament.player",
+        "tournament.participant_result",
+    ),
 )
 async def execute_record(
     session: AsyncSession,

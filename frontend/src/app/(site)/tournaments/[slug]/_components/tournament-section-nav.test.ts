@@ -27,8 +27,8 @@ function stage(overrides: Partial<StageSummary> = {}): StageSummary {
     advance_count: null,
     advance_upper_count: null,
     order: 1,
-    is_active: true,
-    is_completed: false,
+    node_id: 1,
+    status: "live",
     ranking_preset: null,
     tiebreak_order: null,
     scoring: {
@@ -146,7 +146,7 @@ describe("buildTournamentSectionNav", () => {
     // The qualification lock moves the tournament back to draft: a finished table stays open.
     expect(
       model("draft", `/tournaments/${tournamentId}/ranking`, [
-        stage({ stage_type: "individual_swiss", is_completed: true })
+        stage({ stage_type: "individual_swiss", status: "completed" })
       ]).find((item) => item.id === "ranking")
     ).toMatchObject({ available: true });
   });
@@ -201,8 +201,8 @@ describe("buildTournamentSectionNav", () => {
 
   it("links the bracket to the current stage, not to an unstarted playoff", () => {
     const stages = [
-      stage({ id: 1, stage_type: "swiss", order: 0, is_active: false, is_published: false }),
-      stage({ id: 2, stage_type: "double_elimination", order: 1, is_active: false, is_published: false })
+      stage({ id: 1, stage_type: "swiss", order: 0, status: "draft", is_published: false }),
+      stage({ id: 2, stage_type: "double_elimination", order: 1, status: "draft", is_published: false })
     ];
 
     expect(model("live", undefined, stages).find((item) => item.id === "bracket")?.href).toBe(

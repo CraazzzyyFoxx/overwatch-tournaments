@@ -239,9 +239,9 @@ describe("TournamentLayout streaming overview", () => {
       advance_count: null,
       advance_upper_count: null,
       order,
-      is_active: true,
+      node_id: 1,
+      status: "live",
       is_published: true,
-      is_completed: false,
       ranking_preset: null,
       tiebreak_order: null,
       scoring: {

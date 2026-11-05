@@ -22,6 +22,7 @@ sys.path.insert(0, str(backend_root / "stats-service"))
 from shared.core import enums  # noqa: E402
 from shared.models.encounter import Encounter  # noqa: E402
 from shared.models.tournament.bracket_encounter import BracketEncounter  # noqa: E402
+from shared.models.tournament.flow import FlowNode  # noqa: E402
 from shared.models.tournament.player_role import assignment_of  # noqa: E402
 from shared.models.tournament.stage import Stage, StageItem  # noqa: E402
 from shared.models.tournament.team import Player  # noqa: E402
@@ -45,10 +46,14 @@ class SeriesConditionsOnPostgresTests(EncounterWriterCase):
                 name="Playoff",
                 stage_type=enums.StageType.DOUBLE_ELIMINATION,
                 order=1,
-                is_completed=True,
             )
             s.add(stage)
             await s.flush()
+            s.add(
+                FlowNode(
+                    tournament_id=self.ids["t"], kind="stage", name="Playoff", status="completed", stage_id=stage.id
+                )
+            )
             upper = StageItem(stage_id=stage.id, name="U", type=enums.StageItemType.BRACKET_UPPER, order=0)
             lower = StageItem(stage_id=stage.id, name="L", type=enums.StageItemType.BRACKET_LOWER, order=1)
             s.add_all([upper, lower])

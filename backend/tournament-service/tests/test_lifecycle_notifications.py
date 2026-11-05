@@ -708,7 +708,7 @@ class EncounterScheduledTests(_LifecycleTestCase):
 
         self.assertEqual([], self.fx.notifications())
 
-    async def test_a_preview_bracket_stays_silent_until_the_stage_is_activated(self) -> None:
+    async def test_a_preview_bracket_stays_silent_until_the_stage_is_started(self) -> None:
         stage = self.fx.stage()
         self.fx.encounter(
             teams=[self.home.id, self.away.id],
@@ -718,7 +718,7 @@ class EncounterScheduledTests(_LifecycleTestCase):
 
         self.assertEqual([], self.fx.notifications())
 
-        await stage_service.activate_stage(self.fx.shim, stage.id, notify=False, commit=False, stage=stage)
+        await stage_service.start_stage(self.fx.shim, stage)
 
         self.assertEqual([701, 702], self.fx.recipients("encounter.scheduled"))
         # Bulk event: a whole bracket going live posts nothing to the channel.

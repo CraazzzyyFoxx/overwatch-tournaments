@@ -7,6 +7,7 @@ import en from "@/i18n/messages/en.json";
 import ru from "@/i18n/messages/ru.json";
 
 import {
+  NODE_TRANSITIONS,
   SCHEDULABLE_PHASES,
   TOURNAMENT_PHASES,
   VALID_TRANSITIONS
@@ -27,6 +28,7 @@ import {
 const BACKEND_CORE = join(import.meta.dirname, "..", "..", "..", "..", "backend", "shared", "core");
 const ENUMS_PY = readFileSync(join(BACKEND_CORE, "enums.py"), "utf8");
 const MACHINE_PY = readFileSync(join(BACKEND_CORE, "tournament_state.py"), "utf8");
+const FLOW_STATE_PY = readFileSync(join(BACKEND_CORE, "flow_state.py"), "utf8");
 
 /**
  * One top-level Python construct: its opening line plus everything indented
@@ -99,6 +101,42 @@ describe("tournament lifecycle parity with backend/shared/core", () => {
 
     const typescript = Object.fromEntries(
       Object.entries(VALID_TRANSITIONS).map(([from, to]) => [from, [...to].sort()])
+    );
+
+    expect(typescript).toEqual(python);
+  });
+});
+
+/** Member name -> wire value of one Python `StrEnum`. */
+function enumWire(className: string): Record<string, string> {
+  return Object.fromEntries(
+    [...section(ENUMS_PY, new RegExp(`class ${className}\\(StrEnum\\):`)).matchAll(/(\w+) = "([a-z_]+)"/g)].map(
+      (entry) => [entry[1], entry[2]]
+    )
+  );
+}
+
+describe("node lifecycle parity with backend/shared/core/flow_state.py", () => {
+  it("allows exactly the node transitions _VALID_TRANSITIONS allows", () => {
+    const kinds = enumWire("FlowNodeKind");
+    const statuses = enumWire("FlowNodeStatus");
+    const block = section(FLOW_STATE_PY, /^_VALID_TRANSITIONS/m);
+    const python: Record<string, Record<string, string[]>> = {};
+    for (const kind of block.matchAll(/_K\.(\w+): \{([\s\S]*?)\n    \},/g)) {
+      const moves: Record<string, string[]> = {};
+      for (const move of kind[2].matchAll(/_S\.(\w+): frozenset\(\{([^}]*)\}\)/g)) {
+        moves[statuses[move[1]]] = [...move[2].matchAll(/_S\.(\w+)/g)]
+          .map((target) => statuses[target[1]])
+          .sort();
+      }
+      python[kinds[kind[1]]] = moves;
+    }
+
+    const typescript = Object.fromEntries(
+      Object.entries(NODE_TRANSITIONS).map(([kind, moves]) => [
+        kind,
+        Object.fromEntries(Object.entries(moves).map(([from, to]) => [from, [...to].sort()]))
+      ])
     );
 
     expect(typescript).toEqual(python);

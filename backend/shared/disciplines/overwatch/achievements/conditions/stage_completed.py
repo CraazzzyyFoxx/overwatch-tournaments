@@ -16,8 +16,10 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
+from shared.core.enums import FlowNodeStatus
 from shared.domain.achievements.context import EvalContext
 from shared.models.achievements.achievement import AchievementGrain
+from shared.services.flow_queries import stage_node_status
 
 from . import ResultSet, register
 from .stat_threshold import OPERATORS
@@ -29,7 +31,7 @@ from .stat_threshold import OPERATORS
     description="Every stage whose number matches is completed",
     required=("value",),
     optional=("op",),
-    depends_on=("tournament.stage", "tournament.player"),
+    depends_on=("tournament.stage", "tournament.flow_node", "tournament.player"),
 )
 async def execute_stage_completed(
     session: AsyncSession,
@@ -42,7 +44,7 @@ async def execute_stage_completed(
     numbered = (
         sa.select(
             models.Stage.tournament_id,
-            models.Stage.is_completed,
+            (stage_node_status(models.Stage.id) == FlowNodeStatus.COMPLETED).label("is_completed"),
             sa.func.row_number()
             .over(partition_by=models.Stage.tournament_id, order_by=(models.Stage.order, models.Stage.id))
             .label("number"),

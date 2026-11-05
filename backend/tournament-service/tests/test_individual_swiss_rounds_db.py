@@ -23,7 +23,7 @@ from src.services.admin.stage import stage_service
 from src.services.individual_swiss import individual_swiss_rounds_service
 from src.services.individual_swiss.qualification import qualification_service
 from src.services.standings.service import standings_service
-from tests._encounter_layer import EncounterLayerCase
+from tests._encounter_layer import EncounterLayerCase, move_stage
 
 ROLES = {"tank": 4, "damage": 8, "support": 8}
 
@@ -79,10 +79,7 @@ class IndividualSwissRoundsTests(EncounterLayerCase):
                 ),
             )
             stage_id = stage.id
-        async with self.Session() as s:
-            await stage_service.activate_and_generate(
-                s, stage_id, force=True, notify=False, commit=True, schedule_standings=False
-            )
+        await move_stage(self.Session, stage_id, enums.FlowNodeStatus.READY, enums.FlowNodeStatus.LIVE)
         return stage_id
 
     async def _round(self, stage_id: int, number: int) -> list[int]:
@@ -221,7 +218,8 @@ class IndividualSwissRoundsTests(EncounterLayerCase):
         await self._confirm(round_two[1], 2, 0)
         self.assertEqual([], await self._recalculate_and_generate(stage_id))
         async with self.Session() as s:
-            self.assertTrue((await s.get_one(models.Stage, stage_id)).is_completed)
+            run = await standings_service.recalculate_for_tournament(s, self.tournament_id)
+        self.assertIn(stage_id, run.completed_stage_ids)
         self.assertEqual([], await self._round(stage_id, 3))
         final = await self._table(stage_id)
         self.assertEqual({2}, {row.matches_played for row in final.values()})
@@ -262,11 +260,8 @@ class IndividualSwissRoundsTests(EncounterLayerCase):
                 ),
             )
             stage_id = stage.id
-        async with self.Session() as s:
-            with self.assertRaises(BaseAPIException) as raised:
-                await stage_service.activate_and_generate(
-                    s, stage_id, force=True, notify=False, commit=True, schedule_standings=False
-                )
+        with self.assertRaises(BaseAPIException) as raised:
+            await move_stage(self.Session, stage_id, enums.FlowNodeStatus.READY, enums.FlowNodeStatus.LIVE)
         self.assertEqual("playoff_too_large", raised.exception.detail["code"])
 
     async def test_balance_mode_splits_the_whole_pool_into_four_teams(self) -> None:
@@ -296,8 +291,8 @@ class IndividualSwissRoundsTests(EncounterLayerCase):
 
         async with self.Session() as s:
             with self.assertRaises(BaseAPIException) as refused:
-                await stage_service.activate_and_generate(
-                    s, stage_id, force=True, notify=False, commit=True, schedule_standings=False
+                await stage_service.generate_encounters(
+                    s, stage_id, notify=False, commit=True, schedule_standings=False
                 )
         self.assertEqual(409, refused.exception.status_code)
         self.assertEqual(first_round, await self._round(stage_id, 1))
@@ -307,9 +302,7 @@ class IndividualSwissRoundsTests(EncounterLayerCase):
             await s.execute(sa.delete(models.Encounter).where(models.Encounter.id.in_(first_round)))
             await s.commit()
         async with self.Session() as s:
-            await stage_service.activate_and_generate(
-                s, stage_id, force=True, notify=False, commit=True, schedule_standings=False
-            )
+            await stage_service.generate_encounters(s, stage_id, notify=False, commit=True, schedule_standings=False)
         self.assertEqual(20, len(await self._table(stage_id)))
         self.assertEqual(2, len(await self._round(stage_id, 1)))
         self.assertEqual([], await self._round(stage_id, 2))

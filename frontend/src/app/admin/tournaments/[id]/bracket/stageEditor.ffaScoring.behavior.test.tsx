@@ -130,9 +130,9 @@ function stage(stageType: StageType, regulation: Partial<StageRegulation> = {}):
     advance_count: 2,
     advance_upper_count: null,
     order: 0,
-    is_active: true,
+    node_id: 1,
+    status: "live",
     is_published: false,
-    is_completed: false,
     ranking_preset: null,
     tiebreak_order: null,
     scoring: {

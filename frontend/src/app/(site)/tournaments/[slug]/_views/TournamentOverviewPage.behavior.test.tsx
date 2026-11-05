@@ -144,9 +144,9 @@ function makeStage(overrides: Partial<StageSummary> & { id: number }): StageSumm
     advance_count: null,
     advance_upper_count: null,
     order: 1,
-    is_active: true,
+    node_id: 1,
+    status: "live",
     is_published: true,
-    is_completed: false,
     ranking_preset: null,
     tiebreak_order: null,
     scoring: {
@@ -978,7 +978,7 @@ describe("while it is being played", () => {
 describe("once it is over", () => {
   beforeEach(() => {
     tournament = makeTournament("completed", {
-      stages: [makeStage({ id: 7, is_active: false, is_completed: true })]
+      stages: [makeStage({ id: 7, status: "completed" })]
     });
     getAllEncounters.mockResolvedValue(encounterList(playedBracket()));
   });
@@ -1080,7 +1080,7 @@ describe("once it is over", () => {
 
   it("drops to third-by-standings when the tournament never had a bracket", async () => {
     tournament = makeTournament("completed", {
-      stages: [makeStage({ id: 7, name: "League", stage_type: "round_robin", is_completed: true })]
+      stages: [makeStage({ id: 7, name: "League", stage_type: "round_robin", status: "completed" })]
     });
     getAllEncounters.mockResolvedValue(encounterList([makeEncounter(1, 1, ALPHA, GAMMA, [2, 0])]));
     getStandings.mockResolvedValue([

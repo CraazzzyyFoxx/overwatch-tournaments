@@ -8,6 +8,7 @@ import {
   StageItem,
   StageItemInput,
   StageItemType,
+  StageNodeStatus,
   PickBanKind,
   PickBanState,
   PickBanSubmissionItem,
@@ -137,6 +138,7 @@ import {
   PregameRoomHistoryRead,
 } from "@/types/admin.types";
 import type { AdminDashboard, DashboardTrends } from "@/types/admin-dashboard.types";
+import type { FlowNodeRead, FlowNodeStatus } from "@/types/flow.types";
 
 /**
  * Serialise the reports filter set once — the list and its counters must send
@@ -1597,16 +1599,14 @@ class AdminService {
     await apiFetch(`/api/v1/admin/stages/items/inputs/${inputId}`, { method: "DELETE" });
   }
 
-  async activateStage(stageId: number): Promise<Stage> {
-    const response = await apiFetch(`/api/v1/admin/stages/${stageId}/activate`, {
-      method: "POST"
-    });
-    return response.json();
-  }
-
-  async deactivateStage(stageId: number): Promise<Stage> {
-    const response = await apiFetch(`/api/v1/admin/stages/${stageId}/deactivate`, {
-      method: "POST"
+  /**
+   * Moves a lifecycle node (a stage's `node_id`) to `status`. The server runs the move's side effects: `ready`
+   * seats the stage's inputs, `live` publishes it and generates its matches when it has none.
+   */
+  async transitionNode(nodeId: number, status: FlowNodeStatus): Promise<FlowNodeRead> {
+    const response = await apiFetch(`/api/v1/admin/flow-nodes/${nodeId}/transition`, {
+      method: "POST",
+      body: { status }
     });
     return response.json();
   }
@@ -1638,19 +1638,6 @@ class AdminService {
       method: "POST"
     });
     return response.json();
-  }
-
-  async activateAndGenerateStage(
-    stageId: number,
-    opts?: { force?: boolean }
-  ): Promise<{ generated: number }> {
-    const qs = opts?.force ? "?force=true" : "";
-    const response = await apiFetch(`/api/v1/admin/stages/${stageId}/activate-and-generate${qs}`,
-      { method: "POST" }
-    );
-    const job = (await response.json()) as TournamentComputationJob;
-    const completed = await this.waitForTournamentJob(job);
-    return { generated: Number(completed.result_json?.generated ?? 0) };
   }
 
   async seedTeams(
@@ -1700,8 +1687,8 @@ class AdminService {
       stage_id: number;
       name: string;
       stage_type: string;
-      is_active: boolean;
-      is_completed: boolean;
+      node_id: number;
+      status: StageNodeStatus;
       total: number;
       completed: number;
       items: {

@@ -366,7 +366,7 @@ Jobs: `tournament_bracket_jobs` / `tournament_standings_jobs`, prefetch 4, isola
 
 Stage config: `max_rounds` (default 5), best-of (any), `pairing_mode` `score` | `balance` (default `score`), `playoff_team_count` `K` (default 4, ≥ 1). The two new fields exist only on this type: create/update fills the defaults for it and forces them `NULL` on every other type; an explicit `null` on an update restores the defaults. Points are the stage's `win_points` / `draw_points` / `loss_points` for the series (preset `wins`).
 
-**Start** (`IndividualSwissRoundsService.start`, reached by the ordinary "activate and generate" action; a stage that already has encounters is 409). The pool is the tournament's roster still in the balancer pool; the roster shape is the tournament's (`tournament_slot_shape`; first target Overwatch 1 tank / 2 damage / 2 support). Nothing is written until all of these hold; the system never trims the pool itself. Each refusal is 409 `{code, message}`:
+**Start** (`IndividualSwissRoundsService.start`, reached by the stage node's `ready → live` move; a stage that already has encounters is 409). The pool is the tournament's roster still in the balancer pool; the roster shape is the tournament's (`tournament_slot_shape`; first target Overwatch 1 tank / 2 damage / 2 support). Nothing is written until all of these hold; the system never trims the pool itself. Each refusal is 409 `{code, message}`:
 
 - `member_required` — a registration has no workspace member;
 - `one_role_required` — a player does not have exactly one playable (ranked) role (no flex);

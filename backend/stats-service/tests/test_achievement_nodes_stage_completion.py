@@ -50,13 +50,22 @@ class _StageCase(_EngineTestCase):
             stage_type=stage_type,
             order=order,
             max_rounds=1,
-            is_completed=completed,
+        )
+        self.db.insert(
+            models.FlowNode.__table__,
+            tournament_id=REAL_TOURNAMENT_ID,
+            kind="stage",
+            name=f"stage {order}",
+            status="completed" if completed else "live",
+            stage_id=stage_id,
         )
         return stage_id
 
     def complete(self, stage_id: int) -> None:
         self.db.session.execute(
-            sa.update(models.Stage.__table__).where(models.Stage.__table__.c.id == stage_id).values(is_completed=True)
+            sa.update(models.FlowNode.__table__)
+            .where(models.FlowNode.__table__.c.stage_id == stage_id)
+            .values(status="completed")
         )
         self.db.session.commit()
 

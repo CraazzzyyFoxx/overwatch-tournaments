@@ -62,9 +62,9 @@ class AdminStageMergeTests(IsolatedAsyncioTestCase):
             tournament_id=99,
             name="A",
             stage_type=enums.StageType.SWISS,
-            is_active=False,
+            status="draft",
+            node=SimpleNamespace(name="A"),
             is_published=False,
-            is_completed=True,
             order=0,
             items=[target_item],
         )
@@ -73,9 +73,8 @@ class AdminStageMergeTests(IsolatedAsyncioTestCase):
             tournament_id=99,
             name="B",
             stage_type=enums.StageType.SWISS,
-            is_active=True,
+            status="draft",
             is_published=True,
-            is_completed=True,
             order=1,
         )
         source_stage_c = SimpleNamespace(
@@ -83,9 +82,8 @@ class AdminStageMergeTests(IsolatedAsyncioTestCase):
             tournament_id=99,
             name="C",
             stage_type=enums.StageType.SWISS,
-            is_active=False,
+            status="draft",
             is_published=False,
-            is_completed=True,
             order=2,
         )
         playoff_stage = SimpleNamespace(id=13, tournament_id=99, order=3)
@@ -152,11 +150,10 @@ class AdminStageMergeTests(IsolatedAsyncioTestCase):
 
         self.assertEqual("merged-stage", result)
         self.assertEqual("Groups", target_stage.name)
-        self.assertTrue(target_stage.is_active)
+        self.assertEqual("Groups", target_stage.node.name)
         # `source_stage_b` was already published; the merge must carry that
         # forward so its retargeted encounters stay reportable.
         self.assertTrue(target_stage.is_published)
-        self.assertTrue(target_stage.is_completed)
         self.assertEqual(target_stage.id, source_item_b.stage_id)
         self.assertEqual(target_stage.id, source_item_c.stage_id)
         self.assertEqual(1, source_item_b.order)
@@ -179,7 +176,7 @@ class AdminStageDeleteOrderTests(IsolatedAsyncioTestCase):
     phase numbers the organizer owns, and two stages may share one on purpose."""
 
     async def test_delete_stage_does_not_renumber_remaining_phases(self) -> None:
-        deleted_stage = SimpleNamespace(id=10, tournament_id=99, order=1)
+        deleted_stage = SimpleNamespace(id=10, tournament_id=99, order=1, status="draft")
         remaining_a = SimpleNamespace(id=9, order=0)
         remaining_b = SimpleNamespace(id=11, order=2)
         remaining_c = SimpleNamespace(id=12, order=2)

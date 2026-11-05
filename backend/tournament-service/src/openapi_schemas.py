@@ -211,10 +211,7 @@ OPERATIONS: dict[str, Op] = {
     "rpc.tournament.individual_swiss_lock_qualification": Op(response=individual_swiss_schemas.QualificationLockRead),
     # ── bespoke: stage workflow ────────────────────────────────────────────
     "rpc.tournament.stage_merge": Op(request=schemas.MergeGroupStagesRequest, response=schemas.StageRead),
-    "rpc.tournament.stage_activate": Op(response=schemas.StageRead),
-    "rpc.tournament.stage_deactivate": Op(response=schemas.StageRead),
     "rpc.tournament.stage_generate": Op(response=schemas.TournamentComputationJobRead),
-    "rpc.tournament.stage_activate_and_generate": Op(response=schemas.TournamentComputationJobRead),
     "rpc.tournament.stage_auto_wire": Op(
         response=schemas.StageRead,
         query_params=(QueryParam("source_stage_id", "integer", description="The group stage to wire from."),),

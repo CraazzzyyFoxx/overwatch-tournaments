@@ -334,6 +334,7 @@ class UpdateStageTests(IsolatedAsyncioTestCase):
             # ``_assert_scoring_editable`` asks every group of the stage whether
             # a playoff seeded off it has started.
             items=[],
+            node=SimpleNamespace(name=""),
         )
         # ``Stage.scoring`` is a property on the real model; the double spells
         # it out, levels 1-2 read off the rule row the stage points at (D51).

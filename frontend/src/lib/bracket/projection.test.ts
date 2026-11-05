@@ -72,9 +72,9 @@ function stage(overrides: Partial<Stage> & { id: number; stage_type: StageType }
     advance_count: null,
     advance_upper_count: null,
     order: overrides.id,
-    is_active: false,
+    node_id: 1,
+    status: "draft",
     is_published: false,
-    is_completed: false,
     ranking_preset: null,
     tiebreak_order: null,
     scoring: { win: null, draw: null, loss: null },
@@ -559,7 +559,7 @@ describe("getStageStatus", () => {
     const s = stage({ id: 1, stage_type: "swiss" });
     expect(getStageStatus(s, false)).toBe("Draft");
     expect(getStageStatus(s, true)).toBe("Preview");
-    expect(getStageStatus({ ...s, is_active: true }, true)).toBe("Active");
-    expect(getStageStatus({ ...s, is_completed: true }, true)).toBe("Completed");
+    expect(getStageStatus({ ...s, status: "live" }, true)).toBe("Active");
+    expect(getStageStatus({ ...s, status: "completed" }, true)).toBe("Completed");
   });
 });

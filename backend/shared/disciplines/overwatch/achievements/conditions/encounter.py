@@ -99,7 +99,7 @@ def join_final_encounters(query: sa.Select, workspace_id: int) -> sa.Select:
     description="A series ended with one of the listed scorelines",
     required=("scores",),
     optional=("round_type", "side", "winner"),
-    depends_on=("tournament.encounter", "tournament.player", "tournament.stage"),
+    depends_on=("tournament.encounter", "tournament.player", "tournament.stage", "tournament.flow_node"),
 )
 async def execute_encounter_score(
     session: AsyncSession,

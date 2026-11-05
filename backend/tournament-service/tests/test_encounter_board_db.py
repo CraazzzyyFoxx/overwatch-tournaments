@@ -29,7 +29,7 @@ from src import schemas
 from src.services.encounter.flows import flows_service
 from src.services.encounter.games import encounter_game_service
 from src.services.encounter.service import SAVED_VIEW_LIMIT, encounter_service
-from tests._encounter_layer import EncounterLayerCase
+from tests._encounter_layer import EncounterLayerCase, add_stage_node
 
 _TAG = itertools.count()
 _PAGE_ENTITIES = ["tournament", "stage", "stage_item", "teams", "matches", "matches.map"]
@@ -80,6 +80,7 @@ class BoardTests(EncounterLayerCase):
             )
             s.add(groups)
             await s.flush()
+            add_stage_node(s, groups)
             group = StageItem(stage_id=groups.id, name="G", type=enums.StageItemType.GROUP, order=0)
             s.add(group)
             await s.flush()

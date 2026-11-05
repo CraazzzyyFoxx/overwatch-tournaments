@@ -11772,28 +11772,12 @@
       },
       "summary": "Upsert Google Sheet feed"
     },
-    "rpc.tournament.stage_activate": {
-      "description": "Permission: workspace `stage.update` on the stage's workspace. Activates a stage.",
-      "response": {
-        "array": false,
-        "ref": "tournament.StageRead"
-      },
-      "summary": "Activate stage"
-    },
-    "rpc.tournament.stage_activate_and_generate": {
-      "description": "Permission: workspace `stage.update` on the stage's workspace (the optional force flag needs no extra grant). Enqueues a combined activate-and-generate bracket job (202 Accepted), honoring an optional force flag.",
-      "response": {
-        "array": false,
-        "ref": "tournament.TournamentComputationJobRead"
-      },
-      "summary": "Activate and generate stage"
-    },
     "rpc.tournament.stage_apply_best_of": {
       "description": "Permission: workspace `stage.update` on the stage's workspace. Rewrites best_of on the stage's existing encounters from the stage's best-of config (in place, preserving scores).",
       "summary": "Apply best-of to existing matches"
     },
     "rpc.tournament.stage_auto_wire": {
-      "description": "Permission: workspace `stage.update` on the stage's workspace. Wires the stage's TENTATIVE inputs from a round-robin/Swiss stage's \"Teams advancing to playoff\" count \u2014 the same auto-wire Activate & generate runs automatically, exposed standalone for preview/debugging. The source is the one group stage of the latest earlier phase; pass source_stage_id to name it when that phase runs several divisions in parallel (a value that is not an integer is 422 `invalid_query_param`).",
+      "description": "Permission: workspace `stage.update` on the stage's workspace. Wires the stage's TENTATIVE inputs from a round-robin/Swiss stage's \"Teams advancing to playoff\" count \u2014 the same auto-wire the stage's `draft \u2192 ready` move runs, exposed standalone for preview/debugging. The source is the one group stage of the latest earlier phase; pass source_stage_id to name it when that phase runs several divisions in parallel (a value that is not an integer is 422 `invalid_query_param`).",
       "query_params": [
         {
           "name": "source_stage_id",
@@ -11845,14 +11829,6 @@
         "ref": "tournament.BracketTemplateRead"
       },
       "summary": "Save a custom bracket layout"
-    },
-    "rpc.tournament.stage_deactivate": {
-      "description": "Permission: workspace `stage.update` on the stage's workspace. Reverts an accidentally-activated stage back to Draft/preview; refuses (409) once any of its matches has been reported or started.",
-      "response": {
-        "array": false,
-        "ref": "tournament.StageRead"
-      },
-      "summary": "Deactivate stage"
     },
     "rpc.tournament.stage_generate": {
       "description": "Permission: workspace `stage.update` on the stage's workspace. Enqueues a bracket-generation job (202 Accepted) for the stage.",
@@ -58160,14 +58136,6 @@
           "title": "Id",
           "type": "integer"
         },
-        "is_active": {
-          "title": "Is Active",
-          "type": "boolean"
-        },
-        "is_completed": {
-          "title": "Is Completed",
-          "type": "boolean"
-        },
         "is_published": {
           "default": false,
           "title": "Is Published",
@@ -58189,6 +58157,10 @@
         "name": {
           "title": "Name",
           "type": "string"
+        },
+        "node_id": {
+          "title": "Node Id",
+          "type": "integer"
         },
         "order": {
           "title": "Order",
@@ -58245,6 +58217,9 @@
         },
         "stage_type": {
           "$ref": "#/components/schemas/tournament.StageType"
+        },
+        "status": {
+          "$ref": "#/components/schemas/tournament.FlowNodeStatus"
         },
         "swiss_bye_points": {
           "anyOf": [
@@ -58309,8 +58284,8 @@
         "description",
         "stage_type",
         "order",
-        "is_active",
-        "is_completed"
+        "node_id",
+        "status"
       ],
       "title": "StageRead",
       "type": "object"
@@ -58603,14 +58578,6 @@
           "title": "Id",
           "type": "integer"
         },
-        "is_active": {
-          "title": "Is Active",
-          "type": "boolean"
-        },
-        "is_completed": {
-          "title": "Is Completed",
-          "type": "boolean"
-        },
         "is_published": {
           "default": false,
           "title": "Is Published",
@@ -58624,6 +58591,10 @@
         "name": {
           "title": "Name",
           "type": "string"
+        },
+        "node_id": {
+          "title": "Node Id",
+          "type": "integer"
         },
         "order": {
           "title": "Order",
@@ -58680,6 +58651,9 @@
         },
         "stage_type": {
           "$ref": "#/components/schemas/tournament.StageType"
+        },
+        "status": {
+          "$ref": "#/components/schemas/tournament.FlowNodeStatus"
         },
         "swiss_bye_points": {
           "anyOf": [
@@ -58744,8 +58718,8 @@
         "description",
         "stage_type",
         "order",
-        "is_active",
-        "is_completed"
+        "node_id",
+        "status"
       ],
       "title": "StageSummaryRead",
       "type": "object"

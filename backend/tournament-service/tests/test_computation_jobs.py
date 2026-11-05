@@ -105,15 +105,9 @@ class ComputationJobTests(IsolatedAsyncioTestCase):
                 stage_id=2,
                 operation="generate_stage",
             )
-            await computation.request_bracket_job(
-                session,
-                tournament_id=1,
-                stage_id=2,
-                operation="activate_and_generate",
-            )
 
         keys = [call.kwargs["idempotency_key"] for call in create.await_args_list]
-        self.assertEqual(["bracket:2:all", "bracket:2:all"], keys)
+        self.assertEqual(["bracket:2:all"], keys)
 
     async def test_a_job_whose_every_attempt_died_is_failed_not_reclaimed(self) -> None:
         """A worker killed mid-job (OOM) redelivers it; the queue has no delivery limit, so claim_job is the stop."""
@@ -243,7 +237,6 @@ class ComputationJobTests(IsolatedAsyncioTestCase):
         session = SimpleNamespace()
         operations = (
             ("generate_stage", "generate_encounters"),
-            ("activate_and_generate", "activate_and_generate"),
             ("generate_next_swiss_round", "generate_next_swiss_round"),
         )
 
@@ -260,11 +253,6 @@ class ComputationJobTests(IsolatedAsyncioTestCase):
                     bracket_worker.stage_service, "generate_encounters", AsyncMock(return_value=[])
                 ) as generate,
                 patch.object(
-                    bracket_worker.stage_service,
-                    "activate_and_generate",
-                    AsyncMock(return_value=(SimpleNamespace(), [])),
-                ) as activate,
-                patch.object(
                     bracket_worker.swiss_rounds_service, "generate_next_swiss_round", AsyncMock(return_value=[])
                 ) as swiss,
             ):
@@ -272,7 +260,6 @@ class ComputationJobTests(IsolatedAsyncioTestCase):
 
             calls = {
                 "generate_encounters": generate.await_count,
-                "activate_and_generate": activate.await_count,
                 "generate_next_swiss_round": swiss.await_count,
             }
             self.assertEqual(1, calls[expected_call])

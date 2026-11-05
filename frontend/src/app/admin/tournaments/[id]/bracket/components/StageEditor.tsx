@@ -7,17 +7,20 @@ import { useBracketRoundLabel } from "@/hooks/useBracketRoundLabel";
 import { usePathname, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import {
+  CheckCircle2,
   Crown,
+  Flag,
   GitMerge,
   MoreHorizontal,
   PlayCircle,
+  RotateCcw,
   Shuffle,
   Trash2,
   Undo2,
   Wand2,
   Workflow,
   Link2,
-  Zap
+  type LucideIcon
 } from "lucide-react";
 
 import { LinkTabs, type LinkTabItem } from "@/components/kit/LinkTabs";
@@ -34,7 +37,8 @@ import {
 import { adminQueryKeys } from "@/lib/admin/query-keys";
 import { notify } from "@/lib/notify";
 import adminService from "@/services/admin.service";
-import type { Stage, Tournament } from "@/types/tournament.types";
+import { NODE_TRANSITIONS } from "@/lib/tournament/lifecycle";
+import type { Stage, StageNodeStatus, Tournament } from "@/types/tournament.types";
 import type { Team } from "@/types/team.types";
 
 import {
@@ -84,6 +88,18 @@ const StandingsBrowser = dynamic(
 /** The tabs, each named by its own key in `adminBracket.editor`. */
 const BRACKET_SECTIONS = ["settings", "layout", "standings", "items"] as const;
 type BracketSection = (typeof BRACKET_SECTIONS)[number];
+
+/** What the action menu calls each `from>to` step of a stage node, keyed by `NODE_TRANSITIONS.stage`. */
+const STAGE_MOVES: Record<
+  string,
+  { label: "markReady" | "start" | "revert" | "complete" | "reopen"; icon: LucideIcon }
+> = {
+  "draft>ready": { label: "markReady", icon: Flag },
+  "ready>live": { label: "start", icon: PlayCircle },
+  "ready>draft": { label: "revert", icon: Undo2 },
+  "live>completed": { label: "complete", icon: CheckCircle2 },
+  "completed>live": { label: "reopen", icon: RotateCcw }
+};
 
 interface StageEditorProps {
   stage: Stage;
@@ -184,11 +200,10 @@ export function StageEditor({
     intent,
     opPending,
     runPendingOp,
-    activateMutation,
+    transitionMutation,
     generateMutation,
     applyBestOfMutation,
-    autoWireMutation,
-    activateAndGenerateMutation
+    autoWireMutation
   } = useStageOperations({ stage, teams, mergeCandidates, mergedName, onChanged, onSelect });
 
   const isFfaForm = FFA_STAGE_TYPES.includes(form.stageType);
@@ -280,7 +295,8 @@ export function StageEditor({
     stage.items.length > 0 &&
     stage.stage_type !== "individual_swiss" &&
     stages.some((candidate) => candidate.stage_type === "individual_swiss");
-  const canDeactivate = (stage.is_active || stage.is_published) && !stage.is_completed;
+  // The lifecycle moves the server allows from here; `draft` is the confirm-guarded revert.
+  const transitions = NODE_TRANSITIONS.stage[stage.status] ?? [];
 
   const tabs: LinkTabItem[] = BRACKET_SECTIONS.map((key) => ({
     key,
@@ -360,24 +376,24 @@ export function StageEditor({
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  {stage.is_active ? null : (
-                    <DropdownMenuItem
-                      disabled={activateMutation.isPending}
-                      onSelect={() => activateMutation.mutate()}
-                    >
-                      <PlayCircle className="size-4" aria-hidden />
-                      {t("activate")}
-                    </DropdownMenuItem>
-                  )}
-                  {isBracket ? (
-                    <DropdownMenuItem
-                      disabled={activateAndGenerateMutation.isPending}
-                      onSelect={() => activateAndGenerateMutation.mutate(undefined)}
-                    >
-                      <Zap className="size-4" aria-hidden />
-                      {t("activateGenerate")}
-                    </DropdownMenuItem>
-                  ) : null}
+                  {transitions.map((target) => {
+                    const move = STAGE_MOVES[`${stage.status}>${target}`];
+                    const Icon = move.icon;
+                    return (
+                      <DropdownMenuItem
+                        key={target}
+                        disabled={transitionMutation.isPending}
+                        onSelect={() =>
+                          target === "draft"
+                            ? setPendingOp({ kind: "revert" })
+                            : transitionMutation.mutate(target as StageNodeStatus)
+                        }
+                      >
+                        <Icon className="size-4" aria-hidden />
+                        {t(move.label)}
+                      </DropdownMenuItem>
+                    );
+                  })}
                   {isBracket ? (
                     <DropdownMenuItem
                       disabled={autoWireMutation.isPending}
@@ -405,12 +421,6 @@ export function StageEditor({
                     <DropdownMenuItem onSelect={() => setPendingOp({ kind: "merge" })}>
                       <GitMerge className="size-4" aria-hidden />
                       {t("merge")}
-                    </DropdownMenuItem>
-                  ) : null}
-                  {canDeactivate ? (
-                    <DropdownMenuItem onSelect={() => setPendingOp({ kind: "deactivate" })}>
-                      <Undo2 className="size-4" aria-hidden />
-                      {t("revert")}
                     </DropdownMenuItem>
                   ) : null}
                   <DropdownMenuItem

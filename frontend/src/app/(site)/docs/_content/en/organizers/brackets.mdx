@@ -25,22 +25,22 @@ The stage header shows its status.
 
 | Status | What it means |
 | --- | --- |
-| **Draft** | No matches generated yet. |
-| **Preview** | The bracket is generated but the stage is not active. Organizers see it; captains do not. |
-| **Active** | The stage is live: matches can be played and reported. |
+| **Draft** | Being built. A bracket may already be generated, but the stage is not ready. |
+| **Ready** | The inputs are seated (tentative slots became teams). Organizers see the bracket; captains do not. |
+| **Live** | The stage is live: matches can be played and reported. Several stages can be live at once. |
 | **Completed** | The stage is finished. |
 
-**Generate bracket** builds the bracket without activating the stage — that is what preview is for. Until the stage is activated, captains can neither run the map veto nor file a report: their room shows **Bracket preview** and a note saying it opens once you activate the stage.
+**Generate bracket** builds the bracket without starting the stage — that is what preview is for. Until the stage is started, captains can neither run the map veto nor file a report: their room shows **Bracket preview** and a note saying it opens once you start the stage.
 
 The usual order is:
 
 1. Create the stage and wire teams into it (the **Items** tab).
 2. Press **Generate bracket** and check the result in **Bracket preview**.
-3. When it looks right, choose **Activate stage** — or **Activate & generate** to do both at once for a playoff bracket.
+3. When it looks right, choose **Mark ready** (it seats the teams a playoff takes from the earlier stage), then **Start**. **Start** generates the bracket first if you did not.
 
 Once a stage has matches the button reads **Regenerate**. It leaves played matches alone: in a grouped stage only groups with no matches get a new bracket, an all-empty bracket simply gets its seeded teams written in, and anything else is blocked until you delete the existing matches.
 
-**Revert to draft** puts the stage back into draft, but only while none of its matches has started.
+**Back to draft** puts a ready stage back into draft, but only while none of its matches has started. **Complete** and **Reopen** move a live stage to finished and back; the platform also does this itself when the last match of a stage is closed or a result is corrected.
 
 <Callout type="warning">
 **Delete stage** removes the stage structure, its team slots and its generated matches. **Delete structure item** also removes that group's standings. Neither can be undone.
@@ -50,7 +50,7 @@ Once a stage has matches the button reads **Regenerate**. It leaves played match
 
 The **Phase** field in **General** sets the wave. Stages sharing a number run in parallel — that is how a High and a Low division run side by side. A higher number is a later wave, fed by the ones before it.
 
-If you activate a stage while an earlier one still has open encounters, the platform warns you first: the seeds freeze against standings that can still change.
+A stage wired to earlier stages in the flow cannot be marked ready until they are completed, so its seeds never freeze against standings that can still change.
 
 ## Seeding
 

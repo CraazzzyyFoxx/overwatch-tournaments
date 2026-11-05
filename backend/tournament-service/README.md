@@ -396,10 +396,6 @@ Candidates are selected with one coarse SQL filter, then each is re-locked
 transaction per tournament, so a failure on one never aborts the rest of the tick and two replicas
 never transition the same row twice.
 
-Reaching `LIVE` has one side effect: if the target stage has ready inputs and no encounters yet, the
-service enqueues a bracket job (`activate_and_generate` or `generate_stage`) so the group stage
-starts without a second admin action.
-
 ## The transactional outbox
 
 Every domain event this service emits is written as a `public.event_outbox` row **inside the same

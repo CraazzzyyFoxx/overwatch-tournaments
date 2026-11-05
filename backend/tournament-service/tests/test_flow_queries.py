@@ -39,9 +39,10 @@ class FlowQueriesTests(FlowCase):
 
     async def test_input_members_follow_edge_then_rank_and_expand_teams_substitutes_last(self) -> None:
         m = await self._members(5)
+        # First: ``create_stage`` auto-wires the first stage to an existing single formation, and this test draws its own edges.
+        target = (await self.stage())[1]
         source_a = await self.node("registration", "closed")
         source_b = await self.node("formation", "completed", config={"mode": "manual"})
-        target = (await self.stage())[1]
         async with self.Session() as s:
             team = models.Team(tournament_id=self.tournament_id, name="T", balancer_name="T")
             s.add(team)

@@ -267,9 +267,9 @@ class StageSummaryRead(BaseRead, _StageRegulationRead):
     advance_count: int | None = None
     advance_upper_count: int | None = None
     order: int
-    is_active: bool
+    node_id: int
+    status: enums.FlowNodeStatus
     is_published: bool = False
-    is_completed: bool
     challonge_id: int | None = None
     challonge_slug: str | None = None
     has_custom_bracket: bool = False
@@ -284,9 +284,9 @@ class StageRead(BaseRead, _StageRegulationRead):
     advance_count: int | None = None
     advance_upper_count: int | None = None
     order: int
-    is_active: bool
+    node_id: int
+    status: enums.FlowNodeStatus
     is_published: bool = False
-    is_completed: bool
     challonge_id: int | None = None
     challonge_slug: str | None = None
     has_custom_bracket: bool = False

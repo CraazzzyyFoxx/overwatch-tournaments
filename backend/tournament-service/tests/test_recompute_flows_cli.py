@@ -19,12 +19,10 @@ recompute_flows = importlib.import_module("recompute_flows")
 class RecomputeFlowsCliTests(EncounterLayerCase):
     async def test_recompute_all_writes_results_once(self) -> None:
         async with self.Session() as s:
-            node = FlowNode(
-                tournament_id=self.tournament_id, kind="stage", name="Playoff", status="live", stage_id=self.stage_id
-            )
+            node = await s.scalar(sa.select(FlowNode).where(FlowNode.stage_id == self.stage_id))
+            node.status = "live"
             s.add_all(
                 [
-                    node,
                     Standing(
                         tournament_id=self.tournament_id,
                         stage_id=self.stage_id,

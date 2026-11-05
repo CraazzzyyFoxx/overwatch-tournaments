@@ -148,10 +148,8 @@ class StandingsJobTests(EncounterLayerCase):
 
     async def _stage_node(self) -> int:
         async with self.Session() as s:
-            node = FlowNode(
-                tournament_id=self.tournament_id, kind="stage", name="Playoff", status="live", stage_id=self.stage_id
-            )
-            s.add(node)
+            node = await s.scalar(sa.select(FlowNode).where(FlowNode.stage_id == self.stage_id))
+            node.status = "live"
             await s.commit()
             return node.id
 

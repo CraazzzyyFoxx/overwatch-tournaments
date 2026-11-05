@@ -13,7 +13,7 @@ baselines and Discord channels live in `stats/`. `catalog/` writes only to `cata
 > `--check` and fails on drift, so the diagrams cannot fall behind the models again.
 
 <!-- ERD:auto _alembic_head -->
-Alembic head: **`flowP3_01`** (173 revisions in `backend/migrations/versions/`).
+Alembic head: **`flowP3_02`** (174 revisions in `backend/migrations/versions/`).
 <!-- /ERD:auto -->
 
 **Reading the diagrams**
@@ -1319,9 +1319,7 @@ erDiagram
         int advance_count "nullable"
         int advance_upper_count "nullable"
         int order
-        boolean is_active
         boolean is_published
-        boolean is_completed
         varchar ranking_preset "nullable"
         varchar[] tiebreak_order "nullable"
         float win_points "nullable"

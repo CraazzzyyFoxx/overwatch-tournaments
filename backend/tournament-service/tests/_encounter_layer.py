@@ -20,9 +20,11 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from shared.core import enums
+from shared.core.enums import FlowNodeStatus
 from shared.models.encounter import Encounter, ScoringRule
 from shared.models.tenancy.workspace import Workspace
 from shared.models.tournament.bracket_encounter import BracketEncounter
+from shared.models.tournament.flow import FlowNode
 from shared.models.tournament.stage import Stage, StageItem
 from shared.models.tournament.team import Team
 from shared.models.tournament.tournament import Tournament
@@ -30,8 +32,9 @@ from shared.services.encounter.participants import active_teams, place_team
 from shared.services.encounter.result import apply_result
 from shared.testing import create_test_async_engine
 from shared.testing.db import ensure_test_postgres
+from src.services.flow.lifecycle import flow_node_service
 
-__all__ = ("EncounterLayerCase", "add_encounter", "add_scoring_rule")
+__all__ = ("EncounterLayerCase", "add_encounter", "add_scoring_rule", "add_stage_node", "move_stage")
 
 _TAG = itertools.count()
 
@@ -47,6 +50,22 @@ async def add_scoring_rule(session, workspace_id: int) -> ScoringRule:
     session.add(rule)
     await session.flush()
     return rule
+
+
+def add_stage_node(session, stage: Stage, status: str = "draft") -> FlowNode:
+    """The node every stage read carries (``Stage.node_id`` / ``status``); a stage built as a bare row has none."""
+    node = FlowNode(tournament_id=stage.tournament_id, kind="stage", name=stage.name, status=status, stage_id=stage.id)
+    session.add(node)
+    return node
+
+
+async def move_stage(session_maker, stage_id: int, *targets: FlowNodeStatus) -> None:
+    """Move the stage's node through ``targets`` (e.g. ``READY, LIVE``) the way an admin does, and commit."""
+    async with session_maker() as s:
+        node_id = await s.scalar(sa.select(FlowNode.id).where(FlowNode.stage_id == stage_id))
+        for target in targets:
+            await flow_node_service.transition(s, node_id, target, actor=None)
+        await s.commit()
 
 
 async def add_encounter(
@@ -141,6 +160,7 @@ class EncounterLayerCase(IsolatedAsyncioTestCase):
             )
             s.add(stage)
             await s.flush()
+            add_stage_node(s, stage)
             item = StageItem(stage_id=stage.id, name="A", type=enums.StageItemType.SINGLE_BRACKET, order=0)
             s.add(item)
             teams = [Team(tournament_id=tournament.id, name=f"t{i}", balancer_name=f"{tag}-{i}") for i in range(4)]

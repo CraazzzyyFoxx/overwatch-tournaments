@@ -124,8 +124,8 @@ function roundRobinStage(): Stage {
     advance_count: 2,
     advance_upper_count: null,
     order: 0,
-    is_active: true,
-    is_completed: false,
+    node_id: 1,
+    status: "live",
     ranking_preset: null,
     tiebreak_order: null,
     scoring: {

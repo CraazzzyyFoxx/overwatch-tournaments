@@ -8,8 +8,8 @@ ahead-of-seeding bracket the same entry point builds:
   ``advance_count`` × groups with every slot TBD, and the teams are written
   into that same bracket once they resolve -- but only while it is provably
   untouched.
-* ``deactivate_stage`` must only revert ``is_active``/``is_published`` back to
-  Draft while every one of the stage's encounters is still OPEN -- the moment
+* ``revert_to_draft`` (the stage node's ``ready → draft`` hook) must only clear ``is_published``
+  while every one of the stage's encounters is still OPEN -- the moment
   any encounter has been reported or started, it refuses instead of stranding
   real data behind a bracket that looks like a preview again.
 """
@@ -33,6 +33,7 @@ errors = importlib.import_module("shared.core.errors")
 stage_service = importlib.import_module("src.services.admin.stage")
 stage_base = importlib.import_module("src.services.admin.stage.base")
 stage_generation = importlib.import_module("src.services.admin.stage.generation")
+stage_lifecycle = importlib.import_module("src.services.admin.stage.lifecycle")
 
 from tests._stage_regulation import stage_regulation  # noqa: E402
 
@@ -379,63 +380,61 @@ class GenerateEncountersGuardTests(IsolatedAsyncioTestCase):
         create.assert_not_awaited()
 
 
-class ActivateStageParallelPhaseTests(IsolatedAsyncioTestCase):
-    """Activating a stage moves the tournament to that stage's PHASE.
+class StartStageTests(IsolatedAsyncioTestCase):
+    """The ``ready → live`` hook publishes the stage and generates only when it has no matches."""
 
-    Stages sharing an ``order`` (the Low and High divisions of one wave) run at
-    the same time, so activation may only clear ``is_active`` on OTHER phases —
-    clearing it per-stage made the second division switch the first one off.
-    """
-
-    async def test_activation_leaves_the_phase_siblings_active(self) -> None:
-        stage = SimpleNamespace(id=5, tournament_id=1, order=2, items=[], is_active=False, is_published=False)
-        statements: list = []
-
-        def _record(statement, *_a, **_kw):  # noqa: ANN001, ANN002, ANN003, ANN202
-            statements.append(statement)
-            # The stage has no encounters to notify about.
-            return SimpleNamespace(scalars=lambda: iter(()))
-
-        session = SimpleNamespace(execute=AsyncMock(side_effect=_record), flush=AsyncMock())
-
-        with patch.object(stage_service.stage_service, "_publish_structure_changed", AsyncMock()):
-            await stage_service.stage_service.activate_stage(session, 5, commit=False, stage=stage)
-
-        self.assertTrue(stage.is_active)
-        self.assertTrue(stage.is_published)
-        sql = str(statements[0].compile(compile_kwargs={"literal_binds": True}))
-        self.assertIn("!= 2", sql)
-        self.assertNotIn("!= 5", sql)
-
-
-class DeactivateStageGuardTests(IsolatedAsyncioTestCase):
-    async def test_reverts_an_untouched_stage_to_draft(self) -> None:
-        stage = SimpleNamespace(id=5, tournament_id=1, is_active=True, is_published=True)
-        # ``deactivate_stage`` counts non-OPEN encounters with one scalar over
-        # ``tournament.bracket_encounter``.
-        session = SimpleNamespace(execute=AsyncMock(), scalar=AsyncMock(return_value=0), flush=AsyncMock())
+    async def test_publishes_and_leaves_existing_matches_alone(self) -> None:
+        stage = SimpleNamespace(id=5, tournament_id=1, is_published=False)
+        generate = AsyncMock()
+        service = stage_service.stage_service
 
         with (
-            patch.object(stage_service.stage_service, "get_stage", AsyncMock(side_effect=[stage, stage])),
-            patch.object(stage_service.stage_service, "_publish_structure_changed", AsyncMock()) as notify,
+            patch.object(service, "_count_stage_encounters", AsyncMock(return_value=3)),
+            patch.object(service, "_notify_published_encounters", AsyncMock()) as notify,
+            patch.object(service, "generate_encounters", generate),
+            patch.object(stage_lifecycle, "request_stage_reconcile") as reconcile,
         ):
-            result = await stage_service.stage_service.deactivate_stage(session, 5, commit=False)
+            await service.start_stage(SimpleNamespace(), stage)
 
-        self.assertFalse(stage.is_active)
-        self.assertFalse(stage.is_published)
-        self.assertIs(stage, result)
+        self.assertTrue(stage.is_published)
+        reconcile.assert_called_once()
         notify.assert_awaited_once()
-        session.flush.assert_awaited_once()
+        generate.assert_not_awaited()
+
+    async def test_generates_when_the_stage_has_no_matches(self) -> None:
+        stage = SimpleNamespace(id=5, tournament_id=1, is_published=False)
+        generate = AsyncMock(return_value=["encounter"])
+        service = stage_service.stage_service
+
+        with (
+            patch.object(service, "_count_stage_encounters", AsyncMock(return_value=0)),
+            patch.object(service, "generate_encounters", generate),
+            patch.object(stage_lifecycle, "request_stage_reconcile"),
+        ):
+            result = await service.start_stage(SimpleNamespace(), stage)
+
+        self.assertEqual(["encounter"], result)
+        generate.assert_awaited_once()
+        self.assertIs(False, generate.await_args.kwargs["commit"])
+
+
+class RevertToDraftGuardTests(IsolatedAsyncioTestCase):
+    async def test_reverts_an_untouched_stage_to_draft(self) -> None:
+        stage = SimpleNamespace(id=5, tournament_id=1, is_published=True)
+        # ``revert_to_draft`` counts non-OPEN encounters with one scalar over ``tournament.bracket_encounter``.
+        session = SimpleNamespace(scalar=AsyncMock(return_value=0))
+
+        await stage_service.stage_service.revert_to_draft(session, stage)
+
+        self.assertFalse(stage.is_published)
 
     async def test_refuses_once_any_encounter_left_open(self) -> None:
-        stage = SimpleNamespace(id=5, tournament_id=1, is_active=True, is_published=True)
-        session = SimpleNamespace(execute=AsyncMock(), scalar=AsyncMock(return_value=1))
+        stage = SimpleNamespace(id=5, tournament_id=1, is_published=True)
+        session = SimpleNamespace(scalar=AsyncMock(return_value=1))
 
-        with patch.object(stage_service.stage_service, "get_stage", AsyncMock(return_value=stage)):
-            with self.assertRaises(HTTPException) as ctx:
-                await stage_service.stage_service.deactivate_stage(session, 5, commit=False)
+        with self.assertRaises(HTTPException) as ctx:
+            await stage_service.stage_service.revert_to_draft(session, stage)
 
         self.assertEqual(409, ctx.exception.status_code)
         # Refused before mutating anything.
-        self.assertTrue(stage.is_active)
         self.assertTrue(stage.is_published)

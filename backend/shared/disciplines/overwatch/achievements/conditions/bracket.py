@@ -83,7 +83,7 @@ def _decided_teams_query(
     grain=AchievementGrain.user_tournament,
     description="The team's route through the bracket",
     optional=("lost_in_round", "min_lower_bracket_wins", "played_lower_bracket", "played_upper_bracket"),
-    depends_on=("tournament.encounter", "tournament.player", "tournament.stage"),
+    depends_on=("tournament.encounter", "tournament.player", "tournament.stage", "tournament.flow_node"),
 )
 async def execute_bracket_path(
     session: AsyncSession,

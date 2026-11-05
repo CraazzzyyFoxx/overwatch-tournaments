@@ -207,7 +207,7 @@ export function buildBracketTabs({
       href: tournamentHref(tournament, `/bracket?stage=${stage.id}`),
       label:
         eliminationStages.length === 1 && groupStages.length > 0 ? labels.playoff : stage.name,
-      disabled: isDead(isActive, stageIdsWithMatches.has(stage.id) || !stage.is_completed)
+      disabled: isDead(isActive, stageIdsWithMatches.has(stage.id) || stage.status !== "completed")
     });
   }
 

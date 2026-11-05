@@ -187,7 +187,7 @@ export function buildTournamentSectionNav({
   const hasRanking = individualStages.length > 0;
   // Locking the qualification moves a finished stage's tournament back to `draft`, which
   // precedes `live`, so a completed personal table keeps its tab open there.
-  const rankingOpen = competitionStarted || individualStages.some((stage) => stage.is_completed);
+  const rankingOpen = competitionStarted || individualStages.some((stage) => stage.status === "completed");
   const sections = (competitionStarted ? competitionOrder : preCompetitionOrder).filter(
     (id) =>
       (id !== "stream" || hasStreams) &&

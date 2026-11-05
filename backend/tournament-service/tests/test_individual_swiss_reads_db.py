@@ -17,7 +17,7 @@ from src.schemas import individual_swiss as swiss_schemas
 from src.services.individual_swiss.pins import pins_service
 from src.services.individual_swiss.qualification import qualification_service
 from src.services.individual_swiss.reads import reads_service
-from tests._encounter_layer import EncounterLayerCase
+from tests._encounter_layer import EncounterLayerCase, add_encounter, add_stage_node
 
 _N = itertools.count()
 
@@ -38,6 +38,7 @@ class IndividualSwissReadsCase(EncounterLayerCase):
             )
             s.add(stage)
             await s.flush()
+            add_stage_node(s, stage, "live")
             self.swiss_id = stage.id
             await s.commit()
         self.members: dict[str, int] = {}
@@ -108,8 +109,21 @@ class IndividualSwissReadsCase(EncounterLayerCase):
             return await s.get_one(models.Stage, self.swiss_id)
 
     async def complete(self) -> None:
+        """Every round of the stage (``max_rounds``) played: what the standings rule calls completed."""
         async with self.Session() as s:
-            await s.execute(sa.update(models.Stage).where(models.Stage.id == self.swiss_id).values(is_completed=True))
+            tournament = await s.get_one(models.Tournament, self.tournament_id)
+            for round_number in (1, 2):
+                await add_encounter(
+                    s,
+                    tournament,
+                    self.rule_id,
+                    teams=[None, None],
+                    stage_id=self.swiss_id,
+                    round_number=round_number,
+                    status=enums.EncounterStatus.COMPLETED,
+                    result_status=enums.EncounterResultStatus.CONFIRMED,
+                    result_source="admin",
+                )
             await s.commit()
 
     async def balancer_statuses(self) -> dict[str, tuple[str, str | None]]:

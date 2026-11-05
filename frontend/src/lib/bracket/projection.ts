@@ -195,9 +195,9 @@ export function getProgressPercent(completed: number, total: number) {
 export type StageStatus = "Completed" | "Active" | "Preview" | "Draft";
 
 export function getStageStatus(stage: Stage, hasEncounters: boolean): StageStatus {
-  if (stage.is_completed) return "Completed";
-  if (stage.is_active) return "Active";
-  // Bracket generated ahead of activation: visible to organizers, not yet
+  if (stage.status === "completed") return "Completed";
+  if (stage.status === "live") return "Active";
+  // Bracket generated ahead of the start: visible to organizers, not yet
   // usable by captains (`shared.services.bracket.usability.is_encounter_live`).
   if (!stage.is_published && hasEncounters) return "Preview";
   return "Draft";

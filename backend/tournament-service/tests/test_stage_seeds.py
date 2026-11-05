@@ -174,15 +174,3 @@ class GroupAdvanceCountsTests(TestCase):
     def test_group_advance_override_keeps_the_stage_upper(self) -> None:
         counts = seeds.group_advance_counts([_group(1, advance=4)], default_advance=6, default_upper=2)
         self.assertEqual([(1, 2, 2)], counts)
-
-
-class StageLifecycleTests(TestCase):
-    def test_draft_preview_live_done(self) -> None:
-        lifecycle = importlib.import_module("src.domain.stage.lifecycle")
-        draft = SimpleNamespace(is_active=False, is_published=False, is_completed=False)
-        self.assertEqual(lifecycle.stage_lifecycle(draft, has_encounters=False), lifecycle.StageLifecycle.DRAFT)
-        self.assertEqual(lifecycle.stage_lifecycle(draft, has_encounters=True), lifecycle.StageLifecycle.PREVIEW)
-        live = SimpleNamespace(is_active=False, is_published=True, is_completed=False)
-        self.assertEqual(lifecycle.stage_lifecycle(live, has_encounters=True), lifecycle.StageLifecycle.LIVE)
-        done = SimpleNamespace(is_active=False, is_published=True, is_completed=True)
-        self.assertEqual(lifecycle.stage_lifecycle(done, has_encounters=True), lifecycle.StageLifecycle.DONE)

@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from shared import models
 from shared.core import enums
@@ -21,6 +22,7 @@ from src.services.individual_swiss.standings import recalculate_individual_stage
 from src.services.registration._common import EXCLUDED_BALANCER_STATUS
 from src.services.registration.lifecycle import lifecycle_service
 from src.services.registration.realtime import emit_balancer_registrations_changed
+from src.services.standings.service import standings_service
 
 __all__ = ("NOT_QUALIFIED_REASON", "IndividualSwissQualificationService", "qualification_service")
 
@@ -49,7 +51,13 @@ class IndividualSwissQualificationService:
             raise refuse(status.HTTP_409_CONFLICT, "not_individual_swiss", "Это не этап личной швейцарки")
         # The tournament row serializes two organizers locking at once: the loser sees DRAFT and is refused. The
         # order (tournament, then stage) is the bracket worker's; the pin writer takes the stage row alone.
-        tournament = await _tournaments.get(session, stage.tournament_id, for_update=True, populate_existing=True)
+        tournament = await _tournaments.get(
+            session,
+            stage.tournament_id,
+            for_update=True,
+            populate_existing=True,
+            options=[selectinload(models.Tournament.stages).selectinload(models.Stage.items)],
+        )
         await session.execute(sa.select(models.Stage.id).where(models.Stage.id == stage.id).with_for_update())
         stage = await _stages.get(session, stage.id, populate_existing=True) or stage
         if (
@@ -62,7 +70,8 @@ class IndividualSwissQualificationService:
                 "qualification_not_live",
                 "Квалификацию можно закрепить только пока турнир идёт (LIVE), и только один раз",
             )
-        if not stage.is_completed:
+        # The lock completes the stage node (Task 5), the worker never does: the standings rule is read here.
+        if stage.id not in await standings_service._completed_stage_ids(session, tournament, []):
             raise refuse(
                 status.HTTP_409_CONFLICT,
                 "stage_not_completed",

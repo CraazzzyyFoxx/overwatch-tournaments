@@ -90,9 +90,9 @@ function stage(id: number, name: string, order: number, stageType: StageType): S
     advance_count: null,
     advance_upper_count: null,
     order,
-    is_active: false,
+    node_id: 1,
+    status: "completed",
     is_published: true,
-    is_completed: true,
     ranking_preset: null,
     tiebreak_order: null,
     scoring: {

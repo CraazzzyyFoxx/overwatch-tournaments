@@ -23,9 +23,9 @@ export interface StageProgress {
 // stage-ordering helpers, and the `tournamentsList` labels below would put the
 // whole namespace in the admin message bundle (lint:zones Z4).
 //
-// Coarse stage-progress proxy from stage completion flags. Real "X/Y matches"
+// Coarse stage-progress proxy from stage completion. Real "X/Y matches"
 // requires a precomputed backend field (see plan C2); until then we render a
-// graceful label + bar derived from stages.is_completed and the current stage.
+// graceful label + bar derived from the stage nodes' `completed` status and the current stage.
 //
 // Bucketed by the status's presentation variant rather than by listing statuses
 // again: which statuses read as "signing up" is already decided once, in
@@ -46,7 +46,7 @@ export function stageProgress(
 
   const stages = tournament.stages ?? [];
   const total = stages.length;
-  const completed = stages.filter((stage) => stage.is_completed).length;
+  const completed = stages.filter((stage) => stage.status === "completed").length;
   const current = pickCurrentStage(stages, status);
   const pct = total > 0 ? Math.min(95, Math.max(10, Math.round((completed / total) * 100))) : 50;
   return { label: current?.name ?? t("common.live"), pct, tone: "accent" };

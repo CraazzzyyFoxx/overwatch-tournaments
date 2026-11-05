@@ -11,13 +11,14 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
-from shared.core.enums import FlowNodeKind, FlowNodeStatus, TournamentStatus
+from shared.core.enums import FlowNodeKind, FlowNodeStatus, StageType, TournamentStatus
 from shared.core.errors import ApiExc, ApiHTTPException
 from shared.core.flow_state import FlowNodeState, derive_tournament_status, tournament_status_after, validate_transition
 from shared.core.tournament_state import is_finished_for_status
 from shared.services.flow_queries import downstream_lifecycle_started
 from shared.services.participant_result import write_participant_results
 from shared.services.realtime import Resource
+from src.services.admin.stage import stage_service
 from src.services.flow.engine import flow_engine
 from src.services.tournament.events import (
     enqueue_achievement_evaluation,
@@ -38,10 +39,32 @@ _REOPENS = frozenset(
     {(FlowNodeKind.REGISTRATION, _S.CLOSED, _S.OPEN), (FlowNodeKind.FORMATION, _S.COMPLETED, _S.FORMING)}
 )
 
-#: Side effects of one move, run before the status is written; later tasks register entries.
+
+async def _stage_of(session: AsyncSession, node: models.FlowNode) -> models.Stage:
+    """The node's stage, re-read: a hook edits it and its items, and must not see a stale copy."""
+    return await stage_service.get_stage(session, node.stage_id, populate_existing=True)
+
+
+async def _seat_inputs(session: AsyncSession, node: models.FlowNode) -> None:
+    await stage_service.seat_inputs(session, await _stage_of(session, node))
+
+
+async def _start_stage(session: AsyncSession, node: models.FlowNode) -> None:
+    await stage_service.start_stage(session, await _stage_of(session, node))
+
+
+async def _revert_to_draft(session: AsyncSession, node: models.FlowNode) -> None:
+    await stage_service.revert_to_draft(session, await _stage_of(session, node))
+
+
+#: Side effects of one move, run before the status is written.
 _HOOKS: dict[
     tuple[FlowNodeKind, FlowNodeStatus, FlowNodeStatus], Callable[[AsyncSession, models.FlowNode], Awaitable[None]]
-] = {}
+] = {
+    (FlowNodeKind.STAGE, _S.DRAFT, _S.READY): _seat_inputs,
+    (FlowNodeKind.STAGE, _S.READY, _S.LIVE): _start_stage,
+    (FlowNodeKind.STAGE, _S.READY, _S.DRAFT): _revert_to_draft,
+}
 
 
 def _conflict(code: str, msg: str) -> ApiHTTPException:
@@ -146,6 +169,36 @@ class FlowNodeService:
         await enqueue_tournament_state_changed(session, tournament, old_status=old.value, new_status=new.value)
         await session.flush()
         return new
+
+    async def sync_stage_completion(
+        self, session: AsyncSession, tournament_id: int, completed_stage_ids: frozenset[int]
+    ) -> list[int]:
+        """Move stage nodes to what the standings rule says (§5.3); returns the moved node ids.
+
+        ``live`` and in the set → ``completed``; ``completed`` and not in the set → ``live`` (a correction reopened a
+        match). Individual Swiss completes by its qualification lock, never here.
+        """
+        rows = await session.execute(
+            sa.select(models.FlowNode.id, models.FlowNode.status, models.FlowNode.stage_id)
+            .join(models.Stage, models.Stage.id == models.FlowNode.stage_id)
+            .where(
+                models.FlowNode.tournament_id == tournament_id,
+                models.FlowNode.kind == FlowNodeKind.STAGE,
+                models.Stage.stage_type != StageType.INDIVIDUAL_SWISS,
+            )
+            .order_by(models.FlowNode.id)
+        )
+        moved: list[int] = []
+        for node_id, node_status, stage_id in rows.all():
+            if node_status == _S.LIVE and stage_id in completed_stage_ids:
+                target = _S.COMPLETED
+            elif node_status == _S.COMPLETED and stage_id not in completed_stage_ids:
+                target = _S.LIVE
+            else:
+                continue
+            await self.transition(session, node_id, target, automated=True, actor=None)
+            moved.append(node_id)
+        return moved
 
     async def _assert_inputs_final(self, session: AsyncSession, node: models.FlowNode) -> None:
         """Every node wired into ``node`` has its final output (a lifecycle input freezes at its first move, §8.3)."""

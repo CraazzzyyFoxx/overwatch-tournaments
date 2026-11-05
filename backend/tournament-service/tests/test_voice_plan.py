@@ -17,7 +17,7 @@ from shared.models.tournament.stage import Stage, StageItem, StageItemInput
 from src.schemas import voice as voice_schemas
 from src.services.voice import admin as voice_admin
 from src.services.voice.plan import build_voice_plan
-from tests._encounter_layer import EncounterLayerCase
+from tests._encounter_layer import EncounterLayerCase, add_stage_node
 
 _COUNTER = itertools.count(1)
 SE = enums.StageType.SINGLE_ELIMINATION
@@ -91,8 +91,16 @@ class VoicePlanCase(EncounterLayerCase):
             await s.commit()
             return player.id
 
-    async def stage(self, order: int, *, kind: enums.StageType = SE, teams: tuple[int, ...] = (), **flags: bool) -> int:
-        """A stage whose single item seats ``teams`` (indexes into ``self.teams``) as FINAL inputs."""
+    async def stage(
+        self,
+        order: int,
+        *,
+        kind: enums.StageType = SE,
+        teams: tuple[int, ...] = (),
+        status: str = "draft",
+        is_published: bool = False,
+    ) -> int:
+        """A stage (its node at ``status``) whose single item seats ``teams`` (indexes into ``self.teams``) as FINAL inputs."""
         async with self.Session() as s:
             stage = Stage(
                 tournament_id=self.tournament_id,
@@ -100,10 +108,11 @@ class VoicePlanCase(EncounterLayerCase):
                 name=f"S{order}",
                 stage_type=kind,
                 order=order,
-                **flags,
+                is_published=is_published,
             )
             s.add(stage)
             await s.flush()
+            add_stage_node(s, stage, status)
             item = StageItem(stage_id=stage.id, name="A", type=enums.StageItemType.GROUP, order=0)
             s.add(item)
             await s.flush()
@@ -119,9 +128,14 @@ class VoicePlanCase(EncounterLayerCase):
             await s.commit()
             return stage.id
 
-    async def flag(self, stage_id: int, **flags: bool) -> None:
+    async def flag(self, stage_id: int, *, status: str | None = None, is_published: bool | None = None) -> None:
         async with self.Session() as s:
-            await s.execute(sa.update(Stage).where(Stage.id == stage_id).values(**flags))
+            if status is not None:
+                await s.execute(
+                    sa.update(models.FlowNode).where(models.FlowNode.stage_id == stage_id).values(status=status)
+                )
+            if is_published is not None:
+                await s.execute(sa.update(Stage).where(Stage.id == stage_id).values(is_published=is_published))
             await s.commit()
 
     async def seat_round(self, stage_id: int, round_: int, encounters: list[tuple[list[int], list[int]]]) -> None:
@@ -175,24 +189,24 @@ class VoicePlanCase(EncounterLayerCase):
 
 class VoicePlanTeamTests(VoicePlanCase):
     async def test_a_team_drops_out_when_its_stage_is_deactivated_and_everything_goes_after_the_final(self) -> None:
-        groups = await self.stage(1, teams=(0, 1), is_active=True, is_published=True)
+        groups = await self.stage(1, teams=(0, 1), status="live", is_published=True)
         final = await self.stage(2, teams=(0,))
         self.assertEqual(["hub", self.team_key(0), self.team_key(1)], await self.keys())
 
-        # Activating the next stage deactivates the previous one: t1 did not advance.
-        await self.flag(groups, is_active=False)
-        await self.flag(final, is_active=True, is_published=True)
+        # The groups finished and the final went live: t1 did not advance.
+        await self.flag(groups, status="completed")
+        await self.flag(final, status="live", is_published=True)
         plan = await self.plan()
         self.assertEqual(["hub", self.team_key(0)], [c.slot_key for c in plan.channels])
         self.assertEqual([0, 1], [c.position for c in plan.channels])
 
-        await self.flag(final, is_completed=True)
+        await self.flag(final, status="completed")
         plan = await self.plan()
         self.assertEqual(([], {}), (plan.channels, plan.routes))
         self.assertTrue(plan.enabled)
 
     async def test_nothing_exists_when_disabled_without_a_guild_or_after_the_tournament(self) -> None:
-        await self.stage(1, teams=(0, 1), is_active=True, is_published=True)
+        await self.stage(1, teams=(0, 1), status="live", is_published=True)
         self.assertEqual(3, len(await self.keys()))
         async with self.Session() as s:
             await s.execute(sa.update(models.TournamentVoiceSettings).values(enabled=False))
@@ -234,7 +248,7 @@ class VoicePlanTeamTests(VoicePlanCase):
         self.assertEqual([], await self.keys())
 
     async def test_a_team_voice_admits_the_substitute_and_the_replaced_player_but_not_a_removed_one(self) -> None:
-        await self.stage(1, teams=(0,), is_active=True, is_published=True)
+        await self.stage(1, teams=(0,), status="live", is_published=True)
         replaced, substitute, removed = await self.member("a"), await self.member("b"), await self.member("c")
         await self.player(0, replaced)
         await self.player(0, substitute, substitution=True)
@@ -252,7 +266,7 @@ class VoicePlanTeamTests(VoicePlanCase):
         self.assertEqual([], plan.warnings)
 
     async def test_a_player_without_discord_is_a_warning_not_a_member(self) -> None:
-        await self.stage(1, teams=(0,), is_active=True, is_published=True)
+        await self.stage(1, teams=(0,), status="live", is_published=True)
         linked, unlinked = await self.member("a"), await self.member("b", discord=False)
         await self.player(0, linked)
         await self.player(0, unlinked)
@@ -267,14 +281,14 @@ class VoicePlanTeamTests(VoicePlanCase):
 
 class VoicePlanSwissTests(VoicePlanCase):
     async def test_a_swiss_stage_with_a_playoff_has_team_voices_and_no_round_slots(self) -> None:
-        await self.stage(1, kind=IS, is_active=True, is_published=True, is_completed=True)
-        await self.stage(2, teams=(0, 1), is_active=True, is_published=True)
+        await self.stage(1, kind=IS, status="completed", is_published=True)
+        await self.stage(2, teams=(0, 1), status="live", is_published=True)
         self.assertEqual(["hub", self.team_key(0), self.team_key(1)], await self.keys())
 
     async def test_the_latest_round_fills_the_slots_and_a_slot_beats_the_team_voice(self) -> None:
-        swiss = await self.stage(1, kind=IS, is_active=True, is_published=True)
+        swiss = await self.stage(1, kind=IS, status="live", is_published=True)
         # A parallel stage of the same order keeps a team voice beside the slots.
-        await self.stage(1, teams=(0,), is_active=True, is_published=True)
+        await self.stage(1, teams=(0,), status="live", is_published=True)
         m1, m2, m3, m4, m5, m6 = [await self.member(f"m{i}", discord=i != 6) for i in range(1, 7)]
         await self.player(0, m1)
         await self.seat_round(swiss, 1, [([m1, m2], [m3, m4]), ([m5], [m6])])
@@ -295,17 +309,17 @@ class VoicePlanSwissTests(VoicePlanCase):
         self.assertEqual(list(range(len(plan.channels))), [c.position for c in plan.channels])
 
     async def test_a_completed_swiss_stage_has_no_slots(self) -> None:
-        swiss = await self.stage(1, kind=IS, is_active=True, is_published=True)
+        swiss = await self.stage(1, kind=IS, status="live", is_published=True)
         a, b = await self.member("a"), await self.member("b")
         await self.seat_round(swiss, 1, [([a], [b])])
         self.assertEqual(3, len(await self.keys()))
-        await self.flag(swiss, is_completed=True)
+        await self.flag(swiss, status="completed")
         self.assertEqual([], await self.keys())
 
 
 class VoiceAdminTests(VoicePlanCase):
     async def test_status_joins_the_plan_with_the_bots_rows_and_lists_the_dropped_ones(self) -> None:
-        await self.stage(1, teams=(0, 1), is_active=True, is_published=True)
+        await self.stage(1, teams=(0, 1), status="live", is_published=True)
         async with self.Session() as s:
             s.add_all(
                 [

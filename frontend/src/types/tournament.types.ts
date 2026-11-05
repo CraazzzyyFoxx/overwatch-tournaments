@@ -20,6 +20,9 @@ export type TournamentStatus =
   | "completed"
   | "archived";
 
+/** The statuses of a stage node (`NODE_TRANSITIONS.stage`). */
+export type StageNodeStatus = "draft" | "ready" | "live" | "completed";
+
 export type StageType =
   | "round_robin"
   | "single_elimination"
@@ -164,9 +167,11 @@ export interface StageSummary extends StageRegulation {
    */
   advance_upper_count: number | null;
   order: number;
-  is_active: boolean;
+  /** The stage's flow node: `POST /admin/flow-nodes/{node_id}/transition` moves it. */
+  node_id: number;
+  /** The node's status is the stage's lifecycle (`draft → ready → live → completed`). */
+  status: StageNodeStatus;
   is_published: boolean;
-  is_completed: boolean;
   /** An organizer-drawn bracket template replaces the generated shape. */
   has_custom_bracket: boolean;
   challonge_id: number | null;

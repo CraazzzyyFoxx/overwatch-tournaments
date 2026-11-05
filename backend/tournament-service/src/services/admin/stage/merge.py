@@ -8,6 +8,7 @@ from sqlalchemy.orm import selectinload
 from shared import models
 from shared.core import enums
 from shared.core import http_status as status
+from shared.core.errors import ApiExc, ApiHTTPException
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.models.tournament.pick_ban import PickBanConfig, PickBanConfigSlot
 from src.services.admin.stage.base import StageServiceBase
@@ -148,6 +149,12 @@ class StageMergeMixin(StageServiceBase):
                     detail="All merged group stages must have the same stage type",
                 )
 
+        if any(stage.status != target_stage.status for stage in source_stages):
+            raise ApiHTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=[ApiExc(code="stage_status_mismatch", msg="Every merged stage must be in the target's status")],
+            )
+
         # Analytical: joins Stage purely to order the items by their owning
         # stage's order, so the merged group numbering follows stage order.
         items_result = await session.execute(
@@ -225,13 +232,11 @@ class StageMergeMixin(StageServiceBase):
 
         next_target_name = target_name.strip() if target_name else ""
         if next_target_name:
-            target_stage.name = next_target_name
-        target_stage.is_active = target_stage.is_active or any(stage.is_active for stage in source_stages)
+            target_stage.name = target_stage.node.name = next_target_name
         # A merge retargets the source stages' encounters onto `target_stage`
         # (`_retarget_stage_rows` above); if any source was already published,
         # those encounters must stay reportable under their new stage.
         target_stage.is_published = target_stage.is_published or any(stage.is_published for stage in source_stages)
-        target_stage.is_completed = target_stage.is_completed and all(stage.is_completed for stage in source_stages)
 
         await session.flush()
         for source_stage in source_stages:

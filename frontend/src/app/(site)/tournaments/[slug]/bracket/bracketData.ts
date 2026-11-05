@@ -55,13 +55,13 @@ export function getBracketRefetchInterval(status: TournamentStatus): number | fa
 }
 
 /**
- * A stage the organizer generated ahead of activation (`is_published=false`,
- * not yet `is_completed`). Everyone sees it, look-only: no match links, edits,
+ * A stage the organizer generated ahead of its start (`is_published=false`,
+ * not yet `completed`). Everyone sees it, look-only: no match links, edits,
  * reports or rearranging -- the backend rejects captain reports/veto for it
  * regardless (`shared.services.bracket.usability.is_encounter_live`).
  */
 export function isStagePreview(stage: StageSummary): boolean {
-  return !stage.is_published && !stage.is_completed;
+  return !stage.is_published && stage.status !== "completed";
 }
 
 /**

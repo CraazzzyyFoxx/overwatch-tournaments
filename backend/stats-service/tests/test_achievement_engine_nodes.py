@@ -61,8 +61,15 @@ class _NodeFixture(_scrim._Fixture):
             stage_type=stage_type,
             order=order,
             max_rounds=1,
-            # Every scenario here is a played-out tournament.
-            is_completed=True,
+        )
+        # Every scenario here is a played-out tournament.
+        self.insert(
+            models.FlowNode.__table__,
+            tournament_id=tournament_id,
+            kind="stage",
+            name=name,
+            status="completed",
+            stage_id=stage_id,
         )
         return stage_id
 

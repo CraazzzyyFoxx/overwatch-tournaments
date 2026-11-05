@@ -61,7 +61,6 @@ def _transition(*, has_form: bool, force: bool = False):
         ),
         patch("src.services.admin.tournament.enqueue_tournament_state_changed", AsyncMock()),
         patch("src.services.admin.tournament.publish_tournament_invalidation", AsyncMock()),
-        patch.object(tournament_service, "_maybe_auto_start_group_stage", AsyncMock()),
         # The lifecycle notifier reads the phase schedule and the workspace off
         # a real session; this fake has neither, and the guard under test is
         # upstream of it.

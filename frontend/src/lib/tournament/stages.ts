@@ -21,7 +21,7 @@ export function pickCurrentStage<T extends StageSummary>(
   status: TournamentStatus
 ): T | null {
   const ordered = [...stages].sort((left, right) => left.order - right.order || left.id - right.id);
-  const visible = ordered.filter((stage) => stage.is_published || stage.is_completed);
+  const visible = ordered.filter((stage) => stage.is_published || stage.status === "completed");
   const pool = visible.length > 0 ? visible : ordered;
 
   if (reachedAtLeast(status, "completed")) {
@@ -32,8 +32,8 @@ export function pickCurrentStage<T extends StageSummary>(
     );
   }
   return (
-    pool.find((stage) => stage.is_active) ??
-    pool.find((stage) => !stage.is_completed) ??
+    pool.find((stage) => stage.status === "live") ??
+    pool.find((stage) => stage.status !== "completed") ??
     pool.at(-1) ??
     null
   );

@@ -22,6 +22,7 @@ from shared.models.encounter.scoring_rule import ScoringRule
 from shared.models.tournament.tournament import Tournament
 
 if typing.TYPE_CHECKING:
+    from shared.models.tournament.flow import FlowNode
     from shared.models.tournament.team import Team
 
 
@@ -109,16 +110,10 @@ class Stage(db.TimeStampIntegerMixin):
     # Lower bracket. NULL = all of them start Upper. A group's own value overrides it.
     advance_upper_count: Mapped[int | None] = mapped_column(Integer(), nullable=True)
     order: Mapped[int] = mapped_column(Integer(), default=0)
-    is_active: Mapped[bool] = mapped_column(Boolean(), default=False, server_default="false")
-    # Sticky, unlike ``is_active``: set True the first time the stage is
-    # activated and never cleared again, even after a later stage's
-    # activation flips ``is_active`` back to False. ``admin/stage/generation.py::
-    # generate_encounters`` can populate a stage's encounters while it is
-    # still Draft (a preview of the bracket shape before the stage goes
-    # live) -- captains cannot report or veto against those encounters
-    # until this flips True (tournament-service ``src.services.bracket.usability``).
+    # Set when the stage's node goes ``ready → live`` and cleared on ``ready → draft``. A bracket
+    # ``admin/stage/generation.py::generate_encounters`` built as a preview stays unusable for captains (they cannot
+    # report or veto against it) until this is True (tournament-service ``src.services.bracket.usability``).
     is_published: Mapped[bool] = mapped_column(Boolean(), default=False, server_default="false")
-    is_completed: Mapped[bool] = mapped_column(Boolean(), default=False, server_default="false")
 
     # ── Regulation. NULL means "not set here": the engine falls back to the
     # default points (1 / 0.5 / 0), the stage type's preset (ranking) or the win
@@ -182,6 +177,19 @@ class Stage(db.TimeStampIntegerMixin):
     #: encounter is over. Loaded with the stage because ``scoring`` -- which
     #: every stage read carries -- is built from it.
     scoring_rule: Mapped[ScoringRule] = relationship(lazy="selectin")
+    #: The stage's flow node (spec §4.5): its status is the stage's lifecycle. Loaded with the stage because every
+    #: stage read carries ``node_id`` and ``status``.
+    node: Mapped[FlowNode | None] = relationship(
+        lazy="selectin", uselist=False, cascade="all, delete-orphan", passive_deletes=True
+    )
+
+    @property
+    def node_id(self) -> int:
+        return self.node.id
+
+    @property
+    def status(self) -> str:
+        return self.node.status
 
     @property
     def scoring(self) -> dict[str, typing.Any]:

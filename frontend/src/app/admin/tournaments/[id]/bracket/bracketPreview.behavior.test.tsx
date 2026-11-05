@@ -72,9 +72,9 @@ function stage(): Stage {
     advance_count: null,
     advance_upper_count: null,
     order: 1,
-    is_active: false,
+    node_id: 1,
+    status: "draft",
     is_published: false,
-    is_completed: false,
     ranking_preset: null,
     tiebreak_order: null,
     scoring: {

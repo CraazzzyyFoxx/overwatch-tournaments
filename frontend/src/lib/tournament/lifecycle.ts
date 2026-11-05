@@ -69,3 +69,30 @@ export function reachedAtLeast(status: TournamentStatus, target: TournamentStatu
 export function isSchedulablePhase(value: string): value is SchedulablePhase {
   return (SCHEDULABLE_PHASES as readonly string[]).includes(value);
 }
+
+/**
+ * `flow_state._VALID_TRANSITIONS`: where an admin may move a node of each lifecycle kind. A stage's action menu offers
+ * exactly `NODE_TRANSITIONS.stage[stage.status]`; each one is `POST /admin/flow-nodes/{node_id}/transition`.
+ */
+export const NODE_TRANSITIONS: Record<
+  "registration" | "formation" | "stage",
+  Record<string, readonly string[]>
+> = {
+  registration: {
+    draft: ["open"],
+    open: ["check_in", "closed"],
+    check_in: ["closed"],
+    closed: ["open"]
+  },
+  formation: {
+    draft: ["forming"],
+    forming: ["draft", "completed"],
+    completed: ["forming"]
+  },
+  stage: {
+    draft: ["ready"],
+    ready: ["draft", "live"],
+    live: ["completed"],
+    completed: ["live"]
+  }
+};

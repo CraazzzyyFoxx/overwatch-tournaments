@@ -144,7 +144,7 @@ export function EliminationStagePanel({
 
         <TabsContent value="bracket" className="mt-0 p-4">
           {encounters.length === 0 ? (
-            stage.is_completed ? (
+            stage.status === "completed" ? (
               <div className="py-8 text-center text-[color:var(--aqt-fg-muted)]">
                 {t("common.noMatches", { stage: stage.name })}
               </div>
