@@ -7,6 +7,7 @@ from .computation import *
 from .encounter_link import *
 from .encounter_report import *
 from .link import *
+from .participant_result import *
 from .pick_ban import *
 from .player_standing import *
 from .player_role import *

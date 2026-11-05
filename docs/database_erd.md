@@ -13,7 +13,7 @@ baselines and Discord channels live in `stats/`. `catalog/` writes only to `cata
 > `--check` and fails on drift, so the diagrams cannot fall behind the models again.
 
 <!-- ERD:auto _alembic_head -->
-Alembic head: **`botlobby01`** (169 revisions in `backend/migrations/versions/`).
+Alembic head: **`flowP1_participant_result`** (170 revisions in `backend/migrations/versions/`).
 <!-- /ERD:auto -->
 
 **Reading the diagrams**
@@ -1133,6 +1133,14 @@ erDiagram
         json built_in_fields_json
         json custom_fields_json
     }
+    TOURNAMENT_PARTICIPANT_RESULT {
+        bigint tournament_id PK,FK
+        bigint workspace_member_id PK,FK
+        bigint final_team_id FK "nullable"
+        int placement "nullable"
+        int field_size
+        bigint source_node_id "nullable"
+    }
     TOURNAMENT_PICK_BAN_CONFIG {
         bigint id PK
         timestamptz created_at
@@ -1474,6 +1482,7 @@ erDiagram
     PUBLIC_WORKSPACE_MEMBER ||--o{ TOURNAMENT_PLAYER : "workspace_member_id"
     PUBLIC_WORKSPACE_MEMBER ||--o{ TOURNAMENT_PLAYER_STANDING : "workspace_member_id"
     PUBLIC_WORKSPACE_MEMBER ||--o{ TOURNAMENT_PLAYER_STANDING_PIN : "workspace_member_id"
+    PUBLIC_WORKSPACE_MEMBER ||--o| TOURNAMENT_PARTICIPANT_RESULT : "workspace_member_id"
     REGISTRATION_REGISTRATION |o--o{ TOURNAMENT_PLAYER_STANDING : "registration_id"
     TOURNAMENT_CHALLONGE_SOURCE |o--o{ TOURNAMENT_CHALLONGE_SYNC_LOG : "source_id"
     TOURNAMENT_CHALLONGE_SOURCE ||--o{ TOURNAMENT_CHALLONGE_MATCH_MAPPING : "source_id"
@@ -1508,6 +1517,7 @@ erDiagram
     TOURNAMENT_STAGE_ITEM |o--o{ TOURNAMENT_SWISS_BYE : "stage_item_id"
     TOURNAMENT_STAGE_ITEM |o--o{ TOURNAMENT_SWISS_STOPPED_SCOPE : "stage_item_id"
     TOURNAMENT_STAGE_ITEM ||--o{ TOURNAMENT_STAGE_ITEM_INPUT : "stage_item_id"
+    TOURNAMENT_TEAM |o--o{ TOURNAMENT_PARTICIPANT_RESULT : "final_team_id"
     TOURNAMENT_TEAM |o--o{ TOURNAMENT_STAGE_ITEM_INPUT : "team_id"
     TOURNAMENT_TEAM |o--o{ TOURNAMENT_VOICE_CHANNEL : "team_id"
     TOURNAMENT_TEAM ||--o{ TOURNAMENT_CHALLONGE_PARTICIPANT_MAPPING : "team_id"
@@ -1532,6 +1542,7 @@ erDiagram
     TOURNAMENT_TOURNAMENT ||--o{ TOURNAMENT_TOURNAMENT_PREVIEW_ACCESS : "tournament_id"
     TOURNAMENT_TOURNAMENT ||--o{ TOURNAMENT_VOICE_CHANNEL : "tournament_id"
     TOURNAMENT_TOURNAMENT ||--o| TOURNAMENT_ENCOUNTER_REPORT_FORM : "tournament_id"
+    TOURNAMENT_TOURNAMENT ||--o| TOURNAMENT_PARTICIPANT_RESULT : "tournament_id"
     TOURNAMENT_TOURNAMENT ||--o| TOURNAMENT_RECALCULATION_STATE : "tournament_id"
     TOURNAMENT_TOURNAMENT ||--o| TOURNAMENT_VOICE_SETTINGS : "tournament_id"
 ```
