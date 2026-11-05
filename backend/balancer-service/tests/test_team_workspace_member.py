@@ -8,6 +8,7 @@ writer stay covered.
 from __future__ import annotations
 
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import IsolatedAsyncioTestCase
@@ -54,7 +55,14 @@ def _rows_result(rows):
 
 class MaterializeTeamsWorkspaceMemberTests(IsolatedAsyncioTestCase):
     async def test_new_player_gets_workspace_member_id(self) -> None:
-        tournament = SimpleNamespace(id=88, workspace_id=55, start_date=None, discipline="overwatch")
+        tournament = SimpleNamespace(
+            id=88,
+            workspace_id=55,
+            start_date=None,
+            end_date=None,
+            created_at=datetime(2026, 1, 1, tzinfo=UTC),
+            discipline="overwatch",
+        )
         member_user = SimpleNamespace(id=42)
         created_team = SimpleNamespace(id=3, name="Roster", tournament_id=88)
         created_member = SimpleNamespace(id=9001)

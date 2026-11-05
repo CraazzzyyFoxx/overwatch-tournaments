@@ -3,11 +3,11 @@
 Runs the *real* queries against a real SQL engine (SQLite standing in for
 Postgres, no aiosqlite installed -- see ``_AsyncSessionShim``) rather than
 asserting on mocks: the claims under test are properties of the emitted SQL
-(chronological ordering, the NULL-``start_date`` sentinel, workspace scoping),
+(chronological ordering by the tournament chronology key, workspace scoping),
 which a mocked session cannot falsify.
 
 The "current" tournament passed to ``load_prior_participation`` is a bare
-``SimpleNamespace`` (only ``.id``/``.start_date``/``.workspace_id`` are read) --
+``SimpleNamespace`` (only ``.id``/``.start_date``/``.end_date``/``.created_at``/``.workspace_id`` are read) --
 it never needs to exist as a DB row, since the comparison binds those values as
 plain parameters. "Prior" tournaments the function discovers via its join DO
 need real rows.
@@ -38,6 +38,9 @@ from shared.testing import create_sqlite_tables, install_postgres_type_shims  # 
 from src.services.newcomer_status import load_prior_participation  # noqa: E402
 
 install_postgres_type_shims()
+
+JAN, FEB, MAR = (datetime(2026, month, 1, tzinfo=UTC) for month in (1, 2, 3))
+FEB_2, FEB_9 = datetime(2026, 2, 2, tzinfo=UTC), datetime(2026, 2, 9, tzinfo=UTC)
 
 
 TABLES = (
@@ -116,7 +119,15 @@ class _Fixture:
         )
         return workspace_id
 
-    def tournament(self, tournament_id: int, *, workspace_id: int, start_date: datetime | None) -> int:
+    def tournament(
+        self,
+        tournament_id: int,
+        *,
+        workspace_id: int,
+        start_date: datetime | None,
+        end_date: datetime | None = None,
+        created_at: datetime = JAN,
+    ) -> int:
         self.insert(
             Tournament.__table__,
             id=tournament_id,
@@ -124,6 +135,8 @@ class _Fixture:
             name=f"Tournament {tournament_id}",
             slug=f"tournament-{tournament_id}",
             start_date=start_date,
+            end_date=end_date,
+            created_at=created_at,
         )
         return tournament_id
 
@@ -177,8 +190,21 @@ class _Fixture:
         return player_id
 
 
-def _current(tournament_id: int, *, workspace_id: int, start_date: datetime | None) -> SimpleNamespace:
-    return SimpleNamespace(id=tournament_id, workspace_id=workspace_id, start_date=start_date)
+def _current(
+    tournament_id: int,
+    *,
+    workspace_id: int,
+    start_date: datetime | None,
+    end_date: datetime | None = None,
+    created_at: datetime = JAN,
+) -> SimpleNamespace:
+    return SimpleNamespace(
+        id=tournament_id,
+        workspace_id=workspace_id,
+        start_date=start_date,
+        end_date=end_date,
+        created_at=created_at,
+    )
 
 
 class _DatabaseTestCase(IsolatedAsyncioTestCase):
@@ -235,44 +261,48 @@ class WorkspaceScopeTests(_DatabaseTestCase):
         self.assertFalse(history.is_newcomer(42))
 
 
-class NullStartDateSentinelTests(_DatabaseTestCase):
-    """Postgres tuple comparison breaks the moment either side is NULL -- these
-    pin the ``COALESCE(start_date, _FAR_FUTURE)`` sentinel both directions."""
+class ChronologyTests(_DatabaseTestCase):
+    """Prior means earlier by (coalesce(start, created), coalesce(end, start, created), id) -- spec §11.1."""
 
-    async def test_dated_tournament_counts_as_earlier_than_an_undated_current_one(self) -> None:
+    async def test_a_lower_id_that_starts_later_is_not_prior(self) -> None:
         self.db.workspace(1)
-        self.db.tournament(10, workspace_id=1, start_date=datetime(2020, 1, 1, tzinfo=UTC))
+        self.db.tournament(10, workspace_id=1, start_date=MAR)
         self.db.player(10, user_id=42, workspace_id=1)
 
-        # The current tournament has no start_date at all -- without the
-        # sentinel, comparing against a real date would raise or misbehave.
-        current = _current(20, workspace_id=1, start_date=None)
-        history = await load_prior_participation(self.db.shim, tournament=current, user_ids=[42])
-
-        self.assertFalse(history.is_newcomer(42))
-
-    async def test_undated_tournament_never_counts_as_earlier_despite_a_lower_id(self) -> None:
-        self.db.workspace(1)
-        # id=10 sorts before id=20 numerically, but its NULL start_date must
-        # place it *after* any dated tournament -- including one created later
-        # with a real, earlier-looking date.
-        self.db.tournament(10, workspace_id=1, start_date=None)
-        self.db.player(10, user_id=42, workspace_id=1)
-
-        current = _current(20, workspace_id=1, start_date=datetime(2019, 1, 1, tzinfo=UTC))
+        current = _current(20, workspace_id=1, start_date=FEB)
         history = await load_prior_participation(self.db.shim, tournament=current, user_ids=[42])
 
         self.assertTrue(history.is_newcomer(42))
 
-    async def test_two_undated_tournaments_tie_break_on_id(self) -> None:
+    async def test_a_start_tie_is_broken_by_end_date_before_id(self) -> None:
         self.db.workspace(1)
-        self.db.tournament(10, workspace_id=1, start_date=None)
-        self.db.player(10, user_id=42, workspace_id=1)
+        self.db.tournament(30, workspace_id=1, start_date=FEB, end_date=FEB_2)
+        self.db.player(30, user_id=42, workspace_id=1)
 
-        current = _current(20, workspace_id=1, start_date=None)
+        current = _current(20, workspace_id=1, start_date=FEB, end_date=FEB_9)
         history = await load_prior_participation(self.db.shim, tournament=current, user_ids=[42])
 
         self.assertFalse(history.is_newcomer(42))
+
+    async def test_an_undated_tournament_is_placed_at_its_creation(self) -> None:
+        self.db.workspace(1)
+        self.db.tournament(10, workspace_id=1, start_date=None, created_at=JAN)
+        self.db.player(10, user_id=42, workspace_id=1)
+
+        current = _current(20, workspace_id=1, start_date=FEB)
+        history = await load_prior_participation(self.db.shim, tournament=current, user_ids=[42])
+
+        self.assertFalse(history.is_newcomer(42))
+
+    async def test_an_undated_current_tournament_is_placed_at_its_creation(self) -> None:
+        self.db.workspace(1)
+        self.db.tournament(10, workspace_id=1, start_date=FEB)
+        self.db.player(10, user_id=42, workspace_id=1)
+
+        current = _current(20, workspace_id=1, start_date=None, created_at=JAN)
+        history = await load_prior_participation(self.db.shim, tournament=current, user_ids=[42])
+
+        self.assertTrue(history.is_newcomer(42))
 
 
 class RoleScopeTests(_DatabaseTestCase):

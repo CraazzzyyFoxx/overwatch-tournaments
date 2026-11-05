@@ -4,24 +4,20 @@ Prior participation is judged by tournament chronology, not by whether a
 ``Player`` row for the identity happens to exist yet, so importing historical
 data out of chronological order cannot freeze a wrong answer.
 
-Ordering matches the codebase's one established "tournament chronology"
-convention (``division.py``/``streak.py``/``tournament/service.py``):
-``Tournament.start_date NULLS LAST, Tournament.id``. Reproduced here as
-``COALESCE(start_date, _FAR_FUTURE)`` because Postgres tuple comparison (``<``,
-needed here -- not just ``ORDER BY``) breaks outright the moment either side is
-NULL; ``NULLS LAST`` has no ``<``-comparison equivalent.
+Ordering is the tournament chronology key (``shared.core.chrono``), which is never NULL, so the tuple
+comparison needs no sentinel.
 """
 
 from __future__ import annotations
 
 from collections.abc import Collection
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from typing import Literal
 
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.core.chrono import chrono_sort_key, tournament_chrono_key
 from shared.models.tenancy.workspace import Workspace, WorkspaceMember
 from shared.models.tournament.team import Player
 from shared.models.tournament.tournament import Tournament
@@ -29,11 +25,6 @@ from shared.models.tournament.tournament import Tournament
 __all__ = ("NewcomerScope", "PriorParticipation", "load_prior_participation")
 
 NewcomerScope = Literal["global", "workspace"]
-
-# Stands in for a NULL `start_date` on both sides of the comparison -- the same
-# role `NULLS LAST` plays in every `ORDER BY` elsewhere in the codebase, just
-# usable in a `<` predicate.
-_FAR_FUTURE = datetime(9999, 12, 31, 23, 59, 59, 999999, tzinfo=UTC)
 
 
 @dataclass(frozen=True)
@@ -70,7 +61,6 @@ async def load_prior_participation(
     )
     scope: NewcomerScope = scope_row.scalar_one_or_none() or "global"
 
-    cur_start = tournament.start_date or _FAR_FUTURE
     query = (
         sa.select(WorkspaceMember.player_id, Tournament.discipline, Player.role)
         .select_from(Player)
@@ -78,7 +68,7 @@ async def load_prior_participation(
         .join(Tournament, Tournament.id == Player.tournament_id)
         .where(
             WorkspaceMember.player_id.in_(user_ids),
-            sa.tuple_(sa.func.coalesce(Tournament.start_date, _FAR_FUTURE), Tournament.id) < (cur_start, tournament.id),
+            sa.tuple_(*tournament_chrono_key()) < sa.tuple_(*chrono_sort_key(tournament)),
         )
     )
     if scope == "workspace":
