@@ -16,6 +16,9 @@ import { PresetRunPanel } from "@/app/balancer/components/PresetRunPanel";
 import { TeamDistributionPanel } from "@/app/balancer/components/TeamDistributionPanel";
 import { VariantSelector } from "@/app/balancer/components/VariantSelector";
 import { useBalancerTournamentId } from "@/app/balancer/components/useBalancerTournamentId";
+import { FlowNodeSelect } from "@/components/kit/FlowNodeSelect";
+import { FLOW_NODE_PARAM, useFlowNodeParam } from "@/hooks/useFlowNodeParam";
+import { useQueryParams } from "@/hooks/useQueryParams";
 import { useBalancerJob } from "@/app/balancer/components/useBalancerJob";
 import { useBalancerMutations } from "@/app/balancer/components/useBalancerMutations";
 import {
@@ -161,6 +164,16 @@ export function BalancerMainPageClient() {
     if (isPlayersSidebarCollapsed) playersPanelRef.current?.collapse();
   }, [railPercent, isPoolSidebarCollapsed, isPlayersSidebarCollapsed]);
 
+  // Owner metadata supplies both roster shape and the player editor's grid pin.
+  // Reuse the public shell's query and embedded version rather than refetching it.
+  const tournamentQuery = useQuery({
+    ...tournamentOverviewQueryOptions(tournamentId as number),
+    enabled: tournamentId !== null
+  });
+  // The balance, its config and every export belong to one formation node of the tournament.
+  const formationNodeId = useFlowNodeParam(tournamentQuery.data, "formation");
+  const { setParams } = useQueryParams();
+
   const registrationsQuery = useQuery({
     queryKey: balancerQueryKeys.registrations(tournamentId),
     queryFn: () =>
@@ -172,25 +185,20 @@ export function BalancerMainPageClient() {
   });
 
   const savedBalanceQuery = useQuery({
-    queryKey: balancerQueryKeys.publicBalance(tournamentId),
-    queryFn: () => balancerAdminService.getBalance(tournamentId as number),
-    enabled: tournamentId !== null,
+    queryKey: balancerQueryKeys.publicBalance(tournamentId, formationNodeId),
+    queryFn: () => balancerAdminService.getBalance(tournamentId as number, formationNodeId as number),
+    enabled: tournamentId !== null && formationNodeId !== null,
     refetchOnWindowFocus: false
   });
 
   const tournamentConfigQuery = useQuery({
-    queryKey: balancerQueryKeys.tournamentConfig(tournamentId),
-    queryFn: () => balancerAdminService.getTournamentConfig(tournamentId as number),
-    enabled: tournamentId !== null,
+    queryKey: balancerQueryKeys.tournamentConfig(tournamentId, formationNodeId),
+    queryFn: () =>
+      balancerAdminService.getTournamentConfig(tournamentId as number, formationNodeId as number),
+    enabled: tournamentId !== null && formationNodeId !== null,
     refetchOnWindowFocus: false
   });
 
-  // Owner metadata supplies both roster shape and the player editor's grid pin.
-  // Reuse the public shell's query and embedded version rather than refetching it.
-  const tournamentQuery = useQuery({
-    ...tournamentOverviewQueryOptions(tournamentId as number),
-    enabled: tournamentId !== null
-  });
   const divisionGrid = useDivisionGrid(tournamentQuery.data?.discipline);
   // The solver config of the tournament's game: its defaults and presets carry that game's role weights.
   const configDiscipline = tournamentQuery.data?.discipline ?? null;
@@ -248,7 +256,7 @@ export function BalancerMainPageClient() {
     setLastJsonImportFile(null);
     setDraftConfig({});
     setSavedTournamentConfig({});
-  }, [tournamentId]);
+  }, [tournamentId, formationNodeId]);
 
   useEffect(() => {
     if (!balancerConfigQuery.data) {
@@ -375,8 +383,8 @@ export function BalancerMainPageClient() {
       : t("presets.CUSTOM");
   const saveConfigMutation = useMutation({
     mutationFn: async () => {
-      if (!tournamentId) throw new Error(t("errors.noTournament"));
-      const saved = await balancerAdminService.upsertTournamentConfig(tournamentId, {
+      if (!tournamentId || formationNodeId === null) throw new Error(t("errors.noTournament"));
+      const saved = await balancerAdminService.upsertTournamentConfig(tournamentId, formationNodeId, {
         config_json: sanitizeBalancerConfig(draftConfig) as Record<string, unknown>
       });
       return saved.config_json as BalancerConfig;
@@ -385,7 +393,7 @@ export function BalancerMainPageClient() {
       setDraftConfig(config);
       setSavedTournamentConfig(config);
       await queryClient.invalidateQueries({
-        queryKey: balancerQueryKeys.tournamentConfig(tournamentId)
+        queryKey: balancerQueryKeys.tournamentConfig(tournamentId, formationNodeId)
       });
       notify.success(t("toasts.settingsSaved"));
     }
@@ -447,10 +455,10 @@ export function BalancerMainPageClient() {
       setDraftConfig(sanitized);
       setSavedTournamentConfig(sanitized);
       void queryClient.invalidateQueries({
-        queryKey: balancerQueryKeys.tournamentConfig(tournamentId)
+        queryKey: balancerQueryKeys.tournamentConfig(tournamentId, formationNodeId)
       });
     },
-    [queryClient, tournamentId]
+    [queryClient, tournamentId, formationNodeId]
   );
 
   const handleResetConfig = useCallback(() => {
@@ -480,6 +488,7 @@ export function BalancerMainPageClient() {
     importBalanceMutation
   } = useBalancerMutations({
     tournamentId,
+    formationNodeId,
     workspaceId,
     queryClient,
     dispatchJob,
@@ -758,6 +767,12 @@ export function BalancerMainPageClient() {
     // right-hand cards, the variant strip and the actions bar the moment the
     // pool sidebar is widened.
     <div className="flex min-h-0 min-w-0 flex-col gap-3">
+      <FlowNodeSelect
+        tournament={tournamentQuery.data}
+        kind="formation"
+        value={formationNodeId}
+        onChange={(nodeId) => setParams({ [FLOW_NODE_PARAM]: nodeId })}
+      />
       <PresetRunPanel
         counters={[
           { label: t("counters.pool"), value: poolPlayers.length, icon: Users },

@@ -42,11 +42,12 @@ __all__ = (
 class BalancerTournamentConfig(db.TimeStampIntegerMixin):
     __tablename__ = "tournament_config"
     __table_args__ = (
-        UniqueConstraint("tournament_id", name="uq_balancer_tournament_config_tournament"),
+        UniqueConstraint("formation_node_id", name="uq_balancer_tournament_config_formation_node"),
         {"schema": "balancer"},
     )
 
     tournament_id: Mapped[int] = mapped_column(ForeignKey("tournament.tournament.id", ondelete="CASCADE"), index=True)
+    formation_node_id: Mapped[int] = mapped_column(ForeignKey("tournament.flow_node.id", ondelete="CASCADE"))
     workspace_id: Mapped[int] = mapped_column(ForeignKey("workspace.id", ondelete="CASCADE"), index=True)
     config_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, server_default="{}", default=dict)
     updated_by: Mapped[int | None] = mapped_column(ForeignKey("auth.user.id", ondelete="SET NULL"), nullable=True)
@@ -113,11 +114,12 @@ class UserBalancerConfig(db.TimeStampIntegerMixin):
 class BalancerBalance(db.TimeStampIntegerMixin):
     __tablename__ = "balance"
     __table_args__ = (
-        UniqueConstraint("tournament_id", name="uq_balancer_balance_tournament"),
+        UniqueConstraint("formation_node_id", name="uq_balancer_balance_formation_node"),
         {"schema": "balancer"},
     )
 
     tournament_id: Mapped[int] = mapped_column(ForeignKey("tournament.tournament.id", ondelete="CASCADE"), index=True)
+    formation_node_id: Mapped[int] = mapped_column(ForeignKey("tournament.flow_node.id", ondelete="CASCADE"))
     workspace_id: Mapped[int | None] = mapped_column(
         ForeignKey("workspace.id", ondelete="SET NULL"), nullable=True, index=True
     )

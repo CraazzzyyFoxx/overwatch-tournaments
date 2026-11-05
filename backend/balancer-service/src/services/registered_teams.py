@@ -29,6 +29,7 @@ from shared.repository import RegistrationTeamRepository, TournamentRepository
 from shared.services.balancer_realtime import BALANCER_TEAMS_CHANGED
 from shared.services.team_format import tournament_slot_shape
 from src.services.balancer.realtime import emit_balancer_data, stage_export_invalidation
+from src.services.formation_node import require_forming
 from src.services.team_export import ExportPlan, team_materialization
 from src.services.team_export.registered import SkippedTeam, build_registered_export
 
@@ -61,6 +62,7 @@ class RegisteredTeamsService:
         self,
         session: AsyncSession,
         tournament_id: int,
+        formation_node_id: int,
         *,
         team_ids: Sequence[int] | None = None,
         actor_user_id: int,
@@ -76,6 +78,7 @@ class RegisteredTeamsService:
         tournament = await self.tournaments.get(session, tournament_id)
         if tournament is None:
             raise _err("not_found", f"Tournament {tournament_id} not found", status_code=404)
+        await require_forming(session, formation_node_id)
 
         shape = await tournament_slot_shape(session, tournament_id)
 
@@ -117,6 +120,7 @@ class RegisteredTeamsService:
             session,
             ExportPlan(
                 tournament_id=tournament_id,
+                formation_node_id=formation_node_id,
                 teams=payload.teams,
                 prior_team_ids=payload.prior_team_ids,
                 on_unresolved="error",

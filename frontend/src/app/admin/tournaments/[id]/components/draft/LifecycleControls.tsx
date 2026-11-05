@@ -14,6 +14,7 @@ import { useDraftMutations } from "@/hooks/useDraftData";
 
 interface LifecycleControlsProps {
   tournamentId: number;
+  formationNodeId: number;
   board: DraftBoard;
   /** The server refuses to resume while no feasible role assignment remains. */
   resumeBlocked?: boolean;
@@ -28,17 +29,26 @@ type ConfirmedAction = "rollback" | "cancel" | "export" | "autopick";
  * Extra time and override steer a pick in flight and stay in the draft room's
  * admin dock, where the board they act on is visible.
  */
-export function LifecycleControls({ tournamentId, board, resumeBlocked = false }: Readonly<LifecycleControlsProps>) {
+export function LifecycleControls({
+  tournamentId,
+  formationNodeId,
+  board,
+  resumeBlocked = false
+}: Readonly<LifecycleControlsProps>) {
   const t = useTranslations("draftAdmin.controlRoom");
   const tDraft = useTranslations("draftAdmin");
   const resumeReasonId = useId();
-  const mutations = useDraftMutations(tournamentQueryKeys.draftBoard(tournamentId));
+  const mutations = useDraftMutations(
+    tournamentQueryKeys.draftBoard(tournamentId, formationNodeId)
+  );
   const [confirmedAction, setConfirmedAction] = useState<ConfirmedAction | null>(null);
   const session = board.session;
   const queryClient = useQueryClient();
   const exportMutation = useMutation({
     mutationFn: () => draftService.exportDraft(tournamentId, session.id),
-    onSettled: () => queryClient.invalidateQueries({ queryKey: tournamentQueryKeys.draftBoard(tournamentId) }),
+    onSettled: () => queryClient.invalidateQueries({
+        queryKey: tournamentQueryKeys.draftBoard(tournamentId, formationNodeId)
+      }),
   });
   const currentPick = board.current_pick;
   const resolvedCount = board.picks.filter((pick) =>

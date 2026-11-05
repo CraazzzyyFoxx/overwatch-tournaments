@@ -81,6 +81,7 @@ TABLES = (
     models.StatDef.__table__,
     models.Standing.__table__,
     models.ParticipantResult.__table__,
+    models.FlowNode.__table__,
 )
 
 WORKSPACE_ID = 1

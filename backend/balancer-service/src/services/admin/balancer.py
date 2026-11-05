@@ -32,6 +32,7 @@ from src.schemas.team import InternalBalancerTeamsPayload
 from src.services.admin.balancer_variant import BalancerVariantService, balancer_variant_service
 from src.services.balancer.config.provider import normalize_tournament_config_payload
 from src.services.balancer.realtime import emit_balancer_data, stage_export_invalidation
+from src.services.formation_node import require_forming
 from src.services.team import to_materialization_teams
 from src.services.team_export import ExportPlan, refuse_missing_handles, sync_player_ranks, team_materialization
 
@@ -121,14 +122,15 @@ class BalancerAdminService:
     async def get_tournament_config(
         self,
         session: AsyncSession,
-        tournament_id: int,
+        formation_node_id: int,
     ) -> models.BalancerTournamentConfig | None:
-        return await self.tournament_configs.get_by_tournament(session, tournament_id)
+        return await self.tournament_configs.get_by_formation_node(session, formation_node_id)
 
     async def upsert_tournament_config(
         self,
         session: AsyncSession,
         tournament_id: int,
+        formation_node_id: int,
         workspace_id: int,
         config_json: dict[str, Any] | None,
         auth_user: models.AuthUser,
@@ -136,7 +138,7 @@ class BalancerAdminService:
         # workspace_id is resolved by the caller (the RPC handler already fetched
         # it for the permission check) — no second Tournament lookup here.
         normalized_config = normalize_tournament_config_payload(config_json)
-        tournament_config = await self.get_tournament_config(session, tournament_id)
+        tournament_config = await self.get_tournament_config(session, formation_node_id)
         now = datetime.now(UTC)
 
         if tournament_config is None:
@@ -144,6 +146,7 @@ class BalancerAdminService:
                 session,
                 models.BalancerTournamentConfig(
                     tournament_id=tournament_id,
+                    formation_node_id=formation_node_id,
                     workspace_id=workspace_id,
                     config_json=normalized_config,
                     updated_by=auth_user.id,
@@ -239,13 +242,14 @@ class BalancerAdminService:
         # commit, so no refresh round-trip is needed.
         return config
 
-    async def get_balance(self, session: AsyncSession, tournament_id: int) -> models.BalancerBalance | None:
-        return await self.balances.get_by_tournament(session, tournament_id)
+    async def get_balance(self, session: AsyncSession, formation_node_id: int) -> models.BalancerBalance | None:
+        return await self.balances.get_by_formation_node(session, formation_node_id)
 
     async def save_balance(
         self,
         session: AsyncSession,
         tournament_id: int,
+        formation_node_id: int,
         data: schemas.BalanceSaveRequest,
         auth_user: models.AuthUser,
     ) -> models.BalancerBalance:
@@ -256,12 +260,13 @@ class BalancerAdminService:
         if not payload.teams:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Balance result does not contain teams")
 
-        balance = await self.get_balance(session, tournament_id)
+        balance = await self.get_balance(session, formation_node_id)
         if balance is None:
             balance = await self.balances.create(
                 session,
                 models.BalancerBalance(
                     tournament_id=tournament_id,
+                    formation_node_id=formation_node_id,
                     config_json=normalized_config_json,
                     result_json=normalized_result_json,
                     saved_by=auth_user.id,
@@ -299,6 +304,7 @@ class BalancerAdminService:
         balance = await self.balances.get_for_export(session, balance_id)
         if balance is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Balance not found")
+        await require_forming(session, balance.formation_node_id)
 
         payload = InternalBalancerTeamsPayload.model_validate(normalize_balance_response_payload(balance.result_json))
         tournament = await self.tournaments.get(session, balance.tournament_id)
@@ -347,6 +353,7 @@ class BalancerAdminService:
             session,
             ExportPlan(
                 tournament_id=balance.tournament_id,
+                formation_node_id=balance.formation_node_id,
                 teams=to_materialization_teams([team.to_balancer_team(dimension) for team in payload.teams]),
                 prior_team_ids=linked_team_ids,
                 on_unresolved="skip",
@@ -381,7 +388,7 @@ class BalancerAdminService:
         dimension = DISCIPLINES[tournament.discipline].rated_dimension.code
         updated = await sync_player_ranks(
             session,
-            balance.tournament_id,
+            balance.formation_node_id,
             to_materialization_teams([team.to_balancer_team(dimension) for team in payload.teams]),
         )
         await emit_balancer_data(session, balance.tournament_id, BALANCER_TEAMS_CHANGED, actor_user_id=actor_user_id)

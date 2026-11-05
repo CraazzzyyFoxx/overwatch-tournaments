@@ -153,7 +153,7 @@ class MaterializeTeamsWorkspaceMemberTests(IsolatedAsyncioTestCase):
                 ),
             ),
         ):
-            await materialization_module.materialize_teams(session, 88, to_materialization_teams(payload))
+            await materialization_module.materialize_teams(session, 88, 99, to_materialization_teams(payload))
 
         get_or_create.assert_awaited_once_with(session, workspace_id=55, player_id=42)
         player_calls = [call.args[0] for call in session.add.call_args_list if isinstance(call.args[0], Player)]

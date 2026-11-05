@@ -3,6 +3,8 @@ Postgres."""
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
+
 import sqlalchemy as sa
 
 from shared import models
@@ -21,6 +23,9 @@ class _ResultCase(EncounterWriterCase):
     async def roster(self, s, member: str, team: str, *, substitute: bool = False) -> int:
         player = Player(
             tournament_id=self.ids["t"],
+            formation_node_id=await s.scalar(
+                sa.select(models.Team.formation_node_id).where(models.Team.id == self.ids[team])
+            ),
             team_id=self.ids[team],
             workspace_member_id=self.ids[member],
             name=f"{member}-{team}",
@@ -30,6 +35,29 @@ class _ResultCase(EncounterWriterCase):
         s.add(player)
         await s.flush()
         return player.id
+
+    async def formations(self, s, **teams: tuple[str, ...]) -> dict[str, int]:
+        """A formation node per keyword (completed in keyword order) and its teams moved onto it; ``Player`` rows
+        written afterwards for those teams carry the node."""
+        now = datetime(2026, 11, 5, tzinfo=UTC)
+        nodes: dict[str, int] = {}
+        for index, (name, members) in enumerate(teams.items()):
+            node = models.FlowNode(
+                tournament_id=self.ids["t"],
+                kind="formation",
+                name=name,
+                status="completed",
+                config={"mode": "manual"},
+                completed_at=now + timedelta(hours=index),
+            )
+            s.add(node)
+            await s.flush()
+            nodes[name] = node.id
+            for team in members:
+                await s.execute(
+                    sa.update(models.Team).where(models.Team.id == self.ids[team]).values(formation_node_id=node.id)
+                )
+        return nodes
 
     async def stage(self, s, order: int) -> int:
         stage = Stage(
@@ -122,6 +150,30 @@ class WriteParticipantResultsTests(_ResultCase):
                 await self.results(s),
             )
 
+    async def test_the_last_completed_formation_decides_and_the_field_is_its_node(self) -> None:
+        async with self.Session() as s:
+            await self.formations(s, early=("team0", "team1"), late=("team2",))  # team3 stays tournament-wide
+            await self.roster(s, "m0", "team2")  # the lower Player.id, but the later formation
+            await self.roster(s, "m0", "team0")
+            await self.roster(s, "m1", "team3")  # a tournament-wide team comes after any formation's
+            await self.roster(s, "m1", "team1")
+            await self.roster(s, "m2", "team3")
+            self.standing(s, "team0", 4)
+            self.standing(s, "team1", 3)
+            self.standing(s, "team2", 1)
+            self.standing(s, "team3", 2)
+            await self.finish(s)
+            await write_participant_results(s, self.ids["t"])
+            await s.commit()
+            self.assertEqual(
+                {
+                    self.ids["m0"]: (self.ids["team2"], 1, 1),
+                    self.ids["m1"]: (self.ids["team1"], 3, 2),
+                    self.ids["m2"]: (self.ids["team3"], 2, 1),
+                },
+                await self.results(s),
+            )
+
     async def test_a_substitute_has_no_result(self) -> None:
         async with self.Session() as s:
             await self.roster(s, "m0", "team0", substitute=True)
@@ -168,6 +220,23 @@ class MemberTournamentRowTests(_ResultCase):
             playing = await self.roster(s, "m0", "team0")
             await self.roster(s, "m0", "team1", substitute=True)
             self.assertEqual([playing], await self._chosen(s, "m0"))
+
+    async def test_without_a_result_the_last_completed_formation_wins(self) -> None:
+        async with self.Session() as s:
+            await self.formations(s, early=("team0",), late=("team1",))
+            await self.roster(s, "m0", "team1")
+            await self.roster(s, "m0", "team0")
+            await self.roster(s, "m1", "team2")  # tournament-wide
+            await self.roster(s, "m1", "team0")
+            ids = {
+                m: await s.scalars(
+                    sa.select(Player.id).where(Player.workspace_member_id == self.ids[m]).order_by(Player.id)
+                )
+                for m in ("m0", "m1")
+            }
+            m0, m1 = (list(ids["m0"]), list(ids["m1"]))
+            self.assertEqual([m0[0]], await self._chosen(s, "m0"))  # team1, formed later than team0
+            self.assertEqual([m1[1]], await self._chosen(s, "m1"))  # a formation's team before the tournament-wide one
 
 
 class LookupTests(_ResultCase):

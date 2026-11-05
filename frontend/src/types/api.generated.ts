@@ -14761,6 +14761,11 @@ export interface components {
             /** Exported At */
             exported_at: string | null;
             format: components["schemas"]["balancer.DraftFormat"];
+            /**
+             * Formation Node Id
+             * @default null
+             */
+            formation_node_id: number | null;
             /** Id */
             id: number;
             /**
@@ -15216,6 +15221,8 @@ export interface components {
             allow_admin_override: boolean;
             /** @default best_fit */
             autopick_strategy: components["schemas"]["balancer.DraftAutopickStrategy"];
+            /** Formation Node Id */
+            formation_node_id: number;
             /**
              * Overtime Seconds
              * @default 0
@@ -15296,6 +15303,11 @@ export interface components {
             /** Exported At */
             exported_at: string | null;
             format: components["schemas"]["balancer.DraftFormat"];
+            /**
+             * Formation Node Id
+             * @default null
+             */
+            formation_node_id: number | null;
             /** Id */
             id: number;
             /**
@@ -38900,7 +38912,9 @@ export interface operations {
     };
     get__api_v1_balancer_draft_tournaments__tournament_id__draft: {
         parameters: {
-            query?: never;
+            query?: {
+                formation_node_id?: string;
+            };
             header?: never;
             path: {
                 tournament_id: string;
@@ -38960,7 +38974,9 @@ export interface operations {
     };
     get__api_v1_balancer_draft_tournaments__tournament_id__sessions: {
         parameters: {
-            query?: never;
+            query?: {
+                formation_node_id?: string;
+            };
             header?: never;
             path: {
                 tournament_id: string;
@@ -39765,7 +39781,9 @@ export interface operations {
     };
     get__api_v1_balancer_tournaments__tournament_id__balance: {
         parameters: {
-            query?: never;
+            query?: {
+                formation_node_id?: string;
+            };
             header?: never;
             path: {
                 tournament_id: string;
@@ -39843,7 +39861,9 @@ export interface operations {
     };
     put__api_v1_balancer_tournaments__tournament_id__balance: {
         parameters: {
-            query?: never;
+            query?: {
+                formation_node_id?: string;
+            };
             header?: never;
             path: {
                 tournament_id: string;
@@ -39925,7 +39945,9 @@ export interface operations {
     };
     post__api_v1_balancer_tournaments__tournament_id__balance: {
         parameters: {
-            query?: never;
+            query?: {
+                formation_node_id?: string;
+            };
             header?: never;
             path: {
                 tournament_id: string;
@@ -73234,7 +73256,9 @@ export interface operations {
     };
     get__api_v1_balancer_tournaments__tournament_id__config: {
         parameters: {
-            query?: never;
+            query?: {
+                formation_node_id?: string;
+            };
             header?: never;
             path: {
                 tournament_id: string;
@@ -73312,7 +73336,9 @@ export interface operations {
     };
     put__api_v1_balancer_tournaments__tournament_id__config: {
         parameters: {
-            query?: never;
+            query?: {
+                formation_node_id?: string;
+            };
             header?: never;
             path: {
                 tournament_id: string;
@@ -73394,7 +73420,9 @@ export interface operations {
     };
     post__api_v1_balancer_tournaments__tournament_id__registered_teams_export: {
         parameters: {
-            query?: never;
+            query?: {
+                formation_node_id?: string;
+            };
             header?: never;
             path: {
                 tournament_id: string;
@@ -73554,7 +73582,9 @@ export interface operations {
     };
     post__api_v1_balancer_tournaments__tournament_id__teams_import: {
         parameters: {
-            query?: never;
+            query?: {
+                formation_node_id?: string;
+            };
             header?: never;
             path: {
                 tournament_id: string;

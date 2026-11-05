@@ -49,6 +49,7 @@ from shared.repository import CatalogRoleRepository  # noqa: E402
 from shared.services.team_format import save_tournament_format  # noqa: E402
 from shared.testing import create_test_async_engine  # noqa: E402
 from src.services.registered_teams import registered_teams_service  # noqa: E402
+from tests.factories import formation_node  # noqa: E402
 
 _UNIQUE = 0
 
@@ -104,6 +105,7 @@ class RegisteredExportIntegrationTests(IsolatedAsyncioTestCase):
 
             self.workspace_id = workspace.id
             self.tournament_id = tournament.id
+            self.node_id = await formation_node(session, tournament.id, mode="registered")
             self.member_ids: list[int] = []
             self.player_ids: list[int] = []
             for index in range(4):
@@ -228,7 +230,9 @@ class RegisteredExportIntegrationTests(IsolatedAsyncioTestCase):
     async def test_a_complete_team_becomes_a_tournament_team(self) -> None:
         await self._complete_team()
         async with self.Session() as session:
-            result = await registered_teams_service.export_registered(session, self.tournament_id, actor_user_id=1)
+            result = await registered_teams_service.export_registered(
+                session, self.tournament_id, self.node_id, actor_user_id=1
+            )
 
         self.assertEqual(1, result.imported_teams)
         self.assertEqual(0, result.removed_teams)
@@ -246,7 +250,7 @@ class RegisteredExportIntegrationTests(IsolatedAsyncioTestCase):
     async def test_slot_codes_become_player_roles(self) -> None:
         await self._complete_team()
         async with self.Session() as session:
-            await registered_teams_service.export_registered(session, self.tournament_id, actor_user_id=1)
+            await registered_teams_service.export_registered(session, self.tournament_id, self.node_id, actor_user_id=1)
 
         _team, players = await self._exported()
         roles = sorted(player.role for player in players)
@@ -257,7 +261,7 @@ class RegisteredExportIntegrationTests(IsolatedAsyncioTestCase):
         corruption rather than an error."""
         await self._complete_team()
         async with self.Session() as session:
-            await registered_teams_service.export_registered(session, self.tournament_id, actor_user_id=1)
+            await registered_teams_service.export_registered(session, self.tournament_id, self.node_id, actor_user_id=1)
 
         _team, players = await self._exported()
         self.assertEqual([3000, 2500, 2000, 1000], [player.rank for player in players])
@@ -267,7 +271,7 @@ class RegisteredExportIntegrationTests(IsolatedAsyncioTestCase):
         `is_substitution`; a substitute wrongly marked active would inflate both."""
         await self._complete_team()
         async with self.Session() as session:
-            await registered_teams_service.export_registered(session, self.tournament_id, actor_user_id=1)
+            await registered_teams_service.export_registered(session, self.tournament_id, self.node_id, actor_user_id=1)
 
         _team, players = await self._exported()
         substitutes = [player for player in players if player.is_substitution]
@@ -286,7 +290,7 @@ class RegisteredExportIntegrationTests(IsolatedAsyncioTestCase):
     async def test_the_export_back_link_is_stamped_on_the_source_team(self) -> None:
         source = await self._complete_team()
         async with self.Session() as session:
-            await registered_teams_service.export_registered(session, self.tournament_id, actor_user_id=1)
+            await registered_teams_service.export_registered(session, self.tournament_id, self.node_id, actor_user_id=1)
 
         async with self.Session() as session:
             fresh = await session.scalar(sa.select(RegistrationTeam).where(RegistrationTeam.id == source.id))
@@ -303,11 +307,13 @@ class RegisteredExportIntegrationTests(IsolatedAsyncioTestCase):
         twice is idempotent instead of doubling the roster."""
         await self._complete_team()
         async with self.Session() as session:
-            await registered_teams_service.export_registered(session, self.tournament_id, actor_user_id=1)
+            await registered_teams_service.export_registered(session, self.tournament_id, self.node_id, actor_user_id=1)
         first_team, first_players = await self._exported()
 
         async with self.Session() as session:
-            second = await registered_teams_service.export_registered(session, self.tournament_id, actor_user_id=1)
+            second = await registered_teams_service.export_registered(
+                session, self.tournament_id, self.node_id, actor_user_id=1
+            )
 
         self.assertEqual(1, second.removed_teams)
         self.assertEqual(1, second.imported_teams)
@@ -328,7 +334,9 @@ class RegisteredExportIntegrationTests(IsolatedAsyncioTestCase):
                 roster=[(0, "tank", 3000, False)],
             )
         async with self.Session() as session:
-            result = await registered_teams_service.export_registered(session, self.tournament_id, actor_user_id=1)
+            result = await registered_teams_service.export_registered(
+                session, self.tournament_id, self.node_id, actor_user_id=1
+            )
 
         self.assertEqual(0, result.imported_teams)
         self.assertEqual(["team_incomplete"], [item.code for item in result.skipped])
@@ -352,7 +360,9 @@ class RegisteredExportIntegrationTests(IsolatedAsyncioTestCase):
 
         async with self.Session() as session:
             with self.assertRaises(ApiHTTPException) as caught:
-                await registered_teams_service.export_registered(session, self.tournament_id, actor_user_id=1)
+                await registered_teams_service.export_registered(
+                    session, self.tournament_id, self.node_id, actor_user_id=1
+                )
         assert caught.exception.status_code == 409
         assert "team_format_violation" in str(caught.exception.detail)
         assert "role_below_hard_min" in str(caught.exception.detail)

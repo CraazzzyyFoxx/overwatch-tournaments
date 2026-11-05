@@ -241,7 +241,7 @@ class TournamentImageSubjects(IsolatedAsyncioTestCase):
         async def fake_tournament_read(_session, tournament, entities):
             # Same entity set registry._ser_tournament hydrates, so the admin form
             # reads this reply exactly as it reads a PATCH reply.
-            self.assertEqual(["stages", "roster_shape", "division_grid_version", "rules"], entities)
+            self.assertEqual(["stages", "roster_shape", "division_grid_version", "rules", "flow_nodes"], entities)
             return _tournament_read(cover_image_url=tournament.cover_image_url, logo_url=tournament.logo_url)
 
         with (

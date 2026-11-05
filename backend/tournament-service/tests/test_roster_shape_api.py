@@ -107,6 +107,15 @@ class _LockProbeSession:
             return self.team_status
         return self.draft_status
 
+    async def scalars(self, _statement: object) -> list:
+        """The ``flow_nodes`` entity's reads: this tournament has no nodes."""
+
+        class _Rows(list):
+            def all(self) -> list:
+                return list(self)
+
+        return _Rows()
+
     async def execute(self, statement: Any) -> Any:
         """No ``challonge_source`` rows — this fake covers the roster-shape branch only.
 

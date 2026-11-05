@@ -91,6 +91,8 @@ class DraftSessionCreateRequest(BaseModel):
     form has nothing to submit and nothing to keep in sync for either.
     """
 
+    #: The formation node (of the tournament in the path) whose teams the draft forms.
+    formation_node_id: int
     pool_source: DraftPoolSource = DraftPoolSource.BALANCER_BALANCE
     source_balance_id: int | None = None
     pick_time_seconds: _PickTimeSeconds = 45
@@ -385,6 +387,8 @@ class DraftSessionRead(BaseRead):
     model_config = _ReadConfig
 
     tournament_id: int | None
+    #: The formation node a tournament draft forms teams for; ``None`` for a mix draft.
+    formation_node_id: int | None = None
     #: The mix owning this draft and the lobby it forms teams for; both ``None`` for a tournament draft (spec §9.1).
     custom_game_id: int | None = None
     lobby_index: int | None = None

@@ -28,6 +28,7 @@ from shared.core.errors import BaseAPIException  # noqa: E402
 from shared.models.draft import DraftSession  # noqa: E402
 from shared.models.tenancy.workspace import Workspace  # noqa: E402
 from shared.models.tournament import Tournament  # noqa: E402
+from shared.models.tournament.flow import FlowNode  # noqa: E402
 from shared.testing import real_db_sessionmaker as _db_sessions  # noqa: E402
 from src import schemas  # noqa: E402
 from src.services.admin import tournament as admin_tournament  # noqa: E402
@@ -55,9 +56,15 @@ async def _seed(session, *, draft_status: str | None) -> tuple[int, int]:
     session.add(tournament)
     await session.flush()
     if draft_status is not None:
+        node = FlowNode(
+            tournament_id=tournament.id, kind="formation", name="Teams", status="forming", config={"mode": "draft"}
+        )
+        session.add(node)
+        await session.flush()
         session.add(
             DraftSession(
                 tournament_id=tournament.id,
+                formation_node_id=node.id,
                 workspace_id=ws.id,
                 discipline=tournament.discipline,
                 status=draft_status,

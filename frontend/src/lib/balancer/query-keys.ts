@@ -23,9 +23,16 @@ export const balancerQueryKeys = {
   sheet: (tournamentId: KeyPart) => ["balancer-admin", "sheet", tournamentId] as const,
   statusCatalog: (workspaceId: KeyPart) =>
     ["balancer-admin", "status-catalog", workspaceId] as const,
-  tournamentConfig: (tournamentId: KeyPart) =>
-    ["balancer-admin", "tournament-config", tournamentId] as const,
-  publicBalance: (tournamentId: KeyPart) => ["balancer-public", "balance", tournamentId] as const,
+  /** One formation node's config; without the node, the prefix every node of the tournament sits under. */
+  tournamentConfig: (tournamentId: KeyPart, formationNodeId?: KeyPart) =>
+    formationNodeId === undefined
+      ? (["balancer-admin", "tournament-config", tournamentId] as const)
+      : (["balancer-admin", "tournament-config", tournamentId, formationNodeId] as const),
+  /** One formation node's saved balance; without the node, the prefix every node of the tournament sits under. */
+  publicBalance: (tournamentId: KeyPart, formationNodeId?: KeyPart) =>
+    formationNodeId === undefined
+      ? (["balancer-public", "balance", tournamentId] as const)
+      : (["balancer-public", "balance", tournamentId, formationNodeId] as const),
   /** The public solver config of one game: its role weights are that game's. */
   publicConfig: (discipline: KeyPart) => ["balancer-public", "config", discipline] as const,
   draftSetupPool: (tournamentId: KeyPart) =>

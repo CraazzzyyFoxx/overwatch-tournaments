@@ -15,6 +15,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from shared.core.enums import FlowNodeKind, FlowNodeStatus, FlowResultState, StageType
 from shared.domain.flow.config import FilterNodeConfig, RegistrationNodeConfig, parse_node_config
 from shared.domain.flow.validate import topological_order
+from shared.models.balancer.balance import BalancerBalance, BalancerTeam
+from shared.models.draft.draft import DraftSession, DraftTeam
 from shared.models.registration.registration import Registration
 from shared.models.tournament.flow import FlowEdge, FlowNode, FlowNodeResult
 from shared.models.tournament.player_standing import PlayerStanding
@@ -87,7 +89,7 @@ class FlowEngine:
             if kind in _LIFECYCLE_PORT:
                 loader = {
                     FlowNodeKind.REGISTRATION: self._registration_rows,
-                    FlowNodeKind.FORMATION: self._formation_rows,
+                    FlowNodeKind.FORMATION: self.formation_rows,
                     FlowNodeKind.STAGE: self._stage_rows,
                 }[kind]
                 rows, state = await loader(session, node), self._lifecycle_state(node)
@@ -150,9 +152,32 @@ class FlowEngine:
             ]
         )
 
-    async def _formation_rows(self, session: AsyncSession, node: FlowNode) -> list[ResultRow]:
+    async def formation_rows(self, session: AsyncSession, node: FlowNode) -> list[ResultRow]:
+        """The node's teams plus the tournament-wide ones (plan Decision 8), balancer / draft order first, then ``Team.id``."""
+        mode = node.config.get("mode")
+        if mode == "balancer":
+            place = (
+                sa.select(sa.func.min(BalancerTeam.sort_order))
+                .join(BalancerBalance, BalancerBalance.id == BalancerTeam.balance_id)
+                .where(BalancerBalance.formation_node_id == node.id, BalancerTeam.exported_team_id == Team.id)
+                .scalar_subquery()
+            )
+        elif mode == "draft":
+            place = (
+                sa.select(sa.func.min(DraftTeam.draft_position))
+                .join(DraftSession, DraftSession.id == DraftTeam.session_id)
+                .where(DraftSession.formation_node_id == node.id, DraftTeam.exported_team_id == Team.id)
+                .scalar_subquery()
+            )
+        else:
+            place = None
         team_ids = await session.scalars(
-            sa.select(Team.id).where(Team.tournament_id == node.tournament_id).order_by(Team.id)
+            sa.select(Team.id)
+            .where(
+                Team.tournament_id == node.tournament_id,
+                sa.or_(Team.formation_node_id == node.id, Team.formation_node_id.is_(None)),
+            )
+            .order_by(*([] if place is None else [place.asc().nulls_last()]), Team.id)
         )
         return [ResultRow(None, team_id) for team_id in team_ids]
 

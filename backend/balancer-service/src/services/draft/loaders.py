@@ -60,10 +60,10 @@ async def shape(session: AsyncSession, draft_session: DraftSession) -> RosterSha
 
 
 async def role_overrides(session: AsyncSession, draft_session: DraftSession) -> dict[str, Any] | None:
-    """The stored balancer knobs the draft's role impacts start from: the tournament's config, or the mix host's own
+    """The stored balancer knobs the draft's role impacts start from: the formation node's config, or the mix host's own
     (spec §9.1). ``None`` leaves the discipline defaults."""
     if draft_session.tournament_id is not None:
-        stored = await _tournament_configs.get_by_tournament(session, draft_session.tournament_id)
+        stored = await _tournament_configs.get_by_formation_node(session, draft_session.formation_node_id)
         return stored.config_json if stored is not None else None
     game = await _games.get(session, draft_session.custom_game_id)
     host = await _host_configs.get_by_user(session, game.host_user_id) if game.host_user_id is not None else None

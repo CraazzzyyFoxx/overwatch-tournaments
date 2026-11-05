@@ -92,11 +92,12 @@ class PlanWiringTests(IsolatedAsyncioTestCase):
         with (
             mock.patch.object(registered_teams, "build_registered_export", return_value=payload),
             mock.patch.object(registered_teams, "tournament_slot_shape", return_value=SHAPE),
+            mock.patch.object(registered_teams, "require_forming", mock.AsyncMock()),
             mock.patch.object(registered_teams.team_materialization, "run", side_effect=_run),
             mock.patch.object(registered_teams, "stage_export_invalidation", mock.AsyncMock()),
         ):
             await registered_teams.registered_teams_service.export_registered(
-                _Session(_tournament()), 7, actor_user_id=1
+                _Session(_tournament()), 7, 70, actor_user_id=1
             )  # type: ignore[arg-type]
         self.assertEqual(1, len(captured))
         return captured[0]
@@ -113,6 +114,10 @@ class PlanWiringTests(IsolatedAsyncioTestCase):
         nothing raised anywhere."""
         plan = await self._captured_plan(_payload_with_one_team())
         self.assertEqual("error", plan.on_unresolved)
+
+    async def test_the_plan_names_the_formation_node(self) -> None:
+        plan = await self._captured_plan(_payload_with_one_team())
+        self.assertEqual(70, plan.formation_node_id)
 
     async def test_the_prior_export_is_replaced_not_duplicated(self) -> None:
         plan = await self._captured_plan(_payload_with_one_team())
@@ -137,10 +142,11 @@ class NoOpExportTests(IsolatedAsyncioTestCase):
         with (
             mock.patch.object(registered_teams, "build_registered_export", return_value=payload),
             mock.patch.object(registered_teams, "tournament_slot_shape", return_value=SHAPE),
+            mock.patch.object(registered_teams, "require_forming", mock.AsyncMock()),
             mock.patch.object(registered_teams.team_materialization, "run", runner),
         ):
             result = await registered_teams.registered_teams_service.export_registered(
-                _Session(_tournament()), 7, actor_user_id=1
+                _Session(_tournament()), 7, 70, actor_user_id=1
             )  # type: ignore[arg-type]
 
         runner.assert_not_awaited()
@@ -159,11 +165,12 @@ class NoOpExportTests(IsolatedAsyncioTestCase):
         with (
             mock.patch.object(registered_teams, "build_registered_export", return_value=payload),
             mock.patch.object(registered_teams, "tournament_slot_shape", return_value=SHAPE),
+            mock.patch.object(registered_teams, "require_forming", mock.AsyncMock()),
             mock.patch.object(registered_teams.team_materialization, "run", side_effect=_run),
             mock.patch.object(registered_teams, "stage_export_invalidation", mock.AsyncMock()),
         ):
             result = await registered_teams.registered_teams_service.export_registered(
-                _Session(_tournament()), 7, actor_user_id=1
+                _Session(_tournament()), 7, 70, actor_user_id=1
             )  # type: ignore[arg-type]
 
         self.assertEqual(1, result.imported_teams)
@@ -171,5 +178,5 @@ class NoOpExportTests(IsolatedAsyncioTestCase):
 
     async def test_a_missing_tournament_is_a_404(self) -> None:
         with self.assertRaises(Exception) as caught:
-            await registered_teams.registered_teams_service.export_registered(_Session(None), 7, actor_user_id=1)  # type: ignore[arg-type]
+            await registered_teams.registered_teams_service.export_registered(_Session(None), 7, 70, actor_user_id=1)  # type: ignore[arg-type]
         self.assertEqual(404, getattr(caught.exception, "status_code", None))

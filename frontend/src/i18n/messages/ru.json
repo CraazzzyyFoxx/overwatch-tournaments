@@ -1368,6 +1368,9 @@
     }
   },
   "admin": {
+    "flowNodeSelect": {
+      "label": "{kind, select, registration {Регистрация} other {Формирование}}"
+    },
     "saveBar": {
       "unsavedChanges": "Несохранённые изменения",
       "save": "Сохранить изменения",

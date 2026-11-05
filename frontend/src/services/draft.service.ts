@@ -38,8 +38,13 @@ async function readJsonOrNull<T>(response: Response): Promise<T | null> {
 }
 
 export default class draftService {
-  static async getTournamentBoard(tournamentId: number): Promise<DraftBoard | null> {
-    const res = await apiFetch(`/api/v1/balancer/draft/tournaments/${tournamentId}/draft`);
+  static async getTournamentBoard(
+    tournamentId: number,
+    formationNodeId: number
+  ): Promise<DraftBoard | null> {
+    const res = await apiFetch(`/api/v1/balancer/draft/tournaments/${tournamentId}/draft`, {
+      query: { formation_node_id: formationNodeId }
+    });
     return readJsonOrNull<DraftBoard>(res);
   }
 
@@ -120,9 +125,11 @@ export default class draftService {
     return res.json();
   }
 
-  /** Every session ever created for the tournament, newest first. */
-  static async listSessions(tournamentId: number): Promise<DraftSession[]> {
-    const res = await apiFetch(`/api/v1/balancer/draft/tournaments/${tournamentId}/sessions`);
+  /** Every session ever created for the formation node, newest first. */
+  static async listSessions(tournamentId: number, formationNodeId: number): Promise<DraftSession[]> {
+    const res = await apiFetch(`/api/v1/balancer/draft/tournaments/${tournamentId}/sessions`, {
+      query: { formation_node_id: formationNodeId }
+    });
     return res.json();
   }
 

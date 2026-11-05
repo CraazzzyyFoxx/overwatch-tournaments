@@ -57,10 +57,16 @@ async def _revert_to_draft(session: AsyncSession, node: models.FlowNode) -> None
     await stage_service.revert_to_draft(session, await _stage_of(session, node))
 
 
+async def _require_teams(session: AsyncSession, node: models.FlowNode) -> None:
+    if not await flow_engine.formation_rows(session, node):
+        raise _conflict("formation_has_no_teams", "A formation without teams cannot be completed")
+
+
 #: Side effects of one move, run before the status is written.
 _HOOKS: dict[
     tuple[FlowNodeKind, FlowNodeStatus, FlowNodeStatus], Callable[[AsyncSession, models.FlowNode], Awaitable[None]]
 ] = {
+    (FlowNodeKind.FORMATION, _S.FORMING, _S.COMPLETED): _require_teams,
     (FlowNodeKind.STAGE, _S.DRAFT, _S.READY): _seat_inputs,
     (FlowNodeKind.STAGE, _S.READY, _S.LIVE): _start_stage,
     (FlowNodeKind.STAGE, _S.READY, _S.DRAFT): _revert_to_draft,

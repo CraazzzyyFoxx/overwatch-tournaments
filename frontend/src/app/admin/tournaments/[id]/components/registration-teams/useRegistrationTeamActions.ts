@@ -96,12 +96,15 @@ export interface RegistrationTeamActions {
 export function useRegistrationTeamActions({
   tournamentId,
   workspaceId,
+  formationNodeId,
   closeConfirm,
   closeRename,
   closePlace
 }: Readonly<{
   tournamentId: number;
   workspaceId: number;
+  /** The formation node the export writes into. */
+  formationNodeId: number | null;
   /** A confirmed action that succeeded has nothing left to ask. */
   closeConfirm: () => void;
   closeRename: () => void;
@@ -145,8 +148,10 @@ export function useRegistrationTeamActions({
   });
 
   const exportMutation = useMutation({
-    mutationFn: (teamIds: number[]) =>
-      registrationTeamService.exportRegistered(tournamentId, teamIds),
+    mutationFn: (teamIds: number[]) => {
+      if (formationNodeId === null) throw new Error("no formation node");
+      return registrationTeamService.exportRegistered(tournamentId, formationNodeId, teamIds);
+    },
     onSuccess: (result) => {
       invalidateTeams();
       // The export writes `tournament.team` rows, which the bracket and the

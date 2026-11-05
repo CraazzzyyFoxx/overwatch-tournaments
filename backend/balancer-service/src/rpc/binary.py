@@ -20,6 +20,7 @@ from shared.rpc.identity import ensure_workspace_permission
 from src.core import db
 from src.core.auth import _get_tournament_workspace_id
 from src.rpc import _common as c
+from src.services.formation_node import require_formation_node
 from src.services.registered_teams import registered_teams_service
 from src.services.team import team_service
 
@@ -47,6 +48,8 @@ def register(broker: Any, logger: Any) -> None:
             tournament_id = c.require_id(data)
             ws_id = await _get_tournament_workspace_id(session, tournament_id)
             ensure_workspace_permission(user, ws_id, "team", "create")
+            node_id = c.formation_node_id(data)
+            await require_formation_node(session, tournament_id, node_id)
 
             payload_format = data.get("payload_format") or "auto"
             if payload_format not in _PAYLOAD_FORMATS:
@@ -65,7 +68,7 @@ def register(broker: Any, logger: Any) -> None:
             payload = await asyncio.to_thread(_decode_and_parse, data)
 
             outcome = await team_service.import_teams(
-                session, tournament_id, payload, payload_format, actor_user_id=user.id
+                session, tournament_id, node_id, payload, payload_format, actor_user_id=user.id
             )
             return {"imported_teams": outcome.imported_teams, "advisories": outcome.materialization.advisories}
 
@@ -85,6 +88,8 @@ def register(broker: Any, logger: Any) -> None:
             tournament_id = c.require_id(data)
             ws_id = await _get_tournament_workspace_id(session, tournament_id)
             ensure_workspace_permission(user, ws_id, "team", "create")
+            node_id = c.formation_node_id(data)
+            await require_formation_node(session, tournament_id, node_id)
             await quota.charge(user, "balancer.teams_export", workspace_id=ws_id)
 
             # ``c.payload`` normalizes a missing/non-dict body to {}, so an empty
@@ -93,7 +98,7 @@ def register(broker: Any, logger: Any) -> None:
             team_ids = [int(value) for value in raw_ids] if isinstance(raw_ids, list) and raw_ids else None
 
             result = await registered_teams_service.export_registered(
-                session, tournament_id, team_ids=team_ids, actor_user_id=user.id
+                session, tournament_id, node_id, team_ids=team_ids, actor_user_id=user.id
             )
             # Publishes the signals ``export_registered`` staged after the orchestrator's commit.
             await session.commit()

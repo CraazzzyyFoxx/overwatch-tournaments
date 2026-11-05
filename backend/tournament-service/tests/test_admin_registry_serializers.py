@@ -144,6 +144,15 @@ class _NullSession:
     async def scalar(self, statement: object) -> object:
         return None
 
+    async def scalars(self, _statement: object) -> list:
+        """The ``flow_nodes`` entity's reads: this tournament has no nodes."""
+
+        class _Rows(list):
+            def all(self) -> list:
+                return list(self)
+
+        return _Rows()
+
 
 class SerTournamentChallongeTests(IsolatedAsyncioTestCase):
     def setUp(self) -> None:

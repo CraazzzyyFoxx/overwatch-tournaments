@@ -216,6 +216,7 @@ class _Database:
         RoleDimension.__table__,
         models.WorkspaceMember.__table__,
         models.ParticipantResult.__table__,
+        models.FlowNode.__table__,
         models.AnalyticsAlgorithm.__table__,
         models.AnalyticsPerformance.__table__,
         # Read (empty) by the profile's match-log stats query.

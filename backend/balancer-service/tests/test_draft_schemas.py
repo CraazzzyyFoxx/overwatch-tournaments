@@ -31,7 +31,7 @@ from src.services.draft import lifecycle  # noqa: E402
 
 
 def test_create_request_defaults() -> None:
-    req = schemas.DraftSessionCreateRequest()
+    req = schemas.DraftSessionCreateRequest(formation_node_id=1)
     assert req.pool_source == DraftPoolSource.BALANCER_BALANCE
     assert req.pick_time_seconds == 45
     assert req.autopick_strategy == DraftAutopickStrategy.BEST_FIT
@@ -49,11 +49,11 @@ def test_create_request_no_longer_carries_the_roster_size_or_the_format() -> Non
 def test_create_request_ignores_a_stale_client_sending_rounds_or_team_size() -> None:
     # Pydantic's default `extra="ignore"`: the keys are accepted and dropped, so
     # an old admin bundle keeps working and cannot influence the created session.
-    req = schemas.DraftSessionCreateRequest(rounds=7, team_size=11)
+    req = schemas.DraftSessionCreateRequest(formation_node_id=1, rounds=7, team_size=11)
 
     assert not hasattr(req, "rounds")
     assert not hasattr(req, "team_size")
-    assert req.model_dump() == schemas.DraftSessionCreateRequest().model_dump()
+    assert req.model_dump() == schemas.DraftSessionCreateRequest(formation_node_id=1).model_dump()
 
 
 def test_lifecycle_rejects_rounds_that_do_not_match_the_shape() -> None:
@@ -114,7 +114,7 @@ def test_roster_shape_read_is_one_class_shared_with_tournament_service() -> None
 @pytest.mark.parametrize("seconds", [9, 601])
 def test_create_request_rejects_bad_pick_time(seconds: int) -> None:
     with pytest.raises(ValidationError):
-        schemas.DraftSessionCreateRequest(pick_time_seconds=seconds)
+        schemas.DraftSessionCreateRequest(formation_node_id=1, pick_time_seconds=seconds)
 
 
 def test_select_request_requires_expected_version() -> None:
@@ -133,13 +133,13 @@ def test_patch_request_pick_time_validation() -> None:
 @pytest.mark.parametrize("seconds", [-1, 301])
 def test_create_request_rejects_overtime_outside_the_allowed_window(seconds: int) -> None:
     with pytest.raises(ValidationError):
-        schemas.DraftSessionCreateRequest(overtime_seconds=seconds)
+        schemas.DraftSessionCreateRequest(formation_node_id=1, overtime_seconds=seconds)
 
 
 def test_create_request_defaults_to_no_overtime() -> None:
     # 0 keeps the pre-overtime behaviour: an expired clock autopicks at once.
-    assert schemas.DraftSessionCreateRequest().overtime_seconds == 0
-    assert schemas.DraftSessionCreateRequest(overtime_seconds=300).overtime_seconds == 300
+    assert schemas.DraftSessionCreateRequest(formation_node_id=1).overtime_seconds == 0
+    assert schemas.DraftSessionCreateRequest(formation_node_id=1, overtime_seconds=300).overtime_seconds == 300
 
 
 def test_patch_request_overtime_is_optional_and_range_checked() -> None:

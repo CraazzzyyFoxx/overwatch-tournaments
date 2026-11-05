@@ -36,12 +36,13 @@ func NewBinary(caller edge.RPCCaller, identity edge.IdentityResolver, log *slog.
 }
 
 // TeamsImport: POST /api/v1/balancer/tournaments/{tournament_id}/teams/import.
-// Multipart: file part "data" (a JSON file) + optional form field "payload_format".
+// Multipart: file part "data" (a JSON file) + optional form field "payload_format"; query "formation_node_id".
 func (b *Binary) TeamsImport(w http.ResponseWriter, r *http.Request) {
 	data, ok := b.identityInto(w, r, map[string]any{"id": r.PathValue("tournament_id")})
 	if !ok {
 		return
 	}
+	attachQuery(data, r) // forwards formation_node_id
 	release, ok := upload.Admit(w, r, maxUpload)
 	if !ok {
 		return

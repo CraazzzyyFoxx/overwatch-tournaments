@@ -39,6 +39,7 @@ from src.core import db
 from src.core.auth import _resolve_user_from_token
 from src.rpc import _common as c
 from src.services.balancer import jobs
+from src.services.formation_node import require_formation_node
 
 _SF = db.async_session_maker
 
@@ -117,6 +118,8 @@ def register(broker: Any, logger: Any) -> None:
             user = await _resolve_user(data)
             tournament_id = int(data["id"])
             workspace_id = await get_tournament_workspace_id(session, tournament_id)
+            node_id = c.formation_node_id(data)
+            await require_formation_node(session, tournament_id, node_id)
             payload = schemas.TournamentBalanceRequest.model_validate(c.payload(data) or {})
             overrides = payload.config_overrides
             return await jobs.create_job(
@@ -127,6 +130,7 @@ def register(broker: Any, logger: Any) -> None:
                 user=user,
                 broker=broker,
                 tournament_id=tournament_id,
+                formation_node_id=node_id,
             )
 
         return await c.envelope(logger, "jobs.create_for_tournament", op, session_factory=_SF)

@@ -20,19 +20,21 @@ import { EmptyNote } from "@/components/kit/EmptyNote";
 
 interface DraftSessionDashboardProps {
   tournamentId: number;
+  formationNodeId: number;
   canManage: boolean;
 }
 
 export function DraftSessionDashboard({
   tournamentId,
+  formationNodeId,
   canManage
 }: Readonly<DraftSessionDashboardProps>) {
   const t = useTranslations("draftAdmin");
   const [wizardEpoch, setWizardEpoch] = useState(0);
-  const boardKey = tournamentQueryKeys.draftBoard(tournamentId);
+  const boardKey = tournamentQueryKeys.draftBoard(tournamentId, formationNodeId);
   const boardQuery = useQuery({
     queryKey: boardKey,
-    queryFn: () => draftService.getTournamentBoard(tournamentId),
+    queryFn: () => draftService.getTournamentBoard(tournamentId, formationNodeId),
     enabled: Number.isFinite(tournamentId) && tournamentId > 0
   });
   const tournamentQuery = useHubTournamentQuery(tournamentId);
@@ -63,7 +65,7 @@ export function DraftSessionDashboard({
   }
 
   if (board && session && (session.status === "live" || session.status === "paused")) {
-    return <AdminControlRoom tournamentId={tournamentId} board={board} />;
+    return <AdminControlRoom tournamentId={tournamentId} formationNodeId={formationNodeId} board={board} />;
   }
 
   const terminalSession =
@@ -75,6 +77,7 @@ export function DraftSessionDashboard({
       // session would otherwise survive the delete.
       key={wizardEpoch}
       tournamentId={tournamentId}
+      formationNodeId={formationNodeId}
       board={terminalSession ? null : board}
       rosterShape={rosterShape}
       // Past sessions sit under the step rail (F5 ·4), collapsed: they are
@@ -91,6 +94,7 @@ export function DraftSessionDashboard({
           <CollapsibleContent className="pt-2">
             <DraftHistoryPanel
               tournamentId={tournamentId}
+              formationNodeId={formationNodeId}
               onSessionDeleted={(sessionId) => {
                 if (sessionId === session?.id) setWizardEpoch((epoch) => epoch + 1);
               }}

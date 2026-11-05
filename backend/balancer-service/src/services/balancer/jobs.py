@@ -180,10 +180,11 @@ async def create_job(
     user,
     broker,
     tournament_id: int | None = None,
+    formation_node_id: int | None = None,
     discipline: str | None = None,
 ) -> CreateJobResponse:
-    """Queue a balance job for an uploaded pool, or -- with ``uploaded_file=None`` and a ``tournament_id`` -- for
-    the tournament's own pool.
+    """Queue a balance job for an uploaded pool, or -- with ``uploaded_file=None`` and a ``formation_node_id`` -- for
+    the pool that formation node's input holds.
 
     The tournament pool is built here by the same engine the draft reads (``shared.services.roster``), so the
     balancer and the draft cannot be fed two different rank sources.
@@ -192,7 +193,7 @@ async def create_job(
 
     if uploaded_file is None:
         _access_policy.ensure_workspace_access(user, workspace_id)
-        rosters = await roster_engine.for_tournament(session, tournament_id, pool_only=True)
+        rosters = await roster_engine.for_node_input(session, formation_node_id, pool_only=True)
         player_data = roster_engine.balancer_input(rosters.values())
         if not player_data["players"]:
             raise HTTPException(

@@ -95,7 +95,7 @@ def _dump(obj: Any) -> Any:
 #: What a tournament / team write replies with: the CRUD serializers below and the
 #: image upload/delete subjects (``src/rpc/{tournament,team}_binary.py``) share
 #: these, so the admin form reads every write's reply the same way.
-TOURNAMENT_ENTITIES = ["stages", "roster_shape", "division_grid_version", "rules"]
+TOURNAMENT_ENTITIES = ["stages", "roster_shape", "division_grid_version", "rules", "flow_nodes"]
 TEAM_ENTITIES = ["tournament", "players", "players.user", "captain"]
 
 

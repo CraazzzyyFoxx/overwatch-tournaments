@@ -7,11 +7,13 @@ from datetime import UTC, datetime, timedelta
 import sqlalchemy as sa
 
 from shared.core import enums
+from shared.models.balancer.balance import BalancerBalance, BalancerTeam
 from shared.models.registration.registration import Registration
 from shared.models.tournament.flow import FlowEdge, FlowNode, FlowNodeResult
 from shared.models.tournament.player_standing import PlayerStanding
 from shared.models.tournament.stage import Stage, StageItem
 from shared.models.tournament.standings import Standing
+from shared.models.tournament.team import Team
 from shared.tests.encounter_writer_case import EncounterWriterCase
 from src.services.flow.engine import flow_engine
 
@@ -153,6 +155,35 @@ class FlowEngineTests(EncounterWriterCase):
         await self._recompute()
         expected = [(i + 1, None, self.ids[f"team{i}"], None, "final") for i in range(4)]
         self.assertEqual(expected, await self._results(self.form))
+
+    async def test_formation_emits_its_own_and_tournament_wide_teams_in_balance_order(self) -> None:
+        ids = self.ids
+        async with self.Session() as s:
+            other = self._node("formation", "Other", "forming", {"mode": "manual"})
+            s.add(other)
+            await s.flush()
+            for team, node in (("team0", self.form.id), ("team1", self.form.id), ("team2", other.id), ("team3", None)):
+                await s.execute(sa.update(Team).where(Team.id == ids[team]).values(formation_node_id=node))
+            balance = BalancerBalance(tournament_id=ids["t"], formation_node_id=self.form.id, result_json={})
+            s.add(balance)
+            await s.flush()
+            s.add_all(
+                BalancerTeam(
+                    balance_id=balance.id,
+                    name=team,
+                    balancer_name=team,
+                    avg_sr=2000,
+                    total_sr=4000,
+                    sort_order=order,
+                    exported_team_id=ids[team],
+                )
+                for order, team in enumerate(("team1", "team0"))
+            )
+            await s.commit()
+        await self._recompute()
+        rows = await self._results(self.form)
+        # The balance's order first, the node-less team after it, the other formation's team not at all.
+        self.assertEqual([ids["team1"], ids["team0"], ids["team3"]], [row[2] for row in rows])
 
     async def test_stage_ranking_feeds_a_per_group_filter_until_the_stage_completes(self) -> None:
         await self._recompute()

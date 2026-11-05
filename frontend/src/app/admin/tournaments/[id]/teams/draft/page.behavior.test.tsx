@@ -55,7 +55,12 @@ vi.mock("@/hooks/usePermissions", () => ({
 vi.mock("../../hubQueries", () => ({
   tabFallback: null,
   useHubTournamentQuery: () => ({
-    data: { id: 64, workspace_id: 1, team_formation: mocks.teamFormation },
+    data: {
+      id: 64,
+      workspace_id: 1,
+      team_formation: mocks.teamFormation,
+      flow_nodes: [{ id: 9, kind: "formation", name: "Teams", status: "forming", config: { mode: "draft" }, schedule: [], stage_id: null }]
+    },
     isLoading: false
   })
 }));

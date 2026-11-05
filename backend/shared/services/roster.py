@@ -297,19 +297,22 @@ class RosterEngine:
         )
         return {row.id: rosters[row.id] for row in found if row.id in rosters}
 
-    async def pool_ids(self, session: AsyncSession, tournament_id: int, registration_ids: Sequence[int]) -> set[int]:
-        """Which of these registrations the balancer pool includes -- ids only.
+    async def pool_ids(self, session: AsyncSession, node_id: int, registration_ids: Sequence[int]) -> set[int]:
+        """Which of these registrations :meth:`for_node_input` would keep with ``pool_only`` -- ids only.
 
         For a caller that resolves several leniencies at once: narrowing with
         this and then resolving the union in ONE :meth:`for_tournament` pass
         costs one cheap id query instead of a second full engine run.
         """
-        if not registration_ids:
+        tournament_id = await session.scalar(sa.select(FlowNode.tournament_id).where(FlowNode.id == node_id))
+        members = await input_member_ids(session, node_id)
+        if tournament_id is None or not members or not registration_ids:
             return set()
         rows = await session.scalars(
             sa.select(Registration.id).where(
                 Registration.tournament_id == tournament_id,
                 _any_of(Registration.id, registration_ids),
+                _any_of(Registration.workspace_member_id, members),
                 *_pool_clauses(tournament_id),
             )
         )

@@ -13,7 +13,7 @@ baselines and Discord channels live in `stats/`. `catalog/` writes only to `cata
 > `--check` and fails on drift, so the diagrams cannot fall behind the models again.
 
 <!-- ERD:auto _alembic_head -->
-Alembic head: **`flowP3_02`** (174 revisions in `backend/migrations/versions/`).
+Alembic head: **`flowP3_03`** (175 revisions in `backend/migrations/versions/`).
 <!-- /ERD:auto -->
 
 **Reading the diagrams**
@@ -1237,6 +1237,7 @@ erDiagram
         boolean is_substitution
         bigint related_player_id FK "nullable"
         bigint tournament_id FK
+        bigint formation_node_id FK "nullable"
         boolean is_newcomer
         boolean is_newcomer_role
         bigint workspace_member_id FK
@@ -1425,6 +1426,7 @@ erDiagram
         varchar image_url "nullable"
         bigint captain_id FK "nullable"
         bigint tournament_id FK
+        bigint formation_node_id FK "nullable"
     }
     TOURNAMENT_TOURNAMENT {
         bigint id PK
@@ -1537,6 +1539,8 @@ erDiagram
     TOURNAMENT_CHALLONGE_SOURCE ||--o{ TOURNAMENT_CHALLONGE_MATCH_MAPPING : "source_id"
     TOURNAMENT_CHALLONGE_SOURCE ||--o{ TOURNAMENT_CHALLONGE_PARTICIPANT_MAPPING : "source_id"
     TOURNAMENT_FLOW_NODE |o--o{ TOURNAMENT_PARTICIPANT_RESULT : "source_node_id"
+    TOURNAMENT_FLOW_NODE |o--o{ TOURNAMENT_PLAYER : "formation_node_id"
+    TOURNAMENT_FLOW_NODE |o--o{ TOURNAMENT_TEAM : "formation_node_id"
     TOURNAMENT_FLOW_NODE ||--o{ TOURNAMENT_FLOW_EDGE : "source_node_id"
     TOURNAMENT_FLOW_NODE ||--o{ TOURNAMENT_FLOW_EDGE : "target_node_id"
     TOURNAMENT_FLOW_NODE ||--o{ TOURNAMENT_FLOW_NODE_RESULT : "node_id"
@@ -2306,7 +2310,8 @@ erDiagram
         bigint id PK
         timestamptz created_at
         timestamptz updated_at "nullable"
-        bigint tournament_id FK,UK
+        bigint tournament_id FK
+        bigint formation_node_id FK,UK
         bigint workspace_id FK "nullable"
         varchar(32) algorithm "nullable"
         json division_grid_json "nullable"
@@ -2361,7 +2366,8 @@ erDiagram
         bigint id PK
         timestamptz created_at
         timestamptz updated_at "nullable"
-        bigint tournament_id FK,UK
+        bigint tournament_id FK
+        bigint formation_node_id FK,UK
         bigint workspace_id FK
         json config_json
         bigint updated_by FK "nullable"
@@ -2401,9 +2407,11 @@ erDiagram
     PUBLIC_WORKSPACE |o--o{ BALANCER_BALANCE : "workspace_id"
     PUBLIC_WORKSPACE ||--o{ BALANCER_TOURNAMENT_CONFIG : "workspace_id"
     PUBLIC_WORKSPACE ||--o| BALANCER_WORKSPACE_CONFIG : "workspace_id"
+    TOURNAMENT_FLOW_NODE ||--o| BALANCER_BALANCE : "formation_node_id"
+    TOURNAMENT_FLOW_NODE ||--o| BALANCER_TOURNAMENT_CONFIG : "formation_node_id"
     TOURNAMENT_TEAM |o--o{ BALANCER_TEAM : "exported_team_id"
-    TOURNAMENT_TOURNAMENT ||--o| BALANCER_BALANCE : "tournament_id"
-    TOURNAMENT_TOURNAMENT ||--o| BALANCER_TOURNAMENT_CONFIG : "tournament_id"
+    TOURNAMENT_TOURNAMENT ||--o{ BALANCER_BALANCE : "tournament_id"
+    TOURNAMENT_TOURNAMENT ||--o{ BALANCER_TOURNAMENT_CONFIG : "tournament_id"
 ```
 
 Composite unique keys:
@@ -2486,6 +2494,7 @@ erDiagram
         timestamptz created_at
         timestamptz updated_at "nullable"
         bigint tournament_id FK "nullable"
+        bigint formation_node_id FK "nullable"
         bigint custom_game_id FK "nullable"
         int lobby_index FK "nullable"
         varchar(32) discipline FK
@@ -2544,6 +2553,7 @@ erDiagram
     PUBLIC_WORKSPACE_MEMBER |o--o{ DRAFT_PLAYER : "workspace_member_id"
     PUBLIC_WORKSPACE_MEMBER |o--o{ DRAFT_TEAM : "captain_workspace_member_id"
     REGISTRATION_REGISTRATION |o--o{ DRAFT_PLAYER : "registration_id"
+    TOURNAMENT_FLOW_NODE |o--o{ DRAFT_SESSION : "formation_node_id"
     TOURNAMENT_TEAM |o--o{ DRAFT_TEAM : "exported_team_id"
     TOURNAMENT_TOURNAMENT |o--o{ DRAFT_SESSION : "tournament_id"
     TOURNAMENT_TOURNAMENT ||--o{ DRAFT_SESSION : "discipline"

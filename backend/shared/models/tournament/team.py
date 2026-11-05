@@ -57,6 +57,10 @@ class Team(db.TimeStampIntegerMixin):
         ForeignKey("players.user.id", ondelete="SET NULL"), nullable=True, index=True
     )
     tournament_id: Mapped[int] = mapped_column(ForeignKey(Tournament.id, ondelete="CASCADE"), index=True)
+    #: The formation node that made the team; NULL is a tournament-wide team (spec §4.6).
+    formation_node_id: Mapped[int | None] = mapped_column(
+        ForeignKey("tournament.flow_node.id", ondelete="RESTRICT"), nullable=True, index=True
+    )
     tournament: Mapped[Tournament] = relationship()
 
     players: Mapped[list[Player]] = relationship(
@@ -93,6 +97,10 @@ class Player(db.TimeStampIntegerMixin):
         ForeignKey("tournament.player.id", ondelete="SET NULL"), nullable=True
     )
     tournament_id: Mapped[int] = mapped_column(ForeignKey(Tournament.id, ondelete="CASCADE"), index=True)
+    #: The formation node of the player's team (same value as ``Team.formation_node_id``); NULL is tournament-wide.
+    formation_node_id: Mapped[int | None] = mapped_column(
+        ForeignKey("tournament.flow_node.id", ondelete="RESTRICT"), nullable=True, index=True
+    )
     is_newcomer: Mapped[bool] = mapped_column(Boolean(), server_default="false")
     is_newcomer_role: Mapped[bool] = mapped_column(Boolean(), server_default="false")
 

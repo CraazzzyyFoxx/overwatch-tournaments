@@ -10,10 +10,12 @@ import { FactList } from "@/components/kit/FactList";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
+import { FLOW_NODE_PARAM } from "@/hooks/useFlowNodeParam";
 import type { DraftFeasibility, DraftSession } from "@/types/draft.types";
 
 interface DraftReadyStepProps {
   tournamentId: number;
+  formationNodeId: number;
   session: DraftSession;
   feasibility: DraftFeasibility | null;
   /** The feasibility request failed and nothing is cached to show instead. */
@@ -26,6 +28,7 @@ interface DraftReadyStepProps {
 
 export function DraftReadyStep({
   tournamentId,
+  formationNodeId,
   session,
   feasibility,
   feasibilityFailed,
@@ -85,7 +88,11 @@ export function DraftReadyStep({
           {t("startDraft")}
         </Button>
         <Button asChild size="lg" variant="outline">
-          <Link href={`/draft/${tournamentId}`} target="_blank" rel="noreferrer">
+          <Link
+            href={`/draft/${tournamentId}?${FLOW_NODE_PARAM}=${formationNodeId}`}
+            target="_blank"
+            rel="noreferrer"
+          >
             {t("openLiveBoard")}
             <ArrowUpRight className="ml-2 h-4 w-4" aria-hidden />
           </Link>

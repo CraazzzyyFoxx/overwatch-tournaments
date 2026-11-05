@@ -36,6 +36,8 @@ import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 
 type UseBalancerMutationsOptions = {
   tournamentId: number | null;
+  /** The formation node the balance, its config and the exports belong to; `null` while the tournament loads. */
+  formationNodeId: number | null;
   workspaceId: number | null;
   queryClient: QueryClient;
   dispatchJob: React.Dispatch<JobAction>;
@@ -126,6 +128,7 @@ function mergeRegistrationForCache(
 
 export function useBalancerMutations({
   tournamentId,
+  formationNodeId,
   workspaceId,
   queryClient,
   dispatchJob,
@@ -291,7 +294,9 @@ export function useBalancerMutations({
     }
 
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: balancerQueryKeys.publicBalance(tournamentId) }),
+      queryClient.invalidateQueries({
+        queryKey: balancerQueryKeys.publicBalance(tournamentId, formationNodeId)
+      }),
       queryClient.invalidateQueries({ queryKey: adminQueryKeys.tournament(tournamentId) }),
       queryClient.invalidateQueries({ queryKey: adminQueryKeys.tournamentTeams(tournamentId) }),
       queryClient.invalidateQueries({
@@ -341,11 +346,15 @@ export function useBalancerMutations({
   };
 
   const saveActiveBalance = async (): Promise<SavedBalance> => {
-    if (!tournamentId) {
+    if (!tournamentId || formationNodeId === null) {
       throw new Error(t("errors.noTournament"));
     }
 
-    return balancerAdminService.saveBalance(tournamentId, buildActiveBalanceSaveInput());
+    return balancerAdminService.saveBalance(
+      tournamentId,
+      formationNodeId,
+      buildActiveBalanceSaveInput()
+    );
   };
 
   const applySavedBalanceVariant = (savedBalance: SavedBalance) => {
@@ -356,7 +365,7 @@ export function useBalancerMutations({
 
   const runBalanceMutation = useMutation({
     mutationFn: async () => {
-      if (!tournamentId) throw new Error(t("errors.noTournament"));
+      if (!tournamentId || formationNodeId === null) throw new Error(t("errors.noTournament"));
       if (!excludeInvalidPlayers && invalidPlayerStates.length > 0) {
         throw new Error(t("errors.unresolvedIssues"));
       }
@@ -371,7 +380,7 @@ export function useBalancerMutations({
           ? sanitizedDraftConfig
           : (balancerConfigData?.presets[selectedPreset] ?? balancerConfigData?.defaults);
       if (config && isConfigDirty) {
-        const savedConfig = await balancerAdminService.upsertTournamentConfig(tournamentId, {
+        const savedConfig = await balancerAdminService.upsertTournamentConfig(tournamentId, formationNodeId, {
           config_json: sanitizeBalancerConfig(config) as Record<string, unknown>
         });
         config = savedConfig.config_json as BalancerConfig;
@@ -381,6 +390,7 @@ export function useBalancerMutations({
       return {
         job: await balancerService.createTournamentBalanceJob({
           tournament_id: tournamentId,
+          formation_node_id: formationNodeId,
           config_overrides: (config as BalancerConfig | undefined) ?? null
         }),
         skipped,
@@ -408,7 +418,7 @@ export function useBalancerMutations({
     },
     onSuccess: async (savedBalance) => {
       await queryClient.invalidateQueries({
-        queryKey: balancerQueryKeys.publicBalance(tournamentId)
+        queryKey: balancerQueryKeys.publicBalance(tournamentId, formationNodeId)
       });
       applySavedBalanceVariant(savedBalance);
       notify.success(t("toasts.balanceSaved"));

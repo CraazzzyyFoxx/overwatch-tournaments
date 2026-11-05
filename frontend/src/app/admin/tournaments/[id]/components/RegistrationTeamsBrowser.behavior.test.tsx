@@ -174,7 +174,12 @@ function Harness() {
   useEffect(() => {
     rerender = () => force((value) => value + 1);
   }, []);
-  return <RegistrationTeamsBrowser tournamentId={TOURNAMENT_ID} workspaceId={WORKSPACE_ID} discipline="overwatch" />;
+  return <RegistrationTeamsBrowser
+      tournamentId={TOURNAMENT_ID}
+      workspaceId={WORKSPACE_ID}
+      discipline="overwatch"
+      formationNodeId={9}
+    />;
 }
 
 async function mount(search = "") {
@@ -430,7 +435,7 @@ describe("RegistrationTeamsBrowser", () => {
 
     await click(buttonWithText(dialog!, "Add selected teams"));
 
-    expect(exportRegistered).toHaveBeenCalledWith(TOURNAMENT_ID, [COMPLETE_TEAM.id]);
+    expect(exportRegistered).toHaveBeenCalledWith(TOURNAMENT_ID, 9, [COMPLETE_TEAM.id]);
   });
 
   it("cannot select a roster the server would skip", async () => {

@@ -260,3 +260,37 @@ func TestRoutesRegisterWithoutConflict(t *testing.T) {
 	mux.HandleFunc("POST /api/v1/balancer/tournaments/{tournament_id}/teams/import", dummy)
 	mux.HandleFunc("POST /api/v1/balancer/jobs", dummy)
 }
+
+// TestFormationNodeRoutesForwardTheNode pins plan Decision 1: a route keyed by the tournament alone carries the
+// formation node as `?formation_node_id=`; dropping it would make the worker answer 422 for every call.
+func TestFormationNodeRoutesForwardTheNode(t *testing.T) {
+	queues := map[string]bool{
+		"rpc.balancer.admin.tournament_config_get":    true,
+		"rpc.balancer.admin.tournament_config_upsert": true,
+		"rpc.balancer.admin.balance_get":              true,
+		"rpc.balancer.admin.balance_save":             true,
+		"rpc.balancer.teams.export_registered":        true,
+		"rpc.balancer.jobs.create_for_tournament":     true,
+		"rpc.balancer.draft.tournament_board":         true,
+		"rpc.balancer.draft.session_list":             true,
+	}
+	var routes []edge.RouteSpec
+	for _, group := range [][]edge.RouteSpec{AdminRoutes, JobRoutes, DraftReadRoutes, DraftRoutes} {
+		routes = append(routes, group...)
+	}
+	for _, route := range routes {
+		if !queues[route.Queue] {
+			continue
+		}
+		if !slices.Contains(route.Query, "formation_node_id") {
+			t.Fatalf("%s: Query %#v lacks formation_node_id", route.Queue, route.Query)
+		}
+		delete(queues, route.Queue)
+	}
+	if len(queues) != 0 {
+		t.Fatalf("routes not found: %#v", queues)
+	}
+	if !slices.Contains(BinaryAdminDocRoutes[0].Query, "formation_node_id") {
+		t.Fatalf("teams import documents no formation_node_id: %#v", BinaryAdminDocRoutes[0].Query)
+	}
+}

@@ -34,6 +34,7 @@ from shared.repository import CatalogRoleRepository
 from shared.testing import create_test_async_engine  # noqa: E402
 from src.domain.draft.entities import PoolSeat
 from src.services.draft import lifecycle, selection
+from tests.factories import add_input, formation_node, new_member, wire_input
 
 # The 5-slot roster these tests draft for, replacing `rounds=4, team_size=5`:
 # `role_targets_for_team_size(5)` resolved to 1 tank / 2 damage / 2 support, and
@@ -74,6 +75,9 @@ class DraftCustomRulesTests(IsolatedAsyncioTestCase):
             # they now live on the registration, not on the draft seat.
             self.workspace_id = ws.id
             self.tournament_id = tourn.id
+            self.formation_node_id = await formation_node(s, tourn.id, mode="draft")
+            self.registration_node_id = await wire_input(s, self.formation_node_id)
+            self.user_ids: list[int] = []
             self.captain_ranks = [2000, 3000, 2500]  # Cap0, Cap1, Cap2
             await s.commit()
 
@@ -93,16 +97,21 @@ class DraftCustomRulesTests(IsolatedAsyncioTestCase):
             await s.execute(sa.delete(models.Team).where(models.Team.tournament_id == self.tournament_id))
             await s.execute(sa.delete(Tournament).where(Tournament.id == self.tournament_id))
             await s.execute(sa.delete(Workspace).where(Workspace.id == self.workspace_id))
+            await s.execute(sa.delete(models.User).where(models.User.id.in_(self.user_ids)))
             await s.commit()
         await self.engine.dispose()
 
     async def _registration(self, s, *, tag: str, ranks: dict[str, int | None]) -> int:
         """One approved, in-pool ``registration.registration`` with its role rows."""
+        member_id, user_id = await new_member(s, self.workspace_id, tag)
+        self.user_ids.append(user_id)
+        await add_input(s, self.registration_node_id, member_id)
         reg = Registration(
             tournament_id=self.tournament_id,
             display_name=tag,
             status="approved",
             balancer_status="ready",
+            workspace_member_id=member_id,
         )
         s.add(reg)
         await s.flush()
@@ -165,6 +174,7 @@ class DraftCustomRulesTests(IsolatedAsyncioTestCase):
             draft = await lifecycle.lifecycle_service.create_session(
                 s,
                 tournament_id=self.tournament_id,
+                formation_node_id=self.formation_node_id,
                 workspace_id=self.workspace_id,
                 shape=_SHAPE,
                 fmt=DraftFormat.CUSTOM,
@@ -219,6 +229,7 @@ class DraftCustomRulesTests(IsolatedAsyncioTestCase):
             draft = await lifecycle.lifecycle_service.create_session(
                 s,
                 tournament_id=self.tournament_id,
+                formation_node_id=self.formation_node_id,
                 workspace_id=self.workspace_id,
                 shape=_SHAPE,
                 fmt=DraftFormat.CUSTOM,
@@ -268,6 +279,7 @@ class DraftCustomRulesTests(IsolatedAsyncioTestCase):
             draft = await lifecycle.lifecycle_service.create_session(
                 s,
                 tournament_id=self.tournament_id,
+                formation_node_id=self.formation_node_id,
                 workspace_id=self.workspace_id,
                 shape=_SHAPE,
                 fmt=DraftFormat.CUSTOM,

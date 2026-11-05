@@ -55,6 +55,16 @@ class TransitionTests(FlowCase):
         await self._move(form, S.FORMING)
         self.assertEqual("forming", await self.node_status(form))
 
+    async def test_formation_completion_needs_teams(self) -> None:
+        form = await self.node("formation", "forming", config={"mode": "manual"})
+        self.assertEqual("formation_has_no_teams", await self._refused(form, S.COMPLETED))
+        # A tournament-wide team (no formation node) is part of every formation's output (Decision 8).
+        async with self.Session() as s:
+            s.add(models.Team(name="T", balancer_name="T", tournament_id=self.tournament_id))
+            await s.commit()
+        await self._move(form, S.COMPLETED)
+        self.assertEqual("completed", await self.node_status(form))
+
     async def test_reopening_formation_refused_once_downstream_started(self) -> None:
         stage_id, stage_node = await self.stage()
         # The formation is created after the stage: create_stage (Task 4) auto-wires only an existing single formation.

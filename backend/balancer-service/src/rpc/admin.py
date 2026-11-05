@@ -23,6 +23,7 @@ from src.core.auth import _get_balance_workspace_id, _get_tournament_workspace_i
 from src.rpc import _common as c
 from src.services.admin._mappers import serialize_balance, serialize_tournament_config
 from src.services.admin.balancer import balancer_admin_service
+from src.services.formation_node import require_formation_node
 from src.services.mix_ranker import mix_ranker_service, settings_from_json
 
 _SF = db.async_session_maker
@@ -96,7 +97,9 @@ def register(broker: Any, logger: Any) -> None:
             tournament_id = c.require_id(data)
             ws_id = await _get_tournament_workspace_id(session, tournament_id)
             ensure_workspace_permission(user, ws_id, "team", "read")
-            cfg = await balancer_admin_service.get_tournament_config(session, tournament_id)
+            node_id = c.formation_node_id(data)
+            await require_formation_node(session, tournament_id, node_id)
+            cfg = await balancer_admin_service.get_tournament_config(session, node_id)
             return serialize_tournament_config(cfg) if cfg is not None else None
 
         return await c.envelope(logger, "admin.tournament_config_get", op, session_factory=_SF)
@@ -109,9 +112,11 @@ def register(broker: Any, logger: Any) -> None:
             tournament_id = c.require_id(data)
             ws_id = await _get_tournament_workspace_id(session, tournament_id)
             ensure_workspace_permission(user, ws_id, "team", "create")
+            node_id = c.formation_node_id(data)
+            await require_formation_node(session, tournament_id, node_id)
             body = schemas.BalancerTournamentConfigUpsert.model_validate(c.payload(data))
             cfg = await balancer_admin_service.upsert_tournament_config(
-                session, tournament_id, ws_id, body.config_json, user
+                session, tournament_id, node_id, ws_id, body.config_json, user
             )
             return serialize_tournament_config(cfg)
 
@@ -142,7 +147,9 @@ def register(broker: Any, logger: Any) -> None:
             tournament_id = c.require_id(data)
             ws_id = await _get_tournament_workspace_id(session, tournament_id)
             ensure_workspace_permission(user, ws_id, "team", "read")
-            balance = await balancer_admin_service.get_balance(session, tournament_id)
+            node_id = c.formation_node_id(data)
+            await require_formation_node(session, tournament_id, node_id)
+            balance = await balancer_admin_service.get_balance(session, node_id)
             return serialize_balance(balance) if balance is not None else None
 
         return await c.envelope(logger, "admin.balance_get", op, session_factory=_SF)
@@ -155,8 +162,10 @@ def register(broker: Any, logger: Any) -> None:
             tournament_id = c.require_id(data)
             ws_id = await _get_tournament_workspace_id(session, tournament_id)
             ensure_workspace_permission(user, ws_id, "team", "create")
+            node_id = c.formation_node_id(data)
+            await require_formation_node(session, tournament_id, node_id)
             body = schemas.BalanceSaveRequest.model_validate(c.payload(data))
-            balance = await balancer_admin_service.save_balance(session, tournament_id, body, user)
+            balance = await balancer_admin_service.save_balance(session, tournament_id, node_id, body, user)
             return serialize_balance(balance, already_normalized=True)
 
         return await c.envelope(logger, "admin.balance_save", op, session_factory=_SF)

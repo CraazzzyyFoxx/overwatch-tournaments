@@ -27,7 +27,8 @@ const TOURNAMENT = {
   workspace_id: 2,
   discipline: "overwatch",
   team_formation: "draft",
-  division_grid_version: null
+  division_grid_version: null,
+  flow_nodes: [{ id: 9, kind: "formation", name: "Teams", status: "forming", config: { mode: "draft" }, schedule: [], stage_id: null }]
 };
 
 const mocks = vi.hoisted(() => ({
@@ -36,7 +37,7 @@ const mocks = vi.hoisted(() => ({
   tournamentQuery: {} as Record<string, unknown>
 }));
 
-vi.mock("next/navigation", () => ({ useParams: () => ({ id: "5" }), redirect: vi.fn() }));
+vi.mock("next/navigation", () => ({ useParams: () => ({ id: "5" }), useSearchParams: () => new URLSearchParams(), redirect: vi.fn() }));
 vi.mock("next-intl", () => ({ useLocale: () => "en", useTranslations: () => (key: string) => key }));
 vi.mock("@/hooks/useTournamentClientData", () => ({ useTournamentQuery: () => mocks.tournamentQuery }));
 vi.mock("@/hooks/useEntityWorkspace", () => ({ useEntityWorkspace: () => {} }));

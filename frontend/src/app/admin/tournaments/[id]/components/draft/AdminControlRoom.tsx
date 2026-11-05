@@ -15,6 +15,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { StatusDot } from "@/components/ui/status-dot";
 import { HeroCoord, HeroFrame } from "@/components/site/PageHero";
+import { FLOW_NODE_PARAM } from "@/hooks/useFlowNodeParam";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import type { DraftBoard } from "@/types/draft.types";
 
@@ -25,6 +26,7 @@ import { ResolveRoleConflictDialog } from "./ResolveRoleConflictDialog";
 
 interface AdminControlRoomProps {
   tournamentId: number;
+  formationNodeId: number;
   board: DraftBoard;
 }
 
@@ -46,13 +48,20 @@ const CONNECTION_TONE: Record<string, Tone> = {
  * resume), the lifecycle actions that end or rewind the session, and the
  * tournament's draft history.
  */
-export function AdminControlRoom({ tournamentId, board }: Readonly<AdminControlRoomProps>) {
+export function AdminControlRoom({
+  tournamentId,
+  formationNodeId,
+  board
+}: Readonly<AdminControlRoomProps>) {
   const t = useTranslations("draftAdmin.controlRoom");
   const tDraft = useTranslations("draftAdmin");
   const [roleDialogOpen, setRoleDialogOpen] = useState(false);
   // Subscribed here too: the status, clock and feasibility below must follow
   // the picks made in the room without a manual reload.
-  const { connectionState } = useDraftRealtime(tournamentQueryKeys.draftBoard(tournamentId), board);
+  const { connectionState } = useDraftRealtime(
+    tournamentQueryKeys.draftBoard(tournamentId, formationNodeId),
+    board
+  );
   const feasibilityQuery = useDraftFeasibilityQuery(board.session.id);
   // The session's own owner scope: the draft's roles are the tournament game's, whatever game is being browsed.
   const ontology = useDisciplineMetadata(board.session.workspace_id, board.session.discipline).data ?? null;
@@ -112,13 +121,14 @@ export function AdminControlRoom({ tournamentId, board }: Readonly<AdminControlR
             {/* Leaving for the room is the primary action while live; while
                 paused, Resume below is the next step and takes the lead. */}
             <Button asChild size="lg" variant={session.status === "paused" ? "outline" : "default"}>
-              <Link href={`/draft/${tournamentId}`} target="_blank" rel="noreferrer">
+              <Link href={`/draft/${tournamentId}?${FLOW_NODE_PARAM}=${formationNodeId}`} target="_blank" rel="noreferrer">
                 {t("openBoard")}
                 <ArrowUpRight className="ml-2 h-4 w-4" aria-hidden />
               </Link>
             </Button>
             <LifecycleControls
               tournamentId={tournamentId}
+              formationNodeId={formationNodeId}
               board={board}
               resumeBlocked={feasibility?.is_feasible === false}
             />
@@ -152,7 +162,7 @@ export function AdminControlRoom({ tournamentId, board }: Readonly<AdminControlR
           )}
           {/* Deleting a session is refused while it is live, so the live one is
               listed as context; the terminal ones stay erasable from here. */}
-          <DraftHistoryPanel tournamentId={tournamentId} />
+          <DraftHistoryPanel tournamentId={tournamentId} formationNodeId={formationNodeId} />
         </div>
         <aside className="lg:border-l lg:border-border lg:pl-6">
           <FeasibilityStatus feasibility={feasibility} loading={feasibilityQuery.isLoading} ontology={ontology} />
@@ -163,6 +173,7 @@ export function AdminControlRoom({ tournamentId, board }: Readonly<AdminControlR
         open={roleDialogOpen}
         onOpenChange={setRoleDialogOpen}
         tournamentId={tournamentId}
+        formationNodeId={formationNodeId}
         board={board}
         feasibility={feasibility}
         ontology={ontology}

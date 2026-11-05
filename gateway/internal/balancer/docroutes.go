@@ -23,6 +23,6 @@ var LobbyCallbackDocRoutes = []edge.RouteSpec{
 
 // BinaryAdminDocRoutes is the admin teams-import upload.
 var BinaryAdminDocRoutes = []edge.RouteSpec{
-	{Method: "POST", Pattern: "/api/v1/balancer/tournaments/{tournament_id}/teams/import", Queue: "rpc.balancer.admin.teams_import", Auth: edge.AuthRequired,
+	{Method: "POST", Pattern: "/api/v1/balancer/tournaments/{tournament_id}/teams/import", Queue: "rpc.balancer.admin.teams_import", Query: []string{"formation_node_id"}, Auth: edge.AuthRequired,
 		Media: edge.Media{Files: []string{"data"}, Fields: []string{"payload_format"}}},
 }

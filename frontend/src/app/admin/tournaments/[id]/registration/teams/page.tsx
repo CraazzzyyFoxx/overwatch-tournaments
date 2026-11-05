@@ -2,6 +2,8 @@
 
 import { useParams } from "next/navigation";
 
+import { useFlowNodeParam } from "@/hooks/useFlowNodeParam";
+
 import { RegistrationTeamsBrowser } from "../../components/RegistrationTeamsBrowser";
 import { tabError, tabFallback, useHubTournamentQuery } from "../../hubQueries";
 
@@ -21,6 +23,8 @@ export default function RegistrationTeamsPage() {
   // Already in cache — the shell runs the same query under the same key.
   const tournamentQuery = useHubTournamentQuery(tournamentId);
   const tournament = tournamentQuery.data;
+  // The export writes the teams of one formation node.
+  const formationNodeId = useFlowNodeParam(tournament, "formation");
 
   if (tournamentQuery.isLoading) return tabFallback;
   if (validTournamentId == null || tournament?.workspace_id == null) {
@@ -32,6 +36,7 @@ export default function RegistrationTeamsPage() {
       tournamentId={validTournamentId}
       workspaceId={tournament.workspace_id}
       discipline={tournament.discipline}
+      formationNodeId={formationNodeId}
     />
   );
 }

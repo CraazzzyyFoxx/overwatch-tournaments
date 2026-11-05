@@ -111,6 +111,7 @@ describe("tournamentService.getPublicOverview", () => {
               // read is where the document is wanted — the shell decides the
               // Rules tab's existence from it and the tab renders it.
               "rules",
+              "flow_nodes",
             ],
           },
         },

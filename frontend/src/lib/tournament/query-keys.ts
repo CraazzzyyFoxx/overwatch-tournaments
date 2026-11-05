@@ -107,8 +107,11 @@ export const tournamentQueryKeys = {
   registrationInviteHistory: (workspaceId: number, teamId: number) =>
     ["registration-invite-history", workspaceId, teamId] as const,
   subscriptionStatus: (tournamentId: number) => ["subscription-status", tournamentId] as const,
-  draftBoard: (tournamentId: number) => ["draft", tournamentId, "board"] as const,
-  draftSessions: (tournamentId: number) => ["draft", tournamentId, "sessions"] as const,
+  /** The formation node's current draft (active, else the latest). */
+  draftBoard: (tournamentId: number, formationNodeId: number) =>
+    ["draft", tournamentId, "board", formationNodeId] as const,
+  draftSessions: (tournamentId: number, formationNodeId: number) =>
+    ["draft", tournamentId, "sessions", formationNodeId] as const,
   draftSession: (sessionId: number) => ["draft", "session", sessionId] as const,
   /** One session's board, whoever owns the draft: the room's cache, patched by the session's own topic. */
   draftSessionBoard: (sessionId: number) => ["draft", "session", sessionId, "board"] as const,

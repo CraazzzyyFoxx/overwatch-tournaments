@@ -25,12 +25,14 @@ from shared.core.enums import (
     DraftPickStatus,
     DraftPlayerStatus,
     DraftStatus,
-    TournamentStatus,
+    FlowNodeKind,
+    FlowNodeStatus,
 )
 from shared.core.errors import BaseAPIException
 from shared.domain.roster import PlayerRoster
 from shared.domain.roster_shape import RosterShape
 from shared.models.draft import DraftPick, DraftPlayer, DraftSession, DraftTeam
+from shared.models.tournament.flow import FlowNode
 from shared.repository import CustomGameRepository
 from shared.repository.draft import (
     DraftPickRepository,
@@ -38,6 +40,7 @@ from shared.repository.draft import (
     DraftSessionRepository,
     DraftTeamRepository,
 )
+from shared.repository.flow_node import FlowNodeRepository
 from shared.repository.identity import UserRepository
 from shared.repository.tournament import TournamentRepository
 from shared.repository.workspace import WorkspaceMemberRepository, get_or_create_workspace_member
@@ -56,6 +59,7 @@ from src.services.draft.feasibility import DraftFeasibilityService, feasibility_
 from src.services.draft.journal import journal_service
 from src.services.draft.rosters import DraftRosterService, draft_rosters
 from src.services.draft.selection import DraftSelectionService, selection_service
+from src.services.formation_node import require_formation_node
 from src.services.mix_room_dms import notify_mix_captain
 
 __all__ = ("DraftLifecycleService", "lifecycle_service")
@@ -132,6 +136,7 @@ class DraftLifecycleService:
         rosters: DraftRosterService = draft_rosters,
         selection: DraftSelectionService = selection_service,
         custom_games: CustomGameRepository = CustomGameRepository(),
+        flow_nodes: FlowNodeRepository = FlowNodeRepository(),
     ) -> None:
         self.sessions_repo = sessions_repo
         self.teams_repo = teams_repo
@@ -144,6 +149,7 @@ class DraftLifecycleService:
         self.rosters = rosters
         self.selection = selection
         self.custom_games = custom_games
+        self.flow_nodes = flow_nodes
 
     async def get_session(self, session: AsyncSession, session_id: int) -> DraftSession:
         draft = await self.sessions_repo.get(session, session_id)
@@ -178,23 +184,27 @@ class DraftLifecycleService:
         )
         return row.code if row is not None else None
 
-    async def assert_no_active_draft(self, session: AsyncSession, tournament_id: int) -> None:
-        if await self.sessions_repo.exists_active_for_tournament(session, tournament_id):
-            raise _err("draft_already_active", f"Tournament {tournament_id} already has an active draft")
+    async def assert_no_active_draft(self, session: AsyncSession, formation_node_id: int) -> None:
+        if await self.sessions_repo.exists_active_for_formation_node(session, formation_node_id):
+            raise _err("draft_already_active", f"Formation node {formation_node_id} already has an active draft")
 
-    async def assert_draft_formation(self, session: AsyncSession, tournament_id: int) -> None:
-        """A draft forms the teams only of a tournament that says it does: the
+    async def assert_draft_formation(self, session: AsyncSession, formation_node_id: int) -> FlowNode:
+        """A draft forms the teams only of a formation node that says it does: the
         balancer and team registration write `tournament.team` their own way.
 
         Checked on create, seed and start: a session created before the check
-        existed, or a tournament switched away from draft since, is stopped too.
+        existed, or a node switched away from draft since, is stopped too.
         """
-        formation = await self.tournaments_repo.get_team_formation(session, tournament_id)
-        if formation != "draft":
+        node = await self.flow_nodes.get(session, formation_node_id)
+        if node is None:
+            raise _err("flow_node_not_found", "Flow node not found", status_code=404)
+        mode = node.config.get("mode")
+        if node.kind != FlowNodeKind.FORMATION or mode != "draft":
             raise _err(
                 "tournament_not_draft_formation",
-                f"Tournament {tournament_id} forms its teams by {formation!r}, not by draft",
+                f"Flow node {formation_node_id} forms its teams by {mode!r}, not by draft",
             )
+        return node
 
     async def tournament_draft_format(
         self, session: AsyncSession, tournament_id: int, *, rounds: int
@@ -214,6 +224,7 @@ class DraftLifecycleService:
         workspace_id: int,
         shape: RosterShape,
         tournament_id: int | None = None,
+        formation_node_id: int | None = None,
         custom_game_id: int | None = None,
         lobby_index: int | None = None,
         pool_source: str = "balancer_balance",
@@ -225,8 +236,8 @@ class DraftLifecycleService:
         allow_admin_override: bool = True,
         settings: dict | None = None,
     ) -> DraftSession:
-        """A session of exactly one owner: a tournament, or one lobby of a mix (spec §9.1). One active session per
-        owner -- checked here for a tournament, by ``uq_draft_session_active_lobby`` for a lobby."""
+        """A session of exactly one owner: a tournament's formation node, or one lobby of a mix (spec §9.1). One
+        active session per owner -- checked here for a node, by ``uq_draft_session_active_lobby`` for a lobby."""
         # `rounds` is derived, never passed: the shape owns the roster size.
         if shape.draft_rounds < 1:
             raise _err(
@@ -236,12 +247,13 @@ class DraftLifecycleService:
                 status_code=422,
             )
         if tournament_id is not None:
-            await self.assert_no_active_draft(session, tournament_id)
+            await self.assert_no_active_draft(session, formation_node_id)
             owner = await self.tournaments_repo.get(session, tournament_id)
         else:
             owner = await self.custom_games.get(session, custom_game_id)
         draft = DraftSession(
             tournament_id=tournament_id,
+            formation_node_id=formation_node_id,
             custom_game_id=custom_game_id,
             lobby_index=lobby_index,
             discipline=owner.discipline,
@@ -270,8 +282,9 @@ class DraftLifecycleService:
         workspace_id: int,
         actor_user_id: int,
     ) -> DraftSession:
-        """Create a session for the tournament and publish ``draft.session_updated``."""
-        await self.assert_draft_formation(session, tournament_id)
+        """Create a session for the payload's formation node and publish ``draft.session_updated``."""
+        await require_formation_node(session, tournament_id, payload.formation_node_id)
+        await self.assert_draft_formation(session, payload.formation_node_id)
         # The roster shape is the tournament's, not the request's: a draft
         # cannot be created at a size the tournament does not run. The format
         # is the tournament's for the same reason -- it is a rule organizers
@@ -281,6 +294,7 @@ class DraftLifecycleService:
         draft = await self.create_session(
             session,
             tournament_id=tournament_id,
+            formation_node_id=payload.formation_node_id,
             workspace_id=workspace_id,
             shape=shape,
             pool_source=payload.pool_source.value,
@@ -418,7 +432,7 @@ class DraftLifecycleService:
             raise _err("draft_not_seedable", "Draft can only be seeded in SETUP or READY")
         rules.validate_seat_identities(seats, mix=draft_session.custom_game_id is not None)
         if draft_session.tournament_id is not None:
-            await self.assert_draft_formation(session, draft_session.tournament_id)
+            await self.assert_draft_formation(session, draft_session.formation_node_id)
         captains = [seat for seat in seats if seat.draft_position is not None]
         if not captains:
             raise _err("draft_no_captains", "At least one captain is required to seed a draft")
@@ -701,20 +715,14 @@ class DraftLifecycleService:
 
     async def start(self, session: AsyncSession, draft_session: DraftSession, *, force: bool = False) -> DraftSession:
         draft_state.validate_transition(DraftStatus(draft_session.status), DraftStatus.LIVE)
-        # A mix draft has no tournament to be in a phase (spec §9.1).
+        # A mix draft has no formation node to be forming (spec §9.1).
         if draft_session.tournament_id is not None:
             # Not bypassed by ``force``: no draft forms another formation's teams.
-            await self.assert_draft_formation(session, draft_session.tournament_id)
-            # The phase gate keeps organizers from going live before the tournament reaches its draft phase. A
-            # superuser may bypass it (``force``) to run a draft out of band — a test run, or a rescue after the
-            # schedule drifted.
-            if not force:
-                tournament = await self.tournaments_repo.get_summary_row(session, draft_session.tournament_id)
-                if tournament is None or tournament.status != TournamentStatus.DRAFT.value:
-                    raise _err(
-                        "tournament_not_in_draft_phase",
-                        "Draft can only start while the tournament is in the draft phase",
-                    )
+            node = await self.assert_draft_formation(session, draft_session.formation_node_id)
+            # The node gate keeps organizers from going live before the formation node is forming. A superuser may
+            # bypass it (``force``) to run a draft out of band — a test run, or a rescue after the schedule drifted.
+            if not force and node.status != FlowNodeStatus.FORMING:
+                raise _err("formation_not_forming", "Draft can only start while its formation node is forming")
         first = await self.picks_repo.first_upcoming(session, draft_session.id)
         if first is None:
             raise _err("draft_no_picks", "Draft has no picks to start")

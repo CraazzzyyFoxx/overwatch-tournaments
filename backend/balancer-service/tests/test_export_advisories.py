@@ -32,7 +32,7 @@ class ExportAdvisoryWireTests(IsolatedAsyncioTestCase):
             stack.enter_context(patch.object(module.c, "active_actor", return_value=SimpleNamespace(id=1)))
             stack.enter_context(patch.object(module, "ensure_workspace_permission"))
             stack.enter_context(patch.object(module.c, "require_admin_panel"))
-            return await handlers[subject]({"id": 1, "tournament_id": 2}, None)
+            return await handlers[subject]({"id": 1, "tournament_id": 2, "query": {"formation_node_id": ["9"]}}, None)
 
     async def test_balance_export_returns_named_advisories(self):
         advisories = ["Alpha: skipped Missing#1234 (not found)", "Alpha: team_format_violation: starters_out_of_range"]
@@ -57,6 +57,7 @@ class ExportAdvisoryWireTests(IsolatedAsyncioTestCase):
             "rpc.balancer.admin.teams_import",
             {
                 "_get_tournament_workspace_id": AsyncMock(return_value=3),
+                "require_formation_node": AsyncMock(),
                 "quota": SimpleNamespace(charge=AsyncMock()),
                 "_decode_and_parse": lambda data: {"data": {"teams": []}},
                 "team_service": SimpleNamespace(

@@ -218,7 +218,10 @@ export default class tournamentService {
           // schemas that nest TournamentRead must not carry a copy each. Read
           // here because this one payload is the whole page shell — the Rules
           // tab's presence AND its content both come off it.
-          "rules"
+          "rules",
+          // The registration and formation nodes: the draft room and the balancer name the formation they
+          // follow, and the section nav asks whether the tournament has a table.
+          "flow_nodes"
         ]
       }
     }).then((response) => response.json());

@@ -19,6 +19,7 @@ from shared.services.team_format import save_tournament_format
 from shared.testing import create_test_async_engine
 from shared.testing.db import ensure_test_postgres
 from src.services.team_export.materialization import MaterializationMember, MaterializationTeam, materialize_teams
+from tests.factories import formation_node
 
 
 class TeamExportFormatTests(IsolatedAsyncioTestCase):
@@ -40,6 +41,7 @@ class TeamExportFormatTests(IsolatedAsyncioTestCase):
         )
         s.add_all([self.tournament, dimension])
         await s.flush()
+        self.node_id = await formation_node(s, self.tournament.id)
         self.shotcaller = models.CatalogRole(dimension_id=dimension.id, code="shotcaller", name="Shotcaller")
         s.add(self.shotcaller)
         self.members = []
@@ -88,6 +90,7 @@ class TeamExportFormatTests(IsolatedAsyncioTestCase):
             await materialize_teams(
                 self.session,
                 self.tournament.id,
+                self.node_id,
                 [
                     MaterializationTeam(
                         balancer_name="Roster",
@@ -114,6 +117,7 @@ class TeamExportFormatTests(IsolatedAsyncioTestCase):
         outcome = await materialize_teams(
             self.session,
             self.tournament.id,
+            self.node_id,
             [
                 MaterializationTeam(
                     balancer_name="Roster",
@@ -156,6 +160,7 @@ class TeamExportFormatTests(IsolatedAsyncioTestCase):
             await materialize_teams(
                 self.session,
                 self.tournament.id,
+                self.node_id,
                 [
                     MaterializationTeam(balancer_name="Duplicate", members=(starter, alias), captain_player_id=1),
                 ],
@@ -179,6 +184,7 @@ class TeamExportFormatTests(IsolatedAsyncioTestCase):
             await materialize_teams(
                 self.session,
                 self.tournament.id,
+                self.node_id,
                 [
                     MaterializationTeam(balancer_name=name, members=(starter,), captain_player_id=1)
                     for name in ("First", "Second")
@@ -199,14 +205,15 @@ class TeamExportFormatTests(IsolatedAsyncioTestCase):
     async def test_existing_roster_is_retained_but_cannot_supply_another_team(self) -> None:
         starter = replace(self.members[0], non_rated_roles=(self.shotcaller,))
         team = MaterializationTeam(balancer_name="Existing", members=(starter,))
-        await materialize_teams(self.session, self.tournament.id, [team])
+        await materialize_teams(self.session, self.tournament.id, self.node_id, [team])
         await self.session.flush()
-        repeated = await materialize_teams(self.session, self.tournament.id, [team])
+        repeated = await materialize_teams(self.session, self.tournament.id, self.node_id, [team])
         assert repeated.created_players == 0 and repeated.created_teams == []
         with self.assertRaises(ApiHTTPException) as caught:
             await materialize_teams(
                 self.session,
                 self.tournament.id,
+                self.node_id,
                 [replace(team, balancer_name="Other", captain_player_id=1)],
                 on_unresolved="error",
             )
@@ -218,6 +225,7 @@ class TeamExportFormatTests(IsolatedAsyncioTestCase):
         outcome = await materialize_teams(
             self.session,
             self.tournament.id,
+            self.node_id,
             [MaterializationTeam(balancer_name="Partial", members=(missing,))],
             on_unresolved="skip",
         )
@@ -233,6 +241,7 @@ class TeamExportFormatTests(IsolatedAsyncioTestCase):
         outcome = await materialize_teams(
             self.session,
             self.tournament.id,
+            self.node_id,
             [MaterializationTeam(balancer_name=name, members=(starter,)) for name in ("First", "Second")],
             on_unresolved="skip",
         )

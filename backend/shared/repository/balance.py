@@ -15,12 +15,12 @@ class BalancerTournamentConfigRepository(BaseRepository[models.BalancerTournamen
     def __init__(self) -> None:
         super().__init__(models.BalancerTournamentConfig)
 
-    async def get_by_tournament(
+    async def get_by_formation_node(
         self,
         session: AsyncSession,
-        tournament_id: int,
+        formation_node_id: int,
     ) -> models.BalancerTournamentConfig | None:
-        return await self.get_by(session, tournament_id=tournament_id)
+        return await self.get_by(session, formation_node_id=formation_node_id)
 
 
 class WorkspaceBalancerConfigRepository(BaseRepository[models.WorkspaceBalancerConfig]):
@@ -96,14 +96,14 @@ class BalancerBalanceRepository(BaseRepository[models.BalancerBalance]):
     def __init__(self) -> None:
         super().__init__(models.BalancerBalance)
 
-    async def get_by_tournament(
+    async def get_by_formation_node(
         self,
         session: AsyncSession,
-        tournament_id: int,
+        formation_node_id: int,
         *,
         with_teams: bool = True,
     ) -> models.BalancerBalance | None:
-        query = self.select().where(self.model.tournament_id == tournament_id)
+        query = self.select().where(self.model.formation_node_id == formation_node_id)
         if with_teams:
             query = query.options(selectinload(self.model.teams))
         return await session.scalar(query)

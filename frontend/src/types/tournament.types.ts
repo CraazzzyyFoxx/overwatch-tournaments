@@ -7,6 +7,7 @@ import type { DraftFormatSettings } from "@/types/draft.types";
 import type { RoleRef } from "@/lib/roster/role-ref";
 import type { PersonDisplay } from "@/types/user.types";
 import type { Schema } from "@/types/api";
+import type { TournamentFlowNode } from "@/types/flow.types";
 
 // ─── Enums ──────────────────────────────────────────────────────────────────
 
@@ -287,6 +288,11 @@ export interface Tournament {
    * responses still sitting in a client cache from before this field existed.
    */
   links?: TournamentLink[];
+  /**
+   * The registration, formation, stage and leaderboard nodes with their status and schedule. Opt-in (`flow_nodes`),
+   * absent on a read that did not ask; read through `nodesOfKind` (`lib/tournament/flow-nodes`).
+   */
+  flow_nodes?: TournamentFlowNode[];
   /** Wide banner for the tournament hero. Uploaded separately from the
    * settings PATCH (see `adminService.uploadTournamentImage`). */
   cover_image_url: string | null;

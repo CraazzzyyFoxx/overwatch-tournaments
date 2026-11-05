@@ -25,6 +25,7 @@ from shared.models.tournament.tournament import Tournament
 from shared.testing import create_test_async_engine
 from shared.testing.db import ensure_test_postgres
 from src.services.admin.balancer import balancer_admin_service
+from tests.factories import formation_node
 
 _TAG = itertools.count()
 
@@ -100,6 +101,7 @@ class BalanceExportMissingHandleTests(IsolatedAsyncioTestCase):
             }
             balance = BalancerBalance(
                 tournament_id=tournament.id,
+                formation_node_id=await formation_node(s, tournament.id),
                 result_json={
                     "teams": [team],
                     "statistics": {"average_mmr": 3000, "mmr_std_dev": 0, "total_teams": 1, "players_per_team": 2},

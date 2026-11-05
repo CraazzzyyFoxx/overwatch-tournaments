@@ -207,6 +207,17 @@ function makeTournament(status: TournamentStatus, overrides: Partial<Tournament>
     is_finished: false,
     is_hidden: false,
     team_formation: "draft",
+    flow_nodes: [
+      {
+        id: 9,
+        kind: "formation",
+        name: "Teams",
+        status: "forming",
+        config: { mode: "draft" },
+        schedule: [],
+        stage_id: null
+      }
+    ],
     status,
     auto_transitions_enabled: true,
     allow_late_registration: false,

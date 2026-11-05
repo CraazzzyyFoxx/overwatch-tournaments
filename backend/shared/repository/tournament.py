@@ -157,12 +157,6 @@ class TournamentRepository(BaseRepository[models.Tournament]):
             sa.select(models.Tournament.draft_format_json).where(models.Tournament.id == tournament_id)
         )
 
-    async def get_team_formation(self, session: AsyncSession, tournament_id: int) -> str | None:
-        """How the tournament forms its teams (``balancer``, ``draft``, ...); ``None`` when it does not exist."""
-        return await session.scalar(
-            sa.select(models.Tournament.team_formation).where(models.Tournament.id == tournament_id)
-        )
-
     async def get_for_registration(self, session: AsyncSession, registration_id: int) -> models.Tournament | None:
         """The tournament a balancer registration belongs to."""
         return await session.scalar(

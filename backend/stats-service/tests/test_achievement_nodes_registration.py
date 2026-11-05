@@ -94,6 +94,7 @@ class _RegistrationFixture(_scrim._Fixture):
             models.DraftSession.__table__,
             id=session_id,
             tournament_id=tournament_id,
+            formation_node_id=self._id(),
             workspace_id=workspace_id,
             discipline="overwatch",
             status=DraftStatus.COMPLETED,

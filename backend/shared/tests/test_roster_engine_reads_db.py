@@ -180,7 +180,34 @@ class RosterEngineReadsTests(IsolatedAsyncioTestCase):
         )
         assert rosters[foreign].rank_on("tank") is None
 
-    async def test_pool_ids_keep_only_the_balancer_pool(self) -> None:
-        one, two, _excluded, foreign, _deleted = self.ids
+    async def test_pool_ids_keep_the_balancer_pool_of_the_nodes_input(self) -> None:
+        one, two, excluded, foreign, _deleted = self.ids
         async with self.Session() as s:
-            assert await roster_engine.pool_ids(s, self.tournament_id, self.ids) == {one, two, foreign}
+            node = models.FlowNode(tournament_id=self.tournament_id, kind="formation", name="Teams", status="draft")
+            source = models.FlowNode(tournament_id=self.tournament_id, kind="registration", name="R", status="closed")
+            s.add_all([node, source])
+            await s.flush()
+            s.add(
+                models.FlowEdge(
+                    tournament_id=self.tournament_id,
+                    source_node_id=source.id,
+                    source_port="participants",
+                    target_node_id=node.id,
+                    target_port="players",
+                )
+            )
+            # ``two`` is not in the node's input: the pool alone would keep it.
+            members = await s.scalars(
+                sa.select(models.Registration.workspace_member_id).where(
+                    models.Registration.id.in_([one, excluded, foreign]),
+                    models.Registration.workspace_member_id.is_not(None),
+                )
+            )
+            s.add_all(
+                models.FlowNodeResult(
+                    node_id=source.id, port="participants", rank=rank, workspace_member_id=member_id, state="final"
+                )
+                for rank, member_id in enumerate(members, start=1)
+            )
+            await s.commit()
+            assert await roster_engine.pool_ids(s, node.id, self.ids) == {one, foreign}

@@ -57,6 +57,7 @@ import adminService from "@/services/admin.service";
 
 interface DraftSetupWizardProps {
   tournamentId: number;
+  formationNodeId: number;
   board: DraftBoard | null;
   /** Resolved tournament roster shape; a live session's own shape wins over it. */
   rosterShape: RosterShape;
@@ -66,13 +67,14 @@ interface DraftSetupWizardProps {
 
 export function DraftSetupWizard({
   tournamentId,
+  formationNodeId,
   board,
   rosterShape,
   aside
 }: Readonly<DraftSetupWizardProps>) {
   const t = useTranslations("draftAdmin");
   const queryClient = useQueryClient();
-  const boardKey = tournamentQueryKeys.draftBoard(tournamentId);
+  const boardKey = tournamentQueryKeys.draftBoard(tournamentId, formationNodeId);
   const initialSession = board?.session ?? null;
   const [localSession, setLocalSession] = useState<DraftSession | null>(initialSession);
   const session =
@@ -235,6 +237,7 @@ export function DraftSetupWizard({
   const createMutation = useMutation({
     mutationFn: () =>
       draftService.createSession(tournamentId, {
+        formation_node_id: formationNodeId,
         pool_source: "balancer_balance",
         pick_time_seconds: config.pickTimeSeconds,
         overtime_seconds: config.overtimeSeconds,
@@ -553,6 +556,7 @@ export function DraftSetupWizard({
           {step === "ready" && session && (
             <DraftReadyStep
               tournamentId={tournamentId}
+              formationNodeId={formationNodeId}
               session={session}
               feasibility={committedFeasibility ?? feasibilityQuery.data ?? null}
               // A retry in flight reads as "Checking…" again, not as the stale error.

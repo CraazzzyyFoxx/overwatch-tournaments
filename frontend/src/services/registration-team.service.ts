@@ -145,15 +145,20 @@ const registrationTeamService = {
     return response.json();
   },
 
-  /** Materialize complete teams into `tournament.team`. Refuses when standings
+  /** Materialize complete teams into the forming formation node's teams. Refuses when standings
    *  already exist for teams it does not own, so it cannot invalidate a bracket. */
   async exportRegistered(
     tournamentId: number,
+    formationNodeId: number,
     teamIds?: number[],
   ): Promise<RegistrationTeamExportResult> {
     const response = await apiFetch(
       `/api/v1/balancer/tournaments/${tournamentId}/registered-teams/export`,
-      { method: "POST", body: teamIds !== undefined ? { team_ids: teamIds } : {} },
+      {
+        method: "POST",
+        query: { formation_node_id: formationNodeId },
+        body: teamIds !== undefined ? { team_ids: teamIds } : {},
+      },
     );
     return response.json();
   },

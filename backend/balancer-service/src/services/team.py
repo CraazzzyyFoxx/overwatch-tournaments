@@ -18,6 +18,7 @@ from shared.repository import TournamentRepository
 from shared.services.balancer_realtime import BALANCER_TEAMS_CHANGED
 from src.schemas.team import BalancerTeam, InternalBalancerTeamsPayload
 from src.services.balancer.realtime import emit_balancer_data, stage_export_invalidation
+from src.services.formation_node import require_forming
 from src.services.team_export import (
     ExportOutcome,
     ExportPlan,
@@ -59,12 +60,13 @@ class TeamService:
         self,
         session: AsyncSession,
         tournament_id: int,
+        formation_node_id: int,
         payload: Any,
         payload_format: str,
         *,
         actor_user_id: int,
     ) -> ExportOutcome:
-        """Import an uploaded teams file: create teams/players, no prior-export cleanup, no stamp.
+        """Import an uploaded teams file into the forming node: create teams/players, no prior-export cleanup, no stamp.
 
         ``auto`` reads a ``{"data": {"teams": [...]}}`` dict as atravkovs and anything else
         as the internal format. Commits once (the orchestrator owns the boundary).
@@ -82,6 +84,7 @@ class TeamService:
             tournament = await TournamentRepository().get(session, tournament_id)
             dimension = DISCIPLINES[tournament.discipline].rated_dimension.code
             teams = [team.to_balancer_team(dimension) for team in internal_payload.teams]
+        await require_forming(session, formation_node_id)
         # ``run`` commits, so the signals are staged first to ride that commit.
         await emit_balancer_data(session, tournament_id, BALANCER_TEAMS_CHANGED, actor_user_id=actor_user_id)
         await stage_export_invalidation(session, tournament_id)
@@ -89,6 +92,7 @@ class TeamService:
             session,
             ExportPlan(
                 tournament_id=tournament_id,
+                formation_node_id=formation_node_id,
                 teams=to_materialization_teams(teams),
                 # Lenient: an unresolvable battle tag skips that player rather
                 # than failing the whole import.

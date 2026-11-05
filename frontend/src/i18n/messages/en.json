@@ -1368,6 +1368,9 @@
     }
   },
   "admin": {
+    "flowNodeSelect": {
+      "label": "{kind, select, registration {Registration} other {Formation}}"
+    },
     "saveBar": {
       "unsavedChanges": "Unsaved changes",
       "save": "Save changes",

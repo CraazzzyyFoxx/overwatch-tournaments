@@ -11,6 +11,7 @@ import { tournamentHref } from "@/lib/tournament/url";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import draftService from "@/services/draft.service";
 import { useDraftBoardQuery } from "@/hooks/useDraftData";
+import { useFlowNodeParam } from "@/hooks/useFlowNodeParam";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useTournamentQuery } from "@/hooks/useTournamentClientData";
 import { useEntityWorkspace } from "@/hooks/useEntityWorkspace";
@@ -33,10 +34,11 @@ export default function PublicDraftRoomPage() {
   useEntityWorkspace(tournament?.workspace_id, tournament?.discipline);
   const { canAccessPermission } = usePermissions();
   // The tournament's current draft (active, else the latest): the room is the session's.
+  const formationNodeId = useFlowNodeParam(tournament, "formation");
   const lookup = useQuery({
-    queryKey: tournamentQueryKeys.draftBoard(tournament?.id ?? 0),
-    queryFn: () => draftService.getTournamentBoard(tournament!.id),
-    enabled: tournament != null,
+    queryKey: tournamentQueryKeys.draftBoard(tournament?.id ?? 0, formationNodeId ?? 0),
+    queryFn: () => draftService.getTournamentBoard(tournament!.id, formationNodeId!),
+    enabled: tournament != null && formationNodeId != null,
     refetchInterval: (query) => (query.state.data == null ? LOOKUP_POLL_MS : false)
   });
   const sessionId = lookup.data?.session.id ?? null;

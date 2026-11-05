@@ -46,8 +46,8 @@ class DraftSession(db.TimeStampIntegerMixin):
     __table_args__ = (
         # One active draft per owner -- a CANCELLED/COMPLETED draft may coexist with a new one.
         Index(
-            "uq_draft_session_active_tournament",
-            "tournament_id",
+            "uq_draft_session_active_formation_node",
+            "formation_node_id",
             unique=True,
             postgresql_where=text("status IN ('setup','ready','live','paused')"),
         ),
@@ -64,6 +64,10 @@ class DraftSession(db.TimeStampIntegerMixin):
         # the discipline, so a copied column can never disagree with the owner it was copied from.
         CheckConstraint("num_nonnulls(tournament_id, custom_game_id) = 1", name="ck_draft_session_owner"),
         CheckConstraint("(custom_game_id IS NULL) = (lobby_index IS NULL)", name="ck_draft_session_lobby"),
+        # A tournament draft forms one formation node's teams; a mix draft has no node (spec §4.6).
+        CheckConstraint(
+            "(tournament_id IS NULL) = (formation_node_id IS NULL)", name="ck_draft_session_formation_node"
+        ),
         ForeignKeyConstraint(
             ["tournament_id", "workspace_id", "discipline"],
             ["tournament.tournament.id", "tournament.tournament.workspace_id", "tournament.tournament.discipline"],
@@ -87,6 +91,9 @@ class DraftSession(db.TimeStampIntegerMixin):
     )
 
     tournament_id: Mapped[int | None] = mapped_column(BigInteger(), nullable=True)
+    formation_node_id: Mapped[int | None] = mapped_column(
+        ForeignKey("tournament.flow_node.id", ondelete="CASCADE"), nullable=True
+    )
     #: The mix owning this draft, with ``lobby_index`` the lobby it forms teams for (spec §9.1).
     custom_game_id: Mapped[int | None] = mapped_column(BigInteger(), nullable=True)
     lobby_index: Mapped[int | None] = mapped_column(Integer(), nullable=True)

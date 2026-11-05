@@ -41,31 +41,40 @@ class DraftSessionRepository(BaseRepository[models.DraftSession]):
         """
         await session.execute(sa.delete(self.model).where(self.model.id == id))
 
-    async def exists_active_for_tournament(self, session: AsyncSession, tournament_id: int) -> bool:
+    async def exists_active_for_formation_node(self, session: AsyncSession, formation_node_id: int) -> bool:
         result = await session.scalar(
             sa.select(self.model.id).where(
-                self.model.tournament_id == tournament_id,
+                self.model.formation_node_id == formation_node_id,
                 self.model.status.in_(ACTIVE_DRAFT_STATUSES),
             )
         )
         return result is not None
 
-    async def get_active_for_tournament(self, session: AsyncSession, tournament_id: int) -> models.DraftSession | None:
+    async def get_active_for_formation_node(
+        self, session: AsyncSession, formation_node_id: int
+    ) -> models.DraftSession | None:
         return await session.scalar(
             self.select()
-            .where(self.model.tournament_id == tournament_id, self.model.status.in_(ACTIVE_DRAFT_STATUSES))
+            .where(self.model.formation_node_id == formation_node_id, self.model.status.in_(ACTIVE_DRAFT_STATUSES))
             .order_by(self.model.id.desc())
             .limit(1)
         )
 
-    async def get_latest_for_tournament(self, session: AsyncSession, tournament_id: int) -> models.DraftSession | None:
+    async def get_latest_for_formation_node(
+        self, session: AsyncSession, formation_node_id: int
+    ) -> models.DraftSession | None:
         return await session.scalar(
-            self.select().where(self.model.tournament_id == tournament_id).order_by(self.model.id.desc()).limit(1)
+            self.select()
+            .where(self.model.formation_node_id == formation_node_id)
+            .order_by(self.model.id.desc())
+            .limit(1)
         )
 
-    async def list_by_tournament(self, session: AsyncSession, tournament_id: int) -> Sequence[models.DraftSession]:
+    async def list_by_formation_node(
+        self, session: AsyncSession, formation_node_id: int
+    ) -> Sequence[models.DraftSession]:
         result = await session.scalars(
-            self.select().where(self.model.tournament_id == tournament_id).order_by(self.model.id.desc())
+            self.select().where(self.model.formation_node_id == formation_node_id).order_by(self.model.id.desc())
         )
         return result.all()
 

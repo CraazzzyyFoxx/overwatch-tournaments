@@ -73,6 +73,7 @@ class _FakeSession:
 def _plan(**overrides: object) -> ExportPlan:
     defaults: dict[str, object] = {
         "tournament_id": 7,
+        "formation_node_id": 70,
         "teams": [
             MaterializationTeam(
                 balancer_name="Alpha#1234",

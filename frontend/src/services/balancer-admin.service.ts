@@ -230,19 +230,25 @@ export default class balancerAdminService {
     return response.json();
   }
 
-  static async getTournamentConfig(tournamentId: number): Promise<BalancerTournamentConfig | null> {
-    const response = await apiFetch(`/api/v1/balancer/tournaments/${tournamentId}/config`
-    );
+  static async getTournamentConfig(
+    tournamentId: number,
+    formationNodeId: number
+  ): Promise<BalancerTournamentConfig | null> {
+    const response = await apiFetch(`/api/v1/balancer/tournaments/${tournamentId}/config`, {
+      query: { formation_node_id: formationNodeId }
+    });
     return readJsonOrNull<BalancerTournamentConfig>(response);
   }
 
   static async upsertTournamentConfig(
     tournamentId: number,
+    formationNodeId: number,
     data: BalancerTournamentConfigUpsertInput
   ): Promise<BalancerTournamentConfig> {
     const response = await apiFetch(`/api/v1/balancer/tournaments/${tournamentId}/config`,
       {
         method: "PUT",
+        query: { formation_node_id: formationNodeId },
         body: data
       }
     );
@@ -296,16 +302,22 @@ export default class balancerAdminService {
     return response.json();
   }
 
-  static async getBalance(tournamentId: number): Promise<SavedBalance | null> {
-    const response = await apiFetch(`/api/v1/balancer/tournaments/${tournamentId}/balance`
-    );
+  static async getBalance(tournamentId: number, formationNodeId: number): Promise<SavedBalance | null> {
+    const response = await apiFetch(`/api/v1/balancer/tournaments/${tournamentId}/balance`, {
+      query: { formation_node_id: formationNodeId }
+    });
     return readJsonOrNull<SavedBalance>(response);
   }
 
-  static async saveBalance(tournamentId: number, data: BalanceSaveInput): Promise<SavedBalance> {
+  static async saveBalance(
+    tournamentId: number,
+    formationNodeId: number,
+    data: BalanceSaveInput
+  ): Promise<SavedBalance> {
     const response = await apiFetch(`/api/v1/balancer/tournaments/${tournamentId}/balance`,
       {
         method: "PUT",
+        query: { formation_node_id: formationNodeId },
         body: data
       }
     );

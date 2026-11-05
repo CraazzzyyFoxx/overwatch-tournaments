@@ -33,7 +33,6 @@ from shared.core.enums import (  # noqa: E402
     DraftPickStatus,
     DraftPlayerStatus,
     DraftStatus,
-    TournamentStatus,
 )
 from shared.core.errors import ApiHTTPException  # noqa: E402
 from shared.domain.roster_shape import RosterShape  # noqa: E402
@@ -49,6 +48,7 @@ from shared.models.registration.registration import (  # noqa: E402
 )
 from shared.models.tenancy.workspace import Workspace, WorkspaceMember  # noqa: E402
 from shared.models.tournament import Tournament  # noqa: E402
+from shared.models.tournament.flow import FlowNode  # noqa: E402
 from shared.repository import CatalogRoleRepository  # noqa: E402
 from shared.schemas.role import RoleRef  # noqa: E402
 from shared.services.team_format import save_tournament_format  # noqa: E402
@@ -63,6 +63,7 @@ from src.services.draft import journal, lifecycle, loaders, queue, selection  # 
 from src.services.draft import realtime as draft_realtime  # noqa: E402
 from src.services.draft.feasibility import feasibility_service  # noqa: E402
 from src.services.draft.rosters import draft_rosters  # noqa: E402
+from tests.factories import add_input, formation_node, new_member, wire_input  # noqa: E402
 
 
 class _CapturingBroker:
@@ -190,6 +191,9 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
             await s.flush()
             self.workspace_id = ws.id
             self.tournament_id = tourn.id
+            self.formation_node_id = await formation_node(s, tourn.id, mode="draft")
+            self.registration_node_id = await wire_input(s, self.formation_node_id)
+            self.pool_user_ids: list[int] = []
             self.captain_user_ids = [u.id for u in users]
             self.captain_auth_user_ids = [u.id for u in auth_users]
             self.captain_member_ids = [m.id for m in members]
@@ -222,7 +226,9 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
             await s.execute(sa.delete(Tournament).where(Tournament.id == self.tournament_id))
             # players.user.auth_user_id is a plain column on User (no separate
             # link-table row to clean up); deleting the User rows below is enough.
-            await s.execute(sa.delete(User).where(User.id.in_(self.captain_user_ids + self.export_user_ids)))
+            await s.execute(
+                sa.delete(User).where(User.id.in_(self.captain_user_ids + self.export_user_ids + self.pool_user_ids))
+            )
             await s.execute(sa.delete(models.AuthUser).where(models.AuthUser.id.in_(self.captain_auth_user_ids)))
             await s.execute(sa.delete(Workspace).where(Workspace.id == self.workspace_id))
             await s.commit()
@@ -243,6 +249,10 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
         leaves the role DECLARED but unranked, which is what makes it unplayable
         and the registration unseatable.
         """
+        if workspace_member_id is None:
+            workspace_member_id, user_id = await new_member(s, self.workspace_id, tag)
+            self.pool_user_ids.append(user_id)
+        await add_input(s, self.registration_node_id, workspace_member_id)
         reg = Registration(
             tournament_id=self.tournament_id,
             display_name=tag,
@@ -308,6 +318,7 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
         draft = await lifecycle.lifecycle_service.create_session(
             s,
             tournament_id=self.tournament_id,
+            formation_node_id=self.formation_node_id,
             workspace_id=self.workspace_id,
             shape=_SHAPE,
         )
@@ -367,24 +378,22 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
             self.assertEqual(current.overall_no, 1)
             self.assertIsNotNone(current.clock_expires_at)
 
-    async def test_start_gated_on_tournament_draft_phase(self) -> None:
-        async def _set_status(s, status: TournamentStatus) -> None:
-            await s.execute(
-                sa.update(Tournament).values(status=status.value).where(Tournament.id == self.tournament_id)
-            )
-            await s.commit()
+    async def _set_node(self, s, **values) -> None:
+        await s.execute(sa.update(FlowNode).values(**values).where(FlowNode.id == self.formation_node_id))
+        await s.commit()
 
+    async def test_start_gated_on_a_forming_formation_node(self) -> None:
         async with self.Session() as s:
             draft = await self._new_session(s)
-            await _set_status(s, TournamentStatus.REGISTRATION)
+            await self._set_node(s, status="draft")
 
             with self.assertRaises(ApiHTTPException) as ctx:
                 await lifecycle.lifecycle_service.start(s, draft)
             self.assertEqual(ctx.exception.status_code, 409)
-            self.assertEqual(ctx.exception.detail[0]["code"], "tournament_not_in_draft_phase")
+            self.assertEqual(ctx.exception.detail[0]["code"], "formation_not_forming")
             self.assertEqual(draft.status, DraftStatus.READY.value)
 
-            await _set_status(s, TournamentStatus.DRAFT)
+            await self._set_node(s, status="forming")
             await lifecycle.lifecycle_service.start(s, draft)
             await s.commit()
             self.assertEqual(draft.status, DraftStatus.LIVE.value)
@@ -392,39 +401,30 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
     async def test_start_phase_gate_is_bypassed_for_superusers(self) -> None:
         async with self.Session() as s:
             draft = await self._new_session(s)
-            await s.execute(
-                sa.update(Tournament)
-                .values(status=TournamentStatus.REGISTRATION.value)
-                .where(Tournament.id == self.tournament_id)
-            )
-            await s.commit()
+            await self._set_node(s, status="draft")
 
             await lifecycle.lifecycle_service.start(s, draft, force=True)
             await s.commit()
             self.assertEqual(draft.status, DraftStatus.LIVE.value)
 
-    async def test_session_create_needs_a_draft_formed_tournament(self) -> None:
+    async def test_session_create_needs_a_draft_formation_node(self) -> None:
         async def _create(s):
             return await lifecycle.lifecycle_service.create_for_tournament(
                 s,
-                schemas.DraftSessionCreateRequest(),
+                schemas.DraftSessionCreateRequest(formation_node_id=self.formation_node_id),
                 tournament_id=self.tournament_id,
                 workspace_id=self.workspace_id,
                 actor_user_id=self.captain_auth_user_ids[0],
             )
 
         async with self.Session() as s:
-            await s.execute(
-                sa.update(Tournament).values(team_formation="balancer").where(Tournament.id == self.tournament_id)
-            )
+            await self._set_node(s, config={"mode": "balancer"})
             with self.assertRaises(ApiHTTPException) as ctx:
                 await _create(s)
             self.assertEqual(ctx.exception.status_code, 409)
             self.assertEqual(ctx.exception.detail[0]["code"], "tournament_not_draft_formation")
 
-            await s.execute(
-                sa.update(Tournament).values(team_formation="draft").where(Tournament.id == self.tournament_id)
-            )
+            await self._set_node(s, config={"mode": "draft"})
             draft = await _create(s)
             await s.commit()
             self.assertEqual(draft.status, DraftStatus.SETUP.value)
@@ -434,10 +434,7 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
             # Seeded while the tournament ran a draft; it forms its teams by the
             # balancer now -- as a session created before the create guard can.
             draft = await self._new_session(s)
-            await s.execute(
-                sa.update(Tournament).values(team_formation="balancer").where(Tournament.id == self.tournament_id)
-            )
-            await s.commit()
+            await self._set_node(s, config={"mode": "balancer"})
 
             with self.assertRaises(ApiHTTPException) as ctx:
                 await lifecycle.lifecycle_service.seed(s, draft, seats=[])
@@ -514,6 +511,7 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
             draft = await lifecycle.lifecycle_service.create_session(
                 s,
                 tournament_id=self.tournament_id,
+                formation_node_id=self.formation_node_id,
                 workspace_id=self.workspace_id,
                 shape=_SHAPE,
             )
@@ -567,6 +565,7 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
             draft = await lifecycle.lifecycle_service.create_session(
                 s,
                 tournament_id=self.tournament_id,
+                formation_node_id=self.formation_node_id,
                 workspace_id=self.workspace_id,
                 shape=_SHAPE,
             )
@@ -830,7 +829,7 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
             self.assertTrue(res.pick.is_autopick)
             self.assertIsNotNone(res.next_pick)
 
-    async def test_one_active_draft_per_tournament(self) -> None:
+    async def test_one_active_draft_per_formation_node(self) -> None:
         async with self.Session() as s:
             await self._new_session(s)
         async with self.Session() as s2:
@@ -838,6 +837,7 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
                 await lifecycle.lifecycle_service.create_session(
                     s2,
                     tournament_id=self.tournament_id,
+                    formation_node_id=self.formation_node_id,
                     workspace_id=self.workspace_id,
                     shape=_SHAPE,
                 )
@@ -863,6 +863,7 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
             replacement = await lifecycle.lifecycle_service.create_session(
                 s2,
                 tournament_id=self.tournament_id,
+                formation_node_id=self.formation_node_id,
                 workspace_id=self.workspace_id,
                 shape=_SHAPE,
             )
@@ -1045,7 +1046,11 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
     async def test_seed_from_pool_uses_existing_balancer_pool(self) -> None:
         async with self.Session() as s:
             draft = await lifecycle.lifecycle_service.create_session(
-                s, tournament_id=self.tournament_id, workspace_id=self.workspace_id, shape=_SHAPE
+                s,
+                tournament_id=self.tournament_id,
+                formation_node_id=self.formation_node_id,
+                workspace_id=self.workspace_id,
+                shape=_SHAPE,
             )
             pool_ids = await self._build_balancer_pool(s, 9)
             captain_ids = pool_ids[:3]
@@ -1111,7 +1116,11 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
 
         async with self.Session() as s:
             draft = await lifecycle.lifecycle_service.create_session(
-                s, tournament_id=self.tournament_id, workspace_id=self.workspace_id, shape=_SHAPE
+                s,
+                tournament_id=self.tournament_id,
+                formation_node_id=self.formation_node_id,
+                workspace_id=self.workspace_id,
+                shape=_SHAPE,
             )
             pool_ids = await self._build_balancer_pool(s, 9)
             # ranks = 3000 + i*25, so captains[0..2] have ranks 3000 < 3025 < 3050
@@ -1146,7 +1155,11 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
         # needs a rank -- before writing any team, player or pick row.
         async with self.Session() as s:
             draft = await lifecycle.lifecycle_service.create_session(
-                s, tournament_id=self.tournament_id, workspace_id=self.workspace_id, shape=_SHAPE
+                s,
+                tournament_id=self.tournament_id,
+                formation_node_id=self.formation_node_id,
+                workspace_id=self.workspace_id,
+                shape=_SHAPE,
             )
             draft_id = draft.id
             seats = await self._seats(s)
@@ -1182,7 +1195,11 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
         # A cancelled draft must not block creating a fresh one.
         async with self.Session() as s:
             second = await lifecycle.lifecycle_service.create_session(
-                s, tournament_id=self.tournament_id, workspace_id=self.workspace_id, shape=_SHAPE
+                s,
+                tournament_id=self.tournament_id,
+                formation_node_id=self.formation_node_id,
+                workspace_id=self.workspace_id,
+                shape=_SHAPE,
             )
             await s.commit()
             self.assertEqual(second.status, DraftStatus.SETUP.value)
@@ -1191,7 +1208,11 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
     async def test_seed_from_pool_rejects_captain_not_in_pool(self) -> None:
         async with self.Session() as s:
             draft = await lifecycle.lifecycle_service.create_session(
-                s, tournament_id=self.tournament_id, workspace_id=self.workspace_id, shape=_SHAPE
+                s,
+                tournament_id=self.tournament_id,
+                formation_node_id=self.formation_node_id,
+                workspace_id=self.workspace_id,
+                shape=_SHAPE,
             )
             await self._build_balancer_pool(s, 4)
             with self.assertRaises(ApiHTTPException):
@@ -1581,7 +1602,11 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
             s.add(other)
             await s.flush()
             foreign = await lifecycle.lifecycle_service.create_session(
-                s, tournament_id=other.id, workspace_id=other_ws.id, shape=_SHAPE
+                s,
+                tournament_id=other.id,
+                formation_node_id=await formation_node(s, other.id, mode="draft"),
+                workspace_id=other_ws.id,
+                shape=_SHAPE,
             )
             await s.commit()
             foreign_id, other_id, other_ws_id = foreign.id, other.id, other_ws.id
@@ -1638,7 +1663,11 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
             s.add(other)
             await s.flush()
             foreign = await lifecycle.lifecycle_service.create_session(
-                s, tournament_id=other.id, workspace_id=other_ws.id, shape=_SHAPE
+                s,
+                tournament_id=other.id,
+                formation_node_id=await formation_node(s, other.id, mode="draft"),
+                workspace_id=other_ws.id,
+                shape=_SHAPE,
             )
             await s.commit()
             foreign_id, other_id, other_ws_id = foreign.id, other.id, other_ws.id
@@ -1792,6 +1821,7 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
             draft = await lifecycle.lifecycle_service.create_session(
                 s,
                 tournament_id=self.tournament_id,
+                formation_node_id=self.formation_node_id,
                 workspace_id=self.workspace_id,
                 shape=_SHAPE,
             )

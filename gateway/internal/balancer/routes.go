@@ -43,11 +43,11 @@ var PublicRoutes = []edge.RouteSpec{
 // injects the resolved identity (AuthRequired). The teams-import multipart upload
 // is handled separately (binary.go).
 var AdminRoutes = []edge.RouteSpec{
-	{Method: "GET", Pattern: "/api/v1/balancer/tournaments/{tournament_id}/config", Queue: "rpc.balancer.admin.tournament_config_get", IDParam: "tournament_id", Auth: edge.AuthRequired, Timeout: fastReadTimeout},
-	{Method: "PUT", Pattern: "/api/v1/balancer/tournaments/{tournament_id}/config", Queue: "rpc.balancer.admin.tournament_config_upsert", IDParam: "tournament_id", Body: true, Auth: edge.AuthRequired},
+	{Method: "GET", Pattern: "/api/v1/balancer/tournaments/{tournament_id}/config", Queue: "rpc.balancer.admin.tournament_config_get", IDParam: "tournament_id", Query: []string{"formation_node_id"}, Auth: edge.AuthRequired, Timeout: fastReadTimeout},
+	{Method: "PUT", Pattern: "/api/v1/balancer/tournaments/{tournament_id}/config", Queue: "rpc.balancer.admin.tournament_config_upsert", IDParam: "tournament_id", Query: []string{"formation_node_id"}, Body: true, Auth: edge.AuthRequired},
 	{Method: "GET", Pattern: "/api/v1/balancer/tournaments/{tournament_id}/summary", Queue: "rpc.balancer.admin.tournament_summary_get", IDParam: "tournament_id", Auth: edge.AuthRequired, Timeout: fastReadTimeout},
-	{Method: "GET", Pattern: "/api/v1/balancer/tournaments/{tournament_id}/balance", Queue: "rpc.balancer.admin.balance_get", IDParam: "tournament_id", Auth: edge.AuthRequired},
-	{Method: "PUT", Pattern: "/api/v1/balancer/tournaments/{tournament_id}/balance", Queue: "rpc.balancer.admin.balance_save", IDParam: "tournament_id", Body: true, Auth: edge.AuthRequired},
+	{Method: "GET", Pattern: "/api/v1/balancer/tournaments/{tournament_id}/balance", Queue: "rpc.balancer.admin.balance_get", IDParam: "tournament_id", Query: []string{"formation_node_id"}, Auth: edge.AuthRequired},
+	{Method: "PUT", Pattern: "/api/v1/balancer/tournaments/{tournament_id}/balance", Queue: "rpc.balancer.admin.balance_save", IDParam: "tournament_id", Query: []string{"formation_node_id"}, Body: true, Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/v1/balancer/balances/{balance_id}/export", Queue: "rpc.balancer.admin.balance_export", IDParam: "balance_id", Auth: edge.AuthRequired},
 	// Rank-only re-export: updates the ranks of players the balance already
 	// materialized, without touching the teams (so a live bracket survives).
@@ -56,7 +56,7 @@ var AdminRoutes = []edge.RouteSpec{
 	// `Body: true` carries the optional `team_ids` narrowing; an empty body exports
 	// every complete team. Unlike balance_export this refuses when standings exist
 	// for teams it does not own, so it cannot silently invalidate a live bracket.
-	{Method: "POST", Pattern: "/api/v1/balancer/tournaments/{tournament_id}/registered-teams/export", Queue: "rpc.balancer.teams.export_registered", IDParam: "tournament_id", Body: true, Auth: edge.AuthRequired},
+	{Method: "POST", Pattern: "/api/v1/balancer/tournaments/{tournament_id}/registered-teams/export", Queue: "rpc.balancer.teams.export_registered", IDParam: "tournament_id", Query: []string{"formation_node_id"}, Body: true, Auth: edge.AuthRequired},
 	{Method: "GET", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/config", Queue: "rpc.balancer.admin.workspace_config_get", IDParam: "workspace_id", Auth: edge.AuthRequired, Timeout: fastReadTimeout},
 	{Method: "PUT", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/config", Queue: "rpc.balancer.admin.workspace_config_upsert", IDParam: "workspace_id", Body: true, Auth: edge.AuthRequired},
 	// The mix ranker's knobs and its hidden-rating rebuild. The upsert and the
@@ -190,7 +190,7 @@ var RosterRoutes = []edge.RouteSpec{
 var JobRoutes = []edge.RouteSpec{
 	{Method: "GET", Pattern: "/api/v1/balancer/jobs/{job_id}", Queue: "rpc.balancer.jobs.status", IDParam: "job_id", Auth: edge.AuthRequired, Timeout: fastReadTimeout},
 	{Method: "GET", Pattern: "/api/v1/balancer/jobs/{job_id}/result", Queue: "rpc.balancer.jobs.result", IDParam: "job_id", Auth: edge.AuthRequired},
-	{Method: "POST", Pattern: "/api/v1/balancer/tournaments/{tournament_id}/balance", Queue: "rpc.balancer.jobs.create_for_tournament", IDParam: "tournament_id", Body: true, Auth: edge.AuthRequired, Success: 202},
+	{Method: "POST", Pattern: "/api/v1/balancer/tournaments/{tournament_id}/balance", Queue: "rpc.balancer.jobs.create_for_tournament", IDParam: "tournament_id", Query: []string{"formation_node_id"}, Body: true, Auth: edge.AuthRequired, Success: 202},
 	// Synchronous twin of the trio above, for API clients: the whole pool rides
 	// in the body, the teams come back in the response. No job id, no polling,
 	// no realtime topic — and no workspace read either, so `workspace_id` is
@@ -201,7 +201,7 @@ var JobRoutes = []edge.RouteSpec{
 // DraftReadRoutes are the public draft spectating reads (no auth), from
 // src/routes/admin/draft.py.
 var DraftReadRoutes = []edge.RouteSpec{
-	{Method: "GET", Pattern: "/api/v1/balancer/draft/tournaments/{tournament_id}/draft", Queue: "rpc.balancer.draft.tournament_board", IDParam: "tournament_id", Auth: edge.AuthNone, Timeout: fastReadTimeout},
+	{Method: "GET", Pattern: "/api/v1/balancer/draft/tournaments/{tournament_id}/draft", Queue: "rpc.balancer.draft.tournament_board", IDParam: "tournament_id", Query: []string{"formation_node_id"}, Auth: edge.AuthNone, Timeout: fastReadTimeout},
 	{Method: "GET", Pattern: "/api/v1/balancer/draft/sessions/{session_id}", Queue: "rpc.balancer.draft.session_get", IDParam: "session_id", Auth: edge.AuthNone, Timeout: fastReadTimeout},
 	{Method: "GET", Pattern: "/api/v1/balancer/draft/sessions/{session_id}/board", Queue: "rpc.balancer.draft.session_board", IDParam: "session_id", Auth: edge.AuthNone, Timeout: fastReadTimeout},
 }
@@ -225,7 +225,7 @@ var DraftRoutes = []edge.RouteSpec{
 	{Method: "GET", Pattern: "/api/v1/balancer/draft/sessions/{session_id}/journal", Queue: "rpc.balancer.draft.journal", IDParam: "session_id", Query: []string{"limit"}, Auth: edge.AuthRequired, Timeout: fastReadTimeout},
 	{Method: "POST", Pattern: "/api/v1/balancer/draft/sessions/{session_id}/players/{player_id}/roles", Queue: "rpc.balancer.draft.player_role_edit", IDParam: "player_id", Path: []string{"session_id"}, Body: true, Auth: edge.AuthRequired},
 	// tournament-only admin
-	{Method: "GET", Pattern: "/api/v1/balancer/draft/tournaments/{tournament_id}/sessions", Queue: "rpc.balancer.draft.session_list", IDParam: "tournament_id", Auth: edge.AuthRequired, Timeout: fastReadTimeout},
+	{Method: "GET", Pattern: "/api/v1/balancer/draft/tournaments/{tournament_id}/sessions", Queue: "rpc.balancer.draft.session_list", IDParam: "tournament_id", Query: []string{"formation_node_id"}, Auth: edge.AuthRequired, Timeout: fastReadTimeout},
 	{Method: "POST", Pattern: "/api/v1/balancer/draft/tournaments/{tournament_id}/sessions", Queue: "rpc.balancer.draft.session_create", IDParam: "tournament_id", Body: true, Auth: edge.AuthRequired},
 	{Method: "DELETE", Pattern: "/api/v1/balancer/draft/tournaments/{tournament_id}/sessions/{session_id}", Queue: "rpc.balancer.draft.session_delete", IDParam: "session_id", Path: []string{"tournament_id"}, Auth: edge.AuthRequired, Success: 204},
 	{Method: "POST", Pattern: "/api/v1/balancer/draft/tournaments/{tournament_id}/sessions/{session_id}/seed", Queue: "rpc.balancer.draft.seed", IDParam: "session_id", Path: []string{"tournament_id"}, Body: true, Auth: edge.AuthRequired},

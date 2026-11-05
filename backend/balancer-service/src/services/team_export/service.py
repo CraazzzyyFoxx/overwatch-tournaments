@@ -57,6 +57,8 @@ class ExportPlan:
     """What one materialization path contributes to the shared sequence."""
 
     tournament_id: int
+    #: The formation node the teams belong to: the cleanup, the guard and the team reuse touch only its rows.
+    formation_node_id: int
     teams: Sequence[MaterializationTeam]
     prior_team_ids: Sequence[int] = ()
     on_unresolved: OnUnresolved = "skip"
@@ -102,12 +104,14 @@ class TeamMaterializationService:
         prior_ids = list(plan.prior_team_ids)
 
         if plan.guard_standings:
-            await self._assert_no_foreign_standings(session, plan.tournament_id, prior_ids)
+            await self._assert_no_foreign_standings(session, plan.formation_node_id, prior_ids)
 
         if prior_ids:
-            await session.execute(sa.delete(Standing).where(Standing.team_id.in_(prior_ids)))
-            await session.execute(sa.delete(Player).where(Player.team_id.in_(prior_ids)))
-            await session.execute(sa.delete(Team).where(Team.id.in_(prior_ids)))
+            # A link may point into another formation's export: only this node's teams go.
+            own_ids = sa.select(Team.id).where(Team.id.in_(prior_ids), Team.formation_node_id == plan.formation_node_id)
+            await session.execute(sa.delete(Standing).where(Standing.team_id.in_(own_ids)))
+            await session.execute(sa.delete(Player).where(Player.team_id.in_(own_ids)))
+            await session.execute(sa.delete(Team).where(Team.id.in_(own_ids)))
             if plan.unlink is not None:
                 plan.unlink()
             await session.flush()
@@ -115,6 +119,7 @@ class TeamMaterializationService:
         materialization = await materialize_teams(
             session,
             plan.tournament_id,
+            plan.formation_node_id,
             plan.teams,
             on_unresolved=plan.on_unresolved,
         )
@@ -128,7 +133,7 @@ class TeamMaterializationService:
             rows = (
                 await session.scalars(
                     sa.select(Team).where(
-                        Team.tournament_id == plan.tournament_id,
+                        Team.formation_node_id == plan.formation_node_id,
                         Team.balancer_name.in_(names),
                     )
                 )
@@ -147,10 +152,10 @@ class TeamMaterializationService:
     @staticmethod
     async def _assert_no_foreign_standings(
         session: AsyncSession,
-        tournament_id: int,
+        formation_node_id: int,
         prior_team_ids: Sequence[int],
     ) -> None:
-        """Refuse when standings exist for teams this export will not replace.
+        """Refuse when standings exist for teams of this node that this export will not replace.
 
         Re-export is destructive-then-idempotent, not diffed, so a bracket built
         on teams outside ``prior_team_ids`` would be silently invalidated.
@@ -159,7 +164,7 @@ class TeamMaterializationService:
             sa.select(sa.literal(1))
             .select_from(Standing)
             .join(Team, Team.id == Standing.team_id)
-            .where(Team.tournament_id == tournament_id)
+            .where(Team.formation_node_id == formation_node_id)
             .limit(1)
         )
         if prior_team_ids:
@@ -171,7 +176,7 @@ class TeamMaterializationService:
                     ApiExc(
                         code="standings_exist",
                         msg=(
-                            "Standings already exist for this tournament; re-exporting teams "
+                            "Standings already exist for this formation's teams; re-exporting them "
                             "would invalidate them. Remove the standings first."
                         ),
                     )

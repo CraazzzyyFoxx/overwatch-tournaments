@@ -22655,6 +22655,18 @@
         "format": {
           "$ref": "#/components/schemas/balancer.DraftFormat"
         },
+        "formation_node_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Formation Node Id"
+        },
         "id": {
           "title": "Id",
           "type": "integer"
@@ -23804,6 +23816,10 @@
           "$ref": "#/components/schemas/balancer.DraftAutopickStrategy",
           "default": "best_fit"
         },
+        "formation_node_id": {
+          "title": "Formation Node Id",
+          "type": "integer"
+        },
         "overtime_seconds": {
           "default": 0,
           "title": "Overtime Seconds",
@@ -23836,6 +23852,9 @@
           "title": "Source Balance Id"
         }
       },
+      "required": [
+        "formation_node_id"
+      ],
       "title": "DraftSessionCreateRequest",
       "type": "object"
     },
@@ -24002,6 +24021,18 @@
         },
         "format": {
           "$ref": "#/components/schemas/balancer.DraftFormat"
+        },
+        "formation_node_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Formation Node Id"
         },
         "id": {
           "title": "Id",
