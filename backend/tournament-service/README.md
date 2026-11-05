@@ -386,7 +386,8 @@ REGISTRATION ──▶ CHECK_IN ──▶ DRAFT ──▶ LIVE ──▶ PLAYOFF
 
 **What the tick will and will not do.** It moves forward only, and only *out of* `REGISTRATION`,
 `CHECK_IN` or `DRAFT` — so the furthest it can take a tournament is `LIVE`. `PLAYOFFS` and
-`COMPLETED` depend on the actual course of play and stay manual. Tournaments with
+`COMPLETED` depend on the actual course of play and stay manual. A stage node's `start` schedule row
+moves it `ready → live` and generates its encounters. Tournaments with
 `auto_transitions_enabled = false` are never touched. When several rows are due at once the tick
 picks the *latest* due phase and jumps straight to it rather than stepping through the intermediate
 ones.

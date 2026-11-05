@@ -327,7 +327,7 @@ class FlowNodeStateChangedEvent(BaseEvent):
     """Domain event emitted when a registration, formation or stage node changes status.
 
     Published by: tournament-service (``FlowNodeService.transition``, manual and automatic).
-    Consumed by: discord-service (channel registry reload, voice sync).
+    Consumed by: discord-service (channel registry reload; a stage going live or completing requests a voice sync).
     """
 
     event_type: str = Field(default="flow_node_state_changed", frozen=True)

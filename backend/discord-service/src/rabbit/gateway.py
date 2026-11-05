@@ -40,6 +40,7 @@ from shared.messaging.config import (
     DISCORD_VOICE_MOVE_DLQ,
     DISCORD_VOICE_MOVE_QUEUE,
     DISCORD_VOICE_SYNC_DLQ,
+    FLOW_NODE_STATE_CHANGED_ROUTING_KEY,
     MATCH_LOG_RESULT_DLQ,
     MATCH_LOG_RESULT_QUEUE,
     PICKUP_MIX_CHANGED_DLQ,
@@ -49,7 +50,7 @@ from shared.messaging.config import (
 from shared.messaging.topology import declare_dead_letter_queue
 from shared.observability import make_rabbit_broker, observe_message_processing
 from shared.repository.discord_message import LIVE_STATUSES, DiscordMessageRepository
-from shared.schemas.events import DiscordCommandEvent, MatchLogProcessedEvent
+from shared.schemas.events import DiscordCommandEvent, FlowNodeStateChangedEvent, MatchLogProcessedEvent
 from shared.schemas.rpc import rpc_error, rpc_ok
 from shared.services.discord_messages import emit_changed
 from src import rpc_api
@@ -446,6 +447,13 @@ class DiscordRabbitGateway:
             await self._settle(session, row, self._messages.mark_deleted(session, row.id))
         await msg.ack()
 
+    async def _on_flow_node_state_changed(self, body: dict[str, Any]) -> None:
+        """A node moved: reload the channel map; a stage going live or completing re-plans that tournament's voice."""
+        event = FlowNodeStateChangedEvent.model_validate(body)
+        await self._registry.reload()
+        if event.kind == "stage" and event.new_status in {"live", "completed"}:
+            self._voice_sync.request(event.tournament_id)
+
     # --- subscribers -----------------------------------------------------------
 
     def _register(self, broker: RabbitBroker) -> None:
@@ -617,6 +625,19 @@ class DiscordRabbitGateway:
                 # A finished tournament loses its channels; a started one gets its team voices.
                 if isinstance(tournament_id := body.get("tournament_id"), int):
                     self._voice_sync.request(tournament_id)
+
+        @broker.subscriber(
+            RabbitQueue("", exclusive=True, auto_delete=True, routing_key=FLOW_NODE_STATE_CHANGED_ROUTING_KEY),
+            TOURNAMENT_EVENTS_EXCHANGE,
+        )
+        async def handle_flow_node_state_changed(body: dict[str, Any], msg: RabbitMessage) -> None:
+            async with observe_message_processing(
+                queue="flow_node_state",
+                handler="handle_flow_node_state_changed",
+                message=msg,
+                logger=logger,
+            ):
+                await self._on_flow_node_state_changed(body)
 
         rpc_api.register(
             broker,
