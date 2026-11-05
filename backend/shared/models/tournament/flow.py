@@ -113,7 +113,7 @@ class FlowNodeResult(db.TimeStampIntegerMixin):
     item_rank: Mapped[int | None] = mapped_column(Integer(), nullable=True)
     score: Mapped[float | None] = mapped_column(Numeric(asdecimal=False), nullable=True)
     tie_group: Mapped[int | None] = mapped_column(Integer(), nullable=True)
-    breakdown: Mapped[dict[str, Any] | None] = mapped_column(JSONB(), nullable=True)
+    breakdown: Mapped[dict[str, Any] | None] = mapped_column(JSONB(none_as_null=True), nullable=True)
     state: Mapped[str] = mapped_column(String(16))
 
 
