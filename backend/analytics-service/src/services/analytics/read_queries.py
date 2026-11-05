@@ -272,6 +272,7 @@ class AnalyticsReadService:
                 sa.tuple_(start, end, tid)
                 <= sa.tuple_(current.c.chrono_start, current.c.chrono_end, current.c.tournament_id),
             )
+            .where(models.ParticipantResult.placement.is_not(None))
         ).subquery()
 
         query = (
@@ -289,7 +290,9 @@ class AnalyticsReadService:
             )
             .join(subquery, subquery.c.user_id == models.WorkspaceMember.player_id)
             .join(models.User, models.User.id == subquery.c.user_id)
-            .where(models.ParticipantResult.tournament_id == tournament_id)
+            .where(
+                models.ParticipantResult.tournament_id == tournament_id, models.ParticipantResult.placement.is_not(None)
+            )
             .order_by(subquery.c.chrono_start.desc(), subquery.c.chrono_end.desc(), subquery.c.tournament_id.desc())
         )
 

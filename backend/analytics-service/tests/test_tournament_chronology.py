@@ -98,6 +98,13 @@ class StreaksChronologyTests(_ChronologyTestCase):
         # 1 has the lowest id but started after 2, so it is not in 2's history; 3 ended before 2, so it is.
         self.assertEqual([2, 3], await self._positions(2))
 
+    async def test_an_unplaced_result_is_skipped_in_history_and_lists_no_member_as_the_target(self) -> None:
+        table = models.ParticipantResult.__table__
+        self.db.session.execute(sa.update(table).where(table.c.tournament_id == 3).values(placement=None))
+        self.assertEqual([1, 2], await self._positions(1))
+        self.db.session.execute(sa.update(table).where(table.c.tournament_id == 2).values(placement=None))
+        self.assertEqual([], await self._positions(2))
+
 
 splits = importlib.import_module("src.services.ml.training.splits")
 backfill = importlib.import_module("src.services.ml.inference.backfill")
