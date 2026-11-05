@@ -60,7 +60,7 @@ won keeps "winner" while the profile shows 0 titles). After `alembic upgrade hea
    `GET /api/v1/admin/ws/{workspace_id}/achievements/rules/runs`.
 2. **Analytics, per workspace that has members on two teams in one tournament.** Follow
    `backend/analytics-service/docs/runbook-shift-recompute.md`, "Recompute on the prod host", without retraining: the
-   v1 Points/Linear/OpenSkill recompute (step 2, `POST /v2/jobs` with `{"kind":"compute","tournament_id":<earliest
+   v1 Points/Linear/OpenSkill recompute (step 2, `POST /api/v1/analytics/jobs` with `{"kind":"compute","tournament_id":<earliest
    tournament>}`) and the shift backfill (step 1b, `python -m src.services.ml.cli backfill --from <day> --to <today>`,
    run in the `analytics-worker` container). Stored `analytics.player_shift` rows computed under the old team-grain
    placement stay until then. The manual shift (`AnalyticsPlayer.shift`) is never touched.

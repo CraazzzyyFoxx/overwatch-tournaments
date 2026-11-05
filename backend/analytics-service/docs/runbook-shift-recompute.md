@@ -60,7 +60,7 @@ $ML backfill --from $SINCE --to $(date -u +%F)
 #    permission). The v1 recalc of a tournament also rewrites the v1 rows of every later (by start date) tournament of
 #    the workspace that already has them, so one job for the earliest tournament refreshes them all; tournaments never
 #    computed get their rows from their own job:
-curl -X POST https://<api-host>/v2/jobs -H "Authorization: Bearer <token>" \
+curl -X POST https://<api-host>/api/v1/analytics/jobs -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" -d "{\"kind\":\"compute\",\"tournament_id\":$FIRST}"
 #    (or with the built-in recompute button in the admin panel; jobs are serialized — one per workspace)
 ```
