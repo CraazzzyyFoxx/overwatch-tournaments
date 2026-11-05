@@ -14,8 +14,9 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
-from shared.core.enums import FlowNodeKind, FlowNodeStatus, FlowResultState, StageType
+from shared.core.enums import FlowNodeKind, FlowNodeStatus, FlowResultState, FlowUnit, StageType
 from shared.domain.flow.config import (
+    AggregateNodeConfig,
     FilterNodeConfig,
     LeaderboardNodeConfig,
     RegistrationNodeConfig,
@@ -31,7 +32,8 @@ from shared.models.tournament.flow import FlowEdge, FlowNode, FlowNodeResult
 from shared.models.tournament.player_standing import PlayerStanding
 from shared.models.tournament.stage import Stage, StageItem
 from shared.models.tournament.standings import Standing
-from shared.models.tournament.team import Team
+from shared.models.tournament.team import Player, Team
+from src.domain.flow.aggregate import AggregateInput, compute_aggregate
 from src.domain.flow.compute import (
     PureOutput,
     ResultRow,
@@ -40,6 +42,7 @@ from src.domain.flow.compute import (
     compute_merge,
     compute_split,
 )
+from src.services.standings.service import FFA_STAGE_TYPES
 
 __all__ = ("FlowEngine", "FlowRecomputeReport", "flow_engine")
 
@@ -48,8 +51,6 @@ _LIFECYCLE_PORT = {
     FlowNodeKind.FORMATION: "teams",
     FlowNodeKind.STAGE: "ranking",
 }
-#: The output port of a pure node with exactly one (split has one per bucket).
-_PURE_PORT = {FlowNodeKind.FILTER: "passed", FlowNodeKind.MERGE: "merged", FlowNodeKind.LEADERBOARD: "ranking"}
 #: The status at which a lifecycle node's rows stop moving.
 _FINAL_STATUS = {
     FlowNodeKind.REGISTRATION: FlowNodeStatus.CLOSED,
@@ -85,9 +86,6 @@ class FlowEngine:
             )
         ).all()
         by_id = {n.id: n for n in nodes}
-        for n in nodes:
-            if n.kind not in _LIFECYCLE_PORT and n.kind not in _PURE_PORT and n.kind != FlowNodeKind.SPLIT:
-                raise ValueError(f"flow node {n.id} of kind {n.kind} is not computed in phase 2")
         order = topological_order(by_id, ((e.source_node_id, e.target_node_id) for e in edges))
         if order is None:
             raise ValueError(f"flow of tournament {tournament_id} contains a cycle")
@@ -111,13 +109,17 @@ class FlowEngine:
                 ports, state = {_LIFECYCLE_PORT[kind]: await loader(session, node)}, self._lifecycle_state(node)
             else:
                 sources = [outputs.get((e.source_node_id, e.source_port)) for e in incoming[node_id]]
-                if not sources or not all(s and s[0] for s in sources):
+                # An aggregate scores a missing input as 0, so it waits only while no input has rows.
+                has_rows = [bool(s and s[0]) for s in sources]
+                if not (any(has_rows) if kind == FlowNodeKind.AGGREGATE else sources and all(has_rows)):
                     ports = {p.name: [] for p in concrete_outputs(kind, node.config)}
                     state, status = FlowResultState.TENTATIVE, FlowNodeStatus.PENDING
                 else:
-                    ready = [s for s in sources if s]
-                    computed = self._compute_pure(kind, node, [s[0] for s in ready], item_order)
-                    final = not computed.boundary_tie and all(s[1] == FlowResultState.FINAL for s in ready)
+                    if kind == FlowNodeKind.AGGREGATE:
+                        computed = await self._compute_aggregate(session, node, incoming[node_id], sources, by_id)
+                    else:
+                        computed = self._compute_pure(kind, node, [s[0] for s in sources if s], item_order)
+                    final = not computed.boundary_tie and all(s and s[1] == FlowResultState.FINAL for s in sources)
                     ports, state = computed.ports, FlowResultState.FINAL if final else FlowResultState.TENTATIVE
                     status = FlowNodeStatus(state.value)
             moved = False
@@ -147,7 +149,42 @@ class FlowEngine:
             board = parse_node_config(kind, node.config)
             assert isinstance(board, LeaderboardNodeConfig)
             return compute_leaderboard(board, inputs[0])
-        return PureOutput({_PURE_PORT[kind]: compute_merge(inputs)})
+        return PureOutput({"merged": compute_merge(inputs)})
+
+    async def _compute_aggregate(
+        self,
+        session: AsyncSession,
+        node: FlowNode,
+        edges: Sequence[FlowEdge],
+        sources: Sequence[tuple[list[ResultRow], FlowResultState] | None],
+        by_id: Mapping[int, FlowNode],
+    ) -> PureOutput:
+        config = parse_node_config(FlowNodeKind.AGGREGATE, node.config)
+        assert isinstance(config, AggregateNodeConfig)
+        inputs = [
+            AggregateInput(
+                e.source_node_id,
+                s[0] if s else [],
+                bool(s and s[1] == FlowResultState.FINAL),
+                by_id[e.source_node_id].completed_at,
+            )
+            for e, s in zip(edges, sources, strict=True)
+        ]
+        members: defaultdict[int, list[int]] = defaultdict(list)
+        team_ids = {r.team_id for i in inputs for r in i.rows if r.team_id is not None}
+        if config.unit == FlowUnit.PLAYERS and team_ids:
+            rows = await session.execute(
+                sa.select(Player.team_id, Player.workspace_member_id)
+                .where(
+                    Player.team_id.in_(team_ids),
+                    Player.is_substitution.is_(False),
+                    Player.workspace_member_id.is_not(None),
+                )
+                .order_by(Player.id)
+            )
+            for team_id, member_id in rows:
+                members[team_id].append(member_id)
+        return compute_aggregate(config, inputs, members_by_team=members)
 
     def _lifecycle_state(self, node: FlowNode) -> FlowResultState:
         final = node.status == _FINAL_STATUS[FlowNodeKind(node.kind)]
@@ -248,12 +285,19 @@ class FlowEngine:
         return [ResultRow(None, team_id) for team_id in team_ids]
 
     async def _stage_rows(self, session: AsyncSession, node: FlowNode) -> list[ResultRow]:
-        if (
-            await session.scalar(sa.select(Stage.stage_type).where(Stage.id == node.stage_id))
-            == StageType.INDIVIDUAL_SWISS
-        ):
+        """The stage table; ``breakdown`` carries the stage metrics an aggregate formula reads (plan Decision 8)."""
+        stage_type = await session.scalar(sa.select(Stage.stage_type).where(Stage.id == node.stage_id))
+        if stage_type == StageType.INDIVIDUAL_SWISS:
             players = await session.execute(
-                sa.select(PlayerStanding.workspace_member_id, PlayerStanding.points)
+                sa.select(
+                    PlayerStanding.workspace_member_id,
+                    PlayerStanding.points,
+                    PlayerStanding.wins,
+                    PlayerStanding.draws,
+                    PlayerStanding.losses,
+                    PlayerStanding.maps_won - PlayerStanding.maps_lost,
+                    PlayerStanding.buchholz,
+                )
                 .where(PlayerStanding.stage_id == node.stage_id)
                 .order_by(
                     PlayerStanding.is_qualified.desc(),
@@ -262,17 +306,71 @@ class FlowEngine:
                     PlayerStanding.workspace_member_id,
                 )
             )
-            return [ResultRow(member_id, None, score=points) for member_id, points in players]
+            return [
+                ResultRow(
+                    member_id,
+                    None,
+                    score=points,
+                    breakdown={
+                        "wins": wins,
+                        "draws": draws,
+                        "losses": losses,
+                        "map_diff": map_diff,
+                        "buchholz": buchholz,
+                    },
+                )
+                for member_id, points, wins, draws, losses, map_diff, buchholz in players
+            ]
         standings = await session.execute(
-            sa.select(Standing.team_id, Standing.stage_item_id, Standing.position, Standing.points, Standing.tie_group)
+            sa.select(
+                Standing.team_id,
+                Standing.stage_item_id,
+                Standing.position,
+                Standing.points,
+                Standing.tie_group,
+                Standing.win,
+                Standing.draw,
+                Standing.lose,
+                Standing.score_differential,
+                Standing.buchholz,
+                Standing.swiss_status,
+            )
             .outerjoin(StageItem, StageItem.id == Standing.stage_item_id)
             .where(Standing.stage_id == node.stage_id)
             .order_by(Standing.position, StageItem.order.asc().nulls_first(), Standing.points.desc(), Standing.team_id)
         )
         return _dedup(
             [
-                ResultRow(None, team_id, item_id, position, points, tie_group)
-                for team_id, item_id, position, points, tie_group in standings
+                ResultRow(
+                    None,
+                    team_id,
+                    item_id,
+                    position,
+                    points,
+                    tie_group,
+                    {
+                        "wins": win,
+                        "draws": draw,
+                        "losses": lose,
+                        "map_diff": score_differential or 0,
+                        "buchholz": buchholz or 0,
+                        "ffa_score": points if stage_type in FFA_STAGE_TYPES else 0,
+                        **({} if swiss_status is None else {"swiss_status": swiss_status}),
+                    },
+                )
+                for (
+                    team_id,
+                    item_id,
+                    position,
+                    points,
+                    tie_group,
+                    win,
+                    draw,
+                    lose,
+                    score_differential,
+                    buchholz,
+                    swiss_status,
+                ) in standings
             ]
         )
 

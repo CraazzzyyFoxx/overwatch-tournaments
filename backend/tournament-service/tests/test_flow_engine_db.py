@@ -326,9 +326,8 @@ class FlowEngineTests(EncounterWriterCase):
     async def test_a_result_without_a_breakdown_is_stored_as_sql_null(self) -> None:
         await self._recompute()
         async with self.Session() as s:
-            stored = await s.scalar(
-                sa.select(sa.func.count()).where(
-                    FlowNodeResult.node_id == self.stage.id, FlowNodeResult.breakdown.is_(None)
-                )
-            )
-        self.assertEqual(4, stored)
+            rows = sa.select(sa.func.count()).where(FlowNodeResult.node_id == self.reg.id)
+            total = await s.scalar(rows)
+            stored = await s.scalar(rows.where(FlowNodeResult.breakdown.is_(None)))
+        self.assertGreater(total, 0)
+        self.assertEqual(total, stored)

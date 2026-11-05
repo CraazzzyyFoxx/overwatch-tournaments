@@ -8,8 +8,10 @@ from pydantic import BaseModel, ConfigDict, Field, NonNegativeInt, model_validat
 from pydantic_core import PydanticCustomError
 
 from shared.core.enums import FlowNodeKind, FlowUnit, SubscriptionEnforcementStage
+from shared.domain.ffa_formula import FfaFormulaError, compile_formula
 
 __all__ = (
+    "AGGREGATE_VARIABLES",
     "NODE_CONFIG_MODELS",
     "AggregateNodeConfig",
     "AggregateScore",
@@ -126,6 +128,12 @@ class SplitNodeConfig(_NodeConfig):
     serpentine: bool = False
 
 
+#: What an aggregate formula may read per input row; a stage metric an input cannot supply is 0.
+AGGREGATE_VARIABLES: frozenset[str] = frozenset(
+    {"place", "participants", "points", "wins", "draws", "losses", "map_diff", "buchholz", "ffa_score"}
+)
+
+
 class AggregateScore(_NodeConfig):
     preset: Literal["stage_points", "placement_table", "formula"]
     table: dict[str, float] = {}
@@ -143,6 +151,23 @@ class AggregateNodeConfig(_NodeConfig):
     def _n_for_windowed_modes(self) -> AggregateNodeConfig:
         if self.mode in ("sum_last_n", "sum_best_n") and self.n is None:
             raise ValueError(f"n is required for mode {self.mode!r}")
+        return self
+
+    @model_validator(mode="after")
+    def _score_is_usable(self) -> AggregateNodeConfig:
+        score = self.score
+        if score.preset == "formula":
+            if score.formula is None:
+                raise PydanticCustomError("aggregate_formula_required", "The formula preset needs a formula")
+            try:
+                compile_formula(score.formula, (), variables=AGGREGATE_VARIABLES)
+            except FfaFormulaError as exc:
+                raise PydanticCustomError(exc.code, str(exc), {"offset": exc.offset, "name": exc.name}) from exc
+        elif score.preset == "placement_table":
+            if not score.table:
+                raise PydanticCustomError("aggregate_table_required", "The placement table needs at least one place")
+            if not all(place.isdecimal() and int(place) >= 1 for place in score.table):
+                raise PydanticCustomError("aggregate_table_place", "Placement table keys are places: 1, 2, 3, ...")
         return self
 
 

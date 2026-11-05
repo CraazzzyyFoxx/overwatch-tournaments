@@ -200,7 +200,7 @@ class FlowService:
             except ValidationError as exc:
                 error(
                     "invalid_node_config",
-                    "; ".join(f"{'.'.join(map(str, e['loc']))}: {e['msg']}" for e in exc.errors()),
+                    "; ".join(f"{'.'.join(map(str, e['loc']))}: {e['msg']} ({e['type']})" for e in exc.errors()),
                     node_id,
                 )
             upserted.add(node_id)
