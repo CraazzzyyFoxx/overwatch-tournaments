@@ -301,7 +301,6 @@ export interface TournamentCreateInput {
   /** "Create tournament" creates it Unpublished; it is published from the hub. */
   is_hidden?: boolean;
   team_formation?: string;
-  status?: TournamentStatus;
   start_date: string;
   end_date: string;
   auto_transitions_enabled?: boolean;
@@ -332,12 +331,6 @@ export interface TournamentUpdateInput {
   draft_format_json?: DraftFormatSettings | null;
 }
 
-export interface TournamentPhaseScheduleEntryInput {
-  status: TournamentStatus;
-  starts_at: string;
-  ends_at?: string | null;
-}
-
 interface TournamentPreviewAccessUser {
   id: number;
   name: string;
@@ -350,11 +343,6 @@ export interface TournamentPreviewAccessEntry {
   auth_user_id: number;
   created_at: string;
   user?: TournamentPreviewAccessUser | null;
-}
-
-export interface TournamentStatusTransitionInput {
-  status: TournamentStatus;
-  force?: boolean;
 }
 
 /**

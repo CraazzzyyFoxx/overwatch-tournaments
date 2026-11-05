@@ -11,15 +11,14 @@ import type { TournamentFlowNode } from "@/types/flow.types";
 
 // ─── Enums ──────────────────────────────────────────────────────────────────
 
-export type TournamentStatus =
-  | "announcement"
-  | "registration"
-  | "draft"
-  | "check_in"
-  | "live"
-  | "playoffs"
-  | "completed"
-  | "archived";
+/** The derived tournament status (`shared/core/flow_state.py`); `archived` is the only one an admin sets. */
+export type TournamentStatus = "announcement" | "live" | "completed" | "archived";
+
+/**
+ * What a surface calls the phase of a tournament: the status, except `registration` / `check_in` while the
+ * tournament is `live` only because a registration node is open (`displayStatus`, `lib/tournament/status`).
+ */
+export type TournamentDisplayStatus = TournamentStatus | "registration" | "check_in";
 
 /** The statuses of a stage node (`NODE_TRANSITIONS.stage`). */
 export type StageNodeStatus = "draft" | "ready" | "live" | "completed";
@@ -201,12 +200,6 @@ export interface Stage extends StageSummary {
  */
 export type TeamFormation = "balancer" | "draft" | "registration" | "solo";
 
-interface TournamentPhaseSchedule {
-  status: TournamentStatus;
-  starts_at: string;
-  ends_at: string | null;
-}
-
 export interface Tournament {
   id: number;
   created_at: Date;
@@ -255,7 +248,6 @@ export interface Tournament {
    * the rules require). Shifts the timestamps of their past broadcasts.
    */
   pov_stream_delay_s: number;
-  phase_schedule: TournamentPhaseSchedule[];
 
   stages: StageSummary[];
   participants_count: number | null;
@@ -305,7 +297,7 @@ export type TournamentImageSlot = "cover" | "logo";
  */
 export interface TournamentFacets {
   total: number;
-  /** `live` + `playoffs` combined: "matches happening right now". */
+  /** Tournaments with a stage node `live`: "matches happening right now". */
   live: number;
   by_status: Record<TournamentStatus, number>;
   league: number;

@@ -48,14 +48,7 @@ describe("tournamentService.getActive", () => {
   // tournaments only, instead of every tournament for the client to filter.
   it("asks the server for the active statuses only", async () => {
     await tournamentService.getActive();
-    expect(calls[0].options?.query?.status).toEqual([
-      "live",
-      "playoffs",
-      "registration",
-      "check_in",
-      "announcement",
-      "draft",
-    ]);
+    expect(calls[0].options?.query?.status).toEqual(["announcement", "live"]);
   });
 });
 
@@ -171,7 +164,7 @@ describe("tournamentService.listTournaments", () => {
             sort: "participants_count",
             order: "desc",
             workspace_id: 7,
-            entities: ["stages", "participants_count", "teams_count"],
+            entities: ["stages", "participants_count", "teams_count", "flow_nodes"],
             status: "live",
             is_league: false,
             query: "spring",
@@ -214,7 +207,7 @@ describe("tournamentService.getFacets", () => {
   it("sends exactly the list's filters and no paging", async () => {
     await tournamentService.getFacets({
       workspaceId: 7,
-      status: "registration",
+      status: "announcement",
       isLeague: true,
       query: " cup ",
     });
@@ -225,7 +218,7 @@ describe("tournamentService.getFacets", () => {
         options: {
           query: {
             workspace_id: 7,
-            status: "registration",
+            status: "announcement",
             is_league: true,
             query: "cup",
           },

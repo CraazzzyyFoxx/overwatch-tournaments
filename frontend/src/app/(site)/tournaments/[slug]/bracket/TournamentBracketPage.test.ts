@@ -44,10 +44,7 @@ describe("TournamentBracketPage", () => {
 
   it.each([
     ["live", 15_000],
-    ["playoffs", 15_000],
-    ["registration", false],
-    ["draft", false],
-    ["check_in", false],
+    ["announcement", false],
     ["completed", false],
     ["archived", false]
   ] as const)("uses the lifecycle polling policy for %s", (status, expected) => {

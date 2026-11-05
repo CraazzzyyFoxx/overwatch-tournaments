@@ -72,6 +72,22 @@ export function registrationNodeConfig(node: Pick<TournamentFlowNode, "config"> 
   };
 }
 
+/** When the current registration node's `open` window closes (ISO-8601), or null when it has none. */
+export function registrationClosesAt(
+  tournament: Pick<Tournament, "flow_nodes"> | null | undefined
+): string | null {
+  const node = currentRegistrationNode(tournament);
+  return (node && scheduleRow(node, "open")?.ends_at) || null;
+}
+
+/** The earliest planned stage start (ISO-8601) across the stage nodes, or null when none is scheduled. */
+export function playStartsAt(tournament: Pick<Tournament, "flow_nodes"> | null | undefined): string | null {
+  const starts = nodesOfKind(tournament, "stage").flatMap((node) =>
+    node.schedule.filter((entry) => entry.phase === "start").map((entry) => entry.starts_at)
+  );
+  return starts.sort((left, right) => Date.parse(left) - Date.parse(right))[0] ?? null;
+}
+
 function scheduleRow(node: Pick<TournamentFlowNode, "schedule">, phase: "open" | "check_in") {
   return node.schedule.find((entry) => entry.phase === phase);
 }

@@ -37,7 +37,7 @@ import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";
 import { useSlotLabel } from "@/hooks/useSlotLabel";
 import { roleAccent } from "@/lib/registration/role-accent";
 import { findRole, roleColor, rolePresentation, showsRoles, type RoleOntology } from "@/lib/roster/ontology";
-import { reachedAtLeast } from "@/lib/tournament/lifecycle";
+import { hasPlayStarted } from "@/lib/tournament/stages";
 import { answerFlag, answerList, answerText } from "@/lib/forms/answers";
 import { IDENTITY_PROVIDERS, identityKey, identityProvider } from "@/lib/forms/builtin-keys";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
@@ -389,7 +389,7 @@ function MyRegistrationCard({
   const isApproved = registration.status === "approved";
   const isTerminal = TERMINAL_REGISTRATION_STATUSES.has(registration.status);
   const checkInPhaseOver =
-    !isCheckedIn && !canCheckIn && reachedAtLeast(tournament.status, "live");
+    !isCheckedIn && !canCheckIn && hasPlayStarted(tournament.status, tournament.stages);
   // Withdrawal closes at check-in: past that point the roster is balanced and
   // drafted against a confirmed attendee list (backend returns 409 too).
   const canWithdraw =

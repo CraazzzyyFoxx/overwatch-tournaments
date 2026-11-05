@@ -10,7 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import type { Formatter } from "@/lib/datetime";
 import { getFormatter } from "@/lib/datetime/server";
 import { getActiveTournaments, getPublicCommunities, type PublicCommunity } from "@/lib/site/public-data";
-import { getTournamentStatusMeta } from "@/lib/tournament/status";
+import { getTournamentStatusMeta, displayStatus } from "@/lib/tournament/status";
 import { cn } from "@/lib/utils";
 import type { Tournament } from "@/types/tournament.types";
 
@@ -55,7 +55,7 @@ async function loadDirectory(): Promise<DirectoryEntry[]> {
   const entries = communities.map((community): DirectoryEntry => {
     const mine = active.filter((tournament) => tournament.workspace_id === community.workspace.id);
     const running =
-      mine.find((tournament) => getTournamentStatusMeta(tournament.status).variant === "live") ??
+      mine.find((tournament) => getTournamentStatusMeta(displayStatus(tournament)).variant === "live") ??
       mine[0] ??
       null;
     return { ...community, active: running };
@@ -119,7 +119,7 @@ async function CommunityCard({ entry }: Readonly<{ entry: DirectoryEntry }>) {
   // Only a verified custom domain is an address worth showing; platform
   // subdomains are plumbing.
   const host = workspace.custom_domain_verified_at ? workspace.custom_domain : null;
-  const variant = active ? getTournamentStatusMeta(active.status).variant : null;
+  const variant = active ? getTournamentStatusMeta(displayStatus(active)).variant : null;
 
   return (
     <Link href={`/workspace/${workspace.slug}`} prefetch={false} className={CARD_CLASS}>

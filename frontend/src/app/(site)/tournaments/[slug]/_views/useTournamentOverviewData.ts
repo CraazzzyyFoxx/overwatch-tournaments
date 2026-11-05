@@ -34,7 +34,7 @@ import { ELIMINATION_TYPES, GROUP_TYPES, overviewVariant } from "./tournamentOve
 export function useTournamentOverviewData(tournamentId: number, slug: string) {
   const tournamentQuery = useTournamentQuery(slug);
   const tournament = tournamentQuery.data;
-  const variant = tournament ? overviewVariant(tournament.status) : null;
+  const variant = tournament ? overviewVariant(tournament) : null;
   const workspaceId = tournament?.workspace_id;
 
   // Memoised for its identity, not its cost: `stageId`/`stageType` below are

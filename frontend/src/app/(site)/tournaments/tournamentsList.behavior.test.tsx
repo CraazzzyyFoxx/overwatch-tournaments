@@ -120,9 +120,10 @@ function tournament(id: number, over: Partial<Tournament> = {}): Tournament {
     is_finished: false,
     is_hidden: false,
     team_formation: "balancer",
-    status: "registration",
+    // `live` because a registration node is open: the card reads "Registration" (`displayStatus`).
+    status: "live",
+    flow_nodes: [{ id: 1, kind: "registration", name: "Registration", status: "open", config: {}, schedule: [], stage_id: null }],
     auto_transitions_enabled: false,
-    phase_schedule: [],
     stages: [],
     participants_count: 30,
     registrations_count: null,
@@ -149,12 +150,9 @@ function facets(over: Partial<TournamentFacets> = {}): TournamentFacets {
     live: 3,
     by_status: {
       live: 2,
-      playoffs: 1,
-      registration: 5,
-      check_in: 0,
+      announcement: 5,
       completed: 30,
-      archived: 4,
-      draft: 0
+      archived: 4
     } as Record<TournamentStatus, number>,
     league: 6,
     standard: 36,

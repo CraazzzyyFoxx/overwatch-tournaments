@@ -153,7 +153,6 @@ function makeTournament(
     flow_nodes: [
       { id: 21, kind: "registration", name: "Registration", status: "open", config: {}, schedule: [], stage_id: null }
     ],
-    phase_schedule: [],
     stages: [],
     participants_count: 4,
     registrations_count: 4,
@@ -285,7 +284,7 @@ beforeEach(() => {
   });
   canReadOrganizerColumns = false;
   searchParams = new URLSearchParams();
-  tournament = makeTournament("draft", "check_in", OW5V5_SHAPE);
+  tournament = makeTournament("draft", "live", OW5V5_SHAPE);
   // The service returns the whole list envelope; the pool reads its rows.
   listRegistrations.mockResolvedValue({
     registrations: POOL_ROSTER,
@@ -434,7 +433,7 @@ describe("participants pool", () => {
   });
 
   it("gives team registration the table and no view switch", async () => {
-    tournament = makeTournament("registration", "check_in", null);
+    tournament = makeTournament("registration", "live", null);
     await mount();
 
     expect(container.querySelector('[role="radiogroup"]')).toBeNull();
@@ -461,7 +460,7 @@ describe("participants pool", () => {
   });
 
   it("keeps organizer-only columns out of the config without the grant", async () => {
-    tournament = requiringSubscription(makeTournament("registration", "check_in", null));
+    tournament = requiringSubscription(makeTournament("registration", "live", null));
     await mount();
 
     const columns = (
@@ -480,7 +479,7 @@ describe("participants pool", () => {
 
   it("restores organizer-only columns for a reader who may see them", async () => {
     canReadOrganizerColumns = true;
-    tournament = requiringSubscription(makeTournament("registration", "check_in", null));
+    tournament = requiringSubscription(makeTournament("registration", "live", null));
     await mount();
 
     const columns = (
@@ -502,7 +501,7 @@ describe("the pool of a one-role game", () => {
       top_characters: []
     });
     tournament = {
-      ...makeTournament("draft", "check_in", {
+      ...makeTournament("draft", "live", {
         slots: { agent: 6 },
         team_size: 6,
         flex_slots: 0,

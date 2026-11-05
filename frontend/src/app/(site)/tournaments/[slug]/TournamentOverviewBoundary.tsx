@@ -17,7 +17,8 @@ import {
   areStreamsVisible,
   getTournamentStatusMeta,
   isTournamentStatusEnded,
-  mayHavePastBroadcasts
+  mayHavePastBroadcasts,
+  displayStatus
 } from "@/lib/tournament/status";
 
 type TournamentOverviewBoundaryProps = {
@@ -67,7 +68,7 @@ export default async function TournamentOverviewBoundary({
   queryClient.setQueryData(tournamentOverviewQueryOptions(slug).queryKey, overview);
   // The hero's played count (`HeroPhaseFact`), read while the tournament is played — the overview's own encounters
   // and FFA lobbies, under the same gates as `useTournamentPlayedCount`.
-  const isLive = getTournamentStatusMeta(overview.status).variant === "live";
+  const isLive = getTournamentStatusMeta(displayStatus(overview)).variant === "live";
   const bracketPlan = createBracketQueryPlan(overview, null);
   // A failed read is just left out (`prefetchQuery` swallows it, `dehydrate`
   // drops it) and the shell retries it client-side.
@@ -79,11 +80,11 @@ export default async function TournamentOverviewBoundary({
       ? null
       : queryClient.prefetchQuery(tournamentRegistrationFormQueryOptions(overview)),
     // The broadcast dock and the Stream tab, read only while streams show.
-    areStreamsVisible(overview.status)
+    areStreamsVisible(displayStatus(overview))
       ? queryClient.prefetchQuery(tournamentStreamsQueryOptions(overview.id))
       : null,
     // The Stream tab's other gate, and the Stream page's past broadcasts.
-    mayHavePastBroadcasts(overview.status)
+    mayHavePastBroadcasts(displayStatus(overview))
       ? queryClient.prefetchQuery(tournamentVodsQueryOptions(overview.id))
       : null,
     isLive && bracketPlan.initialStageId !== null

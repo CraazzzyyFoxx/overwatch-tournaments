@@ -2,7 +2,7 @@ import type { useTranslations } from "next-intl";
 
 import { pickCurrentStage } from "@/lib/tournament/stages";
 import { getTournamentStatusMeta } from "@/lib/tournament/status";
-import type { Tournament, TournamentStatus } from "@/types/tournament.types";
+import type { Tournament, TournamentDisplayStatus } from "@/types/tournament.types";
 
 /**
  * The root translator `stageProgress` (and the tournament facts beside it)
@@ -32,7 +32,7 @@ export interface StageProgress {
 // `@/lib/tournament/status`.
 export function stageProgress(
   tournament: Tournament,
-  status: TournamentStatus,
+  status: TournamentDisplayStatus,
   t: Translate
 ): StageProgress {
   switch (getTournamentStatusMeta(status).variant) {
@@ -40,14 +40,12 @@ export function stageProgress(
       return { label: t("tournamentsList.stage.final"), pct: 100, tone: "accent" };
     case "upcoming":
       return { label: t("tournamentsList.stage.signups"), pct: 30, tone: "warning" };
-    case "draft":
-      return { label: t("tournamentsList.stage.setup"), pct: 20, tone: "neutral" };
   }
 
   const stages = tournament.stages ?? [];
   const total = stages.length;
   const completed = stages.filter((stage) => stage.status === "completed").length;
-  const current = pickCurrentStage(stages, status);
+  const current = pickCurrentStage(stages, tournament.status);
   const pct = total > 0 ? Math.min(95, Math.max(10, Math.round((completed / total) * 100))) : 50;
   return { label: current?.name ?? t("common.live"), pct, tone: "accent" };
 }

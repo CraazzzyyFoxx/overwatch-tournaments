@@ -171,24 +171,42 @@ function makeStage(overrides: Partial<StageSummary> & { id: number }): StageSumm
   };
 }
 
-/** A schedule whose registration is over and whose play window is open. */
-const PHASE_SCHEDULE: Tournament["phase_schedule"] = [
+type FlowNode = NonNullable<Tournament["flow_nodes"]>[number];
+
+const REGISTRATION_SCHEDULE = [
   {
-    status: "registration",
+    phase: "open",
     starts_at: new Date("2024-08-01T10:00:00Z").toISOString(),
     ends_at: new Date("2024-08-10T10:00:00Z").toISOString()
   },
   {
-    status: "check_in",
+    phase: "check_in",
     starts_at: new Date("2024-08-11T10:00:00Z").toISOString(),
     ends_at: null
-  },
-  {
-    status: "live",
-    starts_at: new Date("2024-08-12T10:00:00Z").toISOString(),
-    ends_at: null
   }
-];
+] as FlowNode["schedule"];
+
+/** Registration over its window with check-in planned, and a stage that starts when play does. */
+function registrationNode(status: string): FlowNode {
+  return { id: 4, kind: "registration", name: "Registration", status, config: {}, schedule: REGISTRATION_SCHEDULE, stage_id: null } as FlowNode;
+}
+const STAGE_NODE = {
+  id: 11,
+  kind: "stage",
+  name: "Playoffs",
+  status: "live",
+  config: {},
+  schedule: [{ phase: "start", starts_at: new Date("2024-08-12T10:00:00Z").toISOString(), ends_at: null }],
+  stage_id: 7
+} as FlowNode;
+const formationNode = (status: string): FlowNode =>
+  ({ id: 9, kind: "formation", name: "Teams", status, config: { mode: "draft" }, schedule: [], stage_id: null }) as FlowNode;
+
+/** Before play: the tournament is `live` because a registration node is, no stage has started, teams not forming. */
+const SIGN_UP: Partial<Tournament> = {
+  stages: [makeStage({ id: 7, status: "draft" })],
+  flow_nodes: [registrationNode("open"), formationNode("draft"), { ...STAGE_NODE, status: "draft" }]
+};
 
 function makeTournament(status: TournamentStatus, overrides: Partial<Tournament> = {}): Tournament {
   return {
@@ -207,21 +225,9 @@ function makeTournament(status: TournamentStatus, overrides: Partial<Tournament>
     is_finished: false,
     is_hidden: false,
     team_formation: "draft",
-    flow_nodes: [
-      { id: 4, kind: "registration", name: "Registration", status: "open", config: {}, schedule: [], stage_id: null },
-      {
-        id: 9,
-        kind: "formation",
-        name: "Teams",
-        status: "forming",
-        config: { mode: "draft" },
-        schedule: [],
-        stage_id: null
-      }
-    ],
+    flow_nodes: [registrationNode("open"), formationNode("forming"), STAGE_NODE],
     status,
     auto_transitions_enabled: true,
-    phase_schedule: PHASE_SCHEDULE,
     stages: [makeStage({ id: 7 })],
     participants_count: 20,
     registrations_count: 24,
@@ -690,7 +696,7 @@ const COPY = en.tournamentDetail.overview;
 
 describe("before the tournament starts", () => {
   it("counts the field by primary role against the roster shape", async () => {
-    tournament = makeTournament("registration");
+    tournament = makeTournament("live", SIGN_UP);
     listRegistrations.mockResolvedValue(
       regList([
         makeRegistration(1, "tank", "Hornet#21345"),
@@ -744,7 +750,7 @@ describe("before the tournament starts", () => {
   });
 
   it("counts a team-registration field in teams, with no role shape to fill", async () => {
-    tournament = makeTournament("registration", { team_formation: "registration" });
+    tournament = makeTournament("live", { ...SIGN_UP, team_formation: "registration" });
     const team = (id: number) =>
       ({
         id,
@@ -772,7 +778,10 @@ describe("before the tournament starts", () => {
   });
 
   it("keeps the schedule under the anchor the retired /schedule route points at", async () => {
-    tournament = makeTournament("check_in");
+    tournament = makeTournament("live", {
+      ...SIGN_UP,
+      flow_nodes: [registrationNode("check_in"), formationNode("draft"), { ...STAGE_NODE, status: "draft" }]
+    });
     await mount();
 
     const phases = container.querySelector("#phases");
@@ -783,7 +792,11 @@ describe("before the tournament starts", () => {
 
 describe("while the captains draft", () => {
   beforeEach(() => {
-    tournament = makeTournament("draft");
+    // Registration closed, the draft formation node forming, no stage started.
+    tournament = makeTournament("live", {
+      stages: [makeStage({ id: 7, status: "draft" })],
+      flow_nodes: [{ ...registrationNode("closed") }, formationNode("forming"), { ...STAGE_NODE, status: "draft" }]
+    });
     getTournamentBoard.mockResolvedValue(liveDraftBoard());
   });
 
@@ -1125,9 +1138,15 @@ describe("the reference card", () => {
     is_active: true
   };
 
-  for (const status of ["check_in", "draft", "live", "completed"] as const) {
-    it(`states the format, the full description and the links in the ${status} branch`, async () => {
-      tournament = makeTournament(status, { links: [DISCORD] });
+  const BRANCHES: [string, TournamentStatus, Partial<Tournament>][] = [
+    ["check-in", "live", { ...SIGN_UP, flow_nodes: [registrationNode("check_in"), formationNode("draft")] }],
+    ["draft", "live", { stages: [makeStage({ id: 7, status: "draft" })] }],
+    ["live", "live", {}],
+    ["completed", "completed", {}]
+  ];
+  for (const [branch, status, overrides] of BRANCHES) {
+    it(`states the format, the full description and the links in the ${branch} branch`, async () => {
+      tournament = makeTournament(status, { ...overrides, links: [DISCORD] });
       getAllEncounters.mockResolvedValue(encounterList(playedBracket()));
       await mount();
 

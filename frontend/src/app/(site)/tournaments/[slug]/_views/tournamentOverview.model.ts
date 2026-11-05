@@ -1,15 +1,11 @@
 import type { RoundGroup } from "@/lib/bracket/view";
 import { getEncounterWinner, isEncounterCompleted } from "@/lib/encounter/status";
-import { reachedAtLeast } from "@/lib/tournament/lifecycle";
+import { hasPlayStarted } from "@/lib/tournament/stages";
+import { displayStatus, reachedCheckIn } from "@/lib/tournament/status";
 import type { Encounter } from "@/types/encounter.types";
 import type { Registration } from "@/types/registration.types";
 import type { Team } from "@/types/team.types";
-import type {
-  StageSummary,
-  Standings,
-  Tournament,
-  TournamentStatus
-} from "@/types/tournament.types";
+import type { StageSummary, Standings, Tournament } from "@/types/tournament.types";
 import type { PersonDisplay } from "@/types/user.types";
 
 // ---------------------------------------------------------------------------
@@ -19,22 +15,12 @@ import type { PersonDisplay } from "@/types/user.types";
 export type OverviewVariant = "registration" | "live" | "completed";
 
 /**
- * Exhaustive over `TournamentStatus` on purpose: a status added on the backend
- * then fails the build here instead of silently landing on a fallback branch.
+ * The overview a tournament gets: the finished one, the one once play has started, and the registration view for
+ * everything before — announcing, signing up, checking in and forming the teams.
  */
-const VARIANT_BY_STATUS: Record<TournamentStatus, OverviewVariant> = {
-  announcement: "registration",
-  draft: "registration",
-  registration: "registration",
-  check_in: "registration",
-  live: "live",
-  playoffs: "live",
-  completed: "completed",
-  archived: "completed"
-};
-
-export function overviewVariant(status: TournamentStatus): OverviewVariant {
-  return VARIANT_BY_STATUS[status];
+export function overviewVariant(tournament: Pick<Tournament, "status" | "stages">): OverviewVariant {
+  if (tournament.status === "completed" || tournament.status === "archived") return "completed";
+  return hasPlayStarted(tournament.status, tournament.stages) ? "live" : "registration";
 }
 
 /**
@@ -44,8 +30,10 @@ export function overviewVariant(status: TournamentStatus): OverviewVariant {
  * and the overview shows the teams themselves. A team-registration tournament
  * has teams during registration, and they are still sign-ups then.
  */
-export function hasTeamLineup(tournament: Pick<Tournament, "status" | "teams_count">): boolean {
-  return (tournament.teams_count ?? 0) > 0 && reachedAtLeast(tournament.status, "check_in");
+export function hasTeamLineup(
+  tournament: Pick<Tournament, "status" | "flow_nodes" | "teams_count">
+): boolean {
+  return (tournament.teams_count ?? 0) > 0 && reachedCheckIn(displayStatus(tournament));
 }
 
 /** Stage types with a bracket to draw, and with a standings table instead. */

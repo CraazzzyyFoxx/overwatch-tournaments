@@ -63,7 +63,6 @@ const overviewFixture: Tournament = {
   team_formation: "balancer",
   status: "live",
   auto_transitions_enabled: true,
-  phase_schedule: [],
   stages: [],
   participants_count: 84,
   registrations_count: 96,

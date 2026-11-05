@@ -51,7 +51,7 @@ export function swapSlotTeams(
 }
 
 export function getBracketRefetchInterval(status: TournamentStatus): number | false {
-  return status === "live" || status === "playoffs" ? 15_000 : false;
+  return status === "live" ? 15_000 : false;
 }
 
 /**

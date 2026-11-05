@@ -9,13 +9,10 @@ import { useMinuteClock } from "@/hooks/useMinuteClock";
 import { cn } from "@/lib/utils";
 import type { Tournament } from "@/types/tournament.types";
 
-import { buildTournamentSchedule, type PhaseSegment } from "../_views/tournamentSchedule.model";
+import { buildTournamentSchedule, phaseStatusWord, type PhaseSegment } from "../_views/tournamentSchedule.model";
 
 export type PhaseTimelineProps = {
-  tournament: Pick<
-    Tournament,
-    "status" | "team_formation" | "phase_schedule" | "auto_transitions_enabled"
-  >;
+  tournament: Pick<Tournament, "flow_nodes" | "auto_transitions_enabled">;
   /** Viewer clock override for deterministic tests; defaults to the minute clock. */
   now?: number;
   /** Anchor id, so the header chip can deep-link here. */
@@ -67,9 +64,6 @@ export function PhaseTimeline({
     if (Number.isNaN(date.getTime())) return null;
     return format.dateTime(date, STAMP);
   };
-  // A current phase nobody scheduled has no time to print: "now" is its time.
-  const nowText = <span className="text-[color:var(--aqt-teal)]">{t("common.now")}</span>;
-
   const countdown = (segment: PhaseSegment) => {
     if (segment.countdownMs === null || segment.countdownTo === null) return null;
     const relative = format.relativeTime(new Date(now + segment.countdownMs), now);
@@ -79,14 +73,18 @@ export function PhaseTimeline({
   };
 
   const isNow = (segment: PhaseSegment) => segment.state === "current" && !segment.windowClosed;
-  const label = (segment: PhaseSegment) => (
+  const label = (segment: PhaseSegment) => {
+    const word = phaseStatusWord(segment);
+    return (
     <>
-      {t(`common.statusBadge.${segment.status}`)}
+      {word ? t(`common.statusBadge.${word}`) : segment.nodeName}
+      {word && segment.nodeNamed ? <Eyebrow className="ml-1.5">{segment.nodeName}</Eyebrow> : null}
       {segment.windowClosed ? (
         <Eyebrow className="ml-1.5">{t("tournamentDetail.publicPages.schedule.closed")}</Eyebrow>
       ) : null}
     </>
-  );
+    );
+  };
 
   return (
     <div id={id} className={cn("scroll-mt-28", className)}>
@@ -98,7 +96,7 @@ export function PhaseTimeline({
           const countdownText = countdown(segment);
           return (
             <li
-              key={segment.status}
+              key={segment.key}
               aria-current={segment.state === "current" ? "step" : undefined}
               className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3"
             >
@@ -138,11 +136,7 @@ export function PhaseTimeline({
                 </span>
                 <span className="aqt-tnum text-label text-[color:var(--aqt-fg-faint)]">
                   {countdownText ??
-                    (segment.startsAt === null ? (
-                      nowText
-                    ) : startText ? (
-                      <time dateTime={segment.startsAt}>{startText}</time>
-                    ) : null)}
+                    (startText ? <time dateTime={segment.startsAt}>{startText}</time> : null)}
                 </span>
               </div>
             </li>

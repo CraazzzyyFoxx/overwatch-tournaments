@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { Api } from "./api";
+import { rememberNodes, type Api } from "./api";
 
 export type Discipline = "overwatch" | "lol" | "deadlock" | "valorant";
 
@@ -23,7 +23,7 @@ export type Tournament = { id: number; slug: string; name: string; status: strin
 export async function createTournament(
   api: Api,
   workspaceId: number,
-  overrides: Partial<{ discipline: Discipline; name: string; status: string; team_formation: string; is_hidden: boolean; is_league: boolean }> = {}
+  overrides: Partial<{ discipline: Discipline; name: string; team_formation: string; is_hidden: boolean; is_league: boolean }> = {}
 ): Promise<Tournament> {
   return api.post<Tournament>(
     "/api/v1/admin/tournaments",
@@ -33,7 +33,7 @@ export async function createTournament(
       name: uniq("Cup"),
       start_date: isoDate(7),
       end_date: isoDate(14),
-      // Tests drive status explicitly; the 30 s tick must not move it under them.
+      // Tests drive the nodes explicitly; the 30 s tick must not move them under them.
       auto_transitions_enabled: false,
       ...overrides,
     },
@@ -41,7 +41,37 @@ export async function createTournament(
   );
 }
 
-/** Manual status change (forced through the matrix when `force`). */
-export async function setStatus(api: Api, tournamentId: number, status: string, force = false) {
-  return api.patch(`/api/v1/admin/tournaments/${tournamentId}/status`, { status, force });
+export type FlowNodeSchedule = { phase: string; starts_at: string; ends_at: string | null };
+export type TournamentFlowNode = {
+  id: number;
+  kind: string;
+  name: string;
+  status: string;
+  stage_id: number | null;
+  config: Record<string, unknown>;
+  schedule: FlowNodeSchedule[];
+};
+
+/** The tournament's registration, formation, stage and leaderboard nodes (`?entities=flow_nodes`). */
+export async function flowNodes(api: Api, tournamentId: number): Promise<TournamentFlowNode[]> {
+  const t = await api.get<{ flow_nodes?: TournamentFlowNode[] }>(`/api/v1/tournaments/${tournamentId}`, { entities: "flow_nodes" });
+  return t.flow_nodes ?? [];
+}
+
+/** The first node of a kind: `create_tournament` writes one registration and one formation node. */
+export async function nodeOf(api: Api, tournamentId: number, kind: "registration" | "formation"): Promise<TournamentFlowNode> {
+  const node = (await flowNodes(api, tournamentId)).find((candidate) => candidate.kind === kind);
+  if (!node) throw new Error(`tournament ${tournamentId} has no ${kind} node`);
+  rememberNodes(tournamentId, { [kind]: node.id });
+  return node;
+}
+
+/** One lifecycle move of a node (`POST /admin/flow-nodes/{id}/transition`); the server refuses an illegal one. */
+export async function transitionNode(api: Api, nodeId: number, status: string) {
+  return api.post<TournamentFlowNode>(`/api/v1/admin/flow-nodes/${nodeId}/transition`, { status });
+}
+
+/** Archive a completed tournament, or return an archived one to completed. */
+export async function setArchived(api: Api, tournamentId: number, archived: boolean) {
+  return api.post<Tournament>(`/api/v1/admin/tournaments/${tournamentId}/archive`, { archived });
 }

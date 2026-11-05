@@ -25,14 +25,15 @@ import type { Tournament } from "@/types/tournament.types";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
+import { displayStatus } from "@/lib/tournament/status";
 
 import { TournamentMobileCard, useTournamentColumns } from "./useTournamentColumns";
 
 /** The lifecycle chip: which rows each option keeps. */
 const LIFECYCLE = {
-  live: (tournament: Tournament) => tournament.status === "live" || tournament.status === "playoffs",
+  live: (tournament: Tournament) => displayStatus(tournament) === "live",
   registration: (tournament: Tournament) =>
-    tournament.status === "registration" || tournament.status === "check_in",
+    displayStatus(tournament) === "registration" || displayStatus(tournament) === "check_in",
   unpublished: (tournament: Tournament) => tournament.is_hidden,
   finished: (tournament: Tournament) =>
     tournament.is_finished || tournament.status === "completed" || tournament.status === "archived"
@@ -84,7 +85,11 @@ export function TournamentsBrowser() {
   const tournamentsQuery = useQuery({
     // Its own entry: the pickers sharing `adminList` load no stages, and this table draws them.
     queryKey: [...tournamentQueryKeys.adminList(currentWorkspaceId, discipline ?? ALL_DISCIPLINES), "stages"],
-    queryFn: () => tournamentService.getAll(null, currentWorkspaceId, discipline, ["stages", "participants_count"]),
+    queryFn: () => tournamentService.getAll(null, currentWorkspaceId, discipline, [
+        "stages",
+        "participants_count",
+        "flow_nodes"
+      ]),
     enabled: ready
   });
   const tournaments = useMemo(() => tournamentsQuery.data?.results ?? [], [tournamentsQuery.data]);

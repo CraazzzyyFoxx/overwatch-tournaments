@@ -19,7 +19,9 @@ export type FlowNodeRead = Schema<"tournament.FlowNodeRead">;
 export type FlowNodeStatus = `${Schema<"tournament.FlowNodeStatus">}`;
 
 /** One phase window (`open`, `check_in`, `start`) of a node. */
-export type FlowNodeScheduleEntry = Schema<"tournament.FlowNodeScheduleEntry">;
+export type FlowNodeScheduleEntry = Omit<Schema<"tournament.FlowNodeScheduleEntry">, "phase"> & {
+  phase: `${Schema<"tournament.FlowNodeScheduleEntry">["phase"]}`;
+};
 
 /** A registration, formation, stage or leaderboard node as `TournamentRead.flow_nodes` carries it. */
 export type TournamentFlowNode = Schema<"tournament.TournamentFlowNodeRead">;

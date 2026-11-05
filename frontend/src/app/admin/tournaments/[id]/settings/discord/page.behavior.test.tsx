@@ -81,7 +81,6 @@ const TOURNAMENT = {
   slug: "owt-64",
   team_formation: "balancer",
   status: "live",
-  phase_schedule: [],
   stages: []
 } as unknown as Tournament;
 

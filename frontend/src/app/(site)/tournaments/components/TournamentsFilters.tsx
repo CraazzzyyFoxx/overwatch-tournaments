@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 import { Card } from "@/components/ui/card";
 import { FilterChip } from "@/components/ui/filter-chip";
 import { SearchField } from "@/components/ui/search-field";
-import { TOURNAMENT_STATUS_ORDER, getTournamentStatusMeta } from "@/lib/tournament/status";
+import { getTournamentStatusMeta } from "@/lib/tournament/status";
 import type { TournamentStatus } from "@/types/tournament.types";
 import {
   Select,
@@ -27,12 +27,14 @@ export type ViewMode = "cards" | "list";
  * fact (`getTournamentStatusMeta(...).variant`); what colour that bucket wears
  * is presentation, so it stays here.
  */
-const VARIANT_DOT: Record<"live" | "upcoming" | "finished" | "draft", string> = {
+const VARIANT_DOT: Record<"live" | "upcoming" | "finished", string> = {
   live: "var(--aqt-rose)",
   upcoming: "var(--aqt-amber)",
-  finished: "var(--aqt-fg-dim)",
-  draft: "var(--aqt-blue)"
+  finished: "var(--aqt-fg-dim)"
 };
+
+/** The chips filter by the stored status (what `/tournaments?status=` takes), in the order the bar lists them. */
+const STATUS_CHIPS = ["live", "announcement", "completed", "archived"] as const satisfies readonly TournamentStatus[];
 
 interface TournamentsFiltersProps {
   /** Every visible tournament in the workspace, filters aside. From the facets. */
@@ -97,7 +99,7 @@ const TournamentsFilters = ({
             {t("common.all")}
           </FilterChip>
 
-          {TOURNAMENT_STATUS_ORDER.map((status) => {
+          {STATUS_CHIPS.map((status) => {
             const count = statusCounts[status] ?? 0;
             // A chip is only worth its place when it narrows something: an empty
             // bucket narrows to nothing, and one that matches the total ("All 77"

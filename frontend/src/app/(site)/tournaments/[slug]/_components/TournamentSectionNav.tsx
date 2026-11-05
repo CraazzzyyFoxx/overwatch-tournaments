@@ -23,7 +23,7 @@ import { StatusDot } from "@/components/ui/status-dot";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { usePrefersReducedMotion } from "@/hooks/usePrefersReducedMotion";
 import { cn } from "@/lib/utils";
-import type { StageSummary, TournamentStatus } from "@/types/tournament.types";
+import type { StageSummary, TournamentDisplayStatus } from "@/types/tournament.types";
 
 import {
   buildTournamentSectionNav,
@@ -65,7 +65,7 @@ const EDGE_FADE = "pointer-events-none absolute inset-y-0 z-2 w-6 to-transparent
 
 type TournamentSectionNavProps = {
   tournamentId: string;
-  status: TournamentStatus;
+  status: TournamentDisplayStatus;
   stages?: StageSummary[];
   hasTeams?: boolean;
   hasStreams?: boolean;
@@ -231,7 +231,7 @@ export default function TournamentSectionNav({
                     <>
                       <Icon className="shrink-0" aria-hidden="true" />
                       <span className={cn(condensed && "md:sr-only")}>{label}</span>
-                      {item.id === "bracket" && (status === "live" || status === "playoffs") ? (
+                      {item.id === "bracket" && status === "live" ? (
                         <StatusDot pulse className="text-[color:var(--aqt-status-live)]" />
                       ) : null}
                     </>

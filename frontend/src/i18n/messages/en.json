@@ -285,11 +285,9 @@
     "league": "League",
     "statusBadge": {
       "announcement": "Announced",
-      "draft": "Team formation",
       "registration": "Registration",
       "check_in": "Check-in",
       "live": "Live",
-      "playoffs": "Playoffs",
       "completed": "Completed",
       "archived": "Archived"
     },
@@ -2332,8 +2330,7 @@
     },
     "stage": {
       "final": "Final",
-      "signups": "Sign-ups",
-      "setup": "Setup"
+      "signups": "Sign-ups"
     },
     "spotlight": {
       "label": "Tournament spotlight",
@@ -10358,18 +10355,17 @@
         "skipped": "Skipped",
         "noAccess": "No access"
       },
-      "title": "Lifecycle checklist",
-      "offTrack": "Off track: {status}"
+      "title": "Lifecycle checklist"
     },
     "hubActions": {
-      "unfinished": "Tournament marked as not finished",
-      "finished": "Tournament marked as finished",
-      "markNotFinished": "Mark not finished",
-      "markFinished": "Mark finished",
-      "finishTitle": "Mark the tournament finished?",
-      "unfinishTitle": "Mark the tournament not finished?",
-      "finishDescription": "Sets the status to {status} and counts its results in player profiles and statistics.",
-      "unfinishDescription": "Sets the status back to {status} and removes its results from player profiles and statistics."
+      "archived": "Tournament archived",
+      "unarchived": "Tournament returned to completed",
+      "archive": "Archive",
+      "unarchive": "Unarchive",
+      "archiveTitle": "Archive the tournament?",
+      "unarchiveTitle": "Unarchive the tournament?",
+      "archiveDescription": "Archiving keeps the results and hides nothing from players; it only marks the tournament as closed for good.",
+      "unarchiveDescription": "The tournament goes back to completed."
     },
     "preview": {
       "added": "Added to preview allowlist",
@@ -10598,18 +10594,6 @@
       "participantsSummary": "{participants, plural, one {# participant} other {# participants}} · <warn>{unmapped} unmapped</warn>",
       "rowUnit": "teams"
     },
-    "status": {
-      "setTo": "Set status to {status}?",
-      "change": "Change status?",
-      "bypass": "{current} does not normally lead to {next}. Automatic phase transitions will be turned off.",
-      "manual": "Automatic phase transitions will be turned off.",
-      "set": "Set {status}",
-      "setStatus": "Set status",
-      "menu": "Change status",
-      "advance": "Move to {status}",
-      "allowedGroup": "Allowed",
-      "forcedGroup": "Forced"
-    },
     "matches": {
       "unauthorized": "Unauthorized",
       "unauthorizedDescription": "You do not have permission to read matches in this tournament.",
@@ -10678,7 +10662,7 @@
       "dates": "Dates",
       "duration": "Tournament duration range",
       "title": "Phase schedule",
-      "hint": "Each phase starts automatically at its start time when automatic transitions are enabled. An end time only closes that phase's action window early. It never changes the tournament status.",
+      "hint": "When automatic transitions are enabled, a start time moves the node on its own: registration opens or goes to check-in, teams start forming, a stage goes live. An end time only closes that phase's action window early. It never moves the node.",
       "timezone": "Time zone:",
       "timezoneLabel": "{label} {timezone} ({offset})",
       "aria": "Phase schedule",
@@ -10686,11 +10670,17 @@
       "ends": "Ends at (optional)",
       "automation": "Automation",
       "automatic": "Automatic phase transitions",
-      "automaticHint": "Re-enabling immediately catches up any overdue phases. Manual status changes switch this off.",
+      "automaticHint": "Re-enabling immediately catches up any overdue phases. Moving a node by hand does not switch this off.",
       "phaseStartsAt": "{phase} starts at",
       "phaseStartTime": "{phase} start time",
       "phaseEndsAt": "{phase} ends at (optional)",
-      "phaseEndTime": "{phase} end time"
+      "phaseEndTime": "{phase} end time",
+      "phases": {
+        "open": "Opens",
+        "check_in": "Check-in",
+        "start": "Start"
+      },
+      "noNodes": "This tournament has no registration, formation or stage to schedule yet."
     },
     "scoring": {
       "results": "Results",
@@ -10892,6 +10882,24 @@
     }
   },
   "adminTournaments": {
+    "nodeControls": {
+      "open": "Open",
+      "checkIn": "Start check-in",
+      "close": "Close",
+      "reopen": "Reopen",
+      "startForming": "Start forming",
+      "backToDraft": "Back to draft",
+      "complete": "Complete",
+      "error": "Could not move the node",
+      "status": {
+        "draft": "Draft",
+        "open": "Open",
+        "check_in": "Check-in",
+        "closed": "Closed",
+        "forming": "Forming",
+        "completed": "Completed"
+      }
+    },
     "list": {
       "deleted": "Tournament deleted",
       "columns": {
@@ -13952,15 +13960,13 @@
       "nextDeadline": "Next deadline {when}",
       "phase": {
         "preparation": "Preparation",
-        "registration": "Registration",
-        "formation": "Team formation",
+        "registration": "Registration and teams",
         "live": "In play",
         "wrap_up": "Wrap-up"
       },
       "action": {
         "preparation": "Set up",
         "registration": "Registrations",
-        "formation": "Teams",
         "live": "Matches",
         "wrap_up": "Checklist"
       },

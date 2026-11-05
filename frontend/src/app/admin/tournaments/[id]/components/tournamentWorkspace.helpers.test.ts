@@ -1,14 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import type { PhaseScheduleFormState, TournamentFormState } from "./tournamentWorkspace.helpers";
+import type { TournamentFormState } from "./tournamentWorkspace.helpers";
 import { getTournamentUpdatePayload } from "./tournamentWorkspace.helpers";
-
-const EMPTY_SCHEDULE: PhaseScheduleFormState = {
-  registration: { starts_at: "", ends_at: "" },
-  check_in: { starts_at: "", ends_at: "" },
-  draft: { starts_at: "", ends_at: "" },
-  live: { starts_at: "", ends_at: "" }
-};
 
 function form(partial: Partial<TournamentFormState> = {}): TournamentFormState {
   return {
@@ -23,7 +16,6 @@ function form(partial: Partial<TournamentFormState> = {}): TournamentFormState {
     start_date: "2026-04-18",
     end_date: "2026-04-19",
     auto_transitions_enabled: true,
-    phase_schedule: EMPTY_SCHEDULE,
     division_grid_version_id: null,
     team_formation: "balancer",
     ...partial

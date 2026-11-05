@@ -29,7 +29,7 @@ import type {
   RegistrationForm,
   RegistrationListResponse
 } from "@/types/registration.types";
-import type { Tournament, TournamentStatus } from "@/types/tournament.types";
+import type { Tournament } from "@/types/tournament.types";
 
 import TournamentParticipantsPage from "./TournamentParticipantsPage";
 
@@ -116,7 +116,7 @@ vi.mock("@/hooks/useTournamentClientData", () => ({
  * Every field spelled out rather than cast: `tsconfig.json` excludes test
  * files, so a fixture that lies about its shape type-checks green.
  */
-function makeTournament(status: TournamentStatus, window: { starts_at: string; ends_at: string | null }): Tournament {
+function makeTournament(phase: "check_in" | "registration", window: { starts_at: string; ends_at: string | null }): Tournament {
   return {
     id: TOURNAMENT_ID,
     created_at: new Date(0),
@@ -132,20 +132,20 @@ function makeTournament(status: TournamentStatus, window: { starts_at: string; e
     is_finished: false,
     is_hidden: false,
     team_formation: "balancer",
-    status,
+    // `live` because the registration node is: the phase reads registration or check-in.
+    status: "live",
     auto_transitions_enabled: true,
     flow_nodes: [
       {
         id: REGISTRATION_NODE_ID,
         kind: "registration",
         name: "Registration",
-        status: status === "check_in" ? "check_in" : "open",
+        status: phase === "check_in" ? "check_in" : "open",
         config: {},
         schedule: [{ phase: "check_in", ...window }],
         stage_id: null
       }
     ],
-    phase_schedule: [{ status: "check_in", ...window }],
     stages: [],
     participants_count: 1,
     registrations_count: 1,

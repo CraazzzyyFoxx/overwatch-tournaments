@@ -26,7 +26,7 @@ export default async function TournamentParticipantsRoutePage({
     <TournamentTabBoundary
       slug={slug}
       prefetch={(queryClient, overview) =>
-        overviewVariant(overview.status) === "completed"
+        overviewVariant(overview) === "completed"
           ? queryClient.prefetchQuery(tournamentTeamsQueryOptions(overview))
           : queryClient.prefetchQuery(tournamentRegistrationsQueryOptions(overview))
       }

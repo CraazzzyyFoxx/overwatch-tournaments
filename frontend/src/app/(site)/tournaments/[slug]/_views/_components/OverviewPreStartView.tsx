@@ -9,6 +9,8 @@ import { Separator } from "@/components/ui/separator";
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";
 import { useMinuteClock } from "@/hooks/useMinuteClock";
 import { useFormatter } from "@/lib/datetime/client";
+import { nodesOfKind } from "@/lib/tournament/flow-nodes";
+import { displayStatus } from "@/lib/tournament/status";
 import { roleColor, type RoleOntology } from "@/lib/roster/ontology";
 import type { Registration, RegistrationListResponse } from "@/types/registration.types";
 import type { Tournament } from "@/types/tournament.types";
@@ -47,12 +49,8 @@ export function OverviewPreStartView({
   phasesCard: React.ReactNode;
 }>) {
   const overviewHref = `/tournaments/${slug}`;
-  const phase =
-    tournament.status === "check_in"
-      ? "check_in"
-      : tournament.status === "announcement"
-        ? "announcement"
-        : "registration";
+  const shown = displayStatus(tournament);
+  const phase = shown === "check_in" ? "check_in" : shown === "announcement" ? "announcement" : "registration";
   const ontology =
     useDisciplineMetadata(tournament.workspace_id, tournament.discipline).data ?? null;
 
@@ -398,7 +396,10 @@ function NotCheckedInCard({
 function AnnouncementCard({ tournament }: Readonly<{ tournament: Tournament }>) {
   const t = useTranslations("tournamentDetail");
   const format = useFormatter();
-  const window = tournament.phase_schedule?.find((entry) => entry.status === "registration");
+  // The earliest `open` window of any registration node: when sign-up first opens.
+  const window = nodesOfKind(tournament, "registration")
+    .flatMap((node) => node.schedule.filter((entry) => entry.phase === "open"))
+    .sort((left, right) => Date.parse(left.starts_at) - Date.parse(right.starts_at))[0];
   return (
     <OverviewSection title={t("overview.announcement.title")}>
       <div className="grid gap-5 sm:grid-cols-2">

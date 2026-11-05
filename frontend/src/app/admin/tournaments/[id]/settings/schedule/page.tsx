@@ -3,19 +3,14 @@
 import { useTranslations } from "next-intl";
 
 import { DateRangePicker } from "@/components/ui/date-range-picker";
-import { DateTimePicker } from "@/components/ui/date-picker";
 import { Switch } from "@/components/ui/switch";
-import { eyebrowClass } from "@/components/ui/eyebrow";
 import { SaveBar } from "@/components/kit/SaveBar";
 import { SettingGroup, SettingRow } from "@/components/kit/SettingRow";
-import { getUtcOffsetLabel } from "@/lib/workspace/timezone";
-import {
-  SCHEDULABLE_PHASES,
-  type SchedulablePhase
-} from "@/lib/tournament/lifecycle";
+import { nodesOfKind } from "@/lib/tournament/flow-nodes";
 import type { Tournament } from "@/types/tournament.types";
 import { SettingsSectionPage } from "../SettingsSection";
 import { useTournamentSettingsForm } from "../useTournamentSettingsForm";
+import { NodeScheduleEditor } from "./NodeScheduleEditor";
 
 export default function ScheduleSettingsPage() {
   return (
@@ -36,25 +31,13 @@ function ScheduleForm({
   tournamentId,
   disabled
 }: Readonly<{ tournament: Tournament; tournamentId: number; disabled: boolean }>) {
-  const tStatus = useTranslations("common.statusBadge");
   const t = useTranslations("adminTournament.schedule");
-  const { form, patch, dirty, summary, saving, save, discard, timezone, error } =
+  const { form, patch, dirty, summary, saving, save, discard, error } =
     useTournamentSettingsForm(tournament, tournamentId, "schedule");
 
-  const setPhaseField = (
-    phase: SchedulablePhase,
-    field: "starts_at" | "ends_at",
-    nextValue: string
-  ) =>
-    patch({
-      phase_schedule: {
-        ...form.phase_schedule,
-        [phase]: { ...form.phase_schedule[phase], [field]: nextValue }
-      }
-    });
-
-  const visiblePhases = SCHEDULABLE_PHASES.filter(
-    (phase) => phase !== "draft" || form.team_formation === "draft"
+  // The lifecycle nodes in the order a tournament runs them; a leaderboard has no schedule.
+  const nodes = (["registration", "formation", "stage"] as const).flatMap((kind) =>
+    nodesOfKind(tournament, kind)
   );
 
   return (
@@ -71,58 +54,15 @@ function ScheduleForm({
           </SettingRow>
         </SettingGroup>
 
-        <SettingGroup
-          id="phases"
-          title={t("title")}
-          description={
-            <>
-              {t("hint")}
-              <span className="mt-1 block font-medium text-foreground/80">
-                {t("timezoneLabel", { label: t("timezone"), timezone, offset: getUtcOffsetLabel(timezone) })}
-              </span>
-            </>
-          }
-        >
-          {/* One header row instead of four repeated label pairs. Stacked
-              below lg, where each picker shows its own labels again. */}
-          <div
-            role="group"
-            aria-label={t("aria")}
-            className="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(6rem,8rem)_1fr_1fr] lg:items-center lg:gap-x-4 lg:gap-y-3"
-          >
-            <div aria-hidden className="hidden lg:contents">
-              <span />
-              <span className={eyebrowClass("muted")}>{t("starts")}</span>
-              <span className={eyebrowClass("muted")}>{t("ends")}</span>
-            </div>
-
-            {visiblePhases.map((phase) => (
-              <div key={phase} className="flex flex-col gap-2 lg:contents">
-                <p className="text-xs font-medium text-foreground lg:py-1">
-                  {tStatus(phase)}
-                </p>
-                <DateTimePicker
-                  id={`settings-phase-${phase}-starts`}
-                  timeId={`settings-phase-${phase}-starts-time`}
-                  dateLabel={`${tStatus(phase)} starts at`}
-                  timeLabel={`${tStatus(phase)} start time`}
-                  labelClassName="lg:sr-only"
-                  value={form.phase_schedule[phase].starts_at}
-                  onChange={(next) => setPhaseField(phase, "starts_at", next)}
-                />
-                <DateTimePicker
-                  id={`settings-phase-${phase}-ends`}
-                  timeId={`settings-phase-${phase}-ends-time`}
-                  dateLabel={`${tStatus(phase)} ends at (optional)`}
-                  timeLabel={`${tStatus(phase)} end time`}
-                  labelClassName="lg:sr-only"
-                  value={form.phase_schedule[phase].ends_at}
-                  onChange={(next) => setPhaseField(phase, "ends_at", next)}
-                />
-              </div>
-            ))}
-          </div>
-        </SettingGroup>
+        {nodes.length === 0 ? (
+          <SettingGroup id="phases" title={t("title")}>
+            <p className="text-caption text-muted-foreground">{t("noNodes")}</p>
+          </SettingGroup>
+        ) : (
+          nodes.map((node) => (
+            <NodeScheduleEditor key={node.id} tournamentId={tournamentId} node={node} disabled={disabled} />
+          ))
+        )}
 
         <SettingGroup id="automation" title={t("automation")}>
           <SettingRow

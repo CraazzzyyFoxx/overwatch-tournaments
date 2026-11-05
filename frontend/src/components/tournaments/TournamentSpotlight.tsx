@@ -13,7 +13,7 @@ import { useAutoplay } from "@/hooks/useAutoplay";
 import { useMinuteClock } from "@/hooks/useMinuteClock";
 import { useFormatter } from "@/lib/datetime/client";
 import { stageProgress } from "@/lib/tournament/stage-progress";
-import { getTournamentStatusMeta } from "@/lib/tournament/status";
+import { getTournamentStatusMeta, displayStatus } from "@/lib/tournament/status";
 import { tournamentHref } from "@/lib/tournament/url";
 import { cn } from "@/lib/utils";
 import type { Tournament } from "@/types/tournament.types";
@@ -59,7 +59,7 @@ export function TournamentSpotlight({ items }: Readonly<{ items: readonly Spotli
 
   if (count === 0) return null;
   const { tournament, picture, workspace } = shown[current];
-  const variant = getTournamentStatusMeta(tournament.status).variant;
+  const variant = getTournamentStatusMeta(displayStatus(tournament)).variant;
 
   return (
     // The pause/play button sits beside the stage, not in it: focusing or
@@ -99,7 +99,7 @@ export function TournamentSpotlight({ items }: Readonly<{ items: readonly Spotli
           {/* A finished tournament carries no status: its dates are already among the facts. */}
           {variant === "finished" ? null : (
             <span className={GLASS_CLASS}>
-              <TournamentStatusPill status={variant}>{t(`common.statusBadge.${tournament.status}`)}</TournamentStatusPill>
+              <TournamentStatusPill status={variant}>{t(`common.statusBadge.${displayStatus(tournament)}`)}</TournamentStatusPill>
             </span>
           )}
           {workspace ? (
@@ -111,7 +111,7 @@ export function TournamentSpotlight({ items }: Readonly<{ items: readonly Spotli
           <b className="max-w-full text-balance font-display text-title font-extrabold text-[color:var(--aqt-fg)] sm:text-headline">
             {tournament.name}
           </b>
-          {variant === "live" ? <StageBar stage={stageProgress(tournament, tournament.status, t)} /> : null}
+          {variant === "live" ? <StageBar stage={stageProgress(tournament, displayStatus(tournament), t)} /> : null}
           <FactsRow facts={tournamentFacts(tournament, t, format, now)} />
           <span className="mt-1 flex flex-wrap gap-2.5">
             <Button asChild>

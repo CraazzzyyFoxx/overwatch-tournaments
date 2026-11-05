@@ -9,7 +9,7 @@ import { TournamentStatusPill } from "@/components/tournaments/StatusPill";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { TOOLBAR_BUTTON_CLASS } from "@/components/balancer/balancer-page-helpers";
-import { getTournamentStatusMeta } from "@/lib/tournament/status";
+import { getTournamentStatusMeta, displayStatus } from "@/lib/tournament/status";
 import { cn } from "@/lib/utils";
 import type { BalancerTournamentSummary } from "@/types/balancer-admin.types";
 
@@ -47,7 +47,7 @@ export function BalancerToolTopBar({ summary }: Readonly<BalancerToolTopBarProps
       <Separator orientation="vertical" className="h-5" />
       <div className="flex min-w-0 shrink items-center gap-2">
         <span className="truncate text-sm font-medium">{summary.name}</span>
-        <TournamentStatusPill status={getTournamentStatusMeta(summary.status).variant} className="shrink-0">
+        <TournamentStatusPill status={getTournamentStatusMeta(displayStatus(summary)).variant} className="shrink-0">
           {tStatus(summary.status)}
         </TournamentStatusPill>
       </div>

@@ -2,6 +2,7 @@ import { expect } from "@playwright/test";
 import type { Api } from "./api";
 import {
   createStage,
+  formTeams,
   startStage,
   listEncounters,
   seedTeams,
@@ -13,7 +14,7 @@ import {
   type TournamentJob,
 } from "./flows";
 import { setPoints } from "./results";
-import { createTournament, createWorkspace, setStatus } from "./seed";
+import { createTournament, createWorkspace } from "./seed";
 
 /**
  * Reference models for the tournament-correctness specs. Every expectation is
@@ -321,7 +322,7 @@ export function ladder([p1, p2, p3, p4]: number[]): Result[] {
 }
 
 /**
- * A LIVE tournament (win/draw/loss 3/1/0) with 8 teams in a generated
+ * A tournament that derives `live` (win/draw/loss 3/1/0) with 8 teams in a generated
  * two-group round robin that advances its top 2, and an unseeded single
  * elimination playoff after it -- what activation auto-wires from the groups.
  */
@@ -329,6 +330,7 @@ export async function seedGroupsToPlayoffs(api: Api) {
   const workspace = await createWorkspace(api);
   const tournament = await createTournament(api, workspace.id);
   const teams = await seedTeams(api, tournament.id, 8, { players: false });
+  await formTeams(api, tournament.id);
   const created = await createStage(
     api,
     tournament.id,
@@ -336,14 +338,13 @@ export async function seedGroupsToPlayoffs(api: Api) {
     { stageType: "round_robin", groups: 2, bestOf: 1, extra: { advance_count: 2 } }
   );
   await setPoints(api, created.id, 3, 1, 0);
-  await startStage(api, created.id);
+  await startStage(api, created);
   const playoff = await api.post<Stage>(
     `/api/v1/admin/stages/tournament/${tournament.id}`,
     { name: "Playoffs", stage_type: "single_elimination", best_of: { default: 1 }, order: 1 },
     201
   );
   await api.post(`/api/v1/admin/stages/${playoff.id}/items`, { name: "Bracket", type: "single_bracket", order: 0 }, 201);
-  await setStatus(api, tournament.id, "live", true);
   const groupStage = await api.get<Stage>(`/api/v1/admin/stages/${created.id}`);
   return {
     tournament,

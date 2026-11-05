@@ -42,7 +42,9 @@ function tournament(id: number, discipline: string, name: string): Tournament {
     is_league: false,
     is_hidden: false,
     is_finished: false,
-    status: "registration",
+    // Live because a registration node is open: the table shows "Registration" (`displayStatus`).
+    status: "live",
+    flow_nodes: [{ id: id * 10, kind: "registration", name: "Registration", status: "open", config: {}, schedule: [] }],
     start_date: new Date("2026-02-01T00:00:00Z"),
     end_date: new Date("2026-02-08T00:00:00Z"),
     stages: []
@@ -89,7 +91,7 @@ async function click(element: Element | null | undefined) {
 }
 const commandItems = () => [...document.querySelectorAll('[cmdk-item=""]')];
 // The table draws each tournament's stages, so this list (unlike the pickers) asks for them.
-const ENTITIES = ["stages", "participants_count"];
+const ENTITIES = ["stages", "participants_count", "flow_nodes"];
 
 beforeEach(() => {
   viewport.mobile = false;

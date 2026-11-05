@@ -16,7 +16,7 @@ import type { AnalyticsHeroParts } from "@/disciplines/types";
 import { useDisciplineMetadata, useDisciplines } from "@/hooks/useDisciplineMetadata";
 import { useEntityWorkspace } from "@/hooks/useEntityWorkspace";
 import { usePermissions } from "@/hooks/usePermissions";
-import { getTournamentStatusMeta } from "@/lib/tournament/status";
+import { getTournamentStatusMeta, displayStatus } from "@/lib/tournament/status";
 import type { StatsScope } from "@/lib/site/stats-scope";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import tournamentService from "@/services/tournament.service";
@@ -202,7 +202,7 @@ const AnalyticsPage = ({ scope }: Readonly<{ scope: StatsScope }>) => {
             // server-side; gating the board's fetches keeps the public baseline from firing a 403.
             canReadV2: canAccessPermission("analytics.read", owner.workspace_id),
             canUpdate: hasPermission("analytics.update"),
-            ended: getTournamentStatusMeta(owner.status).isEnded,
+            ended: getTournamentStatusMeta(displayStatus(owner)).isEnded,
             hero
           }}
           fallback={null}

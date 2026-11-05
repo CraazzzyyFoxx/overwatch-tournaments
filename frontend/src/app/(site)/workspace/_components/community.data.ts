@@ -1,6 +1,6 @@
 import { cache } from "react";
 
-import { getTournamentStatusMeta } from "@/lib/tournament/status";
+import { displayStatus, getTournamentStatusMeta } from "@/lib/tournament/status";
 import tournamentService from "@/services/tournament.service";
 import type { Tournament } from "@/types/tournament.types";
 
@@ -27,8 +27,8 @@ export const getCommunityTournament = cache(
       (tournament) => tournament.workspace_id === workspaceId && !tournament.is_hidden
     );
     return (
-      mine.find((tournament) => getTournamentStatusMeta(tournament.status).variant === "live") ??
-      mine.find((tournament) => tournament.status === "registration") ??
+      mine.find((tournament) => getTournamentStatusMeta(displayStatus(tournament)).variant === "live") ??
+      mine.find((tournament) => displayStatus(tournament) === "registration") ??
       null
     );
   }

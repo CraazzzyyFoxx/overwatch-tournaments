@@ -1,7 +1,7 @@
 import { Calendar, Clock, Shield, Users, type LucideIcon } from "lucide-react";
 
 import { formatDateRange, type Formatter } from "@/lib/datetime";
-import { reachedAtLeast } from "@/lib/tournament/lifecycle";
+import { hasPlayStarted } from "@/lib/tournament/stages";
 import type { StageProgress, Translate } from "@/lib/tournament/stage-progress";
 import type { Tournament } from "@/types/tournament.types";
 
@@ -47,7 +47,7 @@ const LONG_DAY = { day: "numeric", month: "long", year: "numeric", timeZone: "UT
 export function tournamentFacts(
   tournament: Pick<
     Tournament,
-    "status" | "start_date" | "end_date" | "participants_count" | "teams_count" | "registrations_count"
+    "status" | "stages" | "start_date" | "end_date" | "participants_count" | "teams_count" | "registrations_count"
   >,
   t: Translate,
   format: Formatter,
@@ -56,7 +56,7 @@ export function tournamentFacts(
   const start = new Date(tournament.start_date);
   const dateTime = start.toISOString();
 
-  if (!reachedAtLeast(tournament.status, "live")) {
+  if (!hasPlayStarted(tournament.status, tournament.stages)) {
     const facts: TournamentFact[] = [{ kind: "dates", text: format.dateTime(start, DAY), dateTime }];
     if (now !== null && start.getTime() > now) {
       facts.push({

@@ -11,6 +11,7 @@ import { WorkspaceAvatar } from "@/components/workspace/WorkspaceAvatar";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 import { useFormatter } from "@/lib/datetime/client";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
+import { displayStatus } from "@/lib/tournament/status";
 import { tournamentHref } from "@/lib/tournament/url";
 import tournamentService from "@/services/tournament.service";
 import type { Tournament } from "@/types/tournament.types";
@@ -111,8 +112,9 @@ export default function ActiveEvents() {
                 </span>
               </div>
               {group.tournaments.map((tournament) => {
+                const shown = displayStatus(tournament);
                 const counted =
-                  tournament.status === "registration" || tournament.status === "check_in"
+                  shown === "registration" || shown === "check_in"
                     ? t("nav.activeEvents.registrations", {
                         count: tournament.registrations_count ?? 0
                       })
@@ -128,7 +130,7 @@ export default function ActiveEvents() {
                     <span className="min-w-0 flex-1">
                       <span className="block truncate font-semibold">{tournament.name}</span>
                       <span className="block truncate text-caption text-[color:var(--aqt-fg-dim)]">
-                        {t(`common.statusBadge.${tournament.status}`)} · {counted}
+                        {t(`common.statusBadge.${shown}`)} · {counted}
                       </span>
                     </span>
                     <span

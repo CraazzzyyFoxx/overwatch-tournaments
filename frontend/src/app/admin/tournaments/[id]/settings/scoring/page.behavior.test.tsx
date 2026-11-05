@@ -60,7 +60,6 @@ const TOURNAMENT = {
   logs_official: false,
   team_formation: "balancer",
   status: "live",
-  phase_schedule: [],
   stages: []
 } as unknown as Tournament;
 

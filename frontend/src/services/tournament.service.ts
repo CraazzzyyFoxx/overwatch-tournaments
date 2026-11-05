@@ -13,13 +13,19 @@ import {
 } from "@/types/tournament.types";
 import { apiFetch } from "@/lib/api/fetch";
 import { normalizePaginatedResponse } from "@/lib/api/normalize-paginated-response";
-import { isTournamentStatusActive, TOURNAMENT_STATUS_ORDER } from "@/lib/tournament/status";
+import { TOURNAMENT_PHASES } from "@/lib/tournament/lifecycle";
+import { isTournamentStatusActive } from "@/lib/tournament/status";
 
 /** What the header and the home blocks call running: the list asks the server for these only. */
-const ACTIVE_STATUSES = TOURNAMENT_STATUS_ORDER.filter(isTournamentStatusActive);
+const ACTIVE_STATUSES = TOURNAMENT_PHASES.filter(isTournamentStatusActive);
 
 /** What a tournament list row can carry besides its columns; each costs the read a query. */
-type TournamentListEntity = "stages" | "participants_count" | "registrations_count" | "teams_count";
+type TournamentListEntity =
+  | "stages"
+  | "participants_count"
+  | "registrations_count"
+  | "teams_count"
+  | "flow_nodes";
 
 type GetStandingsOptions = {
   workspaceId?: number | null;
@@ -118,7 +124,8 @@ export default class tournamentService {
         sort: params.sort ?? "start_date",
         order: params.order ?? "desc",
         workspace_id: params.workspaceId,
-        entities: ["stages", "participants_count", "teams_count"],
+        // `flow_nodes` lets a card say "Registration" or "Check-in" (`displayStatus`) for a tournament that is `live`.
+        entities: ["stages", "participants_count", "teams_count", "flow_nodes"],
         ...tournamentFilterQuery(params)
       }
     })
@@ -154,7 +161,7 @@ export default class tournamentService {
         // The home "now on the platform" block reads all of these off one list:
         // a running tournament shows its stage, teams and participants, an
         // open one its registrations.
-        entities: ["stages", "registrations_count", "participants_count", "teams_count"]
+        entities: ["stages", "registrations_count", "participants_count", "teams_count", "flow_nodes"]
       }
     })
       .then((response) => response.json())

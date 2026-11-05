@@ -91,7 +91,7 @@ const TournamentTeamsView = ({ tournament, slug }: { tournament: Tournament; slu
   const groupChips = groups.filter(([, count]) => count !== teams.length);
   // The group colour only says something when the visible rows mix groups.
   const showGroup = groupFilter == null && groups.length > 1;
-  const medal = overviewVariant(tournament.status) === "completed";
+  const medal = overviewVariant(tournament) === "completed";
 
   const visibleTeams = teams
     .filter((team) => groupFilter == null || team.group?.name === groupFilter)

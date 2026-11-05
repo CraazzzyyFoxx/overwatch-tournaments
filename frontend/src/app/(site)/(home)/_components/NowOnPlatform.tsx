@@ -25,7 +25,7 @@ import { getFormatter } from "@/lib/datetime/server";
 import { getActiveTournaments, getPublicWorkspaces } from "@/lib/site/public-data";
 import { tournamentPicture } from "@/lib/tournament/art";
 import { stageProgress } from "@/lib/tournament/stage-progress";
-import { getTournamentStatusMeta } from "@/lib/tournament/status";
+import { getTournamentStatusMeta, displayStatus } from "@/lib/tournament/status";
 import { tournamentHref } from "@/lib/tournament/url";
 import { cn } from "@/lib/utils";
 import catalogService from "@/services/catalog.service";
@@ -106,8 +106,8 @@ async function loadNow(): Promise<NowData> {
   // Running tournaments only (the read filters by status server-side), live ones first.
   const active = [...activePage.results].sort(
     (left, right) =>
-      Number(getTournamentStatusMeta(right.status).variant === "live") -
-      Number(getTournamentStatusMeta(left.status).variant === "live")
+      Number(getTournamentStatusMeta(displayStatus(right)).variant === "live") -
+      Number(getTournamentStatusMeta(displayStatus(left)).variant === "live")
   );
   // The archive read and the active list can name the same tournament the
   // moment one finishes: never list it twice.
@@ -199,7 +199,7 @@ async function FeaturedCard({
 }: Readonly<{ item: NowItem; workspace: WorkspaceListItem | undefined; now: number; wide?: boolean }>) {
   const [t, format] = await Promise.all([getTranslations(), getFormatter()]);
   const { tournament, picture } = item;
-  const variant = getTournamentStatusMeta(tournament.status).variant;
+  const variant = getTournamentStatusMeta(displayStatus(tournament)).variant;
 
   return (
     <Link
@@ -232,7 +232,7 @@ async function FeaturedCard({
           date range does not. */}
       {variant === "finished" ? null : (
         <span className={cn(GLASS_CLASS, "absolute left-4 top-4 sm:left-5 sm:top-5")}>
-          <TournamentStatusPill status={variant}>{t(`common.statusBadge.${tournament.status}`)}</TournamentStatusPill>
+          <TournamentStatusPill status={variant}>{t(`common.statusBadge.${displayStatus(tournament)}`)}</TournamentStatusPill>
         </span>
       )}
 
@@ -248,7 +248,7 @@ async function FeaturedCard({
         <b className="max-w-full text-balance font-display text-title font-extrabold text-[color:var(--aqt-fg)] lg:text-headline">
           {tournament.name}
         </b>
-        {variant === "live" ? <StageBar stage={stageProgress(tournament, tournament.status, t)} /> : null}
+        {variant === "live" ? <StageBar stage={stageProgress(tournament, displayStatus(tournament), t)} /> : null}
         <FactsRow facts={tournamentFacts(tournament, t, format, now)} />
       </span>
 
@@ -274,7 +274,7 @@ async function ShowcaseRow({
 }: Readonly<{ item: NowItem; workspace: WorkspaceListItem | undefined; now: number }>) {
   const [t, format] = await Promise.all([getTranslations(), getFormatter()]);
   const { tournament, picture } = item;
-  const variant = getTournamentStatusMeta(tournament.status).variant;
+  const variant = getTournamentStatusMeta(displayStatus(tournament)).variant;
   const facts = tournamentFacts(tournament, t, format, now);
   const fact = facts.find((candidate) => candidate.kind === "countdown") ?? facts[0];
 
@@ -300,7 +300,7 @@ async function ShowcaseRow({
       </span>
       <span className="flex min-w-0 flex-col items-start gap-1.5">
         {variant === "finished" ? null : (
-          <TournamentStatusPill status={variant}>{t(`common.statusBadge.${tournament.status}`)}</TournamentStatusPill>
+          <TournamentStatusPill status={variant}>{t(`common.statusBadge.${displayStatus(tournament)}`)}</TournamentStatusPill>
         )}
         <b className="line-clamp-2 font-display text-ui font-semibold leading-tight text-[color:var(--aqt-fg)]">
           {tournament.name}

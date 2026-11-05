@@ -103,7 +103,7 @@ function tournament(slots: RosterSlotMap, discipline = "overwatch"): Tournament 
     name: "Widow's Deadly Kiss",
     slug: "widows-deadly-kiss",
     team_formation: "registration",
-    status: "registration",
+    status: "live",
     flow_nodes: [
       {
         id: 21,

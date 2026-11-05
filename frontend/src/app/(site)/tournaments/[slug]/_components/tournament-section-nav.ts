@@ -1,7 +1,6 @@
-import { reachedAtLeast } from "@/lib/tournament/lifecycle";
-import { pickCurrentStage } from "@/lib/tournament/stages";
+import { hasPlayStarted, pickCurrentStage } from "@/lib/tournament/stages";
 import type { StreamVods, TournamentStreams } from "@/types/stream.types";
-import type { StageSummary, TournamentStatus } from "@/types/tournament.types";
+import type { StageSummary, TournamentDisplayStatus } from "@/types/tournament.types";
 
 export type TournamentSectionId =
   | "overview" | "rules" | "bracket" | "ranking" | "teams" | "matches" | "maps" | "stats" | "stream" | "participants";
@@ -25,7 +24,7 @@ export type TournamentSectionNavItem = {
 
 type BuildTournamentSectionNavInput = {
   tournamentId: string;
-  status: TournamentStatus;
+  status: TournamentDisplayStatus;
   stages: StageSummary[];
   /**
    * Whether any team exists yet. Teams are formed before play starts (balancer
@@ -121,7 +120,7 @@ export function isTournamentOverviewPath(pathname: string, tournamentId?: string
 
 function resolveBracketHref(
   tournamentId: string,
-  status: TournamentStatus,
+  status: TournamentDisplayStatus,
   stages: StageSummary[]
 ): string {
   const primary = pickCurrentStage(stages, status);
@@ -177,7 +176,7 @@ export function buildTournamentSectionNav({
   hasMapPool = false,
   pathname
 }: BuildTournamentSectionNavInput): TournamentSectionNavItem[] {
-  const competitionStarted = reachedAtLeast(status, "live");
+  const competitionStarted = hasPlayStarted(status, stages);
   const currentPath = normalizePathname(pathname);
   // `stream`, `rules` and `maps` are present-or-absent rather than open-or-locked,
   // because a locked tab claims the content exists somewhere. They are filtered
@@ -185,8 +184,7 @@ export function buildTournamentSectionNav({
   // `ranking` is the same for a different reason: only an individual Swiss stage has a personal table.
   const individualStages = stages.filter((stage) => stage.stage_type === "individual_swiss");
   const hasRanking = individualStages.length > 0;
-  // Locking the qualification moves a finished stage's tournament back to `draft`, which
-  // precedes `live`, so a completed personal table keeps its tab open there.
+  // A completed personal table keeps its tab open whatever the phase shows.
   const rankingOpen = competitionStarted || individualStages.some((stage) => stage.status === "completed");
   const sections = (competitionStarted ? competitionOrder : preCompetitionOrder).filter(
     (id) =>

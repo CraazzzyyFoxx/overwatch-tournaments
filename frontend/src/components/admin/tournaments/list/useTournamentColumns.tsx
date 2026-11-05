@@ -11,6 +11,7 @@ import { TOURNAMENT_STATUS_TONE } from "@/app/admin/tournaments/[id]/components/
 import { formatDateRange } from "@/lib/datetime";
 import { useFormatter } from "@/lib/datetime/client";
 import { formatTournamentStages } from "@/lib/tournament/stages";
+import { displayStatus } from "@/lib/tournament/status";
 import type { DisciplineDescriptor } from "@/types/discipline.types";
 import type { Tournament } from "@/types/tournament.types";
 
@@ -42,7 +43,8 @@ function TournamentStatus({ tournament }: Readonly<{ tournament: Tournament }>) 
       </span>
     );
   }
-  return <StatusPill tone={TOURNAMENT_STATUS_TONE[tournament.status]}>{tStatus(tournament.status)}</StatusPill>;
+  const shown = displayStatus(tournament);
+  return <StatusPill tone={TOURNAMENT_STATUS_TONE[shown]}>{tStatus(shown)}</StatusPill>;
 }
 
 /**

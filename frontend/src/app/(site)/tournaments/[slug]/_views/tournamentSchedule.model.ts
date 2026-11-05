@@ -1,38 +1,46 @@
-import {
-  SCHEDULABLE_PHASES,
-  isSchedulablePhase,
-  phaseRank,
-  type SchedulablePhase
-} from "@/lib/tournament/lifecycle";
+import { nodesOfKind } from "@/lib/tournament/flow-nodes";
+import type { FlowNodeScheduleEntry, TournamentFlowNode } from "@/types/flow.types";
 import type { Tournament } from "@/types/tournament.types";
 
 /**
- * PLAYOFFS and everything after it depend on the actual course of play and are
- * never scheduled, so they can never appear on this timeline: the hero's status
- * pill carries them instead.
+ * One window of the timeline is one `flow_node_schedule` row of a registration, formation or stage node: the node's
+ * `open` / `check_in` / `start` phase. The leaderboard nodes carry none.
  */
 
 type PhaseSegmentState = "done" | "current" | "upcoming";
 
+type ScheduledKind = "registration" | "formation" | "stage";
+
+/** A node's statuses in the order it passes them, and the status each schedulable phase moves it to (`SCHEDULE_TRANSITIONS`). */
+const PHASE_TARGET: Record<ScheduledKind, { order: readonly string[]; target: Record<string, string> }> = {
+  registration: {
+    order: ["draft", "open", "check_in", "closed"],
+    target: { open: "open", check_in: "check_in" }
+  },
+  formation: { order: ["draft", "forming", "completed"], target: { start: "forming" } },
+  stage: { order: ["draft", "ready", "live", "completed"], target: { start: "live" } }
+};
+
 export type PhaseSegment = {
-  status: SchedulablePhase;
+  /** Unique per node and phase. */
+  key: string;
+  kind: ScheduledKind;
+  phase: FlowNodeScheduleEntry["phase"];
+  nodeName: string;
+  /** The tournament has several registration nodes, so a registration phase must name its node. */
+  nodeNamed: boolean;
   /**
-   * Derived from `tournament.status`, NEVER from `now` vs `startsAt`. A
-   * `starts_at` is a plan the worker tick executes, and with automation off it
+   * Derived from the node's status, NEVER from `now` vs `startsAt`. A
+   * `starts_at` is a plan the scheduler executes, and with automation off it
    * may never be executed at all — comparing clocks would report a phase as
-   * running while the tournament sits in the previous one.
+   * running while the node sits in the previous one.
    */
   state: PhaseSegmentState;
-  /**
-   * Planned phase start, ISO-8601. `null` only for the phase the tournament is
-   * in when the organizer scheduled no window for it: it still belongs on the
-   * timeline, because "where are we now" is the first thing the timeline says.
-   */
-  startsAt: string | null;
+  /** Planned phase start, ISO-8601. */
+  startsAt: string;
   /**
    * When the phase's action window closes, ISO-8601, or null when it stays open
-   * for the whole phase. This never advances the status (see
-   * `TournamentPhaseSchedule` in `shared/models/tournament/tournament.py`).
+   * for the whole phase. This never advances the status.
    */
   endsAt: string | null;
   /**
@@ -45,33 +53,36 @@ export type PhaseSegment = {
   /**
    * Which boundary `countdownMs` targets. The label follows this rather than the
    * segment's state: a phase can be marked current before its planned start —
-   * the organizer advanced the status by hand, or automation is off — and then
+   * the organizer advanced the node by hand, or automation is off — and then
    * the phase's own start is the boundary worth counting.
    */
   countdownTo: "start" | "close" | null;
   /**
    * The phase is current but its action window has already closed — the
-   * tournament waits for the next phase. Registration is the usual case: the
-   * status stays `registration` until check-in starts, but nobody can register.
+   * node waits for the next phase. Registration is the usual case: the
+   * node stays `open` until check-in starts, but nobody can register.
    * The view must not paint such a phase as "now".
    */
   windowClosed: boolean;
 };
 
+/** The status word a registration phase is named by (`common.statusBadge`); formation and stage phases are named by their node. */
+export function phaseStatusWord(segment: Pick<PhaseSegment, "kind" | "phase">): "registration" | "check_in" | null {
+  if (segment.kind !== "registration") return null;
+  return segment.phase === "open" ? "registration" : "check_in";
+}
+
 export type TournamentScheduleModel = {
   segments: PhaseSegment[];
   /**
-   * With auto-transitions off the organizer advances phases by hand, so the
+   * With auto-transitions off the organizer advances nodes by hand, so the
    * times are the intended plan rather than a commitment.
    */
   automationOff: boolean;
 };
 
 type ScheduleInput = {
-  tournament: Pick<
-    Tournament,
-    "status" | "team_formation" | "phase_schedule" | "auto_transitions_enabled"
-  >;
+  tournament: Pick<Tournament, "flow_nodes" | "auto_transitions_enabled">;
   /**
    * The viewer's clock. Non-nullable on purpose: the page renders its skeleton
    * until hydration supplies one, rather than dressing the pre-hydration render
@@ -86,62 +97,47 @@ function epoch(iso: string | null): number | null {
   return Number.isFinite(value) ? value : null;
 }
 
+function segmentsOf(node: TournamentFlowNode, nodeNamed: boolean): PhaseSegment[] {
+  const kind = node.kind as ScheduledKind;
+  const { order, target } = PHASE_TARGET[kind];
+  const rank = order.indexOf(node.status);
+  return node.schedule.flatMap((row) => {
+    const targetRank = order.indexOf(target[row.phase]);
+    // A row of a phase the kind cannot schedule (the server refuses to write one) has no place on a timeline.
+    if (targetRank < 0) return [];
+    return [
+      {
+        key: `${node.id}:${row.phase}`,
+        kind,
+        phase: row.phase,
+        nodeName: node.name,
+        nodeNamed,
+        state: rank < targetRank ? "upcoming" : rank === targetRank ? "current" : "done",
+        startsAt: row.starts_at,
+        endsAt: row.ends_at ?? null,
+        countdownMs: null,
+        countdownTo: null,
+        windowClosed: false
+      } satisfies PhaseSegment
+    ];
+  });
+}
+
 export function buildTournamentSchedule({
   tournament,
   now
 }: ScheduleInput): TournamentScheduleModel {
-  const schedule = tournament.phase_schedule ?? [];
-
-  const currentRank = phaseRank(tournament.status);
-  const segments: PhaseSegment[] = [];
-
-  for (const phase of SCHEDULABLE_PHASES) {
-    const row = schedule.find((entry) => entry.status === phase);
-    // An unscheduled phase has no place on a timeline: it carries no time, and
-    // for check-in its absence is exactly what "this tournament has no
-    // check-in" means. A row of em-dashes would be noise, not information.
-    if (!row) continue;
-
-    const rank = phaseRank(phase);
-    segments.push({
-      status: phase,
-      state: rank < currentRank ? "done" : rank === currentRank ? "current" : "upcoming",
-      startsAt: row.starts_at,
-      endsAt: row.ends_at,
-      countdownMs: null,
-      countdownTo: null,
-      windowClosed: false
-    });
-  }
-
-  // The phase the tournament is in, even when nobody scheduled it: a balancer
-  // tournament forming its teams sits in `draft` between check-in and the
-  // start, usually with no window of its own. Without this step the timeline
-  // had no "now" at all. A lone step is not a timeline, so only beside others.
-  const status = tournament.status;
-  if (
-    segments.length > 0 &&
-    isSchedulablePhase(status) &&
-    !segments.some((segment) => segment.state === "current")
-  ) {
-    const after = segments.findIndex((segment) => phaseRank(segment.status) > currentRank);
-    segments.splice(after < 0 ? segments.length : after, 0, {
-      status,
-      state: "current",
-      startsAt: null,
-      endsAt: null,
-      countdownMs: null,
-      countdownTo: null,
-      windowClosed: false
-    });
-  }
+  const nodeNamed = nodesOfKind(tournament, "registration").length > 1;
+  const segments = (["registration", "formation", "stage"] as const)
+    .flatMap((kind) => nodesOfKind(tournament, kind).flatMap((node) => segmentsOf(node, nodeNamed)))
+    .sort((left, right) => (epoch(left.startsAt) ?? 0) - (epoch(right.startsAt) ?? 0));
 
   const current = segments.find((segment) => segment.state === "current");
   if (current) {
     const startsAt = epoch(current.startsAt);
     const endsAt = epoch(current.endsAt);
     // The phase is marked current but its planned start has not arrived: the
-    // status moved ahead of the plan, which is exactly what a manual advance
+    // node moved ahead of the plan, which is exactly what a manual advance
     // looks like. Its own start is then the nearest boundary, and the only
     // answer to "when does this actually begin".
     if (startsAt !== null && startsAt > now) {
@@ -169,12 +165,11 @@ export function buildTournamentSchedule({
   return { segments, automationOff: !tournament.auto_transitions_enabled };
 }
 
-export type NextPhaseBoundary = {
-  status: SchedulablePhase;
+export type NextPhaseBoundary = Pick<PhaseSegment, "kind" | "phase" | "nodeName"> & {
   /** ISO-8601 instant of the boundary. */
   at: string;
   /** Whether the boundary opens the phase or closes its action window. */
-  kind: "start" | "close";
+  boundary: "start" | "close";
   msLeft: number;
 };
 
@@ -190,5 +185,12 @@ export function nextPhaseBoundary(input: ScheduleInput): NextPhaseBoundary | nul
   if (!carrier || carrier.countdownMs === null || carrier.countdownTo === null) return null;
   const at = carrier.countdownTo === "close" ? carrier.endsAt : carrier.startsAt;
   if (at === null) return null;
-  return { status: carrier.status, at, kind: carrier.countdownTo, msLeft: carrier.countdownMs };
+  return {
+    kind: carrier.kind,
+    phase: carrier.phase,
+    nodeName: carrier.nodeName,
+    at,
+    boundary: carrier.countdownTo,
+    msLeft: carrier.countdownMs
+  };
 }

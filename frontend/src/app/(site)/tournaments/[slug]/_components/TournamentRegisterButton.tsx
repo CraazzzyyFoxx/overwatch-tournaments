@@ -9,7 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { getCurrentPathForAuthRedirect } from "@/lib/auth/redirect";
 import { cn } from "@/lib/utils";
-import { reachedAtLeast } from "@/lib/tournament/lifecycle";
+import { hasPlayStarted } from "@/lib/tournament/stages";
+import { displayStatus, getTournamentStatusMeta } from "@/lib/tournament/status";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { useAuthModalStore } from "@/stores/auth-modal.store";
 import registrationService from "@/services/registration.service";
@@ -80,7 +81,7 @@ export default function TournamentRegisterButton({
   // The viewer's own registration, for as long as it is news: through check-in
   // and the forming of the teams, open window or not. Once the matches are on,
   // the slot belongs to what the tournament is doing.
-  if (myReg && !reachedAtLeast(tournament.status, "live")) {
+  if (myReg && !hasPlayStarted(tournament.status, tournament.stages)) {
     const statusMap: Record<string, { icon: typeof Clock; label: string; className: string }> = {
       pending: {
         icon: Clock,
@@ -130,7 +131,7 @@ export default function TournamentRegisterButton({
     // Someone may still come to sign up while the tournament registers or
     // checks in. From the forming of the teams on nobody asks, and a dead box
     // would be the loudest thing in the hero.
-    if (reachedAtLeast(tournament.status, "draft")) return null;
+    if (getTournamentStatusMeta(displayStatus(tournament)).variant !== "upcoming") return null;
     return (
       // A STATE, not a control: the subtle button's box and palette, without the hover a click would need.
       <div

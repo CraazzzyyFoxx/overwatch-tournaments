@@ -187,7 +187,7 @@ function freshness(status: TournamentStatus, live: readonly TournamentStatus[]) 
 // A view without these numbers shows its empty state; an error toast would only repeat it.
 const QUIET = { suppressErrorToast: true };
 
-const PLAYING: readonly TournamentStatus[] = ["draft", "live", "playoffs"];
+const PLAYING: readonly TournamentStatus[] = ["live"];
 
 export function tournamentPlayerStatsQueryOptions(tournament: Pick<Tournament, "id" | "status">) {
   return queryOptions({
@@ -223,6 +223,6 @@ export function tournamentDraftQueryOptions(
     enabled: nodeId !== null,
     select: mapDraftBoard,
     meta: QUIET,
-    ...freshness(tournament.status, ["draft"])
+    ...freshness(tournament.status, ["live"])
   });
 }

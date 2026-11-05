@@ -151,7 +151,6 @@ function makeTournament(): Tournament {
     team_formation: "balancer",
     status: "completed",
     auto_transitions_enabled: false,
-    phase_schedule: [],
     stages: [],
     participants_count: 60,
     registrations_count: 60,

@@ -10,7 +10,7 @@ import type { AnalyticsHeroParts } from "@/disciplines/types";
 import { formatDateRange } from "@/lib/datetime";
 import { useFormatter } from "@/lib/datetime/client";
 import { stageProgress } from "@/lib/tournament/stage-progress";
-import { getTournamentStatusMeta } from "@/lib/tournament/status";
+import { getTournamentStatusMeta, displayStatus } from "@/lib/tournament/status";
 import type { TeamFormation, Tournament } from "@/types/tournament.types";
 
 interface TournamentHeroProps {
@@ -67,8 +67,8 @@ export default function TournamentHero({ tournament, parts, picker }: Readonly<T
     );
   }
 
-  const statusLabel = t(`common.statusBadge.${tournament.status}`);
-  const stage = stageProgress(tournament, tournament.status, t);
+  const statusLabel = t(`common.statusBadge.${displayStatus(tournament)}`);
+  const stage = stageProgress(tournament, displayStatus(tournament), t);
   const facts = [
     tournament.is_league ? t("analytics.hero.formatLeague") : t("analytics.hero.formatCup"),
     tournament.team_formation ? t(`common.${tournament.team_formation as TeamFormation}`) : null,
@@ -91,7 +91,7 @@ export default function TournamentHero({ tournament, parts, picker }: Readonly<T
           >
             {tournament.name}
           </HoverPrefetchLink>
-          <TournamentStatusPill status={getTournamentStatusMeta(tournament.status).variant} className="shrink-0">
+          <TournamentStatusPill status={getTournamentStatusMeta(displayStatus(tournament)).variant} className="shrink-0">
             {stage?.label ? `${statusLabel} · ${stage.label}` : statusLabel}
           </TournamentStatusPill>
         </span>

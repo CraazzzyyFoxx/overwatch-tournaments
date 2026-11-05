@@ -1,5 +1,5 @@
 import type { Api } from "./api";
-import { battleTag, openRegistration, type FormField, type FormSchema, type Registration, type ScheduleEntry } from "./flows";
+import { battleTag, openRegistration, type FormField, type FormSchema, type Registration, type FlowNodeScheduleEntry } from "./flows";
 import { createTournament, createWorkspace, uniq, type Tournament, type Workspace } from "./seed";
 import type { TestUser } from "./users";
 
@@ -76,21 +76,21 @@ export type AdminRegistration = Registration & {
   balancer_status_meta: { value: string; name: string; excludes_from_balancer: boolean };
 };
 
-export type ReadyTournament = { ws: Workspace; t: Tournament; version: number };
+export type ReadyTournament = { ws: Workspace; t: Tournament; version: number; registrationNodeId: number };
 
-/** A fresh workspace + tournament with registration open now (form saved, status REGISTRATION). */
+/** A fresh workspace + tournament with registration open now (form saved, the registration node `open`). */
 export async function openTournament(
   api: Api,
-  opts: { form?: FormSchema; teamFormation?: string; schedule?: ScheduleEntry[]; formExtra?: Record<string, unknown> } = {}
+  opts: { form?: FormSchema; teamFormation?: string; schedule?: FlowNodeScheduleEntry[]; formExtra?: Record<string, unknown> } = {}
 ): Promise<ReadyTournament> {
   const ws = await createWorkspace(api);
   const t = await createTournament(api, ws.id, opts.teamFormation ? { team_formation: opts.teamFormation } : {});
-  const version = await openRegistration(api, t.id, { form: opts.form, schedule: opts.schedule });
+  const { versionId: version, registrationNodeId } = await openRegistration(api, t.id, { form: opts.form, schedule: opts.schedule });
   if (opts.formExtra) {
     const form = await api.get<PublicForm>(`/api/v1/admin/balancer/tournaments/${t.id}/registration-form`);
     await api.put(`/api/v1/admin/balancer/tournaments/${t.id}/registration-form`, { form_schema: form.form_schema, ...opts.formExtra });
   }
-  return { ws, t, version };
+  return { ws, t, version, registrationNodeId };
 }
 
 /** Answers for TEAM_FORM / OW_FORM: the user's own BattleTag, `role` primary. */

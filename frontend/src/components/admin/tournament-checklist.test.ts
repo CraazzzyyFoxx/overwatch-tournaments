@@ -20,7 +20,7 @@ const t = createTranslator({ locale: "en", messages: en, namespace: "adminTourna
 function readiness(overrides: Partial<TournamentReadiness> = {}): TournamentReadiness {
   return {
     tournament_id: 7,
-    status: "registration",
+    status: "live",
     team_formation: "balancer",
     schedule_configured: true,
     grid_selected: true,
@@ -79,7 +79,7 @@ const SETUP_MASKED: Partial<TournamentReadiness> = {
 function ctx(overrides: Partial<ChecklistContext> = {}): ChecklistContext {
   return {
     basePath: "/admin/tournaments/7",
-    status: "registration",
+    status: "live",
     hasChallongeSource: false,
     ...overrides
   };
@@ -109,19 +109,10 @@ describe("buildChecklist", () => {
 
   it("each status shows only the items whose window it is in", () => {
     expect(keys(at("announcement"))).toEqual(["schedule", "grid", "registration_form", "stages"]);
-    expect(keys(at("registration"))).toEqual([
+    expect(keys(at("live"))).toEqual([
       "schedule",
       "grid",
       "registration_form",
-      "registrations_reviewed",
-      "ranks",
-      "pool_ready",
-      "balance_saved",
-      "balance_exported",
-      "stages"
-    ]);
-    expect(keys(at("check_in"))).toEqual([
-      "grid",
       "registrations_reviewed",
       "ranks",
       "check_in",
@@ -130,29 +121,30 @@ describe("buildChecklist", () => {
       "balance_exported",
       "stages",
       "slots",
-      "bracket"
+      "bracket",
+      "results",
+      "logs"
     ]);
-    expect(keys(at("live"))).toEqual(["slots", "bracket", "results", "logs"]);
   });
 
   it("check-in is progress, never open work", () => {
-    const checkIn = byKey(at("check_in"), "check_in");
+    const checkIn = byKey(at("live"), "check_in");
     expect(checkIn.state).toBe("info");
     expect(checkIn.detail).toBe("2/3 checked in");
-    expect(byKey(at("check_in", TEAM_MASKED), "check_in").state).toBe("no-access");
+    expect(byKey(at("live", TEAM_MASKED), "check_in").state).toBe("no-access");
   });
 
   it("pending registrations need review", () => {
-    expect(byKey(at("registration", { registrations_pending: 2 }), "registrations_reviewed").state).toBe("warn");
-    expect(byKey(at("registration", { registrations_pending: 0 }), "registrations_reviewed").state).toBe("done");
+    expect(byKey(at("live", { registrations_pending: 2 }), "registrations_reviewed").state).toBe("warn");
+    expect(byKey(at("live", { registrations_pending: 0 }), "registrations_reviewed").state).toBe("done");
   });
 
   it("masked groups render no-access instead of zeros", () => {
-    const team = at("registration", TEAM_MASKED);
+    const team = at("live", TEAM_MASKED);
     for (const key of ["registration_form", "registrations_reviewed", "ranks", "pool_ready", "balance_saved", "balance_exported"]) {
       expect(byKey(team, key).state, key).toBe("no-access");
     }
-    const setup = at("registration", SETUP_MASKED);
+    const setup = at("live", SETUP_MASKED);
     for (const key of ["schedule", "grid", "stages"]) {
       expect(byKey(setup, key).state, key).toBe("no-access");
     }
@@ -202,15 +194,15 @@ describe("buildChecklist", () => {
   });
 
   it("formation items follow team_formation", () => {
-    const balancer = keys(at("registration", { team_formation: "balancer" }));
+    const balancer = keys(at("live", { team_formation: "balancer" }));
     expect(balancer).toEqual(expect.arrayContaining(["pool_ready", "balance_saved", "balance_exported"]));
     expect(balancer).not.toContain("draft_completed");
 
-    const draft = at("draft", { team_formation: "draft", draft_session_status: "completed" });
+    const draft = at("live", { team_formation: "draft", draft_session_status: "completed" });
     expect(keys(draft)).not.toContain("pool_ready");
     expect(byKey(draft, "draft_completed").state).toBe("done");
 
-    const draftPending = byKey(at("draft", { team_formation: "draft", draft_session_status: "live" }), "draft_completed");
+    const draftPending = byKey(at("live", { team_formation: "draft", draft_session_status: "live" }), "draft_completed");
     expect(draftPending.state).toBe("todo");
     // The session status is translated, never the raw enum, and the row leads to the board.
     expect(draftPending.detail).toBe("Draft is live");
@@ -218,7 +210,7 @@ describe("buildChecklist", () => {
   });
 
   it("pool warns when registrations need fixing", () => {
-    expect(byKey(at("registration", { pool_ready: 5, pool_need_fix: 2 }), "pool_ready").state).toBe("warn");
+    expect(byKey(at("live", { pool_ready: 5, pool_need_fix: 2 }), "pool_ready").state).toBe("warn");
   });
 
   it("registration form hidden for challonge-sourced tournaments", () => {
@@ -227,9 +219,9 @@ describe("buildChecklist", () => {
   });
 
   it("hrefs point at final tab addresses (D20)", () => {
-    expect(byKey(at("registration"), "registrations_reviewed").href).toBe("/admin/tournaments/7/registration/entries");
-    expect(byKey(at("registration"), "pool_ready").href).toBe("/admin/tournaments/7/teams/roster");
-    expect(byKey(at("registration"), "stages").href).toBe("/admin/tournaments/7/bracket");
+    expect(byKey(at("live"), "registrations_reviewed").href).toBe("/admin/tournaments/7/registration/entries");
+    expect(byKey(at("live"), "pool_ready").href).toBe("/admin/tournaments/7/teams/roster");
+    expect(byKey(at("live"), "stages").href).toBe("/admin/tournaments/7/bracket");
     expect(byKey(at("completed"), "results").href).toBe("/admin/tournaments/7/matches/encounters");
     expect(byKey(at("completed"), "logs").href).toBe("/admin/tournaments/7/matches/logs");
   });
@@ -237,12 +229,12 @@ describe("buildChecklist", () => {
 
 describe("pickNextAction", () => {
   it("prefers a warning over an earlier to-do", () => {
-    const items = at("registration", { grid_selected: false, registrations_pending: 3 });
+    const items = at("live", { grid_selected: false, registrations_pending: 3 });
     expect(pickNextAction(items)?.key).toBe("registrations_reviewed");
   });
 
   it("falls back to the first to-do, and to nothing when all is done", () => {
-    expect(pickNextAction(at("registration", { grid_selected: false, registrations_pending: 0 }))?.key).toBe("grid");
+    expect(pickNextAction(at("live", { grid_selected: false, registrations_pending: 0 }))?.key).toBe("grid");
     expect(pickNextAction(at("completed"))).toBeUndefined();
   });
 

@@ -16,6 +16,8 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { useInvalidation } from "@/hooks/useInvalidation";
 import { useSyncActiveWorkspace } from "@/hooks/useSyncActiveWorkspace";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
+import { displayStatus } from "@/lib/tournament/status";
+import { FlowNodeControls } from "./components/FlowNodeControls";
 import { TournamentStatusControl } from "./components/TournamentStatusControl";
 import { TOURNAMENT_STATUS_TONE } from "./components/tournamentWorkspace.helpers";
 import { getTournamentWorkspaceQueryKeys } from "@/lib/tournament/workspace-query-keys";
@@ -222,8 +224,8 @@ export function TournamentHubShell({
       <EntityHubHeader
         title={tournament.name}
         status={{
-          label: tStatus(tournament.status),
-          tone: TOURNAMENT_STATUS_TONE[tournament.status]
+          label: tStatus(displayStatus(tournament)),
+          tone: TOURNAMENT_STATUS_TONE[displayStatus(tournament)]
         }}
         meta={[
           <span key="dates" className="tabular-nums">
@@ -251,11 +253,10 @@ export function TournamentHubShell({
           ) : null
         ]}
         actions={
-          <TournamentStatusControl
-            tournament={tournament}
-            canUpdate={canUpdateTournament}
-            isSuperuser={isSuperuser}
-          />
+          <>
+            <FlowNodeControls tournament={tournament} canUpdate={canUpdateTournament} />
+            <TournamentStatusControl tournament={tournament} canUpdate={canUpdateTournament} />
+          </>
         }
       />
       <LinkTabs items={tabItems} activeKey={isLegacySegment ? "" : activeTab} ariaLabel={t("sections")} />

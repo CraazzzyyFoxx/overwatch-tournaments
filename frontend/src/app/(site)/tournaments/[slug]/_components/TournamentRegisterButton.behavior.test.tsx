@@ -84,13 +84,6 @@ function makeTournament(status: TournamentStatus): Tournament {
         stage_id: null
       }
     ],
-    phase_schedule: [
-      {
-        status: "registration",
-        starts_at: "2024-08-01T10:00:00.000Z",
-        ends_at: "2024-08-10T10:00:00.000Z"
-      }
-    ],
     stages: [],
     participants_count: 70,
     registrations_count: 75,
@@ -173,15 +166,22 @@ describe("the register button of an open registration node", () => {
   });
 });
 
+/** The node closed and nothing started: the tournament is `live`, the phase reads live. */
+const closedRegistration = (tournament: Tournament): Tournament => ({
+  ...tournament,
+  flow_nodes: tournament.flow_nodes?.map((node) => ({ ...node, status: "closed" }))
+});
+
 describe("the action slot once registration has closed", () => {
   it("says so while a latecomer could still be looking for the sign-up", async () => {
-    await mount(makeTournament("check_in"));
+    // Live because a registration node is open (its sign-up window long over): the phase reads registration.
+    await mount(makeTournament("live"));
 
     expect(container.textContent).toBe(en.registration.button.closed);
   });
 
   it("says nothing once the teams are being formed", async () => {
-    await mount(makeTournament("draft"));
+    await mount(closedRegistration(makeTournament("live")));
 
     expect(container.textContent).toBe("");
   });
@@ -190,12 +190,13 @@ describe("the action slot once registration has closed", () => {
     auth = { status: "authenticated", user: { id: 1 } };
     getMyRegistration.mockResolvedValue({ status: "approved" });
 
-    await mount(makeTournament("draft"));
+    // Registration closed, no stage live yet: the teams are being formed.
+    await mount(closedRegistration(makeTournament("live")));
     const link = container.querySelector("a");
     expect(link?.textContent).toBe(en.common.approved);
     expect(link?.getAttribute("href")).toBe("/tournaments/anak-cup/participants");
 
-    await mount(makeTournament("live"));
+    await mount({ ...closedRegistration(makeTournament("live")), stages: [{ status: "live" } as Tournament["stages"][number]] });
     expect(container.textContent).toBe("");
   });
 });

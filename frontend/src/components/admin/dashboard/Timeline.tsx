@@ -12,13 +12,12 @@ import { GameIcon } from "@/components/workspace/GameIcon";
 import { useFormatter } from "@/lib/datetime/client";
 import { cn } from "@/lib/utils";
 import type { DashboardTimelineEvent, DashboardTournamentCard } from "@/types/admin-dashboard.types";
-import type { TournamentStatus } from "@/types/tournament.types";
 import { Block, BlockError } from "./Block";
 import { dayLabel, groupByDay } from "./model";
 
 /**
- * Phase-schedule boundaries of the next seven days, listed by day. Overdue
- * starts (a phase the tournament should have entered and has not) lead in their
+ * Node-schedule boundaries of the next seven days, listed by day. Overdue
+ * starts (a phase a node should have entered and has not) lead in their
  * own group in the error tone: they are the entries that are already late.
  */
 export function Timeline({
@@ -83,7 +82,7 @@ export function Timeline({
               </Eyebrow>
               <ul className="mt-1 divide-y divide-border/50">
                 {group.events.map((event) => (
-                  <li key={`${event.tournament_id}:${event.status}:${event.edge}`}>
+                  <li key={`${event.tournament_id}:${event.node_name}:${event.phase}:${event.edge}`}>
                     <TimelineRow event={event} card={cardOf.get(event.tournament_id)} />
                   </li>
                 ))}
@@ -104,7 +103,13 @@ function TimelineRow({
   const t = useTranslations("adminShell.dashboard");
   const tStatus = useTranslations("common.statusBadge");
   const format = useFormatter();
-  const phase = tStatus(event.status as TournamentStatus);
+  // A registration phase is named by the status it opens; a start by its node (a stage or the team formation).
+  const phase =
+    event.phase === "open"
+      ? tStatus("registration")
+      : event.phase === "check_in"
+        ? tStatus("check_in")
+        : event.node_name;
   return (
     // Bleeds to the card edge so the hover fill spans the card.
     <HoverPrefetchLink

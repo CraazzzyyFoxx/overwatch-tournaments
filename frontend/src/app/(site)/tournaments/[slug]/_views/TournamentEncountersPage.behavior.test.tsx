@@ -141,7 +141,6 @@ const TOURNAMENT: Tournament = {
   team_formation: "balancer",
   status: "completed",
   auto_transitions_enabled: true,
-  phase_schedule: [],
   stages: [GROUPS, PLAYOFFS],
   participants_count: 20,
   registrations_count: 20,

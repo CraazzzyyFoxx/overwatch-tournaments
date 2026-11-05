@@ -24,8 +24,9 @@ import { Eyebrow } from "@/components/ui/eyebrow";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getFormatter } from "@/lib/datetime/server";
 import { getPlayerSlug } from "@/lib/player";
+import { playStartsAt, registrationClosesAt } from "@/lib/tournament/flow-nodes";
 import { getFinishedTournaments, type FinishedTournament } from "@/lib/tournament/finished";
-import { getTournamentStatusMeta } from "@/lib/tournament/status";
+import { displayStatus, getTournamentStatusMeta } from "@/lib/tournament/status";
 import { tournamentHref } from "@/lib/tournament/url";
 import type { Formatter } from "@/lib/datetime";
 import type { Tournament } from "@/types/tournament.types";
@@ -180,13 +181,13 @@ export async function NowInCommunity({ workspace }: Readonly<{ workspace: Worksp
 
 /** The tournament being played, or the one taking entries. */
 async function LeadActive({ tournament }: Readonly<{ tournament: Tournament }>) {
-  const [t, tCommon, tSite, format] = await Promise.all([
+  const [t, tSite, format] = await Promise.all([
     getTranslations("workspace"),
-    getTranslations("common"),
     getTranslations("site"),
     getFormatter()
   ]);
-  const live = getTournamentStatusMeta(tournament.status).variant === "live";
+  const live = getTournamentStatusMeta(displayStatus(tournament)).variant === "live";
+  const liveStage = tournament.stages?.find((stage) => stage.status === "live");
 
   if (live) {
     return (
@@ -205,9 +206,7 @@ async function LeadActive({ tournament }: Readonly<{ tournament: Tournament }>) 
         }
       >
         <Facts>
-          {tournament.status === "playoffs" ? (
-            <Fact value={tCommon("statusBadge.playoffs")} label={t("now.stage")} />
-          ) : null}
+          {liveStage ? <Fact value={liveStage.name} label={t("now.stage")} /> : null}
           {typeof tournament.teams_count === "number" ? (
             <Fact
               value={format.number(tournament.teams_count)}
@@ -242,11 +241,8 @@ async function LeadActive({ tournament }: Readonly<{ tournament: Tournament }>) 
     );
   }
 
-  const registrationEnd =
-    tournament.phase_schedule.find((phase) => phase.status === "registration")?.ends_at ?? null;
-  const liveStart =
-    tournament.phase_schedule.find((phase) => phase.status === "live")?.starts_at ??
-    String(tournament.start_date);
+  const registrationEnd = registrationClosesAt(tournament);
+  const liveStart = playStartsAt(tournament) ?? String(tournament.start_date);
   const time = (value: string) =>
     format.dateTime(new Date(value), {
       day: "numeric",
