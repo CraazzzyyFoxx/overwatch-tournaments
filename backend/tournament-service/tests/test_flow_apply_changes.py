@@ -120,3 +120,44 @@ class ApplyChangesTests(FlowCase):
             [("invalid_node_config", -1)], [(i.code, i.node_id) for i in plan.issues if i.severity == "error"]
         )
         self.assertEqual({"r": -1}, plan.ref_ids)
+
+    async def test_an_edge_can_be_repointed_off_a_node_deleted_in_the_same_request(self) -> None:
+        reg = await self.node("registration")
+        gone = await self.node("formation", config={"mode": "manual"})
+        kept = await self.node("formation", config={"mode": "manual"})
+        wire = await self.edge(reg, "participants", gone, "players")
+        read = await self._apply(
+            FlowChanges(
+                edges=[
+                    FlowEdgeUpsert(id=wire, source=reg, source_port="participants", target=kept, target_port="players")
+                ],
+                delete_node_ids=[gone],
+            )
+        )
+        self.assertEqual([(wire, reg, kept)], [(e.id, e.source_node_id, e.target_node_id) for e in read.edges])
+        self.assertEqual({reg, kept}, {n.id for n in read.nodes})
+
+    async def test_a_kind_change_restarts_the_node_in_the_new_kinds_lifecycle(self) -> None:
+        pure = await self.node("filter", "final", config={"mode": "top", "n": 4})
+        lifecycle = await self.node("formation", "draft", config={"mode": "manual"})
+        read = await self._apply(
+            FlowChanges(
+                nodes=[
+                    FlowNodeUpsert(id=pure, kind="formation", name="F", config={"mode": "manual"}),
+                    FlowNodeUpsert(id=lifecycle, kind="filter", name="T", config={"mode": "top", "n": 2}),
+                ]
+            )
+        )
+        self.assertEqual(
+            {pure: ("formation", "draft"), lifecycle: ("filter", "pending")},
+            {n.id: (n.kind, n.status) for n in read.nodes},
+        )
+
+    async def test_a_kind_change_of_a_started_node_is_node_frozen(self) -> None:
+        form = await self.node("formation", "forming", config={"mode": "manual"})
+        self.assertEqual(
+            (409, "node_frozen"),
+            await self._refusal(
+                FlowChanges(nodes=[FlowNodeUpsert(id=form, kind="filter", name="T", config={"mode": "top", "n": 2})])
+            ),
+        )

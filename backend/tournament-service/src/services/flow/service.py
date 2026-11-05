@@ -257,7 +257,6 @@ class FlowService:
             e.id: e for e in await session.scalars(sa.select(FlowEdge).where(FlowEdge.tournament_id == tournament_id))
         }
         await session.execute(sa.delete(FlowEdge).where(FlowEdge.id.in_(changes.delete_edge_ids)))
-        await session.execute(sa.delete(FlowNode).where(FlowNode.id.in_(changes.delete_node_ids)))
         created: list[FlowNode] = []
         for u in changes.nodes:
             fields = {
@@ -266,13 +265,17 @@ class FlowService:
                 "config": u.config,
                 "position_x": u.position_x,
                 "position_y": u.position_y,
+                # A kind change (allowed only on an unfrozen node) starts the node over in the new kind's lifecycle.
+                "status": (FlowNodeStatus.DRAFT if u.kind in LIFECYCLE_KINDS else FlowNodeStatus.PENDING).value,
             }
-            if u.id is not None:
+            if u.id is None:
+                created.append(FlowNode(tournament_id=tournament_id, stage_id=u.stage_id, **fields))
+            else:
+                row = node_rows[u.id]
+                if row.kind == u.kind.value:
+                    del fields["status"]
                 for name, value in fields.items():
-                    setattr(node_rows[u.id], name, value)
-                continue
-            status = FlowNodeStatus.DRAFT if u.kind in LIFECYCLE_KINDS else FlowNodeStatus.PENDING
-            created.append(FlowNode(tournament_id=tournament_id, status=status.value, stage_id=u.stage_id, **fields))
+                    setattr(row, name, value)
         session.add_all(created)
         await session.flush()
         real_ids = {-i: row.id for i, row in enumerate(created, 1)}
@@ -292,6 +295,8 @@ class FlowService:
                 for name, value in fields.items():
                     setattr(edge_rows[u.id], name, value)
         await session.flush()
+        # Last, so an edge the request re-points has left the deleted node before the cascade.
+        await session.execute(sa.delete(FlowNode).where(FlowNode.id.in_(changes.delete_node_ids)))
 
         await flow_engine.recompute(session, tournament_id)
         await flow_node_service.sync_tournament_status(session, tournament_id)
