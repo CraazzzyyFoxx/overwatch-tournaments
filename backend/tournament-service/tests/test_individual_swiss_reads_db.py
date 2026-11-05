@@ -13,6 +13,7 @@ from shared.core.errors import BaseAPIException
 from shared.models.identity.user import User
 from shared.models.tenancy.workspace import WorkspaceMember
 from shared.services.encounter.participants import MemberSnapshot, place_team
+from shared.testing.factories import add_entry, registration_node
 from src.schemas import individual_swiss as swiss_schemas
 from src.services.individual_swiss.pins import pins_service
 from src.services.individual_swiss.qualification import qualification_service
@@ -40,6 +41,7 @@ class IndividualSwissReadsCase(EncounterLayerCase):
             await s.flush()
             add_stage_node(s, stage, "live")
             self.swiss_id = stage.id
+            self.registration_node_id = await registration_node(s, self.tournament_id, status="closed")
             await s.commit()
         self.members: dict[str, int] = {}
         self.user_ids: list[int] = []
@@ -73,11 +75,12 @@ class IndividualSwissReadsCase(EncounterLayerCase):
                     tournament_id=self.tournament_id,
                     workspace_member_id=member.id,
                     display_name=name,
-                    status="approved",
-                    balancer_status="ready",
                 )
                 s.add(registration)
                 await s.flush()
+                await add_entry(
+                    s, self.registration_node_id, registration.id, status="approved", balancer_status="ready"
+                )
                 registration_id = registration.id
             s.add(
                 models.PlayerStanding(
@@ -131,9 +134,11 @@ class IndividualSwissReadsCase(EncounterLayerCase):
             rows = await s.execute(
                 sa.select(
                     models.Registration.display_name,
-                    models.Registration.balancer_status,
-                    models.Registration.exclude_reason,
-                ).where(models.Registration.tournament_id == self.tournament_id)
+                    models.RegistrationEntry.balancer_status,
+                    models.RegistrationEntry.exclude_reason,
+                )
+                .join(models.RegistrationEntry, models.RegistrationEntry.registration_id == models.Registration.id)
+                .where(models.Registration.tournament_id == self.tournament_id)
             )
             return {name: (status, reason) for name, status, reason in rows.all()}
 

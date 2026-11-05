@@ -38,14 +38,15 @@ class PlayerExportService:
         self,
         session: AsyncSession,
         tournament_id: int,
+        registration_node_id: int,
         *,
         export_format: str,
         include_private: bool,
     ) -> dict[str, Any]:
-        """The pool in ``export_format``, one of ``PLAYER_EXPORT_FORMATS``."""
+        """The pool of a registration node in ``export_format``, one of ``PLAYER_EXPORT_FORMATS``."""
         # One payload, one source: the same rosters the balance job and the
         # draft read, serialized by the engine rather than re-derived here.
-        rosters = await roster_engine.for_tournament(session, tournament_id, pool_only=True)
+        rosters = await roster_engine.for_registration_node(session, registration_node_id, pool_only=True)
         if export_format == "xv-1":
             return roster_engine.balancer_input(rosters.values())
         return await self._owt_export(session, tournament_id, rosters.values(), include_private=include_private)

@@ -18,6 +18,7 @@ from shared.models.registration.registration import Registration, RegistrationRo
 from shared.repository import CatalogRoleRepository
 from shared.services.encounter.participants import active_teams
 from shared.services.encounter.result import apply_result
+from shared.testing.factories import add_entry
 from src import schemas
 from src.services.admin.stage import stage_service
 from src.services.individual_swiss import individual_swiss_rounds_service
@@ -34,6 +35,12 @@ class IndividualSwissRoundsTests(EncounterLayerCase):
         tag = f"isw-{os.getpid()}-{self.workspace_id}"
         async with self.Session() as s:
             catalog = await CatalogRoleRepository().rated_rows(s, discipline="overwatch", workspace_id=None)
+            node = models.FlowNode(
+                tournament_id=self.tournament_id, kind="registration", name="Day 1", status="closed", config={}
+            )
+            s.add(node)
+            await s.flush()
+            node_id = node.id
             for role, count in counts.items():
                 for index in range(count):
                     user = models.User(name=f"{tag}-{role}-{index}")
@@ -45,12 +52,11 @@ class IndividualSwissRoundsTests(EncounterLayerCase):
                     registration = Registration(
                         tournament_id=self.tournament_id,
                         display_name=f"{role}{index}",
-                        status="approved",
-                        balancer_status="ready",
                         workspace_member_id=member.id,
                     )
                     s.add(registration)
                     await s.flush()
+                    await add_entry(s, node_id, registration.id, status="approved", balancer_status="ready")
                     s.add(
                         RegistrationRole(
                             registration_id=registration.id,
@@ -63,7 +69,6 @@ class IndividualSwissRoundsTests(EncounterLayerCase):
                             is_active=True,
                         )
                     )
-            s.add(models.FlowNode(tournament_id=self.tournament_id, kind="registration", name="Day 1", status="closed"))
             await s.commit()
 
     async def _wire_pool(self, stage_id: int) -> None:

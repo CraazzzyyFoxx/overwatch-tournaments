@@ -22,7 +22,7 @@ from src.services.person_names import account_display_name
 from src.services.registration.admission import assert_admitted_at
 from src.services.registration.service import TeamPlacement
 from src.services.registration.team_rate_limits import assert_accept_attempt_allowed
-from src.services.registration.teams._core import TeamServiceBase
+from src.services.registration.teams._core import TeamServiceBase, _form
 from src.services.registration.teams._shared import (
     _SLOT_RELEASING_STATUSES,
     INVITE_ACCEPTED,
@@ -112,6 +112,7 @@ class InviteeMixin(TeamServiceBase):
         live = invite.state == INVITE_PENDING and (invite.expires_at is None or invite.expires_at > datetime.now(UTC))
         return RegistrationTeamInvitePreview(
             tournament_id=team.tournament_id,
+            registration_node_id=team.registration_node_id,
             tournament_name=team.tournament.name,
             workspace_id=team.workspace_id,
             discipline=team.tournament.discipline,
@@ -216,18 +217,22 @@ class InviteeMixin(TeamServiceBase):
         # authoritative guard against a concurrent redemption.
         if invite.state != INVITE_PENDING or (invite.expires_at is not None and invite.expires_at <= datetime.now(UTC)):
             raise _diagnose_dead_invite(invite)
-        tournament_id = await session.scalar(
-            sa.select(models.RegistrationTeam.tournament_id).where(
-                models.RegistrationTeam.id == invite.team_id,
-                models.RegistrationTeam.deleted_at.is_(None),
+        # The team's node is the intake the redeemer joins: signing up is having no entry THERE.
+        team_row = (
+            await session.execute(
+                sa.select(models.RegistrationTeam.tournament_id, models.RegistrationTeam.registration_node_id).where(
+                    models.RegistrationTeam.id == invite.team_id,
+                    models.RegistrationTeam.deleted_at.is_(None),
+                )
             )
-        )
+        ).one_or_none()
         gated = False
-        if tournament_id is not None and not await self._has_registration(session, tournament_id, auth_user.id):
+        if team_row is not None and not await self._has_entry(session, team_row.registration_node_id, auth_user.id):
             await assert_admitted_at(
                 session,
                 None,
-                tournament_id=tournament_id,
+                registration_node_id=team_row.registration_node_id,
+                tournament_id=team_row.tournament_id,
                 auth_user_id=auth_user.id,
                 stage=AdmissionStage.registration,
             )
@@ -252,10 +257,12 @@ class InviteeMixin(TeamServiceBase):
         #
         # The submitted ``body`` is deliberately IGNORED on this path: the player
         # already answered the form, and the invite only decides which slot they
-        # occupy. Their recorded roles and ranks stand.
+        # occupy. Their recorded roles and ranks stand. A profile of ANOTHER intake gains its entry in the team's
+        # node here, without a body.
         existing = await self._own_registration(session, team.tournament_id, auth_user.id)
+        existing_entry = await self._own_entry(session, team.registration_node_id, auth_user.id)
         if existing is not None:
-            if existing.status in _SLOT_RELEASING_STATUSES:
+            if existing_entry is not None and existing_entry.status in _SLOT_RELEASING_STATUSES:
                 # Withdrawn or rejected. Reviving it here would smuggle a re-entry past
                 # the rule that withdrawal is final, which exists because a withdrawal
                 # after check-in invalidates a composed roster.
@@ -271,9 +278,18 @@ class InviteeMixin(TeamServiceBase):
                 existing.id,
                 team_id=team.id,
                 slot_code=invite.slot_code,
-                is_substitute=bool(invite.is_substitute),
             ):
                 raise _fail(409, "already_on_team", "You are already on a team in this tournament")
+            if existing_entry is None:
+                form = await _form(session, team.tournament_id)
+                existing_entry = self.registrations.new_entry(
+                    existing,
+                    team.registration_node_id,
+                    auto_approve=bool(form is not None and form.auto_approve),
+                    values={},
+                )
+                session.add(existing_entry)
+            existing_entry.is_substitute = bool(invite.is_substitute)
         elif not gated:
             # The registration seen before the lock is gone, so this accept would sign
             # up without having passed the gate. Rare (a concurrent delete); retrying
@@ -295,17 +311,23 @@ class InviteeMixin(TeamServiceBase):
             await session.refresh(invite)
             raise _diagnose_dead_invite(invite)
 
-        registration = existing or await self.registrations.write_public_registration(
-            session,
-            tournament_id=team.tournament_id,
-            auth_user=auth_user,
-            body=body,
-            team_placement=TeamPlacement(
-                registration_team_id=team.id,
-                slot_code=invite.slot_code,
-                is_substitute=bool(invite.is_substitute),
-            ),
-            commit=False,
+        registration = (
+            existing
+            or (
+                await self.registrations.write_public_registration(
+                    session,
+                    tournament_id=team.tournament_id,
+                    registration_node_id=team.registration_node_id,
+                    auth_user=auth_user,
+                    body=body,
+                    team_placement=TeamPlacement(
+                        registration_team_id=team.id,
+                        slot_code=invite.slot_code,
+                        is_substitute=bool(invite.is_substitute),
+                    ),
+                    commit=False,
+                )
+            ).registration
         )
         identity = registration.primary_game_identity(provider=identity_provider(tournament.discipline))
         invite.accepted_registration_id = registration.id

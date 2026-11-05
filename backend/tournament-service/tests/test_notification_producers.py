@@ -97,6 +97,8 @@ TABLE_NAMES = (
     "players.social_account_visibility",
     "workspace_member",
     "registration.registration",
+    "registration.registration_entry",
+    "tournament.flow_node",
     "registration.role",
     "catalog.role",
     "catalog.role_dimension",
@@ -234,6 +236,13 @@ class _Fixture:
         )
         self.session.add(self.tournament)
         self.session.flush()
+        self.node = models.FlowNode(
+            tournament_id=TOURNAMENT_ID, kind="registration", name="Registration", status="open", config={}
+        )
+        self.session.add(self.node)
+        self.session.flush()
+        #: registration id -> its entry in ``node`` (what the lifecycle writes status and check-in on).
+        self.entries: dict[int, models.RegistrationEntry] = {}
 
     def close(self) -> None:
         self.session.close()
@@ -275,19 +284,24 @@ class _Fixture:
                     handle_normalized=normalize_social_handle(SocialProvider.BATTLENET, battle_tag),
                 )
             ],
-            status=status,
             registration_team_id=team_id,
             team_slot_code=slot_code,
-            is_substitute=False,
         )
         self.session.add(registration)
         self.session.flush()
+        entry = models.RegistrationEntry(
+            registration_node_id=self.node.id, registration_id=registration.id, status=status
+        )
+        self.session.add(entry)
+        self.session.flush()
+        self.entries[registration.id] = entry
         return registration
 
     def team(self, name: str) -> models.RegistrationTeam:
         team = models.RegistrationTeam(
             workspace_id=WORKSPACE_ID,
             tournament_id=TOURNAMENT_ID,
+            registration_node_id=self.node.id,
             name=name,
             name_normalized=name.lower(),
             status=teams_module.TEAM_FORMING,
@@ -551,7 +565,7 @@ class RegistrationDecisionTests(_ProducerTestCase):
         self.fx.session.flush()
 
     async def test_approve_notifies_the_player(self) -> None:
-        self.registration.status = "approved"
+        self.fx.entries[self.registration.id].status = "approved"
         await events_module.enqueue_registration_approved(self.fx.shim, self.registration)
         await self.fx.shim.commit()
 
@@ -569,7 +583,7 @@ class RegistrationDecisionTests(_ProducerTestCase):
         )
 
     async def test_reject_notifies_the_player(self) -> None:
-        self.registration.status = "rejected"
+        self.fx.entries[self.registration.id].status = "rejected"
         await events_module.notify_registration_rejected(self.fx.shim, self.registration)
         await self.fx.shim.commit()
 
@@ -583,7 +597,7 @@ class RegistrationDecisionTests(_ProducerTestCase):
         itself still goes through."""
         shadow_member = self.fx.player("Ghost", auth_user_id=None)
         shadow_registration = self.fx.registration(shadow_member, battle_tag="Ghost#3333", status="pending")
-        shadow_registration.status = "approved"
+        self.fx.entries[shadow_registration.id].status = "approved"
 
         await events_module.enqueue_registration_approved(self.fx.shim, shadow_registration)
         await self.fx.shim.commit()
@@ -592,7 +606,9 @@ class RegistrationDecisionTests(_ProducerTestCase):
         self.assertEqual(
             "approved",
             self.fx.session.scalar(
-                sa.select(models.Registration.status).where(models.Registration.id == shadow_registration.id)
+                sa.select(models.RegistrationEntry.status).where(
+                    models.RegistrationEntry.registration_id == shadow_registration.id
+                )
             ),
         )
 
@@ -811,7 +827,7 @@ class RegistrationDecisionQueryBudgetTests(_ProducerTestCase):
         self.fx.session.flush()
         self.statements.clear()
         approved, _skipped = await lifecycle_module.lifecycle_service.bulk_approve_registrations(
-            self.fx.shim, TOURNAMENT_ID, registration_ids, reviewed_by=None
+            self.fx.shim, self.fx.node.id, registration_ids, reviewed_by=None
         )
         self.assertEqual(size, approved)
         return self._tournament_name_reads()
@@ -837,7 +853,7 @@ class RegistrationDecisionQueryBudgetTests(_ProducerTestCase):
                 selectinload(models.Registration.workspace_member).selectinload(models.WorkspaceMember.player),
             )
         )
-        registration.status = "approved"
+        self.fx.entries[registration_id].status = "approved"
         self.statements.clear()
 
         await events_module.enqueue_registration_approved(self.fx.shim, registration)
@@ -942,14 +958,17 @@ class TeamRosterOutcomeTests(_ProducerTestCase):
         self.fx.session.expire_all()
         rejected = self.fx.session.get(models.RegistrationTeam, self.team.id)
         self.assertEqual("Duplicate roster", rejected.rejection_reason)
+        entries = list(self.fx.session.scalars(sa.select(models.RegistrationEntry)))
         members = list(self.fx.session.scalars(sa.select(models.Registration)))
-        self.assertEqual({"approved"}, {member.status for member in members})
+        self.assertEqual({"approved"}, {entry.status for entry in entries})
         self.assertTrue(all(member.registration_team_id is None for member in members))
-        self.assertTrue(all(member.team_slot_code is None and not member.is_substitute for member in members))
+        self.assertTrue(all(member.team_slot_code is None for member in members))
+        self.assertTrue(not any(entry.is_substitute for entry in entries))
         for account, expected in ((None, []), (MATE_AUTH, []), (CAPTAIN_AUTH, [self.team.id])):
             visible = await teams_module.teams_service.list_teams(
                 self.fx.shim,
                 tournament_id=TOURNAMENT_ID,
+                registration_node_id=self.fx.node.id,
                 include_terminal_for_auth_user_id=account,
             )
             self.assertEqual(expected, [team.id for team in visible])
@@ -967,7 +986,9 @@ class TeamRosterOutcomeTests(_ProducerTestCase):
         )
         self.fx.session.expire_all()
         members = list(self.fx.session.scalars(sa.select(models.Registration)))
-        self.assertEqual({"withdrawn"}, {member.status for member in members})
+        self.assertEqual(
+            {"withdrawn"}, {entry.status for entry in self.fx.session.scalars(sa.select(models.RegistrationEntry))}
+        )
         self.assertEqual({self.team.id}, {member.registration_team_id for member in members})
         self.assertEqual(teams_module.INVITE_REVOKED, invite.state)
 
@@ -1004,6 +1025,7 @@ class TargetedInviteAvailabilityTests(_ProducerTestCase):
         offers = await teams_module.teams_service.list_my_invites(
             self.fx.shim,
             tournament_id=TOURNAMENT_ID,
+            registration_node_id=self.fx.node.id,
             auth_user=_auth_user(INVITEE_AUTH, "invitee"),
         )
         return [offer.invite_id for offer in offers]
@@ -1031,7 +1053,7 @@ class TargetedInviteAvailabilityTests(_ProducerTestCase):
             setattr(row, attribute, original)
         substitute = self.fx.player("Bench", auth_user_id=OPPONENT_AUTH)
         registration = self.fx.registration(substitute, battle_tag="Bench#3333", team_id=self.team.id, slot_code="tank")
-        registration.is_substitute = True
+        self.fx.entries[registration.id].is_substitute = True
         self.assertEqual([], await self._offers())
 
     async def test_terminal_recipient_registration_hides_the_offer(self) -> None:

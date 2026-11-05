@@ -248,6 +248,7 @@ _PROSPECTIVE_ID = 0
 
 def _signals_for(
     registration: Any | None,
+    entry: Any | None,
     *,
     profiles: Mapping[int, ProfileSignal],
     subscriptions: Mapping[int, SubscriptionSignal],
@@ -256,9 +257,10 @@ def _signals_for(
 
     ``registration is None`` is the sign-up gate, which runs before the row
     exists. Every lifecycle fact is then falsy, so ``decision`` is
-    ``not_admitted``; that gate reads ``blockers``, never ``decision``.
+    ``not_admitted``; that gate reads ``blockers``, never ``decision``. The lifecycle facts (status, pool state,
+    check-in) are the registration's ``entry`` in the node being evaluated; no entry reads like no row.
     """
-    if registration is None:
+    if registration is None or entry is None:
         return AdmissionSignals(
             registration_id=_PROSPECTIVE_ID,
             status="",
@@ -269,9 +271,9 @@ def _signals_for(
         )
     return AdmissionSignals(
         registration_id=registration.id,
-        status=getattr(registration, "status", ""),
-        balancer_status=getattr(registration, "balancer_status", None),
-        checked_in=bool(getattr(registration, "checked_in", False)),
+        status=getattr(entry, "status", ""),
+        balancer_status=getattr(entry, "balancer_status", None),
+        checked_in=bool(getattr(entry, "checked_in", False)),
         profile=profiles.get(registration.id),
         subscription=subscriptions.get(registration.id),
     )
@@ -281,6 +283,7 @@ async def resolve_admission(
     session: AsyncSession,
     registrations: Sequence[Any],
     *,
+    entries: Mapping[int, Any],
     config: AdmissionConfig,
     resolver: RequirementEvaluator | None = None,
     stage: AdmissionStage = AdmissionStage.check_in,
@@ -296,6 +299,8 @@ async def resolve_admission(
     batch, attributed to the stage's collection source, instead of one
     :func:`resolve_admission_for_gate` per member. It applies no sign-up
     softening, so it is for ``stage=check_in`` only.
+
+    ``entries`` is each registration's participation in the node being evaluated, by registration id.
     """
     if not registrations:
         return {}
@@ -316,7 +321,7 @@ async def resolve_admission(
     return {
         registration.id: evaluate(
             config,
-            _signals_for(registration, profiles=profiles, subscriptions=subscriptions),
+            _signals_for(registration, entries.get(registration.id), profiles=profiles, subscriptions=subscriptions),
             stage=stage,
             requirements=REQUIREMENTS,
         )
@@ -331,6 +336,7 @@ async def resolve_admission_for_gate(
     config: AdmissionConfig,
     resolver: RequirementEvaluator | None,
     stage: AdmissionStage,
+    entry: Any | None = None,
     auth_user_id: int | None = None,
 ) -> AdmissionEvaluation:
     """Evaluate ONE subject for a blocking decision, forcing a live look.
@@ -385,7 +391,7 @@ async def resolve_admission_for_gate(
 
     return evaluate(
         config,
-        _signals_for(registration, profiles=profiles, subscriptions=subscriptions),
+        _signals_for(registration, entry, profiles=profiles, subscriptions=subscriptions),
         stage=stage,
         requirements=REQUIREMENTS,
     )

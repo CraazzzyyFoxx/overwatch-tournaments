@@ -31,6 +31,8 @@ from shared.testing.cache import configure_test_cache  # noqa: E402
 from src.core import caching  # noqa: E402
 from src.services.registration import public_list  # noqa: E402
 
+NODE = 3
+
 
 class _FakeSessionCtx:
     async def __aenter__(self) -> object:
@@ -62,7 +64,7 @@ class TestCoalescing(IsolatedAsyncioTestCase):
     async def test_concurrent_callers_share_one_build(self) -> None:
         calls = 0
 
-        async def fake_build(session: object, *, tournament_id: int) -> str:
+        async def fake_build(session: object, *, tournament_id: int, registration_node_id: int) -> str:
             nonlocal calls
             calls += 1
             await asyncio.sleep(0.05)
@@ -70,7 +72,7 @@ class TestCoalescing(IsolatedAsyncioTestCase):
 
         with _build(fake_build):
             results = await asyncio.gather(
-                *[public_list.coalesced_registration_list(_session_maker, 42) for _ in range(6)]
+                *[public_list.coalesced_registration_list(_session_maker, 42, NODE) for _ in range(6)]
             )
 
         assert calls == 1, f"expected one real build for the whole burst, got {calls}"
@@ -80,46 +82,63 @@ class TestCoalescing(IsolatedAsyncioTestCase):
     async def test_distinct_tournaments_never_share_a_build(self) -> None:
         seen_ids: list[int] = []
 
-        async def fake_build(session: object, *, tournament_id: int) -> int:
+        async def fake_build(session: object, *, tournament_id: int, registration_node_id: int) -> int:
             seen_ids.append(tournament_id)
             await asyncio.sleep(0.02)
             return tournament_id
 
         with _build(fake_build):
             results = await asyncio.gather(
-                public_list.coalesced_registration_list(_session_maker, 1),
-                public_list.coalesced_registration_list(_session_maker, 2),
+                public_list.coalesced_registration_list(_session_maker, 1, NODE),
+                public_list.coalesced_registration_list(_session_maker, 2, NODE),
             )
 
         assert sorted(seen_ids) == [1, 2]
         assert results == [1, 2]
 
+    async def test_distinct_nodes_of_one_tournament_never_share_a_build(self) -> None:
+        seen: list[tuple[int, int]] = []
+
+        async def fake_build(session: object, *, tournament_id: int, registration_node_id: int) -> int:
+            seen.append((tournament_id, registration_node_id))
+            await asyncio.sleep(0.02)
+            return registration_node_id
+
+        with _build(fake_build):
+            results = await asyncio.gather(
+                public_list.coalesced_registration_list(_session_maker, 1, 10),
+                public_list.coalesced_registration_list(_session_maker, 1, 11),
+            )
+
+        assert sorted(seen) == [(1, 10), (1, 11)]
+        assert results == [10, 11]
+
     async def test_sequential_calls_after_completion_rebuild(self) -> None:
         calls = 0
 
-        async def fake_build(session: object, *, tournament_id: int) -> int:
+        async def fake_build(session: object, *, tournament_id: int, registration_node_id: int) -> int:
             nonlocal calls
             calls += 1
             return calls
 
         with _build(fake_build):
-            first = await public_list.coalesced_registration_list(_session_maker, 7)
-            second = await public_list.coalesced_registration_list(_session_maker, 7)
+            first = await public_list.coalesced_registration_list(_session_maker, 7, NODE)
+            second = await public_list.coalesced_registration_list(_session_maker, 7, NODE)
 
         assert (first, second) == (1, 2), "a call after the burst settles must see fresh, live data, not a stale share"
 
     async def test_follower_cancellation_does_not_kill_the_shared_build(self) -> None:
         calls = 0
 
-        async def fake_build(session: object, *, tournament_id: int) -> str:
+        async def fake_build(session: object, *, tournament_id: int, registration_node_id: int) -> str:
             nonlocal calls
             calls += 1
             await asyncio.sleep(0.1)
             return "ok"
 
         with _build(fake_build):
-            leader = asyncio.create_task(public_list.coalesced_registration_list(_session_maker, 9))
-            follower = asyncio.create_task(public_list.coalesced_registration_list(_session_maker, 9))
+            leader = asyncio.create_task(public_list.coalesced_registration_list(_session_maker, 9, NODE))
+            follower = asyncio.create_task(public_list.coalesced_registration_list(_session_maker, 9, NODE))
             await asyncio.sleep(0.02)
 
             follower.cancel()
@@ -137,7 +156,7 @@ class TestCoalescing(IsolatedAsyncioTestCase):
         release = asyncio.Event()
         builds = 0
 
-        async def fake_build(session: object, *, tournament_id: int) -> str:
+        async def fake_build(session: object, *, tournament_id: int, registration_node_id: int) -> str:
             nonlocal builds
             builds += 1
             build = builds
@@ -146,13 +165,15 @@ class TestCoalescing(IsolatedAsyncioTestCase):
             return f"build-{build}"
 
         with _build(fake_build):
-            before = asyncio.create_task(public_list.coalesced_registration_list(_session_maker, 11))
+            before = asyncio.create_task(public_list.coalesced_registration_list(_session_maker, 11, NODE))
             await asyncio.sleep(0.01)
             await invalidate_from_event(
                 CacheInvalidatedEvent(scope_kind="tournament", scope_id=11, resources=["tournament.registrations"])
             )
             try:
-                after = await asyncio.wait_for(public_list.coalesced_registration_list(_session_maker, 11), timeout=2)
+                after = await asyncio.wait_for(
+                    public_list.coalesced_registration_list(_session_maker, 11, NODE), timeout=2
+                )
             finally:
                 release.set()
 

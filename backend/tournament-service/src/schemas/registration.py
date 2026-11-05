@@ -76,6 +76,10 @@ class RegistrationTeamBrief(BaseModel):
 
 class RegistrationRead(BaseModel):
     id: int
+    #: The entry this read describes, and the registration node it belongs to: ``status``, ``checked_in``,
+    #: ``balancer_status`` and ``reviewed_at`` are that entry's.
+    entry_id: int
+    registration_node_id: int
     tournament_id: int
     workspace_id: int
     user_id: int | None = None

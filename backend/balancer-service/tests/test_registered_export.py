@@ -84,17 +84,24 @@ class _FakeSession:
     """Serves the export's three reads; the engine itself is patched out."""
 
     def __init__(self, *, teams: list[object], registrations: list[object]) -> None:
-        self._queued: list[list[object]] = [teams, registrations]
+        self._teams = teams
+        #: ``(registration, entry)`` rows, as the one member read returns them; later executes find nothing.
+        self._rows: list[list[object]] = [
+            [
+                (registration, SimpleNamespace(is_substitute=registration.is_substitute))
+                for registration in registrations
+            ]
+        ]
 
     async def scalars(self, statement: object) -> list[object]:
-        return self._queued.pop(0)
+        return self._teams
 
     async def scalar(self, statement: object) -> int:
         return 42  # workspace_id
 
     async def execute(self, statement: object) -> Mock:
         result = Mock()
-        result.all.return_value = []
+        result.all.return_value = self._rows.pop(0) if self._rows else []
         return result
 
 

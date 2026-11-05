@@ -44,7 +44,18 @@ from shared.services.division_grid.access import (
 from src import schemas
 from src.clients.challonge import challonge_client
 from src.core import auth
-from src.rpc._helpers import _bool, _dump, _identity, _path_int, _payload, _q1, _require_id, _require_q1, _run
+from src.rpc._helpers import (
+    _bool,
+    _dump,
+    _identity,
+    _path_int,
+    _payload,
+    _q1,
+    _registration_node_id,
+    _require_id,
+    _require_q1,
+    _run,
+)
 from src.rpc._s3 import get_s3
 from src.services.admin import tournament as tournament_admin_service
 from src.services.challonge import sync as challonge_sync
@@ -409,6 +420,7 @@ def register(broker: Any, logger: Any) -> None:
                 entity_type="tournament",
                 entity_id=tournament_id,
                 after={
+                    "registration_node_id": body.registration_node_id,
                     "source_url": body.source_url,
                     "title": body.title,
                     "auto_sync_enabled": body.auto_sync_enabled,
@@ -418,6 +430,7 @@ def register(broker: Any, logger: Any) -> None:
             feed = await sheet_sync.sheet_sync_service.upsert_google_sheet_feed(
                 session,
                 tournament_id,
+                registration_node_id=body.registration_node_id,
                 source_url=body.source_url,
                 title=body.title,
                 auto_sync_enabled=body.auto_sync_enabled,
@@ -539,6 +552,7 @@ def register(broker: Any, logger: Any) -> None:
             await auth.require_tournament_id_permission(
                 session, user, tournament_id=tournament_id, resource="player", action="read"
             )
+            registration_node_id = await _registration_node_id(session, data, tournament_id)
             export_format = _q1(data, "format") or PLAYER_EXPORT_DEFAULT_FORMAT
             if export_format not in PLAYER_EXPORT_FORMATS:
                 raise HTTPException(
@@ -555,6 +569,7 @@ def register(broker: Any, logger: Any) -> None:
             payload = await player_export_service.export(
                 session,
                 tournament_id,
+                registration_node_id,
                 export_format=export_format,
                 include_private=bool(_q1(data, "include_private", _bool, default=False)),
             )

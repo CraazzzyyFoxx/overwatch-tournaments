@@ -8,16 +8,18 @@ from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from decimal import Decimal
+from typing import Any
 
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from shared.core.enums import FlowNodeKind, FlowNodeStatus, FlowResultState, StageType
 from shared.domain.flow.config import FilterNodeConfig, RegistrationNodeConfig, parse_node_config
 from shared.domain.flow.validate import topological_order
 from shared.models.balancer.balance import BalancerBalance, BalancerTeam
 from shared.models.draft.draft import DraftSession, DraftTeam
-from shared.models.registration.registration import Registration
+from shared.models.registration.registration import Registration, RegistrationEntry, RegistrationTeam
 from shared.models.tournament.flow import FlowEdge, FlowNode, FlowNodeResult
 from shared.models.tournament.player_standing import PlayerStanding
 from shared.models.tournament.stage import Stage, StageItem
@@ -133,22 +135,57 @@ class FlowEngine:
     async def _registration_rows(self, session: AsyncSession, node: FlowNode) -> list[ResultRow]:
         config = parse_node_config(FlowNodeKind.REGISTRATION, node.config)
         assert isinstance(config, RegistrationNodeConfig)
+
+        def qualifies(entry: Any) -> sa.ColumnElement[bool]:
+            """The entry is approved (and checked in when the node asks for check-in): it is on the node's output."""
+            clause = sa.and_(entry.status == "approved", entry.deleted_at.is_(None))
+            return sa.and_(clause, entry.checked_in.is_(True)) if config.check_in else clause
+
         query = (
             sa.select(Registration.workspace_member_id, Registration.registration_team_id)
+            .join(RegistrationEntry, RegistrationEntry.registration_id == Registration.id)
             .where(
-                Registration.tournament_id == node.tournament_id,
-                Registration.status == "approved",
+                RegistrationEntry.registration_node_id == node.id,
+                qualifies(RegistrationEntry),
                 Registration.deleted_at.is_(None),
                 Registration.workspace_member_id.is_not(None),
             )
-            .order_by(Registration.reviewed_at.asc().nulls_last(), Registration.id)
+            .order_by(RegistrationEntry.reviewed_at.asc().nulls_last(), Registration.id)
         )
-        if config.check_in:
-            query = query.where(Registration.checked_in.is_(True))
+        if config.intake == "team":
+            # Whole teams only: a complete team none of whose live members is left out (a pending or unchecked member
+            # holds the whole team back), emitted with the team id so a registered formation can rebuild it.
+            member = aliased(Registration)
+            other = aliased(RegistrationEntry)
+            held_back = (
+                sa.select(sa.literal(1))
+                .select_from(member)
+                .join(other, other.registration_id == member.id)
+                .where(
+                    member.registration_team_id == RegistrationTeam.id,
+                    member.deleted_at.is_(None),
+                    other.registration_node_id == node.id,
+                    other.deleted_at.is_(None),
+                    other.status.notin_(("withdrawn", "rejected")),
+                    ~qualifies(other),
+                )
+                .exists()
+            )
+            query = query.join(RegistrationTeam, RegistrationTeam.id == Registration.registration_team_id).where(
+                RegistrationTeam.registration_node_id == node.id,
+                RegistrationTeam.status == "complete",
+                RegistrationTeam.deleted_at.is_(None),
+                ~held_back,
+            )
+        rows = await session.execute(query)
         return _dedup(
             [
-                ResultRow(member_id, None, breakdown={"registration_team_id": team_id} if team_id is not None else None)
-                for member_id, team_id in await session.execute(query)
+                ResultRow(
+                    member_id,
+                    None,
+                    breakdown={"registration_team_id": team_id} if config.intake == "team" else None,
+                )
+                for member_id, team_id in rows
             ]
         )
 

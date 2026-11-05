@@ -55,6 +55,7 @@ from src.rpc._helpers import (
     _path_int,
     _payload,
     _q1,
+    _registration_node_id,
     _require_id,
     _require_q1,
     _run,
@@ -527,6 +528,7 @@ def register(broker: Any, logger: Any) -> None:
             user = _identity(data)
             tournament_id = _path_int(data, "tournament_id")
             await ensure_tournament_viewable(session, user, tournament_id)
+            registration_node_id = await _registration_node_id(session, data, tournament_id)
             body = RegistrationSubmit.model_validate(_payload(data))
             form = await reg_common._common_service.get_registration_form(session, tournament_id)
 
@@ -545,6 +547,7 @@ def register(broker: Any, logger: Any) -> None:
             await assert_admitted_at(
                 session,
                 None,
+                registration_node_id=registration_node_id,
                 tournament_id=tournament_id,
                 auth_user_id=user.id,
                 stage=AdmissionStage.registration,
@@ -555,7 +558,12 @@ def register(broker: Any, logger: Any) -> None:
             # lives in the service layer; commits internally.
             return _dump(
                 await reg_service.registration_service.submit_public_registration(
-                    session, tournament_id=tournament_id, auth_user=user, body=body, form=form
+                    session,
+                    tournament_id=tournament_id,
+                    registration_node_id=registration_node_id,
+                    auth_user=user,
+                    body=body,
+                    form=form,
                 )
             )
 
@@ -567,17 +575,21 @@ def register(broker: Any, logger: Any) -> None:
             user = _identity(data)
             tournament_id = _path_int(data, "tournament_id")
             await ensure_tournament_viewable(session, user, tournament_id)
-            reg = await reg_service.registration_service.get_registration(session, tournament_id, user.id)
-            if reg is None:
+            entry = await reg_service.registration_service.get_registration(
+                session, await _registration_node_id(session, data, tournament_id), user.id
+            )
+            if entry is None:
                 return None
             form = await reg_common._common_service.get_registration_form(session, tournament_id)
             # The registrant's own card goes through the SAME resolver as the
             # participants list and the admin table -- one batch of one row -- so
             # "why am I not admitted" answers identically on every surface.
-            admissions = await reg_service.registration_service.resolve_admission_list(session, [reg], form=form)
+            admissions = await reg_service.registration_service.resolve_admission_list(
+                session, [entry.registration], {entry.registration_id: entry}, form=form
+            )
             return _dump(
                 await reg_service.registration_service.build_own_read(
-                    session, reg, form=form, chips=AdmissionChips.of(admissions.get(reg.id))
+                    session, entry, form=form, chips=AdmissionChips.of(admissions.get(entry.registration_id))
                 )
             )
 
@@ -595,9 +607,13 @@ def register(broker: Any, logger: Any) -> None:
             if form is None:
                 raise HTTPException(status_code=404, detail="Registration form not found")
 
-            reg = await reg_service.registration_service.get_registration(session, tournament_id, user.id)
-            if reg is None:
+            # The self-edit policy and the ``reserve`` answer are per entry, so the edit names its node.
+            entry = await reg_service.registration_service.get_registration(
+                session, await _registration_node_id(session, data, tournament_id), user.id
+            )
+            if entry is None:
                 raise HTTPException(status_code=404, detail="No registration found")
+            reg = entry.registration
 
             provider = identity_provider(reg.tournament.discipline)
             schema = reg_service._require_current_schema(form, body.form_version_id)
@@ -615,12 +631,13 @@ def register(broker: Any, logger: Any) -> None:
                 discipline=reg.tournament.discipline,
                 hero_catalog=hero_catalog,
                 registration=reg,
+                entry=entry,
             )
 
             # update_registration commits internally, so the audit row is staged
             # BEFORE it and rides the same transaction -- a refused edit leaves no
             # trail of having happened. Same ordering rule the admin RPC follows.
-            before, after = reg_audit.profile_changes(reg, {"answers": values})
+            before, after = reg_audit.profile_changes(reg, {"answers": values}, entry)
             if before or after:
                 await reg_audit.audit_service.stage(
                     session,
@@ -637,7 +654,7 @@ def register(broker: Any, logger: Any) -> None:
 
             updated = await reg_service.registration_service.update_registration(
                 session,
-                reg,
+                entry,
                 tournament=reg.tournament,
                 values=values,
                 schema=schema,
@@ -654,11 +671,13 @@ def register(broker: Any, logger: Any) -> None:
             user = _identity(data)
             tournament_id = _path_int(data, "tournament_id")
             await ensure_tournament_viewable(session, user, tournament_id)
-            reg = await reg_service.registration_service.get_registration(session, tournament_id, user.id)
-            if reg is None:
+            entry = await reg_service.registration_service.get_registration(
+                session, await _registration_node_id(session, data, tournament_id), user.id
+            )
+            if entry is None:
                 raise HTTPException(status_code=404, detail="No registration found")
             # withdraw_registration commits internally.
-            await reg_service.registration_service.withdraw_registration(session, reg)
+            await reg_service.registration_service.withdraw_registration(session, entry)
             return _dump(RegistrationStatusResponse(status="withdrawn", message="Registration withdrawn"))
 
         return await _run(logger, op)
@@ -669,8 +688,10 @@ def register(broker: Any, logger: Any) -> None:
             user = _identity(data)
             tournament_id = _path_int(data, "tournament_id")
             await ensure_tournament_viewable(session, user, tournament_id)
-            reg = await reg_service.registration_service.get_registration(session, tournament_id, user.id)
-            if reg is None:
+            entry = await reg_service.registration_service.get_registration(
+                session, await _registration_node_id(session, data, tournament_id), user.id
+            )
+            if entry is None:
                 raise HTTPException(status_code=404, detail="No registration found")
             form = await reg_common._common_service.get_registration_form(session, tournament_id)
 
@@ -685,7 +706,8 @@ def register(broker: Any, logger: Any) -> None:
             # forever. Do not add a gate there, nor an `override=True` parameter here.
             await assert_admitted_at(
                 session,
-                reg,
+                entry.registration,
+                registration_node_id=entry.registration_node_id,
                 tournament_id=tournament_id,
                 auth_user_id=user.id,
                 stage=AdmissionStage.check_in,
@@ -697,7 +719,7 @@ def register(broker: Any, logger: Any) -> None:
             # instead of silently vanishing on the next refetch.
             checked_in = await reg_service.registration_service.check_in_registration(
                 session,
-                reg,
+                entry,
                 checked_in_by=user.id,
             )
             return _dump(await reg_service.registration_service.build_own_read(session, checked_in, form=form))
@@ -717,11 +739,13 @@ def register(broker: Any, logger: Any) -> None:
             user = _identity(data)
             tournament_id = _path_int(data, "tournament_id")
             await ensure_tournament_viewable(session, user, tournament_id)
-            reg = await reg_service.registration_service.get_registration(session, tournament_id, user.id)
-            if reg is None:
+            entry = await reg_service.registration_service.get_registration(
+                session, await _registration_node_id(session, data, tournament_id), user.id
+            )
+            if entry is None:
                 raise HTTPException(status_code=404, detail="No registration found")
             await assert_recheck_allowed(auth_user_id=user.id)
-            await recheck_registration(session, reg, auth_user_id=user.id)
+            await recheck_registration(session, entry.registration, auth_user_id=user.id)
             await session.commit()
             return None
 
@@ -809,8 +833,13 @@ def register(broker: Any, logger: Any) -> None:
             # before the wait instead of idling in it.
             tournament_id = _path_int(data, "tournament_id")
             await ensure_tournament_viewable(session, _optional_identity(data), tournament_id)
+            registration_node_id = await _registration_node_id(session, data, tournament_id)
             await session.commit()
-            return _dump(await public_list.coalesced_registration_list(db.async_session_maker, tournament_id))
+            return _dump(
+                await public_list.coalesced_registration_list(
+                    db.async_session_maker, tournament_id, registration_node_id
+                )
+            )
 
         return await _run(logger, op)
 
@@ -830,9 +859,11 @@ def register(broker: Any, logger: Any) -> None:
             tournament_id = _path_int(data, "tournament_id")
             user = _optional_identity(data)
             await ensure_tournament_viewable(session, user, tournament_id)
+            registration_node_id = await _registration_node_id(session, data, tournament_id)
             teams = await team_service.teams_service.list_teams(
                 session,
                 tournament_id=tournament_id,
+                registration_node_id=registration_node_id,
                 include_terminal=False,
                 include_terminal_for_auth_user_id=user.id if user is not None else None,
             )
@@ -849,7 +880,7 @@ def register(broker: Any, logger: Any) -> None:
                     items=items,
                     total=len(items),
                     unassigned_players=await team_service.teams_service.count_unassigned_players(
-                        session, tournament_id
+                        session, registration_node_id
                     ),
                 )
             )
@@ -889,6 +920,7 @@ def register(broker: Any, logger: Any) -> None:
             user = _identity(data)
             tournament_id = _path_int(data, "tournament_id")
             await ensure_tournament_viewable(session, user, tournament_id)
+            registration_node_id = await _registration_node_id(session, data, tournament_id)
             body = RegistrationTeamCreateRequest.model_validate(_payload(data))
 
             # Same gate as solo registration, same stage: the captain is a registrant
@@ -898,6 +930,7 @@ def register(broker: Any, logger: Any) -> None:
             await assert_admitted_at(
                 session,
                 None,
+                registration_node_id=registration_node_id,
                 tournament_id=tournament_id,
                 auth_user_id=user.id,
                 stage=AdmissionStage.registration,
@@ -906,6 +939,7 @@ def register(broker: Any, logger: Any) -> None:
             team, _registration, issues = await team_service.teams_service.create_team(
                 session,
                 tournament_id=tournament_id,
+                registration_node_id=registration_node_id,
                 auth_user=user,
                 name=body.name,
                 slot_code=body.slot_code,
@@ -969,7 +1003,9 @@ def register(broker: Any, logger: Any) -> None:
             user = _identity(data)
             tournament_id = _path_int(data, "tournament_id")
             await ensure_tournament_viewable(session, user, tournament_id)
-            items = await team_service.teams_service.list_free_agents(session, tournament_id)
+            items = await team_service.teams_service.list_free_agents(
+                session, tournament_id, await _registration_node_id(session, data, tournament_id)
+            )
             return _dump(RegistrationFreeAgentListResponse(items=items, total=len(items)))
 
         return await _run(logger, op)
@@ -986,7 +1022,10 @@ def register(broker: Any, logger: Any) -> None:
             user = _identity(data)
             tournament_id = _path_int(data, "tournament_id")
             items = await team_service.teams_service.list_my_invites(
-                session, tournament_id=tournament_id, auth_user=user
+                session,
+                tournament_id=tournament_id,
+                registration_node_id=await _registration_node_id(session, data, tournament_id),
+                auth_user=user,
             )
             return _dump(RegistrationTeamInviteOfferListResponse(items=items))
 
@@ -1187,6 +1226,7 @@ def register(broker: Any, logger: Any) -> None:
             team = await team_service.teams_service.check_in_roster(
                 session,
                 team_id=_path_int(data, "team_id"),
+                registration_node_id=_require_q1(data, "registration_node_id", int),
                 auth_user=user,
                 exclude_registration_ids=body.exclude_registration_ids,
             )

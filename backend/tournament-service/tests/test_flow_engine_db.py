@@ -14,6 +14,7 @@ from shared.models.tournament.player_standing import PlayerStanding
 from shared.models.tournament.stage import Stage, StageItem
 from shared.models.tournament.standings import Standing
 from shared.models.tournament.team import Team
+from shared.testing.factories import add_entry
 from shared.tests.encounter_writer_case import EncounterWriterCase
 from src.services.flow.engine import flow_engine
 
@@ -56,25 +57,12 @@ class FlowEngineTests(EncounterWriterCase):
                         points=points,
                     )
                 )
-            s.add_all(
-                [
-                    Registration(
-                        tournament_id=t,
-                        workspace_member_id=ids["m0"],
-                        status="approved",
-                        reviewed_at=T0 + timedelta(hours=2),
-                    ),
-                    Registration(
-                        tournament_id=t,
-                        workspace_member_id=ids["m1"],
-                        status="approved",
-                        reviewed_at=T0 + timedelta(hours=1),
-                    ),
-                    Registration(tournament_id=t, workspace_member_id=ids["m2"], status="pending"),
-                    Registration(tournament_id=t, workspace_member_id=ids["m3"], status="approved", checked_in=True),
-                    Registration(tournament_id=t, workspace_member_id=None, status="approved"),
-                ]
-            )
+            registrations = [
+                Registration(tournament_id=t, workspace_member_id=ids[m]) for m in ("m0", "m1", "m2", "m3")
+            ]
+            registrations.append(Registration(tournament_id=t, workspace_member_id=None))
+            s.add_all(registrations)
+            await s.flush()
             self.reg = self._node("registration", "Registration", "open")
             self.form = self._node("formation", "Teams", "completed", {"mode": "balancer"})
             self.stage = self._node("stage", "Groups", "live", stage_id=stage.id)
@@ -83,6 +71,18 @@ class FlowEngineTests(EncounterWriterCase):
             )
             s.add_all([self.reg, self.form, self.stage, self.top])
             await s.flush()
+            for registration, fields in zip(
+                registrations,
+                (
+                    {"status": "approved", "reviewed_at": T0 + timedelta(hours=2)},
+                    {"status": "approved", "reviewed_at": T0 + timedelta(hours=1)},
+                    {"status": "pending"},
+                    {"status": "approved", "checked_in": True},
+                    {"status": "approved"},
+                ),
+                strict=True,
+            ):
+                await add_entry(s, self.reg.id, registration.id, **fields)
             s.add_all(
                 [
                     self._edge(self.reg, "participants", self.form, "players"),

@@ -58,6 +58,7 @@ from shared.services.subscriptions.entitlements import SubscriptionResolver  # n
 from shared.services.subscriptions.wiring import build_log_sink, build_store  # noqa: E402
 from shared.services.team_format import save_tournament_format  # noqa: E402
 from shared.testing import real_db_sessionmaker as _db_sessions  # noqa: E402
+from shared.testing.factories import registration_node  # noqa: E402
 from src.rpc import _helpers as rpc_helpers  # noqa: E402
 from src.rpc import public_rpc  # noqa: E402
 from src.schemas.registration import RegistrationSubmit  # noqa: E402
@@ -160,11 +161,13 @@ async def _seed(session: Any, *, require_subscription: bool = False) -> SimpleNa
     ]
     session.add_all(users)
     await session.flush()
+    node_id = await registration_node(session, tournament.id)
     await session.commit()
     return SimpleNamespace(
         suffix=suffix,
         workspace_id=workspace.id,
         tournament_id=tournament.id,
+        node_id=node_id,
         version_id=version.id,
         users=users,
         auth_user_ids=[user.id for user in users],
@@ -201,6 +204,7 @@ async def _found_team(session: Any, seeded: SimpleNamespace, captain: int, name:
     team, _registration, _issues = await teams_service.create_team(
         session,
         tournament_id=seeded.tournament_id,
+        registration_node_id=seeded.node_id,
         auth_user=seeded.users[captain],
         name=f"{name} {seeded.suffix}",
         slot_code="flex",
@@ -326,7 +330,11 @@ def test_a_newcomer_is_gated_and_a_free_agent_is_not() -> None:
             # Registered solo first (that path's gate lives in its handler), then joins:
             # the refusing provider is never asked, so the accept goes through.
             await registration_service.submit_public_registration(
-                session, tournament_id=seeded.tournament_id, auth_user=seeded.users[2], body=_submit(seeded, 2)
+                session,
+                tournament_id=seeded.tournament_id,
+                registration_node_id=seeded.node_id,
+                auth_user=seeded.users[2],
+                body=_submit(seeded, 2),
             )
             await teams_service.accept_invite(session, auth_user=seeded.users[2], body=None, token=token)
         return newcomer, await _team_of(session, seeded, 2) == team_id
@@ -368,6 +376,7 @@ def test_a_refusal_keeps_the_verdict_it_paid_for() -> None:
                 await admission_module.assert_admitted_at(
                     session,
                     None,
+                    registration_node_id=seeded.node_id,
                     tournament_id=seeded.tournament_id,
                     auth_user_id=subject,
                     stage=AdmissionStage.registration,
@@ -408,7 +417,6 @@ def test_two_writers_of_one_primary_handle_are_serialized() -> None:
             first.add(
                 models.Registration(
                     tournament_id=seeded.tournament_id,
-                    status="pending",
                     submitted_at=datetime.now(UTC),
                     identities=[
                         models.RegistrationIdentity(
@@ -457,7 +465,10 @@ def test_the_public_team_list_shows_invites_only_to_that_teams_staff() -> None:
         seen: dict[str, dict[str, int]] = {}
         with patch.object(rpc_helpers.db, "async_session_maker", Session):
             for reader, auth_user_id in readers.items():
-                data: dict[str, Any] = {"tournament_id": seeded.tournament_id}
+                data: dict[str, Any] = {
+                    "tournament_id": seeded.tournament_id,
+                    "query": {"registration_node_id": [str(seeded.node_id)]},
+                }
                 if auth_user_id is not None:
                     data["identity"] = make_identity(user_id=auth_user_id)
                 envelope = await broker.handlers["rpc.tournament.regteam_list_public"](data, None)

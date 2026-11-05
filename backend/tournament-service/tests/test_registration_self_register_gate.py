@@ -46,6 +46,7 @@ from shared.models.tenancy.workspace import Workspace, WorkspaceMember  # noqa: 
 from shared.models.tournament import Tournament, TournamentPhaseSchedule  # noqa: E402
 from shared.rbac import get_workspace_system_role  # noqa: E402
 from shared.testing import real_db_sessionmaker as _db_sessions  # noqa: E402
+from shared.testing.factories import registration_node  # noqa: E402
 from src.services.registration import service as reg_service  # noqa: E402
 from src.services.registration import windows  # noqa: E402
 
@@ -125,15 +126,17 @@ def test_first_registration_creates_member_and_player_role() -> None:
                 workspace = await _make_workspace(session)
                 tournament = await _make_tournament(session, workspace_id=workspace.id)
                 auth_user = await _make_auth_user(session, suffix)
+                node_id = await registration_node(session, tournament.id)
                 await session.commit()
                 workspace_id, tournament_id, auth_user_id = workspace.id, tournament.id, auth_user.id
 
             try:
                 async with session_maker() as session:
                     actor = _authed_user(auth_user_id)
-                    registration = await reg_service.registration_service.create_registration(
+                    entry = await reg_service.registration_service.create_registration(
                         session,
                         tournament_id=tournament_id,
+                        registration_node_id=node_id,
                         workspace_id=workspace_id,
                         auth_user_id=auth_user_id,
                         values={"identity_battlenet": [f"SelfReg{suffix}#111"]},
@@ -141,7 +144,7 @@ def test_first_registration_creates_member_and_player_role() -> None:
                         auto_approve=False,
                         auth_user=actor,
                     )
-                    member_id = registration.workspace_member_id
+                    member_id = entry.registration.workspace_member_id
 
                 async with session_maker() as session:
                     # The registration's only identity anchor is workspace_member_id
@@ -186,6 +189,7 @@ def test_workspace_scoped_self_register_deny_returns_403() -> None:
                 workspace = await _make_workspace(session)
                 tournament = await _make_tournament(session, workspace_id=workspace.id)
                 auth_user = await _make_auth_user(session, suffix)
+                node_id = await registration_node(session, tournament.id)
                 await session.commit()
                 workspace_id, tournament_id, auth_user_id = workspace.id, tournament.id, auth_user.id
 
@@ -201,6 +205,7 @@ def test_workspace_scoped_self_register_deny_returns_403() -> None:
                         await reg_service.registration_service.create_registration(
                             session,
                             tournament_id=tournament_id,
+                            registration_node_id=node_id,
                             workspace_id=workspace_id,
                             auth_user_id=auth_user_id,
                             values={"identity_battlenet": [f"Denied{suffix}#222"]},
@@ -239,6 +244,8 @@ def test_second_registration_does_not_duplicate_member() -> None:
                 tournament_a = await _make_tournament(session, workspace_id=workspace.id)
                 tournament_b = await _make_tournament(session, workspace_id=workspace.id)
                 auth_user = await _make_auth_user(session, suffix)
+                node_a_id = await registration_node(session, tournament_a.id)
+                node_b_id = await registration_node(session, tournament_b.id)
                 await session.commit()
                 workspace_id = workspace.id
                 tournament_a_id, tournament_b_id = tournament_a.id, tournament_b.id
@@ -247,9 +254,10 @@ def test_second_registration_does_not_duplicate_member() -> None:
             try:
                 actor = _authed_user(auth_user_id)
                 async with session_maker() as session:
-                    registration_a = await reg_service.registration_service.create_registration(
+                    entry_a = await reg_service.registration_service.create_registration(
                         session,
                         tournament_id=tournament_a_id,
+                        registration_node_id=node_a_id,
                         workspace_id=workspace_id,
                         auth_user_id=auth_user_id,
                         values={"identity_battlenet": [f"Dup{suffix}#333"]},
@@ -257,11 +265,12 @@ def test_second_registration_does_not_duplicate_member() -> None:
                         auto_approve=False,
                         auth_user=actor,
                     )
-                    member_id_a = registration_a.workspace_member_id
+                    member_id_a = entry_a.registration.workspace_member_id
                 async with session_maker() as session:
-                    registration_b = await reg_service.registration_service.create_registration(
+                    entry_b = await reg_service.registration_service.create_registration(
                         session,
                         tournament_id=tournament_b_id,
+                        registration_node_id=node_b_id,
                         workspace_id=workspace_id,
                         auth_user_id=auth_user_id,
                         values={"identity_battlenet": [f"Dup{suffix}#333"]},
@@ -269,7 +278,7 @@ def test_second_registration_does_not_duplicate_member() -> None:
                         auto_approve=False,
                         auth_user=actor,
                     )
-                    member_id_b = registration_b.workspace_member_id
+                    member_id_b = entry_b.registration.workspace_member_id
 
                 async with session_maker() as session:
                     member_a = await session.scalar(sa.select(WorkspaceMember).where(WorkspaceMember.id == member_id_a))
@@ -500,16 +509,15 @@ def test_admin_check_in_ignores_the_check_in_window() -> None:
 
     from src.services.registration import lifecycle
 
-    registration = SimpleNamespace(
-        id=7,
-        tournament=_gate_tournament(enums.TournamentStatus.LIVE),
+    entry = SimpleNamespace(
+        registration=SimpleNamespace(id=7, tournament=_gate_tournament(enums.TournamentStatus.LIVE)),
         checked_in=False,
         checked_in_at=None,
         checked_in_by=None,
     )
 
-    async def fake_get(_self, _session, _registration_id):
-        return registration
+    async def fake_get(_self, _session, _node_id, _registration_id):
+        return entry
 
     # The checked-in-by account read finds nothing: only the window rule is under test.
     no_rows = MagicMock(**{"unique.return_value.scalars.return_value.first.return_value": None})
@@ -517,14 +525,14 @@ def test_admin_check_in_ignores_the_check_in_window() -> None:
     service = lifecycle.lifecycle_service
 
     with (
-        patch.object(type(service), "get_registration_by_id", fake_get),
+        patch.object(type(service), "get_entry", fake_get),
         patch.object(service.common, "_register_registration_changed", AsyncMock()),
     ):
-        result = asyncio.run(service.check_in_registration(session, 7, checked_in_by=99))
+        result = asyncio.run(service.check_in_registration(session, 3, 7, checked_in_by=99))
 
-    assert result is registration
-    assert registration.checked_in is True
-    assert registration.checked_in_by == 99
+    assert result is entry
+    assert entry.checked_in is True
+    assert entry.checked_in_by == 99
 
 
 async def _noop() -> None:

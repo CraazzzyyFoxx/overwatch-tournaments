@@ -47,6 +47,7 @@ from shared.models.registration.registration import (  # noqa: E402
 from shared.models.tenancy.workspace import Workspace  # noqa: E402
 from shared.models.tournament import Tournament, TournamentPhaseSchedule  # noqa: E402
 from shared.services.ontology import project_disciplines  # noqa: E402
+from shared.testing.factories import registration_node  # noqa: E402
 from shared.testing.roles import rated_catalog, registration_role  # noqa: E402
 from src.schemas import BalancerRegistrationUpdateRequest  # noqa: E402
 from src.schemas.registration import RegistrationSubmit  # noqa: E402
@@ -372,7 +373,7 @@ def test_a_blank_answer_survives_validation_as_an_explicit_clear() -> None:
 
 
 def _registration(**kwargs: Any) -> models.Registration:
-    return models.Registration(id=1, tournament_id=7, status="pending", **kwargs)
+    return models.Registration(id=1, tournament_id=7, **kwargs)
 
 
 def test_role_update_preserves_rank_value_on_surviving_roles() -> None:
@@ -441,7 +442,7 @@ def test_a_role_edit_does_not_leave_a_parentless_role_row_in_the_session() -> No
 
 def test_a_new_registration_of_a_one_role_game_stores_that_role_without_a_roles_answer() -> None:
     """Organizer rows and sheet rows validate partially, so nothing implied the role before ``apply``."""
-    created = models.Registration(tournament_id=7, status="pending", identities=[])
+    created = models.Registration(tournament_id=7, identities=[])
     answer_service.apply(
         created, {}, catalog_roles=rated_catalog(discipline_code="deadlock"), schema=SCHEMA, hero_catalog=None
     )
@@ -570,10 +571,12 @@ async def _seed(session: Any, *, schema: FormSchema) -> dict[str, Any]:
     auth_user = AuthUser(email=f"answers-{suffix}@example.com", username=f"answers_{suffix}", hashed_password="x")
     session.add(auth_user)
     await session.flush()
+    node_id = await registration_node(session, tournament.id)
     await session.commit()
     return {
         "workspace_id": workspace.id,
         "tournament_id": tournament.id,
+        "node_id": node_id,
         "version_id": version.id,
         "auth_user": auth_user,
     }
@@ -595,6 +598,7 @@ def test_public_submit_validates_against_the_current_version_and_stamps_it(db_se
             read = await registration_service.submit_public_registration(
                 db_session,
                 tournament_id=seeded["tournament_id"],
+                registration_node_id=seeded["node_id"],
                 auth_user=seeded["auth_user"],
                 body=RegistrationSubmit(
                     form_version_id=seeded["version_id"],
@@ -662,6 +666,7 @@ def test_submit_with_stale_version_is_409_form_version_stale(db_session) -> None
                 await registration_service.submit_public_registration(
                     db_session,
                     tournament_id=seeded["tournament_id"],
+                    registration_node_id=seeded["node_id"],
                     auth_user=seeded["auth_user"],
                     body=RegistrationSubmit(
                         form_version_id=seeded["version_id"] + 1000,
@@ -693,18 +698,17 @@ def test_a_self_edit_read_never_lazy_loads_its_tournament(db_session) -> None:
             await registration_service.submit_public_registration(
                 db_session,
                 tournament_id=seeded["tournament_id"],
+                registration_node_id=seeded["node_id"],
                 auth_user=seeded["auth_user"],
                 body=RegistrationSubmit(
                     form_version_id=seeded["version_id"],
                     answers={"identity_battlenet": [f"E{suffix}#1234"]},
                 ),
             )
-            registration = await registration_service.get_registration(
-                db_session, seeded["tournament_id"], seeded["auth_user"].id
-            )
+            entry = await registration_service.get_registration(db_session, seeded["node_id"], seeded["auth_user"].id)
             updated = await registration_service.update_registration(
                 db_session,
-                registration,
+                entry,
                 tournament=await registration_service.tournament_repo.get(db_session, seeded["tournament_id"]),
                 values={"public_notes": "edited"},
                 schema=SCHEMA,
@@ -712,6 +716,7 @@ def test_a_self_edit_read_never_lazy_loads_its_tournament(db_session) -> None:
             )
             gc.collect()  # the intermittent half: nothing but the read itself may keep the Tournament alive
             return _reg_to_read(
+                updated.registration,
                 updated,
                 workspace_id=seeded["workspace_id"],
                 provider="battlenet",
@@ -739,6 +744,7 @@ def test_a_new_invitee_with_no_form_answers_is_refused(db_session) -> None:
                 await registration_service.submit_public_registration(
                     db_session,
                     tournament_id=seeded["tournament_id"],
+                    registration_node_id=seeded["node_id"],
                     auth_user=seeded["auth_user"],
                     body=None,
                 )
@@ -765,6 +771,7 @@ def test_a_gated_identity_is_refused_end_to_end(db_session) -> None:
                 await registration_service.submit_public_registration(
                     db_session,
                     tournament_id=seeded["tournament_id"],
+                    registration_node_id=seeded["node_id"],
                     auth_user=seeded["auth_user"],
                     body=RegistrationSubmit(
                         form_version_id=seeded["version_id"],
@@ -891,6 +898,7 @@ def test_a_role_top_hero_list_survives_being_replaced_in_place(db_session) -> No
             await registration_service.submit_public_registration(
                 db_session,
                 tournament_id=seeded["tournament_id"],
+                registration_node_id=seeded["node_id"],
                 auth_user=seeded["auth_user"],
                 body=RegistrationSubmit(
                     form_version_id=seeded["version_id"],
@@ -900,12 +908,10 @@ def test_a_role_top_hero_list_survives_being_replaced_in_place(db_session) -> No
                     answers={"identity_battlenet": [f"H{suffix}#1234"], "roles": picks},
                 ),
             )
-            registration = await registration_service.get_registration(
-                db_session, seeded["tournament_id"], seeded["auth_user"].id
-            )
+            entry = await registration_service.get_registration(db_session, seeded["node_id"], seeded["auth_user"].id)
             updated = await registration_service.update_registration(
                 db_session,
-                registration,
+                entry,
                 tournament=await registration_service.tournament_repo.get(db_session, seeded["tournament_id"]),
                 values={"roles": picks},
                 schema=schema,
@@ -915,7 +921,7 @@ def test_a_role_top_hero_list_survives_being_replaced_in_place(db_session) -> No
             # The read the RPC builds from the row it just wrote. The roster
             # engine walks roles -> hero_entries, so a row handed back with that
             # chain unloaded raises MissingGreenlet instead of serving the edit.
-            assert await _public_rosters(db_session, [updated])
+            assert await _public_rosters(db_session, [updated.registration], {updated.registration_id: updated})
             rows = (
                 await db_session.execute(
                     sa.select(
@@ -928,7 +934,7 @@ def test_a_role_top_hero_list_survives_being_replaced_in_place(db_session) -> No
                         models.RegistrationRole,
                         models.RegistrationRole.id == models.RegistrationRoleEntity.role_id,
                     )
-                    .where(models.RegistrationRole.registration_id == registration.id)
+                    .where(models.RegistrationRole.registration_id == entry.registration_id)
                     .order_by(models.RegistrationRoleEntity.priority)
                 )
             ).all()
@@ -955,7 +961,7 @@ def test_a_role_top_hero_list_survives_being_replaced_in_place(db_session) -> No
                             models.RegistrationRole,
                             models.RegistrationRole.id == models.RegistrationRoleEntity.role_id,
                         )
-                        .where(models.RegistrationRole.registration_id == registration.id)
+                        .where(models.RegistrationRole.registration_id == entry.registration_id)
                         .order_by(models.RegistrationRoleEntity.priority)
                     )
                 ).all()
@@ -1022,6 +1028,7 @@ def test_the_player_sheet_patch_round_trips_a_roles_character_picks(db_session) 
             await registration_service.submit_public_registration(
                 db_session,
                 tournament_id=seeded["tournament_id"],
+                registration_node_id=seeded["node_id"],
                 auth_user=seeded["auth_user"],
                 body=RegistrationSubmit(
                     form_version_id=seeded["version_id"],
@@ -1031,27 +1038,26 @@ def test_the_player_sheet_patch_round_trips_a_roles_character_picks(db_session) 
                     },
                 ),
             )
-            registration = await registration_service.get_registration(
-                db_session, seeded["tournament_id"], seeded["auth_user"].id
-            )
-            before = await _picks(registration.id)
+            entry = await registration_service.get_registration(db_session, seeded["node_id"], seeded["auth_user"].id)
+            before = await _picks(entry.registration_id)
 
             async def patch(body: BalancerRegistrationUpdateRequest) -> None:
                 await lifecycle_service.update_registration_profile(
                     db_session,
-                    registration.id,
+                    entry.registration_id,
                     display_name=body.display_name,
                     admin_notes=body.admin_notes,
                     answers=body.answers,
                     status_value=body.status,
                     balancer_status_value=body.balancer_status,
                     roles=[role.model_dump() for role in body.roles or []],
+                    entry=entry,
                 )
 
             await patch(_patch("top_characters"))
-            kept = await _picks(registration.id)
+            kept = await _picks(entry.registration_id)
             await patch(_patch("top_heroes"))
-            return before, kept, await _picks(registration.id)
+            return before, kept, await _picks(entry.registration_id)
         finally:
             await db_session.rollback()
             await _drop(db_session, seeded["workspace_id"])
@@ -1090,6 +1096,7 @@ def test_an_organizer_save_without_roles_keeps_the_role_set_while_an_empty_list_
             await registration_service.submit_public_registration(
                 db_session,
                 tournament_id=seeded["tournament_id"],
+                registration_node_id=seeded["node_id"],
                 auth_user=seeded["auth_user"],
                 body=RegistrationSubmit(
                     form_version_id=seeded["version_id"],
@@ -1099,28 +1106,27 @@ def test_an_organizer_save_without_roles_keeps_the_role_set_while_an_empty_list_
                     },
                 ),
             )
-            registration = await registration_service.get_registration(
-                db_session, seeded["tournament_id"], seeded["auth_user"].id
-            )
+            entry = await registration_service.get_registration(db_session, seeded["node_id"], seeded["auth_user"].id)
 
             async def patch(payload: dict[str, Any]) -> None:
                 body = BalancerRegistrationUpdateRequest.model_validate(payload)
                 await lifecycle_service.update_registration_profile(
                     db_session,
-                    registration.id,
+                    entry.registration_id,
                     display_name=body.display_name,
                     admin_notes=body.admin_notes,
                     answers=body.answers,
                     status_value=body.status,
                     balancer_status_value=body.balancer_status,
                     roles=[role.model_dump() for role in body.roles] if body.roles is not None else None,
+                    entry=entry,
                 )
 
             async def state() -> tuple:
                 ranks = (
                     await db_session.execute(
                         sa.select(models.RegistrationRole.rank_value)
-                        .where(models.RegistrationRole.registration_id == registration.id)
+                        .where(models.RegistrationRole.registration_id == entry.registration_id)
                         .order_by(models.RegistrationRole.priority)
                     )
                 ).scalars()
@@ -1135,7 +1141,7 @@ def test_an_organizer_save_without_roles_keeps_the_role_set_while_an_empty_list_
                             models.RegistrationRole,
                             models.RegistrationRole.id == models.RegistrationRoleEntity.role_id,
                         )
-                        .where(models.RegistrationRole.registration_id == registration.id)
+                        .where(models.RegistrationRole.registration_id == entry.registration_id)
                         .order_by(models.RegistrationRoleEntity.priority)
                     )
                 ).all()
@@ -1222,6 +1228,7 @@ def test_an_edit_that_changes_the_role_set_keeps_its_overlapping_picks(db_sessio
             await registration_service.submit_public_registration(
                 db_session,
                 tournament_id=seeded["tournament_id"],
+                registration_node_id=seeded["node_id"],
                 auth_user=seeded["auth_user"],
                 body=RegistrationSubmit(
                     form_version_id=seeded["version_id"],
@@ -1234,12 +1241,10 @@ def test_an_edit_that_changes_the_role_set_keeps_its_overlapping_picks(db_sessio
                     },
                 ),
             )
-            registration = await registration_service.get_registration(
-                db_session, seeded["tournament_id"], seeded["auth_user"].id
-            )
+            entry = await registration_service.get_registration(db_session, seeded["node_id"], seeded["auth_user"].id)
             updated = await registration_service.update_registration(
                 db_session,
-                registration,
+                entry,
                 tournament=await registration_service.tournament_repo.get(db_session, seeded["tournament_id"]),
                 values={
                     "roles": [
@@ -1254,7 +1259,9 @@ def test_an_edit_that_changes_the_role_set_keeps_its_overlapping_picks(db_sessio
                 hero_catalog=catalog,
                 form_version_id=seeded["version_id"],
             )
-            roster = (await _public_rosters(db_session, [updated])).get(updated.id)
+            roster = (
+                await _public_rosters(db_session, [updated.registration], {updated.registration_id: updated})
+            ).get(updated.registration_id)
             assert roster is not None
             roster_roles = [entry.role for entry in roster.roles]
             roster_damage_heroes = [
@@ -1278,7 +1285,7 @@ def test_an_edit_that_changes_the_role_set_keeps_its_overlapping_picks(db_sessio
                             models.CatalogEntity,
                             models.CatalogEntity.id == models.RegistrationRoleEntity.entity_id,
                         )
-                        .where(models.RegistrationRole.registration_id == registration.id)
+                        .where(models.RegistrationRole.registration_id == entry.registration_id)
                         .order_by(
                             models.RegistrationRole.priority,
                             models.RegistrationRoleEntity.priority,

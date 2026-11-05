@@ -37,10 +37,11 @@ class _RecordingSession:
         self.commits += 1
 
 
-def _registration(*, checked_in: bool) -> models.Registration:
-    return models.Registration(
+def _entry(*, checked_in: bool) -> models.RegistrationEntry:
+    return models.RegistrationEntry(
         id=1,
-        tournament_id=7,
+        registration_node_id=3,
+        registration=models.Registration(id=1, tournament_id=7),
         status="approved",
         checked_in=checked_in,
     )
@@ -48,23 +49,23 @@ def _registration(*, checked_in: bool) -> models.Registration:
 
 class TestPublicWithdrawGuard(IsolatedAsyncioTestCase):
     async def test_checked_in_registration_cannot_be_withdrawn(self) -> None:
-        registration = _registration(checked_in=True)
+        entry = _entry(checked_in=True)
         session = _RecordingSession()
 
         with self.assertRaises(HTTPException) as caught:
-            await reg_service.registration_service.withdraw_registration(session, registration)
+            await reg_service.registration_service.withdraw_registration(session, entry)
 
         assert caught.exception.status_code == 409
         # The refusal must leave the row alone: a half-applied withdrawal would
         # be worse than either outcome.
-        assert registration.status == "approved"
+        assert entry.status == "approved"
         assert session.commits == 0
 
     async def test_approved_registration_without_check_in_still_withdraws(self) -> None:
-        registration = _registration(checked_in=False)
+        entry = _entry(checked_in=False)
         session = _RecordingSession()
 
-        await reg_service.registration_service.withdraw_registration(session, registration)
+        await reg_service.registration_service.withdraw_registration(session, entry)
 
-        assert registration.status == "withdrawn"
+        assert entry.status == "withdrawn"
         assert session.commits == 1

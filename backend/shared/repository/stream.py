@@ -152,10 +152,12 @@ class StreamTargetRepository:
         shared by both channel sources so a change to what counts as
         participation cannot drift between them."""
         registration = models.Registration
+        entry = models.RegistrationEntry
         return [
             registration.tournament_id.in_(tournament_ids),
             registration.deleted_at.is_(None),
-            registration.status == "approved",
+            # Approved at ANY registration node of the tournament.
+            registration.entries.any(sa.and_(entry.status == "approved", entry.deleted_at.is_(None))),
         ]
 
     @staticmethod

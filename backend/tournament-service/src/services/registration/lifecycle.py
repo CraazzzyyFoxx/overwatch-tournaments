@@ -8,9 +8,12 @@ Collaborators are constructor-injected attributes of ``lifecycle_service``
 (``registration_repo``, ``common``, ``registrations``): tests patch those, not
 module globals.
 
-Every single-row method takes ``registration=`` when the caller already holds the
-row loaded by ``get_registration_by_id`` (the admin handlers read it for the audit
-row first), so one request loads the registration graph once.
+Participation is per registration node: every entry-scoped method takes the
+``registration_node_id`` right after the session and an ``entry=`` when the caller
+already holds the entry loaded by ``get_entry`` (the admin handlers read it for the
+audit row first), so one request loads the registration graph once. Only the profile
+edit (``update_registration_profile``) and ``get_registration_by_id`` work on the
+registration itself.
 """
 
 from __future__ import annotations
@@ -38,6 +41,7 @@ from shared.registration_statuses import (
 from shared.repository import (
     AuthUserRepository,
     CatalogRoleRepository,
+    RegistrationEntryRepository,
     RegistrationRepository,
     RegistrationStatusRepository,
     TournamentRepository,
@@ -99,11 +103,15 @@ _USERNAME_ONLY = (noload(models.AuthUser.roles), noload(models.AuthUser.oauth_co
 def _registration_read_options() -> list[Any]:
     """Eager loads every admin serializer of a registration needs: the shared
     read loaders plus the admin-only relationships."""
+    return [*registration_read_loaders(), selectinload(models.Registration.google_sheet_binding)]
+
+
+def _entry_read_options() -> list[Any]:
+    """The same for a registration ENTRY: its registration's loaders plus the entry's reviewer and check-in account."""
     return [
-        *registration_read_loaders(),
-        selectinload(models.Registration.reviewer).options(*_USERNAME_ONLY),
-        selectinload(models.Registration.checked_in_by_user).options(*_USERNAME_ONLY),
-        selectinload(models.Registration.google_sheet_binding),
+        selectinload(models.RegistrationEntry.registration).options(*_registration_read_options()),
+        selectinload(models.RegistrationEntry.reviewer).options(*_USERNAME_ONLY),
+        selectinload(models.RegistrationEntry.checked_in_by_user).options(*_USERNAME_ONLY),
     ]
 
 
@@ -135,12 +143,14 @@ class RegistrationLifecycleService:
         self,
         *,
         registration_repo: RegistrationRepository = RegistrationRepository(),
+        entry_repo: RegistrationEntryRepository = RegistrationEntryRepository(),
         status_repo: RegistrationStatusRepository = RegistrationStatusRepository(),
         tournament_repo: TournamentRepository = TournamentRepository(),
         common: RegistrationCommonService = _common_service,
         registrations: RegistrationService = registration_service,
     ) -> None:
         self.registration_repo = registration_repo
+        self.entry_repo = entry_repo
         self.status_repo = status_repo
         self.tournament_repo = tournament_repo
         self.common = common
@@ -149,36 +159,42 @@ class RegistrationLifecycleService:
     async def list_registrations(
         self,
         session: AsyncSession,
-        tournament_id: int,
+        registration_node_id: int,
         *,
         status_filter: str | None = None,
         inclusion_filter: str | None = None,
         source_filter: str | None = None,
         include_deleted: bool = False,
-    ) -> list[models.Registration]:
+    ) -> list[models.RegistrationEntry]:
+        """The node's entries (each with its registration loaded), newest first."""
+        entry = models.RegistrationEntry
         # Analytical: the admin table's filter matrix, including a correlated
         # workspace subquery for the balancer-pool clauses.
         query = (
-            self.registration_repo.select()
-            .where(models.Registration.tournament_id == tournament_id)
-            .options(*_registration_read_options())
-            .order_by(models.Registration.submitted_at.desc(), models.Registration.id.desc())
+            self.entry_repo.select()
+            .join(models.Registration, models.Registration.id == entry.registration_id)
+            .where(entry.registration_node_id == registration_node_id)
+            .options(*_entry_read_options())
+            .order_by(entry.created_at.desc(), entry.id.desc())
         )
         if not include_deleted:
-            query = query.where(models.Registration.deleted_at.is_(None))
+            query = query.where(entry.deleted_at.is_(None), models.Registration.deleted_at.is_(None))
         if status_filter and status_filter != "all":
-            query = query.where(models.Registration.status == status_filter)
+            query = query.where(entry.status == status_filter)
         if inclusion_filter in ("reserve", "not_reserve"):
             # Separate axis from the pool clauses below: a reserve is a player's
             # declaration, not a balancer status, and "who agreed to sub in" is
             # unanswerable by eye at a few hundred rows.
-            query = query.where(models.Registration.is_reserve.is_(inclusion_filter == "reserve"))
+            query = query.where(entry.is_reserve.is_(inclusion_filter == "reserve"))
         if inclusion_filter in ("included", "excluded"):
             workspace_id_expr = (
-                sa.select(models.Tournament.workspace_id).where(models.Tournament.id == tournament_id).scalar_subquery()
+                sa.select(models.Tournament.workspace_id)
+                .join(models.FlowNode, models.FlowNode.tournament_id == models.Tournament.id)
+                .where(models.FlowNode.id == registration_node_id)
+                .scalar_subquery()
             )
             clause = balancer_pool_included_clause if inclusion_filter == "included" else balancer_pool_excluded_clause
-            query = query.where(clause(models.Registration.balancer_status, workspace_id_expr))
+            query = query.where(clause(entry.balancer_status, workspace_id_expr))
         if source_filter == "google_sheets":
             query = query.where(models.Registration.google_sheet_binding.has())
         elif source_filter == "manual":
@@ -189,7 +205,7 @@ class RegistrationLifecycleService:
     async def list_registration_reads(
         self,
         session: AsyncSession,
-        tournament_id: int,
+        registration_node_id: int,
         *,
         workspace_id: int,
         status_filter: str | None = None,
@@ -197,16 +213,20 @@ class RegistrationLifecycleService:
         source_filter: str | None = None,
         include_deleted: bool = False,
     ) -> list[schemas.BalancerRegistrationRead]:
-        """The admin registrations table: each filtered row with its status meta, native ranks, roster and admission."""
-        registrations = await self.list_registrations(
+        """The admin registrations table of ONE node: each filtered entry with its status meta, native ranks, roster
+        and admission."""
+        entries = await self.list_registrations(
             session,
-            tournament_id,
+            registration_node_id,
             status_filter=status_filter,
             inclusion_filter=inclusion_filter,
             source_filter=source_filter,
             include_deleted=include_deleted,
         )
-        status_meta_map = await get_status_metas_map(session, workspace_id=workspace_id) if registrations else None
+        registrations = [entry.registration for entry in entries]
+        entry_by_registration = {entry.registration_id: entry for entry in entries}
+        tournament_id = await self.common.tournament_id_of_node(session, registration_node_id)
+        status_meta_map = await get_status_metas_map(session, workspace_id=workspace_id) if entries else None
         tournament = await self.common.ensure_tournament_exists(session, tournament_id)
         grid = await self.common.get_tournament_grid(session, tournament_id)
         ow_ranks = await native_ranks_by_registration(
@@ -217,19 +237,29 @@ class RegistrationLifecycleService:
         # payload and the draft pool are built from.
         form = await self.common.get_registration_form(session, tournament_id)
         rosters = await roster_engine.resolve(
-            session, registrations, workspace_id=workspace_id, tournament_id=tournament_id, form=form, grid=grid
+            session,
+            registrations,
+            workspace_id=workspace_id,
+            tournament_id=tournament_id,
+            form=form,
+            grid=grid,
+            entries=entry_by_registration,
         )
         # Same resolution the public participants list uses, so the admin
         # Admission / Subscription / Profile columns are byte-identical to what
         # the player sees on their own card.
-        admissions = await self.registrations.resolve_admission_list(session, registrations, form=form)
+        admissions = await self.registrations.resolve_admission_list(
+            session, registrations, entry_by_registration, form=form
+        )
         provider = identity_provider(tournament.discipline)
         reads = []
-        for registration in registrations:
+        for entry in entries:
+            registration = entry.registration
             chips = AdmissionChips.of(admissions.get(registration.id))
             reads.append(
                 serialize_registration(
                     registration,
+                    entry,
                     workspace_id=workspace_id,
                     provider=provider,
                     status_meta_map=status_meta_map,
@@ -253,6 +283,21 @@ class RegistrationLifecycleService:
         if registration is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Registration not found")
         return registration
+
+    async def get_entry(
+        self, session: AsyncSession, registration_node_id: int, registration_id: int
+    ) -> models.RegistrationEntry:
+        """The registration's live entry in the node with everything the admin serializers read; 404 without one.
+
+        ``populate_existing`` for the same reason as :meth:`get_registration_by_id`.
+        """
+        return await self.entry_repo.require_for(
+            session,
+            registration_node_id,
+            registration_id,
+            options=_entry_read_options(),
+            populate_existing=True,
+        )
 
     async def validate_registration_status_value(
         self,
@@ -281,6 +326,7 @@ class RegistrationLifecycleService:
         workspace_id: int,
         discipline: str,
         registration: models.Registration | None = None,
+        entry: models.RegistrationEntry | None = None,
     ) -> tuple[FormSchema, dict[str, Any], HeroCatalog | None, int | None]:
         """Validate an ORGANIZER's answers: partial, and requirements off.
 
@@ -313,14 +359,15 @@ class RegistrationLifecycleService:
             discipline=discipline,
             hero_catalog=hero_catalog,
             registration=registration,
+            entry=entry,
         )
         return schema, values, hero_catalog, max_heroes
 
     async def create_manual_registration(
         self,
         session: AsyncSession,
+        registration_node_id: int,
         *,
-        tournament_id: int,
         display_name: str | None,
         admin_notes: str | None,
         answers: Mapping[str, Any] | None = None,
@@ -328,8 +375,8 @@ class RegistrationLifecycleService:
         balancer_status_value: str | None = None,
         roles: list[dict[str, Any]],
         auth_user_id: int | None = None,
-    ) -> models.Registration:
-        """An organizer-authored registration row.
+    ) -> models.RegistrationEntry:
+        """An organizer-authored registration (profile + its entry in the node).
 
         ``answers`` is the same flat document the public form submits; it is
         validated with ``enforce_required=False`` and ``partial=True`` because an
@@ -337,6 +384,7 @@ class RegistrationLifecycleService:
         (admin rows, with ranks) wins over ``answers["roles"]`` when both arrive.
         """
         answers = answers or {}
+        tournament_id = await self.common.tournament_id_of_node(session, registration_node_id)
         tournament = await self.common.ensure_tournament_exists(session, tournament_id)
         workspace_id = tournament.workspace_id
         catalog_roles = await CatalogRoleRepository().rated_rows(
@@ -367,13 +415,22 @@ class RegistrationLifecycleService:
             tournament_id=tournament_id,
             form_version_id=form.current_version_id if form is not None else None,
             admin_notes=admin_notes,
-            status=resolved_status,
-            balancer_status=NOT_ADDED_BALANCER_STATUS,
             # Explicitly initialize even an empty collection before the first flush.
             identities=[],
         )
+        entry = models.RegistrationEntry(
+            registration_node_id=registration_node_id,
+            status=resolved_status,
+            balancer_status=NOT_ADDED_BALANCER_STATUS,
+        )
+        entry.registration = registration
         answer_service.apply(
-            registration, values, schema=schema, hero_catalog=hero_catalog, catalog_roles=catalog_roles
+            registration,
+            values,
+            schema=schema,
+            hero_catalog=hero_catalog,
+            catalog_roles=catalog_roles,
+            entry=entry,
         )
         provider = identity_provider(tournament.discipline)
         primary_identity = registration.primary_game_identity(provider=provider)
@@ -389,7 +446,7 @@ class RegistrationLifecycleService:
             )
         auto_managed = balancer_status_value is None or balancer_status_value in AUTO_MANAGED_BALANCER_STATUSES
         if not auto_managed:
-            registration.balancer_status = balancer_status_value
+            entry.balancer_status = balancer_status_value
         await self.registration_repo.create(session, registration)
         # Unconditional, and with the workspace: a manual registration has no auth
         # account, but its game handle is still the identity every inherited rank
@@ -398,12 +455,13 @@ class RegistrationLifecycleService:
         await self.registrations.ensure_player_identity(
             session, registration, provider=provider, auth_user_id=auth_user_id, workspace_id=workspace_id
         )
+        await session.flush()
         if auto_managed:
             # Resolved only now: the member anchor above is what the inherited rank
             # layers hang off, so a roster read before it would rate every blank
             # role as unranked.
-            registration.balancer_status = (
-                included_balancer_status(await resolve_roster(session, registration))
+            entry.balancer_status = (
+                included_balancer_status(await resolve_roster(session, registration_node_id, registration))
                 if resolved_status == "approved"
                 else NOT_ADDED_BALANCER_STATUS
             )
@@ -412,7 +470,7 @@ class RegistrationLifecycleService:
         else:
             await self.common._register_registration_changed(session, registration)
         await session.commit()
-        return await self.get_registration_by_id(session, registration.id)
+        return await self.get_entry(session, registration_node_id, registration.id)
 
     async def update_registration_profile(
         self,
@@ -430,6 +488,7 @@ class RegistrationLifecycleService:
         pin: bool | None = None,
         clear_pin: bool = False,
         registration: models.Registration | None = None,
+        entry: models.RegistrationEntry | None = None,
     ) -> models.Registration:
         """An organizer's edit of one registration.
 
@@ -437,13 +496,23 @@ class RegistrationLifecycleService:
         pipeline the player's own PATCH uses (partial, requirements not enforced);
         everything else here is admin state the form never asks about. ``roles``
         (admin rows, with ranks) wins over ``answers["roles"]``.
+
+        ``status_value``, ``balancer_status_value``, ``exclude_reason`` and the ``reserve`` answer are the
+        registration's participation: they are written on ``entry`` (the node being edited) and need one.
         """
         answers = answers or {}
+        if entry is None and (
+            status_value is not None or balancer_status_value is not None or exclude_reason is not None
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="registration_node_id is required to change a status",
+            )
         registration = registration or await self.get_registration_by_id(session, registration_id)
         catalog_roles = await CatalogRoleRepository().rated_rows(
             session, discipline=registration.tournament.discipline, workspace_id=registration.tournament.workspace_id
         )
-        previous_status = registration.status
+        previous_status = entry.status if entry is not None else None
 
         form = await self.common.get_registration_form(session, registration.tournament_id)
         schema, values, hero_catalog, max_heroes = await self._validated_answers(
@@ -453,6 +522,7 @@ class RegistrationLifecycleService:
             workspace_id=registration.tournament.workspace_id,
             discipline=registration.tournament.discipline,
             registration=registration,
+            entry=entry,
         )
         if roles is not None:
             values.pop("roles", None)
@@ -463,7 +533,12 @@ class RegistrationLifecycleService:
             exclude_registration_id=registration.id,
         )
         answer_service.apply(
-            registration, values, schema=schema, hero_catalog=hero_catalog, catalog_roles=catalog_roles
+            registration,
+            values,
+            schema=schema,
+            hero_catalog=hero_catalog,
+            catalog_roles=catalog_roles,
+            entry=entry,
         )
         if form is not None:
             registration.form_version_id = form.current_version_id
@@ -481,10 +556,12 @@ class RegistrationLifecycleService:
                 scope="registration",
                 value=status_value,
             )
-            registration.status = status_value
+            entry.status = status_value
         if balancer_status_value is not None:
             if balancer_status_value in AUTO_MANAGED_BALANCER_STATUSES:
-                sync_included_balancer_status(registration, await resolve_roster(session, registration))
+                sync_included_balancer_status(
+                    entry, await resolve_roster(session, entry.registration_node_id, registration)
+                )
             else:
                 await self.validate_registration_status_value(
                     session,
@@ -492,15 +569,13 @@ class RegistrationLifecycleService:
                     scope="balancer",
                     value=balancer_status_value,
                 )
-                if balancer_status_value != NOT_ADDED_BALANCER_STATUS and registration.status != "approved":
+                if balancer_status_value != NOT_ADDED_BALANCER_STATUS and entry.status != "approved":
                     raise HTTPException(
                         status_code=status.HTTP_409_CONFLICT,
                         detail="Registration must be approved before adding to balancer",
                     )
-                registration.balancer_status = balancer_status_value
-                registration.exclude_reason = (
-                    exclude_reason if balancer_status_value == EXCLUDED_BALANCER_STATUS else None
-                )
+                entry.balancer_status = balancer_status_value
+                entry.exclude_reason = exclude_reason if balancer_status_value == EXCLUDED_BALANCER_STATUS else None
 
         unpin = clear_pin or (pin is False and roles is None)
         if roles is not None:
@@ -531,8 +606,10 @@ class RegistrationLifecycleService:
             auth_user_id=auth_user_id,
             workspace_id=workspace_id,
         )
-        if roles is not None or unpin:
-            sync_included_balancer_status(registration, await resolve_roster(session, registration))
+        if entry is not None and (roles is not None or unpin):
+            sync_included_balancer_status(
+                entry, await resolve_roster(session, entry.registration_node_id, registration)
+            )
 
         if status_value == "approved" and previous_status != "approved":
             await enqueue_registration_approved(session, registration)
@@ -549,224 +626,238 @@ class RegistrationLifecycleService:
     async def approve_registration(
         self,
         session: AsyncSession,
+        registration_node_id: int,
         registration_id: int,
         *,
         reviewed_by: int | None,
-        registration: models.Registration | None = None,
-    ) -> models.Registration:
-        registration = registration or await self.get_registration_by_id(session, registration_id)
-        registration.status = "approved"
-        registration.reviewed_at = datetime.now(UTC)
-        registration.reviewed_by = reviewed_by
+        entry: models.RegistrationEntry | None = None,
+    ) -> models.RegistrationEntry:
+        entry = entry or await self.get_entry(session, registration_node_id, registration_id)
+        entry.status = "approved"
+        entry.reviewed_at = datetime.now(UTC)
+        entry.reviewed_by = reviewed_by
         # The FK moved, so the serializer's .reviewer must too; one account read, not a refetch.
-        registration.reviewer = await _username_user(session, reviewed_by)
-        # A pending registration's balancer_status is always not_in_balancer with
+        entry.reviewer = await _username_user(session, reviewed_by)
+        # A pending entry's balancer_status is always not_in_balancer with
         # no exclude_reason -- every write path that could set anything else
         # requires status == "approved" already (see set_balancer_status /
         # update_registration_profile). Nothing to reset here.
-        await enqueue_registration_approved(session, registration)
+        await enqueue_registration_approved(session, entry.registration)
         await session.commit()
-        return registration
+        return entry
 
     async def reject_registration(
         self,
         session: AsyncSession,
+        registration_node_id: int,
         registration_id: int,
         *,
         reviewed_by: int | None,
-        registration: models.Registration | None = None,
-    ) -> models.Registration:
-        registration = registration or await self.get_registration_by_id(session, registration_id)
-        registration.status = "rejected"
-        registration.reviewed_at = datetime.now(UTC)
-        registration.reviewed_by = reviewed_by
+        entry: models.RegistrationEntry | None = None,
+    ) -> models.RegistrationEntry:
+        entry = entry or await self.get_entry(session, registration_node_id, registration_id)
+        entry.status = "rejected"
+        entry.reviewed_at = datetime.now(UTC)
+        entry.reviewed_by = reviewed_by
         # The FK moved, so the serializer's .reviewer must too; one account read, not a refetch.
-        registration.reviewer = await _username_user(session, reviewed_by)
-        await notify_registration_rejected(session, registration)
+        entry.reviewer = await _username_user(session, reviewed_by)
+        await notify_registration_rejected(session, entry.registration)
         await session.commit()
-        return registration
+        return entry
 
     async def bulk_approve_registrations(
         self,
         session: AsyncSession,
-        tournament_id: int,
+        registration_node_id: int,
         registration_ids: list[int],
         *,
         reviewed_by: int | None,
     ) -> tuple[int, int]:
         result = await session.execute(
-            self.registration_repo.select()
+            self.entry_repo.select()
+            .join(models.Registration, models.Registration.id == models.RegistrationEntry.registration_id)
             .where(
-                models.Registration.tournament_id == tournament_id,
+                models.RegistrationEntry.registration_node_id == registration_node_id,
+                models.RegistrationEntry.deleted_at.is_(None),
                 models.Registration.deleted_at.is_(None),
-                models.Registration.id.in_(registration_ids),
-                models.Registration.status == "pending",
+                models.RegistrationEntry.registration_id.in_(registration_ids),
+                models.RegistrationEntry.status == "pending",
             )
             # enqueue_registrations_approved reads primary_game_identity() -> identities;
             # an unloaded collection raises MissingGreenlet on an async session.
-            .options(selectinload(models.Registration.identities))
+            .options(selectinload(models.RegistrationEntry.registration).selectinload(models.Registration.identities))
         )
-        registrations = list(result.scalars().all())
+        entries = list(result.scalars().all())
         now = datetime.now(UTC)
-        for registration in registrations:
-            registration.status = "approved"
-            registration.reviewed_at = now
-            registration.reviewed_by = reviewed_by
-        await enqueue_registrations_approved(session, registrations)
+        for entry in entries:
+            entry.status = "approved"
+            entry.reviewed_at = now
+            entry.reviewed_by = reviewed_by
+        await enqueue_registrations_approved(session, [entry.registration for entry in entries])
         await session.commit()
-        return len(registrations), len(registration_ids) - len(registrations)
+        return len(entries), len(registration_ids) - len(entries)
 
     async def add_to_balancer(
         self,
         session: AsyncSession,
+        registration_node_id: int,
         registration_id: int,
         *,
-        registration: models.Registration | None = None,
-    ) -> models.Registration:
-        """Put an approved registration into the pool, rating it from its resolved
+        entry: models.RegistrationEntry | None = None,
+    ) -> models.RegistrationEntry:
+        """Put an approved entry into the pool, rating it from its resolved
         roster (`ready` if every declared role carries a rank, else `incomplete`).
         """
-        registration = registration or await self.get_registration_by_id(session, registration_id)
-        if registration.status != "approved":
+        entry = entry or await self.get_entry(session, registration_node_id, registration_id)
+        if entry.status != "approved":
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Registration must be approved before adding to balancer",
             )
-        registration.exclude_reason = None
-        registration.balancer_status = included_balancer_status(await resolve_roster(session, registration))
-        await self.common._register_registration_changed(session, registration)
+        entry.exclude_reason = None
+        entry.balancer_status = included_balancer_status(
+            await resolve_roster(session, registration_node_id, entry.registration)
+        )
+        await self.common._register_registration_changed(session, entry.registration)
         await session.commit()
         # Scalar-only mutation; the eagerly-loaded object stays valid after
         # commit (expire_on_commit=False), so no refetch is needed.
-        return registration
+        return entry
 
     async def withdraw_registration(
         self,
         session: AsyncSession,
+        registration_node_id: int,
         registration_id: int,
         *,
-        registration: models.Registration | None = None,
-    ) -> models.Registration:
-        registration = registration or await self.get_registration_by_id(session, registration_id)
-        registration.status = "withdrawn"
-        await self.common._register_registration_changed(session, registration)
+        entry: models.RegistrationEntry | None = None,
+    ) -> models.RegistrationEntry:
+        entry = entry or await self.get_entry(session, registration_node_id, registration_id)
+        entry.status = "withdrawn"
+        await self.common._register_registration_changed(session, entry.registration)
         await session.commit()
         # Scalar-only mutation; no refetch needed (expire_on_commit=False).
-        return registration
+        return entry
 
     async def restore_registration(
         self,
         session: AsyncSession,
+        registration_node_id: int,
         registration_id: int,
         *,
-        registration: models.Registration | None = None,
-    ) -> models.Registration:
-        registration = registration or await self.get_registration_by_id(session, registration_id)
-        registration.status = "approved"
-        await self.common._register_registration_changed(session, registration)
+        entry: models.RegistrationEntry | None = None,
+    ) -> models.RegistrationEntry:
+        entry = entry or await self.get_entry(session, registration_node_id, registration_id)
+        entry.status = "approved"
+        await self.common._register_registration_changed(session, entry.registration)
         await session.commit()
         # Scalar-only mutation; no refetch needed (expire_on_commit=False).
-        return registration
+        return entry
 
     async def soft_delete_registration(
         self,
         session: AsyncSession,
+        registration_node_id: int,
         registration_id: int,
         *,
         deleted_by: int | None,
-    ) -> models.Registration:
-        registration = await self.get_registration_by_id(session, registration_id)
-        registration.deleted_at = datetime.now(UTC)
-        registration.deleted_by = deleted_by
-        await self.common._register_registration_changed(session, registration)
+    ) -> models.RegistrationEntry:
+        """Remove the registration from the node: the ENTRY is soft-deleted, the profile stays (plan Decision 11)."""
+        entry = await self.get_entry(session, registration_node_id, registration_id)
+        entry.deleted_at = datetime.now(UTC)
+        entry.deleted_by = deleted_by
+        await self.common._register_registration_changed(session, entry.registration)
         await session.commit()
-        return registration
+        return entry
 
     async def set_balancer_status(
         self,
         session: AsyncSession,
+        registration_node_id: int,
         registration_id: int,
         *,
         balancer_status: str,
         exclude_reason: str | None = None,
-        registration: models.Registration | None = None,
-    ) -> models.Registration:
-        """Explicitly pin a registration to a balancer status: `not_in_balancer`,
+        entry: models.RegistrationEntry | None = None,
+    ) -> models.RegistrationEntry:
+        """Explicitly pin an entry to a balancer status: `not_in_balancer`,
         `excluded` (with an optional `exclude_reason`), or a workspace custom
         slug. `ready`/`incomplete` are rejected -- those two are exclusively
         derived from role ranks; use `add_to_balancer` to (re)compute one of them.
         """
         _reject_auto_managed_status(balancer_status)
-        registration = registration or await self.get_registration_by_id(session, registration_id)
+        entry = entry or await self.get_entry(session, registration_node_id, registration_id)
         await self.validate_registration_status_value(
             session,
-            workspace_id=registration.tournament.workspace_id,
+            workspace_id=entry.registration.tournament.workspace_id,
             scope="balancer",
             value=balancer_status,
         )
-        if balancer_status != NOT_ADDED_BALANCER_STATUS and registration.status != "approved":
+        if balancer_status != NOT_ADDED_BALANCER_STATUS and entry.status != "approved":
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Registration must be approved before adding to balancer",
             )
-        registration.balancer_status = balancer_status
-        registration.exclude_reason = exclude_reason if balancer_status == EXCLUDED_BALANCER_STATUS else None
-        await self.common._register_registration_changed(session, registration)
+        entry.balancer_status = balancer_status
+        entry.exclude_reason = exclude_reason if balancer_status == EXCLUDED_BALANCER_STATUS else None
+        await self.common._register_registration_changed(session, entry.registration)
         await session.commit()
         # Scalar-only mutation; no refetch needed (expire_on_commit=False).
-        return registration
+        return entry
 
     async def check_in_registration(
         self,
         session: AsyncSession,
+        registration_node_id: int,
         registration_id: int,
         *,
         checked_in_by: int | None,
-        registration: models.Registration | None = None,
-    ) -> models.Registration:
+        entry: models.RegistrationEntry | None = None,
+    ) -> models.RegistrationEntry:
         """Admin check-in. Deliberately ungated by the CHECK_IN phase window --
         organizers check people in before the phase opens, after it closes, and
         during LIVE when someone shows up late. The window gate belongs to the
         self-service path only (``registration_service.check_in_registration``);
         undo (``uncheck_in_registration``) is ungated too.
         """
-        registration = registration or await self.get_registration_by_id(session, registration_id)
-        registration.checked_in = True
-        registration.checked_in_at = datetime.now(UTC)
-        registration.checked_in_by = checked_in_by
+        entry = entry or await self.get_entry(session, registration_node_id, registration_id)
+        entry.checked_in = True
+        entry.checked_in_at = datetime.now(UTC)
+        entry.checked_in_by = checked_in_by
         # The FK moved, so the serializer's .checked_in_by_user must too; one account read, not a refetch.
-        registration.checked_in_by_user = await _username_user(session, checked_in_by)
-        await self.common._register_registration_changed(session, registration)
+        entry.checked_in_by_user = await _username_user(session, checked_in_by)
+        await self.common._register_registration_changed(session, entry.registration)
         await session.commit()
-        return registration
+        return entry
 
     async def uncheck_in_registration(
         self,
         session: AsyncSession,
+        registration_node_id: int,
         registration_id: int,
         *,
-        registration: models.Registration | None = None,
-    ) -> models.Registration:
-        registration = registration or await self.get_registration_by_id(session, registration_id)
-        registration.checked_in = False
-        registration.checked_in_at = None
-        registration.checked_in_by = None
+        entry: models.RegistrationEntry | None = None,
+    ) -> models.RegistrationEntry:
+        entry = entry or await self.get_entry(session, registration_node_id, registration_id)
+        entry.checked_in = False
+        entry.checked_in_at = None
+        entry.checked_in_by = None
         # Also clear the loaded relationship so the serializer does not report a
         # stale username: assigning the FK column alone leaves .checked_in_by_user
         # populated (and we skip the refetch — expire_on_commit=False keeps the
         # object valid after commit).
-        registration.checked_in_by_user = None
-        await self.common._register_registration_changed(session, registration)
+        entry.checked_in_by_user = None
+        await self.common._register_registration_changed(session, entry.registration)
         await session.commit()
-        return registration
+        return entry
 
     async def bulk_add_to_balancer(
         self,
         session: AsyncSession,
-        tournament_id: int,
+        registration_node_id: int,
         registration_ids: list[int],
     ) -> tuple[int, int]:
-        """Bulk version of `add_to_balancer` -- only approved registrations
+        """Bulk version of `add_to_balancer` -- only approved entries
         qualify; every other id is silently skipped (counted, not errored).
 
         The ``reserve`` answer is not a qualifier: it says the registrant is
@@ -774,34 +865,42 @@ class RegistrationLifecycleService:
         sweep enrols them like anybody else.
         """
         result = await session.execute(
-            self.registration_repo.select()
+            self.entry_repo.select()
+            .join(models.Registration, models.Registration.id == models.RegistrationEntry.registration_id)
             .where(
-                models.Registration.tournament_id == tournament_id,
+                models.RegistrationEntry.registration_node_id == registration_node_id,
+                models.RegistrationEntry.deleted_at.is_(None),
                 models.Registration.deleted_at.is_(None),
-                models.Registration.id.in_(registration_ids),
-                models.Registration.status == "approved",
+                models.RegistrationEntry.registration_id.in_(registration_ids),
+                models.RegistrationEntry.status == "approved",
             )
             # The engine reads roles, their heroes and the member anchor; none of
             # them may lazy-load on an async session.
-            .options(*registration_load_options())
+            .options(selectinload(models.RegistrationEntry.registration).options(*registration_load_options()))
         )
-        registrations = list(result.scalars().all())
+        entries = list(result.scalars().all())
+        registrations = [entry.registration for entry in entries]
+        tournament_id = await self.common.tournament_id_of_node(session, registration_node_id)
         workspace_id = await session.scalar(
             sa.select(models.Tournament.workspace_id).where(models.Tournament.id == tournament_id)
         )
         rosters = await roster_engine.resolve(
-            session, registrations, workspace_id=workspace_id, tournament_id=tournament_id
+            session,
+            registrations,
+            workspace_id=workspace_id,
+            tournament_id=tournament_id,
+            entries={entry.registration_id: entry for entry in entries},
         )
-        for registration in registrations:
-            registration.exclude_reason = None
-            registration.balancer_status = included_balancer_status(rosters.get(registration.id))
+        for entry in entries:
+            entry.exclude_reason = None
+            entry.balancer_status = included_balancer_status(rosters.get(entry.registration_id))
         await session.commit()
-        return len(registrations), len(registration_ids) - len(registrations)
+        return len(entries), len(registration_ids) - len(entries)
 
     async def bulk_set_balancer_status(
         self,
         session: AsyncSession,
-        tournament_id: int,
+        registration_node_id: int,
         registration_ids: list[int],
         *,
         balancer_status: str,
@@ -813,6 +912,7 @@ class RegistrationLifecycleService:
         `balancer_status` isn't `not_in_balancer`, mirroring the single-row 409.
         """
         _reject_auto_managed_status(balancer_status)
+        tournament_id = await self.common.tournament_id_of_node(session, registration_node_id)
         tournament = await self.common.ensure_tournament_exists(session, tournament_id)
         await self.validate_registration_status_value(
             session,
@@ -820,21 +920,27 @@ class RegistrationLifecycleService:
             scope="balancer",
             value=balancer_status,
         )
-        query = self.registration_repo.select().where(
-            models.Registration.tournament_id == tournament_id,
-            models.Registration.deleted_at.is_(None),
-            models.Registration.id.in_(registration_ids),
+        query = (
+            self.entry_repo.select()
+            .join(models.Registration, models.Registration.id == models.RegistrationEntry.registration_id)
+            .where(
+                models.RegistrationEntry.registration_node_id == registration_node_id,
+                models.RegistrationEntry.deleted_at.is_(None),
+                models.Registration.deleted_at.is_(None),
+                models.RegistrationEntry.registration_id.in_(registration_ids),
+            )
+            .options(selectinload(models.RegistrationEntry.registration))
         )
         if balancer_status != NOT_ADDED_BALANCER_STATUS:
-            query = query.where(models.Registration.status == "approved")
+            query = query.where(models.RegistrationEntry.status == "approved")
         result = await session.execute(query)
-        registrations = list(result.scalars().all())
-        for registration in registrations:
-            registration.balancer_status = balancer_status
-            registration.exclude_reason = exclude_reason if balancer_status == EXCLUDED_BALANCER_STATUS else None
-            await self.common._register_registration_changed(session, registration)
+        entries = list(result.scalars().all())
+        for entry in entries:
+            entry.balancer_status = balancer_status
+            entry.exclude_reason = exclude_reason if balancer_status == EXCLUDED_BALANCER_STATUS else None
+            await self.common._register_registration_changed(session, entry.registration)
         await session.commit()
-        return len(registrations), len(registration_ids) - len(registrations)
+        return len(entries), len(registration_ids) - len(entries)
 
 
 lifecycle_service = RegistrationLifecycleService()

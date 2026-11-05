@@ -38,15 +38,16 @@ class NotificationRecipientRepository:
     """Recipient lookups for the tournament lifecycle notifier."""
 
     async def check_in_pending_auth_user_ids(self, session: AsyncSession, tournament_id: int) -> list[int]:
-        """Accounts that still owe this tournament a check-in.
+        """Accounts that still owe this tournament a check-in, at any of its registration nodes.
 
-        Approved, not withdrawn, not already checked in -- telling somebody to
+        An approved, live, not-yet-checked-in entry -- telling somebody to
         check in when they already have, or when their entry was never
         accepted, is the notification nobody reads the next one after.
         """
         query = (
             sa.select(models.User.auth_user_id)
-            .select_from(models.Registration)
+            .select_from(models.RegistrationEntry)
+            .join(models.Registration, models.Registration.id == models.RegistrationEntry.registration_id)
             .join(
                 models.WorkspaceMember,
                 models.WorkspaceMember.id == models.Registration.workspace_member_id,
@@ -54,9 +55,10 @@ class NotificationRecipientRepository:
             .join(models.User, models.User.id == models.WorkspaceMember.player_id)
             .where(
                 models.Registration.tournament_id == tournament_id,
-                models.Registration.status == "approved",
+                models.RegistrationEntry.status == "approved",
+                models.RegistrationEntry.deleted_at.is_(None),
                 models.Registration.deleted_at.is_(None),
-                models.Registration.checked_in.is_(False),
+                models.RegistrationEntry.checked_in.is_(False),
                 models.User.auth_user_id.is_not(None),
             )
             .distinct()

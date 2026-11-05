@@ -148,6 +148,7 @@ class IntegrationsAuditTests(IsolatedAsyncioTestCase):
                     "identity": IDENTITY,
                     "id": TOURNAMENT_ID,
                     "payload": {
+                        "registration_node_id": 11,
                         "source_url": "https://docs.google.com/spreadsheets/d/abc/edit",
                         "title": "signups",
                         "auto_sync_enabled": True,
@@ -165,6 +166,7 @@ class IntegrationsAuditTests(IsolatedAsyncioTestCase):
         self.assertEqual(("tournament", TOURNAMENT_ID), (row.entity_type, row.entity_id))
         self.assertEqual(
             {
+                "registration_node_id": 11,
                 "source_url": "https://docs.google.com/spreadsheets/d/abc/edit",
                 "title": "signups",
                 "auto_sync_enabled": True,

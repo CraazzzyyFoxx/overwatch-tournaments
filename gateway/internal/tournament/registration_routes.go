@@ -41,15 +41,15 @@ var RegistrationAdminRoutes = []edge.RouteSpec{
 	// list registrations (status/inclusion/source filters + include_deleted) -> AllQuery.
 	{Method: "GET", Pattern: "/api/v1/admin/balancer/tournaments/{tournament_id}/registrations", Queue: "rpc.tournament.reg_list", IDParam: "tournament_id", AllQuery: true, Auth: edge.AuthRequired, Timeout: regReadTimeout},
 	// create manual registration (201).
-	{Method: "POST", Pattern: "/api/v1/admin/balancer/tournaments/{tournament_id}/registrations", Queue: "rpc.tournament.reg_create_manual", IDParam: "tournament_id", Body: true, Auth: edge.AuthRequired, Success: 201},
+	{Method: "POST", Pattern: "/api/v1/admin/balancer/tournaments/{tournament_id}/registrations", Queue: "rpc.tournament.reg_create_manual", IDParam: "tournament_id", Body: true, Query: []string{"registration_node_id"}, Auth: edge.AuthRequired, Success: 201},
 	// per-registration mutations (keyed by registration_id).
-	{Method: "PATCH", Pattern: "/api/v1/admin/balancer/registrations/{registration_id}", Queue: "rpc.tournament.reg_update", IDParam: "registration_id", Body: true, Auth: edge.AuthRequired},
-	{Method: "PATCH", Pattern: "/api/v1/admin/balancer/registrations/{registration_id}/approve", Queue: "rpc.tournament.reg_approve", IDParam: "registration_id", Auth: edge.AuthRequired},
-	{Method: "PATCH", Pattern: "/api/v1/admin/balancer/registrations/{registration_id}/reject", Queue: "rpc.tournament.reg_reject", IDParam: "registration_id", Auth: edge.AuthRequired},
-	{Method: "POST", Pattern: "/api/v1/admin/balancer/registrations/{registration_id}/include", Queue: "rpc.tournament.reg_include_balancer", IDParam: "registration_id", Auth: edge.AuthRequired},
-	{Method: "PATCH", Pattern: "/api/v1/admin/balancer/registrations/{registration_id}/withdraw", Queue: "rpc.tournament.reg_withdraw", IDParam: "registration_id", Auth: edge.AuthRequired},
-	{Method: "PATCH", Pattern: "/api/v1/admin/balancer/registrations/{registration_id}/restore", Queue: "rpc.tournament.reg_restore", IDParam: "registration_id", Auth: edge.AuthRequired},
-	{Method: "DELETE", Pattern: "/api/v1/admin/balancer/registrations/{registration_id}", Queue: "rpc.tournament.reg_delete", IDParam: "registration_id", Auth: edge.AuthRequired, Success: 204},
+	{Method: "PATCH", Pattern: "/api/v1/admin/balancer/registrations/{registration_id}", Queue: "rpc.tournament.reg_update", IDParam: "registration_id", Body: true, Query: []string{"registration_node_id"}, Auth: edge.AuthRequired},
+	{Method: "PATCH", Pattern: "/api/v1/admin/balancer/registrations/{registration_id}/approve", Queue: "rpc.tournament.reg_approve", IDParam: "registration_id", Query: []string{"registration_node_id"}, Auth: edge.AuthRequired},
+	{Method: "PATCH", Pattern: "/api/v1/admin/balancer/registrations/{registration_id}/reject", Queue: "rpc.tournament.reg_reject", IDParam: "registration_id", Query: []string{"registration_node_id"}, Auth: edge.AuthRequired},
+	{Method: "POST", Pattern: "/api/v1/admin/balancer/registrations/{registration_id}/include", Queue: "rpc.tournament.reg_include_balancer", IDParam: "registration_id", Query: []string{"registration_node_id"}, Auth: edge.AuthRequired},
+	{Method: "PATCH", Pattern: "/api/v1/admin/balancer/registrations/{registration_id}/withdraw", Queue: "rpc.tournament.reg_withdraw", IDParam: "registration_id", Query: []string{"registration_node_id"}, Auth: edge.AuthRequired},
+	{Method: "PATCH", Pattern: "/api/v1/admin/balancer/registrations/{registration_id}/restore", Queue: "rpc.tournament.reg_restore", IDParam: "registration_id", Query: []string{"registration_node_id"}, Auth: edge.AuthRequired},
+	{Method: "DELETE", Pattern: "/api/v1/admin/balancer/registrations/{registration_id}", Queue: "rpc.tournament.reg_delete", IDParam: "registration_id", Query: []string{"registration_node_id"}, Auth: edge.AuthRequired, Success: 204},
 	// registration-teams: the organizer's incomplete-team view (§8/§12.5) and
 	// rejection. `IDParam` carries the tournament (that is what
 	// `_tournament_ctx` authorizes against, via `data["id"]`); `team_id` rides in
@@ -71,17 +71,17 @@ var RegistrationAdminRoutes = []edge.RouteSpec{
 	{Method: "POST", Pattern: "/api/v1/admin/balancer/tournaments/{tournament_id}/registration-teams/{team_id}/members/{registration_id}/place", Queue: "rpc.tournament.regteam_place_admin", IDParam: "tournament_id", Path: []string{"team_id", "registration_id"}, Body: true, Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/v1/admin/balancer/tournaments/{tournament_id}/registration-teams/{team_id}/members/attach", Queue: "rpc.tournament.regteam_attach_admin", IDParam: "tournament_id", Path: []string{"team_id"}, Body: true, Auth: edge.AuthRequired},
 	// bulk + balancer-status mutations.
-	{Method: "POST", Pattern: "/api/v1/admin/balancer/tournaments/{tournament_id}/registrations/bulk-approve", Queue: "rpc.tournament.reg_bulk_approve", IDParam: "tournament_id", Body: true, Auth: edge.AuthRequired},
-	{Method: "PATCH", Pattern: "/api/v1/admin/balancer/registrations/{registration_id}/balancer-status", Queue: "rpc.tournament.reg_set_balancer_status", IDParam: "registration_id", Body: true, Auth: edge.AuthRequired},
-	{Method: "POST", Pattern: "/api/v1/admin/balancer/tournaments/{tournament_id}/registrations/bulk-add-to-balancer", Queue: "rpc.tournament.reg_bulk_add_balancer", IDParam: "tournament_id", Body: true, Auth: edge.AuthRequired},
-	{Method: "POST", Pattern: "/api/v1/admin/balancer/tournaments/{tournament_id}/registrations/bulk-set-balancer-status", Queue: "rpc.tournament.reg_bulk_set_balancer_status", IDParam: "tournament_id", Body: true, Auth: edge.AuthRequired},
+	{Method: "POST", Pattern: "/api/v1/admin/balancer/tournaments/{tournament_id}/registrations/bulk-approve", Queue: "rpc.tournament.reg_bulk_approve", IDParam: "tournament_id", Body: true, Query: []string{"registration_node_id"}, Auth: edge.AuthRequired},
+	{Method: "PATCH", Pattern: "/api/v1/admin/balancer/registrations/{registration_id}/balancer-status", Queue: "rpc.tournament.reg_set_balancer_status", IDParam: "registration_id", Body: true, Query: []string{"registration_node_id"}, Auth: edge.AuthRequired},
+	{Method: "POST", Pattern: "/api/v1/admin/balancer/tournaments/{tournament_id}/registrations/bulk-add-to-balancer", Queue: "rpc.tournament.reg_bulk_add_balancer", IDParam: "tournament_id", Body: true, Query: []string{"registration_node_id"}, Auth: edge.AuthRequired},
+	{Method: "POST", Pattern: "/api/v1/admin/balancer/tournaments/{tournament_id}/registrations/bulk-set-balancer-status", Queue: "rpc.tournament.reg_bulk_set_balancer_status", IDParam: "tournament_id", Body: true, Query: []string{"registration_node_id"}, Auth: edge.AuthRequired},
 	// rank-autofill preview/apply.
-	{Method: "POST", Pattern: "/api/v1/admin/balancer/tournaments/{tournament_id}/registrations/rank-autofill/preview", Queue: "rpc.tournament.reg_rank_autofill_preview", IDParam: "tournament_id", Body: true, Auth: edge.AuthRequired},
-	{Method: "POST", Pattern: "/api/v1/admin/balancer/tournaments/{tournament_id}/registrations/rank-autofill/apply", Queue: "rpc.tournament.reg_rank_autofill_apply", IDParam: "tournament_id", Body: true, Auth: edge.AuthRequired},
+	{Method: "POST", Pattern: "/api/v1/admin/balancer/tournaments/{tournament_id}/registrations/rank-autofill/preview", Queue: "rpc.tournament.reg_rank_autofill_preview", IDParam: "tournament_id", Body: true, Query: []string{"registration_node_id"}, Auth: edge.AuthRequired},
+	{Method: "POST", Pattern: "/api/v1/admin/balancer/tournaments/{tournament_id}/registrations/rank-autofill/apply", Queue: "rpc.tournament.reg_rank_autofill_apply", IDParam: "tournament_id", Body: true, Query: []string{"registration_node_id"}, Auth: edge.AuthRequired},
 	// per-user rank history of ONE game (path user_id + query workspace_id and discipline, both required).
 	{Method: "GET", Pattern: "/api/v1/admin/balancer/users/{user_id}/registration-rank-history", Queue: "rpc.tournament.reg_user_rank_history", Path: []string{"user_id"}, Query: []string{"workspace_id", "discipline"}, Auth: edge.AuthRequired, Timeout: regReadTimeout},
 	// check-in toggle.
-	{Method: "PATCH", Pattern: "/api/v1/admin/balancer/registrations/{registration_id}/check-in", Queue: "rpc.tournament.reg_check_in", IDParam: "registration_id", Body: true, Auth: edge.AuthRequired},
+	{Method: "PATCH", Pattern: "/api/v1/admin/balancer/registrations/{registration_id}/check-in", Queue: "rpc.tournament.reg_check_in", IDParam: "registration_id", Body: true, Query: []string{"registration_node_id"}, Auth: edge.AuthRequired},
 
 	// ── registration_status.py (/ws/{workspace_id}/balancer-statuses) ─────
 	// All routes are workspace-scoped via the path workspace_id (copied verbatim).

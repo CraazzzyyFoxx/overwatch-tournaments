@@ -125,6 +125,8 @@ class BalancerPlayerExportResponse(BaseModel):
 
 
 class BalancerGoogleSheetFeedUpsert(BaseModel):
+    #: The registration node the sheet's rows become entries of.
+    registration_node_id: int
     source_url: str
     title: str | None = None
     auto_sync_enabled: bool = False
@@ -135,6 +137,7 @@ class BalancerGoogleSheetFeedUpsert(BaseModel):
 
 class BalancerGoogleSheetFeedRead(BaseRead):
     tournament_id: int
+    registration_node_id: int
     source_url: str
     sheet_id: str
     gid: str | None
@@ -426,6 +429,10 @@ class BalancerRegistrationStatusUpdate(BaseModel):
 
 
 class BalancerRegistrationRead(BaseRead):
+    #: The registration's entry in ``registration_node_id``: the status, check-in, pool state and review fields below
+    #: are that entry's (plan Decision 2); ``id`` is the profile.
+    entry_id: int
+    registration_node_id: int
     tournament_id: int
     workspace_id: int
     user_id: int | None = None

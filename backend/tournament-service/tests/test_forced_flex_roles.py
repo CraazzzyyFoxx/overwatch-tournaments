@@ -317,7 +317,7 @@ class TestAOneRoleGameAlwaysPlaysItsRole:
 
     def test_a_write_naming_no_role_keeps_the_stored_row_and_its_rank(self) -> None:
         stored = _agent(rank_value=3100, is_active=True, is_primary=False, priority=0)
-        registration = models.Registration(id=1, tournament_id=7, status="pending")
+        registration = models.Registration(id=1, tournament_id=7)
         registration.roles = [stored]
 
         _common.replace_registration_roles(registration, [], catalog_roles=DEADLOCK_ROLES)

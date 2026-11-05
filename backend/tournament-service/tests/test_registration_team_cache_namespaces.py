@@ -54,7 +54,9 @@ class RegistrationAndTeamCacheNamespaceTests(IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
         configure_test_cache()
         await cache.clear()
-        self.build = AsyncMock(side_effect=lambda _session, *, tournament_id: {"fresh": tournament_id})
+        self.build = AsyncMock(
+            side_effect=lambda _session, *, tournament_id, registration_node_id: {"fresh": tournament_id}
+        )
         self.page = AsyncMock(return_value=([], 0))
         service = team_flows.flows_service
         for patcher in (
@@ -70,7 +72,7 @@ class RegistrationAndTeamCacheNamespaceTests(IsolatedAsyncioTestCase):
 
     @staticmethod
     async def _registration_list(tournament_id: int):
-        return await public_list.build_registration_list(_no_session, tournament_id)
+        return await public_list.build_registration_list(_no_session, tournament_id, 3)
 
     @staticmethod
     async def _teams_page(tournament_id: int):
@@ -79,7 +81,7 @@ class RegistrationAndTeamCacheNamespaceTests(IsolatedAsyncioTestCase):
 
     async def test_each_family_writes_its_v2_key_and_never_reads_the_pre_bump_one(self) -> None:
         for read, upstream, prefix in (
-            (self._registration_list, self.build, "fastapi::registration_list:v3:7:"),
+            (self._registration_list, self.build, "fastapi::registration_list:v4:7:3:"),
             (self._teams_page, self.page, "fastapi::teams:v4:5:7:"),
         ):
             fresh = await read(7)

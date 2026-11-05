@@ -1,10 +1,10 @@
 """Node regressions for the registration- and draft-derived condition leaves.
 
 These three nodes read rows nothing else in the engine touches
-(``registration.registration``, ``tournament.tournament_phase_schedule`` and the
-``draft.*`` family), and each of them has a way of awarding the wrong
+(``registration.registration_entry``, the registration node's ``flow_node_schedule``
+rows and the ``draft.*`` family), and each of them has a way of awarding the wrong
 person: a sheet-imported registration has no player identity at all, a
-tournament may simply never have had a registration phase, and a draft's
+registration node may simply never have had an ``open`` window, and a draft's
 captain is a different person from everyone they picked.
 """
 
@@ -14,6 +14,8 @@ import importlib
 import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+
+import sqlalchemy as sa
 
 REPO_BACKEND_ROOT = Path(__file__).resolve().parents[2]
 STATS_SERVICE_ROOT = REPO_BACKEND_ROOT / "stats-service"
@@ -31,7 +33,7 @@ from test_scrim_achievement_isolation import (  # noqa: E402
     _EngineTestCase,
 )
 
-from shared.core.enums import DraftPickStatus, DraftPlayerStatus, DraftStatus, TournamentStatus  # noqa: E402
+from shared.core.enums import DraftPickStatus, DraftPlayerStatus, DraftStatus  # noqa: E402
 
 # Importing the modules is what registers the nodes.
 importlib.import_module("shared.disciplines.overwatch.achievements.conditions.registration")  # noqa: E402
@@ -51,12 +53,26 @@ CHECK_IN_OPEN = datetime(2026, 5, 8, 18, 0, tzinfo=UTC)
 
 
 class _RegistrationFixture(_scrim._Fixture):
-    def phase(self, tournament_id: int, status: TournamentStatus, starts_at: datetime) -> None:
+    def registration_node(self, tournament_id: int) -> int:
+        """Get-or-create the tournament's registration node (a draft one, status is irrelevant to the nodes)."""
+        node = models.FlowNode.__table__
+        existing = self.session.scalar(
+            sa.select(node.c.id).where(node.c.tournament_id == tournament_id, node.c.kind == "registration")
+        )
+        if existing is not None:
+            return existing
+        node_id = self._id()
         self.insert(
-            models.TournamentPhaseSchedule.__table__,
+            node, id=node_id, tournament_id=tournament_id, kind="registration", name="Registration", status="open"
+        )
+        return node_id
+
+    def phase(self, tournament_id: int, phase: str, starts_at: datetime) -> None:
+        self.insert(
+            models.FlowNodeSchedule.__table__,
             id=self._id(),
-            tournament_id=tournament_id,
-            status=status,
+            node_id=self.registration_node(tournament_id),
+            phase=phase,
             starts_at=starts_at,
         )
 
@@ -78,12 +94,20 @@ class _RegistrationFixture(_scrim._Fixture):
             id=registration_id,
             tournament_id=tournament_id,
             workspace_member_id=member_id,
-            status="approved",
             submitted_at=submitted_at,
+            is_team_manager=is_team_manager,
+            deleted_at=deleted_at,
+        )
+        self.insert(
+            models.RegistrationEntry.__table__,
+            id=self._id(),
+            registration_node_id=self.registration_node(tournament_id),
+            registration_id=registration_id,
+            status="approved",
+            created_at=submitted_at,
             checked_in=checked_in,
             checked_in_at=checked_in_at,
             is_substitute=is_substitute,
-            is_team_manager=is_team_manager,
             deleted_at=deleted_at,
         )
         return registration_id
@@ -183,8 +207,8 @@ class _RegistrationCase(_EngineTestCase):
     def open_tournament(self, tournament_id: int = REAL_TOURNAMENT_ID, *, with_phases: bool = True) -> None:
         self.db.tournament(tournament_id, name="Cup", is_hidden=False, start=REG_OPEN)
         if with_phases:
-            self.db.phase(tournament_id, TournamentStatus.REGISTRATION, REG_OPEN)
-            self.db.phase(tournament_id, TournamentStatus.CHECK_IN, CHECK_IN_OPEN)
+            self.db.phase(tournament_id, "open", REG_OPEN)
+            self.db.phase(tournament_id, "check_in", CHECK_IN_OPEN)
 
     async def evaluate(self, rule: dict, tournament_id: int | None):  # noqa: ANN201
         return await evaluator.evaluate(self.db.shim, rule, await self.context(tournament_id))
@@ -260,7 +284,7 @@ class RegistrationTimingTests(_RegistrationCase):
     async def test_other_workspace_registration_is_invisible(self) -> None:
         self.open_tournament(LATER_TOURNAMENT_ID)
         self.db.foreign_tournament(FOREIGN_TOURNAMENT_ID)
-        self.db.phase(FOREIGN_TOURNAMENT_ID, TournamentStatus.REGISTRATION, REG_OPEN)
+        self.db.phase(FOREIGN_TOURNAMENT_ID, "open", REG_OPEN)
         self.db.registration(
             LATER_TOURNAMENT_ID, self.db.member(REAL_HOME_USER), submitted_at=REG_OPEN + timedelta(minutes=1)
         )

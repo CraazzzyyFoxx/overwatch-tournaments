@@ -99,11 +99,19 @@ async def _identity_keys_by_team(session: AsyncSession, *, tournament_id: int) -
     members = list(
         await session.scalars(
             sa.select(models.Registration)
+            .join(models.RegistrationTeam, models.RegistrationTeam.id == models.Registration.registration_team_id)
+            .join(
+                models.RegistrationEntry,
+                sa.and_(
+                    models.RegistrationEntry.registration_id == models.Registration.id,
+                    models.RegistrationEntry.registration_node_id == models.RegistrationTeam.registration_node_id,
+                ),
+            )
             .where(
                 models.Registration.tournament_id == tournament_id,
-                models.Registration.registration_team_id.is_not(None),
                 models.Registration.deleted_at.is_(None),
-                models.Registration.status.notin_(_SLOT_RELEASING),
+                models.RegistrationEntry.deleted_at.is_(None),
+                models.RegistrationEntry.status.notin_(_SLOT_RELEASING),
             )
             # ``_identity_keys`` reads the Discord handle off the identity rows,
             # which are never lazy-loadable in async code.
@@ -120,20 +128,20 @@ async def _identity_keys_by_team(session: AsyncSession, *, tournament_id: int) -
 
 
 def _starter_ranks(
-    members: Sequence[models.Registration],
+    members: Sequence[models.RegistrationEntry],
     rosters: dict[int, PlayerRoster],
     shape: Any,
 ) -> list[StarterRank]:
     starters: list[StarterRank] = []
-    for registration in members:
-        if registration.is_substitute:
+    for member in members:
+        if member.is_substitute:
             continue
-        roster = rosters.get(registration.id)
+        roster = rosters.get(member.registration_id)
         if roster is None:
-            starters.append(StarterRank(registration.id, None))
+            starters.append(StarterRank(member.registration_id, None))
             continue
-        role = _slot_role(registration.team_slot_code, shape)
-        starters.append(StarterRank(registration.id, roster.rank_on(role)))
+        role = _slot_role(member.registration.team_slot_code, shape)
+        starters.append(StarterRank(member.registration_id, roster.rank_on(role)))
     return starters
 
 
@@ -183,7 +191,7 @@ class TeamEligibilityService:
         self,
         session: AsyncSession,
         team: models.RegistrationTeam,
-        members: Sequence[models.Registration],
+        members: Sequence[models.RegistrationEntry],
         *,
         form: models.RegistrationForm | None,
         shape: Any,
@@ -199,7 +207,7 @@ class TeamEligibilityService:
     async def evaluate_many(
         self,
         session: AsyncSession,
-        rosters: Sequence[tuple[models.RegistrationTeam, Sequence[models.Registration]]],
+        rosters: Sequence[tuple[models.RegistrationTeam, Sequence[models.RegistrationEntry]]],
         *,
         form: models.RegistrationForm | None,
         shape: Any,
@@ -212,7 +220,9 @@ class TeamEligibilityService:
         if form is None or not rosters:
             return issues
         first = rosters[0][0]
-        members = [member for _team, roster in rosters for member in roster]
+        # The rosters are entries (their node's participation); the rules read the registrations behind them.
+        entries = [member for _team, roster in rosters for member in roster]
+        members = [entry.registration for entry in entries]
 
         ranked = (
             form.team_rank_min is not None or form.team_rank_max is not None or form.team_max_rank_spread is not None
@@ -226,7 +236,11 @@ class TeamEligibilityService:
                 )
             )
             resolved = await self.rosters.resolve(
-                session, loaded, workspace_id=first.workspace_id, tournament_id=first.tournament_id
+                session,
+                loaded,
+                workspace_id=first.workspace_id,
+                tournament_id=first.tournament_id,
+                entries={entry.registration_id: entry for entry in entries},
             )
             for team, roster in rosters:
                 issues[team.id].extend(
@@ -243,7 +257,10 @@ class TeamEligibilityService:
             keys_by_team = await _identity_keys_by_team(session, tournament_id=first.tournament_id)
             for team, roster in rosters:
                 taken = set().union(*(keys for team_id, keys in keys_by_team.items() if team_id != team.id))
-                this_keys = {m.id: _identity_keys(m, discord_ids.get(m.id, [])) for m in roster}
+                this_keys = {
+                    m.registration_id: _identity_keys(m.registration, discord_ids.get(m.registration_id, []))
+                    for m in roster
+                }
                 issues[team.id].extend(evaluate_unique_identity(this_keys=this_keys, taken_keys=taken))
 
         if form.team_require_discord_guild:
@@ -251,7 +268,9 @@ class TeamEligibilityService:
             signals = await _discord_signals(members, discord_ids, guild_id=guild_id, discord=discord)
             for team, roster in rosters:
                 issues[team.id].extend(
-                    evaluate_discord_guild({m.id: signals[m.id] for m in roster}, guild_id=guild_id, require=True)
+                    evaluate_discord_guild(
+                        {m.registration_id: signals[m.registration_id] for m in roster}, guild_id=guild_id, require=True
+                    )
                 )
 
         return issues

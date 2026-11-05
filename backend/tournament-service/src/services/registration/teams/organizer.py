@@ -83,17 +83,17 @@ class OrganizerMixin(TeamServiceBase):
             },
             members=members,
         )
-        for registration in members:
+        for member in members:
             if withdraw_members:
-                registration.status = "withdrawn"
+                member.status = "withdrawn"
             else:
                 # Returning to the solo pool DOES mean leaving the team, so here the
                 # link is cleared. When members are withdrawn it is retained, so their
                 # own card can say the team was rejected rather than leaving them with
                 # an unexplained withdrawal.
-                registration.registration_team_id = None
-                registration.team_slot_code = None
-                registration.is_substitute = False
+                member.registration.registration_team_id = None
+                member.registration.team_slot_code = None
+                member.is_substitute = False
         # Revokes EXPIRED pending rows too, unlike ``consume_if_pending`` — see that
         # repository method's docstring.
         await self.invite_repo.revoke_pending_for_team(
@@ -186,12 +186,14 @@ class OrganizerMixin(TeamServiceBase):
         tournament_id: int,
         team_id: int,
         registration: models.Registration,
+        entry: models.RegistrationEntry,
         slot_code: str,
         is_substitute: bool = False,
     ) -> models.RegistrationTeam:
+        """Seat ``registration`` on the team; ``entry`` is its entry in the team's registration node."""
         if registration.tournament_id != tournament_id:
             raise _fail(404, "registration_not_found", "That registration is not in this tournament")
-        if registration.status in ("withdrawn", "rejected"):
+        if entry.status in ("withdrawn", "rejected"):
             raise _fail(409, "registration_terminal", "This registration is no longer active")
 
         source_id = registration.registration_team_id
@@ -221,7 +223,7 @@ class OrganizerMixin(TeamServiceBase):
 
         registration.registration_team_id = dest.id
         registration.team_slot_code = slot_code
-        registration.is_substitute = bool(is_substitute)
+        entry.is_substitute = bool(is_substitute)
         await session.flush()
         dest_occ = await self._occupancy(session, dest, shape, max_substitutes=max_substitutes)
         _apply_occupancy_status(dest, dest_occ)
@@ -244,13 +246,15 @@ class OrganizerMixin(TeamServiceBase):
         if dest_probe is None or dest_probe.tournament_id != tournament_id:
             raise _fail(404, "team_not_found", "Team not found")
         registration = await self.registration_repo.get(session, registration_id)
-        if registration is None:
+        entry = await self.entry_repo.get_for(session, dest_probe.registration_node_id, registration_id)
+        if registration is None or entry is None:
             raise _fail(404, "registration_not_found", "That registration is not in this tournament")
         dest = await self._place_onto(
             session,
             tournament_id=tournament_id,
             team_id=team_id,
             registration=registration,
+            entry=entry,
             slot_code=slot_code,
             is_substitute=is_substitute,
         )
@@ -317,8 +321,6 @@ class OrganizerMixin(TeamServiceBase):
             registration = models.Registration(
                 tournament_id=tournament_id,
                 display_name=tag,
-                status="approved",
-                balancer_status="not_in_balancer",
             )
             registration.identities.append(
                 models.RegistrationIdentity(provider=provider, position=0, handle=tag, handle_normalized=key)
@@ -329,11 +331,20 @@ class OrganizerMixin(TeamServiceBase):
             await self.registrations.ensure_player_identity(
                 session, registration, provider=provider, auth_user_id=None, workspace_id=dest_probe.workspace_id
             )
+        # The organizer brings the player into the team's node: a registration with no entry there gets an approved one.
+        entry = await self.entry_repo.get_for(session, dest_probe.registration_node_id, registration.id)
+        if entry is None:
+            entry = models.RegistrationEntry(
+                registration_node_id=dest_probe.registration_node_id, registration_id=registration.id, status="approved"
+            )
+            session.add(entry)
+            await session.flush()
         dest = await self._place_onto(
             session,
             tournament_id=tournament_id,
             team_id=team_id,
             registration=registration,
+            entry=entry,
             slot_code=slot_code,
             is_substitute=is_substitute,
         )

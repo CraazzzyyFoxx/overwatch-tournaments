@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from shared.core.enums import DraftPlayerStatus, MixParticipation
 from shared.domain.roster import PlayerRoster
 from shared.models.draft import DraftPlayer, DraftSession
+from shared.services.flow_queries import upstream_registration_node_ids
 from shared.services.roster import RosterEngine, roster_engine
 from src.services.custom_game import CustomGameService, custom_game_service
 
@@ -60,11 +61,14 @@ class DraftRosterService:
         # ``frozen`` wins over ``available``: a registration seated twice keeps
         # the lenient answer, so its picked seat never loses its roster.
         pool = await self.engine.pool_ids(session, draft_session.formation_node_id, sorted(available - frozen))
-        by_registration = await self.engine.for_tournament(
-            session,
-            draft_session.tournament_id,
-            registration_ids=sorted(frozen | pool),
-            include_deleted=True,
+        # A seat's roster is its registration's entry in the nearest registration node upstream of the formation.
+        upstream = await upstream_registration_node_ids(session, draft_session.formation_node_id)
+        by_registration = (
+            await self.engine.for_registration_node(
+                session, upstream[0], registration_ids=sorted(frozen | pool), include_deleted=True
+            )
+            if upstream
+            else {}
         )
         return {
             player.id: by_registration[player.registration_id]

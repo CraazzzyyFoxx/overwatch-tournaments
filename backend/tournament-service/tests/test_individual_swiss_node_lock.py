@@ -11,6 +11,7 @@ from shared.models.registration.registration import Registration, RegistrationRo
 from shared.repository import CatalogRoleRepository
 from shared.services.encounter.participants import active_teams
 from shared.services.encounter.result import apply_result
+from shared.testing.factories import add_entry
 from src.schemas import individual_swiss as swiss_schemas
 from src.services.flow.engine import flow_engine
 from src.services.flow.lifecycle import flow_node_service
@@ -62,12 +63,11 @@ class SwissNodeTests(FlowCase):
                 registration = Registration(
                     tournament_id=self.tournament_id,
                     display_name=f"{role}{index}",
-                    status="approved",
-                    balancer_status="ready",
                     workspace_member_id=member.id,
                 )
                 s.add(registration)
                 await s.flush()
+                await add_entry(s, self.registration_node, registration.id, status="approved", balancer_status="ready")
                 s.add(
                     RegistrationRole(
                         registration_id=registration.id,
@@ -135,12 +135,16 @@ class SwissNodeTests(FlowCase):
         self.assertTrue(result.qualified)
         self.assertEqual("completed", await self.node_status(self.stage_node))
         async with self.Session() as s:
-            self.assertIsNotNone(await s.scalar(sa.select(models.Stage.qualification_locked_at)))
+            self.assertIsNotNone(
+                await s.scalar(sa.select(models.Stage.qualification_locked_at).where(models.Stage.id == self.stage_id))
+            )
             self.assertEqual(
                 {"ready"},
                 set(
                     await s.scalars(
-                        sa.select(Registration.balancer_status).where(Registration.tournament_id == self.tournament_id)
+                        sa.select(models.RegistrationEntry.balancer_status).where(
+                            models.RegistrationEntry.registration_node_id == self.registration_node
+                        )
                     )
                 ),
             )

@@ -1,6 +1,6 @@
 """The one resolver of "which roles does this registration play, and at what rank".
 
-    RosterEngine.for_tournament(session, tournament_id)
+    RosterEngine.for_registration_node(session, registration_node_id)
         -> {registration_id: PlayerRoster}
 
 Everything downstream -- admin list, pool verdict, balancer algorithm input,
@@ -35,6 +35,7 @@ from shared.models.catalog.entity import CatalogEntity
 from shared.models.identity.user import User
 from shared.models.registration.registration import (
     Registration,
+    RegistrationEntry,
     RegistrationForm,
     RegistrationIdentity,
     RegistrationRole,
@@ -48,7 +49,7 @@ from shared.repository import TournamentRepository
 from shared.schemas.identity import PlayerIdentityRead
 from shared.schemas.role import RoleRef
 from shared.services.division_grid.access import get_effective_division_grid
-from shared.services.flow_queries import input_member_ids
+from shared.services.flow_queries import input_member_ids, upstream_registration_node_ids
 from shared.services.member_rank import TOURNAMENT_ORDER, MemberRankService, member_rank_service
 
 __all__ = ("RosterEngine", "registration_load_options", "roster_engine")
@@ -89,14 +90,17 @@ def _primary_tag_order(provider: str) -> sa.ScalarSelect[str]:
     )
 
 
-def _pool_clauses(tournament_id: int) -> tuple[Any, ...]:
-    """The balancer pool predicate, exactly as the panel defines it."""
+def _pool_clauses(registration_node_id: int) -> tuple[Any, ...]:
+    """The balancer pool predicate on a registration node's entry, exactly as the panel defines it."""
     return (
-        Registration.status == "approved",
-        Registration.deleted_at.is_(None),
+        RegistrationEntry.status == "approved",
+        RegistrationEntry.deleted_at.is_(None),
         balancer_pool_included_clause(
-            Registration.balancer_status,
-            sa.select(Tournament.workspace_id).where(Tournament.id == tournament_id).scalar_subquery(),
+            RegistrationEntry.balancer_status,
+            sa.select(Tournament.workspace_id)
+            .join(FlowNode, FlowNode.tournament_id == Tournament.id)
+            .where(FlowNode.id == registration_node_id)
+            .scalar_subquery(),
         ),
     )
 
@@ -144,7 +148,7 @@ class _Member(NamedTuple):
 
 @dataclass(slots=True)
 class _RoleRow:
-    """A ``RegistrationRole`` as :meth:`RosterEngine.for_tournament` reads it: what the engine reads off one, with
+    """A ``RegistrationRole`` as :meth:`RosterEngine.for_registration_node` reads it: what the engine reads off one, with
     the ``role``/``subrole`` hybrids folded in."""
 
     id: int
@@ -165,8 +169,8 @@ class _IdentityRow:
 
 @dataclass(slots=True)
 class _RegistrationRow:
-    """A ``Registration`` as :meth:`RosterEngine.for_tournament` reads it: the columns and collections the engine
-    reads off one loaded with ``registration_load_options``, as plain rows. ``resolve`` takes either."""
+    """A ``Registration`` as :meth:`RosterEngine.for_registration_node` reads it: the columns and collections the
+    engine reads off one loaded with ``registration_load_options``, as plain rows. ``resolve`` takes either."""
 
     id: int
     workspace_member_id: int | None
@@ -174,13 +178,8 @@ class _RegistrationRow:
     public_notes: str | None
     admin_notes: str | None
     custom_fields_json: dict[str, Any] | None
-    status: str
-    balancer_status: str
-    exclude_reason: str | None
-    checked_in: bool
     registration_team_id: int | None
     team_slot_code: str | None
-    is_substitute: bool
     stream_pov: bool
     roles: list[_RoleRow] = field(init=False, default_factory=list)
     identities: list[_IdentityRow] = field(init=False, default_factory=list)
@@ -190,10 +189,23 @@ class _RegistrationRow:
         return next((row for row in self.identities if row.provider == provider and row.position == 0), None)
 
 
-#: The ``Registration`` columns behind a ``_RegistrationRow``, in its field order.
+@dataclass(slots=True)
+class _EntryRow:
+    """A ``RegistrationEntry`` as the engine reads it: what the roster carries of the participation."""
+
+    status: str
+    balancer_status: str
+    exclude_reason: str | None
+    checked_in: bool
+    is_substitute: bool
+
+
+#: The ``Registration`` / ``RegistrationEntry`` columns behind a ``_RegistrationRow`` / ``_EntryRow``, in field order.
 _REGISTRATION_COLUMNS = tuple(getattr(Registration, column.name) for column in fields(_RegistrationRow) if column.init)
+_ENTRY_COLUMNS = tuple(getattr(RegistrationEntry, column.name) for column in fields(_EntryRow))
 
 type _Registration = Registration | _RegistrationRow
+type _Entry = RegistrationEntry | _EntryRow
 type _Role = RegistrationRole | _RoleRow
 
 
@@ -209,46 +221,55 @@ class RosterEngine:
 
     # -- entry points --------------------------------------------------------
 
-    async def for_tournament(
+    async def for_registration_node(
         self,
         session: AsyncSession,
-        tournament_id: int,
+        registration_node_id: int,
         *,
         pool_only: bool = False,
         registration_ids: Sequence[int] | None = None,
         include_deleted: bool = False,
     ) -> dict[int, PlayerRoster]:
-        """Every registration of a tournament, resolved. The one entry point.
+        """The registrations that have an entry in a registration node, resolved. The one entry point.
 
-        ``pool_only`` narrows to the balancer pool exactly as the panel defines it
-        (approved, not deleted, and a ``balancer_status`` that does not exclude) --
-        this is what the draft seeds from and what the balance job balances.
+        ``pool_only`` narrows to the balancer pool exactly as the panel defines it (approved, not deleted, and a
+        ``balancer_status`` that does not exclude) on the node's entry -- this is what the draft seeds from and what
+        the balance job balances. The roster's status, check-in and pool state are the entry's.
         """
         row = (
             await session.execute(
-                sa.select(Tournament.workspace_id, Tournament.discipline).where(Tournament.id == tournament_id)
+                sa.select(FlowNode.tournament_id, Tournament.workspace_id, Tournament.discipline)
+                .join(Tournament, Tournament.id == FlowNode.tournament_id)
+                .where(FlowNode.id == registration_node_id)
             )
         ).one_or_none()
         if row is None:
             return {}
-        workspace_id, discipline = row
+        tournament_id, workspace_id, discipline = row
         # Plain Core rows, no ORM: building the objects for the registrations, their roles and identities, a role's
         # top characters and the member's player was most of a load's time, for values read once.
         query = (
-            sa.select(*_REGISTRATION_COLUMNS)
-            .where(Registration.tournament_id == tournament_id)
+            sa.select(*_REGISTRATION_COLUMNS, *_ENTRY_COLUMNS)
+            .join(RegistrationEntry, RegistrationEntry.registration_id == Registration.id)
+            .where(RegistrationEntry.registration_node_id == registration_node_id)
             .order_by(_primary_tag_order(identity_provider(discipline)).asc(), Registration.id.asc())
         )
         if not include_deleted:
-            query = query.where(Registration.deleted_at.is_(None))
+            query = query.where(Registration.deleted_at.is_(None), RegistrationEntry.deleted_at.is_(None))
         if pool_only:
-            query = query.where(*_pool_clauses(tournament_id))
+            query = query.where(*_pool_clauses(registration_node_id))
         if registration_ids is not None:
             if not registration_ids:
                 return {}
             query = query.where(_any_of(Registration.id, registration_ids))
 
-        registrations = [_RegistrationRow(*values) for values in await session.execute(query)]
+        split = len(_REGISTRATION_COLUMNS)
+        registrations: list[_RegistrationRow] = []
+        entries: dict[int, _EntryRow] = {}
+        for values in await session.execute(query):
+            registration = _RegistrationRow(*values[:split])
+            registrations.append(registration)
+            entries[registration.id] = _EntryRow(*values[split:])
         await self._collections(session, registrations)
         return await self.resolve(
             session,
@@ -261,6 +282,7 @@ class RosterEngine:
             members=await self._members(
                 session, {reg.workspace_member_id for reg in registrations if reg.workspace_member_id is not None}
             ),
+            entries=entries,
         )
 
     async def for_node_input(
@@ -271,29 +293,33 @@ class RosterEngine:
         pool_only: bool = False,
         registration_ids: Sequence[int] | None = None,
     ) -> dict[int, PlayerRoster]:
-        """The tournament's registration profiles of ``node_id``'s input members, in input order, by registration id.
+        """The registration profiles of ``node_id``'s input members, in input order, by registration id.
 
-        ``pool_only`` keeps the balancer-included ones (:func:`_pool_clauses`). A member without a profile in this
-        tournament has no roster and is skipped.
-
-        # shortcut: the pool predicate still reads the profile's ``balancer_status``; the registration entry replaces
-        # it with the entry of the nearest upstream registration node (Task 7).
+        The roster's status and pool state are the member's entry in the NEAREST upstream registration node (the
+        latest one when several feed the node, plan Decision 9); ``pool_only`` keeps the balancer-included ones
+        (:func:`_pool_clauses`). A member without a live entry in that node has no roster and is skipped.
         """
-        tournament_id = await session.scalar(sa.select(FlowNode.tournament_id).where(FlowNode.id == node_id))
         members = await input_member_ids(session, node_id)
-        if tournament_id is None or not members:
+        upstream = await upstream_registration_node_ids(session, node_id)
+        if not members or not upstream:
             return {}
-        query = sa.select(Registration.id, Registration.workspace_member_id).where(
-            Registration.tournament_id == tournament_id,
-            Registration.deleted_at.is_(None),
-            _any_of(Registration.workspace_member_id, members),
+        registration_node_id = upstream[0]
+        query = (
+            sa.select(Registration.id, Registration.workspace_member_id)
+            .join(RegistrationEntry, RegistrationEntry.registration_id == Registration.id)
+            .where(
+                RegistrationEntry.registration_node_id == registration_node_id,
+                RegistrationEntry.deleted_at.is_(None),
+                Registration.deleted_at.is_(None),
+                _any_of(Registration.workspace_member_id, members),
+            )
         )
         if registration_ids is not None:
             query = query.where(_any_of(Registration.id, registration_ids))
         position = {member_id: index for index, member_id in enumerate(members)}
         found = sorted(await session.execute(query), key=lambda row: (position[row.workspace_member_id], row.id))
-        rosters = await self.for_tournament(
-            session, tournament_id, pool_only=pool_only, registration_ids=[row.id for row in found]
+        rosters = await self.for_registration_node(
+            session, registration_node_id, pool_only=pool_only, registration_ids=[row.id for row in found]
         )
         return {row.id: rosters[row.id] for row in found if row.id in rosters}
 
@@ -301,19 +327,22 @@ class RosterEngine:
         """Which of these registrations :meth:`for_node_input` would keep with ``pool_only`` -- ids only.
 
         For a caller that resolves several leniencies at once: narrowing with
-        this and then resolving the union in ONE :meth:`for_tournament` pass
+        this and then resolving the union in ONE :meth:`for_node_input` pass
         costs one cheap id query instead of a second full engine run.
         """
-        tournament_id = await session.scalar(sa.select(FlowNode.tournament_id).where(FlowNode.id == node_id))
         members = await input_member_ids(session, node_id)
-        if tournament_id is None or not members or not registration_ids:
+        upstream = await upstream_registration_node_ids(session, node_id)
+        if not members or not upstream or not registration_ids:
             return set()
         rows = await session.scalars(
-            sa.select(Registration.id).where(
-                Registration.tournament_id == tournament_id,
+            sa.select(Registration.id)
+            .join(RegistrationEntry, RegistrationEntry.registration_id == Registration.id)
+            .where(
+                RegistrationEntry.registration_node_id == upstream[0],
                 _any_of(Registration.id, registration_ids),
                 _any_of(Registration.workspace_member_id, members),
-                *_pool_clauses(tournament_id),
+                Registration.deleted_at.is_(None),
+                *_pool_clauses(upstream[0]),
             )
         )
         return set(rows)
@@ -333,6 +362,7 @@ class RosterEngine:
         discipline: str | None = None,
         characters: Mapping[int, tuple[CharacterRef, ...]] | None = None,
         members: Mapping[int, _Member] | None = None,
+        entries: Mapping[int, _Entry],
     ) -> dict[int, PlayerRoster]:
         """Resolve already-loaded registrations. Rows must carry
         :func:`registration_load_options`.
@@ -340,8 +370,10 @@ class RosterEngine:
         ``form``/``grid`` are read from the tournament when omitted; pass them when
         the caller already holds them (the admin list does) to save two queries.
         ``characters`` (by registration role id) and ``members`` (by workspace
-        member id) are :meth:`for_tournament`'s own Core reads; without them both
-        come off the rows.
+        member id) are :meth:`for_registration_node`'s own Core reads; without them both come off the rows.
+
+        ``entries`` is each registration's participation in the node being read (by registration id): the status,
+        pool state and check-in the roster carries come from there, never from the profile.
         """
         if not registrations:
             return {}
@@ -379,6 +411,7 @@ class RosterEngine:
         return {
             reg.id: self._build(
                 reg,
+                entries[reg.id],
                 declared[reg.id],
                 resolved.get(reg.id, {}),
                 mode=mode,
@@ -604,6 +637,7 @@ class RosterEngine:
     def _build(
         self,
         reg: _Registration,
+        participation: _Entry,
         declared: tuple[_Role | str, ...],
         resolved: Mapping[str, ResolvedRank],
         *,
@@ -683,13 +717,13 @@ class RosterEngine:
             public_notes=reg.public_notes,
             admin_notes=reg.admin_notes,
             custom_fields=dict(reg.custom_fields_json or {}),
-            status=reg.status,
-            balancer_status=reg.balancer_status,
-            exclude_reason=reg.exclude_reason,
-            checked_in=bool(reg.checked_in),
+            status=participation.status,
+            balancer_status=participation.balancer_status,
+            exclude_reason=participation.exclude_reason,
+            checked_in=bool(participation.checked_in),
             registration_team_id=reg.registration_team_id,
             team_slot_code=reg.team_slot_code,
-            is_substitute=bool(reg.is_substitute),
+            is_substitute=bool(participation.is_substitute),
             identities={identity.provider: identity.handle for identity in reg.identities if identity.position == 0},
             stream_pov=bool(reg.stream_pov),
             additional_handles=tuple(

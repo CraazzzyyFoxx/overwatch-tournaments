@@ -21,6 +21,7 @@ from shared.models.platform.outbox import EventOutbox
 from shared.services.ontology import project_disciplines
 from shared.services.social_identity import social_identity_service
 from shared.testing import create_test_async_engine
+from shared.testing.factories import registration_node
 from src.services.registration.lifecycle import lifecycle_service
 from src.services.registration.rank_autofill import rank_autofill_service
 
@@ -88,6 +89,8 @@ class RiotRenameAutofillTests(IsolatedAsyncioTestCase):
                 end_date=datetime.now(UTC),
             )
             s.add(tournament)
+            await s.flush()
+            self.node_id = await registration_node(s, tournament.id)
             await s.commit()
             self.workspace_id, self.tournament_id = workspace.id, tournament.id
 
@@ -113,9 +116,9 @@ class RiotRenameAutofillTests(IsolatedAsyncioTestCase):
     async def test_a_renamed_riot_id_still_fills_the_players_solo_rank(self) -> None:
         old, new = f"Old{self.tag}#EUW", f"New{self.tag}#EUW"
         async with self.Session() as s:
-            registration = await lifecycle_service.create_manual_registration(
+            entry = await lifecycle_service.create_manual_registration(
                 s,
-                tournament_id=self.tournament_id,
+                self.node_id,
                 display_name=None,
                 admin_notes=None,
                 answers={"identity_riot": [old]},
@@ -129,7 +132,7 @@ class RiotRenameAutofillTests(IsolatedAsyncioTestCase):
                     }
                 ],
             )
-            registration_id, player_id = registration.id, registration.workspace_member.player_id
+            registration_id, player_id = entry.registration_id, entry.registration.workspace_member.player_id
             account = await s.scalar(
                 sa.select(models.SocialAccount).where(
                     models.SocialAccount.user_id == player_id, models.SocialAccount.provider == "riot"
@@ -154,7 +157,7 @@ class RiotRenameAutofillTests(IsolatedAsyncioTestCase):
             loaded = await lifecycle_service.get_registration_by_id(s, registration_id)
             assert [identity.handle for identity in loaded.identities] == [old]
             result = await rank_autofill_service.autofill_registration_ranks_from_parsed(
-                s, self.tournament_id, registration_ids=[registration_id]
+                s, self.tournament_id, self.node_id, registration_ids=[registration_id]
             )
 
         [row] = result["players"]

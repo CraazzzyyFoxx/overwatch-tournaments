@@ -1,4 +1,4 @@
-"""Shared ``DivisionGrid``/``DivisionTier`` test-double builders.
+"""Shared ``DivisionGrid``/``DivisionTier`` test-double builders and registration-entry seeds.
 
 ``shared.division_grid.DivisionGrid``/``DivisionTier`` is a cross-service
 domain type -- division-grid resolution runs in both app-service and
@@ -53,3 +53,27 @@ def division_grid(version_id: int, tiers: tuple[tuple[int, int, int, int | None]
             division_tier(tier_id, number, rank_min, rank_max) for tier_id, number, rank_min, rank_max in tiers
         ),
     )
+
+
+async def registration_node(
+    session: Any, tournament_id: int, *, status: str = "open", name: str = "Registration"
+) -> int:
+    """A registration node of the tournament (flushed, not committed): what an entry belongs to."""
+    from shared import models
+
+    node = models.FlowNode(tournament_id=tournament_id, kind="registration", name=name, status=status, config={})
+    session.add(node)
+    await session.flush()
+    return node.id
+
+
+async def add_entry(session: Any, registration_node_id: int, registration_id: int, **fields: Any) -> Any:
+    """A ``RegistrationEntry`` of ``registration_id`` in the node (flushed, not committed); ``fields`` are its columns."""
+    from shared import models
+
+    entry = models.RegistrationEntry(
+        registration_node_id=registration_node_id, registration_id=registration_id, **fields
+    )
+    session.add(entry)
+    await session.flush()
+    return entry

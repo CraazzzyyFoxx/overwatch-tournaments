@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from shared import models
 from shared.domain.team_eligibility import EligibilityIssue
@@ -51,15 +52,17 @@ class CaptainMixin(TeamServiceBase):
         session: AsyncSession,
         *,
         tournament_id: int,
+        registration_node_id: int,
         auth_user: models.AuthUser,
         name: str,
         slot_code: str,
         body: RegistrationSubmit,
     ) -> tuple[models.RegistrationTeam, models.Registration, list[EligibilityIssue]]:
-        """Register a new team, with the caller as captain occupying one slot.
+        """Register a new team through a registration node, with the caller as captain occupying one slot.
 
         The captain is a member like any other: they take a real slot and
-        their own registration goes through the same validation as a solo entrant. One
+        their own registration goes through the same validation as a solo entrant, and
+        their entry in the node is created with it. One
         transaction, so a team can never exist without its captain's registration.
 
         Returns the team, the captain's registration row and the roster's
@@ -81,6 +84,7 @@ class CaptainMixin(TeamServiceBase):
 
         team = models.RegistrationTeam(
             tournament_id=tournament_id,
+            registration_node_id=registration_node_id,
             workspace_id=tournament.workspace_id,
             name=cleaned_name,
             name_normalized=cleaned_name.lower(),
@@ -99,14 +103,16 @@ class CaptainMixin(TeamServiceBase):
         occupancy = await self._occupancy(session, team, shape, max_substitutes=max_substitutes)
         _check_slot(occupancy, slot_code, is_substitute=False, offering=False)
 
-        registration = await self.registrations.write_public_registration(
+        entry = await self.registrations.write_public_registration(
             session,
             tournament_id=tournament_id,
+            registration_node_id=registration_node_id,
             auth_user=auth_user,
             body=body,
             team_placement=TeamPlacement(registration_team_id=team.id, slot_code=slot_code),
             commit=False,
         )
+        registration = entry.registration
         team.captain_registration_id = registration.id
         _apply_occupancy_status(
             team,
@@ -251,17 +257,19 @@ class CaptainMixin(TeamServiceBase):
         session: AsyncSession,
         *,
         team_id: int,
+        registration_node_id: int,
         auth_user: models.AuthUser,
         exclude_registration_ids: list[int] | None = None,
     ) -> models.RegistrationTeam:
+        """Check in every member's entry in the team's registration node (no entry is created in any other node)."""
         from src.services.admission.resolve import load_auth_user_ids
         from src.services.registration.admission import assert_roster_admitted
 
         excluded = set(exclude_registration_ids or [])
 
-        def _awaiting(members: list[models.Registration]) -> list[models.Registration]:
-            awaiting = [r for r in members if r.id not in excluded and not r.checked_in]
-            if any(r.status != "approved" for r in awaiting):
+        def _awaiting(members: list[models.RegistrationEntry]) -> list[models.RegistrationEntry]:
+            awaiting = [m for m in members if m.registration_id not in excluded and not m.checked_in]
+            if any(m.status != "approved" for m in awaiting):
                 raise _fail(409, "member_not_approved", "Every member must be approved before team check-in")
             return awaiting
 
@@ -276,7 +284,7 @@ class CaptainMixin(TeamServiceBase):
                 models.RegistrationTeam.deleted_at.is_(None),
             )
         )
-        if team is None:
+        if team is None or team.registration_node_id != registration_node_id:
             raise _fail(404, "team_not_found", "Team not found")
         await self._assert_staff(session, team, auth_user)
         tournament = await self.tournament_repo.get(session, team.tournament_id)
@@ -285,24 +293,27 @@ class CaptainMixin(TeamServiceBase):
         if not is_check_in_window_active(tournament):
             raise _fail(409, "check_in_closed", "Check-in is not active for this tournament")
         awaiting = _awaiting(await self._roster_members(session, team.id))
-        accounts = await load_auth_user_ids(session, awaiting)
-        if any(accounts[registration.id] is None for registration in awaiting):
+        registrations = [member.registration for member in awaiting]
+        accounts = await load_auth_user_ids(session, registrations)
+        if any(accounts[registration.id] is None for registration in registrations):
             raise _fail(409, "player_has_no_account", "This player has no account to check in")
-        for registration in awaiting:
+        for registration in registrations:
             registration.tournament = tournament
             registration.registration_team = team
-        await assert_roster_admitted(session, awaiting, tournament_id=team.tournament_id)
-        admitted = {registration.id for registration in awaiting}
+        await assert_roster_admitted(
+            session, registrations, registration_node_id=registration_node_id, tournament_id=team.tournament_id
+        )
+        admitted = {registration.id for registration in registrations}
 
         team = await self._lock_team(session, team_id)
         await self._assert_staff(session, team, auth_user)
         now = datetime.now(UTC)
-        for registration in _awaiting(await self._roster_members(session, team.id, fresh=True)):
-            if registration.id not in admitted:
+        for member in _awaiting(await self._roster_members(session, team.id, fresh=True)):
+            if member.registration_id not in admitted:
                 raise _fail(409, "roster_changed", "The roster changed during check-in; try again")
-            registration.checked_in = True
-            registration.checked_in_at = now
-            registration.checked_in_by = auth_user.id
+            member.checked_in = True
+            member.checked_in_at = now
+            member.checked_in_by = auth_user.id
         await emit(
             session,
             scope=Scope.tournament(team.tournament_id),
@@ -400,14 +411,19 @@ class CaptainMixin(TeamServiceBase):
         await self._assert_registration_open(session, team.tournament_id)
         await self._assert_captain(session, team, auth_user)
 
-        successor = await self.registration_repo.get(session, registration_id)
-        if successor is None or successor.registration_team_id != team.id:
+        successor = await self.entry_repo.get_for(
+            session,
+            team.registration_node_id,
+            registration_id,
+            options=[selectinload(models.RegistrationEntry.registration)],
+        )
+        if successor is None or successor.registration.registration_team_id != team.id:
             raise _fail(404, "member_not_found", "This player is not on the team")
         if successor.is_substitute:
             # A bench player holds no starter slot, so making them captain would leave
             # the roster with a captain outside its own shape.
             raise _fail(409, "captain_must_be_starter", "A substitute cannot captain the team")
-        team.captain_registration_id = successor.id
+        team.captain_registration_id = successor.registration_id
         await session.commit()
 
     async def disband_team(
@@ -448,8 +464,8 @@ class CaptainMixin(TeamServiceBase):
             },
             members=members,
         )
-        for registration in members:
-            registration.status = "withdrawn"
+        for member in members:
+            member.status = "withdrawn"
         # Revokes EXPIRED pending rows too, unlike ``consume_if_pending`` — see that
         # repository method's docstring.
         await self.invite_repo.revoke_pending_for_team(

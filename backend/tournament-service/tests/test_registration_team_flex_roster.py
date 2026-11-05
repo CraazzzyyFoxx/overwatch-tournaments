@@ -47,6 +47,7 @@ from shared.models.registration.registration import (  # noqa: E402
 from shared.models.tenancy.workspace import Workspace  # noqa: E402
 from shared.models.tournament import Tournament, TournamentPhaseSchedule  # noqa: E402
 from shared.services.team_format import save_tournament_format  # noqa: E402
+from shared.testing.factories import registration_node  # noqa: E402
 from src.schemas.registration import RegistrationSubmit  # noqa: E402
 from src.services.registration.teams import TEAM_COMPLETE, TEAM_FORMING, teams_service  # noqa: E402
 from src.services.registration.teams import invitee as invitee_module  # noqa: E402
@@ -113,10 +114,12 @@ async def _seed(session: Any) -> SimpleNamespace:
         session.add(user)
         users.append(user)
     await session.flush()
+    node_id = await registration_node(session, tournament.id)
     await session.commit()
     return SimpleNamespace(
         workspace_id=workspace.id,
         tournament_id=tournament.id,
+        node_id=node_id,
         version_id=version.id,
         captain=users[0],
         members=users[1:],
@@ -167,6 +170,7 @@ def test_a_three_flex_roster_is_founded_and_filled_by_two_invites(db_session) ->
             team, _registration, _issues = await teams_service.create_team(
                 db_session,
                 tournament_id=seeded.tournament_id,
+                registration_node_id=seeded.node_id,
                 auth_user=seeded.captain,
                 name=f"Squad {seeded.tournament_id}",
                 slot_code="flex",

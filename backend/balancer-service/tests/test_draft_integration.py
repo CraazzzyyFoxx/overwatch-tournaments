@@ -43,6 +43,7 @@ from shared.models.identity.user import User  # noqa: E402
 from shared.models.platform.realtime import WorkspaceEvent  # noqa: E402
 from shared.models.registration.registration import (  # noqa: E402
     Registration,
+    RegistrationEntry,
     RegistrationIdentity,
     RegistrationRole,
 )
@@ -53,6 +54,7 @@ from shared.repository import CatalogRoleRepository  # noqa: E402
 from shared.schemas.role import RoleRef  # noqa: E402
 from shared.services.team_format import save_tournament_format  # noqa: E402
 from shared.testing import create_test_async_engine  # noqa: E402
+from shared.testing.factories import add_entry  # noqa: E402
 from src import schemas  # noqa: E402
 from src.domain.draft.entities import PoolSeat  # noqa: E402
 from src.rpc import draft as draft_rpc  # noqa: E402
@@ -256,12 +258,11 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
         reg = Registration(
             tournament_id=self.tournament_id,
             display_name=tag,
-            status="approved",
-            balancer_status="ready",
             workspace_member_id=workspace_member_id,
         )
         s.add(reg)
         await s.flush()
+        await add_entry(s, self.registration_node_id, reg.id, status="approved", balancer_status="ready")
         s.add(
             RegistrationIdentity(
                 registration_id=reg.id,
@@ -1094,8 +1095,8 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
             captain = next(p for p in players if p.status == DraftPlayerStatus.PICKED.value)
             available = next(p for p in players if p.status == DraftPlayerStatus.AVAILABLE.value)
             await s.execute(
-                sa.update(Registration)
-                .where(Registration.id == available.registration_id)
+                sa.update(RegistrationEntry)
+                .where(RegistrationEntry.registration_id == available.registration_id)
                 .values(balancer_status="excluded")
             )
             await s.execute(

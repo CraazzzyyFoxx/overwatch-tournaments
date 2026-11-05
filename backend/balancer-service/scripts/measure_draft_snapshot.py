@@ -88,6 +88,7 @@ from shared.repository import CatalogRoleRepository  # noqa: E402
 from shared.schemas.role import RoleRef  # noqa: E402
 from shared.services.team_format import copy_for_tournament  # noqa: E402
 from shared.testing import configure_test_cache, create_test_async_engine  # noqa: E402
+from shared.testing.factories import add_entry, registration_node  # noqa: E402
 from src import schemas  # noqa: E402
 from src.domain.draft.entities import PoolSeat  # noqa: E402
 from src.services.draft import feasibility as feasibility_mod  # noqa: E402
@@ -304,6 +305,7 @@ async def seed(session_factory: async_sessionmaker[AsyncSession], suffix: str) -
         await s.flush()
         form.current_version_id = version.id
 
+        node_id = await registration_node(s, tourn.id, status="closed")
         hero_ids = await _heroes(s)
         catalog_roles = await CatalogRoleRepository().rated_rows(s, discipline=tourn.discipline, workspace_id=ws.id)
         total_seats = TEAMS + POOL_PLAYERS
@@ -321,14 +323,13 @@ async def seed(session_factory: async_sessionmaker[AsyncSession], suffix: str) -
             reg = Registration(
                 tournament_id=tourn.id,
                 display_name=f"Player {i}",
-                status="approved",
-                balancer_status="ready",
                 workspace_member_id=members[i].id,
                 form_version_id=version.id,
                 custom_fields_json={"discord_tag": f"player{i}", "experience": "2 seasons", "notes": "hidden"},
             )
             s.add(reg)
             await s.flush()
+            await add_entry(s, node_id, reg.id, status="approved", balancer_status="ready")
             # A real pool is mostly two- and three-role registrants; rotate the
             # lead role so the 26 teams can actually fill 1/2/2.
             lead = ROLES[i % 3]

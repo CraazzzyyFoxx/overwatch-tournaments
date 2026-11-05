@@ -60,6 +60,11 @@ class RosterIdentityTests(IsolatedAsyncioTestCase):
                 )
                 s.add(tournament)
                 await s.flush()
+                node = models.FlowNode(
+                    tournament_id=tournament.id, kind="registration", name="R", status="open", config={}
+                )
+                s.add(node)
+                await s.flush()
                 registrations = []
                 for handles in (
                     {"battlenet": ["Alpha#1234", "Alt#1111"], "riot": ["Zulu Riot#KR1", "Alt Riot#KR2"]},
@@ -81,8 +86,9 @@ class RosterIdentityTests(IsolatedAsyncioTestCase):
                     )
                     s.add(registration)
                     await s.flush()
+                    s.add(models.RegistrationEntry(registration_node_id=node.id, registration_id=registration.id))
                     registrations.append(registration.id)
-                self.tournaments[code] = (tournament.id, registrations)
+                self.tournaments[code] = (node.id, registrations)
             await s.commit()
 
     async def asyncTearDown(self) -> None:
@@ -92,9 +98,9 @@ class RosterIdentityTests(IsolatedAsyncioTestCase):
         await self.engine.dispose()
 
     async def test_provider_scopes_primary_extras_order_and_absence(self) -> None:
-        for code, (tournament_id, (first, second, missing)) in self.tournaments.items():
+        for code, (node_id, (first, second, missing)) in self.tournaments.items():
             async with self.Session() as s:
-                rosters = await roster_engine.for_tournament(s, tournament_id)
+                rosters = await roster_engine.for_registration_node(s, node_id)
             expected = [second, first, missing] if code == "lol" else [first, second, missing]
             assert list(rosters) == expected
             assert (rosters[first].handle, rosters[first].additional_handles) == (

@@ -28,6 +28,7 @@ from shared.models.registration.registration import Registration, RegistrationFo
 from shared.models.tenancy.workspace import Workspace, WorkspaceMember
 from shared.models.tournament import (
     BracketEncounter,
+    FlowNode,
     Stage,
     StageItem,
     StageItemInput,
@@ -36,6 +37,7 @@ from shared.models.tournament import (
     TournamentPhaseSchedule,
     TournamentRecalculationState,
 )
+from shared.testing.factories import add_entry, registration_node
 from src.schemas import AdminDashboard
 from src.services.dashboard.overview import DashboardPermissions, overview
 from src.services.dashboard.readiness import readiness
@@ -56,6 +58,20 @@ async def _workspace(session: Any) -> int:
     session.add(workspace)
     await session.flush()
     return workspace.id
+
+
+async def _register(session: Any, tournament: Tournament, display_name: str = "p", **entry_fields: Any) -> Registration:
+    """A registration with its entry (``entry_fields``) in the tournament's registration node, created on first use."""
+    registration = Registration(tournament_id=tournament.id, display_name=display_name)
+    session.add(registration)
+    await session.flush()
+    node_id = await session.scalar(
+        sa.select(FlowNode.id).where(FlowNode.tournament_id == tournament.id, FlowNode.kind == "registration")
+    )
+    if node_id is None:
+        node_id = await registration_node(session, tournament.id)
+    await add_entry(session, node_id, registration.id, **entry_fields)
+    return registration
 
 
 async def _tournament(
@@ -304,7 +320,7 @@ def test_pending_registrations_turn_critical_inside_24h_of_closing(db_session) -
         for label, closes_in in (("calm", timedelta(days=3)), ("urgent", timedelta(hours=2)), ("unscheduled", None)):
             schedule = ((TS.REGISTRATION, now - timedelta(days=1), now + closes_in),) if closes_in else ()
             tournament = await _tournament(session, workspace_id, TS.REGISTRATION, schedule=schedule)
-            session.add(Registration(tournament_id=tournament.id, display_name="p", status="pending"))
+            await _register(session, tournament, status="pending")
             ids[label] = tournament.id
         await session.flush()
         return ids
@@ -411,20 +427,13 @@ def test_card_readiness_is_the_checklist_of_its_tournament(db_session) -> None:
             db_session.add(team)
             db_session.add(RegistrationForm(tournament_id=registration.id, workspace_id=workspace_id, is_open=True))
             regs = [
-                Registration(
-                    tournament_id=registration.id,
-                    display_name="a",
-                    status="approved",
-                    checked_in=True,
-                    balancer_status="ready",
+                await _register(
+                    db_session, registration, "a", status="approved", checked_in=True, balancer_status="ready"
                 ),
-                Registration(
-                    tournament_id=registration.id, display_name="b", status="approved", balancer_status="incomplete"
-                ),
-                Registration(tournament_id=registration.id, display_name="c", status="pending"),
-                Registration(tournament_id=live.id, display_name="d", status="approved", checked_in=True),
+                await _register(db_session, registration, "b", status="approved", balancer_status="incomplete"),
+                await _register(db_session, registration, "c", status="pending"),
+                await _register(db_session, live, "d", status="approved", checked_in=True),
             ]
-            db_session.add_all(regs)
             await db_session.flush()
             roles = {
                 role.code: role
@@ -570,7 +579,7 @@ def test_the_dashboard_costs_the_same_statements_at_any_card_count(db_session) -
                         TS.REGISTRATION,
                         schedule=((TS.REGISTRATION, now - timedelta(days=1), now + timedelta(days=3)),),
                     )
-                    db_session.add(Registration(tournament_id=tournament.id, display_name="p", status="pending"))
+                    await _register(db_session, tournament, status="pending")
                 await db_session.commit()
                 db_session.expunge_all()
                 statements.clear()
@@ -604,7 +613,7 @@ def test_masked_groups_are_null_not_zero(rpc, db_session) -> None:
                 TS.REGISTRATION,
                 schedule=((TS.REGISTRATION, now - timedelta(days=1), now + timedelta(days=3)),),
             )
-            db_session.add(Registration(tournament_id=tournament.id, display_name="p", status="pending"))
+            await _register(db_session, tournament, status="pending")
             archived = await _tournament(db_session, workspace_id, TS.ARCHIVED)
             db_session.add(Team(tournament_id=archived.id, name="Empty", balancer_name="empty"))
             await db_session.commit()

@@ -32,6 +32,7 @@ from shared.models.tenancy.workspace import Workspace
 from shared.models.tournament import Tournament
 from shared.repository import CatalogRoleRepository
 from shared.testing import create_test_async_engine  # noqa: E402
+from shared.testing.factories import add_entry
 from src.domain.draft.entities import PoolSeat
 from src.services.draft import lifecycle, selection
 from tests.factories import add_input, formation_node, new_member, wire_input
@@ -109,12 +110,11 @@ class DraftCustomRulesTests(IsolatedAsyncioTestCase):
         reg = Registration(
             tournament_id=self.tournament_id,
             display_name=tag,
-            status="approved",
-            balancer_status="ready",
             workspace_member_id=member_id,
         )
         s.add(reg)
         await s.flush()
+        await add_entry(s, self.registration_node_id, reg.id, status="approved", balancer_status="ready")
         s.add(
             RegistrationIdentity(
                 registration_id=reg.id,

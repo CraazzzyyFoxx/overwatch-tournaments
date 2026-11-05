@@ -34,6 +34,7 @@ if TYPE_CHECKING:
 
 __all__ = (
     "Registration",
+    "RegistrationEntry",
     "RegistrationForm",
     "RegistrationFormTemplate",
     "RegistrationFormVersion",
@@ -244,13 +245,6 @@ class Registration(db.TimeStampIntegerMixin):
             unique=True,
             postgresql_where="deleted_at IS NULL",
         ),
-        Index(
-            "ix_registration_tournament_balancer_status",
-            "tournament_id",
-            "status",
-            "balancer_status",
-            postgresql_where="deleted_at IS NULL",
-        ),
         {"schema": "registration"},
     )
 
@@ -265,13 +259,6 @@ class Registration(db.TimeStampIntegerMixin):
     )
     display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     stream_pov: Mapped[bool] = mapped_column(Boolean(), nullable=False, server_default="false", default=False)
-    #: "Call me in if a replacement is needed." The registrant's OWN declaration,
-    #: answered through the ``reserve`` builtin question. It is not a pool state:
-    #: membership stays ``balancer_status``, and an organizer adding a reserve to
-    #: the pool IS the "we need a sub" action. Also imposed by the schedule -- a
-    #: sign-up past the REGISTRATION window's ``ends_at`` is a reserve whatever
-    #: the answer said (see ``services/registration/self_edit.py``).
-    is_reserve: Mapped[bool] = mapped_column(Boolean(), nullable=False, server_default="false", default=False)
     #: The schema version this registration's answers were validated against;
     #: NULL for legacy/manual rows, which fall back to the form's current version.
     form_version_id: Mapped[int | None] = mapped_column(
@@ -281,23 +268,11 @@ class Registration(db.TimeStampIntegerMixin):
     public_notes: Mapped[str | None] = mapped_column(Text(), nullable=True)
     #: Player → organizers. Never leaves an organizer context.
     organizer_notes: Mapped[str | None] = mapped_column(Text(), nullable=True)
-    # Reason note for the current status, populated when balancer_status ==
-    # "excluded" (why the registration was manually pulled from the pool).
-    exclude_reason: Mapped[str | None] = mapped_column(String(64), nullable=True)
     admin_notes: Mapped[str | None] = mapped_column(Text(), nullable=True)
     custom_fields_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
-    status: Mapped[str] = mapped_column(String(32), nullable=False, server_default="pending", default="pending")
-    balancer_status: Mapped[str] = mapped_column(
-        String(32), nullable=False, server_default="not_in_balancer", default="not_in_balancer"
-    )
-    checked_in: Mapped[bool] = mapped_column(Boolean(), nullable=False, server_default="false", default=False)
-    checked_in_at: Mapped[db.DateTime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    checked_in_by: Mapped[int | None] = mapped_column(ForeignKey("auth.user.id", ondelete="SET NULL"), nullable=True)
     submitted_at: Mapped[db.DateTime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    reviewed_at: Mapped[db.DateTime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    reviewed_by: Mapped[int | None] = mapped_column(ForeignKey("auth.user.id", ondelete="SET NULL"), nullable=True)
     deleted_at: Mapped[db.DateTime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     deleted_by: Mapped[int | None] = mapped_column(ForeignKey("auth.user.id", ondelete="SET NULL"), nullable=True)
     balancer_profile_overridden_at: Mapped[db.DateTime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -313,10 +288,6 @@ class Registration(db.TimeStampIntegerMixin):
     # Captain-assigned roster slot: a module role code or the open-slot key
     # ``flex``, which never creates a role assignment.
     team_slot_code: Mapped[str | None] = mapped_column(String(16), nullable=True)
-    # Bench member. Exported as ``Player.is_substitution=True`` with a NULL
-    # ``related_player_id`` (nobody has been replaced yet); ``Team.avg_sr`` /
-    # ``total_sr`` filter on ``is_substitution`` alone, so that stays correct.
-    is_substitute: Mapped[bool] = mapped_column(Boolean(), nullable=False, server_default="false", default=False)
     #: Extra roster editor besides the unique captain. Managers may invite,
     #: kick, rename, reassign and cover a team subscription; they may not
     #: transfer, lock, disband or reject. Default false is "captain only".
@@ -326,9 +297,9 @@ class Registration(db.TimeStampIntegerMixin):
     # Readers needing the domain player must eager-load this relationship
     # (selectinload / explicit join) — never rely on a lazy load in async code.
     workspace_member: Mapped[WorkspaceMember | None] = relationship()
-    reviewer: Mapped[AuthUser | None] = relationship(foreign_keys=[reviewed_by])
     deleted_by_user: Mapped[AuthUser | None] = relationship(foreign_keys=[deleted_by])
-    checked_in_by_user: Mapped[AuthUser | None] = relationship(foreign_keys=[checked_in_by])
+    # Never lazy-loaded in async code: readers wanting the entries of one node query ``RegistrationEntry``.
+    entries: Mapped[list[RegistrationEntry]] = relationship(back_populates="registration", passive_deletes=True)
     roles: Mapped[list[RegistrationRole]] = relationship(back_populates="registration", cascade="all, delete-orphan")
     google_sheet_binding: Mapped[RegistrationGoogleSheetBinding | None] = relationship(
         back_populates="registration",
@@ -363,6 +334,65 @@ class Registration(db.TimeStampIntegerMixin):
         tournament's identity provider): its identity for sheet keys, rosters and
         lookups. Never another provider's handle."""
         return next((row for row in self.identities if row.provider == provider and row.position == 0), None)
+
+
+class RegistrationEntry(db.TimeStampIntegerMixin):
+    """A registration's participation in ONE registration node (spec §4.5).
+
+    The profile (:class:`Registration`) is one per ``(tournament, member)``; everything that depends on the intake the
+    person joined lives here: the review decision, check-in, the balancer pool state and the reserve / substitute flags.
+    """
+
+    __tablename__ = "registration_entry"
+    __table_args__ = (
+        Index(
+            "uq_registration_entry_node_registration",
+            "registration_node_id",
+            "registration_id",
+            unique=True,
+            postgresql_where="deleted_at IS NULL",
+        ),
+        Index(
+            "ix_registration_entry_node_balancer_status",
+            "registration_node_id",
+            "status",
+            "balancer_status",
+            postgresql_where="deleted_at IS NULL",
+        ),
+        {"schema": "registration"},
+    )
+
+    registration_node_id: Mapped[int] = mapped_column(
+        ForeignKey("tournament.flow_node.id", ondelete="RESTRICT"), index=True
+    )
+    registration_id: Mapped[int] = mapped_column(
+        ForeignKey("registration.registration.id", ondelete="CASCADE"), index=True
+    )
+    status: Mapped[str] = mapped_column(String(32), nullable=False, server_default="pending", default="pending")
+    checked_in: Mapped[bool] = mapped_column(Boolean(), nullable=False, server_default="false", default=False)
+    checked_in_at: Mapped[db.DateTime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    checked_in_by: Mapped[int | None] = mapped_column(ForeignKey("auth.user.id", ondelete="SET NULL"), nullable=True)
+    balancer_status: Mapped[str] = mapped_column(
+        String(32), nullable=False, server_default="not_in_balancer", default="not_in_balancer"
+    )
+    # Reason note for the current status, populated when balancer_status == "excluded" (why the entry was manually
+    # pulled from the pool).
+    exclude_reason: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    #: "Call me in if a replacement is needed." The registrant's OWN declaration, answered through the ``reserve``
+    #: builtin question. It is not a pool state: membership stays ``balancer_status``. Also imposed by the schedule --
+    #: a sign-up past the open window's ``ends_at`` is a reserve whatever the answer said.
+    is_reserve: Mapped[bool] = mapped_column(Boolean(), nullable=False, server_default="false", default=False)
+    # Bench member. Exported as ``Player.is_substitution=True`` with a NULL ``related_player_id`` (nobody has been
+    # replaced yet); ``Team.avg_sr`` / ``total_sr`` filter on ``is_substitution`` alone, so that stays correct.
+    is_substitute: Mapped[bool] = mapped_column(Boolean(), nullable=False, server_default="false", default=False)
+    reviewed_at: Mapped[db.DateTime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    reviewed_by: Mapped[int | None] = mapped_column(ForeignKey("auth.user.id", ondelete="SET NULL"), nullable=True)
+    deleted_at: Mapped[db.DateTime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    deleted_by: Mapped[int | None] = mapped_column(ForeignKey("auth.user.id", ondelete="SET NULL"), nullable=True)
+
+    registration: Mapped[Registration] = relationship(back_populates="entries")
+    reviewer: Mapped[AuthUser | None] = relationship(foreign_keys=[reviewed_by])
+    checked_in_by_user: Mapped[AuthUser | None] = relationship(foreign_keys=[checked_in_by])
 
 
 class RegistrationIdentity(db.TimeStampIntegerMixin):
@@ -512,6 +542,10 @@ class RegistrationGoogleSheetFeed(db.TimeStampIntegerMixin):
     )
 
     tournament_id: Mapped[int] = mapped_column(ForeignKey("tournament.tournament.id", ondelete="CASCADE"), index=True)
+    #: The registration node the sheet's rows become entries of.
+    registration_node_id: Mapped[int] = mapped_column(
+        ForeignKey("tournament.flow_node.id", ondelete="RESTRICT"), index=True
+    )
     source_url: Mapped[str] = mapped_column(Text())
     sheet_id: Mapped[str] = mapped_column(String(255))
     gid: Mapped[str | None] = mapped_column(String(64), nullable=True)
@@ -596,6 +630,10 @@ class RegistrationTeam(db.TimeStampIntegerMixin):
     )
 
     tournament_id: Mapped[int] = mapped_column(ForeignKey("tournament.tournament.id", ondelete="CASCADE"), index=True)
+    #: The registration node the team signs up through; its members' entries live in the same node.
+    registration_node_id: Mapped[int] = mapped_column(
+        ForeignKey("tournament.flow_node.id", ondelete="RESTRICT"), index=True
+    )
     workspace_id: Mapped[int] = mapped_column(ForeignKey("workspace.id", ondelete="CASCADE"), index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     #: Lowercased ``name``, maintained by the service layer — same convention as

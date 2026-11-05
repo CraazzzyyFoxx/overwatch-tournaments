@@ -6,13 +6,13 @@ from __future__ import annotations
 
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from shared import models
 from shared.domain.roster_shape import RosterShape
 from shared.domain.team_roster import RosterMember, RosterOccupancy
 from shared.services.notifications import notify
 from shared.services.realtime import Resource, Scope, emit
-from src.services.registration.service import _owned_by
 from src.services.registration.teams._core import TeamServiceBase
 from src.services.registration.teams._shared import (
     _apply_occupancy_status,
@@ -45,22 +45,22 @@ class RosterMixin(TeamServiceBase):
         shape = await self._resolve_shape(session, tournament)
         max_substitutes = await self._max_substitutes(session, team.tournament_id)
         members = await self._roster_members(session, team.id)
-        target = next((m for m in members if m.id == registration_id), None)
+        target = next((m for m in members if m.registration_id == registration_id), None)
         if target is None:
             raise _fail(404, "member_not_found", "This player is not on the team")
-        if target.id == team.captain_registration_id and is_substitute:
+        if target.registration_id == team.captain_registration_id and is_substitute:
             raise _fail(409, "captain_must_be_starter", "A substitute cannot captain the team")
 
         if swap_with_registration_id is not None:
-            other = next((m for m in members if m.id == swap_with_registration_id), None)
+            other = next((m for m in members if m.registration_id == swap_with_registration_id), None)
             if other is None:
                 raise _fail(404, "member_not_found", "This player is not on the team")
-            if other.id == team.captain_registration_id and target.is_substitute:
+            if other.registration_id == team.captain_registration_id and target.is_substitute:
                 raise _fail(409, "captain_must_be_starter", "A substitute cannot captain the team")
-            other_slot, other_sub = target.team_slot_code, bool(target.is_substitute)
-            target.team_slot_code = other.team_slot_code
+            other_slot, other_sub = target.registration.team_slot_code, bool(target.is_substitute)
+            target.registration.team_slot_code = other.registration.team_slot_code
             target.is_substitute = bool(other.is_substitute)
-            other.team_slot_code = other_slot
+            other.registration.team_slot_code = other_slot
             other.is_substitute = other_sub
         else:
             occupancy = await self._occupancy(
@@ -72,9 +72,9 @@ class RosterMixin(TeamServiceBase):
             # Occupancy currently includes this member. Pretend they have left
             # so the destination slot is tested as it will be after the move.
             remaining = [
-                RosterMember(slot_code=m.team_slot_code or "", is_substitute=bool(m.is_substitute))
+                RosterMember(slot_code=m.registration.team_slot_code or "", is_substitute=bool(m.is_substitute))
                 for m in members
-                if m.id != target.id and m.team_slot_code
+                if m.registration_id != target.registration_id and m.registration.team_slot_code
             ]
             projected = RosterOccupancy(
                 shape=shape,
@@ -86,7 +86,7 @@ class RosterMixin(TeamServiceBase):
                 max_substitutes=max_substitutes,
             )
             _check_slot(projected, slot_code, is_substitute=is_substitute, offering=False)
-            target.team_slot_code = slot_code
+            target.registration.team_slot_code = slot_code
             target.is_substitute = bool(is_substitute)
 
         await session.flush()
@@ -127,21 +127,21 @@ class RosterMixin(TeamServiceBase):
         self,
         session: AsyncSession,
         team: models.RegistrationTeam,
-        registration: models.Registration,
+        entry: models.RegistrationEntry,
         shape: RosterShape,
         *,
         max_substitutes: int,
     ) -> None:
         """Detach a member from the roster and recompute the team's status.
 
-        The registration itself is *withdrawn*, not deleted: it is a real person's
-        real entry, and the admin registration table plus the audit trail both expect
-        it to survive. Clearing the three team columns is what frees the slot.
+        The entry itself is *withdrawn*, not deleted: it is a real person's
+        real participation, and the admin registration table plus the audit trail both expect
+        it to survive. Clearing the team columns is what frees the slot.
         """
-        registration.status = "withdrawn"
-        registration.registration_team_id = None
-        registration.team_slot_code = None
-        registration.is_substitute = False
+        entry.status = "withdrawn"
+        entry.is_substitute = False
+        entry.registration.registration_team_id = None
+        entry.registration.team_slot_code = None
         await session.flush()
         _apply_occupancy_status(team, await self._occupancy(session, team, shape, max_substitutes=max_substitutes))
         await emit(
@@ -165,8 +165,13 @@ class RosterMixin(TeamServiceBase):
 
         if registration_id == team.captain_registration_id:
             raise _fail(409, "cannot_kick_captain", "A captain cannot remove themselves; transfer or disband instead")
-        registration = await self.registration_repo.get(session, registration_id)
-        if registration is None or registration.registration_team_id != team.id:
+        entry = await self.entry_repo.get_for(
+            session,
+            team.registration_node_id,
+            registration_id,
+            options=[selectinload(models.RegistrationEntry.registration)],
+        )
+        if entry is None or entry.registration.registration_team_id != team.id:
             raise _fail(404, "member_not_found", "This player is not on the team")
 
         kicked_auth_user_id = await session.scalar(
@@ -176,13 +181,13 @@ class RosterMixin(TeamServiceBase):
                 models.Registration,
                 models.Registration.workspace_member_id == models.WorkspaceMember.id,
             )
-            .where(models.Registration.id == registration.id)
+            .where(models.Registration.id == entry.registration_id)
         )
         shape = await self._resolve_shape(session, tournament)
         await self._release_member(
             session,
             team,
-            registration,
+            entry,
             shape,
             max_substitutes=await self._max_substitutes(session, team.tournament_id),
         )
@@ -217,22 +222,17 @@ class RosterMixin(TeamServiceBase):
         _assert_unlocked(team)
         tournament = await self._assert_registration_open(session, team.tournament_id)
 
-        registration = await session.scalar(
-            self.registration_repo.select().where(
-                models.Registration.registration_team_id == team.id,
-                _owned_by(auth_user.id),
-            )
-        )
-        if registration is None:
+        entry = await self._own_entry(session, team.registration_node_id, auth_user.id)
+        if entry is None or entry.registration.registration_team_id != team.id:
             raise _fail(404, "member_not_found", "You are not on this team")
-        if registration.id == team.captain_registration_id:
+        if entry.registration_id == team.captain_registration_id:
             raise _fail(409, "captain_must_transfer", "Transfer captaincy or disband the team instead")
 
         shape = await self._resolve_shape(session, tournament)
         await self._release_member(
             session,
             team,
-            registration,
+            entry,
             shape,
             max_substitutes=await self._max_substitutes(session, team.tournament_id),
         )

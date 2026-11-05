@@ -77,6 +77,7 @@ def submitted_late(
 
 def _floor(
     registration: models.Registration,
+    entry: models.RegistrationEntry,
     tournament: models.Tournament,
 ) -> frozenset[str]:
     """Keys the organizer cannot open, and why.
@@ -94,14 +95,14 @@ def _floor(
     a slot the schedule hands out.
     """
     locked: set[str] = set()
-    if registration.reviewed_at is not None:
+    if entry.reviewed_at is not None:
         locked.update(identity_key(provider) for provider in GAME_PROVIDERS)
-    if is_included_in_balancer(registration) or registration.registration_team_id is not None:
+    if is_included_in_balancer(entry) or registration.registration_team_id is not None:
         locked.add("roles")
     return frozenset(locked)
 
 
-def _answered_keys(registration: models.Registration) -> frozenset[str]:
+def _answered_keys(registration: models.Registration, entry: models.RegistrationEntry) -> frozenset[str]:
     """The questions this row has an answer for.
 
     ``answers_of`` covers the answer COLUMNS, the identity rows and the custom
@@ -113,7 +114,7 @@ def _answered_keys(registration: models.Registration) -> frozenset[str]:
     relationship is never lazy-loadable in async code, so a caller that did not
     eager-load it has no roles to report rather than a ``MissingGreenlet``.
     """
-    answered = set(answer_service.answers_of(registration))
+    answered = set(answer_service.answers_of(registration, entry))
     if registration.__dict__.get("roles"):
         answered.add("roles")
     return frozenset(answered)
@@ -121,6 +122,7 @@ def _answered_keys(registration: models.Registration) -> frozenset[str]:
 
 def self_edit_policy(
     registration: models.Registration,
+    entry: models.RegistrationEntry,
     tournament: models.Tournament,
     schema: FormSchema,
     *,
@@ -134,12 +136,12 @@ def self_edit_policy(
     document -- otherwise an organizer freezing a question would leave everyone
     who registered earlier still editing it under their own older version.
     """
-    unanswered = frozenset(field.key for field in schema.fields()) - _answered_keys(registration)
-    writable = (schema.editable_keys() | unanswered) - _floor(registration, tournament)
+    unanswered = frozenset(field.key for field in schema.fields()) - _answered_keys(registration, entry)
+    writable = (schema.editable_keys() | unanswered) - _floor(registration, entry, tournament)
 
-    if registration.deleted_at is not None or registration.status not in _EDITABLE_STATUSES:
+    if registration.deleted_at is not None or entry.deleted_at is not None or entry.status not in _EDITABLE_STATUSES:
         return SelfEditPolicy(False, "status_locked", frozenset())
-    if registration.checked_in:
+    if entry.checked_in:
         # Check-in freezes the entry the organizer is about to balance.
         return SelfEditPolicy(False, "checked_in", frozenset())
     if not is_registration_open(tournament, now=now):

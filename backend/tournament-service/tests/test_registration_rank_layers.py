@@ -88,13 +88,8 @@ def _registration(
         organizer_notes=None,
         admin_notes=None,
         custom_fields_json=None,
-        status="approved",
-        balancer_status="in_balancer",
-        exclude_reason=None,
-        checked_in=False,
         registration_team_id=None,
         team_slot_code=None,
-        is_substitute=False,
         stream_pov=False,
         identities=[identity],
         handles=lambda provider: [identity.handle] if provider == SocialProvider.BATTLENET else [],
@@ -131,6 +126,15 @@ async def _resolve(
         grid=_GRID,
         role_codes=("tank", "damage", "support"),
         discipline="overwatch",
+        entries={
+            registration.id: SimpleNamespace(
+                status="approved",
+                balancer_status="in_balancer",
+                exclude_reason=None,
+                checked_in=False,
+                is_substitute=False,
+            )
+        },
     )
     return rosters[registration.id]
 

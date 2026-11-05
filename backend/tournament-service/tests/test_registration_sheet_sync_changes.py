@@ -29,6 +29,7 @@ from shared.models.tournament import Tournament
 from shared.services.ontology import project_disciplines
 from shared.services.realtime import INVALIDATION_EVENT_TYPE, Resource
 from shared.testing import real_db_sessionmaker
+from shared.testing.factories import registration_node
 from src.services.registration import sheet_sync
 
 _SCHEMA = FormSchema(
@@ -78,6 +79,7 @@ async def _seed(session: Any) -> dict[str, Any]:
     session.add(
         RegistrationGoogleSheetFeed(
             tournament_id=tournament.id,
+            registration_node_id=await registration_node(session, tournament.id),
             source_url="http://sheet.example/changes",
             sheet_id="sheet-changes",
             mapping_config_json=_MAPPING,

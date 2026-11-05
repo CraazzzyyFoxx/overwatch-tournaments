@@ -46,20 +46,22 @@ class DedicatedActionTests(TestCase):
     """The three catalog actions that exist for exactly one handler each."""
 
     def test_reg_approve_uses_the_approve_action(self) -> None:
-        self.assertIn('_registration_ctx(session, data, "approve")', _handler_source("rpc.tournament.reg_approve"))
+        self.assertIn('_registration_node_ctx(session, data, "approve")', _handler_source("rpc.tournament.reg_approve"))
 
     def test_reg_reject_uses_the_reject_action(self) -> None:
-        self.assertIn('_registration_ctx(session, data, "reject")', _handler_source("rpc.tournament.reg_reject"))
+        self.assertIn('_registration_node_ctx(session, data, "reject")', _handler_source("rpc.tournament.reg_reject"))
 
     def test_reg_check_in_uses_the_check_in_action(self) -> None:
-        self.assertIn('_registration_ctx(session, data, "check_in")', _handler_source("rpc.tournament.reg_check_in"))
+        self.assertIn(
+            '_registration_node_ctx(session, data, "check_in")', _handler_source("rpc.tournament.reg_check_in")
+        )
 
     def test_reg_bulk_approve_uses_the_approve_action_on_registration(self) -> None:
         source = _handler_source("rpc.tournament.reg_bulk_approve")
         self.assertIn('_tournament_ctx(session, data, "approve", resource="registration")', source)
 
     def test_reg_delete_uses_the_delete_action(self) -> None:
-        self.assertIn('_registration_ctx(session, data, "delete")', _handler_source("rpc.tournament.reg_delete"))
+        self.assertIn('_registration_node_ctx(session, data, "delete")', _handler_source("rpc.tournament.reg_delete"))
 
 
 class RegistrationFormResourceTests(TestCase):

@@ -31,10 +31,9 @@ class RegistrationEventOutboxTests(IsolatedAsyncioTestCase):
             auth_user_id=11,
             user_id=None,
             primary_handle=lambda _provider: "Player#1234",
-            status="pending",
-            reviewed_at=None,
-            reviewed_by=None,
-            exclude_reason="manual",
+        )
+        entry = SimpleNamespace(
+            registration=registration, status="pending", reviewed_at=None, reviewed_by=None, exclude_reason="manual"
         )
         session = SimpleNamespace(
             commit=AsyncMock(side_effect=lambda: calls.append("commit")), execute=AsyncMock(return_value=_NO_ROWS)
@@ -46,8 +45,8 @@ class RegistrationEventOutboxTests(IsolatedAsyncioTestCase):
         with (
             patch.object(
                 registration_service.lifecycle_service,
-                "get_registration_by_id",
-                AsyncMock(return_value=registration),
+                "get_entry",
+                AsyncMock(return_value=entry),
             ),
             patch.object(
                 registration_service,
@@ -55,10 +54,10 @@ class RegistrationEventOutboxTests(IsolatedAsyncioTestCase):
                 AsyncMock(side_effect=fake_enqueue),
             ) as enqueue_approved,
         ):
-            result = await registration_service.lifecycle_service.approve_registration(session, 7, reviewed_by=99)
+            result = await registration_service.lifecycle_service.approve_registration(session, 5, 7, reviewed_by=99)
 
-        self.assertIs(result, registration)
-        self.assertEqual("approved", registration.status)
+        self.assertIs(result, entry)
+        self.assertEqual("approved", entry.status)
         enqueue_approved.assert_awaited_once_with(session, registration)
         self.assertLess(calls.index("enqueue"), calls.index("commit"))
 
@@ -71,10 +70,8 @@ class RegistrationEventOutboxTests(IsolatedAsyncioTestCase):
             auth_user_id=12,
             user_id=None,
             primary_handle=lambda _provider: "Player#5678",
-            status="pending",
-            reviewed_at=None,
-            reviewed_by=None,
         )
+        entry = SimpleNamespace(registration=registration, status="pending", reviewed_at=None, reviewed_by=None)
         session = SimpleNamespace(
             commit=AsyncMock(side_effect=lambda: calls.append("commit")), execute=AsyncMock(return_value=_NO_ROWS)
         )
@@ -85,8 +82,8 @@ class RegistrationEventOutboxTests(IsolatedAsyncioTestCase):
         with (
             patch.object(
                 registration_service.lifecycle_service,
-                "get_registration_by_id",
-                AsyncMock(return_value=registration),
+                "get_entry",
+                AsyncMock(return_value=entry),
             ),
             patch.object(
                 registration_service,
@@ -94,9 +91,9 @@ class RegistrationEventOutboxTests(IsolatedAsyncioTestCase):
                 AsyncMock(side_effect=fake_notify),
             ) as notify_rejected,
         ):
-            result = await registration_service.lifecycle_service.reject_registration(session, 8, reviewed_by=99)
+            result = await registration_service.lifecycle_service.reject_registration(session, 5, 8, reviewed_by=99)
 
-        self.assertIs(result, registration)
-        self.assertEqual("rejected", registration.status)
+        self.assertIs(result, entry)
+        self.assertEqual("rejected", entry.status)
         notify_rejected.assert_awaited_once_with(session, registration)
         self.assertLess(calls.index("notify"), calls.index("commit"))

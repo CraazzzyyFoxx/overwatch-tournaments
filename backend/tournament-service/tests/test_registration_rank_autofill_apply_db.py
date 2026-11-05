@@ -19,6 +19,7 @@ from shared import models
 from shared.models.platform.outbox import EventOutbox
 from shared.services.ontology import project_disciplines
 from shared.testing import create_test_async_engine
+from shared.testing.factories import registration_node
 from src.services.registration.lifecycle import lifecycle_service
 from src.services.registration.rank_autofill import rank_autofill_service
 
@@ -66,6 +67,8 @@ class AutofillApplyVerdictTests(IsolatedAsyncioTestCase):
                 end_date=datetime.now(UTC),
             )
             s.add(tournament)
+            await s.flush()
+            self.node_id = await registration_node(s, tournament.id)
             await s.commit()
             self.workspace_id, self.tournament_id = workspace.id, tournament.id
 
@@ -90,9 +93,9 @@ class AutofillApplyVerdictTests(IsolatedAsyncioTestCase):
 
     async def _registration_with_solo_rank(self, s, name: str) -> int:
         """An approved, unranked ``mid`` registration whose player has a fresh Solo/Duo rank to fill it from."""
-        registration = await lifecycle_service.create_manual_registration(
+        entry = await lifecycle_service.create_manual_registration(
             s,
-            tournament_id=self.tournament_id,
+            self.node_id,
             display_name=None,
             admin_notes=None,
             answers={"identity_riot": [f"{name}{self.tag}#EUW"]},
@@ -108,7 +111,7 @@ class AutofillApplyVerdictTests(IsolatedAsyncioTestCase):
         )
         account = await s.scalar(
             sa.select(models.SocialAccount).where(
-                models.SocialAccount.user_id == registration.workspace_member.player_id,
+                models.SocialAccount.user_id == entry.registration.workspace_member.player_id,
                 models.SocialAccount.provider == "riot",
             )
         )
@@ -137,7 +140,7 @@ class AutofillApplyVerdictTests(IsolatedAsyncioTestCase):
             ]
         )
         await s.commit()
-        return registration.id
+        return entry.registration_id
 
     async def test_both_verdict_branches_see_the_ranks_the_run_wrote(self) -> None:
         async with self.Session() as s:
@@ -146,20 +149,25 @@ class AutofillApplyVerdictTests(IsolatedAsyncioTestCase):
             # A manual approved row lands in the pool on creation (unranked: ``incomplete``). The pooled row stays
             # there, so autofill re-derives its verdict; the joining row is taken out, so autofill adds it back.
             await s.execute(
-                sa.update(models.Registration)
-                .where(models.Registration.id == pooled)
+                sa.update(models.RegistrationEntry)
+                .where(models.RegistrationEntry.registration_id == pooled)
                 .values(balancer_status="incomplete")
             )
             await s.execute(
-                sa.update(models.Registration)
-                .where(models.Registration.id == joining)
+                sa.update(models.RegistrationEntry)
+                .where(models.RegistrationEntry.registration_id == joining)
                 .values(balancer_status="not_in_balancer")
             )
             await s.commit()
 
         async with self.Session() as s:
             result = await rank_autofill_service.autofill_registration_ranks_from_parsed(
-                s, self.tournament_id, registration_ids=[pooled, joining], add_to_balancer=True, apply=True
+                s,
+                self.tournament_id,
+                self.node_id,
+                registration_ids=[pooled, joining],
+                add_to_balancer=True,
+                apply=True,
             )
 
         assert (result["applied_registrations"], result["balancer_additions"]) == (2, 1)
@@ -167,9 +175,9 @@ class AutofillApplyVerdictTests(IsolatedAsyncioTestCase):
             verdicts = dict(
                 (
                     await s.execute(
-                        sa.select(models.Registration.id, models.Registration.balancer_status).where(
-                            models.Registration.id.in_([pooled, joining])
-                        )
+                        sa.select(
+                            models.RegistrationEntry.registration_id, models.RegistrationEntry.balancer_status
+                        ).where(models.RegistrationEntry.registration_id.in_([pooled, joining]))
                     )
                 ).all()
             )

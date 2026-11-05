@@ -52,6 +52,7 @@ from shared.models.registration.registration import (  # noqa: E402
 )
 from shared.models.tenancy.workspace import Workspace  # noqa: E402
 from shared.models.tournament import Tournament  # noqa: E402
+from shared.testing.factories import registration_node  # noqa: E402
 from tests._lol_grid import seed_lol_grid  # noqa: E402
 
 _WORKSPACE_ID = 1
@@ -440,6 +441,7 @@ async def _seed_feed(
     session.add(
         RegistrationGoogleSheetFeed(
             tournament_id=tournament.id,
+            registration_node_id=await registration_node(session, tournament.id),
             source_url="http://sheet.example/atomic",
             sheet_id="sheet-atomic",
             mapping_config_json=mapping,

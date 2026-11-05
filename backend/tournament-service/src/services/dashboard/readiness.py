@@ -106,10 +106,21 @@ def team_counts(tournament_id: sa.SQLColumnExpression[int] | int) -> list[sa.Lab
     subqueries like the counters.
     """
     reg = models.Registration
+    entry = models.RegistrationEntry
     active = (reg.tournament_id == tournament_id, reg.deleted_at.is_(None))
-    reg_pending = sa.select(sa.func.count(reg.id)).where(*active, reg.status == "pending")
-    reg_approved = sa.select(sa.func.count(reg.id)).where(*active, reg.status == "approved")
-    reg_checked_in = sa.select(sa.func.count(reg.id)).where(*active, reg.checked_in.is_(True))
+
+    def registrations_where(*conditions: sa.ColumnElement[bool]) -> sa.Select[Any]:
+        """Distinct registrations with a live entry (at ANY registration node of the tournament) meeting ``conditions``."""
+        return (
+            sa.select(sa.func.count(sa.distinct(reg.id)))
+            .select_from(reg)
+            .join(entry, entry.registration_id == reg.id)
+            .where(*active, entry.deleted_at.is_(None), *conditions)
+        )
+
+    reg_pending = registrations_where(entry.status == "pending")
+    reg_approved = registrations_where(entry.status == "approved")
+    reg_checked_in = registrations_where(entry.checked_in.is_(True))
     # Saved rank data only: >=1 role row with a stored rank_value. A join, not ``IN (subquery)``: SQLAlchemy
     # correlates a subquery with its immediately enclosing SELECT only, and the dashboard correlates on ``Tournament``.
     role = models.RegistrationRole
@@ -118,8 +129,8 @@ def team_counts(tournament_id: sa.SQLColumnExpression[int] | int) -> list[sa.Lab
         .join(reg, reg.id == role.registration_id)
         .where(*active, role.rank_value.is_not(None))
     )
-    pool_ready = sa.select(sa.func.count(reg.id)).where(*active, reg.balancer_status == "ready")
-    pool_need_fix = sa.select(sa.func.count(reg.id)).where(*active, reg.balancer_status == "incomplete")
+    pool_ready = registrations_where(entry.balancer_status == "ready")
+    pool_need_fix = registrations_where(entry.balancer_status == "incomplete")
     # "A form row exists", not "registration is open": openness is the phase
     # schedule's window, and a tournament whose window merely ENDED still has
     # its form configured.

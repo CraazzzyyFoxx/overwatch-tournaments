@@ -75,13 +75,13 @@ var PublicWriteRoutes = []edge.RouteSpec{
 	// whole minutes at a time (Sentry OWT-TOURNAMENTS-212). The writes around
 	// them keep the default.
 	{Method: "GET", Pattern: "/api/v1/tournaments/{tournament_id}/registration/form", Queue: "rpc.tournament.reg_pub_form", Path: []string{"tournament_id"}, Auth: edge.AuthOptional, Timeout: regReadTimeout},
-	{Method: "POST", Pattern: "/api/v1/tournaments/{tournament_id}/registration", Queue: "rpc.tournament.reg_pub_create", Path: []string{"tournament_id"}, Body: true, Auth: edge.AuthRequired, Success: 201},
-	{Method: "GET", Pattern: "/api/v1/tournaments/{tournament_id}/registration/me", Queue: "rpc.tournament.reg_pub_get_me", Path: []string{"tournament_id"}, Auth: edge.AuthRequired, Timeout: regReadTimeout},
-	{Method: "PATCH", Pattern: "/api/v1/tournaments/{tournament_id}/registration/me", Queue: "rpc.tournament.reg_pub_update_me", Path: []string{"tournament_id"}, Body: true, Auth: edge.AuthRequired},
-	{Method: "DELETE", Pattern: "/api/v1/tournaments/{tournament_id}/registration/me", Queue: "rpc.tournament.reg_pub_withdraw_me", Path: []string{"tournament_id"}, Auth: edge.AuthRequired},
-	{Method: "POST", Pattern: "/api/v1/tournaments/{tournament_id}/registration/me/check-in", Queue: "rpc.tournament.reg_pub_check_in", Path: []string{"tournament_id"}, Auth: edge.AuthRequired},
-	{Method: "POST", Pattern: "/api/v1/tournaments/{tournament_id}/registration/me/recheck", Queue: "rpc.tournament.reg_pub_recheck_me", Path: []string{"tournament_id"}, Auth: edge.AuthRequired, Success: 204},
-	{Method: "GET", Pattern: "/api/v1/tournaments/{tournament_id}/registration/list", Queue: "rpc.tournament.reg_pub_list", Path: []string{"tournament_id"}, Auth: edge.AuthOptional, Timeout: regReadTimeout},
+	{Method: "POST", Pattern: "/api/v1/tournaments/{tournament_id}/registration", Queue: "rpc.tournament.reg_pub_create", Path: []string{"tournament_id"}, Body: true, Query: []string{"registration_node_id"}, Auth: edge.AuthRequired, Success: 201},
+	{Method: "GET", Pattern: "/api/v1/tournaments/{tournament_id}/registration/me", Queue: "rpc.tournament.reg_pub_get_me", Path: []string{"tournament_id"}, Query: []string{"registration_node_id"}, Auth: edge.AuthRequired, Timeout: regReadTimeout},
+	{Method: "PATCH", Pattern: "/api/v1/tournaments/{tournament_id}/registration/me", Queue: "rpc.tournament.reg_pub_update_me", Path: []string{"tournament_id"}, Body: true, Query: []string{"registration_node_id"}, Auth: edge.AuthRequired},
+	{Method: "DELETE", Pattern: "/api/v1/tournaments/{tournament_id}/registration/me", Queue: "rpc.tournament.reg_pub_withdraw_me", Path: []string{"tournament_id"}, Query: []string{"registration_node_id"}, Auth: edge.AuthRequired},
+	{Method: "POST", Pattern: "/api/v1/tournaments/{tournament_id}/registration/me/check-in", Queue: "rpc.tournament.reg_pub_check_in", Path: []string{"tournament_id"}, Query: []string{"registration_node_id"}, Auth: edge.AuthRequired},
+	{Method: "POST", Pattern: "/api/v1/tournaments/{tournament_id}/registration/me/recheck", Queue: "rpc.tournament.reg_pub_recheck_me", Path: []string{"tournament_id"}, Query: []string{"registration_node_id"}, Auth: edge.AuthRequired, Success: 204},
+	{Method: "GET", Pattern: "/api/v1/tournaments/{tournament_id}/registration/list", Queue: "rpc.tournament.reg_pub_list", Path: []string{"tournament_id"}, Query: []string{"registration_node_id"}, Auth: edge.AuthOptional, Timeout: regReadTimeout},
 	// `IDParam`, not `Path`: this dispatches into `reads.py`, whose handlers read
 	// the path id as `data["id"]` (see its module docstring). Declaring it as
 	// `Path` left `data["id"]` unset and 422'd every call.
@@ -97,14 +97,14 @@ var PublicWriteRoutes = []edge.RouteSpec{
 	// The public "Teams" roster. AuthOptional like the participants list: anyone
 	// may see the field. Invites are omitted server-side, so this cannot leak who
 	// was asked and declined.
-	{Method: "GET", Pattern: "/api/v1/tournaments/{tournament_id}/registration-teams", Queue: "rpc.tournament.regteam_list_public", Path: []string{"tournament_id"}, Auth: edge.AuthOptional},
+	{Method: "GET", Pattern: "/api/v1/tournaments/{tournament_id}/registration-teams", Queue: "rpc.tournament.regteam_list_public", Path: []string{"tournament_id"}, Query: []string{"registration_node_id"}, Auth: edge.AuthOptional},
 
 	// Who a captain may invite, and what a player has been invited to. Both are
 	// AuthRequired reads: the first returns strictly a subset of the public
 	// participants list but exists only to act on, and the second is scoped to the
 	// caller's own token — "whose invites" is never a path parameter.
-	{Method: "GET", Pattern: "/api/v1/tournaments/{tournament_id}/registration-teams/free-agents", Queue: "rpc.tournament.regteam_free_agents", Path: []string{"tournament_id"}, Auth: edge.AuthRequired},
-	{Method: "GET", Pattern: "/api/v1/tournaments/{tournament_id}/registration-teams/my-invites", Queue: "rpc.tournament.regteam_my_invites", Path: []string{"tournament_id"}, Auth: edge.AuthRequired},
+	{Method: "GET", Pattern: "/api/v1/tournaments/{tournament_id}/registration-teams/free-agents", Queue: "rpc.tournament.regteam_free_agents", Path: []string{"tournament_id"}, Query: []string{"registration_node_id"}, Auth: edge.AuthRequired},
+	{Method: "GET", Pattern: "/api/v1/tournaments/{tournament_id}/registration-teams/my-invites", Queue: "rpc.tournament.regteam_my_invites", Path: []string{"tournament_id"}, Query: []string{"registration_node_id"}, Auth: edge.AuthRequired},
 	// A captain's own invite history. Captaincy-gated in the worker, not by
 	// workspace permission — the organizer reads the same rows through the admin
 	// route. `{team_id}` and not the caller's identity, because a captain may hold
@@ -117,7 +117,7 @@ var PublicWriteRoutes = []edge.RouteSpec{
 	// redeemer's account, so the token authorizes which SLOT you may take, never
 	// who you are. The one exception is the invite PREVIEW below, which is
 	// deliberately anonymous.
-	{Method: "POST", Pattern: "/api/v1/tournaments/{tournament_id}/registration-teams", Queue: "rpc.tournament.regteam_create", Path: []string{"tournament_id"}, Body: true, Auth: edge.AuthRequired, Success: 201},
+	{Method: "POST", Pattern: "/api/v1/tournaments/{tournament_id}/registration-teams", Queue: "rpc.tournament.regteam_create", Path: []string{"tournament_id"}, Body: true, Query: []string{"registration_node_id"}, Auth: edge.AuthRequired, Success: 201},
 	{Method: "POST", Pattern: "/api/v1/registration-teams/{team_id}/invites", Queue: "rpc.tournament.regteam_invite", Path: []string{"team_id"}, Body: true, Auth: edge.AuthRequired, Success: 201},
 	{Method: "DELETE", Pattern: "/api/v1/registration-teams/invites/{invite_id}", Queue: "rpc.tournament.regteam_invite_revoke", Path: []string{"invite_id"}, Auth: edge.AuthRequired, Success: 204},
 	// The only anonymous invite surface: a link invite exists to reach someone with
@@ -137,7 +137,7 @@ var PublicWriteRoutes = []edge.RouteSpec{
 	{Method: "POST", Pattern: "/api/v1/registration-teams/{team_id}/members/{registration_id}/manager", Queue: "rpc.tournament.regteam_set_manager", Path: []string{"team_id", "registration_id"}, Body: true, Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/v1/registration-teams/{team_id}/invites/{invite_id}/extend", Queue: "rpc.tournament.regteam_extend_invite", Path: []string{"team_id", "invite_id"}, Body: true, Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/v1/registration-teams/{team_id}/lock", Queue: "rpc.tournament.regteam_lock", Path: []string{"team_id"}, Auth: edge.AuthRequired},
-	{Method: "POST", Pattern: "/api/v1/registration-teams/{team_id}/check-in", Queue: "rpc.tournament.regteam_check_in", Path: []string{"team_id"}, Body: true, Auth: edge.AuthRequired},
+	{Method: "POST", Pattern: "/api/v1/registration-teams/{team_id}/check-in", Queue: "rpc.tournament.regteam_check_in", Path: []string{"team_id"}, Body: true, Query: []string{"registration_node_id"}, Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/v1/registration-teams/{team_id}/subscription/cover", Queue: "rpc.tournament.regteam_cover_subscription", Path: []string{"team_id"}, Body: true, Auth: edge.AuthRequired},
 	// NOTE: DELETE /registration-teams/{team_id}/image is NOT here — it is
 	// ambiguous with /registration-teams/invites/{invite_id} under the stdlib

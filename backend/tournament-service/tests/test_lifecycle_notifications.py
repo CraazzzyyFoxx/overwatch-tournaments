@@ -61,6 +61,8 @@ TABLE_NAMES = (
     "players.user",
     "workspace_member",
     "registration.registration",
+    "registration.registration_entry",
+    "tournament.flow_node",
     "stats.match",
     "tournament.tournament",
     "tournament.tournament_phase_schedule",
@@ -189,6 +191,11 @@ class _Fixture:
         )
         self.session.add(self.tournament)
         self.session.flush()
+        self.node = models.FlowNode(
+            tournament_id=TOURNAMENT_ID, kind="registration", name="Registration", status="open", config={}
+        )
+        self.session.add(self.node)
+        self.session.flush()
 
     def close(self) -> None:
         self.session.close()
@@ -234,12 +241,15 @@ class _Fixture:
         registration = models.Registration(
             tournament_id=TOURNAMENT_ID,
             workspace_member_id=member.id,
-            status=status,
-            checked_in=checked_in,
             deleted_at=deleted_at,
-            is_substitute=False,
         )
         self.session.add(registration)
+        self.session.flush()
+        self.session.add(
+            models.RegistrationEntry(
+                registration_node_id=self.node.id, registration_id=registration.id, status=status, checked_in=checked_in
+            )
+        )
         self.session.flush()
         return registration
 

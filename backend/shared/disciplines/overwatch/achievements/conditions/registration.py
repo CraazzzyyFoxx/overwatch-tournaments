@@ -1,5 +1,7 @@
 """registration_timing / registration_flag — how a player entered a tournament.
 
+A player's participation is one entry per registration node: a rule passes when ANY of the player's entries does.
+
 Grain: user_tournament (user_id, tournament_id).
 """
 
@@ -11,7 +13,6 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
-from shared.core.enums import TournamentStatus
 from shared.core.tournament_state import as_utc
 from shared.domain.achievements.context import EvalContext
 from shared.models.achievements.achievement import AchievementGrain
@@ -19,16 +20,16 @@ from shared.models.achievements.achievement import AchievementGrain
 from . import ResultSet, register
 from .stat_threshold import OPERATORS
 
-#: event -> (registration timestamp, the phase whose ``starts_at`` it is measured against)
-_EVENTS: dict[str, tuple[Any, TournamentStatus]] = {
-    "signup": (models.Registration.submitted_at, TournamentStatus.REGISTRATION),
-    "check_in": (models.Registration.checked_in_at, TournamentStatus.CHECK_IN),
+#: event -> (entry timestamp, the schedule phase of the entry's registration node it is measured against)
+_EVENTS: dict[str, tuple[Any, str]] = {
+    "signup": (models.RegistrationEntry.created_at, "open"),
+    "check_in": (models.RegistrationEntry.checked_in_at, "check_in"),
 }
 
 _FLAGS: dict[str, Any] = {
-    "substitute": models.Registration.is_substitute,
+    "substitute": models.RegistrationEntry.is_substitute,
     "team_manager": models.Registration.is_team_manager,
-    "checked_in": models.Registration.checked_in,
+    "checked_in": models.RegistrationEntry.checked_in,
 }
 
 
@@ -37,7 +38,12 @@ _FLAGS: dict[str, Any] = {
     grain=AchievementGrain.user_tournament,
     description="How early or late the player signed up or checked in",
     required=("event", "op", "value"),
-    depends_on=("registration.registration", "tournament.player"),
+    depends_on=(
+        "registration.registration",
+        "registration.registration_entry",
+        "tournament.flow_node_schedule",
+        "tournament.player",
+    ),
 )
 async def execute_registration_timing(
     session: AsyncSession,
@@ -57,26 +63,28 @@ async def execute_registration_timing(
             models.WorkspaceMember.player_id,
             models.Registration.tournament_id,
             stamp_column,
-            models.TournamentPhaseSchedule.starts_at,
+            models.FlowNodeSchedule.starts_at,
         )
-        .select_from(models.Registration)
+        .select_from(models.RegistrationEntry)
         # Inner joins by design: a registration with no member has no player
-        # identity, and a tournament with no schedule row for this phase has
+        # identity, and a node with no schedule row for this phase has
         # nothing to measure against. Neither is a failed threshold.
+        .join(models.Registration, models.Registration.id == models.RegistrationEntry.registration_id)
         .join(
             models.WorkspaceMember,
             models.WorkspaceMember.id == models.Registration.workspace_member_id,
         )
         .join(models.Tournament, models.Tournament.id == models.Registration.tournament_id)
         .join(
-            models.TournamentPhaseSchedule,
+            models.FlowNodeSchedule,
             sa.and_(
-                models.TournamentPhaseSchedule.tournament_id == models.Registration.tournament_id,
-                models.TournamentPhaseSchedule.status == phase,
+                models.FlowNodeSchedule.node_id == models.RegistrationEntry.registration_node_id,
+                models.FlowNodeSchedule.phase == phase,
             ),
         )
         .where(
             models.Registration.deleted_at.is_(None),
+            models.RegistrationEntry.deleted_at.is_(None),
             stamp_column.is_not(None),
             sa.and_(
                 models.Tournament.workspace_id == context.workspace_id,
@@ -109,7 +117,7 @@ async def execute_registration_timing(
     description="A property of how the player entered the tournament",
     required=("flag",),
     optional=("value",),
-    depends_on=("registration.registration", "tournament.player"),
+    depends_on=("registration.registration", "registration.registration_entry", "tournament.player"),
 )
 async def execute_registration_flag(
     session: AsyncSession,
@@ -125,7 +133,8 @@ async def execute_registration_flag(
             models.WorkspaceMember.player_id,
             models.Registration.tournament_id,
         )
-        .select_from(models.Registration)
+        .select_from(models.RegistrationEntry)
+        .join(models.Registration, models.Registration.id == models.RegistrationEntry.registration_id)
         .join(
             models.WorkspaceMember,
             models.WorkspaceMember.id == models.Registration.workspace_member_id,
@@ -133,6 +142,7 @@ async def execute_registration_flag(
         .join(models.Tournament, models.Tournament.id == models.Registration.tournament_id)
         .where(
             models.Registration.deleted_at.is_(None),
+            models.RegistrationEntry.deleted_at.is_(None),
             _FLAGS[flag] == value,
             sa.and_(
                 models.Tournament.workspace_id == context.workspace_id,

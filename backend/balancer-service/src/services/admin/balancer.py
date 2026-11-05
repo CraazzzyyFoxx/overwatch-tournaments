@@ -22,6 +22,7 @@ from shared.repository import (
 )
 from shared.services.balancer_realtime import BALANCER_BALANCE_SAVED, BALANCER_CONFIG_CHANGED, BALANCER_TEAMS_CHANGED
 from shared.services.discord_errors import DiscordError
+from shared.services.flow_queries import upstream_registration_node_ids
 from shared.services.roster import roster_engine
 from src import schemas
 from src.domain.balancer.config.public_contract import (
@@ -320,9 +321,12 @@ class BalancerAdminService:
                 if str(player.uuid).isdigit()
             }
         )
+        upstream = await upstream_registration_node_ids(session, balance.formation_node_id)
         refuse_missing_handles(
             (
-                await roster_engine.for_tournament(session, balance.tournament_id, registration_ids=registration_ids)
+                await roster_engine.for_registration_node(session, upstream[0], registration_ids=registration_ids)
+                if upstream
+                else {}
             ).values()
         )
 

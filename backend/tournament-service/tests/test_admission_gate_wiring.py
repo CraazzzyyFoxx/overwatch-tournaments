@@ -54,6 +54,7 @@ BOOSTY_TIER_2 = {"mode": "all", "requirements": [{"provider": "boosty", "min_tie
 MALFORMED = {"mode": "most", "requirements": []}
 
 TOURNAMENT = 55
+NODE = 5
 USER = 42
 REG_ID = 900
 
@@ -200,9 +201,8 @@ def _registration(*, handle: str | None = None, checked_in: bool = False) -> Any
     handles = [handle] if handle else []
     return SimpleNamespace(
         id=REG_ID,
-        status="approved",
-        balancer_status="ready",
-        checked_in=checked_in,
+        #: Its entry in the gated node: what the evaluation reads of the lifecycle.
+        entry=SimpleNamespace(status="approved", balancer_status="ready", checked_in=checked_in),
         handles=lambda _provider: list(handles),
     )
 
@@ -228,11 +228,16 @@ class _GateCase(IsolatedAsyncioTestCase):
         with (
             mock.patch.object(admission, "_common_service") as forms,
             mock.patch.object(admission, "subscription_resolver", return_value=resolver),
+            mock.patch.object(admission, "RegistrationEntryRepository") as entries,
         ):
             forms.get_registration_form = mock.AsyncMock(return_value=form)
+            entries.return_value.get_for = mock.AsyncMock(
+                return_value=registration.entry if registration is not None else None
+            )
             evaluation = await admission.assert_admitted_at(
                 session,
                 registration,
+                registration_node_id=NODE,
                 tournament_id=TOURNAMENT,
                 auth_user_id=USER,
                 stage=stage,

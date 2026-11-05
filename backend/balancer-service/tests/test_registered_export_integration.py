@@ -38,6 +38,7 @@ from shared.domain.team_format import FormatDimension, FormatRule, TeamFormat  #
 from shared.models.identity.user import User  # noqa: E402
 from shared.models.registration.registration import (  # noqa: E402
     Registration,
+    RegistrationEntry,
     RegistrationForm,
     RegistrationIdentity,
     RegistrationRole,
@@ -48,8 +49,9 @@ from shared.models.tournament.tournament import Tournament  # noqa: E402
 from shared.repository import CatalogRoleRepository  # noqa: E402
 from shared.services.team_format import save_tournament_format  # noqa: E402
 from shared.testing import create_test_async_engine  # noqa: E402
+from shared.testing.factories import add_entry  # noqa: E402
 from src.services.registered_teams import registered_teams_service  # noqa: E402
-from tests.factories import formation_node  # noqa: E402
+from tests.factories import formation_node, wire_input  # noqa: E402
 
 _UNIQUE = 0
 
@@ -106,6 +108,7 @@ class RegisteredExportIntegrationTests(IsolatedAsyncioTestCase):
             self.workspace_id = workspace.id
             self.tournament_id = tournament.id
             self.node_id = await formation_node(session, tournament.id, mode="registered")
+            self.registration_node_id = await wire_input(session, self.node_id)
             self.member_ids: list[int] = []
             self.player_ids: list[int] = []
             for index in range(4):
@@ -149,6 +152,7 @@ class RegisteredExportIntegrationTests(IsolatedAsyncioTestCase):
         """``roster`` = (member index, slot code, rank, is_substitute)."""
         team = RegistrationTeam(
             tournament_id=self.tournament_id,
+            registration_node_id=self.registration_node_id,
             workspace_id=self.workspace_id,
             name=name,
             name_normalized=name.lower(),
@@ -167,13 +171,14 @@ class RegisteredExportIntegrationTests(IsolatedAsyncioTestCase):
                 tournament_id=self.tournament_id,
                 workspace_member_id=self.member_ids[member_index],
                 display_name=f"m{member_index}-{self.suffix}",
-                status="approved",
                 registration_team_id=team.id,
                 team_slot_code=slot_code,
-                is_substitute=is_substitute,
             )
             session.add(registration)
             await session.flush()
+            await add_entry(
+                session, self.registration_node_id, registration.id, status="approved", is_substitute=is_substitute
+            )
             session.add(
                 RegistrationIdentity(
                     registration_id=registration.id,
@@ -349,10 +354,14 @@ class RegisteredExportIntegrationTests(IsolatedAsyncioTestCase):
         source = await self._complete_team()
         async with self.Session() as session:
             await session.execute(
-                sa.update(Registration)
+                sa.update(RegistrationEntry)
                 .where(
-                    Registration.registration_team_id == source.id,
-                    Registration.team_slot_code == "tank",
+                    RegistrationEntry.registration_id.in_(
+                        sa.select(Registration.id).where(
+                            Registration.registration_team_id == source.id,
+                            Registration.team_slot_code == "tank",
+                        )
+                    )
                 )
                 .values(status="withdrawn")
             )

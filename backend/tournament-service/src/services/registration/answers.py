@@ -59,18 +59,21 @@ __all__ = (
     "merge_custom_answers",
 )
 
-#: Builtin answer key -> the column it lands in. ``identity_*`` (rows) and
-#: ``roles`` (rows) are handled on their own.
+#: Builtin answer key -> the profile column it lands in. ``identity_*`` (rows) and
+#: ``roles`` (rows) are handled on their own, and so is ``reserve``: it lands on the registration ENTRY (a
+#: registrant's availability is per intake).
 _ANSWER_COLUMNS: dict[str, str] = {
     "stream_pov": "stream_pov",
-    "reserve": "is_reserve",
     "public_notes": "public_notes",
     "organizer_notes": "organizer_notes",
 }
 
+#: The builtin answer an entry carries: key -> ``RegistrationEntry`` column.
+ENTRY_ANSWER_COLUMNS: dict[str, str] = {"reserve": "is_reserve"}
+
 #: Of those, the ones whose column is NOT NULL boolean: a blank answer is
 #: ``False``, never ``NULL``.
-_BOOL_COLUMNS = frozenset({"stream_pov", "is_reserve"})
+_BOOL_COLUMNS = frozenset({"stream_pov"})
 
 _NOT_VERIFIED_MSG = "This must match an OAuth-verified account linked to your profile."
 
@@ -150,6 +153,7 @@ class RegistrationAnswerService:
         discipline: str,
         hero_catalog: HeroCatalog | None,
         registration: models.Registration | None = None,
+        entry: models.RegistrationEntry | None = None,
     ) -> dict[str, Any]:
         """The typed values ``answers`` reduces to, or ``422`` with every error.
 
@@ -163,7 +167,7 @@ class RegistrationAnswerService:
         the OAuth gate does not run, because the organizer authoring the row IS
         the authority the gate exists to substitute for.
 
-        ``registration`` is the row an EDIT rewrites. A key the form does not ask
+        ``registration`` (with its ``entry`` in the node being written, if any) is the row an EDIT rewrites. A key the form does not ask
         that only repeats what ``answers_of`` reads back for it is dropped, not
         refused: the read reports every answer column (``reserve``/``stream_pov``
         are NOT NULL) and answers to questions a later version removed, so a
@@ -171,7 +175,7 @@ class RegistrationAnswerService:
         ``unknown_field``. A CHANGED undeclared key still does.
         """
         if registration is not None:
-            stored = self.answers_of(registration)
+            stored = self.answers_of(registration, entry)
             answers = {
                 key: value
                 for key, value in answers.items()
@@ -315,8 +319,12 @@ class RegistrationAnswerService:
         schema: FormSchema,
         hero_catalog: HeroCatalog | None,
         catalog_roles: Mapping[str, models.CatalogRole],
+        entry: models.RegistrationEntry | None = None,
     ) -> None:
         """Write validated answers onto a registration (and its child rows).
+
+        ``entry`` is the registration's participation in the node being written: the ``reserve`` answer lands there,
+        so a write with no entry (a profile edit outside any node) leaves it alone.
 
         Nothing is flushed or committed: the caller owns the transaction, which
         is what lets the team flows land a registration and its team slot
@@ -327,6 +335,10 @@ class RegistrationAnswerService:
                 continue
             value = values[key]
             setattr(registration, column, bool(value) if column in _BOOL_COLUMNS else (value or None))
+        if entry is not None:
+            for key, column in ENTRY_ANSWER_COLUMNS.items():
+                if key in values:
+                    setattr(entry, column, bool(values[key]))
         self._apply_identities(registration, values, schema=schema)
         roots = root_role_codes(catalog_roles)
         # A NEW registration of a one-role game gets that role even when nothing asked (organizer and sheet rows
@@ -438,8 +450,12 @@ class RegistrationAnswerService:
         # the delete-orphan cascade rather than being detached from the list.
         registration.roles[:] = merged
 
-    def answers_of(self, registration: models.Registration) -> dict[str, Any]:
+    def answers_of(
+        self, registration: models.Registration, entry: models.RegistrationEntry | None = None
+    ) -> dict[str, Any]:
         """The flat answer document a registration reads back as.
+
+        ``entry`` adds the answers an entry carries (``reserve``); without one they are not part of the document.
 
         Every ``identity_<provider>`` answer is a list of handles, primary first
         (sorted by ``position`` rather than trusting the in-session order of a
@@ -455,6 +471,9 @@ class RegistrationAnswerService:
             value = getattr(registration, column, None)
             if value is not None:
                 out[key] = value
+        if entry is not None:
+            for key, column in ENTRY_ANSWER_COLUMNS.items():
+                out[key] = getattr(entry, column)
         identities = sorted(registration.__dict__.get("identities") or (), key=lambda row: row.position)
         for identity in identities:
             out.setdefault(identity_key(identity.provider), []).append(identity.handle)

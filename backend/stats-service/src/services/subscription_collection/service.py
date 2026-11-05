@@ -101,10 +101,11 @@ class SubscriptionCollectionService:
         return targets
 
     async def load_auth_user_ids_for_tournament(self, session: AsyncSession, tournament_id: int) -> list[int]:
-        """Get all auth_user_ids for registered participants in a tournament."""
+        """Get all auth_user_ids for participants with a live, not withdrawn entry at any registration node of a tournament."""
         stmt = (
             sa.select(models.User.auth_user_id)
             .select_from(models.Registration)
+            .join(models.RegistrationEntry, models.RegistrationEntry.registration_id == models.Registration.id)
             .join(
                 models.WorkspaceMember,
                 models.Registration.workspace_member_id == models.WorkspaceMember.id,
@@ -113,7 +114,8 @@ class SubscriptionCollectionService:
             .where(
                 models.Registration.tournament_id == tournament_id,
                 models.Registration.deleted_at.is_(None),
-                models.Registration.status != "withdrawn",
+                models.RegistrationEntry.deleted_at.is_(None),
+                models.RegistrationEntry.status != "withdrawn",
                 models.User.auth_user_id.isnot(None),
             )
             .distinct()

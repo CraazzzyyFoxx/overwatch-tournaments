@@ -41272,6 +41272,10 @@
           "default": null,
           "title": "Mapping Config Json"
         },
+        "registration_node_id": {
+          "title": "Registration Node Id",
+          "type": "integer"
+        },
         "sheet_id": {
           "title": "Sheet Id",
           "type": "string"
@@ -41312,6 +41316,7 @@
       "required": [
         "id",
         "tournament_id",
+        "registration_node_id",
         "source_url",
         "sheet_id",
         "gid",
@@ -41394,6 +41399,10 @@
           "default": null,
           "title": "Mapping Config Json"
         },
+        "registration_node_id": {
+          "title": "Registration Node Id",
+          "type": "integer"
+        },
         "source_url": {
           "title": "Source Url",
           "type": "string"
@@ -41425,6 +41434,7 @@
         }
       },
       "required": [
+        "registration_node_id",
         "source_url"
       ],
       "title": "BalancerGoogleSheetFeedUpsert",
@@ -42501,6 +42511,10 @@
           "default": null,
           "title": "Display Name"
         },
+        "entry_id": {
+          "title": "Entry Id",
+          "type": "integer"
+        },
         "exclude_reason": {
           "anyOf": [
             {
@@ -42545,6 +42559,10 @@
           ],
           "default": null,
           "title": "Profiles Open"
+        },
+        "registration_node_id": {
+          "title": "Registration Node Id",
+          "type": "integer"
         },
         "reviewed_at": {
           "anyOf": [
@@ -42670,6 +42688,8 @@
       },
       "required": [
         "id",
+        "entry_id",
+        "registration_node_id",
         "tournament_id",
         "workspace_id",
         "source",
@@ -55128,6 +55148,10 @@
           "title": "Edit Writable Keys",
           "type": "array"
         },
+        "entry_id": {
+          "title": "Entry Id",
+          "type": "integer"
+        },
         "form_version_id": {
           "anyOf": [
             {
@@ -55231,6 +55255,10 @@
           ],
           "default": null,
           "title": "Queue Total"
+        },
+        "registration_node_id": {
+          "title": "Registration Node Id",
+          "type": "integer"
         },
         "reviewed_at": {
           "anyOf": [
@@ -55347,6 +55375,8 @@
       },
       "required": [
         "id",
+        "entry_id",
+        "registration_node_id",
         "tournament_id",
         "workspace_id",
         "display"
@@ -55918,6 +55948,10 @@
           "title": "Is Substitute",
           "type": "boolean"
         },
+        "registration_node_id": {
+          "title": "Registration Node Id",
+          "type": "integer"
+        },
         "slot_code": {
           "title": "Slot Code",
           "type": "string"
@@ -55949,6 +55983,7 @@
       },
       "required": [
         "tournament_id",
+        "registration_node_id",
         "tournament_name",
         "workspace_id",
         "discipline",

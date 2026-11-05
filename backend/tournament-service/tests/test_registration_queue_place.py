@@ -44,7 +44,7 @@ class QueuePlaceTests(IsolatedAsyncioTestCase):
     async def test_reports_the_role_place_beside_the_overall_one(self):
         place = await service.registration_service.queue_position(
             _Session(role="damage", counts=(2, 119, 1, 42)),
-            SimpleNamespace(id=7, tournament_id=115, submitted_at=None),
+            SimpleNamespace(id=9, registration_id=7, registration_node_id=3, created_at=None),
         )
 
         self.assertEqual((place.position, place.total), (2, 119))
@@ -54,7 +54,7 @@ class QueuePlaceTests(IsolatedAsyncioTestCase):
         """The counts come back zero; "0 of 0" and "1 of 1" are both lies."""
         place = await service.registration_service.queue_position(
             _Session(role=None, counts=(2, 119, 0, 0)),
-            SimpleNamespace(id=7, tournament_id=115, submitted_at=None),
+            SimpleNamespace(id=9, registration_id=7, registration_node_id=3, created_at=None),
         )
 
         self.assertEqual((place.position, place.total), (2, 119))

@@ -195,6 +195,7 @@ def build_mapping_catalog(
 
 def apply_sheet_fields_to_registration(
     registration: models.Registration,
+    entry: models.RegistrationEntry,
     parsed_fields: dict[str, Any],
     values: Mapping[str, Any],
     *,
@@ -204,7 +205,7 @@ def apply_sheet_fields_to_registration(
     sheet_ranked_roles: Collection[str],
     mode: FlexRoleMode = "optional",
 ) -> bool:
-    """Write one parsed sheet row onto a registration.
+    """Write one parsed sheet row onto a registration (``entry``: its participation in the feed's node).
 
     ``values`` is the row's answers already validated against ``schema``; the
     answer service owns the columns, the identity rows and the custom answers,
@@ -222,7 +223,9 @@ def apply_sheet_fields_to_registration(
     column has nothing to say about it.
     """
     registration.display_name = parsed_fields.get("display_name") or registration.display_name
-    answer_service.apply(registration, values, schema=schema, hero_catalog=None, catalog_roles=catalog_roles)
+    answer_service.apply(
+        registration, values, schema=schema, hero_catalog=None, catalog_roles=catalog_roles, entry=entry
+    )
 
     if not allow_balancer_overwrite:
         return False
@@ -349,6 +352,7 @@ class SheetSyncService:
         session: AsyncSession,
         tournament_id: int,
         *,
+        registration_node_id: int,
         source_url: str,
         title: str | None,
         auto_sync_enabled: bool,
@@ -357,6 +361,7 @@ class SheetSyncService:
         value_mapping_json: dict[str, Any] | None,
     ) -> models.RegistrationGoogleSheetFeed:
         tournament = await self.common.ensure_tournament_exists(session, tournament_id)
+        await self.common.ensure_registration_node(session, tournament_id, registration_node_id)
         sheet_id, gid = extract_sheet_source(source_url)
         feed = await self.get_google_sheet_feed(session, tournament_id)
         if mapping_config_json is not None or value_mapping_json is not None:
@@ -371,6 +376,7 @@ class SheetSyncService:
         if feed is None:
             feed = models.RegistrationGoogleSheetFeed(
                 tournament_id=tournament.id,
+                registration_node_id=registration_node_id,
                 source_url=source_url,
                 sheet_id=sheet_id,
                 gid=gid,
@@ -383,6 +389,7 @@ class SheetSyncService:
             )
             await self.feed_repo.create(session, feed)
         else:
+            feed.registration_node_id = registration_node_id
             feed.source_url = source_url
             feed.sheet_id = sheet_id
             feed.gid = gid
@@ -727,6 +734,17 @@ class SheetSyncService:
                 )
             )
             bindings_by_key = {binding.source_record_key: binding for binding in existing_bindings}
+            # The rows become entries of the feed's registration node: its live entries, by registration id.
+            node_id = feed.registration_node_id
+            node_entries = {
+                row.registration_id: row
+                for row in await session.scalars(
+                    sa.select(models.RegistrationEntry).where(
+                        models.RegistrationEntry.registration_node_id == node_id,
+                        models.RegistrationEntry.deleted_at.is_(None),
+                    )
+                )
+            }
 
             # Bulk prefetches for the per-row loop, so a changed row costs no
             # lookups of its own (unchanged rows are skipped before any):
@@ -777,7 +795,7 @@ class SheetSyncService:
             seen_keys: set[str] = set()
             # Rows whose roles the sync rewrote: their ready/incomplete verdict is
             # recomputed once, below, from the engine's rosters.
-            resync_status_by_id: dict[int, models.Registration] = {}
+            resync_status_by_id: dict[int, models.RegistrationEntry] = {}
 
             for source_record_key, (row_index, raw_row_json, parsed_fields) in parsed_rows.items():
                 # Seen BEFORE validation: a row the sheet still carries must not
@@ -787,10 +805,12 @@ class SheetSyncService:
                 parsed_fields_json = serialize_parsed_fields(parsed_fields)
                 # Applied as-is last time: nothing to validate, write or count. A
                 # withdrawn registration is re-applied, so a row back on the sheet restores it.
+                bound_entry = node_entries.get(binding.registration_id) if binding is not None else None
                 if (
                     binding is not None
                     and binding.row_hash == _row_hash(raw_row_json, parsed_fields_json, mode, binding.registration)
-                    and binding.registration.status != "withdrawn"
+                    and bound_entry is not None
+                    and bound_entry.status != "withdrawn"
                 ):
                     continue
                 values, answer_errors = await self._validated_row_answers(
@@ -823,12 +843,18 @@ class SheetSyncService:
                         form_version_id=form.current_version_id if form is not None else None,
                         display_name=parsed_fields.get("display_name"),
                         admin_notes=parsed_fields.get("admin_notes"),
-                        status="approved",
                         submitted_at=parsed_fields.get("submitted_at") or now,
                         identities=[],
                     )
+                    row_entry = models.RegistrationEntry(registration_node_id=node_id, status="approved")
+                    row_entry.registration = registration
                     answer_service.apply(
-                        registration, values, schema=schema, hero_catalog=None, catalog_roles=catalog_roles
+                        registration,
+                        values,
+                        schema=schema,
+                        hero_catalog=None,
+                        catalog_roles=catalog_roles,
+                        entry=row_entry,
                     )
                     replace_registration_roles(
                         registration,
@@ -837,14 +863,23 @@ class SheetSyncService:
                         mode=mode,
                     )
                     await self.registration_repo.create(session, registration)
+                    node_entries[registration.id] = row_entry
                     new_identity = registration.primary_game_identity(provider=provider)
                     if new_identity is not None:
                         registrations_by_handle.setdefault(new_identity.handle_normalized, registration)
                     created += 1
                 else:
                     allow_balancer_overwrite = registration.balancer_profile_overridden_at is None
+                    row_entry = node_entries.get(registration.id)
+                    if row_entry is None:
+                        # A registration of another intake (or one removed from this node) joins this node.
+                        row_entry = models.RegistrationEntry(registration_node_id=node_id, status="approved")
+                        row_entry.registration = registration
+                        session.add(row_entry)
+                        node_entries[registration.id] = row_entry
                     if apply_sheet_fields_to_registration(
                         registration,
+                        row_entry,
                         parsed_fields,
                         values,
                         schema=schema,
@@ -853,9 +888,9 @@ class SheetSyncService:
                         sheet_ranked_roles=sheet_ranked_roles,
                         mode=mode,
                     ):
-                        resync_status_by_id[registration.id] = registration
-                    if registration.status == "withdrawn":
-                        registration.status = "approved"
+                        resync_status_by_id[registration.id] = row_entry
+                    if row_entry.status == "withdrawn":
+                        row_entry.status = "approved"
                     updated += 1
 
                 # Anchor sheet-imported registrations on a workspace_member: OW-rank
@@ -896,8 +931,9 @@ class SheetSyncService:
             for binding in existing_bindings:
                 if binding.source_record_key in seen_keys:
                     continue
-                if binding.registration.status != "withdrawn":
-                    binding.registration.status = "withdrawn"
+                gone_entry = node_entries.get(binding.registration_id)
+                if gone_entry is not None and gone_entry.status != "withdrawn":
+                    gone_entry.status = "withdrawn"
                     withdrawn += 1
 
             if resync_status_by_id:
@@ -905,14 +941,14 @@ class SheetSyncService:
                 # engine because the rows above were loaded for the sync's own
                 # purposes; autoflush publishes the role writes first, so the
                 # verdict is the one this sync just produced.
-                rosters = await roster_engine.for_tournament(
+                rosters = await roster_engine.for_registration_node(
                     session,
-                    tournament_id,
+                    node_id,
                     registration_ids=list(resync_status_by_id),
                     include_deleted=True,
                 )
-                for registration_id, registration in resync_status_by_id.items():
-                    sync_included_balancer_status(registration, rosters.get(registration_id))
+                for registration_id, resynced_entry in resync_status_by_id.items():
+                    sync_included_balancer_status(resynced_entry, rosters.get(registration_id))
 
             feed.header_row_json = headers
             if feed.mapping_config_json is None:

@@ -69,6 +69,7 @@ def serialize_registration_role(
 
 def serialize_registration(
     registration: models.Registration,
+    entry: models.RegistrationEntry,
     *,
     workspace_id: int,
     provider: str,
@@ -81,8 +82,8 @@ def serialize_registration(
 ) -> schemas.BalancerRegistrationRead:
     binding = loaded_relationship_or_none(registration, "google_sheet_binding")
     roles = loaded_relationship_or_none(registration, "roles") or []
-    reviewer = loaded_relationship_or_none(registration, "reviewer")
-    checked_in_by_user = loaded_relationship_or_none(registration, "checked_in_by_user")
+    reviewer = loaded_relationship_or_none(entry, "reviewer")
+    checked_in_by_user = loaded_relationship_or_none(entry, "checked_in_by_user")
     # API shape: ``user_id`` (the frontend depends on it) is derived from the
     # member anchor — callers must eager-load workspace_member
     # (loaded_relationship_or_none never lazy-loads).
@@ -91,15 +92,17 @@ def serialize_registration(
     sorted_roles = sorted(roles, key=lambda item: (item.priority, item.role))
     # Every role row is reported (the editor toggles the ones the engine left
     # out of the roster); the roster is what rates them.
-    entry_by_role = {entry.role: entry for entry in roster.roles} if roster is not None else {}
+    roster_role_by_code = {role.role: role for role in roster.roles} if roster is not None else {}
     resolved_status_meta = (
-        status_meta_map["registration"].get(registration.status) if status_meta_map is not None else None
-    ) or build_unknown_status_meta("registration", registration.status)
+        status_meta_map["registration"].get(entry.status) if status_meta_map is not None else None
+    ) or build_unknown_status_meta("registration", entry.status)
     resolved_balancer_status_meta = (
-        status_meta_map["balancer"].get(registration.balancer_status) if status_meta_map is not None else None
-    ) or build_unknown_status_meta("balancer", registration.balancer_status)
+        status_meta_map["balancer"].get(entry.balancer_status) if status_meta_map is not None else None
+    ) or build_unknown_status_meta("balancer", entry.balancer_status)
     return schemas.BalancerRegistrationRead(
         id=registration.id,
+        entry_id=entry.id,
+        registration_node_id=entry.registration_node_id,
         tournament_id=registration.tournament_id,
         workspace_id=workspace_id,
         user_id=workspace_member.player_id if workspace_member is not None else None,
@@ -110,7 +113,7 @@ def serialize_registration(
         ),
         source="google_sheets" if binding is not None else "manual",
         source_record_key=binding.source_record_key if binding is not None else None,
-        answers=answer_service.answers_of(registration),
+        answers=answer_service.answers_of(registration, entry),
         admin_notes=registration.admin_notes,
         # The roster is the one flex predicate (``PlayerRoster.is_full_flex``,
         # computed over playable declared roles). Without a roster there is no
@@ -121,18 +124,18 @@ def serialize_registration(
             if roster is not None
             else is_flex_submission([role for role in sorted_roles if role.is_active])
         ),
-        status=registration.status,
-        balancer_status=registration.balancer_status,
+        status=entry.status,
+        balancer_status=entry.balancer_status,
         status_meta=schemas.StatusMetaRead(**resolved_status_meta),
         balancer_status_meta=schemas.StatusMetaRead(**resolved_balancer_status_meta),
-        exclude_reason=registration.exclude_reason,
-        checked_in=registration.checked_in,
-        checked_in_at=registration.checked_in_at,
+        exclude_reason=entry.exclude_reason,
+        checked_in=entry.checked_in,
+        checked_in_at=entry.checked_in_at,
         checked_in_by_username=checked_in_by_user.username if checked_in_by_user is not None else None,
-        deleted_at=registration.deleted_at,
+        deleted_at=entry.deleted_at,
         submitted_at=registration.submitted_at,
         submitted_late=tournament is not None and submitted_late(registration, tournament),
-        reviewed_at=registration.reviewed_at,
+        reviewed_at=entry.reviewed_at,
         reviewed_by_username=reviewer.username if reviewer is not None else None,
         balancer_profile_overridden_at=registration.balancer_profile_overridden_at,
         admission=admission if admission is not None else AdmissionRead.unknown(),
@@ -143,7 +146,7 @@ def serialize_registration(
             serialize_registration_role(
                 role,
                 (ow_ranks_for_user or {}).get(role.role),
-                entry_by_role.get(role.role),
+                roster_role_by_code.get(role.role),
             )
             for role in sorted_roles
         ],
@@ -266,6 +269,7 @@ def serialize_feed(
     return schemas.BalancerGoogleSheetFeedRead(
         id=feed.id,
         tournament_id=feed.tournament_id,
+        registration_node_id=feed.registration_node_id,
         source_url=feed.source_url,
         sheet_id=feed.sheet_id,
         gid=feed.gid,

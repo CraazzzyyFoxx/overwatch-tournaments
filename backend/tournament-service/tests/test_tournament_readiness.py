@@ -62,15 +62,23 @@ def seeded(db):
     db.flush()
     db.add(Stage(tournament_id=t.id, name="Groups", stage_type=enums.StageType.ROUND_ROBIN, scoring_rule_id=rule.id))
     db.add(RegistrationForm(tournament_id=t.id, workspace_id=ws.id, is_open=True))
-    regs = [
-        Registration(tournament_id=t.id, display_name="a", status="approved", checked_in=True, balancer_status="ready"),
-        Registration(
-            tournament_id=t.id, display_name="b", status="approved", checked_in=True, balancer_status="incomplete"
-        ),
-        Registration(tournament_id=t.id, display_name="c", status="approved"),
-        Registration(tournament_id=t.id, display_name="d", status="pending"),
-    ]
-    db.add_all(regs)
+    regs = [Registration(tournament_id=t.id, display_name=name) for name in "abcd"]
+    node = models.FlowNode(tournament_id=t.id, kind="registration", name="Registration", status="open", config={})
+    db.add_all([*regs, node])
+    db.flush()
+    db.add_all(
+        models.RegistrationEntry(registration_node_id=node.id, registration_id=reg.id, **fields)
+        for reg, fields in zip(
+            regs,
+            (
+                {"status": "approved", "checked_in": True, "balancer_status": "ready"},
+                {"status": "approved", "checked_in": True, "balancer_status": "incomplete"},
+                {"status": "approved"},
+                {"status": "pending"},
+            ),
+            strict=True,
+        )
+    )
     db.flush()
     # Saved rank data on two registrations (one approved, one pending); the
     # role without rank_value must NOT count as ranked.

@@ -81,6 +81,7 @@ from .ranks import (
     RankSnapshotRepository,
 )
 from .registration import (
+    RegistrationEntryRepository,
     RegistrationRepository,
     RegistrationRoleRepository,
     RegistrationTeamInviteRepository,
@@ -268,6 +269,7 @@ __all__ = (
     "RankFetchLogRepository",
     "RankSnapshotRepository",
     "RefreshTokenRepository",
+    "RegistrationEntryRepository",
     "RegistrationFormRepository",
     "RegistrationFormTemplateRepository",
     "RegistrationFormVersionRepository",

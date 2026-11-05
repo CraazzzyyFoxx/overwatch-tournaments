@@ -59,7 +59,7 @@ class _Tournaments:
 def _create(**kwargs: Any):
     service = lifecycle.DraftLifecycleService(tournaments_repo=_Tournaments())  # type: ignore[arg-type]
     return asyncio.run(
-        service.create_session(_FakeSession(), tournament_id=1, workspace_id=2, **kwargs)  # type: ignore[arg-type]
+        service.create_session(_FakeSession(), tournament_id=1, formation_node_id=3, workspace_id=2, **kwargs)  # type: ignore[arg-type]
     )
 
 

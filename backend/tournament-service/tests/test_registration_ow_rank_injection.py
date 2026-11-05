@@ -89,12 +89,16 @@ def test_single_role_registration_is_not_flex() -> None:
                 handle_normalized=normalize_social_handle(SocialProvider.BATTLENET, "Player#1234"),
             )
         ],
+        stream_pov=False,
+        roles=[_role_model("tank", 500)],
+    )
+    entry = models.RegistrationEntry(
+        id=1,
+        registration_node_id=3,
         status="pending",
         balancer_status="pending",
         # Server-side defaults are not applied to a transient instance.
         checked_in=False,
-        stream_pov=False,
-        roles=[_role_model("tank", 500)],
     )
     roster = PlayerRoster(
         registration_id=1,
@@ -108,8 +112,12 @@ def test_single_role_registration_is_not_flex() -> None:
     )
 
     assert (
-        serializers.serialize_registration(registration, workspace_id=1, provider="battlenet", roster=roster).is_flex
+        serializers.serialize_registration(
+            registration, entry, workspace_id=1, provider="battlenet", roster=roster
+        ).is_flex
         is False
     )
     # No roster resolved: same predicate as the write path, over declared-active rows.
-    assert serializers.serialize_registration(registration, workspace_id=1, provider="battlenet").is_flex is False
+    assert (
+        serializers.serialize_registration(registration, entry, workspace_id=1, provider="battlenet").is_flex is False
+    )

@@ -280,6 +280,7 @@ class SubscriptionAdminService:
             await session.execute(
                 sa.select(models.Tournament.workspace_id, req.requirement_json)
                 .select_from(reg)
+                .join(models.RegistrationEntry, models.RegistrationEntry.registration_id == reg.id)
                 .join(member, reg.workspace_member_id == member.id)
                 .join(player, member.player_id == player.id)
                 .join(models.Tournament, reg.tournament_id == models.Tournament.id)
@@ -291,7 +292,8 @@ class SubscriptionAdminService:
                 .where(
                     player.auth_user_id == auth_user_id,
                     reg.deleted_at.is_(None),
-                    reg.status != "withdrawn",
+                    models.RegistrationEntry.deleted_at.is_(None),
+                    models.RegistrationEntry.status != "withdrawn",
                     form.require_subscription.is_(True),
                 )
             )

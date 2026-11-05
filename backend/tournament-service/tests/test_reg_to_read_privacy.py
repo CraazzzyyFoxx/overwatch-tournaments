@@ -57,6 +57,20 @@ def _identity(provider: str, handle: str, position: int = 0) -> SimpleNamespace:
     return SimpleNamespace(provider=provider, handle=handle, position=position)
 
 
+def _entry() -> SimpleNamespace:
+    """The registration's participation in its node: what the read takes status, check-in and reserve from."""
+    return SimpleNamespace(
+        id=5,
+        registration_node_id=3,
+        status="approved",
+        balancer_status="ready",
+        checked_in=False,
+        reviewed_at=None,
+        is_reserve=False,
+        is_substitute=False,
+    )
+
+
 def _reg_stub(extra: tuple[SimpleNamespace, ...] = ()) -> SimpleNamespace:
     identities = [
         _identity("battlenet", "Player#1234"),
@@ -96,11 +110,7 @@ def _reg_stub(extra: tuple[SimpleNamespace, ...] = ()) -> SimpleNamespace:
         organizer_notes="please seed me low",
         custom_fields_json={"vk": "vk.com/player", "staff_note": "watch this one"},
         form_version_id=9,
-        status="approved",
-        balancer_status="ready",
-        checked_in=False,
         submitted_at=datetime(2026, 1, 1),
-        reviewed_at=None,
     )
     # The model's own algorithm, run against the stub's rows.
     stub.primary_game_identity = partial(Registration.primary_game_identity, stub)
@@ -108,7 +118,7 @@ def _reg_stub(extra: tuple[SimpleNamespace, ...] = ()) -> SimpleNamespace:
 
 
 def test_the_roster_read_carries_every_public_answer_it_renders():
-    read = _reg_to_read(_reg_stub(), workspace_id=1, provider="battlenet", public_keys=PUBLIC_KEYS)
+    read = _reg_to_read(_reg_stub(), _entry(), workspace_id=1, provider="battlenet", public_keys=PUBLIC_KEYS)
 
     # Anti-smurf transparency data (the roster's whole point): the declared
     # alternates ride in the battlenet answer, primary first.
@@ -127,7 +137,7 @@ def test_the_roster_read_carries_every_public_answer_it_renders():
 
 
 def test_an_anonymous_read_drops_the_answers_the_organizer_kept_to_themselves():
-    read = _reg_to_read(_reg_stub(), workspace_id=1, provider="battlenet", public_keys=PUBLIC_KEYS)
+    read = _reg_to_read(_reg_stub(), _entry(), workspace_id=1, provider="battlenet", public_keys=PUBLIC_KEYS)
 
     assert "organizer_notes" not in read.answers
     assert "staff_note" not in read.answers
@@ -136,7 +146,7 @@ def test_an_anonymous_read_drops_the_answers_the_organizer_kept_to_themselves():
 
 
 def test_no_public_key_set_is_the_organizer_context_and_filters_nothing():
-    read = _reg_to_read(_reg_stub(), workspace_id=1, provider="battlenet")
+    read = _reg_to_read(_reg_stub(), _entry(), workspace_id=1, provider="battlenet")
 
     assert read.answers["organizer_notes"] == "please seed me low"
     assert read.answers["staff_note"] == "watch this one"
@@ -145,14 +155,14 @@ def test_no_public_key_set_is_the_organizer_context_and_filters_nothing():
 
 
 def test_a_registration_answered_against_an_older_version_reads_stale():
-    stale = _reg_to_read(_reg_stub(), workspace_id=1, provider="battlenet", current_version_id=11)
-    current = _reg_to_read(_reg_stub(), workspace_id=1, provider="battlenet", current_version_id=9)
+    stale = _reg_to_read(_reg_stub(), _entry(), workspace_id=1, provider="battlenet", current_version_id=11)
+    current = _reg_to_read(_reg_stub(), _entry(), workspace_id=1, provider="battlenet", current_version_id=9)
 
     assert (stale.form_version_id, stale.form_version_stale) == (9, True)
     assert current.form_version_stale is False
     # An unknown current version is never reported as stale: the read simply
     # does not know, and a false badge would nag every reader forever.
-    assert _reg_to_read(_reg_stub(), workspace_id=1, provider="battlenet").form_version_stale is False
+    assert _reg_to_read(_reg_stub(), _entry(), workspace_id=1, provider="battlenet").form_version_stale is False
 
 
 def test_ranks_stay_hidden_unless_the_form_publishes_them():
@@ -161,8 +171,8 @@ def test_ranks_stay_hidden_unless_the_form_publishes_them():
         SimpleNamespace(role="tank", subrole=None, is_primary=True, priority=0, rank_value=3200, hero_entries=[])
     ]
 
-    hidden = _reg_to_read(stub, workspace_id=1, provider="battlenet", roster=_roster(3200))
-    shown = _reg_to_read(stub, workspace_id=1, provider="battlenet", show_ranks=True, roster=_roster(3200))
+    hidden = _reg_to_read(stub, _entry(), workspace_id=1, provider="battlenet", roster=_roster(3200))
+    shown = _reg_to_read(stub, _entry(), workspace_id=1, provider="battlenet", show_ranks=True, roster=_roster(3200))
 
     assert hidden.roles[0].rank_value is None
     assert shown.roles[0].rank_value == 3200
@@ -174,7 +184,9 @@ def test_follow_reg_uses_inherited_workspace_rank():
         SimpleNamespace(role="tank", subrole=None, is_primary=True, priority=0, rank_value=None, hero_entries=[])
     ]
 
-    read = _reg_to_read(stub, workspace_id=1, provider="battlenet", show_ranks=True, roster=_roster(3200, "workspace"))
+    read = _reg_to_read(
+        stub, _entry(), workspace_id=1, provider="battlenet", show_ranks=True, roster=_roster(3200, "workspace")
+    )
 
     assert read.roles[0].rank_value == 3200
 
@@ -191,14 +203,19 @@ def test_public_roles_come_from_the_roster_not_the_rows():
     synthesized = RosterRole(role="damage", rank=None, source="none", is_primary=False, priority=1, subrole=None)
 
     read = _reg_to_read(
-        stub, workspace_id=1, provider="battlenet", show_ranks=True, roster=_roster(3200, "registration", synthesized)
+        stub,
+        _entry(),
+        workspace_id=1,
+        provider="battlenet",
+        show_ranks=True,
+        roster=_roster(3200, "registration", synthesized),
     )
 
     assert [(role.role.role, role.rank_value) for role in read.roles] == [("tank", 3200), ("damage", None)]
 
 
 def test_read_payload_includes_profile_visibility():
-    read = _reg_to_read(_reg_stub(), workspace_id=1, provider="battlenet", profiles_open=True)
+    read = _reg_to_read(_reg_stub(), _entry(), workspace_id=1, provider="battlenet", profiles_open=True)
 
     assert read.profiles_open is True
 
@@ -207,24 +224,26 @@ def test_the_primary_handle_is_the_owner_providers_never_another_games():
     riot = _identity("riot", "Faker#KR1")
 
     # Both games' handles on one registration: each owner provider reads its own.
-    assert _reg_to_read(_reg_stub((riot,)), workspace_id=1, provider="riot").primary_handle == "Faker#KR1"
-    assert _reg_to_read(_reg_stub((riot,)), workspace_id=1, provider="battlenet").primary_handle == "Player#1234"
+    assert _reg_to_read(_reg_stub((riot,)), _entry(), workspace_id=1, provider="riot").primary_handle == "Faker#KR1"
+    assert (
+        _reg_to_read(_reg_stub((riot,)), _entry(), workspace_id=1, provider="battlenet").primary_handle == "Player#1234"
+    )
 
 
 def test_a_missing_owner_provider_handle_reads_null_even_with_another_games_handle():
     # A League registration whose only game handle is a BattleTag: no Riot ID, no handle.
-    assert _reg_to_read(_reg_stub(), workspace_id=1, provider="riot").primary_handle is None
+    assert _reg_to_read(_reg_stub(), _entry(), workspace_id=1, provider="riot").primary_handle is None
 
 
 def test_the_read_names_the_person_by_the_games_visible_handle_and_links_the_canonical_name():
-    read = _reg_to_read(_reg_stub((_identity("riot", "Snap#EUW"),)), workspace_id=1, provider="riot")
+    read = _reg_to_read(_reg_stub((_identity("riot", "Snap#EUW"),)), _entry(), workspace_id=1, provider="riot")
 
     assert (read.display.name, read.display.tag) == ("Faker", "#KR1")
     assert (read.display.canonical, read.display.snapshot) == ("Canon#9", "Snap#EUW")
 
 
 def test_without_a_visible_game_account_the_registration_handle_names_the_person():
-    read = _reg_to_read(_reg_stub(), workspace_id=1, provider="battlenet")
+    read = _reg_to_read(_reg_stub(), _entry(), workspace_id=1, provider="battlenet")
 
     assert (read.display.name, read.display.tag, read.display.snapshot) == ("Player", "#1234", None)
     assert read.display.canonical == "Canon#9"

@@ -296,19 +296,16 @@ def test_stale_count_counts_live_registrations_on_older_versions(db_session) -> 
                     Registration(
                         tournament_id=tournament_id,
                         display_name="live-a",
-                        status="approved",
                         form_version_id=version_one,
                     ),
                     Registration(
                         tournament_id=tournament_id,
                         display_name="live-b",
-                        status="approved",
                         form_version_id=version_one,
                     ),
                     Registration(
                         tournament_id=tournament_id,
                         display_name="withdrawn",
-                        status="approved",
                         form_version_id=version_one,
                         deleted_at=datetime.now(UTC),
                     ),

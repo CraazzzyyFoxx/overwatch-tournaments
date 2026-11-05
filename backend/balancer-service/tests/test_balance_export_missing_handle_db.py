@@ -24,8 +24,9 @@ from shared.models.tournament.team import Team
 from shared.models.tournament.tournament import Tournament
 from shared.testing import create_test_async_engine
 from shared.testing.db import ensure_test_postgres
+from shared.testing.factories import add_entry
 from src.services.admin.balancer import balancer_admin_service
-from tests.factories import formation_node
+from tests.factories import formation_node, wire_input
 
 _TAG = itertools.count()
 
@@ -73,11 +74,14 @@ class BalanceExportMissingHandleTests(IsolatedAsyncioTestCase):
             s.add(tournament)
             await s.flush()
             captain, member = (
-                Registration(tournament_id=tournament.id, display_name=name, status="approved", balancer_status="ready")
-                for name in ("No Tag Captain", "Tagged#1")
+                Registration(tournament_id=tournament.id, display_name=name) for name in ("No Tag Captain", "Tagged#1")
             )
             s.add_all([captain, member])
             await s.flush()
+            formation_id = await formation_node(s, tournament.id)
+            registration_node_id = await wire_input(s, formation_id)
+            for registration in (captain, member):
+                await add_entry(s, registration_node_id, registration.id, status="approved", balancer_status="ready")
             s.add(
                 RegistrationIdentity(
                     registration_id=member.id,
@@ -101,7 +105,7 @@ class BalanceExportMissingHandleTests(IsolatedAsyncioTestCase):
             }
             balance = BalancerBalance(
                 tournament_id=tournament.id,
-                formation_node_id=await formation_node(s, tournament.id),
+                formation_node_id=formation_id,
                 result_json={
                     "teams": [team],
                     "statistics": {"average_mmr": 3000, "mmr_std_dev": 0, "total_teams": 1, "players_per_team": 2},

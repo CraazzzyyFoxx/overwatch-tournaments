@@ -278,6 +278,8 @@ class RegistrationTeamInvitePreview(BaseModel):
     """
 
     tournament_id: int
+    #: The registration node the team was created at: the node the invitee signs up in.
+    registration_node_id: int
     tournament_name: str
     workspace_id: int
     #: The tournament's discipline: the game whose roles name ``slot_code``.

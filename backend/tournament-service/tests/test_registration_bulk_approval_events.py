@@ -56,7 +56,6 @@ class RegistrationBulkApprovalEventsTests(IsolatedAsyncioTestCase):
             models.Registration(
                 tournament_id=self.tournament.id,
                 workspace_member_id=member_id,
-                status="approved",
                 identities=[
                     models.RegistrationIdentity(
                         provider="battlenet",
