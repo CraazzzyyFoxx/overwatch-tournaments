@@ -1,8 +1,8 @@
 import type { Page } from "@playwright/test";
 import { BASE_URL } from "../support/env";
 import { expect, openPage, test } from "../support/fixtures";
-import { listTeams, seedPlayers } from "../support/flows";
-import { createTournament, createWorkspace } from "../support/seed";
+import { listTeams, openRegistration, seedPlayers } from "../support/flows";
+import { createTournament, createWorkspace, nodeOf, transitionNode } from "../support/seed";
 import { createMix, draftBoard, pickFirstSafe, seedDraft, seedMembers, type DraftBoard, type Mix } from "../support/team-formation";
 
 // Team formation through the UI: the live draft room (two captains in their
@@ -72,7 +72,11 @@ test("@mobile a spectator follows a live draft on a phone", async ({ adminApi, m
 test("roster tab opens the tournament balancer with the registration pool", async ({ adminApi, page }) => {
   const ws = await createWorkspace(adminApi);
   const t = await createTournament(adminApi, ws.id);
-  const pool = await seedPlayers(adminApi, t.id, 10);
+  const { registrationNodeId } = await openRegistration(adminApi, t.id);
+  const pool = await seedPlayers(adminApi, t.id, 10, { registrationNodeId });
+  // The balancer works on a closed intake and a forming formation.
+  await transitionNode(adminApi, registrationNodeId, "closed");
+  await transitionNode(adminApi, (await nodeOf(adminApi, t.id, "formation")).id, "forming");
   await openPage(page, `/admin/tournaments/${t.id}/teams/roster`);
   await page.getByRole("link", { name: "Open balancer" }).click();
   await expect(page).toHaveURL(new RegExp(`/balancer\\?tournament=${t.id}`), { timeout: 240_000 });

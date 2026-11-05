@@ -80,7 +80,7 @@ test("groups → playoffs: group cards and tables, then the playoff bracket and 
   const { tournament, groupStage, playoff } = setup;
   for (const r of [...ladder(setup.groupA), ...ladder(setup.groupB)]) await enter(adminApi, setup.encounters, r);
   await stageStandings(adminApi, tournament.id, groupStage.id);
-  await startStage(adminApi, playoff.id);
+  await startStage(adminApi, playoff);
   const seeds = seedOrder(await adminApi.get<Stage>(`/api/v1/admin/stages/${playoff.id}`));
   const playoffEncounters = await playBracket(adminApi, tournament.id, playoff.id, singleElimination(seeds), better(seeds));
   const groupEncounters = await listEncounters(adminApi, tournament.id, groupStage.id);

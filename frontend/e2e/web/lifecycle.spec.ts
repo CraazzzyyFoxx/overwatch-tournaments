@@ -14,7 +14,7 @@ import {
   seedPlayers,
   setResult,
 } from "../support/flows";
-import { createTournament, createWorkspace, setStatus } from "../support/seed";
+import { createTournament, createWorkspace, nodeOf, transitionNode } from "../support/seed";
 
 type RailItem = { label: string; locked: boolean };
 
@@ -63,8 +63,9 @@ test("public tournament page follows the lifecycle (anon + player)", async ({ ad
   });
 
   let versionId = 0;
+  let registrationNodeId = 0;
   await test.step("registration: anon is asked to log in, the player gets the Register CTA", async () => {
-    versionId = await openRegistration(adminApi, t.id);
+    ({ versionId, registrationNodeId } = await openRegistration(adminApi, t.id));
     await openPage(anon, url);
     await expect(anon.getByRole("heading", { level: 1 })).toContainText("Registration");
     await expect(anon.getByText("Login to register").first()).toBeVisible();
@@ -75,7 +76,7 @@ test("public tournament page follows the lifecycle (anon + player)", async ({ ad
   });
 
   await test.step("registered player sees the review state, then check-in", async () => {
-    const reg = await registerSelf(player, t.id, versionId, { roles: ["support"] });
+    const reg = await registerSelf(player, t.id, registrationNodeId, versionId, { roles: ["support"] });
     await openPage(playerPage, url);
     // The hero CTA turns into the entry's state, linking to the participants list.
     await expect(playerPage.getByRole("link", { name: "Pending review" })).toBeVisible();
@@ -85,8 +86,8 @@ test("public tournament page follows the lifecycle (anon + player)", async ({ ad
     await rankRegistration(adminApi, reg.id, [{ role: reg.roles[0].role, rank: 2600 }]);
     await adminApi.patch(`/api/v1/admin/balancer/registrations/${reg.id}/approve`);
     await adminApi.post(`/api/v1/admin/balancer/tournaments/${t.id}/registrations/bulk-add-to-balancer`, { registration_ids: [reg.id] });
-    await seedPlayers(adminApi, t.id, 9);
-    await setStatus(adminApi, t.id, "check_in");
+    await seedPlayers(adminApi, t.id, 9, { registrationNodeId });
+    await transitionNode(adminApi, registrationNodeId, "check_in");
 
     await openPage(playerPage, url);
     await expect(playerPage.getByRole("heading", { level: 1 })).toContainText("Check-in");
@@ -104,7 +105,10 @@ test("public tournament page follows the lifecycle (anon + player)", async ({ ad
 
   let teamIds: number[] = [];
   await test.step("teams exported: Teams opens before play, competition stays locked", async () => {
-    const { teams } = await balanceAndExport(adminApi, t.id);
+    // The formation starts only once its input, the registration, is closed.
+    await transitionNode(adminApi, registrationNodeId, "closed");
+    const formation = await nodeOf(adminApi, t.id, "formation");
+    const { teams } = await balanceAndExport(adminApi, t.id, formation.id);
     teamIds = teams.map((team) => team.id);
     // tournament-service may serve teams_count 0 for ~1 s after an export: reload until the rail
     // and the Teams tab catch up, bounded so a tab that stays stale still fails.
@@ -122,8 +126,7 @@ test("public tournament page follows the lifecycle (anon + player)", async ({ ad
 
   await test.step("LIVE: rail reorders, bracket opens with team names and the result", async () => {
     const stage = await createStage(adminApi, t.id, teamIds, { stageType: "single_elimination", name: "Final" });
-    await startStage(adminApi, stage.id);
-    await setStatus(adminApi, t.id, "live");
+    await startStage(adminApi, stage);
 
     await openPage(anon, url);
     await expect(anon.getByRole("heading", { level: 1 })).toContainText("Live");

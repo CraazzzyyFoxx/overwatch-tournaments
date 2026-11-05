@@ -25,7 +25,9 @@ import {
 } from "../support/correctness";
 import { expect, test } from "../support/fixtures";
 import {
+  completeStages,
   createStage,
+  formTeams,
   startStage,
   listEncounters,
   seedBracket,
@@ -35,7 +37,7 @@ import {
   type TournamentJob,
 } from "../support/flows";
 import { openGame, readEncounter, resultAudit, series, setPoints, sides } from "../support/results";
-import { createTournament, createWorkspace, setStatus } from "../support/seed";
+import { createTournament, createWorkspace, type Tournament } from "../support/seed";
 
 /**
  * Tournament-engine correctness, end to end over the gateway: brackets laid out
@@ -387,7 +389,7 @@ test("groups → playoffs: top 2 cross-seed A1-B2 / B1-A2 only once the groups c
   expect(groupOrder(itemB)).toEqual(groupTable(groupB, planB, POINTS, ROUND_ROBIN_ORDER).map((r) => r.team));
   expect((await adminApi.get<Stage>(`/api/v1/admin/stages/${groupStage.id}`)).status, "both groups closed").toBe("completed");
 
-  await startStage(adminApi, playoff.id);
+  await startStage(adminApi, playoff);
   const firstRound = async () =>
     (await listEncounters(adminApi, tournament.id, playoff.id))
       .filter((e) => e.round === 1)
@@ -437,7 +439,9 @@ test("groups → playoffs: top 2 cross-seed A1-B2 / B1-A2 only once the groups c
   const before = await standingsSnapshot(adminApi, tournament.id);
   await recalculate(adminApi, tournament.id);
   expect(await standingsSnapshot(adminApi, tournament.id), "a second recalculation changes nothing").toEqual(before);
-  const finished = await adminApi.post(`/api/v1/admin/tournaments/${tournament.id}/finish`);
+  // The tournament completes with its last stage node; the standings closed the stages that were played out.
+  await completeStages(adminApi, tournament.id);
+  const finished = await adminApi.get<Tournament>(`/api/v1/tournaments/${tournament.id}`);
   expect(finished.status).toBe("completed");
   expect(await standingsSnapshot(adminApi, tournament.id), "finishing keeps the standings").toEqual(before);
   await recalculate(adminApi, tournament.id);
@@ -455,6 +459,7 @@ for (const [groupCount, wiring] of [
     const ws = await createWorkspace(adminApi);
     const tournament = await createTournament(adminApi, ws.id);
     const teams = await seedTeams(adminApi, tournament.id, groupCount * 2, { players: false });
+    await formTeams(adminApi, tournament.id);
     const explicit = wiring !== "auto-wire";
     const created = await createStage(
       adminApi,
@@ -462,14 +467,13 @@ for (const [groupCount, wiring] of [
       teams.map((t) => t.id),
       { stageType: "round_robin", groups: groupCount, bestOf: 1, extra: explicit ? {} : { advance_count: 2 } }
     );
-    await startStage(adminApi, created.id);
+    await startStage(adminApi, created);
     const playoff = await adminApi.post<Stage>(
       `/api/v1/admin/stages/tournament/${tournament.id}`,
       { name: "Playoffs", stage_type: "single_elimination", best_of: { default: 1 }, order: 1 },
       201
     );
     await adminApi.post(`/api/v1/admin/stages/${playoff.id}/items`, { name: "Bracket", type: "single_bracket", order: 0 }, 201);
-    await setStatus(adminApi, tournament.id, "live", true);
 
     const groupStage = await adminApi.get<Stage>(`/api/v1/admin/stages/${created.id}`);
     const groupOf = new Map(groupStage.items.flatMap((item) => item.inputs.map((input) => [input.team_id!, item.name])));
@@ -478,7 +482,7 @@ for (const [groupCount, wiring] of [
     const rows = await stageStandings(adminApi, tournament.id, created.id);
     const winners = new Set(rows.filter((r) => r.position === 1).map((r) => r.team_id));
     if (explicit) await adminApi.post(`/api/v1/admin/stages/${playoff.id}/wire-from-groups`, { source_stage_id: created.id, top: 2 });
-    await startStage(adminApi, playoff.id);
+    await startStage(adminApi, playoff);
 
     const firstRound = (await listEncounters(adminApi, tournament.id, playoff.id)).filter((e) => e.round === 1).map((e) => seats(e) as [number, number]);
     const n = groupCount * 2;
@@ -620,6 +624,7 @@ test("ffa: two lobbies scored by a placement table; ties go to game wins, the he
   const ws = await createWorkspace(adminApi);
   const tournament = await createTournament(adminApi, ws.id);
   const teams = await seedTeams(adminApi, tournament.id, 8, { players: false });
+  await formTeams(adminApi, tournament.id);
   const placementPoints = [10, 6, 3, 1];
   const ffa = await createStage(
     adminApi,
@@ -635,14 +640,13 @@ test("ffa: two lobbies scored by a placement table; ties go to game wins, the he
       },
     }
   );
-  await startStage(adminApi, ffa.id);
+  await startStage(adminApi, ffa);
   const playoff = await adminApi.post<Stage>(
     `/api/v1/admin/stages/tournament/${tournament.id}`,
     { name: "Playoffs", stage_type: "single_elimination", best_of: { default: 1 }, order: 1 },
     201
   );
   await adminApi.post(`/api/v1/admin/stages/${playoff.id}/items`, { name: "Bracket", type: "single_bracket", order: 0 }, 201);
-  await setStatus(adminApi, tournament.id, "live", true);
 
   const stage = await adminApi.get<Stage>(`/api/v1/admin/stages/${ffa.id}`);
   const [itemA, itemB] = [...stage.items].sort((x, y) => x.id - y.id).map((item) => item.id);
@@ -712,7 +716,7 @@ test("ffa: two lobbies scored by a placement table; ties go to game wins, the he
   }
   expect((await adminApi.get<Stage>(`/api/v1/admin/stages/${ffa.id}`)).status, "both lobbies played their card").toBe("completed");
 
-  await startStage(adminApi, playoff.id);
+  await startStage(adminApi, playoff);
   const firstRound = (await listEncounters(adminApi, tournament.id, playoff.id)).filter((e) => e.round === 1).map((e) => seats(e).join("-"));
   expect(firstRound.sort(), "A1 vs B2, B1 vs A2").toEqual([`${p2}-${q3}`, `${q4}-${p1}`].sort());
 });

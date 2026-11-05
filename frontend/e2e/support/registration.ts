@@ -48,8 +48,6 @@ export type PublicForm = {
   id: number;
   version_id: number;
   version_number: number;
-  is_open: boolean;
-  registration_late: boolean;
   hide_registrations: boolean;
   stale_registrations: number | null;
   form_schema: FormSchema;

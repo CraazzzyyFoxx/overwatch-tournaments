@@ -1,7 +1,7 @@
 import { expect, openPage, test } from "../support/fixtures";
 import { battleTag, registerSelf } from "../support/flows";
 import { FULL_FORM, openTournament, type AdminRegistration, type MyRegistration } from "../support/registration";
-import { setStatus, uniq } from "../support/seed";
+import { transitionNode, uniq } from "../support/seed";
 import { selectWorkspace } from "../support/workspace";
 
 // Registration UX after the `registration` schema split: the public CTA →
@@ -64,11 +64,11 @@ test("player edits only open questions, then withdraws from the participants car
 });
 
 test("approved player checks in from the card once CHECK_IN opens", async ({ adminApi, makeUser, pageAs }) => {
-  const { t, version } = await openTournament(adminApi);
+  const { t, version, registrationNodeId } = await openTournament(adminApi);
   const user = await makeUser("ci");
-  const reg = await registerSelf(user, t.id, version, { roles: ["damage"] });
+  const reg = await registerSelf(user, t.id, registrationNodeId, version, { roles: ["damage"] });
   await adminApi.patch(`/api/v1/admin/balancer/registrations/${reg.id}/approve`);
-  await setStatus(adminApi, t.id, "check_in");
+  await transitionNode(adminApi, registrationNodeId, "check_in");
   const page = await pageAs(user);
   await openPage(page, `/tournaments/${t.slug}/participants`);
 
@@ -81,9 +81,9 @@ test("approved player checks in from the card once CHECK_IN opens", async ({ adm
 });
 
 test("organizer approves from the row menu and bulk-approves the rest on Registration › Entries", async ({ adminApi, makeUser, page }) => {
-  const { ws, t, version } = await openTournament(adminApi);
+  const { ws, t, version, registrationNodeId } = await openTournament(adminApi);
   const regs = [];
-  for (const role of ["tank", "damage", "support"]) regs.push(await registerSelf(await makeUser("rv"), t.id, version, { roles: [role] }));
+  for (const role of ["tank", "damage", "support"]) regs.push(await registerSelf(await makeUser("rv"), t.id, registrationNodeId, version, { roles: [role] }));
   await selectWorkspace(page.context(), ws.id);
   await openPage(page, `/admin/tournaments/${t.id}/registration/entries`);
 

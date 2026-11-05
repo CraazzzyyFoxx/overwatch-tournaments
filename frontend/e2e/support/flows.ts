@@ -398,6 +398,13 @@ export async function startStage(api: Api, stage: Pick<Stage, "node_id">): Promi
   for (const status of ["ready", "live"]) await transitionNode(api, stage.node_id, status);
 }
 
+/** Completes the stage nodes still `live` (the standings job closes most on its own); the tournament then derives `completed`. */
+export async function completeStages(api: Api, tournamentId: number): Promise<void> {
+  for (const node of await flowNodes(api, tournamentId)) {
+    if (node.kind === "stage" && node.status === "live") await transitionNode(api, node.id, "completed");
+  }
+}
+
 /** Duels by default; the list answers `slot_count = 2` only, so an FFA lobby needs its seat count. */
 export async function listEncounters(api: Api, tournamentId: number, stageId?: number, slotCount?: number): Promise<Encounter[]> {
   const page = await api.get<{ results: Encounter[] }>("/api/v1/encounters", {
