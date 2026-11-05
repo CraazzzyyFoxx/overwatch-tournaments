@@ -143,7 +143,7 @@ async def load_evaluation_frame(
     ranked = players[players["div"].notna()].sort_values([*_ROLE_KEY, "order", "player_id"])
 
     # T_p: the previous ranked tournament of the same (workspace, user, role), in tournament start order.
-    chain = ranked[ranked["is_final"]].drop_duplicates([*_ROLE_KEY, "tournament_id"], keep="last")
+    chain = ranked[ranked["is_final"].astype(bool)].drop_duplicates([*_ROLE_KEY, "tournament_id"], keep="last")
     by_role = chain.groupby(_ROLE_KEY, sort=False)
     chain = chain.assign(
         prev_tournament_id=by_role["tournament_id"].shift(1),
