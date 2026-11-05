@@ -85,6 +85,17 @@ def _queries(
         patch.object(users.profile, "get_roles", AsyncMock(return_value=roles or [])),
         patch.object(users.profile, "get_teams", AsyncMock(return_value=(teams or [], len(teams or [])))),
         patch.object(
+            users.profile,
+            "get_placements",
+            AsyncMock(
+                return_value={
+                    team.tournament_id: team.standings[0].overall_position
+                    for team in teams or []
+                    if team.standings[0].overall_position > 0
+                }
+            ),
+        ),
+        patch.object(
             users.encounters,
             "get_user_hero_records",
             hero_records or AsyncMock(return_value=heroes or []),

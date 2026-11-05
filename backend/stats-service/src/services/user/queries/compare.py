@@ -255,18 +255,20 @@ class UserCompareQueries(DisciplineQueries):
         team_positions = (
             sa.select(
                 scoped_players.c.user_id,
-                scoped_players.c.team_id,
-                sa.func.min(models.Standing.overall_position).label("overall_position"),
+                scoped_players.c.tournament_id,
+                sa.func.min(models.ParticipantResult.placement).label("overall_position"),
             )
             .select_from(scoped_players)
+            .join(models.WorkspaceMember, models.WorkspaceMember.player_id == scoped_players.c.user_id)
             .join(
-                models.Standing,
+                models.ParticipantResult,
                 sa.and_(
-                    models.Standing.team_id == scoped_players.c.team_id,
-                    models.Standing.tournament_id == scoped_players.c.tournament_id,
+                    models.ParticipantResult.tournament_id == scoped_players.c.tournament_id,
+                    models.ParticipantResult.final_team_id == scoped_players.c.team_id,
+                    models.ParticipantResult.workspace_member_id == models.WorkspaceMember.id,
                 ),
             )
-            .group_by(scoped_players.c.user_id, scoped_players.c.team_id)
+            .group_by(scoped_players.c.user_id, scoped_players.c.tournament_id)
             .cte("compare_team_positions")
         )
         average_placements = (

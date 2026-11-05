@@ -1,6 +1,7 @@
 import datetime
 import typing
 from collections import Counter
+from collections.abc import Mapping
 from statistics import mean
 
 import sqlalchemy as sa
@@ -1160,6 +1161,7 @@ class UserService(DisciplineQueries):
             params=pagination.PaginationSortParams(page=1, per_page=-1, entities=["tournament", "placement"]),
             workspace_id=workspace_id,
         )
+        member_placements = await self.profile.get_placements(session, user.id, workspace_id=workspace_id)
 
         placements: list[int] = []
         placements_playoff: list[int] = []
@@ -1182,7 +1184,7 @@ class UserService(DisciplineQueries):
             # yet, but the player is already in it.
             tournaments_count += 1
 
-            placement = _mappers.resolve_team_placement(team)
+            placement = member_placements.get(team.tournament_id)
             if placement is None:
                 continue
             placements.append(placement)
@@ -1195,7 +1197,7 @@ class UserService(DisciplineQueries):
                     placements_group.append(standing.position)
 
         games = (
-            await self._game_summaries(session, user.id, teams, workspace_id=workspace_id)
+            await self._game_summaries(session, user.id, teams, member_placements, workspace_id=workspace_id)
             if self._discipline is None
             else []
         )
@@ -1258,6 +1260,7 @@ class UserService(DisciplineQueries):
         session: AsyncSession,
         user_id: int,
         teams: typing.Sequence[models.Team],
+        placements: Mapping[int, int],
         *,
         workspace_id: int | None,
     ) -> list[schemas.UserGameSummary]:
@@ -1273,7 +1276,7 @@ class UserService(DisciplineQueries):
             if team.tournament.is_league:
                 continue
             tally[0] += 1
-            if _mappers.resolve_team_placement(team) == 1:
+            if placements.get(team.tournament_id) == 1:
                 tally[1] += 1
         installed = {code: index for index, code in enumerate(DISCIPLINES)}
         ordered = sorted(tallies, key=lambda code: (-tallies[code][0], installed.get(code, len(installed))))
@@ -1358,6 +1361,7 @@ class UserService(DisciplineQueries):
             params=pagination.PaginationSortParams(page=1, per_page=-1, entities=["tournament", "placement"]),
             workspace_id=workspace_id,
         )
+        member_placements = await self.profile.get_placements(session, user.id, workspace_id=workspace_id)
 
         placements: list[int] = []
         tournaments_count = 0
@@ -1368,7 +1372,7 @@ class UserService(DisciplineQueries):
             if tournament.is_league:
                 continue
             tournaments_count += 1
-            placement = _mappers.resolve_team_placement(team)
+            placement = member_placements.get(team.tournament_id)
             if placement is not None:
                 placements.append(placement)
                 if placement == 1:

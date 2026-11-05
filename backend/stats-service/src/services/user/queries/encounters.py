@@ -22,6 +22,7 @@ from shared.schemas.catalog import CatalogEntityRead
 from shared.schemas.identity import PersonDisplayRead
 from shared.schemas.match import NativeFact
 from shared.schemas.role import RoleRef
+from shared.services.participant_result import is_member_tournament_row
 from shared.services.person_display import game_handle_of
 from src.core.workspace import workspace_filter
 from src.schemas.user import UserMatchViewer
@@ -953,7 +954,7 @@ class UserEncounterQueries(DisciplineQueries):
     async def get_player_by_user_and_tournament(
         self, session: AsyncSession, user_id: int, tournament_id: int
     ) -> models.Player | None:
-        """Look up a user's Player row for a specific tournament.
+        """Look up a user's tournament Player row: the final team's (spec §11.4).
 
         Loads `team` + `team.tournament` (+ its `division_grid_version`) +
         `team.standings` for the stats page. The grid version is eager-loaded so the
@@ -972,6 +973,7 @@ class UserEncounterQueries(DisciplineQueries):
                 sa.and_(
                     models.Player.workspace_member.has(models.WorkspaceMember.player_id == user_id),
                     models.Player.tournament_id == tournament_id,
+                    is_member_tournament_row(),
                 )
             )
         )

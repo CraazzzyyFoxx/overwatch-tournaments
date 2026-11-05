@@ -41,7 +41,8 @@ MAP_STAT_RECORDS = {
     "solo_kills": enums.LogStatsName.SoloKills,
 }
 
-#: A title: first overall outside a group stage (``StageItem`` outer-joined onto the standing).
+#: A team title: first overall outside a group stage (``StageItem`` outer-joined onto the standing); only
+#: ``get_underdog_champion``, a team read, still uses it.
 _TITLE = (
     models.Standing.overall_position == 1,
     sa.or_(models.Standing.stage_item_id.is_(None), models.StageItem.type != enums.StageItemType.GROUP),
@@ -88,16 +89,23 @@ class StatisticsQueries(DisciplineQueries):
         )
 
     def _championships(self, *columns: typing.Any, workspace_id: int | None, almanac: bool = True) -> sa.Select:
-        """``columns`` over one row per title (:data:`_TITLE`) of a non-substitute roster entry in a public tournament."""
+        """``columns`` over one row per tournament won (the member's final placement, 1st) in a public tournament."""
+        result = models.ParticipantResult
         return (
             sa.select(*columns)
             .select_from(models.Player)
             .join(models.WorkspaceMember, models.WorkspaceMember.id == models.Player.workspace_member_id)
-            .join(models.Standing, models.Standing.team_id == models.Player.team_id)
-            .outerjoin(models.StageItem, models.StageItem.id == models.Standing.stage_item_id)
+            .join(
+                result,
+                sa.and_(
+                    result.tournament_id == models.Player.tournament_id,
+                    result.workspace_member_id == models.Player.workspace_member_id,
+                    result.final_team_id == models.Player.team_id,
+                ),
+            )
             .join(models.Tournament, models.Tournament.id == models.Player.tournament_id)
             .where(
-                *_TITLE,
+                result.placement == 1,
                 models.Player.is_substitution.is_(False),
                 *self._public_tournaments(workspace_id, almanac=almanac),
             )

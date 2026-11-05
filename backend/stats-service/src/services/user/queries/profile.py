@@ -14,6 +14,7 @@ from shared.disciplines import discipline
 from shared.models.stats.match import mv_entity_global_stats
 from shared.schemas.role import RoleRef
 from shared.services.division_grid.access import tournament_effective_version_id_expr
+from shared.services.participant_result import is_member_tournament_row
 from src.services.discipline_queries import DisciplineQueries
 from src.services.encounter_seats import Seat
 
@@ -85,7 +86,7 @@ class UserProfileQueries(DisciplineQueries):
         params: pagination.PaginationSortParams,
         workspace_id: int | None = None,
     ) -> tuple[typing.Sequence[models.Team], int]:
-        """Paginated teams a user has played for, plus the total count.
+        """Paginated teams a user has played for, one per tournament (the member's final team, §11.2), plus the total.
 
         Scoped exactly like ``get_tournaments_with_stats`` (which powers the
         Tournaments tab): a tournament belongs to a user's history as soon as the
@@ -99,6 +100,7 @@ class UserProfileQueries(DisciplineQueries):
             models.Player.is_substitution.is_(False),
             models.Tournament.is_hidden.is_(False),
             played_encounter,
+            is_member_tournament_row(),
         )
 
         total_query = (
@@ -130,6 +132,24 @@ class UserProfileQueries(DisciplineQueries):
             return teams, len(teams)
         result_total = await session.execute(total_query)
         return teams, result_total.scalar_one()
+
+    async def get_placements(
+        self, session: AsyncSession, user_id: int, workspace_id: int | None = None
+    ) -> dict[int, int]:
+        """``{tournament_id: placement}`` over the user's ranked ``participant_result`` rows in this game."""
+        query = (
+            sa.select(models.ParticipantResult.tournament_id, models.ParticipantResult.placement)
+            .join(models.WorkspaceMember, models.WorkspaceMember.id == models.ParticipantResult.workspace_member_id)
+            .join(models.Tournament, models.Tournament.id == models.ParticipantResult.tournament_id)
+            .where(
+                models.WorkspaceMember.player_id == user_id,
+                models.ParticipantResult.placement.is_not(None),
+                *self.discipline_filter(models.Tournament.discipline),
+            )
+        )
+        if workspace_id is not None:
+            query = query.where(models.Tournament.workspace_id == workspace_id)
+        return dict((await session.execute(query)).tuples().all())
 
     async def get_roles(
         self, session: AsyncSession, user_id: int, workspace_id: int | None = None

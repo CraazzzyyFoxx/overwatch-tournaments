@@ -11,6 +11,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from unittest import IsolatedAsyncioTestCase
 
+import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
@@ -115,6 +116,21 @@ class StatisticsAlmanacTest(IsolatedAsyncioTestCase):
             models.Standing(
                 tournament_id=tournament.id, team_id=team.id, position=1, overall_position=1, matches=1, points=3.0
             )
+        )
+        members = await self.session.scalars(
+            sa.select(models.Player.workspace_member_id).where(
+                models.Player.team_id == team.id, models.Player.is_substitution.is_(False)
+            )
+        )
+        self.session.add_all(
+            models.ParticipantResult(
+                tournament_id=tournament.id,
+                workspace_member_id=member_id,
+                final_team_id=team.id,
+                placement=1,
+                field_size=2,
+            )
+            for member_id in members
         )
         await self.session.flush()
 

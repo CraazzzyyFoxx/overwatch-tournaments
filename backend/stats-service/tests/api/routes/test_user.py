@@ -308,6 +308,27 @@ def _ensure_compare_division_fixture(db: Session) -> dict[str, int | str]:
                 buchholz=None,
                 tb=None,
             ),
+            models.ParticipantResult(
+                tournament_id=ids["subject_cohort_tournament"],
+                workspace_member_id=ids["subject_member"],
+                final_team_id=ids["subject_cohort_team"],
+                placement=1,
+                field_size=2,
+            ),
+            models.ParticipantResult(
+                tournament_id=ids["subject_other_tournament"],
+                workspace_member_id=ids["subject_member"],
+                final_team_id=ids["subject_other_team"],
+                placement=10,
+                field_size=2,
+            ),
+            models.ParticipantResult(
+                tournament_id=ids["baseline_cohort_tournament"],
+                workspace_member_id=ids["baseline_member"],
+                final_team_id=ids["baseline_cohort_team"],
+                placement=4,
+                field_size=2,
+            ),
         ]
     )
     db.flush()
