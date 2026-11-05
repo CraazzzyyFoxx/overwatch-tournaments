@@ -5,19 +5,22 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, model_validator
 
 from shared.core.enums import FlowNodeKind, FlowNodeStatus, FlowResultState, FlowUnit
 
 __all__ = (
     "AdminFlowRead",
+    "FlowChanges",
     "FlowEdgeRead",
+    "FlowEdgeUpsert",
     "FlowIssueRead",
     "FlowKindPortsRead",
     "FlowNodeRead",
     "FlowNodeResultRead",
     "FlowNodeScheduleEntry",
     "FlowNodeTransition",
+    "FlowNodeUpsert",
     "FlowPortRead",
     "FlowPortSpecRead",
     "FlowRead",
@@ -120,3 +123,46 @@ class TournamentFlowNodeRead(BaseModel):
     stage_id: int | None
     config: dict[str, Any]
     schedule: list[FlowNodeScheduleEntry]
+
+
+class FlowNodeUpsert(BaseModel):
+    """Create (``ref`` set, ``id`` unset) or update (``id`` set) one node. ``stage_id`` only matters for a new node."""
+
+    id: int | None = None
+    ref: str | None = None
+    kind: FlowNodeKind
+    name: str
+    config: dict[str, Any] = {}
+    stage_id: int | None = None
+    position_x: float = 0.0
+    position_y: float = 0.0
+
+    @model_validator(mode="after")
+    def _id_xor_ref(self) -> FlowNodeUpsert:
+        if (self.id is None) == (self.ref is None):
+            raise ValueError("exactly one of id and ref must be set")
+        return self
+
+
+class FlowEdgeUpsert(BaseModel):
+    """``source`` / ``target`` are a node id, or the ``ref`` of a node created by the same request."""
+
+    id: int | None = None
+    source: int | str
+    source_port: str
+    target: int | str
+    target_port: str
+
+
+class FlowChanges(BaseModel):
+    nodes: list[FlowNodeUpsert] = Field(default_factory=list)
+    edges: list[FlowEdgeUpsert] = Field(default_factory=list)
+    delete_node_ids: list[int] = Field(default_factory=list)
+    delete_edge_ids: list[int] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _refs_unique(self) -> FlowChanges:
+        refs = [n.ref for n in self.nodes if n.ref is not None]
+        if len(refs) != len(set(refs)):
+            raise ValueError("node refs must be unique")
+        return self

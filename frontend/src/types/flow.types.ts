@@ -3,6 +3,9 @@ import type { Schema } from "@/types/api";
 /** A tournament's flow graph: nodes with their ports, edges and every node's ranked results. */
 export type FlowRead = Schema<"tournament.FlowRead">;
 
+/** A partial graph edit for `PUT /admin/tournaments/{id}/flow`: node/edge upserts and deletes. */
+export type FlowChanges = Schema<"tournament.FlowChanges">;
+
 export type FlowNodeRead = Schema<"tournament.FlowNodeRead">;
 
 /** Lifecycle status of a node; which values apply depends on its kind. */

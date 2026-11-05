@@ -562,6 +562,10 @@ DOCS: dict[str, dict] = {
         "summary": "Get a tournament's flow (admin)",
         "description": "Permission: workspace `tournament.read` on the tournament's workspace. The public flow read plus the validator's issues on the stored graph and the port catalogue per node kind.",
     },
+    "rpc.tournament.flow_apply": {
+        "summary": "Change a tournament's flow graph",
+        "description": "Permission: workspace `tournament.update`. Replaces part of the tournament's node graph in one transaction: `nodes` creates (`ref`) or updates (`id`) nodes, `edges` wires them (an endpoint is a node id or a new node's `ref`), `delete_node_ids` / `delete_edge_ids` remove. A started node, or a pure node with a started lifecycle node downstream, cannot be deleted, re-configured or re-wired (`node_frozen`, 409); stage nodes are created and deleted with their stage; an invalid graph answers 422 `flow_invalid`. Answers the admin flow read.",
+    },
     "rpc.tournament.flow_node_transition": {
         "summary": "Move a flow node along its lifecycle",
         "description": "Permission: workspace `tournament.update`. Moves one registration, formation or stage node along its lifecycle (`invalid_node_transition`, `input_not_final`, `downstream_started` answer 409) and re-derives the tournament status.",

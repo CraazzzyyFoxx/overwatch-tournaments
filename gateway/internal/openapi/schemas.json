@@ -9678,6 +9678,18 @@
       },
       "summary": "Get FFA stage lobbies (organizer view)"
     },
+    "rpc.tournament.flow_apply": {
+      "description": "Permission: workspace `tournament.update`. Replaces part of the tournament's node graph in one transaction: `nodes` creates (`ref`) or updates (`id`) nodes, `edges` wires them (an endpoint is a node id or a new node's `ref`), `delete_node_ids` / `delete_edge_ids` remove. A started node, or a pure node with a started lifecycle node downstream, cannot be deleted, re-configured or re-wired (`node_frozen`, 409); stage nodes are created and deleted with their stage; an invalid graph answers 422 `flow_invalid`. Answers the admin flow read.",
+      "request": {
+        "array": false,
+        "ref": "tournament.FlowChanges"
+      },
+      "response": {
+        "array": false,
+        "ref": "tournament.AdminFlowRead"
+      },
+      "summary": "Change a tournament's flow graph"
+    },
     "rpc.tournament.flow_get": {
       "description": "Permission: workspace `tournament.read` on the tournament's workspace. The public flow read plus the validator's issues on the stored graph and the port catalogue per node kind.",
       "response": {
@@ -49612,6 +49624,40 @@
       "title": "FirstPickRule",
       "type": "string"
     },
+    "tournament.FlowChanges": {
+      "properties": {
+        "delete_edge_ids": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Delete Edge Ids",
+          "type": "array"
+        },
+        "delete_node_ids": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Delete Node Ids",
+          "type": "array"
+        },
+        "edges": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.FlowEdgeUpsert"
+          },
+          "title": "Edges",
+          "type": "array"
+        },
+        "nodes": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.FlowNodeUpsert"
+          },
+          "title": "Nodes",
+          "type": "array"
+        }
+      },
+      "title": "FlowChanges",
+      "type": "object"
+    },
     "tournament.FlowEdgeRead": {
       "properties": {
         "id": {
@@ -49643,6 +49689,61 @@
         "target_port"
       ],
       "title": "FlowEdgeRead",
+      "type": "object"
+    },
+    "tournament.FlowEdgeUpsert": {
+      "description": "``source`` / ``target`` are a node id, or the ``ref`` of a node created by the same request.",
+      "properties": {
+        "id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Id"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Source"
+        },
+        "source_port": {
+          "title": "Source Port",
+          "type": "string"
+        },
+        "target": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Target"
+        },
+        "target_port": {
+          "title": "Target Port",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source",
+        "source_port",
+        "target",
+        "target_port"
+      ],
+      "title": "FlowEdgeUpsert",
       "type": "object"
     },
     "tournament.FlowIssueRead": {
@@ -50006,6 +50107,76 @@
         "status"
       ],
       "title": "FlowNodeTransition",
+      "type": "object"
+    },
+    "tournament.FlowNodeUpsert": {
+      "description": "Create (``ref`` set, ``id`` unset) or update (``id`` set) one node. ``stage_id`` only matters for a new node.",
+      "properties": {
+        "config": {
+          "additionalProperties": true,
+          "default": {},
+          "title": "Config",
+          "type": "object"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Id"
+        },
+        "kind": {
+          "$ref": "#/components/schemas/tournament.FlowNodeKind"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "position_x": {
+          "default": 0.0,
+          "title": "Position X",
+          "type": "number"
+        },
+        "position_y": {
+          "default": 0.0,
+          "title": "Position Y",
+          "type": "number"
+        },
+        "ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ref"
+        },
+        "stage_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stage Id"
+        }
+      },
+      "required": [
+        "kind",
+        "name"
+      ],
+      "title": "FlowNodeUpsert",
       "type": "object"
     },
     "tournament.FlowPortRead": {

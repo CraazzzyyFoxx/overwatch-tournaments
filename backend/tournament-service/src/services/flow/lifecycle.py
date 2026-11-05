@@ -68,7 +68,7 @@ class FlowNodeService:
             raise ApiHTTPException(
                 status_code=404, detail=[ApiExc(code="flow_node_not_found", msg="Flow node not found")]
             )
-        await self._lock_tournament(session, tournament_id)
+        await self.lock_tournament(session, tournament_id)
         node = await session.scalar(
             sa.select(models.FlowNode)
             .where(models.FlowNode.id == node_id)
@@ -107,7 +107,7 @@ class FlowNodeService:
         )
         return node
 
-    async def _lock_tournament(self, session: AsyncSession, tournament_id: int) -> models.Tournament:
+    async def lock_tournament(self, session: AsyncSession, tournament_id: int) -> models.Tournament:
         """The tournament row ``FOR NO KEY UPDATE``: serializes node moves and the status write of one tournament."""
         tournament = await session.scalar(
             sa.select(models.Tournament)
@@ -123,7 +123,7 @@ class FlowNodeService:
 
     async def sync_tournament_status(self, session: AsyncSession, tournament_id: int) -> TournamentStatus:
         """Write the status the nodes derive (spec §9); emits the state event and the finish effects on a change."""
-        tournament = await self._lock_tournament(session, tournament_id)
+        tournament = await self.lock_tournament(session, tournament_id)
         has_outgoing = sa.exists().where(models.FlowEdge.source_node_id == models.FlowNode.id)
         rows = await session.execute(
             sa.select(models.FlowNode.kind, models.FlowNode.status, ~has_outgoing).where(

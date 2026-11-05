@@ -69,3 +69,27 @@ def register(broker: Any, logger: Any) -> None:
             return _dump(await flow_service.get_node_read(session, tournament_id, node_id))
 
         return await _run(logger, op)
+
+    @broker.subscriber("rpc.tournament.flow_apply")
+    async def _flow_apply(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = _identity(data)
+            tournament_id = _require_id(data)
+            ws_id = await auth.get_tournament_workspace_id(session, tournament_id)
+            ensure_workspace_permission(user, ws_id, "tournament", "update")
+            body = flow_schemas.FlowChanges.model_validate(_payload(data))
+            await record_admin_audit(
+                session,
+                action="tournament.flow_apply",
+                actor=user,
+                data=data,
+                workspace_id=ws_id,
+                entity_type="tournament",
+                entity_id=tournament_id,
+                after=body.model_dump(mode="json"),
+            )
+            read = await flow_service.apply_changes(session, tournament_id, body, actor=user)
+            await session.commit()
+            return _dump(read)
+
+        return await _run(logger, op)

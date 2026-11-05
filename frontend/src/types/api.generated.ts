@@ -8280,7 +8280,13 @@ export interface paths {
          *     RPC subject: `rpc.tournament.flow_get`
          */
         get: operations["get__api_v1_admin_tournaments__tournament_id__flow"];
-        put?: never;
+        /**
+         * Change a tournament's flow graph
+         * @description Permission: workspace `tournament.update`. Replaces part of the tournament's node graph in one transaction: `nodes` creates (`ref`) or updates (`id`) nodes, `edges` wires them (an endpoint is a node id or a new node's `ref`), `delete_node_ids` / `delete_edge_ids` remove. A started node, or a pure node with a started lifecycle node downstream, cannot be deleted, re-configured or re-wired (`node_frozen`, 409); stage nodes are created and deleted with their stage; an invalid graph answers 422 `flow_invalid`. Answers the admin flow read.
+         *
+         *     RPC subject: `rpc.tournament.flow_apply`
+         */
+        put: operations["put__api_v1_admin_tournaments__tournament_id__flow"];
         post?: never;
         delete?: never;
         options?: never;
@@ -29918,6 +29924,36 @@ export interface components {
              */
             regex: string | null;
         };
+        /** FlowChanges */
+        "tournament.FlowChanges": {
+            /** Delete Edge Ids */
+            delete_edge_ids?: number[];
+            /** Delete Node Ids */
+            delete_node_ids?: number[];
+            /** Edges */
+            edges?: components["schemas"]["tournament.FlowEdgeUpsert"][];
+            /** Nodes */
+            nodes?: components["schemas"]["tournament.FlowNodeUpsert"][];
+        };
+        /**
+         * FlowEdgeUpsert
+         * @description ``source`` / ``target`` are a node id, or the ``ref`` of a node created by the same request.
+         */
+        "tournament.FlowEdgeUpsert": {
+            /**
+             * Id
+             * @default null
+             */
+            id: number | null;
+            /** Source */
+            source: number | string;
+            /** Source Port */
+            source_port: string;
+            /** Target */
+            target: number | string;
+            /** Target Port */
+            target_port: string;
+        };
         /** FlowIssueRead */
         "tournament.FlowIssueRead": {
             /** Code */
@@ -29951,6 +29987,47 @@ export interface components {
         /** FlowNodeTransition */
         "tournament.FlowNodeTransition": {
             status: components["schemas"]["tournament.FlowNodeStatus"];
+        };
+        /**
+         * FlowNodeUpsert
+         * @description Create (``ref`` set, ``id`` unset) or update (``id`` set) one node. ``stage_id`` only matters for a new node.
+         */
+        "tournament.FlowNodeUpsert": {
+            /**
+             * Config
+             * @default {}
+             */
+            config: {
+                [key: string]: unknown;
+            };
+            /**
+             * Id
+             * @default null
+             */
+            id: number | null;
+            kind: components["schemas"]["tournament.FlowNodeKind"];
+            /** Name */
+            name: string;
+            /**
+             * Position X
+             * @default 0
+             */
+            position_x: number;
+            /**
+             * Position Y
+             * @default 0
+             */
+            position_y: number;
+            /**
+             * Ref
+             * @default null
+             */
+            ref: string | null;
+            /**
+             * Stage Id
+             * @default null
+             */
+            stage_id: number | null;
         };
         /** FlowPortSpecRead */
         "tournament.FlowPortSpecRead": {
@@ -64758,6 +64835,88 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["tournament.AdminFlowRead"];
+                };
+            };
+            /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not authorized (`forbidden`). Authenticated, but the credential lacks the permission, workspace, or scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    put__api_v1_admin_tournaments__tournament_id__flow: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["tournament.FlowChanges"];
+            };
+        };
         responses: {
             /** @description Success */
             200: {
