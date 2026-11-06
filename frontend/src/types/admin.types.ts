@@ -427,15 +427,11 @@ export interface StageItemInputCreateInput {
   slot: number;
   input_type?: StageItemInputType;
   team_id?: number | null;
-  source_stage_item_id?: number | null;
-  source_position?: number | null;
 }
 
 export interface StageItemInputUpdateInput {
   input_type?: StageItemInputType;
   team_id?: number | null;
-  source_stage_item_id?: number | null;
-  source_position?: number | null;
   /** Moves the input into this item of the same stage. */
   stage_item_id?: number;
   /** Seed to insert at; the seeds it passes shift by one, both items stay 1..N. */

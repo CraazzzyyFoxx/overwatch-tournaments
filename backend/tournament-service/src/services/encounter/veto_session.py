@@ -245,7 +245,7 @@ async def _previous_stage_id(
 ) -> int | None:
     """The stage that actually feeds this bracket.
 
-    Follow the TENTATIVE inputs' ``source_stage_item_id`` back to its stage.
+    Follow the seats' ``source_result_id`` back to the stage item of the result row they came from.
     Plain stage order cannot answer it once a phase runs parallel divisions —
     "the earlier stage" is then two stages, only one of which holds these teams.
     """
@@ -254,10 +254,8 @@ async def _previous_stage_id(
     if position.stage_item_id is not None:
         source = await session.scalar(
             select(models.StageItem.stage_id)
-            .join(
-                models.StageItemInput,
-                models.StageItemInput.source_stage_item_id == models.StageItem.id,
-            )
+            .join(models.FlowNodeResult, models.FlowNodeResult.stage_item_id == models.StageItem.id)
+            .join(models.StageItemInput, models.StageItemInput.source_result_id == models.FlowNodeResult.id)
             .where(models.StageItemInput.stage_item_id == position.stage_item_id)
             .limit(1)
         )

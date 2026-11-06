@@ -12,6 +12,10 @@ LIFECYCLE_KINDS: frozenset[FlowNodeKind] = frozenset(
 PURE_KINDS: frozenset[FlowNodeKind] = frozenset(FlowNodeKind) - LIFECYCLE_KINDS
 
 _DONE: frozenset[FlowNodeStatus] = frozenset({FlowNodeStatus.COMPLETED, FlowNodeStatus.FINAL})
+#: The status at which a node's output is final: registration closed, formation/stage completed, pure node final.
+FINAL_STATUSES: frozenset[FlowNodeStatus] = frozenset(
+    {FlowNodeStatus.CLOSED, FlowNodeStatus.COMPLETED, FlowNodeStatus.FINAL}
+)
 
 _K = FlowNodeKind
 _S = FlowNodeStatus

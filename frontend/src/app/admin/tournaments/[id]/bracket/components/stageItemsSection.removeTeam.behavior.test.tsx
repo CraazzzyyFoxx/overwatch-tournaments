@@ -59,8 +59,7 @@ function item(id: number, overrides: Partial<StageItem> = {}): StageItem {
         slot: 1,
         input_type: "final",
         team_id: 7,
-        source_stage_item_id: null,
-        source_position: null
+        source_result_id: null
       }
     ],
     ...overrides
@@ -119,7 +118,6 @@ async function mount(stage: Stage) {
         <QueryClientProvider client={client}>
           <StageItemsSection
           stage={stage}
-          stages={[stage]}
           teams={[team]}
           isTeamsLoading={false}
           progress={undefined}
@@ -171,8 +169,7 @@ describe("remove assigned team", () => {
           slot: 2,
           input_type: "empty",
           team_id: null,
-          source_stage_item_id: null,
-          source_position: null
+          source_result_id: null
         }
       ]
     });

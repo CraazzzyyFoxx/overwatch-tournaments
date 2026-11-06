@@ -50,8 +50,7 @@ function input(id: number, overrides: Partial<StageItemInput> = {}): StageItemIn
     slot: 1,
     input_type: "final",
     team_id: 7,
-    source_stage_item_id: null,
-    source_position: null,
+    source_result_id: null,
     ...overrides
   };
 }
@@ -125,7 +124,6 @@ async function mount(stage: Stage) {
         <QueryClientProvider client={client}>
           <StageItemsSection
           stage={stage}
-          stages={[stage]}
           teams={teams}
           isTeamsLoading={false}
           progress={undefined}

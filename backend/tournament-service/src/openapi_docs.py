@@ -263,11 +263,11 @@ DOCS: dict[str, dict] = {
     },
     "rpc.tournament.admin.create#stage_item_input": {
         "summary": "Create stage item input",
-        "description": "Permission: workspace `stage.create`. Creates a stage item input under a stage item. A `source_stage_item_id` that does not exist or belongs to another tournament is 400.",
+        "description": "Permission: workspace `stage.create`. Creates a stage item input under a stage item (`final` with a team, or `empty`).",
     },
     "rpc.tournament.admin.update#stage_item_input": {
         "summary": "Update stage item input",
-        "description": "Permission: workspace `stage.update`. Updates a stage item input by id. A `source_stage_item_id` that does not exist or belongs to another tournament is 400.",
+        "description": "Permission: workspace `stage.update`. Updates a stage item input by id. Editing its team clears its `source_result_id` (a hand-seeded seat).",
     },
     "rpc.tournament.admin.delete#stage_item_input": {
         "summary": "Delete stage item input",
@@ -745,14 +745,6 @@ DOCS: dict[str, dict] = {
     "rpc.tournament.stage_apply_best_of": {
         "summary": "Apply best-of to existing matches",
         "description": "Permission: workspace `stage.update` on the stage's workspace. Rewrites best_of on the stage's existing encounters from the stage's best-of config (in place, preserving scores).",
-    },
-    "rpc.tournament.stage_auto_wire": {
-        "summary": "Auto-wire stage from groups",
-        "description": "Permission: workspace `stage.update` on the stage's workspace. Wires the stage's TENTATIVE inputs from a round-robin/Swiss stage's \"Teams advancing to playoff\" count — the same auto-wire the stage's `draft → ready` move runs, exposed standalone for preview/debugging. The source is the one group stage of the latest earlier phase; pass source_stage_id to name it when that phase runs several divisions in parallel (a value that is not an integer is 422 `invalid_query_param`).",
-    },
-    "rpc.tournament.stage_wire": {
-        "summary": "Wire stage from groups",
-        "description": "Permission: workspace `stage.update` on the target stage's workspace. Wires a target stage's slots from a source group stage's top placements.",
     },
     "rpc.tournament.stage_seed": {
         "summary": "Seed teams into stage",

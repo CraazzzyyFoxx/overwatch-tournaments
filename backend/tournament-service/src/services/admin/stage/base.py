@@ -1,12 +1,14 @@
 """Shared state and primitives of the stage admin service: repositories, loads, locks, the write epilogue."""
 
-from typing import Any
+from collections.abc import Sequence
+from typing import Any, cast
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from shared import models
+from shared.core import enums
 from shared.core import http_status as status
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.repository import (
@@ -20,6 +22,7 @@ from shared.repository import (
     TeamRepository,
     TournamentRepository,
 )
+from src.domain.stage.seeds import SeatSource, SeedRanking, lower_bracket_item, plan_seats
 from src.services.tournament.events import (
     STRUCTURE_RESOURCES,
     enqueue_tournament_recalculation,
@@ -77,6 +80,80 @@ class StageServiceBase:
         if tournament_id is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Stage not found")
         return tournament_id
+
+    async def _stage_input_rows(
+        self, session: AsyncSession, stage: models.Stage
+    ) -> tuple[models.FlowNode | None, list[models.FlowNodeResult]]:
+        """The stage's node and the team rows wired into its ``participants`` port, in rank order (spec §5.3).
+
+        A stage without a node (a scrim stage) or without an input edge has no rows.
+        """
+        node = await session.scalar(select(models.FlowNode).where(models.FlowNode.stage_id == stage.id))
+        if node is None:
+            return None, []
+        rows = await session.scalars(
+            select(models.FlowNodeResult)
+            .join(
+                models.FlowEdge,
+                and_(
+                    models.FlowEdge.source_node_id == models.FlowNodeResult.node_id,
+                    models.FlowEdge.source_port == models.FlowNodeResult.port,
+                ),
+            )
+            .where(
+                models.FlowEdge.target_node_id == node.id,
+                models.FlowEdge.target_port == "participants",
+                models.FlowNodeResult.team_id.is_not(None),
+            )
+            .order_by(models.FlowNodeResult.rank, models.FlowNodeResult.id)
+            # The engine rewrites result rows with core statements, so a loaded copy may be stale.
+            .execution_options(populate_existing=True)
+        )
+        return node, list(rows)
+
+    async def _plan_for(
+        self, session: AsyncSession, stage: models.Stage, rows: Sequence[models.FlowNodeResult]
+    ) -> dict[int, list[SeatSource]]:
+        """Stage item id -> the input rows seated in it, in slot order (spec §5.3, plan Decisions 1-3).
+
+        A double-elimination stage that gets lower starters gets its lower bracket item here.
+        """
+        double = stage.stage_type == enums.StageType.DOUBLE_ELIMINATION
+        sources = [
+            SeatSource(
+                row.id,
+                cast(int, row.team_id),
+                row.stage_item_id,
+                row.item_rank,
+                lower=(row.breakdown or {}).get("bracket") == "lower",
+            )
+            for row in rows
+        ]
+        if double and any(one.lower for one in sources) and not lower_bracket_item(stage, list(stage.items)):
+            lower = models.StageItem(
+                stage_id=stage.id,
+                name="Lower bracket",
+                type=enums.StageItemType.BRACKET_LOWER,
+                order=max((item.order for item in stage.items), default=-1) + 1,
+                # Explicitly empty: an untouched collection lazy-loads once flushed, which an async session refuses.
+                inputs=[],
+            )
+            await self.stage_item_repo.create(session, lower)
+            stage.items.append(lower)
+        source_item_ids = {one.stage_item_id for one in sources if one.stage_item_id is not None}
+        item_orders = await session.execute(
+            select(models.StageItem.id, models.StageItem.order).where(models.StageItem.id.in_(source_item_ids))
+        )
+        source_item_order = dict(item_orders.tuples().all())
+        return plan_seats(
+            sources,
+            ranking=SeedRanking(stage.seed_ranking),
+            target_items=stage.items,
+            double_elimination=double,
+            arrange_groups=stage.bracket_template is None,
+            source_item_order=source_item_order,
+            rng_seed=stage.id,
+        )
 
     async def _lock_stage(self, session: AsyncSession, stage_id: int) -> None:
         """Serialize the writers that race over one stage's bracket: a template

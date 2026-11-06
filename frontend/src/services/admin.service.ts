@@ -1611,19 +1611,6 @@ class AdminService {
     return response.json();
   }
 
-  /**
-   * Wires the bracket's seeds from a group stage. `sourceStageId` names the
-   * feeding stage — the server cannot infer it when a phase runs several
-   * divisions in parallel, and refuses rather than guessing.
-   */
-  async autoWireStage(stageId: number, sourceStageId?: number): Promise<Stage> {
-    const qs = sourceStageId ? `?source_stage_id=${sourceStageId}` : "";
-    const response = await apiFetch(`/api/v1/admin/stages/${stageId}/auto-wire${qs}`, {
-      method: "POST"
-    });
-    return response.json();
-  }
-
   async seedTeams(
     stageId: number,
     data: {

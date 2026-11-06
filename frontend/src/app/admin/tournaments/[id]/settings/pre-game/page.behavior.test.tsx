@@ -1475,8 +1475,7 @@ describe("Settings › Pre-game phase authors every round of a stage at once", (
             slot: index + 1,
             input_type: "final",
             team_id: index + 1,
-            source_stage_item_id: null,
-            source_position: null
+            source_result_id: null
           }))
         }
       ]

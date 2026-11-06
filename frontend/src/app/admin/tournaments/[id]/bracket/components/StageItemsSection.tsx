@@ -47,7 +47,6 @@ import { inputLabel, listOf, seedOrder, SeedList, SeedSlotRow, type SeedLists } 
 
 interface StageItemsSectionProps {
   stage: Stage;
-  stages: Stage[];
   teams: Team[];
   isTeamsLoading: boolean;
   progress: StageProgress | undefined;
@@ -68,7 +67,6 @@ interface StageItemsSectionProps {
  */
 export function StageItemsSection({
   stage,
-  stages,
   teams,
   isTeamsLoading,
   progress,
@@ -336,16 +334,10 @@ export function StageItemsSection({
                           // The position, not the stored slot: it is what the team is
                           // seeded as, gaps an older delete left included.
                           const seed = index + 1;
-                          const label = inputLabel(
-                            getInputDisplayLabelInfo(input, stages, teamById),
-                            tRoot
-                          );
+                          const label = inputLabel(getInputDisplayLabelInfo(input, teamById), tRoot);
                           const isEditing = editingInputId === input.id;
                           const canSwapAssignedTeams = input.team_id != null;
-                          const changeTeamLabel = t(
-                            input.input_type === "tentative" ? "overrideTeam" : "changeTeam",
-                            { seed, name: item.name }
-                          );
+                          const changeTeamLabel = t("changeTeam", { seed, name: item.name });
 
                           return (
                             <SeedSlotRow
@@ -416,11 +408,6 @@ export function StageItemsSection({
                                 </>
                               ) : input.input_type !== "empty" ? (
                                 <>
-                                  {input.input_type === "tentative" ? (
-                                    <span className="shrink-0 text-muted-foreground">
-                                      {t("tentative")}
-                                    </span>
-                                  ) : null}
                                   <Button
                                     size="icon"
                                     variant="ghost"
@@ -516,7 +503,7 @@ export function StageItemsSection({
           <DragOverlay>
             {activeDragInput ? (
               <span className="rounded-md border border-border bg-card px-2.5 py-1.5 text-xs">
-                {inputLabel(getInputDisplayLabelInfo(activeDragInput, stages, teamById), tRoot)}
+                {inputLabel(getInputDisplayLabelInfo(activeDragInput, teamById), tRoot)}
               </span>
             ) : null}
           </DragOverlay>

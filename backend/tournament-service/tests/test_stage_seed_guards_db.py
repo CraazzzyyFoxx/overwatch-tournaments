@@ -1,10 +1,9 @@
-"""Seed writers on the test Postgres: who waits for whom, and what a seed may point at.
+"""Seed writers on the test Postgres: who waits for whom.
 
 ``seed_teams`` takes the stage lock every other input writer takes and refuses
 a stage that already has encounters. Requalification locks the encounter rows
 of the items that still look untouched and asks again under the lock, so a
-result landing meanwhile is seen, not overwritten. A TENTATIVE seed may only
-qualify from a stage item of its own tournament.
+result landing meanwhile is seen, not overwritten.
 """
 
 from __future__ import annotations
@@ -19,8 +18,6 @@ from shared.models.encounter import Encounter
 from shared.models.encounter.team import EncounterTeam
 from shared.models.tournament.stage import Stage, StageItem, StageItemInput
 from shared.models.tournament.standings import Standing
-from shared.models.tournament.tournament import Tournament
-from src import schemas
 from src.services.admin.stage import stage_service
 from tests._encounter_layer import EncounterLayerCase
 
@@ -39,51 +36,12 @@ class StageSeedGuardTests(EncounterLayerCase):
                 stage_type=enums.StageType.ROUND_ROBIN,
                 order=0,
             )
-            foreign = Tournament(workspace_id=self.workspace_id, name="Other", slug=f"other-{self.tournament_id}")
-            s.add_all([groups, foreign])
-            await s.flush()
-            foreign_stage = Stage(
-                tournament_id=foreign.id,
-                scoring_rule_id=self.rule_id,
-                name="Their groups",
-                stage_type=enums.StageType.ROUND_ROBIN,
-                order=0,
-            )
-            s.add(foreign_stage)
+            s.add(groups)
             await s.flush()
             group = StageItem(stage_id=groups.id, name="A", type=enums.StageItemType.GROUP, order=0)
-            foreign_group = StageItem(stage_id=foreign_stage.id, name="A", type=enums.StageItemType.GROUP, order=0)
-            s.add_all([group, foreign_group])
+            s.add(group)
             await s.commit()
-            self.groups_id, self.group_id, self.foreign_group_id = groups.id, group.id, foreign_group.id
-
-    async def _tentative(self, source_stage_item_id: int) -> StageItemInput:
-        async with self.Session() as s:
-            return await stage_service.create_stage_item_input(
-                s,
-                self.item_id,
-                schemas.StageItemInputCreate(
-                    slot=1,
-                    input_type=enums.StageItemInputType.TENTATIVE,
-                    source_stage_item_id=source_stage_item_id,
-                    source_position=1,
-                ),
-            )
-
-    async def test_a_seed_cannot_qualify_from_another_tournament(self) -> None:
-        with self.assertRaises(BaseAPIException) as created:
-            await self._tentative(self.foreign_group_id)
-        self.assertEqual(400, created.exception.status_code)
-
-        own = await self._tentative(self.group_id)
-        async with self.Session() as s:
-            with self.assertRaises(BaseAPIException) as updated:
-                await stage_service.update_stage_item_input(
-                    s, own.id, schemas.StageItemInputUpdate(source_stage_item_id=self.foreign_group_id)
-                )
-        self.assertEqual(400, updated.exception.status_code)
-        async with self.Session() as s:
-            self.assertEqual(self.group_id, (await s.get_one(StageItemInput, own.id)).source_stage_item_id)
+            self.groups_id, self.group_id = groups.id, group.id
 
     async def test_seeding_refuses_a_stage_with_encounters(self) -> None:
         await self.encounter(0, 1)

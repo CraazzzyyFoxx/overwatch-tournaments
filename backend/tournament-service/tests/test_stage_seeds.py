@@ -76,10 +76,6 @@ class RankTeamIdsTests(TestCase):
         )
 
 
-def _group(item_id: int, advance: int | None = None, upper: int | None = None) -> SimpleNamespace:
-    return SimpleNamespace(id=item_id, advance_count=advance, advance_upper_count=upper)
-
-
 class BuildSeedingTests(TestCase):
     def _slices(self, *counts: int, start: int = 1) -> list:
         return [seeds.GroupSlice(100 + index, start, count) for index, count in enumerate(counts)]
@@ -149,28 +145,3 @@ class SeparateGroupsTests(TestCase):
 
     def test_a_clash_no_swap_can_resolve_stays(self) -> None:
         self.assertEqual([(100, 1), (100, 2)], seeds.separate_groups([(100, 1), (100, 2)]))
-
-
-class GroupAdvanceCountsTests(TestCase):
-    def test_stage_default_splits_every_group(self) -> None:
-        counts = seeds.group_advance_counts([_group(1), _group(2)], default_advance=6, default_upper=2)
-        self.assertEqual([(1, 2, 4), (2, 2, 4)], counts)
-
-    def test_no_upper_default_sends_everyone_upper(self) -> None:
-        self.assertEqual([(1, 6, 0)], seeds.group_advance_counts([_group(1)], default_advance=6, default_upper=None))
-
-    def test_group_override_of_upper_wins(self) -> None:
-        counts = seeds.group_advance_counts([_group(1, upper=4), _group(2)], default_advance=6, default_upper=2)
-        self.assertEqual([(1, 4, 2), (2, 2, 4)], counts)
-
-    def test_zero_upper_sends_the_whole_group_lower(self) -> None:
-        counts = seeds.group_advance_counts([_group(1, upper=0)], default_advance=6, default_upper=2)
-        self.assertEqual([(1, 0, 6)], counts)
-
-    def test_upper_is_clamped_to_the_groups_own_advance(self) -> None:
-        counts = seeds.group_advance_counts([_group(1, advance=1)], default_advance=6, default_upper=2)
-        self.assertEqual([(1, 1, 0)], counts)
-
-    def test_group_advance_override_keeps_the_stage_upper(self) -> None:
-        counts = seeds.group_advance_counts([_group(1, advance=4)], default_advance=6, default_upper=2)
-        self.assertEqual([(1, 2, 2)], counts)

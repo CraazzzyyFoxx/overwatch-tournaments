@@ -13,7 +13,7 @@ baselines and Discord channels live in `stats/`. `catalog/` writes only to `cata
 > `--check` and fails on drift, so the diagrams cannot fall behind the models again.
 
 <!-- ERD:auto _alembic_head -->
-Alembic head: **`flowP3_06`** (178 revisions in `backend/migrations/versions/`).
+Alembic head: **`flowP4_01_source_result`** (179 revisions in `backend/migrations/versions/`).
 <!-- /ERD:auto -->
 
 **Reading the diagrams**
@@ -1360,8 +1360,7 @@ erDiagram
         int slot
         stageiteminputtype input_type
         bigint team_id FK "nullable"
-        bigint source_stage_item_id FK "nullable"
-        int source_position "nullable"
+        bigint source_result_id FK "nullable"
     }
     TOURNAMENT_STAGE_ROUND_BEST_OF {
         bigint stage_id PK,FK
@@ -1535,6 +1534,7 @@ erDiagram
     TOURNAMENT_FLOW_NODE ||--o{ TOURNAMENT_FLOW_EDGE : "target_node_id"
     TOURNAMENT_FLOW_NODE ||--o{ TOURNAMENT_FLOW_NODE_RESULT : "node_id"
     TOURNAMENT_FLOW_NODE ||--o{ TOURNAMENT_FLOW_NODE_SCHEDULE : "node_id"
+    TOURNAMENT_FLOW_NODE_RESULT |o--o{ TOURNAMENT_STAGE_ITEM_INPUT : "source_result_id"
     TOURNAMENT_PICK_BAN_CONFIG ||--o{ TOURNAMENT_PICK_BAN_CONFIG_ITEM : "pick_ban_config_id"
     TOURNAMENT_PICK_BAN_CONFIG ||--o{ TOURNAMENT_PICK_BAN_CONFIG_SLOT : "pick_ban_config_id"
     TOURNAMENT_PICK_BAN_CONFIG_SLOT ||--o{ TOURNAMENT_PICK_BAN_CONFIG_SLOT_ITEM : "pick_ban_config_slot_id"
@@ -1561,7 +1561,6 @@ erDiagram
     TOURNAMENT_STAGE_ITEM |o--o{ TOURNAMENT_CHALLONGE_SOURCE : "stage_item_id"
     TOURNAMENT_STAGE_ITEM |o--o{ TOURNAMENT_COMPUTATION_JOB : "stage_item_id"
     TOURNAMENT_STAGE_ITEM |o--o{ TOURNAMENT_FLOW_NODE_RESULT : "stage_item_id"
-    TOURNAMENT_STAGE_ITEM |o--o{ TOURNAMENT_STAGE_ITEM_INPUT : "source_stage_item_id"
     TOURNAMENT_STAGE_ITEM |o--o{ TOURNAMENT_STANDING : "stage_item_id"
     TOURNAMENT_STAGE_ITEM |o--o{ TOURNAMENT_STANDING_PIN : "stage_item_id"
     TOURNAMENT_STAGE_ITEM |o--o{ TOURNAMENT_SWISS_BYE : "stage_item_id"

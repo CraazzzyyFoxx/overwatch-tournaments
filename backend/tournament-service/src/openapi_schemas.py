@@ -211,11 +211,6 @@ OPERATIONS: dict[str, Op] = {
     # ── bespoke: stage workflow ────────────────────────────────────────────
     "rpc.tournament.stage_merge": Op(request=schemas.MergeGroupStagesRequest, response=schemas.StageRead),
     "rpc.tournament.stage_generate": Op(response=schemas.TournamentComputationJobRead),
-    "rpc.tournament.stage_auto_wire": Op(
-        response=schemas.StageRead,
-        query_params=(QueryParam("source_stage_id", "integer", description="The group stage to wire from."),),
-    ),
-    "rpc.tournament.stage_wire": Op(request=schemas.WireFromGroupsRequest, response=schemas.StageRead),
     "rpc.tournament.stage_seed": Op(request=schemas.SeedTeamsRequest, response=schemas.StageRead),
     "rpc.tournament.stage_bracket_template_get": Op(response=schemas.BracketTemplateRead),
     "rpc.tournament.stage_bracket_template_set": Op(request=BracketTemplate, response=schemas.BracketTemplateRead),

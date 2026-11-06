@@ -1,7 +1,7 @@
 """Stage WORKFLOW admin methods over typed RPC.
 
 Scope: ONLY the stage workflow endpoints (progress, merge-group-stages,
-generate, auto-wire, wire-from-groups, seed-teams,
+generate, seed-teams,
 bracket-template read/save/reset). A stage's lifecycle is its flow node: ``rpc.tournament.flow_node_transition``. Stage /
 stage_item / stage_item_input CRUD create/update/delete go through the generic CRUD
 engine and are handled separately.
@@ -15,7 +15,7 @@ The gateway passes path params as ``data["<name>"]`` (and the primary id as
 
 Commit semantics:
 - ``get_stage_progress`` is read-only.
-- ``merge_group_stages``, ``seed_teams``, ``wire_from_groups``,
+- ``merge_group_stages``, ``seed_teams``,
   ``set_bracket_template``, ``clear_bracket_template`` commit internally.
 - ``request_bracket_job`` (generate) does NOT commit —
   ``create_job`` only flushes and enqueues an outbox event, so the handler
@@ -31,7 +31,6 @@ from faststream.rabbit.annotations import RabbitMessage
 from shared import models
 from shared.core import http_status as status
 from shared.core.errors import BaseAPIException as HTTPException
-from shared.rpc.common import q1
 from shared.rpc.identity import ensure_workspace_permission
 from shared.services.audit import record_admin_audit
 from shared.services.tournament.computation import request_bracket_job
@@ -255,73 +254,6 @@ def register(broker: Any, logger: Any) -> None:
             )
             updated = await stage_service.apply_best_of_to_existing(session, stage_id)
             return {"updated": updated}
-
-        return await _run(logger, op)
-
-    # ── auto-wire (standalone trigger for the auto-wire) ──
-
-    @broker.subscriber("rpc.tournament.stage_auto_wire")
-    async def _stage_auto_wire(data: dict, msg: RabbitMessage) -> dict:
-        async def op(session: Any) -> Any:
-            user = _identity(data)
-            stage_id = _path_int(data, "stage_id")
-            ws_id = await auth.get_stage_workspace_id(session, stage_id)
-            ensure_workspace_permission(user, ws_id, "stage", "update")
-            # The optional ``source_stage_id`` query param names which group stage
-            # feeds this bracket, when the earlier phase runs several divisions and
-            # no single one is "the" preceding stage. Not an integer: 422.
-            source_stage_id = q1(data, "source_stage_id", int)
-            await record_admin_audit(
-                session,
-                action="stage.auto_wire",
-                actor=user,
-                data=data,
-                workspace_id=ws_id,
-                entity_type="stage",
-                entity_id=stage_id,
-                after={"source_stage_id": source_stage_id},
-            )
-            # auto_wire_stage commits internally; returns a Stage.
-            stage = await stage_service.auto_wire_stage(session, stage_id, source_stage_id=source_stage_id)
-            return _dump(await tournament_flows.stage_read(session, stage))
-
-        return await _run(logger, op)
-
-    # ── wire from groups ──────────────────────────────────────────────────
-
-    @broker.subscriber("rpc.tournament.stage_wire")
-    async def _stage_wire(data: dict, msg: RabbitMessage) -> dict:
-        async def op(session: Any) -> Any:
-            user = _identity(data)
-            stage_id = _path_int(data, "stage_id")
-            ws_id = await auth.get_stage_workspace_id(session, stage_id)
-            ensure_workspace_permission(user, ws_id, "stage", "update")
-            body = schemas.WireFromGroupsRequest.model_validate(_payload(data))
-            await record_admin_audit(
-                session,
-                action="stage.wire",
-                actor=user,
-                data=data,
-                workspace_id=ws_id,
-                entity_type="stage",
-                entity_id=stage_id,
-                after={
-                    "source_stage_id": body.source_stage_id,
-                    "top": body.top,
-                    "top_lb": body.top_lb,
-                    "mode": body.mode,
-                },
-            )
-            # wire_from_groups commits internally; returns a Stage.
-            stage = await stage_service.wire_from_groups(
-                session,
-                target_stage_id=stage_id,
-                source_stage_id=body.source_stage_id,
-                top=body.top,
-                top_lb=body.top_lb,
-                mode=body.mode,
-            )
-            return _dump(await tournament_flows.stage_read(session, stage))
 
         return await _run(logger, op)
 

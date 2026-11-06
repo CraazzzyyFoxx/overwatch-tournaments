@@ -65,15 +65,21 @@ export const STAGE_ITEM_TYPE_LABELS: Record<StageItemType, string> = {
 
 export const SEED_RANKING_LABELS: Record<SeedRanking, string> = {
   slot: "Slot order (manual / standings)",
+  source: "Input order",
   avg_sr: "Highest team avg SR first",
   total_sr: "Highest team total SR first",
-  random: "Random (stable per stage)"
+  random: "Random (stable per stage)",
+  cross: "Cross groups (A1–B2)",
+  snake: "Snake groups (A1, B1, A2, B2)"
 };
 export const SEED_RANKING_LABEL_KEYS: Record<SeedRanking, string> = {
   slot: "slot",
+  source: "source",
   avg_sr: "avg_sr",
   total_sr: "total_sr",
-  random: "random"
+  random: "random",
+  cross: "cross",
+  snake: "snake"
 };
 
 const DEFAULT_SWISS_TIEBREAKERS = [
@@ -211,35 +217,13 @@ export function getStageStatusTone(stage: Stage, hasEncounters: boolean): Tone {
   return "neutral";
 }
 
-export type InputDisplayLabelInfo =
-  | { label: string; key: "team" }
-  | { label: "Empty slot"; key: "emptySlot" }
-  | { label: string; key: "winnerOf"; groupName: string; position: number };
+export type InputDisplayLabelInfo = { label: string; key: "team" } | { label: "Empty slot"; key: "emptySlot" };
 
 export function getInputDisplayLabelInfo(
   input: StageItemInput,
-  stages: Stage[],
   teamById: Map<number, Team>
 ): InputDisplayLabelInfo {
   if (input.team_id != null) return { label: getTeamName(teamById, input.team_id), key: "team" };
-
-  if (
-    input.input_type === "tentative" &&
-    input.source_stage_item_id != null &&
-    input.source_position != null
-  ) {
-    const sourceItem = stages
-      .flatMap((stage) => stage.items)
-      .find((item) => item.id === input.source_stage_item_id);
-    const groupName = sourceItem?.name ?? `Item ${input.source_stage_item_id}`;
-    return {
-      label: `Winner of ${groupName} #${input.source_position}`,
-      key: "winnerOf",
-      groupName,
-      position: input.source_position
-    };
-  }
-
   return { label: "Empty slot", key: "emptySlot" };
 }
 

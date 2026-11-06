@@ -12,9 +12,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from shared import models
 from shared.core.enums import EncounterStatus, FlowNodeKind, FlowNodeStatus, StageType, TournamentStatus
 from shared.core.errors import ApiExc, ApiHTTPException
-from shared.core.flow_state import FlowNodeState, derive_tournament_status, tournament_status_after, validate_transition
+from shared.core.flow_state import (
+    FINAL_STATUSES,
+    FlowNodeState,
+    derive_tournament_status,
+    tournament_status_after,
+    validate_transition,
+)
 from shared.core.tournament_state import is_finished_for_status
-from shared.services.flow_queries import downstream_lifecycle_started
+from shared.services.flow_queries import downstream_lifecycle_started, input_boundary_tied
 from shared.services.participant_result import write_participant_results
 from shared.services.realtime import Resource
 from src.services.admin.stage import stage_service
@@ -30,8 +36,6 @@ from src.services.tournament.events import (
 __all__ = ("FlowNodeService", "flow_node_service")
 
 _S = FlowNodeStatus
-#: The status at which a node's output is final: registration closed, formation/stage completed, pure node final.
-_FINAL = frozenset({_S.CLOSED, _S.COMPLETED, _S.FINAL})
 #: Moving into these stamps ``completed_at``; moving out clears it.
 _COMPLETE = frozenset({_S.CLOSED, _S.COMPLETED})
 #: Reopening one of these changes an input that downstream nodes froze (spec §8.3).
@@ -265,10 +269,12 @@ class FlowNodeService:
             sa.select(
                 sa.exists()
                 .where(models.FlowEdge.target_node_id == node.id, models.FlowNode.id == models.FlowEdge.source_node_id)
-                .where(models.FlowNode.status.not_in([s.value for s in _FINAL]))
+                .where(models.FlowNode.status.not_in([s.value for s in FINAL_STATUSES]))
             )
         )
         if not_final:
+            if await input_boundary_tied(session, node.id):
+                raise _conflict("boundary_tie", "A tie at the qualification cut is unresolved; pin the table that ties")
             raise _conflict("input_not_final", "An input of this node is not final yet")
 
     async def _assert_downstream_not_started(self, session: AsyncSession, node: models.FlowNode) -> None:

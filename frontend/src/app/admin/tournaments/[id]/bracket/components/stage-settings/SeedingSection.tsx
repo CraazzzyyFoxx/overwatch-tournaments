@@ -5,7 +5,6 @@ import { useMutation } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 
 import { SettingGroup, SettingRow } from "@/components/kit/SettingRow";
-import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { NumberInput } from "@/components/ui/number-input";
 import {
@@ -21,13 +20,11 @@ import type { SeedRanking, Stage, StageItem } from "@/types/tournament.types";
 
 import {
   BRACKET_STAGE_TYPES,
-  GROUP_STAGE_TYPES,
   projectedBracketSeedCounts,
   qualifyingSourceStage,
   SEED_RANKING_LABELS,
   SEED_RANKING_LABEL_KEYS
 } from "@/lib/bracket/projection";
-import { Spinner } from "@/components/ui/spinner";
 import type { SectionProps } from "./types";
 
 export function SeedingSection({
@@ -43,34 +40,6 @@ export function SeedingSection({
   const isBracket = BRACKET_STAGE_TYPES.includes(form.stageType);
   const isGroups = !isBracket;
   const groups = stage.items.filter((item) => item.type === "group");
-  const sources = stages.filter(
-    (candidate) =>
-      candidate.id !== stage.id &&
-      GROUP_STAGE_TYPES.includes(candidate.stage_type) &&
-      candidate.order < form.order
-  );
-  // Stages arrive async and the phase is editable, so the pick is derived, not
-  // remembered: an unset (or no longer offered) choice falls back to the only
-  // source there is.
-  const [pickedSourceId, setPickedSourceId] = useState("");
-  const sourceId = sources.some((source) => String(source.id) === pickedSourceId)
-    ? pickedSourceId
-    : sources.length === 1
-      ? String(sources[0].id)
-      : "";
-  // How the advancing teams split across upper/lower is the server's rule
-  // (per-group `advance_count` / `advance_upper_count` included); this only
-  // says WHICH stage feeds the bracket.
-  const wireMutation = useMutation({
-    mutationFn: (sourceStageId: number) => adminService.autoWireStage(stage.id, sourceStageId),
-    onSuccess: () => {
-      onChanged();
-      notify.success(t("wireSuccess"));
-    },
-    onError: (error) =>
-      notify.apiError(error, { title: t("wireError") })
-  });
-
   // Per-group overrides are stage_item rows, not stage form fields: they PATCH
   // on blur instead of waiting for "Save changes", which is why they carry
   // their own draft state rather than living in `form`.
@@ -161,37 +130,6 @@ export function SeedingSection({
   return (
     <>
       <SettingGroup id="stage-seeding" title={tRoot("editor.seeding")} description={t("fillHelp")}>
-        {isBracket && sources.length > 0 ? (
-          <SettingRow htmlFor={`${ids}-feed`} label={t("wireFrom")} hint={t("wireHelp")}>
-            <div className="flex w-full min-w-0 items-center gap-2">
-              <Select value={sourceId} onValueChange={setPickedSourceId}>
-                <SelectTrigger id={`${ids}-feed`} className="min-w-0 flex-1">
-                  <SelectValue placeholder={t("groupStage")} />
-                </SelectTrigger>
-                <SelectContent>
-                  {sources.map((source) => (
-                    <SelectItem key={source.id} value={String(source.id)}>
-                      {source.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={!sourceId || wireMutation.isPending}
-                onClick={() => wireMutation.mutate(Number(sourceId))}
-              >
-                {wireMutation.isPending ? (
-                  <Spinner />
-                ) : null}
-                {t("wire")}
-              </Button>
-            </div>
-          </SettingRow>
-        ) : null}
-
         {isBracket ? (
           <SettingRow htmlFor={`${ids}-seed-ranking`} label={t("bracketSeeds")} hint={t("seedHelp")}>
             <Select

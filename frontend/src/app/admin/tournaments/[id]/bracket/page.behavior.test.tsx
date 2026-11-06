@@ -155,8 +155,7 @@ function groupStage(): Stage {
             slot: 1,
             input_type: "final",
             team_id: 1,
-            source_stage_item_id: null,
-            source_position: null
+            source_result_id: null
           }
         ]
       }

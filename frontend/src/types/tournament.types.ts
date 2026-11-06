@@ -34,7 +34,7 @@ export type StageType =
 
 export type StageItemType = "group" | "bracket_upper" | "bracket_lower" | "single_bracket";
 
-export type StageItemInputType = "final" | "tentative" | "empty";
+export type StageItemInputType = "final" | "empty";
 
 export type EncounterResultStatus = "none" | "pending_confirmation" | "confirmed" | "disputed";
 
@@ -57,8 +57,8 @@ export interface StageItemInput {
   slot: number;
   input_type: StageItemInputType;
   team_id: number | null;
-  source_stage_item_id: number | null;
-  source_position: number | null;
+  /** The flow result row the seat came from; `null` for a hand-seeded team. */
+  source_result_id: number | null;
 }
 
 export interface StageItem {
@@ -78,8 +78,11 @@ export interface StageItem {
   inputs: StageItemInput[];
 }
 
-/** How a bracket stage orders its seeds; `slot` keeps the manual/standings order. */
-export type SeedRanking = "slot" | "avg_sr" | "total_sr" | "random";
+/**
+ * How a stage orders its seeds: `slot` / `source` keep the manual / input order, `cross` and `snake` regroup the input
+ * by the group each row came from.
+ */
+export type SeedRanking = "slot" | "source" | "avg_sr" | "total_sr" | "random" | "cross" | "snake";
 
 /** How an `individual_swiss` round forms its lobbies. */
 export type StagePairingMode = "score" | "balance";

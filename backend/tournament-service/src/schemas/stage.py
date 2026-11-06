@@ -235,8 +235,7 @@ class StageItemInputRead(BaseRead):
     slot: int
     input_type: enums.StageItemInputType
     team_id: int | None
-    source_stage_item_id: int | None
-    source_position: int | None
+    source_result_id: int | None
 
 
 class StageItemRead(BaseRead):

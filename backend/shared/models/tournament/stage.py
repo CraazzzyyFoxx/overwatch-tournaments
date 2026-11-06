@@ -71,7 +71,10 @@ class Stage(db.TimeStampIntegerMixin):
     __tablename__ = "stage"
     __table_args__ = (
         CheckConstraint("de_grand_final_type IN ('no_reset', 'with_reset')", name="ck_stage_de_grand_final_type"),
-        CheckConstraint("seed_ranking IN ('slot', 'avg_sr', 'total_sr', 'random')", name="ck_stage_seed_ranking"),
+        CheckConstraint(
+            "seed_ranking IN ('slot', 'source', 'avg_sr', 'total_sr', 'random', 'cross', 'snake')",
+            name="ck_stage_seed_ranking",
+        ),
         CheckConstraint("best_of_default >= 1", name="ck_stage_best_of_default"),
         CheckConstraint("best_of_final IS NULL OR best_of_final >= 1", name="ck_stage_best_of_final"),
         CheckConstraint("swiss_qualify_wins IS NULL OR swiss_qualify_wins >= 1", name="ck_stage_swiss_qualify_wins"),
@@ -299,14 +302,13 @@ class StageItemInput(db.TimeStampIntegerMixin):
         nullable=True,
         index=True,
     )
-    source_stage_item_id: Mapped[int | None] = mapped_column(
-        ForeignKey(StageItem.id, ondelete="SET NULL"), nullable=True
+    #: The flow result row this seat was taken from (``seat_inputs``); NULL for a hand-seeded team.
+    source_result_id: Mapped[int | None] = mapped_column(
+        ForeignKey("tournament.flow_node_result.id", ondelete="SET NULL"), nullable=True, index=True
     )
-    source_position: Mapped[int | None] = mapped_column(Integer(), nullable=True)
 
     stage_item: Mapped[StageItem] = relationship(back_populates="inputs", foreign_keys=[stage_item_id])
     team: Mapped[Team | None] = relationship(foreign_keys=[team_id])
-    source_stage_item: Mapped[StageItem | None] = relationship(foreign_keys=[source_stage_item_id])
 
 
 class SwissBye(db.TimeStampIntegerMixin):

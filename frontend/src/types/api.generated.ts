@@ -7325,7 +7325,7 @@ export interface paths {
         head?: never;
         /**
          * Update stage item input
-         * @description Permission: workspace `stage.update`. Updates a stage item input by id. A `source_stage_item_id` that does not exist or belongs to another tournament is 400.
+         * @description Permission: workspace `stage.update`. Updates a stage item input by id. Editing its team clears its `source_result_id` (a hand-seeded seat).
          *
          *     RPC subject: `rpc.tournament.admin.update`
          */
@@ -7371,7 +7371,7 @@ export interface paths {
         put?: never;
         /**
          * Create stage item input
-         * @description Permission: workspace `stage.create`. Creates a stage item input under a stage item. A `source_stage_item_id` that does not exist or belongs to another tournament is 400.
+         * @description Permission: workspace `stage.create`. Creates a stage item input under a stage item (`final` with a team, or `empty`).
          *
          *     RPC subject: `rpc.tournament.admin.create`
          */
@@ -7482,28 +7482,6 @@ export interface paths {
          *     RPC subject: `rpc.tournament.stage_apply_best_of`
          */
         post: operations["post__api_v1_admin_stages__stage_id__apply_best_of"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/admin/stages/{stage_id}/auto-wire": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Auto-wire stage from groups
-         * @description Permission: workspace `stage.update` on the stage's workspace. Wires the stage's TENTATIVE inputs from a round-robin/Swiss stage's "Teams advancing to playoff" count — the same auto-wire the stage's `draft → ready` move runs, exposed standalone for preview/debugging. The source is the one group stage of the latest earlier phase; pass source_stage_id to name it when that phase runs several divisions in parallel (a value that is not an integer is 422 `invalid_query_param`).
-         *
-         *     RPC subject: `rpc.tournament.stage_auto_wire`
-         */
-        post: operations["post__api_v1_admin_stages__stage_id__auto_wire"];
         delete?: never;
         options?: never;
         head?: never;
@@ -7692,28 +7670,6 @@ export interface paths {
          */
         put: operations["put__api_v1_admin_stages__stage_id__standing_pins"];
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/admin/stages/{stage_id}/wire-from-groups": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Wire stage from groups
-         * @description Permission: workspace `stage.update` on the target stage's workspace. Wires a target stage's slots from a source group stage's top placements.
-         *
-         *     RPC subject: `rpc.tournament.stage_wire`
-         */
-        post: operations["post__api_v1_admin_stages__stage_id__wire_from_groups"];
         delete?: never;
         options?: never;
         head?: never;
@@ -21566,10 +21522,8 @@ export interface components {
             input_type: components["schemas"]["tournament.StageItemInputType"];
             /** Slot */
             slot: number;
-            /** Source Position */
-            source_position: number | null;
-            /** Source Stage Item Id */
-            source_stage_item_id: number | null;
+            /** Source Result Id */
+            source_result_id: number | null;
             /** Stage Item Id */
             stage_item_id: number;
             /** Team Id */
@@ -31510,16 +31464,6 @@ export interface components {
             /** Slot */
             slot: number;
             /**
-             * Source Position
-             * @default null
-             */
-            source_position: number | null;
-            /**
-             * Source Stage Item Id
-             * @default null
-             */
-            source_stage_item_id: number | null;
-            /**
              * Team Id
              * @default null
              */
@@ -31534,16 +31478,6 @@ export interface components {
              * @default null
              */
             slot: number | null;
-            /**
-             * Source Position
-             * @default null
-             */
-            source_position: number | null;
-            /**
-             * Source Stage Item Id
-             * @default null
-             */
-            source_stage_item_id: number | null;
             /**
              * Stage Item Id
              * @default null
@@ -32563,40 +32497,6 @@ export interface components {
              * @default null
              */
             workspace_member_id: number | null;
-        };
-        /**
-         * WireFromGroupsRequest
-         * @description Auto-wire TENTATIVE inputs in a playoff stage from a group stage.
-         *
-         *     ``top`` = number of teams per group going to the upper bracket (UB).
-         *     ``top_lb`` = number of teams per group going to the lower bracket (LB).
-         *     When ``top_lb=0`` (default) all teams go into the UB item only.
-         *
-         *     Total UB slots = num_groups * top; total LB slots = num_groups * top_lb.
-         *     LB positions start from ``top + 1`` in each group's standings.
-         *
-         *     ``mode`` = seeding pattern. "cross" avoids same-group rematches in R1
-         *     by alternating direction per column; "snake" does plain top-down.
-         */
-        "tournament.WireFromGroupsRequest": {
-            /**
-             * Mode
-             * @default cross
-             * @enum {string}
-             */
-            mode: TournamentWireFromGroupsRequestMode;
-            /** Source Stage Id */
-            source_stage_id: number;
-            /**
-             * Top
-             * @default 2
-             */
-            top: number;
-            /**
-             * Top Lb
-             * @default 0
-             */
-            top_lb: number;
         };
         /**
          * WorkspaceSubscriptionRequirementRead
@@ -61178,86 +61078,6 @@ export interface operations {
             };
         };
     };
-    post__api_v1_admin_stages__stage_id__auto_wire: {
-        parameters: {
-            query?: {
-                source_stage_id?: number;
-            };
-            header?: never;
-            path: {
-                stage_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Success */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["tournament.StageRead"];
-                };
-            };
-            /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Not authorized (`forbidden`). Authenticated, but the credential lacks the permission, workspace, or scope. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
-            429: {
-                headers: {
-                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
-                    "Retry-After"?: number;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
     get__api_v1_admin_stages__stage_id__bracket_preview: {
         parameters: {
             query?: never;
@@ -61998,88 +61818,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["tournament.TournamentComputationJobRead"];
-                };
-            };
-            /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Not authorized (`forbidden`). Authenticated, but the credential lacks the permission, workspace, or scope. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
-            429: {
-                headers: {
-                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
-                    "Retry-After"?: number;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    post__api_v1_admin_stages__stage_id__wire_from_groups: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                stage_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["tournament.WireFromGroupsRequest"];
-            };
-        };
-        responses: {
-            /** @description Success */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["tournament.StageRead"];
                 };
             };
             /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
@@ -84242,7 +83980,6 @@ export enum TournamentSortOrder {
 }
 export enum TournamentStageItemInputType {
     final = "final",
-    tentative = "tentative",
     empty = "empty"
 }
 export enum TournamentStageItemType {
@@ -84829,8 +84566,4 @@ export enum TournamentVoiceChannelStatusStatus {
     pending = "pending",
     active = "active",
     deleting = "deleting"
-}
-export enum TournamentWireFromGroupsRequestMode {
-    cross = "cross",
-    snake = "snake"
 }

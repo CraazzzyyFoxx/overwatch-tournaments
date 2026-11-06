@@ -446,7 +446,6 @@ class StageItemType(StrEnum):
 
 class StageItemInputType(StrEnum):
     FINAL = "final"
-    TENTATIVE = "tentative"
     EMPTY = "empty"
 
 

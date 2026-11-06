@@ -173,8 +173,8 @@ Rules per area. `/api/docs` has them per subject:
   - An admin encounter edit requests a standings recompute only when status, stage, stage item,
     round or `best_of` change.
   - `stage_seed` refuses a stage that has encounters (409) and waits for the stage row lock like the
-    other stage writers. A stage-item input's `source_stage_item_id` must belong to the same
-    tournament (400).
+    other stage writers. A stage becoming `ready` seats its input rows into stage-item inputs (`source_result_id`) and
+    keeps hand-seeded teams; a seeded team outside the input is 409 `seed_not_in_input`.
   - A standings job diff-writes its rows, so standing ids survive a recompute. A job that changed
     nothing publishes no invalidation and no achievement event. A refused Swiss round or
     requalification is logged and never fails the job.

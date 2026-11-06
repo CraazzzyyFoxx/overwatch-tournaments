@@ -4,8 +4,8 @@ ahead-of-seeding bracket the same entry point builds:
 * ``generate_encounters`` must never insert a second set of matches on top of
   ones that already exist -- a grouped stage skips already-generated groups
   and only fills in new ones; a non-grouped stage refuses outright.
-* A bracket stage with no seeds is built from the preceding group stage's
-  ``advance_count`` × groups with every slot TBD, and the teams are written
+* A bracket stage with no seeds is built from the result rows of its flow
+  input with every slot TBD, and the teams are written
   into that same bracket once they resolve -- but only while it is provably
   untouched.
 * ``revert_to_draft`` (the stage node's ``ready → draft`` hook) must only clear ``is_published``
@@ -51,6 +51,11 @@ def _scalar_result(value: int) -> SimpleNamespace:
 
 def _item(item_id: int, name: str = "Group", order: int = 0, item_type=None) -> SimpleNamespace:
     return SimpleNamespace(id=item_id, name=name, order=order, type=item_type, inputs=[])
+
+
+def _input_rows(count: int) -> AsyncMock:
+    """What ``_stage_input_rows`` answers: the stage's node (unused here) and ``count`` input rows."""
+    return AsyncMock(return_value=(None, [SimpleNamespace(breakdown=None)] * count))
 
 
 def _tuples_result(rows: list[tuple]) -> SimpleNamespace:
@@ -149,7 +154,7 @@ class GenerateEncountersGuardTests(IsolatedAsyncioTestCase):
 
         with (
             patch.object(stage_service.stage_service, "get_stage", AsyncMock(return_value=stage)),
-            patch.object(stage_service.stage_service, "_preceding_group_stage", AsyncMock(return_value=None)),
+            patch.object(stage_service.stage_service, "_stage_input_rows", _input_rows(0)),
             patch.object(stage_service.stage_service, "_create_encounters_from_skeleton", AsyncMock()) as create,
         ):
             with self.assertRaises(HTTPException) as ctx:
@@ -223,8 +228,8 @@ class GenerateEncountersGuardTests(IsolatedAsyncioTestCase):
 
         self.assertEqual([3, 4, 1, 2], gen.await_args.args[2])
 
-    async def test_builds_a_tbd_bracket_from_the_group_stage_advance_count(self) -> None:
-        """The playoff has no seeds yet -- 2 advance from each of 4 groups, so
+    async def test_builds_a_tbd_bracket_from_the_flow_input_rows(self) -> None:
+        """The playoff has no seeds yet -- 8 result rows are wired into it, so
         the 8-team bracket is generated now with every slot left TBD."""
         stage = SimpleNamespace(
             id=99,
@@ -234,14 +239,11 @@ class GenerateEncountersGuardTests(IsolatedAsyncioTestCase):
             is_published=False,
             **stage_regulation(),
         )
-        source = SimpleNamespace(
-            id=4, advance_count=2, advance_upper_count=None, items=[_item(i, order=i) for i in range(4)]
-        )
         session = _queued_session([_rows_result([])])
 
         with (
             patch.object(stage_service.stage_service, "get_stage", AsyncMock(return_value=stage)),
-            patch.object(stage_service.stage_service, "_preceding_group_stage", AsyncMock(return_value=source)),
+            patch.object(stage_service.stage_service, "_stage_input_rows", _input_rows(8)),
             patch.object(
                 stage_service.stage_service, "_create_encounters_from_skeleton", AsyncMock(return_value=[])
             ) as create,
@@ -258,9 +260,9 @@ class GenerateEncountersGuardTests(IsolatedAsyncioTestCase):
         # Every seat is TBD: a pairing is ``team_ids[i]`` per slot now (D55).
         self.assertTrue(all(all(team_id is None for team_id in p.team_ids) for p in skeleton.pairings))
 
-    async def test_a_group_override_changes_the_projected_bracket_size(self) -> None:
-        """One group advancing 3 while the other three advance the stage's 2 makes
-        9 seeds, not 8 -- a 16-slot bracket with byes, one round deeper."""
+    async def test_nine_input_rows_make_a_sixteen_slot_bracket(self) -> None:
+        """Nine rows wired in (one group sending 3 while the other three send 2)
+        make 9 seeds, not 8 -- a 16-slot bracket with byes, one round deeper."""
         stage = SimpleNamespace(
             id=99,
             tournament_id=1,
@@ -269,15 +271,11 @@ class GenerateEncountersGuardTests(IsolatedAsyncioTestCase):
             is_published=False,
             **stage_regulation(),
         )
-        source = SimpleNamespace(
-            id=4, advance_count=2, advance_upper_count=None, items=[_item(i, order=i) for i in range(4)]
-        )
-        source.items[0].advance_count = 3
         session = _queued_session([_rows_result([])])
 
         with (
             patch.object(stage_service.stage_service, "get_stage", AsyncMock(return_value=stage)),
-            patch.object(stage_service.stage_service, "_preceding_group_stage", AsyncMock(return_value=source)),
+            patch.object(stage_service.stage_service, "_stage_input_rows", _input_rows(9)),
             patch.object(
                 stage_service.stage_service, "_create_encounters_from_skeleton", AsyncMock(return_value=[])
             ) as create,

@@ -18,7 +18,6 @@ import {
   Trash2,
   Undo2,
   Wand2,
-  Workflow,
   Link2,
   type LucideIcon
 } from "lucide-react";
@@ -202,8 +201,7 @@ export function StageEditor({
     runPendingOp,
     transitionMutation,
     generateMutation,
-    applyBestOfMutation,
-    autoWireMutation
+    applyBestOfMutation
   } = useStageOperations({ stage, teams, mergeCandidates, mergedName, onChanged, onSelect });
 
   const isFfaForm = FFA_STAGE_TYPES.includes(form.stageType);
@@ -287,7 +285,7 @@ export function StageEditor({
 
   const isBracket = BRACKET_STAGE_TYPES.includes(stage.stage_type);
   // A lobby is seated the same way a group is filled: teams into the stage's
-  // items. Only a bracket takes its slots from a preceding stage instead.
+  // items. Only a bracket takes its slots from its flow input instead.
   const canSeed = !isBracket && teams.length > 0 && stage.items.length > 0;
   // The draft playoff takes its seeds from the captains' ranks; only a tournament that ran an individual Swiss has them.
   const canSeedByCaptain =
@@ -394,15 +392,6 @@ export function StageEditor({
                       </DropdownMenuItem>
                     );
                   })}
-                  {isBracket ? (
-                    <DropdownMenuItem
-                      disabled={autoWireMutation.isPending}
-                      onSelect={() => autoWireMutation.mutate()}
-                    >
-                      <Workflow className="size-4" aria-hidden />
-                      {t("autoWire")}
-                    </DropdownMenuItem>
-                  ) : null}
                   {canSeed ? (
                     <DropdownMenuItem onSelect={() => setPendingOp({ kind: "seed" })}>
                       <Shuffle className="size-4" aria-hidden />
@@ -515,7 +504,6 @@ export function StageEditor({
         {activeSection === "items" ? (
           <StageItemsSection
             stage={stage}
-            stages={stages}
             teams={teams}
             isTeamsLoading={isTeamsLoading}
             progress={progress}

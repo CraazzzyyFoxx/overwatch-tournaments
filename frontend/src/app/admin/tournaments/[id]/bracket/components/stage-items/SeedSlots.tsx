@@ -12,15 +12,12 @@ import { cn } from "@/lib/utils";
 import type { StageItem, StageItemInput } from "@/types/tournament.types";
 import type { InputDisplayLabelInfo } from "@/lib/bracket/projection";
 
-/** What a seed slot shows: the team, the group placement feeding it, or nothing yet. */
+/** What a seed slot shows: the team, or nothing yet. */
 export function inputLabel(
   info: InputDisplayLabelInfo,
   t: ReturnType<typeof useTranslations<"adminBracket">>
 ): string {
   if (info.key === "team") return info.label;
-  if (info.key === "winnerOf") {
-    return t("labels.winnerOf", { groupName: info.groupName, position: info.position });
-  }
   return t("labels.emptySlot");
 }
 

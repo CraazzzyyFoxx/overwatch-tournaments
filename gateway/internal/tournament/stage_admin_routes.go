@@ -29,8 +29,6 @@ var StageSubtreeRoutes = []edge.RouteSpec{
 	{Method: "POST", Pattern: "/api/v1/admin/stages/{stage_id}/merge-group-stages", Queue: "rpc.tournament.stage_merge", Path: []string{"stage_id"}, Body: true, Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/v1/admin/stages/{stage_id}/generate", Queue: "rpc.tournament.stage_generate", Path: []string{"stage_id"}, Auth: edge.AuthRequired, Success: 202},
 	{Method: "POST", Pattern: "/api/v1/admin/stages/{stage_id}/apply-best-of", Queue: "rpc.tournament.stage_apply_best_of", Path: []string{"stage_id"}, Auth: edge.AuthRequired},
-	{Method: "POST", Pattern: "/api/v1/admin/stages/{stage_id}/wire-from-groups", Queue: "rpc.tournament.stage_wire", Path: []string{"stage_id"}, Body: true, Auth: edge.AuthRequired},
-	{Method: "POST", Pattern: "/api/v1/admin/stages/{stage_id}/auto-wire", Queue: "rpc.tournament.stage_auto_wire", Path: []string{"stage_id"}, Query: []string{"source_stage_id"}, Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/v1/admin/stages/{stage_id}/seed-teams", Queue: "rpc.tournament.stage_seed", Path: []string{"stage_id"}, Body: true, Auth: edge.AuthRequired},
 	// Replace one standings table's pins (the group is in the body); schedules
 	// the recalculation that applies them. Worker enforces "standing"/"update".

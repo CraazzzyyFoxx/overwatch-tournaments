@@ -212,33 +212,7 @@ const StandingsTable = ({
   const stages = providedStages ?? stagesQuery.data ?? [];
 
   const stage = standings[0]?.stage;
-  // Prefer the explicit, admin-configured Stage.advance_count column; fall back
-  // to the derived bracket-wiring count.
-  let stageCount = stage?.advance_count ?? null;
-
-  if (stageCount == null && stage != null && stages.length > 0) {
-    const currentStage = stages.find((s) => s.id === stage.id);
-    const stageItemIds = new Set(currentStage?.items?.map((item) => item.id) ?? []);
-    if (stageItemIds.size > 0) {
-      let maxPos = 0;
-      for (const stg of stages) {
-        for (const item of stg.items ?? []) {
-          for (const input of item.inputs ?? []) {
-            if (
-              input.source_stage_item_id != null &&
-              stageItemIds.has(input.source_stage_item_id) &&
-              input.source_position != null
-            ) {
-              maxPos = Math.max(maxPos, input.source_position);
-            }
-          }
-        }
-      }
-      if (maxPos > 0) {
-        stageCount = maxPos;
-      }
-    }
-  }
+  const stageCount = stage?.advance_count ?? null;
 
   // A group may override the stage's number for itself. This table renders one
   // group at a time, so the rendered group's override — when it has one — is

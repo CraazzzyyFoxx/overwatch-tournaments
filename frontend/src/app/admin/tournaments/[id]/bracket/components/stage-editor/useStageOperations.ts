@@ -101,16 +101,6 @@ export function useStageOperations({
     }
   });
 
-  const autoWireMutation = useMutation({
-    mutationFn: () => adminService.autoWireStage(stage.id),
-    onSuccess: () => {
-      onChanged();
-      notify.success(t("autoWired"));
-    },
-    onError: (error) =>
-      notify.apiError(error, { title: t("autoWireError") })
-  });
-
   const seedMutation = useMutation({
     mutationFn: (mode: "snake_sr" | "captain_rank") =>
       adminService.seedTeams(stage.id, {
@@ -180,8 +170,7 @@ export function useStageOperations({
     runPendingOp,
     transitionMutation,
     generateMutation,
-    applyBestOfMutation,
-    autoWireMutation
+    applyBestOfMutation
   };
 }
 

@@ -7625,7 +7625,7 @@
       "summary": "Create stage item"
     },
     "rpc.tournament.admin.create#stage_item_input": {
-      "description": "Permission: workspace `stage.create`. Creates a stage item input under a stage item. A `source_stage_item_id` that does not exist or belongs to another tournament is 400.",
+      "description": "Permission: workspace `stage.create`. Creates a stage item input under a stage item (`final` with a team, or `empty`).",
       "request": {
         "array": false,
         "ref": "tournament.StageItemInputCreate"
@@ -7868,7 +7868,7 @@
       "summary": "Update stage item"
     },
     "rpc.tournament.admin.update#stage_item_input": {
-      "description": "Permission: workspace `stage.update`. Updates a stage item input by id. A `source_stage_item_id` that does not exist or belongs to another tournament is 400.",
+      "description": "Permission: workspace `stage.update`. Updates a stage item input by id. Editing its team clears its `source_result_id` (a hand-seeded seat).",
       "request": {
         "array": false,
         "ref": "tournament.StageItemInputUpdate"
@@ -11797,24 +11797,6 @@
       "description": "Permission: workspace `stage.update` on the stage's workspace. Rewrites best_of on the stage's existing encounters from the stage's best-of config (in place, preserving scores).",
       "summary": "Apply best-of to existing matches"
     },
-    "rpc.tournament.stage_auto_wire": {
-      "description": "Permission: workspace `stage.update` on the stage's workspace. Wires the stage's TENTATIVE inputs from a round-robin/Swiss stage's \"Teams advancing to playoff\" count \u2014 the same auto-wire the stage's `draft \u2192 ready` move runs, exposed standalone for preview/debugging. The source is the one group stage of the latest earlier phase; pass source_stage_id to name it when that phase runs several divisions in parallel (a value that is not an integer is 422 `invalid_query_param`).",
-      "query_params": [
-        {
-          "name": "source_stage_id",
-          "required": false,
-          "schema": {
-            "description": "The group stage to wire from.",
-            "type": "integer"
-          }
-        }
-      ],
-      "response": {
-        "array": false,
-        "ref": "tournament.StageRead"
-      },
-      "summary": "Auto-wire stage from groups"
-    },
     "rpc.tournament.stage_bracket_preview": {
       "description": "Permission: workspace `stage.read` on the stage's workspace. Returns the bracket a stage would generate \u2014 the real generator's pairings, seed order, advancement edges and per-round best-of, with skeleton-local ids because nothing is written; wired teams appear by name, an unseeded playoff is projected from the preceding group stage.",
       "summary": "Preview stage bracket"
@@ -11890,18 +11872,6 @@
         "ref": "tournament.StageRead"
       },
       "summary": "Seed teams into stage"
-    },
-    "rpc.tournament.stage_wire": {
-      "description": "Permission: workspace `stage.update` on the target stage's workspace. Wires a target stage's slots from a source group stage's top placements.",
-      "request": {
-        "array": false,
-        "ref": "tournament.WireFromGroupsRequest"
-      },
-      "response": {
-        "array": false,
-        "ref": "tournament.StageRead"
-      },
-      "summary": "Wire stage from groups"
     },
     "rpc.tournament.standing_pins_set": {
       "description": "Permission: workspace `standing.update` on the stage's workspace. Replaces every pin of one standings table (the stage plus body `stage_item_id`, null for an elimination stage): a pinned team keeps that place whatever results arrive later, the others fill the free places in computed order. An empty `pins` list unpins the table. 422 for a team outside the table or a place past its end; 409 when a playoff seeded from the group is under way and the change touches its qualifying places or removes a pin. Schedules the standings-recalculation job that applies them (202 Accepted).",
@@ -57570,30 +57540,6 @@
           "title": "Slot",
           "type": "integer"
         },
-        "source_position": {
-          "anyOf": [
-            {
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Source Position"
-        },
-        "source_stage_item_id": {
-          "anyOf": [
-            {
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Source Stage Item Id"
-        },
         "team_id": {
           "anyOf": [
             {
@@ -57626,7 +57572,7 @@
           "title": "Slot",
           "type": "integer"
         },
-        "source_position": {
+        "source_result_id": {
           "anyOf": [
             {
               "type": "integer"
@@ -57635,18 +57581,7 @@
               "type": "null"
             }
           ],
-          "title": "Source Position"
-        },
-        "source_stage_item_id": {
-          "anyOf": [
-            {
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "title": "Source Stage Item Id"
+          "title": "Source Result Id"
         },
         "stage_item_id": {
           "title": "Stage Item Id",
@@ -57670,8 +57605,7 @@
         "slot",
         "input_type",
         "team_id",
-        "source_stage_item_id",
-        "source_position"
+        "source_result_id"
       ],
       "title": "StageItemInputRead",
       "type": "object"
@@ -57679,7 +57613,6 @@
     "tournament.StageItemInputType": {
       "enum": [
         "final",
-        "tentative",
         "empty"
       ],
       "title": "StageItemInputType",
@@ -57710,31 +57643,6 @@
           ],
           "default": null,
           "title": "Slot"
-        },
-        "source_position": {
-          "anyOf": [
-            {
-              "minimum": 1,
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Source Position"
-        },
-        "source_stage_item_id": {
-          "anyOf": [
-            {
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Source Stage Item Id"
         },
         "stage_item_id": {
           "anyOf": [
@@ -62520,39 +62428,6 @@
         "code"
       ],
       "title": "VoiceWarning",
-      "type": "object"
-    },
-    "tournament.WireFromGroupsRequest": {
-      "description": "Auto-wire TENTATIVE inputs in a playoff stage from a group stage.\n\n``top`` = number of teams per group going to the upper bracket (UB).\n``top_lb`` = number of teams per group going to the lower bracket (LB).\nWhen ``top_lb=0`` (default) all teams go into the UB item only.\n\nTotal UB slots = num_groups * top; total LB slots = num_groups * top_lb.\nLB positions start from ``top + 1`` in each group's standings.\n\n``mode`` = seeding pattern. \"cross\" avoids same-group rematches in R1\nby alternating direction per column; \"snake\" does plain top-down.",
-      "properties": {
-        "mode": {
-          "default": "cross",
-          "enum": [
-            "cross",
-            "snake"
-          ],
-          "title": "Mode",
-          "type": "string"
-        },
-        "source_stage_id": {
-          "title": "Source Stage Id",
-          "type": "integer"
-        },
-        "top": {
-          "default": 2,
-          "title": "Top",
-          "type": "integer"
-        },
-        "top_lb": {
-          "default": 0,
-          "title": "Top Lb",
-          "type": "integer"
-        }
-      },
-      "required": [
-        "source_stage_id"
-      ],
-      "title": "WireFromGroupsRequest",
       "type": "object"
     },
     "tournament.WorkspaceSubscriptionRequirementRead": {

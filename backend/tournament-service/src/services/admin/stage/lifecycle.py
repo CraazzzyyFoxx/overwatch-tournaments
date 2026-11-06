@@ -6,58 +6,75 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from shared import models
 from shared.core import enums
 from shared.core import http_status as status
+from shared.core.errors import ApiExc, ApiHTTPException
 from shared.core.errors import BaseAPIException as HTTPException
 from src.services.admin.stage.base import StageServiceBase
-from src.services.admin.stage.qualification import _boundary_tie_unresolved
 from src.services.encounter.room_reconcile import request_stage_reconcile
 from src.services.notifications.lifecycle import lifecycle_notifier
+from src.services.tournament.events import enqueue_tournament_recalculation
 
 
 class StageLifecycleMixin(StageServiceBase):
     async def seat_inputs(self, session: AsyncSession, stage: models.Stage) -> None:
-        """Hook ``draft → ready``: wire the playoff from its groups, then resolve tentative inputs to teams.
+        """Hook ``draft → ready``: seat the teams of the stage's flow input (spec §5.3, plan Decision 1).
 
-        ``_auto_wire_from_groups`` runs first so the loop sees the freshly created TENTATIVE inputs.
+        A stage the admin already seeded keeps its seats, each stamped with its input row (a seeded team the input
+        does not hold is refused); otherwise every input is replaced by the seating the input's rows and the stage's
+        ``seed_ranking`` plan. A stage without an input edge, and an individual Swiss stage, is left alone.
         """
-        await self._auto_wire_from_groups(session, stage)
-
-        source_item_ids = {
-            inp.source_stage_item_id
-            for item in stage.items
-            for inp in item.inputs
-            if inp.input_type == enums.StageItemInputType.TENTATIVE
-            and inp.source_stage_item_id is not None
-            and inp.source_position is not None
-        }
-        standings_by_item: dict[int, list[models.Standing]] = {}
-        if source_item_ids:
-            standings_result = await session.execute(
-                self.standing_repo.select()
-                .where(models.Standing.stage_item_id.in_(source_item_ids))
-                .order_by(models.Standing.stage_item_id, models.Standing.position)
+        await self._lock_stage(session, stage.id)
+        if stage.stage_type == enums.StageType.INDIVIDUAL_SWISS:
+            return
+        _, rows = await self._stage_input_rows(session, stage)
+        if not rows:
+            return
+        # Re-read under the lock: a seed writer may have committed between the hook's load and the lock.
+        stage = await self.get_stage(session, stage.id, populate_existing=True)
+        if not stage.items:
+            raise ApiHTTPException(
+                status_code=400,
+                detail=[
+                    ApiExc(
+                        code="stage_has_no_items",
+                        msg="Add a group or bracket to this stage before it is ready",
+                    )
+                ],
             )
-            for standing in standings_result.scalars():
-                standings_by_item.setdefault(standing.stage_item_id, []).append(standing)
-
-        for item in stage.items:
-            for inp in item.inputs:
-                if inp.input_type != enums.StageItemInputType.TENTATIVE:
-                    continue
-                if inp.source_stage_item_id is None or inp.source_position is None:
-                    continue
-                standings = standings_by_item.get(inp.source_stage_item_id, [])
-                if inp.source_position <= len(standings):
-                    if _boundary_tie_unresolved(standings, inp.source_position):
-                        raise HTTPException(
-                            status_code=status.HTTP_409_CONFLICT,
-                            detail=(
-                                "unresolved tie at qualification boundary; pin the order in Standings "
-                                f"(source stage item {inp.source_stage_item_id}, "
-                                f"position {inp.source_position})"
-                            ),
+        inputs = [inp for item in stage.items for inp in item.inputs]
+        seated = [inp for inp in inputs if inp.input_type == enums.StageItemInputType.FINAL and inp.team_id is not None]
+        if seated:
+            result_of = {row.team_id: row.id for row in rows}
+            outside = sorted({inp.team_id for inp in seated if inp.team_id not in result_of})
+            if outside:
+                raise ApiHTTPException(
+                    status_code=409,
+                    detail=[
+                        ApiExc(
+                            code="seed_not_in_input", msg=f"Teams {outside} are seeded but not in this stage's input"
                         )
-                    inp.team_id = standings[inp.source_position - 1].team_id
-                    inp.input_type = enums.StageItemInputType.FINAL
+                    ],
+                )
+            for inp in seated:
+                inp.source_result_id = result_of[inp.team_id]
+            return
+        for inp in inputs:
+            await self.stage_item_input_repo.delete(session, inp)
+        plan = await self._plan_for(session, stage, rows)
+        await self.stage_item_input_repo.create_many(
+            session,
+            [
+                models.StageItemInput(
+                    stage_item_id=item_id,
+                    slot=slot,
+                    input_type=enums.StageItemInputType.FINAL,
+                    team_id=one.team_id,
+                    source_result_id=one.result_id,
+                )
+                for item_id, seats in plan.items()
+                for slot, one in enumerate(seats, 1)
+            ],
+        )
+        await enqueue_tournament_recalculation(session, stage.tournament_id)
 
     async def start_stage(self, session: AsyncSession, stage: models.Stage) -> list[models.Encounter]:
         """Hook ``ready → live``: publish the stage, generate its encounters when it has none, tell the rosters."""
@@ -112,8 +129,8 @@ class StageLifecycleMixin(StageServiceBase):
         back down would strand real data behind a bracket that looks like a preview again. So the revert is allowed
         only while every one of the stage's encounters is still ``OPEN``.
 
-        Does not unwind ``seat_inputs``' resolution of TENTATIVE inputs to FINAL -- re-wire from the source stage
-        (``wire_from_groups``) if that also needs undoing.
+        Keeps the seats ``seat_inputs`` wrote: the next ``draft → ready`` stamps them again and refuses a team the
+        input no longer holds, so clear the stage's seeds first when the input changed.
         """
         touched = await session.scalar(
             select(func.count())

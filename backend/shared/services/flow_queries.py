@@ -2,13 +2,20 @@
 
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from shared.core.enums import FlowNodeKind, FlowNodeStatus
-from shared.core.flow_state import LIFECYCLE_KINDS
+from shared.core.flow_state import FINAL_STATUSES, LIFECYCLE_KINDS
 from shared.models.tournament.flow import FlowEdge, FlowNode, FlowNodeResult
 from shared.models.tournament.team import Player
 
-__all__ = ("downstream_lifecycle_started", "input_member_ids", "stage_node_status", "upstream_registration_node_ids")
+__all__ = (
+    "downstream_lifecycle_started",
+    "input_boundary_tied",
+    "input_member_ids",
+    "stage_node_status",
+    "upstream_registration_node_ids",
+)
 
 
 def _reached(node_id: int, *, towards_targets: bool) -> sa.CTE:
@@ -74,3 +81,30 @@ async def downstream_lifecycle_started(session: AsyncSession, node_id: int) -> b
 def stage_node_status(stage_id_column: sa.ColumnElement[int]) -> sa.ScalarSelect[str]:
     """The status of the node of the stage ``stage_id_column`` names, for a correlated select."""
     return sa.select(FlowNode.status).where(FlowNode.stage_id == stage_id_column).scalar_subquery()
+
+
+async def input_boundary_tied(session: AsyncSession, node_id: int) -> bool:
+    """Whether a ``filter`` feeding ``node_id`` waits on a tie at its cut (spec §5.4).
+
+    The filter is ``tentative`` although every node wired into it is final: only a pin (or a manual filter) resolves it.
+    """
+    upstream, source = aliased(FlowEdge), aliased(FlowNode)
+    return bool(
+        await session.scalar(
+            sa.select(
+                sa.exists().where(
+                    FlowEdge.target_node_id == node_id,
+                    FlowNode.id == FlowEdge.source_node_id,
+                    FlowNode.kind == FlowNodeKind.FILTER,
+                    FlowNode.status == FlowNodeStatus.TENTATIVE,
+                    ~sa.exists()
+                    .where(
+                        upstream.target_node_id == FlowNode.id,
+                        source.id == upstream.source_node_id,
+                        source.status.not_in([s.value for s in FINAL_STATUSES]),
+                    )
+                    .correlate(FlowNode),
+                )
+            )
+        )
+    )

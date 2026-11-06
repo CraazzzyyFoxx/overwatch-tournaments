@@ -6,8 +6,8 @@ Three layers, all of them here, none of them touching a session:
    treats ``team_ids[0]`` as seed 1 (plays the lowest seed). Lives in
    ``Stage.seed_ranking``:
 
-   - ``slot`` (default) / ``source``: keep StageItemInput slot order (standings wiring, manual slots; ``source`` =
-     the input's rank order).
+   - ``slot`` (default) / ``source``: keep StageItemInput slot order (manual slots; ``source`` = the input's rank
+     order).
    - ``cross`` / ``snake``: regroup the input's rows by ``(stage_item_id, item_rank)`` at seating (:func:`plan_seats`);
      generation keeps the seated slot order, like ``slot``.
    - ``avg_sr``: highest ``Team.avg_sr`` is seed 1.
@@ -50,7 +50,6 @@ __all__ = (
     "bracket_seeds",
     "build_seeding",
     "collect_item_team_ids",
-    "group_advance_counts",
     "group_for_index",
     "lower_bracket_item",
     "parse_seed_mode",
@@ -216,30 +215,6 @@ class GroupSlice(NamedTuple):
     #: 1-based first position taken from that group (3 = "from 3rd place down").
     start: int
     count: int
-
-
-def group_advance_counts(
-    source_items: Sequence[Any],
-    *,
-    default_advance: int,
-    default_upper: int | None,
-) -> list[tuple[int, int, int]]:
-    """Per source group: ``(item_id, upper_count, lower_count)``.
-
-    A group's own ``advance_count`` overrides ``default_advance`` (0 / NULL reads
-    as "no override": the schema rejects 0). Its own ``advance_upper_count``
-    overrides ``default_upper``; NULL on both means everyone it sends starts in
-    the upper bracket. ``0`` upper is real: the whole group starts lower. Upper
-    never exceeds what the group actually sends.
-    """
-    counts: list[tuple[int, int, int]] = []
-    for item in source_items:
-        advance = getattr(item, "advance_count", None) or default_advance
-        own_upper = getattr(item, "advance_upper_count", None)
-        upper = own_upper if own_upper is not None else (default_upper if default_upper is not None else advance)
-        upper = min(upper, advance)
-        counts.append((item.id, upper, advance - upper))
-    return counts
 
 
 def build_seeding(slices: Sequence[GroupSlice], mode: str) -> list[tuple[int, int]]:

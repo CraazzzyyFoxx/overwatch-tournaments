@@ -77,12 +77,6 @@ APPROVED_DIRECT_WRITE_FILES = {
     # ``NotificationRepository.retire``.
     "shared/services/notifications.py",
     "tournament-service/src/services/challonge/stage_refs.py",
-    # Replacing a delete-orphan collection, not CRUD: ``_apply_seeding`` is a
-    # deliberately SYNCHRONOUS helper whose delete half is a collection
-    # ``remove``; the insert half is the matching ``session.add``. An async
-    # repository create would make the whole seeding path async to move one
-    # line.
-    "tournament-service/src/services/admin/stage_common.py",
     "balancer-service/src/services/team_export/materialization.py",
     "balancer-service/src/services/team_export/service.py",
     "tournament-service/src/services/admin/encounter.py",
