@@ -7,8 +7,8 @@ from itertools import groupby
 from typing import Any
 
 from shared.domain.flow.config import FilterNodeConfig, LeaderboardNodeConfig, SplitNodeConfig
+from src.domain.stage.pins import apply_pins
 from src.domain.stage.seeds import group_for_index
-from src.services.standings.service import apply_pins
 
 __all__ = (
     "PureOutput",

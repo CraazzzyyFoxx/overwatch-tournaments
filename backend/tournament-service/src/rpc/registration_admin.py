@@ -40,7 +40,6 @@ from __future__ import annotations
 
 from typing import Any, NamedTuple
 
-import sqlalchemy as sa
 from faststream.rabbit.annotations import RabbitMessage
 
 from shared import models
@@ -172,9 +171,7 @@ async def _registration_node_ctx(session: Any, data: dict[str, Any], action: str
     """:func:`_registration_ctx` plus the registration node the request names, checked against the registration's
     own tournament."""
     ctx = await _registration_ctx(session, data, action)
-    tournament_id = await session.scalar(
-        sa.select(models.Registration.tournament_id).where(models.Registration.id == ctx.id)
-    )
+    tournament_id = await reg_common._common_service.tournament_id_of_registration(session, ctx.id)
     return _NodeCtx(ctx, await _registration_node_id(session, data, tournament_id))
 
 

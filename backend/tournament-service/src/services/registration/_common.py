@@ -371,6 +371,15 @@ class RegistrationCommonService:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Flow node not found")
         return tournament_id
 
+    async def tournament_id_of_registration(self, session: AsyncSession, registration_id: int) -> int:
+        """The tournament a registration belongs to; 404 when there is no such registration."""
+        tournament_id = await session.scalar(
+            sa.select(models.Registration.tournament_id).where(models.Registration.id == registration_id)
+        )
+        if tournament_id is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Registration not found")
+        return tournament_id
+
     async def get_tournament_grid(self, session: AsyncSession, tournament_id: int) -> DivisionGrid:
         """Use the scoped full model so sheets and autofill retain native ranges."""
         tournament = await self.ensure_tournament_exists(session, tournament_id)

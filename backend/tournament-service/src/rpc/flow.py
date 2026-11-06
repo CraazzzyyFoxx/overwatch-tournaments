@@ -4,11 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-import sqlalchemy as sa
 from faststream.rabbit.annotations import RabbitMessage
 
-from shared.core.errors import ApiExc, ApiHTTPException
-from shared.models.tournament.flow import FlowNode
 from shared.rpc.identity import ensure_workspace_permission, rehydrate_user_optional
 from shared.services.audit import record_admin_audit
 from shared.services.tournament.visibility import ensure_tournament_viewable
@@ -22,9 +19,7 @@ from src.services.flow.service import flow_service
 
 async def _node_scope(session: Any, node_id: int) -> tuple[int, int]:
     """The node's tournament and that tournament's workspace; 404 for a missing node."""
-    tournament_id = await session.scalar(sa.select(FlowNode.tournament_id).where(FlowNode.id == node_id))
-    if tournament_id is None:
-        raise ApiHTTPException(status_code=404, detail=[ApiExc(code="flow_node_not_found", msg="Flow node not found")])
+    tournament_id = await flow_service.node_tournament_id(session, node_id)
     return tournament_id, await auth.get_tournament_workspace_id(session, tournament_id)
 
 
