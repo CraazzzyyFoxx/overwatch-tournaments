@@ -10,6 +10,7 @@ import {
   isSignUpLate,
   isSignUpOpen,
   nodeDraftFormat,
+  listedRegistrationNode,
   primaryFormationMode,
   registrationIntake
 } from "./flow-nodes";
@@ -44,6 +45,22 @@ describe("currentRegistrationNode", () => {
     expect(idOf([node(3, "draft")])).toBeNull();
     expect(idOf([node(9, "forming", "formation")])).toBeNull();
     expect(currentRegistrationNode(undefined)).toBeNull();
+  });
+});
+
+describe("listedRegistrationNode", () => {
+  it("lists the first registration node before any intake opens (announced tournament)", () => {
+    expect(listedRegistrationNode({ flow_nodes: [node(7, "draft"), node(6, "draft")] })?.id).toBe(6);
+  });
+
+  it("keeps the current node, or the node it is given", () => {
+    const nodes = [node(3, "closed"), node(4, "open")];
+    expect(listedRegistrationNode({ flow_nodes: nodes })?.id).toBe(4);
+    expect(listedRegistrationNode({ flow_nodes: nodes }, nodes[0])?.id).toBe(3);
+  });
+
+  it("is none without a registration node", () => {
+    expect(listedRegistrationNode({ flow_nodes: [node(9, "forming", "formation")] })).toBeNull();
   });
 });
 

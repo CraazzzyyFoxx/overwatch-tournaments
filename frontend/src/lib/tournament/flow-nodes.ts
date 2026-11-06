@@ -78,6 +78,18 @@ export function currentRegistrationNode(
   );
 }
 
+/**
+ * The registration node whose roster the public lists show: `node` (default: the current one), else the first
+ * registration node. Before any intake opens every node is `draft` and there is no current one, but the roster still
+ * exists (empty, or what an organizer added) and the page must not wait for a node that will never come.
+ */
+export function listedRegistrationNode(
+  tournament: Pick<Tournament, "flow_nodes"> | null | undefined,
+  node: TournamentFlowNode | null = currentRegistrationNode(tournament)
+): TournamentFlowNode | null {
+  return node ?? nodesOfKind(tournament, "registration")[0] ?? null;
+}
+
 /** The registration node's intake settings, as `RegistrationNodeConfig` (backend) stores them; absent keys read as its defaults. */
 export interface RegistrationNodeConfig {
   check_in: boolean;

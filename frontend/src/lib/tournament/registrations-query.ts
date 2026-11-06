@@ -1,6 +1,6 @@
 import { queryOptions, skipToken } from "@tanstack/react-query";
 
-import { currentRegistrationNode } from "@/lib/tournament/flow-nodes";
+import { currentRegistrationNode, listedRegistrationNode } from "@/lib/tournament/flow-nodes";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import registrationService from "@/services/registration.service";
 import registrationTeamService from "@/services/registration-team.service";
@@ -17,7 +17,8 @@ type RegistrationTournament = Pick<Tournament, "id" | "workspace_id" | "flow_nod
 
 /**
  * The roster of the registration node — the participants section's list, and the declared top heroes the teams
- * section's roster expansion reads.
+ * section's roster expansion reads. Before any intake opens it is the first registration node's roster
+ * (`listedRegistrationNode`), so the list does not wait forever on a node that is still `draft`.
  *
  * Shared with the Participants route's server prefetch, so both sides build the
  * same key out of one factory.
@@ -26,7 +27,7 @@ export function tournamentRegistrationsQueryOptions(
   tournament: RegistrationTournament,
   node: TournamentFlowNode | null = currentRegistrationNode(tournament)
 ) {
-  const nodeId = node?.id ?? null;
+  const nodeId = listedRegistrationNode(tournament, node)?.id ?? null;
   return queryOptions({
     queryKey: tournamentQueryKeys.registrationsList(tournament.workspace_id, tournament.id, nodeId ?? 0),
     queryFn: nodeId == null ? skipToken : () => registrationService.listRegistrations(tournament.id, nodeId)
