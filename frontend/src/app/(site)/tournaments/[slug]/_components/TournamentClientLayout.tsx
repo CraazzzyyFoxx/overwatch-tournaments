@@ -18,6 +18,7 @@ import {
   mayHavePastBroadcasts,
   displayStatus
 } from "@/lib/tournament/status";
+import { kindOf } from "@/lib/flow/kinds";
 import { draftFormationNode } from "@/lib/tournament/flow-nodes";
 import { formatDateRange } from "@/lib/datetime";
 import { useFormatter } from "@/lib/datetime/client";
@@ -369,6 +370,7 @@ export default function TournamentClientLayout({
         hasStreams={hasStreamSection(streams, vods)}
         hasRules={Boolean(tournament.rules?.trim())}
         hasMapPool={hasMapPool}
+        hasLeaderboard={(tournament.flow_nodes ?? []).some((n) => kindOf(n) === "leaderboard")}
         collapsed={heroScrolledPast}
         collapsedTitle={<span title={tournament.name}>{collapsedRailTitle(tournament.name)}</span>}
         collapsedActions={

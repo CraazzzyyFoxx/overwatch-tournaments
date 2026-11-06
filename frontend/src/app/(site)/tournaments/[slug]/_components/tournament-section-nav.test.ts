@@ -315,6 +315,20 @@ describe("buildTournamentSectionNav", () => {
     expect(model("live").some((item) => item.id === "rules")).toBe(false);
   });
 
+  it("shows the Table only for a tournament with a leaderboard, right after Rules during play", () => {
+    const ids = (input: { status: TournamentDisplayStatus; hasLeaderboard?: boolean }) =>
+      buildTournamentSectionNav({
+        tournamentId,
+        stages: [stage()],
+        hasRules: true,
+        pathname: `/tournaments/${tournamentId}`,
+        ...input
+      }).map((item) => item.id);
+
+    expect(ids({ status: "live" })).not.toContain("table");
+    expect(ids({ status: "live", hasLeaderboard: true }).slice(0, 3)).toEqual(["overview", "rules", "table"]);
+  });
+
   it("keeps Rules directly under Overview in both phase orders", () => {
     // The one section whose place does not move with the phase: before play it
     // decides whether a player signs up, during play it settles a dispute.

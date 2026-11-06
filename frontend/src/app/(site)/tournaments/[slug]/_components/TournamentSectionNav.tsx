@@ -16,6 +16,7 @@ import {
   Map as MapIcon,
   Radio,
   Scale,
+  Table as TableIcon,
   Users
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -37,6 +38,7 @@ const icons: Record<TournamentSectionId, React.ComponentType<{ className?: strin
   overview: LayoutDashboard,
   bracket: LayoutGrid,
   ranking: ListOrdered,
+  table: TableIcon,
   teams: Users,
   matches: Calendar,
   maps: MapIcon,
@@ -71,6 +73,7 @@ type TournamentSectionNavProps = {
   hasStreams?: boolean;
   hasRules?: boolean;
   hasMapPool?: boolean;
+  hasLeaderboard?: boolean;
   /**
    * Rendered in the rail's leading slot only while the page's big title is out
    * of view, so the viewer never loses the tournament's name without the rail
@@ -92,6 +95,7 @@ export default function TournamentSectionNav({
   hasStreams,
   hasRules,
   hasMapPool,
+  hasLeaderboard,
   collapsedTitle,
   collapsedActions,
   collapsed = false,
@@ -115,9 +119,10 @@ export default function TournamentSectionNav({
         hasStreams,
         hasRules,
         hasMapPool,
+        hasLeaderboard,
         pathname
       }),
-    [hasMapPool, hasRules, hasTeams, hasStreams, pathname, stages, status, tournamentId]
+    [hasLeaderboard, hasMapPool, hasRules, hasTeams, hasStreams, pathname, stages, status, tournamentId]
   );
   const setActiveRef = (node: HTMLElement | null) => {
     activeRef.current = node;

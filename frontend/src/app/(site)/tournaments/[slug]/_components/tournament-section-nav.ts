@@ -3,7 +3,7 @@ import type { StreamVods, TournamentStreams } from "@/types/stream.types";
 import type { StageSummary, TournamentDisplayStatus } from "@/types/tournament.types";
 
 export type TournamentSectionId =
-  | "overview" | "rules" | "bracket" | "ranking" | "teams" | "matches" | "maps" | "stats" | "stream" | "participants";
+  | "overview" | "rules" | "bracket" | "ranking" | "table" | "teams" | "matches" | "maps" | "stats" | "stream" | "participants";
 
 type TournamentNavReasonKey =
   | "tournamentDetail.nav.reasons.competitionNotStarted"
@@ -52,6 +52,11 @@ type BuildTournamentSectionNavInput = {
    * empty Maps tab would promise a pool nobody configured.
    */
   hasMapPool?: boolean;
+  /**
+   * Whether the flow has a leaderboard node. Absent-or-present like Rules, and
+   * never locked: the table shows tentative rows as soon as results exist.
+   */
+  hasLeaderboard?: boolean;
   pathname: string;
 };
 
@@ -78,6 +83,7 @@ const preCompetitionOrder: TournamentSectionId[] = [
   "teams",
   "bracket",
   "ranking",
+  "table",
   "matches",
   "stats"
 ];
@@ -85,6 +91,7 @@ const preCompetitionOrder: TournamentSectionId[] = [
 const competitionOrder: TournamentSectionId[] = [
   "overview",
   "rules",
+  "table",
   "bracket",
   "ranking",
   "teams",
@@ -174,6 +181,7 @@ export function buildTournamentSectionNav({
   hasStreams = false,
   hasRules = false,
   hasMapPool = false,
+  hasLeaderboard = false,
   pathname
 }: BuildTournamentSectionNavInput): TournamentSectionNavItem[] {
   const competitionStarted = hasPlayStarted(status, stages);
@@ -192,6 +200,7 @@ export function buildTournamentSectionNav({
       (id !== "rules" || hasRules) &&
       (id !== "maps" || hasMapPool) &&
       (id !== "ranking" || hasRanking) &&
+      (id !== "table" || hasLeaderboard) &&
       (id !== "teams" || hasTeams || !competitionStarted)
   );
 

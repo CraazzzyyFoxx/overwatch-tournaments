@@ -63,6 +63,11 @@
     "teams": "Teams",
     "participants": "Participants",
     "ranking": "Player standings",
+    "table": "Table",
+    "flow": {
+      "counted": "counted",
+      "notCounted": "not counted"
+    },
     "matches": "Matches",
     "heroes": "Heroes",
     "characters": "Characters",
@@ -3563,6 +3568,28 @@
       "empty": {
         "title": "No standings yet",
         "description": "The table appears once the first round is played."
+      }
+    },
+    "table": {
+      "title": "Table",
+      "empty": "The table appears once the first results are in.",
+      "livePreview": "Live preview",
+      "place": "#",
+      "participant": "Participant",
+      "total": "Total",
+      "formula": {
+        "mode": {
+          "sumAll": "Every result counts.",
+          "sumLastN": "Only the last {n} results count.",
+          "sumBestN": "Only the best {n} results count.",
+          "average": "The average of the results played counts."
+        },
+        "score": {
+          "stagePoints": "A result scores the stage points.",
+          "placementTable": "A result scores by place: {table}.",
+          "formula": "A result scores by the formula {formula}, where place is the finishing place and participants the field size."
+        },
+        "ties": "Ties go to the most best places, then to the place in the latest result."
       }
     },
     "individualRounds": {
