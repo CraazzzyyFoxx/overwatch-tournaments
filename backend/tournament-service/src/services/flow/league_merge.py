@@ -9,10 +9,11 @@ from __future__ import annotations
 
 import itertools
 import json
+import uuid
 from collections import defaultdict
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 
 import sqlalchemy as sa
@@ -23,27 +24,47 @@ from shared.core.chrono import chrono_sort_key
 from shared.core.enums import FlowNodeKind, FlowNodeStatus
 from shared.domain.flow.config import AggregateNodeConfig, LeaderboardNodeConfig
 from shared.domain.flow.validate import validate_flow
+from shared.domain.workspace_tier import VERIFIED_STATUSES
+from shared.messaging.config import ACHIEVEMENT_EVALUATE_DEFERRED_QUEUE, ANALYTICS_JOB_QUEUE
+from shared.messaging.outbox import enqueue_outbox_event
+from shared.models.achievements.achievement import (
+    AchievementOverride,
+    AchievementOverrideAction,
+    EvaluationRun,
+    EvaluationRunStatus,
+    EvaluationRunTrigger,
+)
+from shared.models.analytics.analytics import AnalyticsJob
 from shared.models.tournament.flow import FlowEdge, FlowNode
+from shared.schemas.events import AchievementEvaluateEvent, AnalyticsJobRequested
 from shared.services.participant_result import write_participant_results
 from src.services.flow.engine import flow_engine
 from src.services.flow.lifecycle import flow_node_service
 from src.services.flow.service import load_flow_specs
 
 __all__ = (
+    "GRANT_REASON",
     "REGISTRATION_FKS",
     "TOURNAMENT_FKS",
     "Dropped",
+    "GrantSnapshot",
     "LeagueDay",
     "LeagueEntry",
     "LeagueSourceRow",
     "MappingError",
     "MergeError",
     "MergeLog",
+    "ResultKey",
+    "affected_scope",
     "apply_mapping",
     "fetch_league_rows",
+    "grant_missing",
     "load_mapping",
     "merge_league",
     "plan_leagues",
+    "queue_analytics",
+    "queue_evaluations",
+    "snapshot_results",
 )
 
 LEAGUE_NAME_SEPARATOR = " | "
@@ -625,3 +646,203 @@ async def apply_mapping(
             logs.append(await merge_league(session, entry))
             await (session.rollback() if dry_run else session.commit())
     return logs
+
+
+GRANT_REASON = "league merge"
+
+#: ``(rule, member, tournament, encounter, match)``: the identity of an ``achievements.evaluation_result`` row.
+type ResultKey = tuple[int, int, int | None, int | None, int | None]
+
+
+@dataclass
+class GrantSnapshot:
+    """The result keys that existed before the merge and the evaluation runs that must finish before ``grant``."""
+
+    keys: list[ResultKey]
+    run_ids: list[str] = field(default_factory=list)
+
+    def to_json(self) -> str:
+        return json.dumps({"keys": self.keys, "run_ids": self.run_ids})
+
+    @classmethod
+    def from_json(cls, text: str) -> GrantSnapshot:
+        raw = json.loads(text)
+        return cls([(k[0], k[1], k[2], k[3], k[4]) for k in raw["keys"]], list(raw["run_ids"]))
+
+
+async def affected_scope(session: AsyncSession, tournament_ids: Collection[int]) -> tuple[set[int], set[int]]:
+    """``(workspace ids, member ids)`` with a player or a registration in one of the tournaments (Decision 3)."""
+    params = _ids(sorted(tournament_ids))
+    workspaces = await session.scalars(
+        sa.text("SELECT DISTINCT workspace_id FROM tournament.tournament WHERE id = ANY(CAST(:ids AS bigint[]))"),
+        params,
+    )
+    members = await session.scalars(
+        sa.text(
+            "SELECT workspace_member_id FROM tournament.player WHERE tournament_id = ANY(CAST(:ids AS bigint[])) "
+            "UNION SELECT workspace_member_id FROM registration.registration "
+            "WHERE tournament_id = ANY(CAST(:ids AS bigint[])) AND workspace_member_id IS NOT NULL"
+        ),
+        params,
+    )
+    return set(workspaces), set(members)
+
+
+async def _result_keys(session: AsyncSession, member_ids: Collection[int]) -> list[ResultKey]:
+    rows = await session.execute(
+        sa.text(
+            "SELECT achievement_rule_id, workspace_member_id, tournament_id, encounter_id, match_id "
+            "FROM achievements.evaluation_result WHERE workspace_member_id = ANY(CAST(:ids AS bigint[]))"
+        ),
+        _ids(sorted(member_ids)),
+    )
+    return [(r[0], r[1], r[2], r[3], r[4]) for r in rows.all()]
+
+
+def _sort_key(key: ResultKey) -> tuple[int, ...]:
+    return tuple(-1 if part is None else part for part in key)
+
+
+async def snapshot_results(
+    session: AsyncSession, *, member_ids: Collection[int], target_of: Mapping[int, int]
+) -> list[ResultKey]:
+    """Every result of ``member_ids`` with its tournament mapped day → target, sorted."""
+    keys = [
+        (r, m, target_of.get(t, t) if t is not None else None, e, mt)
+        for r, m, t, e, mt in await _result_keys(session, member_ids)
+    ]
+    return sorted(set(keys), key=_sort_key)
+
+
+async def queue_evaluations(session: AsyncSession, workspace_ids: Collection[int]) -> list[str]:
+    """One deferred workspace-wide run per workspace (the path ``runner._enqueue_deferred`` writes); returns run ids."""
+    run_ids: list[str] = []
+    for workspace_id in sorted(workspace_ids):
+        run = EvaluationRun(
+            id=str(uuid.uuid4()),
+            workspace_id=workspace_id,
+            trigger=EvaluationRunTrigger.manual,
+            tournament_id=None,
+            status=EvaluationRunStatus.queued,
+            started_at=datetime.now(UTC),
+        )
+        session.add(run)
+        await session.flush()
+        await enqueue_outbox_event(
+            session,
+            AchievementEvaluateEvent(
+                workspace_id=workspace_id,
+                changed_tables=[],
+                run_id=str(run.id),
+                rule_ids=None,
+                source_service="league-merge",
+            ),
+            exchange="",
+            routing_key=ACHIEVEMENT_EVALUATE_DEFERRED_QUEUE.name,
+        )
+        run_ids.append(str(run.id))
+    return run_ids
+
+
+async def queue_analytics(session: AsyncSession, target_ids: Collection[int]) -> dict[int, str]:
+    """Per workspace one ``compute`` job from its earliest target (it rewrites every later computed tournament)."""
+    rows = (
+        await session.execute(
+            sa.text(
+                "SELECT t.id, t.workspace_id, t.start_date, t.end_date, t.created_at, w.verification_status "
+                "FROM tournament.tournament t JOIN workspace w ON w.id = t.workspace_id "
+                "WHERE t.id = ANY(CAST(:ids AS bigint[]))"
+            ),
+            _ids(sorted(target_ids)),
+        )
+    ).all()
+    by_workspace: dict[int, list[Any]] = defaultdict(list)
+    for row in rows:
+        by_workspace[row.workspace_id].append(row)
+    outcome: dict[int, str] = {}
+    for workspace_id, targets in sorted(by_workspace.items()):
+        if targets[0].verification_status not in VERIFIED_STATUSES:
+            outcome[workspace_id] = "skipped: workspace_not_verified"
+            continue
+        active = await session.scalar(
+            sa.select(AnalyticsJob.id).where(
+                AnalyticsJob.workspace_id == workspace_id, AnalyticsJob.status.in_(("pending", "running"))
+            )
+        )
+        if active is not None:
+            outcome[workspace_id] = f"skipped: job {active} active"
+            continue
+        earliest = min(targets, key=chrono_sort_key)
+        job = AnalyticsJob(
+            workspace_id=workspace_id,
+            tournament_id=earliest.id,
+            kind="compute",
+            status="pending",
+            progress={},
+            requested_by_user_id=None,
+        )
+        session.add(job)
+        await session.flush()
+        await enqueue_outbox_event(
+            session,
+            AnalyticsJobRequested(
+                job_id=int(job.id), event_id=f"analytics_job:{job.id}", source_service="league-merge"
+            ),
+            exchange="",
+            routing_key=ANALYTICS_JOB_QUEUE.name,
+        )
+        outcome[workspace_id] = f"job {job.id}"
+    return outcome
+
+
+async def grant_missing(session: AsyncSession, snapshot: GrantSnapshot, *, granted_by: int) -> dict[int, int]:
+    """Grant ``(rule, member, tournament, match)`` for every snapshot key the finished evaluation no longer yields.
+
+    Idempotent: an existing grant override of the same four values is skipped. Returns grants written per rule.
+    """
+    for run_id in snapshot.run_ids:
+        status = await session.scalar(
+            sa.select(EvaluationRun.status).where(EvaluationRun.id == run_id).execution_options(populate_existing=True)
+        )
+        if status is None:
+            raise MergeError(f"evaluation run {run_id} is missing")
+        if status not in (EvaluationRunStatus.done, EvaluationRunStatus.partial):
+            raise MergeError(f"evaluation run {run_id} is {status}")
+    members = sorted({key[1] for key in snapshot.keys})
+    missing = set(snapshot.keys) - set(await _result_keys(session, members))
+    wanted = sorted(
+        {(rule, member, tournament, match) for rule, member, tournament, _, match in missing}, key=_sort_key
+    )
+    granted: dict[int, int] = defaultdict(int)
+    for rule, member, tournament, match in wanted:
+        params = {"rule": rule, "member": member, "tournament": tournament, "match": match}
+        exists = await session.scalar(
+            sa.text("SELECT 1 FROM achievements.rule r JOIN workspace_member m ON m.id = :member WHERE r.id = :rule"),
+            params,
+        )
+        if exists is None:
+            continue
+        already = await session.scalar(
+            sa.text(
+                "SELECT 1 FROM achievements.override WHERE achievement_rule_id = :rule AND workspace_member_id = :member "
+                "AND tournament_id IS NOT DISTINCT FROM :tournament AND match_id IS NOT DISTINCT FROM :match "
+                "AND action = 'grant'"
+            ),
+            params,
+        )
+        if already is not None:
+            continue
+        session.add(
+            AchievementOverride(
+                achievement_rule_id=rule,
+                workspace_member_id=member,
+                tournament_id=tournament,
+                match_id=match,
+                action=AchievementOverrideAction.grant,
+                reason=GRANT_REASON,
+                granted_by=granted_by,
+            )
+        )
+        granted[rule] += 1
+    await session.flush()
+    return dict(granted)
