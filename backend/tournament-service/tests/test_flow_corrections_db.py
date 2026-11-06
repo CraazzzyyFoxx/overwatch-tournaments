@@ -9,7 +9,7 @@ import sqlalchemy as sa
 from shared import models
 from shared.core.errors import BaseAPIException
 from shared.models.platform.outbox import EventOutbox
-from shared.models.tournament.flow import FlowEdge, FlowNode, FlowNodeResult
+from shared.models.tournament.flow import FlowEdge, FlowNode
 from shared.models.tournament.standings import Standing
 from src import schemas
 from src.services.admin.stage import stage_service
@@ -141,6 +141,28 @@ class FlowCorrectionsDbTests(GroupsToPlayoffCase):
         self.assertEqual("downstream_started", refused.detail[0]["code"])
         self.assertIn("Draft", refused.detail[0]["msg"])
 
+    async def test_started_cut_counts_a_formation_that_left_draft(self) -> None:
+        setup = await self._groups_to_playoff(filter_config=_TOP_TWO)
+        async with self.Session() as s:
+            formation = FlowNode(tournament_id=self.tournament_id, kind="formation", name="Draft", status="draft")
+            s.add(formation)
+            await s.flush()
+            s.add(
+                FlowEdge(
+                    tournament_id=self.tournament_id,
+                    source_node_id=setup.filter_node_id,
+                    source_port="passed",
+                    target_node_id=formation.id,
+                    target_port="players",
+                )
+            )
+            await s.commit()
+        async with self.Session() as s:
+            self.assertIsNone(await started_cut(s, setup.group_a_item_id))  # a draft formation consumed nothing yet
+        await self._set_status(formation.id, "forming")
+        async with self.Session() as s:
+            self.assertEqual(2, await started_cut(s, setup.group_a_item_id))  # A1, A2 reached the formation
+
     async def test_correction_allowed_with_only_pure_nodes_downstream(self) -> None:
         setup = await self._groups_to_playoff(filter_config=_TOP_TWO)
         async with self.Session() as s:
@@ -255,7 +277,11 @@ class FlowCorrectionsDbTests(GroupsToPlayoffCase):
         seats = (await self._seats(setup.playoff_stage_id))["Bracket"]
         self.assertEqual([results[team] for _, team, _, _ in seats], [source for _, _, _, source in seats])
         async with self.Session() as s:
-            names = list(await s.scalars(sa.select(models.Encounter.name)))
+            names = list(
+                await s.scalars(
+                    sa.select(models.Encounter.name).where(models.Encounter.tournament_id == self.tournament_id)
+                )
+            )
         self.assertEqual(1, len(names))
         self.assertIn("A3", names[0])
         self.assertNotIn("A2", names[0])
@@ -281,28 +307,42 @@ class FlowCorrectionsDbTests(GroupsToPlayoffCase):
         self.assertEqual(0, await self._reseat())
         self.assertEqual(before, await self._team_seats(setup))
 
-    async def test_reseat_keeps_an_admin_hand_edit(self) -> None:
-        setup = await self._groups_to_playoff(filter_config=_TOP_TWO)
-        await self._ready(setup)
-        before = await self._team_seats(setup)
-        async with self.Session() as s:  # an admin edit clears the seat's source row
+    async def _hand_seat(self, setup: Setup, old: str, new: str) -> None:
+        """An admin seats ``new`` over ``old``'s seat: the stamp the admin writers leave."""
+        async with self.Session() as s:
             await s.execute(
                 sa.update(models.StageItemInput)
-                .where(models.StageItemInput.team_id == setup.teams["B2"])
-                .values(source_result_id=None)
+                .where(models.StageItemInput.team_id == setup.teams[old])
+                .values(team_id=setup.teams[new], source_result_id=None, seat_source="manual")
             )
             await s.commit()
 
+    async def test_reseat_never_moves_a_manual_seat(self) -> None:
+        setup = await self._groups_to_playoff(filter_config=_TOP_TWO)
+        await self._ready(setup)
+        t = setup.teams
+        before = await self._team_seats(setup)
+        await self._hand_seat(setup, "B2", "B2")  # an admin's own seat for a team that is in the input
+
         await self._swap_group_places(setup, "A2", "A3")
 
-        self.assertEqual(0, await self._reseat())
-        self.assertEqual(before, await self._team_seats(setup))
-        async with self.Session() as s:
-            self.assertEqual(
-                4,
-                await s.scalar(
-                    sa.select(sa.func.count())
-                    .select_from(FlowNodeResult)
-                    .where(FlowNodeResult.node_id == setup.filter_node_id)
-                ),
-            )
+        self.assertEqual(1, await self._reseat())
+        slot_of_a2 = next(slot for slot, team in before if team == t["A2"])
+        self.assertEqual(
+            [(slot, t["A3"] if slot == slot_of_a2 else team) for slot, team in before], await self._team_seats(setup)
+        )
+        seats = (await self._seats(setup.playoff_stage_id))["Bracket"]
+        self.assertIsNone(next(source for _, team, _, source in seats if team == t["B2"]))
+
+    async def test_reseat_keeps_a_manual_seat_of_a_team_outside_the_input(self) -> None:
+        setup = await self._groups_to_playoff(filter_config=_TOP_TWO)
+        await self._ready(setup)
+        t = setup.teams
+        before = await self._team_seats(setup)
+        await self._hand_seat(setup, "B2", "B3")  # a replacement the input does not hold
+
+        await self._swap_group_places(setup, "A2", "A3")
+
+        self.assertEqual(1, await self._reseat())
+        expected = {t["A2"]: t["A3"], t["B2"]: t["B3"]}
+        self.assertEqual([(slot, expected.get(team, team)) for slot, team in before], await self._team_seats(setup))

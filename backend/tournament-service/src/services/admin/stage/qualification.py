@@ -1,6 +1,8 @@
 """Requalification: ready stages re-seated from their input's current results (spec §8.4)."""
 
 from collections import defaultdict
+from collections.abc import Mapping, Sequence
+from typing import cast
 
 import sqlalchemy as sa
 from sqlalchemy import select
@@ -12,6 +14,7 @@ from shared.core import enums
 from shared.domain.encounter_naming import build_encounter_name_from_ids
 from shared.services.encounter.participants import active_teams, place_team, vacate_slot
 from shared.services.flow_queries import input_boundary_tied
+from src.domain.stage.seeds import SeatSource
 from src.services.admin.stage.base import StageServiceBase
 from src.services.notifications.lifecycle import lifecycle_notifier
 
@@ -21,8 +24,8 @@ class StageQualificationMixin(StageServiceBase):
         """Re-plan every ``ready`` stage from its input's current rows and move the seats that changed.
 
         A ``ready`` stage is the only one downstream of a result that may still follow it (a ``live`` one is refused by
-        ``flow.corrections``). A stage with a hand-edited seat or whose input filter waits on a boundary tie is left
-        alone. Returns how many seats changed hands, were added or removed.
+        ``flow.corrections``). A stage whose input filter waits on a boundary tie is left alone, and a seat an admin
+        wrote (``seat_source = manual``) never moves. Returns how many seats changed hands, were added or removed.
         """
         stage_ids = await session.scalars(
             select(models.FlowNode.stage_id)
@@ -42,16 +45,18 @@ class StageQualificationMixin(StageServiceBase):
         node, rows = await self._stage_input_rows(session, stage)
         current = {(item.id, inp.slot): inp for item in stage.items for inp in item.inputs}
         seated = [inp for inp in current.values() if inp.team_id is not None]
-        in_input = {row.team_id for row in rows}
-        # A seat without its source row is an admin's hand edit -- unless its team left the input, which is what
-        # deleting the team's result row (``ON DELETE SET NULL``) looks like.
-        hand_edited = any(inp.source_result_id is None and inp.team_id in in_input for inp in seated)
-        if node is None or not rows or not seated or hand_edited or await input_boundary_tied(session, node.id):
+        if node is None or not rows or not seated or await input_boundary_tied(session, node.id):
             return 0
-        plan = await self._plan_for(session, stage, rows)
-        wanted = {(item_id, slot): one for item_id, seats in plan.items() for slot, one in enumerate(seats, 1)}
+        # An admin's seats (``manual``) never move. A stage that has any only swaps its departed ``flow`` teams, in
+        # place, for the input teams nobody holds; otherwise the stage is re-planned from the input.
+        manual = any(inp.seat_source == "manual" for inp in seated)
+        if manual:
+            wanted = _substitutes(rows, current)
+        else:
+            plan = await self._plan_for(session, stage, rows)
+            wanted = {(item_id, slot): one for item_id, seats in plan.items() for slot, one in enumerate(seats, 1)}
         added = [key for key in wanted if key not in current]
-        removed = [inp for key, inp in current.items() if key not in wanted and inp.team_id is not None]
+        removed = [] if manual else [inp for key, inp in current.items() if key not in wanted and inp.team_id]
         # A bracket that already has encounters cannot grow or shrink here.
         if (added or removed) and await self._count_stage_encounters(session, stage.id):
             return 0
@@ -176,3 +181,20 @@ class StageQualificationMixin(StageServiceBase):
             await pick_ban_session_service.sync_all_pick_ban_sessions_after_team_change(session, encounter)
         # No channel post: requalification rewrites a whole stage item.
         await lifecycle_notifier.on_encounters_changed(session, encounters, channel=False)
+
+
+def _substitutes(
+    rows: Sequence[models.FlowNodeResult], current: Mapping[tuple[int, int], models.StageItemInput]
+) -> dict[tuple[int, int], SeatSource]:
+    """Seat -> the input row it should hold when admin seats are around: its own team's row, or for a departed team
+    the next input team no seat holds."""
+    manual = {inp.team_id for inp in current.values() if inp.seat_source == "manual"}
+    by_team = {row.team_id: row for row in rows if row.team_id not in manual}
+    flow = {key: inp for key, inp in current.items() if inp.team_id is not None and inp.seat_source != "manual"}
+    held = {inp.team_id for inp in flow.values()}
+    arriving = iter([row for team_id, row in by_team.items() if team_id not in held])
+    wanted: dict[tuple[int, int], SeatSource] = {}
+    for key, inp in flow.items():
+        if row := by_team.get(inp.team_id) or next(arriving, None):
+            wanted[key] = SeatSource(row.id, cast(int, row.team_id), row.stage_item_id, row.item_rank)
+    return wanted

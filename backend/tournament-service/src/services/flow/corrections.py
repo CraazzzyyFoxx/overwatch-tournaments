@@ -2,7 +2,7 @@
 
 from collections import defaultdict
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
@@ -84,12 +84,13 @@ async def assert_encounter_correction_allowed(session: AsyncSession, encounter: 
 
 
 async def started_cut(session: AsyncSession, stage_item_id: int) -> int | None:
-    """The deepest ``item_rank`` of ``stage_item_id`` seated in a started stage, ``None`` when none is.
+    """The deepest ``item_rank`` of ``stage_item_id`` seated in a started stage or fed to a started formation, ``None``
+    when there is none.
 
-    Every place down to it is frozen into a stage that can no longer be re-seated; places below it qualified nobody who
+    Every place down to it is frozen into a node that can no longer be re-seated; places below it qualified nobody who
     is playing.
     """
-    return await session.scalar(
+    seated = await session.scalar(
         select(func.max(models.FlowNodeResult.item_rank))
         .join(models.StageItemInput, models.StageItemInput.source_result_id == models.FlowNodeResult.id)
         .join(models.StageItem, models.StageItem.id == models.StageItemInput.stage_item_id)
@@ -99,3 +100,21 @@ async def started_cut(session: AsyncSession, stage_item_id: int) -> int | None:
             models.FlowNode.status.in_([status.value for status in _STARTED[FlowNodeKind.STAGE]]),
         )
     )
+    # A formation seats nobody: what it consumed is the rows of the node that feeds it.
+    consumed = await session.scalar(
+        select(func.max(models.FlowNodeResult.item_rank))
+        .join(
+            models.FlowEdge,
+            and_(
+                models.FlowEdge.source_node_id == models.FlowNodeResult.node_id,
+                models.FlowEdge.source_port == models.FlowNodeResult.port,
+            ),
+        )
+        .join(models.FlowNode, models.FlowNode.id == models.FlowEdge.target_node_id)
+        .where(
+            models.FlowNodeResult.stage_item_id == stage_item_id,
+            models.FlowNode.kind == FlowNodeKind.FORMATION,
+            models.FlowNode.status.in_([status.value for status in _STARTED[FlowNodeKind.FORMATION]]),
+        )
+    )
+    return max((cut for cut in (seated, consumed) if cut is not None), default=None)

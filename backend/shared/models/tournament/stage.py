@@ -273,6 +273,7 @@ class StageItemInput(db.TimeStampIntegerMixin):
     __tablename__ = "stage_item_input"
     __table_args__ = (
         UniqueConstraint("stage_item_id", "slot", name="uq_stage_item_input_item_slot"),
+        CheckConstraint("seat_source IN ('flow', 'manual')", name="ck_stage_item_input_seat_source"),
         {"schema": "tournament"},
     )
 
@@ -291,6 +292,9 @@ class StageItemInput(db.TimeStampIntegerMixin):
     source_result_id: Mapped[int | None] = mapped_column(
         ForeignKey("tournament.flow_node_result.id", ondelete="SET NULL"), nullable=True, index=True
     )
+    #: ``flow``: the seat follows the stage's input (``seat_inputs`` / requalification own it); ``manual``: an admin wrote
+    #: it and nothing but an admin moves it.
+    seat_source: Mapped[str] = mapped_column(String(8), default="flow", server_default="flow")
 
     stage_item: Mapped[StageItem] = relationship(back_populates="inputs", foreign_keys=[stage_item_id])
     team: Mapped[Team | None] = relationship(foreign_keys=[team_id])

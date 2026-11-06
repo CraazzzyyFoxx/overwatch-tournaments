@@ -85,6 +85,7 @@ Procedures for an operator. Commands are meant to be run verbatim.
 | [`releases/2026-10-23-prod-cutover.md`](./releases/2026-10-23-prod-cutover.md) | Taking production from v1.48.1 through every cutover above in one maintenance window: the nginx maintenance page (`make maint-on/eta/off`, bypass cookie), pre-window checks and the step timings measured on dev, drain/backup/migrate/proof/start order, point of no return and restore |
 | [`releases/2026-11-05-tournament-chronology.md`](./releases/2026-11-05-tournament-chronology.md) | One tournament chronology (start, end, id) for every time-ordered read: analytics/ML, achievements, newcomer status, stats and tournament reads; the date-range ML backfill and its runbook change; no migration |
 | [`releases/2026-11-05-participant-result.md`](./releases/2026-11-05-participant-result.md) | `tournament.participant_result`: one result per member per finished tournament, backfilled, read by profile/overview/compare/titles, analytics and the Overwatch placement achievements; behaviour changes and the post-migration rollout (achievement evaluation per workspace, analytics recompute) |
+| [`releases/2026-11-05-flow-p4-transition-nodes.md`](./releases/2026-11-05-flow-p4-transition-nodes.md) | Advancement through flow nodes: wire-from-groups routes, advance counts and TENTATIVE seats removed, seats from flow results (`seat_source`), requalification and corrections rules; **deploy order: `flowP3_06`, `recompute_flows.py`, then head** |
 
 ## Designs, plans and reviews
 

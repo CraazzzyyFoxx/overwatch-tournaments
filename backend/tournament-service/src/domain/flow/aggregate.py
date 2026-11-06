@@ -42,7 +42,9 @@ def compute_aggregate(
     )
     entries: dict[int, list[_Entry]] = {}
     for index, source in enumerate(inputs):
-        for place, row in enumerate(source.rows, 1):
+        heads: dict[int, int] = {}  # tie_group -> rank of its first row: a shared place is its head rank
+        for rank, row in enumerate(source.rows, 1):
+            place = rank if row.tie_group is None else heads.setdefault(row.tie_group, rank)
             metrics = row.breakdown if isinstance(row.breakdown, dict) else {}
             if config.score.preset == "stage_points":
                 score = row.score or 0
@@ -54,13 +56,12 @@ def compute_aggregate(
             for pid in _participants(config.unit, row, members_by_team):
                 entries.setdefault(pid, []).append(_Entry(index, place, score))
 
-    recent = sorted(range(len(inputs)), key=lambda i: inputs[i].completed_at or _NEVER, reverse=True)
-    last_n = set(recent[: config.n or 0])
-    last_done = max(
-        (i for i, source in enumerate(inputs) if source.final and source.completed_at),
-        key=lambda i: inputs[i].completed_at or _NEVER,
-        default=None,
-    )
+    # ``completed_at`` is the input's recency (the engine fills it in); the later edge is the more recent on a tie.
+    def recency(i: int) -> tuple[datetime, int]:
+        return inputs[i].completed_at or _NEVER, i
+
+    last_n = set(sorted(range(len(inputs)), key=recency, reverse=True)[: config.n or 0])
+    last_done = max((i for i, source in enumerate(inputs) if source.final), key=recency, default=None)
     max_place = max((e.place for rows in entries.values() for e in rows), default=0)
 
     totals: dict[int, float] = {}
@@ -75,7 +76,8 @@ def compute_aggregate(
                 picked = {e.index for e in rows}
         counted[pid] = picked
         total = sum(e.score for e in rows if e.index in picked)
-        totals[pid] = total / len(rows) if config.mode == "average" else total
+        # Rounded: formula sums such as 0.1 + 0.2 and 0.3 must tie.
+        totals[pid] = round(total / len(rows) if config.mode == "average" else total, 9)
 
     def key(pid: int) -> tuple:
         rows = entries[pid]

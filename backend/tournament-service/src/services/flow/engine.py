@@ -5,9 +5,10 @@ their inputs. Rows are updated in place so ids stay stable (plan Decision 5). Li
 A moved leaderboard sink of a finished tournament rewrites ``participant_result`` (spec §4.7 rule 1).
 """
 
-from collections import defaultdict
+from collections import Counter, defaultdict
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
@@ -28,7 +29,9 @@ from shared.domain.flow.ports import concrete_outputs
 from shared.domain.flow.validate import topological_order
 from shared.models.balancer.balance import BalancerBalance, BalancerTeam
 from shared.models.draft.draft import DraftSession, DraftTeam
+from shared.models.encounter.encounter import Encounter
 from shared.models.registration.registration import Registration, RegistrationEntry, RegistrationTeam
+from shared.models.tournament.bracket_encounter import BracketEncounter
 from shared.models.tournament.flow import FlowEdge, FlowNode, FlowNodeResult
 from shared.models.tournament.player_standing import PlayerStanding
 from shared.models.tournament.stage import Stage, StageItem
@@ -102,6 +105,10 @@ class FlowEngine:
             (n.id for n in nodes if n.kind == FlowNodeKind.LEADERBOARD and n.id not in has_successor), default=None
         )
 
+        stage_ended = (
+            await self._stage_ended(session, tournament_id) if any(n.kind == "aggregate" for n in nodes) else {}
+        )
+        recency: dict[int, datetime | None] = {}
         outputs: dict[tuple[int, str], tuple[list[ResultRow], FlowResultState]] = {}
         board_moved = False
         changed: list[int] = []
@@ -125,12 +132,19 @@ class FlowEngine:
                     state, status = FlowResultState.TENTATIVE, FlowNodeStatus.PENDING
                 else:
                     if kind == FlowNodeKind.AGGREGATE:
-                        computed = await self._compute_aggregate(session, node, incoming[node_id], sources, by_id)
+                        computed = await self._compute_aggregate(session, node, incoming[node_id], sources, recency)
                     else:
                         computed = self._compute_pure(kind, node, [s[0] for s in sources if s], item_order)
                     final = not computed.boundary_tie and all(s and s[1] == FlowResultState.FINAL for s in sources)
                     ports, state = computed.ports, FlowResultState.FINAL if final else FlowResultState.TENTATIVE
                     status = FlowNodeStatus(state.value)
+            # When the node finished: what an aggregate orders its inputs by. A node without a stamp (legacy and merged
+            # stages) falls back to its stage's latest encounter; a pure node to its most recent input.
+            recency[node_id] = (
+                node.completed_at or (stage_ended.get(node.stage_id) if state == FlowResultState.FINAL else None)
+                if kind in _LIFECYCLE_PORT
+                else max((r for e in incoming[node_id] if (r := recency[e.source_node_id])), default=None)
+            )
             moved = False
             for port, rows in ports.items():
                 outputs[(node_id, port)] = (rows, state)
@@ -166,13 +180,27 @@ class FlowEngine:
             return compute_leaderboard(board, inputs[0])
         return PureOutput({"merged": compute_merge(inputs)})
 
+    async def _stage_ended(self, session: AsyncSession, tournament_id: int) -> dict[int, datetime]:
+        """Stage id -> the time of its latest encounter, for a completed stage node that carries no ``completed_at``."""
+        when = sa.func.coalesce(
+            Encounter.ended_at, Encounter.confirmed_at, Encounter.started_at, Encounter.scheduled_at
+        )
+        rows = await session.execute(
+            sa.select(BracketEncounter.stage_id, sa.func.max(when))
+            .join(Encounter, Encounter.id == BracketEncounter.encounter_id)
+            .join(Stage, Stage.id == BracketEncounter.stage_id)
+            .where(Stage.tournament_id == tournament_id)
+            .group_by(BracketEncounter.stage_id)
+        )
+        return {stage_id: ended for stage_id, ended in rows if ended is not None}
+
     async def _compute_aggregate(
         self,
         session: AsyncSession,
         node: FlowNode,
         edges: Sequence[FlowEdge],
         sources: Sequence[tuple[list[ResultRow], FlowResultState] | None],
-        by_id: Mapping[int, FlowNode],
+        recency: Mapping[int, datetime | None],
     ) -> PureOutput:
         config = parse_node_config(FlowNodeKind.AGGREGATE, node.config)
         assert isinstance(config, AggregateNodeConfig)
@@ -181,7 +209,7 @@ class FlowEngine:
                 e.source_node_id,
                 s[0] if s else [],
                 bool(s and s[1] == FlowResultState.FINAL),
-                by_id[e.source_node_id].completed_at,
+                recency[e.source_node_id],
             )
             for e, s in zip(edges, sources, strict=True)
         ]
@@ -352,41 +380,50 @@ class FlowEngine:
             )
             .outerjoin(StageItem, StageItem.id == Standing.stage_item_id)
             .where(Standing.stage_id == node.stage_id)
-            .order_by(Standing.position, StageItem.order.asc().nulls_first(), Standing.points.desc(), Standing.team_id)
+            .order_by(
+                # A seeded team that never played (position 0) ranks last.
+                sa.func.coalesce(Standing.position, 0) <= 0,
+                Standing.position,
+                StageItem.order.asc().nulls_first(),
+                Standing.points.desc(),
+                Standing.team_id,
+            )
         )
-        return _dedup(
-            [
-                ResultRow(
-                    None,
-                    team_id,
-                    item_id,
-                    position,
-                    points,
-                    tie_group,
-                    {
-                        "wins": win,
-                        "draws": draw,
-                        "losses": lose,
-                        "map_diff": score_differential or 0,
-                        "buchholz": buchholz or 0,
-                        "ffa_score": points if stage_type in FFA_STAGE_TYPES else 0,
-                        **({} if swiss_status is None else {"swiss_status": swiss_status}),
-                    },
-                )
-                for (
-                    team_id,
-                    item_id,
-                    position,
-                    points,
-                    tie_group,
-                    win,
-                    draw,
-                    lose,
-                    score_differential,
-                    buchholz,
-                    swiss_status,
-                ) in standings
-            ]
+        return _share_places(
+            _dedup(
+                [
+                    ResultRow(
+                        None,
+                        team_id,
+                        item_id,
+                        position,
+                        points,
+                        tie_group,
+                        {
+                            "wins": win,
+                            "draws": draw,
+                            "losses": lose,
+                            "map_diff": score_differential or 0,
+                            "buchholz": buchholz or 0,
+                            "ffa_score": points if stage_type in FFA_STAGE_TYPES else 0,
+                            **({} if swiss_status is None else {"swiss_status": swiss_status}),
+                        },
+                    )
+                    for (
+                        team_id,
+                        item_id,
+                        position,
+                        points,
+                        tie_group,
+                        win,
+                        draw,
+                        lose,
+                        score_differential,
+                        buchholz,
+                        swiss_status,
+                    ) in standings
+                ]
+            )
         )
 
     async def _write_results(
@@ -435,6 +472,28 @@ class FlowEngine:
         if inserts:
             await session.execute(sa.insert(FlowNodeResult), [_decimal_score(i) for i in inserts])
         return bool(gone or updates or inserts)
+
+
+def _tie_key(row: ResultRow) -> tuple[int | None, int] | None:
+    """What makes two rows of a stage table tie: one group's tie group, or equal positions of an elimination table."""
+    if row.stage_item_id is not None:
+        return (row.stage_item_id, row.tie_group) if row.tie_group else None
+    return (None, row.item_rank) if row.item_rank is not None else None
+
+
+def _share_places(rows: list[ResultRow]) -> list[ResultRow]:
+    """Stage-wide tie groups: every tied row carries the rank of its run's first row (the head place).
+
+    A group stage stores ties per group (the group's own place); an elimination table has no tie group, only equal
+    positions (two semi-final losers are both 3rd). Neither numbering is a stage rank, and two groups reuse numbers.
+    """
+    keys = [_tie_key(r) for r in rows]
+    sizes = Counter(keys)
+    heads: dict[tuple[int | None, int], int] = {}
+    return [
+        replace(r, tie_group=None if key is None or sizes[key] < 2 else heads.setdefault(key, rank))
+        for rank, (r, key) in enumerate(zip(rows, keys, strict=True), 1)
+    ]
 
 
 def _decimal_score(values: Mapping[str, object]) -> dict[str, object]:

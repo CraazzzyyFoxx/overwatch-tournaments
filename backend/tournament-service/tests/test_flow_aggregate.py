@@ -100,3 +100,37 @@ def test_breakdown_marks_counted_inputs():
         {"node_id": 11, "place": 1, "score": 10, "counted": False},
         {"node_id": 12, "place": 2, "score": 6, "counted": True},
     ]
+
+
+def test_rows_sharing_a_tie_group_score_their_head_place():
+    # Two semi-final losers are both 3rd: neither takes the 4th place's points, whatever their team ids.
+    rows = [ResultRow(None, 1), ResultRow(None, 2), ResultRow(None, 3, tie_group=3), ResultRow(None, 4, tie_group=3)]
+    table = {"preset": "placement_table", "table": {"1": 10, "2": 6, "3": 3, "4": 1}}
+    out = agg("sum_all", score=table, inputs=[AggregateInput(11, rows, True, T1)], unit="teams")
+    assert [(m, s) for m, s, _ in out] == [(1, 10), (2, 6), (3, 3), (4, 3)]
+
+
+def test_inputs_without_a_timestamp_count_later_edges_as_more_recent():
+    inputs = [AggregateInput(10 + day, [p(day), p(9)], True, None) for day in (1, 2, 3)]
+    # Member 9 is 2nd every day; members 1..3 win one day each, and sum_last_n 2 counts the last two edges.
+    out = agg("sum_last_n", 2, inputs=inputs)
+    assert [m for m, _, _ in out[:3]] == [9, 3, 2]
+    assert [m for m, s, _ in out if s == 10] == [3, 2]
+
+
+def test_last_input_tie_break_uses_the_last_edge_when_nothing_is_stamped():
+    table = {"preset": "placement_table", "table": {"1": 5, "2": 4, "3": 3}}
+    inputs = [AggregateInput(11, [p(1), p(2), p(3)], True, None), AggregateInput(12, [p(3), p(2), p(1)], True, None)]
+    assert [m for m, _, _ in agg("sum_all", score=table, inputs=inputs)] == [3, 1, 2]
+
+
+def test_float_totals_that_differ_by_rounding_tie():
+    config = AggregateNodeConfig.model_validate(
+        {"unit": "players", "score": {"preset": "stage_points"}, "mode": "sum_all", "tiebreak": []}
+    )
+    inputs = [
+        AggregateInput(11, [p(1, score=0.1), p(2, score=0.3)], True, T1),
+        AggregateInput(12, [p(1, score=0.2), p(2, score=0)], True, T2),
+    ]
+    out = compute_aggregate(config, inputs, members_by_team={}).ports["ranking"]
+    assert [r.tie_group for r in out] == [1, 1]

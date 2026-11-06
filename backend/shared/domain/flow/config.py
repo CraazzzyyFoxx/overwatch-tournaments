@@ -166,7 +166,8 @@ class AggregateNodeConfig(_NodeConfig):
         elif score.preset == "placement_table":
             if not score.table:
                 raise PydanticCustomError("aggregate_table_required", "The placement table needs at least one place")
-            if not all(place.isdecimal() and int(place) >= 1 for place in score.table):
+            # Canonical keys only: the lookup is ``str(place)``, so "01" or full-width digits would silently score 0.
+            if not all(p.isascii() and p.isdecimal() and int(p) >= 1 and str(int(p)) == p for p in score.table):
                 raise PydanticCustomError("aggregate_table_place", "Placement table keys are places: 1, 2, 3, ...")
         return self
 

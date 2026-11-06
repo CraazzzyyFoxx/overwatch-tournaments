@@ -3,6 +3,7 @@
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
+from itertools import groupby
 from typing import Any
 
 from shared.domain.flow.config import FilterNodeConfig, LeaderboardNodeConfig, SplitNodeConfig
@@ -145,11 +146,10 @@ def compute_leaderboard(config: LeaderboardNodeConfig, rows: Sequence[ResultRow]
     )
     ordered = [(by_id[pid], pinned) for pid, _position, pinned in placed]
     ranking: list[ResultRow] = []
-    for i, (r, pinned) in enumerate(ordered):
-        # A pinned row is never tied; an unpinned one stays tied only with an adjacent unpinned row of its group.
-        neighbours = [ordered[j] for j in (i - 1, i + 1) if 0 <= j < len(ordered)]
-        shares = not pinned and any(
-            not other_pinned and other.tie_group == r.tie_group for other, other_pinned in neighbours
-        )
-        ranking.append(replace(r, tie_group=r.tie_group if shares else None))
+    # A pinned row is never tied; an unpinned one stays tied only with the adjacent unpinned rows of its group, and a
+    # run that a pin split gets its own tie group: its head rank (the group numbers of the input may repeat).
+    for key, run in groupby(((r, None if pinned else r.tie_group) for r, pinned in ordered), key=lambda pair: pair[1]):
+        members = [r for r, _ in run]
+        head = len(ranking) + 1 if key is not None and len(members) > 1 else None
+        ranking.extend(replace(r, tie_group=head) for r in members)
     return PureOutput({"ranking": ranking})

@@ -100,7 +100,7 @@ class StageInputsMixin(StageServiceBase):
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Selected team is already assigned in this stage; replace a populated slot to swap teams",
             )
-        inp = models.StageItemInput(stage_item_id=stage_item_id, **data.model_dump())
+        inp = models.StageItemInput(stage_item_id=stage_item_id, seat_source="manual", **data.model_dump())
         await self.stage_item_input_repo.create(session, inp)
         await enqueue_tournament_recalculation(session, tournament_id)
         await self._publish_structure_changed(session, tournament_id)
@@ -154,9 +154,11 @@ class StageInputsMixin(StageServiceBase):
                     )
                 existing_input.team_id = inp.team_id
                 existing_input.source_result_id = None
+                existing_input.seat_source = "manual"
 
             next_input_type = enums.StageItemInputType.FINAL
             inp.source_result_id = None
+            inp.seat_source = "manual"
 
         if next_input_type == enums.StageItemInputType.FINAL:
             if next_team_id is None:
@@ -167,6 +169,7 @@ class StageInputsMixin(StageServiceBase):
         elif next_input_type == enums.StageItemInputType.EMPTY:
             next_team_id = None
             inp.source_result_id = None
+            inp.seat_source = "flow"
 
         inp.input_type = next_input_type
         inp.team_id = next_team_id
@@ -244,6 +247,7 @@ class StageInputsMixin(StageServiceBase):
         )
         target.insert(len(target) if slot is None else min(slot - 1, len(target)), inp)
         inp.stage_item_id = target_item_id
+        inp.seat_source = "manual"
         await self._reseat_slots(session, *([target] if target is source else [source, target]))
 
     async def _reseat_slots(self, session: AsyncSession, *items: list[models.StageItemInput]) -> None:

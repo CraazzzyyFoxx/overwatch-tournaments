@@ -134,6 +134,7 @@ class StageSeedingMixin(StageServiceBase):
                     slot=slot,
                     input_type=enums.StageItemInputType.FINAL,
                     team_id=team.id,
+                    seat_source="manual",
                 )
             )
 
