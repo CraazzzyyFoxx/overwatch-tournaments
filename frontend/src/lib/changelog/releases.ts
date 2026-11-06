@@ -23,19 +23,11 @@ export interface Release {
 
 export const RELEASES: readonly Release[] = [
   {
-    version: "2.11.0",
-    date: "2026-11-06",
-    title: {
-      ru: "Лиги стали турнирами",
-      en: "Leagues become single tournaments"
-    }
-  },
-  {
     version: "2.10.0",
-    date: "2026-11-06",
+    date: "2026-11-07",
     title: {
-      ru: "Схема турнира, таблица лиги и вкладка «Формат»",
-      en: "Tournament flow, league table and Format tab"
+      ru: "Схема турнира, лиги одним турниром и таблица сезона",
+      en: "Tournament flow, leagues as one tournament and the season table"
     }
   },
   {
