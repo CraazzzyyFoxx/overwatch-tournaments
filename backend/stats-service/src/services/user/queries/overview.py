@@ -65,7 +65,7 @@ class UserOverviewQueries(DisciplineQueries):
     ) -> list[typing.Any]:
         """WHERE list shared by every correlated overview aggregate.
 
-        ``extra`` slots in between the finished/league predicates and the
+        ``extra`` slots in between the finished predicate and the
         optional tournament pin. Every caller joins ``Tournament``, so
         ``workspace_id`` scopes the aggregate to the same workspace as the value
         the row displays.
@@ -83,7 +83,6 @@ class UserOverviewQueries(DisciplineQueries):
                 workspace_id=workspace_id,
             ),
             models.Tournament.is_finished.is_(True),
-            models.Tournament.is_league.is_(False),
             *extra,
         ]
         if workspace_id is not None:
@@ -305,7 +304,6 @@ class UserOverviewQueries(DisciplineQueries):
             .where(
                 *self.discipline_filter(models.Tournament.discipline),
                 models.Tournament.is_finished.is_(True),
-                models.Tournament.is_league.is_(False),
                 *([models.Tournament.workspace_id == workspace_id] if workspace_id is not None else []),
             )
             .cte("overview_winrate_seat_maps")
@@ -626,7 +624,6 @@ class UserOverviewQueries(DisciplineQueries):
                 models.WorkspaceMember.player_id.in_(user_ids),
                 models.Player.is_substitution.is_(False),
                 models.Tournament.is_finished.is_(True),
-                models.Tournament.is_league.is_(False),
             )
             .group_by(models.WorkspaceMember.player_id)
         )
@@ -684,7 +681,6 @@ class UserOverviewQueries(DisciplineQueries):
                 *self.discipline_filter(models.Tournament.discipline),
                 models.WorkspaceMember.player_id.in_(user_ids),
                 models.Tournament.is_finished.is_(True),
-                models.Tournament.is_league.is_(False),
                 *ws_filter,
             )
             .group_by(models.WorkspaceMember.player_id)
@@ -716,7 +712,6 @@ class UserOverviewQueries(DisciplineQueries):
                 models.WorkspaceMember.player_id.in_(user_ids),
                 models.Player.is_substitution.is_(False),
                 models.Tournament.is_finished.is_(True),
-                models.Tournament.is_league.is_(False),
                 *ws_filter,
             )
             .group_by(models.WorkspaceMember.player_id)
@@ -740,7 +735,6 @@ class UserOverviewQueries(DisciplineQueries):
                 models.WorkspaceMember.player_id.in_(user_ids),
                 models.Player.is_substitution.is_(False),
                 models.Tournament.is_finished.is_(True),
-                models.Tournament.is_league.is_(False),
                 models.Encounter.closeness.isnot(None),
                 *ws_filter,
             )
@@ -855,7 +849,7 @@ class UserOverviewQueries(DisciplineQueries):
         """``(maps_won, maps_lost, encounters_played)`` per user for the page.
 
         Same scope as the other overview aggregates (not substitution, finished
-        non-league tournaments, optional workspace), read through the team's seat
+        tournaments, optional workspace), read through the team's seat
         in each two-seat encounter. "Played" is an encounter with a result (non-zero
         score sum); the DISTINCT stops a user rostered twice on one
         team from counting that encounter's maps twice.
@@ -885,7 +879,6 @@ class UserOverviewQueries(DisciplineQueries):
                 models.WorkspaceMember.player_id.in_(user_ids),
                 models.Player.is_substitution.is_(False),
                 models.Tournament.is_finished.is_(True),
-                models.Tournament.is_league.is_(False),
                 *ws_filter,
             )
             .distinct()
@@ -910,7 +903,7 @@ class UserOverviewQueries(DisciplineQueries):
     ) -> dict[int, datetime.datetime | None]:
         """Latest tournament date per user: ``MAX(COALESCE(end_date, start_date))``.
 
-        Non-league and optionally workspace-scoped, exactly like the
+        Optionally workspace-scoped, exactly like the
         ``active_last_30d`` KPI — the row's "last active" has to agree with it,
         so an unfinished tournament counts: being in one right now is activity.
         """
@@ -931,7 +924,6 @@ class UserOverviewQueries(DisciplineQueries):
             .where(
                 models.WorkspaceMember.player_id.in_(user_ids),
                 models.Player.is_substitution.is_(False),
-                models.Tournament.is_league.is_(False),
                 *ws_filter,
             )
             .group_by(models.WorkspaceMember.player_id)
@@ -1083,7 +1075,6 @@ class UserOverviewQueries(DisciplineQueries):
                 models.WorkspaceMember.player_id.in_(candidate_ids),
                 models.Player.is_substitution.is_(False),
                 models.Tournament.is_finished.is_(True),
-                models.Tournament.is_league.is_(False),
                 *ws_filter,
             )
             .group_by(models.WorkspaceMember.player_id)
@@ -1112,7 +1103,6 @@ class UserOverviewQueries(DisciplineQueries):
             .where(
                 models.WorkspaceMember.player_id.in_(candidate_ids),
                 models.Player.is_substitution.is_(False),
-                models.Tournament.is_league.is_(False),
                 sa.or_(
                     sa.and_(models.Tournament.end_date.isnot(None), models.Tournament.end_date >= cutoff),
                     sa.and_(models.Tournament.start_date.isnot(None), models.Tournament.start_date >= cutoff),

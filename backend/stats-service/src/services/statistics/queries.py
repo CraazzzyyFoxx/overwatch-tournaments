@@ -62,14 +62,10 @@ class StatisticsQueries(DisciplineQueries):
         self, workspace_id: int | None, *, almanac: bool = True
     ) -> tuple[sa.ColumnElement[bool], ...]:
         """What a public board counts: this game, this workspace (``None``: all), and the ``/statistics`` set -- every
-        tournament an anonymous viewer may see, leagues included (the overall figures' and ``/encounters``' set).
-        ``almanac=False`` keeps the champion/win-rate boards (home, hall of fame) on their own rule: no hidden or
-        league tournament."""
-        visible = (
-            (visible_tournaments_predicate(None),)
-            if almanac
-            else (models.Tournament.is_hidden.is_(False), models.Tournament.is_league.is_(False))
-        )
+        tournament an anonymous viewer may see (the overall figures' and ``/encounters``' set).
+        ``almanac=False`` keeps the champion/win-rate boards (home, hall of fame) on their own rule: no hidden
+        tournament."""
+        visible = (visible_tournaments_predicate(None),) if almanac else (models.Tournament.is_hidden.is_(False),)
         return (
             *visible,
             *self.discipline_filter(models.Tournament.discipline),

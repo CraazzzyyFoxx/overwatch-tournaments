@@ -302,7 +302,6 @@ def register(broker: Any, logger: Any) -> None:
             user = _identity(data)
             workspace_id = _require_q1(data, "workspace_id", int)
             ensure_workspace_permission(user, workspace_id, "tournament", "create")
-            is_league = _q1(data, "is_league", _bool, default=False)
             start_date = _require_q1(data, "start_date", date.fromisoformat)
             end_date = _require_q1(data, "end_date", date.fromisoformat)
             challonge_slug = _require_q1(data, "challonge_slug")
@@ -322,7 +321,6 @@ def register(broker: Any, logger: Any) -> None:
                 after={
                     "challonge_slug": challonge_slug,
                     "discipline": discipline,
-                    "is_league": is_league,
                     "start_date": start_date,
                     "end_date": end_date,
                     "division_grid_version_id": division_grid_version_id,
@@ -333,7 +331,6 @@ def register(broker: Any, logger: Any) -> None:
                 session,
                 workspace_id=workspace_id,
                 discipline=discipline,
-                is_league=is_league,
                 start_date=start_date,
                 end_date=end_date,
                 challonge_slug=challonge_slug,

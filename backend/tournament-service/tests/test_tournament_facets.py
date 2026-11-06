@@ -1,6 +1,6 @@
 """Facet counters for the public tournaments page (rpc.tournament.tournaments_facets).
 
-The whole contract of ``get_facets`` is *which filter each of its four queries
+The whole contract of ``get_facets`` is *which filter each of its three queries
 leaves out*, and that is visible in the SQL it builds — so the primary tests drive
 it with a recording session and assert on the compiled statements plus the schema
 assembled from canned rows. Nothing about it needs a database, and the properties
@@ -8,9 +8,7 @@ under test are exactly the ones a reviewer cannot eyeball:
 
 * ``by_status`` must NOT carry the status filter, or picking a chip zeroes its
   siblings and the filter becomes a one-way door;
-* ``league``/``standard`` must NOT carry the ``is_league`` filter, for the same
-  reason;
-* ``total``/``live`` must carry NEITHER (nor the search), because the hero states
+* ``total``/``live`` must carry NO filter (nor the search), because the hero states
   a platform fact, not a property of the current selection;
 * the visibility predicate and ``workspace_id`` must be on ALL THREE, including
   the unfiltered totals — a hidden tournament that only leaks into ``total`` still
@@ -73,11 +71,9 @@ class _RecordingSession:
         return _Rows(self._results[len(self.statements) - 1])
 
 
-#: Enough rows to satisfy all four queries: per-status groups, per-is_league
-#: groups, then the single (total, live) row.
+#: Enough rows to satisfy all three queries: per-status groups, then the single (total, live) row.
 _DEFAULT_RESULTS = [
     [(STATUS.LIVE, 3), (STATUS.COMPLETED, 30)],
-    [(True, 6), (False, 36)],
     [(42, 3)],
     [(5,)],
 ]
@@ -98,32 +94,21 @@ async def _run_facet_statements(**kwargs) -> list[sa.Select]:
 
 
 def test_by_status_ignores_its_own_axis_but_keeps_the_others() -> None:
-    _, (status_sql, _, _, _) = asyncio.run(_run_facets(status=STATUS.LIVE, is_league=True, query="cup", workspace_id=4))
+    _, (status_sql, _, _) = asyncio.run(_run_facets(status=STATUS.LIVE, query="cup", workspace_id=4))
 
     assert "GROUP BY tournament.tournament.status" in status_sql
     # Its own filter must be absent...
     assert "tournament.status = " not in status_sql
     # ...while every other axis stays, so the numbers match the visible list.
-    assert "tournament.is_league IS " in status_sql
     assert "tournament.name ILIKE" in status_sql
     assert "tournament.workspace_id = " in status_sql
 
 
-def test_league_split_ignores_is_league_but_keeps_status_and_search() -> None:
-    _, (_, league_sql, _, _) = asyncio.run(_run_facets(status=STATUS.LIVE, is_league=True, query="cup", workspace_id=4))
-
-    assert "GROUP BY tournament.tournament.is_league" in league_sql
-    assert "tournament.is_league IS " not in league_sql
-    assert "tournament.status = " in league_sql
-    assert "tournament.name ILIKE" in league_sql
-
-
 def test_totals_ignore_every_filter_but_never_visibility() -> None:
-    _, (_, _, totals_sql, _) = asyncio.run(_run_facets(status=STATUS.LIVE, is_league=True, query="cup", workspace_id=4))
+    _, (_, totals_sql, _) = asyncio.run(_run_facets(status=STATUS.LIVE, query="cup", workspace_id=4))
 
     # Only the "live" aggregate reads the status; no user filter does.
     assert totals_sql.count("tournament.status = ") == 1
-    assert "tournament.is_league IS " not in totals_sql
     assert "ILIKE" not in totals_sql
     # Scope, however, is not a filter: it is who is allowed to be counted.
     assert "tournament.is_hidden IS false" in totals_sql
@@ -132,14 +117,11 @@ def test_totals_ignore_every_filter_but_never_visibility() -> None:
     assert "FILTER (WHERE" in totals_sql
 
 
-def test_registration_open_counts_registering_tournaments_under_search_and_league_but_not_status() -> None:
-    facets, (_, _, _, registration_sql) = asyncio.run(
-        _run_facets(status=STATUS.LIVE, is_league=True, query="cup", workspace_id=4)
-    )
+def test_registration_open_counts_registering_tournaments_under_search_but_not_status() -> None:
+    facets, (_, _, registration_sql) = asyncio.run(_run_facets(status=STATUS.LIVE, query="cup", workspace_id=4))
 
     assert facets.registration_open == 5
     assert "tournament.flow_node.status IN" in registration_sql
-    assert "tournament.is_league IS " in registration_sql
     assert "tournament.name ILIKE" in registration_sql
     assert "tournament.status = " not in registration_sql
 
@@ -162,25 +144,16 @@ def test_all_statuses_are_present_even_at_zero() -> None:
     assert facets.by_status[STATUS.ANNOUNCEMENT] == 0
 
 
-def test_league_and_standard_come_from_the_boolean_groups() -> None:
+def test_total_and_live_come_from_the_unfiltered_row() -> None:
     facets, _ = asyncio.run(_run_facets())
 
-    assert facets.league == 6
-    assert facets.standard == 36
     assert facets.total == 42
     assert facets.live == 3
 
 
-def test_missing_league_group_reads_as_zero_not_a_key_error() -> None:
-    facets, _ = asyncio.run(_run_facets(results=[[(STATUS.LIVE, 2)], [(False, 2)], [(2, 2)], [(0,)]]))
-
-    assert facets.league == 0
-    assert facets.standard == 2
-
-
 def test_in_play_counts_a_live_tournament_with_a_live_stage_node() -> None:
     statements = asyncio.run(_run_facet_statements())
-    totals = statements[2].compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True})
+    totals = statements[1].compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True})
 
     # Rendered with literals: the hero's "live now" number is a ball in play, not a registration filling up.
     sql = str(totals)
@@ -208,7 +181,6 @@ async def _make_tournament(
     *,
     workspace_id: int,
     status: enums.TournamentStatus,
-    is_league: bool = False,
     is_hidden: bool = False,
     in_play: bool = False,
 ) -> Tournament:
@@ -221,7 +193,6 @@ async def _make_tournament(
         # `generate_unique_tournament_slug`, which this factory bypasses.
         slug=f"facets-{suffix}",
         status=status,
-        is_league=is_league,
         is_hidden=is_hidden,
         start_date=now,
         end_date=now + timedelta(days=1),
@@ -261,7 +232,6 @@ def test_facets_over_a_real_workspace() -> None:
                 await _make_tournament(session, workspace_id=ws.id, status=STATUS.LIVE, in_play=True)
                 await _make_tournament(session, workspace_id=ws.id, status=STATUS.LIVE)
                 await _make_tournament(session, workspace_id=ws.id, status=STATUS.ANNOUNCEMENT)
-                await _make_tournament(session, workspace_id=ws.id, status=STATUS.LIVE, is_league=True, in_play=True)
                 await _make_tournament(session, workspace_id=ws.id, status=STATUS.LIVE, is_hidden=True, in_play=True)
                 await session.commit()
                 workspace_id = ws.id
@@ -272,35 +242,26 @@ def test_facets_over_a_real_workspace() -> None:
                     anon = await flows.get_facets(session, workspace_id=workspace_id)
                     # Selecting a chip must not collapse the other axes.
                     picked = await flows.get_facets(session, workspace_id=workspace_id, status=STATUS.ANNOUNCEMENT)
-                    leagues_only = await flows.get_facets(session, workspace_id=workspace_id, is_league=True)
                     superuser = await flows.get_facets(session, workspace_id=workspace_id, viewer=_superuser())
-                return anon, picked, leagues_only, superuser
+                return anon, picked, superuser
             finally:
                 async with session_maker() as session:
                     await session.execute(sa.delete(Workspace).where(Workspace.id == workspace_id))
                     await session.commit()
 
-    anon, picked, leagues_only, superuser = asyncio.run(_run())
+    anon, picked, superuser = asyncio.run(_run())
 
     # Anonymous: the hidden live tournament is in no counter at all.
-    assert anon.total == 4
-    assert anon.live == 2  # live with a live stage node, hidden one excluded; the node-less live one is not in play
-    assert anon.by_status[STATUS.LIVE] == 3
+    assert anon.total == 3
+    assert anon.live == 1  # live with a live stage node, hidden one excluded; the node-less live one is not in play
+    assert anon.by_status[STATUS.LIVE] == 2
     assert anon.by_status[STATUS.ANNOUNCEMENT] == 1
-    assert (anon.league, anon.standard) == (1, 3)
 
-    # status=announcement: by_status is unchanged, league/standard narrow to it.
+    # status=announcement: by_status is unchanged, the hero totals too.
     assert picked.by_status == anon.by_status
-    assert (picked.league, picked.standard) == (0, 1)
     assert (picked.total, picked.live) == (anon.total, anon.live)
 
-    # is_league=true: league/standard are unchanged, by_status narrows.
-    assert (leagues_only.league, leagues_only.standard) == (anon.league, anon.standard)
-    assert leagues_only.by_status[STATUS.LIVE] == 1
-    assert leagues_only.by_status[STATUS.ANNOUNCEMENT] == 0
-    assert (leagues_only.total, leagues_only.live) == (anon.total, anon.live)
-
     # A superuser sees the hidden one everywhere.
-    assert superuser.total == 5
-    assert superuser.live == 3
-    assert superuser.by_status[STATUS.LIVE] == 4
+    assert superuser.total == 4
+    assert superuser.live == 2
+    assert superuser.by_status[STATUS.LIVE] == 3

@@ -46,7 +46,6 @@ def _team(
     tournament_id: int,
     *,
     placement: int | None,
-    is_league: bool = False,
     start: datetime.datetime | None = None,
     end: datetime.datetime | None = None,
     created: datetime.datetime = datetime.datetime(2026, 1, 1, tzinfo=datetime.UTC),
@@ -56,7 +55,6 @@ def _team(
         tournament=SimpleNamespace(
             id=tournament_id,
             name=f"OWT Mix #{tournament_id}",
-            is_league=is_league,
             start_date=start or datetime.datetime(2026, 1, tournament_id, tzinfo=datetime.UTC),
             end_date=end,
             created_at=created,
@@ -182,20 +180,6 @@ class UserDraftCardTests(IsolatedAsyncioTestCase):
             [{"role": {"dimension": "player_role", "role": "damage", "parent": None}, "maps": 60, "maps_won": 40}],
             [entry.model_dump() for entry in card.roles],
         )
-
-    async def test_leagues_never_reach_the_card(self) -> None:
-        """A league has no bracket and no placement; counting it would make the
-        card's tournament and placement numbers disagree with each other."""
-        with _queries(
-            104,
-            overall=(10, 5, 0.5),
-            teams=[_team(2, placement=3), _team(9, placement=None, is_league=True)],
-            teams_counts={2: 16},
-        ):
-            card = await users.get_draft_card(object(), 104, workspace_id=1)
-
-        self.assertEqual(1, card.tournaments)
-        self.assertEqual([2], [entry.id for entry in card.recent_tournaments])
 
     async def test_recency_follows_the_tournament_chronology(self) -> None:
         """An undated tournament sits at its creation date, and a start tie goes to the later end date."""

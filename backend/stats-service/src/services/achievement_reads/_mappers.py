@@ -14,7 +14,6 @@ def to_tournament_link(
     return schemas.AchievementTournamentLink(
         id=tournament.id,
         name=tournament.name,
-        is_league=tournament.is_league,
     )
 
 

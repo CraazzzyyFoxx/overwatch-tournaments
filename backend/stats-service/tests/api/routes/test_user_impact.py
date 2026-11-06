@@ -96,7 +96,6 @@ def _ensure_impact_badge_fixture(db: Session) -> dict[str, int]:
                 name="Impact Badge Tournament",
                 slug="impact-badge-tournament",
                 is_finished=True,
-                is_league=False,
             ),
             models.Team(
                 id=ids["team_home"],

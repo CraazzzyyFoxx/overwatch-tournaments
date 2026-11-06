@@ -205,7 +205,6 @@ class AdminTournamentService:
             session,
             workspace_id=data.workspace_id,
             name=data.name,
-            is_league=data.is_league,
         )
 
         if existing_tournament:
@@ -397,7 +396,6 @@ class AdminTournamentService:
         *,
         workspace_id: int,
         discipline: str,
-        is_league: bool,
         start_date: date,
         end_date: date,
         challonge_slug: str,
@@ -418,7 +416,6 @@ class AdminTournamentService:
                 discipline=discipline,
                 name=challonge_tournament.name,
                 description=challonge_tournament.description,
-                is_league=is_league,
                 start_date=start_date,
                 end_date=end_date,
                 logs_official=False,  # an imported bracket never starts accepting ingest evidence

@@ -110,7 +110,6 @@ def _tournament(tournament_id: int = 91_001) -> models.Tournament:
         name="Linked Tournament",
         slug="linked-tournament",
         description=None,
-        is_league=False,
         is_finished=False,
         is_hidden=False,
         status=enums.TournamentStatus.LIVE,

@@ -66,7 +66,6 @@ async def _make_tournament(
     status: enums.TournamentStatus = enums.TournamentStatus.ANNOUNCEMENT,
     description: str | None = None,
     start_date: datetime | None = None,
-    is_league: bool = False,
 ) -> Tournament:
     now = start_date or datetime.now(UTC)
     tournament = Tournament(
@@ -78,7 +77,6 @@ async def _make_tournament(
         description=description,
         status=status,
         is_hidden=False,
-        is_league=is_league,
         start_date=now,
         end_date=now + timedelta(days=1),
     )

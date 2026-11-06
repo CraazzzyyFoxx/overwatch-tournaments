@@ -138,8 +138,7 @@ async def execute_is_newcomer(
 @register(
     "tournament_type",
     grain=AchievementGrain.user_tournament,
-    description="Tournament flavour (league vs regular)",
-    optional=("is_league",),
+    description="Played the tournament",
     depends_on=("tournament.player",),
 )
 async def execute_tournament_type(
@@ -147,11 +146,7 @@ async def execute_tournament_type(
     params: dict[str, Any],
     context: EvalContext,
 ) -> ResultSet:
-    """Filter by tournament type. Grain: user_tournament.
-
-    is_league: true/false/null. null = any tournament (no filter).
-    """
-    is_league = params.get("is_league")
+    """The player has a non-substitute entry in the tournament. Grain: user_tournament."""
 
     query = (
         sa.select(models.WorkspaceMember.player_id, models.Player.tournament_id)
@@ -170,9 +165,6 @@ async def execute_tournament_type(
         )
     )
 
-    if is_league is not None:
-        query = query.where(models.Tournament.is_league.is_(is_league))
-
     if context.tournament:
         query = query.where(models.Player.tournament_id == context.tournament.id)
 
@@ -185,7 +177,7 @@ async def execute_tournament_type(
     grain=AchievementGrain.user,
     description="How many tournaments the player entered",
     required=("op", "value"),
-    optional=("is_league", "start_after", "start_before"),
+    optional=("start_after", "start_before"),
     depends_on=("tournament.player",),
 )
 async def execute_tournament_count(
@@ -196,7 +188,6 @@ async def execute_tournament_count(
     """Number of tournaments played. Grain: user (global).
 
     Optional filters narrow which tournaments are counted:
-        is_league: bool | None — filter Tournament.is_league
         start_after / start_before: str (ISO date) — filter Tournament.start_date
             (start_after is inclusive >=, start_before is strict <; e.g.
             start_before="2022-10-04" for OW1, start_after="2022-10-04" for OW2)
@@ -205,7 +196,6 @@ async def execute_tournament_count(
     value = params["value"]
     op_fn = OPERATORS[op]
 
-    is_league = params.get("is_league")
     start_after = params.get("start_after")
     start_before = params.get("start_before")
 
@@ -215,8 +205,6 @@ async def execute_tournament_count(
         ),
         models.Player.is_substitution.is_(False),
     ]
-    if is_league is not None:
-        where_clauses.append(models.Tournament.is_league.is_(is_league))
     if start_after is not None:
         where_clauses.append(models.Tournament.start_date >= datetime.date.fromisoformat(start_after))
     if start_before is not None:

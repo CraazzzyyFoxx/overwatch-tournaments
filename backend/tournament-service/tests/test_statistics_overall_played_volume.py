@@ -40,7 +40,7 @@ def _day(year: int, month: int, day: int) -> datetime:
 
 
 async def _seed(session: Any) -> tuple[int, int]:
-    """Two counted tournaments sharing a day, a counted league, plus a hidden one that must not count.
+    """Two counted tournaments sharing a day, a third counted one, plus a hidden one that must not count.
 
     Returns ``(workspace id, gamemode id)``; the map is the gamemode's own, so
     dropping both clears the lot (the test DB ships no maps to borrow).
@@ -83,10 +83,10 @@ async def _seed(session: Any) -> tuple[int, int]:
     first = _tournament("a", _day(2031, 1, 1), _day(2031, 1, 3))
     second = _tournament("b", _day(2031, 1, 3), _day(2031, 1, 4))
     # A hidden tournament is excluded from every public count, its days and maps
-    # included. A league counts like any other tournament.
+    # included.
     hidden = _tournament("h", _day(2031, 6, 1), _day(2031, 6, 9), is_hidden=True)
-    league = _tournament("l", _day(2031, 7, 1), _day(2031, 7, 9), is_league=True)
-    session.add_all([first, second, hidden, league])
+    third = _tournament("l", _day(2031, 7, 1), _day(2031, 7, 9))
+    session.add_all([first, second, hidden, third])
     await session.flush()
 
     teams = [
@@ -107,14 +107,14 @@ async def _seed(session: Any) -> tuple[int, int]:
     session.add_all(hidden_teams)
     await session.flush()
     await add_encounter(session, hidden, rule.id, teams=[team.id for team in hidden_teams], scores=(2, 0))
-    # The league's finished duel counts.
-    league_teams = [
-        Team(tournament_id=league.id, name=f"L{index} {suffix}", balancer_name=f"l{index}-{suffix}")
+    # The third tournament's finished duel counts.
+    third_teams = [
+        Team(tournament_id=third.id, name=f"L{index} {suffix}", balancer_name=f"l{index}-{suffix}")
         for index in range(2)
     ]
-    session.add_all(league_teams)
+    session.add_all(third_teams)
     await session.flush()
-    await add_encounter(session, league, rule.id, teams=[team.id for team in league_teams], scores=(2, 1))
+    await add_encounter(session, third, rule.id, teams=[team.id for team in third_teams], scores=(2, 1))
     # A finished lobby is not an encounter of the public count (duels only, like /encounters).
     await seed_encounter(session, first, rule.id, [(None, 3.0), (None, 2.0), (None, 1.0)], name=f"Lobby {suffix}")
     await session.flush()
@@ -167,10 +167,10 @@ def test_overall_counts_played_volume(db_session) -> None:
 
     assert overall.tournaments == 3
     assert overall.teams == 4
-    # The first tournament's finished duel and the league's; not the open one, the lobby or the hidden one's.
+    # The first tournament's finished duel and the third's; not the open one, the lobby or the hidden one's.
     assert overall.encounters == 2
     assert overall.maps == 4
-    # 1-3 Jan plus 3-4 Jan = 1,2,3,4 (the shared 3rd counted once), plus the league's 1-9 Jul.
+    # 1-3 Jan plus 3-4 Jan = 1,2,3,4 (the shared 3rd counted once), plus the third's 1-9 Jul.
     assert overall.days == 13
     assert overall.hours == 2
     assert (hidden_workspace.tournaments, hidden_workspace.encounters, hidden_workspace.days) == (0, 0, 0)

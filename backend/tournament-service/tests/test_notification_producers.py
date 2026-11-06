@@ -230,7 +230,6 @@ class _Fixture:
             name=TOURNAMENT_NAME,
             slug="autumn-cup",
             is_hidden=False,
-            is_league=False,
             start_date=datetime(2026, 1, 1, tzinfo=UTC),
         )
         self.session.add(self.tournament)

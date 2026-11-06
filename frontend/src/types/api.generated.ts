@@ -3273,7 +3273,7 @@ export interface paths {
         };
         /**
          * Players almanac table
-         * @description Permission: public; no authentication required. Returns every player with at least one public, non-league tournament (substitute entries excluded), across every game or only the optional `discipline` (404 `discipline_not_installed` for an unknown code), optionally workspace-scoped: titles, tournaments, maps won/lost, map win rate (null without maps) and `low_sample` (three tournaments or fewer). `sort` = `titles` (default) | `tournaments` | `maps_won` | `winrate` (only players above the low-sample threshold), `order` = `desc` (default) | `asc`. `rank` is the competition rank (1, 2, 2, 4) over the whole population; the optional case-insensitive name search `query` filters the page without renumbering it, and `total` counts the filtered rows. Ties: win rate desc (null last), then name.
+         * @description Permission: public; no authentication required. Returns every player with at least one public tournament (substitute entries excluded), across every game or only the optional `discipline` (404 `discipline_not_installed` for an unknown code), optionally workspace-scoped: titles, tournaments, maps won/lost, map win rate (null without maps) and `low_sample` (three tournaments or fewer). `sort` = `titles` (default) | `tournaments` | `maps_won` | `winrate` (only players above the low-sample threshold), `order` = `desc` (default) | `asc`. `rank` is the competition rank (1, 2, 2, 4) over the whole population; the optional case-insensitive name search `query` filters the page without renumbering it, and `total` counts the filtered rows. Ties: win rate desc (null last), then name.
          *
          *     RPC subject: `rpc.stats.statistics.players`
          */
@@ -3295,7 +3295,7 @@ export interface paths {
         };
         /**
          * All-time records
-         * @description Permission: public; no authentication required. Returns the all-time records of public, non-league tournaments (mixes never count), optionally workspace-scoped, in a fixed order; a record with no data is omitted. Always: `win_streak` (most consecutive series won by a player's team), `biggest_upset` (series won by the roster with the lower average SR, largest gap relative to the loser's), `underdog_champion` (champion with the lowest roster SR rank within its own tournament: `value` = rank, `of_total` = rated teams) and `closest_final` (a finished tournament's final with the highest closeness). With a `discipline` (404 `discipline_not_installed` for an unknown code) also the parsed-log records the game has: the highest single-map player `hero_damage`, `healing`, `eliminations`, `damage_blocked` and `solo_kills`, `most_mvps` (maps at impact rank 1) and `longest_map`.
+         * @description Permission: public; no authentication required. Returns the all-time records of public tournaments (mixes never count), optionally workspace-scoped, in a fixed order; a record with no data is omitted. Always: `win_streak` (most consecutive series won by a player's team), `biggest_upset` (series won by the roster with the lower average SR, largest gap relative to the loser's), `underdog_champion` (champion with the lowest roster SR rank within its own tournament: `value` = rank, `of_total` = rated teams) and `closest_final` (a finished tournament's final with the highest closeness). With a `discipline` (404 `discipline_not_installed` for an unknown code) also the parsed-log records the game has: the highest single-map player `hero_damage`, `healing`, `eliminations`, `damage_blocked` and `solo_kills`, `most_mvps` (maps at impact rank 1) and `longest_map`.
          *
          *     RPC subject: `rpc.stats.statistics.records`
          */
@@ -3383,7 +3383,7 @@ export interface paths {
         };
         /**
          * Map statistics
-         * @description Permission: public; no authentication required. Returns the path discipline's maps (404 `discipline_not_installed` for an unknown game) grouped by the mode each game was played in (the game's or parsed map's own mode, not the map's catalog parent, so one map can sit under several modes; games without a mode in a last null bucket), optionally workspace-scoped, most played first. A game is one of a completed series of a public, non-league tournament: the series' confirmed games with a map when it has any, else its parsed maps, so nothing counts twice. `share` is a map's games over its mode's; `avg_duration_s` averages the parsed maps of that map and mode (null when none).
+         * @description Permission: public; no authentication required. Returns the path discipline's maps (404 `discipline_not_installed` for an unknown game) grouped by the mode each game was played in (the game's or parsed map's own mode, not the map's catalog parent, so one map can sit under several modes; games without a mode in a last null bucket), optionally workspace-scoped, most played first. A game is one of a completed series of a public tournament: the series' confirmed games with a map when it has any, else its parsed maps, so nothing counts twice. `share` is a map's games over its mode's; `avg_duration_s` averages the parsed maps of that map and mode (null when none).
          *
          *     RPC subject: `rpc.stats.statistics.maps`
          */
@@ -3583,7 +3583,7 @@ export interface paths {
         };
         /**
          * Tournament facet counts
-         * @description Permission: public; no authentication required — every count is filtered to the tournaments the viewer may see. Returns chip counters for the tournaments list: unfiltered total/live plus per-status and league/standard counts, each axis counted without its own filter.
+         * @description Permission: public; no authentication required — every count is filtered to the tournaments the viewer may see. Returns chip counters for the tournaments list: unfiltered total/live plus per-status counts, each axis counted without its own filter.
          *
          *     RPC subject: `rpc.tournament.tournaments_facets`
          */
@@ -3605,7 +3605,7 @@ export interface paths {
         };
         /**
          * Lookup tournaments
-         * @description Permission: public; no authentication required — hidden tournaments, and every tournament of a hidden workspace, are never listed here, for any caller. Returns a lightweight id/name list of up to 500 most-recent tournaments, optionally filtered by workspace, league flag and installed discipline (an uninstalled code is 422), for pickers.
+         * @description Permission: public; no authentication required — hidden tournaments, and every tournament of a hidden workspace, are never listed here, for any caller. Returns a lightweight id/name list of up to 500 most-recent tournaments, optionally filtered by workspace and installed discipline (an uninstalled code is 422), for pickers.
          *
          *     RPC subject: `rpc.tournament.lookup_tournaments`
          */
@@ -6097,7 +6097,7 @@ export interface paths {
         };
         /**
          * Organizer dashboard trends
-         * @description Permission: workspace `tournament.read`. Returns participants, newcomers, duel log coverage and the median match-end-to-confirmation time of the workspace's last 10 finished, non-league, non-hidden tournaments, oldest first, optionally narrowed to one installed `discipline` (404 `discipline_not_installed` for an unknown code). 422 without `workspace_id`.
+         * @description Permission: workspace `tournament.read`. Returns participants, newcomers, duel log coverage and the median match-end-to-confirmation time of the workspace's last 10 finished, non-hidden tournaments, oldest first, optionally narrowed to one installed `discipline` (404 `discipline_not_installed` for an unknown code). 422 without `workspace_id`.
          *
          *     RPC subject: `rpc.tournament.admin_dashboard_trends`
          */
@@ -16563,8 +16563,6 @@ export interface components {
         "stats.AchievementTournamentLink": {
             /** Id */
             id: number;
-            /** Is League */
-            is_league: boolean;
             /** Name */
             name: string;
         };
@@ -18169,8 +18167,6 @@ export interface components {
              * @default false
              */
             is_finished: boolean;
-            /** Is League */
-            is_league: boolean;
             /** Name */
             name: string;
             /** @default null */
@@ -18530,8 +18526,6 @@ export interface components {
             draw: number;
             /** Id */
             id: number;
-            /** Is League */
-            is_league: boolean;
             /** Lost */
             lost: number;
             /** Maps Lost */
@@ -18635,8 +18629,6 @@ export interface components {
              * @default false
              */
             is_finished: boolean;
-            /** Is League */
-            is_league: boolean;
             /** Name */
             name: string;
             /** @default null */
@@ -22142,8 +22134,7 @@ export interface components {
          * @description Chip counters for the public tournaments page.
          *
          *     ``total``/``live`` are unconditional platform facts (see
-         *     ``TournamentFlowsService.get_facets``); ``by_status`` and ``league``/
-         *     ``standard`` each ignore their own filter so a selected chip never zeroes its
+         *     ``TournamentFlowsService.get_facets``); ``by_status`` ignores its own filter so a selected chip never zeroes its
          *     siblings.
          */
         "tournament.TournamentFacets": {
@@ -22151,14 +22142,10 @@ export interface components {
             by_status: {
                 [key: string]: number;
             };
-            /** League */
-            league: number;
             /** Live */
             live: number;
             /** Registration Open */
             registration_open: number;
-            /** Standard */
-            standard: number;
             /** Total */
             total: number;
         };
@@ -22276,8 +22263,6 @@ export interface components {
              * @default false
              */
             is_hidden: boolean;
-            /** Is League */
-            is_league: boolean;
             /**
              * Links
              * @default []
@@ -32388,11 +32373,6 @@ export interface components {
              */
             is_hidden: boolean;
             /**
-             * Is League
-             * @default false
-             */
-            is_league: boolean;
-            /**
              * Logs Official
              * @default false
              */
@@ -32593,11 +32573,6 @@ export interface components {
              * @default null
              */
             is_hidden: boolean | null;
-            /**
-             * Is League
-             * @default null
-             */
-            is_league: boolean | null;
             /**
              * Logs Official
              * @default null
@@ -46049,7 +46024,6 @@ export interface operations {
                 order?: components["schemas"]["tournament.SortOrder"];
                 query?: string;
                 fields?: string[];
-                is_league?: boolean | null;
                 workspace_id?: number | null;
                 status?: components["schemas"]["tournament.TournamentStatus"][];
                 registration_open?: boolean;
@@ -46115,7 +46089,6 @@ export interface operations {
             query?: {
                 workspace_id?: number | null;
                 status?: components["schemas"]["tournament.TournamentStatus"] | null;
-                is_league?: boolean | null;
                 discipline?: string | null;
                 query?: string;
             };
@@ -46178,7 +46151,6 @@ export interface operations {
         parameters: {
             query?: {
                 workspace_id?: number;
-                is_league?: boolean;
                 discipline?: string;
             };
             header?: never;
@@ -81537,7 +81509,6 @@ export interface operations {
                 end_date: string;
                 challonge_slug: string;
                 discipline: string;
-                is_league?: boolean;
                 division_grid_version_id?: number;
             };
             header?: never;

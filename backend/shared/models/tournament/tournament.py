@@ -64,7 +64,6 @@ class Tournament(db.TimeStampIntegerMixin):
     # ignores raw HTML, so there is nothing to sanitize on the way in and no
     # stored-XSS surface on the way out.
     rules: Mapped[str | None] = mapped_column(Text(), nullable=True)
-    is_league: Mapped[bool] = mapped_column(Boolean(), default=False, server_default="false", nullable=False)
     is_finished: Mapped[bool] = mapped_column(Boolean(), default=False, server_default="false", nullable=False)
     # Hidden (preview) mode — orthogonal to ``status``. When true the tournament
     # and ALL its nested data are visible only to workspace admins and users on

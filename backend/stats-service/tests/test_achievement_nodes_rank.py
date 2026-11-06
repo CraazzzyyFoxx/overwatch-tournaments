@@ -85,7 +85,6 @@ class _RankFixture(_scrim._Fixture):
             name="Foreign",
             slug="foreign",
             is_hidden=False,
-            is_league=False,
             start_date=datetime(2026, 1, 1, tzinfo=UTC),
         )
         member_id = self._id()

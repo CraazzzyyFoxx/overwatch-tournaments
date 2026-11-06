@@ -254,8 +254,8 @@ DOCS: dict[str, dict] = {
     "rpc.stats.statistics.players": {
         "summary": "Players almanac table",
         "description": (
-            "Permission: public; no authentication required. Returns every player with at least one public,"
-            " non-league tournament (substitute entries excluded), across every game or only the optional"
+            "Permission: public; no authentication required. Returns every player with at least one public"
+            " tournament (substitute entries excluded), across every game or only the optional"
             " `discipline` (404 `discipline_not_installed` for an unknown code), optionally workspace-scoped: titles,"
             " tournaments, maps won/lost, map win rate (null without maps) and `low_sample` (three tournaments or"
             " fewer). `sort` = `titles` (default) | `tournaments` | `maps_won` | `winrate` (only players above the"
@@ -267,7 +267,7 @@ DOCS: dict[str, dict] = {
     "rpc.stats.statistics.records": {
         "summary": "All-time records",
         "description": (
-            "Permission: public; no authentication required. Returns the all-time records of public, non-league"
+            "Permission: public; no authentication required. Returns the all-time records of public"
             " tournaments (mixes never count), optionally workspace-scoped, in a fixed order; a record with no data is"
             " omitted. Always: `win_streak` (most consecutive series won by a player's team), `biggest_upset` (series"
             " won by the roster with the lower average SR, largest gap relative to the loser's), `underdog_champion`"
@@ -285,7 +285,7 @@ DOCS: dict[str, dict] = {
             " `discipline_not_installed` for an unknown game) grouped by the mode each game was played in (the game's"
             " or parsed map's own mode, not the map's catalog parent, so one map can sit under several modes; games"
             " without a mode in a last null bucket), optionally workspace-scoped, most played first. A game is one of"
-            " a completed series of a public, non-league tournament: the series' confirmed games with a map when it has"
+            " a completed series of a public tournament: the series' confirmed games with a map when it has"
             " any, else its parsed maps, so nothing counts twice. `share` is a map's games over its mode's;"
             " `avg_duration_s` averages the parsed maps of that map and mode (null when none)."
         ),

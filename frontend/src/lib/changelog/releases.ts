@@ -23,6 +23,14 @@ export interface Release {
 
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.11.0",
+    date: "2026-11-06",
+    title: {
+      ru: "Лиги стали турнирами",
+      en: "Leagues become single tournaments"
+    }
+  },
+  {
     version: "2.9.0",
     date: "2026-11-04",
     title: {

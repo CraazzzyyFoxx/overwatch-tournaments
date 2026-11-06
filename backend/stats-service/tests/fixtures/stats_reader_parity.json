@@ -91,7 +91,6 @@
             },
             "last_tournament": {
               "id": 910000,
-              "is_league": false,
               "name": "P4 tournament"
             },
             "user": {
@@ -135,7 +134,6 @@
             },
             "last_tournament": {
               "id": 910000,
-              "is_league": false,
               "name": "P4 tournament"
             },
             "user": {
@@ -201,7 +199,6 @@
           "tournaments": [
             {
               "id": 910000,
-              "is_league": false,
               "name": "P4 tournament"
             }
           ],
@@ -262,7 +259,6 @@
           "tournaments": [
             {
               "id": 910000,
-              "is_league": false,
               "name": "P4 tournament"
             }
           ],
@@ -1102,7 +1098,6 @@
             "tournament": {
               "id": 909971,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament_career_1",
               "status": "completed"
             },
@@ -1233,7 +1228,6 @@
             "tournament": {
               "id": 909972,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament_career_2",
               "status": "completed"
             },
@@ -1370,7 +1364,6 @@
             "tournament": {
               "id": 909971,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament_career_1",
               "status": "completed"
             },
@@ -1488,7 +1481,6 @@
             "tournament": {
               "id": 909972,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament_career_2",
               "status": "completed"
             },
@@ -1606,7 +1598,6 @@
             "tournament": {
               "id": 909973,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament_career_3",
               "status": "completed"
             },
@@ -2055,7 +2046,6 @@
             "tournament": {
               "id": 910000,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament",
               "status": "completed"
             },
@@ -2173,7 +2163,6 @@
             "tournament": {
               "id": 910001,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament_other",
               "status": "completed"
             },
@@ -2291,7 +2280,6 @@
             "tournament": {
               "id": 910002,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament_hidden",
               "status": "completed"
             },
@@ -2747,7 +2735,6 @@
             "tournament": {
               "id": 910000,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament",
               "status": "completed"
             },
@@ -2865,7 +2852,6 @@
             "tournament": {
               "id": 910001,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament_other",
               "status": "completed"
             },
@@ -2983,7 +2969,6 @@
             "tournament": {
               "id": 910002,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament_hidden",
               "status": "completed"
             },
@@ -3108,7 +3093,6 @@
             "tournament": {
               "id": 909971,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament_career_1",
               "status": "completed"
             },
@@ -3226,7 +3210,6 @@
             "tournament": {
               "id": 909972,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament_career_2",
               "status": "completed"
             },
@@ -3344,7 +3327,6 @@
             "tournament": {
               "id": 909973,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament_career_3",
               "status": "completed"
             },
@@ -3793,7 +3775,6 @@
             "tournament": {
               "id": 910000,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament",
               "status": "completed"
             },
@@ -3911,7 +3892,6 @@
             "tournament": {
               "id": 910001,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament_other",
               "status": "completed"
             },
@@ -4029,7 +4009,6 @@
             "tournament": {
               "id": 910002,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament_hidden",
               "status": "completed"
             },
@@ -4160,7 +4139,6 @@
             "tournament": {
               "id": 909971,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament_career_1",
               "status": "completed"
             },
@@ -4278,7 +4256,6 @@
             "tournament": {
               "id": 909972,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament_career_2",
               "status": "completed"
             },
@@ -4396,7 +4373,6 @@
             "tournament": {
               "id": 909973,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament_career_3",
               "status": "completed"
             },
@@ -4845,7 +4821,6 @@
             "tournament": {
               "id": 910000,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament",
               "status": "completed"
             },
@@ -4963,7 +4938,6 @@
             "tournament": {
               "id": 910001,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament_other",
               "status": "completed"
             },
@@ -5081,7 +5055,6 @@
             "tournament": {
               "id": 910002,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament_hidden",
               "status": "completed"
             },
@@ -5206,7 +5179,6 @@
             "tournament": {
               "id": 909971,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament_career_1",
               "status": "completed"
             },
@@ -5324,7 +5296,6 @@
             "tournament": {
               "id": 909972,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament_career_2",
               "status": "completed"
             },
@@ -5442,7 +5413,6 @@
             "tournament": {
               "id": 909973,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament_career_3",
               "status": "completed"
             },
@@ -13915,7 +13885,6 @@
             "tournament": {
               "id": 910002,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament_hidden",
               "status": "completed"
             },
@@ -14033,7 +14002,6 @@
             "tournament": {
               "id": 910001,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament_other",
               "status": "completed"
             },
@@ -14482,7 +14450,6 @@
             "tournament": {
               "id": 910000,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament",
               "status": "completed"
             },
@@ -14600,7 +14567,6 @@
             "tournament": {
               "id": 909973,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament_career_3",
               "status": "completed"
             },
@@ -14718,7 +14684,6 @@
             "tournament": {
               "id": 909972,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament_career_2",
               "status": "completed"
             },
@@ -14836,7 +14801,6 @@
             "tournament": {
               "id": 909971,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament_career_1",
               "status": "completed"
             },
@@ -20135,7 +20099,6 @@
             },
             "id": 910001,
             "is_finished": true,
-            "is_league": false,
             "name": "P4 tournament_other",
             "status": "completed"
           },
@@ -20648,7 +20611,6 @@
             },
             "id": 910000,
             "is_finished": true,
-            "is_league": false,
             "name": "P4 tournament",
             "status": "completed"
           },
@@ -21161,7 +21123,6 @@
             },
             "id": 909973,
             "is_finished": true,
-            "is_league": false,
             "name": "P4 tournament_career_3",
             "status": "completed"
           },
@@ -21674,7 +21635,6 @@
             },
             "id": 909972,
             "is_finished": true,
-            "is_league": false,
             "name": "P4 tournament_career_2",
             "status": "completed"
           },
@@ -22187,7 +22147,6 @@
             },
             "id": 909971,
             "is_finished": true,
-            "is_league": false,
             "name": "P4 tournament_career_1",
             "status": "completed"
           }
@@ -22715,7 +22674,6 @@
           "draw": 0,
           "encounters": [],
           "id": 910001,
-          "is_league": false,
           "lost": 1,
           "maps_lost": 0,
           "maps_won": 1,
@@ -23274,7 +23232,6 @@
           "draw": 0,
           "encounters": [],
           "id": 910000,
-          "is_league": false,
           "lost": 1,
           "maps_lost": 0,
           "maps_won": 7,
@@ -23890,7 +23847,6 @@
           "draw": 0,
           "encounters": [],
           "id": 909973,
-          "is_league": false,
           "lost": 0,
           "maps_lost": 0,
           "maps_won": 1,
@@ -24449,7 +24405,6 @@
           "draw": 0,
           "encounters": [],
           "id": 909972,
-          "is_league": false,
           "lost": 0,
           "maps_lost": 0,
           "maps_won": 1,
@@ -25008,7 +24963,6 @@
           "draw": 0,
           "encounters": [],
           "id": 909971,
-          "is_league": false,
           "lost": 0,
           "maps_lost": 0,
           "maps_won": 1,
@@ -25252,7 +25206,6 @@
             "tournament": {
               "id": 910002,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament_hidden",
               "status": "completed"
             },
@@ -25692,7 +25645,6 @@
             "tournament": {
               "id": 910000,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament",
               "status": "completed"
             },
@@ -25810,7 +25762,6 @@
             "tournament": {
               "id": 909972,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament_career_2",
               "status": "completed"
             },
@@ -25928,7 +25879,6 @@
             "tournament": {
               "id": 909971,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament_career_1",
               "status": "completed"
             },
@@ -29126,7 +29076,6 @@
             },
             "id": 910000,
             "is_finished": true,
-            "is_league": false,
             "name": "P4 tournament",
             "status": "completed"
           },
@@ -29639,7 +29588,6 @@
             },
             "id": 909972,
             "is_finished": true,
-            "is_league": false,
             "name": "P4 tournament_career_2",
             "status": "completed"
           },
@@ -30152,7 +30100,6 @@
             },
             "id": 909971,
             "is_finished": true,
-            "is_league": false,
             "name": "P4 tournament_career_1",
             "status": "completed"
           }
@@ -30680,7 +30627,6 @@
           "draw": 0,
           "encounters": [],
           "id": 910000,
-          "is_league": false,
           "lost": 0,
           "maps_lost": 7,
           "maps_won": 0,
@@ -31239,7 +31185,6 @@
           "draw": 0,
           "encounters": [],
           "id": 909972,
-          "is_league": false,
           "lost": 1,
           "maps_lost": 1,
           "maps_won": 0,
@@ -31798,7 +31743,6 @@
           "draw": 0,
           "encounters": [],
           "id": 909971,
-          "is_league": false,
           "lost": 1,
           "maps_lost": 1,
           "maps_won": 0,
@@ -32519,7 +32463,6 @@
             "tournament": {
               "id": 910000,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament",
               "status": "completed"
             },
@@ -32637,7 +32580,6 @@
             "tournament": {
               "id": 909973,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament_career_3",
               "status": "completed"
             },
@@ -36340,7 +36282,6 @@
             },
             "id": 910000,
             "is_finished": true,
-            "is_league": false,
             "name": "P4 tournament",
             "status": "completed"
           },
@@ -36853,7 +36794,6 @@
             },
             "id": 909973,
             "is_finished": true,
-            "is_league": false,
             "name": "P4 tournament_career_3",
             "status": "completed"
           }
@@ -37381,7 +37321,6 @@
           "draw": 0,
           "encounters": [],
           "id": 910000,
-          "is_league": false,
           "lost": 1,
           "maps_lost": 0,
           "maps_won": 7,
@@ -37997,7 +37936,6 @@
           "draw": 0,
           "encounters": [],
           "id": 909973,
-          "is_league": false,
           "lost": 1,
           "maps_lost": 1,
           "maps_won": 0,
@@ -39350,7 +39288,6 @@
           "tournaments": [
             {
               "id": 910000,
-              "is_league": false,
               "name": "P4 tournament"
             }
           ],
@@ -40188,7 +40125,6 @@
           "tournament": {
             "id": 910000,
             "is_finished": true,
-            "is_league": false,
             "name": "P4 tournament",
             "status": "completed"
           },
@@ -43717,7 +43653,6 @@
           "tournament": {
             "id": 910002,
             "is_finished": true,
-            "is_league": false,
             "name": "P4 tournament_hidden",
             "status": "completed"
           },
@@ -46066,7 +46001,6 @@
           "tournament": {
             "id": 910001,
             "is_finished": true,
-            "is_league": false,
             "name": "P4 tournament_other",
             "status": "completed"
           },
@@ -48008,7 +47942,6 @@
             },
             "last_tournament": {
               "id": 910000,
-              "is_league": false,
               "name": "P4 tournament"
             },
             "user": {
@@ -48052,7 +47985,6 @@
             },
             "last_tournament": {
               "id": 910000,
-              "is_league": false,
               "name": "P4 tournament"
             },
             "user": {
@@ -48118,7 +48050,6 @@
           "tournaments": [
             {
               "id": 910000,
-              "is_league": false,
               "name": "P4 tournament"
             }
           ],
@@ -48179,7 +48110,6 @@
           "tournaments": [
             {
               "id": 910000,
-              "is_league": false,
               "name": "P4 tournament"
             }
           ],
@@ -48965,7 +48895,6 @@
             "tournament": {
               "id": 909971,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament_career_1",
               "status": "completed"
             },
@@ -49096,7 +49025,6 @@
             "tournament": {
               "id": 909972,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament_career_2",
               "status": "completed"
             },
@@ -49233,7 +49161,6 @@
             "tournament": {
               "id": 909971,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament_career_1",
               "status": "completed"
             },
@@ -49351,7 +49278,6 @@
             "tournament": {
               "id": 909972,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament_career_2",
               "status": "completed"
             },
@@ -49469,7 +49395,6 @@
             "tournament": {
               "id": 909973,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament_career_3",
               "status": "completed"
             },
@@ -49918,7 +49843,6 @@
             "tournament": {
               "id": 910000,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament",
               "status": "completed"
             },
@@ -50036,7 +49960,6 @@
             "tournament": {
               "id": 910002,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament_hidden",
               "status": "completed"
             },
@@ -50492,7 +50415,6 @@
             "tournament": {
               "id": 910000,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament",
               "status": "completed"
             },
@@ -50610,7 +50532,6 @@
             "tournament": {
               "id": 910002,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament_hidden",
               "status": "completed"
             },
@@ -50735,7 +50656,6 @@
             "tournament": {
               "id": 909971,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament_career_1",
               "status": "completed"
             },
@@ -50853,7 +50773,6 @@
             "tournament": {
               "id": 909972,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament_career_2",
               "status": "completed"
             },
@@ -50971,7 +50890,6 @@
             "tournament": {
               "id": 909973,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament_career_3",
               "status": "completed"
             },
@@ -51420,7 +51338,6 @@
             "tournament": {
               "id": 910000,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament",
               "status": "completed"
             },
@@ -51538,7 +51455,6 @@
             "tournament": {
               "id": 910002,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament_hidden",
               "status": "completed"
             },
@@ -51669,7 +51585,6 @@
             "tournament": {
               "id": 909971,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament_career_1",
               "status": "completed"
             },
@@ -51787,7 +51702,6 @@
             "tournament": {
               "id": 909972,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament_career_2",
               "status": "completed"
             },
@@ -51905,7 +51819,6 @@
             "tournament": {
               "id": 909973,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament_career_3",
               "status": "completed"
             },
@@ -52354,7 +52267,6 @@
             "tournament": {
               "id": 910000,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament",
               "status": "completed"
             },
@@ -52472,7 +52384,6 @@
             "tournament": {
               "id": 910002,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament_hidden",
               "status": "completed"
             },
@@ -52597,7 +52508,6 @@
             "tournament": {
               "id": 909971,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament_career_1",
               "status": "completed"
             },
@@ -52715,7 +52625,6 @@
             "tournament": {
               "id": 909972,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament_career_2",
               "status": "completed"
             },
@@ -52833,7 +52742,6 @@
             "tournament": {
               "id": 909973,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament_career_3",
               "status": "completed"
             },
@@ -58125,7 +58033,6 @@
             "tournament": {
               "id": 910002,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament_hidden",
               "status": "completed"
             },
@@ -58574,7 +58481,6 @@
             "tournament": {
               "id": 910000,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament",
               "status": "completed"
             },
@@ -58692,7 +58598,6 @@
             "tournament": {
               "id": 909973,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament_career_3",
               "status": "completed"
             },
@@ -58810,7 +58715,6 @@
             "tournament": {
               "id": 909972,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament_career_2",
               "status": "completed"
             },
@@ -58928,7 +58832,6 @@
             "tournament": {
               "id": 909971,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament_career_1",
               "status": "completed"
             },
@@ -64221,7 +64124,6 @@
             },
             "id": 910000,
             "is_finished": true,
-            "is_league": false,
             "name": "P4 tournament",
             "status": "completed"
           },
@@ -64734,7 +64636,6 @@
             },
             "id": 909973,
             "is_finished": true,
-            "is_league": false,
             "name": "P4 tournament_career_3",
             "status": "completed"
           },
@@ -65247,7 +65148,6 @@
             },
             "id": 909972,
             "is_finished": true,
-            "is_league": false,
             "name": "P4 tournament_career_2",
             "status": "completed"
           },
@@ -65760,7 +65660,6 @@
             },
             "id": 909971,
             "is_finished": true,
-            "is_league": false,
             "name": "P4 tournament_career_1",
             "status": "completed"
           }
@@ -66288,7 +66187,6 @@
           "draw": 0,
           "encounters": [],
           "id": 910000,
-          "is_league": false,
           "lost": 1,
           "maps_lost": 0,
           "maps_won": 7,
@@ -66904,7 +66802,6 @@
           "draw": 0,
           "encounters": [],
           "id": 909973,
-          "is_league": false,
           "lost": 0,
           "maps_lost": 0,
           "maps_won": 1,
@@ -67463,7 +67360,6 @@
           "draw": 0,
           "encounters": [],
           "id": 909972,
-          "is_league": false,
           "lost": 0,
           "maps_lost": 0,
           "maps_won": 1,
@@ -68022,7 +67918,6 @@
           "draw": 0,
           "encounters": [],
           "id": 909971,
-          "is_league": false,
           "lost": 0,
           "maps_lost": 0,
           "maps_won": 1,
@@ -68800,7 +68695,6 @@
             "tournament": {
               "id": 910001,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament_other",
               "status": "completed"
             },
@@ -68949,7 +68843,6 @@
             "tournament": {
               "id": 910001,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament_other",
               "status": "completed"
             },
@@ -69074,7 +68967,6 @@
             "tournament": {
               "id": 910001,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament_other",
               "status": "completed"
             },
@@ -69199,7 +69091,6 @@
             "tournament": {
               "id": 910001,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament_other",
               "status": "completed"
             },
@@ -69330,7 +69221,6 @@
             "tournament": {
               "id": 910001,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament_other",
               "status": "completed"
             },
@@ -73449,7 +73339,6 @@
             "tournament": {
               "id": 910001,
               "is_finished": true,
-              "is_league": false,
               "name": "P4 tournament_other",
               "status": "completed"
             },
@@ -76629,7 +76518,6 @@
             },
             "id": 910001,
             "is_finished": true,
-            "is_league": false,
             "name": "P4 tournament_other",
             "status": "completed"
           }
@@ -77157,7 +77045,6 @@
           "draw": 0,
           "encounters": [],
           "id": 910001,
-          "is_league": false,
           "lost": 1,
           "maps_lost": 0,
           "maps_won": 1,

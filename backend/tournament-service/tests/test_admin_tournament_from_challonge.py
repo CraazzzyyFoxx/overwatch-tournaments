@@ -55,7 +55,6 @@ class CreateTournamentFromChallongeTests(IsolatedAsyncioTestCase):
                 session,
                 workspace_id=9,
                 discipline="lol",
-                is_league=False,
                 start_date=date(2026, 1, 1),
                 end_date=date(2026, 2, 1),
                 challonge_slug="https://challonge.com/winter-cup",

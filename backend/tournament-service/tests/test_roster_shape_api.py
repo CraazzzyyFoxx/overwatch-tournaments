@@ -52,7 +52,6 @@ def _tournament(
         name=f"Tournament {tournament_id}",
         slug=f"tournament-{tournament_id}",
         description=None,
-        is_league=False,
         is_finished=False,
         is_hidden=False,
         status=enums.TournamentStatus.LIVE,

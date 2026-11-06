@@ -130,7 +130,6 @@ async def _seed(session: Any) -> _Seed:
             slug=f"{slug}-{suffix}",
             status=enums.TournamentStatus.COMPLETED if finished else enums.TournamentStatus.LIVE,
             is_finished=finished,
-            is_league=False,
             start_date=start,
             end_date=end,
         )
@@ -577,7 +576,6 @@ async def _two_rank_scales(session: Any) -> None:
                 slug=f"cn-{key}-{suffix}",
                 status=enums.TournamentStatus.COMPLETED,
                 is_finished=True,
-                is_league=False,
                 division_grid_version_id=version.id,
             )
             session.add(tournament)

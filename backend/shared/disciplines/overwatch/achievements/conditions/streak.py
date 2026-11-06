@@ -65,7 +65,6 @@ async def execute_consecutive(
                 models.Tournament.workspace_id == context.workspace_id,
                 models.Tournament.discipline == context.discipline,
             ),
-            models.Tournament.is_league.is_(False),
             models.Tournament.is_hidden.is_(False),
         )
     ).subquery("tournament_seq")
@@ -95,7 +94,6 @@ async def execute_consecutive(
             .join(tournament_seq, tournament_seq.c.tournament_id == models.Tournament.id)
             .where(
                 placed,
-                models.Tournament.is_league.is_(False),
                 sa.and_(
                     models.Tournament.workspace_id == context.workspace_id,
                     models.Tournament.discipline == context.discipline,
@@ -134,7 +132,6 @@ async def execute_consecutive(
                 .join(tournament_seq, tournament_seq.c.tournament_id == models.Tournament.id)
                 .where(
                     standing_is_elimination(standing=models.Standing, stage=models.Stage),
-                    models.Tournament.is_league.is_(False),
                     sa.and_(
                         models.Tournament.workspace_id == context.workspace_id,
                         models.Tournament.discipline == context.discipline,
@@ -231,7 +228,6 @@ async def execute_stable_streak(
                 models.Tournament.workspace_id == context.workspace_id,
                 models.Tournament.discipline == context.discipline,
             ),
-            models.Tournament.is_league.is_(False),
             models.Player.is_substitution.is_(False),
             is_member_tournament_row(),
         )

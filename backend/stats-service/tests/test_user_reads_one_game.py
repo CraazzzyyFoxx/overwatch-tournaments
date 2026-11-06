@@ -91,7 +91,6 @@ class UserReadsOneGameTest(IsolatedAsyncioTestCase):
             slug=f"{label}-{self.tag}",
             status=enums.TournamentStatus.COMPLETED,
             is_finished=True,
-            is_league=False,
             start_date=day,
             end_date=day,
         )

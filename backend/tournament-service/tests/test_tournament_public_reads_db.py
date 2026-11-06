@@ -45,7 +45,6 @@ async def _tournament(session, workspace: Workspace) -> Tournament:
         slug=f"public-reads-{suffix}",
         status=enums.TournamentStatus.COMPLETED,
         is_hidden=False,
-        is_league=False,
         start_date=now,
         end_date=now + timedelta(days=1),
     )

@@ -15,7 +15,7 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
-from shared.core import enums, pagination
+from shared.core import enums
 from shared.testing import create_test_async_engine, ensure_test_postgres
 from src import schemas
 from src.services.statistics.service import statistics
@@ -62,7 +62,7 @@ class StatisticsAlmanacTest(IsolatedAsyncioTestCase):
             self.users[key], self.members[key] = user, member
         return self.members[key]
 
-    async def _tournament(self, label: str, start: datetime = DAY, *, is_league: bool = False) -> models.Tournament:
+    async def _tournament(self, label: str, start: datetime = DAY) -> models.Tournament:
         tournament = models.Tournament(
             workspace_id=self.ws.id,
             discipline=OW,
@@ -70,7 +70,6 @@ class StatisticsAlmanacTest(IsolatedAsyncioTestCase):
             slug=f"{label}-{self.tag}",
             status=enums.TournamentStatus.COMPLETED,
             is_finished=True,
-            is_league=is_league,
             start_date=start,
             end_date=start + timedelta(days=1),
         )
@@ -134,10 +133,8 @@ class StatisticsAlmanacTest(IsolatedAsyncioTestCase):
         )
         await self.session.flush()
 
-    async def _duel(
-        self, label: str, home: str, away: str, score: tuple[int, int], title: str | None, *, is_league: bool = False
-    ) -> None:
-        tournament = await self._tournament(label, is_league=is_league)
+    async def _duel(self, label: str, home: str, away: str, score: tuple[int, int], title: str | None) -> None:
+        tournament = await self._tournament(label)
         teams = {key: await self._team(tournament, f"{label}{key}", (key, 1000)) for key in (home, away)}
         await self._series(tournament, teams[home], teams[away], score)
         if title is not None:
@@ -192,24 +189,6 @@ class StatisticsAlmanacTest(IsolatedAsyncioTestCase):
         self.assertEqual((only.id, only.rank, only.low_sample), (self.users["a"].id, 1, False))
         # The other sorts keep the low-sample players.
         self.assertEqual(len(await self._players(sort="tournaments", order="asc")), 4)
-
-    async def test_a_league_counts_on_the_almanac_but_not_on_the_champion_board(self) -> None:
-        # /statistics counts every visible tournament, leagues included; the champion board (home, hall of fame)
-        # keeps its standard-only rule.
-        await self._duel("std", "a", "b", (2, 0), title="a")
-        await self._duel("lg", "a", "b", (2, 1), title="a", is_league=True)
-        a, b = await self._players()
-        self.assertEqual((a.id, a.titles, a.tournaments, a.maps_won, a.maps_lost), (self.users["a"].id, 2, 2, 4, 1))
-        self.assertEqual((b.tournaments, b.maps_won), (2, 1))
-        self.assertEqual((await self._records())["win_streak"].value, 2)
-
-        board = await statistics.get_most_champions(
-            self.session,
-            pagination.PaginationSortParams(sort="value", order="desc"),
-            discipline=OW,
-            workspace_id=self.ws.id,
-        )
-        self.assertEqual([(row.id, row.value) for row in board.results], [(self.users["a"].id, 1)])
 
     # ---- records ------------------------------------------------------------------
 

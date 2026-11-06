@@ -111,7 +111,6 @@ class TournamentRepository(BaseRepository[models.Tournament]):
         self,
         session: AsyncSession,
         *,
-        is_league: bool | None = None,
         is_finished: bool | None = None,
         workspace_id: int | None = None,
         options: Sequence[_AbstractLoad] | None = None,
@@ -122,8 +121,6 @@ class TournamentRepository(BaseRepository[models.Tournament]):
         wants the rows.
         """
         query = self._apply_options(self.select(), options).order_by(models.Tournament.id.asc())
-        if is_league is not None:
-            query = query.where(models.Tournament.is_league.is_(is_league))
         if is_finished is not None:
             query = query.where(models.Tournament.is_finished.is_(is_finished))
         if workspace_id is not None:

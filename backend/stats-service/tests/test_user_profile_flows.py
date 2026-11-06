@@ -184,7 +184,6 @@ class UserProfileFlowsTests(IsolatedAsyncioTestCase):
             tournament=SimpleNamespace(
                 id=3,
                 name="Tournament Example",
-                is_league=False,
                 division_grid_version=tournament_grid_version,
             ),
         )
@@ -275,7 +274,6 @@ class UserProfileFlowsTests(IsolatedAsyncioTestCase):
             name="Tournament Example",
             workspace_id=5,
             discipline="overwatch",
-            is_league=False,
             division_grid_version=tournament_grid_version,
         )
         team = SimpleNamespace(id=9, tournament=tournament, standings=[])
@@ -354,7 +352,6 @@ class UserProfileFlowsTests(IsolatedAsyncioTestCase):
             tournament=SimpleNamespace(
                 id=3,
                 name="Tournament Example",
-                is_league=False,
                 division_grid_version=None,
             ),
         )
@@ -441,7 +438,6 @@ class UserProfileFlowsTests(IsolatedAsyncioTestCase):
                 name="Tournament Example",
                 workspace_id=5,
                 discipline="overwatch",
-                is_league=False,
                 division_grid_version=None,
             ),
         )

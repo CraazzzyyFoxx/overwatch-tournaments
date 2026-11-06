@@ -185,7 +185,6 @@ class _Fixture:
             name=TOURNAMENT_NAME,
             slug="autumn-cup",
             is_hidden=False,
-            is_league=False,
             status=TournamentStatus.ANNOUNCEMENT,
             start_date=datetime(2026, 1, 1, tzinfo=UTC),
         )

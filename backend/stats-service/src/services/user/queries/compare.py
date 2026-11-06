@@ -111,18 +111,17 @@ class UserCompareQueries(DisciplineQueries):
         workspace_id: int | None = None,
         grid: DivisionGrid,
         name: str = "compare_scoped_players",
-        require_finished_nonleague: bool = True,
+        require_finished: bool = True,
     ) -> sa.CTE:
         """Resolve eligible roster rows once for all grouped compare metrics."""
 
         filters: list[typing.Any] = [
             models.Player.is_substitution.is_(False),
         ]
-        if require_finished_nonleague:
+        if require_finished:
             filters.extend(
                 [
                     models.Tournament.is_finished.is_(True),
-                    models.Tournament.is_league.is_(False),
                 ]
             )
         if role is not None:
@@ -184,7 +183,7 @@ class UserCompareQueries(DisciplineQueries):
             workspace_id=workspace_id,
             grid=grid,
             name="compare_stat_scoped_players",
-            require_finished_nonleague=False,
+            require_finished=False,
         )
         has_scope_filter = role is not None or div_min is not None or div_max is not None or tournament_id is not None
         # Which roster rows count: role/division narrow them, and so does the
@@ -237,7 +236,6 @@ class UserCompareQueries(DisciplineQueries):
             .join(encounter_tournament, encounter_tournament.id == models.Encounter.tournament_id)
             .where(
                 encounter_tournament.is_finished.is_(True),
-                encounter_tournament.is_league.is_(False),
                 *([models.Encounter.tournament_id == tournament_id] if tournament_id is not None else []),
             )
             .subquery("compare_map_sides")
@@ -708,8 +706,8 @@ class UserCompareQueries(DisciplineQueries):
         text changes whenever the population size does never reuses a prepared plan.
 
         The predicate is ``_compare_user_scope_exists``. It is NOT the same as
-        ``scoped_players`` below, which deliberately drops the finished/non-league
-        restriction (``require_finished_nonleague=False``) -- reusing that CTE here
+        ``scoped_players`` below, which deliberately drops the finished
+        restriction (``require_finished=False``) -- reusing that CTE here
         would silently widen the baseline.
         """
 
@@ -730,7 +728,7 @@ class UserCompareQueries(DisciplineQueries):
             workspace_id=workspace_id,
             grid=grid,
             name="compare_hero_scoped_players",
-            require_finished_nonleague=False,
+            require_finished=False,
         )
 
         # Same reasoning as ``_compare_metrics_query_v2``: the workspace narrows which

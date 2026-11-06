@@ -31,7 +31,6 @@ def _tournament() -> models.Tournament:
         name="Tournament 10",
         slug="tournament-10",
         description=None,
-        is_league=False,
         is_finished=False,
         is_hidden=False,
         status=enums.TournamentStatus.LIVE,

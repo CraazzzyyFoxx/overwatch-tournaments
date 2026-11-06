@@ -77,7 +77,6 @@ OPERATIONS: dict[str, Op] = {
         response_array=True,
         query_params=(
             _WS_ANY,
-            QueryParam("is_league", "boolean"),
             QueryParam("discipline", description="Installed discipline code; absent lists every game."),
         ),
     ),
@@ -267,7 +266,6 @@ OPERATIONS: dict[str, Op] = {
             QueryParam("end_date", required=True),
             QueryParam("challonge_slug", required=True),
             QueryParam("discipline", required=True),
-            QueryParam("is_league", "boolean"),
             QueryParam("division_grid_version_id", "integer"),
         ),
     ),

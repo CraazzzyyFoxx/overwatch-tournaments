@@ -27,7 +27,7 @@ from .stat_threshold import OPERATORS
     grain=AchievementGrain.user,
     description="How many times a standing position was reached",
     required=("op", "value"),
-    optional=("count_by", "is_league", "position_op", "position_value"),
+    optional=("count_by", "position_op", "position_value"),
     depends_on=("tournament.participant_result", "tournament.player"),
 )
 async def execute_standing_count(
@@ -43,14 +43,12 @@ async def execute_standing_count(
         count_by: "tournament" (default) | "role"
         op: operator for the resulting count
         value: count threshold
-        is_league: bool | None (default False) — filter Tournament.is_league
     """
     position_op = params.get("position_op", "==")
     position_value = params.get("position_value", 1)
     count_by = params.get("count_by", "tournament")
     op = params["op"]
     value = params["value"]
-    is_league = params.get("is_league", False)
 
     pos_fn = OPERATORS[position_op]
     op_fn = OPERATORS[op]
@@ -67,8 +65,6 @@ async def execute_standing_count(
             models.Tournament.workspace_id == context.workspace_id, models.Tournament.discipline == context.discipline
         ),
     ]
-    if is_league is not None:
-        where_clauses.append(models.Tournament.is_league.is_(is_league))
 
     query = (
         sa.select(models.WorkspaceMember.player_id)

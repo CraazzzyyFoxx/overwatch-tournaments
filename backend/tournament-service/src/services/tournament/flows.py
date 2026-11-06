@@ -222,7 +222,6 @@ class TournamentFlowsService:
             slug=tournament.slug,
             start_date=tournament.start_date,
             end_date=tournament.end_date,
-            is_league=tournament.is_league,
             is_finished=tournament.is_finished,
             is_hidden=tournament.is_hidden,
             cover_image_url=tournament.cover_image_url,
@@ -338,7 +337,6 @@ class TournamentFlowsService:
         session: AsyncSession,
         *,
         workspace_id: int | None = None,
-        is_league: bool | None = None,
         discipline: str | None = None,
         limit: int = 500,
     ) -> list[schemas.LookupItem]:
@@ -352,8 +350,6 @@ class TournamentFlowsService:
         )
         if workspace_id is not None:
             query = query.where(models.Tournament.workspace_id == workspace_id)
-        if is_league is not None:
-            query = query.where(models.Tournament.is_league.is_(is_league))
         if discipline is not None:
             query = query.where(models.Tournament.discipline == discipline)
         result = await session.execute(query)
@@ -366,18 +362,14 @@ class TournamentFlowsService:
         viewer: AuthUser | None = None,
         workspace_id: int | None = None,
         status: enums.TournamentStatus | None = None,
-        is_league: bool | None = None,
         discipline: str | None = None,
         query: str = "",
     ) -> schemas.TournamentFacets:
         """Chip counters for the public tournaments page (rpc.tournament.tournaments_facets).
 
-        **Each axis is counted without its own filter.** ``by_status`` applies
-        ``is_league`` and the search but not ``status``; ``league``/``standard``
-        apply ``status`` and the search but not ``is_league``. Counting an axis
-        *with* its own filter would zero every sibling chip the moment one is
-        picked — the UI would show "registration 5, everything else 0" and offer
-        no click that leads back out of the filter.
+        **Each axis is counted without its own filter.** ``by_status`` applies the search but not ``status``.
+        Counting an axis *with* its own filter would zero every sibling chip the moment one is picked — the UI would
+        show "registration 5, everything else 0" and offer no click that leads back out of the filter.
 
         ``total`` and ``live`` are deliberately unconditional (visibility and
         workspace only): the page hero states a platform-wide fact ("42
@@ -393,12 +385,10 @@ class TournamentFlowsService:
         if discipline is not None:
             scope.append(models.Tournament.discipline == discipline)
         search = [models.Tournament.name.ilike(f"%{query}%")] if query else []
-        league = [] if is_league is None else [models.Tournament.is_league.is_(is_league)]
-        status_filter = [] if status is None else [models.Tournament.status == status]
 
         status_rows = await session.execute(
             sa.select(models.Tournament.status, sa.func.count(models.Tournament.id))
-            .where(*scope, *search, *league)
+            .where(*scope, *search)
             .group_by(models.Tournament.status)
         )
         # Every member present, always: an absent key would force each client to
@@ -406,19 +396,6 @@ class TournamentFlowsService:
         by_status = dict.fromkeys(enums.TournamentStatus, 0)
         for row_status, count in status_rows.all():
             by_status[enums.TournamentStatus(row_status)] = int(count)
-
-        league_rows = await session.execute(
-            sa.select(models.Tournament.is_league, sa.func.count(models.Tournament.id))
-            .where(*scope, *search, *status_filter)
-            .group_by(models.Tournament.is_league)
-        )
-        league_count = 0
-        standard_count = 0
-        for is_league_value, count in league_rows.all():
-            if is_league_value:
-                league_count = int(count)
-            else:
-                standard_count = int(count)
 
         totals = (
             await session.execute(
@@ -430,7 +407,7 @@ class TournamentFlowsService:
         ).one()
         registration_open = (
             await session.execute(
-                sa.select(sa.func.count(models.Tournament.id)).where(*scope, *search, *league, registering_tournament())
+                sa.select(sa.func.count(models.Tournament.id)).where(*scope, *search, registering_tournament())
             )
         ).one()[0]
 
@@ -439,8 +416,6 @@ class TournamentFlowsService:
             live=int(totals[1]),
             by_status=by_status,
             registration_open=int(registration_open),
-            league=league_count,
-            standard=standard_count,
         )
 
     async def get_stages_read(self, session: AsyncSession, tournament_id: int) -> list[schemas.StageRead]:

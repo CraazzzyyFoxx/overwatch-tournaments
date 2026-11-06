@@ -182,7 +182,6 @@ def _ensure_compare_division_fixture(db: Session) -> dict[str, int | str]:
                 slug="compare-division-subject-cohort",
                 workspace_id=ids["workspace"],
                 is_finished=True,
-                is_league=False,
             ),
             models.Tournament(
                 id=ids["subject_other_tournament"],
@@ -190,7 +189,6 @@ def _ensure_compare_division_fixture(db: Session) -> dict[str, int | str]:
                 slug="compare-division-subject-other",
                 workspace_id=ids["workspace"],
                 is_finished=True,
-                is_league=False,
             ),
             models.Tournament(
                 id=ids["baseline_cohort_tournament"],
@@ -198,7 +196,6 @@ def _ensure_compare_division_fixture(db: Session) -> dict[str, int | str]:
                 slug="compare-division-baseline-cohort",
                 workspace_id=ids["workspace"],
                 is_finished=True,
-                is_league=False,
             ),
             models.Team(
                 id=ids["subject_cohort_team"],

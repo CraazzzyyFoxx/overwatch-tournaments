@@ -25,11 +25,11 @@ const publicReadTimeout = 30 * time.Second
 var PublicReadRoutes = []edge.RouteSpec{
 	// tournament.py
 	{Method: "GET", Pattern: "/api/v1/tournaments", Queue: "rpc.tournament.list_tournaments", AllQuery: true, Auth: edge.AuthOptional, Timeout: publicReadTimeout},
-	{Method: "GET", Pattern: "/api/v1/tournaments/lookup", Queue: "rpc.tournament.lookup_tournaments", Query: []string{"workspace_id", "is_league", "discipline"}, Auth: edge.AuthNone, Timeout: publicReadTimeout},
+	{Method: "GET", Pattern: "/api/v1/tournaments/lookup", Queue: "rpc.tournament.lookup_tournaments", Query: []string{"workspace_id", "discipline"}, Auth: edge.AuthNone, Timeout: publicReadTimeout},
 	{Method: "GET", Pattern: "/api/v1/tournaments/statistics/history", Queue: "rpc.tournament.statistics_history", Query: []string{"workspace_id"}, Auth: edge.AuthNone, Timeout: publicReadTimeout},
 	{Method: "GET", Pattern: "/api/v1/tournaments/statistics/division", Queue: "rpc.tournament.statistics_division", Query: []string{"workspace_id", "discipline"}, Auth: edge.AuthNone, Timeout: publicReadTimeout},
 	{Method: "GET", Pattern: "/api/v1/tournaments/statistics/overall", Queue: "rpc.tournament.statistics_overall", Query: []string{"workspace_id"}, Auth: edge.AuthNone, Timeout: publicReadTimeout},
-	{Method: "GET", Pattern: "/api/v1/tournaments/facets", Queue: "rpc.tournament.tournaments_facets", Query: []string{"workspace_id", "status", "is_league", "discipline", "query"}, Auth: edge.AuthOptional, Timeout: publicReadTimeout},
+	{Method: "GET", Pattern: "/api/v1/tournaments/facets", Queue: "rpc.tournament.tournaments_facets", Query: []string{"workspace_id", "status", "discipline", "query"}, Auth: edge.AuthOptional, Timeout: publicReadTimeout},
 	{Method: "GET", Pattern: "/api/v1/tournaments/{id}", Queue: "rpc.tournament.get_tournament", IDParam: "id", Query: []string{"entities"}, Auth: edge.AuthOptional, Timeout: publicReadTimeout},
 	{Method: "GET", Pattern: "/api/v1/tournaments/{id}/stages", Queue: "rpc.tournament.get_stages", IDParam: "id", Auth: edge.AuthOptional, Timeout: publicReadTimeout},
 	{Method: "GET", Pattern: "/api/v1/tournaments/{id}/standings", Queue: "rpc.tournament.get_standings", IDParam: "id", Query: []string{"entities"}, Auth: edge.AuthOptional, Timeout: publicReadTimeout},

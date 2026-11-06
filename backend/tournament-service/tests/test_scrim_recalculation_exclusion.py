@@ -208,7 +208,6 @@ class _Fixture:
             name=name,
             slug=f"tournament-{tournament_id}",
             is_hidden=is_hidden,
-            is_league=False,
             # A lazily provisioned scrim container never gets a start date; a real
             # tournament always has one.
             start_date=datetime(2026, 1, 1, tzinfo=UTC) if dated else None,

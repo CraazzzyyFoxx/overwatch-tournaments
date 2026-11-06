@@ -63,6 +63,9 @@ APPROVED_DIRECT_WRITE_FILES = {
     "tournament-service/src/services/bracket/usability.py",
     # Flow recompute: one batched delete/update/insert of ``flow_node_result`` rows per node, diffed in place.
     "tournament-service/src/services/flow/engine.py",
+    # League merge (spec 15.3): set-based re-point of every tournament-keyed table from the day tournaments to the target,
+    # collision deletes, grant overrides and queued runs, all in one operator-run transaction.
+    "tournament-service/src/services/flow/league_merge.py",
     # Append-only event journal, not CRUD: the realtime rail writes one
     # WorkspaceEvent row per staged event from the session's own before_commit
     # hook, which is where the row has to be created for it to ride the

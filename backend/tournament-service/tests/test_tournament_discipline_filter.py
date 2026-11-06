@@ -104,7 +104,6 @@ async def _make_tournament(session, *, workspace_id: int, discipline: str) -> To
         discipline=discipline,
         status=enums.TournamentStatus.LIVE,
         is_hidden=False,
-        is_league=False,
         start_date=now,
         end_date=now + timedelta(days=1),
     )

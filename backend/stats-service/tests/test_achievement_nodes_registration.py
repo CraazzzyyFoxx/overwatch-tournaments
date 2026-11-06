@@ -184,7 +184,6 @@ class _RegistrationFixture(_scrim._Fixture):
             name="foreign",
             slug=f"tournament-{tournament_id}",
             is_hidden=False,
-            is_league=False,
             start_date=REG_OPEN,
         )
 

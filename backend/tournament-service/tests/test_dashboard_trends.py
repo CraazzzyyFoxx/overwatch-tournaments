@@ -2,7 +2,7 @@
 
     uv run pytest tournament-service/tests/test_dashboard_trends.py -v
 
-The selection (status/hidden/league/workspace/discipline, the chronology key, limit,
+The selection (status/hidden/workspace/discipline, the chronology key, limit,
 oldest-first) and the per-tournament aggregates (newcomers, duel-only log
 coverage, the confirmation median's exclusions) are all SQL, so they are
 pinned against a seeded workspace that is dropped again. Uses the shared
@@ -73,7 +73,6 @@ async def _seed(session: Any) -> _Seed:
         "undated": tournament("undated", None, created_at=_day(2030, 5, 1)),
         "lol": tournament("lol", _day(2031, 2, 1), discipline="lol"),
         # Newer than everything above, and excluded regardless.
-        "league": tournament("league", _day(2031, 3, 1), is_league=True),
         "hidden": tournament("hidden", _day(2031, 3, 2), is_hidden=True),
         "live": tournament("live", _day(2031, 3, 3), status=enums.TournamentStatus.LIVE),
         "foreign": tournament("foreign", _day(2031, 3, 4), workspace_id=other.id),

@@ -66,7 +66,7 @@ DOCS: dict[str, dict] = {
     # ── public reads (arrays) ──────────────────────────────────────────────
     "rpc.tournament.lookup_tournaments": {
         "summary": "Lookup tournaments",
-        "description": "Permission: public; no authentication required — hidden tournaments, and every tournament of a hidden workspace, are never listed here, for any caller. Returns a lightweight id/name list of up to 500 most-recent tournaments, optionally filtered by workspace, league flag and installed discipline (an uninstalled code is 422), for pickers.",
+        "description": "Permission: public; no authentication required — hidden tournaments, and every tournament of a hidden workspace, are never listed here, for any caller. Returns a lightweight id/name list of up to 500 most-recent tournaments, optionally filtered by workspace and installed discipline (an uninstalled code is 422), for pickers.",
     },
     "rpc.tournament.get_stages": {
         "summary": "List tournament stages",
@@ -128,7 +128,7 @@ DOCS: dict[str, dict] = {
     },
     "rpc.tournament.tournaments_facets": {
         "summary": "Tournament facet counts",
-        "description": "Permission: public; no authentication required — every count is filtered to the tournaments the viewer may see. Returns chip counters for the tournaments list: unfiltered total/live plus per-status and league/standard counts, each axis counted without its own filter.",
+        "description": "Permission: public; no authentication required — every count is filtered to the tournaments the viewer may see. Returns chip counters for the tournaments list: unfiltered total/live plus per-status counts, each axis counted without its own filter.",
     },
     "rpc.tournament.list_encounters": {
         "summary": "List encounters",
@@ -1757,7 +1757,7 @@ DOCS: dict[str, dict] = {
         "summary": "Organizer dashboard trends",
         "description": (
             "Permission: workspace `tournament.read`. Returns participants, newcomers, duel log coverage and the"
-            " median match-end-to-confirmation time of the workspace's last 10 finished, non-league, non-hidden"
+            " median match-end-to-confirmation time of the workspace's last 10 finished, non-hidden"
             " tournaments, oldest first, optionally narrowed to one installed `discipline` (404"
             " `discipline_not_installed` for an unknown code). 422 without `workspace_id`."
         ),

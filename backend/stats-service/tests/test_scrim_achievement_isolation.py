@@ -321,7 +321,6 @@ class _Fixture:
             name=name,
             slug=f"tournament-{tournament_id}",
             is_hidden=is_hidden,
-            is_league=False,
             start_date=start,
             end_date=end,
             **({} if created is None else {"created_at": created}),

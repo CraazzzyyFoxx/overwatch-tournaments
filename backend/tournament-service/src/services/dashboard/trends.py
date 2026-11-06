@@ -1,4 +1,4 @@
-"""Organizer-dashboard trends: the last 10 finished, public, non-league tournaments.
+"""Organizer-dashboard trends: the last 10 finished, public tournaments.
 
 One round-trip: a CTE picks the tournaments, two grouped subqueries (roster,
 encounters) aggregate over them and are LEFT-joined back, so a tournament with
@@ -38,7 +38,6 @@ class DashboardTrendsService:
             tournament.workspace_id == workspace_id,
             tournament.status.in_((enums.TournamentStatus.COMPLETED, enums.TournamentStatus.ARCHIVED)),
             tournament.is_hidden.is_(False),
-            tournament.is_league.is_(False),
         )
         if discipline is not None:
             picked_q = picked_q.where(tournament.discipline == discipline)

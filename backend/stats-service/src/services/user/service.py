@@ -1177,9 +1177,6 @@ class UserService(DisciplineQueries):
         ]
 
         for team in teams:
-            if team.tournament.is_league:
-                continue
-
             # Participation, not scoring: a live tournament has no final placement
             # yet, but the player is already in it.
             tournaments_count += 1
@@ -1273,8 +1270,6 @@ class UserService(DisciplineQueries):
         tallies: dict[str, list[int]] = {}
         for team in teams:
             tally = tallies.setdefault(team.tournament.discipline, [0, 0])
-            if team.tournament.is_league:
-                continue
             tally[0] += 1
             if placements.get(team.tournament_id) == 1:
                 tally[1] += 1
@@ -1369,8 +1364,6 @@ class UserService(DisciplineQueries):
         recent: dict[int, schemas.UserDraftCardTournament] = {}
         for team in sorted(teams, key=lambda item: chrono_sort_key(item.tournament), reverse=True):
             tournament = team.tournament
-            if tournament.is_league:
-                continue
             tournaments_count += 1
             placement = member_placements.get(team.tournament_id)
             if placement is not None:
@@ -1529,7 +1522,6 @@ class UserService(DisciplineQueries):
                 name=team.tournament.name,
                 workspace_id=team.tournament.workspace_id,
                 discipline=team.tournament.discipline,
-                is_league=team.tournament.is_league,
                 team_id=team.id,
                 team=team.name,
                 players=players_read,

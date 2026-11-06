@@ -49,7 +49,6 @@ class TournamentRead(BaseRead):
     rules: str | None = None
     challonge_id: int | None
     challonge_slug: str | None
-    is_league: bool
     is_finished: bool
     is_hidden: bool = False
     # Branding uploaded through the dedicated image subjects, never through
@@ -108,7 +107,6 @@ class TournamentPaginationSortSearchQueryParams(
         typing.Literal["id", "name", "start_date", "end_date", "similarity:name", "participants_count"]
     ]
 ):
-    is_league: bool | None = None
     workspace_id: WorkspaceFilter = None
     #: Any of these statuses (``?status=live&status=playoffs``); absent or empty is every status.
     status: list[enums.TournamentStatus] = []
@@ -119,7 +117,6 @@ class TournamentPaginationSortSearchQueryParams(
 
 @dataclass
 class TournamentPaginationSortSearchParams(pagination.PaginationSortSearchParams):
-    is_league: bool | None = None
     workspace_id: int | None = None
     status: list[enums.TournamentStatus] = field(default_factory=list)
     registration_open: bool = False
@@ -156,7 +153,6 @@ class TournamentFacetsQueryParams(BaseModel):
 
     workspace_id: WorkspaceFilter = None
     status: enums.TournamentStatus | None = None
-    is_league: bool | None = None
     discipline: InstalledDisciplineFilter = None
     query: str = ""
 
@@ -165,8 +161,7 @@ class TournamentFacets(BaseModel):
     """Chip counters for the public tournaments page.
 
     ``total``/``live`` are unconditional platform facts (see
-    ``TournamentFlowsService.get_facets``); ``by_status`` and ``league``/
-    ``standard`` each ignore their own filter so a selected chip never zeroes its
+    ``TournamentFlowsService.get_facets``); ``by_status`` ignores its own filter so a selected chip never zeroes its
     siblings.
     """
 
@@ -176,5 +171,3 @@ class TournamentFacets(BaseModel):
     #: Tournaments with a registration node in ``open`` or ``check_in`` (the "Registration" chip); like ``by_status``
     #: it ignores the status filter.
     registration_open: int
-    league: int
-    standard: int

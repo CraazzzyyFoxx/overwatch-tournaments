@@ -50,7 +50,6 @@ class AchievementTournamentLink(BaseModel):
 
     id: int
     name: str
-    is_league: bool
 
 
 class AchievementMatchLink(BaseModel):

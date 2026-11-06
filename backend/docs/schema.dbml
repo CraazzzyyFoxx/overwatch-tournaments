@@ -3302,8 +3302,6 @@ Table tournament.stage {
   description VARCHAR
   stage_type stagetype [not null]
   max_rounds int [not null, default: 5]
-  advance_count int
-  advance_upper_count int
   "order" int [not null]
   is_published boolean [not null, default: false]
   ranking_preset VARCHAR
@@ -3339,8 +3337,6 @@ Table tournament.stage_item {
   name VARCHAR [not null]
   type stageitemtype [not null]
   "order" int [not null]
-  advance_count int
-  advance_upper_count int
   indexes {
     (id, stage_id) [unique, name: "uq_stage_item_id_stage"]
     (stage_id) [name: "ix_tournament_stage_item_stage_id"]
@@ -3472,7 +3468,6 @@ Table tournament.tournament {
   slug VARCHAR [not null, unique]
   description VARCHAR
   rules text
-  is_league boolean [not null, default: false]
   is_finished boolean [not null, default: false]
   is_hidden boolean [not null, default: false]
   team_formation VARCHAR [not null, default: `balancer`]
@@ -3618,8 +3613,8 @@ Ref: achievements.override.tournament_id > tournament.tournament.id [delete: cas
 Ref: achievements.override.match_id > stats.match.id [delete: cascade]
 Ref: achievements.override.granted_by > auth.user.id [delete: set null]
 Ref: achievements.rule.workspace_id > workspace.id [delete: cascade]
-Ref: achievements.rule.discipline > catalog.discipline.code
 Ref: achievements.rule.discipline > catalog.entity.discipline [delete: set null (entity_id)]
+Ref: achievements.rule.discipline > catalog.discipline.code
 Ref: achievements.rule.entity_id > catalog.entity.id [delete: set null (entity_id)]
 Ref: achievements.rule.entity_kind > catalog.entity.kind [delete: set null (entity_id)]
 Ref: analytics.anomaly_feedback.tournament_id > tournament.tournament.id [delete: cascade]
@@ -3715,8 +3710,8 @@ Ref: draft.player.dimension_id > catalog.role.dimension_id
 Ref: draft.player.captain_role_id > catalog.role.id
 Ref: draft.session.tournament_id > tournament.tournament.id [delete: cascade]
 Ref: draft.session.formation_node_id > tournament.flow_node.id [delete: cascade]
-Ref: draft.session.custom_game_id > mix.custom_game.id [delete: cascade]
 Ref: draft.session.custom_game_id > mix.lobby.custom_game_id [delete: cascade]
+Ref: draft.session.custom_game_id > mix.custom_game.id [delete: cascade]
 Ref: draft.session.lobby_index > mix.lobby.lobby_index [delete: cascade]
 Ref: draft.session.discipline > mix.custom_game.discipline [delete: cascade]
 Ref: draft.session.discipline > tournament.tournament.discipline [delete: cascade]
@@ -3932,19 +3927,19 @@ Ref: roster.format_role_rule.role_id > catalog.role.id
 Ref: roster.team_format.workspace_id > mix.custom_game.workspace_id [delete: cascade]
 Ref: roster.team_format.workspace_id > tournament.tournament.workspace_id [delete: cascade]
 Ref: roster.team_format.workspace_id > workspace.id [delete: cascade]
+Ref: roster.team_format.discipline > mix.custom_game.discipline [delete: cascade]
 Ref: roster.team_format.discipline > tournament.tournament.discipline [delete: cascade]
 Ref: roster.team_format.discipline > catalog.discipline.code
-Ref: roster.team_format.discipline > mix.custom_game.discipline [delete: cascade]
 Ref: roster.team_format.tournament_id > tournament.tournament.id [delete: cascade]
 Ref: roster.team_format.custom_game_id > mix.custom_game.id [delete: cascade]
 Ref: roster.team_format_dimension.team_format_id > roster.team_format.id [delete: cascade]
-Ref: roster.team_format_dimension.discipline > roster.team_format.discipline [delete: cascade]
 Ref: roster.team_format_dimension.discipline > catalog.role_dimension.discipline
+Ref: roster.team_format_dimension.discipline > roster.team_format.discipline [delete: cascade]
 Ref: roster.team_format_dimension.dimension_id > catalog.role_dimension.id
 Ref: stats.discord_channel.tournament_id > tournament.tournament.id [delete: cascade]
-Ref: stats.event.match_id > stats.match.id [delete: cascade]
 Ref: stats.event.match_id > stats.match_player.match_id
 Ref: stats.event.match_id > stats.match_team.match_id
+Ref: stats.event.match_id > stats.match.id [delete: cascade]
 Ref: stats.event.match_id > stats.match_player.match_id
 Ref: stats.event.match_id > stats.match_team.match_id
 Ref: stats.event.type_id > stats.event_type.id
@@ -3957,8 +3952,8 @@ Ref: stats.event.related_entity_id > catalog.entity.id
 Ref: stats.event.entity_kind > catalog.entity.kind
 Ref: stats.event.entity_kind > catalog.entity.kind
 Ref: stats.event_type.discipline > catalog.discipline.code
-Ref: stats.fact.match_id > stats.match_team.match_id [delete: cascade]
 Ref: stats.fact.match_id > stats.match_player.match_id [delete: cascade]
+Ref: stats.fact.match_id > stats.match_team.match_id [delete: cascade]
 Ref: stats.fact.encounter_team_id > stats.match_team.encounter_team_id [delete: cascade]
 Ref: stats.fact.workspace_member_id > stats.match_player.workspace_member_id [delete: cascade]
 Ref: stats.fact.entity_id > catalog.entity.id [delete: restrict]

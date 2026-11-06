@@ -44740,7 +44740,6 @@
     },
     "aggregate/won_maps": {
       "params": {
-        "include_league": true,
         "metric": "won_maps",
         "order": "asc"
       },

@@ -75,7 +75,6 @@ async def _seed(session: Any) -> _Seed:
         slug=f"seats-{suffix}",
         status=enums.TournamentStatus.COMPLETED,
         is_finished=True,
-        is_league=False,
     )
     session.add(tournament)
     await session.flush()
