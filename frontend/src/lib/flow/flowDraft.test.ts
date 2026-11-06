@@ -11,6 +11,7 @@ import {
   isDirty,
   keyedValidation,
   refreshDraft,
+  reconnect,
   removeNode,
   toChanges,
   updateNode,
@@ -76,6 +77,20 @@ describe("flow draft", () => {
     const draft = draftFromRead(starterRead());
     expect(connect(draft, { source: "1", sourceHandle: "participants", target: "1", targetHandle: "participants" })).toBe(draft);
     expect(connect(draft, { source: "1", sourceHandle: "participants", target: "2", targetHandle: "players" })).toBe(draft);
+  });
+
+  it("moves a saved edge by deleting it and sending the new one", () => {
+    const draft = addNode(draftFromRead(starterRead()), filter);
+    const moved = reconnect(draft, "e10", { source: "1", sourceHandle: "participants", target: "new-1", targetHandle: "ranking" });
+    const changes = toChanges(moved);
+    expect(changes.delete_edge_ids).toEqual([10]);
+    expect(changes.edges).toEqual([{ source: 1, source_port: "participants", target: "new-1", target_port: "ranking" }]);
+  });
+
+  it("leaves the draft as is when an edge is dropped back on its ports or onto a self-loop", () => {
+    const draft = draftFromRead(starterRead());
+    expect(reconnect(draft, "e10", { source: "1", sourceHandle: "participants", target: "2", targetHandle: "players" })).toBe(draft);
+    expect(reconnect(draft, "e10", { source: "1", sourceHandle: "participants", target: "1", targetHandle: "participants" })).toBe(draft);
   });
 
   it("keeps a dirty draft across a refetch but takes the new statuses", () => {

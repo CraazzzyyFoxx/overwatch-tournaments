@@ -45,7 +45,7 @@ async function render(n: DraftNode, dirty = false) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={en}>
-        <NodeInspector tournamentId={7} tournament={tournament} read={starterRead()} node={n} dirty={dirty} readOnly={false} onChange={vi.fn()} onClose={vi.fn()} />
+        <NodeInspector tournamentId={7} tournament={tournament} read={starterRead()} node={n} dirty={dirty} readOnly={false} onChange={vi.fn()} onDelete={vi.fn()} onClose={vi.fn()} />
       </NextIntlClientProvider>
     );
   });

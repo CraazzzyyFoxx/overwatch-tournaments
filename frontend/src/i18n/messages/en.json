@@ -65,6 +65,7 @@
     "flow": {
       "counted": "counted",
       "notCounted": "not counted",
+      "deleteEdge": "Remove connection",
       "kind": {
         "registration": "Registration",
         "formation": "Formation",
@@ -11054,6 +11055,8 @@
       },
       "inspector": {
         "close": "Close",
+        "delete": "Delete node",
+        "deleteLocked": "This node has already started and can no longer be deleted.",
         "name": "Name",
         "saveFirst": "Save the flow to configure this node.",
         "saveOrDiscard": "Save or discard the graph first.",
