@@ -9,7 +9,7 @@ import { FFA_STAGE_TYPES } from "@/lib/bracket/projection";
 import { UNKNOWN_ROUND_SHAPE, type BracketRoundShape } from "@/lib/bracket/round-name";
 import { getPublicPageQueryPresentation } from "@/lib/public-page-query-presentation";
 import { tournamentCharacterPlaytimeQueryOptions } from "@/lib/tournament/character-playtime-query";
-import { currentRegistrationNode } from "@/lib/tournament/flow-nodes";
+import { listedRegistrationNode } from "@/lib/tournament/flow-nodes";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import { pickCurrentStage } from "@/lib/tournament/stages";
 import encounterService from "@/services/encounter.service";
@@ -58,9 +58,9 @@ export function useTournamentOverviewData(tournamentId: number, slug: string) {
     !(tournament?.stages ?? []).some((item) => ELIMINATION_TYPES[item.stage_type] === true);
   const needsStandings = showsGroupTable || podiumNeedsStandings;
 
-  // Same key and fetcher as `TournamentParticipantsPage`, so the two sections
-  // share one cache entry instead of each paying for the roster.
-  const registrationNodeId = currentRegistrationNode(tournament)?.id ?? null;
+  // Same key and fetcher as `TournamentParticipantsPage` (`tournamentRegistrationsQueryOptions`), so the two
+  // sections share one cache entry instead of each paying for the roster.
+  const registrationNodeId = listedRegistrationNode(tournament)?.id ?? null;
   const registrationsQuery = useQuery({
     queryKey: tournamentQueryKeys.registrationsList(workspaceId ?? 0, tournamentId, registrationNodeId ?? 0),
     queryFn:

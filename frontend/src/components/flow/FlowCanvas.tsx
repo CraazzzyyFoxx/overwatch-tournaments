@@ -21,6 +21,7 @@ import "@xyflow/react/dist/style.css";
 import { FLOW_NODE_MIME, type FlowNodeData } from "@/lib/flow/flowCanvas";
 import type { FlowNodeKind } from "@/types/flow.types";
 
+import { FlowEdge } from "./FlowEdge";
 import { FlowNodeCard } from "./FlowNodeCard";
 
 /** xyflow chrome repainted in the app's shadcn tokens (as the rule builder does). */
@@ -38,6 +39,8 @@ const XY_THEME = {
 } as CSSProperties;
 
 const nodeTypes = { flowNode: FlowNodeCard };
+// `default` is the type of every edge without one: all of them get the remove button.
+const edgeTypes = { default: FlowEdge };
 
 /** The next props' elements, each keeping the xyflow-owned fields of the element it replaces (matched by id). */
 function carryOver<T extends { id: string }>(current: T[], next: T[], keys: (keyof T)[]): T[] {
@@ -55,6 +58,8 @@ type FlowCanvasProps = {
   onNodesChange?: OnNodesChange<Node<FlowNodeData>>;
   onEdgesChange?: OnEdgesChange;
   onConnect?: (connection: Connection) => void;
+  /** An edge's end dragged onto another handle. */
+  onReconnect?: (edgeId: string, connection: Connection) => void;
   onNodeClick?: (key: string) => void;
   /** A palette row dropped on the canvas, at a flow-space position. */
   onDropKind?: (kind: FlowNodeKind, position: { x: number; y: number }) => void;
@@ -69,6 +74,7 @@ function Canvas({
   onNodesChange,
   onEdgesChange,
   onConnect,
+  onReconnect,
   onNodeClick,
   onDropKind,
   heightClass
@@ -117,9 +123,13 @@ function Canvas({
         nodes={rfNodes}
         edges={rfEdges}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         onNodesChange={handleNodesChange}
         onEdgesChange={handleEdgesChange}
         onConnect={readOnly ? undefined : onConnect}
+        onReconnect={readOnly || !onReconnect ? undefined : (edge, connection) => onReconnect(edge.id, connection)}
+        edgesReconnectable={!readOnly && onReconnect !== undefined}
+        deleteKeyCode={readOnly ? null : ["Backspace", "Delete"]}
         onNodeClick={onNodeClick ? (_event, node) => onNodeClick(node.id) : undefined}
         onDragOver={readOnly ? undefined : onDragOver}
         onDrop={readOnly ? undefined : onDrop}

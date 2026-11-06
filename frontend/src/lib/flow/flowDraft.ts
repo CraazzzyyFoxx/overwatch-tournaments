@@ -189,6 +189,21 @@ export const connect = (
   };
 };
 
+/** Moves an edge to new endpoints: the old one is dropped (a saved one queued for deletion), a new one added. Unmoved, or refused by `connect`, the draft stays as is. */
+export const reconnect = (
+  draft: FlowDraft,
+  key: string,
+  c: { source: string; sourceHandle: string; target: string; targetHandle: string }
+): FlowDraft => {
+  const old = draft.edges.find((e) => e.key === key);
+  const unmoved =
+    old && old.source === c.source && old.sourcePort === c.sourceHandle && old.target === c.target && old.targetPort === c.targetHandle;
+  if (!old || unmoved) return draft;
+  const dropped = removeEdge(draft, key);
+  const next = connect(dropped, c);
+  return next === dropped ? draft : next;
+};
+
 /** Every stage node feeding `key`, reached through any chain of non-stage nodes (a stage's own upstream is already behind it). */
 function upstreamStages(draft: FlowDraft, key: string): DraftNode[] {
   const found = new Map<string, DraftNode>();

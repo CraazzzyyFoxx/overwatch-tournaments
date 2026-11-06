@@ -1,6 +1,6 @@
 "use client";
 
-import { X } from "lucide-react";
+import { Trash2, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { Badge } from "@/components/ui/badge";
@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { STAGE_TYPE_LABELS } from "@/lib/bracket/projection";
 import { isLifecycle } from "@/lib/flow/kinds";
-import type { DraftNode } from "@/lib/flow/flowDraft";
+import { canDelete, type DraftNode } from "@/lib/flow/flowDraft";
 import type { FlowRead } from "@/types/flow.types";
 import type { Tournament } from "@/types/tournament.types";
 
@@ -28,11 +28,13 @@ type Props = Readonly<{
   dirty: boolean;
   readOnly: boolean;
   onChange: (patch: Patch) => void;
+  /** Drops the node and its edges from the draft. */
+  onDelete: () => void;
   onClose: () => void;
 }>;
 
 /** The side panel of the selected node: its name, then the screens of its kind. */
-export function NodeInspector({ tournamentId, tournament, read, node, dirty, readOnly, onChange, onClose }: Props) {
+export function NodeInspector({ tournamentId, tournament, read, node, dirty, readOnly, onChange, onDelete, onClose }: Props) {
   const t = useTranslations("adminTournament.flow.inspector");
   const tKind = useTranslations("common.flow.kind");
   const tStatus = useTranslations("common.flow.status");
@@ -94,6 +96,19 @@ export function NodeInspector({ tournamentId, tournament, read, node, dirty, rea
             {(id) => <Input id={id} value={node.name} disabled={readOnly} onChange={(e) => rename(e.target.value)} />}
           </Field>
         </div>
+        {readOnly ? null : (
+          <Button
+            type="button"
+            variant="ghost-destructive"
+            size="icon-sm"
+            aria-label={t("delete")}
+            title={canDelete(node) ? t("delete") : t("deleteLocked")}
+            disabled={!canDelete(node)}
+            onClick={onDelete}
+          >
+            <Trash2 aria-hidden />
+          </Button>
+        )}
         <Button type="button" variant="ghost" size="icon-sm" aria-label={t("close")} onClick={onClose}>
           <X aria-hidden />
         </Button>

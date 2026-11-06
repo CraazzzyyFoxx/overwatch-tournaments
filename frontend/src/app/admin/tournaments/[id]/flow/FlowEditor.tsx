@@ -11,7 +11,17 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { useQueryParams } from "@/hooks/useQueryParams";
 import { toCanvas } from "@/lib/flow/flowCanvas";
 import { arrangeDraft } from "@/lib/flow/autoLayout";
-import { addNode, assignStageOrders, connect, deletedLifecycleNodes, removeEdge, removeNode, updateNode, canDelete } from "@/lib/flow/flowDraft";
+import {
+  addNode,
+  assignStageOrders,
+  canDelete,
+  connect,
+  deletedLifecycleNodes,
+  reconnect,
+  removeEdge,
+  removeNode,
+  updateNode
+} from "@/lib/flow/flowDraft";
 import { applyPreset, hasOnlyStarterNodes } from "@/lib/flow/presets";
 import { usePresetLabels } from "@/lib/flow/usePresetLabels";
 import type { FlowNodeKind, FlowStageCreate } from "@/types/flow.types";
@@ -124,6 +134,10 @@ export function FlowEditor({ tournamentId }: Readonly<{ tournamentId: number }>)
               if (sourceHandle && targetHandle)
                 apply((d) => assignStageOrders(connect(d, { source, sourceHandle, target, targetHandle }), savedOrders));
             }}
+            onReconnect={(edgeId, { source, sourceHandle, target, targetHandle }) => {
+              if (sourceHandle && targetHandle)
+                apply((d) => assignStageOrders(reconnect(d, edgeId, { source, sourceHandle, target, targetHandle }), savedOrders));
+            }}
             onNodesChange={(changes) =>
               apply((d) =>
                 changes.reduce((acc, change) => {
@@ -149,6 +163,10 @@ export function FlowEditor({ tournamentId }: Readonly<{ tournamentId: number }>)
             dirty={dirty}
             readOnly={readOnly}
             onChange={(patch) => apply((d) => updateNode(d, selected.key, patch))}
+            onDelete={() => {
+              apply((d) => removeNode(d, selected.key));
+              select(null);
+            }}
             onClose={() => select(null)}
           />
         ) : null}
