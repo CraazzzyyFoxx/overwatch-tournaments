@@ -180,6 +180,13 @@ class FlowService:
     async def get_node_read(self, session: AsyncSession, tournament_id: int, node_id: int) -> flow_schemas.FlowNodeRead:
         return next(n for n in (await self.get_read(session, tournament_id)).nodes if n.id == node_id)
 
+    async def node_tournament_id(self, session: AsyncSession, node_id: int) -> int:
+        """The tournament a node belongs to; 404 ``flow_node_not_found`` for a missing node."""
+        node = await session.get(FlowNode, node_id)
+        if node is None:
+            raise _not_found("flow_node_not_found", "Flow node not found")
+        return node.tournament_id
+
     async def get_admin_read(self, session: AsyncSession, tournament_id: int) -> flow_schemas.AdminFlowRead:
         read, nodes, edges = await self._load(session, tournament_id)
         return flow_schemas.AdminFlowRead(
