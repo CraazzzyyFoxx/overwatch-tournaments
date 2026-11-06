@@ -469,7 +469,7 @@ export async function seedBracket(
     captains?: TestUser[];
     bestOf?: number;
     players?: boolean;
-    tournament?: Partial<{ name: string; is_league: boolean; team_formation: string; is_hidden: boolean }>;
+    tournament?: Partial<{ name: string; team_formation: string; is_hidden: boolean }>;
     stage?: Record<string, unknown>;
   } = {}
 ): Promise<BracketSeed> {

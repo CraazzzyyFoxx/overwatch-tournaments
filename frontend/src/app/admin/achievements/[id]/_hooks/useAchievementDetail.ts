@@ -37,7 +37,7 @@ export function useAchievementDetailData({
 
   const { data: tournaments } = useQuery({
     queryKey: tournamentQueryKeys.list(),
-    queryFn: () => tournamentService.getAll(null)
+    queryFn: () => tournamentService.getAll()
   });
 
   // The overrides list is per game, and which game is the loaded rule's: its id key

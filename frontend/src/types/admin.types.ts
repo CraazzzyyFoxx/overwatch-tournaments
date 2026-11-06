@@ -295,7 +295,6 @@ export interface TournamentCreateInput {
   discipline: string;
   name: string;
   description?: string;
-  is_league: boolean;
   /** Public-URL slug; left blank, one is generated from `name`. */
   slug?: string;
   /** "Create tournament" creates it Unpublished; it is published from the hub. */
@@ -315,7 +314,6 @@ export interface TournamentUpdateInput {
   challonge_slug?: string | null;
   /** Renames the public-URL slug; the retired value keeps resolving via a redirect. */
   slug?: string | null;
-  is_league?: boolean;
   is_finished?: boolean;
   is_hidden?: boolean;
   team_formation?: string;

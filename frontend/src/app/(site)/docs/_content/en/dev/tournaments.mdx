@@ -53,11 +53,11 @@ The one exception to the allowlist rule is the **scrim container**: a hidden ser
 
 A stage is one competitive segment of a tournament. Its `stage_type` is `round_robin`, `single_elimination`, `double_elimination`, `swiss`, `ffa_league` or `individual_swiss`.
 
-A stage's state is the status of its flow node, exposed as `status` (and `node_id` to address it): `draft → ready → live → completed`. `POST /api/v1/admin/flow-nodes/{node_id}/transition` with `{"status": "…"}` is the only way to move it: `draft → ready` seats the inputs (tentative slots become teams, an unresolved tie at the qualification boundary is a 409), `ready → live` publishes the stage and generates its matches when it has none, `ready → draft` is refused with 409 once a match was reported. Several stages may be `live` at once. The standings worker moves `live → completed` when every match is finished and back to `live` when a correction reopens one.
+A stage's state is the status of its flow node, exposed as `status` (and `node_id` to address it): `draft → ready → live → completed`. `POST /api/v1/admin/flow-nodes/{node_id}/transition` with `{"status": "…"}` is the only way to move it: `draft → ready` seats the stage's inputs from its flow input (a tie at the qualification cut that no pin resolves is a 409 `boundary_tie`), `ready → live` publishes the stage and generates its matches when it has none, `ready → draft` is refused with 409 once a match was reported. Several stages may be `live` at once. The standings worker moves `live → completed` when every match is finished and back to `live` when a correction reopens one.
 
 `is_published` is what captains' actions gate on: it is set when the stage goes `live` and cleared by `ready → draft`. Every captain action and every pick-ban check requires it, so writes against an unpublished preview bracket are rejected with 409.
 
-A stage decomposes into **items** (`stage_item`) of type `group`, `bracket_upper`, `bracket_lower` or `single_bracket`, and each item declares **inputs** (`stage_item_input`), one per slot. An input is `final` (the team is known), `tentative` (the slot is owed by another stage's result — it carries `source_stage_item_id` and `source_position`) or `empty`. How many teams advance is `advance_count` on the stage, overridable per group.
+A stage decomposes into **items** (`stage_item`) of type `group`, `bracket_upper`, `bracket_lower` or `single_bracket`, and each item declares **inputs** (`stage_item_input`), one per slot. An input is `final` (the team is known; `source_result_id` is the flow result row it was seated from, `null` for a hand-seeded team) or `empty`. How many teams advance is `advance_count` on the stage, overridable per group.
 
 ### `ffa_league`
 
@@ -131,7 +131,7 @@ Recalculation is a background job: `POST /api/v1/admin/standings/recalculate/{to
 
 ## What to read and what to subscribe to
 
-The public reads are `/api/v1/tournaments`, `/api/v1/tournaments/{id}`, `/api/v1/tournaments/{id}/stages`, `/api/v1/tournaments/{id}/standings`, `/api/v1/encounters` and `/api/v1/encounters/{id}`. The tournament list filters on `workspace_id`, `status` and `is_league`.
+The public reads are `/api/v1/tournaments`, `/api/v1/tournaments/{id}`, `/api/v1/tournaments/{id}/stages`, `/api/v1/tournaments/{id}/standings`, `/api/v1/encounters` and `/api/v1/encounters/{id}`. The tournament list filters on `workspace_id` and `status`.
 
 The encounter list filters on `tournament_id`, `stage_id`, `stage_item_id`, `best_of`, `discipline`, `status`, `has_logs`, `is_final`, `is_upset`, `closeness_min`/`closeness_max` and `scope` (`all` or `my_team`), and searches with `query`:
 

@@ -19,7 +19,6 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 /** A stored status, or `registration`: tournaments whose registration node is open or in check-in (a derived phase). */
 export type StatusFilter = "all" | TournamentStatus | "registration";
-export type TypeFilter = "all" | "standard" | "league";
 export type SortBy = "latest" | "oldest" | "participants";
 export type ViewMode = "cards" | "list";
 
@@ -49,10 +48,6 @@ interface TournamentsFiltersProps {
   statusCounts: Record<Exclude<StatusFilter, "all">, number>;
   statusFilter: StatusFilter;
   onStatusChange: (value: StatusFilter) => void;
-  typeFilter: TypeFilter;
-  leagueCount: number;
-  standardCount: number;
-  onTypeChange: (value: TypeFilter) => void;
   search: string;
   onSearchChange: (value: string) => void;
   sortBy: SortBy;
@@ -66,10 +61,6 @@ const TournamentsFilters = ({
   statusCounts,
   statusFilter,
   onStatusChange,
-  typeFilter,
-  leagueCount,
-  standardCount,
-  onTypeChange,
   search,
   onSearchChange,
   sortBy,
@@ -78,8 +69,6 @@ const TournamentsFilters = ({
   onViewChange
 }: TournamentsFiltersProps) => {
   const t = useTranslations();
-  const toggleType = (value: Exclude<TypeFilter, "all">) =>
-    onTypeChange(typeFilter === value ? "all" : value);
 
   return (
     /* Phone first: one horizontally scrollable chip row (wrapping chips used to
@@ -89,9 +78,6 @@ const TournamentsFilters = ({
        row is under the touch minimum. */
     <Card className="flex flex-col gap-2.5 p-2.5 md:flex-row md:flex-wrap md:items-center md:gap-2">
       <div className="-mx-2.5 flex items-center gap-x-5 gap-y-2 overflow-x-auto px-2.5 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:mx-0 md:flex-wrap md:overflow-visible md:px-0 md:pb-0">
-        {/* Two groups, not one run of chips split by a hairline: status and
-            format answer different questions, and a divider between them
-            disappeared (or stranded itself) the moment the row wrapped. */}
         <div
           role="group"
           aria-label={t("common.status")}
@@ -127,29 +113,6 @@ const TournamentsFilters = ({
               </FilterChip>
             );
           })}
-        </div>
-
-        <div
-          role="group"
-          aria-label={t("tournamentsList.filters.typeLabel")}
-          className="flex shrink-0 items-center gap-2"
-        >
-          <FilterChip
-            active={typeFilter === "standard"}
-            count={standardCount}
-            onClick={() => toggleType("standard")}
-            className="max-md:h-10"
-          >
-            {t("tournamentsList.filters.standard")}
-          </FilterChip>
-          <FilterChip
-            active={typeFilter === "league"}
-            count={leagueCount}
-            onClick={() => toggleType("league")}
-            className="max-md:h-10"
-          >
-            {t("common.league")}
-          </FilterChip>
         </div>
       </div>
 

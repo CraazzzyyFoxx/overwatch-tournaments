@@ -86,7 +86,6 @@ const TOURNAMENT = {
   description: null,
   challonge_id: 991,
   challonge_slug: "owt-64",
-  is_league: false,
   is_finished: false,
   is_hidden: false,
   team_formation: "balancer",

@@ -85,7 +85,7 @@ export function TournamentsBrowser() {
   const tournamentsQuery = useQuery({
     // Its own entry: the pickers sharing `adminList` load no stages, and this table draws them.
     queryKey: [...tournamentQueryKeys.adminList(currentWorkspaceId, discipline ?? ALL_DISCIPLINES), "stages"],
-    queryFn: () => tournamentService.getAll(null, currentWorkspaceId, discipline, [
+    queryFn: () => tournamentService.getAll(currentWorkspaceId, discipline, [
         "stages",
         "participants_count",
         "flow_nodes"

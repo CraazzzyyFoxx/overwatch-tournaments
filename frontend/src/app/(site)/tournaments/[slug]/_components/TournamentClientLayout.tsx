@@ -269,12 +269,6 @@ export default function TournamentClientLayout({
                 </HoverPrefetchLink>
                 <span className="opacity-50">/</span>
                 <span>{formatDateRange(format, tournament.start_date, tournament.end_date)}</span>
-                {tournament.is_league ? (
-                  <>
-                    <span className="opacity-50">/</span>
-                    <span>{t("common.league")}</span>
-                  </>
-                ) : null}
               </HeroCoord>
             }
             title={

@@ -44,7 +44,7 @@ export function useEncounterReportScope({
 
   const tournamentsQuery = useQuery({
     queryKey: tournamentQueryKeys.list(),
-    queryFn: () => tournamentService.getAll(null),
+    queryFn: () => tournamentService.getAll(),
     enabled: workspaceId != null && tournamentId == null
   });
 

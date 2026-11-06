@@ -47,9 +47,7 @@ const FeaturedTournamentCard = ({
         <div className="flex items-start justify-between gap-3.5 px-5.5 pb-4 pt-5.5">
           <div>
             <span className="aqt-tnum text-label text-[color:var(--aqt-fg-faint)]">
-              {tournament.is_league ? t("common.league") : ""}
-              {tournament.team_formation &&
-                `${tournament.is_league ? " · " : ""}${t(`common.${tournament.team_formation as TeamFormation}`)}`}
+              {tournament.team_formation && t(`common.${tournament.team_formation as TeamFormation}`)}
             </span>
             {/* The card used to navigate from an `onClick` on the <article>, so
                 keyboard users could not reach it and AT never announced a target.

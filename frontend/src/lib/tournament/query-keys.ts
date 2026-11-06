@@ -170,17 +170,15 @@ export const tournamentQueryKeys = {
     workspaceId: KeyPart,
     discipline: KeyPart,
     status: KeyPart,
-    type: KeyPart,
     query: KeyPart,
     sort: KeyPart
-  ) => ["tournaments", "list", workspaceId, discipline, status, type, query, sort] as const,
+  ) => ["tournaments", "list", workspaceId, discipline, status, query, sort] as const,
   facets: (
     workspaceId: KeyPart,
     discipline: KeyPart,
     status: KeyPart,
-    type: KeyPart,
     query: KeyPart
-  ) => ["tournaments", "facets", workspaceId, discipline, status, type, query] as const,
+  ) => ["tournaments", "facets", workspaceId, discipline, status, query] as const,
   /** The workspace's own slice, or the platform-wide one under `"global"`. */
   byWorkspace: (workspaceScope: KeyPart) => ["tournaments", workspaceScope] as const,
   allActive: () => ["tournaments", "all-active"] as const,

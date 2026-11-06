@@ -486,7 +486,7 @@ describe("/admin/teams", () => {
 
     expect(getTeams).toHaveBeenCalledTimes(1);
     expect(getTeams).toHaveBeenCalledWith(expect.objectContaining({ workspaceId: 1 }));
-    expect(getTournaments.mock.calls).toEqual([[null, 1]]);
+    expect(getTournaments.mock.calls).toEqual([[1]]);
     expect(container.textContent).not.toContain("Other Community Squad");
   });
 });

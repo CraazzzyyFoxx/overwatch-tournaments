@@ -80,7 +80,6 @@ export function CreateTournamentDialog({
           workspace_id: workspaceId,
           discipline: game,
           name: name.trim(),
-          is_league: false,
           is_hidden: true,
           team_formation: teamFormation,
           start_date: startDate,
@@ -91,7 +90,6 @@ export function CreateTournamentDialog({
         workspace_id: workspaceId,
         discipline: game,
         challonge_slug: normalizeChallongeSlug(challongeSlug),
-        is_league: false,
         start_date: startDate,
         end_date: endDate
       });

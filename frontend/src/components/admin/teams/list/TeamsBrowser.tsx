@@ -79,7 +79,7 @@ export function TeamsBrowser({
 
   const tournamentsQuery = useQuery({
     queryKey: tournamentQueryKeys.adminList(workspaceId, ALL_DISCIPLINES),
-    queryFn: () => tournamentService.getAll(null, workspaceId)
+    queryFn: () => tournamentService.getAll(workspaceId)
   });
 
   const selectedTournamentId = parseTournamentQueryParam(searchParams?.get(TOURNAMENT_QUERY_PARAM) ?? null);

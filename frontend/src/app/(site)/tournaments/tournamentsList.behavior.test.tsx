@@ -116,7 +116,6 @@ function tournament(id: number, over: Partial<Tournament> = {}): Tournament {
     description: null,
     challonge_id: null,
     challonge_slug: null,
-    is_league: false,
     is_finished: false,
     is_hidden: false,
     team_formation: "balancer",
@@ -155,8 +154,6 @@ function facets(over: Partial<TournamentFacets> = {}): TournamentFacets {
       completed: 30,
       archived: 4
     } as Record<TournamentStatus, number>,
-    league: 6,
-    standard: 36,
     ...over
   };
 }
@@ -323,7 +320,6 @@ describe("tournaments list", () => {
         order: "desc",
         workspaceId: 1,
         status: undefined,
-        isLeague: undefined,
         query: undefined
       })
     ]);
@@ -418,8 +414,6 @@ describe("tournaments list", () => {
     expect(chipCount(en.common.all)).toBe("42");
     expect(chipCount(en.common.statusBadge.live)).toBe("2");
     expect(chipCount(en.common.statusBadge.completed)).toBe("30");
-    expect(chipCount(en.tournamentsList.filters.standard)).toBe("36");
-    expect(chipCount(en.common.league)).toBe("6");
   });
 
   it("reports live events from the unfiltered facet, not from the loaded rows", async () => {

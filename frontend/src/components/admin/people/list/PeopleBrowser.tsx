@@ -95,7 +95,7 @@ export function PeopleBrowser({ workspaceId }: Readonly<{ workspaceId: number | 
 
   const tournamentsQuery = useQuery({
     queryKey: tournamentQueryKeys.list(),
-    queryFn: () => tournamentService.getAll(null)
+    queryFn: () => tournamentService.getAll()
   });
 
   const defs = useMemo(

@@ -30,7 +30,7 @@ export function useAchievementCatalog({
   // The workspace's tournaments: nothing is read until the workspace is known.
   const { data: tournaments } = useQuery({
     queryKey: tournamentQueryKeys.adminList(workspaceId, ALL_DISCIPLINES),
-    queryFn: () => tournamentService.getAll(null, workspaceId),
+    queryFn: () => tournamentService.getAll(workspaceId),
     enabled: workspaceId !== null,
   });
 

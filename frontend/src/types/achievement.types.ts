@@ -37,7 +37,6 @@ export interface Achievement {
 interface AchievementTournamentLink {
   id: number;
   name: string;
-  is_league: boolean;
 }
 
 /** The match an achievement was earned in and every participant of it, in slot order (`score` is `result?.score`/`team_facts.score`). */

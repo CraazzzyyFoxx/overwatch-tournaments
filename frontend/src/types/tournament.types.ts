@@ -222,7 +222,6 @@ export interface Tournament {
   rules: string | null;
   challonge_id: number | null;
   challonge_slug: string | null;
-  is_league: boolean;
   is_finished: boolean;
   is_hidden: boolean;
   /** Free string on the backend; the known values are `TeamFormation`. */
@@ -303,8 +302,6 @@ export interface TournamentFacets {
   /** Tournaments with a registration node `open` or in `check_in`: the "Registration" chip. */
   registration_open: number;
   by_status: Record<TournamentStatus, number>;
-  league: number;
-  standard: number;
 }
 
 // ─── Shared pick-ban vocabulary ─────────────────────────────────────────────

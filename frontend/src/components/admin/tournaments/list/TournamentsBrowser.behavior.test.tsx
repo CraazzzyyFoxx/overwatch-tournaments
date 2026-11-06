@@ -39,7 +39,6 @@ function tournament(id: number, discipline: string, name: string): Tournament {
     id,
     name,
     discipline,
-    is_league: false,
     is_hidden: false,
     is_finished: false,
     // Live because a registration node is open: the table shows "Registration" (`displayStatus`).
@@ -95,7 +94,7 @@ const ENTITIES = ["stages", "participants_count", "flow_nodes"];
 
 beforeEach(() => {
   viewport.mobile = false;
-  getAll.mockReset().mockImplementation(async (_isLeague: unknown, workspace?: number | null, discipline?: string | null) => {
+  getAll.mockReset().mockImplementation(async (workspace?: number | null, discipline?: string | null) => {
     const results = (workspace === 1 ? POOL : [...POOL, ELSEWHERE]).filter(
       (entry) => !discipline || entry.discipline === discipline
     );
@@ -124,7 +123,7 @@ describe("admin tournaments list across games", () => {
     useWorkspaceStore.setState({ gameScope: "lol", lastGame: "lol" });
     await mount("/admin/tournaments");
 
-    expect(getAll).toHaveBeenCalledWith(null, 1, null, ENTITIES);
+    expect(getAll).toHaveBeenCalledWith(1, null, ENTITIES);
     expect(headers().some((text) => text.includes(en.common.discipline.column))).toBe(true);
     expect(rowText("Rift Cup")).toContain("League of Legends");
     expect(rowText("Spring Cup")).toContain("Overwatch");
@@ -133,7 +132,7 @@ describe("admin tournaments list across games", () => {
   it("asks the server for one game's tournaments under a game, without the column", async () => {
     await mount("/admin/tournaments?discipline=lol");
 
-    expect(getAll).toHaveBeenLastCalledWith(null, 1, "lol", ENTITIES);
+    expect(getAll).toHaveBeenLastCalledWith(1, "lol", ENTITIES);
     expect(headers().some((text) => text.includes(en.common.discipline.column))).toBe(false);
     expect(rowText("Rift Cup")).toBeDefined();
     expect(rowText("Spring Cup")).toBeUndefined();
@@ -150,7 +149,7 @@ describe("admin tournaments list across games", () => {
     await settle();
 
     expect(navigation.current()).toBe("/admin/tournaments?status=registration&discipline=lol");
-    expect(getAll).toHaveBeenLastCalledWith(null, 1, "lol", ENTITIES);
+    expect(getAll).toHaveBeenLastCalledWith(1, "lol", ENTITIES);
     expect(rowText("Spring Cup")).toBeUndefined();
   });
 
@@ -161,7 +160,7 @@ describe("admin tournaments list across games", () => {
     await settle();
 
     expect(navigation.current()).toBe("/admin/tournaments");
-    expect(getAll).toHaveBeenLastCalledWith(null, 1, null, ENTITIES);
+    expect(getAll).toHaveBeenLastCalledWith(1, null, ENTITIES);
     expect(rowText("Spring Cup")).toBeDefined();
   });
 
@@ -178,7 +177,7 @@ describe("admin tournaments list across games", () => {
     await settle();
 
     expect(navigation.current()).toBe("/admin/tournaments");
-    expect(getAll).toHaveBeenCalledWith(null, 1, null, ENTITIES);
+    expect(getAll).toHaveBeenCalledWith(1, null, ENTITIES);
     expect(rowText("Rift Cup")).toContain("League of Legends");
   });
 
@@ -212,7 +211,7 @@ describe("admin tournaments list across games", () => {
     await act(async () => useWorkspaceStore.setState({ currentWorkspaceId: 1 }));
     await settle();
 
-    expect(getAll.mock.calls).toEqual([[null, 1, null, ENTITIES]]);
+    expect(getAll.mock.calls).toEqual([[1, null, ENTITIES]]);
     expect(rowText("Spring Cup")).toBeDefined();
     expect(rowText("Other Community Cup")).toBeUndefined();
   });

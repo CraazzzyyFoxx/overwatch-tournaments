@@ -10,7 +10,6 @@ function form(partial: Partial<TournamentFormState> = {}): TournamentFormState {
     rules: "",
     challonge_slug: "owt-64",
     slug: "owt-64",
-    is_league: false,
     is_finished: false,
     is_hidden: false,
     start_date: "2026-04-18",
@@ -60,10 +59,10 @@ describe("getTournamentUpdatePayload", () => {
 
   it("combines every changed field, leaving untouched ones out entirely", () => {
     const initial = form();
-    const current = form({ is_league: true, is_hidden: true });
+    const current = form({ is_finished: true, is_hidden: true });
 
     expect(getTournamentUpdatePayload(current, initial)).toEqual({
-      is_league: true,
+      is_finished: true,
       is_hidden: true
     });
   });

@@ -19,7 +19,6 @@ import {
   SectionHead
 } from "@/components/site/open-layout";
 import { owtButton } from "@/components/site/owt-button";
-import { Badge } from "@/components/ui/badge";
 import { Eyebrow } from "@/components/ui/eyebrow";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getFormatter } from "@/lib/datetime/server";
@@ -357,7 +356,6 @@ async function ChronicleRow({
   last
 }: Readonly<{ row: FinishedTournament; last: boolean }>) {
   const [t, format] = await Promise.all([getTranslations("workspace"), getFormatter()]);
-  const tSite = await getTranslations("site");
   const { tournament, winner } = row;
   const start = new Date(tournament.start_date);
 
@@ -383,11 +381,6 @@ async function ChronicleRow({
           >
             {tournament.name}
           </Link>
-          {tournament.is_league ? (
-            <Badge tone="neutral" voice="label">
-              {tSite("league")}
-            </Badge>
-          ) : null}
         </div>
         {winner ? (
           <div className="mt-1.5 flex flex-wrap items-baseline gap-x-3.5 gap-y-1 text-caption text-[color:var(--aqt-fg-muted)]">

@@ -55,7 +55,6 @@ const TOURNAMENT = {
   workspace_id: 1,
   name: "OWT 64",
   slug: "owt-64",
-  is_league: false,
   is_finished: false,
   logs_official: false,
   team_formation: "balancer",

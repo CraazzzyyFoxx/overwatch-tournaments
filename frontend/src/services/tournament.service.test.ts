@@ -60,10 +60,10 @@ describe("tournamentService.getAll", () => {
   // Every row at per_page -1: the stages of each would be most of the payload,
   // and a picker draws none of them.
   it("loads no stages unless the caller asks for them", async () => {
-    await tournamentService.getAll(null, 7);
+    await tournamentService.getAll(7);
     expect(calls[0].options?.query?.entities).toEqual(["participants_count"]);
 
-    await tournamentService.getAll(null, 7, null, ["stages", "participants_count"]);
+    await tournamentService.getAll(7, null, ["stages", "participants_count"]);
     expect(calls[1].options?.query?.entities).toEqual(["stages", "participants_count"]);
   });
 });
@@ -142,11 +142,10 @@ describe("tournamentService.listTournaments", () => {
     calls.length = 0;
   });
 
-  it("sends paging, sort and the three filters the backend understands", async () => {
+  it("sends paging, sort and the filters the backend understands", async () => {
     await tournamentService.listTournaments({
       workspaceId: 7,
       status: "live",
-      isLeague: false,
       query: "spring",
       sort: "participants_count",
       order: "desc",
@@ -166,7 +165,6 @@ describe("tournamentService.listTournaments", () => {
             workspace_id: 7,
             entities: ["stages", "participants_count", "teams_count", "flow_nodes"],
             status: "live",
-            is_league: false,
             query: "spring",
           },
         },
@@ -174,22 +172,19 @@ describe("tournamentService.listTournaments", () => {
     ]);
   });
 
-  // `is_league: false` is a real filter and must survive; the absent ones must
-  // not travel at all. A present-but-null `status` would be a value the backend
-  // matches against, and an empty `query` would ILIKE '%%' on every row while
-  // making the request key differ from the unsearched one.
-  it("omits unset filters instead of sending nulls, and keeps is_league false", async () => {
+  // Absent filters must not travel at all. A present-but-null `status` would be a
+  // value the backend matches against, and an empty `query` would ILIKE '%%' on
+  // every row while making the request key differ from the unsearched one.
+  it("omits unset filters instead of sending nulls", async () => {
     await tournamentService.listTournaments({
       workspaceId: null,
       status: null,
-      isLeague: false,
       query: "   ",
     });
 
     const query = calls[0].options?.query as Record<string, unknown>;
     expect(query.status).toBeUndefined();
     expect(query.query).toBeUndefined();
-    expect(query.is_league).toBe(false);
     expect(query.page).toBe(1);
     expect(query.sort).toBe("start_date");
     expect(query.order).toBe("desc");
@@ -208,7 +203,6 @@ describe("tournamentService.getFacets", () => {
     await tournamentService.getFacets({
       workspaceId: 7,
       status: "announcement",
-      isLeague: true,
       query: " cup ",
     });
 
@@ -219,7 +213,6 @@ describe("tournamentService.getFacets", () => {
           query: {
             workspace_id: 7,
             status: "announcement",
-            is_league: true,
             query: "cup",
           },
         },

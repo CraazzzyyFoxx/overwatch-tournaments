@@ -78,7 +78,7 @@ const HeroLeaderboardContent = ({ scope, initial }: Readonly<{ scope: StatsScope
   const pickerWorkspaceId = scope === "all" ? "all" : currentWorkspaceId;
   const tournamentsQuery = useQuery({
     queryKey: tournamentQueryKeys.selectOptions(pickerWorkspaceId),
-    queryFn: () => tournamentService.getAll(null, pickerWorkspaceId),
+    queryFn: () => tournamentService.getAll(pickerWorkspaceId),
     staleTime: 5 * 60 * 1000,
   });
 

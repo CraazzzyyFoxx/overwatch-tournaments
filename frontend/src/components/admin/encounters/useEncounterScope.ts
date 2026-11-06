@@ -32,7 +32,7 @@ export function useEncounterScope({
 }>) {
   const tournamentsQuery = useQuery({
     queryKey: tournamentQueryKeys.adminList(workspaceId, ALL_DISCIPLINES),
-    queryFn: () => tournamentService.getAll(null, workspaceId),
+    queryFn: () => tournamentService.getAll(workspaceId),
     enabled: tournamentId == null && workspaceId != null
   });
 

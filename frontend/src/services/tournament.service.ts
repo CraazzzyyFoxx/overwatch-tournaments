@@ -36,7 +36,6 @@ type GetStandingsOptions = {
 /** The filter dimensions the list and its facet counts share. `discipline` null/absent is every game. */
 type TournamentFilterParams = {
   status?: TournamentStatus | null;
-  isLeague?: boolean | null;
   query?: string;
   discipline?: string | null;
 };
@@ -49,7 +48,6 @@ type TournamentFilterParams = {
 function tournamentFilterQuery(params: TournamentFilterParams): Record<string, unknown> {
   return {
     status: params.status ?? undefined,
-    is_league: params.isLeague ?? undefined,
     query: params.query?.trim() ? params.query.trim() : undefined,
     discipline: params.discipline ?? undefined
   };
@@ -76,14 +74,12 @@ export default class tournamentService {
    * lists every game's. Pickers need no stages: only a caller that draws them asks for them.
    */
   static async getAll(
-    isLeague: boolean | null = null,
     workspaceId?: number | "all" | null,
     discipline?: string | null,
     entities: TournamentListEntity[] = ["participants_count"]
   ): Promise<PaginatedResponse<Tournament>> {
     return apiFetch(`/api/v1/tournaments`, {
       query: {
-        is_league: isLeague,
         workspace_id: workspaceId,
         discipline,
         page: 1,

@@ -23,7 +23,7 @@ export type Tournament = { id: number; slug: string; name: string; status: strin
 export async function createTournament(
   api: Api,
   workspaceId: number,
-  overrides: Partial<{ discipline: Discipline; name: string; team_formation: string; is_hidden: boolean; is_league: boolean }> = {}
+  overrides: Partial<{ discipline: Discipline; name: string; team_formation: string; is_hidden: boolean }> = {}
 ): Promise<Tournament> {
   return api.post<Tournament>(
     "/api/v1/admin/tournaments",

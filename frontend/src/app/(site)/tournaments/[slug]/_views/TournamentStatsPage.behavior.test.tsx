@@ -145,7 +145,6 @@ function makeTournament(): Tournament {
     description: null,
     challonge_id: null,
     challonge_slug: null,
-    is_league: false,
     is_finished: true,
     is_hidden: false,
     team_formation: "balancer",

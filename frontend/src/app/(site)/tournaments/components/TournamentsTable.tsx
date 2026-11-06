@@ -75,12 +75,6 @@ const TournamentRow = ({
                 <GameLabel code={tournament.discipline} games={games} />
               </>
             ) : null}
-            {tournament.is_league && (
-              <>
-                <span className={SEP}>·</span>
-                {t("common.league")}
-              </>
-            )}
             {tournament.team_formation && (
               <>
                 <span className={SEP}>·</span>

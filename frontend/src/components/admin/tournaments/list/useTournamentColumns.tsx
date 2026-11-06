@@ -15,17 +15,9 @@ import { displayStatus } from "@/lib/tournament/status";
 import type { DisciplineDescriptor } from "@/types/discipline.types";
 import type { Tournament } from "@/types/tournament.types";
 
-/** The tournament's name, a league marked as one. */
+/** The tournament's name. */
 function TournamentName({ tournament }: Readonly<{ tournament: Tournament }>) {
-  const t = useTranslations("adminTournaments.list");
-  return (
-    <span className="font-medium">
-      {tournament.name}
-      {tournament.is_league ? (
-        <span className="ml-2 text-caption font-normal text-muted-foreground">{t("type.league")}</span>
-      ) : null}
-    </span>
-  );
+  return <span className="font-medium">{tournament.name}</span>;
 }
 
 /**

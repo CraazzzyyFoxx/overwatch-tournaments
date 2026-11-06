@@ -231,7 +231,6 @@ export function TournamentHubShell({
           <span key="dates" className="tabular-nums">
             {formatDateRange(format, tournament.start_date, tournament.end_date)}
           </span>,
-          tournament.is_league ? t("league") : null,
           typeof teamsCount === "number" ? (
             <span key="teams" className="tabular-nums">
               {t("teamsMetric", { count: teamsCount })}

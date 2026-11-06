@@ -27,7 +27,6 @@ import FeaturedLive from "./FeaturedLive";
 import TournamentsFilters, {
   type SortBy,
   type StatusFilter,
-  type TypeFilter,
   type ViewMode
 } from "./TournamentsFilters";
 import TournamentsGrid from "./TournamentsGrid";
@@ -38,7 +37,6 @@ import { groupLiveByTournament } from "./tournaments-helpers";
 const PER_PAGE = 12;
 
 const SORT_BY: readonly SortBy[] = ["latest", "oldest", "participants"];
-const TYPE_FILTERS: readonly TypeFilter[] = ["all", "standard", "league"];
 const VIEWS: readonly ViewMode[] = ["cards", "list"];
 
 /**
@@ -106,11 +104,6 @@ const TournamentsClient = ({
       ? (statusParam as StatusFilter)
       : "all";
 
-  const typeParam = searchParams?.get("type");
-  const typeFilter: TypeFilter = TYPE_FILTERS.includes(typeParam as TypeFilter)
-    ? (typeParam as TypeFilter)
-    : "all";
-
   const viewParam = searchParams?.get("view");
   const view: ViewMode = VIEWS.includes(viewParam as ViewMode) ? (viewParam as ViewMode) : "cards";
 
@@ -135,16 +128,15 @@ const TournamentsClient = ({
     // every unrelated filter change and fight the writer that caused it.
   }, [query]);
 
-  const hasActiveFilters = statusFilter !== "all" || typeFilter !== "all" || query !== "";
+  const hasActiveFilters = statusFilter !== "all" || query !== "";
   const clearFilters = () => {
     setSearchInput("");
-    setParams({ status: null, type: null, q: null });
+    setParams({ status: null, q: null });
   };
 
   const filterQuery = {
     workspaceId,
     status: statusFilter === "all" || statusFilter === "registration" ? undefined : statusFilter,
-    isLeague: typeFilter === "all" ? undefined : typeFilter === "league",
     query: query || undefined,
     discipline: disciplineFilter
   };
@@ -161,7 +153,7 @@ const TournamentsClient = ({
   } = useInfiniteQuery({
     // Every filter is in the key: a narrowed filter is a different list, so the
     // pages already accumulated for the old one must not carry over.
-    queryKey: tournamentQueryKeys.listPage(workspaceId, disciplineKey, statusFilter, typeFilter, query, sortBy),
+    queryKey: tournamentQueryKeys.listPage(workspaceId, disciplineKey, statusFilter, query, sortBy),
     queryFn: ({ pageParam, signal }) =>
       tournamentService.listTournaments(
         {
@@ -186,7 +178,7 @@ const TournamentsClient = ({
   });
 
   const { data: facets } = useQuery({
-    queryKey: tournamentQueryKeys.facets(workspaceId, disciplineKey, statusFilter, typeFilter, query),
+    queryKey: tournamentQueryKeys.facets(workspaceId, disciplineKey, statusFilter, query),
     queryFn: ({ signal }) => tournamentService.getFacets(filterQuery, { signal }),
     enabled: ready
   });
@@ -265,10 +257,6 @@ const TournamentsClient = ({
         statusCounts={{ ...(facets?.by_status ?? NO_STATUS_COUNTS), registration: facets?.registration_open ?? 0 }}
         statusFilter={statusFilter}
         onStatusChange={(value) => setParams({ status: value === "all" ? null : value })}
-        typeFilter={typeFilter}
-        leagueCount={facets?.league ?? 0}
-        standardCount={facets?.standard ?? 0}
-        onTypeChange={(value) => setParams({ type: value === "all" ? null : value })}
         search={searchInput}
         onSearchChange={setSearchInput}
         sortBy={sortBy}

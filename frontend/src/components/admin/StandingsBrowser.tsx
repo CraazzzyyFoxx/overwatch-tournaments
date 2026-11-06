@@ -83,7 +83,7 @@ export function StandingsBrowser({
 
   const tournamentsQuery = useQuery({
     queryKey: tournamentQueryKeys.list(),
-    queryFn: () => tournamentService.getAll(null),
+    queryFn: () => tournamentService.getAll(),
     enabled: tournamentId == null
   });
 

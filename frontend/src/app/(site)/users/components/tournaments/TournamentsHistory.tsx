@@ -7,14 +7,6 @@ import type { UserTournamentEntry, UserTournamentList } from "@/types/user.types
 import userService from "@/services/user.service";
 import { usePrefersReducedMotion } from "@/hooks/usePrefersReducedMotion";
 import { userQueryKeys } from "@/lib/users/query-keys";
-import {
-  type TournamentGroup,
-  groupEntries,
-  groupRepId,
-  groupTournamentIds,
-  groupTournamentsByLeague,
-  isLeagueGroup
-} from "@/app/(site)/users/components/tournaments/tournaments-history.helpers";
 import TournamentsPlacementTimeline from "@/app/(site)/users/components/tournaments/TournamentsPlacementTimeline";
 import TournamentList from "@/app/(site)/users/components/tournaments/TournamentList";
 import TournamentDossier from "@/app/(site)/users/components/tournaments/TournamentDossier";
@@ -33,60 +25,46 @@ const TournamentsHistory = ({ tournaments, selfUserId, tournamentsWon, showGames
   const dossierRef = useRef<HTMLDivElement>(null);
   const reduceMotion = usePrefersReducedMotion();
 
-  const groups = useMemo(() => groupTournamentsByLeague(tournaments.results), [tournaments.results]);
+  const events = tournaments.results;
 
-  // Default selection: the deep-linked event (?selectedTournamentId=) if it maps
-  // to a group, otherwise the most-recent event.
-  const initialKey = useMemo(() => {
+  // Default selection: the deep-linked event (?selectedTournamentId=) if it is in the list, otherwise the
+  // most-recent event.
+  const initialId = useMemo(() => {
     const raw = searchParams?.get("selectedTournamentId");
     const id = raw ? Number(raw) : NaN;
-    if (Number.isFinite(id)) {
-      const match = groups.find((group) => groupTournamentIds(group).includes(id));
-      if (match) return groupRepId(match);
-    }
+    if (Number.isFinite(id) && events.some((t) => t.id === id)) return id;
     // The API returns events newest-first (by start date).
-    return groups.length ? groupRepId(groups[0]) : null;
+    return events.length ? events[0].id : null;
     // Deep-link is read from the initial searchParams snapshot; selection is
     // client state thereafter (URL is kept in sync via replaceState on select).
-  }, [groups, searchParams]);
+  }, [events, searchParams]);
 
-  const [selectedKey, setSelectedKey] = useState<number | null>(initialKey);
+  const [selectedId, setSelectedId] = useState<number | null>(initialId);
 
-  // Reconcile at render time (no effect) if the selection no longer maps to a
-  // group — e.g. the tournaments prop changed.
-  const validKeys = useMemo(() => groups.map(groupRepId), [groups]);
-  const effectiveKey = selectedKey != null && validKeys.includes(selectedKey) ? selectedKey : initialKey;
-  const selectedGroup = useMemo(
-    () => groups.find((group) => groupRepId(group) === effectiveKey) ?? null,
-    [groups, effectiveKey]
-  );
-  const selectedIds = useMemo(() => (selectedGroup ? groupTournamentIds(selectedGroup) : []), [selectedGroup]);
+  // Reconcile at render time (no effect) if the selection is no longer in the list — e.g. the tournaments prop
+  // changed.
+  const effectiveId = selectedId != null && events.some((t) => t.id === selectedId) ? selectedId : initialId;
+  const selected = useMemo(() => events.find((t) => t.id === effectiveId) ?? null, [events, effectiveId]);
 
-  // Lazy dossier detail: the list endpoint never carries encounters — read them per tournament in the selected
-  // group only, cached per tournament so re-selecting an event reads nothing, and merge them in (with each entry's
-  // grid from the list) before handing the group to the dossier. A failed read leaves that tournament's run empty,
-  // without a toast.
-  const selectedEntries = selectedGroup ? groupEntries(selectedGroup) : [];
-  const encounterQueries = useQueries({
-    queries: selectedEntries.map((t) => ({
+  // Lazy dossier detail: the list endpoint never carries encounters — read them for the selected tournament only,
+  // cached per tournament so re-selecting an event reads nothing, and merge them in (with its grid from the list)
+  // before handing it to the dossier. A failed read leaves the run empty, without a toast.
+  const [encounters] = useQueries({
+    queries: (selected ? [selected] : []).map((t) => ({
       queryKey: userQueryKeys.tournamentEncounters(selfUserId, t.workspace_id, t.discipline, t.id),
       queryFn: () => userService.getUserTournamentEncounters(selfUserId, t.id),
       staleTime: 5 * 60 * 1000,
       meta: { suppressErrorToast: true }
     }))
   });
-  const loadingEncounters = encounterQueries.some((query) => query.isPending);
+  const loadingEncounters = encounters?.isPending ?? false;
 
-  let detailedGroup: TournamentGroup<UserTournamentEntry> | null = null;
-  if (selectedGroup) {
-    const detailed = selectedEntries.map((t, index) => ({
-      ...t,
-      division_grid_version:
-        tournaments.division_grid_versions.find((version) => version.id === t.division_grid_version_id) ?? null,
-      encounters: encounterQueries[index]?.data ?? []
-    }));
-    detailedGroup = isLeagueGroup(selectedGroup) ? detailed : detailed[0];
-  }
+  const detailed: UserTournamentEntry | null = selected && {
+    ...selected,
+    division_grid_version:
+      tournaments.division_grid_versions.find((version) => version.id === selected.division_grid_version_id) ?? null,
+    encounters: encounters?.data ?? []
+  };
 
   const syncUrl = (id: number) => {
     if (typeof window === "undefined") return;
@@ -102,11 +80,9 @@ const TournamentsHistory = ({ tournaments, selfUserId, tournamentsWon, showGames
   };
 
   const selectEvent = (tournamentId: number) => {
-    const match = groups.find((group) => groupTournamentIds(group).includes(tournamentId));
-    if (!match) return;
-    const key = groupRepId(match);
-    setSelectedKey(key);
-    syncUrl(key);
+    if (!events.some((t) => t.id === tournamentId)) return;
+    setSelectedId(tournamentId);
+    syncUrl(tournamentId);
     scrollToDossier();
   };
 
@@ -115,20 +91,20 @@ const TournamentsHistory = ({ tournaments, selfUserId, tournamentsWon, showGames
       <TournamentsPlacementTimeline
         tournaments={tournaments.results}
         tournamentsWon={tournamentsWon}
-        selectedIds={selectedIds}
+        selectedIds={selected ? [selected.id] : []}
         onSelect={selectEvent}
       />
       <div className="grid grid-cols-1 gap-3.5 min-[1081px]:grid-cols-[minmax(0,1fr)_404px]">
         <div ref={dossierRef} className="order-2 min-w-0 scroll-mt-4 min-[1081px]:order-1">
           <TournamentDossier
-            group={detailedGroup}
+            tournament={detailed}
             selfUserId={selfUserId}
             loadingEncounters={loadingEncounters}
           />
         </div>
         {/* Desktop: the list is taken out of flow so the row height is the dossier's and the list scrolls inside it. */}
         <div className="order-1 min-[1081px]:relative min-[1081px]:order-2 min-[1081px]:min-h-[520px]">
-          <TournamentList groups={groups} selectedKey={effectiveKey} onSelect={selectEvent} showGames={showGames} />
+          <TournamentList tournaments={events} selectedId={effectiveId} onSelect={selectEvent} showGames={showGames} />
         </div>
       </div>
     </>

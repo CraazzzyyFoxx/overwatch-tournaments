@@ -76,7 +76,7 @@ export function AttachLogDialog({
   const tournamentId = tournamentValue === undefined ? undefined : Number(tournamentValue);
   const tournamentsQuery = useQuery({
     queryKey: tournamentQueryKeys.byWorkspace(workspaceId ?? "global"),
-    queryFn: () => tournamentService.getAll(null, workspaceId),
+    queryFn: () => tournamentService.getAll(workspaceId),
     enabled: pickTournament
   });
   const encountersQuery = useQuery({

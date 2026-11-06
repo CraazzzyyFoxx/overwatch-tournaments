@@ -53,11 +53,11 @@
 
 Стадия — это один соревновательный отрезок турнира. Тип задаётся полем `stage_type`: `round_robin`, `single_elimination`, `double_elimination`, `swiss`, `ffa_league`, `individual_swiss`.
 
-Состояние стадии — статус её узла потока, он отдаётся как `status` (и `node_id`, чтобы к нему обратиться): `draft → ready → live → completed`. Двигает его только `POST /api/v1/admin/flow-nodes/{node_id}/transition` с телом `{"status": "…"}`: `draft → ready` рассаживает входы (отложенные слоты становятся командами, нерешённая ничья на границе квалификации — 409), `ready → live` публикует стадию и генерирует её встречи, если их нет, `ready → draft` отклоняется с 409, как только по какому-то матчу сообщили результат. Одновременно может идти несколько стадий `live`. Воркер таблиц переводит `live → completed`, когда все матчи сыграны, и обратно в `live`, если правка результата вновь открыла матч.
+Состояние стадии — статус её узла потока, он отдаётся как `status` (и `node_id`, чтобы к нему обратиться): `draft → ready → live → completed`. Двигает его только `POST /api/v1/admin/flow-nodes/{node_id}/transition` с телом `{"status": "…"}`: `draft → ready` рассаживает входы стадии из её входа в потоке (ничья на границе квалификации, которую не разрешил ни один пин, — 409 `boundary_tie`), `ready → live` публикует стадию и генерирует её встречи, если их нет, `ready → draft` отклоняется с 409, как только по какому-то матчу сообщили результат. Одновременно может идти несколько стадий `live`. Воркер таблиц переводит `live → completed`, когда все матчи сыграны, и обратно в `live`, если правка результата вновь открыла матч.
 
 `is_published` — то, по чему проверяются действия капитанов: он выставляется, когда стадия становится `live`, и сбрасывается переходом `ready → draft`. Все действия капитанов и pick/ban требуют его, поэтому записи в непубликованную предпросмотровую сетку отклоняются с 409.
 
-Стадия раскладывается на **элементы** (`stage_item`) с типом `group`, `bracket_upper`, `bracket_lower` или `single_bracket`, а у элемента есть **входы** (`stage_item_input`) — по одному на слот. Вход бывает `final` (команда известна), `tentative` (место занято результатом другой стадии — есть `source_stage_item_id` и `source_position`) или `empty`. Сколько команд проходит дальше, задаёт `advance_count` на стадии, с возможностью переопределить его на отдельной группе.
+Стадия раскладывается на **элементы** (`stage_item`) с типом `group`, `bracket_upper`, `bracket_lower` или `single_bracket`, а у элемента есть **входы** (`stage_item_input`) — по одному на слот. Вход бывает `final` (команда известна; `source_result_id` — строка результата потока, из которой её посадили, у посеянной вручную — `null`) или `empty`. Сколько команд проходит дальше, задаёт `advance_count` на стадии, с возможностью переопределить его на отдельной группе.
 
 ### `ffa_league`
 
@@ -131,7 +131,7 @@ Host: owt.craazzzyyfoxx.me
 
 ## Что читать и на что подписываться
 
-Публичные чтения — `/api/v1/tournaments`, `/api/v1/tournaments/{id}`, `/api/v1/tournaments/{id}/stages`, `/api/v1/tournaments/{id}/standings`, `/api/v1/encounters`, `/api/v1/encounters/{id}`. Список турниров фильтруется по `workspace_id`, `status` и `is_league`.
+Публичные чтения — `/api/v1/tournaments`, `/api/v1/tournaments/{id}`, `/api/v1/tournaments/{id}/stages`, `/api/v1/tournaments/{id}/standings`, `/api/v1/encounters`, `/api/v1/encounters/{id}`. Список турниров фильтруется по `workspace_id` и `status`.
 
 Список встреч фильтруется по `tournament_id`, `stage_id`, `stage_item_id`, `best_of`, `discipline`, `status`, `has_logs`, `is_final`, `is_upset`, `closeness_min`/`closeness_max` и `scope` (`all` или `my_team`), а ищет по `query`:
 

@@ -116,7 +116,6 @@ describe("CreateTournamentDialog", () => {
       workspace_id: 7,
       discipline: "lol",
       name: "Autumn Cup",
-      is_league: false,
       is_hidden: true,
       team_formation: "balancer",
       start_date: "2026-11-01",

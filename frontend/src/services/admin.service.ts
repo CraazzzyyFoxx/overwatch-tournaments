@@ -282,7 +282,6 @@ class AdminService {
     workspace_id: number;
     discipline: string;
     challonge_slug: string;
-    is_league: boolean;
     start_date: string;
     end_date: string;
     division_grid_version_id?: number | null;

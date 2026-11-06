@@ -107,12 +107,6 @@ const TournamentCard = ({
               <GameLabel code={tournament.discipline} games={games} />
             </>
           ) : null}
-          {tournament.is_league && (
-            <>
-              <span aria-hidden className="text-[color:var(--aqt-fg-dim)]">·</span>
-              <span>{t("common.league")}</span>
-            </>
-          )}
           {tournament.team_formation && (
             <>
               <span aria-hidden className="text-[color:var(--aqt-fg-dim)]">·</span>

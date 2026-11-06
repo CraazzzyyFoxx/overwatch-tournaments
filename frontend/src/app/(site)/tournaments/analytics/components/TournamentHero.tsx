@@ -70,7 +70,7 @@ export default function TournamentHero({ tournament, parts, picker }: Readonly<T
   const statusLabel = t(`common.statusBadge.${displayStatus(tournament)}`);
   const stage = stageProgress(tournament, displayStatus(tournament), t);
   const facts = [
-    tournament.is_league ? t("analytics.hero.formatLeague") : t("analytics.hero.formatCup"),
+    t("analytics.hero.formatCup"),
     tournament.team_formation ? t(`common.${tournament.team_formation as TeamFormation}`) : null,
     parts.counts
       ? t("tournamentDetail.header.teamsAndPlayers", {

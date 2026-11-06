@@ -282,7 +282,6 @@
     "roleVerificationFailed": "Failed to verify role",
     "tournamentNotFound": "Tournament not found.",
     "tournaments": "Tournaments",
-    "league": "League",
     "statusBadge": {
       "announcement": "Announced",
       "registration": "Registration",
@@ -2176,7 +2175,6 @@
       }
     },
     "hero": {
-      "formatLeague": "League",
       "formatCup": "Cup"
     },
     "community": {
@@ -2338,9 +2336,7 @@
       "teamsBalancedLabel": "Teams balanced"
     },
     "filters": {
-      "standard": "Standard",
       "searchPlaceholder": "Search tournaments",
-      "typeLabel": "Type",
       "sort": {
         "newest": "Newest first",
         "oldest": "Oldest first",
@@ -2966,8 +2962,6 @@
         "is_captain": "Captained the team",
         "is_newcomer": "First tournament for the player",
         "is_newcomer_count": "Tournaments entered as a newcomer: {amount}",
-        "tournament_type_league": "League tournament",
-        "tournament_type_regular": "Regular tournament, not a league",
         "tournament_type_any": "Tournament of any type",
         "tournament_count": "Tournaments entered: {amount}",
         "draft_pick": "Overall pick number in the live draft: {amount}",
@@ -3009,8 +3003,6 @@
         "lostInRound": "lost in round {amount}",
         "groupsIncluded": "group stage standings included",
         "groupsOnly": "group stage only",
-        "leaguesOnly": "league tournaments only",
-        "leaguesIncluded": "leagues included",
         "startedAfter": "started after {date}",
         "startedBefore": "started before {date}",
         "autopick": "picked automatically",
@@ -4475,7 +4467,7 @@
       "eyebrowRoot": "Tournaments",
       "eyebrowCurrent": "Encounters",
       "title": "Encounters",
-      "lede": "Every encounter of every tournament and league: results, closeness and game logs.",
+      "lede": "Every encounter of every tournament: results, closeness and game logs.",
       "completed": "Completed",
       "recent": "+{count} in 7 days",
       "withLogs": "With logs",
@@ -6202,8 +6194,6 @@
       "title": "Tournament history",
       "clickToExpand": "click to expand",
       "mapNumber": "Map {n}",
-      "leagueBadge": "League",
-      "divisionsCount": "{count, plural, one {# division} other {# divisions}}",
       "bestPlacement": "· best #{n}",
       "teamName": "Team {name}",
       "roster": {
@@ -6229,8 +6219,7 @@
         "filter": {
           "all": "All",
           "titles": "Titles",
-          "podium": "Podium",
-          "leagues": "Leagues"
+          "podium": "Podium"
         }
       },
       "dossier": {
@@ -6238,7 +6227,6 @@
         "run": "The run",
         "noRun": "No matches recorded for this event.",
         "mapResults": "Maps: {won}W {lost}L",
-        "divisions": "Divisions",
         "summary": {
           "placement": "Placement",
           "record": "Record",
@@ -9897,7 +9885,6 @@
       "label": "Trusted community",
       "title": "Trusted community — verified by the platform team"
     },
-    "league": "League",
     "entry": {
       "solo": "Solo entry",
       "team": "Team entry"
@@ -9952,7 +9939,6 @@
       "cancelTeam": "Cancel team assignment edit",
       "removeSlot": "Remove slot {seed} of {name}",
       "teamForSlot": "Team for slot {seed} of {name}",
-      "overrideTeam": "Override team in slot {seed} of {name}",
       "changeTeam": "Change team in slot {seed} of {name}",
       "teamToAdd": "Team to add to {name}",
       "empty": "No teams assigned yet. Pick a team below to fill the first slot.",
@@ -9966,8 +9952,7 @@
       "adding": "Adding…",
       "group": "Group {number}",
       "bracket": "Bracket",
-      "slotCount": "{count, plural, one {# slot} other {# slots}}",
-      "tentative": "Tentative"
+      "slotCount": "{count, plural, one {# slot} other {# slots}}"
     },
     "ffa": {
       "preset": "Scoring preset",
@@ -10015,14 +10000,12 @@
       "revertError": "Could not revert this stage to draft",
       "generateError": "Could not generate the bracket",
       "applyBestOfError": "Could not apply best-of to existing matches",
-      "autoWireError": "Could not auto-wire this stage from groups",
       "transitionError": "Could not move this stage",
       "seedError": "Could not seed teams into this stage",
       "deleteItemError": "Could not delete this structure item",
       "removeSlotError": "Could not remove this team slot",
       "reverted": "Stage reverted to draft",
       "updatedBestOf": "Updated best-of on {count, plural, one {# match} other {# matches}}",
-      "autoWired": "Auto-wired playoff seeds from the group stage",
       "published": "Published to captains",
       "notVisible": "Not visible to captains",
       "generate": "Generate bracket",
@@ -10033,7 +10016,6 @@
       "start": "Start",
       "complete": "Complete",
       "reopen": "Reopen",
-      "autoWire": "Auto-wire from groups",
       "seed": "Seed by SR",
       "merge": "Merge groups",
       "revert": "Back to draft",
@@ -10191,16 +10173,10 @@
       "grandFinal": "Grand final",
       "noReset": "No reset",
       "withReset": "With reset",
-      "wireError": "Could not wire this stage from groups",
-      "wireSuccess": "Wired playoff seeds from the selected stage",
       "advanceError": "Could not change how many teams advance",
       "upperError": "Could not change this group's upper-bracket share",
-      "wireFrom": "Wire seeds from",
-      "groupStage": "Group stage",
-      "wire": "Wire",
-      "wireHelp": "Which group stage feeds this bracket. Required when two divisions run in parallel.",
       "bracketSeeds": "Bracket seeds",
-      "seedHelp": "Who is seed 1 in the generated bracket. Slot order keeps standings wiring.",
+      "seedHelp": "Who is seed 1 in the generated bracket. Slot order keeps the seats as seeded; the others order the stage's input.",
       "advanceLabel": "Teams advancing to playoff (per group)",
       "advancePlaceholder": "Auto (derive from bracket)",
       "advanceHelp": "Top N from each group advance. Leave empty to auto-derive from the bracket wiring.",
@@ -10298,9 +10274,12 @@
       },
       "seedRanking": {
         "slot": "Slot order (manual / standings)",
+        "source": "Input order",
         "avg_sr": "Highest team avg SR first",
         "total_sr": "Highest team total SR first",
-        "random": "Random (stable per stage)"
+        "random": "Random (stable per stage)",
+        "cross": "Cross groups (A1–B2)",
+        "snake": "Snake groups (A1, B1, A2, B2)"
       },
       "rankingPresets": {
         "default": "System default",
@@ -10314,8 +10293,7 @@
         "battle_royale": "Battle royale"
       },
       "divisionFallback": "Division {number}",
-      "emptySlot": "Empty slot",
-      "winnerOf": "Winner of {groupName} #{position}"
+      "emptySlot": "Empty slot"
     },
     "bestOfSections": {
       "upper": "Upper bracket",
@@ -10385,7 +10363,6 @@
       "notFoundDescription": "This tournament does not exist or was deleted.",
       "unauthorized": "Unauthorized",
       "unauthorizedDescription": "You do not have permission to access this tournament workspace.",
-      "league": "League",
       "teamsMetric": "{count, plural, one {# team} other {# teams}}",
       "encountersMetric": "{count, plural, one {# encounter} other {# encounters}}",
       "sections": "Tournament sections",
@@ -10743,7 +10720,6 @@
     },
     "scoring": {
       "results": "Results",
-      "league": "Treat as league season",
       "finished": "Mark tournament as finished",
       "logsOfficial": "Accept match logs as official results",
       "logsOfficialDescription": "An uploaded log decides a game that has no accepted result yet, from the placements it shows. Accepted, confirmed or admin results are never overwritten; reopen a game to correct it."
@@ -10954,9 +10930,6 @@
         "finished": "Finished",
         "live": "Live",
         "registration": "Registration"
-      },
-      "type": {
-        "league": "League"
       },
       "title": "Tournaments",
       "create": "Create tournament",
@@ -11817,8 +11790,6 @@
       "isNewcomer": "Is newcomer",
       "countTournaments": "Count tournaments",
       "any": "Any",
-      "league": "League",
-      "notLeague": "Not league",
       "anyRound": "Any round",
       "final": "Final",
       "winnerOnly": "Winner only",
@@ -11859,7 +11830,6 @@
       "newcomerMode": "Newcomer mode",
       "tournamentCountOperator": "Tournament count operator",
       "tournamentCount": "Tournament count",
-      "tournamentType": "Tournament type",
       "roundType": "Round type",
       "whichSideCounts": "Which side counts",
       "sortOrder": "Sort order",
