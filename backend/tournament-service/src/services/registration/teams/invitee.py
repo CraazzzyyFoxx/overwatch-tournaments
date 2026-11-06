@@ -288,7 +288,7 @@ class InviteeMixin(TeamServiceBase):
                     auto_approve=config.auto_approve,
                     values={},
                 )
-                session.add(existing_entry)
+                await self.entry_repo.create(session, existing_entry)
             existing_entry.is_substitute = bool(invite.is_substitute)
         elif not gated:
             # The registration seen before the lock is gone, so this accept would sign

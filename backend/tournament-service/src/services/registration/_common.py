@@ -27,6 +27,7 @@ from shared.domain.roster import FlexRoleMode, PlayerRoster
 from shared.hero_catalog import DEFAULT_MAX_TOP_HEROES, HeroCatalog, build_hero_entries
 from shared.registration_statuses import get_builtin_status_values, is_balancer_status_excluded
 from shared.repository import RegistrationFormRepository, TournamentRepository
+from shared.repository.flow_node import FlowNodeRepository
 from shared.schemas.role import RoleRef
 from shared.services.division_grid.access import (
     get_effective_division_grid_version,
@@ -331,9 +332,11 @@ class RegistrationCommonService:
         *,
         form_repo: RegistrationFormRepository = RegistrationFormRepository(),
         tournament_repo: TournamentRepository = TournamentRepository(),
+        flow_node_repo: FlowNodeRepository = FlowNodeRepository(),
     ) -> None:
         self.form_repo = form_repo
         self.tournament_repo = tournament_repo
+        self.flow_node_repo = flow_node_repo
 
     async def _register_registration_changed(
         self,
@@ -354,7 +357,7 @@ class RegistrationCommonService:
         self, session: AsyncSession, tournament_id: int, registration_node_id: int
     ) -> models.FlowNode:
         """The registration node ``registration_node_id`` of this tournament; 404 for any other id (plan Decision 1)."""
-        node = await session.get(models.FlowNode, registration_node_id)
+        node = await self.flow_node_repo.get(session, registration_node_id)
         if node is None or node.tournament_id != tournament_id or node.kind != FlowNodeKind.REGISTRATION:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Flow node not found")
         return node

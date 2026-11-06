@@ -40,6 +40,7 @@ from shared.repository import (
     CatalogRoleRepository,
     GoogleSheetBindingRepository,
     GoogleSheetFeedRepository,
+    RegistrationEntryRepository,
     RegistrationRepository,
 )
 from shared.services.realtime import Resource, Scope, emit
@@ -266,11 +267,13 @@ class SheetSyncService:
         feed_repo: GoogleSheetFeedRepository = GoogleSheetFeedRepository(),
         binding_repo: GoogleSheetBindingRepository = GoogleSheetBindingRepository(),
         registration_repo: RegistrationRepository = RegistrationRepository(),
+        entry_repo: RegistrationEntryRepository = RegistrationEntryRepository(),
         common: RegistrationCommonService = _common_service,
     ) -> None:
         self.feed_repo = feed_repo
         self.binding_repo = binding_repo
         self.registration_repo = registration_repo
+        self.entry_repo = entry_repo
         self.common = common
 
     async def _registration_schema(self, session: AsyncSession, tournament_id: int) -> FormSchema:
@@ -889,7 +892,7 @@ class SheetSyncService:
                         # A registration of another intake (or one removed from this node) joins this node.
                         row_entry = models.RegistrationEntry(registration_node_id=node_id, status="approved")
                         row_entry.registration = registration
-                        session.add(row_entry)
+                        await self.entry_repo.create(session, row_entry)
                         node_entries[registration.id] = row_entry
                     if apply_sheet_fields_to_registration(
                         registration,

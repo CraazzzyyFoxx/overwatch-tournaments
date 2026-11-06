@@ -11,6 +11,7 @@ from shared import models
 from shared.core import enums
 from shared.core.enums import FlowNodeKind, FlowNodeStatus
 from shared.core.errors import BaseAPIException as HTTPException
+from shared.repository.flow_node import FlowNodeRepository
 from shared.services.encounter.events import enqueue_encounter_completed
 from src import schemas
 from src.services.challonge.sync._types import _ImportSource, _source_lookup_key, _SourceFetch, _UpsertResult
@@ -21,6 +22,8 @@ from src.services.tournament.events import (
     enqueue_tournament_recalculation,
     publish_tournament_invalidation,
 )
+
+_flow_nodes = FlowNodeRepository()
 
 
 class ImportMixin:
@@ -355,7 +358,7 @@ class ImportMixin:
             # Entries, teams and sheet feeds hold the intake with ``ON DELETE RESTRICT``: such an intake is in use.
             async with session.begin_nested():
                 for node in inputs:
-                    await session.delete(node)
+                    await _flow_nodes.delete(session, node)
                 await session.flush()
         except IntegrityError:
             logger.warning("Registration of tournament {} is in use; formation stays", tournament_id)

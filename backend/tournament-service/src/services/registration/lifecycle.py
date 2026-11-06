@@ -432,7 +432,7 @@ class RegistrationLifecycleService:
                 balancer_status=NOT_ADDED_BALANCER_STATUS,
             )
             entry.registration = registration
-            session.add(entry)
+            await self.entry_repo.create(session, entry)
         else:
             await self.registrations.ensure_unique_primary_game_handles(
                 session, tournament_id=tournament_id, values=values

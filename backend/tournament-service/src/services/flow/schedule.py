@@ -4,7 +4,6 @@
 (``SCHEDULE_TRANSITIONS``); ``ends_at`` only closes the phase's action window and never changes a status.
 """
 
-import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
@@ -12,6 +11,7 @@ from shared.core.enums import FlowNodeKind
 from shared.core.errors import ApiExc, ApiHTTPException
 from shared.core.flow_state import SCHEDULE_PHASES
 from shared.core.tournament_state import as_utc
+from shared.repository.flow_node import FlowNodeRepository, FlowNodeScheduleRepository
 from shared.services.realtime import Resource
 from src.schemas.flow import FlowNodeScheduleEntry
 from src.services.tournament.events import publish_tournament_invalidation
@@ -24,11 +24,20 @@ def _unprocessable(code: str, msg: str) -> ApiHTTPException:
 
 
 class FlowNodeScheduleService:
+    def __init__(
+        self,
+        *,
+        nodes: FlowNodeRepository = FlowNodeRepository(),
+        schedules: FlowNodeScheduleRepository = FlowNodeScheduleRepository(),
+    ) -> None:
+        self.nodes = nodes
+        self.schedules = schedules
+
     async def set_schedule(
         self, session: AsyncSession, node_id: int, entries: list[FlowNodeScheduleEntry]
     ) -> models.FlowNode:
         """Replace the node's schedule with ``entries``; flushes, never commits."""
-        node = await session.get(models.FlowNode, node_id)
+        node = await self.nodes.get(session, node_id)
         if node is None:
             raise ApiHTTPException(
                 status_code=404, detail=[ApiExc(code="flow_node_not_found", msg="Flow node not found")]
@@ -48,12 +57,14 @@ class FlowNodeScheduleService:
         if opens is not None and check_in is not None and as_utc(check_in.starts_at) <= as_utc(opens.starts_at):
             raise _unprocessable("invalid_schedule", "Check-in must start after registration opens")
 
-        await session.execute(sa.delete(models.FlowNodeSchedule).where(models.FlowNodeSchedule.node_id == node_id))
-        session.add_all(
-            models.FlowNodeSchedule(node_id=node_id, phase=e.phase, starts_at=e.starts_at, ends_at=e.ends_at)
-            for e in entries
+        await self.schedules.replace_for_node(
+            session,
+            node_id,
+            [
+                models.FlowNodeSchedule(node_id=node_id, phase=e.phase, starts_at=e.starts_at, ends_at=e.ends_at)
+                for e in entries
+            ],
         )
-        await session.flush()
         await publish_tournament_invalidation(
             session, node.tournament_id, (Resource.TOURNAMENT_FLOW, Resource.TOURNAMENT_STRUCTURE)
         )

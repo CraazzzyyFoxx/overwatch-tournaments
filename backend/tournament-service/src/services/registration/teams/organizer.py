@@ -340,8 +340,7 @@ class OrganizerMixin(TeamServiceBase):
             entry = models.RegistrationEntry(
                 registration_node_id=dest_probe.registration_node_id, registration_id=registration.id, status="approved"
             )
-            session.add(entry)
-            await session.flush()
+            await self.entry_repo.create(session, entry)
         dest = await self._place_onto(
             session,
             tournament_id=tournament_id,

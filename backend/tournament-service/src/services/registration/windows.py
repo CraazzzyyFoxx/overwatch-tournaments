@@ -17,12 +17,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from shared import models
 from shared.core.enums import FlowNodeKind
 from shared.domain.flow.config import RegistrationNodeConfig, parse_node_config
+from shared.repository.flow_node import FlowNodeRepository
 from shared.services.registration_window import (
     is_check_in_open,
     is_sign_up_open,
     sign_up_late_clause,
     sign_up_open_clause,
 )
+
+_flow_nodes = FlowNodeRepository()
 
 
 def node_config(node: models.FlowNode) -> RegistrationNodeConfig:
@@ -80,7 +83,7 @@ class RegistrationWindowService:
         return (await self.load_sign_up_state(session, registration_node_id))[0]
 
     async def load_check_in_open(self, session: AsyncSession, registration_node_id: int) -> bool:
-        node = await session.get(models.FlowNode, registration_node_id)
+        node = await _flow_nodes.get(session, registration_node_id)
         if node is None:
             return False
         return is_check_in_open_for(node, await self.load_schedule(session, registration_node_id))
