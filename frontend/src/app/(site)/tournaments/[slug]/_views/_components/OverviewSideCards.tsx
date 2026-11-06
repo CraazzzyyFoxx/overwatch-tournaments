@@ -13,6 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";
 import { useSlotLabel } from "@/hooks/useSlotLabel";
 import { kindOf } from "@/lib/flow/kinds";
+import { formulaInWords } from "@/lib/flow/leaderboardTable";
 import {
   summarizeFormat,
   summarizeStageWaves,
@@ -111,9 +112,12 @@ export function OverviewFormatCard({ tournament }: Readonly<{ tournament: Tourna
       case "top":
         return t(`${key}.top`, { n: transition.n });
       case "perItemTop":
-        return transition.upper === null
-          ? t(`${key}.perItemTop`, { n: transition.n })
-          : t(`${key}.perItemUpper`, { n: transition.n, upper: transition.upper });
+        if (transition.upper === null)
+          return t(`${key}.${transition.grouped ? "perItemTop" : "top"}`, { n: transition.n });
+        return t(`${key}.${transition.grouped ? "perItemUpper" : "upper"}`, {
+          n: transition.n,
+          upper: transition.upper
+        });
       case "range":
         return t(`${key}.range`, { from: transition.from, to: transition.to });
       case "swissStatus":
@@ -182,7 +186,9 @@ export function OverviewFormatCard({ tournament }: Readonly<{ tournament: Tourna
         total: step.stages.length
       }),
       t(`tournamentDetail.overview.format.league.score.${rule.score.key}`, {
-        formula: rule.score.formula ?? ""
+        formula: formulaInWords(rule.score.formula ?? "", (variable) =>
+          t(`tournamentDetail.table.formula.variables.${variable}`)
+        )
       })
     ].join(" · ");
     return (

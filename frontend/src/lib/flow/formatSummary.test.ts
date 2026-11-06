@@ -6,7 +6,11 @@ import type { FlowRead } from "@/types/flow.types";
 type N = [id: number, kind: string, config?: Record<string, unknown>, status?: string];
 
 /** A flow from `[id, kind, config, status]` nodes and `[from, to]` edges; a stage node `n` owns stage `n * 10`. */
-const flow = (nodes: N[], edges: [number, number][]): FlowRead =>
+const flow = (
+  nodes: N[],
+  edges: [number, number][],
+  items: [node: number, item: number][] = []
+): FlowRead =>
   ({
     nodes: nodes.map(([id, kind, config = {}, status = "draft"]) => ({
       id,
@@ -24,7 +28,7 @@ const flow = (nodes: N[], edges: [number, number][]): FlowRead =>
       target_node_id,
       target_port: "in"
     })),
-    results: [],
+    results: items.map(([node_id, stage_item_id]) => ({ node_id, port: "ranking", stage_item_id })),
     participants: []
   }) as unknown as FlowRead;
 
@@ -67,13 +71,45 @@ describe("summarizeFormat", () => {
           [2, 3],
           [3, 4],
           [4, 5]
+        ],
+        [
+          [3, 100],
+          [3, 101]
         ]
       )
     );
 
     expect(names(summary)).toEqual([["stage 3"], ["stage 5"]]);
-    expect(summary.steps[1]!.transitions).toEqual([{ kind: "perItemTop", n: 2, upper: 1 }]);
+    expect(summary.steps[1]!.transitions).toEqual([
+      { kind: "perItemTop", n: 2, upper: 1, grouped: true }
+    ]);
     expect(summary.steps.map((s) => s.state)).toEqual(["done", "current"]);
+  });
+
+  it("does not say per group for a per-item filter on a stage with one item", () => {
+    const nodes: N[] = [
+      [1, "stage"],
+      [2, "filter", { mode: "per_item_top", n: 4 }],
+      [3, "stage"]
+    ];
+    const edges: [number, number][] = [
+      [1, 2],
+      [2, 3]
+    ];
+    const one = summarizeFormat(
+      flow(nodes, edges, [
+        [1, 100],
+        [1, 100]
+      ])
+    );
+    const unknown = summarizeFormat(flow(nodes, edges));
+
+    expect(one.steps[1]!.transitions).toEqual([
+      { kind: "perItemTop", n: 4, upper: null, grouped: false }
+    ]);
+    expect(unknown.steps[1]!.transitions).toEqual([
+      { kind: "perItemTop", n: 4, upper: null, grouped: false }
+    ]);
   });
 
   it("reads individual swiss -> top 20 -> draft formation -> playoff as a filter then a re-formation", () => {

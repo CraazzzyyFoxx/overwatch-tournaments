@@ -8,7 +8,7 @@ export type StepState = "done" | "current" | "upcoming";
 /** What a pure node or a formation between two stages says to a reader, in the words of its config. */
 export type FormatTransition =
   | { kind: "top"; n: number }
-  | { kind: "perItemTop"; n: number; upper: number | null }
+  | { kind: "perItemTop"; n: number; upper: number | null; grouped: boolean }
   | { kind: "range"; from: number; to: number }
   | { kind: "swissStatus"; status: "qualified" | "eliminated" }
   | { kind: "manual" }
@@ -111,6 +111,23 @@ export function summarizeFormat(flow: FlowRead): FormatSummary {
   }
   const ordered = [...groups.entries()].sort(([, a], [, b]) => a.depth - b.depth);
 
+  /** The most distinct stage items (groups) a filter's source stages show in their results or its per-item map; 0 when unknown. */
+  const itemCount = (filter: FlowNodeRead): number => {
+    const sourceStages = new Set<number>();
+    const walk = (id: number) => {
+      for (const from of up(id)) {
+        if (kind(from) === "stage") sourceStages.add(from);
+        else walk(from);
+      }
+    };
+    walk(filter.id);
+    const items = new Set<string>(Object.keys((filter.config.per_item ?? {}) as object));
+    for (const r of flow.results)
+      if (sourceStages.has(r.node_id) && r.stage_item_id != null)
+        items.add(String(r.stage_item_id));
+    return items.size;
+  };
+
   /** Nodes between the previous step and these stages, upstream first. */
   const between = (stages: FlowNodeRead[]): FormatTransition[] => {
     const seen = new Set<number>();
@@ -124,7 +141,7 @@ export function summarizeFormat(flow: FlowRead): FormatSummary {
       }
     };
     stages.forEach((s) => visit(s.id));
-    return found.flatMap((n) => transitionOf(n, depth(n.id) > 0));
+    return found.flatMap((n) => transitionOf(n, depth(n.id) > 0, itemCount(n)));
   };
 
   const steps = ordered.map(([key, group], i) => ({
@@ -154,7 +171,7 @@ export function summarizeFormat(flow: FlowRead): FormatSummary {
   };
 }
 
-function transitionOf(node: FlowNodeRead, afterStage: boolean): FormatTransition[] {
+function transitionOf(node: FlowNodeRead, afterStage: boolean, items: number): FormatTransition[] {
   const c = node.config as Record<string, unknown>;
   switch (kindOf(node)) {
     case "filter":
@@ -166,7 +183,8 @@ function transitionOf(node: FlowNodeRead, afterStage: boolean): FormatTransition
             {
               kind: "perItemTop",
               n: Number(c.n),
-              upper: typeof c.upper === "number" ? c.upper : null
+              upper: typeof c.upper === "number" ? c.upper : null,
+              grouped: items >= 2
             }
           ];
         case "range":

@@ -166,3 +166,35 @@ export function describeAggregate(config: Record<string, unknown>): AggregateWor
     }
   };
 }
+
+/** The variables an aggregate formula may read (`AGGREGATE_VARIABLES` on the backend). */
+export const FORMULA_VARIABLES = [
+  "place",
+  "participants",
+  "points",
+  "wins",
+  "draws",
+  "losses",
+  "map_diff",
+  "buchholz",
+  "ffa_score"
+] as const;
+export type FormulaVariable = (typeof FORMULA_VARIABLES)[number];
+
+const isFormulaVariable = (name: string): name is FormulaVariable =>
+  (FORMULA_VARIABLES as readonly string[]).includes(name);
+
+/**
+ * A formula as a reader says it: known variables take their `label`, `*` reads `×`, `+` and `/` get a space either side.
+ * Anything else (numbers, `-`, parentheses, function names) stays as written.
+ */
+export function formulaInWords(
+  formula: string,
+  label: (variable: FormulaVariable) => string
+): string {
+  return formula
+    .replace(/\b[A-Za-z_]\w*\b/g, (name) => (isFormulaVariable(name) ? label(name) : name))
+    .replace(/\s*\*\s*/g, " × ")
+    .replace(/\s*([+/])\s*/g, " $1 ")
+    .trim();
+}

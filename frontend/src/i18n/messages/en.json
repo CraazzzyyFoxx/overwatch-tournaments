@@ -3242,6 +3242,7 @@
           "top": "Top {n} advance",
           "perItemTop": "Top {n} per group advance",
           "perItemUpper": "Top {n} per group advance: top {upper} to the upper bracket, the rest to the lower",
+          "upper": "Top {n} advance: the best {upper} to the upper bracket, the rest to the lower",
           "range": "Places {from}–{to} advance",
           "qualified": "Qualified players advance",
           "eliminated": "Eliminated players move on",
@@ -3655,7 +3656,18 @@
         "score": {
           "stagePoints": "A result scores the stage points.",
           "placementTable": "A result scores by place: {table}.",
-          "formula": "A result scores by the formula {formula}, where place is the finishing place and participants the field size."
+          "formula": "A result scores by the formula: {formula}."
+        },
+        "variables": {
+          "place": "place",
+          "participants": "participants",
+          "points": "stage points",
+          "wins": "wins",
+          "draws": "draws",
+          "losses": "losses",
+          "map_diff": "map difference",
+          "buchholz": "Buchholz",
+          "ffa_score": "FFA score"
         },
         "ties": "Ties go to the most best places, then to the place in the latest result."
       }

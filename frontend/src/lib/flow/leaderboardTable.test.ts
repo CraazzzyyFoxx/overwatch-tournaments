@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { leagueFlow } from "./fixtures";
-import { buildLeaderboardTable, describeAggregate } from "./leaderboardTable";
+import { buildLeaderboardTable, describeAggregate, formulaInWords } from "./leaderboardTable";
 
 describe("leaderboard table", () => {
   it("has one column per aggregate input, in edge order, named after the input", () => {
@@ -101,5 +101,26 @@ describe("leaderboard table", () => {
       mode: { key: "average", n: null },
       score: { key: "formula", table: [], formula: "max(0, participants - place + 1)" }
     });
+  });
+});
+
+describe("formulaInWords", () => {
+  const label = (variable: string) => `<${variable}>`;
+
+  it("names the variables and reads * as ×", () => {
+    expect(formulaInWords("wins + draws * 0.5 + buchholz * 0.01", label)).toBe(
+      "<wins> + <draws> × 0.5 + <buchholz> × 0.01"
+    );
+  });
+
+  it("spaces + and / and leaves minus, numbers, brackets and unknown names as written", () => {
+    expect(formulaInWords("max(0,participants-place+1)/2", label)).toBe(
+      "max(0,<participants>-<place> + 1) / 2"
+    );
+    expect(formulaInWords("bonus*2", label)).toBe("bonus × 2");
+  });
+
+  it("does not touch a name that merely contains a variable", () => {
+    expect(formulaInWords("placement + points_total", label)).toBe("placement + points_total");
   });
 });
