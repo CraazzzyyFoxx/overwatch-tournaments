@@ -211,6 +211,8 @@ class _Database:
     TABLES = (
         models.Tournament.__table__,
         models.Player.__table__,
+        # Joined by the member's-tournament-row predicate (``is_member_tournament_row``).
+        models.Team.__table__,
         PlayerRole.__table__,
         CatalogRole.__table__,
         RoleDimension.__table__,
@@ -238,6 +240,7 @@ class _Database:
         self.shim = _AsyncSessionShim(self.session)
         self._next_id = 1
         self._members: dict[int, int] = {}
+        self._teams: set[int] = set()
         self.insert(
             RoleDimension.__table__,
             id=1,
@@ -277,6 +280,15 @@ class _Database:
         if user_id not in self._members:
             self._members[user_id] = self._id()
             self.insert(models.WorkspaceMember.__table__, id=self._members[user_id], workspace_id=1, player_id=user_id)
+        if tournament_id not in self._teams:
+            self._teams.add(tournament_id)
+            self.insert(
+                models.Team.__table__,
+                id=tournament_id,
+                tournament_id=tournament_id,
+                name=f"Team {tournament_id}",
+                balancer_name=f"Team {tournament_id}",
+            )
         player_id = self._id()
         self.insert(
             models.Player.__table__,
