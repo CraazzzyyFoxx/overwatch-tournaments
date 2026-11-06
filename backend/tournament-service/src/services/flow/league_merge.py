@@ -17,10 +17,16 @@ from typing import Any, Literal
 
 import sqlalchemy as sa
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from shared.core.chrono import chrono_sort_key
-from shared.domain.flow.config import AggregateNodeConfig
+from shared.core.enums import FlowNodeKind, FlowNodeStatus
+from shared.domain.flow.config import AggregateNodeConfig, LeaderboardNodeConfig
+from shared.domain.flow.validate import validate_flow
+from shared.models.tournament.flow import FlowEdge, FlowNode
+from shared.services.participant_result import write_participant_results
+from src.services.flow.engine import flow_engine
+from src.services.flow.service import load_flow_specs
 
 __all__ = (
     "REGISTRATION_FKS",
@@ -32,6 +38,7 @@ __all__ = (
     "MappingError",
     "MergeError",
     "MergeLog",
+    "apply_mapping",
     "fetch_league_rows",
     "load_mapping",
     "merge_league",
@@ -81,9 +88,12 @@ class LeagueEntry(BaseModel):
         return self
 
     @property
+    def days_in_order(self) -> list[LeagueDay]:
+        return sorted(self.days, key=lambda d: (d.day, d.division or ""))
+
+    @property
     def days_latest_first(self) -> list[int]:
-        ordered = sorted(self.days, key=lambda d: (d.day, d.division or ""), reverse=True)
-        return [d.tournament_id for d in ordered]
+        return [d.tournament_id for d in reversed(self.days_in_order)]
 
     @property
     def others(self) -> list[int]:
@@ -465,20 +475,113 @@ async def _apply_rules(session: AsyncSession, entry: LeagueEntry, log: MergeLog)
         log.moved[qualified] = moved.rowcount
 
 
+async def _relabel_days(session: AsyncSession, entry: LeagueEntry) -> list[int]:
+    """Name each day's branch, stack the branches on y and offset ``Stage.order`` so days display in order.
+
+    Returns the day sinks (stage nodes with no outgoing edge) in day order: the aggregate's inputs (Decision 9).
+    """
+    sinks: list[int] = []
+    offset = 0
+    for index, day in enumerate(entry.days_in_order):
+        label = f"Day {day.day}" if day.division is None else f"Day {day.day} · {day.division}"
+        params = {"day": day.tournament_id}
+        await session.execute(
+            sa.text(
+                "UPDATE tournament.flow_node SET position_y = position_y + :dy, name = CASE kind "
+                "WHEN 'registration' THEN :label WHEN 'formation' THEN :label || ' · Teams' "
+                "ELSE :label || ' · ' || name END WHERE tournament_id = :day"
+            ),
+            {**params, "dy": index * 400, "label": label},
+        )
+        top = await session.scalar(
+            sa.text('SELECT max("order") FROM tournament.stage WHERE tournament_id = :day'), params
+        )
+        if top is not None:
+            await session.execute(
+                sa.text('UPDATE tournament.stage SET "order" = "order" + :offset WHERE tournament_id = :day'),
+                {**params, "offset": offset},
+            )
+            offset += top + 1
+        sinks += await session.scalars(
+            sa.text(
+                "SELECT n.id FROM tournament.flow_node n WHERE n.tournament_id = :day AND n.kind = 'stage' "
+                "AND NOT EXISTS (SELECT 1 FROM tournament.flow_edge e WHERE e.source_node_id = n.id) ORDER BY n.id"
+            ),
+            params,
+        )
+    return sinks
+
+
+async def _add_season_table(session: AsyncSession, entry: LeagueEntry, sinks: Sequence[int]) -> None:
+    """``sinks → aggregate → leaderboard`` right of the rightmost node; invalid graphs abort the league (Decision 9)."""
+    target = entry.target_tournament_id
+    max_x = await session.scalar(
+        sa.text("SELECT coalesce(max(position_x), 0) FROM tournament.flow_node WHERE tournament_id = :t"),
+        {"t": target},
+    )
+    aggregate = FlowNode(
+        tournament_id=target,
+        kind=FlowNodeKind.AGGREGATE,
+        name=f"{entry.name} · Season",
+        status=FlowNodeStatus.PENDING,
+        config=entry.aggregate.model_dump(mode="json"),
+        position_x=max_x + 300,
+        position_y=0,
+    )
+    leaderboard = FlowNode(
+        tournament_id=target,
+        kind=FlowNodeKind.LEADERBOARD,
+        name="Table",
+        status=FlowNodeStatus.PENDING,
+        config=LeaderboardNodeConfig().model_dump(mode="json"),
+        position_x=max_x + 600,
+        position_y=0,
+    )
+    session.add_all([aggregate, leaderboard])
+    await session.flush()
+    session.add_all(
+        [
+            *(
+                FlowEdge(
+                    tournament_id=target,
+                    source_node_id=sink,
+                    source_port="ranking",
+                    target_node_id=aggregate.id,
+                    target_port="inputs",
+                )
+                for sink in sinks
+            ),
+            FlowEdge(
+                tournament_id=target,
+                source_node_id=aggregate.id,
+                source_port="ranking",
+                target_node_id=leaderboard.id,
+                target_port="ranking",
+            ),
+        ]
+    )
+    await session.flush()
+    issues = [i for i in validate_flow(*await load_flow_specs(session, target)) if i.severity == "error"]
+    if issues:
+        raise MergeError("; ".join(f"{i.code}: {i.message}" for i in issues))
+
+
 async def merge_league(session: AsyncSession, entry: LeagueEntry) -> MergeLog:
     """Re-point every day of ``entry`` to its target tournament and delete the emptied days (spec §15.3).
 
-    Flushes, never commits. The composite FKs are deferred for the whole transaction and checked once at the end.
+    Flushes, never commits. The composite FKs are deferred while rows move and checked at the end of the merge.
     """
     await _check_days(session, entry)
     await session.execute(sa.text("SET CONSTRAINTS ALL DEFERRED"))
     log = MergeLog(entry.target_tournament_id, [])
     days = entry.days_latest_first
     await _assign_formations(session, entry)
+    sinks = await _relabel_days(session, entry)
     await _collapse_registered_teams(session, days, log)
     await _collapse_profiles(session, days, log)
     await _collapse_forms(session, days, log)
     await _apply_rules(session, entry, log)
+    await _add_season_table(session, entry, sinks)
     await session.execute(
         sa.text(
             "UPDATE tournament.tournament SET name = :name, end_date = ("
@@ -503,6 +606,19 @@ async def merge_league(session: AsyncSession, entry: LeagueEntry) -> MergeLog:
         sa.text("DELETE FROM tournament.tournament WHERE id = ANY(CAST(:ids AS bigint[]))"), _ids(entry.others)
     )
     log.deleted_tournament_ids = list(entry.others)
-    await session.execute(sa.text("SET CONSTRAINTS ALL IMMEDIATE"))
-    await session.flush()
+    await flow_engine.recompute(session, entry.target_tournament_id)
+    await write_participant_results(session, entry.target_tournament_id)
+    await session.execute(sa.text("SET CONSTRAINTS ALL IMMEDIATE"))  # surface a violation here, not at commit
     return log
+
+
+async def apply_mapping(
+    session_maker: async_sessionmaker[AsyncSession], entries: Sequence[LeagueEntry], *, dry_run: bool
+) -> list[MergeLog]:
+    """Merge each league in its own transaction (rolled back on ``dry_run``); the first failure is re-raised."""
+    logs: list[MergeLog] = []
+    for entry in entries:
+        async with session_maker() as session:
+            logs.append(await merge_league(session, entry))
+            await (session.rollback() if dry_run else session.commit())
+    return logs

@@ -30,6 +30,7 @@ from src.services.flow.league_merge import (
     TOURNAMENT_FKS,
     LeagueEntry,
     MergeError,
+    apply_mapping,
     merge_league,
 )
 
@@ -125,6 +126,7 @@ class LeagueMergeCase(IsolatedAsyncioTestCase):
                     name=f"{tag} L | Day {n}",
                     slug=f"{tag}-d{n}",
                     status=enums.TournamentStatus.COMPLETED,
+                    is_finished=True,
                     start_date=datetime(2026, 1, 7 * n, 18, tzinfo=UTC),
                 )
                 s.add(tournament)
@@ -471,3 +473,98 @@ class LeagueMergeCase(IsolatedAsyncioTestCase):
         async with self.Session() as s:
             with self.assertRaisesRegex(MergeError, f"tournament {self.ids['d2']} does not exist"):
                 await merge_league(s, self.entry())
+
+    async def _nodes(self) -> list[FlowNode]:
+        async with self.Session() as s:
+            return list(
+                (
+                    await s.scalars(
+                        sa.select(FlowNode).where(FlowNode.tournament_id == self.ids["d1"]).order_by(FlowNode.id)
+                    )
+                ).all()
+            )
+
+    async def test_each_day_is_a_named_branch_feeding_aggregate_and_leaderboard(self) -> None:
+        await self._merge()
+        nodes = await self._nodes()
+        by_id = {n.id: n for n in nodes}
+        assert [n.name for n in nodes if n.kind == "registration"] == ["Day 1", "Day 2", "Day 3"]
+        assert [n.name for n in nodes if n.kind == "formation"] == ["Day 1 · Teams", "Day 2 · Teams", "Day 3 · Teams"]
+        assert [n.name for n in nodes if n.kind == "stage"] == [
+            "Day 1 · Groups 1",
+            "Day 2 · Groups 2",
+            "Day 3 · Groups 3",
+        ]
+        assert [n.position_y for n in nodes if n.kind == "registration"] == [0, 400, 800]
+        (aggregate,) = [n for n in nodes if n.kind == "aggregate"]
+        (leaderboard,) = [n for n in nodes if n.kind == "leaderboard"]
+        assert (aggregate.name, leaderboard.name) == ("Weekly League · Season", "Table")
+        assert aggregate.config["mode"] == "sum_all" and aggregate.config["unit"] == "players"
+        async with self.Session() as s:
+            edges = (
+                await s.scalars(
+                    sa.select(FlowEdge).where(FlowEdge.tournament_id == self.ids["d1"]).order_by(FlowEdge.id)
+                )
+            ).all()
+        into_aggregate = [e for e in edges if e.target_node_id == aggregate.id]
+        assert [by_id[e.source_node_id].name for e in into_aggregate] == [
+            "Day 1 · Groups 1",
+            "Day 2 · Groups 2",
+            "Day 3 · Groups 3",
+        ]
+        assert [(e.source_port, e.target_port) for e in into_aggregate] == [("ranking", "inputs")] * 3
+        assert [
+            (e.source_node_id, e.source_port, e.target_port) for e in edges if e.target_node_id == leaderboard.id
+        ] == [(aggregate.id, "ranking", "ranking")]
+
+    async def test_days_display_in_order_and_the_target_spans_the_season(self) -> None:
+        await self._merge()
+        orders = await self._scalars(
+            'SELECT "order" FROM tournament.stage WHERE id = ANY(:s) ORDER BY id',
+            s=[self.ids[f"stage{n}"] for n in (1, 2, 3)],
+        )
+        assert orders == [0, 1, 2]
+        async with self.Session() as s:
+            target = await s.get_one(models.Tournament, self.ids["d1"])
+        assert (target.name, target.slug.endswith("-d1")) == ("Weekly League", True)
+        assert target.end_date == datetime(2026, 1, 21, 18, tzinfo=UTC)
+
+    async def test_the_table_scores_every_day_and_feeds_participant_results(self) -> None:
+        await self._merge()
+        (leaderboard,) = [n for n in await self._nodes() if n.kind == "leaderboard"]
+        async with self.Session() as s:
+            scores = dict(
+                (
+                    await s.execute(
+                        sa.select(models.FlowNodeResult.workspace_member_id, models.FlowNodeResult.score).where(
+                            models.FlowNodeResult.node_id == leaderboard.id
+                        )
+                    )
+                ).all()
+            )
+            placed = set(
+                (
+                    await s.scalars(
+                        sa.select(models.ParticipantResult.workspace_member_id).where(
+                            models.ParticipantResult.tournament_id == self.ids["d1"]
+                        )
+                    )
+                ).all()
+            )
+        m0, m1, m2 = self.ids["m0"], self.ids["m1"], self.ids["m2"]
+        # Alpha (m0, m1) won every day: 3 x 10; Bravo (m2 on day 2 only) placed 2nd once: 5.
+        assert {k: float(v) for k, v in scores.items()} == {m0: 30.0, m1: 30.0, m2: 5.0}
+        assert placed == {m0, m1, m2}
+
+    async def test_dry_run_writes_nothing(self) -> None:
+        (log,) = await apply_mapping(self.Session, [self.entry()], dry_run=True)
+        assert sorted(log.deleted_tournament_ids) == sorted([self.ids["d2"], self.ids["d3"]])
+        alive = await self._scalars(
+            "SELECT id FROM tournament.tournament WHERE id = ANY(:i) ORDER BY id",
+            i=[self.ids[f"d{n}"] for n in (1, 2, 3)],
+        )
+        assert alive == sorted(self.ids[f"d{n}"] for n in (1, 2, 3))
+        assert [n.name for n in await self._nodes()] == ["Registration", "Teams", "Groups 1"]
+        assert await self._scalars(
+            "SELECT tournament_id FROM tournament.stage WHERE id = :s", s=self.ids["stage2"]
+        ) == [self.ids["d2"]]
