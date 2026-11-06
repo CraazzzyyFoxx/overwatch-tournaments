@@ -57,7 +57,6 @@
     "players": "players",
     "inTeams": "in teams",
     "done": "done",
-    "format": "Format",
     "teamFormation": "Team Formation",
     "stages": "Stages",
     "teams": "Teams",
@@ -3214,6 +3213,48 @@
         "grandFinalNoReset": "Grand final without bracket reset",
         "team": "Team",
         "learnMore": "How a tournament works",
+        "days": "{count, plural, one {# match day} other {# match days}}",
+        "stepDone": "Done",
+        "intro": {
+          "solo": "Solo sign-up",
+          "team": "Team sign-up",
+          "formation": {
+            "balancer": "teams by balance",
+            "draft": "teams by captain draft",
+            "registered": "registered teams",
+            "manual": "teams set by the organizers"
+          }
+        },
+        "league": {
+          "mode": {
+            "sumAll": "every day counts",
+            "sumLastN": "last {n} of {total} days count",
+            "sumBestN": "best {n} of {total} days count",
+            "average": "average of all days counts"
+          },
+          "score": {
+            "stagePoints": "points = stage points",
+            "placementTable": "points by place in each day",
+            "formula": "points = {formula}"
+          }
+        },
+        "transition": {
+          "top": "Top {n} advance",
+          "perItemTop": "Top {n} per group advance",
+          "perItemUpper": "Top {n} per group advance: top {upper} to the upper bracket, the rest to the lower",
+          "range": "Places {from}–{to} advance",
+          "qualified": "Qualified players advance",
+          "eliminated": "Eliminated players move on",
+          "manual": "The organizers pick who advances",
+          "split": "Split into {names}",
+          "reform": "Teams are re-formed: {how}",
+          "reformHow": {
+            "balancer": "balance",
+            "draft": "captain draft",
+            "registered": "registered teams",
+            "manual": "set by the organizers"
+          }
+        },
         "types": {
           "round_robin": {
             "name": "Round-robin",
@@ -3618,9 +3659,6 @@
         },
         "ties": "Ties go to the most best places, then to the place in the latest result."
       }
-    },
-    "format": {
-      "hint": "Each box is a step of the tournament; arrows show who moves on."
     },
     "registerCards": {
       "title": "Registration",

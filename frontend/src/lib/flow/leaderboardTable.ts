@@ -130,8 +130,17 @@ const SCORES = {
   formula: "formula"
 } as const;
 
+export interface AggregateWords {
+  mode: { key: "sumAll" | "sumLastN" | "sumBestN" | "average"; n: number | null };
+  score: {
+    key: "stagePoints" | "placementTable" | "formula";
+    table: [string, number][];
+    formula: string | null;
+  };
+}
+
 /** The aggregate config as the keys of its three sentences (mode, score; the tiebreak sentence is fixed). */
-export function describeAggregate(config: Record<string, unknown>) {
+export function describeAggregate(config: Record<string, unknown>): AggregateWords {
   const mode = MODES[config.mode as keyof typeof MODES] ?? "sumAll";
   const score = (config.score ?? {}) as {
     preset?: string;
