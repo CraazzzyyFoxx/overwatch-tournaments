@@ -38,9 +38,10 @@ const ALL_PERMS = {
 } as const;
 
 describe("hub tabs", () => {
-  test("is the lifecycle, six entries, in the order it happens", () => {
+  test("is the lifecycle, seven entries, structure first", () => {
     expect(TAB_KEYS).toEqual([
       "overview",
+      "flow",
       "registration",
       "teams",
       "bracket",
@@ -53,6 +54,7 @@ describe("hub tabs", () => {
   // to `allowedSettingsSection`, so only two tabs still gate themselves.
   test.each<[TabKey, boolean]>([
     ["overview", true],
+    ["flow", true],
     ["registration", false],
     ["teams", true],
     ["bracket", true],

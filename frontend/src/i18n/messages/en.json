@@ -10387,7 +10387,8 @@
         "teams": "Teams",
         "bracket": "Bracket",
         "matches": "Matches",
-        "settings": "Settings"
+        "settings": "Settings",
+        "flow": "Flow"
       },
       "notFound": "Tournament not found",
       "notFoundDescription": "This tournament does not exist or was deleted.",
@@ -10944,6 +10945,54 @@
       "ready": "Ready",
       "live": "Live",
       "done": "Done"
+    },
+    "flow": {
+      "canvasLabel": "Tournament flow",
+      "toolbar": {
+        "presets": "Presets",
+        "save": "Save flow",
+        "discard": "Discard",
+        "unsaved": "Unsaved changes"
+      },
+      "palette": {
+        "title": "Nodes",
+        "lifecycle": "Lifecycle",
+        "transitions": "Transitions",
+        "hint": "Drag onto the canvas or click to add",
+        "add": "Add {kind}"
+      },
+      "issues": {
+        "title": "Issues",
+        "none": "No issues",
+        "error": "Error",
+        "warning": "Warning"
+      },
+      "presets": {
+        "title": "Start from a preset",
+        "apply": "Apply",
+        "days": "Days",
+        "best": "Best results counted",
+        "ids": {
+          "single": "Single stage",
+          "groups_playoff": "Groups → playoff",
+          "groups_reformation_playoff": "Groups → re-formation → playoff",
+          "swiss_draft_playoff": "Individual Swiss → draft → playoff",
+          "league": "League season (N days, best K)"
+        },
+        "names": {
+          "playoff": "Playoff",
+          "groups": "Groups",
+          "topPerGroup": "Top {n} per group",
+          "top": "Top {n}",
+          "playoffTeams": "Playoff teams",
+          "swiss": "Swiss",
+          "qualifiers": "Qualifiers",
+          "day": "Day {i}",
+          "dayTeams": "Day {i} teams",
+          "season": "Season",
+          "seasonTable": "Season table"
+        }
+      }
     }
   },
   "adminTournaments": {

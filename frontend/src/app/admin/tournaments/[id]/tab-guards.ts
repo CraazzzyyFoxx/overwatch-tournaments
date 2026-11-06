@@ -11,6 +11,7 @@
  */
 export const TAB_KEYS = [
   "overview",
+  "flow",
   "registration",
   "teams",
   "bracket",
