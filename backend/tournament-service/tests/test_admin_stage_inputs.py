@@ -8,7 +8,7 @@ handing out more rounds than the configured maximum.
 
 Re-seeding only ever added or overwrote the slots it was given: shrinking the
 advance from top-2 to top-1 left the second-place inputs behind, and a preserved
-TENTATIVE input was collided with rather than skipped, because the free slot was
+placeholder input was collided with rather than skipped, because the free slot was
 found once and then counted up from.
 
 Creating a stage input checked none of the invariants editing one checks, so an
@@ -250,8 +250,6 @@ class UpdateStageTests(IsolatedAsyncioTestCase):
             id=1,
             tournament_id=99,
             stage_type=enums.StageType.SWISS,
-            # ``_assert_scoring_editable`` asks every group of the stage whether
-            # a playoff seeded off it has started.
             items=[],
             node=SimpleNamespace(name=""),
         )
@@ -279,6 +277,8 @@ class UpdateStageTests(IsolatedAsyncioTestCase):
             patch.object(service, "get_stage", AsyncMock(side_effect=[stage, stage])),
             patch.object(service, "_publish_structure_changed", AsyncMock()),
             patch.object(stage_crud, "enqueue_tournament_recalculation", AsyncMock()),
+            # ``_assert_scoring_editable`` asks the flow whether a node fed by the stage has started.
+            patch.object(stage_crud, "assert_stage_correction_allowed", AsyncMock()),
         ):
             await service.update_stage(session, 1, data)
 

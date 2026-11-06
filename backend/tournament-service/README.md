@@ -175,6 +175,10 @@ Rules per area. `/api/docs` has them per subject:
   - `stage_seed` refuses a stage that has encounters (409) and waits for the stage row lock like the
     other stage writers. A stage becoming `ready` seats its input rows into stage-item inputs (`source_result_id`) and
     keeps hand-seeded teams; a seeded team outside the input is 409 `seed_not_in_input`.
+  - A result or scoring correction is refused with 409 `downstream_started` once a node fed by the stage (through
+    pure nodes only) is a live or completed stage or a forming or completed formation; a `ready` stage is re-seated
+    from the moved results by the standings job (a stage with a hand-edited seat, or whose filter waits on a boundary
+    tie, is left as it is).
   - A standings job diff-writes its rows, so standing ids survive a recompute. A job that changed
     nothing publishes no invalidation and no achievement event. A refused Swiss round or
     requalification is logged and never fails the job.

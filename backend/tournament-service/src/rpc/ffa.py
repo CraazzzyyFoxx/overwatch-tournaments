@@ -38,9 +38,9 @@ from src.core import auth
 from src.rpc._helpers import _actor_player_id, _dump, _identity, _path_int, _payload, _read, _require_id, _run
 from src.schemas.ffa import FfaGameCancelInput, FfaGameResultsInput, FfaGamesCountInput
 from src.services import visibility_resolvers
-from src.services.admin.stage import stage_service as admin_stage_service
 from src.services.encounter.ffa import ffa_encounter_service, public_view, require_lobby
 from src.services.encounter.games import GameResultIn
+from src.services.flow.corrections import assert_encounter_correction_allowed
 
 
 async def _assert_source_correction_allowed(session: Any, encounter_id: int) -> None:
@@ -49,13 +49,13 @@ async def _assert_source_correction_allowed(session: Any, encounter_id: int) -> 
 
     All three writes can move a group's final table -- a corrected game, a
     voided one, a games count that reopens a completed lobby -- so all three
-    answer to the rule the stage service owns. A missing lobby is left to the
+    answer to the rule ``flow.corrections`` owns. A missing lobby is left to the
     service below to 404 on.
     """
     lobby = await ffa_encounter_service.get_encounter(session, encounter_id)
     if lobby is not None:
         require_lobby(lobby)
-        await admin_stage_service.assert_source_correction_allowed(session, lobby)
+        await assert_encounter_correction_allowed(session, lobby)
 
 
 async def _admin_lobby(session: Any, data: dict, action: str) -> tuple[models.AuthUser, int, int]:

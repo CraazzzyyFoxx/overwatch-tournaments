@@ -27,6 +27,7 @@ from src import schemas
 from src.domain.bracket import SwissThresholds
 from src.domain.individual_swiss import PoolError, PoolPlayer, check_playoff_team_count, teams_per_round
 from src.services.admin.stage.base import StageServiceBase
+from src.services.flow.corrections import assert_stage_correction_allowed
 from src.services.individual_swiss.standings import DEFAULT_PLAYOFF_TEAMS, stage_players
 from src.services.tournament.events import enqueue_tournament_recalculation
 
@@ -203,7 +204,10 @@ class StageCrudMixin(StageServiceBase):
             )
         return output
 
-    async def create_stage(self, session: AsyncSession, tournament_id: int, data: schemas.StageCreate) -> models.Stage:
+    async def _create_stage_record(
+        self, session: AsyncSession, tournament_id: int, data: schemas.StageCreate
+    ) -> models.Stage:
+        """The stage row with its scoring rule and Challonge link: flushes; no node, publish or commit."""
         tournament = await self.tournament_repo.get(session, tournament_id)
         if not tournament:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tournament not found")
@@ -223,7 +227,6 @@ class StageCrudMixin(StageServiceBase):
         _apply_stage_fields(stage, payload)
         _normalize_individual_swiss(stage)
         await self.stage_repo.create(session, stage)
-        await self.add_stage_node(session, stage)
         if challonge_id is not None:
             session.add(
                 models.ChallongeSource(
@@ -234,6 +237,11 @@ class StageCrudMixin(StageServiceBase):
                     source_type="stage",
                 )
             )
+        return stage
+
+    async def create_stage(self, session: AsyncSession, tournament_id: int, data: schemas.StageCreate) -> models.Stage:
+        stage = await self._create_stage_record(session, tournament_id, data)
+        await self.add_stage_node(session, stage)
         await self._publish_structure_changed(session, tournament_id)
         await session.commit()
         return await self.get_stage(session, stage.id)
@@ -411,7 +419,7 @@ class StageCrudMixin(StageServiceBase):
         values are a record of the tournament, and no later edit brings them back.
         """
         if _ranking_signature(before) != _ranking_signature(after):
-            await self.assert_stage_correction_allowed(session, stage)
+            await assert_stage_correction_allowed(session, stage.id)
         formula = compile_formula(after["game_formula"], [column["key"] for column in after["columns"]])
         if formula.names & PLACEMENT_VARIABLES and await self.result_repo.stage_has_unplaced_results(session, stage.id):
             raise HTTPException(
@@ -438,7 +446,11 @@ class StageCrudMixin(StageServiceBase):
                 ],
             )
 
-    async def delete_stage(self, session: AsyncSession, stage_id: int) -> None:
+    async def _delete_stage_record(self, session: AsyncSession, stage_id: int) -> int:
+        """Delete a draft stage with its derived rows (the node goes by cascade); returns its tournament id.
+
+        Flushes; no recompute, publish or commit.
+        """
         stage = await self.get_stage(session, stage_id)
         if stage.status not in (None, enums.FlowNodeStatus.DRAFT):
             raise ApiHTTPException(
@@ -448,11 +460,9 @@ class StageCrudMixin(StageServiceBase):
         tournament_id = stage.tournament_id
         # Lazy: ``flow.lifecycle`` imports this package. Tournament lock first, as a node move takes it, before the
         # node row goes with the stage.
-        from src.services.flow.engine import flow_engine  # noqa: PLC0415
         from src.services.flow.lifecycle import flow_node_service  # noqa: PLC0415
 
-        had_node = stage.node is not None
-        if had_node:
+        if stage.node is not None:
             await flow_node_service.lock_tournament(session, tournament_id)
         workspace_id = await session.scalar(
             select(models.Tournament.workspace_id).where(models.Tournament.id == tournament_id)
@@ -466,13 +476,21 @@ class StageCrudMixin(StageServiceBase):
         await self.encounter_repo.delete_for_stage(session, stage_id)
         await self.standing_repo.delete_for_stage(session, stage_id)
         await self.stage_repo.delete(session, stage)
+        await stage_owner_delete(session, evidence, workspace_id=workspace_id, entity_type="stage", entity_id=stage_id)
+        return tournament_id
+
+    async def delete_stage(self, session: AsyncSession, stage_id: int) -> None:
+        # Lazy: ``flow.lifecycle`` imports this package.
+        from src.services.flow.engine import flow_engine  # noqa: PLC0415
+        from src.services.flow.lifecycle import flow_node_service  # noqa: PLC0415
+
+        had_node = (await self.get_stage(session, stage_id)).node is not None
+        tournament_id = await self._delete_stage_record(session, stage_id)
         if had_node:
             # The status derives from the nodes: a deleted draft sink can complete the tournament.
-            await session.flush()
             await flow_engine.recompute(session, tournament_id)
             await flow_node_service.sync_tournament_status(session, tournament_id)
         await self._publish_structure_changed(session, tournament_id)
-        await stage_owner_delete(session, evidence, workspace_id=workspace_id, entity_type="stage", entity_id=stage_id)
         await session.commit()
 
     async def delete_stage_item(self, session: AsyncSession, stage_item_id: int) -> None:

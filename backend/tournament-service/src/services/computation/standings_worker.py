@@ -126,14 +126,17 @@ async def process_standings_job(job_id: int) -> None:
                     tournament_id,
                     lambda: flow_node_service.sync_stage_completion(session, tournament_id, run.completed_stage_ids),
                 )
-                # The standings that just moved are what a frozen playoff seed was
-                # resolved FROM: re-resolve the ones an untouched downstream stage
-                # item still holds, in this transaction, before anything publishes.
+                # The flow reads the standings and the stages they just moved; the stages seated off its results follow.
+                await _isolated(
+                    session, "Flow recompute", tournament_id, lambda: flow_engine.recompute(session, tournament_id)
+                )
+                # A ready stage was seated from results that just moved: re-seat it, in this transaction, before
+                # anything publishes.
                 requalified = await _isolated(
                     session,
                     "Requalification",
                     tournament_id,
-                    lambda: admin_stage_service.requalify_downstream_inputs(session, tournament_id, stages=stages),
+                    lambda: admin_stage_service.reseat_ready_stages(session, tournament_id),
                 )
                 # What was loaded for the ranking is reused unless requalification moved seats or rolled back (a
                 # rolled-back savepoint expires what it touched): then the Swiss pass reads its own.
@@ -155,11 +158,6 @@ async def process_standings_job(job_id: int) -> None:
                     "Individual Swiss round generation",
                     tournament_id,
                     lambda: individual_swiss_rounds_service.generate_ready_rounds(session, tournament_id),
-                )
-                # After every other step: the flow reads the standings and the stages they just moved. Not used for
-                # invalidation; a failure here must not freeze the standings.
-                await _isolated(
-                    session, "Flow recompute", tournament_id, lambda: flow_engine.recompute(session, tournament_id)
                 )
                 generated = [*(generated or []), *(individual or [])]
             # Nothing moved, nothing to announce: no refetch storm and no achievement run for an identical table.

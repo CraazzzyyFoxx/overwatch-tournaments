@@ -26,6 +26,7 @@ from shared.services.stats_owner_delete import capture_owner_delete, stage_owner
 from src import schemas
 from src.services.bracket.advancement import reset_downstream
 from src.services.bracket.swiss_state import remove_swiss_bye_round
+from src.services.flow.corrections import assert_encounter_correction_allowed
 from src.services.notifications.lifecycle import after_encounter_teams_changed, lifecycle_notifier
 from src.services.tournament.events import enqueue_tournament_recalculation
 
@@ -378,10 +379,10 @@ class AdminEncounterService:
                 )
         _reject_settled_result_edits(encounter, update_data)
         # A status write on this encounter is a result correction, so it may only
-        # land while the qualifications it already fed are still untouched; a
+        # land while the nodes it already fed have not started; a
         # pure rename or reschedule is not a correction.
         if "status" in update_data:
-            await self._assert_source_correction_allowed(session, encounter)
+            await assert_encounter_correction_allowed(session, encounter)
 
         position = await session.get(models.BracketEncounter, encounter.id)
         old_coordinate = (position.stage_id, position.stage_item_id, position.round) if position else None
@@ -436,16 +437,6 @@ class AdminEncounterService:
         await session.refresh(encounter)
 
         return encounter
-
-    @staticmethod
-    async def _assert_source_correction_allowed(session: AsyncSession, encounter: models.Encounter) -> None:
-        """409 unless the downstream qualifications this result fed can still be
-        re-resolved. Imported lazily -- ``admin.stage`` pulls in the whole
-        bracket generation stack, which imports this module's siblings.
-        """
-        from src.services.admin.stage import stage_service as admin_stage_service
-
-        await admin_stage_service.assert_source_correction_allowed(session, encounter)
 
     async def _team_name(self, session: AsyncSession, team_id: int | None) -> str | None:
         """``None`` for an empty slot -- ``build_encounter_name`` renders it as TBD."""
@@ -737,7 +728,7 @@ class AdminEncounterService:
             and stage.stage_type == enums.StageType.SWISS
             and not await self._round_has_other_encounters(session, encounter, position)
         )
-        await self._assert_source_correction_allowed(session, encounter)
+        await assert_encounter_correction_allowed(session, encounter)
         evidence = await capture_owner_delete(session, encounter_id=encounter_id)
         # ``reset_downstream`` mutates ORM state and leaves flushing to its
         # caller, and ``session.delete`` does not flush either: the enqueue

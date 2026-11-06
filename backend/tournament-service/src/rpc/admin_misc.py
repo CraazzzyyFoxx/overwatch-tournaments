@@ -53,6 +53,7 @@ from src.services.bracket.usability import assert_encounter_live
 from src.services.computation import jobs as computation_jobs
 from src.services.encounter.captain import ReportResultIn, captain_service
 from src.services.encounter.report_form import report_form_service
+from src.services.flow.corrections import assert_encounter_correction_allowed
 from src.services.tournament import flows as tournament_flows
 
 
@@ -82,14 +83,13 @@ async def _serialize_result(session: Any, encounter: models.Encounter) -> dict:
 async def _assert_source_correction_allowed(session: Any, encounter_id: int) -> None:
     """Refuse a result correction whose downstream qualification is already live.
 
-    Both result endpoints rewrite a result that a later stage may have been
-    seeded from; the stage service owns that rule (it is the one that would have
-    to re-resolve the frozen seeds). A missing encounter is left to the service
-    below to 404 on.
+    Both result endpoints rewrite a result that a later node may have been
+    seeded from; ``flow.corrections`` owns that rule. A missing encounter is left
+    to the service below to 404 on.
     """
     encounter = await enc_service.encounter_service.get_encounter(session, encounter_id)
     if encounter is not None:
-        await admin_stage_service.assert_source_correction_allowed(session, encounter)
+        await assert_encounter_correction_allowed(session, encounter)
 
 
 async def _assert_bracket_live(session: Any, encounter_id: int) -> None:

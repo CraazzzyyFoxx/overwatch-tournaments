@@ -34,7 +34,7 @@ from shared.models.identity.auth_user import AuthUser
 from shared.models.identity.user import User
 from shared.models.tenancy.workspace import Workspace, WorkspaceMember
 from shared.models.tournament.bracket_encounter import BracketEncounter
-from shared.models.tournament.flow import FlowNode
+from shared.models.tournament.flow import FlowEdge, FlowNode
 from shared.models.tournament.player_role import PlayerRole
 from shared.models.tournament.scrim import ScrimRoom
 from shared.models.tournament.stage import Stage, StageItem, StageItemInput
@@ -49,6 +49,7 @@ from src import schemas
 from src.services.admin.stage import rule_values, stage_service
 from src.services.challonge import sync as challonge_sync
 from src.services.challonge.sync import upsert as sync_upsert
+from src.services.flow.engine import flow_engine
 from src.services.scrim.service import _free_slot, scrim_service
 from src.services.standings.service import Seat, StageEncounter, standings_service
 from tests._encounter_layer import move_stage
@@ -192,50 +193,38 @@ class StageScoringCrudTests(StageLayerCase):
         self.assertEqual([5.0, 3.0, 1.0], list(rule.placement_points))
 
     async def test_the_409_after_the_next_stage_was_seeded_stays(self) -> None:
-        """A re-ranking edit is refused once a playoff seeded off this stage plays."""
+        """A re-ranking edit is refused once a playoff fed by this stage (through a filter) is live."""
         group = await self.make_stage(enums.StageType.ROUND_ROBIN, teams=self.team_ids[:2], name="Group")
         async with self.Session() as s:
-            item = (await stage_service.get_stage(s, group.id)).items[0]
             playoff = await stage_service.create_stage(
                 s,
                 self.tournament_id,
                 schemas.StageCreate(name="Playoff", stage_type=enums.StageType.SINGLE_ELIMINATION, order=2),
             )
-            po_item = StageItem(stage_id=playoff.id, name="UB", type=enums.StageItemType.BRACKET_UPPER, order=0)
-            s.add(po_item)
+            group_node_id = await s.scalar(sa.select(FlowNode.id).where(FlowNode.stage_id == group.id))
+            playoff_node_id = await s.scalar(sa.select(FlowNode.id).where(FlowNode.stage_id == playoff.id))
+            top = FlowNode(tournament_id=self.tournament_id, kind="filter", name="Top", status="final", config={"n": 1})
+            s.add(top)
             await s.flush()
-            # A FINAL input that remembers where it was resolved from, and a
-            # started encounter in the item it feeds: that is "already seeded".
-            s.add(
-                StageItemInput(
-                    stage_item_id=po_item.id,
-                    slot=1,
-                    input_type=enums.StageItemInputType.FINAL,
-                    team_id=self.team_ids[0],
-                    source_stage_item_id=item.id,
-                    source_position=1,
-                )
+            s.add_all(
+                [
+                    FlowEdge(
+                        tournament_id=self.tournament_id,
+                        source_node_id=group_node_id,
+                        source_port="ranking",
+                        target_node_id=top.id,
+                        target_port="ranking",
+                    ),
+                    FlowEdge(
+                        tournament_id=self.tournament_id,
+                        source_node_id=top.id,
+                        source_port="passed",
+                        target_node_id=playoff_node_id,
+                        target_port="participants",
+                    ),
+                ]
             )
-            encounter = Encounter(
-                workspace_id=self.workspace_id,
-                discipline="overwatch",
-                tournament_id=self.tournament_id,
-                scoring_rule_id=playoff.scoring_rule_id,
-                name="F",
-                slot_count=2,
-                status=enums.EncounterStatus.PENDING,
-            )
-            s.add(encounter)
-            await s.flush()
-            s.add(
-                BracketEncounter(
-                    encounter_id=encounter.id,
-                    tournament_id=self.tournament_id,
-                    stage_id=playoff.id,
-                    stage_item_id=po_item.id,
-                    round=1,
-                )
-            )
+            await s.execute(sa.update(FlowNode).where(FlowNode.id == playoff_node_id).values(status="live"))
             await s.commit()
 
         with self.assertRaises(Exception) as ctx:
@@ -717,7 +706,7 @@ class SwissThresholdTests(StageLayerCase):
 
 
 class PlayoffWiringTests(StageLayerCase):
-    """Wiring a playoff from groups keeps a group's teams apart in round 1."""
+    """Seating a playoff from the groups' filter keeps a group's teams apart in round 1."""
 
     async def test_three_groups_sending_two_never_open_against_their_own_group(self) -> None:
         # Six teams, three groups of two, the top two of each advance: the 1-vs-N
@@ -775,6 +764,39 @@ class PlayoffWiringTests(StageLayerCase):
             await s.commit()
         async with self.Session() as s:
             await standings_service.recalculate_for_tournament(s, self.tournament_id)
+            groups_node_id = await s.scalar(sa.select(FlowNode.id).where(FlowNode.stage_id == groups.id))
+            playoff_node_id = await s.scalar(sa.select(FlowNode.id).where(FlowNode.stage_id == playoff.id))
+            await s.execute(sa.update(FlowNode).where(FlowNode.id == groups_node_id).values(status="completed"))
+            await s.execute(sa.update(Stage).where(Stage.id == playoff.id).values(seed_ranking="cross"))
+            top = FlowNode(
+                tournament_id=self.tournament_id,
+                kind="filter",
+                name="Top",
+                status="pending",
+                config={"mode": "per_item_top", "n": 2},
+            )
+            s.add(top)
+            await s.flush()
+            s.add_all(
+                [
+                    FlowEdge(
+                        tournament_id=self.tournament_id,
+                        source_node_id=groups_node_id,
+                        source_port="ranking",
+                        target_node_id=top.id,
+                        target_port="ranking",
+                    ),
+                    FlowEdge(
+                        tournament_id=self.tournament_id,
+                        source_node_id=top.id,
+                        source_port="passed",
+                        target_node_id=playoff_node_id,
+                        target_port="participants",
+                    ),
+                ]
+            )
+            await flow_engine.recompute(s, self.tournament_id)
+            await s.commit()
         await move_stage(self.Session, playoff.id, enums.FlowNodeStatus.READY, enums.FlowNodeStatus.LIVE)
         async with self.Session() as s:
             rounds = dict(
