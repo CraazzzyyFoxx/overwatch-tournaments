@@ -15,6 +15,7 @@ import type { FlowNodeKind, FlowStageCreate } from "@/types/flow.types";
 
 import { tabError, tabFallback, useHubTournamentQuery } from "../hubQueries";
 import { FlowIssues } from "./FlowIssues";
+import { NodeInspector } from "./inspectors/NodeInspector";
 import { FlowPalette } from "./FlowPalette";
 import { PresetDialog } from "./PresetDialog";
 import { useFlowEditor } from "./useFlowEditor";
@@ -28,11 +29,12 @@ export function FlowEditor({ tournamentId }: Readonly<{ tournamentId: number }>)
   const tKind = useTranslations("common.flow.kind");
   const tNames = useTranslations("adminTournament.flow.presets.names");
   const { canAccessPermission } = usePermissions();
-  const { setParams } = useQueryParams({ shallow: true, resetOnChange: [] });
+  const { searchParams, setParams } = useQueryParams({ shallow: true, resetOnChange: [] });
   const [presetsOpen, setPresetsOpen] = useState(false);
 
   const editor = useFlowEditor(tournamentId);
-  const workspaceId = useHubTournamentQuery(tournamentId).data?.workspace_id ?? null;
+  const tournament = useHubTournamentQuery(tournamentId).data;
+  const workspaceId = tournament?.workspace_id ?? null;
   const canUpdate = canAccessPermission("tournament.update", workspaceId);
   const { read, draft, keyed, dirty, apply } = editor;
 
@@ -40,6 +42,16 @@ export function FlowEditor({ tournamentId }: Readonly<{ tournamentId: number }>)
   if (!read || !draft || !keyed) return tabFallback;
 
   const readOnly = !canUpdate;
+  const selected = draft.nodes.find((n) => n.key === searchParams?.get(FLOW_NODE_PARAM));
+  // Palette (editable only), canvas, inspector (a node is selected).
+  const columns = readOnly
+    ? selected
+      ? "lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]"
+      : ""
+    : selected
+      ? "lg:grid-cols-[11rem_minmax(0,3fr)_minmax(0,2fr)]"
+      : "lg:grid-cols-[11rem_minmax(0,1fr)]";
+  const select = (key: string | null) => setParams({ [FLOW_NODE_PARAM]: key });
   const issueCounts = new Map([...keyed.nodeIssues].map(([key, list]) => [key, list.length]));
   const { nodes, edges } = toCanvas(draft, keyed.ports, issueCounts, new Set(keyed.edgeIssues.keys()), readOnly);
 
@@ -94,7 +106,7 @@ export function FlowEditor({ tournamentId }: Readonly<{ tournamentId: number }>)
         ) : null}
       </div>
 
-      <div className={readOnly ? undefined : "grid gap-4 lg:grid-cols-[11rem_minmax(0,1fr)]"}>
+      <div className={`grid gap-4 ${columns}`}>
         {readOnly ? null : (
           <div className="hidden lg:block">
             <FlowPalette onAdd={(kind) => add(kind)} />
@@ -106,7 +118,7 @@ export function FlowEditor({ tournamentId }: Readonly<{ tournamentId: number }>)
             edges={edges}
             readOnly={readOnly}
             heightClass="h-[70vh]"
-            onNodeClick={(key) => setParams({ [FLOW_NODE_PARAM]: key })}
+            onNodeClick={select}
             onDropKind={add}
             onConnect={({ source, sourceHandle, target, targetHandle }) => {
               if (sourceHandle && targetHandle) apply((d) => connect(d, { source, sourceHandle, target, targetHandle }));
@@ -126,9 +138,21 @@ export function FlowEditor({ tournamentId }: Readonly<{ tournamentId: number }>)
             }
           />
         </section>
+        {selected && tournament ? (
+          <NodeInspector
+            key={selected.key}
+            tournamentId={tournamentId}
+            tournament={tournament}
+            node={selected}
+            dirty={dirty}
+            readOnly={readOnly}
+            onChange={(patch) => apply((d) => updateNode(d, selected.key, patch))}
+            onClose={() => select(null)}
+          />
+        ) : null}
       </div>
 
-      <FlowIssues keyed={keyed} draft={draft} onSelect={(key) => setParams({ [FLOW_NODE_PARAM]: key })} />
+      <FlowIssues keyed={keyed} draft={draft} onSelect={select} />
 
       <PresetDialog
         open={presetsOpen}

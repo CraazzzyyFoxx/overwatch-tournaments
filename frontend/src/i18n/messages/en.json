@@ -10992,6 +10992,23 @@
           "season": "Season",
           "seasonTable": "Season table"
         }
+      },
+      "inspector": {
+        "close": "Close",
+        "name": "Name",
+        "saveFirst": "Save the flow to configure this node.",
+        "saveOrDiscard": "Save or discard the graph first.",
+        "stageType": "Stage type",
+        "mode": "Team formation",
+        "openBalancer": "Open the balancer",
+        "openRegisteredTeams": "Open registered teams",
+        "openRoster": "Open the roster",
+        "modes": {
+          "balancer": "Balancer",
+          "draft": "Draft",
+          "registered": "Registered teams",
+          "manual": "Manual"
+        }
       }
     }
   },
