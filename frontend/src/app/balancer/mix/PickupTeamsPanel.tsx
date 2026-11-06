@@ -117,9 +117,8 @@ type PickupTeamsPanelProps = {
   settingNextMap: boolean;
   /** Rolled or hand-picked; `null` clears. Persisted per lobby server-side. */
   onNextMapChange: (mapId: number | null) => void;
-  settingLobbyCode: boolean;
   /** Trimmed; `null` clears. Persisted per lobby server-side, writable while the match is live. */
-  onLobbyCodeChange: (lobbyCode: string | null) => void;
+  onLobbyCodeChange: (lobbyCode: string | null) => Promise<unknown>;
   /** The host's bot-lobby control, for a game whose bot opens lobbies. Omitted -- none. */
   botLobby?: BotLobbyOptions | null;
   closingMix: boolean;
@@ -191,7 +190,6 @@ export function PickupTeamsPanel({
   maps,
   settingNextMap,
   onNextMapChange,
-  settingLobbyCode,
   onLobbyCodeChange,
   botLobby = null,
   closingMix,
@@ -413,7 +411,6 @@ export function PickupTeamsPanel({
                 <LobbyCodeStrip
                   lobbyCode={lobby?.lobby_code ?? null}
                   canWrite={canWrite}
-                  saving={settingLobbyCode}
                   capturing={capturing}
                   onLobbyCodeChange={onLobbyCodeChange}
                 />

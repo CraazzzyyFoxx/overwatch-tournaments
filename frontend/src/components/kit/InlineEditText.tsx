@@ -19,6 +19,11 @@ interface InlineEditTextProps {
   /** Accessible name of the field, e.g. "Group name". */
   label: string;
   canEdit?: boolean;
+  /** `false` lets a blank draft save as `""` (a clear) instead of erroring. */
+  required?: boolean;
+  /** Shown in the input and, muted, in place of an empty value. */
+  placeholder?: string;
+  maxLength?: number;
   className?: string;
   textClassName?: string;
   inputClassName?: string;
@@ -30,6 +35,9 @@ export function InlineEditText({
   onSave,
   label,
   canEdit = true,
+  required = true,
+  placeholder,
+  maxLength,
   className,
   textClassName,
   inputClassName
@@ -41,7 +49,7 @@ export function InlineEditText({
 
   const commit = async () => {
     const next = draft?.trim() ?? "";
-    if (!next) {
+    if (!next && required) {
       setError(t("required", { label: label.toLowerCase() }));
       return;
     }
@@ -76,7 +84,7 @@ export function InlineEditText({
   if (draft === null) {
     return (
       <div className={cn("flex min-w-0 items-center gap-1", className)}>
-        <span className={cn("truncate", textClassName)}>{value}</span>
+        <span className={cn("truncate", textClassName, !value && "text-muted-foreground")}>{value || placeholder}</span>
         {canEdit ? (
           <Button
             size="icon-sm"
@@ -100,6 +108,8 @@ export function InlineEditText({
         aria-label={label}
         aria-invalid={error ? true : undefined}
         value={draft}
+        placeholder={placeholder}
+        maxLength={maxLength}
         disabled={isSaving}
         size="sm"
         className={cn("h-7", inputClassName)}

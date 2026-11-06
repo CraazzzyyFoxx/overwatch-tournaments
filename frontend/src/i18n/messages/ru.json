@@ -8998,7 +8998,6 @@
       "roll": "Разыграть",
       "lobbyCodeLabel": "Код лобби",
       "lobbyCodePlaceholder": "Вставьте код из игры",
-      "lobbyCodeSave": "Сохранить",
       "lobbyCodeCopy": "Скопировать код лобби",
       "lobbyCodeCopied": "Код лобби скопирован",
       "lobbyCodeCopyFailed": "Нет доступа к буферу обмена"

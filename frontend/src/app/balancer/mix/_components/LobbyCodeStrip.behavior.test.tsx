@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 //
-// The lobby's join code: a host's save stores it trimmed and a blank one clears it, and a stored code that moves
-// (the save coming back, another host's write) replaces the field; a reader sees the code, or nothing without one.
+// The lobby's join code: a host's inline edit stores it trimmed and a blank one clears it; a reader sees the code, or
+// nothing without one.
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -19,24 +19,27 @@ let root: Root | null = null;
 let host: HTMLDivElement | null = null;
 
 function render(props: Partial<Parameters<typeof LobbyCodeStrip>[0]> = {}) {
-  const onLobbyCodeChange = vi.fn();
+  const onLobbyCodeChange = vi.fn().mockResolvedValue(undefined);
   host ??= document.body.appendChild(document.createElement("div"));
   root ??= createRoot(host);
   act(() =>
     root!.render(
-      <LobbyCodeStrip lobbyCode={null} canWrite saving={false} onLobbyCodeChange={onLobbyCodeChange} {...props} />
+      <LobbyCodeStrip lobbyCode={null} canWrite onLobbyCodeChange={onLobbyCodeChange} {...props} />
     )
   );
   return onLobbyCodeChange;
 }
 
+const button = (label: string) => host!.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!;
+
 async function save(value: string) {
+  await act(async () => button("edit").click());
   const input = host!.querySelector("input")!;
   await act(async () => {
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, value);
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
-  await act(async () => input.form!.requestSubmit());
+  await act(async () => button("save").click());
 }
 
 afterEach(() => {
@@ -54,13 +57,6 @@ describe("LobbyCodeStrip", () => {
 
     await save("   ");
     expect(onChange).toHaveBeenLastCalledWith(null);
-  });
-
-  it("replaces the field with a stored code that moved", () => {
-    render({ lobbyCode: "OLD" });
-    render({ lobbyCode: "NEW" });
-
-    expect(host!.querySelector("input")!.value).toBe("NEW");
   });
 
   it("shows a reader the code, and nothing while there is none", () => {
