@@ -8,7 +8,7 @@ import sqlalchemy as sa
 from shared.core import enums
 from shared.models.tournament.flow import FlowNode
 from shared.models.tournament.stage import Stage
-from src.schemas.admin.stage import StageCreate
+from src import schemas
 from src.schemas.flow import FlowChanges, FlowEdgeUpsert, FlowNodeUpsert
 from src.services.flow.service import flow_service
 from tests._flow_case import FlowCase
@@ -35,7 +35,7 @@ class StageNodeSaveTests(FlowCase):
                         ref="g",
                         kind="stage",
                         name="Groups",
-                        stage=StageCreate(name="Groups", stage_type=enums.StageType.ROUND_ROBIN, order=2),
+                        stage=schemas.StageCreate(name="Groups", stage_type=enums.StageType.ROUND_ROBIN, order=2),
                     )
                 ],
                 edges=[FlowEdgeUpsert(source=formation, source_port="teams", target="g", target_port="participants")],
@@ -57,7 +57,7 @@ class StageNodeSaveTests(FlowCase):
                 kind="filter",
                 name="F",
                 config={"mode": "top", "n": 2},
-                stage=StageCreate(name="X", stage_type=enums.StageType.ROUND_ROBIN),
+                stage=schemas.StageCreate(name="X", stage_type=enums.StageType.ROUND_ROBIN),
             )
         self.assertEqual("flow_node_stage_misplaced", caught.exception.errors()[0]["type"])
 

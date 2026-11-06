@@ -9,9 +9,9 @@ import sqlalchemy as sa
 
 from shared.core import enums
 from shared.models.tournament.flow import FlowNode
+from src import schemas
 from src.rpc import _helpers as rpc_helpers
 from src.rpc import flow
-from src.schemas.admin.stage import StageCreate
 from src.schemas.flow import FlowChanges, FlowEdgeUpsert, FlowNodeUpsert
 from src.services.flow.service import flow_service
 from tests._flow_case import FlowCase
@@ -39,7 +39,7 @@ class ValidateChangesTests(FlowCase):
                         ref="g",
                         kind="stage",
                         name="Groups",
-                        stage=StageCreate(name="Groups", stage_type=enums.StageType.ROUND_ROBIN),
+                        stage=schemas.StageCreate(name="Groups", stage_type=enums.StageType.ROUND_ROBIN),
                     )
                 ],
                 edges=[FlowEdgeUpsert(source=formation, source_port="teams", target="g", target_port="participants")],
@@ -62,7 +62,7 @@ class ValidateChangesTests(FlowCase):
                         ref="g",
                         kind="stage",
                         name="Groups",
-                        stage=StageCreate(name="Groups", stage_type=enums.StageType.ROUND_ROBIN),
+                        stage=schemas.StageCreate(name="Groups", stage_type=enums.StageType.ROUND_ROBIN),
                     )
                 ],
                 edges=[

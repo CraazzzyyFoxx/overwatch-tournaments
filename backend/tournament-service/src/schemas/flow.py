@@ -21,7 +21,7 @@ from shared.domain.flow.config import (
     SplitNodeConfig,
     StageNodeConfig,
 )
-from src.schemas.admin.stage import StageCreate
+from src import schemas
 
 __all__ = (
     "AdminFlowRead",
@@ -206,7 +206,7 @@ class FlowNodeUpsert(BaseModel):
     name: str
     config: dict[str, Any] = {}
     stage_id: int | None = None
-    stage: StageCreate | None = None
+    stage: schemas.StageCreate | None = None
     position_x: float = 0.0
     position_y: float = 0.0
 
