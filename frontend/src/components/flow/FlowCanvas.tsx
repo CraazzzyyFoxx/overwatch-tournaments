@@ -17,7 +17,7 @@ import {
 import "@xyflow/react/dist/style.css";
 
 import { FLOW_NODE_MIME, type FlowNodeData } from "@/lib/flow/flowCanvas";
-import type { FlowNodeKind } from "@/lib/flow/kinds";
+import type { FlowNodeKind } from "@/types/flow.types";
 
 import { FlowNodeCard } from "./FlowNodeCard";
 

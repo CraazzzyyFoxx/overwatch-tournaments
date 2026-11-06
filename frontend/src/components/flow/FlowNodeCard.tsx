@@ -5,7 +5,8 @@ import { useTranslations } from "next-intl";
 
 import { Badge } from "@/components/ui/badge";
 import { HANDLE_COLOR, type FlowNodeData } from "@/lib/flow/flowCanvas";
-import { UNIT_COLOR, type FlowUnit } from "@/lib/flow/kinds";
+import { UNIT_COLOR } from "@/lib/flow/kinds";
+import type { FlowUnit } from "@/types/flow.types";
 
 /** One flow node: kind, name, status and issue badges, and a typed handle per resolved port. */
 export function FlowNodeCard({ data }: NodeProps<Node<FlowNodeData>>) {

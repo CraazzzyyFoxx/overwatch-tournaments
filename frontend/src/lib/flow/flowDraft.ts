@@ -1,11 +1,14 @@
-import type { Schema } from "@/types/api";
-import type { FlowNodeStatus as FlowNodeStatusValue, FlowRead } from "@/types/flow.types";
+import type {
+  FlowIssueRead,
+  FlowNodeKind,
+  FlowNodeStatus as FlowNodeStatusValue,
+  FlowNodeUpsert,
+  FlowPortRead,
+  FlowRead,
+  FlowStageCreate
+} from "@/types/flow.types";
 
-import { isLifecycle, kindOf, type FlowNodeKind, type FlowStageCreate } from "./kinds";
-
-type FlowIssueRead = Schema<"tournament.FlowIssueRead">;
-type FlowPortRead = Schema<"tournament.FlowPortRead">;
-type FlowNodeUpsert = Schema<"tournament.FlowNodeUpsert">;
+import { isLifecycle, kindOf } from "./kinds";
 
 export type DraftNode = {
   key: string;
@@ -41,7 +44,6 @@ export type FlowDraft = {
 };
 
 /** `FlowChanges` with what the editor sends: `nodes` always present, a new stage node carrying its `stage`. */
-// until P5 Task 1-3 regenerate api types (`FlowNodeUpsert.stage`)
 export type FlowNodeChange = Pick<FlowNodeUpsert, "kind" | "name" | "config" | "position_x" | "position_y"> & {
   ref?: string;
   id?: number;

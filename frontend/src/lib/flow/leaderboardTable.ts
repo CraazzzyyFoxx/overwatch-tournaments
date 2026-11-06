@@ -1,14 +1,6 @@
 import { kindOf } from "@/lib/flow/kinds";
 import type { FlowNodeRead, FlowRead } from "@/types/flow.types";
 
-// until P5 Task 3 regenerates api types (`FlowRead.participants`: display names of the result rows' members/teams)
-type FlowParticipant = {
-  workspace_member_id?: number | null;
-  team_id?: number | null;
-  name: string;
-};
-type NamedFlow = FlowRead & { participants?: FlowParticipant[] };
-
 export type TableColumn = { nodeId: number; name: string };
 export type TableCell = { place: number; score: number; counted: boolean } | null;
 export type TableRow = {
@@ -61,7 +53,7 @@ function breakdownOf(result: Result | undefined): Map<number, NonNullable<TableC
  * the aggregate that feeds it supplies one column per input, the cells and the total.
  */
 export function buildLeaderboardTable(
-  flow: NamedFlow,
+  flow: FlowRead,
   nodeId?: number
 ): LeaderboardTableModel | null {
   const node =

@@ -1,7 +1,10 @@
-import type { FlowRead } from "@/types/flow.types";
+import type { FlowRead, FlowStageCreate } from "@/types/flow.types";
 
 import { addNode, connect, removeEdge, updateNode, type FlowDraft, type NewNode } from "./flowDraft";
-import { kindOf, type FlowStageCreate } from "./kinds";
+import { kindOf } from "./kinds";
+
+/** The stage fields a preset sets beyond name, type and order; the server fills every other one. */
+type StageExtra = { seed_ranking?: `${NonNullable<FlowStageCreate["seed_ranking"]>}`; playoff_team_count?: number };
 
 export type PresetId = "single" | "groups_playoff" | "groups_reformation_playoff" | "swiss_draft_playoff" | "league";
 
@@ -62,11 +65,17 @@ export function applyPreset(
   const wire = (source: string, sourceHandle: string, target: string, targetHandle: string) => {
     wired.push({ source, sourceHandle, target, targetHandle });
   };
-  const stage = (name: string, stageType: FlowStageCreate["stage_type"], col: number, row = 0, extra: Partial<FlowStageCreate> = {}) =>
-    add({ kind: "stage", name, config: {}, stage: { name, stage_type: stageType, order: col, ...extra }, ...at(col, row) });
+  const stage = (name: string, stageType: `${FlowStageCreate["stage_type"]}`, col: number, row = 0, extra: StageExtra = {}) =>
+    add({
+      kind: "stage",
+      name,
+      config: {},
+      stage: { name, stage_type: stageType, order: col, ...extra } as FlowStageCreate,
+      ...at(col, row)
+    });
   const filter = (name: string, config: Record<string, unknown>, col: number) =>
     add({ kind: "filter", name, config, ...at(col) });
-  const playoff = (col: number, extra: Partial<FlowStageCreate> = {}) =>
+  const playoff = (col: number, extra: StageExtra = {}) =>
     stage(labels.playoff, "single_elimination", col, 0, extra);
   const formed = (name: string, col: number, row = 0) =>
     add({ kind: "formation", name, config: { mode: formation.config.mode }, ...at(col, row) });

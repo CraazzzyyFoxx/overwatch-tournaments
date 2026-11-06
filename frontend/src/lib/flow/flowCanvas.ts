@@ -1,13 +1,16 @@
 import type { Edge, Node } from "@xyflow/react";
 
 import { HANDLE_COLOR } from "@/components/rule-builder/rule-tree";
-import type { Schema } from "@/types/api";
-import type { FlowNodeStatus as FlowNodeStatusValue, FlowRead } from "@/types/flow.types";
+import type {
+  FlowNodeKind,
+  FlowNodeStatus as FlowNodeStatusValue,
+  FlowPortRead,
+  FlowRead,
+  FlowUnit
+} from "@/types/flow.types";
 
 import { canDelete, type FlowDraft } from "./flowDraft";
-import { UNIT_COLOR, type FlowNodeKind, type FlowUnit } from "./kinds";
-
-type FlowPortRead = Schema<"tournament.FlowPortRead">;
+import { UNIT_COLOR } from "./kinds";
 
 /** The drag MIME of a palette row: the node kind being dropped. */
 export const FLOW_NODE_MIME = "application/flow-node-kind";
