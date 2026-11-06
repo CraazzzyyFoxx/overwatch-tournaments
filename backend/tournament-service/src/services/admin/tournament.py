@@ -12,7 +12,7 @@ from shared.core import http_status as status
 from shared.core.enums import FlowNodeKind, FlowNodeStatus, TournamentStatus
 from shared.core.errors import ApiExc, ApiHTTPException
 from shared.core.errors import BaseAPIException as HTTPException
-from shared.domain.flow.legacy import FORMATION_MODE, X_STEP
+from shared.domain.flow.legacy import X_STEP
 from shared.domain.tournament_slug import slugify
 from shared.repository import (
     ChallongeSourceRepository,
@@ -247,14 +247,14 @@ class AdminTournamentService:
             kind=FlowNodeKind.REGISTRATION,
             name="Registration",
             status=FlowNodeStatus.DRAFT,
-            config={"check_in": False, "intake": "team" if tournament.team_formation == "registration" else "solo"},
+            config={"check_in": False, "intake": "solo"},
         )
         formation = models.FlowNode(
             tournament_id=tournament.id,
             kind=FlowNodeKind.FORMATION,
             name="Teams",
             status=FlowNodeStatus.DRAFT,
-            config={"mode": FORMATION_MODE.get(tournament.team_formation, "manual")},
+            config={"mode": "balancer"},
             position_x=X_STEP,
         )
         session.add_all([registration, formation])
@@ -330,16 +330,6 @@ class AdminTournamentService:
 
         if not tournament:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tournament not found")
-
-        if "team_formation" in update_data and update_data["team_formation"] != tournament.team_formation:
-            await assert_no_active_draft_session(session, tournament_id)
-
-        # Same lock, one level down: the session snapshots the format at create
-        # time, so an edit mid-draft would promise a change the running board
-        # will never honour. Both sides are normalized (DraftFormatField in,
-        # this same path out), so a Settings-tab resend is not a change.
-        if "draft_format_json" in update_data and update_data["draft_format_json"] != tournament.draft_format_json:
-            await assert_no_active_draft_session(session, tournament_id, change="the draft format")
 
         if "challonge_slug" in update_data:
             update_data.pop("challonge_slug")

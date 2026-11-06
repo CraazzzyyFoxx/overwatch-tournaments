@@ -108,7 +108,6 @@ async def _seed(session: Any, *, require_subscription: bool = False) -> SimpleNa
         name=f"Write guards {suffix}",
         slug=f"wguard-{suffix}",
         status=enums.TournamentStatus.LIVE,
-        team_formation="registration",
     )
     session.add(tournament)
     await session.flush()

@@ -90,7 +90,6 @@ async def _seed(session: Any, *, discipline: str) -> SimpleNamespace:
         slug=f"ownprov-{suffix}",
         discipline=discipline,
         status=enums.TournamentStatus.LIVE,
-        team_formation="registration",
     )
     session.add(tournament)
     await session.flush()

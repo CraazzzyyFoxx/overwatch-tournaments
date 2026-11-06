@@ -147,7 +147,7 @@ class Encounter(db.TimeStampIntegerMixin):
     )
     #: ``enums.EncounterResultSource``, or NULL while no official result exists --
     #: readers then show the running total of the confirmed games. Plain
-    #: text + CHECK, like ``Tournament.team_formation``.
+    #: text + CHECK.
     result_source: Mapped[str | None] = mapped_column(String(16), nullable=True)
     #: Bumped by every result write, under the row's own lock.
     result_version: Mapped[int] = mapped_column(BigInteger(), default=0, server_default="0")

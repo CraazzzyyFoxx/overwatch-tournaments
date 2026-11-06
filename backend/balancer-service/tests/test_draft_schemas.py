@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import sys
 from pathlib import Path
 
@@ -24,6 +23,7 @@ from shared.core.enums import (  # noqa: E402
 )
 from shared.domain.roster_shape import RosterShape  # noqa: E402
 from shared.models.draft import DraftSession  # noqa: E402
+from shared.schemas.draft_format import session_format  # noqa: E402
 from shared.schemas.roster_slots import RosterShapeRead  # noqa: E402
 from src import schemas  # noqa: E402
 from src.domain.draft import rules  # noqa: E402
@@ -162,33 +162,19 @@ def test_extend_request_requires_the_optimistic_token() -> None:
     assert (ok.expected_version, ok.seconds) == (3, 30)
 
 
-# ─── the format is the tournament's, not the request's ───────────────────────
+# ─── the format is the formation node's, not the request's ───────────────────
 
 
-class _FormatSession:
-    """Just enough AsyncSession for ``tournament_draft_format``."""
-
-    def __init__(self, raw: dict | None) -> None:
-        self._raw = raw
-
-    async def scalar(self, statement: object) -> dict | None:
-        return self._raw
-
-
-def _tournament_format(raw: dict | None, rounds: int):
-    return asyncio.run(
-        lifecycle.lifecycle_service.tournament_draft_format(_FormatSession(raw), 1, rounds=rounds)  # type: ignore[arg-type]
-    )
+def _node_format(raw: dict | None, rounds: int):
+    return session_format(raw, rounds)
 
 
 def test_a_tournament_without_a_stored_format_drafts_snake() -> None:
-    assert _tournament_format(None, 4) == (DraftFormat.SNAKE, {})
+    assert _node_format(None, 4) == (DraftFormat.SNAKE, {})
 
 
 def test_a_custom_tournament_copies_its_rules_padded_to_the_round_count() -> None:
-    fmt, settings = _tournament_format(
-        {"format": "custom", "round_rules": ["reverse"], "avg_tie_seed_reverse": True}, 3
-    )
+    fmt, settings = _node_format({"format": "custom", "round_rules": ["reverse"], "avg_tie_seed_reverse": True}, 3)
 
     assert fmt is DraftFormat.CUSTOM
     assert settings == {"round_rules": ["reverse", "linear", "linear"], "avg_tie_seed_reverse": True}

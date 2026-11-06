@@ -342,6 +342,44 @@ def test_pending_registrations_turn_critical_inside_24h_of_closing(db_session) -
     assert all(card.registrations_last_24h == 1 for card in dashboard.tournaments)
 
 
+def test_balancer_issues_follow_the_formation_nodes_of_the_flow(db_session) -> None:
+    async def seed(session: Any, workspace_id: int, now: datetime) -> dict[str, Any]:
+        ids = {}
+        for label, modes in (
+            ("balancer", ("balancer",)),
+            ("draft", ("draft",)),
+            ("both", ("draft", "balancer")),
+            ("none", ()),
+        ):
+            tournament = await _tournament(session, workspace_id, TS.LIVE)
+            await _register(session, tournament, status="approved", balancer_status="incomplete")
+            for mode in modes:
+                session.add(
+                    FlowNode(
+                        tournament_id=tournament.id,
+                        kind="formation",
+                        name="Teams",
+                        status="draft",
+                        config={"mode": mode},
+                    )
+                )
+            ids[label] = tournament.id
+        await session.flush()
+        return ids
+
+    dashboard, ids, _now = _run(db_session, seed)
+
+    cards = {card.id: card for card in dashboard.tournaments}
+    assert {label: cards[tid].readiness.formation_modes for label, tid in ids.items()} == {
+        "balancer": ["balancer"],
+        "draft": ["draft"],
+        "both": ["balancer", "draft"],
+        "none": [],
+    }
+    flagged = {label for label, tid in ids.items() if "pool_need_fix" in {i[0] for i in _issues(dashboard, tid)}}
+    assert flagged == {"balancer", "both"}
+
+
 # --- backlog -------------------------------------------------------------------
 
 

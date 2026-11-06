@@ -33,6 +33,7 @@ from shared.core.tournament_state import FINISHED_STATUSES
 from src import schemas
 from src.services.dashboard.readiness import (
     build_readiness,
+    formation_modes,
     has_enabled_achievement_rules,
     latest_evaluation_run_status,
     setup_counts,
@@ -189,13 +190,17 @@ def _card_issues(
             closes = card.registration_closes_at
             severity = "critical" if closes is not None and closes - now < REGISTRATION_URGENT else "warning"
             found.append(("registrations_pending", severity, readiness.registrations_pending))
-        if card.team_formation == "balancer" and readiness.pool_need_fix:
+        if "balancer" in readiness.formation_modes and readiness.pool_need_fix:
             found.append(("pool_need_fix", "warning", readiness.pool_need_fix))
         if readiness.registrations_approved is not None:
             unranked = readiness.registrations_approved - (readiness.registrations_ranked or 0)
             if unranked > 0:
                 found.append(("ranks_missing", "warning", unranked))
-        if card.team_formation == "balancer" and readiness.balance_saved and readiness.balance_exported_at is None:
+        if (
+            "balancer" in readiness.formation_modes
+            and readiness.balance_saved
+            and readiness.balance_exported_at is None
+        ):
             found.append(("balance_not_exported", "warning", None))
         if slots_empty:
             found.append(("stage_slots_empty", "warning", slots_empty))
@@ -264,7 +269,6 @@ class AdminDashboardService:
                 is_hidden=tournament.is_hidden,
                 logo_url=tournament.logo_url,
                 cover_image_url=tournament.cover_image_url,
-                team_formation=tournament.team_formation,
                 start_date=tournament.start_date,
                 end_date=tournament.end_date,
                 finished_at=row.finished_at if phase == "wrap_up" else None,
@@ -394,6 +398,7 @@ class AdminDashboardService:
                     "has_achievement_rules"
                 ),
                 standings_recalc_pending(tournament.id).label("recalc_pending"),
+                formation_modes(tournament.id),
                 *(setup_counts(tournament.id) if permissions.tournament_read else ()),
                 *(team_counts(tournament.id) if permissions.team_read else ()),
             ).where(

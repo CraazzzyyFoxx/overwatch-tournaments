@@ -67,7 +67,6 @@ class DraftCustomRulesTests(IsolatedAsyncioTestCase):
                 name=f"T {self._suffix}",
                 slug=f"t-{self._suffix}",
                 status="announcement",
-                team_formation="draft",
             )
             s.add(tourn)
             await s.flush()

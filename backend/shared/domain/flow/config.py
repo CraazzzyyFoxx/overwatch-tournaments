@@ -9,6 +9,7 @@ from pydantic_core import PydanticCustomError
 
 from shared.core.enums import FlowNodeKind, FlowUnit, SubscriptionEnforcementStage
 from shared.domain.ffa_formula import FfaFormulaError, compile_formula
+from shared.schemas.draft_format import DraftFormatField
 
 __all__ = (
     "AGGREGATE_VARIABLES",
@@ -64,6 +65,8 @@ class RegistrationNodeConfig(_NodeConfig):
 
 class FormationNodeConfig(_NodeConfig):
     mode: Literal["balancer", "draft", "registered", "manual"]
+    #: The draft's format rule; only read when ``mode == "draft"``. ``None`` is the snake default.
+    draft_format: DraftFormatField = None
 
 
 class StageNodeConfig(_NodeConfig):

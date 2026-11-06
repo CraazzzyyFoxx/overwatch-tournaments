@@ -430,10 +430,17 @@ class LockQualificationTests(IndividualSwissReadsCase):
     async def test_a_draft_format_other_than_snake_is_refused_before_anything_is_locked(self) -> None:
         await self.complete()
         async with self.Session() as s:
-            await s.execute(
-                sa.update(models.Tournament)
-                .where(models.Tournament.id == self.tournament_id)
-                .values(draft_format_json={"format": "linear", "round_rules": [], "avg_tie_seed_reverse": False})
+            s.add(
+                models.FlowNode(
+                    tournament_id=self.tournament_id,
+                    kind="formation",
+                    name="Teams",
+                    status="draft",
+                    config={
+                        "mode": "draft",
+                        "draft_format": {"format": "linear", "round_rules": [], "avg_tie_seed_reverse": False},
+                    },
+                )
             )
             await s.commit()
         with self.assertRaises(BaseAPIException) as raised:

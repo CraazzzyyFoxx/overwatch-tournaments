@@ -308,6 +308,23 @@ class FormationScopeTests(IsolatedAsyncioTestCase):
             self.assertEqual(caught.exception.status_code, 409)
             self.assertEqual(_code(caught), "draft_already_active")
 
+    async def test_a_draft_takes_the_format_of_its_own_node(self) -> None:
+        custom = {"format": "custom", "round_rules": ["reverse"], "avg_tie_seed_reverse": True}
+        async with self.Session() as s:
+            other = await formation_node(s, self.tournament_id, mode="draft")
+            for node_id, rule in ((self.a, custom), (other, {"format": "linear"})):
+                await s.execute(
+                    sa.update(models.FlowNode)
+                    .where(models.FlowNode.id == node_id)
+                    .values(config={"mode": "draft", "draft_format": rule})
+                )
+            first, second = await self._create_draft(s, self.a), await self._create_draft(s, other)
+            self.assertEqual((first.format, second.format), ("custom", "linear"))
+            self.assertEqual(first.settings_json["round_rules"][0], "reverse")
+            self.assertEqual(len(first.settings_json["round_rules"]), first.rounds)
+            self.assertTrue(first.settings_json["avg_tie_seed_reverse"])
+            self.assertNotIn("round_rules", second.settings_json)
+
     async def test_draft_start_needs_forming_node(self) -> None:
         async with self.Session() as s:
             draft = await self._create_draft(s, self.a)

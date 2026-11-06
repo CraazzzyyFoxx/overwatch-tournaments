@@ -57,7 +57,10 @@ def seeded(db):
     db.add(RegistrationForm(tournament_id=t.id, workspace_id=ws.id))
     regs = [Registration(tournament_id=t.id, display_name=name) for name in "abcd"]
     node = models.FlowNode(tournament_id=t.id, kind="registration", name="Registration", status="open", config={})
-    db.add_all([*regs, node])
+    formation = models.FlowNode(
+        tournament_id=t.id, kind="formation", name="Teams", status="draft", config={"mode": "balancer"}
+    )
+    db.add_all([*regs, node, formation])
     db.flush()
     db.add(models.FlowNodeSchedule(node_id=node.id, phase="open", starts_at=datetime.now(UTC)))
     db.add_all(
@@ -131,7 +134,7 @@ def test_readiness_counts(rpc, seeded):
     r = asyncio.run(run())
     assert r.tournament_id == tournament_id
     assert r.status == "live"
-    assert r.team_formation == "balancer"
+    assert r.formation_modes == ["balancer"]
     # tournament.read group
     assert r.schedule_configured is True
     assert r.grid_selected is False
@@ -194,7 +197,7 @@ def test_readiness_masks_fields_without_tournament_read(rpc, seeded):
     # always-visible header
     assert d["tournament_id"] == tournament_id
     assert d["status"] == "live"
-    assert d["team_formation"] == "balancer"
+    assert d["formation_modes"] == ["balancer"]
     # tournament.read-gated fields are masked
     assert d["stages_total"] is None
     assert d["logs_used"] is None

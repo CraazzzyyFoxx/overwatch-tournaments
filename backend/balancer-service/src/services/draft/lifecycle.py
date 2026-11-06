@@ -44,7 +44,7 @@ from shared.repository.flow_node import FlowNodeRepository
 from shared.repository.identity import UserRepository
 from shared.repository.tournament import TournamentRepository
 from shared.repository.workspace import WorkspaceMemberRepository, get_or_create_workspace_member
-from shared.schemas.draft_format import session_format_from_tournament
+from shared.schemas.draft_format import session_format
 from shared.schemas.role import RoleRef
 from shared.services.ontology import resolve_role_ref
 from shared.services.team_format import tournament_slot_shape
@@ -64,8 +64,8 @@ from src.services.mix_room_dms import notify_mix_captain
 
 __all__ = ("DraftLifecycleService", "lifecycle_service")
 
-#: ``settings_json`` keys the tournament's format rule owns. A client may not set
-#: them: on create they come from ``Tournament.draft_format_json``, on patch the
+#: ``settings_json`` keys the formation node's format rule owns. A client may not set
+#: them: on create they come from the node's ``config["draft_format"]``, on patch the
 #: session keeps the snapshot it was created with. Otherwise the wizard (or a
 #: stale bundle) would be a second, unlocked place to edit the format.
 _FORMAT_SETTINGS_KEYS = ("round_rules", "avg_tie_seed_reverse")
@@ -206,17 +206,6 @@ class DraftLifecycleService:
             )
         return node
 
-    async def tournament_draft_format(
-        self, session: AsyncSession, tournament_id: int, *, rounds: int
-    ) -> tuple[DraftFormat, dict]:
-        """The tournament's format rule, projected onto a session of ``rounds`` rounds.
-
-        The format is entered once in the tournament's settings, and every new
-        session takes its snapshot from here (``NULL`` -> snake).
-        """
-        raw = await self.tournaments_repo.get_draft_format_json(session, tournament_id)
-        return session_format_from_tournament(raw, rounds)
-
     async def create_session(
         self,
         session: AsyncSession,
@@ -290,13 +279,13 @@ class DraftLifecycleService:
     ) -> DraftSession:
         """Create a session for the payload's formation node and publish ``draft.session_updated``."""
         await require_formation_node(session, tournament_id, payload.formation_node_id)
-        await self.assert_draft_formation(session, payload.formation_node_id)
+        node = await self.assert_draft_formation(session, payload.formation_node_id)
         # The roster shape is the tournament's, not the request's: a draft
         # cannot be created at a size the tournament does not run. The format
-        # is the tournament's for the same reason -- it is a rule organizers
-        # announce, edited in the tournament's settings, not here.
+        # is the formation node's for the same reason -- it is a rule organizers
+        # announce, edited in the flow, not here.
         shape = await tournament_slot_shape(session, tournament_id)
-        fmt, format_settings = await self.tournament_draft_format(session, tournament_id, rounds=shape.draft_rounds)
+        fmt, format_settings = session_format(node.config.get("draft_format"), shape.draft_rounds)
         draft = await self.create_session(
             session,
             tournament_id=tournament_id,

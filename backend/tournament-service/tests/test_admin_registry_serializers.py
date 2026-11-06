@@ -120,12 +120,10 @@ def _tournament(tournament_id: int = 91_001) -> models.Tournament:
         discord_dms_enabled=True,
         logs_official=False,
         pov_stream_delay_s=0,
-        team_formation="balancer",
         division_grid_version_id=5,
         # Plain columns the serializer reads: unset on a detached instance means
         # a refresh attempt, not NULL.
         discipline="overwatch",
-        draft_format_json=None,
         rules=None,
         cover_image_url=None,
         logo_url=None,
