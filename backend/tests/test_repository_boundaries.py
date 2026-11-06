@@ -82,7 +82,6 @@ APPROVED_DIRECT_WRITE_FILES = {
     "tournament-service/src/services/admin/encounter.py",
     "tournament-service/src/services/admin/stage/crud.py",
     "tournament-service/src/services/admin/stage/merge.py",
-    "tournament-service/src/services/admin/stage/qualification.py",
     "tournament-service/src/services/admin/stage/seeding.py",
     "tournament-service/src/services/admin/team.py",
     "tournament-service/src/services/admin/tournament.py",
