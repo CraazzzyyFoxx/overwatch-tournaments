@@ -10362,6 +10362,8 @@
       "empty": "The table appears once the first round is generated.",
       "place": "Place",
       "player": "Player",
+      "role": "Role",
+      "search": "Search players",
       "points": "Points",
       "record": "W–D–L",
       "mapDiff": "Map diff",

@@ -17,12 +17,14 @@ export const ROW_HEIGHT_ESTIMATE: Record<AdminTableDensity, number> = { comforta
 
 /** One flat list of everything the body renders, so the virtualiser can measure group headers and expanded details like any other row. */
 export type BodyItem<TData> =
-  | { kind: "group"; key: string; group: DataTableGroup<TData> }
+  | { kind: "group"; key: string; group: DataTableGroup<TData>; collapsed: boolean }
   | { kind: "row"; key: string; row: Row<TData> }
   | { kind: "detail"; key: string; row: Row<TData> };
 
 export interface VirtualBodyOptions<TData> extends Pick<DataTableProps<TData>, "groupRows"> {
   pageRows: Row<TData>[];
+  /** Keys of the groups the reader folded: only their header is rendered. */
+  collapsedGroups: ReadonlySet<string>;
   /** `renderExpanded` was given, so an expanded row contributes a detail item. */
   hasExpandedDetail: boolean;
   isMobile: boolean;
@@ -34,6 +36,7 @@ export interface VirtualBodyOptions<TData> extends Pick<DataTableProps<TData>, "
 export function useVirtualBody<TData>({
   pageRows,
   groupRows,
+  collapsedGroups,
   hasExpandedDetail,
   isMobile,
   density,
@@ -43,13 +46,16 @@ export function useVirtualBody<TData>({
     ? groupRows(pageRows)
     : [{ key: "all", label: null, rows: pageRows }];
 
-  const bodyItems: BodyItem<TData>[] = rowGroups.flatMap((group) => [
-    ...(group.label !== null ? [{ kind: "group" as const, key: `group:${group.key}`, group }] : []),
-    ...group.rows.flatMap((row) => [
-      { kind: "row" as const, key: row.id, row },
-      ...(hasExpandedDetail && row.getIsExpanded() ? [{ kind: "detail" as const, key: `detail:${row.id}`, row }] : [])
-    ])
-  ]);
+  const bodyItems: BodyItem<TData>[] = rowGroups.flatMap((group) => {
+    const collapsed = group.label !== null && collapsedGroups.has(group.key);
+    return [
+      ...(group.label !== null ? [{ kind: "group" as const, key: `group:${group.key}`, group, collapsed }] : []),
+      ...(collapsed ? [] : group.rows).flatMap((row) => [
+        { kind: "row" as const, key: row.id, row },
+        ...(hasExpandedDetail && row.getIsExpanded() ? [{ kind: "detail" as const, key: `detail:${row.id}`, row }] : [])
+      ])
+    ];
+  });
 
   const virtualize = !isMobile && bodyItems.length > VIRTUALIZE_FROM;
   const virtualizer = useVirtualizer({

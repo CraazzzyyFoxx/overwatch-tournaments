@@ -280,14 +280,8 @@ export default function RegistrationsTable({
       (key) => t(`registrationsAdmin.grouping.${key}`)
     ).map((group) => ({
       key: group.key,
-      label: (
-        <>
-          <span className="text-foreground">{group.label}</span>
-          <span className="ml-2 font-normal normal-case text-muted-foreground">
-            {t("registrationsAdmin.table.registrationCount", { count: group.registrations.length })}
-          </span>
-        </>
-      ),
+      // The table's group header adds the row count after the label.
+      label: <span className="text-foreground">{group.label}</span>,
       rows: group.registrations.flatMap((registration) => {
         const row = rowsById.get(registration.id);
         return row ? [row] : [];

@@ -72,15 +72,18 @@ import { TiebreakersSection } from "./stage-settings/TiebreakersSection";
 import { tabFallback } from "../../hubQueries";
 import { useStageOperations } from "./stage-editor/useStageOperations";
 import { MatchesView } from "../../matches/MatchesView";
-import { PlayerStandingsSection } from "./PlayerStandingsSection";
 
-// The standings table is the heaviest thing the editor can show and only one
-// tab of four needs it, so it is split out of the Bracket tab's bundle.
+// The standings tables are the heaviest thing the editor can show and only one
+// tab of four needs them, so they are split out of the Bracket tab's bundle.
 const StandingsBrowser = dynamic(
   () =>
     import("@/components/admin/StandingsBrowser").then((module) => ({
       default: module.StandingsBrowser
     })),
+  { loading: () => tabFallback }
+);
+const PlayerStandingsSection = dynamic(
+  () => import("./PlayerStandingsSection").then((module) => ({ default: module.PlayerStandingsSection })),
   { loading: () => tabFallback }
 );
 

@@ -31,7 +31,8 @@ project, satisfy `host.ts`, and it works.
   - `onCell(row)` — per-row `<td>` `className` / `style` / `align` / `title`; no `colSpan`/`rowSpan`.
 - **Sorting.** Click to sort; Shift+click stacks a second sort in client mode.
 - **Rendering.** Sticky header in its own scroll box, virtualised body past 100 rows,
-  grouped rows (`groupRows`, with the reader's choice in the View menu via `groupBy`),
+  grouped rows (`groupRows`, with the reader's choice in the View menu via `groupBy`; each
+  group header shows its row count and folds the group away on click, until reload),
   expandable details (`renderExpanded`), density, cards below `md` (`renderMobileCard`),
   search-match highlighting, a `summary` line at the foot. The table is its own card;
   `framed={false}` drops that frame when a card around it already has one.

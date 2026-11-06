@@ -358,11 +358,11 @@ describe("RegistrationsTable toolbar", () => {
     await click(menuItem("menuitemradio", "Group by check-in"));
 
     // Both buckets: the pool has no checked-in rows, so one section holds all 25.
-    // A section header is a body row without a row id; the foot's total says the same words.
+    // A section header is a body row without a row id, its row count after the label.
     const sectionHeaders = [...scope.querySelectorAll("tbody tr:not([data-row-id])")].map(
       (node) => node.textContent ?? ""
     );
-    expect(sectionHeaders.some((text) => text.includes("25 registrations"))).toBe(true);
+    expect(sectionHeaders.some((text) => text.endsWith("25"))).toBe(true);
   });
 });
 

@@ -190,9 +190,9 @@ describe("WorkspaceStatusesSettingsPage", () => {
     const container = await mount();
 
     // Group headers, not four tables: the same row shape either side of them.
-    const groups = [...container.querySelectorAll("tbody tr")]
-      .map((row) => row.textContent ?? "")
-      .filter((text) => text === "System" || text === "Custom");
+    const groups = [...container.querySelectorAll("tbody tr:not([data-row-id]) button")].map((header) =>
+      (header.textContent ?? "").replace(/\d+$/, "")
+    );
     expect(groups).toEqual(["System", "Custom"]);
     expect(container.querySelectorAll("table")).toHaveLength(1);
     expect(container.textContent).toContain("Awaiting captain");
